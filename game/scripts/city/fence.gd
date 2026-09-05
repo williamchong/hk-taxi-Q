@@ -28,6 +28,7 @@
 extends Node3D
 
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
+const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 
 func _ready() -> void:
@@ -96,7 +97,7 @@ func _ready() -> void:
 	# different nodes: `verify_fence.gd` grades the asset's own `-col` import and
 	# would stay green if this function stopped building bodies at all, which is a
 	# barrier the car drives through and renders perfectly.
-	# `railings_preview.gd` prints its collider count for the mirror-image reason.
+	# `layer_preview.gd` prints its collider count for the mirror-image reason.
 	print(
 		(
 			"fence: %d barriers placed at %d mouths, %d refused, %d colliders"
@@ -104,7 +105,7 @@ func _ready() -> void:
 				transforms.size(),
 				int(document.get("mouths", 0)),
 				refused,
-				find_children("*", "StaticBody3D", true, false).size()
+				MeshContract.colliders(self)
 			]
 		)
 	)

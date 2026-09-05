@@ -14,11 +14,11 @@
 ## the signs whose meaning is their *shape*; a region whose signs are all time
 ## plates and parking legends draws none and `city.json` names null. What stops
 ## that becoming a silent skip is `verify_city.gd`, whose `_check_documents`
-## asserts a *named* signs asset exists and matches this file's constant — so a
+## asserts a *named* signs asset exists and matches the path `generated_layer.gd`'s table gives it — so a
 ## manifest naming `signs.glb` with the file gone fails there.
 extends SceneTree
 
-const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One surface per mesh, so each primitive is one draw call — the rule the road
@@ -67,16 +67,21 @@ const SIGNS_MATERIAL: String = "res://tuning/signs.tres"
 
 
 func _init() -> void:
-	if not GeneratedSigns.is_present():
-		print("  skip  no traffic signs shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.SIGNS):
+		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.SIGNS))
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedSigns.load_signs()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.SIGNS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedSigns.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.SIGNS)
+			)
+		)
 		quit(1)
 		return
 
@@ -88,7 +93,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedSigns.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.SIGNS))
 	quit(1 if not problems.is_empty() else 0)
 
 
@@ -116,14 +121,14 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 					% [instance.name, mesh.get_surface_count(), SURFACES_PER_MESH]
 				)
 			)
-		if String(instance.name) == GeneratedSigns.TEXT_MESH:
+		if String(instance.name) == GeneratedLayer.SIGNS_TEXT_MESH:
 			lettered = true
 			problems.append_array(_check_lettering(mesh, instance.name))
 		else:
 			problems.append_array(_check_plates(mesh, instance.name))
 
 	# ⚠️ Reported rather than required. A region with no `TS102` in it draws no
-	# lettering and is right not to — see `GeneratedSigns.TEXT_ATLAS_BUDGET_PX`.
+	# lettering and is right not to — see `GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX`.
 	if not lettered:
 		print("  note  no lettering primitive; this region's faces carry no words")
 
@@ -175,7 +180,7 @@ func _check_lettering(mesh: ArrayMesh, name: StringName) -> PackedStringArray:
 		# declared texture that never arrived fails too.
 		problems.append_array(
 			MeshContract.check_surface(
-				mesh, surface, where, true, GeneratedSigns.TEXT_ATLAS_BUDGET_PX
+				mesh, surface, where, true, GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX
 			)
 		)
 		problems.append_array(

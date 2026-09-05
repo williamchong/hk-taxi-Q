@@ -1031,6 +1031,36 @@ than discovering the rest of it from a bug report.
   there, and does it feel like a road rather than a ramp-shaped bug?"* is a drive, and it is the
   user's.
 
+### Phase 5 — Content, and the modularisation that precedes it
+
+**Goal:** a second region loads beside the first, and the bundle is built from parts an artist can
+author and a second region can reuse.
+
+**Broken down** because the constraint is measured rather than guessed: the thin layers scale
+linearly with the region (`Q115`), a whole-city mesh is refused on precision as well as size (`Q116`),
+and a 3D developer's review named the same thing from the outside. **The draw-call budget stays** —
+a `MultiMesh` costs the draw call the merged glb costs, measured at `P3-29` — and every step below
+pastes its delta on the driving route. 🔴 **Every step owes an A/B render at one fixed camera, shot
+twice a side and `cmp`'d** (`Q62`): no counter here can see a placement or a facing go wrong.
+
+**What is refused is in `Q115` with its numbers** — a road kit, runtime extrusion, decals, the
+conformed paint layers as props, reuse across the ETL registrations — and is not re-proposed here.
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P5-1` ✅ **built 2026-09-06 (`Q115`)** | **Script consolidation** — `generated_layer.gd`, one table for the nine `.glb` layers, and `layer_preview.gd` keyed by a layer id, replacing nine `generated_*.gd` and nine `*_preview.gd` (the four JSON loaders and the fare, road-graph and tile previews are real code and stay) | ✅ Measured by `git diff --numstat`: **1,111 removed, 435 added**, code lines **356 → 169**; the first estimate of "about 2,000" was wrong. ✅ `check.sh` exit 0 ×3, every `verify_*` resolving its layer through the table and `verify_city.gd` still pinning each path to the manifest. ✅ Bundle **byte-identical** by `shasum` over 147 files. ✅ Draw calls on the throttle route 65/64/63/63/65/63 → **65/65/63/63/65/63**, telemetry identical; the t=2 call is the streamer's tile landing a tick earlier. ✅ `Q27` street frame **0 of 2,073,600 pixels** differing. 🔴 Two findings: a consumer in `.claude/skills/…/driver.gd` that no grep of `game/` could see, and Godot 4.7.1's `--import` re-saving JSON with tabs — `CLAUDE.md` amended. ✅ Reviewed: `Q77`'s load-order reason restored, id constants close a silent-skip hole, `Q74` closed with the prose in the scene comments, and `verify_city.gd` holds both scenes' layer nodes against the table. ⬜ Review point stands |
+| `P5-2` | **Signs as a face library plus placements** — 20 `TS` face meshes authored **once for Hong Kong** plus one pole prop; `signs.json` publishes position, facing, height, code and `turned` per plate; the loader draws one `MultiMesh` per face and one for poles | Same **671 / 497**. Every counter `signs.json` publishes today byte-identical — both partitions, `shift_m` with its `n`, `plates_turned` = the NO ENTRY family exactly, `no_entry_against_flow` 0 by mutation, `posts_kept_as_surveyed`. `facing_away` re-derived from the placement basis and **0**; `verify_signs.gd` grades the dispatch **per face**; `sign_face_survey.py` unchanged and its two tables re-pasted. The 83 text plates a face variant carrying `signs_text.png`; `mesh_contract.gd` still passes. Draw calls **about 22**, pasted. A/B at one street that carries kept posts. `city.json` schema bumped, both sides one commit |
+| `P5-3` | **Lamps as one prop plus placements** — `lamps.json` publishes 892 transforms; one `MultiMesh`, no collider | Every `lamps.json` counter byte-identical — `min_kerb_clearance_m`, `shift_m` with `n`, `lantern_overhang_m`, `lanterns_past_centreline`, the spacing pair, `gaps_over_report_m`. `verify_lamps.gd`'s upright bar re-stated over transforms and the prism ring **not** reversed (`P3-26`). Draw calls **1 → 1**. The prop's own AABB quoted against `Q82`'s 1,646 m; ⚠️ `[importer_defaults]` compression stays off — this removes the reason, not the setting. A/B at one street |
+| `P5-4` | **Arrows as a glyph library plus placements** — one mesh per `RM` code; `arrows.json` publishes position, yaw and **pitch** between nose and tail heights, plus lane slot | Both partitions byte-identical, `stacked_disagreeing` **29** unmoved (the finding is a lane count, not a mesh), `against_one_way`, `outside_carriageway` 38 / 9 unmoved. `inverted` re-stated as the basis determinant and **0**. `paint_clearance.py` reads placements plus glyph and reproduces its buried-arrow table. Draw calls = glyph codes, pasted. ⚠️ Box junctions and stop lines stay merged (`Q92`) |
+| `P5-5` | **The barrier family as tiled panels** — railings, bollards and barriers tiled from one unit per class along the run, on `fence.py`'s `unit_width_m` pattern | Per class, `drawn_m` within one panel of today's per run end and the residual **published** (a new `metres_snapped` counter); gaps at bends **counted and published**, never closed by stretching a panel. `railing_error.py` walks panels and its three tables re-pasted; `facing_away` **0** per panel; `cull_disabled` kept; no collider. `Q112`'s thickness is the unit's own. Draw calls **3 → 3**. A/B at a bend |
+| `P5-6` | **Roads chunked by tile** — the measured ribbon cut at stations on the 150 m grid, caps whole to one tile, one `-col` per chunk; the streamer gains a second tile content class | The union of chunks reproduces today's `roads.glb` in positions, normals, colours, indices and both `TEXCOORD`s **up to the duplicated cut stations, counted**; seam gap **0.000 m** at every cut, measured. `verify_road_surface.gd` per chunk; `paint_clearance`, `kerbside_error`, `overhang`, `deck_margin` loop over chunks and reproduce their tables. Draw-call delta on the driving route pasted against the region-wide 1. `city.json` schema bumped. ⚠️ Starts when the second region starts, not before |
+| `P5-7` | **The region join** — the ETL cut moves from the rectangle to the graph (`Q116`): an edge belongs whole to one region, boundary nodes are published by both, caps go whole to one side | The assignment rule written down in `Q116` before code. Every boundary node in both regions at a city-space position coincident to the vertex; **0** edges clipped by the rectangle; `reachability.py` across the pair loses **0.00%**; a drive across the join at one fixed camera. ⚠️ The rectangle still selects sheets and `bounds` do not move (`Q10`) |
+| `P5-8` | **Content** — Causeway Bay, then Central (`Q6`); full vehicle roster, audio pass, night mode | Outline only; refine once `P5-7` lands |
+
+**Order.** `P5-1`, then `P5-2` before `P5-3` because the sign faces are the strongest reuse case
+and the loader learns `MultiMesh` dispatch once, then `P5-4`, `P5-5`; `P5-6` and `P5-7` together
+when the second region is chosen.
+
 ### Outline only — refine once Phase 3 lands
 
 - **`P3-27` (candidate, unscheduled) — Pedestrian crossings and footway extent.** Re-opened by
@@ -1040,13 +1070,12 @@ than discovering the rest of it from a bug report.
   failure. Scope it the way `P3-18` was: one primitive, one draw call, counters that publish both
   partitions, and a `DATA_SOURCES.md` entry per layer read.
 
-- **Phase 5 — Content:** Causeway Bay, then Central. Full vehicle roster, audio pass, night mode.
 - **Phase 6 — Production polish:** menus, settings, save/progression, accessibility, localisation QA.
 - **Phase 7 — Ship:** free-slice boundary, one-time unlock IAP, store assets, web demo, HK press
   outreach, legal sight-check of landmark depiction.
 
-Deliberately not broken down. Anything planned in detail now would be a guess, and the slice will
-change the assumptions.
+Phases 6 and 7 are deliberately not broken down. Anything planned in detail now would be a guess,
+and the slice will change the assumptions.
 
 ---
 

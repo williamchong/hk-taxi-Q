@@ -21,7 +21,7 @@
 ## while. This one was written with it; if this comment is edited, go and look.
 extends SceneTree
 
-const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's arrows cost one draw call — the rule the
@@ -39,16 +39,21 @@ const ARROWS_MATERIAL: String = "res://tuning/arrows.tres"
 
 
 func _init() -> void:
-	if not GeneratedArrows.is_present():
-		print("  skip  no turn arrows shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.ARROWS):
+		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.ARROWS))
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedArrows.load_arrows()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.ARROWS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedArrows.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.ARROWS)
+			)
+		)
 		quit(1)
 		return
 
@@ -60,7 +65,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedArrows.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.ARROWS))
 	quit(1 if not problems.is_empty() else 0)
 
 

@@ -16,19 +16,11 @@
 ## particular camera distance, so it stays an eyeball criterion.
 extends SceneTree
 
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
-const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
-const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
-const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
-const GeneratedRoadMarks = preload("res://scripts/city/generated_roadmarks.gd")
-const GeneratedLamps = preload("res://scripts/city/generated_lamps.gd")
-const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
-const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
-const GeneratedSignals = preload("res://scripts/city/generated_signals.gd")
-const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
@@ -39,6 +31,14 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## centimetre therefore catches a real transform — an axis flip, a unit scale, a
 ## dropped offset — without ever firing on rounding.
 const TOLERANCE_M: float = 0.01
+
+## The two scenes every drawn layer must have a `layer_preview` node in.
+## `roadmarks` shipped with a node in neither and `lamps` with a node in the
+## preview only, each past a green `check.sh` (`Q73`); the table in
+## `generated_layer.gd` is what makes this checkable, in both directions.
+const LAYER_SCENES: PackedStringArray = [
+	"res://scenes/dev/city_drive.tscn", "res://scenes/dev/city_preview.tscn"
+]
 
 
 func _init() -> void:
@@ -58,6 +58,7 @@ func _init() -> void:
 		return
 
 	var problems: PackedStringArray = _check_documents(manifest)
+	problems.append_array(_check_layer_nodes())
 	for tile: Manifest.Tile in manifest.tiles:
 		var found: PackedStringArray = _check_tile(manifest, tile)
 		if found.is_empty():
@@ -93,7 +94,11 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH)
 	)
 	problems.append_array(
-		_check_document("road surface", manifest.road_surface_path, GeneratedRoadSurface.PATH)
+		_check_document(
+			"road surface",
+			manifest.road_surface_path,
+			GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE)
+		)
 	)
 	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.PATH))
 	problems.append_array(
@@ -111,19 +116,27 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# `tram.glb` with the file gone would pass every check in the repo.
 	if not manifest.tramway_path.is_empty():
 		problems.append_array(
-			_check_document("tramway", manifest.tramway_path, GeneratedTramway.PATH)
+			_check_document(
+				"tramway", manifest.tramway_path, GeneratedLayer.path(GeneratedLayer.TRAMWAY)
+			)
 		)
 	# Guarded for the same reason, and with the same thing the guard must not do:
 	# `verify_arrows.gd` treats an absent asset as a pass, so a manifest naming
 	# `arrows.glb` with the file gone would otherwise pass every check here.
 	if not manifest.arrows_path.is_empty():
-		problems.append_array(_check_document("arrows", manifest.arrows_path, GeneratedArrows.PATH))
+		problems.append_array(
+			_check_document(
+				"arrows", manifest.arrows_path, GeneratedLayer.path(GeneratedLayer.ARROWS)
+			)
+		)
 	# Guarded on the same terms again: `verify_boxjunctions.gd` treats an absent
 	# asset as a pass, so a manifest naming `boxjunctions.glb` with the file gone
 	# would otherwise pass every check here.
 	if not manifest.railings_path.is_empty():
 		problems.append_array(
-			_check_document("railings", manifest.railings_path, GeneratedRailings.PATH)
+			_check_document(
+				"railings", manifest.railings_path, GeneratedLayer.path(GeneratedLayer.RAILINGS)
+			)
 		)
 	# Guarded on the same terms: `verify_lamps.gd` treats an absent asset as a
 	# pass, so a manifest naming `lamps.glb` with the file gone would otherwise
@@ -132,10 +145,16 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# published domain where `REFNAME` has none — so a bundle that names the
 	# asset really is expected to hold it.
 	if not manifest.lamps_path.is_empty():
-		problems.append_array(_check_document("lamps", manifest.lamps_path, GeneratedLamps.PATH))
+		problems.append_array(
+			_check_document("lamps", manifest.lamps_path, GeneratedLayer.path(GeneratedLayer.LAMPS))
+		)
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
-			_check_document("box junctions", manifest.boxjunctions_path, GeneratedBoxJunctions.PATH)
+			_check_document(
+				"box junctions",
+				manifest.boxjunctions_path,
+				GeneratedLayer.path(GeneratedLayer.BOXJUNCTIONS)
+			)
 		)
 	# Guarded on the same terms once more, and this is the guard that matters
 	# most: `verify_signs.gd` treats an absent asset as a pass *and* a null
@@ -143,13 +162,19 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# text-faced — so without this a manifest naming `signs.glb` with the file
 	# gone would pass every check in the repo.
 	if not manifest.signs_path.is_empty():
-		problems.append_array(_check_document("signs", manifest.signs_path, GeneratedSigns.PATH))
+		problems.append_array(
+			_check_document("signs", manifest.signs_path, GeneratedLayer.path(GeneratedLayer.SIGNS))
+		)
 	# Guarded on the same terms a sixth time: `verify_roadmarks.gd` treats an
 	# absent asset as a pass, so a manifest naming `roadmarks.glb` with the file
 	# gone would otherwise pass every check here.
 	if not manifest.roadmarks_path.is_empty():
 		problems.append_array(
-			_check_document("road markings", manifest.roadmarks_path, GeneratedRoadMarks.PATH)
+			_check_document(
+				"road markings",
+				manifest.roadmarks_path,
+				GeneratedLayer.path(GeneratedLayer.ROADMARKS)
+			)
 		)
 	# Guarded on the same terms a seventh time, and on the sharpest version of
 	# the argument: `verify_signals.gd` treats an absent asset as a pass, *and* a
@@ -159,8 +184,40 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# `signals.glb` with the file gone would pass every check in the repo.
 	if not manifest.signals_path.is_empty():
 		problems.append_array(
-			_check_document("signals", manifest.signals_path, GeneratedSignals.PATH)
+			_check_document(
+				"signals", manifest.signals_path, GeneratedLayer.path(GeneratedLayer.SIGNALS)
+			)
 		)
+	return problems
+
+
+## Every id in `GeneratedLayer.ids()` names a `layer_preview` node in both dev
+## scenes, and every such node names an id — read off the `.tscn` text rather
+## than by instantiating the game. A misspelt `layer = "lampz"` would otherwise
+## draw nothing and push one error at runtime that no check reads.
+func _check_layer_nodes() -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var pattern := RegEx.new()
+	pattern.compile('(?m)^layer = "([^"]*)"$')
+	var ids: PackedStringArray = GeneratedLayer.ids()
+	for scene: String in LAYER_SCENES:
+		var text: String = FileAccess.get_file_as_string(scene)
+		if text.is_empty():
+			problems.append("%s could not be read" % scene)
+			continue
+		var named: PackedStringArray = []
+		for hit: RegExMatch in pattern.search_all(text):
+			named.append(hit.get_string(1))
+		for id: String in ids:
+			if not named.has(id):
+				problems.append("%s has no layer_preview node for %s" % [scene, id])
+		for id: String in named:
+			if not ids.has(id):
+				problems.append(
+					"%s names a layer %s that generated_layer.gd does not" % [scene, id]
+				)
+	if problems.is_empty():
+		print("  ok    %d layer nodes in each of %d scenes" % [ids.size(), LAYER_SCENES.size()])
 	return problems
 
 

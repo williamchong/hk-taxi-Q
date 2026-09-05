@@ -9,7 +9,7 @@
 ; whole region's lettering, and still one draw call.
 ;
 ; 🔴 **This is the file that stops `Texture memory` being 0.** `Q63` decided that
-; deliberately and bought a ceiling with it: `generated_signs.gd` declares how
+; deliberately and bought a ceiling with it: `generated_layer.gd` declares how
 ; many pixels the sign layer may ship and `mesh_contract.gd` fails the bundle
 ; above it, fails an *undeclared* texture anywhere else, and fails a declared
 ; texture that never arrived. Nothing here is allowed to become the reason that

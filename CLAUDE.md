@@ -99,7 +99,10 @@ Common emoji for this project:
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
 - ⚠️ Opening the Godot editor or running an export rewrites `game/project.godot` and
   `game/export_presets.cfg`, stripping their comments. Never commit either as a side effect; see
-  `docs/ARCHITECTURE.md` for how to restore and verify. Headless `--import`/`--script` are safe.
+  `docs/ARCHITECTURE.md` for how to restore and verify. Headless `--import`/`--script` leave those
+  two alone — ⚠️ **but a headless `--import` rescan re-saves JSON with tab indentation**, whitespace
+  only, and that reaches the tracked `game/assets/authored/greybox_wanchai.json` (`Q115`). Run
+  `git status` after `check.sh` and `git checkout` it; never commit it as a side effect either.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
 - This is not a Node project. Do not run npm/npx/node commands.
 
@@ -469,7 +472,7 @@ Common emoji for this project:
   touches which code draws what.
 - **`text` layers, `text_cell_px`, `text_source`, or `pipeline/sign_text.py`: paste `signs.json`'s
   `text_plates`, `text_facing_away`, `text_atlas_px` and `text_coverage`, before and after** — and
-  move `GeneratedSigns.TEXT_ATLAS_BUDGET_PX` in the same diff. 🔴 **This is the one place the bundle
+  move `GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX` in the same diff. 🔴 **This is the one place the bundle
   ships an image**, admitted by `Q63`'s declaration check rather than in spite of it, so a budget
   with slack in it is a metric nobody reads. ⚠️ **`text_coverage` is the detector**: a cell cropped
   off the lettering bakes paper, and a blank square on a plate renders as the blank plate it already

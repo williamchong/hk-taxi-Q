@@ -601,6 +601,15 @@ def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) 
 
     Runs shorter than `min_length_m` are dropped — a feature clipping a corner
     of the region contributes a stub no vehicle can occupy.
+
+    ⚠️ **This rectangle is also the region join, and that is open (`Q116`).**
+    "Nothing to seam" is true of one region on its own; two neighbours built
+    this way meet at a hard edge with no continuing graph, ribbon, kerb run
+    or lamp row, because each cut its polylines where its own rectangle fell.
+    The planned fix (`P5-7`) moves the cut onto the graph — an edge whole to
+    one region, its boundary nodes published by both — and keeps this
+    rectangle as the sheet selector only. Until then a second region cannot
+    be joined to this one, and no streaming unit changes that.
     """
     if len(points) < 2:
         # A NULL or single-vertex geometry is legal in a geodatabase and is not

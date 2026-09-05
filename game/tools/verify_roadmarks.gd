@@ -14,10 +14,10 @@
 ## paragraph, unchanged: a city whose estate publishes no transverse markings
 ## ships none and `city.json` names null. What stops that becoming a silent skip
 ## is `verify_city.gd`, whose `_check_documents` asserts a *named* road-marking
-## asset exists and matches this file's constant.
+## asset exists and matches the path `generated_layer.gd`'s table gives it.
 extends SceneTree
 
-const GeneratedRoadMarks = preload("res://scripts/city/generated_roadmarks.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's markings cost one draw call — the rule
@@ -38,16 +38,23 @@ const ROADMARKS_MATERIAL: String = "res://tuning/roadmarks.tres"
 
 
 func _init() -> void:
-	if not GeneratedRoadMarks.is_present():
-		print("  skip  no road markings shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.ROADMARKS):
+		print(
+			"  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.ROADMARKS)
+		)
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedRoadMarks.load_roadmarks()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.ROADMARKS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedRoadMarks.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.ROADMARKS)
+			)
+		)
 		quit(1)
 		return
 
@@ -59,7 +66,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedRoadMarks.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.ROADMARKS))
 	quit(1 if not problems.is_empty() else 0)
 
 

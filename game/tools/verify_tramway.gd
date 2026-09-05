@@ -19,7 +19,7 @@
 ## a while; if this comment is edited again, go and look.
 extends SceneTree
 
-const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's tramway costs one draw call — the same
@@ -66,16 +66,21 @@ const TRACK_M_TOLERANCE: float = 0.05
 
 
 func _init() -> void:
-	if not GeneratedTramway.is_present():
-		print("  skip  no tramway shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.TRAMWAY):
+		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.TRAMWAY))
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedTramway.load_tramway()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.TRAMWAY)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedTramway.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.TRAMWAY)
+			)
+		)
 		quit(1)
 		return
 
@@ -87,7 +92,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedTramway.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.TRAMWAY))
 	quit(1 if not problems.is_empty() else 0)
 
 
@@ -110,7 +115,9 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 	problems.append_array(_check_has_no_collision(scene_root))
 	problems.append_array(
-		MeshContract.check_uv2_import_settings(GeneratedTramway.PATH, "tramway class")
+		MeshContract.check_uv2_import_settings(
+			GeneratedLayer.path(GeneratedLayer.TRAMWAY), "tramway class"
+		)
 	)
 
 	return problems

@@ -25,7 +25,7 @@
 ## `arms_against_kerb` counter, which would read 0 by construction (`Q72`).
 extends SceneTree
 
-const GeneratedLamps = preload("res://scripts/city/generated_lamps.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's lamps cost one draw call — the rule the
@@ -92,16 +92,21 @@ const MIN_UPRIGHT_SHARE: float = 0.35
 
 
 func _init() -> void:
-	if not GeneratedLamps.is_present():
-		print("  skip  no lamp posts shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.LAMPS):
+		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.LAMPS))
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedLamps.load_lamps()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.LAMPS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedLamps.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.LAMPS)
+			)
+		)
 		quit(1)
 		return
 
@@ -113,7 +118,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedLamps.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.LAMPS))
 	quit(1 if not problems.is_empty() else 0)
 
 

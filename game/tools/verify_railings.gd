@@ -14,10 +14,10 @@
 ## paragraph, unchanged: a city whose estate publishes no railing layer ships
 ## none and `city.json` names null. What stops that becoming a silent skip is
 ## `verify_city.gd`, whose `_check_documents` asserts a *named* railing asset
-## exists and matches this file's constant.
+## exists and matches the path `generated_layer.gd`'s table gives it.
 extends SceneTree
 
-const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive **per class**, so each class costs one draw call — the rule the
@@ -66,16 +66,23 @@ const MIN_AGREEMENT: float = 0.0
 
 
 func _init() -> void:
-	if not GeneratedRailings.is_present():
-		print("  skip  no railings shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.RAILINGS):
+		print(
+			"  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.RAILINGS)
+		)
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedRailings.load_railings()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.RAILINGS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedRailings.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.RAILINGS)
+			)
+		)
 		quit(1)
 		return
 
@@ -87,7 +94,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedRailings.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.RAILINGS))
 	quit(1 if not problems.is_empty() else 0)
 
 

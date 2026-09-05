@@ -1280,7 +1280,7 @@ class Signs(LayerSpec):
     # pixels, laid in a row, so the whole atlas is `cell_px x cell_px x cells` —
     # which is what `mesh_contract.gd`'s declared budget is measured against and
     # what `PROGRESS.md`'s `Texture memory` stops being 0 for. ⚠️ Raising it is a
-    # budget change and has to move a number in `generated_signs.gd` in the same
+    # budget change and has to move a number in `generated_layer.gd` in the same
     # diff, which is `Q63`'s entire point: an image ships when someone declares
     # room for it, never because it fitted.
     text_cell_px: int

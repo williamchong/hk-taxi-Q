@@ -21,7 +21,7 @@
 extends SceneTree
 
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 
 const DEFAULT_SCENE: String = "res://scenes/dev/city_drive.tscn"
 
@@ -320,7 +320,7 @@ func _report(t: float) -> void:
 		_abort(
 			(
 				"vehicle fell %.1f m below its spawn by t=%.2f. %s"
-				% [_spawn_y - pos.y, t, GeneratedRoadSurface.missing_hint()]
+				% [_spawn_y - pos.y, t, GeneratedLayer.missing_hint(GeneratedLayer.ROAD_SURFACE)]
 			)
 		)
 

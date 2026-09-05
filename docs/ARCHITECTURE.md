@@ -204,7 +204,7 @@ there, read the log for `Parse Error` / `Compile Error` rather than waiting it o
 scripting a Godot run, give it a watchdog rather than a long timeout.
 
 🔴 **A verify tool proves an asset is correct. Nothing proves it is in the world.**
-`verify_roadmarks.gd` calls `GeneratedRoadMarks.load_roadmarks()` and grades the returned
+`verify_roadmarks.gd` calls `GeneratedLayer.load_layer("roadmarks")` and grades the returned
 `PackedScene` in isolation, so it passed while `roadmarks.glb` was in no scene at all — built,
 exported, named by `city.json`, dispatched by the importer, and invisible. The player's report was
 the only instrument that could see it (`Q73`). **Every layer here has the same blind spot**; the others
@@ -821,6 +821,11 @@ from the ground one.
 and allowed to overhang — a road feature is cut at the boundary, because a polyline cut in two is two
 polylines with nothing to seam. Without it, 14% of the region's road length is geometry the player
 cannot reach, including a tunnel running 570 m out into the harbour.
+⚠️ **That is also why two regions cannot yet be joined (`Q116`).** "Nothing to seam" holds for one
+region alone; two neighbours each cut on their own rectangle meet at a hard edge with no continuing
+graph, ribbon, kerb run or lamp row. `P5-7` moves the cut onto the graph — an edge belongs whole to
+one region and a boundary node is published by both — and the rectangle stays as the sheet selector.
+Until then Phase 5's second region is blocked on it, and no streaming unit changes that.
 
 `node.kind` is `junction` where three or more edge ends meet and `endpoint` otherwise. Degree, not
 the source's intersection layer: two centrelines meeting end to end is one road continuing through a
@@ -1491,11 +1496,12 @@ the second vehicle anyone built.
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/generated_*.gd` | Locators — one definition per document the manifest names, two readers: `road_graph`, `road_surface`, `fares`, `landmarks`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `signals` (latent, `Q77`), `lamps`. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
+| `scripts/city/generated_layer.gd` | Locator for the nine one-mesh `.glb` layers — `road_surface`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `signals` (latent, `Q77`), `railings`, `lamps`, `signs` — one table, id constants, and the per-layer absence terms that used to be nine files (`P5-1`, `Q115`). Also owns the sign text-atlas budget (`Q63`) |
+| `scripts/city/generated_*.gd` | Locators for the JSON documents — `road_graph`, `fares`, `landmarks`, `fence` — one definition each, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `signals` (latent — the nodes are wired in both scenes, the manifest names no asset, `Q77`), `lamps`. 🔴 **Adding a drawn layer means adding its node to `city_drive.tscn` AND `city_preview.tscn`, and no tool can see either omission.** `roadmarks` had everything else and no node at all (`Q73`); `lamps` then shipped into the preview scene only, so it was built, verified, and **invisible in the game** — found by driving it, not by a check (`Q82`). ⚠️ **Two nodes are deliberately preview-only and are NOT counterexamples**: `road` is `P1-3`'s graph diagnostic, kept hidden because it z-fights the surface, and `city_drive.tscn` carries `GraphOverlay` instead; `fare` is `P1-5`'s pins, and `P3-1a` has not started. Everything that draws a *generated mesh* is in both. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
+| `scripts/city/*_preview.gd` | Dev previews: `tile`, `road` and `fare` are their own scripts, and `layer_preview.gd` draws any of the nine `.glb` layers by the `layer` id set on its node — nine nodes in each scene, `signals` latent (the manifest names no asset, `Q77`). 🔴 **Adding a drawn layer means adding its node to `city_drive.tscn` AND `city_preview.tscn`** — `verify_city.gd` now holds both scenes' `layer` ids against `generated_layer.gd`'s table in both directions (`Q115`), which is the check `Q73` could not have. `roadmarks` had everything else and no node at all (`Q73`); `lamps` then shipped into the preview scene only, so it was built, verified, and **invisible in the game** — found by driving it, not by a check (`Q82`). ⚠️ **Two nodes are deliberately preview-only and are NOT counterexamples**: `road` is `P1-3`'s graph diagnostic, kept hidden because it z-fights the surface, and `city_drive.tscn` carries `GraphOverlay` instead; `fare` is `P1-5`'s pins, and `P3-1a` has not started. Everything that draws a *generated mesh* is in both. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |

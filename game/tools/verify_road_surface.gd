@@ -10,7 +10,7 @@
 ## Exits non-zero if the surface is missing or fails any check.
 extends SceneTree
 
-const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's roads cost one draw call — the same
@@ -56,9 +56,9 @@ const MAX_EDGE_M: float = 4000.0
 
 
 func _init() -> void:
-	var packed: PackedScene = GeneratedRoadSurface.load_surface()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.ROAD_SURFACE)
 	if packed == null:
-		printerr(GeneratedRoadSurface.missing_hint())
+		printerr(GeneratedLayer.missing_hint(GeneratedLayer.ROAD_SURFACE))
 		quit(1)
 		return
 
@@ -70,7 +70,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedRoadSurface.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE))
 	quit(1 if not problems.is_empty() else 0)
 
 
@@ -98,7 +98,9 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 	problems.append_array(MeshContract.check_collision(scene_root))
 	problems.append_array(
-		MeshContract.check_uv2_import_settings(GeneratedRoadSurface.PATH, "marking payload")
+		MeshContract.check_uv2_import_settings(
+			GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE), "marking payload"
+		)
 	)
 
 	return problems

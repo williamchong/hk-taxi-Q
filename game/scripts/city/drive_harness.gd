@@ -24,8 +24,8 @@
 ## car.
 extends Node3D
 
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
-const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
 
 ## How far the resolved start line may sit from the Taxi's authored transform
 ## before it is worth saying so, in metres.
@@ -199,5 +199,7 @@ func _warn_if_there_is_no_road() -> void:
 	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 		return
 
-	push_warning("Nothing under the start line. " + GeneratedRoadSurface.missing_hint())
+	push_warning(
+		"Nothing under the start line. " + GeneratedLayer.missing_hint(GeneratedLayer.ROAD_SURFACE)
+	)
 	set_physics_process(false)

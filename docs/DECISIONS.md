@@ -102,7 +102,7 @@ wins.
 | `Q71` | Three byte-identical shaders, and the repo had already written the rule | ✅ Closed — `marking_paint.gdshader` is shared by the arrows, the boxes and the stop lines; a layer is a parameterisation, not a shader |
 | `Q72` | A NO ENTRY faces the traffic it forbids, not the traffic it stands beside | ✅ Closed — and the counter that stood before it was a tautology certifying the wrong state; `plates_turned` must equal the drawn NO ENTRY family exactly |
 | `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
-| `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
+| `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | ✅ **Closed by `P5-1` (`Q115`)** — the prose went to the `.tscn` node comments, `MeshContract.colliders` exists, and `verify_city.gd` now checks the nodes. Was: 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 | `Q75` | **A setting that is no longer set cannot fail, and two of them were not set** | ✅ Closed — one editor save in `78c077e` dropped three GDScript warning promotions and `rendering_method.web`, and nothing failed for three weeks, because the sweep can only enforce what the file still asks for. All four restored and `check.sh` gains a `settings` step that counts them, mutation-tested against the exact `78c077e` state. 🔴 **The three apparent recurrences were one loss all along** — no restoration had ever been committed, so an ordinary `checkout` or rebase kept erasing it. The renderer override proved a **no-op in practice**: Godot 4.7 forces Compatibility on web regardless, so no shipped cut ran the wrong renderer |
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
 | `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard all seven optional-layer verify tools already used |
@@ -131,6 +131,8 @@ wins.
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
+| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1` built 2026-09-06, `P5-2`–`P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
+| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open, owned by `P5-7`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). The cut moves from the rectangle to the graph — an edge belongs whole to one region and boundary nodes are shared — and the streaming unit stays the tile: per-edge is 737 draw calls a region, per-region is the always-resident bundle that fails at scale |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -11144,6 +11146,24 @@ it shipped on the settled pattern instead.
 `push_warning` because absence there *is* an error, and a deferred emit — and folding it in would
 lose the distinction between the mandatory layer and the nine optional ones.
 
+### ✅ Closed by `P5-1` (`Q115`) — all three steps, in the order above
+
+1. `MeshContract.colliders(node) -> int` stands beside `has_collision`, which is now defined by it;
+   the seven call sites are gone with the files, and the two that remain (`layer_preview.gd`,
+   `fence.gd`) use it.
+2. `generated_layer.gd` is the shared loader — one table, id constants, the absence terms.
+3. `layer_preview.gd` is the one preview, and **the prose went where this record said it could**:
+   each layer's own no-collider argument is a node comment in `city_drive.tscn` and
+   `city_preview.tscn`, beside the node that would have to change.
+
+⚠️ **The road surface WAS folded in after all, and the distinction survived by a column, not a
+file**: its table row has an empty `absence`, which is what makes `is_optional` false, the missing
+asset a `push_warning` rather than a report, and the `built` signal is now on every layer node
+(only the tiles' is listened to). `Q73`'s "no tool can see the omission" is also closed by the
+same table — `verify_city.gd` holds both scenes' `layer` ids against it in both directions.
+
+**Status.** ✅ Closed.
+
 ---
 
 ## `Q75` — A setting that is no longer set cannot fail, and two of them were not set
@@ -19022,3 +19042,235 @@ that no longer exists.
 **See.** `Q113` for the width half and the sweep · `Q94` for the bracket and the arrow row ·
 `Q95` for the measured width · `Q107` for the licence the deck ceiling borrows · `Q103` for why the
 deck is a reading and not a survey · `Q72` for why a counter is mutation-checked rather than read
+
+
+## `Q115` — What repeats ships as a prop with placements; what is measured stays merged
+
+Raised by a 3D game developer's review of the game, relayed by the user: use a grid system for
+the roads; a lamp should be one model placed many times rather than one mesh of every lamp in Wan
+Chai; likewise the road. Followed by the user's own framing — a whole-city road mesh is infeasible
+once the game grows past one region; loosen the draw-call budget and favour reuse in both models
+and scripts; and accept some accuracy loss for reuse.
+
+### 🔴 The draw-call budget is not what stands between this bundle and modular assets
+
+`ARCHITECTURE.md`'s technique 3 — one merged primitive per generated layer — was written for the
+draw call, and a `MultiMesh` costs the same one. `fence.gd` measured it: the prop instantiated as a
+scene per placement read **81-92** draws on a driving route against a **55-57** baseline, a single
+`MultiMesh` over the same 90 transforms read **57-61**, and the two builds were **pixel-identical**
+at the `e627` camera. So every layer below ships modular at the draw call it ships today, one per
+distinct mesh. ⚠️ **The budget stays**: mobile's 150 is scoped to the Adreno 618 floor, the web
+build runs `gl_compatibility` where submission is the dominant CPU cost, and neither tier has a
+device to re-measure on. Loosening a ceiling nobody can measure against changes nothing on the
+desktop tier and removes the only one the two constrained tiers have. Each step pastes its delta.
+
+### What the merged form actually costs, so the case for the change is the right one
+
+- **Always resident.** Godot culls per `MeshInstance3D` by AABB, and a region-wide layer is one
+  AABB; every lamp is submitted every frame. ⚠️ A `MultiMesh` has the same property unless it is
+  chunked, so instancing on its own buys no culling — only bundle size and per-instance form.
+- **Linear in the region.** Wan Chai's road graph is **40.7 km**; Hong Kong's is roughly
+  2,100 km, ×50. `roads.glb` at 1.8 MB / 32k triangles scales to ~90 MB / ~1.6M, past the desktop
+  triangle budget; `lamps.glb` at 2.3 MB to ~115 MB, past the mobile bundle cap on its own.
+- **Quantisation over the wrong box** (`Q82`): imported positions are compressed over each mesh's
+  own AABB, so a 0.06 m bracket arm was stored at 0.025 m steps across `lamps.glb`'s 1,646 m and
+  compression had to go off project-wide at +2.002% of PCK. A prop is quantised over its own 3 m.
+- **Nothing can be hand-authored.** Lamp, sign and railing geometry is built in Python; an artist
+  has no asset to edit.
+
+### What modularises, in order, and what each moves
+
+The rule is **modularise where the real object repeats**. Every step keeps the ETL's registration
+and every counter it publishes — only the output form changes, from triangles to a placement list
+and a prop — and every step owes an A/B render at a fixed camera, because no counter here can see
+a placement or a facing go wrong (`Q62`).
+
+1. **Scripts** (`P5-1`). Nine `generated_*.gd` loaders — one per `.glb` layer — differed in a path
+   and a hint string, and nine `*_preview.gd` differed in a node name; the four JSON loaders and the
+   fare, road-graph and tile previews are real code and stay. One table-driven loader and one preview
+   keyed by a layer id, no measured behaviour moved. First because everything below lands on it.
+   ⚠️ The first estimate here was "about 2,000 lines"; measured, the deleted files were **999**
+   lines including their `.uid`s, of which **356** were code — see the build below.
+2. **Signs** (`P5-2`) — the strongest reuse case in the bundle. **671 plates on 497 posts are 20
+   `TS` codes** (`TS115` 177, `TS182` 123, `TS107` 84, `TS102` 74, …), each face already built from
+   the same `layer_polygons` every time it is drawn; the merged glb is that library flattened. A face
+   library authored **once for Hong Kong**, one pole prop, and placements of position, facing, height
+   and code. Draw calls 2 → about 22. `facing_away` reads the placement basis; `verify_signs.gd`
+   grades the dispatch per face; `sign_face_survey.py` is unchanged because it already grades the
+   config faces; the 83 text plates stay as a face variant carrying the atlas, so the no-texture
+   contract is untouched.
+3. **Lamps** (`P5-3`). One prop, **892** transforms, one `MultiMesh`, no collider. `Q82`'s
+   quantisation disappears with the region-wide AABB. The upright bar and the spacing pair move to
+   transforms.
+4. **Arrows** (`P5-4`). **747** arrows from a glyph table of about a dozen `RM` codes. An arrow is
+   a rigid planar glyph laid between its nose and tail heights and lifted clear, so position, yaw and
+   **pitch** in a transform reproduce it exactly; the lane snap stays in the ETL. `paint_clearance.py`
+   reads placements plus glyph.
+5. **The barrier family as tiled panels** (`P5-5`) — the one place accuracy is traded, and it is
+   traded *toward* the city: HK pedestrian railings are standard panels, so tiling a unit along the
+   run on `fence.py`'s `unit_width_m` pattern is more faithful than a slab extruded along it. The
+   loss is a run's ends snapping to a panel multiple and small gaps at sharp bends, both published.
+6. **Roads chunked by tile** (`P5-6`), when the second region starts — see below.
+
+### 🔴 Refused, each with its number
+
+- **A road kit** (straight pieces, catalogue widths, right-angled junction templates). On this
+  region's 737 level-0 edges: **418 (57%) bow more than 0.5 m** off a straight piece, p90 **7.2 m**,
+  max 59 m; **88 distinct** carriageway widths; **301 of 380** junctions are 3-way; **half** the arm
+  angles are more than 10° off a right-angle grid, p90 38°. A kit re-authors the centrelines to its
+  vocabulary and moves streets by metres, and the buildings are surveyed footprints, so the roads
+  stop fitting between them. 🔴 **Accuracy is not a dial on this layer**: below the measured
+  geometry the next stop is a stylised city with re-drawn blocks, which is a reversal of the
+  "accurate city, toy vehicles" direction and the user's call to make as one, not a tolerance.
+  ⚠️ Quantising *widths* would not make a road reusable either — the unique part of a road is its
+  path, and the reusable component of a procedural road is the generator, which already runs on any
+  region.
+- **The Unity grid asset.** A cell overlay for strategy-game territory and pathing, on the wrong
+  engine; what it is reached for — spatial partitioning — is the 150 m tile grid that exists.
+- **Runtime road extrusion** (`Path3D` + `CSGPolygon3D`, or a GDScript port of `surface.py`).
+  Slow at 737 edges with poor collision, or 2,700 lines of measured behaviour duplicated with every
+  grader that reads the shipped ribbon re-pointed at a runtime mesh, and the trimesh collider built
+  at runtime.
+- **Box junctions and stop / give-way lines as props.** 20 unique surveyed polygons and 191 bars at
+  per-host lengths, every vertex conformed to the road's own cap fan — which `Q92` showed is the only
+  way to keep them out of the asphalt. No repeated unit and no rigid form.
+- **Decals for road paint.** The engine's own modular road-paint form, and it conforms for free; it
+  is an image, refused by `mesh_contract.gd`'s no-texture contract and by `P3-16`'s "no pictogram
+  textures" ruling. ⚠️ `Decal` support on the Compatibility renderer the web build runs is
+  **unverified on 4.7**; check before this is ever reconsidered.
+- **Reuse across the ETL registrations.** `_register` exists in `signs`, `lamps`, `railings` and
+  `signals` and each difference is recorded with the defect it prevents — the outward-only clamp is
+  right for a post and would zigzag a run (`Q78`), the lamp prism ring is not reversed where the sign
+  and signal ones are (`P3-26`), the carriageway survey is a second implementation so the grader
+  shares no code with the pipeline (`Q95`). Sharing a core here retires a check.
+- **Lane lines and kerbside paint** need nothing: they are already a component, as a shader over the
+  `TEXCOORD_0` lane coordinate and the kerb runs.
+
+### The road scales by chunking, and that is feasible where the ground's was not
+
+Split the measured ribbon by the existing 150 m tile grid and stream it with the buildings. `Q25`'s
+tearing came from decimating a continuous surface *after* cutting it; the ribbon is never decimated
+and is built per station, so a cut between two stations that duplicates the shared station's
+vertices on both sides is seamless **by construction**. Junction caps go whole to one tile; the
+lane coordinate and the kerb runs are per station and continue across the cut; each chunk carries
+its own `-col`. Cost: one draw call per resident chunk instead of one per region, a schema bump, a
+second tile content class in the streamer, and graders that already loop over building tiles
+looping over road chunks too. ⚠️ It does not solve the region join — `Q116`.
+
+### ✅ `P5-1` is built — `generated_layer.gd` and `layer_preview.gd`
+
+Eighteen scripts deleted (nine loaders, nine previews, the road surface's `built` signal and
+warn-on-missing folded in as the one non-optional row), two written. **1,111 lines removed and
+435 added** across `game/` and the skill's driver (net −676); code lines excluding comments and
+blanks **356 → 169**. The table carries every per-layer ⚠️ the deleted docstrings held — which
+absences are ordinary and why — and `SIGNS_TEXT_MESH` / `SIGNS_TEXT_ATLAS_BUDGET_PX` moved into it
+with `Q63`'s paragraph intact, so `verify_signs.gd` and `mesh_contract.gd`'s budget stay one number.
+
+**Evidence.** `check.sh` exit 0 three times, every layer's verify tool resolving its path through
+the table and `verify_city.gd` still asserting each against the manifest. The generated bundle
+**byte-identical** (one `shasum` over 147 files, before and after). Draw calls on the throttle
+route, `--hold=accelerate@0.3+5.7`, before → after: 65/64/63/63/65/63 → **65/65/63/63/65/63** at
+t=1…6 s, telemetry identical to the centimetre; the one-call difference at t=2 comes with
+`prims` 829,022 → 843,192, the streamer landing a tile a tick earlier, and the same figure
+appears at t=1 on both sides. The `Q27` street viewpoint, `--debug-view=off --hud=off`, shot
+twice a side: the after pair `cmp`-identical, and the before frame that survived matches the
+after frame on **0 of 2,073,600** pixels differing.
+
+🔴 **Two findings from the build, neither about the refactor.**
+
+- **A consumer lived outside `game/` and every grep of `game/`, `tools/` and `docs/` missed it**:
+  `.claude/skills/run-hk-taxi-q/driver.gd` preloaded `generated_road_surface.gd`, so `check.sh`
+  was green and the first `drive.sh` run failed to parse. Five more references were comments in
+  `CLAUDE.md`, `signs.py`, `config.py` and `hong_kong.yaml`. A script deletion owes a grep of the
+  **whole repo**, `.claude/` included.
+- **Godot 4.7.1's headless `--import` re-saves JSON, with tabs, whitespace-only.** A rescan —
+  a changed `.json`, or any script change — rewrote `assets/generated/roadgraph.json` and the
+  **tracked** `assets/authored/greybox_wanchai.json` (60 lines, indentation only). It is
+  idempotent, so a second run touches nothing and the first run after a sync is the one that
+  moves files. `CLAUDE.md`'s "headless `--import` is safe" was true of `project.godot` and is
+  amended; restore the authored file with `git checkout` before committing, and never commit it
+  as a side effect (`Q99`'s class). The generated copy is build output and is rewritten back from
+  `etl/out/` here only so the bundle hash can be compared.
+- ⚠️ One of the two before-side preview shots came back with 96% of its pixels different from
+  its own twin — the focus-steal corruption the run skill records — which is why each side is
+  shot twice and only a matching pair is evidence.
+
+### The review round, and what it put back
+
+Three reviewers over the diff (reuse, quality, efficiency). Efficiency: clean. The rest:
+
+- 🔴 **Two "do not simplify" reasons had been dropped in the merge and are restored.** `Q77`'s —
+  `load()` on an absent path prints `ERROR: No loader found` *before* returning null, which shipped
+  into the web build's console — now sits on `is_present`, the shared owner; and the deferred
+  `built` emit's reason (`_ready` runs children-first) is back on the one line that needs it.
+- 🔴 **A silent-skip hole, closed with constants.** `_row` pushes an error and returns nothing on a
+  misspelt id, so `is_present("lampz")` is `false`, a verify tool's skip branch exits 0, and
+  `check.sh` greps for parse errors and not for `ERROR:`. Code callers now pass
+  `GeneratedLayer.LAMPS` and never the string, so a typo fails to parse — which is the failure
+  `check.sh` does catch. The `.tscn` keeps the string, because an exported `String` is what a scene
+  stores, and `verify_city.gd` holds both scenes' values against `ids()` in both directions — the
+  check `Q73` could not have. Mutation-checked: `layer = "lampz"` in one scene fails it.
+- ✅ **`Q74` closes**: the per-layer no-collider prose that the merge had deleted went to the node
+  comments of both scenes, and `MeshContract.colliders` exists.
+- The verify tools' skip lines read the table's `noun`; the loader lost the preview's formatting
+  (`height_note`) and a `node` column that named a child after its own parent; every row is indexed
+  rather than `get`-defaulted, so a missing key fails loudly.
+- ⚠️ **"The whole repo was grepped" above was not quite true either**: `signs_text.tres`,
+  `signs_text.gdshader` and the `ARCHITECTURE.md` script map still named the deleted files. Found
+  by review, not by grep — the grep had excluded `.tres` and `.gdshader`.
+- Left as pre-existing: the rebuild-hint template is now in five files where it was in thirteen,
+  and the eight verify tools share a twelve-line preamble a helper could own; both are follow-ons.
+
+**Status.** `P5-1` built and reviewed; `P5-2`–`P5-6` planned in `PLAN.md`, not started.
+
+**See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
+`Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`
+for why the ribbon can be cut and the ground could not · `Q78` and `P3-26` for the registrations
+kept apart · `Q10` for the region as the unit above the tile
+
+## `Q116` — Two regions meet at a hard edge, and the join decides where the cut is, not the unit
+
+Raised by the user against `Q115`: "we still can't load a road for the whole city as one model; it
+is feasible for Wan Chai as a region, but we would expand to Hong Kong." Then: does the join justify
+splitting the model at a finer unit, per road, or a coarser one?
+
+### A whole-city model is refused twice, and size is the second reason
+
+`Q10` puts every region on its own local origin because Wan Chai sits ~38 km from the HK grid origin,
+where float32 spacing is **3.9 mm** against a suspension sag of 50 mm. And the region's 40.7 km of
+road graph is roughly a fiftieth of Hong Kong's, so the thin layers alone — `roads.glb` ~90 MB,
+`lamps.glb` ~115 MB at that scale — pass the mobile bundle cap before a building tile is counted
+(`Q115`). The region is therefore the unit above the tile, and `city_offset` exists so two can be
+placed relative to each other. A neighbour's offset is on the order of 1.5 km, where float32 spacing
+is ~0.1 mm, so placing a second region under a transform costs no precision.
+
+### 🔴 The open defect is the cut, not the unit
+
+`roads.py` clips every road feature to the region rectangle, deliberately — "a polyline cut in two is
+two polylines with nothing to seam", and without the clip 14% of the region's road length was
+unreachable geometry. Two adjacent regions built that way meet at a hard edge with no continuing
+graph, ribbon, kerb run, lamp row or fare snap. ⚠️ **No streaming unit changes that**: the seam is
+where the ETL cut, and it cut on a rectangle.
+
+The fix is to cut on the **graph**. An edge belongs whole to one region; a node on the boundary is
+published by both, at a city-space position that coincides to the vertex; junction caps go whole to
+one side. Then the join is a shared node with duplicated vertices, which is the same construction
+`Q115` uses to chunk the ribbon at a station. ⚠️ **The rectangle stays** — it is what selects sheets
+and `bounds` may not move once a `city.json` has shipped (`Q10`) — and the graph cut is a rule applied
+inside it: which region owns an edge that crosses the line is an assignment rule this repo has not
+written, and it is the whole of `P5-7`'s design work.
+
+### Finer or coarser: neither, and the tile is the unit
+
+- **Per edge** is the finest unit and buys nothing the join needs: it is **737** draw calls a region
+  on a layer that ships in one today, and a cut edge is still a cut edge.
+- **Per region** is today's unit and is what fails at scale — the always-resident bundle `Q115`
+  prices.
+- **Per tile** (150 m, five to ten edges, the grid buildings already stream on) is the unit, once
+  the cut is at nodes: a chunk holds whole edges, or edge runs cut at a station, and its AABB culls
+  it like a building tile.
+
+**Status.** Open. Owned by `P5-7`; nothing built and no assignment rule written.
+
+**See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
+Central · `Q25` for the seam the ground taught

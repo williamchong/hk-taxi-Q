@@ -15,11 +15,11 @@
 ## numbers its heads outside `head_prefixes`, because `REFNAME` has no published
 ## domain and the gate is a rule about *spelling* this project wrote. What stops
 ## that becoming a silent skip is `verify_city.gd`, whose `_check_documents`
-## asserts a *named* signals asset exists and matches this file's constant — so a
+## asserts a *named* signals asset exists and matches the path `generated_layer.gd`'s table gives it — so a
 ## manifest naming `signals.glb` with the file gone fails there.
 extends SceneTree
 
-const GeneratedSignals = preload("res://scripts/city/generated_signals.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's signals cost one draw call — the rule the
@@ -53,16 +53,21 @@ const SIGNALS_MATERIAL: String = "res://tuning/signals.tres"
 
 
 func _init() -> void:
-	if not GeneratedSignals.is_present():
-		print("  skip  no signal heads shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.SIGNALS):
+		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.SIGNALS))
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedSignals.load_signals()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.SIGNALS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedSignals.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.SIGNALS)
+			)
+		)
 		quit(1)
 		return
 
@@ -74,7 +79,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedSignals.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.SIGNALS))
 	quit(1 if not problems.is_empty() else 0)
 
 

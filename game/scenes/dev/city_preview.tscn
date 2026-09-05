@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
@@ -6,15 +6,7 @@
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
-[ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
-[ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="11_tramway"]
-[ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
-[ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
-[ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="14_railings"]
-[ext_resource type="Script" path="res://scripts/city/lamps_preview.gd" id="18_lamps"]
-[ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="15_signs"]
-[ext_resource type="Script" path="res://scripts/city/roadmarks_preview.gd" id="16_roadmarks"]
-[ext_resource type="Script" path="res://scripts/city/signals_preview.gd" id="17_signals"]
+[ext_resource type="Script" path="res://scripts/city/layer_preview.gd" id="5_layer"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -22,38 +14,59 @@
 [node name="Tiles" type="Node3D" parent="."]
 script = ExtResource("1_tiles")
 
+; The drivable surface (`P1-4`): the one generated layer that COLLIDES — its
+; `-col` mesh is what the wheels stand on, and `verify_road_surface.gd` asserts
+; it is there. Every layer node below prints its collider count for the
+; opposite reason — there must be none — and each says why (`Q74`).
 [node name="RoadSurface" type="Node3D" parent="."]
-script = ExtResource("5_surface")
+script = ExtResource("5_layer")
+layer = "road_surface"
 
 ; The tramway (`P3-14`). Here as well as in `city_drive.tscn` because the two
 ; fixed colour viewpoints `Q27` judges the palette from are shot in this scene,
 ; and the rail is the brightest thing the city puts on a road surface — a look
 ; change judged without it would be judged on a city that is missing its
 ; highest-contrast element.
+; No collider: it has no `-col` suffix, it lies on ground that is already solid
+; (`P3-10`), and a 30 mm rail modelled as collision geometry is a kerb the
+; player cannot see the point of.
 [node name="Tramway" type="Node3D" parent="."]
-script = ExtResource("11_tramway")
+script = ExtResource("5_layer")
+layer = "tramway"
 
 ; The turn arrows (`P3-15`), here as well as in `city_drive.tscn` for the same
 ; reason the tramway is. Separate from the ribbon because drawing them on it
 ; would put them under `road_markings.tres`'s 6 m junction fade at exactly the
 ; junctions they are about; a region whose sources publish no marking symbols
 ; ships none and this node simply stays empty.
+; No collider, for a sharper reason than the tramway's: an arrow lies flat
+; across a lane the car drives along, so a collider is a step every vehicle in
+; the region crosses at speed rather than one at the edge of the road.
 [node name="Arrows" type="Node3D" parent="."]
-script = ExtResource("12_arrows")
+script = ExtResource("5_layer")
+layer = "arrows"
 
 ; The published yellow box junctions (`P3-18`), one mesh for the whole region.
 ; A region whose sources publish no box polygons ships none and this node
 ; simply stays empty.
+; No collider, for the arrows' reason: the hatch lies across the middle of
+; every boxed junction, so a collider is a 12 mm step every vehicle crosses at
+; speed.
 [node name="BoxJunctions" type="Node3D" parent="."]
-script = ExtResource("13_boxjunctions")
+script = ExtResource("5_layer")
+layer = "boxjunctions"
 
 ; The published stop and give-way lines (`P3-23`), one mesh for the whole
 ; region, drawn across the junction mouths rather than along the road, and
 ; hosted by the road each one *crosses* — the two disagree on 43% of the
 ; layer. A region whose sources publish no transverse markings ships none and
 ; this node simply stays empty.
+; No collider, and this layer is the sharpest case for it: a stop line crosses
+; every approach in the city, so a 16 mm step modelled as collision geometry is
+; a kerb the player mounts at every junction while braking.
 [node name="RoadMarks" type="Node3D" parent="."]
-script = ExtResource("16_roadmarks")
+script = ExtResource("5_layer")
+layer = "roadmarks"
 
 ; The published traffic signal heads (`P3-17`), one mesh for the whole region,
 ; standing on the kerb the ribbon actually drew rather than where they were
@@ -61,16 +74,27 @@ script = ExtResource("16_roadmarks")
 ; **unlit**: no dataset publishes signal timing, an invented cycle instructs, and
 ; nothing obeys it until `P3-3`'s traffic exists. A region whose publisher spells
 ; its codes outside `head_prefixes` ships none and this node simply stays empty.
+; No collider: a signal post is a 60 mm prism at every junction mouth, so
+; modelling it as collision geometry before `P2-6` has measured a frame on the
+; device floor is the wrong order — and a car catching one mid-drift is a worse
+; failure than passing through it. `B3` revisits it; breakaway poles are the
+; genre's answer, and that is an effect rather than a shape.
 [node name="Signals" type="Node3D" parent="."]
-script = ExtResource("17_signals")
+script = ExtResource("5_layer")
+layer = "signals"
 
 ; The published pedestrian railings (`P3-19`), one mesh for the whole
 ; region, standing on the kerb the ribbon actually drew rather than where
 ; they were surveyed — two-thirds of them were surveyed inside it. A region
 ; whose sources publish no railing layer ships none and this node simply
 ; stays empty.
+; No collider, and here that is a design decision rather than a rendering one:
+; `GAME_DESIGN.md` lists railings under "omit or make breakable" precisely
+; because a solid one turns a narrow street into a corridor. Collision is a
+; `B3` question.
 [node name="Railings" type="Node3D" parent="."]
-script = ExtResource("14_railings")
+script = ExtResource("5_layer")
+layer = "railings"
 
 ; The published lamp posts (`P3-26`), one mesh for the whole region, standing on
 ; the kerb the ribbon actually drew rather than where they were surveyed — 64.1%
@@ -78,15 +102,27 @@ script = ExtResource("14_railings")
 ; exposure into `COLOR_0` at build time, `Q26` has not chosen a look, and
 ; `ART_DESIGN.md` says to resist adding lights. A region whose sources publish no
 ; utility point layer ships none and this node simply stays empty.
+; No collider: a lamp column is a 90 mm prism every twenty metres down every
+; kerb, so modelling 897 of them as collision geometry before `P2-6` has
+; measured a frame on the device floor is the wrong order — and a car catching
+; one mid-drift is a worse failure than passing through it. `B3` revisits it;
+; breakaway poles are the genre's answer, and that is an effect rather than a
+; shape.
 [node name="Lamps" type="Node3D" parent="."]
-script = ExtResource("18_lamps")
+script = ExtResource("5_layer")
+layer = "lamps"
 
 ; The published traffic signs (`P3-16`), one mesh for the whole region, standing
 ; on the poles TD surveyed rather than at the abbreviation points that name them
 ; — those are drawing labels and sit a median 2.6 m away. Only the signs whose
 ; meaning is their *shape* are here; the text-faced 2,364 are refused (`Q42`).
+; No collider, and unlike the railings that is a budget decision rather than a
+; design one: a sign post is a real obstacle a real car would hit, but 699 of
+; them is 699 collision bodies and `P2-6` has not measured a frame on the
+; device floor yet. Breakaway posts are a `B3` question.
 [node name="Signs" type="Node3D" parent="."]
-script = ExtResource("15_signs")
+script = ExtResource("5_layer")
+layer = "signs"
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

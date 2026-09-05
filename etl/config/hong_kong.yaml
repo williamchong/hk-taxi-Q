@@ -1455,7 +1455,7 @@ signs:
     # nothing standing over them. Q68 left this as the last thing the atlas
     # refused, deliberately for its own diff, because Q63's point is that an
     # image ships when someone declares room for it — and the room is declared
-    # in `generated_signs.gd` in the same commit as this row.
+    # in `generated_layer.gd` in the same commit as this row.
     #
     # 🔴 **This face is drawn in NEGATIVE and that is not a detail.** TD's cell
     # is a solid red octagon with the words *knocked out* of it, where TS102 is
@@ -1730,7 +1730,7 @@ signs:
   # 🔴 **This is where `Texture memory` stops being 0.** One square cell per
   # lettered face, laid in a row, so the atlas is 256 x 256 for the one face that
   # carries words today. `mesh_contract.gd` admits it only because
-  # `generated_signs.gd` declares room for exactly this many pixels — Q63's
+  # `generated_layer.gd` declares room for exactly this many pixels — Q63's
   # amendment — so raising this number without moving that one fails the build,
   # which is the entire point of the amendment.
   #

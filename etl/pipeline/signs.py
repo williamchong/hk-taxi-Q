@@ -2216,7 +2216,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignRep
         # ⚠️ Must be 0. A backwards quad is not a backwards word, it is no word.
         "text_facing_away": report.text_facing_away,
         # The number `PROGRESS.md`'s `Texture memory` is, and what
-        # `generated_signs.gd` declares room for. Moving it is a budget change.
+        # `generated_layer.gd` declares room for. Moving it is a budget change.
         "text_atlas_px": report.text_atlas_px,
         # 🔴 **The atlas as a shipped file** (`Q70`), `null` where this region
         # baked no lettering. `export.py` copies it into `city.json` and

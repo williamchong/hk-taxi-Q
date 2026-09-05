@@ -1,7 +1,7 @@
 ## Where the ETL's fare nodes live, and how to read them.
 ##
 ## The third of these, for the same reason as `generated_road_graph.gd` and
-## `generated_road_surface.gd`: two things will want the fare nodes for
+## `generated_layer.gd`: two things will want the fare nodes for
 ## different purposes — the preview draws them, `FareSystem` (`P3-1`) will hail
 ## from them — and a moved path that only one of them learns about fails
 ## silently in the other.

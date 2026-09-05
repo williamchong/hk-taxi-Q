@@ -9,7 +9,7 @@
 ##
 ## No streaming and no LOD, deliberately: two heroes are ≤8k triangles each
 ## against a 300k budget, so residency is cheaper than the machinery — the
-## same argument `road_surface_preview.gd` makes for the carriageway. Measure
+## same argument `layer_preview.gd` makes for the carriageway. Measure
 ## with `tools/frame_stats.py` before believing that sentence about a bigger
 ## roster.
 extends Node3D

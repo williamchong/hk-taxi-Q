@@ -133,7 +133,14 @@ static func _mesh_triangles_inside(mesh: Mesh, here: Transform3D, box: AABB) -> 
 ## engine, so "did the importer act on it" is a question both the road surface
 ## and the building tiles have to ask.
 static func has_collision(node: Node) -> bool:
-	return not node.find_children("*", "StaticBody3D", true, false).is_empty()
+	return colliders(node) > 0
+
+
+## How many static bodies the node's subtree carries. The previews print it
+## because every generated layer but the road surface must carry none (`Q74`),
+## and `fence.gd` prints it because its bodies are built by hand.
+static func colliders(node: Node) -> int:
+	return node.find_children("*", "StaticBody3D", true, false).size()
 
 
 ## The one `ArrayMesh` a single-primitive asset must carry, or `null` with

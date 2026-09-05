@@ -14,10 +14,10 @@
 ## paragraph, unchanged: a city whose estate publishes no box polygons ships
 ## none and `city.json` names null. What stops that becoming a silent skip is
 ## `verify_city.gd`, whose `_check_documents` asserts a *named* box-junction
-## asset exists and matches this file's constant.
+## asset exists and matches the path `generated_layer.gd`'s table gives it.
 extends SceneTree
 
-const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's boxes cost one draw call — the rule the
@@ -35,16 +35,26 @@ const BOXJUNCTIONS_MATERIAL: String = "res://tuning/boxjunctions.tres"
 
 
 func _init() -> void:
-	if not GeneratedBoxJunctions.is_present():
-		print("  skip  no box junctions shipped for this region")
+	if not GeneratedLayer.is_present(GeneratedLayer.BOXJUNCTIONS):
+		print(
+			(
+				"  skip  no %s shipped for this region"
+				% GeneratedLayer.noun(GeneratedLayer.BOXJUNCTIONS)
+			)
+		)
 		quit(0)
 		return
 
-	var packed: PackedScene = GeneratedBoxJunctions.load_boxjunctions()
+	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.BOXJUNCTIONS)
 	if packed == null:
 		# Present but unloadable, which is not the same as absent — the hint
 		# about rebuilding would be the wrong advice here.
-		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedBoxJunctions.PATH)
+		printerr(
+			(
+				"  FAIL  %s exists but did not load as a scene"
+				% GeneratedLayer.path(GeneratedLayer.BOXJUNCTIONS)
+			)
+		)
 		quit(1)
 		return
 
@@ -56,7 +66,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedBoxJunctions.PATH)
+		print("  ok    ", GeneratedLayer.path(GeneratedLayer.BOXJUNCTIONS))
 	quit(1 if not problems.is_empty() else 0)
 
 

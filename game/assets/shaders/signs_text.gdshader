@@ -43,7 +43,7 @@ render_mode cull_back;
 group_uniforms lettering;
 // The baked atlas, arriving on the glTF material and rewired onto this shader by
 // `tools/generated_scene_import.gd`. ⚠️ **Its size is the declared budget** —
-// `generated_signs.gd` names the number and `signs.json` publishes what shipped.
+// `generated_layer.gd` names the number and `signs.json` publishes what shipped.
 uniform sampler2D glyph_atlas : source_color, filter_linear_mipmap_anisotropic;
 // The same two surface numbers as `signs.tres`, because this quad is the same
 // painted aluminium as the plate a millimetre behind it. Split from that file
