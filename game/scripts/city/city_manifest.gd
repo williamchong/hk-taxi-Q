@@ -143,7 +143,12 @@ const NOT_MEASURED: float = -1.0
 ## set missing a bundle file — with a sharper edge than usual: what it would
 ## *also* do is refuse edges the player can still reach and leave nothing there
 ## to see, which is precisely the invisible wall `Q19` exists to remove.
-const SCHEMA_VERSION: int = 22
+##
+## 23 since `P5-2` (`Q115`): the manifest names `signs_placements.json`, and
+## `signs.glb` is a LIBRARY — one mesh per face variant plus a unit pole. A v22
+## reader instantiating it as a scene draws one of every face at the origin,
+## which is wrong rather than merely different: hard rule 5's test.
+const SCHEMA_VERSION: int = 23
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -315,6 +320,12 @@ var signals_path: String
 ## insisted stay the default.
 var signs_text_atlas_path: String
 
+## Where the sign library stands (`P5-2`): `signs.glb` is one mesh per face
+## variant plus a unit pole, and this document is the list of transforms each
+## one is drawn at. Empty on exactly `signs_path`'s terms — the two are written
+## together — and `verify_city.gd` holds the pair against the locator.
+var signs_placements_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -427,6 +438,7 @@ static func load_manifest() -> CityManifest:
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
 	manifest.signals_path = _resolve(document.get("signals"))
 	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"))
+	manifest.signs_placements_path = _resolve(document.get("signs_placements"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -503,6 +515,7 @@ func shipped() -> PackedStringArray:
 		railings_path,
 		signs_path,
 		signs_text_atlas_path,
+		signs_placements_path,
 		roadmarks_path,
 		signals_path,
 	]

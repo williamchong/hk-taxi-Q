@@ -93,16 +93,26 @@ const SIGNS: String = "signs"
 ## One row per layer. `file` is the asset under `assets/generated/`; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
 ## the sentence that makes the layer optional, and is empty for the one layer
-## that is not. Every row carries every key, and the accessors index rather
-## than `get`, so a row missing one fails loudly instead of defaulting.
+## that is not; `placements` names the document that stands a PROP layer's
+## library meshes in the world (`P5-2`), and is empty for a layer that ships
+## merged. Every row carries every key, and the accessors index rather than
+## `get`, so a row missing one fails loudly instead of defaulting.
 const LAYERS: Dictionary[String, Dictionary] = {
-	ROAD_SURFACE: {"file": "roads.glb", "noun": "road surface", "module": "surface", "absence": ""},
+	ROAD_SURFACE:
+	{
+		"file": "roads.glb",
+		"noun": "road surface",
+		"module": "surface",
+		"absence": "",
+		"placements": "",
+	},
 	TRAMWAY:
 	{
 		"file": "tram.glb",
 		"noun": "tramway",
 		"module": "tramway",
 		"absence": "A city whose sources publish no tramway ships none, and that is not a failure.",
+		"placements": "",
 	},
 	ARROWS:
 	{
@@ -111,6 +121,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "arrows",
 		"absence":
 		"A city whose sources publish no marking symbols ships none, and that is not a failure.",
+		"placements": "",
 	},
 	BOXJUNCTIONS:
 	{
@@ -119,6 +130,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "boxjunctions",
 		"absence":
 		"A city whose sources publish no box polygons ships none, and that is not a failure.",
+		"placements": "",
 	},
 	ROADMARKS:
 	{
@@ -127,6 +139,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "roadmarks",
 		"absence":
 		"A city whose sources publish no transverse markings ships none, and that is not a failure.",
+		"placements": "",
 	},
 	SIGNALS:
 	{
@@ -135,6 +148,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "signals",
 		"absence":
 		"A city whose sources publish no signal layer ships none, and that is not a failure.",
+		"placements": "",
 	},
 	RAILINGS:
 	{
@@ -143,6 +157,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "railings",
 		"absence":
 		"A city whose sources publish no railing layer ships none, and that is not a failure.",
+		"placements": "",
 	},
 	LAMPS:
 	{
@@ -151,6 +166,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "lamps",
 		"absence":
 		"A city whose sources publish no utility point layer ships none, and that is not a failure.",
+		"placements": "",
 	},
 	SIGNS:
 	{
@@ -159,6 +175,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "signs",
 		"absence":
 		"A city whose sources publish no shape-faced signs ships none, and that is not a failure.",
+		"placements": "signs_placements.json",
 	},
 }
 
@@ -209,6 +226,22 @@ static func is_present(layer: String) -> bool:
 static func load_layer(layer: String) -> PackedScene:
 	var at: String = path(layer)
 	return null if at.is_empty() else load(at) as PackedScene
+
+
+## The document standing a prop layer's library in the world, or "" for a
+## layer that ships merged.
+static func placements_path(layer: String) -> String:
+	var row: Dictionary = _row(layer)
+	if row.is_empty() or String(row["placements"]).is_empty():
+		return ""
+	return _ROOT + String(row["placements"])
+
+
+## Whether the layer is a library of props placed by a document, rather than
+## one merged mesh. Reading and decoding the document is
+## `generated_placements.gd`'s; this table only says where it is.
+static func has_placements(layer: String) -> bool:
+	return not placements_path(layer).is_empty()
 
 
 ## Message for the case that reads as "there is no such layer" rather than an

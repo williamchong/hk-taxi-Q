@@ -287,6 +287,7 @@ class _Region:
                 # `Q70`: a region that drew no signs baked no lettering either,
                 # so the atlas is null on the same terms `asset` is.
                 "text_atlas": None,
+                "placements_document": None,
             },
             # Same shape and same reason a sixth time: `testville` declares no
             # `signals:` block, so the stage found nothing and says so.

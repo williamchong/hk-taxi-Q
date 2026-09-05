@@ -1835,14 +1835,12 @@ def landmark_occupiers(
             # somewhere else. Written the obvious way first, and HKCEC's bearing
             # is 0.0 — so the error hid completely until Central Plaza, at 143.1,
             # was checked against the scene.
-            yaw = np.radians(-float(place.get("rot_y_deg", 0.0)))
-            cos, sin = float(np.cos(yaw)), float(np.sin(yaw))
-            spin = np.array([[cos, 0.0, sin], [0.0, 1.0, 0.0], [-sin, 0.0, cos]])
+            # The negation itself is `gltf.placed_positions`' one statement.
+            bearing = float(place.get("rot_y_deg", 0.0))
             for mesh in read_glb(path):
                 if not len(mesh.triangles):
                     continue
-                corners = mesh.positions[mesh.triangles].astype(np.float64)
-                yield corners @ spin.T + offset
+                yield mesh.placed(offset, bearing)[mesh.triangles]
 
     return index_corners(blocks(), bands, sample_m, cell_m=cell_m)
 

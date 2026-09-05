@@ -865,21 +865,16 @@ def landmark_meshes(city: Config, region_id: str, out_dir: Path) -> list[gltf.Me
     for landmark in city.landmarks:
         if not landmark_in_region(landmark, transform, high_x, high_z):
             continue
-        angle = np.radians(-float(landmark.rot_y_deg))
-        cos, sin = float(np.cos(angle)), float(np.sin(angle))
-        offset = np.asarray(
-            transform.to_game(landmark.easting, landmark.northing, landmark.elevation),
-            dtype=np.float64,
-        )
+        offset = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
         for mesh in gltf.read_glb(_asset_path(landmark.asset, out_dir)):
-            spun = mesh.positions.copy()
-            spun[:, 0] = mesh.positions[:, 0] * cos + mesh.positions[:, 2] * sin
-            spun[:, 2] = -mesh.positions[:, 0] * sin + mesh.positions[:, 2] * cos
             # `replace` rather than a fresh `MeshData`: spelling the fields out
             # drops whatever the dataclass grows next, silently. `colours` is
             # cleared on purpose — a hero carries none of the class palette the
             # ground test reads, and keeping them would put it up for exclusion.
-            placed.append(replace(mesh, positions=spun + offset, colours=None))
+            # The negated bearing is `gltf.placed_positions`' — one statement.
+            placed.append(
+                replace(mesh, positions=mesh.placed(offset, landmark.rot_y_deg), colours=None)
+            )
     return placed
 
 

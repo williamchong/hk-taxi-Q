@@ -10,6 +10,15 @@
 ##
 ## Exits non-zero if the signs are present and fail any check.
 ##
+## 🔴 **Since `P5-2` the asset is a LIBRARY and the city is its placements.**
+## `signs.glb` carries one mesh per drawn face variant plus a unit pole, and
+## `signs_placements.json` stands each of them; the checks below grade both
+## halves and the join between them, in both directions — a library mesh
+## nothing stands and a placement naming no mesh both render as a missing
+## sign, and a placement with a negative scale renders as no sign at all under
+## `cull_back`. The material and winding checks are per library mesh, which is
+## every plate in the city checked once.
+##
 ## ⚠️ **Absence is a pass, and here that is not even unusual.** `P3-16` ships only
 ## the signs whose meaning is their *shape*; a region whose signs are all time
 ## plates and parking legends draws none and `city.json` names null. What stops
@@ -19,6 +28,7 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One surface per mesh, so each primitive is one draw call — the rule the road
@@ -36,11 +46,10 @@ const SURFACES_PER_MESH: int = 1
 ## the lettering is a second primitive: one extra draw call, and the untextured
 ## majority byte-identical.
 ##
-## ⚠️ **Two is the maximum and one is normal.** A region whose drawn faces carry
-## no `text` layer ships the plate mesh alone, and so does a city whose whitelist
-## has none — which is the state `Texture memory: 0` describes and the default
-## `Q63` insisted stay the default.
-const MAX_MESHES: int = 2
+## ⚠️ **Per lettered code since `P5-2`**: `signs_text_TS102` stands under every
+## `TS102` plate. A region whose drawn faces carry no `text` layer ships no such
+## mesh, and so does a city whose whitelist has none — which is the state
+## `Texture memory: 0` describes and the default `Q63` insisted stay the default.
 
 ## The material the lettering must end up with, mirroring `TEXTURED` in
 ## `tools/generated_scene_import.gd` and `SIGNS_TEXT_MATERIAL` in
@@ -101,12 +110,11 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
-	if instances.is_empty() or instances.size() > MAX_MESHES:
-		problems.append(
-			"expected 1 or %d MeshInstance3D, found %d" % [MAX_MESHES, instances.size()]
-		)
+	if instances.is_empty():
+		problems.append("the library carries no MeshInstance3D")
 		return problems
 
+	var library: Dictionary[String, Mesh] = {}
 	var lettered: bool = false
 	for node: Node in instances:
 		var instance := node as MeshInstance3D
@@ -114,6 +122,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		if mesh == null:
 			problems.append("'%s' carries no ArrayMesh" % instance.name)
 			continue
+		library[String(instance.name)] = mesh
 		if mesh.get_surface_count() != SURFACES_PER_MESH:
 			problems.append(
 				(
@@ -121,7 +130,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 					% [instance.name, mesh.get_surface_count(), SURFACES_PER_MESH]
 				)
 			)
-		if String(instance.name) == GeneratedLayer.SIGNS_TEXT_MESH:
+		if String(instance.name).begins_with(GeneratedLayer.SIGNS_TEXT_MESH):
 			lettered = true
 			problems.append_array(_check_lettering(mesh, instance.name))
 		else:
@@ -130,9 +139,47 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	# ⚠️ Reported rather than required. A region with no `TS102` in it draws no
 	# lettering and is right not to — see `GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX`.
 	if not lettered:
-		print("  note  no lettering primitive; this region's faces carry no words")
+		print("  note  no lettering mesh; this region's faces carry no words")
 
+	problems.append_array(_check_placements(library))
 	problems.append_array(_check_has_no_collision(scene_root))
+	return problems
+
+
+## The join between the library and its placements, both ways, plus the one
+## property of a transform that decides whether a plate draws at all.
+##
+## 🔴 **A negative scale is a mirror, and under `cull_back` a mirrored plate is
+## a missing one.** The ETL draws a mirrored deviation board as its own mesh for
+## exactly that reason, so no placement may carry the flip — and the refusal
+## lives in `GeneratedPlacements.placement_of`, which returns null for a
+## negative or zero factor, so that the preview cannot draw one either. Here
+## that null is a failure. ⚠️ Reachable, and checked by mutation rather than
+## read: negate one factor in `signs_placements.json` and this fails. There is
+## deliberately no determinant check beside it — the basis is a compass
+## rotation and a positive scale by construction, so one would read clean
+## whatever the document said. `GeneratedPlacements.group` is the one statement
+## of the join, shared with `layer_preview.gd`, so the two cannot disagree
+## about which entries stand.
+func _check_placements(library: Dictionary[String, Mesh]) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var document: Dictionary = GeneratedPlacements.load_placements(
+		GeneratedLayer.placements_path(GeneratedLayer.SIGNS),
+		GeneratedLayer.noun(GeneratedLayer.SIGNS)
+	)
+	if document.is_empty():
+		problems.append("the library is present and its placements document is not")
+		return problems
+	var joined: Dictionary = GeneratedPlacements.group(document, library)
+	if int(joined["no_mesh"]) > 0:
+		problems.append("%d placements name a mesh the library does not carry" % joined["no_mesh"])
+	if int(joined["no_transform"]) > 0:
+		problems.append("%d placements carry no usable transform" % joined["no_transform"])
+	for mesh_name: String in joined["unstood"] as PackedStringArray:
+		problems.append("library mesh '%s' is stood nowhere" % mesh_name)
+	if problems.is_empty():
+		var entries: Array = document.get("placements", []) as Array
+		print("  ok    %d placements stand %d library meshes" % [entries.size(), library.size()])
 	return problems
 
 
@@ -207,5 +254,5 @@ func _check_lettering(mesh: ArrayMesh, name: StringName) -> PackedStringArray:
 ## against one arriving early is the absence of a `-col` suffix in one string.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
-		scene_root, "the signs", "SIGNS_MESH_NAME in etl/pipeline/signs.py"
+		scene_root, "the signs", "SIGNS_POLE_MESH_NAME and the face codes in etl/pipeline/signs.py"
 	)

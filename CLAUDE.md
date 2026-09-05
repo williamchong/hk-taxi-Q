@@ -424,6 +424,16 @@ Common emoji for this project:
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
   Numbers in `Q60` and `Q61`.
+- 🔴 **`signs.glb` is a LIBRARY since `P5-2` and the city is `signs_placements.json`** (`Q115`): one mesh
+  per face variant plus a unit `pole`, stood by 1,251 entries — 671 plates + 83 lettering quads + 497
+  poles, asserted in the stage. `triangles`/`vertices`/`aabb` still describe what is DRAWN and read the
+  merged build's numbers, because the expansion was measured against it (0.13 mm). ⚠️ **A mirrored
+  board is its own mesh, never a negative scale** — under `cull_back` a mirror is a missing plate, and
+  `placement_of` refuses one. ⚠️ **The rotation convention is `GeneratedLandmarks.placement_of`'s and
+  `gltf.placed_positions`'s, one per side** — the ETL's copy is shared by `clearance.py`, the
+  occupancy grader and the signs, and was three hand-written copies before `P5-2`'s review; do not
+  write another. ⚠️ Draw calls are **one per library mesh
+  and the shadow passes multiply it**: +35 on the throttle route for 24 meshes, not +22.
 - **`signs.outset_m`, `max_shift_m`, or `signs._register`: paste `signs.json`'s `drawn`,
   `poles_drawn`, `posts_kept_as_surveyed`, `posts_over_shift`, `posts_in_carriageway`,
   `posts_merged_after_shift` and `shift_m`, before and after — and A/B render one street that

@@ -38,6 +38,8 @@ extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const PropBatch = preload("res://scripts/city/prop_batch.gd")
+const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 
 ## Emitted once built, with the bounds of the layer, so a camera can frame it.
 signal built(low: Vector3, high: Vector3)
@@ -74,18 +76,26 @@ func _ready() -> void:
 		push_error("%s: %s exists but did not load as a scene" % [layer, at])
 		return
 	var instance: Node3D = packed.instantiate()
-	instance.name = name
-	add_child(instance)
-	var bounds: AABB = MeshContract.bounds(instance)
+	var bounds: AABB
+	var triangles: int
+	if GeneratedLayer.has_placements(layer):
+		# A library, not a scene: every mesh in it is a prop, and the document
+		# says where each one stands (`P5-2`). The scene is read for its meshes
+		# — the importer has already dispatched their materials — and freed.
+		var placed: Dictionary = _place(instance)
+		instance.free()
+		if placed.is_empty():
+			return
+		bounds = placed["bounds"]
+		triangles = int(placed["triangles"])
+	else:
+		instance.name = name
+		add_child(instance)
+		bounds = MeshContract.bounds(instance)
+		triangles = MeshContract.triangles(instance)
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
-		% [
-			layer,
-			MeshContract.triangles(instance),
-			MeshContract.colliders(instance),
-			bounds.size.x,
-			bounds.size.z,
-		]
+		% [layer, triangles, MeshContract.colliders(self), bounds.size.x, bounds.size.z]
 	)
 	match _HEIGHT.get(layer, ""):
 		"tall":
@@ -97,3 +107,59 @@ func _ready() -> void:
 		# Deferred for the reason `tile_preview.gd` spells out: `_ready` runs
 		# children-first, so a direct emit here beats the camera's connect.
 		built.emit.call_deferred(bounds.position, bounds.end)
+
+
+## Stands the library's meshes where the placements document puts them, one
+## `MultiMesh` per mesh, and returns the drawn extent and triangle count — or
+## `{}` after pushing what went wrong.
+##
+## ⚠️ **Every library mesh must be stood at least once and every entry must
+## name a mesh**, in both directions, and a miss is an error rather than a
+## skip: a face in the library nothing stands is a code the ETL drew for
+## nobody, and an entry naming no mesh is a sign that is not there. Neither
+## shows in a frame. `GeneratedPlacements.group` is the one statement of that
+## join; `verify_signs.gd` fails on the same counts this pushes.
+func _place(library: Node3D) -> Dictionary:
+	var meshes: Dictionary[String, Mesh] = _meshes_by_name(library)
+	var document: Dictionary = GeneratedPlacements.load_placements(
+		GeneratedLayer.placements_path(layer), GeneratedLayer.noun(layer)
+	)
+	if document.is_empty():
+		return {}
+	var joined: Dictionary = GeneratedPlacements.group(document, meshes)
+	if int(joined["no_mesh"]) > 0:
+		push_error("%s: %d placements name no library mesh" % [layer, joined["no_mesh"]])
+	if int(joined["no_transform"]) > 0:
+		push_error("%s: %d placements carry no usable transform" % [layer, joined["no_transform"]])
+	for mesh_name: String in joined["unstood"] as PackedStringArray:
+		push_error("%s: library mesh %s is stood nowhere" % [layer, mesh_name])
+	var transforms: Dictionary[String, Array] = joined["transforms"]
+	var boxes: Array[AABB] = []
+	var triangles: int = 0
+	for mesh_name: String in transforms:
+		var mesh: Mesh = meshes[mesh_name]
+		var batch: Array[Transform3D] = []
+		batch.assign(transforms[mesh_name])
+		add_child(PropBatch.batch(mesh, batch, mesh_name))
+		var local: AABB = mesh.get_aabb()
+		for at: Transform3D in batch:
+			boxes.append(at * local)
+		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
+	print(
+		(
+			"%s: %d placements over %d library meshes, %d draw calls"
+			% [layer, document.get("placements", []).size(), meshes.size(), transforms.size()]
+		)
+	)
+	return {"bounds": MeshContract.union(boxes), "triangles": triangles}
+
+
+## The library's meshes by the name the ETL gave each — the importer has
+## already dispatched their materials.
+func _meshes_by_name(library: Node3D) -> Dictionary[String, Mesh]:
+	var meshes: Dictionary[String, Mesh] = {}
+	for node: Node in library.find_children("*", "MeshInstance3D", true, false):
+		var found := node as MeshInstance3D
+		if found.mesh != null:
+			meshes[String(found.name)] = found.mesh
+	return meshes

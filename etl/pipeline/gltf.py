@@ -19,6 +19,7 @@ which is far more expensive to notice than an exception at parse time.
 from __future__ import annotations
 
 import json
+import math
 import struct
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -132,6 +133,12 @@ class MeshData:
 
     def translated(self, offset: Sequence[float]) -> MeshData:
         return replace(self, positions=self.positions + np.asarray(offset, dtype=np.float64))
+
+    def placed(
+        self, position: Sequence[float], rot_y_deg: float, scale: Sequence[float] | None = None
+    ) -> np.ndarray:
+        """This mesh's vertices stood at `position` under a compass bearing."""
+        return placed_positions(self.positions, position, rot_y_deg, scale)
 
     def aabb(self) -> Bounds:
         low = self.positions.min(axis=0)
@@ -417,6 +424,35 @@ def _mime_type(uri: str) -> str:
     if suffix == ".png":
         return "image/png"
     raise ValueError(f"unsupported texture format {suffix!r} for {uri}")
+
+
+def placed_positions(
+    positions: np.ndarray,
+    position: Sequence[float],
+    rot_y_deg: float,
+    scale: Sequence[float] | None = None,
+) -> np.ndarray:
+    """`positions` stood at `position`, turned to a compass bearing, optionally scaled.
+
+    🔴 **The ETL's one statement of the placement convention `landmarks.json`,
+    `signs_placements.json` and `generated_landmarks.gd` share.** `rot_y_deg` is
+    a compass bearing, clockwise from north, and game north is `-Z`, so the
+    engine places with `Basis(Vector3.UP, deg_to_rad(-rot_y_deg))` — a rotation
+    by the *negated* bearing about `+Y`. HKCEC's bearing is 0.0, so getting the
+    sign wrong stayed invisible until Central Plaza's 143.1 went through it
+    (`Q19`), and the arithmetic was then written a second and a third time in
+    `clearance.py` and `tools/carriageway_occupancy.py` before `P5-2` needed a
+    fourth. Scale is applied first, in the mesh's own frame — a sign pole is a
+    unit prism stretched to its own height — then the rotation, then the move.
+    `tests/test_gltf.py` pins the sign against a point rather than this text.
+    """
+    facing = math.radians(float(rot_y_deg))
+    cos, sin = math.cos(facing), math.sin(facing)
+    rotation = np.array([[cos, 0.0, -sin], [0.0, 1.0, 0.0], [sin, 0.0, cos]])
+    local = np.asarray(positions, dtype=np.float64)
+    if scale is not None:
+        local = local * np.asarray(scale, dtype=np.float64)
+    return local @ rotation.T + np.asarray(position, dtype=np.float64)
 
 
 def normalise(vectors: np.ndarray) -> np.ndarray:

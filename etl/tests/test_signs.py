@@ -45,11 +45,13 @@ from pipeline.polyline import Segments
 from pipeline.railings import facing_away
 from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (
+    _PLACEMENT_DP,
     _TURN_LEFT,
     _TURN_PROHIBITIONS,
     _TURN_RIGHT,
     _TURN_U,
     SIGNS_MATERIAL,
+    SIGNS_POLE_MESH_NAME,
     Sign,
     SignReport,
     _downstream_node,
@@ -63,10 +65,15 @@ from pipeline.signs import (
     _register,
     _turn_classes,
     facing_from_side,
+    is_text_mesh,
     layer_polygons,
     orphaned_supplementary,
+    placement,
     plate_extent_m,
     plate_frame,
+    stood_positions,
+    text_mesh_name,
+    variant_name,
 )
 from pipeline.surface import mitres
 from tests.helpers import CITY_YAML
@@ -1800,3 +1807,77 @@ class TestTheCityCodesSpeakThisModulesVocabulary:
 
     def test_every_prohibition_names_a_known_movement(self) -> None:
         assert set(_TURN_PROHIBITIONS.values()) <= {_TURN_LEFT, _TURN_RIGHT, _TURN_U}
+
+
+class TestTheLibraryStandsWhereThePlatesWere:
+    """`P5-2`: a face is drawn once at the origin and placed by a compass
+    rotation, and that must be the plate `_draw_plate` would have drawn in
+    place — or `triangles`, `aabb` and the frame are all an estimate.
+
+    ⚠️ `gltf.placed_positions` is the ETL's one statement of the convention and
+    `GeneratedLandmarks.placement_of` is the engine's; they meet in the A/B
+    frame. Flipping the rotation's sign fails the cases at 47 and 291.5 — a
+    facing of 0 or 180 is invariant under it, which is why the parametrisation
+    carries two of each.
+    """
+
+    # 4 dp of position rounding, plus a little for the rotation itself.
+    TOLERANCE = 2.0 * 10.0**-_PLACEMENT_DP
+
+    @pytest.mark.parametrize("facing_deg", [0.0, 47.0, 180.0, 291.5])
+    def test_a_placed_library_plate_is_the_plate_drawn_in_place(self, spec, facing_deg):
+        face = spec.faces["TS115"]
+        centre = np.array([12.25, 3.5, -7.75])
+        in_place = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_plate(in_place, spec, face, centre, facing_deg, -1.0)
+        library = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_plate(library, spec, face, np.zeros(3), 0.0, -1.0)
+        drawn = in_place.build("in_place")
+        variant = library.build(variant_name("TS115", False))
+        assert drawn is not None and variant is not None
+        placed = stood_positions(variant, placement(variant.name, centre, facing_deg))
+        # The same builder in the same order, so rows correspond; the rounding
+        # in `placement` is the only slack.
+        assert np.allclose(placed, drawn.positions, atol=self.TOLERANCE)
+        assert np.array_equal(variant.triangles, drawn.triangles)
+
+    def test_a_mirrored_board_is_its_own_mesh_placed_like_any_other(self, spec):
+        """A negative scale would flip winding under `cull_back`; the mirror is
+        drawn into the mesh and the placement carries no scale at all."""
+        face = spec.faces["TS414"]
+        centre = np.array([-3.0, 2.0, 40.0])
+        in_place = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_plate(in_place, spec, face, centre, 123.0, 1.0)
+        library = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_plate(library, spec, face, np.zeros(3), 0.0, 1.0)
+        drawn = in_place.build("in_place")
+        mirrored = library.build(variant_name("TS414", True))
+        assert drawn is not None and mirrored is not None
+        assert mirrored.name != variant_name("TS414", False)
+        entry = placement(mirrored.name, centre, 123.0)
+        assert "scale" not in entry
+        assert np.allclose(stood_positions(mirrored, entry), drawn.positions, atol=self.TOLERANCE)
+        assert facing_away(mirrored) == 0
+
+    def test_a_placed_unit_pole_is_the_pole_drawn_in_place(self, spec):
+        in_place = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_pole(in_place, spec, 4.0, -7.0, 2.0, 5.5)
+        library = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_pole(library, spec, 0.0, 0.0, 0.0, 1.0)
+        drawn = in_place.build("in_place")
+        unit = library.build(SIGNS_POLE_MESH_NAME)
+        assert drawn is not None and unit is not None
+        # The library pole runs from y=0 to y=1, so its stand is the base and
+        # its `Y` scale is the height — 3.5 here, top 5.5 over base 2.0.
+        entry = placement(unit.name, np.array([4.0, 2.0, -7.0]), 0.0, scale=[1.0, 3.5, 1.0])
+        assert np.allclose(stood_positions(unit, entry), drawn.positions, atol=self.TOLERANCE)
+        # A positive scale keeps the winding the pole was built with.
+        assert facing_away(unit) == 0
+
+    def test_the_lettering_prefix_names_only_lettering(self):
+        """`is_text_mesh` is the inverse of `text_mesh_name` and nothing else
+        satisfies it — `verify_signs.gd` classifies by the same prefix."""
+        assert is_text_mesh(text_mesh_name("TS102"))
+        assert not is_text_mesh(variant_name("TS102", False))
+        assert not is_text_mesh(variant_name("TS414", True))
+        assert not is_text_mesh(SIGNS_POLE_MESH_NAME)

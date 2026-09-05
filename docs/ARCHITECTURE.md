@@ -1219,9 +1219,22 @@ it — so it is read as data and the pole supplies the geometry, joined through 
 rotation, so the facing is **derived** from the host edge, the kerb side and drive-on-left. `Q62`
 records what that still owes.
 
+🔴 **Since `P5-2` (`Q115`) the file is a LIBRARY, and the city is `signs_placements.json`.** One
+mesh per drawn face variant — `TS115`, a mirrored deviation board as `TS414_mirrored` because a
+mirror cannot be a transform under `cull_back` — plus a unit `pole` and one `signs_text_<code>`
+quad per lettered code; **24 meshes, 455 triangles** for Wan Chai against the 20,234 the merged
+build carried. Each is drawn at the origin facing north, and a placement is `landmarks.json`'s
+transform shape (`pos`, a compass `rot_y_deg`) plus an optional `scale`, which the pole uses to
+stand at its own height. `layer_preview.gd` draws one `MultiMesh` per library mesh — **24 draw
+calls where there were 2**, and on the throttle route **+35** once the shadow passes are counted —
+and `verify_signs.gd` grades the library per mesh and the join in both directions: every entry
+names a mesh, every mesh is stood, and a negative scale is refused as no transform at all.
+`signs.json`'s `triangles`, `vertices` and `aabb` still describe what is drawn, and read the
+merged build's own numbers; `library_*` and `placements` are the new keys.
+
 | | |
 |---|---|
-| Primitives | one, for the whole region's signage |
+| Primitives | one per library mesh — a face variant, the pole, a lettering quad per lettered code (`P5-2`); before it, one for the whole region's signage |
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no `TEXCOORD_*`, no texture |
 | `COLOR_0` | The plate livery as **sRGB bytes**, straight from `hong_kong.yaml`'s `signs.colours` |
 
@@ -1462,7 +1475,8 @@ every region lies inside them.
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
 | `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
-| `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). One primitive, one draw call, **no collider** | ✅ `P3-16` |
+| `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). **A library since `P5-2`** — one mesh per face variant plus a unit pole, stood by `signs_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-16`, `P5-2` |
+| `signs_placements.json` | Where the sign library stands: one entry per plate, per lettering quad and per pole, in `landmarks.json`'s transform shape plus a `scale` for the pole. Written beside `signs.glb` and null on its terms | ✅ `P5-2` |
 | `lamps.glb` | The published lamp posts, standing on the kerb the ribbon actually drew rather than where LandsD surveyed them — 64.1% of those are inside it — with a bracket arm reaching over the carriageway. The one layer whose vocabulary the publisher defines. Unlit, deliberately: `Q38` bakes the exposure at build time and `Q26` has not chosen a look. One primitive, one draw call, **no collider** | ✅ `P3-26` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |

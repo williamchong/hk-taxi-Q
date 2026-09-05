@@ -29,6 +29,7 @@ extends Node3D
 
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const PropBatch = preload("res://scripts/city/prop_batch.gd")
 
 
 func _ready() -> void:
@@ -89,7 +90,7 @@ func _ready() -> void:
 			_collider(shape, at, "barrier_col_e%d_n%d_%d" % [edge_id, node_id, transforms.size()])
 		)
 
-	add_child(_multimesh(mesh, transforms))
+	add_child(PropBatch.batch(mesh, transforms, "BarrierRow"))
 	# ⚠️ **Both halves printed, and the collider count with them.** `placed` alone
 	# reads as success on a bundle where half the fence was refused, and a fence
 	# with holes in it is the state `Q19` forbids shipping. The collider count is
@@ -137,19 +138,3 @@ func _collider(shape: Shape3D, at: Transform3D, name_: String) -> StaticBody3D:
 	collision.shape = shape
 	body.add_child(collision)
 	return body
-
-
-func _multimesh(mesh: Mesh, transforms: Array[Transform3D]) -> MultiMeshInstance3D:
-	var multi := MultiMesh.new()
-	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.mesh = mesh
-	# Set after `mesh` and `transform_format`: `instance_count` allocates the
-	# buffer, so assigning it first and the format second discards every
-	# transform written in between.
-	multi.instance_count = transforms.size()
-	for index: int in transforms.size():
-		multi.set_instance_transform(index, transforms[index])
-	var node := MultiMeshInstance3D.new()
-	node.name = "BarrierRow"
-	node.multimesh = multi
-	return node

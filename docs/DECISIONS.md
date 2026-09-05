@@ -19221,7 +19221,67 @@ Three reviewers over the diff (reuse, quality, efficiency). Efficiency: clean. T
 - Left as pre-existing: the rebuild-hint template is now in five files where it was in thirteen,
   and the eight verify tools share a twelve-line preamble a helper could own; both are follow-ons.
 
-**Status.** `P5-1` built and reviewed; `P5-2`–`P5-6` planned in `PLAN.md`, not started.
+### ✅ `P5-2` is built — the signs are a library, and the city is its placements
+
+`signs.glb` carries **24 meshes / 455 triangles** — 20 face codes, two of them also as a mirrored
+board (`Q66`: a mirror cannot be a transform under `cull_back`, so it is its own mesh), two
+lettering quads and a unit pole — where the merged build carried 20,234. `signs_placements.json`
+stands them: **1,251 entries = 671 plates + 83 lettering quads + 497 poles**, asserted in the stage
+on `turned_plates_agree`'s terms. The rotation convention is stated once on each side —
+`placed_positions` in the ETL, `GeneratedLandmarks.placement_of` in the engine, deliberately not a
+second producer — and the pole is the one placement with a `scale`.
+
+**The library under its placements IS the merged mesh, measured.** Every one of the 32,614
+expanded vertices lies within **0.13 mm** of a vertex of the shipped merged `signs.glb` and none is
+missing; the lettering matches to a millimetre. So `signs.json`'s `triangles`, `vertices` and
+`aabb` keep their meaning and read **20,234 / 32,614** exactly as before; every other counter is
+byte-identical — both partitions, `shift_m` n=654, `plates_turned` 195, `boards_mirrored` 2,
+`facing_away` 0 summed over the library, which is not a tautology of the placement because a
+rotation and a positive scale preserve winding. `city.json` 22 → **23**, `signs.json` 4 → **5**.
+
+**Evidence.** `check.sh` exit 0; `verify_signs.gd` reads *1251 placements stand 24 library
+meshes*. The `Q27` street frame against the merged build: **2 of 2,073,600 pixels** differ, maximum
+channel difference 6 — float32 transforms on the GPU against baked positions. Draw calls on the
+throttle route **65/65/63/63/65/63 → 100/99/98/100/100/99**.
+
+🔴 **That is +35, not the +22 the plan estimated, and the difference is the shadow passes.** A
+`MultiMesh` is a draw per cascade as well as one for the main pass, and the merged mesh paid that
+once; the budget is stated in *visible* triangles and this number is the tool's all-pass count, so
+the figure to carry is the delta on this route. It sits under the 150 mobile ceiling with the
+overlay's +8 included. ⚠️ Whether the small faces should cast shadows at all is a `P2-6` question
+and not decided here.
+
+⚠️ **Size moved the other way from the plan's implication**: `signs.glb` **1,050,100 → 46,340 B**,
+and `signs_placements.json` is **254,954 B** pretty-printed — a net saving, but the document is
+five times the library it stands.
+
+**Mutation-checked, four ways.** A negated pole scale: `verify_signs.gd` fails on that entry with
+*no usable transform* — ⚠️ the refusal lives in `placement_of`, so a determinant check beside it
+was found unreachable and removed (`Q58`'s trap in a new file). A library mesh stood nowhere: fails
+*stood nowhere*. The rotation's sign flipped in `placed_positions`: 3 of the 6 convention tests
+fail, the three whose facing is not 0 or 180. The pole's stand skipped: the stage refuses with
+*754 placements … expected 1251*.
+
+**The review round.** Three reviewers; efficiency clean (the whole placement pass is ~7 ms, the
+JSON's indentation is 55% of its bytes and stays, by `documents.py`'s own argument). What moved:
+
+- 🔴 **The compass rotation was the ETL's THIRD copy, and its "one statement" docstring was
+  false.** `clearance.py::landmark_meshes` and `tools/carriageway_occupancy.py` each carried the
+  same negated-bearing arithmetic; it is `gltf.placed_positions` now, `MeshData.placed` beside
+  `translated`, with a test that turns north to east — and the swap is proved inert the way `Q108`
+  says: a full rebuild reproduces `clearance.json` apart from the build stamp, and the occupancy
+  grader's output is byte-identical.
+- 🔴 **A latent contradiction**: a stand whose mesh collapsed was filtered out *and* the partition
+  would then have raised on it as "dropped or doubled". `placements_refused` counts them and closes
+  the identity; 0 today.
+- The placements reader is its own script, `generated_placements.gd`, and `GeneratedLayer` is a
+  table again; `GeneratedPlacements.group` is the one statement of the library-to-document join,
+  so the preview's errors and the verifier's failures are the same three counts. The preview's
+  AABB seed is `MeshContract.union`, which exists for exactly that trap.
+- `is_text_mesh` is the inverse of `text_mesh_name` on both sides, pinned; the 4 dp of a placement
+  is reasoned (float32 spacing at region scale) and the tests derive their tolerance from it.
+
+**Status.** `P5-1` and `P5-2` built and reviewed; `P5-3`–`P5-6` planned in `PLAN.md`, not started.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
 `Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`

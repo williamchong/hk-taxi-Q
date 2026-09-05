@@ -192,7 +192,12 @@ CITY_NAME = "city.json"
 # merged. ⚠️ Nullable like the optional assets: a city that declares no
 # `clearance:` block fences nothing, and the game must be able to tell that from
 # a city whose fence found nothing to do.
-CITY_SCHEMA = 22
+# 23 since `P5-2` (`Q115`): the manifest names `signs_placements.json`, and
+# `signs.glb` is a library — one mesh per face variant plus a unit pole — rather
+# than the region's signage merged. A v22 reader would instantiate the library
+# as a scene and draw one of every face at the origin, which is wrong rather
+# than merely different: hard rule 5's test.
+CITY_SCHEMA = 23
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -233,6 +238,7 @@ OPTIONAL_ASSET_KEYS = (
     "railings",
     "signs",
     "signs_text_atlas",
+    "signs_placements",
     "roadmarks",
     "signals",
 )
@@ -465,6 +471,11 @@ def build_region(
         # did, on every run, leaving `verify_signs.gd` red. The atlas ships
         # beside `signs.glb` now and this key is what keeps it there.
         "signs_text_atlas": signs["text_atlas"],
+        # Where the sign library STANDS (`P5-2`, `Q115`): `signs.glb` is one mesh
+        # per face variant and a unit pole since schema 23, and a reader that
+        # instantiates it as a scene puts every face in the city at the origin.
+        # `null` on `signs`' own terms.
+        "signs_placements": signs["placements_document"],
         # `null` where the city drew no stop or give-way lines, on `tramway`'s
         # terms and read from the stage's own manifest for its reason: a region
         # whose markings all failed the transverse join must not be contradicted

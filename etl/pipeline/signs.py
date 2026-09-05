@@ -204,14 +204,36 @@ SIGNS_MANIFEST_NAME = "signs.json"
 # the old interpretation would read the distribution as moves that all happened
 # and would be **wrong about what it describes** — hard rule 5's test, met by a
 # key whose bytes still parse. `posts_kept_as_surveyed` is the new key.
-SIGNS_MANIFEST_SCHEMA = 4
+# 5 since `P5-2` (`Q115`): `signs.glb` is a LIBRARY — one mesh per drawn face
+# variant plus a unit pole — and the plates stand where `signs_placements.json`
+# puts them. `triangles`, `vertices` and `aabb` still describe what is DRAWN
+# (the library under its placements), so a reader comparing them to the merged
+# build reads the same numbers; `library_*` and `placements` are new, and
+# `placements_document` names the file. A v4 reader publishing a `city.json`
+# with no `signs_placements` would ship a library and stand nothing on it.
+SIGNS_MANIFEST_SCHEMA = 5
+# The placements, beside the library (`P5-2`). One entry per library mesh per
+# stand: a plate, its lettering quad where the face has words, and its pole.
+# `transform` is `landmarks.json`'s shape — `pos` and a compass `rot_y_deg` —
+# so the engine owns one rotation convention, not two; `scale` is the one
+# addition, because a pole is a unit prism stretched to its own height.
+SIGNS_PLACEMENTS_NAME = "signs_placements.json"
+SIGNS_PLACEMENTS_SCHEMA = 1
 
 # ⚠️ **No `-col` suffix**, the same call `arrows.glb` and `railings.glb` both
 # make and for a reason this layer states more strongly than either: 728 poles
 # is 728 collision bodies, and `P2-6` has not yet measured a frame on the device
 # floor. A car passing through a sign post is the recorded cost. Breakaway poles
 # are the genre's answer and they are an effect, so they belong in `B3`.
-SIGNS_MESH_NAME = "signs"
+#
+# Since `P5-2` a library mesh is named after its face code — `TS115` — with
+# `SIGNS_MIRRORED_SUFFIX` where the board is turned to face the carriageway
+# (`Q66`), and the post is `SIGNS_POLE_MESH_NAME`. Winding cannot be restored
+# by a transform, so a mirrored board is its own mesh rather than a negative
+# scale on the plain one — a negative determinant flips every triangle under
+# `cull_back` and the board goes missing rather than backwards.
+SIGNS_POLE_MESH_NAME = "pole"
+SIGNS_MIRRORED_SUFFIX = "_mirrored"
 
 # glTF material name, the contract channel `SURFACE_MATERIAL`, `TRAMWAY_MATERIAL`
 # and `ARROWS_MATERIAL` all use: `tools/generated_scene_import.gd` maps this
@@ -226,6 +248,10 @@ SIGNS_MATERIAL = "signs"
 # primitives in one `.glb` keeps the untextured majority byte-identical and
 # scopes the texture declaration to one surface, the shape `railings.glb`
 # already ships three of. Cost: one draw call.
+#
+# Since `P5-2` it is a PREFIX: one lettering mesh per lettered code —
+# `signs_text_TS102` — placed under the same transform as its plate, so the
+# words stand on the face they belong to. `verify_signs.gd` matches the prefix.
 SIGNS_TEXT_MESH_NAME = "signs_text"
 SIGNS_TEXT_MATERIAL = "signs_text"
 
@@ -523,10 +549,21 @@ class SignReport:
     # `chevrons_` field a lie.
     boards_mirrorable: int = 0
     boards_mirrored: int = 0
+    # What is DRAWN: the library under every placement, so these read the same
+    # as the merged build they replaced (`P5-2`). The library's own size is
+    # `library_*`, and `placements` counts entries in `signs_placements.json`.
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
+    placements: int = 0
+    # Stands whose library mesh collapsed to nothing, so nothing could stand;
+    # part of the partition `placements + placements_refused == drawn +
+    # text_plates + poles_drawn`, and 0 today.
+    placements_refused: int = 0
+    library_meshes: int = 0
+    library_triangles: int = 0
+    library_vertices: int = 0
 
     # Reused rather than restated, the line `railings.py` and `boxjunctions.py`
     # both carry: p90/p99/max beside the median is `arrows.py`'s choice and its
@@ -1490,6 +1527,76 @@ def _draw_pole(
 
 
 # --------------------------------------------------------------------------
+# The library and its placements (`P5-2`)
+# --------------------------------------------------------------------------
+
+
+# Where a library mesh is drawn: at the pole axis, facing north, so a placement
+# is a compass rotation about `Y` and a translation — `plate_frame(0.0)` is the
+# frame `_placed_positions` and `GeneratedLandmarks.placement_of` both undo.
+_LIBRARY_ORIGIN = np.zeros(3)
+_LIBRARY_FACING_DEG = 0.0
+
+
+def variant_name(code: str, mirrored: bool) -> str:
+    """The library mesh a plate of `code` stands as."""
+    return code + (SIGNS_MIRRORED_SUFFIX if mirrored else "")
+
+
+def text_mesh_name(code: str) -> str:
+    """The library mesh carrying `code`'s lettering, placed under its plate."""
+    return f"{SIGNS_TEXT_MESH_NAME}_{code}"
+
+
+def is_text_mesh(name: str) -> bool:
+    """Whether a library mesh is a lettering quad — the inverse of `text_mesh_name`."""
+    return name.startswith(SIGNS_TEXT_MESH_NAME)
+
+
+# Decimals a placement keeps. Float32 spacing at region scale (~10³ m) is
+# ~1e-4 m, which is what `signs.glb` stores and the engine's `Transform3D`
+# holds, so 4 dp is that resolution: 3 would be coarser than the merged build,
+# 5 would be bytes the consumer cannot represent. `tests/test_signs.py`'s
+# tolerance is derived from this number rather than restated.
+_PLACEMENT_DP = 4
+
+
+def _rounded(value: float) -> float:
+    # `+ 0.0` collapses `-0.0`, on `documents.round_position`'s argument: a plate
+    # at the region's western edge can land on it, and "-0.0" is a diff.
+    return round(float(value), _PLACEMENT_DP) + 0.0
+
+
+def placement(
+    mesh: str, position: np.ndarray, facing_deg: float, scale: Sequence[float] | None = None
+) -> dict[str, Any]:
+    """One `signs_placements.json` entry, in `landmarks.json`'s transform shape."""
+    entry: dict[str, Any] = {
+        "mesh": mesh,
+        "transform": {
+            "pos": [_rounded(value) for value in position],
+            "rot_y_deg": _rounded(facing_deg),
+        },
+    }
+    if scale is not None:
+        entry["scale"] = [_rounded(value) for value in scale]
+    return entry
+
+
+def stood_positions(mesh: MeshData, entry: dict[str, Any]) -> np.ndarray:
+    """`mesh`'s vertices where `entry` stands them, in region game space.
+
+    The rotation is `gltf.placed_positions`' — the one statement `landmarks.json`
+    and this document share — so what this owns is only the entry's shape.
+    `tests/test_signs.py` pins it against `_draw_plate` drawn in place, which is
+    what makes the library's `triangles`/`aabb` the merged build's numbers and
+    not an estimate.
+    """
+    transform = entry["transform"]
+    return mesh.placed(transform["pos"], float(transform["rot_y_deg"]), entry.get("scale"))
+
+
+# --------------------------------------------------------------------------
 # The region
 # --------------------------------------------------------------------------
 
@@ -1714,7 +1821,13 @@ def build_region(
     # `ALBEDO`. `arrows.py` records the opposite decision for the opposite reason,
     # and `Q54`'s bar is the same in both directions. The normal is per polygon,
     # because every plate faces a different sideways.
-    builder = ColouredBuilder(SIGNS_MATERIAL)
+    # 🔴 **One builder per library mesh, not one for the region** (`P5-2`). A
+    # face variant is drawn ONCE, at the origin facing north, and every plate of
+    # it is a placement; the pole is a unit prism placed with a `Y` scale. The
+    # channel decision stands: `COLOR_0` ships and `signs.gdshader` reads it.
+    library: dict[str, ColouredBuilder] = {}
+    text_libraries: dict[str, _TextBuilder] = {}
+    stands: list[dict[str, Any]] = []
     # ⚠️ **Baked before anything is drawn, and only for faces that ask.** A city
     # whose whitelist carries no `text` layer bakes nothing, ships no texture and
     # keeps `Texture memory` at 0 — the default `Q63` insisted stay the default.
@@ -1728,7 +1841,6 @@ def build_region(
             cached_source(city, spec.text_source, root=sources_root),
             cell_px=spec.text_cell_px,
         )
-    text_builder = _TextBuilder()
     # ---- place, then draw ----
     # ⚠️ **Two phases, because registration can re-create what the merge
     # removed.** Every post on the same edge, side and `t` is pushed to the
@@ -1840,17 +1952,31 @@ def build_region(
             # the turn visible in the manifest.
             plate_facing_deg = _plate_facing_deg(post.facing_deg, face)
             report.plates_turned += int(plate_facing_deg != post.facing_deg)
-            _draw_plate(
-                builder,
-                spec,
-                face,
-                centre,
-                plate_facing_deg,
-                post.side,
-                code=sign.code,
-                text=text,
-                text_builder=text_builder,
-            )
+            mirrored = _mirrors(face, post.side)
+            variant = variant_name(sign.code, mirrored)
+            lettered_face = text is not None and sign.code in text.cells
+            if variant not in library:
+                library[variant] = ColouredBuilder(SIGNS_MATERIAL)
+                # `side` only decides the mirror in `_draw_plate`, so the
+                # variant is drawn with the side that reproduces its own mirror.
+                _draw_plate(
+                    library[variant],
+                    spec,
+                    face,
+                    _LIBRARY_ORIGIN,
+                    _LIBRARY_FACING_DEG,
+                    1.0 if mirrored else -1.0,
+                    code=sign.code,
+                    text=text,
+                    text_builder=(
+                        text_libraries.setdefault(sign.code, _TextBuilder())
+                        if lettered_face
+                        else None
+                    ),
+                )
+            stands.append(placement(variant, centre, plate_facing_deg))
+            if lettered_face:
+                stands.append(placement(text_mesh_name(sign.code), centre, plate_facing_deg))
             height += 2.0 * half_h + spec.stack_gap_m
 
             report.drawn += 1
@@ -1860,13 +1986,16 @@ def build_region(
             )
             _record_semantics(report, sign, post, face, turns, by_edge[post.snap.edge])
 
-        _draw_pole(
-            builder,
-            spec,
-            post.x,
-            post.z,
-            post.y,
-            post.y + height - spec.stack_gap_m + spec.pole_headroom_m,
+        if SIGNS_POLE_MESH_NAME not in library:
+            library[SIGNS_POLE_MESH_NAME] = ColouredBuilder(SIGNS_MATERIAL)
+            _draw_pole(library[SIGNS_POLE_MESH_NAME], spec, 0.0, 0.0, 0.0, 1.0)
+        stands.append(
+            placement(
+                SIGNS_POLE_MESH_NAME,
+                np.array([post.x, post.y, post.z]),
+                0.0,
+                scale=[1.0, height - spec.stack_gap_m + spec.pole_headroom_m, 1.0],
+            )
         )
         report.poles_drawn += 1
 
@@ -1882,32 +2011,85 @@ def build_region(
             f"the per-code counts disagree, so one of them is not counting what it says"
         )
 
-    mesh = builder.build(SIGNS_MESH_NAME)
-    if mesh is not None:
-        report.facing_away = facing_away(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
-        report.aabb = [list(low), list(high)]
-        meshes = [mesh]
-        text_mesh = None if text is None else text_builder.build(SIGNS_TEXT_MESH_NAME, text)
-        if text_mesh is not None:
-            # ⚠️ **`facing_away` is asked of this one too.** It is a second mesh
-            # under the same `cull_back` rule, and a quad wound the wrong way is
-            # not a backwards word — it is no word at all, which is exactly the
-            # failure this stage cannot see in a frame (`Q58`).
-            report.text_facing_away = facing_away(text_mesh)
-            report.text_plates = text_mesh.triangle_count // 2
+    meshes: list[MeshData] = []
+    for name in sorted(library):
+        built = library[name].build(name)
+        if built is not None:
+            meshes.append(built)
+    if text_libraries:
+        assert text is not None
+        for code in sorted(text_libraries):
+            built = text_libraries[code].build(text_mesh_name(code), text)
+            if built is not None:
+                meshes.append(built)
+    by_name = {mesh.name: mesh for mesh in meshes}
+    # A stand whose mesh collapsed entirely (every triangle a sliver) would be a
+    # placement of nothing; refused rather than shipped, counted so the
+    # partition below still closes, and 0 today.
+    report.placements_refused = sum(1 for entry in stands if entry["mesh"] not in by_name)
+    stands = [entry for entry in stands if entry["mesh"] in by_name]
+    if meshes:
+        # ⚠️ **`facing_away` is asked of every library mesh**, plates and pole
+        # alike, and it is not a tautology of the placement: a rotation about
+        # `Y` and a positive scale preserve winding, so the library's answer is
+        # the drawn city's — and a polygon wound backwards in `_draw_plate` still
+        # reads here, which is the mutation the test performs. The lettering
+        # meshes are under the same `cull_back` rule and counted apart: a quad
+        # wound the wrong way is not a backwards word, it is no word (`Q58`).
+        report.text_facing_away = sum(
+            facing_away(mesh) for mesh in meshes if is_text_mesh(mesh.name)
+        )
+        report.facing_away = sum(facing_away(mesh) for mesh in meshes) - report.text_facing_away
+        report.library_meshes = len(meshes)
+        report.library_triangles = sum(mesh.triangle_count for mesh in meshes)
+        report.library_vertices = sum(len(mesh.positions) for mesh in meshes)
+        report.placements = len(stands)
+        # What is DRAWN, so these stay the merged build's numbers (`P5-2`).
+        low = np.full(3, np.inf)
+        high = np.full(3, -np.inf)
+        for entry in stands:
+            mesh = by_name[entry["mesh"]]
+            # The plates and posts alone, as before `P5-2`; the lettering is
+            # `text_plates`, its own count, and the extent takes both.
+            if not is_text_mesh(mesh.name):
+                report.triangles += mesh.triangle_count
+                report.vertices += len(mesh.positions)
+            placed = stood_positions(mesh, entry)
+            low = np.minimum(low, placed.min(axis=0))
+            high = np.maximum(high, placed.max(axis=0))
+        report.aabb = [[float(value) for value in low], [float(value) for value in high]]
+        report.text_plates = sum(1 for entry in stands if is_text_mesh(entry["mesh"]))
+        if text is not None and text_libraries:
             report.text_atlas_px = text.pixels
             report.text_coverage = {code: cell.coverage for code, cell in text.cells.items()}
-            meshes.append(text_mesh)
-            # ⚠️ **`write_glb` writes the atlas beside the `.glb`** — the mesh
-            # names `SIGNS_TEXT_ATLAS_NAME` as its texture's `uri` and `gltf.py`
-            # owns both halves of that reference (`Q70`). Only its size is
-            # recorded here, from the bytes rather than from a `stat` of a file
-            # this module no longer writes.
+            # ⚠️ **`write_glb` writes the atlas beside the `.glb`** — each
+            # lettering mesh names `SIGNS_TEXT_ATLAS_NAME` as its texture's `uri`
+            # and `gltf.py` owns both halves of that reference (`Q70`).
             report.text_atlas_bytes = len(text.png)
+        # ⚠️ **Computed, not claimed**, on `turned_plates_agree`'s terms: every
+        # plate stands once, every lettered plate stands its words once, and
+        # every post stands once. A stand dropped or doubled anywhere above
+        # renders as a missing sign or a z-fighting one, and nothing in a frame
+        # says which.
+        expected = report.drawn + report.text_plates + report.poles_drawn
+        if report.placements + report.placements_refused != expected:
+            raise ValueError(
+                f"{report.placements} placements and {report.placements_refused} refused for "
+                f"{report.drawn} plates, {report.text_plates} lettered and "
+                f"{report.poles_drawn} poles — expected {expected}, so a stand was dropped "
+                f"or doubled"
+            )
         report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
+        write_document(
+            out_dir / SIGNS_PLACEMENTS_NAME,
+            {
+                "schema_version": SIGNS_PLACEMENTS_SCHEMA,
+                "city_id": city.id,
+                "region_id": region_id,
+                "library": SIGNS_NAME,
+                "placements": stands,
+            },
+        )
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -2176,6 +2358,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignRep
         # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
         # 11 was bumped over.
         "asset": SIGNS_NAME if report.drawn else None,
+        "placements_document": SIGNS_PLACEMENTS_NAME if report.drawn else None,
         # The read, as four disjoint parts of `signs`.
         "signs": report.signs,
         # ⚠️ **The big number here is the decision, not a shortfall.** Every sign
@@ -2326,6 +2509,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignRep
         "vertices": report.vertices,
         "bytes": report.bytes,
         "aabb": report.aabb,
+        "placements": report.placements,
+        "placements_refused": report.placements_refused,
+        "library_meshes": report.library_meshes,
+        "library_triangles": report.library_triangles,
+        "library_vertices": report.library_vertices,
     }
     return write_document(out_dir / SIGNS_MANIFEST_NAME, document)
 

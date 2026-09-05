@@ -24,11 +24,17 @@ extends RefCounted
 static func triangles(node: Node) -> int:
 	var count: int = 0
 	for instance: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
-		var mesh: Mesh = instance.mesh
-		if mesh == null:
-			continue
-		for surface: int in mesh.get_surface_count():
-			count += mesh.surface_get_array_index_len(surface) / 3
+		if instance.mesh != null:
+			count += mesh_triangles(instance.mesh)
+	return count
+
+
+## Triangles in one mesh across its surfaces — what `triangles` sums, and what
+## a prop layer multiplies by its placement count (`P5-2`).
+static func mesh_triangles(mesh: Mesh) -> int:
+	var count: int = 0
+	for surface: int in mesh.get_surface_count():
+		count += mesh.surface_get_array_index_len(surface) / 3
 	return count
 
 

@@ -165,6 +165,15 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document("signs", manifest.signs_path, GeneratedLayer.path(GeneratedLayer.SIGNS))
 		)
+		# The library's placements, on the library's own terms (`P5-2`): a
+		# bundle naming `signs.glb` and not this stands nothing on it.
+		problems.append_array(
+			_check_document(
+				"sign placements",
+				manifest.signs_placements_path,
+				GeneratedLayer.placements_path(GeneratedLayer.SIGNS)
+			)
+		)
 	# Guarded on the same terms a sixth time: `verify_roadmarks.gd` treats an
 	# absent asset as a pass, so a manifest naming `roadmarks.glb` with the file
 	# gone would otherwise pass every check here.

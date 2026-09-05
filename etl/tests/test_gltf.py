@@ -15,7 +15,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from pipeline.gltf import MeshData, Texture, read_glb, read_scene, write_glb
+from pipeline.gltf import MeshData, Texture, placed_positions, read_glb, read_scene, write_glb
 
 # The rotation LandsD ships on every node: local Z-up to Godot's Y-up, with the
 # grid position in the translation column. Column-major, as glTF requires.
@@ -349,3 +349,32 @@ def test_attribute_length_mismatch_is_rejected() -> None:
             triangles=np.array([[0, 1, 2]]),
             uv2=np.zeros((2, 2), dtype=np.float32),
         )
+
+
+class TestPlacedPositions:
+    """`placed_positions` is the one statement of the compass convention.
+
+    A point one metre north of the origin, turned to bearing 90, stands one
+    metre EAST — clockwise from north on the compass, which is the negated
+    rotation about `+Y` in a frame whose north is `-Z`. Flip the sign and it
+    stands west, which is the defect `Q19` found on Central Plaza's 143.1.
+    """
+
+    def test_a_bearing_turns_north_to_east(self):
+        north = np.array([[0.0, 0.0, -1.0]])
+        east = placed_positions(north, (0.0, 0.0, 0.0), 90.0)
+        assert np.allclose(east, [[1.0, 0.0, 0.0]], atol=1e-12)
+
+    def test_scale_applies_before_the_turn_and_the_move_after(self):
+        point = np.array([[0.0, 1.0, -1.0]])
+        stood = placed_positions(point, (10.0, 2.0, 5.0), 90.0, scale=(1.0, 3.0, 1.0))
+        assert np.allclose(stood, [[11.0, 5.0, 5.0]], atol=1e-12)
+
+    def test_the_mesh_method_is_the_function(self):
+        mesh = MeshData(
+            name="m",
+            positions=np.array([[0.0, 0.0, -1.0]]),
+            normals=np.zeros((1, 3), dtype=np.float32),
+            triangles=np.zeros((0, 3), dtype=np.uint32),
+        )
+        assert np.allclose(mesh.placed((1.0, 0.0, 0.0), 180.0), [[1.0, 0.0, 1.0]], atol=1e-12)
