@@ -109,32 +109,20 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
-	if instances.is_empty():
-		problems.append("the library carries no MeshInstance3D")
+	var library: Dictionary[String, Mesh] = MeshContract.library_meshes(
+		scene_root, SURFACES_PER_MESH, problems
+	)
+	if library.is_empty():
 		return problems
 
-	var library: Dictionary[String, Mesh] = {}
 	var lettered: bool = false
-	for node: Node in instances:
-		var instance := node as MeshInstance3D
-		var mesh := instance.mesh as ArrayMesh
-		if mesh == null:
-			problems.append("'%s' carries no ArrayMesh" % instance.name)
-			continue
-		library[String(instance.name)] = mesh
-		if mesh.get_surface_count() != SURFACES_PER_MESH:
-			problems.append(
-				(
-					"'%s' has %d surfaces, expected %d"
-					% [instance.name, mesh.get_surface_count(), SURFACES_PER_MESH]
-				)
-			)
-		if String(instance.name).begins_with(GeneratedLayer.SIGNS_TEXT_MESH):
+	for mesh_name: String in library:
+		var mesh := library[mesh_name] as ArrayMesh
+		if mesh_name.begins_with(GeneratedLayer.SIGNS_TEXT_MESH):
 			lettered = true
-			problems.append_array(_check_lettering(mesh, instance.name))
+			problems.append_array(_check_lettering(mesh, mesh_name))
 		else:
-			problems.append_array(_check_plates(mesh, instance.name))
+			problems.append_array(_check_plates(mesh, mesh_name))
 
 	# ⚠️ Reported rather than required. A region with no `TS102` in it draws no
 	# lettering and is right not to — see `GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX`.
@@ -158,29 +146,15 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ## read: negate one factor in `signs_placements.json` and this fails. There is
 ## deliberately no determinant check beside it — the basis is a compass
 ## rotation and a positive scale by construction, so one would read clean
-## whatever the document said. `GeneratedPlacements.group` is the one statement
-## of the join, shared with `layer_preview.gd`, so the two cannot disagree
-## about which entries stand.
+## whatever the document said. `GeneratedPlacements.check_join` is the one statement
+## of the join graded, shared with `verify_lamps.gd`, over the same `group` the
+## preview draws from — so the tools cannot disagree about which entries stand.
 func _check_placements(library: Dictionary[String, Mesh]) -> PackedStringArray:
-	var problems: PackedStringArray = []
-	var document: Dictionary = GeneratedPlacements.load_placements(
+	return GeneratedPlacements.check_join(
 		GeneratedLayer.placements_path(GeneratedLayer.SIGNS),
-		GeneratedLayer.noun(GeneratedLayer.SIGNS)
+		GeneratedLayer.noun(GeneratedLayer.SIGNS),
+		library
 	)
-	if document.is_empty():
-		problems.append("the library is present and its placements document is not")
-		return problems
-	var joined: Dictionary = GeneratedPlacements.group(document, library)
-	if int(joined["no_mesh"]) > 0:
-		problems.append("%d placements name a mesh the library does not carry" % joined["no_mesh"])
-	if int(joined["no_transform"]) > 0:
-		problems.append("%d placements carry no usable transform" % joined["no_transform"])
-	for mesh_name: String in joined["unstood"] as PackedStringArray:
-		problems.append("library mesh '%s' is stood nowhere" % mesh_name)
-	if problems.is_empty():
-		var entries: Array = document.get("placements", []) as Array
-		print("  ok    %d placements stand %d library meshes" % [entries.size(), library.size()])
-	return problems
 
 
 ## The plates and posts: the layer as it was before `P3-20`.

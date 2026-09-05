@@ -148,6 +148,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document("lamps", manifest.lamps_path, GeneratedLayer.path(GeneratedLayer.LAMPS))
 		)
+		problems.append_array(
+			_check_document(
+				"lamp placements",
+				manifest.lamps_placements_path,
+				GeneratedLayer.placements_path(GeneratedLayer.LAMPS)
+			)
+		)
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
 			_check_document(

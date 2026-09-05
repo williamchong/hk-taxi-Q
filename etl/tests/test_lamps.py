@@ -31,6 +31,7 @@ from pipeline.lamps import (
     LampReport,
     _draw_lamp,
     _lantern,
+    _library_post,
     _merge,
     _Placed,
     _register,
@@ -38,6 +39,8 @@ from pipeline.lamps import (
     _strut,
 )
 from pipeline.meshbuild import ColouredBuilder
+from pipeline.placements import PLACEMENT_DP, placement, stood_positions
+from pipeline.polyline import bearing_deg
 from pipeline.railings import facing_away
 from tests.helpers import CITY_YAML
 
@@ -262,6 +265,7 @@ class TestTheMeshFacesOutward:
             np.array([0.0, 9.0, 0.0]),
             spec.column_radius_m,
             cap_end=True,
+            seed=np.array([0.0, 1.0, 0.0]),
         )
         mesh = builder.build("column")
         assert facing_away(mesh) == 0
@@ -540,3 +544,37 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
 
         assert int(upright.sum()) == 20
         assert math.isclose(upright.mean(), 0.5)
+
+
+class TestTheLibraryStandsWhereTheColumnsWere:
+    """`P5-3`: a kind is drawn once with its arm north and stood at the bearing
+    of the arm it was given, and that must be the column `_draw_lamp` would have
+    drawn in place — or `triangles`, `aabb` and the frame are an estimate.
+
+    ⚠️ The rotation is `gltf.placed_positions`' one statement; what this pins is
+    `bearing_deg` reading the arm the right way round. An arm pointing east or
+    south-west is not invariant under a flipped sign, so those are the cases.
+    """
+
+    TOLERANCE = 2.0 * 10.0**-PLACEMENT_DP
+
+    @pytest.mark.parametrize("arm", [(1.0, 0.0), (0.0, -1.0), (-0.6, 0.8), (0.7071, 0.7071)])
+    def test_a_stood_library_column_is_the_column_drawn_in_place(self, spec, arm):
+        post = placed(x=31.5, z=-12.25, y=4.0, arm=arm)
+        in_place = ColouredBuilder(LAMPS_MATERIAL)
+        _draw_lamp(in_place, spec, post)
+        library = ColouredBuilder(LAMPS_MATERIAL)
+        _draw_lamp(library, spec, _library_post(post))
+        drawn = in_place.build("in_place")
+        unit = library.build(post.kind)
+        assert drawn is not None and unit is not None
+        entry = placement(post.kind, (post.x, post.y, post.z), bearing_deg(post.arm))
+        assert "scale" not in entry
+        assert np.allclose(stood_positions(unit, entry), drawn.positions, atol=self.TOLERANCE)
+        assert np.array_equal(unit.triangles, drawn.triangles)
+
+    def test_the_bearing_reads_the_compass(self):
+        assert bearing_deg((0.0, -1.0)) == pytest.approx(0.0)
+        assert bearing_deg((1.0, 0.0)) == pytest.approx(90.0)
+        assert bearing_deg((0.0, 1.0)) == pytest.approx(180.0)
+        assert bearing_deg((-1.0, 0.0)) == pytest.approx(270.0)

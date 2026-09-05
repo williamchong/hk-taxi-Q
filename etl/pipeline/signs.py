@@ -172,6 +172,7 @@ from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2, ColouredBuilder
+from pipeline.placements import drawn_totals, placement, refuse_unbuilt, write_placements
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -216,9 +217,9 @@ SIGNS_MANIFEST_SCHEMA = 5
 # stand: a plate, its lettering quad where the face has words, and its pole.
 # `transform` is `landmarks.json`'s shape — `pos` and a compass `rot_y_deg` —
 # so the engine owns one rotation convention, not two; `scale` is the one
-# addition, because a pole is a unit prism stretched to its own height.
+# addition, because a pole is a unit prism stretched to its own height. The
+# entry, the rounding and the writer are `pipeline/placements.py`'s (`P5-3`).
 SIGNS_PLACEMENTS_NAME = "signs_placements.json"
-SIGNS_PLACEMENTS_SCHEMA = 1
 
 # ⚠️ **No `-col` suffix**, the same call `arrows.glb` and `railings.glb` both
 # make and for a reason this layer states more strongly than either: 728 poles
@@ -1533,7 +1534,7 @@ def _draw_pole(
 
 # Where a library mesh is drawn: at the pole axis, facing north, so a placement
 # is a compass rotation about `Y` and a translation — `plate_frame(0.0)` is the
-# frame `_placed_positions` and `GeneratedLandmarks.placement_of` both undo.
+# frame `gltf.placed_positions` and `GeneratedLandmarks.placement_of` both undo.
 _LIBRARY_ORIGIN = np.zeros(3)
 _LIBRARY_FACING_DEG = 0.0
 
@@ -1551,49 +1552,6 @@ def text_mesh_name(code: str) -> str:
 def is_text_mesh(name: str) -> bool:
     """Whether a library mesh is a lettering quad — the inverse of `text_mesh_name`."""
     return name.startswith(SIGNS_TEXT_MESH_NAME)
-
-
-# Decimals a placement keeps. Float32 spacing at region scale (~10³ m) is
-# ~1e-4 m, which is what `signs.glb` stores and the engine's `Transform3D`
-# holds, so 4 dp is that resolution: 3 would be coarser than the merged build,
-# 5 would be bytes the consumer cannot represent. `tests/test_signs.py`'s
-# tolerance is derived from this number rather than restated.
-_PLACEMENT_DP = 4
-
-
-def _rounded(value: float) -> float:
-    # `+ 0.0` collapses `-0.0`, on `documents.round_position`'s argument: a plate
-    # at the region's western edge can land on it, and "-0.0" is a diff.
-    return round(float(value), _PLACEMENT_DP) + 0.0
-
-
-def placement(
-    mesh: str, position: np.ndarray, facing_deg: float, scale: Sequence[float] | None = None
-) -> dict[str, Any]:
-    """One `signs_placements.json` entry, in `landmarks.json`'s transform shape."""
-    entry: dict[str, Any] = {
-        "mesh": mesh,
-        "transform": {
-            "pos": [_rounded(value) for value in position],
-            "rot_y_deg": _rounded(facing_deg),
-        },
-    }
-    if scale is not None:
-        entry["scale"] = [_rounded(value) for value in scale]
-    return entry
-
-
-def stood_positions(mesh: MeshData, entry: dict[str, Any]) -> np.ndarray:
-    """`mesh`'s vertices where `entry` stands them, in region game space.
-
-    The rotation is `gltf.placed_positions`' — the one statement `landmarks.json`
-    and this document share — so what this owns is only the entry's shape.
-    `tests/test_signs.py` pins it against `_draw_plate` drawn in place, which is
-    what makes the library's `triangles`/`aabb` the merged build's numbers and
-    not an estimate.
-    """
-    transform = entry["transform"]
-    return mesh.placed(transform["pos"], float(transform["rot_y_deg"]), entry.get("scale"))
 
 
 # --------------------------------------------------------------------------
@@ -2023,11 +1981,7 @@ def build_region(
             if built is not None:
                 meshes.append(built)
     by_name = {mesh.name: mesh for mesh in meshes}
-    # A stand whose mesh collapsed entirely (every triangle a sliver) would be a
-    # placement of nothing; refused rather than shipped, counted so the
-    # partition below still closes, and 0 today.
-    report.placements_refused = sum(1 for entry in stands if entry["mesh"] not in by_name)
-    stands = [entry for entry in stands if entry["mesh"] in by_name]
+    stands, report.placements_refused = refuse_unbuilt(stands, by_name)
     if meshes:
         # ⚠️ **`facing_away` is asked of every library mesh**, plates and pole
         # alike, and it is not a tautology of the placement: a rotation about
@@ -2044,20 +1998,12 @@ def build_region(
         report.library_triangles = sum(mesh.triangle_count for mesh in meshes)
         report.library_vertices = sum(len(mesh.positions) for mesh in meshes)
         report.placements = len(stands)
-        # What is DRAWN, so these stay the merged build's numbers (`P5-2`).
-        low = np.full(3, np.inf)
-        high = np.full(3, -np.inf)
-        for entry in stands:
-            mesh = by_name[entry["mesh"]]
-            # The plates and posts alone, as before `P5-2`; the lettering is
-            # `text_plates`, its own count, and the extent takes both.
-            if not is_text_mesh(mesh.name):
-                report.triangles += mesh.triangle_count
-                report.vertices += len(mesh.positions)
-            placed = stood_positions(mesh, entry)
-            low = np.minimum(low, placed.min(axis=0))
-            high = np.maximum(high, placed.max(axis=0))
-        report.aabb = [[float(value) for value in low], [float(value) for value in high]]
+        # What is DRAWN, so these stay the merged build's numbers (`P5-2`). The
+        # plates and posts alone, as before; the lettering is `text_plates`, its
+        # own count, and the extent takes both.
+        report.triangles, report.vertices, report.aabb = drawn_totals(
+            by_name, stands, counted=lambda name: not is_text_mesh(name)
+        )
         report.text_plates = sum(1 for entry in stands if is_text_mesh(entry["mesh"]))
         if text is not None and text_libraries:
             report.text_atlas_px = text.pixels
@@ -2080,16 +2026,7 @@ def build_region(
                 f"or doubled"
             )
         report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
-        write_document(
-            out_dir / SIGNS_PLACEMENTS_NAME,
-            {
-                "schema_version": SIGNS_PLACEMENTS_SCHEMA,
-                "city_id": city.id,
-                "region_id": region_id,
-                "library": SIGNS_NAME,
-                "placements": stands,
-            },
-        )
+        write_placements(out_dir / SIGNS_PLACEMENTS_NAME, city.id, region_id, SIGNS_NAME, stands)
 
     _write_manifest(out_dir, city, region_id, report)
     return report

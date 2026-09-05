@@ -26,17 +26,17 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's lamps cost one draw call — the rule the
-## road surface, the tiles, the tramway, the arrows, the boxes, the markings and
-## the signals are all held to.
+## One surface per library mesh, so each is one draw call — `verify_signs.gd`'s
+## rule, and before `P5-3` the merged mesh's: one primitive for the region.
 ##
 ## ⚠️ **Unlike the railings this layer does NOT split by class**, and it must not
 ## start: `railings.glb` ships three primitives because `Q61` found three
 ## distinct objects in one source layer, and this source publishes one code with
-## one meaning. A second primitive here would be a second claim.
-const SURFACES: int = 1
+## one meaning. A second surface on a kind's mesh would be a second claim.
+const SURFACES_PER_MESH: int = 1
 
 ## The material the lamps must end up with, mirroring `SHADERS` in
 ## `tools/generated_scene_import.gd` and `LAMPS_MATERIAL` in
@@ -122,29 +122,48 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
+## 🔴 **Since `P5-3` the asset is a LIBRARY — one mesh per drawn kind, its arm
+## north — and the city is `lamps_placements.json`.** Every mesh check below
+## runs per library mesh, which is every column in the city checked once; the
+## upright bar in particular is now asked of the one column rather than of
+## 892 copies of it, and reads the same share. The join is graded both ways
+## by `GeneratedPlacements.check_join`, shared with `verify_signs.gd`.
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
-
-	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
-	if mesh == null:
+	var library: Dictionary[String, Mesh] = MeshContract.library_meshes(
+		scene_root, SURFACES_PER_MESH, problems
+	)
+	if library.is_empty():
 		return problems
-
-	for surface: int in mesh.get_surface_count():
-		var where: String = "surface %d" % surface
-		# `true`: this mesh ships `COLOR_0` and the shader reads it. The
-		# no-texture guarantee runs on the default budget of 0, which is what
-		# keeps this layer imageless — a lamp post carries no lettering, and the
-		# moment one did it would owe `Q63`'s declaration.
-		problems.append_array(MeshContract.check_surface(mesh, surface, where, true))
-		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, LAMPS_MATERIAL)
-		)
-		problems.append_array(
-			MeshContract.check_stands_upright(
-				mesh, surface, where, "lamps", "Lamps are columns on footways", MIN_UPRIGHT_SHARE
+	for mesh_name: String in library:
+		var mesh := library[mesh_name] as ArrayMesh
+		for surface: int in mesh.get_surface_count():
+			var where: String = "'%s' surface %d" % [mesh_name, surface]
+			# `true`: this mesh ships `COLOR_0` and the shader reads it. The
+			# no-texture guarantee runs on the default budget of 0, which is what
+			# keeps this layer imageless — a lamp post carries no lettering, and the
+			# moment one did it would owe `Q63`'s declaration.
+			problems.append_array(MeshContract.check_surface(mesh, surface, where, true))
+			problems.append_array(
+				MeshContract.check_shader_material(mesh, surface, where, LAMPS_MATERIAL)
 			)
+			problems.append_array(
+				MeshContract.check_stands_upright(
+					mesh,
+					surface,
+					where,
+					"lamps",
+					"Lamps are columns on footways",
+					MIN_UPRIGHT_SHARE
+				)
+			)
+	problems.append_array(
+		GeneratedPlacements.check_join(
+			GeneratedLayer.placements_path(GeneratedLayer.LAMPS),
+			GeneratedLayer.noun(GeneratedLayer.LAMPS),
+			library
 		)
-
+	)
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
 
@@ -154,13 +173,13 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ## ⚠️ **The reasoning runs the other way from the arrows', and is weaker** —
 ## `verify_signs.gd`'s paragraph, and it applies here with one extra edge. A lamp
 ## column is a real obstacle a real car really would hit, so its absence is a
-## **budget** decision rather than a correctness one: 897 columns is 897
+## **budget** decision rather than a correctness one: 892 columns is 892
 ## collision bodies, and `P2-6` has not measured a frame on the device floor. The
 ## extra edge is *how many*: this is the most numerous solid object in the
-## bundle, ahead of the signs' 504 posts. `GAME_DESIGN.md` puts breakaway posts
+## bundle, ahead of the signs' 497 posts. `GAME_DESIGN.md` puts breakaway posts
 ## in `B3`, and the whole guard against one arriving early is the absence of a
-## `-col` suffix in one string in `lamps.py`.
+## `-col` suffix on the kind name each library mesh is built under in `lamps.py`.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
-		scene_root, "the lamps", "LAMPS_MESH_NAME in etl/pipeline/lamps.py"
+		scene_root, "the lamps", "library[kind].build(kind) in etl/pipeline/lamps.py"
 	)

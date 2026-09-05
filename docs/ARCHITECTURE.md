@@ -404,7 +404,8 @@ hk-taxi-Q/
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
 │   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
-│   │   ├── lamps.py             # published lamp posts → lamps.glb (P3-26)
+│   │   ├── lamps.py             # published lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
+│   │   ├── placements.py        # a prop library's stands: entry shape, drawn totals, writer (P5-3)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — 19 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
@@ -1102,17 +1103,29 @@ terms, including the every-marking-failed-the-join state.
 ⚠️ The import-lattice constraint, the winding rule and the p90/p99/max reporting follow
 `boxjunctions.glb` and `arrows.glb` above, unchanged.
 
-### `lamps.glb` — the published lamp posts (`P3-26`, `Q82`)
+### `lamps.glb` — the published lamp posts (`P3-26`, `Q82`, `P5-3`)
 
 A 9 m hexagonal column standing `outset_m` outside the drawn carriageway edge, a bracket arm sloping
 `arm_reach_m` out and `arm_drop_m` down over the carriageway, and a lantern box centred on the far
 end — one per `LPO` point in iB1000's `UtilityPoint` that clears the road. **No collider**, on
-`signs.glb`'s terms: 897 columns is 897 collision bodies and `P2-6` has not measured a frame on the
+`signs.glb`'s terms: 892 columns is 892 collision bodies and `P2-6` has not measured a frame on the
 device floor. Breakaway is a `B3` question.
+
+🔴 **Since `P5-3` (`Q115`) the file is a LIBRARY, and the city is `lamps_placements.json`** — on
+`signs.glb`'s terms below, with one mesh per drawn *kind* (`LPO`: **1 mesh, 40 triangles** for Wan
+Chai against the 35,680 the merged build carried), drawn at the origin with its arm pointing north
+and stood at the compass bearing of the arm each column was given. The column's prism ring is seeded
+from that arm rather than from world `X`, so the stood library *is* the column drawn in place and
+not a copy 15° of ring away from it; `tests/test_lamps.py` pins the two equal. `lamps.json`'s
+`triangles`, `vertices` and `aabb` still describe what is drawn and read the merged build's own
+numbers; `library_*`, `placements` and `placements_document` are the new keys, and `lamps.json`
+is schema **2**, `city.json` **24**. The entry shape, the rounding, the drawn totals and the
+document writer are `pipeline/placements.py`'s, shared with the signs so a third layer cannot drift
+from the first two; the rotation is still `gltf.placed_positions`' one statement.
 
 | | |
 |---|---|
-| Primitives | 1 — one draw call for the region's lamps |
+| Primitives | one per library mesh — one per drawn kind (`P5-3`); before it, one for the whole region's lamps |
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no `TEXCOORD_0`, no texture |
 | `COLOR_0` | One colour, from `hong_kong.yaml`'s `materials:` table via `lamps.column_material`. ⚠️ **Carried although the layer is monochrome**, because `signs.gdshader` reads it and a mesh not supplying it renders white |
 | Material name | `lamps` → `res://tuning/lamps.tres`, the third `.tres` on `signs.gdshader` |
@@ -1477,7 +1490,8 @@ every region lies inside them.
 | `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). **A library since `P5-2`** — one mesh per face variant plus a unit pole, stood by `signs_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-16`, `P5-2` |
 | `signs_placements.json` | Where the sign library stands: one entry per plate, per lettering quad and per pole, in `landmarks.json`'s transform shape plus a `scale` for the pole. Written beside `signs.glb` and null on its terms | ✅ `P5-2` |
-| `lamps.glb` | The published lamp posts, standing on the kerb the ribbon actually drew rather than where LandsD surveyed them — 64.1% of those are inside it — with a bracket arm reaching over the carriageway. The one layer whose vocabulary the publisher defines. Unlit, deliberately: `Q38` bakes the exposure at build time and `Q26` has not chosen a look. One primitive, one draw call, **no collider** | ✅ `P3-26` |
+| `lamps.glb` | The published lamp posts, standing on the kerb the ribbon actually drew rather than where LandsD surveyed them — 64.1% of those are inside it — with a bracket arm reaching over the carriageway. The one layer whose vocabulary the publisher defines. Unlit, deliberately: `Q38` bakes the exposure at build time and `Q26` has not chosen a look. **A library since `P5-3`** — one mesh per drawn kind, stood by `lamps_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-26`, `P5-3` |
+| `lamps_placements.json` | Where the lamp library stands: one entry per column, in `landmarks.json`'s transform shape, the `rot_y_deg` being the compass bearing of the column's bracket arm. Written beside `lamps.glb` and null on its terms | ✅ `P5-3` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | The player's HUD. Speed and the bilingual street plate ship; the minimap, timer and meter are **reserved, empty, checked** slots. Flat-shaded like the city — chamfered polygons, one fill, one keyline — with white for the city's voice and dark for the car's. `--hud=off` for `P3-9` and for art frames | 🟡 `P3-24`; meter, timer and the **world-space** destination marker are `P3-5a` |

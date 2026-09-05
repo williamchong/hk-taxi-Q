@@ -7,17 +7,18 @@
 ## this is its own script rather than a corner of `generated_layer.gd` — that
 ## table is static data about where a layer lives, and this is behaviour.
 ##
-## Two readers: `layer_preview.gd` draws what this decodes and `verify_signs.gd`
-## grades it, so `group` is the one statement of the join between a library and
-## its document — a mesh nothing stands, an entry naming no mesh, an entry with
-## no usable transform — and the two report the same three counts.
+## Three readers: `layer_preview.gd` draws what this decodes, and
+## `verify_signs.gd` and `verify_lamps.gd` grade it through `check_join`, so
+## `group` is the one statement of the join between a library and its document
+## — a mesh nothing stands, an entry naming no mesh, an entry with no usable
+## transform — and all three report the same three counts.
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 
 ## Schema of every placements document — the format is the same per layer.
-## Matches `SIGNS_PLACEMENTS_SCHEMA` in `etl/pipeline/signs.py`.
+## Matches `PLACEMENTS_SCHEMA` in `etl/pipeline/placements.py`.
 const SCHEMA_VERSION: int = 1
 
 
@@ -91,3 +92,28 @@ static func group(document: Dictionary, library: Dictionary[String, Mesh]) -> Di
 		"no_transform": no_transform,
 		"unstood": unstood,
 	}
+
+
+## The join graded, for a verify tool: the library must be stood in both
+## directions and every entry must decode. Returns the problems, and prints the
+## `ok` line itself when there are none, so the two verifiers that call this
+## report the same three failures in the same words.
+static func check_join(
+	path: String, noun: String, library: Dictionary[String, Mesh]
+) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var document: Dictionary = load_placements(path, noun)
+	if document.is_empty():
+		problems.append("the library is present and its placements document is not")
+		return problems
+	var joined: Dictionary = group(document, library)
+	if int(joined["no_mesh"]) > 0:
+		problems.append("%d placements name a mesh the library does not carry" % joined["no_mesh"])
+	if int(joined["no_transform"]) > 0:
+		problems.append("%d placements carry no usable transform" % joined["no_transform"])
+	for mesh_name: String in joined["unstood"] as PackedStringArray:
+		problems.append("library mesh '%s' is stood nowhere" % mesh_name)
+	if problems.is_empty():
+		var entries: Array = document.get("placements", []) as Array
+		print("  ok    %d placements stand %d library meshes" % [entries.size(), library.size()])
+	return problems

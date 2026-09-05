@@ -181,6 +181,39 @@ static func single_primitive(
 	return mesh
 
 
+## The meshes of a LIBRARY asset by node name, with the problems of collecting
+## them — `single_primitive`'s shape for a `.glb` that carries one mesh per
+## repeated shape and is stood by a placements document (`P5-2`, `P5-3`).
+##
+## Empty when the asset carries no mesh at all, which is reported; a node with
+## no `ArrayMesh` is reported and skipped, so the caller grades what is there.
+## `surfaces_per_mesh` is exact, as `surfaces` is above — one surface per mesh
+## is what makes each library mesh one draw call.
+static func library_meshes(
+	scene_root: Node, surfaces_per_mesh: int, problems: PackedStringArray
+) -> Dictionary[String, Mesh]:
+	var library: Dictionary[String, Mesh] = {}
+	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
+	if instances.is_empty():
+		problems.append("the library carries no MeshInstance3D")
+		return library
+	for node: Node in instances:
+		var instance := node as MeshInstance3D
+		var mesh := instance.mesh as ArrayMesh
+		if mesh == null:
+			problems.append("'%s' carries no ArrayMesh" % instance.name)
+			continue
+		library[String(instance.name)] = mesh
+		if mesh.get_surface_count() != surfaces_per_mesh:
+			problems.append(
+				(
+					"'%s' has %d surfaces, expected %d"
+					% [instance.name, mesh.get_surface_count(), surfaces_per_mesh]
+				)
+			)
+	return library
+
+
 ## Problems with an asset that must build **no** collider — the inverse of
 ## `check_collision` below.
 ##

@@ -287,6 +287,18 @@ def frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
+def bearing_deg(direction: Sequence[float]) -> float:
+    """The heading a plan direction `(x, z)` points along, degrees clockwise from north.
+
+    `frame`'s inverse: `frame(bearing_deg(d))[0]` is `d` normalised, so `(0, -1)`
+    is 0 and `(1, 0)` is 90. Here because a library mesh is drawn pointing north
+    and stood at this bearing (`P5-3`), and the expression is the one
+    `Snap.heading_deg` above is built from — that one stays inline for the reason
+    `signs._heading_deg` records, that `Segments.nearest` is every stage's snap.
+    """
+    return math.degrees(math.atan2(float(direction[0]), -float(direction[1]))) % 360.0
+
+
 def game_heading_deg(bearing: float) -> float:
     """A publisher's `ANGLE` as a game heading, degrees clockwise from north.
 

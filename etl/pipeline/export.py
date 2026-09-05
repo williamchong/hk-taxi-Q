@@ -197,7 +197,9 @@ CITY_NAME = "city.json"
 # than the region's signage merged. A v22 reader would instantiate the library
 # as a scene and draw one of every face at the origin, which is wrong rather
 # than merely different: hard rule 5's test.
-CITY_SCHEMA = 23
+# 24 since `P5-3` (`Q115`): the manifest names `lamps_placements.json`, and
+# `lamps.glb` is a library — one mesh per kind — on `signs_placements`' terms.
+CITY_SCHEMA = 24
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -235,6 +237,7 @@ OPTIONAL_ASSET_KEYS = (
     "arrows",
     "boxjunctions",
     "lamps",
+    "lamps_placements",
     "railings",
     "signs",
     "signs_text_atlas",
@@ -457,6 +460,8 @@ def build_region(
         # boxes all failed the join must not be contradicted here by a constant.
         "boxjunctions": boxjunctions["asset"],
         "lamps": lamps["asset"],
+        # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
+        "lamps_placements": lamps["placements_document"],
         "railings": railings["asset"],
         # `null` where the city drew no traffic signs, on `tramway`'s terms and
         # read from the stage's own manifest for its reason. ⚠️ Null is the

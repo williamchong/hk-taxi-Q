@@ -166,7 +166,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "lamps",
 		"absence":
 		"A city whose sources publish no utility point layer ships none, and that is not a failure.",
-		"placements": "",
+		"placements": "lamps_placements.json",
 	},
 	SIGNS:
 	{

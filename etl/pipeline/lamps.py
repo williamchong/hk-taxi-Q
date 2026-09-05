@@ -107,7 +107,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -123,9 +123,16 @@ from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import write_glb
+from pipeline.gltf import MeshData, write_glb
 from pipeline.meshbuild import ColouredBuilder
-from pipeline.polyline import Segments, Snap
+from pipeline.placements import (
+    Placement,
+    drawn_totals,
+    placement,
+    refuse_unbuilt,
+    write_placements,
+)
+from pipeline.polyline import Segments, Snap, bearing_deg
 from pipeline.railings import facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc
@@ -135,8 +142,16 @@ log = logging.getLogger(__name__)
 
 LAMPS_NAME = "lamps.glb"
 LAMPS_MANIFEST_NAME = "lamps.json"
-LAMPS_MANIFEST_SCHEMA = 1
-LAMPS_MESH_NAME = "lamps"
+# 2 since `P5-3` (`Q115`): `lamps.glb` is a LIBRARY — one mesh per drawn kind,
+# drawn at the origin with its arm pointing north — and the columns stand where
+# `lamps_placements.json` puts them. `triangles`, `vertices` and `aabb` still
+# describe what is DRAWN, so a reader comparing them to the merged build reads
+# the same numbers; `library_*`, `placements` and `placements_document` are new.
+# A v1 reader publishing a `city.json` with no `lamps_placements` would ship a
+# library and stand nothing on it.
+LAMPS_MANIFEST_SCHEMA = 2
+LAMPS_PLACEMENTS_NAME = "lamps_placements.json"
+
 # The glTF material name `tools/generated_scene_import.gd` dispatches on, and the
 # one channel the format offers for it. ⚠️ **A name, not a shader**: this layer
 # shares `signs.gdshader` with the signs and the signals, and differs only in the
@@ -259,10 +274,20 @@ class LampReport:
     # signs shipped 3,200 on their first build because the prism ring was wound
     # the way a plate wants. This stage reuses that prism.
     facing_away: int = 0
+    # What is DRAWN: the library under every stand (`P5-3`), so these read the
+    # same as the merged build they replaced. The library's own size is
+    # `library_*`; `placements` counts entries in `lamps_placements.json`, and
+    # `placements_refused` the stands whose mesh collapsed to nothing — part of
+    # the partition `placements + placements_refused == drawn`, and 0 today.
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
+    placements: int = 0
+    placements_refused: int = 0
+    library_meshes: int = 0
+    library_triangles: int = 0
+    library_vertices: int = 0
 
     # Reused rather than restated, the line `signs.py`, `railings.py`,
     # `signals.py` and `boxjunctions.py` all carry: p90/p99/max beside the median
@@ -300,7 +325,11 @@ class _Placed:
     # from HERE** — which is what makes the claim true. Written the other way
     # round, with the draw reading `spec` and the grader reading the placement,
     # the field records the config while the grader's stated property quietly does
-    # not hold. Review caught exactly that.
+    # not hold. Review caught exactly that. ⚠️ Since `P5-3` the draw reads it off
+    # the FIRST post of each kind (`_library_post`) and every other stand of that
+    # kind inherits the library's; `_measure_placement` still grades each post's
+    # own. One value per kind today, and a per-post reach is the moment this
+    # stops holding — `build_region` asserts it rather than assuming it.
     arm_reach_m: float
     # 🔴 **Where the second-stage refusal SETTLED this column**, carried rather
     # than re-derived. `_measure_placement` used to re-snap every kept post — a
@@ -412,8 +441,18 @@ def _strut(
     radius: float,
     *,
     cap_end: bool,
+    seed: np.ndarray,
 ) -> None:
     """A closed prism between two points in world space.
+
+    `seed` orients the ring — which of its corners faces which way. ⚠️ **The
+    column passes its arm as the seed since `P5-3`, and that is load-bearing.**
+    A library column is drawn once with its arm north and stood at the bearing
+    of the arm it was given, so every corner of its ring has to turn with the
+    arm too; seeded from world `X`, the ring stayed axis-aligned in the merged
+    build and the stood library differed from it by up to 15° of ring — 12 mm
+    on a 45 mm radius, invisible and not identical. `tests/test_lamps.py` pins
+    the two equal.
 
     `signs._draw_pole` generalised off the vertical, because a bracket arm is the
     same object lying over. The column passes `start` at the deck and `end` at
@@ -448,10 +487,9 @@ def _strut(
     if length <= 0.0:
         return
     axis = axis / length
-    # Any vector not parallel to the axis gives a frame. Up is parallel for the
-    # column and nearly so for nothing else here, so the fallback is picked
-    # against the axis rather than hoped for.
-    seed = np.array([0.0, 1.0, 0.0])
+    # Any vector not parallel to the axis gives a frame. The arm seeds from `_UP`
+    # and an arm steeper than ~63° would be nearly parallel to it, so the
+    # fallback is picked against the axis rather than hoped for.
     if abs(float(np.dot(seed, axis))) > 0.9:
         seed = np.array([1.0, 0.0, 0.0])
     u = np.cross(seed, axis)
@@ -658,9 +696,26 @@ def build_region(
         )
 
     kept = _merge(placements, spec.merge_m, report)
-    builder = ColouredBuilder(LAMPS_MATERIAL)
+    # 🔴 **One builder per kind, not one for the region** (`P5-3`). A kind is
+    # drawn ONCE at the origin with its arm pointing north, and every column of
+    # it is a stand at the bearing its arm was given — `_draw_lamp` reads the
+    # arm and the reach off the post it is handed, so the library post carries
+    # the north arm and the same reach.
+    library: dict[str, ColouredBuilder] = {}
+    reach_by_kind: dict[str, float] = {}
+    stands: list[Placement] = []
     for post in kept:
-        _draw_lamp(builder, spec, post)
+        if post.kind not in library:
+            library[post.kind] = ColouredBuilder(LAMPS_MATERIAL)
+            reach_by_kind[post.kind] = post.arm_reach_m
+            _draw_lamp(library[post.kind], spec, _library_post(post))
+        # The library carries one reach per kind — see `_Placed.arm_reach_m`.
+        if post.arm_reach_m != reach_by_kind[post.kind]:
+            raise ValueError(
+                f"{post.kind} reaches {post.arm_reach_m} m at ({post.x:.1f}, {post.z:.1f}) "
+                f"and {reach_by_kind[post.kind]} m in the library"
+            )
+        stands.append(placement(post.kind, (post.x, post.y, post.z), bearing_deg(post.arm)))
         report.drawn += 1
         report.drawn_by_kind[post.kind] = report.drawn_by_kind.get(post.kind, 0) + 1
     # ⚠️ **Every declared kind gets a row, drawn or not.** A city that declares a
@@ -676,14 +731,34 @@ def build_region(
     report.gaps_over_report_m = sum(1 for gap in report.spacing_drawn_m if gap > spec.gap_report_m)
     report.refused_by_kind = dict(sorted(report.refused_by_kind.items()))
 
-    mesh = builder.build(LAMPS_MESH_NAME)
-    if mesh is not None:
-        report.facing_away = facing_away(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
-        report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / LAMPS_NAME, [mesh])
+    # A library mesh is named after the kind it draws — `LPO` — so a city
+    # declaring two kinds ships two meshes and an artist replacing one replaces one.
+    meshes: list[MeshData] = []
+    for kind in sorted(library):
+        built = library[kind].build(kind)
+        if built is not None:
+            meshes.append(built)
+    by_name = {mesh.name: mesh for mesh in meshes}
+    stands, report.placements_refused = refuse_unbuilt(stands, by_name)
+    if meshes:
+        # ⚠️ **`facing_away` is asked of every library mesh** and is not a
+        # tautology of the stand: a rotation about `Y` preserves winding, so the
+        # library's answer is the drawn city's — 25,116 inverted triangles would
+        # still read here, as they did on the first build.
+        report.facing_away = sum(facing_away(mesh) for mesh in meshes)
+        report.library_meshes = len(meshes)
+        report.library_triangles = sum(mesh.triangle_count for mesh in meshes)
+        report.library_vertices = sum(len(mesh.positions) for mesh in meshes)
+        report.placements = len(stands)
+        report.triangles, report.vertices, report.aabb = drawn_totals(by_name, stands)
+        # ⚠️ **Computed, not claimed**: every column stands exactly once.
+        if report.placements + report.placements_refused != report.drawn:
+            raise ValueError(
+                f"{report.placements} placements and {report.placements_refused} refused "
+                f"for {report.drawn} columns — a stand was dropped or doubled"
+            )
+        report.bytes = write_glb(out_dir / LAMPS_NAME, meshes)
+        write_placements(out_dir / LAMPS_PLACEMENTS_NAME, city.id, region_id, LAMPS_NAME, stands)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -755,14 +830,27 @@ def _merge(placements: list[_Placed], merge_m: float, report: LampReport) -> lis
     one input identical.
     """
     kept: list[_Placed] = []
-    for placement in placements:
+    for post in placements:
         for other in kept:
-            if math.hypot(other.x - placement.x, other.z - placement.z) <= merge_m:
+            if math.hypot(other.x - post.x, other.z - post.z) <= merge_m:
                 report.merged += 1
                 break
         else:
-            kept.append(placement)
+            kept.append(post)
     return kept
+
+
+# Where a library mesh is drawn: at the origin, arm to the north, so a stand is
+# `bearing_deg(post.arm)` about `Y` and a move — the frame `gltf.placed_positions`
+# and `GeneratedLandmarks.placement_of` both undo.
+_LIBRARY_ARM = np.array([0.0, -1.0])
+# The bracket arm's ring seed; the column's is its own arm (`_strut`).
+_UP = np.array([0.0, 1.0, 0.0])
+
+
+def _library_post(post: _Placed) -> _Placed:
+    """`post`'s kind and reach at the origin with its arm north — the library's copy."""
+    return replace(post, x=0.0, z=0.0, y=0.0, arm=_LIBRARY_ARM)
 
 
 def _draw_lamp(builder: ColouredBuilder, spec: Lamps, post: _Placed) -> None:
@@ -780,8 +868,9 @@ def _draw_lamp(builder: ColouredBuilder, spec: Lamps, post: _Placed) -> None:
     forward = np.array([post.arm[0], 0.0, post.arm[1]])
     end = top + post.arm_reach_m * forward - np.array([0.0, spec.arm_drop_m, 0.0])
 
-    _strut(builder, spec, base, top, spec.column_radius_m, cap_end=True)
-    _strut(builder, spec, top, end, spec.arm_radius_m, cap_end=False)
+    # The column's ring turns with its arm — see `_strut`'s `seed`.
+    _strut(builder, spec, base, top, spec.column_radius_m, cap_end=True, seed=forward)
+    _strut(builder, spec, top, end, spec.arm_radius_m, cap_end=False, seed=_UP)
     _lantern(builder, spec, end, forward)
 
 
@@ -867,6 +956,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
         # 11 was bumped over.
         "asset": LAMPS_NAME if report.triangles else None,
+        "placements_document": LAMPS_PLACEMENTS_NAME if report.triangles else None,
         # The read, as three disjoint parts of `features`.
         "features": report.features,
         # ✅ The selection's refusals, over a domain the publisher **defines**.
@@ -925,6 +1015,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         "vertices": report.vertices,
         "bytes": report.bytes,
         "aabb": report.aabb,
+        "placements": report.placements,
+        "placements_refused": report.placements_refused,
+        "library_meshes": report.library_meshes,
+        "library_triangles": report.library_triangles,
+        "library_vertices": report.library_vertices,
     }
     return write_document(out_dir / LAMPS_MANIFEST_NAME, document)
 

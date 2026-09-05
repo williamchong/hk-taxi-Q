@@ -41,11 +41,11 @@ from pipeline.config import (
     load_config,
 )
 from pipeline.meshbuild import ColouredBuilder
+from pipeline.placements import PLACEMENT_DP, placement, stood_positions
 from pipeline.polyline import Segments
 from pipeline.railings import facing_away
 from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (
-    _PLACEMENT_DP,
     _TURN_LEFT,
     _TURN_PROHIBITIONS,
     _TURN_RIGHT,
@@ -68,10 +68,8 @@ from pipeline.signs import (
     is_text_mesh,
     layer_polygons,
     orphaned_supplementary,
-    placement,
     plate_extent_m,
     plate_frame,
-    stood_positions,
     text_mesh_name,
     variant_name,
 )
@@ -1822,7 +1820,7 @@ class TestTheLibraryStandsWhereThePlatesWere:
     """
 
     # 4 dp of position rounding, plus a little for the rotation itself.
-    TOLERANCE = 2.0 * 10.0**-_PLACEMENT_DP
+    TOLERANCE = 2.0 * 10.0**-PLACEMENT_DP
 
     @pytest.mark.parametrize("facing_deg", [0.0, 47.0, 180.0, 291.5])
     def test_a_placed_library_plate_is_the_plate_drawn_in_place(self, spec, facing_deg):
