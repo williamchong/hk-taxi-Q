@@ -380,6 +380,7 @@ CITY_YAML = textwrap.dedent(
         kerb_width_m: 0.5
         junction_trim_factor: 1.0
         junction_trim_max_fraction: 0.35
+        opposed_pair_bearing_deg: 30.0
         surface_material: asphalt
         kerb_material: kerb
     fares:

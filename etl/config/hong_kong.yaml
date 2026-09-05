@@ -2807,6 +2807,44 @@ roads:
     junction_trim_factor: 1.0
     junction_trim_max_fraction: 0.35
 
+    # How far from anti-parallel two one-way ribbons may run and still be read
+    # as the two halves of one road, which is what earns them a centre line
+    # between the flows. Road Network v2 gives each carriageway of a dual road
+    # its own nodes, so the shared-endpoint rule this replaced paired 12 of the
+    # region's 621 one-way level-0 edges and left the rest drawing two
+    # overlapping ribbons with nothing between them — reported from the driving
+    # seat on HARBOUR ROAD.
+    #
+    # 🔴 The one free value in the pairing, so it is swept rather than chosen.
+    # The search DISTANCE carries no knob — it is the edge's own drawn width,
+    # which is the publish guard (`steps < 8 * lanes`) read backwards, so a
+    # candidate further off could never have published. That matters because
+    # DECISIONS.md's NO ENTRY entry rejected a pairing rule built on a free
+    # radius whose count ran 8 -> 29 -> 49 -> 80 over 10 -> 30 m.
+    #
+    #   deg   paired ends   one-sided   out of range   drew a line
+    #     5            74           3              4            70
+    #    10            84           4              5            79
+    #    20            94           4              5            89
+    #    30            98           6              5            93
+    #    45           100           6              5            95
+    #    60           106           7              5           101
+    #    75           112          10              5           107
+    #    89           122          17              5           117
+    #
+    # ⚠️ NOT a plateau, and it is not quoted as one: over the 10-75 band the
+    # count runs 1.35x. What the sweep says is that it is not the radius rule's
+    # 10x, and that the failure mode announces itself — `one-sided` is votes
+    # that were not returned, and it climbs 4 -> 17 as the bar widens, which is
+    # the pairing telling you the wide angles are matching things that are not
+    # pairs. 30 is where that is still 6, and it is the number
+    # `carriageway_survey.width_bounds.pair_bearing_tolerance_deg` was swept to
+    # for the same question in the other frame.
+    #
+    # ⚠️ Refused at 0 and at 90 or more in config.py, where a perpendicular side
+    # street inside a wide road's own width reads as that road's opposed half.
+    opposed_pair_bearing_deg: 30.0
+
     # docs/ART_DESIGN.md: HK asphalt reads warm, not blue-grey. The kerb is the
     # pale concrete that edges every street on the island.
     #

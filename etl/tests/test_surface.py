@@ -1342,8 +1342,16 @@ class TestMarkingPayload:
         assert all(f["centre"] == 0 for f in fields)
 
     def test_a_street_is_not_its_own_opposed_carriageway(self, tmp_path, testville_config) -> None:
-        """A loop edge shares both its ends with itself and matches its own key.
-        Left in, it publishes a centre line down the middle of its own lane."""
+        """A loop edge publishes a centre line down the middle of its own lane if
+        anything lets it match itself.
+
+        ⚠️ **The reason it cannot changed with the pairing and the test did not.**
+        Under the endpoint rule a loop matched its own reversed key; under the
+        geometric one it is refused twice over — a candidate is never itself, and
+        a loop's chord has no length, so `normalise` leaves `_Ribbon`'s unit at
+        zero and the anti-parallel test is handed a zero vector, which fails it
+        rather than passing it.
+        """
         _write_graph(
             tmp_path,
             [{"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"}],
@@ -1359,6 +1367,105 @@ class TestMarkingPayload:
         )
         report = build_region(testville_config, "middle", out_root=tmp_path / "out")
         assert report.opposed_pair_ends == 0
+
+    def test_a_co_directional_neighbour_is_not_an_opposed_half(
+        self, tmp_path, testville_config
+    ) -> None:
+        """Two one-way ribbons running the SAME way, overlapping exactly as an
+        opposed pair does.
+
+        🔴 **This is the test the endpoint rule never needed and the geometric one
+        cannot ship without.** Two carriageways of one road share both nodes only
+        by accident, so what replaced that rule is proximity — and proximity alone
+        cannot tell a dual carriageway from a service road beside a main one, or
+        from a bus lane drawn as its own edge. A centre line between two flows
+        that go the same way instructs a player to stay left of traffic
+        overtaking on their left.
+        """
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 2, "pos": [100.0, 0.0, 304.0], "kind": "endpoint"},
+                {"id": 3, "pos": [500.0, 0.0, 304.0], "kind": "endpoint"},
+            ],
+            [
+                _edge(
+                    0,
+                    0,
+                    1,
+                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                    direction="forward",
+                ),
+                _edge(
+                    1,
+                    2,
+                    3,
+                    [[100.0, 0.0, 304.0], [500.0, 0.0, 304.0]],
+                    direction="forward",
+                ),
+            ],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+        assert report.opposed_pair_ends == 0
+        assert report.opposed_pairs_one_sided == 0
+        mesh = _mesh(tmp_path)
+        road = _carriageway(mesh)
+        assert all(_decode(c)["centre"] == 0 for c in mesh.uv2[road, 0])
+
+    def test_a_one_sided_vote_publishes_nothing(self, tmp_path, testville_config) -> None:
+        """Three anti-parallel ribbons abreast, so the middle one is the nearest
+        partner of both its neighbours and can only vote back to one of them.
+
+        🔴 **`opposed_pairs_one_sided` is reachable and this is what reaches it.**
+        Each half computes the join in its own lane coordinate, so an unreturned
+        vote is a line the other half does not draw — the 3.9 m double line
+        `P3-12` shipped on FLEMING ROAD. The outer ribbon here votes for the
+        middle one, the middle one votes back to the *nearer* outer one, and the
+        loser publishes nothing rather than half a pair.
+        """
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 2, "pos": [100.0, 0.0, 302.0], "kind": "endpoint"},
+                {"id": 3, "pos": [500.0, 0.0, 302.0], "kind": "endpoint"},
+                {"id": 4, "pos": [100.0, 0.0, 306.0], "kind": "endpoint"},
+                {"id": 5, "pos": [500.0, 0.0, 306.0], "kind": "endpoint"},
+            ],
+            [
+                _edge(
+                    0,
+                    0,
+                    1,
+                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                    direction="forward",
+                ),
+                _edge(
+                    1,
+                    3,
+                    2,
+                    [[500.0, 0.0, 302.0], [100.0, 0.0, 302.0]],
+                    direction="forward",
+                ),
+                _edge(
+                    2,
+                    4,
+                    5,
+                    [[100.0, 0.0, 306.0], [500.0, 0.0, 306.0]],
+                    direction="forward",
+                ),
+            ],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+        # Two ends of one pair published; the third ribbon voted and was refused.
+        assert report.opposed_pair_ends == 2
+        assert report.opposed_pairs_one_sided == 1
+        assert report.opposed_pairs_unpublishable == 0
 
     def test_the_surface_asks_the_engine_for_its_shader(self, testville, tmp_path) -> None:
         """glTF cannot say "use this shader", so the material name is the whole

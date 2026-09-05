@@ -388,6 +388,14 @@ class SurfaceReport:
     # different fixes — nothing detected is a pairing problem, detected and
     # unpublishable is a range problem — and one number cannot tell them apart.
     opposed_pairs_unpublishable: int = 0
+    # Ends that chose a partner which did not choose them back, and so published
+    # nothing. 🔴 **This is the counter that can fail**, and it is the whole
+    # reason the pairing is mutual: each half computes the join in its own lane
+    # coordinate, so two halves naming different partners name different lines —
+    # which is the 3.9 m double line `P3-12` shipped and then removed. It is
+    # reachable at zero (`test_a_one_sided_vote_publishes_nothing`) and non-zero
+    # on this region, which is `Q72`'s test of a counter passed both ways.
+    opposed_pairs_one_sided: int = 0
     # Movements that qualified as running through a node and had their mitre fed
     # into its cap. Reported so a predicate that stopped matching would show.
     #
@@ -1351,7 +1359,7 @@ def build_region(
     # same list by construction rather than by a predicate written twice.
     report.cap_rings = [(cap.level, cap.ring) for cap in caps]
     _record_hidden_kerbs(graph["edges"], edges, report)
-    _read_offside(graph["edges"], edges, report)
+    _read_offside(edges, style, report)
 
     builder = _Builder()
     for edge in edges:
@@ -1937,7 +1945,7 @@ class _Occluders:
         return covered
 
 
-def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceReport) -> None:
+def _read_offside(edges: list[_Edge], style: RoadSurface, report: SurfaceReport) -> None:
     """What each edge's offside boundary actually is, once every ribbon exists.
 
     Two questions with one answer between them, and neither can be asked of an
@@ -1966,52 +1974,32 @@ def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceRepo
     join. Published as `centre_step`, in sixteenths of a lane beyond the
     centreline.
 
-    ⚠️ **Pairs are found by shared endpoints, which `P1-4` measured as a lower
-    bound.** Two one-way carriageways that do not share both ends are not
-    counted, and their offsides are then reported as kerbs. The buried-kerb test
-    above is what stops that being a marking fault: where the ribbons really do
-    overlap, the kerb is hidden and `offside_kerb` stays false whether a pair was
-    identified or not. So a missed pair costs the centre line, not a yellow line
-    down the middle of a road.
-    """
-    by_ends: dict[tuple[int, int], list[int]] = defaultdict(list)
-    for index, entry in enumerate(published):
-        if entry["direction"] == FORWARD:
-            by_ends[(entry["from"], entry["to"])].append(index)
+    🔴 **Pairs are found geometrically, and shared endpoints found six of them.**
+    `P1-4` recorded the endpoint rule as a lower bound and it was a far lower one
+    than "lower bound" suggests: Road Network v2 gives each carriageway of a dual
+    road its own nodes, so the two halves share a node where they meet a junction
+    and almost never share both. **12 of this region's 621 one-way level-0 edges**
+    matched, and the other 609 drew two overlapping ribbons with nothing between
+    the flows — which is what a player sees from the driving seat on HARBOUR ROAD
+    and on every other dual carriageway here. `_opposed_gaps` is what replaced it.
 
-    for index, (entry, edge) in enumerate(zip(published, edges, strict=True)):
+    ⚠️ **A missed pair still costs the centre line and never a yellow line down
+    the middle of a road**, and that is unchanged: the two markings rest on
+    different tests. The kerbside yellow needs only `offside_kerb`, which comes
+    from the buried-kerb geometry above and is decided whether or not a pair was
+    identified.
+    """
+    gaps = _opposed_gaps(edges, style, report)
+
+    for index, edge in enumerate(edges):
         # `None` means the pass had nothing to say. It is unreachable for an edge
         # that draws — `_shape` sets `lip_right` beside `right` — and the reading
         # that matches it is "no neighbour objected", so the kerb stands.
         edge.offside_kerb = edge.kerb_right is None or bool(edge.kerb_right.all())
 
-        if entry["direction"] != FORWARD:
+        gap = gaps.get(index)
+        if gap is None:
             continue
-        # An edge whose two ends are the same node matches its own key, and a
-        # street is not its own opposed carriageway. Left in, it publishes a
-        # centre line down the middle of its own lane. The level guard is the
-        # same argument as the junction cap's: a ramp and the street beneath it
-        # can share both nodes and share no tarmac.
-        partners = [
-            other
-            for other in by_ends.get((entry["to"], entry["from"]), [])
-            if other != index and edges[other].level == edge.level
-        ]
-        # ⚠️ **Measured symmetrically, and it has to be.** Each half of a pair
-        # publishes its own offset and the two are supposed to name the *same*
-        # line. A one-sided measure — this edge's stations against the partner's
-        # segments — lets them disagree, and they did: the region's pairs landed
-        # their two lines up to 3.9 m apart. The mean of both directions is equal
-        # by construction whichever half is asking.
-        gaps = [
-            0.5 * (there + back)
-            for other in partners
-            if (there := _centreline_gap_m(edge, edges[other])) is not None
-            and (back := _centreline_gap_m(edges[other], edge)) is not None
-        ]
-        if not gaps:
-            continue
-        gap = min(gaps)
         report.opposed_pair_ends += 1
 
         steps = round((gap / 2.0) / _u_metres(edge) * 16.0)
@@ -2026,6 +2014,183 @@ def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceRepo
             report.opposed_pairs_unpublishable += 1
             continue
         edge.centre_step = steps + 1
+
+
+class _Ribbon(NamedTuple):
+    """One one-way ribbon as the opposed-pair search sees it.
+
+    ⚠️ **Scalars, not the `(2,)` arrays they were read from, and that is measured
+    rather than preferred.** The filter in `_opposed_gaps` runs over every ordered
+    pair of one-way ribbons — **387,122** on this region — and throws away 99.8%
+    of them, so what it costs is numpy's per-call dispatch and not the geometry it
+    guards. The identical loop reading `np.ndarray` bounds and taking `.any()`
+    ran **395 ms** against **34 ms** here, while `edge_distances` — the thing being
+    guarded — costs **30 ms** in total. Bundling them in one tuple rather than four
+    dicts is the same move for the same reason: one lookup per candidate.
+    """
+
+    plan: np.ndarray
+    # Unit chord, and zero where the ribbon has none — a loop edge, whose two ends
+    # coincide. Zero fails every anti-parallel test rather than passing it, which
+    # is the right way round: a ribbon with no direction has no opposed half.
+    ux: float
+    uz: float
+    low_x: float
+    low_z: float
+    high_x: float
+    high_z: float
+
+
+class _Vote(NamedTuple):
+    """One ribbon's chosen opposed half, and how far away it runs."""
+
+    partner: int
+    gap_m: float
+
+
+def _opposed_gaps(
+    edges: list[_Edge], style: RoadSurface, report: SurfaceReport
+) -> dict[int, float]:
+    """How far apart the two halves of each opposed pair run, by list position.
+
+    A one-way ribbon's partner is the one-way ribbon at the same elevation level
+    that runs **anti-parallel** to it and lies **inside its own drawn width** —
+    nearest first, and only where the two choose each other.
+
+    🔴 **The search distance carries no knob, because it is the publish guard
+    read backwards.** `_read_offside` puts the join at `gap / 2` metres offside of
+    the centreline and refuses anything the ribbon cannot show, which is
+    `steps < 8 * lanes`; substituting `_u_metres` reduces that to `gap` under the
+    drawn width exactly. So a candidate further away than this could never have
+    published, and bounding the search by it adds no value that was not already
+    in the range check. `Q72` rejected a pairing rule built on a free radius whose
+    count ran 8 → 29 → 49 → 80 as the radius went 10 → 30 m; there is no radius
+    here to sweep.
+
+    ⚠️ **`reach` is each edge's OWN width, so the bound is one-sided per vote** —
+    A can reach B while B cannot reach A. Mutuality is what closes it: the
+    effective bound on a published pair is `min(reach_a, reach_b)`, and that is
+    intended rather than incidental, because the join has to be visible on both.
+
+    ⚠️ **The one free value is the angle, so it is config and it is swept** —
+    `roads.surface.opposed_pair_bearing_deg`, with the sweep pasted beside it in
+    `hong_kong.yaml`. It is deliberately a second value from
+    `carriageway_survey.width_bounds.pair_bearing_tolerance_deg`; see the field.
+
+    🔴 **Mutual, and that is not tidiness.** Each half computes the join in its
+    own lane coordinate, so two halves naming different partners name different
+    lines — the 3.9 m double line `P3-12` shipped on FLEMING ROAD and then
+    removed. `opposed_pairs_one_sided` counts the votes that were not returned,
+    so a rule that started matching one way only shows up as a number rather than
+    as a pair of lines nobody is looking at.
+
+    ⚠️ **Anti-parallel is measured on the ribbon chord, not on the published
+    polyline.** Both halves of a pair bend together, so the chord is enough; what
+    it must not be is the untrimmed centreline, because a pair found by geometry
+    has no shared node to be dragged toward and the trims are what the gap below
+    is measured over.
+    """
+    plans: dict[int, np.ndarray] = {}
+    for index, edge in enumerate(edges):
+        # `_Edge` carries the published direction verbatim, so this asks the
+        # ribbons rather than taking a second list to keep in step with them.
+        if edge.direction != FORWARD:
+            continue
+        plan = _ribbon_plan(edge)
+        if plan is not None and len(plan) >= 2:
+            plans[index] = plan
+
+    # One `normalise` over every chord rather than a helper per ribbon: the zero
+    # row it promises to leave at zero is exactly what a loop edge needs, and
+    # `reshape` is what keeps the empty region a `(0, 2)` rather than a `(0,)`.
+    order = list(plans)
+    chords = np.array([plans[index][-1] - plans[index][0] for index in order]).reshape(-1, 2)
+    ribbons = {
+        index: _Ribbon(
+            plans[index],
+            float(unit[0]),
+            float(unit[1]),
+            float(plans[index][:, 0].min()),
+            float(plans[index][:, 1].min()),
+            float(plans[index][:, 0].max()),
+            float(plans[index][:, 1].max()),
+        )
+        for index, unit in zip(order, normalise(chords), strict=True)
+    }
+    # Anti-parallel within the tolerance is a dot product at or below `-cos`,
+    # which is one multiply per candidate against an `arccos`.
+    limit = -float(np.cos(np.radians(style.opposed_pair_bearing_deg)))
+    # Keyed on the unordered pair, because `_pair_gap_m` is symmetric by
+    # construction and both orderings are reached: 871 calls over 444 distinct
+    # pairs on this region, so half of them were recomputation.
+    measured: dict[tuple[int, int], float] = {}
+
+    votes: dict[int, _Vote] = {}
+    for index, here in ribbons.items():
+        edge = edges[index]
+        reach = _drawn_width_m(edge)
+        # Hoisted: the search box is this ribbon's own bounds grown by `reach`,
+        # and it does not move as the candidates are walked.
+        low_x, low_z = here.low_x - reach, here.low_z - reach
+        high_x, high_z = here.high_x + reach, here.high_z + reach
+        best: _Vote | None = None
+        for other, there in ribbons.items():
+            if other == index or edges[other].level != edge.level:
+                continue
+            # ⚠️ **Spelled out rather than shared with `_Occluders.cover`, which
+            # runs the same reject.** That one walks a bucketed handful and can
+            # afford `(low > high).any()` on `(2,)` arrays; this walks every pair,
+            # and the array form is the 361 ms `_Ribbon` records. The duplication
+            # is the price of that, and it is a *bound*, not a reading.
+            if there.low_x > high_x or there.high_x < low_x:
+                continue
+            if there.low_z > high_z or there.high_z < low_z:
+                continue
+            if here.ux * there.ux + here.uz * there.uz > limit:
+                continue
+            key = (min(index, other), max(index, other))
+            if (gap := measured.get(key)) is None:
+                gap = _pair_gap_m(here.plan, there.plan)
+                measured[key] = gap
+            if not 0.0 < gap < reach:
+                continue
+            if best is None or gap < best.gap_m:
+                best = _Vote(other, gap)
+        if best is not None:
+            votes[index] = best
+
+    def returned(index: int, other: int) -> bool:
+        """Did `other` vote for `index` back?"""
+        vote = votes.get(other)
+        return vote is not None and vote.partner == index
+
+    report.opposed_pairs_one_sided += sum(
+        1 for index, vote in votes.items() if not returned(index, vote.partner)
+    )
+    return {index: vote.gap_m for index, vote in votes.items() if returned(index, vote.partner)}
+
+
+def _pair_gap_m(here: np.ndarray, there: np.ndarray) -> float:
+    """The separation two opposed halves both agree on, in metres.
+
+    ⚠️ **Measured symmetrically, and it has to be.** Each half of a pair publishes
+    its own offset and the two are supposed to name the *same* line. A one-sided
+    measure — this edge's stations against the partner's segments — lets them
+    disagree, and they did: the region's pairs landed their two lines up to 3.9 m
+    apart. The mean of both directions is equal by construction whichever half is
+    asking, which is also what lets the caller memoise it on the unordered pair.
+    """
+    return 0.5 * (_centreline_gap_m(here, there) + _centreline_gap_m(there, here))
+
+
+def _drawn_width_m(edge: _Edge) -> float:
+    """This ribbon's representative drawn width, in metres.
+
+    The median for `_u_metres`' reason: since `Q23` the half-width varies per
+    station, so no single scalar is exact and the median is the representative
+    one.
+    """
+    return 2.0 * float(np.median(edge.points[:, _WIDTH]))
 
 
 def _u_metres(edge: _Edge) -> float:
@@ -2043,11 +2208,17 @@ def _u_metres(edge: _Edge) -> float:
     exact. The median is the representative one; every opposed pair in this
     region is flat-widthed, so today it is also exact.
     """
-    return 2.0 * float(np.median(edge.points[:, _WIDTH])) / edge.lanes
+    return _drawn_width_m(edge) / edge.lanes
 
 
-def _centreline_gap_m(edge: _Edge, other: _Edge) -> float | None:
-    """How far this edge's drawn ribbon runs from its opposed partner's, in plan.
+def _centreline_gap_m(here: np.ndarray, there: np.ndarray) -> float:
+    """How far one drawn ribbon runs from its opposed partner's, in plan.
+
+    ⚠️ **Takes the plans the caller already holds rather than two `_Edge`s**:
+    `_ribbon_plan` is fancy indexing and so allocates a fresh copy every call,
+    and `_opposed_gaps` has every one of these arrays in hand. There is no
+    `None` case left for the same reason — it only builds a plan for a ribbon
+    with two stations or more, so an absent one never reaches here.
 
     ⚠️ **Measured on the ribbon, not on the centreline, and that is the whole
     correctness of it.** A pair is found by shared endpoints, so the two
@@ -2059,9 +2230,6 @@ def _centreline_gap_m(edge: _Edge, other: _Edge) -> float | None:
     trimmed back from both nodes for the junction cap, so it carries no shared
     station and no zero.
     """
-    here, there = _ribbon_plan(edge), _ribbon_plan(other)
-    if here is None or there is None or len(there) < 2:
-        return None
     return float(np.median(edge_distances(here, there, closed=False)))
 
 
@@ -2663,6 +2831,17 @@ def main(argv: list[str] | None = None) -> int:
             "  %.0f m of kerb dropped where a neighbouring carriageway already covered it",
             report.buried_kerb_m,
         )
+    # ⚠️ **All three in one line, because they are one population split three
+    # ways** — paired, voted one-sided, paired and out of range — and quoting the
+    # first alone reads as a clean sweep. `P3-12` published the first alone while
+    # the pairing matched 12 of 621 one-way edges.
+    log.info(
+        "  %d edge ends are half of an opposed pair and carry a centre line: "
+        "%d voted for a partner that did not vote back, %d paired and out of range",
+        report.opposed_pair_ends - report.opposed_pairs_unpublishable,
+        report.opposed_pairs_one_sided,
+        report.opposed_pairs_unpublishable,
+    )
     if report.on_structure_m:
         log.info(
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "

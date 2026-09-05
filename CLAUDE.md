@@ -210,6 +210,38 @@ Common emoji for this project:
   *does* move, positions only (the lane snap), so its counters are owed.
   ⚠️ **The evidence is a frame and the cache lies**: force a re-import, and expect the first several
   runs after one **not to reproduce** — shoot until a hash repeats, each side. Numbers in `Q114`.
+- 🔴 **`surface._read_offside`, `_opposed_gaps`, or `roads.surface.opposed_pair_bearing_deg`: paste the
+  stage's `edge ends are half of an opposed pair` line before and after — all three numbers — sweep
+  the angle and paste the table, and A/B render one pair at a fixed camera.** The stage grades
+  itself and there is no separate grader, because **every way this breaks renders as a road with no
+  line down it**, which is what a correct road with one flow also looks like (`Q117`).
+  🔴 **The pairing is MUTUAL and that is not tidiness**: each half computes the join in its own lane
+  coordinate, so an unreturned vote is two halves naming different lines — the 3.9 m double line
+  `P3-12` shipped on FLEMING ROAD. `opposed_pairs_one_sided` is the counter that can fail; it is 6
+  and reachable at zero, so **mutation-check it rather than reading its value**.
+  🔴 **The search distance carries NO knob and must not gain one** — it is the publish guard
+  `steps < 8 * lanes` read backwards, which is the whole answer to `Q72`'s rejection of a free
+  radius. The angle is the one free value, so it is config and it is swept; ⚠️ **its sweep is not a
+  plateau (1.35x over 10-75 deg) and must not be quoted as one** — what it says is that it is not the
+  radius rule's 10x, and that `one-sided` climbing 4 → 17 is the rule announcing its own failure.
+  ⚠️ **Deliberately a SECOND value from `carriageway_survey.width_bounds.pair_bearing_tolerance_deg`,
+  which carries the same number**: that block is optional, so a region with no width survey would
+  lose its centre lines to a width setting. Do not "de-duplicate" them.
+  🔴 **An angle-free rule — mutual offside-kerb burial — is BUILT, MEASURED and REJECTED, so do not
+  re-propose it**: same population, no angle, but its share bar runs 62 → 4 pairs over 0.10 → 1.00
+  with nothing published behind 0.5, which is trading a swept knob for an unswept one.
+  ⚠️ **The plan-bounds reject is a BOUND, not a reading, and the tests are expected to survive
+  deleting it** — the two mutations that must fail are the anti-parallel test and mutuality.
+  ⚠️ **Its scalar `_Ribbon` fields are measured, not preferred**: the same filter on `(2,)` arrays
+  with `.any()` — the form `_Occluders.cover` uses on a bucketed handful — is 395 ms against 34 over
+  387,122 candidate pairs, so that test is deliberately written twice. Do not "de-duplicate" it.
+  ⚠️ **A centre line moves no geometry, and that is the inertness proof** — `roads.glb`'s positions,
+  normals, colours, indices and `TEXCOORD_0` byte-identical, `TEXCOORD_1.y` byte-identical, and
+  `TEXCOORD_1.x` differing **in the centre field only**, asserted field by field; `roadsurface.json`,
+  `arrows.glb`, `roadmarks.glb`, `boxjunctions.glb` and `clearance.json` byte-identical.
+  ⚠️ **The evidence is a frame and the cache lies** — every counter read correctly while the road was
+  blank — so delete `game/.godot/imported/roads.glb-*` and re-import before *each* side, and shoot
+  each side twice and `cmp` them. Numbers in `Q117`.
 - **`surface.floor_default_m`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor

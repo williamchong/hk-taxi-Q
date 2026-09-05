@@ -2437,6 +2437,19 @@ class RoadSurface:
     # edge between two wide roads is not consumed from both ends.
     junction_trim_max_fraction: float
 
+    # How far from anti-parallel two one-way ribbons may run and still be read as
+    # the two halves of one road, which is what `surface._read_offside` needs to
+    # put a centre line between them.
+    #
+    # 🔴 **Deliberately NOT `carriageway_survey.width_bounds.pair_bearing_tolerance_deg`,
+    # which asks the same question with the same number.** That block is
+    # `CarriagewaySurvey | None`, so a region that declares no survey would lose
+    # its centre lines to a width setting — and the two are read in different
+    # frames: that one pairs *published centrelines* off a ray, this one pairs
+    # *drawn ribbons* after the widening. Same question, two populations; the
+    # value agreeing is a fact about the city, not a shared constant.
+    opposed_pair_bearing_deg: float
+
     # ⚠️ **Named, not authored here.** These two colours are in a different
     # dataclass from the rest of the palette, and that is precisely how they
     # escaped the one exposure change every other colour took (`235aa4f`). They
@@ -4134,6 +4147,16 @@ def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
         if metres < 0.0:
             raise ValueError(f"{where} carriageway floor {metres} m is below zero")
 
+    bearing = float(_require(body, "opposed_pair_bearing_deg", where))
+    if not 0.0 < bearing < 90.0:
+        # `width_bounds` refuses its own tolerance at 90 for this reason, and it
+        # bites harder here: the search distance is the edge's own drawn width,
+        # so at 90 every side street crossing a wide road is inside it and reads
+        # as that road's opposed half — a centre line down a street that has one
+        # flow. Zero is refused because it admits nothing and the marking then
+        # reads as configured while drawing nowhere.
+        raise ValueError(f"{where}:opposed_pair_bearing_deg must lie in (0, 90), got {bearing}")
+
     fraction = float(_require(body, "junction_trim_max_fraction", where))
     if not 0.0 < fraction < 0.5:
         # At a half, an edge trimmed at both ends has nothing left between the
@@ -4164,6 +4187,7 @@ def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
         kerb_width_m=measures["kerb_width_m"],
         junction_trim_factor=measures["junction_trim_factor"],
         junction_trim_max_fraction=fraction,
+        opposed_pair_bearing_deg=bearing,
         surface_material=table.get(
             str(_require(body, "surface_material", where)), f"{where}:surface_material"
         ),

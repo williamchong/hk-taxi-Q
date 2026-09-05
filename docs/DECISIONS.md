@@ -19525,3 +19525,178 @@ written, and it is the whole of `P5-7`'s design work.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught
+
+---
+
+## `Q117` — The two flows meet and nothing is drawn where they meet
+
+**Reported from the driving seat**, with a Street View frame beside it: *"there is no any road
+marking or lines between 2 opposing direction lane, there are usually some kind of lines or
+separator drawing between 2 opposite lanes."* The frame is HARBOUR ROAD outside the Grand Hyatt,
+looking west from `X 209.70 Z 373.28`. The shipped city draws two dashed lane dividers and two
+kerbside double yellows across a ~17 m slab of asphalt, and nothing at all down the middle of it.
+Google's own frame of the same spot carries a continuous white line there.
+
+`P3-12` already built the marking. `road_markings.gdshader`'s `separated` branch draws a centre line
+either where `direction == both` or where the codec publishes a `centre` step — the join of an
+opposed pair, which neither half can see from its own lane coordinate because the ribbons overlap
+and `U = lanes` on either lands inside the other's carriageway. What it could not do is find the
+pairs.
+
+### 🔴 The pairing was shared endpoints, and that is 2% of the population
+
+`surface._read_offside` matched an edge `(u, v)` against a one-way edge `(v, u)`. Road Network v2
+gives each carriageway of a dual road **its own nodes**, so two halves share a node where they meet
+a junction and almost never share both. Measured on the region:
+
+```
+  one-way level-0 edges with a drawn ribbon                        621
+  with a reversed shared-endpoint partner                           12   =  6 pairs,  564 m
+  with an anti-parallel partner inside their own drawn width        98   = 49 pairs, 3958 m
+```
+
+`P1-4` recorded the endpoint rule as *"a lower bound"* and the phrase carried the wrong order of
+magnitude: it is a lower bound at **12%** of the pairs, **14%** of the metres and **2%** of the
+one-way edges. `e718`/`e313`
+HARBOUR ROAD — the two halves in the reported frame — share node 313 and nothing else, and run
+6.84 m apart at 172.6 deg of each other.
+
+### The rule that replaced it, and what it does not add
+
+A one-way ribbon's partner is the one-way ribbon **at the same level**, running **anti-parallel**,
+whose centreline lies **inside the edge's own drawn width** — nearest first, and only where the two
+choose each other.
+
+🔴 **The search distance carries no knob, because it is the publish guard read backwards.**
+`_read_offside` puts the join `gap / 2` metres offside of the centreline and refuses anything the
+ribbon cannot show, which is `steps < 8 * lanes`; substituting `_u_metres` reduces that to *the gap
+under the drawn width*, exactly. A candidate further off could never have published. That matters
+because `Q72` rejected a divider rule built on a free radius whose count ran **8 -> 29 -> 49 -> 80**
+over 10 -> 30 m, and this rule has no radius to sweep.
+
+⚠️ **The one free value is the angle, so it is config and it is swept** —
+`roads.surface.opposed_pair_bearing_deg`, refused at 0 and at 90 or more:
+
+```
+  deg   paired ends   one-sided   out of range   drew a line
+    5            74           3              4            70
+   10            84           4              5            79
+   20            94           4              5            89
+   30            98           6              5            93
+   45           100           6              5            95
+   60           106           7              5           101
+   75           112          10              5           107
+   89           122          17              5           117
+```
+
+⚠️ **Not a plateau, and it is not quoted as one**: over the 10-75 band the count runs **1.35x**. What
+the sweep says is that it is not the radius rule's 10x, and that the failure mode announces itself —
+`one-sided` is votes that were not returned, and it climbs **4 -> 17** as the bar widens, which is
+the pairing reporting that the wide angles are matching things that are not pairs. 30 is where that
+is still 6, and it is the value `carriageway_survey.width_bounds.pair_bearing_tolerance_deg` was
+swept to for the same question in the other frame. 🔴 **The two are deliberately separate values** —
+that block is `CarriagewaySurvey | None`, so a region declaring no width survey would lose its centre
+lines to a width setting, and the two are read in different frames (published centrelines off a ray,
+against drawn ribbons after the widening). Their agreeing is a fact about the city, not a shared
+constant.
+
+🔴 **Mutual, and that is not tidiness.** Each half computes the join in its **own** lane coordinate,
+so two halves naming different partners name different lines — which is the 3.9 m double line
+`P3-12` shipped on FLEMING ROAD and then removed. `opposed_pairs_one_sided` counts the votes that
+were not returned: **6** today, reachable at zero, and mutation-checked rather than read
+(`test_a_one_sided_vote_publishes_nothing` fails when the mutuality filter is removed).
+
+### ✅ An angle-free rule was built and measured, and it is rejected on its own sweep
+
+Two merged carriageways bury **each other's offside kerb**, and a co-directional pair does not — in
+left-hand traffic only one of the two offsides faces the other road. So mutual offside burial is an
+anti-parallel test made of containment, with no angle in it, and `_hide_buried_kerbs` already
+computes the geometry. It lands on the same population: **35 pairs / 2,690 m** against the angle
+rule's 42 / 2,665 at its own default, with **zero** edges claiming more than one partner.
+⚠️ **Both columns here, and the sweep below, are measured on ribbons reconstructed from
+`roadgraph.json` and `roadsurface.json`, level 0 only** — which is why the angle column reads 42
+and not the shipping stage's 49. The two rules are compared to each other, never to the stage.
+
+It is rejected because the knob it removes is smaller than the knob it adds. "Buried" is a share of
+the offside rail, and the share bar is what `Q72` refuses:
+
+```
+  bar    mutual pairs   pair-metres          bar    mutual pairs   pair-metres
+  0.10             62          4155          0.60             30          2229
+  0.25             54          3863          0.75             22          1695
+  0.40             45          3214          0.90              8           839
+  0.50             35          2690          1.00              4           352
+```
+
+**15x over its range**, against the angle's 1.35x, and nothing published stands behind 0.5. `.all()`
+— the reading `offside_kerb` itself uses — costs the reported pair, because `e313` runs beside
+`e718` for only 67% of its length.
+
+### ✅ What moved, and the proof that nothing else did
+
+```
+  edge ends half of an opposed pair          12  ->  98   (93 draw a line, 5 out of range)
+  votes not returned                          -  ->   6
+  separated carriageway vertices          10.5%  ->  22.1%
+    of which from an opposed pair            170  ->  1438
+```
+
+🔴 **A centre line moves no geometry, and that is the inertness proof.** Against a bundle rebuilt at
+`HEAD` from the same graph: `roads.glb`'s positions, normals, colours, indices and `TEXCOORD_0` are
+**byte-identical**, `TEXCOORD_1.y` is byte-identical, and `TEXCOORD_1.x` differs on **3,238 of
+39,151** vertices *in the centre field only* — asserted field by field, not inferred from the
+triangle count. `roadsurface.json`, `arrows.glb`, `roadmarks.glb`, `boxjunctions.glb` and
+`clearance.json` are byte-identical documents.
+
+⚠️ **The evidence is a frame** (`Q62`), because every counter above read correctly while the road was
+blank. A/B at one fixed camera on `e718`/`e313` — `city_preview.tscn`,
+`--camera=238,13,371 --look=170,3.5,374 --debug-view=off --hud=off` — with
+`game/.godot/imported/roads.glb-*` deleted and re-imported between the two sides, and each side shot
+twice and `cmp`'d. Before: two dashed dividers and bare asphalt between them. After: a continuous
+white line down the middle of the slab, between the two dashed lines.
+
+⚠️ **A missed pair still costs a centre line and never a yellow line down the middle of a road**, and
+that is unchanged: `offside_kerb` rests on the buried-kerb geometry and is decided whether or not a
+pair was identified. The pairing is strictly *inside* that population, so a pair found here is a kerb
+already hidden.
+
+### ⚠️ The reject is the cost, not the geometry — and that is why one test is written twice
+
+The pairing walks every ordered pair of one-way ribbons (**387,122** on this region), of which
+**4,155** survive the plan-bounds reject and **871** the anti-parallel test. So the loop's cost is
+its *filter*, not the `edge_distances` calls it guards — those total **30 ms**. Reading the bounds
+as `(2,)` arrays and taking `.any()`, the way `_Occluders.cover` does, ran that filter at **395 ms**;
+as plain floats on a `_Ribbon` NamedTuple it is **34 ms**. Stage **1.08 s → 0.73 s**.
+
+🔴 **So the box-disjoint test stays written twice on purpose.** `_Occluders.cover` walks a bucketed
+handful and can afford the array form; this walks every pair and cannot. ⚠️ **It is a bound and not
+a reading**, which is checkable: deleting the reject entirely leaves the vote dict byte-identical,
+and that is a mutation the tests are *expected to survive* — the two that must fail are the
+anti-parallel test and mutuality.
+
+⚠️ `_pair_gap_m` is symmetric by construction, so both orderings of a pair reached it — 871 calls
+over 444 distinct pairs. It is memoised on the unordered pair.
+
+### ⬜ What is still open
+
+- 🔴 **The line is a single continuous white one, and Hong Kong paints a double** between opposing
+  flows on a road of this class — visible in the reported Street View frame. `centre_width` is one
+  uniform in `road_markings.gdshader`, and the sourced dimensions are on the same TD sheet
+  `CT174/51-5(1)F` that `roadmarks.py` reads, where ⚠️ **`LINES SPACING` is the clear gap and not a
+  centre-to-centre pitch** (`Q69`). Not done here: this entry restores a marking that was missing,
+  and drawing the wrong *kind* of marking twice as wide is a second question with its own source.
+- ⚠️ **The range guard is per edge, so a pair can be half-drawn**: 44 pairs draw from both halves and
+  **5 draw from one**, where the join lands within 0.6 m of the refusing half's offside kerb
+  (`e107` LEIGHTON, `e208` FLEMING, `e224` JOHNSTON, `e375` GLOUCESTER, `e745` HENNESSY — gap against
+  drawn width 10.14/10.24, 5.55/5.60, 9.66/10.24, 12.41/12.48, 10.04/10.24). The surviving half draws
+  the line at the correct ground position, at its own rim. Refusing both halves symmetrically is a
+  one-line change and it costs five more lines; it is left as the user's call rather than taken here.
+- ⚠️ **`opposed_pairs_one_sided` is 6 and they are unexamined.** It is a finding to go and look at,
+  never a bar to retune.
+
+**Status.** Fixed 2026-09-06. `check.sh` exit 0, 2,091 tests, 0 shader errors, two mutations two
+failures.
+
+**See.** `Q53` (owned by `P3-12`) for the codec field and the two ways it shipped wrong · `Q94` for the geometric
+pairing this borrows its angle from, and its own sweep · `Q72` for why a free radius is refused ·
+`Q54` for sourced-not-invented · `Q62` for why the evidence is a frame
