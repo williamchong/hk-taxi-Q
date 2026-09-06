@@ -67,7 +67,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	# Look-back is a yaw flip rather than a second camera: it keeps the spring
 	# arm's collision behaviour and costs nothing to hold.
-	var look_back: bool = _input != null and bool(_input.get(&"look_back"))
+	var look_back: bool = _input != null and _input.look_back
 	var desired_yaw: float = target.global_rotation.y + (PI if look_back else 0.0)
 	# Exponential rather than constant-rate, which is the whole of `Q98`: the
 	# rate is proportional to the error, so a small steering correction barely

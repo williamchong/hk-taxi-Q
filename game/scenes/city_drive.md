@@ -1,9 +1,7 @@
 # city_drive.tscn
 
-Rationale for `game/scenes/city_drive.tscn`, kept beside it because Godot's resource writer
-drops every comment on save. Each heading is the line the block sat above;
-`Overview` is the file as a whole. `tools/check.sh` requires this file to exist
-and stay non-empty, and refuses any `;` line in the resource itself.
+Rationale for `game/scenes/city_drive.tscn`. Each heading is the line the block sat above; `Overview` is the
+file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 

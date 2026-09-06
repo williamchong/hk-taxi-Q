@@ -163,9 +163,13 @@ resources="$(
 		find "$ROOT/game/scenes" -type f -name '*.tscn'
 	} | sort
 )"
-missing="$(
+# One pass over the resources answers both questions; the two lists are split
+# by their prefix afterwards, because a `while` in a `$( )` cannot set two
+# variables in the calling shell.
+findings="$(
 	while IFS= read -r doc; do
 		rel="${doc#"$ROOT/"}"
+		grep -q '^;' "$doc" && echo "I  $rel"
 		exempt=0
 		for ok in "${UNDOCUMENTED_OK[@]+"${UNDOCUMENTED_OK[@]}"}"; do
 			if [[ "$rel" == "$ok" ]]; then
@@ -176,15 +180,12 @@ missing="$(
 		((exempt)) && continue
 		sidecar="${doc%.*}.md"
 		if [[ ! -f "$sidecar" ]] || ! grep -q '[^[:space:]]' "$sidecar"; then
-			echo "  $rel — no sidecar ${sidecar#"$ROOT/"}"
+			echo "M  $rel — no sidecar ${sidecar#"$ROOT/"}"
 		fi
 	done <<<"$resources"
 )"
-inline="$(
-	while IFS= read -r doc; do
-		grep -q '^;' "$doc" && echo "  ${doc#"$ROOT/"}"
-	done <<<"$resources"
-)"
+missing="$(sed -n 's/^M //p' <<<"$findings")"
+inline="$(sed -n 's/^I //p' <<<"$findings")"
 orphans="$(
 	{
 		find "$ROOT/game/tuning" -type f -name '*.md'

@@ -158,7 +158,7 @@ var speed_kph: float = 0.0
 var brake_input: float = 0.0
 ## The handbrake button, sampled once per tick. Cached for both reasons
 ## `brake_input` is: an AI taxi on this script must not read the *player's*
-## handbrake, and the alternative was four duck-typed `get()`s a tick — `InputRouter`
+## handbrake, and the alternative was four duck-typed reads a tick — `InputRouter`
 ## has no `class_name`, so those cannot compile to a validated getter the way the
 ## typed `profile` reads do.
 var drift_input: bool = false
@@ -300,10 +300,10 @@ func _physics_process(delta: float) -> void:
 
 	speed_kph = forward_speed_kph()
 	if _input != null:
-		steer_input = float(_input.get(&"steer"))
-		throttle_input = float(_input.get(&"accelerate"))
-		brake_input = float(_input.get(&"brake_reverse"))
-		drift_input = bool(_input.get(&"drift"))
+		steer_input = _input.steer
+		throttle_input = _input.accelerate
+		brake_input = _input.brake_reverse
+		drift_input = _input.drift
 
 	_update_steering(delta)
 	_apply_drive()
