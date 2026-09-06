@@ -20148,14 +20148,21 @@ fatal**, which covers a failed `find` as well as a failed `cd`, and the count is
 committed version prints `ok warnings` and the fix prints `FAIL warnings — swept 0 scripts`. The
 real tree reads **71 scripts swept**.
 
-⚠️ **`tools/skidpad.sh` has the same class-cache prerequisite and said nothing about it.** It is not
+⚠️ **`tools/skidpad.sh` and `drive.sh` have the same class-cache prerequisite and said nothing
+about it.** It is not
 a false green — its own `FATAL` grep fails correctly, because the autoload errors are not in its
 `vehicle_lamps.gd` exclusion — but a fresh clone got a wall of parse errors naming scripts the tool
 never touches. It now names the cause when `global_script_class_cache.cfg` is absent. 🔴 **The hint
 only ever refines a message on a run that is already failing**, so it cannot wave one through, and
 it is not a pre-check. Mutation-checked both ways on one worktree: never imported, **exit 1** with
 the hint; imported, **exit 0**, hint absent, and the drift row reproduces `Q119`'s own **69.8° /
-0.87 s** at 63.02 kph entry.
+0.87 s** at 63.02 kph entry. ⚠️ **`drive.sh` carries the same block**, mutation-checked the same way
+(never imported exit 1 with the hint, imported exit 0 with `DRIVER OK` and no hint) — it is the
+higher-traffic entry point, so hinting only the ablation would have been the worse half to fix.
+🔴 **This is now a THIRD hand-copy of a fact these scripts share, beside `FATAL`**, which is
+identical in `check.sh`, `skidpad.sh` and `drive.sh` and held together by a comment naming
+`check.sh` "the source of truth". There is no `tools/_lib.sh` and introducing one is the user's
+call; the debt is recorded here rather than paid quietly.
 
 ### 🔴 The sweep printed `All checks passed` over a script the engine cannot parse
 

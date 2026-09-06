@@ -75,6 +75,19 @@ status=${PIPESTATUS[0]}
 if grep -qE "$FATAL" "$LOG"; then
 	echo >&2
 	echo "FAILED — a script error, and Godot still exited 0." >&2
+	# Same hint tools/skidpad.sh carries, for the same reason: this is a --script
+	# run, so Godot instantiates the autoloads, and they name class_name globals
+	# that resolve only out of the gitignored game/.godot/. On a clone nobody has
+	# imported, that is a wall of parse errors naming scripts a drive never
+	# touches (Q119). Named rather than pre-checked — it only refines a message on
+	# a run that is already failing, so it can never wave one through. The wording
+	# hedges because a missing cache cannot tell a fresh clone from an interrupted
+	# import, and the remedy is the same either way.
+	if [[ ! -f "$ROOT/game/.godot/global_script_class_cache.cfg" ]]; then
+		echo "         No class_name cache here, so this clone looks unimported or" >&2
+		echo "         half-imported and the autoloads cannot parse. Run tools/check.sh," >&2
+		echo "         or godot --headless --path \"$ROOT/game\" --import." >&2
+	fi
 	exit 1
 fi
 if ((status != 0)); then
