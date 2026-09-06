@@ -132,7 +132,7 @@ wins.
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
 | `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` waits for the second region.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
-| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open, owned by `P5-7`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). The cut moves from the rectangle to the graph — an edge belongs whole to one region and boundary nodes are shared — and the streaming unit stays the tile: per-edge is 737 draw calls a region, per-region is the always-resident bundle that fails at scale |
+| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — the assignment rule is written (2026-09-07), nothing built; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -19529,7 +19529,101 @@ written, and it is the whole of `P5-7`'s design work.
   the cut is at nodes: a chunk holds whole edges, or edge runs cut at a station, and its AABB culls
   it like a building tile.
 
-**Status.** Open. Owned by `P5-7`; nothing built and no assignment rule written.
+### ✅ The assignment rule — written 2026-09-07 against the `causeway_bay` fixture, before code
+
+`Q120` built `causeway_bay` on Wan Chai's east edge, so the join is measured for the first time
+rather than argued. **Nine** source features cross the shared line, and both regions carry all nine
+as a degree-1 node on their own boundary. Read off the two shipped `roadgraph.json`s:
+
+| feature | `wan_chai` | `causeway_bay` | `width_m` (wc / cb) | `lanes` | x-extent of each half to its next junction (m) |
+|---|---|---|---|---|---|
+| CENTRAL-WAN CHAI BYPASS TUNNEL, level −1 | `e489` | `e93` | 6.40 / 6.40 | 2 / 2 | 111.0 / 49.1 |
+| unnamed ramp, level 1 | `e364` | `e85` | **6.70 / 8.00** | 2 / 2 | 90.0 / 110.3 |
+| unnamed ramp, level 1 | `e496` | `e96` | **6.00 / 5.82** | **2 / 1** | 133.2 / 103.6 |
+| GLOUCESTER ROAD | `e171` | `e32` | **4.04 / 6.40** | **1 / 2** | 49.4 / 54.2 |
+| CAUSEWAY ROAD | `e356` | `e80` | **8.76 / 6.40** | 2 / 2 | 40.7 / 54.2 |
+| CAUSEWAY ROAD | `e117` | `e20` | 6.40 / 6.40 | 2 / 2 | 25.9 / 20.2 |
+| TUNG LO WAN ROAD, two-way | `e10` | `e1` | **11.90 / 12.15** | **3 / 4** | 37.0 / 46.8 |
+| COTTON PATH | `e691` | `e176` | **4.79 / 5.86** | 1 / 1 | 39.9 / 51.8 |
+| CAROLINE HILL ROAD | `e61` | `e11` | **7.62 / 7.56** | 2 / 2 | 39.9 / 41.0 |
+
+🔴 **The two rectangles do not share a line, so a rectangle-cut node can never coincide across
+regions.** `wan_chai` clips at easting **837,414.624** — its projected `max_easting` — and
+`causeway_bay` at **837,414.000**, its origin, which `Q7` floors. The 0.624 m is 0.558 m of flooring
+plus 0.066 m because the meridian at 114.188° projects to different eastings at 22.276° and 22.284°
+and the projected box is the bounding box of four projected corners. The nine pairs are therefore
+0.62 m apart in x and, cut on a diagonal at two different lines, **0.3–0.7 m apart in z** —
+TUNG LO WAN ROAD 561.46 against 560.85, COTTON PATH 763.12 against 763.78. This is why the
+acceptance says *coincident to the vertex*: only a source vertex is the same point in both builds.
+
+🔴 **The seam is in the measured attributes as well as the geometry.** `width_m` disagrees on
+**7 of 9** pairs and `lanes` on **3 of 9**, because `Q94`/`Q95` measure per edge and each region's
+edge is half a carriageway — GLOUCESTER ROAD publishes **1 lane / 4.04 m** west of the line and
+**2 / 6.40 m** east of it. Whole-edge ownership closes this by construction: one run, one
+measurement, one publisher.
+
+✅ **Length share is a near tie and is refused as the ownership rule**: 48/52 on GLOUCESTER ROAD,
+49/51 on CAROLINE HILL ROAD, 46/54 on TUNG LO WAN ROAD. A rule that close to its own tie flips
+under a `simplify_tolerance_m` change, and the two regions' builds would then disagree about who
+owns the road.
+
+**The rule.**
+
+1. **Membership is decided on the declared geodetic `bounds`, half-open** — `west ≤ lon < east`,
+   `south ≤ lat < north` — and never on the projected rectangle. Every point belongs to at most one
+   declared region, and the 0.624 m projected strip is `causeway_bay`'s alone. `config.py` refuses
+   declared regions that overlap; the first build accepts only neighbours that share a whole edge or
+   are disjoint, on `Q120`'s *refuse a region nobody declared* precedent.
+2. **A crossing feature is clipped to the union of the declared regions it touches and kept whole
+   across every internal line.** The rectangle clip stays for undeclared territory — the Bypass's
+   570 m into the harbour is still cut, and the 14.2% argument in `roads.clip` still holds — and it
+   stays as the sheet selector (`Q10`).
+3. **The owner is the region containing the run's first vertex in the direction of travel** —
+   `from`, after `roads.py`'s `BACKWARD` normalisation; source vertex order for `both`. It is
+   tolerance-free, it is the same answer from either region's build because both read the same whole
+   feature against the same config, and it puts the handover along the direction of travel: a car
+   leaves a region on that region's own road.
+4. **Publication.** The owner publishes the edge as today, measured over its whole run. Every other
+   declared region the run enters publishes the same edge flagged `foreign: <owner>` — geometry,
+   direction, level and name, with the *authored* width and `width_source: foreign` — and **no
+   drawing or measuring stage acts on a foreign edge**, with one exception: the cap hull at a boundary
+   junction takes the foreign edge's mouth at that authored width, or the junction loses an arm. Its
+   identity across bundles is `(source_id, run ordinal)`, so `source_id` is published on every edge —
+   a schema bump under hard rule 5, because a consumer merging two graphs would be wrong without it.
+   `edge_id` stays the per-region ordinal `Q120` found it to be.
+5. **A boundary node is a graph node** — a junction, or a clipped end on the *outer* boundary —
+   never an internal rectangle intersection. Both regions publish it from the same source vertex, so
+   in city space it coincides to `round_position`'s millimetre by construction. **Caps go whole to
+   the region containing the node.**
+6. **A prop is owned by the region containing its surveyed point** (half-open) and may host onto an
+   owned or a foreign edge, so nothing is placed twice and a sign 10 m past the line still finds
+   its kerb.
+7. **A turn restriction is published by the region that owns its pivot node**, naming edges by the
+   identity in 4.
+
+**What it costs, and what is open until it is built.**
+
+- ⚠️ **The owner measures a far half over sources its rectangle never selected.** `_Source.read`'s
+  bbox and the `Q95` survey rays have to expand to the owned graph's extent plus the ray cap, and the
+  fetch has to cover it — **133 m** past the line at most here, on the level-1 ramp `e496`. Whether
+  the sheets Wan Chai already fetches cover the nine far halves is **unmeasured**; a
+  `foreign_unmeasured_stations` counter refuses what is uncovered rather than inventing it (`Q54`).
+- ⚠️ **The two longest crossings are the level-1 ramps** (90–133 m), whose deck heights come from
+  `INFRASTRUCTURE` meshes in the neighbour's building sheets. Same coverage question, higher stakes:
+  `Q90` is what a ramp with no deck to sample looks like.
+- ⚠️ **The two tile grids are not aligned** — the origins are 1,649 m apart, not a multiple of
+  150 m — so an owned edge's far half lies over the neighbour's grid. `P5-6`'s chunk is culled by its
+  own AABB and this costs nothing, but *caps whole to one tile* means one **owner** tile.
+- 🔴 **The runtime half is not this task's and no task owned it** until `P5-9`: every loader opens
+  one `res://assets/generated/` bundle and nothing reads `city_offset`.
+
+🚫 **Refused**, each with its reason above or here: length-share or midpoint ownership (the near
+ties); cutting both regions at one agreed easting (a cut vertex is still not a graph node, and the
+attribute seam stays); omitting the non-owner's foreign copy (the boundary junction loses a mouth and
+the merged runtime graph has no handover edge); moving `bounds` to a grid-aligned line (`Q10`).
+
+**Status.** 🟡 **Open — the rule is written; nothing built.** Owned by `P5-7`, with the runtime half
+in `P5-9`.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught
@@ -20208,6 +20302,9 @@ for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by 
 
 **Status.** 🟡 **Open.** The coefficients are measured and closed. Two defects it found are open:
 the streaming distances (`P4-5`). ✅ `carve.edges` was the second and closed 2026-09-07 (below).
+✅ **The `Q19` battery has run on `causeway_bay` (2026-09-07, `P5-7a`, below)** — the region builds,
+fences itself and passes `check.sh`; its two `INFRASTRUCTURE` blockages are a different shape from
+Wan Chai's and no carve list is written for it, which is the user's call as it was there.
 
 **Origin.** An occlusion-culling evaluation, and the user's reframe behind it: *"we only built
 wanchai for game developement and design iteration and test play, but we will expand into whole hong
@@ -20448,6 +20545,74 @@ way; keying the list only made it reachable per region.
 precedent against this one.** That refusal was specific — a per-region source block would duplicate
 `bounds`, which hard rule 3 pins to one place. A carve edge list is duplicated nowhere.
 
+### ✅ The `Q19` battery on `causeway_bay` — run 2026-09-07 (`P5-7a`)
+
+The caveat above — *"`Q19`'s starved-edge measurement has never been run outside Wan Chai"* — is
+closed for `causeway_bay`. A clean `python -m pipeline --region causeway_bay` runs all 19 stages in
+**15.0 s** (150 files, 22.7 MB), `sync_generated.sh causeway_bay` copies it, and **`check.sh` exits 0**
+on that sync — every `verify_*` accepts a second region's bundle without a change. The battery, read
+against the built bundle rather than the game's directory:
+
+| instrument | `causeway_bay` | Wan Chai, for scale |
+|---|---|---|
+| `carriageway_occupancy` starved level-0 edges at the lane bar | **5** — `e45` KA NING PATH 0.00 m and `e46` TUNG LO WAN DRIVE 0.00 m (`INFRASTRUCTURE`); `e122` 0.98, `e123` 1.95, `e206` SHELTER STREET 2.93 (`BUILDING`) | 21 |
+| `BUILDING` share of level-0 carriageway | **2.477%** against the 1.720% bar — **FAIL** | ~1.2% |
+| `INFRASTRUCTURE` share | 0.503% | 1.009% |
+| `clearance_reconcile` pipeline / grader / disagreements | **7 / 8 / 1** (`e96`, grader-only) — the ratchet fails, as it must on a bundle it was not tuned to | 21 / 25 / 6 |
+| `fence.json` `fenced_edges` | **3** — `[45, 46, 122]`, 34 barrier units at 6 mouths, 0 pockets, 0 dead ends | 14, 90 units |
+| `reachability` refusing the fenced three | **170 of 39,402 pairs lost (1.26%)**, detour p50 8.4 m; `e45` alone loses **171** | 1 of 187,946 |
+| `narrowing` | clears **0** edges at any floor to 8.32 m; baseline reproduces `clearance.json` on all 199 | clears 0 |
+| `ground_clearance` ground proud, sampled / area | **2.953% / 7.289%** against 1.5% / 3.5% — **FAIL** | 1.00% / 2.2% |
+| `deck_error` \|err\| p90 | **0.182 m**, 90.1% measured — passes | 0.095 m |
+| `overhang` level-1 hanging / level-0 widened past support | 7.8% / 90 m over 12 edges — within bounds | 4.3% |
+| `touchdown_error` | **PASS**; 2 ends refused (`e82`, `e83` MORETON TERRACE FLYOVER, no at-grade edge at the node) | — |
+| `deck_margin` counterfactual | 0 of 211 priced stations under either bar | 2 / 1 |
+
+🔴 **The fence works unattended, and it costs more here than in Wan Chai.** `fence.py` closed the
+three car-bar edges with nothing region-specific, but KA NING PATH is a hillside **link** — refusing
+it alone loses 171 ordered pairs where Wan Chai's whole fence set lost one — so the fence in this
+region walls off a corridor rather than a pocket. That is the price a carve would buy back, and it is
+the number to hold against the carve's own debit.
+
+🔴 **The two `INFRASTRUCTURE` blockages are not Wan Chai's shape, and no carve list is written.**
+`Q19`'s licence — a surveyed width, and a class reading 100% `INFRASTRUCTURE` — is met by **`e45`
+alone** (iB1000 `two_way_span` 5.39 m) and not by `e46` (authored 6.40 m). But the probe shows why
+the licence is not the whole question:
+
+- **`e45` KA NING PATH** (two-way, 1 lane, climbing 17.8 → 33.9 → 27.9 m): the blocker spans the
+  **whole cross-section** over stations 36–44 and 85–91, and its *base* falls **+0.30 → −6.58 m**
+  while its *top* falls **+7.43 → +0.79 m** — a ramp's mass descending *through* the path at two
+  crossings, not a flank standing beside it. A carve here cuts a `headroom_m` slot through a ramp's
+  fill and constructs two walls no publisher drew; Wan Chai's seven were flanks. ⚠️ **Licensed by the
+  rule and not recommended blind** — a frame (`build/driver/p57a/e45_*`, pair `cmp`-identical) shows
+  the path climbing between a grey slope and a block, and does not settle whether the path really
+  passes under. The user made this call edge by edge in Wan Chai; it is theirs here.
+- **`e46` TUNG LO WAN DRIVE** (`on_structure` **8 of 18**): stations 1–40 carry a 1.5 m parapet along
+  one side inside the drawn fringe with 4.4–4.9 m still clear; stations **41–53** carry a slab across
+  the **full** section with base **−0.23 … +0.26 m** and top **+1.4 … +1.5 m** — the ribbon is 1.4 m
+  *under the top of the structure it is partly resting on*. `e204`/`e205` are TUNG LO WAN DRIVE's
+  level-1 halves and MORETON TERRACE FLYOVER's `e82`/`e83` are refused a descent at nodes 76/73 for
+  want of an at-grade edge. This reads as `Q90`'s class — a touchdown the height model did not lift —
+  and **`touchdown_error.py` passes over it**, so it is a height finding for `P2-7`'s owners and not a
+  carve. ⚠️ A cut here would remove the deck the road should be on.
+
+⚠️ **`BUILDING` in the carriageway is over the bar, and that half of `Q19` is still open**: three
+edges, all unnamed lanes or SHELTER STREET, none licensed for anything. ⚠️ **The ground fails at
+twice the bar**, which is `Q24`'s hill-street class arriving in a region with **183 m** of vertical
+span: KA NING PATH, TAI HANG ROAD, TIN HAU TEMPLE ROAD and WUN SHA STREET (+2.89 m worst) carry it.
+Nothing in `P5-7a`'s scope moves either; both are recorded so the next region does not rediscover
+them.
+
+✅ **A drive**: `drive.sh` from the region's own start line (`f_004`, CAUSEWAY ROAD, facing 233°)
+runs **9 s and 150 m at up to 109 kph** under the footbridge and the Causeway Bay flyover with the
+box junction, signs, railings and lamps drawn — **76–92 draw calls**, 145 fps — before the unsteered
+car mounts the nearside kerb and stops against a building face at `(33, 5, 482)`. That is the
+skill's documented full-throttle behaviour, not a wall in the carriageway; it did not end on a
+bridge. ⚠️ The straight-line harness cannot steer, so the drivable-far question is still a human's.
+
+⚠️ **The bundles differ, so the byte comparison above keeps its caveat for a new reason**: a carve
+list would move `causeway_bay`'s tiles, and none is written.
+
 ### ⬜ What this opens
 
 - **`P4-5` owns the streaming distances**, and now has a second operating point to tune against.
@@ -20455,9 +20620,10 @@ precedent against this one.** That refusal was specific — a per-region source 
   at 114.188 exactly, so `Q116`'s *"two regions meet at a hard edge with no continuing graph"* is
   testable rather than argued.
 - **The LOD1 ratio is unowned** and is the cheapest triangle lever measured here.
-- ✅ **`carve.edges` is region-scoped since 2026-09-07** and no longer blocks `P5-7`. ⬜ What it
-  does *not* buy: `Q19`'s starved-edge measurement has never been run on the other three regions,
-  so none of them has a carve list and the byte comparison above keeps its caveat.
+- ✅ **`carve.edges` is region-scoped since 2026-09-07** and no longer blocks `P5-7`. ✅ **The `Q19`
+  battery has now run on `causeway_bay`** (`P5-7a`, above): five starved edges, three fenced, two
+  `INFRASTRUCTURE` blockages of a shape Wan Chai's carve did not meet, and no carve list written —
+  the user's call. `sha_tin` and `mong_kok` are still unmeasured.
 
 **See.** `Q115` for the kit refusal this does not disturb · `Q116` for the region-as-unit argument
 and the ×50 anchor this replaces · `Q87` for a value tuned at one operating point and applied at

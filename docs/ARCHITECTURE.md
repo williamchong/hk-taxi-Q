@@ -1504,7 +1504,9 @@ city_space = region_local + city_offset
 ```
 
 **A region loaded on its own can ignore `city_offset` entirely.** It exists so two regions can be
-placed correctly relative to each other without either giving up its local precision. Anchoring
+placed correctly relative to each other without either giving up its local precision. ⚠️ **And nothing
+in the runtime reads it yet (2026-09-07)** — every loader opens the one bundle under
+`res://assets/generated/`; `P5-9` is the task that places a second region under it. Anchoring
 everything in city space would put Wan Chai ~38 km from the origin, where float32 spacing is ~3.9 mm
 — invisible on a building and awkward on a vehicle whose suspension sag is 50 mm.
 
