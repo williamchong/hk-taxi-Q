@@ -177,7 +177,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 
 | Step | Covers | In CI |
 |---|---|---|
-| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`) | yes |
+| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`). ⚠️ **Runs AFTER `--import`, and that is load-bearing**: a `class_name` resolves out of `.godot/global_script_class_cache.cfg`, which only the import scan writes, so on a never-imported clone every autoload naming one fails to parse against whichever command runs first. As a grep this step needed no engine and ran first for free; as a Godot script it took CI red on `CityManifest`, `VehicleController`, `TouchProfile` and `HudLayout` while the tool itself printed `ok` | yes |
 | `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it, that no resource carries a `;` comment, and that neither an orphan sidecar nor a stale exemption stands (`Q119`) | yes |
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
@@ -216,6 +216,16 @@ load-bearing. Global classes resolve through the gitignored
 *parse*, `_init` never runs, `quit(1)` is never reached, and the SceneTree exits **0** — the check
 reports success having checked nothing. **Never reference a `class_name` global from a `--script`
 tool.**
+
+🔴 **Obeying that is not enough, and `Q119` proved it: the AUTOLOADS are instantiated around every
+`--script` run, and they name globals whatever the tool does.** `verify_settings.gd` complies with
+the rule above — `extends SceneTree`, no global named anywhere — and still went red on a fresh
+clone, because `debug_hud.gd` and `input_router.gd` name `CityManifest`, `VehicleController`,
+`TouchProfile` and `HudLayout` between them, and Godot loads both before the script. So the rule
+binds a *tool* where what actually binds is the **project**: no Godot process may run above
+`==> import` in `tools/check.sh` at all. ⚠️ The failure is also one step milder than the paragraph
+above describes — the tool did print `ok`, but the parse errors reached stderr and `run_godot`'s
+`FATAL` grep failed the step, which is that grep doing exactly the job it exists for.
 
 ⚠️ **Autoloads are registered on the first frame, not before, and a verify tool that loads a scene
 should still `await process_frame` first.** Until `Q119` this was a compile-time trap: anything

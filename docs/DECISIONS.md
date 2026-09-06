@@ -20091,6 +20091,49 @@ samples identical, so the trajectory is the same and the variance is the driver'
 not the game; it is recorded here rather than hidden because a frame `cmp` is this repo's evidence
 and a reader repeating it may hit one of those runs.
 
+### 🔴 The `settings` step needed the import that ran after it
+
+CI went red on `5b8169c` and the fix is a position, not a value. As a grep the step read
+`project.godot` off disk and needed no engine, so it ran first for free. As `verify_settings.gd` it
+is a Godot invocation, and it inherited a prerequisite the position never satisfied: a `class_name`
+resolves out of `.godot/global_script_class_cache.cfg`, which **only the import scan writes**, and a
+fresh clone has no `.godot/` at all. Autoloads are instantiated for a `--script` run too, so
+`debug_hud.gd` and `input_router.gd` failed to parse on `CityManifest`, `VehicleController`,
+`TouchProfile` and `HudLayout`, and `check.sh`'s `FATAL` grep — correctly — read that as a compile
+failure behind an exit `0`.
+
+⚠️ **The tool printed `ok`.** Its own assertions passed and its own exit status was 0; the errors
+are the *engine's*, emitted while instantiating autoloads around the script. A verify tool's own
+verdict is not evidence that its run was clean, which is the whole reason `run_godot` reads stderr
+as well as the status.
+
+🔴 **The rule was already written down, and obeying it would not have helped.** `ARCHITECTURE.md`
+has said *"never reference a `class_name` global from a `--script` tool"* since before this — and
+`verify_settings.gd` obeys it exactly: `extends SceneTree`, no global named anywhere. It went red
+regardless, because the globals are named by the **autoloads**, which Godot instantiates around any
+`--script` run whatever the tool does. So the documented rule binds the tool where what actually
+binds is the project, and a tool following it perfectly is still not safe above the import. The
+durable form is the one now at the top of that comment in `check.sh`: **no Godot process may be
+launched above `==> import`.** That paragraph in `ARCHITECTURE.md` is widened to say so.
+
+⚠️ **And the log named the wrong step.** `check.sh` writes every `FAIL` and the closing `FAILED` to
+stderr, which GitHub's viewer interleaves against stdout by arrival rather than by order — so the
+failure surfaced under `verify_input`, four steps and 300 lines below where it happened. Read the
+log for the `FAIL` line, never for what precedes `FAILED`.
+
+Measured on one never-imported worktree, `VERIFY_GENERATED=0`: `5b8169c` exits **1** at
+`FAIL verify_settings`; with the step moved below `==> import`, **0** and `All checks passed`. The
+move costs nothing, though not for the obvious reason: the import *does* read two of the pinned
+settings, the `[importer_defaults]` keys and `import_etc2_astc`. What makes the order free is that
+`check.sh` never exits early — a failed step sets `failed` and the run continues — so the import
+always ran on whatever `project.godot` said, whether or not the check had already reported a loss.
+Checking first never protected that import; it only reported sooner, into a run that finishes
+anyway.
+
+⚠️ **`Q75`'s entry still reads "a `settings` step, before `--import`"** and is left standing: it is
+that decision's own record, and the four greps beside it are gone too. Read it as history, not as
+the current order.
+
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
 for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire

@@ -117,20 +117,6 @@ if ! "$GDFORMAT" --check "$ROOT/game"; then
 	failed=1
 fi
 
-# Settings that no other check would notice going missing, read back through
-# ProjectSettings by tools/verify_settings.gd rather than grepped out of
-# project.godot. The grep was the wrong instrument: Godot's own writer — the
-# editor's save and ProjectSettings.save() alike — omits every key whose value
-# equals the engine's registered default, so three of the 21 warning promotions
-# and rendering_method.web vanish from the FILE on every save while staying in
-# FORCE. For three weeks that read as "an editor save dropped the settings";
-# it never had. Reading the value back passes a canonical, editor-written
-# project.godot and fails a setting that has really been lost — which is the
-# only distinction worth checking. docs/ARCHITECTURE.md "Project settings" has
-# the rows and the history.
-echo "==> settings"
-run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools/verify_settings.gd"
-
 # Rationale for a .tres/.tscn lives in a sidecar .md beside it, never in the
 # file. Godot's writer regenerates a resource from the object in memory on every
 # editor save and drops every comment — on 2026-08-31 one save took ~30 lines
@@ -235,6 +221,41 @@ fi
 
 echo "==> import"
 run_godot "import" --headless --path "$ROOT/game" --import
+
+# 🔴 NO GODOT PROCESS MAY BE LAUNCHED ABOVE `==> import`. That is the durable
+# rule; what follows is why, and which step learned it the hard way.
+#
+# A `class_name` resolves out of .godot/global_script_class_cache.cfg, which
+# only the import scan writes — so on a clone that has never been imported,
+# every autoload naming one fails to parse and Godot reports that on stderr of
+# WHATEVER command ran first. ⚠️ The tool itself need not name a global:
+# verify_settings.gd names none, and the autoloads Godot instantiates around
+# any --script run name four between them. This step was that command, and it took CI red on
+# CityManifest, VehicleController, TouchProfile and HudLayout while the tool
+# itself printed `ok`. It ran first when it was a grep, which needed no engine;
+# turning it into a Godot script gave it a prerequisite the position never had.
+# Nothing is lost by moving it. The import does read two of the pinned settings
+# — the [importer_defaults] keys and import_etc2_astc — but this script never
+# exits early: a failed step sets `failed` and the run continues, so the import
+# always ran on whatever project.godot said whether or not the check had already
+# reported the loss. Checking first never protected that import; it only
+# reported sooner, into a run that goes on to the end regardless.
+# docs/DECISIONS.md `Q119` "The settings step needed the import that ran
+# after it" has the measurement and the CI log that named the wrong step.
+#
+# Settings that no other check would notice going missing, read back through
+# ProjectSettings by tools/verify_settings.gd rather than grepped out of
+# project.godot. The grep was the wrong instrument: Godot's own writer — the
+# editor's save and ProjectSettings.save() alike — omits every key whose value
+# equals the engine's registered default, so three of the 21 warning promotions
+# and rendering_method.web vanish from the FILE on every save while staying in
+# FORCE. For three weeks that read as "an editor save dropped the settings";
+# it never had. Reading the value back passes a canonical, editor-written
+# project.godot and fails a setting that has really been lost — which is the
+# only distinction worth checking. docs/ARCHITECTURE.md "Project settings" has
+# the rows and the history.
+echo "==> settings"
+run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools/verify_settings.gd"
 
 # The GDScript lint pass. --import alone is not it: measured, it compiles
 # autoloads and what they reach, so an untyped variable planted in
