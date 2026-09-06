@@ -20134,6 +20134,29 @@ anyway.
 that decision's own record, and the four greps beside it are gone too. Read it as history, not as
 the current order.
 
+### ✅ Two more false greens of the same shape, found by the review and closed
+
+Neither was this fix's doing; both are the same defect class, in the two scripts whose whole job is
+turning Godot's exit `0` into a real status.
+
+🔴 **`check.sh`'s warnings sweep could print `ok` having swept nothing.** `cd` inside a `$( )` exits
+the **subshell**, so `cd "$ROOT/game" || exit 1` left `lint_hits` empty, `[[ -n ]]` read empty as
+"no warnings", and the step passed — the exact false green the comment three lines above it warns
+about, inside the check that warns about it. The file list is now taken first and **empty is
+fatal**, which covers a failed `find` as well as a failed `cd`, and the count is printed. ⚠️
+**Mutation-checked rather than read**: against a `game/` holding no `.gd` and a stub engine, the
+committed version prints `ok warnings` and the fix prints `FAIL warnings — swept 0 scripts`. The
+real tree reads **71 scripts swept**.
+
+⚠️ **`tools/skidpad.sh` has the same class-cache prerequisite and said nothing about it.** It is not
+a false green — its own `FATAL` grep fails correctly, because the autoload errors are not in its
+`vehicle_lamps.gd` exclusion — but a fresh clone got a wall of parse errors naming scripts the tool
+never touches. It now names the cause when `global_script_class_cache.cfg` is absent. 🔴 **The hint
+only ever refines a message on a run that is already failing**, so it cannot wave one through, and
+it is not a pre-check. Mutation-checked both ways on one worktree: never imported, **exit 1** with
+the hint; imported, **exit 0**, hint absent, and the drift row reproduces `Q119`'s own **69.8° /
+0.87 s** at 63.02 kph entry.
+
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
 for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire

@@ -35,6 +35,12 @@
 #
 # Headless on purpose: nothing is captured, and the dummy rasteriser is faster
 # and works over SSH. Override GODOT= if yours is not on PATH.
+#
+# Needs an imported project: like every --script run, this one loads the
+# autoloads, and they name class_name globals that resolve only out of the
+# gitignored game/.godot/. On a fresh clone run tools/check.sh first. The failure
+# is loud rather than silent — the FATAL grep below catches it — and it names
+# itself.
 
 set -uo pipefail
 
@@ -64,6 +70,18 @@ status=${PIPESTATUS[0]}
 if grep -E "$FATAL" "$LOG" | grep -qv 'vehicle_lamps.gd'; then
 	echo >&2
 	echo "FAILED — a script error, and Godot still exited 0." >&2
+	# ⚠️ A clone that has never been imported fails here, and without this hint it
+	# fails as a wall of parse errors naming scripts this tool never touches. A
+	# class_name resolves out of .godot/global_script_class_cache.cfg, which only
+	# the import scan writes, and the autoloads Godot instantiates around any
+	# --script run name four globals between them — the defect tools/check.sh hit
+	# at Q119. Named rather than pre-checked: this only refines the message on a
+	# run that is already failing, so it can never wave one through.
+	if [[ ! -f "$ROOT/game/.godot/global_script_class_cache.cfg" ]]; then
+		echo "         This clone has never been imported, so no class_name resolves" >&2
+		echo "         and the autoloads cannot parse. Run tools/check.sh first, or" >&2
+		echo "         godot --headless --path game --import." >&2
+	fi
 	exit 1
 fi
 if ((status != 0)); then

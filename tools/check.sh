@@ -266,19 +266,35 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 #
 # The cd is load-bearing. Run from anywhere else, res:// does not resolve, every
 # script analyses clean, and this passes having checked nothing.
+#
+# 🔴 Which is why the file list is taken FIRST and its emptiness is a failure.
+# `cd` inside a `$( )` exits the SUBSHELL, not this script — so written as one
+# substitution, `cd ... || exit 1` set `lint_hits` empty, `[[ -n ]]` read that as
+# "no warnings", and the step printed `ok` having swept nothing. That is the
+# exact false green the paragraph above warns about, sitting inside the check
+# that warns about it. Splitting the list out makes the failure representable: a
+# failed `cd` and a failed `find` both leave `$scripts` empty, and empty is
+# fatal. The count is printed for the same reason — a swept 0 must be visible.
 echo "==> warnings"
-lint_hits="$(
-	cd "$ROOT/game" || exit 1
-	find . -name '*.gd' | sed 's|^\./|res://|' | while IFS= read -r script; do
-		"$GODOT" --headless --check-only --script "$script" 2>&1 | sed "s|^|$script: |"
-	done | grep 'treated as error'
-)"
-if [[ -n "$lint_hits" ]]; then
-	echo "$lint_hits"
-	echo "  FAIL  warnings — see above" >&2
+scripts="$(cd "$ROOT/game" && find . -name '*.gd' | sed 's|^\./|res://|')"
+if [[ -z "$scripts" ]]; then
+	echo "  FAIL  warnings — swept 0 scripts under $ROOT/game, so nothing was" >&2
+	echo "        checked. That is not the same as nothing being wrong." >&2
 	failed=1
 else
-	echo "  ok    warnings"
+	lint_hits="$(
+		cd "$ROOT/game" || exit 1
+		while IFS= read -r script; do
+			"$GODOT" --headless --check-only --script "$script" 2>&1 | sed "s|^|$script: |"
+		done <<<"$scripts" | grep 'treated as error'
+	)"
+	if [[ -n "$lint_hits" ]]; then
+		echo "$lint_hits"
+		echo "  FAIL  warnings — see above" >&2
+		failed=1
+	else
+		echo "  ok    warnings — $(grep -c . <<<"$scripts") scripts swept"
+	fi
 fi
 
 for tool in "${ALWAYS_TOOLS[@]}"; do
