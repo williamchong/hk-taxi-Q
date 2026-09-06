@@ -97,12 +97,16 @@ Common emoji for this project:
   `:=` counts). `gdformat` owns layout — do not hand-format around it. Untyped declarations fail
   the build, so this is enforced, not advisory.
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
-- ⚠️ Opening the Godot editor or running an export rewrites `game/project.godot` and
-  `game/export_presets.cfg`, stripping their comments. Never commit either as a side effect; see
-  `docs/ARCHITECTURE.md` for how to restore and verify. Headless `--import`/`--script` leave those
-  two alone — ⚠️ **but a headless `--import` rescan re-saves JSON with tab indentation**, whitespace
-  only, and that reaches the tracked `game/assets/authored/greybox_wanchai.json` (`Q115`). Run
-  `git status` after `check.sh` and `git checkout` it; never commit it as a side effect either.
+- 🔴 **Rationale for a `.tres`, `.tscn`, `project.godot` or `export_presets.cfg` goes in prose beside
+  the file, never in it** (`Q119`): a resource's argument lives in the sidecar `handling.md` next to
+  `handling.tres`, and the config files' in `docs/ARCHITECTURE.md`. Godot's writer regenerates all
+  four classes on every editor save, drops every comment, and omits any value equal to an engine or
+  script default — so they are committed in the writer's own form and a save is a no-op.
+  `check.sh` refuses a `;` line in a resource and requires the sidecar; `verify_settings.gd` reads
+  the settings back rather than grepping the file. ⚠️ **A headless `--import` rescan still re-saves
+  JSON with tab indentation**, whitespace only, and that reaches the tracked
+  `game/assets/authored/greybox_wanchai.json` (`Q115`). Run `git status` after `check.sh` and
+  `git checkout` it; never commit it as a side effect.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
 - This is not a Node project. Do not run npm/npx/node commands.
 

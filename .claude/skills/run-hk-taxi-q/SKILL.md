@@ -284,10 +284,10 @@ to — see Gotchas.
   0.15 m and mountable by design. `drive_harness.gd` respawns the car after a 25 m fall and says so
   on stdout.
 - **The window steals focus** for the length of the run. Nothing to be done about it on macOS.
-- **A headless export left `game/project.godot` and `game/export_presets.cfg` untouched** in this
-  session, contrary to the blanket warning in `CLAUDE.md` — but that warning is about the *editor*,
-  which definitely rewrites them and strips their comments. Run `git status` after either, and
-  restore per `docs/ARCHITECTURE.md` if they moved. Driver runs never touch them.
+- **`game/project.godot` and `game/export_presets.cfg` are committed in Godot's own written form**
+  (`Q119`), so an editor save, an export or a drive leaves them clean. If `git status` shows either
+  modified after a run, that is a real settings change and `tools/check.sh`'s `settings` step says
+  which value moved.
 - **`build/` is gitignored**, so screenshots and web builds never dirty the tree.
 
 ## Troubleshooting

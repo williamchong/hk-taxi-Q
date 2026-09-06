@@ -1,56 +1,10 @@
-; Yellow box junctions, drawn as their own geometry (`P3-18`, `Q53`).
-;
-; `tools/generated_scene_import.gd` maps the ETL's `boxjunctions` material name
-; to this path and only this path, so this file is the switch: delete the entry
-; there and the boxes fall back to the `BaseMaterial3D` they imported with,
-; which draws the right hatching in whatever grey the importer picks.
-;
-; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-; data, not constants — and beside `road_markings.tres` and `arrows.tres`,
-; which is the whole point of the file.
-;
-; 🔴 **The shader is shared, so this file is the only thing that makes the boxes
-; yellow** (`Q71`). `marking_paint.gdshader` serves the arrows and the stop lines
-; too, and its default is the *white* those two paint — so where the other two
-; `.tres` restate a default, this one overrides it. `verify_boxjunctions.gd`
-; checks the dispatch against *this path* rather than against the shader, which
-; is what still catches a box junction handed the wrong material.
-;
-; ⚠️ **`paint_colour` is the third authored copy of the marking yellow, and the
-; duplication is the decision** — the same paragraph `arrows.tres` carries for
-; the white. `Q53` kept the marking colours out of `hong_kong.yaml`'s
-; `materials:` table, outside `Q33`'s exposure rule, because paint is not
-; cladding, and predicted that a road colour authored in a third place would be
-; the problem; this is that place for the yellow, put next door so the copies
-; can be read side by side. There is no mechanism in Godot to share a value
-; between two `.tres` files; what there is instead is that a mismatch shows up
-; in a single frame, because a box a different yellow from the no-stopping line
-; painted along its own kerb is the first thing anyone would notice.
-;
-;   road_markings.gdshader  yellow_colour (default) = Color(0.86, 0.68, 0.13, 1.0)
-;   road_markings.tres      yellow_colour           = Color(0.86, 0.68, 0.13, 1.0)
-;   — and this file is the third. `Q71` removed the fourth: `boxjunctions.gdshader`
-;     carried a yellow default of its own until its shader was merged away.
-;
-; ⚠️ **`paint_opacity` is deliberately NOT copied across**, for `arrows.tres`'s
-; stated reason: next door the 0.85 is asphalt showing through paint mixed into
-; one opaque surface; here it would be transparency on a lifted second surface.
-;
-; ⚠️ **Nothing here is a fade, and nothing here is the hatch.** The stripe
-; width, spacing and direction are geometry, decided by `pipeline/boxjunctions.py`
-; from `hong_kong.yaml`'s `boxjunctions:` block and the publisher's own
-; `ANGLE1`/`ANGLE2` — this file only says what colour the paint is.
-;
-; Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table,
-; against the kerbside yellows `P3-13` draws beside them: the thing this has to
-; survive is being seen next to the restriction lines it matches.
-
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="ShaderMaterial" format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/marking_paint.gdshader" id="1_boxjunctions"]
 
 [resource]
 resource_name = "boxjunctions"
+render_priority = 0
 shader = ExtResource("1_boxjunctions")
-shader_parameter/paint_colour = Color(0.86, 0.68, 0.13, 1.0)
+shader_parameter/paint_colour = Color(0.86, 0.68, 0.13, 1)
 shader_parameter/paint_roughness = 0.7

@@ -59,17 +59,11 @@ VERIFY_TOOLS=(
 # exactly the branches where input work happens.
 ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input)
 
-# Promotions docs/ARCHITECTURE.md "GDScript warnings" says project.godot must
-# carry. Named here so the number the settings check wants and the number its
-# diagnostic prints cannot drift apart — the failure it warns against is
-# someone editing one of them down to match a regression.
-WANT_PROMOTED=21
-
-# Tuning resources and scenes that carry no rationale in the file, and are
-# allowed not to. The `tuning` step below fails anything else that carries
-# none, so the default is inverted: a new .tres has to explain itself or be
-# named here deliberately. Reasons are given, because an unexplained exemption
-# is how a list like this rots into a way of silencing the check.
+# Tuning resources and scenes that carry no sidecar .md, and are allowed not
+# to. The `tuning` step below fails anything else without one, so the default
+# is inverted: a new .tres has to explain itself or be named here deliberately.
+# Reasons are given, because an unexplained exemption is how a list like this
+# rots into a way of silencing the check.
 #
 #   camera.tres       Q98 is three commits old and its argument is still in the
 #                     decision entry rather than in the file.
@@ -125,112 +119,54 @@ if ! "$GDFORMAT" --check "$ROOT/game"; then
 	failed=1
 fi
 
-# Settings that no other check would notice going missing. Opening the editor
-# rewrites project.godot from scratch: it discards every comment, and it drops
-# hand-written feature overrides — keys with a `.web` / `.mobile` suffix — which
-# the editor only persists when it created them itself. That is not
-# hypothetical. 78c077e, a commit about the start line, silently took three
-# warning promotions and rendering_method.web out in one editor save, and
-# nothing failed for three weeks: the warnings sweep below greps Godot's output
-# for "treated as error", and Godot emits that only for a warning project.godot
-# itself promotes, so the sweep reads its own enforcement list out of the file
-# it is enforcing. A promotion that is no longer set cannot fail.
-#
-# Counts, not names: docs/ARCHITECTURE.md "GDScript warnings" and "Project
-# settings" hold the durable list and the rationale, and this is the tripwire
-# that says go and read them. untyped_declaration is named as well as counted,
-# because CLAUDE.md makes it a hard rule rather than one of 21 equals, and a
-# count passes happily when it is swapped for some other promotion.
-#
-# Every pattern is anchored, and the renderer pins its value. An unanchored key
-# matches a comment that merely mentions it, and passes that key commented out
-# or set to the wrong renderer; all three were demonstrated against this file.
-# The two feature overrides are pinned separately rather than counted as a
-# class, because they did not share a fate: 78c077e took rendering_method.web
-# and left run/max_fps.mobile standing.
+# Settings that no other check would notice going missing, read back through
+# ProjectSettings by tools/verify_settings.gd rather than grepped out of
+# project.godot. The grep was the wrong instrument: Godot's own writer — the
+# editor's save and ProjectSettings.save() alike — omits every key whose value
+# equals the engine's registered default, so three of the 21 warning promotions
+# and rendering_method.web vanish from the FILE on every save while staying in
+# FORCE. For three weeks that read as "an editor save dropped the settings";
+# it never had. Reading the value back passes a canonical, editor-written
+# project.godot and fails a setting that has really been lost — which is the
+# only distinction worth checking. docs/ARCHITECTURE.md "Project settings" has
+# the rows and the history.
 echo "==> settings"
-project_godot="$ROOT/game/project.godot"
-promoted="$(grep -c '^gdscript/warnings/.*=2$' "$project_godot" || true)"
-untyped="$(grep -c '^gdscript/warnings/untyped_declaration=2$' "$project_godot" || true)"
-web_renderer="$(grep -c '^renderer/rendering_method\.web="gl_compatibility"$' "$project_godot" || true)"
-mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
-# 🔴 Pinned to its VALUE, not counted. MSAA degrades silently: dropped or set to
-# 0, nothing errors, no counter moves and the only symptom is thin geometry —
-# the box junction hatch, sign poles, lamp columns — breaking into dashes at
-# middle distance, which is what it was turned on to stop. 4x (2) is also the
-# ceiling WebGL2 guarantees, so 8x here would be clamped on the web cut and
-# quietly diverge the platforms. `Q91` measured it; docs/ARCHITECTURE.md
-# "Project settings" has the row.
-msaa="$(grep -c '^anti_aliasing/quality/msaa_3d=2$' "$project_godot" || true)"
-# 🔴 Pinned to its VALUE, not merely counted. Godot quantises imported vertex
-# positions over each mesh's own AABB, so the step scales with how wide a layer
-# is rather than how big its objects are — 0.025 m across `lamps.glb`, against a
-# 0.06 m bracket arm and 0.032 m sign poles. Dropped or set false, every
-# generated mesh imports slightly different geometry from the one the ETL built,
-# and the only symptom is a verify tool's count disagreeing with a stage's own.
-# `Q82` measured it; `docs/ARCHITECTURE.md` "Project settings" has the row.
-# ⚠️ The trailing comma is optional because it is not ours to control: this key
-# sits in a `scene={...}` dict and Godot puts a comma after every entry but the
-# last, so adding a third importer default would move one onto this line. Pinned
-# strictly, that reads as the setting having been LOST — a false alarm pointing
-# at a message that says not to edit the check down to match.
-mesh_compression="$(grep -c '^"meshes/force_disable_compression": true,\{0,1\}$' "$project_godot" || true)"
-if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 || "$mesh_compression" != 1 || "$msaa" != 1 ]]; then
-	echo "  promoted warnings:    $promoted (want $WANT_PROMOTED)"
-	echo "  untyped_declaration:  $untyped (want 1)"
-	echo "  rendering_method.web: $web_renderer (want 1)"
-	echo "  max_fps.mobile:       $mobile_fps (want 1)"
-	echo "  mesh compression off: $mesh_compression (want 1)"
-	echo "  msaa_3d=2 (4x):       $msaa (want 1)"
-	echo "  FAIL  settings — project.godot lost settings, most likely to an" >&2
-	echo "        editor save. Restore them; do NOT edit the numbers here down" >&2
-	echo "        to match. See docs/ARCHITECTURE.md \"Project settings\"." >&2
-	failed=1
-else
-	echo "  ok    settings"
-fi
+run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools/verify_settings.gd"
 
-# Godot's .tres/.tscn writer regenerates a file from the resource in memory, so
-# it drops every comment — the same loss the settings step above catches in
-# project.godot, in a file class nothing was watching. On 2026-08-31 one editor
-# save took both: project.godot lost three warning promotions and
-# rendering_method.web, and clean_daylight.tres lost the ~30 lines carrying
-# Q31's contrast measurement and the ambient/glow balance argument.
+# Rationale for a .tres/.tscn lives in a sidecar .md beside it, never in the
+# file. Godot's writer regenerates a resource from the object in memory on every
+# editor save and drops every comment — on 2026-08-31 one save took ~30 lines
+# of Q31's contrast argument out of clean_daylight.tres, and on 2026-09-07 the
+# 1,334 comment lines then inside 26 files were moved out so a save costs
+# nothing. Measured before the move: the writer omits only what already equals
+# the class default, so a .tres cannot lose a value that is doing work (0
+# differing stored properties across the stripped Environment, Sky and sky
+# material). What was at risk was always the argument, never the numbers.
 #
-# ⚠️ The two halves failed DIFFERENTLY, and the difference is what this step is
-# shaped by. Measured afterwards, the .tres lost no value at all — 0 differing
-# stored properties across the Environment, its Sky and its sky material —
-# because the writer omits only what already equals the class default, so it
-# cannot drop a value that is doing work. What is at risk in a .tres is the
-# argument for the numbers, never the numbers. This step therefore tests for
-# prose, and pinning values here would be guarding the half that is safe.
+# Three assertions, and each is a false green rather than a style point:
+#   1. Every .tres/.tscn has a non-empty sidecar unless UNDOCUMENTED_OK names
+#      it, so a new tuning resource cannot slip in unexplained.
+#   2. No .tres/.tscn carries a `;` line at all. A comment put back into the
+#      resource is the hazard returning, and it would survive exactly until
+#      the next editor save.
+#   3. No sidecar stands beside a file that is gone, and no exemption names a
+#      file that has since gained a sidecar — the list must describe the tree.
 #
-# 🔴 Presence, not a count. Comments die ALL AT ONCE — the writer never
-# preserves one — so "carried prose, now carries none" is a signature no honest
-# edit produces. A per-file count would fail on every legitimate rewording and
-# teach the reader to edit the number down, which is the failure the settings
-# step's own diagnostic exists to warn against; a noisy check is how you cause
-# it.
-#
-# The default is inverted: everything in these two globs must carry a comment
-# unless UNDOCUMENTED_OK names it, so a newly added tuning resource cannot slip
-# in unwatched. 20 of 25 .tres and 6 of 8 .tscn carry prose today —
-# city_facade.tres is 83 comment lines of 160, and city_drive.tscn is 99.
-# ⚠️ Three guards here, and each is a false green rather than a style point.
+# ⚠️ Three shell guards here, each a false green rather than a style point.
 # `-type f`, because a directory named `*.tres` makes the grep fail with empty
-# stdout, and the old `grep -c` form compared that to 0, came out false and
-# dropped the file from the report. `grep -q` rather than `-c`, because the
-# question is existence and not a count — and its error status reads as "no
-# prose", which fails loudly instead. And `[@]+`, because bash 3.2 ships on
-# macOS and `"${arr[@]}"` on an EMPTY array under `set -u` aborts the whole
-# script: every check below this line would be skipped rather than failed, on a
-# list the comment above invites people to shorten.
+# stdout and the old `grep -c` form read that as 0. `grep -q` rather than `-c`,
+# because the question is existence and its error status reads as "no prose",
+# which fails loudly. And `[@]+`, because bash 3.2 ships on macOS and
+# `"${arr[@]}"` on an EMPTY array under `set -u` aborts the whole script.
 echo "==> tuning"
-stripped="$(
+resources="$(
 	{
 		find "$ROOT/game/tuning" -type f -name '*.tres'
 		find "$ROOT/game/scenes" -type f -name '*.tscn'
-	} | sort | while IFS= read -r doc; do
+	} | sort
+)"
+missing="$(
+	while IFS= read -r doc; do
 		rel="${doc#"$ROOT/"}"
 		exempt=0
 		for ok in "${UNDOCUMENTED_OK[@]+"${UNDOCUMENTED_OK[@]}"}"; do
@@ -240,40 +176,61 @@ stripped="$(
 			fi
 		done
 		((exempt)) && continue
-		grep -q '^;' "$doc" || echo "  $rel"
+		sidecar="${doc%.*}.md"
+		if [[ ! -f "$sidecar" ]] || ! grep -q '[^[:space:]]' "$sidecar"; then
+			echo "  $rel — no sidecar ${sidecar#"$ROOT/"}"
+		fi
+	done <<<"$resources"
+)"
+inline="$(
+	while IFS= read -r doc; do
+		grep -q '^;' "$doc" && echo "  ${doc#"$ROOT/"}"
+	done <<<"$resources"
+)"
+orphans="$(
+	{
+		find "$ROOT/game/tuning" -type f -name '*.md'
+		find "$ROOT/game/scenes" -type f -name '*.md'
+	} | sort | while IFS= read -r sidecar; do
+		stem="${sidecar%.md}"
+		if [[ ! -f "$stem.tres" && ! -f "$stem.tscn" ]]; then
+			echo "  ${sidecar#"$ROOT/"} — no .tres or .tscn beside it"
+		fi
 	done
 )"
-if [[ -n "$stripped" ]]; then
-	echo "$stripped"
-	echo "  FAIL  tuning — the files above carry no rationale. Most likely an" >&2
-	echo "        editor save: Godot rewrites a .tres/.tscn from the resource" >&2
-	echo "        in memory and drops every comment. Restore them from git; do" >&2
-	echo "        NOT add them to UNDOCUMENTED_OK to quiet this." >&2
-	failed=1
-fi
-
-# The exemption list is checked against the tree, not merely read. A renamed
-# file leaves a dead entry behind, and a file that GAINS rationale keeps an
-# exemption it no longer needs — the list shrinking the rule quietly, which is
-# exactly what its own comment says not to let happen. Publishing the refusals
-# is only worth something if the refusals are still true.
 stale="$(
 	for ok in "${UNDOCUMENTED_OK[@]+"${UNDOCUMENTED_OK[@]}"}"; do
 		if [[ ! -f "$ROOT/$ok" ]]; then
 			echo "  $ok — no such file"
-		elif grep -q '^;' "$ROOT/$ok"; then
-			echo "  $ok — carries rationale now, so the exemption is stale"
+		elif [[ -f "$ROOT/${ok%.*}.md" ]]; then
+			echo "  $ok — has a sidecar now, so the exemption is stale"
 		fi
 	done
 )"
+if [[ -n "$missing" ]]; then
+	echo "$missing"
+	echo "  FAIL  tuning — the files above carry no rationale. Write the sidecar;" >&2
+	echo "        do NOT add them to UNDOCUMENTED_OK to quiet this." >&2
+	failed=1
+fi
+if [[ -n "$inline" ]]; then
+	echo "$inline"
+	echo "  FAIL  tuning — the files above carry a \`;\` comment. Rationale goes in" >&2
+	echo "        the sidecar .md; the next editor save would delete this." >&2
+	failed=1
+fi
+if [[ -n "$orphans" ]]; then
+	echo "$orphans"
+	echo "  FAIL  tuning — orphan sidecars. Delete them or restore the resource." >&2
+	failed=1
+fi
 if [[ -n "$stale" ]]; then
 	echo "$stale"
 	echo "  FAIL  tuning — UNDOCUMENTED_OK no longer describes the tree. Drop" >&2
 	echo "        the entries above; each one is a hole in the check." >&2
 	failed=1
 fi
-
-if [[ -z "$stripped" && -z "$stale" ]]; then
+if [[ -z "$missing$inline$orphans$stale" ]]; then
 	echo "  ok    tuning"
 fi
 

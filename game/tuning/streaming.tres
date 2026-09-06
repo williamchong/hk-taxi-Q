@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="StreamingProfile" format=3]
 
-[ext_resource type="Script" uid="uid://bdbda5me3puu8" path="res://scripts/city/streaming_profile.gd" id="1_streaming"]
+[ext_resource type="Script" path="res://scripts/city/streaming_profile.gd" id="1_streaming"]
 
 [resource]
 script = ExtResource("1_streaming")

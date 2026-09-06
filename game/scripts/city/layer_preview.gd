@@ -33,8 +33,8 @@
 ##
 ## The collider count is printed because for every layer but the road surface
 ## there must be **none**, and each layer's reason is its own — they live in
-## the node comments of `city_drive.tscn` and `city_preview.tscn`, beside the
-## node that would have to change (`Q74`).
+## `city_drive.md` and `city_preview.md` beside those scenes, under the node
+## that would have to change (`Q74`, `Q119`).
 extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")

@@ -100,9 +100,11 @@ look at rather than a bar to retune against.
   rule 5), which cannot be stated without naming the old one.
 - **Generated assets are build output.** Never commit anything under `game/assets/generated/`,
   `etl/out/` or `etl/sources/`.
-- ⚠️ **Never commit `game/project.godot` or `game/export_presets.cfg` as a side effect.** Opening the
-  editor or running an export rewrites both and strips their comments. Restore with
-  `git checkout` and verify with `git diff --exit-code`.
+- 🔴 **Rationale for a resource goes in its sidecar, never in the file.** Godot rewrites every
+  `.tres`, `.tscn`, `project.godot` and `export_presets.cfg` on save and drops comments, so each
+  resource's argument lives in `<name>.md` beside it and the config files' in
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). `tools/check.sh` refuses a `;` line in a resource
+  and requires the sidecar (`Q119`).
 - **Update [`docs/PROGRESS.md`](docs/PROGRESS.md)** when a task changes status or a number is
   re-measured, and **[`docs/DECISIONS.md`](docs/DECISIONS.md)** when a decision is made or a question
   closes. Decision records are keyed by ID and stated in the present tense — no dates, no narration.

@@ -19983,3 +19983,96 @@ The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of surve
 
 **See.** `Q117` for the inferred join this supersedes · `Q54` for sourced-not-invented · `Q92` for
 the height accessor · `Q59` for reading a scanned sheet · `Q69` for the clear-gap trap
+
+## `Q119` — The editor never dropped a setting, and the resources' rationale moves out of the files
+
+**Status.** 🟢 Closed 2026-09-07
+
+**Origin.** A review of the project against Godot's "Best practices" pages. Every page that assumes
+the editor scored *not applicable* here, because the editor was treated as unsafe to save from: a
+save strips the comments the `tuning` step guards and, the record said, drops settings. The user
+opens the editor for every test drive, so that cost was being paid daily. This prices the divergence
+and removes it.
+
+### 🔴 The "dropped settings" were engine defaults, and the file was never wrong
+
+`ProjectSettings.save()` from a headless script — the same writer the editor's Project Settings
+uses — reproduces the strip exactly: every comment gone, `msaa_3d` re-ordered, and precisely the
+four keys `Q75`, `Q99` and the risk register have been restoring since `78c077e`:
+
+```
+- gdscript/warnings/native_method_override=2
+- gdscript/warnings/get_node_default_without_onready=2
+- gdscript/warnings/onready_with_export=2
+- renderer/rendering_method.web="gl_compatibility"
+```
+
+Read back through `ProjectSettings` with those four lines absent from the file:
+
+```
+warnings not at 2: []
+rendering_method.web = gl_compatibility      (has_setting: true)
+max_fps.mobile = 60
+```
+
+The writer omits every key whose value equals the engine's registered default. Those three warnings
+default to *error* in 4.7, and `rendering/renderer/rendering_method.web` is registered by the engine
+with `gl_compatibility` as its default. **All four were in force on every build that "lost" them.**
+`run/max_fps.mobile` has no registered default, which is the whole of why it survived every save
+while the other override never did — not, as `Q99` reasoned, base value against override.
+
+✅ **`Q75` measured this and did not read it**: restoring the three promotions cost *nothing* and the
+web build ran Compatibility without the override. Both were the settings still applying. ⚠️ The
+`[importer_defaults]` block going in `Q104`'s sixth recurrence is **not** explained by this — it is
+not a default and the writer keeps it here — so `verify_settings.gd` pins both of its keys.
+
+🔴 **A grep of the file was therefore the wrong instrument**: it could only ever see whether the
+line was present, and presence is not the setting. `tools/verify_settings.gd` names all 21
+promotions and every pinned value and reads each back through `ProjectSettings`, so a canonical,
+writer-produced file passes and a setting that has really moved fails. `project.godot` and
+`export_presets.cfg` are now committed in the writer's own form, comments and all four
+default-equal keys gone, and a save is a no-op. A headless editor open-and-quit writes nothing;
+a game-binary run (`godot --path game --quit-after 120 res://scenes/dev/city_drive.tscn`) writes
+nothing; only a GUI save writes, and it now writes what is committed.
+
+### ✅ The 1,334 lines move beside the files, and the values are proven unmoved
+
+Every `;` block in the 26 resources that carried one moved to `<name>.md` beside the file, each
+heading the line the block sat above and a file-level block headed `Overview`. Per file, the
+resource with its comments removed is byte-identical to the resource after, and `git diff --numstat`
+reads 1,334 removed against 1,727 sidecar lines written (headings and spacing account for the
+difference). Then every `.tres` and `.tscn` was re-saved through `ResourceSaver` — the editor's
+writer — and compared property by property against a copy taken first, loaded fresh by absolute
+path so the cache could not answer for the file:
+
+```
+normalise: 33 file(s), 0 failure(s)      0 differing stored properties, every file
+```
+
+What the writer changes is form: `load_steps` gone, `uid=` attributes dropped headless (the editor
+will re-add them on the user's first save — commit that once), `4.0` → `4`, key order, and any value
+equal to its script's declared default. ⚠️ **`beams.tres` is empty for that last reason**: all three
+values equal `beam_profile.gd`'s defaults, which `beam_budget.gd` names as its fallback, so the file
+carries only what would differ. That is what any editor save produces and is the point.
+
+`check.sh`'s `tuning` step inverts: a non-empty sidecar for every resource unless `UNDOCUMENTED_OK`
+names it; **no `;` line in any resource**, so the hazard cannot return; no orphan sidecar; no stale
+exemption. The `settings` step is `verify_settings.gd`.
+
+### Priced and refused, so they are not re-proposed
+
+The same review measured the other divergences from the guide and keeps them:
+
+| Divergence | Measured | Cost to follow | Call |
+|---|---|---|---|
+| HUD built in code | 14 nodes: 387 µs from script, 140 µs from a `PackedScene`, once per scene load | Every property comes from `hud_style.tres` and `hud_layout.tres`, so a scene is a second copy of the tuning or no fewer lines; the reserved slots are a loop over a dictionary | Keep |
+| Input polled in `_physics_process` | 0.149 µs per tick for all five reads | `driver.gd` drives every regression run through `Input.action_press`, which emits no event, so an event-driven router reads zero on the wrong-way route | Keep |
+| `BeamBudget` as an autoload | one `/root/` lookup, dormant until a rig registers | A scene that forgets the node takes the "no arbiter, light everything" branch — the silent 8-slot cliff it exists to stop | Keep |
+| `NodePath` rather than typed node exports | `@export var target: Node3D` is **null in all five variants** from a hand-authored `.tscn` on 4.7.1 (cold and warm cache, after `--import`, either node order); the `NodePath` beside it resolves in all five | Needs an editor-saved scene; re-test after the user's first save | Keep, re-measure |
+
+Followed, in their own commits: `.gitattributes`; `FpsCounter` folded into `DebugHud`; the input
+source injected by `NodePath` into `VehicleController` and `ChaseCamera`; Main / World / GUI.
+
+**See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
+this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
+for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire

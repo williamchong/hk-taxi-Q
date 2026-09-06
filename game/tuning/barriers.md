@@ -1,0 +1,64 @@
+# barriers.tres
+
+Rationale for `game/tuning/barriers.tres`, kept beside it because Godot's resource writer
+drops every comment on save. Each heading is the line the block sat above;
+`Overview` is the file as a whole. `tools/check.sh` requires this file to exist
+and stay non-empty, and refuses any `;` line in the resource itself.
+
+## Overview
+
+Vehicle restraint, drawn from the railing layer's `CBARRIER` and `CRASHGATE`
+(`Q61`).
+
+`railings.tres`'s sibling, on the **same shader**. What tells a barrier from a
+fence is entirely the six mask numbers below: two horizontal rails on posts,
+and no balusters at all. Nothing branches in `railings.gdshader` — a class is
+a parameterisation, which keeps the difference in tuning data (CLAUDE.md hard
+rule 4) rather than in a second shader that would drift.
+
+⚠️ **`P3-19` refused these, and the refusal was right at the time.** They read
+as vehicle restraint rather than pedestrian railing, and drawing them as the
+same fence would have asserted a sameness no source states — `Q54`'s debit.
+They are in now as their **own class**, which is the form of claim the code
+strings support: not "these are railings" but "these are a different thing".
+
+⚠️ **The colour is the softest claim in this file.** Hong Kong runs both
+galvanised-steel and painted vehicle barriers, and nothing in the layer says
+which is where — `COLOR` is populated and separates the classes, but the fgdb
+spec gives it only "Color of Feature", Number, with no coded-value table
+anywhere in the document (`Q60`). So this is the conservative reading, bare
+galvanised, warmer and darker than the pedestrian railing beside it; a painted
+maroon would have been the more recognisable choice and a much larger claim.
+
+⚠️ **No collider, like every class in this layer** — and this is the class
+where that will look wrong first, because a crash barrier's whole real purpose
+is to stop a vehicle. `GAME_DESIGN.md` still puts the layer under "omit or
+make breakable"; collision is a `B3` question, and `Q60` records why the
+registration has to get better before it is one.
+
+Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table.
+
+## `shader_parameter/rail_roughness = 0.7`
+
+Rougher than the pedestrian railing: galvanised steel weathers matte where
+painted steel keeps a sheen.
+
+## `shader_parameter/rail_metallic = 0.0`
+
+0.0 for `railings.tres`'s measured reason: `P3-14` shipped the tram rails at
+0.65 and they rendered sky blue, because the only environment here is sky.
+Bare galvanised steel is the case that most tempts 0.65, and it is the case
+that measurement was taken on.
+
+## `shader_parameter/baluster_pitch_m = 0.11`
+
+No balusters. A barrier is rails and posts; the gap between them is the point.
+
+## `shader_parameter/post_pitch_m = 3.0`
+
+Heavier and further apart than a railing's posts.
+
+## `shader_parameter/top_rail_m = Vector2(0.7, 0.9)`
+
+Two rails, in metres above the ribbon deck, against the class's authored
+height_m of 0.9 in `hong_kong.yaml`. The upper one sits at the top of the run.

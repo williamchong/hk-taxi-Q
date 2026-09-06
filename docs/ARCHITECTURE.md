@@ -51,57 +51,42 @@ godot-rust). It preserves every export target, including web. Do not reach for C
 
 ## Project settings
 
-⚠️ **`game/project.godot` is regenerated from scratch whenever Project Settings is saved in the
-editor**, discarding every comment. This table is the durable record — check it against the file
-after anyone touches the settings dialog.
+✅ **`game/project.godot` is committed in the form Godot's own writer produces, so an editor save is
+a no-op on it (`Q119`).** The writer — Project Settings in the editor and `ProjectSettings.save()`
+alike — regenerates the file from memory, drops every comment, and **omits every key whose value
+equals the engine's registered default**. That last rule is what three decision entries read as "the
+editor dropped the settings": `native_method_override`, `get_node_default_without_onready` and
+`onready_with_export` default to *error* already, and `rendering/renderer/rendering_method.web` is
+registered by the engine with `gl_compatibility` as its default, so all four vanish from the file on
+every save **while staying in force**. Nothing failed for three weeks because nothing was lost.
+`run/max_fps.mobile` has no registered default, which is why it always survived. This table is the
+durable record of *why*; the values are asserted by `tools/verify_settings.gd`, which reads each one
+back through `ProjectSettings` — the value in force, not the line in the file — and is `check.sh`'s
+`settings` step.
 
-⚠️ **It also drops hand-written feature overrides** — settings with a `.web` / `.mobile` suffix.
-Observed three times in one session: `renderer/rendering_method.web` disappeared on every editor
-save. Editing the file by hand is what makes them fragile; the editor only persists an override it
-created itself. **Set them through Project Settings → right-click the property → "Override For…"**.
-`check.sh`'s `settings` step now counts the key, so it can no longer go missing unnoticed (`Q75`).
+⚠️ **What that `.web` override buys is narrower than this file used to claim.** Between `78c077e`
+(2026-08-01) and 2026-08-25 the line was absent and the claim was that its absence *silently breaks
+web export because WebGL2 cannot run the mobile renderer*. **Measured on the shipped web build, it
+does not**: the export reports `OpenGL ES 3.0 (WebGL 2.0) - Compatibility` in the browser console,
+because Godot 4.7 forces Compatibility on web regardless — and, per `Q119`, because the override was
+the engine default all along. Keep it stated: the project should say the renderer it wants rather
+than inherit one, and `verify_settings.gd` asserts it whether or not the file carries the line.
 
-🔴 **The loss then appeared to recur three times, and did not — it was never repaired.** Read the
-setting off every commit that has touched the file and there is one loss, at `78c077e`, unbroken to
-`HEAD`; each 2026-08-25 "restoration" lived in the working tree and was erased by an ordinary
-`checkout` / `reset` / rebase before it was committed. **The rule this leaves is blunt: restore
-`project.godot` and commit it in the same change, never as a loose working-tree edit.** `Q75` has the
-evidence and the one-liner that reproduces it.
+✅ **Headless is safe, measured twice.** A full `tools/check.sh` — `--import` and the `--check-only`
+sweep included — leaves the file byte-identical, and a headless editor open-and-quit writes nothing.
+Only a GUI save writes it, and since `Q119` that write is a no-op.
 
-✅ **Headless is safe, and this is the first test that could show it.** A restored file came through
-a full `tools/check.sh` — eight Godot invocations including `--import` and the `--check-only` sweep —
-byte-identical. The earlier tests could not distinguish "did not write the file" from "wrote back the
-state it was already in", because they ran against the regressed file. The **windowed editor** hazard
-above stands unchanged. Still run `tools/check.sh` before any export or cut — its `settings` step is
-the only thing that sees this.
-
-⚠️ **What that override actually buys is narrower than this file used to claim, and the difference
-is worth knowing before anyone "fixes" it again.** The line was missing from `78c077e` (2026-08-01)
-until 2026-08-25, and the claim here was that its absence *silently breaks web export because WebGL2
-cannot run the mobile renderer*. **Measured on the shipped web build, it does not.** Godot 4.7 forces
-Compatibility on web regardless — the export that went out without the override reports
-`OpenGL ES 3.0 (WebGL 2.0) - Compatibility` in the browser console, which is the same renderer the
-override asks for. So four web cuts, including the one `P3-9a` was ready to send drivers, ran the
-intended renderer by engine default rather than by instruction. **Keep the override anyway**: the
-project should state the renderer it wants rather than inherit one, and a future engine that gains a
-second web renderer would otherwise change this build silently. But do not describe its absence as a
-broken export — it was not, and the console line is the evidence.
-
-🔴 **`project.godot` is not the only file the editor rewrites, and until `Q99` it was the only one
-watched.** The same writer regenerates every `.tres` and `.tscn` from the resource in memory, so it
-drops their comments too — and **20 of 25** tuning resources and **6 of 8** scenes carry rationale in
-the file today, `city_facade.tres` at 83 comment lines of 160 and `city_drive.tscn` at 99. One editor
-save on 2026-08-31 took `project.godot` *and* `game/tuning/clean_daylight.tres`; the settings step
-caught the first and nothing at all saw the second.
-
-⚠️ **The two halves fail differently, and only one can lose behaviour.** `project.godot` loses real
-settings, because a hand-written feature override is a key the editor will not re-emit. A `.tres`
-cannot: the writer omits only what already equals the class default, so a value that is doing work
-is a value it keeps. Measured on the stripped `clean_daylight.tres` — **0 differing stored
-properties** across the `Environment`, its `Sky` and its `ProceduralSkyMaterial` — the loss there was
-**the argument for the numbers and never the numbers**. That is why `check.sh`'s `tuning` step tests
-for the presence of prose rather than pinning values: pinning values there would guard the half that
-is already safe. `Q99`.
+🔴 **`.tres` and `.tscn` are rewritten by the same writer, and their rationale therefore lives in a
+sidecar `.md` beside each file, never in the file (`Q119`, superseding `Q99`).** On 2026-09-07 the
+1,334 comment lines then inside 26 resources moved to `<name>.md` next to each — `handling.tres`
+reads `handling.md`, `city_drive.tscn` reads `city_drive.md` — each heading the line the block sat
+above. Every resource was then re-saved through `ResourceSaver` and compared property by property
+against its previous self: **0 differing stored properties across all 33 files**, the same
+measurement `Q99` made on one. What the writer changes is form only — `load_steps` and `uid=`
+attributes, float spelling (`4.0` → `4`), key order, and any value equal to its script's declared
+default (`beams.tres` is empty for that reason: all three values equal `beam_profile.gd`'s
+defaults, which that script names as its fallback). `check.sh`'s `tuning` step now requires the
+sidecar, refuses any `;` line in a resource, and fails an orphan sidecar or a stale exemption.
 
 | Setting | Value | Why |
 |---|---|---|
@@ -179,8 +164,8 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 
 | Step | Covers | In CI |
 |---|---|---|
-| `settings` | That `project.godot` still holds the 21 warning promotions, `untyped_declaration` by name, both feature overrides (`rendering_method.web` at its value, `max_fps.mobile`), `msaa_3d` and `meshes/force_disable_compression` — what an editor save silently drops | yes |
-| `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` under watch still carries its rationale prose, and that `UNDOCUMENTED_OK` has not gone stale (`Q99`) | yes |
+| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`) | yes |
+| `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it, that no resource carries a `;` comment, and that neither an orphan sidecar nor a stale exemption stands (`Q119`) | yes |
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
@@ -228,15 +213,10 @@ the scene instances a `RigidBody3D` with a *null script* — measured. The run t
 reason. A scene instantiated but never added to the tree must also be `free()`d before `quit()`, or
 Godot reports a page of `ERROR: ... leaked at exit` lines that read like a failure and are not one.
 
-⚠️ **Running Godot rewrites two committed config files**, stripping every comment and, in
-`project.godot`, the `rendering_method.web` line. Restore both afterwards and
-*verify*, because `git checkout` prints `Updated 0 paths from the index` whether or not it restored
-anything:
-
-```sh
-git checkout game/project.godot game/export_presets.cfg
-git diff --exit-code game/project.godot game/export_presets.cfg   # this is the check
-```
+✅ **Running Godot no longer dirties the two config files** — both are committed in the writer's own
+form (`Q119`) — but a headless `--import` still re-saves `game/assets/authored/greybox_wanchai.json`
+with tab indentation (`Q115`). Run `git status` afterwards and `git checkout` that one file; never
+commit it as a side effect.
 
 ⚠️ **The reason to restore is the EXPORT's comparability, not the `.web` line — measured
 2026-08-27.** This paragraph used to call it "the line the web export needs"; removing it and
@@ -303,15 +283,13 @@ The `[debug]` block promotes 21 GDScript warnings to errors. This is the engine'
 checker, and the only one available that resolves types at all: a grammar-level linter sees `basis.z`
 as an identifier and a dot, where the engine sees a `Vector3` on a `Basis`.
 
-✅ **Restored 2026-08-25, and now checked.** `native_method_override`,
-`get_node_default_without_onready` and `onready_with_export` had been missing since `78c077e` — an
-editor rewrite, the hazard "Running Godot rewrites two committed config files" describes two
-headings above, landing in a commit about the start line. Nothing failed for three weeks, because a
-promotion that is no longer set cannot fail. Restoring all three cost **nothing**: the sweep stayed
-green, so the guard was latent rather than masking defects. ⚠️ **Never correct this number down to
-match the file** — a count edited to match a regression is a check that certifies the wrong state,
-which is what `Q72` was opened about. `check.sh`'s `settings` step now counts them, so the file
-cannot lose one quietly again (`Q75`).
+✅ **Three of the 21 are engine defaults and never appear in the file.** `native_method_override`,
+`get_node_default_without_onready` and `onready_with_export` default to *error* in Godot 4.7, so the
+writer omits them on every save; `Q75` read their absence after `78c077e` as a loss and restored
+them at no cost, because they had never stopped applying (`Q119`). `tools/verify_settings.gd` names
+all 21 and reads each level back through `ProjectSettings`, so a promotion swapped for another fails
+and a canonical file passes. ⚠️ **Never edit that list down to match a regression** — a list edited
+to match is a check that certifies the wrong state, which is what `Q72` was opened about.
 
 **Level 1 is invisible.** Warnings only reach stdout at level `2`; a warning left at `1` shows up in
 the editor's script panel and nowhere else, and the contributor workflow is deliberately headless.
@@ -1782,6 +1760,13 @@ versioned build artefact.
 directory listing. That keeps the stage intermediates out of the bundle, and it removes tiles a
 previous build left behind, because nothing else would ever notice them: every check in the project
 starts from the manifest, and the manifest has forgotten them.
+
+**`game/export_presets.cfg` is committed, comment-free, and the export dialog rewrites it** in the
+same form. Never put keystore passwords, provisioning profiles or signing identities in it — those
+come from Godot editor settings or the environment (`.gitignore` says the same). ⚠️
+`com.hktaxiq.game` is a `P0-3b` placeholder appearing three times — `application/bundle_identifier`
+twice and `package/unique_name` once — and all three must become the real reverse-domain identifier
+before any store submission.
 
 **Then check it in-engine**, because the ETL cannot assert engine-side facts about its own output.
 `--import` first, since a fresh sync writes GLBs with no import sidecars — then `tools/check.sh`.
