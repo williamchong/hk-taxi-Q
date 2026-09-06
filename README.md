@@ -78,7 +78,7 @@ tools/sync_generated.sh          # copies exactly what city.json names
 ```
 
 **Look at it.** Open the project (`open -a Godot --args --path "$PWD/game"`) and press **F6** on
-`scenes/dev/city_preview.tscn` to fly around the city, or `scenes/dev/city_drive.tscn` to drive it.
+`scenes/dev/city_preview.tscn` to fly around the city, or `scenes/main.tscn` to drive it.
 **F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
 readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
 

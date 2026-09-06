@@ -20079,6 +20079,18 @@ before and after at 63.02 and 86.36 kph entry (drift 69.8° / 0.87 s and 50.4° 
 threshold on both sides), and the driver run's draw calls per debug view unchanged at
 **102 / 110 / 139** (off / minimal / full) with 0 script errors on either side.
 
+✅ **Main / World / GUI, measured inert the same way.** `main.tscn` is `Main` → `World` (instancing
+`scenes/city_drive.tscn`, moved out of `scenes/dev/`) and `GUI` (holding the HUD, which left the level);
+`driver.gd` boots `main.tscn` by default so the HUD stays in every frame. The standard 6 s run's
+4.2 s frame is byte-identical before and after (102 draws, HUD on); `--hud=off` frees the HUD with
+0 script errors at 94 draws; and `Q81`'s wrong-way route (`--hold=accelerate@0.3+12.7
+--hold=steer_right@4.6+1.3`) raises the sign on EXPO DRIVE EAST at 9 s in a frame byte-identical to
+the before side on **5 of 7** after runs and **4 of 4** before runs. ⚠️ The two that differ do so at
+the 9 s telemetry sample alone — 208.76 / 100.87 against 208.87 / 100.48 — with the 8 s and 10 s
+samples identical, so the trajectory is the same and the variance is the driver's sampling phase,
+not the game; it is recorded here rather than hidden because a frame `cmp` is this repo's evidence
+and a reader repeating it may hit one of those runs.
+
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
 for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire

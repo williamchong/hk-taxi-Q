@@ -9,7 +9,6 @@
 [ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 [ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
-[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="17_hud"]
 [ext_resource type="Resource" path="res://tuning/camera.tres" id="18_cameratune"]
 [ext_resource type="Script" path="res://scripts/city/fence.gd" id="20_fence"]
 
@@ -82,6 +81,3 @@ profile = ExtResource("18_cameratune")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 far = 400.0
-
-[node name="Hud" type="CanvasLayer" parent="."]
-script = ExtResource("17_hud")

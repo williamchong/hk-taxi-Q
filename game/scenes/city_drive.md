@@ -1,6 +1,6 @@
 # city_drive.tscn
 
-Rationale for `game/scenes/dev/city_drive.tscn`, kept beside it because Godot's resource writer
+Rationale for `game/scenes/city_drive.tscn`, kept beside it because Godot's resource writer
 drops every comment on save. Each heading is the line the block sat above;
 `Overview` is the file as a whole. `tools/check.sh` requires this file to exist
 and stay non-empty, and refuses any `;` line in the resource itself.
@@ -184,15 +184,3 @@ far plane culls nothing at all, and a chase camera 6.5 m behind a car in a Wan
 Chai street canyon cannot see past a couple of blocks anyway. Measured: 94 draw
 calls and 2.06 M primitives at 2 km, against 48 and 1.16 M at 400 m, with
 nothing visible lost at street level.
-
-## `[node name="Hud" type="CanvasLayer" parent="."]`
-
-The player's HUD (`P3-24`) — speed, the street you are on, and three reserved
-slots that `P3-5a` and `P3-5b` fill. Last in the scene so the Taxi it reads
-already exists when it first looks, and on layer 10 so `DebugHud` (127) and
-its frame counter still win the corners when someone turns them on.
-
-⚠️ `--hud=off` frees it. That is for `P3-9` first — the authenticity test is a
-drive with the direction arrow disabled, and a permanent street plate is
-closer to a navigation aid than that test's premise assumes — and for clean
-art-review frames second.

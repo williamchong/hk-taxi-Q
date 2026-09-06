@@ -164,7 +164,7 @@ godot --headless --path game --script res://tools/verify_city.gd
 `verify_city.gd` is the engine-side half of `P1-7`'s acceptance: it measures every imported LOD0
 mesh and compares it to the `aabb` this pipeline recorded, to 1 cm. That round trip cannot be
 checked from Python, which never sees an importer. Then open `game/scenes/dev/city_preview.tscn`
-and press **F6** to look at the result, or `city_drive.tscn` to drive it.
+and press **F6** to look at the result, or `scenes/main.tscn` to drive it.
 
 ## Layout
 

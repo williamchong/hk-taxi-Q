@@ -1,7 +1,15 @@
 [gd_scene format=3]
 
-[ext_resource type="PackedScene" path="res://scenes/dev/city_drive.tscn" id="1_boot"]
+[ext_resource type="PackedScene" path="res://scenes/city_drive.tscn" id="1_world"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="2_hud"]
 
 [node name="Main" type="Node"]
 
-[node name="CityDrive" parent="." instance=ExtResource("1_boot")]
+[node name="World" type="Node" parent="."]
+
+[node name="CityDrive" parent="World" instance=ExtResource("1_world")]
+
+[node name="GUI" type="Node" parent="."]
+
+[node name="Hud" type="CanvasLayer" parent="GUI"]
+script = ExtResource("2_hud")

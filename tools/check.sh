@@ -73,7 +73,6 @@ ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud 
 #   streaming.tres    Three numbers, all of them in ARCHITECTURE.md's budget.
 #   beams.tres        Same, and verify_beam_budget states the contract in full.
 #   greybox.tscn      A P0-5 harness that predates the convention.
-#   main.tscn         Four lines that do nothing but hand off to city_drive.
 UNDOCUMENTED_OK=(
 	game/tuning/camera.tres
 	game/tuning/handling.tres
@@ -81,7 +80,6 @@ UNDOCUMENTED_OK=(
 	game/tuning/streaming.tres
 	game/tuning/beams.tres
 	game/scenes/dev/greybox.tscn
-	game/scenes/main.tscn
 )
 
 # Godot reports a compile failure with any of these and still exits 0.

@@ -23,7 +23,7 @@ extends SceneTree
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 
-const DEFAULT_SCENE: String = "res://scenes/dev/city_drive.tscn"
+const DEFAULT_SCENE: String = "res://scenes/main.tscn"
 
 ## Sim time between telemetry lines.
 const REPORT_EVERY_S: float = 1.0

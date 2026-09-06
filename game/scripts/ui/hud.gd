@@ -364,7 +364,7 @@ func _process(delta: float) -> void:
 ## nothing interpolates between them — so differentiating in `_process` gave
 ## some frames no velocity change at all and the next frame two ticks' worth,
 ## roughly doubling the variance of a signal this file already has to filter
-## hard. The scene puts `Hud` after `Taxi`, so the car's own `_physics_process`
+## hard. `main.tscn` puts `GUI` after `World`, so the car's own `_physics_process`
 ## has already written `speed_kph` when this reads it.
 ##
 ## ⚠️ **`car.speed_kph`, never `forward_speed_kph()`.** `vehicle_controller.gd`

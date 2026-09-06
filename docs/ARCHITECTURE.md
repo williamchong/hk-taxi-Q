@@ -409,8 +409,9 @@ hk-taxi-Q/
 │   ├── project.godot
 │   ├── export_presets.cfg       # COMMITTED — never put signing credentials here
 │   ├── scenes/
-│   │   ├── main.tscn            # boot wrapper — hands off to the dev drive scene
-│   │   ├── dev/                 # grey-box circuit, skidpad, city preview, city drive
+│   │   ├── main.tscn            # Main / World / GUI — the boot scene
+│   │   ├── city_drive.tscn      # the level World holds: streamer, layers, taxi, chase camera
+│   │   ├── dev/                 # grey-box circuit, skidpad, city preview
 │   │   ├── vehicle/             # taxi.tscn
 │   │   └── world/               # shared rigs: lighting, sky
 │   ├── scripts/
@@ -426,13 +427,14 @@ hk-taxi-Q/
 └── tools/                       # dev scripts: check, sync, export, grading
 ```
 
-⚠️ **`scenes/dev/` is not shipped — except that `run/main_scene` boots `scenes/main.tscn`, a
-seven-line wrapper that instances `scenes/dev/city_drive.tscn`.** A knowing placeholder: the scene
-needs the gitignored `assets/generated/`, so a fresh clone boots to an empty world with only a
-`push_warning`. An export
-is a demo rather than a build until there is a real main scene — but since `P2-1` put `CityStreamer`
-on the boot path in place of `tile_preview.gd`, it is no longer a demo that blows the frame budget:
-268,709 primitives at the spawn against the 1.16 M the preview cost.
+⚠️ **`scenes/dev/` is not shipped.** `run/main_scene` boots `scenes/main.tscn` — `Main` with a `World`
+that instances `scenes/city_drive.tscn` and a `GUI` that holds the HUD, the shape Godot's own
+guidance names, so a level change swaps `World`'s children and the HUD stays (`Q119`). Still a
+knowing placeholder: the level needs the gitignored `assets/generated/`, so a fresh clone boots to an
+empty world with only a `push_warning`. An export is a demo rather than a build until there is a
+menu in front of it — but since `P2-1` put `CityStreamer` on the boot path in place of
+`tile_preview.gd`, it is no longer a demo that blows the frame budget: 268,709 primitives at the
+spawn against the 1.16 M the preview cost.
 
 **Why the ETL is a separate Python project:** it runs rarely, at build time, and needs GDAL — which
 has no good Godot equivalent.
@@ -1792,7 +1794,7 @@ before any store submission.
 | Scene | For |
 |---|---|
 | `scenes/dev/city_preview.tscn` | Fly around. Instantiates **every** tile at one tier — no streaming, no LOD switching, so it is *not* a performance measurement |
-| `scenes/dev/city_drive.tscn` | Drive. Same assets with the taxi on the road surface's collider and the chase camera |
+| `scenes/main.tscn` | Drive. `World` instances `scenes/city_drive.tscn` — the same assets with the taxi on the road surface's collider and the chase camera — and `GUI` holds the HUD |
 
 **The spawn is resolved at runtime and is not written down anywhere.** `drive_harness.gd` asks
 `RoadSpawn.at_fare_node` for fare node **`f_004`, "Expo Drive eastbound underneath HKCEC Phase II"** —

@@ -7,7 +7,8 @@ description: Build, launch, drive and screenshot the hk-taxi-Q Godot game. Use w
 
 A Godot 4.7 arcade taxi game. The city is **build output**, not source — a fresh clone renders
 nothing until the Python ETL has run. There is no menu and no main loop to click through: the game
-boots straight into `city_drive.tscn` with the taxi on Expo Drive under HKCEC.
+boots `main.tscn` — `World` holding `city_drive.tscn`, `GUI` holding the HUD — with the taxi on Expo
+Drive under HKCEC.
 
 Drive it with **`.claude/skills/run-hk-taxi-q/drive.sh`**, which launches a scene, feeds it
 scripted input, prints per-second telemetry, and writes PNGs. All paths below are relative to the
@@ -76,7 +77,7 @@ Everything after `drive.sh` goes to `driver.gd`.
 
 | Argument | Meaning |
 |---|---|
-| `--scene=res://…` | default `res://scenes/dev/city_drive.tscn`; also `city_preview.tscn` |
+| `--scene=res://…` | default `res://scenes/main.tscn` (the drive, HUD included); also `res://scenes/dev/city_preview.tscn` |
 | `--seconds=6` | how long to simulate |
 | `--shots=0.5,3,6` | sim times to capture |
 | `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |

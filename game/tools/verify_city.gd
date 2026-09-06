@@ -37,7 +37,7 @@ const TOLERANCE_M: float = 0.01
 ## preview only, each past a green `check.sh` (`Q73`); the table in
 ## `generated_layer.gd` is what makes this checkable, in both directions.
 const LAYER_SCENES: PackedStringArray = [
-	"res://scenes/dev/city_drive.tscn", "res://scenes/dev/city_preview.tscn"
+	"res://scenes/city_drive.tscn", "res://scenes/dev/city_preview.tscn"
 ]
 
 
