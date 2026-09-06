@@ -19851,9 +19851,10 @@ turns one previously-refused stop line into a drawn one. A pre-existing defect, 
 stage a marking long enough to reach the boundary.
 
 **Height came from the wrong surface.** `DrawnSurface.sample` resolves a plan point to the nearest
-level-0 *centreline*; this region has 16 level-0 edges standing on structure and one ranging
-**7.87 m** (`e465`), so two level-0 ribbons stack in plan and the nearest centreline is not always
-the surface the paint sits on. `tools/paint_clearance.py` gates this and **failed at 1.50% against
+level-0 *centreline*; ⚠️ **two separate facts, and not the same edges** — level-0 heights climb by
+up to **7.87 m** along one edge (`e465` CROSS HARBOUR TUNNEL, which is *not* on structure) and **16**
+other level-0 edges do stand on structure. Either way two level-0 ribbons stack in plan, and the
+nearest centreline is then not the surface the paint sits on. `tools/paint_clearance.py` gates this and **failed at 1.50% against
 0.50%**.
 
 🔴 **The obvious fix was measured and REFUTED.** Sampling from the host's own edge — the road the
@@ -19907,8 +19908,44 @@ whose survey is thinner.
   refusals   no_host_on_axis 18 -> 17, host_off_carriageway 0 -> 52
 ```
 
-**Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests, 0 shader errors, four mutations four
-failures, `paint_clearance` inside its gate, frame reproduced twice.
+### ✅ Review: a partition leg that leaked, and a cost that is priced and not taken
+
+🔴 **`clip` can return no runs and nothing counted it.** A part wholly outside the region, or
+grazing it and leaving a run under the marking's own width, incremented `parts` and then no leg of
+`parts == not_a_road_mark + on_structure + empty_geometry + outside_region + candidates`. It is
+**0 on this region**, so the identity closed and nothing would have shown — which is the whole
+argument for counting it. ⚠️ **The counter is unexercised and says so**: driving it needs a
+published part outside the region and this region has none, so removing the increment leaves the
+suite green. The test pins `clip`'s two empty returns, which is the half a test here can reach.
+
+⚠️ **`_host` no longer takes the mark** — every call site passed `marking.mark`, so it was an
+argument each caller had to keep in sync for no flexibility.
+
+🔴 **`_reachable`'s published figures were stale and are restated.** A marking is no longer a 10 m
+bar: **9,084 → 24,648** vertices and a mean kept set of **6.3 → 14.4** segments, `RM1001` alone at
+32.6 with a worst of 306. The narrowing still earns its keep at **1.25 M projections against
+72.9 M**. ⚠️ **But per-marking work is now cubic in marking length** — the cutoff is a disc of
+radius ≈ L while vertices grow with L — and 8 markings carry 69% of it. **Invisible today**: wall
+time grew 2.2x on 17.4x the projections, because at 14.4 segments the loop is bound by numpy's
+per-call dispatch, not arithmetic.
+
+⚠️ **The optimisation is measured and REFUSED for now.** The height join is **47% of the stage's
+compute** (24,648 scalar `DrawnSurface.sample` calls); batching it with a new `Segments.nearest_many`
+and `DrawnSurface.sample_many` measured **378 → 155 ms**, and re-narrowing per window of vertices
+makes the work linear (1,252,308 → 181,884 projections). Not taken: the stage is 1.2 s, the win is
+~0.22 s of build time no player waits on, it needs new API in two modules other stages share, and
+⚠️ **it is not bit-identical** — heights agree to 9.9e-11 m through argmin tie-breaking — so it moves
+the mesh for a saving that does not justify the claim. Take both halves together when a region makes
+the cubic term bite.
+
+⚠️ **`host.width_m` is an edge MEAN and this gates on it**, where `_drawn_widths` calls it
+report-only. Both ways it could be wrong are measured: `offset_m` is **exactly 0.0 on all 737
+level-0 edges** and this stage is level-0 only, so `Q106`'s asymmetry is inert by arithmetic; and the
+half-width is constant on **721 of 737** edges, the **16** that vary being the ramp-climbers this
+refusal exists to catch. ⚠️ It is also a **midpoint** measure, so it catches a line beside the wrong
+road and not one across it — which is the bearing guard's job, and why the two refusals are separate.
+
+**Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests, 0 shader errors, **five mutations five failures** — 🔴 **and a sixth SURVIVED on the first pass**: nothing tested the on-carriageway refusal at all, which is why it was extracted into `_on_its_own_carriageway` and given tests of its own, `paint_clearance` inside its gate, frame reproduced twice.
 
 ⬜ **Left open.** The 52 refusals are recoverable only by making `DrawnSurface.sample` resolve by
 ribbon *coverage* rather than centreline distance — a change to `Q92`'s one shared accessor, which

@@ -11,7 +11,6 @@ line of twice the width. A quad wound the wrong way is nothing at all.
 from __future__ import annotations
 
 import math
-import pathlib
 from typing import Any
 
 import numpy as np
@@ -87,19 +86,6 @@ BLOCK: dict[str, Any] = {
 }
 
 
-def load_marks() -> tuple[RoadMark, ...]:
-    """`BLOCK`'s marks, through the real loader rather than hand-built.
-
-    ⚠️ Constructed by the loader so these tests cannot drift from what a config
-    actually produces — `RoadMark` gained two required fields and a hand-built
-    one would simply have stopped compiling in a different place.
-    """
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as tmp:
-        return city_with(pathlib.Path(tmp), BLOCK).road_marks.marks
-
-
 def mark_named(mark_id: str) -> dict:
     """One entry of `BLOCK["marks"]` by id.
 
@@ -158,9 +144,14 @@ def marking(spec, code: str, points: list[list[float]]) -> Marking:
     return Marking(code=code, mark=spec.mark_of(code), line=np.asarray(points, dtype=np.float64))
 
 
-def road_mark(mark_id: str) -> RoadMark:
-    """The `RoadMark` one `BLOCK["marks"]` entry loads to, through the real loader."""
-    return next(one for one in load_marks() if one.id == mark_id)
+def road_mark(spec, mark_id: str) -> RoadMark:
+    """One loaded `RoadMark` by id, off the `spec` fixture every other test uses.
+
+    ⚠️ By id and not by `mark_of(code)` because it is the *entry* these tests are
+    about; the loader is still what built it, so they cannot drift from what a
+    config produces.
+    """
+    return next(one for one in spec.marks if one.id == mark_id)
 
 
 class TestTheLegibilityScale:
@@ -173,14 +164,14 @@ class TestTheLegibilityScale:
     1.88x so the two conventions read as one road.
     """
 
-    def test_a_transverse_mark_is_drawn_at_the_width_the_sheet_publishes(self):
-        stop = road_mark("stop_line")
+    def test_a_transverse_mark_is_drawn_at_the_width_the_sheet_publishes(self, spec):
+        stop = road_mark(spec, "stop_line")
         for scale in (1.0, 1.88, 4.0):
             assert stop.drawn_line_width_m(scale) == 0.2
             assert stop.drawn_band_offsets_m(scale) == stop.band_offsets_m
 
-    def test_a_longitudinal_mark_is_drawn_wider_and_the_gap_scales_with_it(self):
-        line = road_mark("double_white_lines")
+    def test_a_longitudinal_mark_is_drawn_wider_and_the_gap_scales_with_it(self, spec):
+        line = road_mark(spec, "double_white_lines")
         assert line.drawn_line_width_m(1.88) == pytest.approx(0.282)
         # ⚠️ The GAP scales too. Widening the lines while holding the published
         # 100 mm would close the pair into one bar — the sheet's own
@@ -191,9 +182,9 @@ class TestTheLegibilityScale:
         clear = (drawn[1] - drawn[0]) - line.drawn_line_width_m(1.88)
         assert clear == pytest.approx(0.1 * 1.88)
 
-    def test_the_shape_the_sheet_publishes_survives_the_scale(self):
+    def test_the_shape_the_sheet_publishes_survives_the_scale(self, spec):
         """Gap over width is the sheet's 100/150 at any exaggeration."""
-        line = road_mark("double_white_lines")
+        line = road_mark(spec, "double_white_lines")
         for scale in (1.0, 1.88, 3.0):
             width = line.drawn_line_width_m(scale)
             drawn = line.drawn_band_offsets_m(scale)
@@ -320,7 +311,7 @@ class TestTheHostIsPickedByTransversality:
         assert junction.edge_id[int(np.argmin(distances))] == 1
 
     def test_the_host_is_the_edge_the_bar_is_drawn_across(self, junction, bar, spec):
-        host = _host(junction, bar, bar.mark, spec)
+        host = _host(junction, bar, spec)
         assert junction.edge_id[host.segment] == 2
         assert host.residual_deg == pytest.approx(0.0, abs=1e-9)
 
@@ -328,11 +319,11 @@ class TestTheHostIsPickedByTransversality:
         # `host_disagreement` is the counter that can see this rule regress —
         # `axis_residual_deg` cannot, because it grades a rule that optimises
         # the very thing it reports (`Q58`'s `drawn_gauge_m` trap).
-        assert _host(junction, bar, bar.mark, spec).disagrees is True
+        assert _host(junction, bar, spec).disagrees is True
 
     def test_no_disagreement_where_proximity_already_agrees(self, junction, spec):
         across = marking(spec, "RM1011", [[10.0, -3.2], [10.0, 3.2]])
-        host = _host(junction, across, across.mark, spec)
+        host = _host(junction, across, spec)
         assert junction.edge_id[host.segment] == 1
         assert host.disagrees is False
 
@@ -347,7 +338,7 @@ class TestTheHostIsPickedByTransversality:
         # That is the correct answer and it is why this needs its own fixture.
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         along = marking(spec, "RM1011", [[-16.0, 1.0], [16.0, 1.0]])
-        host = _host(straight, along, along.mark, spec)
+        host = _host(straight, along, spec)
         assert host is not None
         assert host.residual_deg == pytest.approx(90.0)
         assert host.residual_deg > spec.bearing_tolerance_deg
@@ -357,7 +348,7 @@ class TestTheHostIsPickedByTransversality:
         # purpose: one says the marking is off the network, the other says it is
         # on it and is not a transverse bar.
         far = marking(spec, "RM1011", [[500.0, 500.0], [503.2, 500.0]])
-        assert _host(junction, far, far.mark, spec) is None
+        assert _host(junction, far, spec) is None
 
     def test_a_longitudinal_marking_hosts_to_the_road_it_runs_ALONG(self, junction, spec):
         """🔴 **The same angle, scored the other way up.**
@@ -370,7 +361,7 @@ class TestTheHostIsPickedByTransversality:
         bar, with every partition still closing.
         """
         along = marking(spec, "RM1001", [[-16.0, 1.0], [16.0, 1.0]])
-        host = _host(junction, along, along.mark, spec)
+        host = _host(junction, along, spec)
         assert junction.edge_id[host.segment] == 1
         assert host.residual_deg == pytest.approx(0.0, abs=1e-9)
 
@@ -385,8 +376,8 @@ class TestTheHostIsPickedByTransversality:
         """
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         line = [[-16.0, 1.0], [16.0, 1.0]]
-        longitudinal = _host(straight, marking(spec, "RM1001", line), spec.mark_of("RM1001"), spec)
-        transverse = _host(straight, marking(spec, "RM1011", line), spec.mark_of("RM1011"), spec)
+        longitudinal = _host(straight, marking(spec, "RM1001", line), spec)
+        transverse = _host(straight, marking(spec, "RM1011", line), spec)
         assert longitudinal.residual_deg == pytest.approx(0.0, abs=1e-9)
         assert longitudinal.residual_deg <= spec.bearing_tolerance_deg
         assert transverse.residual_deg == pytest.approx(90.0)
@@ -406,8 +397,8 @@ class TestTheHostIsPickedByTransversality:
         # 10.24 m drawn ribbon, so the bar is 5.12 m from the centreline.
         on = marking(spec, "RM1001", [[-16.0, 4.0], [16.0, 4.0]])
         off = marking(spec, "RM1001", [[-16.0, 9.0], [16.0, 9.0]])
-        assert _on_its_own_carriageway(on, _host(straight, on, on.mark, spec)) is True
-        assert _on_its_own_carriageway(off, _host(straight, off, off.mark, spec)) is False
+        assert _on_its_own_carriageway(on, _host(straight, on, spec)) is True
+        assert _on_its_own_carriageway(off, _host(straight, off, spec)) is False
 
     def test_a_transverse_bar_is_exempt_from_the_carriageway_bar(self, spec):
         """⚠️ **Not an oversight.** A stop line at a four-lane mouth is supposed
@@ -416,9 +407,30 @@ class TestTheHostIsPickedByTransversality:
         markings `P3-23` exists to draw."""
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         far = marking(spec, "RM1011", [[-3.2, 9.0], [3.2, 9.0]])
-        host = _host(straight, far, far.mark, spec)
+        host = _host(straight, far, spec)
         assert host.distance_m > 0.5 * host.width_m
         assert _on_its_own_carriageway(far, host) is True
+
+    def test_off_axis_AND_off_ribbon_lands_in_one_counter_and_it_is_named(self, spec):
+        """⚠️ **The two refusals can both fire, and the order decides which counts.**
+
+        Nothing forced a priority between them, so this pins the one the build
+        loop has: the carriageway check runs first, so a longitudinal marking
+        that is both off its axis and off its host's ribbon is booked as
+        `host_off_carriageway`. The partition stays exclusive either way — what
+        this stops is the two silently swapping and a `Q118` figure moving with
+        no code change to explain it.
+        """
+        straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
+        # ⚠️ Set BESIDE the road, not across it: a marking that crosses the
+        # centreline has its midpoint *on* it, and `Host.distance_m` is a
+        # midpoint measure — so a crossing bar reads 0.0 and passes the
+        # carriageway check however wrong its axis is. Square to the road and
+        # 8 m clear of it, against a 5.12 m drawn half-width.
+        both_wrong = marking(spec, "RM1001", [[0.0, 7.0], [0.0, 9.0]])
+        host = _host(straight, both_wrong, spec)
+        assert host.residual_deg > spec.bearing_tolerance_deg
+        assert _on_its_own_carriageway(both_wrong, host) is False
 
     def test_proximity_breaks_ties_and_never_decides(self, spec):
         # Two edges equally square across the bar, 2 m and 12 m away. The tie
@@ -432,7 +444,7 @@ class TestTheHostIsPickedByTransversality:
             ]
         )
         bar = marking(spec, "RM1011", [[-3.2, 0.0], [3.2, 0.0]])
-        assert two.edge_id[_host(two, bar, bar.mark, spec).segment] == 1
+        assert two.edge_id[_host(two, bar, spec).segment] == 1
 
 
 class TestTheGeometry:
@@ -580,16 +592,22 @@ class TestTheReportPartitions:
         report = RoadMarkReport(
             features=1679,
             parts=4162,
-            not_a_road_mark=3951,
-            on_structure=2,
+            not_a_road_mark=3785,
+            on_structure=25,
             empty_geometry=0,
-            candidates=209,
-            drawn=191,
-            no_host_on_axis=18,
+            outside_region=0,
+            candidates=352,
+            drawn=283,
+            no_host_on_axis=17,
+            host_off_carriageway=52,
             no_edge_in_range=0,
         )
         assert (
-            report.not_a_road_mark + report.on_structure + report.empty_geometry + report.candidates
+            report.not_a_road_mark
+            + report.on_structure
+            + report.empty_geometry
+            + report.outside_region
+            + report.candidates
             == report.parts
         )
         assert (
@@ -599,6 +617,28 @@ class TestTheReportPartitions:
             + report.no_edge_in_range
             == report.candidates
         )
+
+    def test_clip_returns_nothing_the_two_ways_the_partition_must_survive(self, spec):
+        """🔴 **The leg that leaked, as far as a test here can reach it.**
+
+        `clip` returns no runs two ways — a part wholly outside the region, and
+        one that grazes it and leaves a run shorter than the marking's own width
+        — and `parts` has already been incremented by then, so before
+        `outside_region` existed the identity closed while a part vanished.
+
+        ⚠️ **This pins `clip`'s two empty returns and NOT the counting**, because
+        driving the increment needs a published part outside the region and this
+        region has none. The counter is 0 and unexercised; see its own comment.
+        """
+        from pipeline.roads import clip
+
+        line = spec.mark_of("RM1001")
+        # Wholly outside a 100 x 100 region, and grazing it with a stub under the
+        # marking's own 0.15 m width — the two ways the loop can be handed [].
+        outside = np.array([[200.0, 200.0], [300.0, 300.0]])
+        grazing = np.array([[-1.0, 50.0], [0.05, 50.0]])
+        assert clip(outside, (100.0, 100.0), min_length_m=line.line_width_m) == []
+        assert clip(grazing, (100.0, 100.0), min_length_m=line.line_width_m) == []
 
     def test_the_residual_distribution_publishes_its_tail(self):
         # p90/p99/max rather than a median alone: the tail is where a match to

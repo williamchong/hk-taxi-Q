@@ -647,6 +647,13 @@ Common emoji for this project:
   shipped and `underfill_m` measures. ⚠️ **Markings are clipped to the region** (`roads.clip`) —
   without it a 450 m line paints 44 of its 55 vertices over void — and that clip is **not inert on
   the transverse layer**, so a change there moves stop lines too.
+  ⚠️ **The parts partition gained a leg — `outside_region`** — because `clip` returning nothing left
+  `parts` uncounted; it is **0 and unexercised** here (no published part lies outside the region), so
+  removing the increment leaves the suite green. Do not read its 0 as proven.
+  ⚠️ **`_reachable`'s per-marking work is CUBIC in marking length** and 8 markings carry 69% of it;
+  the batching/re-narrowing fix is measured (378 → 155 ms, 6.9x fewer projections) and **refused for
+  now** because it needs new API in two shared modules and is **not bit-identical** (9.9e-11 m,
+  argmin ties). Take both halves together or neither.
   ⚠️ **`underfill_m` is transverse-only** — it is `host width - marking length`, and a longitudinal
   marking's length runs along the road, so pooling it is `Q57` in the one field that cannot survive
   it. Numbers in `Q118`.

@@ -118,7 +118,8 @@ class RoadMarkReport:
 
     The partitions:
 
-        parts == not_a_road_mark + on_structure + empty_geometry + candidates
+        parts == not_a_road_mark + on_structure + empty_geometry + outside_region
+                 + candidates
         candidates == drawn + no_host_on_axis + host_off_carriageway + no_edge_in_range
 
     ⚠️ **The partition is over PARTS, not features, and the two differ by 2.5x
@@ -133,6 +134,19 @@ class RoadMarkReport:
     not_a_road_mark: int = 0
     on_structure: int = 0
     empty_geometry: int = 0
+    # Parts that clipped to nothing: wholly outside the region, or grazing it and
+    # leaving a run shorter than the marking's own width. ⚠️ **Distinct from
+    # `empty_geometry`** — that is a NULL or single-vertex geometry, this is a
+    # real marking somewhere else.
+    #
+    # 🔴 **0 here, and UNEXERCISED — do not read it as proven.** Driving it needs
+    # a published part outside the region and this region has none, so no test in
+    # the suite reaches the increment: removing it leaves the whole suite green.
+    # `test_a_part_that_clips_to_nothing_is_counted` pins the two ways `clip`
+    # returns nothing, which is the half that *can* be tested here. Before this
+    # leg existed the identity closed anyway while `parts` leaked, which is the
+    # failure it is written against.
+    outside_region: int = 0
     candidates: int = 0
 
     drawn: int = 0
@@ -342,7 +356,20 @@ def read_markings(
             # to seam. Each run keeps the code and the mark, so a marking cut by
             # the boundary counts as two candidates; the partition is over parts
             # and this is where a part becomes its drawable runs.
-            for run in clip(line, region_high, min_length_m=mark.line_width_m):
+            runs = clip(line, region_high, min_length_m=mark.line_width_m)
+            if not runs:
+                # 🔴 **Counted, or the parts partition leaks silently.** `clip`
+                # returns nothing two ways — a part wholly outside the region,
+                # and one that only grazes it and leaves a run shorter than the
+                # marking's own width — and `parts` was incremented above. It is
+                # **0 in this region**, which is why the identity closed anyway;
+                # it is reachable the moment a part's bounding box grazes the
+                # filter without its geometry entering. Its own counter rather
+                # than `empty_geometry`, which means a NULL or single-vertex
+                # geometry: this marking is real and is somewhere else.
+                report.outside_region += 1
+                continue
+            for run in runs:
                 report.candidates += 1
                 markings.append(Marking(code=code, mark=mark, line=run))
     return markings
@@ -453,7 +480,7 @@ class Network:
         return np.linalg.norm(offset - along[:, None] * delta, axis=1)
 
 
-def _host(network: Network, marking: Marking, mark: RoadMark, spec: RoadMarks) -> Host | None:
+def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
     """The level-0 edge this marking belongs to, or None if none is in range.
 
     🔴 **Chosen by transversality, not by proximity, and this is the one place
@@ -509,7 +536,7 @@ def _host(network: Network, marking: Marking, mark: RoadMark, spec: RoadMarks) -
     # of error away from the axis this marking is supposed to lie on — so
     # `bearing_tolerance_deg` needs no second value, and `axis_residual_deg`
     # stays one distribution over the two.
-    residual = np.abs(90.0 - crossing) if mark.transverse else crossing
+    residual = np.abs(90.0 - crossing) if marking.mark.transverse else crossing
     score = residual + spec.proximity_weight_deg_per_m * distance[in_range]
     winner = int(np.argmin(score))
     chosen = int(in_range[winner])
@@ -749,10 +776,12 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
     own drawn half-width rather than a number anyone chose.** `DrawnSurface`
     resolves a plan point to the nearest level-0 *centreline*, which is the right
     rule for a bar at a junction mouth and the wrong one where a level-0 ramp
-    climbs beside a street: this region has 16 level-0 edges standing on
-    structure and one ranging **7.87 m** in height (`e465` CROSS HARBOUR TUNNEL),
-    so two level-0 ribbons stack in plan and the nearest centreline is not always
-    the surface the paint sits on. Measured: refusing these took the buried share
+    climbs beside a street. ⚠️ **Two separate facts, and they are not the same
+    edges**: level-0 heights climb by up to **7.87 m** along a single edge here
+    (`e465` CROSS HARBOUR TUNNEL, which is *not* on structure), and **16** other
+    level-0 edges do stand on structure. Either way two level-0 ribbons stack in
+    plan, and the nearest centreline is then not the surface the paint sits on.
+    Measured: refusing these took the buried share
     `tools/paint_clearance.py` gates from **1.50% to 0.21%** and the worst height
     spread across one marking from **4.51 m to 1.18 m**.
 
@@ -764,6 +793,23 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
     ⚠️ **This is a refusal and never a correction** (`Q54`): the paint is not
     moved onto a road, it is left undrawn and counted, because nothing published
     says which of the two stacked ribbons it belongs to.
+
+    ⚠️ **`host.width_m` is `_drawn_widths`' edge MEAN, and that function calls
+    itself a report-only figure — this gates on it, so the gap is stated rather
+    than assumed.** Two things could make it wrong and both are measured on this
+    region: the ribbon is `[offset - half, offset + half]` per station and not
+    `±half` about the centreline (`Q106`), but `offset_m` is **exactly 0.0 on all
+    737 level-0 edges** and this stage is level-0 only, so that term is inert by
+    arithmetic rather than by luck; and the half-width varies per station since
+    `Q23`, but on **721 of 737** edges it does not vary at all. The **16** that do
+    — up to 4.319 m — are the ramp-climbers, which is the same population this
+    refusal exists to catch, so where the mean is least representative is where
+    the answer is least in doubt.
+
+    ⚠️ **A midpoint measure, like everything else `Host` carries.** A marking
+    that crosses its host reads 0.0 however far its ends stray, so this catches a
+    line lying *beside* the wrong road and not one lying across it — which is
+    what the bearing guard is for, and why the two refusals are separate.
     """
     if marking.mark.transverse:
         return True
@@ -781,6 +827,32 @@ def _reachable(
     `d_min + 2r` from the midpoint is nearest to no vertex of it and cannot be
     chosen. Keeping the rest changes no answer.
 
+
+    🔴 **Both figures below were measured before `RM1001` and are restated
+    (`Q118`).** A marking is no longer a 10 m bar: vertices went **9,084 →
+    24,648** and the mean kept set **6.3 → 14.4** segments, with `RM1001` alone
+    at 32.6 and a worst of **306** — 10.3% of the network. The narrowing still
+    earns its keep decisively, **1.25 M projections against 72.9 M unnarrowed**.
+
+    🔴 **But per-marking work is now cubic in marking length, and that is
+    measured rather than feared.** The cutoff is `d_min + 2r` with `r ≈ L/2`, so
+    the kept set is the segments in a disc of radius ≈ L — `∝ L²` — while the
+    vertex count is `∝ L`. Projections grew **17.4x** on **2.7x** the vertices,
+    and **8 markings carry 69%** of them. ⚠️ **It is invisible today**: wall time
+    grew only 2.2x, because at 14.4 segments the loop is bound by numpy's
+    per-call dispatch and not by arithmetic.
+
+    ⚠️ **The fix is priced and NOT taken.** Narrowing again per window of ~64
+    vertices inside the already-narrowed set costs nothing and makes the work
+    linear — 1,252,308 → 181,884 projections — and batching the per-vertex
+    `sample` loop (47% of the stage's compute, 24,648 scalar numpy round-trips)
+    measured **378 → 155 ms**. Both were left: the stage is 1.2 s, the win is
+    ~0.22 s of build time no player waits on, and batching needs a new
+    `Segments.nearest_many` and `DrawnSurface.sample_many` in two modules other
+    stages share. ⚠️ **It would also not be bit-identical** — heights agree to
+    9.9e-11 m, argmin tie-breaking where two segments are equidistant — so it
+    moves the mesh, which is a bigger claim than the saving is worth. Take it
+    when a region makes the cubic term bite, and take both halves together.
 
     ⚠️ **The reason it is worth the fifteen lines is the second city, not this
     one.** Vertices scale with region area and so do segments, so the unnarrowed
@@ -854,7 +926,7 @@ def build_region(
     thinness_bar_m = 2.0 * report.import_quantum_m
     _check_marks_clear_the_lattice(spec, thinness_bar_m)
     for marking in markings:
-        host = _host(network, marking, marking.mark, spec)
+        host = _host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1
             continue
@@ -865,9 +937,10 @@ def build_region(
         # 🔴 **A longitudinal marking must lie ON the road it is hosted to, and
         # the bar is that road's own drawn half-width rather than a number.**
         # `DrawnSurface.sample` resolves height by nearest *centreline*, so where
-        # a level-0 ramp climbs beside a street — 16 such edges here, one ranging
-        # 7.87 m — a line whose host centreline is further off than its true
-        # carriageway takes a height metres from the surface under it. A
+        # a level-0 ramp climbs beside a street — heights climb up to 7.87 m
+        # along one edge, and 16 others stand on structure — a line whose host
+        # centreline is further off than its true carriageway takes a height
+        # metres from the surface under it. A
         # transverse bar is allowed its distant host on purpose (it starts on the
         # far kerb of a four-lane mouth); a line painted *along* a carriageway has
         # no such licence, so this refuses rather than places it wrong (`Q54`).
@@ -953,6 +1026,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         "not_a_road_mark": report.not_a_road_mark,
         "on_structure": report.on_structure,
         "empty_geometry": report.empty_geometry,
+        "outside_region": report.outside_region,
         "candidates": report.candidates,
         # The join, as three disjoint parts of `candidates`.
         "drawn": report.drawn,
