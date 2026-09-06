@@ -77,10 +77,15 @@ if grep -E "$FATAL" "$LOG" | grep -qv 'vehicle_lamps.gd'; then
 	# --script run name four globals between them — the defect tools/check.sh hit
 	# at Q119. Named rather than pre-checked: this only refines the message on a
 	# run that is already failing, so it can never wave one through.
+	#
+	# ⚠️ The wording hedges on purpose. A missing cache file cannot tell a fresh
+	# clone from an import that was interrupted, or from a Godot that names the
+	# file something else — and the remedy is the same either way, so the hint
+	# points at it without claiming to know which.
 	if [[ ! -f "$ROOT/game/.godot/global_script_class_cache.cfg" ]]; then
-		echo "         This clone has never been imported, so no class_name resolves" >&2
-		echo "         and the autoloads cannot parse. Run tools/check.sh first, or" >&2
-		echo "         godot --headless --path game --import." >&2
+		echo "         No class_name cache here, so this clone looks unimported or" >&2
+		echo "         half-imported and the autoloads cannot parse. Run tools/check.sh," >&2
+		echo "         or godot --headless --path \"$ROOT/game\" --import." >&2
 	fi
 	exit 1
 fi

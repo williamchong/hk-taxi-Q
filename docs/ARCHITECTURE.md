@@ -175,13 +175,17 @@ promoted to an error, a dependency that will not compile — all of them print a
 `tools/check.sh` exists to turn that output into an exit code, and is the only thing in the repo that
 does. Running `--import` by hand tells you nothing unless you read the output.
 
+**The rows are in run order, and that is not decoration.** Everything above `--import` must be
+engine-free, because a `class_name` resolves only out of the cache the import scan writes — see the
+note below the table. A new step goes in at its real position.
+
 | Step | Covers | In CI |
 |---|---|---|
-| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`). ⚠️ **Runs AFTER `--import`, and that is load-bearing**: a `class_name` resolves out of `.godot/global_script_class_cache.cfg`, which only the import scan writes, so on a never-imported clone every autoload naming one fails to parse against whichever command runs first. As a grep this step needed no engine and ran first for free; as a Godot script it took CI red on `CityManifest`, `VehicleController`, `TouchProfile` and `HudLayout` while the tool itself printed `ok` | yes |
+| `gdformat --check` | Layout across all of `game/`. ⚠️ **The file count is asserted, not just the status** — pointed at a tree with no `.gd` it prints `0 files would be left unchanged` and exits 0 (`Q119`) | yes |
 | `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it, that no resource carries a `;` comment, and that neither an orphan sidecar nor a stale exemption stands (`Q119`) | yes |
-| `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
-| warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
+| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`). ⚠️ **Runs AFTER `--import`, and that is load-bearing** — the `class_name` note below has why, and why obeying its rule would not have saved this step | yes |
+| warnings sweep | `--check-only` per script, grepping for `treated as error`. ⚠️ **An empty file list is FATAL and the swept count is printed** (71 today): `cd` inside a `$( )` exits the subshell, so the step used to report `ok` having swept nothing. 🔴 **And the pattern is `treated as error|Parse Error`, never `$FATAL`** — a semantic parse error in a file no autoload reaches formats clean and matched neither term, so `check.sh` printed `All checks passed` over a script the engine cannot parse; `$FATAL` itself would fire on 4 healthy lines (`Q119`) | yes |
 | `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
 | `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |

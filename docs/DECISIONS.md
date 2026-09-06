@@ -20157,6 +20157,40 @@ it is not a pre-check. Mutation-checked both ways on one worktree: never importe
 the hint; imported, **exit 0**, hint absent, and the drift row reproduces `Q119`'s own **69.8° /
 0.87 s** at 63.02 kph entry.
 
+### 🔴 The sweep printed `All checks passed` over a script the engine cannot parse
+
+The review that followed the two fixes above found a third, and it is the worst of them, because it
+is the header's own stated failure mode surviving inside the step built to catch it.
+
+The sweep matched `treated as error` alone. That catches a *promoted warning* and nothing else — so
+a **semantic** parse error in a file no autoload reaches (`var x: NoSuchType = null`) matched
+nothing, `--import` never compiled the file, and `check.sh` exited **0** printing
+`ok warnings — 72 scripts swept` and `All checks passed`. Measured on this tree, not reasoned about.
+
+⚠️ **A plain syntax error is caught, which is why this went unseen** — `gdformat` cannot parse the
+file and fails. A semantic error is invisible to a formatter by construction, so the two probes give
+opposite answers and only the second one finds the hole. 🔴 **The pattern is now
+`treated as error|Parse Error` and must NOT be widened to `$FATAL`**: `--check-only` resolves no
+autoloads, so a healthy 71-script sweep emits **4** lines matching `SCRIPT ERROR|Failed to load
+script` — `Identifier not found: DebugHud`, with `hud.gd` and `road_graph_overlay.gd` failing to
+compile behind it — while `Parse Error` is **0**. That measured 0 is the whole licence for the one
+term added; check it again before adding a second.
+
+✅ **`gdformat` had the same shape and is closed with it.** Pointed at a tree holding no `.gd` it
+prints `0 files would be left unchanged` and exits **0**, and it was the one step that reported no
+`ok` line at all. The count is asserted now and the line names it — `ok gdformat — 71 files`.
+
+⚠️ **The redundant second `cd` is gone**, not kept: `--path` is measured equivalent to a `cd` for
+`--check-only` (planted `var x = 1`; both report it, neither does not), so the sweep takes `--path`
+like every other Godot call here and the subshell-exit shape cannot recur in the consuming half.
+
+🚫 **Parallelising is priced and refused, and the usual reason for refusing it is FALSE.**
+`--check-only` writes nothing under `.godot/` — hashed before and after, byte-identical — so
+concurrent runs do not race the import cache, and `xargs -P 8` is **1.47 s against 10.09 s** with
+identical output. What refuses it is that BSD/macOS `xargs` has no `-d` and the `-I{} sh -c` form
+interpolates a filename into a shell command: ~8.6 s, noise beside CI's 76 MB engine download,
+against a metacharacter in a path executing.
+
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
 for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire

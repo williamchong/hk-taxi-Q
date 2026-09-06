@@ -112,9 +112,25 @@ run_godot() {
 	echo "  ok    $label"
 }
 
+# ⚠️ The file count is asserted, not just the status. Pointed at a directory
+# holding no .gd — a wrong $ROOT, a partial checkout — gdformat prints "0 files
+# would be left unchanged" and exits 0, so the step passed having formatted
+# nothing. Same shape as the warnings sweep below, and the only step that
+# reported no `ok` line at all to say what it had covered.
 echo "==> gdformat"
-if ! "$GDFORMAT" --check "$ROOT/game"; then
+fmt_out="$("$GDFORMAT" --check "$ROOT/game" 2>&1)"
+fmt_status=$?
+echo "$fmt_out"
+fmt_files="$(sed -n 's/^\([0-9][0-9]*\) file.*/\1/p' <<<"$fmt_out" | head -1)"
+if ((fmt_status != 0)); then
+	echo "  FAIL  gdformat — see above" >&2
 	failed=1
+elif [[ -z "$fmt_files" || "$fmt_files" == 0 ]]; then
+	echo "  FAIL  gdformat — checked 0 files under $ROOT/game, so nothing was" >&2
+	echo "        checked. That is not the same as nothing being wrong." >&2
+	failed=1
+else
+	echo "  ok    gdformat — $fmt_files files"
 fi
 
 # Rationale for a .tres/.tscn lives in a sidecar .md beside it, never in the
@@ -264,8 +280,10 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 # it honest, since it exits 0 and also reports autoload identifiers it cannot
 # resolve on its own.
 #
-# The cd is load-bearing. Run from anywhere else, res:// does not resolve, every
-# script analyses clean, and this passes having checked nothing.
+# The project directory is load-bearing. Resolve res:// from anywhere else and
+# every script analyses clean, so this passes having checked nothing — measured
+# with a planted `var x = 1`: `--path game` and a `cd` into it both report the
+# promoted warning, and neither reports it.
 #
 # 🔴 Which is why the file list is taken FIRST and its emptiness is a failure.
 # `cd` inside a `$( )` exits the SUBSHELL, not this script — so written as one
@@ -274,7 +292,42 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 # exact false green the paragraph above warns about, sitting inside the check
 # that warns about it. Splitting the list out makes the failure representable: a
 # failed `cd` and a failed `find` both leave `$scripts` empty, and empty is
-# fatal. The count is printed for the same reason — a swept 0 must be visible.
+# fatal. The count is printed for the same reason — a swept 0 must be visible,
+# and it is `grep -c .` rather than `wc -l` because a herestring appends a
+# newline and `wc -l` would report a swept 0 as 1.
+#
+# 🔴 `Parse Error` is in the pattern as well as `treated as error`, and that is
+# the hole this step shipped with. A file no autoload reaches, carrying a
+# SEMANTIC parse error — `var x: NoSuchType = null` — formats clean under
+# gdformat and is refused by Godot, and the old pattern matched neither. Measured
+# on this tree: `check.sh` printed `ok warnings — 72 scripts swept` and
+# `All checks passed`, exit 0, over a script the engine cannot parse. That is the
+# header's own failure mode surviving inside the sweep built to catch it. ⚠️ A
+# plain syntax error is caught by gdformat, which is why this went unseen; a
+# semantic one is invisible to a formatter by construction.
+#
+# ⚠️ The pattern is NOT `$FATAL`, and widening it to that would break every run:
+# `--check-only` resolves no autoloads, so a healthy sweep emits **4** lines
+# matching `SCRIPT ERROR|Failed to load script` — `Identifier not found:
+# DebugHud`, and `hud.gd` / `road_graph_overlay.gd` failing to compile behind it.
+# `Parse Error` is measured at **0** across the healthy 71, which is what makes
+# it the one term that can be added.
+#
+# ⚠️ Serial on purpose, and the usual reason for that is measured FALSE — record
+# it rather than re-deriving it. `--check-only` writes nothing under `.godot/`
+# (hashed before and after, byte-identical), so concurrent runs do not race the
+# import cache, and `xargs -P 8` is 1.47 s against 10.09 s with identical output.
+# What refuses it is portability and safety, not correctness: BSD/macOS `xargs`
+# has no `-d`, and the `-I{} sh -c` form interpolates a filename into a shell
+# command. That trades ~8.6 s — noise beside CI's 76 MB engine download — for a
+# metacharacter in a path executing, in the one script whose job is not lying.
+# `find -print0 | xargs -0 -P8 -n1` is the safe form if it is ever revisited.
+#
+# ⚠️ The sweep itself takes `--path` and does NOT cd, deliberately. A second `cd`
+# here would be the same subshell-exit shape again — succeeding on line one and
+# failing here leaves `lint_hits` empty and prints `ok` with the stale count —
+# and it bought nothing `--path` does not, which is what every other Godot call
+# in this file already passes.
 echo "==> warnings"
 scripts="$(cd "$ROOT/game" && find . -name '*.gd' | sed 's|^\./|res://|')"
 if [[ -z "$scripts" ]]; then
@@ -283,10 +336,10 @@ if [[ -z "$scripts" ]]; then
 	failed=1
 else
 	lint_hits="$(
-		cd "$ROOT/game" || exit 1
 		while IFS= read -r script; do
-			"$GODOT" --headless --check-only --script "$script" 2>&1 | sed "s|^|$script: |"
-		done <<<"$scripts" | grep 'treated as error'
+			"$GODOT" --headless --path "$ROOT/game" --check-only --script "$script" 2>&1 |
+				sed "s|^|$script: |"
+		done <<<"$scripts" | grep -E 'treated as error|Parse Error'
 	)"
 	if [[ -n "$lint_hits" ]]; then
 		echo "$lint_hits"
