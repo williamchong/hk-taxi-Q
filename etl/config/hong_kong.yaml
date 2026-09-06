@@ -2051,11 +2051,47 @@ road_marks:
   # engine re-quantises Y on import too.
   lift_m: 0.016
 
+  # See `RoadMarks.longitudinal_legibility_scale`. 1.88 is not picked here: it is
+  # what `road_markings.gdshader` already draws its own lines at, measured as
+  # `centre_width` 0.055 lane units over a 5.12 m U-lane against the sheet's
+  # 0.150 m. Matching it is what makes the surveyed line and the shader's dashes
+  # read as one road rather than two conventions.
+  longitudinal_legibility_scale: 1.88
+
   marks:
+    # 🔴 **The one LONGITUDINAL entry, and the axis is what makes it drawable.**
+    # Every other row here is a bar across a junction mouth; this one runs along
+    # the carriageway, so the host rule that finds the road a stop line crosses
+    # finds nothing for it. `axis` selects the rule — see `RoadMark.axis`, where
+    # the failure mode is that all 19 km draw nothing with every counter closing.
+    #
+    #   1001 (TC 501)  DOUBLE LINES   LINE WIDTH = 150, LINES SPACING = 100,
+    #                  - WHITE        MODULE: LEFT LINE = CONTINUOUS,
+    #                  REGULATORY             RIGHT LINE = CONTINUOUS
+    #
+    # ⚠️ **WHITE, and read off the sheet rather than assumed.** The colour is not
+    # in the `LINETYPE` code and this layer publishes none, so it comes from the
+    # Description column; RM1040-RM1049 on the same sheet are yellow and are the
+    # reason that is worth checking rather than inferring from "double line".
+    #
+    # ⚠️ **The family is RM1001-RM1004 and only this one is drawable from a
+    # config row.** RM1002 and RM1003 are the same 150/100 pair with one line
+    # broken at 1000 MARK / 5000 GAP — a per-LINE module, which `lines`/`mark_m`
+    # cannot say — and RM1004 publishes `LINES SPACING = VARIABLE`, which no
+    # fixed value can. In region that costs nothing: RM1002 and RM1003 are
+    # **absent** and RM1004 is **40.7 m**, against RM1001's 19,308.
+    - id: double_white_lines
+      codes: [RM1001]
+      axis: longitudinal
+      line_width_m: 0.15
+      lines: 2
+      lines_spacing_m: 0.1
+
     # ⚠️ No `lines_spacing_m`: a single line has no gap to declare, and the
     # loader only reads one where there is a second line for it to sit between.
     - id: stop_line
       codes: [RM1011]
+      axis: transverse
       line_width_m: 0.2
       lines: 1
 
@@ -2065,6 +2101,7 @@ road_marks:
     # continuous. Leaving it out would have given eight junctions no stop line
     # while their neighbours got one.
     - id: stop_lines
+      axis: transverse
       codes: [RM1012]
       line_width_m: 0.2
       lines: 2
@@ -2074,6 +2111,7 @@ road_marks:
     # different marking on a different row; TC 508 is two dashed lines, and the
     # sheet's own words are quoted above.
     - id: give_way_lines
+      axis: transverse
       codes: [RM1013]
       line_width_m: 0.2
       lines: 2

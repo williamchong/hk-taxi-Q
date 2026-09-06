@@ -1910,9 +1910,19 @@ class Railings(LayerSpec):
         return None
 
 
+# How a marking lies against the road it belongs to. ⚠️ **A property of the
+# MARKING and never of the stage**, because the two answers want opposite host
+# rules and `P3-23` shipped with only the first: a stop line is drawn *across* a
+# junction mouth, a double white line runs *along* the carriageway, and the rule
+# that picks the right edge for one picks nothing at all for the other.
+TRANSVERSE = "transverse"
+LONGITUDINAL = "longitudinal"
+MARK_AXES = (TRANSVERSE, LONGITUDINAL)
+
+
 @dataclass(frozen=True)
 class RoadMark:
-    """One published transverse marking, and the bar TD draws it as (`P3-23`).
+    """One published road marking, and the bar TD draws it as (`P3-23`).
 
     ⚠️ **Every dimension here is transcribed from the publisher, not authored.**
     TD's index plan `CT174/51-5(1)F` gives each `RM` code its line width, its
@@ -1954,6 +1964,38 @@ class RoadMark:
     # picking one of those two.
     mark_m: float | None
     gap_m: float | None
+    # `TRANSVERSE` or `LONGITUDINAL` — which way this marking lies against its
+    # host. 🔴 **It selects the host RULE, not just a counter.** `_host` scores a
+    # transverse marking by `|90 - angle|` and a longitudinal one by the angle
+    # itself, so a code declared with the wrong axis finds the most nearly
+    # perpendicular road instead of the one it is painted on, and is then refused
+    # by `bearing_tolerance_deg` — 19 km of published marking drawing nothing,
+    # with both partitions closing.
+    axis: str
+
+    @property
+    def transverse(self) -> bool:
+        """Whether this marking is drawn across its host rather than along it."""
+        return self.axis == TRANSVERSE
+
+    def drawn_line_width_m(self, longitudinal_scale: float) -> float:
+        """The width each line is DRAWN at, which is not the width published.
+
+        See `RoadMarks.longitudinal_legibility_scale`. Transverse marks are drawn
+        at the publisher's own figure and this returns it unchanged.
+        """
+        return self.line_width_m * (1.0 if self.transverse else longitudinal_scale)
+
+    def drawn_band_offsets_m(self, longitudinal_scale: float) -> tuple[float, ...]:
+        """`band_offsets_m` at the drawn width, so the gap scales with the lines.
+
+        ⚠️ **The whole shape scales or none of it does.** Widening the lines while
+        holding the published 100 mm gap would close the pair into one bar at the
+        first exaggeration worth making — the same reading error the sheet's
+        `LINES SPACING` warning is about, arriving through the back door.
+        """
+        scale = 1.0 if self.transverse else longitudinal_scale
+        return tuple(offset * scale for offset in self.band_offsets_m)
 
     @property
     def continuous(self) -> bool:
@@ -2058,6 +2100,26 @@ class RoadMarks(LayerSpec):
     lift_m: float
     # One entry per published marking — see `RoadMark`.
     marks: tuple[RoadMark, ...]
+    # 🔴 **How much wider than life a LONGITUDINAL marking is drawn — authored,
+    # and named as authored.** Every dimension in `marks:` is transcribed from
+    # TD's sheet and none of them may be edited; this is a separate, explicit
+    # draw-time exaggeration, so the publisher's figure stays intact in config
+    # and only the geometry is stretched.
+    #
+    # ⚠️ **Because a truthful line is illegible, which this project has measured
+    # once already.** `road_markings.gdshader` records losing its markings
+    # entirely to a real 100 mm width — "under a pixel at any distance the player
+    # is actually looking" — and draws its own lines at **1.88x** for that
+    # reason. `RM1001` painted at the published 150 mm reads as one thin line at
+    # mid distance and breaks into speckle beyond it, which is that same defect
+    # reached from the other side.
+    #
+    # ⚠️ **Longitudinal only, and that is the point.** A stop line is met
+    # face-on at a junction mouth and is legible at its published 200 mm; a line
+    # running *along* the carriageway recedes to the horizon, which is the worst
+    # case for a thin quad. Applying this to the transverse marks would move
+    # geometry `P3-23` shipped and `underfill_m` measures.
+    longitudinal_legibility_scale: float
 
     def mark_of(self, code: str) -> RoadMark | None:
         """The entry admitting `code`, or None where none does.
@@ -5623,9 +5685,22 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
                 )
             admitted[code] = mark.id
 
+    scale = float(_require(body, "longitudinal_legibility_scale", where))
+    if scale < 1.0:
+        # ⚠️ **Below 1 it would draw a marking NARROWER than the publisher
+        # prints it**, which is not a legibility choice but a transcription error
+        # arriving through a knob that cannot be reviewed as one. Exactly 1.0 is
+        # legal and means "draw it as published".
+        raise ValueError(
+            f"{where}:longitudinal_legibility_scale is {scale}; below 1.0 it draws a marking "
+            f"narrower than the sheet publishes it, which is a transcription error and not a "
+            f"legibility choice"
+        )
+
     return RoadMarks(
         **_spec_header(body, where, _ROAD_MARK_ROLES),
         marks=marks,
+        longitudinal_legibility_scale=scale,
         **measures,
         **weights,
     )
@@ -5685,6 +5760,14 @@ def _road_mark(body: Any, where: str) -> RoadMark:
         module = _measures(body, where, ("mark_m", "gap_m"), positive=True)
         mark_m, gap_m = module["mark_m"], module["gap_m"]
 
+    # ⚠️ **Required, with no default.** Defaulting to `TRANSVERSE` would have let
+    # `P3-23`'s three entries stay unedited and made the axis invisible at the one
+    # place a reader decides it — and the wrong answer here draws nothing while
+    # every counter closes.
+    axis = str(_require(body, "axis", where))
+    if axis not in MARK_AXES:
+        raise ValueError(f"{where}:axis is {axis!r}, not one of {MARK_AXES}")
+
     return RoadMark(
         id=mark_id,
         codes=codes,
@@ -5693,6 +5776,7 @@ def _road_mark(body: Any, where: str) -> RoadMark:
         lines_spacing_m=lines_spacing_m,
         mark_m=mark_m,
         gap_m=gap_m,
+        axis=axis,
     )
 
 

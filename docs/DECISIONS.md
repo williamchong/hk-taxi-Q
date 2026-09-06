@@ -19787,3 +19787,133 @@ open.
 **See.** `Q53` (owned by `P3-12`) for the codec field and the two ways it shipped wrong · `Q94` for the geometric
 pairing this borrows its angle from, and its own sweep · `Q72` for why a free radius is refused ·
 `Q54` for sourced-not-invented · `Q62` for why the evidence is a frame
+
+---
+
+## `Q118` — The double white line is drawn from TD's own survey, and the axis is what unlocked it
+
+`Q117` drew a double white line between opposed carriageways from a join this project **inferred**,
+and recorded that as a `Q54` debit in its own closing section: a *no overtaking* instruction resting
+on a pairing nothing published. It also found the reason that was avoidable — `DTAD_RD_MARK_LINE`
+publishes **RM1001 DOUBLE LINES** as surveyed polyline, and `roadmarks.json`'s `refused_m_by_code`
+had been reporting it all along. This draws it.
+
+### ✅ Read off the sheet first, because the colour is not in the code
+
+`CT174/51-5(1)F` row 1001 (TC 501), REGULATORY, rendered at 600 dpi and read by eye per `Q59`:
+
+```
+  DOUBLE LINES        LINE WIDTH    = 150
+  - WHITE             LINES SPACING = 100
+                      MODULE : LEFT LINE  = CONTINUOUS
+                               RIGHT LINE = CONTINUOUS
+```
+
+⚠️ **WHITE is read, not assumed.** `LINETYPE` carries no colour and this layer publishes none, so it
+comes from the Description column — and RM1040-RM1049 on the same sheet are yellow, which is why
+"double line" is not a safe inference. ⚠️ **The family is RM1001-RM1004 and only this one is
+drawable from a config row**: RM1002 and RM1003 break *one* of the two lines at 1000 MARK / 5000 GAP,
+a per-line module the schema cannot say, and RM1004 publishes `LINES SPACING = VARIABLE`. In region
+that costs nothing — RM1002 and RM1003 are **absent** and RM1004 is **40.7 m**.
+
+### 🔴 The 19,308 m headline was wrong, and `Q117` is corrected
+
+Two-thirds of it is on structure and outside this stage's reach:
+
+```
+  at grade              143 parts    5,745 m
+  on structure  A01      16 parts      882 m
+  on structure  A03       7 parts   12,681 m   <- 5 parts of 1.7-3.7 km
+```
+
+**5,745 m is the drawable population**, not 19,308. The A03 parts are the Central-Wan Chai Bypass
+corridor, entering the spatial filter because its bounding box grazes the region.
+
+### 🔴 The blocker was the host rule, and the axis is a property of the MARKING
+
+`roadmarks.py` scores a host by `|90 - angle|` — square across — because a stop line sits at a
+junction mouth. RM1001 runs **along** the carriageway, so every metre of it would find the most
+nearly perpendicular road in range and then be refused by `bearing_tolerance_deg`, with both
+partitions closing and 19 km drawing nothing. `RoadMark.axis` now selects the rule:
+`|90 - crossing|` transverse, `crossing` longitudinal. ⚠️ **The bar is shared and means the same
+thing in both** — degrees of error away from the axis this marking is meant to lie on — so
+`bearing_tolerance_deg` needs no second value and `axis_residual_deg` stays one distribution.
+⚠️ **Required with no default**, because defaulting to transverse would have let `P3-23`'s three
+entries stay unedited and made the axis invisible at the one place a reader decides it.
+
+### 🔴 Two defects the long markings exposed, one of them pre-existing
+
+**Markings were never clipped to the region.** 6 of 143 at-grade parts carried vertices outside it,
+worst a 450 m line with **44 of 55** vertices out — paint over void, where no road, ground or tile is
+built. `roads.clip` is the fix and its docstring names this very geometry. ⚠️ **It is not inert on
+the layer that shipped**: 3 transverse parts (2 RM1011, 1 RM1013) were outside too, and clipping
+turns one previously-refused stop line into a drawn one. A pre-existing defect, found by giving the
+stage a marking long enough to reach the boundary.
+
+**Height came from the wrong surface.** `DrawnSurface.sample` resolves a plan point to the nearest
+level-0 *centreline*; this region has 16 level-0 edges standing on structure and one ranging
+**7.87 m** (`e465`), so two level-0 ribbons stack in plan and the nearest centreline is not always
+the surface the paint sits on. `tools/paint_clearance.py` gates this and **failed at 1.50% against
+0.50%**.
+
+🔴 **The obvious fix was measured and REFUTED.** Sampling from the host's own edge — the road the
+marking was matched to — took it from 1.50% to **8.58%**, because a marking up to 236 m long spans
+several edges and flat-lines beyond its host's extent.
+
+✅ **What worked is a refusal with a derived bar**: a longitudinal marking must lie within its host's
+own **drawn half-width**, or it is not painted on that carriageway and is refused rather than placed
+(`Q54`). Buried share **1.50% → 0.21%**, better than the 0.30% the layer shipped with, and the worst
+height spread across one marking **4.51 m → 1.18 m** — which is the mechanism confirming itself.
+⚠️ **Transverse marks are exempt and that is not an oversight**: a stop line at a four-lane mouth is
+*supposed* to sit far from the centreline it is square across (`host_distance_m` p90 **16.1 m**), so
+the same bar would refuse the markings `P3-23` exists to draw. Cost: **52 refusals**, published as
+`host_off_carriageway`.
+
+### 🔴 Truthful and illegible: the width is authored, and named as authored
+
+Drawn at the published 150 mm the line is correct and crisp close up, and at mid distance reads as
+**one** thin line, breaking into speckle beyond — which is precisely the defect
+`road_markings.gdshader` records having already hit ("a 10 cm line is under a pixel at any distance
+the player is actually looking, and the first tuning pass lost the markings entirely to that"), and
+why that shader draws its own lines at **1.88x**.
+
+The user's call was a **draw-time legibility scale**: `marks:` keeps the publisher's 150 mm
+untouched, and `road_marks.longitudinal_legibility_scale` (1.88, the shader's own figure) stretches
+only the geometry. ⚠️ **Longitudinal only** — a stop line is met face-on and is legible at its
+published 200 mm, and scaling it would move geometry `P3-23` shipped and `underfill_m` measures.
+⚠️ **The gap scales with the lines**, or widening them would close the pair into one bar — the
+sheet's own `LINES SPACING` trap arriving through the back door; the drawn shape holds TD's 100/150
+at any exaggeration and a test asserts exactly that. ⚠️ **Below 1.0 is refused**: that is a
+transcription error arriving through a knob, not a legibility choice.
+
+⚠️ **Honest limit: it is still not the shader's line.** Geometry cannot antialias a sub-pixel sliver
+the way per-fragment coverage does, so at distance the scaled line stair-steps where the analytic one
+does not, and the 0.188 m drawn gap is sub-pixel well before the lines are. Better than truthful,
+short of the shader.
+
+### ✅ And `Q117`'s inferred join is switched off
+
+`draw_pair_join` ships at **0.0**. On **85 of 91** drawn parts RM1001's host is a one-way edge — the
+population `centre_at` guesses at — and left on, the two are near-coincident and render thickened and
+speckled where they fight. ⚠️ **A dial rather than a deletion**: **70** distinct edges carry a drawn
+RM1001 against the ~93 ends the branch found, so about a quarter lose their line. What they lose is
+the invention, which is the trade `Q54` asks for, and `centre_at` stays in the codec for a region
+whose survey is thinner.
+
+```
+  drawn        191 -> 283        candidates   209 -> 352
+  RM1001        91 parts, 3,416 m of 5,745 at grade
+  triangles  4,512 -> 12,258     bytes  244,696 -> 662,984
+  refusals   no_host_on_axis 18 -> 17, host_off_carriageway 0 -> 52
+```
+
+**Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests, 0 shader errors, four mutations four
+failures, `paint_clearance` inside its gate, frame reproduced twice.
+
+⬜ **Left open.** The 52 refusals are recoverable only by making `DrawnSurface.sample` resolve by
+ribbon *coverage* rather than centreline distance — a change to `Q92`'s one shared accessor, which
+serves the boxes and the arrows too, so it is its own decision. RM1002/RM1003 need a per-line module.
+The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of survey.
+
+**See.** `Q117` for the inferred join this supersedes · `Q54` for sourced-not-invented · `Q92` for
+the height accessor · `Q59` for reading a scanned sheet · `Q69` for the clear-gap trap

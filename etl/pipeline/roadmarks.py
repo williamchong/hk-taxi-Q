@@ -62,7 +62,7 @@ from pipeline.polyline import Segments, plan_lengths_2d
 # same geodatabase, not a threshold anyone may tune. 209 of the region's 211
 # parts are null.
 from pipeline.railings import AT_GRADE
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.roads import ROADGRAPH_NAME, clip, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,
@@ -119,7 +119,7 @@ class RoadMarkReport:
     The partitions:
 
         parts == not_a_road_mark + on_structure + empty_geometry + candidates
-        candidates == drawn + no_transverse_host + no_edge_in_range
+        candidates == drawn + no_host_on_axis + host_off_carriageway + no_edge_in_range
 
     ⚠️ **The partition is over PARTS, not features, and the two differ by 2.5x
     on this layer** — 1,679 features against 4,162 parts, because `RM1001` and
@@ -136,7 +136,12 @@ class RoadMarkReport:
     candidates: int = 0
 
     drawn: int = 0
-    no_transverse_host: int = 0
+    no_host_on_axis: int = 0
+    # Longitudinal markings whose host centreline lies outside that host's own
+    # drawn ribbon — the line is not on the road it matched. Counted separately
+    # because it is a different refusal from an off-axis one and wants a
+    # different fix: this one is a join that landed on the wrong carriageway.
+    host_off_carriageway: int = 0
     no_edge_in_range: int = 0
 
     # Per marking id, how many were drawn and how many metres of published line
@@ -261,6 +266,7 @@ def read_markings(
     spec: RoadMarks,
     region_id: str,
     transform: GameTransform,
+    region_high: tuple[float, float],
     report: RoadMarkReport,
     *,
     sources_root: Path | None,
@@ -319,8 +325,26 @@ def read_markings(
             if len(line) < 2:
                 report.empty_geometry += 1
                 continue
-            report.candidates += 1
-            markings.append(Marking(code=code, mark=mark, line=line))
+            # 🔴 **Clipped to the region, on `roads.py`'s own rule and against
+            # the same geometry it names.** That docstring's example is the
+            # Central-Wan Chai Bypass, which enters the spatial filter because
+            # its bounding box grazes the region and then runs out into the
+            # harbour — and `RM1001` is painted *on* that corridor, so this layer
+            # inherits the defect the moment it stops being short bars at
+            # junctions. Measured before the clip: **6 of 143** at-grade parts
+            # carried vertices outside, the worst a 450 m line with **44 of 55**
+            # of them out, which is paint over void — no road, no ground and no
+            # tile is built there. A stop line never reached this because it is
+            # 10 m long.
+            #
+            # ⚠️ **Cutting is safe here for `clip`'s own reason** — a polyline cut
+            # in two is two polylines, and unlike a mesh there is no open shell
+            # to seam. Each run keeps the code and the mark, so a marking cut by
+            # the boundary counts as two candidates; the partition is over parts
+            # and this is where a part becomes its drawable runs.
+            for run in clip(line, region_high, min_length_m=mark.line_width_m):
+                report.candidates += 1
+                markings.append(Marking(code=code, mark=mark, line=run))
     return markings
 
 
@@ -342,8 +366,10 @@ class Host:
 
     # Index into the flattened segment arrays.
     segment: int
-    # `|90 - angle between the marking and this segment|`, in degrees. Zero is
-    # square across.
+    # The graph edge that segment belongs to.
+    edge_id: int
+    # Degrees of error away from the axis this marking is meant to lie on:
+    # `|90 - crossing|` transverse, the crossing angle itself longitudinal.
     residual_deg: float
     distance_m: float
     # The host's **drawn** carriageway width, for the underfill — read from
@@ -427,8 +453,8 @@ class Network:
         return np.linalg.norm(offset - along[:, None] * delta, axis=1)
 
 
-def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
-    """The level-0 edge this marking is drawn across, or None if none is in range.
+def _host(network: Network, marking: Marking, mark: RoadMark, spec: RoadMarks) -> Host | None:
+    """The level-0 edge this marking belongs to, or None if none is in range.
 
     🔴 **Chosen by transversality, not by proximity, and this is the one place
     this stage departs from `arrows.py` and `boxjunctions.py`.** Both of those
@@ -473,13 +499,24 @@ def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
         return None
 
     gap = np.abs(marking.axis_deg - network.heading_deg[in_range]) % 180.0
-    residual = np.abs(90.0 - np.minimum(gap, 180.0 - gap))
+    # The angle between the marking and the candidate, folded to 0-90.
+    crossing = np.minimum(gap, 180.0 - gap)
+    # 🔴 **The two axes score OPPOSITE quantities off the same angle**, and that
+    # is the whole of what lets one stage draw both. A stop line wants the edge
+    # it is square across, so its residual is the distance from 90. A double
+    # white line runs *along* the carriageway, so its residual is the angle
+    # itself. ⚠️ **The bar is shared and means the same thing in both** — degrees
+    # of error away from the axis this marking is supposed to lie on — so
+    # `bearing_tolerance_deg` needs no second value, and `axis_residual_deg`
+    # stays one distribution over the two.
+    residual = np.abs(90.0 - crossing) if mark.transverse else crossing
     score = residual + spec.proximity_weight_deg_per_m * distance[in_range]
     winner = int(np.argmin(score))
     chosen = int(in_range[winner])
     nearest = int(np.argmin(distance))
     return Host(
         segment=chosen,
+        edge_id=int(network.edge_id[chosen]),
         residual_deg=float(residual[winner]),
         distance_m=float(distance[chosen]),
         width_m=float(network.width_m[chosen]),
@@ -528,7 +565,12 @@ def band_quads(marking: Marking, spec: RoadMarks) -> list[np.ndarray]:
     mark = marking.mark
     along = marking.along_m
     total = float(along[-1])
-    half = 0.5 * mark.line_width_m
+    # ⚠️ **The DRAWN width, which is not the published one for a longitudinal
+    # marking** — see `RoadMarks.longitudinal_legibility_scale`. The offsets take
+    # the same scale, so the pair keeps the sheet's shape at the drawn size.
+    scale = spec.longitudinal_legibility_scale
+    half = 0.5 * mark.drawn_line_width_m(scale)
+    offsets = mark.drawn_band_offsets_m(scale)
 
     quads: list[np.ndarray] = []
     for start, stop in _runs(mark, total):
@@ -542,7 +584,7 @@ def band_quads(marking: Marking, spec: RoadMarks) -> list[np.ndarray]:
             # offsets and the half-width are both expressed in.
             across = np.array([-direction[1], direction[0]])
             first, last = _point_at(marking.line, along, head), _point_at(marking.line, along, tail)
-            for offset in mark.band_offsets_m:
+            for offset in offsets:
                 quads.append(_band_quad(first, last, across, offset, half))
     return quads
 
@@ -700,6 +742,34 @@ def _check_marks_clear_the_lattice(spec: RoadMarks, thinness_bar_m: float) -> No
             )
 
 
+def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
+    """Whether this marking lies on the ribbon of the edge it matched.
+
+    🔴 **A longitudinal marking must be ON its host, and the bar is that host's
+    own drawn half-width rather than a number anyone chose.** `DrawnSurface`
+    resolves a plan point to the nearest level-0 *centreline*, which is the right
+    rule for a bar at a junction mouth and the wrong one where a level-0 ramp
+    climbs beside a street: this region has 16 level-0 edges standing on
+    structure and one ranging **7.87 m** in height (`e465` CROSS HARBOUR TUNNEL),
+    so two level-0 ribbons stack in plan and the nearest centreline is not always
+    the surface the paint sits on. Measured: refusing these took the buried share
+    `tools/paint_clearance.py` gates from **1.50% to 0.21%** and the worst height
+    spread across one marking from **4.51 m to 1.18 m**.
+
+    ⚠️ **Transverse markings are exempt, and that is not an oversight.** A stop
+    line at a four-lane mouth is *supposed* to sit a long way from the centreline
+    it is square across — `host_distance_m` reads p90 16.1 m on this layer — so
+    the same bar would refuse the markings `P3-23` exists to draw.
+
+    ⚠️ **This is a refusal and never a correction** (`Q54`): the paint is not
+    moved onto a road, it is left undrawn and counted, because nothing published
+    says which of the two stacked ribbons it belongs to.
+    """
+    if marking.mark.transverse:
+        return True
+    return host.distance_m <= 0.5 * host.width_m
+
+
 def _reachable(
     segments: Segments, marking: Marking, host: Host, quads: list[np.ndarray]
 ) -> Segments:
@@ -757,7 +827,10 @@ def build_region(
         return report
 
     transform = city.game_transform(region_id)
-    markings = read_markings(city, spec, region_id, transform, report, sources_root=sources_root)
+    region_high = city.region_high(region_id)
+    markings = read_markings(
+        city, spec, region_id, transform, region_high, report, sources_root=sources_root
+    )
 
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     # Level 0 only, the restriction every snap in the pipeline makes (`Q15`): a
@@ -781,7 +854,7 @@ def build_region(
     thinness_bar_m = 2.0 * report.import_quantum_m
     _check_marks_clear_the_lattice(spec, thinness_bar_m)
     for marking in markings:
-        host = _host(network, marking, spec)
+        host = _host(network, marking, marking.mark, spec)
         if host is None:
             report.no_edge_in_range += 1
             continue
@@ -789,12 +862,26 @@ def build_region(
         # Recorded before the bearing guard — `n` past `drawn` is the proof the
         # distribution can read outside its own filter (`Q58`).
         report.axis_residual_deg.append(host.residual_deg)
+        # 🔴 **A longitudinal marking must lie ON the road it is hosted to, and
+        # the bar is that road's own drawn half-width rather than a number.**
+        # `DrawnSurface.sample` resolves height by nearest *centreline*, so where
+        # a level-0 ramp climbs beside a street — 16 such edges here, one ranging
+        # 7.87 m — a line whose host centreline is further off than its true
+        # carriageway takes a height metres from the surface under it. A
+        # transverse bar is allowed its distant host on purpose (it starts on the
+        # far kerb of a four-lane mouth); a line painted *along* a carriageway has
+        # no such licence, so this refuses rather than places it wrong (`Q54`).
+        if not _on_its_own_carriageway(marking, host):
+            report.host_off_carriageway += 1
+            continue
         if host.residual_deg > spec.bearing_tolerance_deg:
-            # Not a transverse bar at all. The region's extremes are a 56.9 m
-            # `RM1013` lying 78.8 deg off square and a 33.8 m `RM1011` at 88.7 —
-            # markings this stage has no reading of, refused rather than turned
-            # onto a road, which would be an invented marking in `Q54`'s sense.
-            report.no_transverse_host += 1
+            # Off the axis this marking is supposed to lie on. Transverse, the
+            # region's extremes are a 56.9 m `RM1013` lying 78.8 deg off square
+            # and a 33.8 m `RM1011` at 88.7; longitudinal, it is a double white
+            # line whose nearest road runs across it. Either way a marking this
+            # stage has no reading of, refused rather than turned onto a road,
+            # which would be an invented marking in `Q54`'s sense.
+            report.no_host_on_axis += 1
             continue
 
         quads = band_quads(marking, spec)
@@ -816,7 +903,15 @@ def build_region(
         )
         report.mark_length_m.append(length)
         report.host_distance_m.append(host.distance_m)
-        report.underfill_m.append(host.width_m - length)
+        # 🔴 **Transverse only, because it is `host width - marking length` and a
+        # longitudinal marking's length is measured along the road rather than
+        # across it.** Pooled, RM1001's 26.7 m median line against a 10.24 m
+        # carriageway would post a -16 m "underfill" and drag a distribution
+        # whose whole content is how far a stop line falls short of its own
+        # kerb — `Q57`'s two populations under one number, in the one field
+        # that cannot survive it.
+        if marking.mark.transverse:
+            report.underfill_m.append(host.width_m - length)
         if heights:
             report.height_spread_m.append(max(heights) - min(heights))
 
@@ -861,7 +956,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         "candidates": report.candidates,
         # The join, as three disjoint parts of `candidates`.
         "drawn": report.drawn,
-        "no_transverse_host": report.no_transverse_host,
+        "no_host_on_axis": report.no_host_on_axis,
+        "host_off_carriageway": report.host_off_carriageway,
         "no_edge_in_range": report.no_edge_in_range,
         # Per entry of the `marks:` table, so an entry that silently drew
         # nothing is visible. `refused_m_by_code` is what reading three codes of
@@ -942,12 +1038,21 @@ def main(argv: list[str] | None = None) -> int:
     city = load_config()
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     log.info(
-        "roadmarks: %d parts -> %d drawn (%d not transverse, %d off network), %d triangles",
+        "roadmarks: %d parts -> %d drawn (%d off axis, %d off their own carriageway, "
+        "%d off network), %d triangles",
         report.parts,
         report.drawn,
-        report.no_transverse_host,
+        report.no_host_on_axis,
+        report.host_off_carriageway,
         report.no_edge_in_range,
         report.triangles,
+    )
+    log.info(
+        "  by marking: %s",
+        ", ".join(
+            f"{name} {count} ({report.drawn_m_by_id.get(name, 0.0):.0f} m)"
+            for name, count in sorted(report.drawn_by_id.items())
+        ),
     )
     return 0
 

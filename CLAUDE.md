@@ -627,6 +627,29 @@ Common emoji for this project:
   look at all three, not just the one you changed. ⚠️ The per-layer dispatch is still checked:
   `check_shader_material` compares the material's `resource_path`, not the shader, so a mesh handed
   the wrong `.tres` still fails — do not reach for `check_shader_source` to quiet it.
+- 🔴 **`RoadMark.axis`, `longitudinal_legibility_scale`, or `_on_its_own_carriageway`: paste
+  `roadmarks.json`'s `drawn_by_id`/`drawn_m_by_id`, `host_off_carriageway` and `no_host_on_axis`
+  before and after, and run `tools/paint_clearance.py`** (`Q118`). 🔴 **The axis selects the HOST
+  RULE, not a counter** — transverse scores `|90 - angle|`, longitudinal the angle itself — so a code
+  declared with the wrong axis finds the most nearly perpendicular road, is refused by
+  `bearing_tolerance_deg`, and draws **nothing with every partition still closing**. It is required
+  with no default for that reason. ⚠️ **The bar is shared and means the same thing in both**, so do
+  not add a second tolerance. 🔴 **`_on_its_own_carriageway` is a REFUSAL with a derived bar — the
+  host's own drawn half-width — and it is longitudinal-only on purpose**: a stop line at a four-lane
+  mouth is *supposed* to sit p90 16.1 m from the centreline it crosses, so applying it to transverse
+  marks refuses the layer `P3-23` exists to draw. It took `paint_clearance` 1.50% → 0.21% and the
+  worst height spread 4.51 → 1.18 m; ⚠️ **the obvious fix is REFUTED — do not re-propose sampling
+  from the host's own edge**, which reads **8.58%** because a 236 m line spans several edges.
+  🔴 **`longitudinal_legibility_scale` is AUTHORED and every `marks:` dimension is TRANSCRIBED — do
+  not edit a published width to fix legibility.** The scale stretches geometry at draw time only;
+  ⚠️ **the gap scales with the lines** or the pair closes into one bar, which is the sheet's own
+  `LINES SPACING` trap from the back door; ⚠️ **longitudinal only**, or it moves geometry `P3-23`
+  shipped and `underfill_m` measures. ⚠️ **Markings are clipped to the region** (`roads.clip`) —
+  without it a 450 m line paints 44 of its 55 vertices over void — and that clip is **not inert on
+  the transverse layer**, so a change there moves stop lines too.
+  ⚠️ **`underfill_m` is transverse-only** — it is `host width - marking length`, and a longitudinal
+  marking's length runs along the road, so pooling it is `Q57` in the one field that cannot survive
+  it. Numbers in `Q118`.
 - **`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way line change:
   paste `roadmarks.json`'s two partitions, `host_disagreement` with `host_considered`,
   `axis_residual_deg`, `underfill_m` and `inverted`, before and after.** ⚠️ **`underfill_m` is

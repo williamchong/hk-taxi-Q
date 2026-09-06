@@ -174,6 +174,21 @@ group_uniforms markings;
 // and so the one item here with no source behind it can be turned off outright.
 uniform float draw_lane_lines : hint_range(0.0, 1.0) = 1.0;
 uniform float draw_centre_line : hint_range(0.0, 1.0) = 1.0;
+// 🔴 **The inferred opposed-pair join, OFF since the surveyed line ships.**
+// `Q117` derived a join between two one-way carriageways geometrically and drew
+// TD's double white line on it — an instruction (*no overtaking*) resting on a
+// pairing this project inferred, which that entry recorded as a `Q54` debit.
+// `pipeline/roadmarks.py` now draws the **published** `RM1001` as geometry, and
+// on 85 of its 91 drawn parts the host is a one-way edge — the very population
+// this branch guesses at. Left on, the two are near-coincident and the pair
+// renders thickened and speckled where they fight.
+//
+// ⚠️ **A dial rather than a deletion, because the survey is not complete**: 70
+// distinct edges carry a drawn `RM1001` against the ~93 ends this branch found,
+// so about a quarter of them lose their line. What they lose is the invention,
+// which is the trade `Q54` asks for — but a region whose survey is thinner may
+// want it back, and `centre_at` stays in the codec for that.
+uniform float draw_pair_join : hint_range(0.0, 1.0) = 0.0;
 uniform float draw_bus_lane : hint_range(0.0, 1.0) = 1.0;
 // ⚠️ **The one marking here that is not in the data** — see
 // `tuning/road_markings.tres`, which is where that argument belongs because it
@@ -324,7 +339,7 @@ void fragment() {
 		bool separated = two_way;
 		if (two_way) {
 			join = centre;
-		} else if (centre_at > 0.0) {
+		} else if (centre_at > 0.0 && draw_pair_join > 0.5) {
 			join = centre + (centre_at - 1.0) / 16.0;
 			separated = true;
 		}
