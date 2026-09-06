@@ -102,12 +102,40 @@ uniform float road_roughness : hint_range(0.0, 1.0) = 0.95;
 
 group_uniforms widths;
 // ⚠️ **Every width here is in lane widths, not metres**, because that is what U
-// is. At the region's 3.2 m lane, 0.031 is a 10 cm line — the real thing. They
-// are authored a little wider than life on purpose: a 10 cm line is under a
+// is. They are authored wider than life on purpose: a real 10 cm line is under a
 // pixel at any distance the player is actually looking, and the first tuning
 // pass lost the markings entirely to that.
+//
+// 🔴 **A U-lane is NOT `lane_width_m`, and the conversion written here was wrong
+// by the widening for three releases.** U is normalised to the ribbon *as drawn*
+// — that is what makes an integer U a lane boundary whatever the widening did —
+// so one U-lane is `2 * half_width / lanes`, which is **5.12 m** across this
+// region (p10 4.16, p90 5.12) against the 3.20 m `lane_width_m` authors. This
+// block used to read "at the region's 3.2 m lane, 0.031 is a 10 cm line", which
+// understated every figure below by the 1.6x widening: `line_width` 0.05 is a
+// **26 cm** line, not 16. `surface.py::_u_metres` is the same correction made on
+// the ETL side, and `P3-12` records the join landing off the carriageway
+// entirely the one time the two were confused.
 uniform float line_width : hint_range(0.0, 0.3) = 0.05;
+// The centre line is a DOUBLE continuous white line, and both numbers are TD's.
+// `CT174/51-5(1)F` publishes RM1001 DOUBLE LINES as `LINE WIDTH = 150,
+// LINES SPACING = 100`, so `centre_gap` is the **clear gap between the two
+// lines and not a pitch** — the sheet's own convention, and the one the config
+// block for `road_marks` spells out at length, because reading it as a pitch
+// draws two 150 mm lines whose centres are 100 mm apart, which is one 250 mm
+// line. The pitch is derived below rather than authored.
+//
+// ⚠️ **The pair is 1.88x life size and that is `line_width`'s exaggeration, not
+// a second choice**: 0.055 U is 0.28 m against the published 0.150, and the gap
+// is held at the sheet's own 100/150 of it so the shape stays TD's at whatever
+// scale legibility asks for.
+//
+// ⚠️ **`yellow_gap` below is a PITCH, not a clear gap** — it is measured from the
+// inner line's centre — so the two are not the same kind of number despite the
+// names. Left as it is: it draws correctly, and renaming it moves a shipped
+// value for nothing.
 uniform float centre_width : hint_range(0.0, 0.3) = 0.055;
+uniform float centre_gap : hint_range(0.0, 0.3) = 0.037;
 uniform float bus_width : hint_range(0.0, 0.4) = 0.09;
 // The kerbside double yellow: where the inner line starts, and the gap to the
 // second. Set clear of U = 0 so the pair sits on the carriageway rather than
@@ -293,8 +321,15 @@ void fragment() {
 			join = centre + (centre_at - 1.0) / 16.0;
 			separated = true;
 		}
+		// Two lines straddling the join, so the distance between their centres is
+		// one line width plus the clear gap. Summed rather than maxed: they never
+		// overlap while `centre_gap` is above zero, and where a fragment catches
+		// both edges the coverage is genuinely the sum.
+		float centre_pitch = (centre_width + centre_gap) * 0.5;
 		float white = separated
-			? draw_centre_line * line_coverage(u, join, centre_width * 0.5, du)
+			? draw_centre_line
+				* (line_coverage(u, join - centre_pitch, centre_width * 0.5, du)
+					+ line_coverage(u, join + centre_pitch, centre_width * 0.5, du))
 			: 0.0;
 
 		// Lane dividers. Only the nearest boundary can be within a line's width

@@ -19679,12 +19679,8 @@ over 444 distinct pairs. It is memoised on the unordered pair.
 
 ### ⬜ What is still open
 
-- 🔴 **The line is a single continuous white one, and Hong Kong paints a double** between opposing
-  flows on a road of this class — visible in the reported Street View frame. `centre_width` is one
-  uniform in `road_markings.gdshader`, and the sourced dimensions are on the same TD sheet
-  `CT174/51-5(1)F` that `roadmarks.py` reads, where ⚠️ **`LINES SPACING` is the clear gap and not a
-  centre-to-centre pitch** (`Q69`). Not done here: this entry restores a marking that was missing,
-  and drawing the wrong *kind* of marking twice as wide is a second question with its own source.
+- ✅ **The line is a DOUBLE continuous white line since 2026-09-06**, at TD's own dimensions, and
+  what that opened is bigger than what it closed — see the section below.
 - ⚠️ **The range guard is per edge, so a pair can be half-drawn**: 44 pairs draw from both halves and
   **5 draw from one**, where the join lands within 0.6 m of the refusing half's offside kerb
   (`e107` LEIGHTON, `e208` FLEMING, `e224` JOHNSTON, `e375` GLOUCESTER, `e745` HENNESSY — gap against
@@ -19694,8 +19690,54 @@ over 444 distinct pairs. It is memoised on the unordered pair.
 - ⚠️ **`opposed_pairs_one_sided` is 6 and they are unexamined.** It is a finding to go and look at,
   never a bar to retune.
 
+### ✅ The centre line is TD's double white line, and the sheet already had the numbers
+
+`CT174/51-5(1)F` publishes **RM1001 DOUBLE LINES — `LINE WIDTH = 150, LINES SPACING = 100`**, and
+that row was already transcribed in `hong_kong.yaml`, where it is quoted to prove the load-bearing
+reading: ⚠️ **`LINES SPACING` is the clear gap and not a centre-to-centre pitch.** Two 150 mm lines
+whose *centres* are 100 mm apart is one 250 mm line; only the gap reading draws a shape. So
+`centre_gap` is the clear gap and the pitch is derived, and the pair is held at the sheet's own
+100/150 ratio so the shape stays TD's at whatever scale legibility asks for — **1.88x life size**,
+which is `line_width`'s existing exaggeration and not a second decision.
+
+🔴 **The U-to-metres conversion written in both files was wrong by the widening, and it had to be
+fixed to author a sourced width at all.** `road_markings.gdshader` and `tuning/road_markings.tres`
+both said "0.031 is a real 10 cm line at this region's 3.2 m lane" — but U is normalised to the
+ribbon *as drawn*, so a U-lane is `2 * half_width / lanes`, **5.12 m** across this region (p10 4.16,
+p90 5.12) and not `lane_width_m`'s 3.20. Every metre figure in those comments understated by 1.6x:
+`line_width` 0.05 is a **26 cm** line, not the 16 cm claimed. `surface.py::_u_metres` is the same
+correction made on the ETL side, and this entry's own `P3-12` citation records the join landing off
+the carriageway entirely the one time the two were confused. ⚠️ **The shipped values did not move**
+— only the arithmetic describing them.
+
+⚠️ **`yellow_gap` next door is a PITCH, not a clear gap**, measured from the inner line's centre. It
+draws correctly and is left alone, but the two uniforms are now different kinds of number with
+similar names, which is written down rather than tidied.
+
+### 🔴 And the region publishes 19,308 m of the real thing
+
+`DTAD_RD_MARK_LINE` carries **RM1001 at 19,308 m in region** — second only to RM1109's 25,204 m, and
+almost a hundred times the 211 transverse parts `roadmarks.py` draws. `roadmarks.json`'s
+`refused_m_by_code` has been publishing it all along. So the double line drawn here is a **proxy for
+a marking the publisher surveys**, and that is a `Q54` debit, not a closed question:
+
+🔴 **A double continuous white line is an instruction — *no overtaking* — and this one rests on an
+inferred pairing.** `Q117` finds the opposed pairs geometrically; the paint then asserts a legal
+restriction on 49 pairs on that authority. It is the same shape as `Q54`'s kerbside double yellow,
+which asserted *no stopping* over 3.4x the kerb that carries one, and it is milder only because the
+join itself is measured rather than assumed.
+
+⬜ **The sourced route is to draw RM1001 as geometry**, the way stop lines are. What blocks it is
+that `roadmarks.py` hosts by **transversality** — a stop line sits square across a junction mouth —
+and refuses anything more than `bearing_tolerance_deg` off square. RM1001 is **longitudinal**: it
+runs *along* the road, so every one of the 19.3 km would be refused by the rule that makes that
+stage correct for the markings it has. It needs a host rule of its own, which is a layer's work and
+not a config row. Until then `draw_centre_line` is the switch, and it now turns off a marking whose
+*shape* is sourced and whose *placement* is not.
+
 **Status.** Fixed 2026-09-06. `check.sh` exit 0, 2,091 tests, 0 shader errors, two mutations two
-failures.
+failures. The double line landed the same day, rendered and reproduced; ⬜ RM1001-as-geometry is
+open.
 
 **See.** `Q53` (owned by `P3-12`) for the codec field and the two ways it shipped wrong · `Q94` for the geometric
 pairing this borrows its angle from, and its own sweep · `Q72` for why a free radius is refused ·

@@ -11,11 +11,34 @@
 ; the whole region: the road surface is a single primitive.
 ;
 ; ⚠️ **The widths are in lane widths, not metres, and they are wider than life.**
-; U is a lane coordinate, so 0.031 is a real 10 cm line at this region's 3.2 m
-; lane. It ships at 0.05 — a 16 cm line — because a truthful one is under a pixel
-; at the distance the player is actually looking, and the honest version simply
-; vanished. The pitch values are the opposite case: V is metres, so
-; `dash_length_m` and `dash_gap_m` are the real thing and want no fudge.
+; A truthful line is under a pixel at the distance the player is actually looking,
+; and the honest version simply vanished. The pitch values are the opposite case:
+; V is metres, so `dash_length_m` and `dash_gap_m` are the real thing and want no
+; fudge.
+;
+; 🔴 **A U-lane is NOT `lane_width_m`, and this block said it was.** U is
+; normalised to the ribbon *as drawn*, so one U-lane is `2 * half_width / lanes`
+; — **5.12 m** across this region (p10 4.16, p90 5.12) against the 3.20 m
+; `lane_width_m` authors. This used to read "0.031 is a real 10 cm line at this
+; region's 3.2 m lane … it ships at 0.05 — a 16 cm line", which understated every
+; width here by the 1.6x widening. `line_width` 0.05 is a **26 cm** line;
+; `centre_width` 0.055 is **28 cm**. `surface.py::_u_metres` is the same
+; correction on the ETL side, and `P3-12` records what confusing the two cost.
+;
+; ⚠️ **The centre line is TD's DOUBLE white line and its two numbers are the
+; sheet's.** `CT174/51-5(1)F` gives RM1001 DOUBLE LINES `LINE WIDTH = 150,
+; LINES SPACING = 100`, and LINES SPACING is the **clear gap, not a pitch** —
+; `centre_gap` is that gap, held at the sheet's own 100/150 of `centre_width` so
+; the shape stays TD's whatever legibility does to the scale. Both are 1.88x life
+; size, which is `line_width`'s exaggeration and not a second decision.
+;
+; 🔴 **This is a marking that says something, and it is drawn from an INFERRED
+; join.** A double continuous white line instructs *no overtaking*; `Q117` finds
+; the opposed pairs geometrically, so the instruction rests on that pairing and
+; not on a survey. TD publishes the real thing — **19,308 m of RM1001 in this
+; region**, second only to RM1109 — and drawing that instead is the sourced route
+; and the open item. `draw_centre_line` is the switch if a recognition round
+; reports the instruction as wrong rather than the line as missing.
 ;
 ; ⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
 ; rather than chosen.** A junction cap overlaps its arms rather than abutting
@@ -71,6 +94,7 @@ shader_parameter/paint_roughness = 0.7
 shader_parameter/road_roughness = 0.95
 shader_parameter/line_width = 0.05
 shader_parameter/centre_width = 0.055
+shader_parameter/centre_gap = 0.037
 shader_parameter/bus_width = 0.09
 shader_parameter/yellow_inset = 0.09
 shader_parameter/yellow_gap = 0.06
