@@ -19714,10 +19714,55 @@ the carriageway entirely the one time the two were confused. ⚠️ **The shippe
 draws correctly and is left alone, but the two uniforms are now different kinds of number with
 similar names, which is written down rather than tidied.
 
+### ✅ Review: the sum is exact, and the suppression window was a bound nothing checked
+
+⚠️ **Summing two `line_coverage` calls is the failure mode that file warns about, and it does not
+apply here — which is provable rather than arguable.** `centre_gap > 0` makes the two paint intervals
+**disjoint**, so `|L1 ∩ F| + |L2 ∩ F| = |(L1 ∪ L2) ∩ F| <= |F|`: the sum *is* the union's coverage and
+is `<= 1` identically, at every distance, so the `clamp` never truncates it. The four-yellow case that
+does clamp is a `smoothstep` artefact — that form converges on **0.5 whatever the line width**, while
+an exact box filter converges on `half_w / w`. 🔴 **So this must not be "fixed" to a `max`**, which
+would halve the pair's far-field brightness; `railings.gdshader::bars()` combines with `max` for the
+opposite and equally correct reason (a post crossing a rail is one piece of steel), so the two files
+disagree on purpose.
+
+✅ **Far field, measured rather than assumed.** The pair converges on `2 x half_w / du` — exactly
+twice the old single line, and 6.6x the dashed divider once the dash's own 3/9 duty cycle is counted.
+The gap is fully resolved to `du <= 0.0185` (~146 m at base FOV) and the two lines merge into one band
+of the correct centroid and coverage at `du = 0.046` (~363 m), which is outside `streaming.tres`'
+250 m tier and at the edge of its 400 m unload. **No distance fade is wanted**: the box filter already
+produces the right merged result, and a hand-authored fade would have to reproduce it.
+
+🔴 **The divider-suppression window was a fixed 0.25 that nothing tied to the widths it protects, and
+this change ate 23% of its margin.** The dash-versus-pair overlap radius went `0.0525 → 0.0985` lane
+units; at the top of `centre_width`'s and `centre_gap`'s own `hint_range`s it is **0.475**, past the
+window, and a dashed divider would be drawn through a continuous double line with nothing to catch it
+— `Q58`'s bound-that-cannot-be-checked. It is now `max(CENTRE_DIVIDER_CLEARANCE_U, <geometry>)`:
+⚠️ **floored by the geometry, not replaced by it**, because the quarter lane is *editorial* — it is
+what stops a dash running *beside* a solid line, which is why a join at `U = 1.19` suppresses the
+divider at `k = 1` though the two never touch. The bus-lane skip took the same floor.
+
+🔴 **And the window sits exactly on the codec's quantisation grid.** `centre_at` is in sixteenths, so
+`abs(k - join)` is always a multiple of 1/16 and `j = 4` is *exactly* 0.25 — deterministic, not a
+floating-point near-miss. Three published `(centre_at, lanes)` pairs land on it and **one is a real
+divider**: `centre_at 13 / lanes 3`, `join = 2.25`, `k = 2`, where `<` drew a dash with **0.78 m** of
+clear asphalt beside the pair (1.01 m before the double). The test is now `<=`.
+
+✅ **A second implementation already agreed on the convention.** `RoadMark.band_offsets_m` places
+RM1012's and RM1013's two lines at `±(line_width_m + lines_spacing_m) / 2` — the same derivation this
+shader now makes for RM1001, in Python at build time against GLSL at runtime. Two layers, two
+languages, one reading of `LINES SPACING`. ⚠️ `centre_gap` ships at **0.0367**, exactly the sheet's
+100/150 of `centre_width`, rather than a rounded 0.037 which was 0.6727 of it.
+
+⚠️ **No shared "double line" helper was extracted, deliberately.** The kerbside yellow pair is
+anchored by an inset from the kerb, its `yellow_gap` is already a **pitch**, and it draws one line or
+two depending on `kind`. A shared signature would have to pick one meaning for its gap, which is the
+exact conflation the sheet's convention exists to prevent.
+
 ### 🔴 And the region publishes 19,308 m of the real thing
 
 `DTAD_RD_MARK_LINE` carries **RM1001 at 19,308 m in region** — second only to RM1109's 25,204 m, and
-almost a hundred times the 211 transverse parts `roadmarks.py` draws. `roadmarks.json`'s
+**11.5x** the 1,673 m of transverse marking `roadmarks.py` draws today. `roadmarks.json`'s
 `refused_m_by_code` has been publishing it all along. So the double line drawn here is a **proxy for
 a marking the publisher surveys**, and that is a `Q54` debit, not a closed question:
 

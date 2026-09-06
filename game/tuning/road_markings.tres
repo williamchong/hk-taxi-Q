@@ -28,7 +28,7 @@
 ; ⚠️ **The centre line is TD's DOUBLE white line and its two numbers are the
 ; sheet's.** `CT174/51-5(1)F` gives RM1001 DOUBLE LINES `LINE WIDTH = 150,
 ; LINES SPACING = 100`, and LINES SPACING is the **clear gap, not a pitch** —
-; `centre_gap` is that gap, held at the sheet's own 100/150 of `centre_width` so
+; `centre_gap` is that gap, held at exactly the sheet's 100/150 of `centre_width` (0.0367) so
 ; the shape stays TD's whatever legibility does to the scale. Both are 1.88x life
 ; size, which is `line_width`'s exaggeration and not a second decision.
 ;
@@ -94,7 +94,7 @@ shader_parameter/paint_roughness = 0.7
 shader_parameter/road_roughness = 0.95
 shader_parameter/line_width = 0.05
 shader_parameter/centre_width = 0.055
-shader_parameter/centre_gap = 0.037
+shader_parameter/centre_gap = 0.0367
 shader_parameter/bus_width = 0.09
 shader_parameter/yellow_inset = 0.09
 shader_parameter/yellow_gap = 0.06

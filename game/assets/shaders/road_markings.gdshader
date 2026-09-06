@@ -71,6 +71,13 @@ const float MARKING_KERB_DOUBLE = 3.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
+// How close a lane divider may come to a drawn centre line before it is
+// suppressed, in lane units. ⚠️ **An EDITORIAL bound and not a geometric one**:
+// it is here so a dashed line does not run *beside* a solid one, which is why
+// the unnamed pair's join at `U = 1.19` suppresses the divider at `k = 1`
+// though the two never touch. The geometric bound is applied underneath it with
+// a `max`, so this may be tuned without being able to put a dash through paint.
+const float CENTRE_DIVIDER_CLEARANCE_U = 0.25;
 // ⚠️ `tram_tracks` is shipped and deliberately not decoded, and since `P3-14`
 // the tramway is drawn as its own mesh — `pipeline/tramway.py`, `tram.glb`.
 //
@@ -135,7 +142,7 @@ uniform float line_width : hint_range(0.0, 0.3) = 0.05;
 // names. Left as it is: it draws correctly, and renaming it moves a shipped
 // value for nothing.
 uniform float centre_width : hint_range(0.0, 0.3) = 0.055;
-uniform float centre_gap : hint_range(0.0, 0.3) = 0.037;
+uniform float centre_gap : hint_range(0.0, 0.3) = 0.0367;
 uniform float bus_width : hint_range(0.0, 0.4) = 0.09;
 // The kerbside double yellow: where the inner line starts, and the gap to the
 // second. Set clear of U = 0 so the pair sits on the carriageway rather than
@@ -321,15 +328,30 @@ void fragment() {
 			join = centre + (centre_at - 1.0) / 16.0;
 			separated = true;
 		}
-		// Two lines straddling the join, so the distance between their centres is
-		// one line width plus the clear gap. Summed rather than maxed: they never
-		// overlap while `centre_gap` is above zero, and where a fragment catches
-		// both edges the coverage is genuinely the sum.
-		float centre_pitch = (centre_width + centre_gap) * 0.5;
+		// Two lines straddling the join, so the centre-to-centre pitch is one line
+		// width plus the clear gap and each sits HALF of that off the join.
+		// ⚠️ **Named a half-pitch because it is one** — this block already carries
+		// one gap-versus-pitch trap (`centre_gap` is a clear gap, `yellow_gap` is
+		// a pitch) and a third word with a fourth meaning is how the next reader
+		// doubles it.
+		//
+		// 🔴 **Summed, and it must NOT be "fixed" to a `max`.** `centre_gap > 0`
+		// makes the two paint intervals disjoint, so the sum *is* the coverage of
+		// their union and is `<= 1` identically — the clamp below never truncates
+		// it, at any distance. That is what separates this from the four-yellow
+		// case `line_coverage` warns about, which clamps because a `smoothstep`
+		// converges on 0.5 whatever the line width while an exact box filter
+		// converges on `half_w / w`. A `max` here would halve the pair's far-field
+		// brightness and be wrong. ⚠️ `railings.gdshader::bars()` combines with
+		// `max` for the opposite and equally correct reason — a post crossing a
+		// rail is one piece of steel — so the two files disagree on purpose.
+		float centre_half_pitch = (centre_width + centre_gap) * 0.5;
+		// How far the pair reaches from the join, for the suppressions below.
+		float centre_reach = centre_half_pitch + centre_width * 0.5;
 		float white = separated
 			? draw_centre_line
-				* (line_coverage(u, join - centre_pitch, centre_width * 0.5, du)
-					+ line_coverage(u, join + centre_pitch, centre_width * 0.5, du))
+				* (line_coverage(u, join - centre_half_pitch, centre_width * 0.5, du)
+					+ line_coverage(u, join + centre_half_pitch, centre_width * 0.5, du))
 			: 0.0;
 
 		// Lane dividers. Only the nearest boundary can be within a line's width
@@ -342,8 +364,23 @@ void fragment() {
 		// missed the opposed-pair join entirely, which lands inside the same
 		// window (the unnamed pair's is at `U = 1.19`, a fifth of a lane from the
 		// divider at `k = 1`) and would have run a dashed line beside a solid one.
+		//
+		// ⚠️ **Floored by the geometry rather than replaced by it.** The quarter
+		// lane above is editorial; `max` is what stops a wider `centre_gap` or
+		// `centre_width` — both tunable to 0.3 — putting a dash through the pair
+		// with nothing to catch it. Shipped, the geometric term is 0.0985 against
+		// the editorial 0.25; at the top of both ranges it is 0.475.
+		//
+		// ⚠️ **`<=`, because the join lands on the codec's own grid.** `centre_at`
+		// is in sixteenths, so `abs(k - join)` is always a multiple of 1/16 and
+		// `j = 4` is *exactly* 0.25 — reachable and deterministic, not a
+		// floating-point near-miss. `centre_at 13 / lanes 3` is published in this
+		// region and puts its divider there; under `<` the dash draws with 0.78 m
+		// of clear asphalt beside the pair, which is what the window exists to
+		// prevent.
 		float k = floor(u + 0.5);
-		float centre_here = separated && abs(k - join) < 0.25 ? draw_centre_line : 0.0;
+		float divider_clear = max(CENTRE_DIVIDER_CLEARANCE_U, centre_reach + line_width * 0.5);
+		float centre_here = separated && abs(k - join) <= divider_clear ? draw_centre_line : 0.0;
 		if (k > 0.5 && k < lanes - 0.5) {
 			// The dash, in metres along the road. Phase is offset half a period
 			// so the wrap lands mid-gap — otherwise the leading edge of every
@@ -358,7 +395,8 @@ void fragment() {
 		// The bus lane is the nearside one, so what marks it is the boundary at
 		// U = 1 — continuous, and wider than a lane divider. Skipped where that
 		// boundary is already the centre line of a two-lane two-way street.
-		if (bus_lane > 0.5 && lanes > 1.5 && !(separated && abs(join - 1.0) < 0.25)) {
+		float bus_clear = max(CENTRE_DIVIDER_CLEARANCE_U, centre_reach + bus_width * 0.5);
+		if (bus_lane > 0.5 && lanes > 1.5 && !(separated && abs(join - 1.0) <= bus_clear)) {
 			white += draw_bus_lane * line_coverage(u, 1.0, bus_width * 0.5, du);
 		}
 
