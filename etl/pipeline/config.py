@@ -2119,6 +2119,12 @@ class RoadMarks(LayerSpec):
     # running *along* the carriageway recedes to the horizon, which is the worst
     # case for a thin quad. Applying this to the transverse marks would move
     # geometry `P3-23` shipped and `underfill_m` measures.
+    #
+    # ⚠️ **Set to 1.0 on 2026-09-06 — the user judged 1.88 too thick from the
+    # driving seat and asked for the accurate size.** The dial is kept rather
+    # than deleted: 1.0 is a reviewable statement that the line is drawn as
+    # published, and the mechanism is what makes any later exaggeration a config
+    # change instead of an edit to a transcribed width.
     longitudinal_legibility_scale: float
 
     def mark_of(self, code: str) -> RoadMark | None:

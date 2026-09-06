@@ -19952,5 +19952,26 @@ ribbon *coverage* rather than centreline distance — a change to `Q92`'s one sh
 serves the boxes and the arrows too, so it is its own decision. RM1002/RM1003 need a per-line module.
 The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of survey.
 
+### 🔴 The legibility scale is 1.0: the accurate size, on the user's call
+
+**The user, from the driving seat, the same day: the double white line at 1.88 is too thick, draw the
+accurate size.** `longitudinal_legibility_scale` is **1.0** — TD's own `LINE WIDTH = 150, LINES
+SPACING = 100`, unstretched. ⚠️ **The dial is kept, not deleted**: 1.0 is a reviewable statement that
+the line is drawn as published, and below 1.0 is still refused as a transcription error.
+
+```
+                          1.88 (was)            1.0 (now)
+  RM1001 quad short side   p50 0.282 m           p50 0.150 m       (stop lines 0.200 m, unmoved)
+  drawn / refused          283 / 17 / 52 / 0     byte-identical, every partition and count
+  triangles / vertices     12,258 / 24,516       identical
+  height_spread_m          p50 0.0303 max 1.1773 p50 0.0298 max 1.1764  (narrower quads span less road)
+  vertices_over_cap        7,176                 7,145
+  paint_clearance          within bounds         within bounds
+```
+
+Only widths moved: the quad count, every partition and every host counter are byte-identical, which is
+this change's inertness proof. ⚠️ **The illegibility the 1.88 answered is not gone** — it is the
+shader's recorded sub-pixel defect, and the answer to it is antialiasing there, not a wider line here.
+
 **See.** `Q117` for the inferred join this supersedes · `Q54` for sourced-not-invented · `Q92` for
 the height accessor · `Q59` for reading a scanned sheet · `Q69` for the clear-gap trap

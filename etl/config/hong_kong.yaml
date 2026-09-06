@@ -2051,12 +2051,17 @@ road_marks:
   # engine re-quantises Y on import too.
   lift_m: 0.016
 
-  # See `RoadMarks.longitudinal_legibility_scale`. 1.88 is not picked here: it is
-  # what `road_markings.gdshader` already draws its own lines at, measured as
-  # `centre_width` 0.055 lane units over a 5.12 m U-lane against the sheet's
-  # 0.150 m. Matching it is what makes the surveyed line and the shader's dashes
-  # read as one road rather than two conventions.
-  longitudinal_legibility_scale: 1.88
+  # See `RoadMarks.longitudinal_legibility_scale`. 🔴 **1.0 since 2026-09-06, on
+  # the user's call from the driving seat: the double white line at 1.88 was too
+  # thick, and the accurate size is the one to draw.** That is TD's own `LINE
+  # WIDTH = 150, LINES SPACING = 100`, unstretched. The 1.88 it replaces was not
+  # picked either — it was what `road_markings.gdshader` draws its own lines at
+  # (`centre_width` 0.055 lane units over a 5.12 m U-lane against the sheet's
+  # 0.150 m), on the argument that the surveyed line and the shader's dashes
+  # should read as one convention. ⚠️ The dial stays, at exactly 1.0, so the
+  # choice remains reviewable here rather than disappearing into the geometry;
+  # below 1.0 is refused as a transcription error.
+  longitudinal_legibility_scale: 1.0
 
   marks:
     # 🔴 **The one LONGITUDINAL entry, and the axis is what makes it drawable.**
