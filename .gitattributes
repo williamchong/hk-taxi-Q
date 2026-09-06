@@ -1,0 +1,11 @@
+# Normalise line endings to LF in the repository, whatever the checkout platform
+# does locally. Godot's own generated .gitattributes carries the same first line;
+# a Windows contributor's CRLF would otherwise reach a .gd or .tscn and diff the
+# whole file. Measured 2026-09-07: no tracked file carried CRLF, so this changes
+# no committed byte.
+* text=auto eol=lf
+
+# Binary assets are never normalised or diffed as text.
+*.glb binary
+*.ttf binary
+*.png binary
