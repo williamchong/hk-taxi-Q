@@ -3251,6 +3251,7 @@ def load_config(path: Path | None = None) -> Config:
     if city.signals is not None:
         _check_declared_source(city, city.signals, f"{path}:signals.source")
     _check_landmarks_lie_within_a_region(city, path)
+    _check_carve_regions_are_declared(city, path)
     return city
 
 
@@ -3289,6 +3290,28 @@ def _check_landmarks_lie_within_a_region(city: Config, path: Path) -> None:
             raise ValueError(
                 f"{path}:landmarks[{index}] ({landmark.id}) sits at "
                 f"E {landmark.easting}, N {landmark.northing} — inside no declared region"
+            )
+
+
+def _check_carve_regions_are_declared(city: Config, path: Path) -> None:
+    """Every region `carve` names is one the city declares.
+
+    🔴 A carve edge id is a per-region ORDINAL (`roads.py`'s
+    `edge_id = len(pending)`), so a misspelt region name does not fail loudly —
+    it silently carves nothing, which reads exactly like a region that has
+    nothing to carve. Checked at load for the reason `_check_source_exists`
+    gives, and this is the earliest the mistake can be caught at all: an edge
+    *id* is only checkable at stage 6 of 19, against a graph, and then only when
+    it happens to fall outside that region's range (`Q120`).
+    """
+    if city.carve is None:
+        return
+    for region_id in city.carve.edges:
+        if region_id not in city.regions:
+            raise ValueError(
+                f"{path}:carve.edges names {region_id!r}, which is not a declared region "
+                f"— carve edge ids are per-region ordinals, so a list under an unknown "
+                f"region names nothing. Declared: {', '.join(sorted(city.regions))}"
             )
 
 
@@ -4296,12 +4319,31 @@ class Carve:
     any edge a later source refresh happens to license, which is a decision
     rather than a query.
 
+    🔴 **Keyed by region, because an edge id is an ORDINAL and not an identity.**
+    `roads.py` assigns `edge_id = len(pending)`, so a bare list means one thing
+    in the region it was written for and something else everywhere else: 7 of the
+    8 ids `wan_chai` carries resolve in `mong_kok`, naming six roads — ARGYLE,
+    FERRY, HOI WANG, LIBERTY, PITT and WATERLOO.
+    Unkeyed, the only thing standing between this list and six silently mis-carved
+    Kowloon roads was that the largest id is 788, so all eight resolve only in a
+    region of 789 edges or more and `mong_kok` has 537. `wan_chai`'s own 797
+    clears that bar, so a region of its size runs clean — both partitions closing,
+    `facing_away` 0 and `check.sh` green.
+
+    ⚠️ **A region absent here carves nothing, and that is a measurement rather
+    than an omission.** `Q19`'s population came from running
+    `carriageway_occupancy` over `wan_chai`; nobody has run it elsewhere, so
+    there is no other region whose list is known. 🔴 **Do not "fix" a build by
+    skipping ids the graph does not carry** — that turns the loud failure into
+    quiet cuts on named streets, which is `Q54` inverted: removing published
+    structure on the authority of an id nobody surveyed.
+
     ⚠️ **Absent, the stage is a no-op and the bundle is byte-identical**
     (`Q95`'s validation move) — which is how a carve is proved to have changed
-    only what it claims.
+    only what it claims. A region with no entry takes that same path.
     """
 
-    edges: tuple[int, ...]
+    edges: dict[str, tuple[int, ...]]
     # How finely the ribbon is walked. The prism is rebuilt per station, so this
     # sets how closely the cut follows a ramp's curve; 2 m is half `carriageway`'s
     # own 4 m survey pitch, because a cut that misses a bend leaves concrete.
@@ -4320,30 +4362,68 @@ class Carve:
     # How far under a soffit the cut stops, so the deck keeps its own thickness.
     soffit_clearance_m: float
 
+    def edges_for(self, region_id: str) -> tuple[int, ...]:
+        """The edges carved in one region, empty where the region declares none.
+
+        ⚠️ **Empty is the answer for an undeclared region, never a lookup
+        failure.** A region nobody has measured is not a misconfiguration — it
+        is a region whose blocked population is unknown — so it carves nothing
+        and the stage no-ops. What *is* refused is a declared region naming an
+        edge its graph does not carry, and that refusal lives in `carve.py`
+        where the graph is readable.
+        """
+        return self.edges.get(region_id, ())
+
 
 def _carve(body: Any, where: str) -> Carve | None:
     """The optional carve block (`P3-28`).
 
     An empty `edges` is refused rather than treated as absent, on
     `_carriageway_survey`'s reasoning: a carve declaring no edges would report a
-    clean run over nothing, which reads like success.
+    clean run over nothing, which reads like success. The same applies one level
+    down: a region mapped to an empty list says nothing a missing key does not.
+
+    ⚠️ **Whether a named region is DECLARED is checked in
+    `_check_carve_regions_are_declared`** and not here, which is the shape every
+    other cross-block reference in this file takes: the check needs the built
+    `Config`, and threading the raw region names in would make this the one
+    block parser that reaches outside its own body.
     """
     if body is None:
         return None
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    entries = _require(body, "edges", where)
-    if not isinstance(entries, list) or not entries:
+    by_region = _require(body, "edges", where)
+    if not isinstance(by_region, dict):
+        # 🔴 Named apart from "empty", because a bare list is the shape this
+        # block had before `P5-7` and so is exactly what a stale branch or an
+        # older local config carries. A migration that reads "is empty" about
+        # eight ids sends the reader looking for the wrong thing.
+        raise ValueError(
+            f"{where}:edges must be a mapping of region id to edge ids, got "
+            f"{by_region!r} — an edge id is a per-region ordinal, so a bare list "
+            f"names nothing without the region it was written for"
+        )
+    if not by_region:
         raise ValueError(f"{where}:edges is empty; leave the block out instead")
-    edges = []
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, int) or isinstance(entry, bool):
-            raise ValueError(f"{where}:edges[{index}] is {entry!r}, expected an edge id")
-        edges.append(int(entry))
-    if len(set(edges)) != len(edges):
-        # Two prisms over one edge would double every metre it reports.
-        raise ValueError(f"{where}:edges repeats an id")
+
+    edges: dict[str, tuple[int, ...]] = {}
+    for region_id, entries in by_region.items():
+        at = f"{where}:edges:{region_id}"
+        if not isinstance(entries, list):
+            raise ValueError(f"{at} must be a list of edge ids, got {entries!r}")
+        if not entries:
+            raise ValueError(f"{at} is empty; leave the region out instead")
+        ids = []
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, int) or isinstance(entry, bool):
+                raise ValueError(f"{at}[{index}] is {entry!r}, expected an edge id")
+            ids.append(int(entry))
+        if len(set(ids)) != len(ids):
+            # Two prisms over one edge would double every metre it reports.
+            raise ValueError(f"{at} repeats an id")
+        edges[region_id] = tuple(ids)
 
     measures = _measures(
         body,
@@ -4351,7 +4431,7 @@ def _carve(body: Any, where: str) -> Carve | None:
         ("station_m", "floor_below_m", "headroom_m", "soffit_clearance_m"),
         positive=True,
     )
-    return Carve(edges=tuple(edges), **measures)
+    return Carve(edges=edges, **measures)
 
 
 @dataclass(frozen=True)

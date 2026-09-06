@@ -2190,6 +2190,98 @@ class TestCarriagewaySurvey:
             load_config(rewrite(drop))
 
 
+class TestCarve:
+    """🔴 An edge id is a per-region ORDINAL, so the list is keyed by region."""
+
+    def test_the_shipped_list_belongs_to_wan_chai_alone(self, hong_kong) -> None:
+        """`Q19`'s population came from running `carriageway_occupancy` over
+        `wan_chai`. Nobody has run it on the other three regions, so they have no
+        list — which is a measurement not yet taken, never an omission."""
+        assert hong_kong.carve is not None
+        assert hong_kong.carve.edges_for("wan_chai") == (233, 55, 485, 788, 398, 256, 327, 99)
+        for region_id in ("causeway_bay", "sha_tin", "mong_kok"):
+            assert hong_kong.carve.edges_for(region_id) == ()
+
+    def test_an_undeclared_region_carves_nothing_rather_than_raising(self, hong_kong) -> None:
+        """The accessor's whole job. A region absent from the block is a region
+        with nothing to cut, so it must answer empty and let the stage no-op —
+        a lookup failure here would make every unmeasured region a build error."""
+        assert hong_kong.carve is not None
+        assert hong_kong.carve.edges_for("kennedy_town") == ()
+
+    def test_a_region_nobody_declares_is_refused_at_load(self, rewrite) -> None:
+        """🔴 The gain in moving the check this early. An edge id can only be
+        caught at stage 6 of 19, against a graph, and then only when it happens
+        to fall outside that region's range — `mong_kok` resolves 7 of `wan_chai`'s
+        8. A region *name* is checkable here, with nothing built."""
+
+        def stray(doc: dict[str, Any]) -> None:
+            doc["carve"]["edges"]["kowloon_tong"] = [1, 2, 3]
+
+        with pytest.raises(ValueError, match="not a declared region"):
+            load_config(rewrite(stray))
+
+    def test_a_bare_list_is_refused(self, rewrite) -> None:
+        """The pre-`P5-7` shape. It loaded, and it named ARGYLE STREET in
+        `mong_kok` — so it must fail rather than be read as some default
+        region's list.
+
+        ⚠️ **Refused as the wrong shape and never as "empty"**: a stale branch
+        carries eight real ids here, and a migration told its list is empty
+        goes looking for the wrong thing."""
+
+        def flatten(doc: dict[str, Any]) -> None:
+            doc["carve"]["edges"] = [233, 55]
+
+        with pytest.raises(ValueError, match="must be a mapping of region id"):
+            load_config(rewrite(flatten))
+
+    def test_a_region_mapped_to_nothing_is_refused(self, rewrite) -> None:
+        """One level down from the empty-block rule, and for its reason: a region
+        declaring no edges reports a clean run over nothing, which reads like
+        success. Leave the region out and it says the same thing honestly."""
+
+        def empty(doc: dict[str, Any]) -> None:
+            doc["carve"]["edges"]["causeway_bay"] = []
+
+        with pytest.raises(ValueError, match="causeway_bay is empty"):
+            load_config(rewrite(empty))
+
+    def test_a_repeated_id_within_one_region_is_refused(self, rewrite) -> None:
+        """Two prisms over one edge would double every metre it reports. The
+        keying must not have loosened this — the ids are unique per region, and
+        the same id under two regions is correct rather than a repeat."""
+
+        def twice(doc: dict[str, Any]) -> None:
+            doc["carve"]["edges"]["wan_chai"] = [233, 233]
+
+        with pytest.raises(ValueError, match="repeats an id"):
+            load_config(rewrite(twice))
+
+    def test_the_same_id_under_two_regions_is_accepted(self, rewrite) -> None:
+        """The other half of the rule above, and the point of the whole change:
+        `55` and `99` exist in three of the four built regions and mean a
+        different road in each."""
+
+        def shared(doc: dict[str, Any]) -> None:
+            doc["carve"]["edges"]["causeway_bay"] = [55, 99]
+
+        city = load_config(rewrite(shared))
+        assert city.carve is not None
+        assert city.carve.edges_for("causeway_bay") == (55, 99)
+        assert 55 in city.carve.edges_for("wan_chai")
+
+    def test_the_measures_stay_city_wide(self, hong_kong) -> None:
+        """🔴 Only the population is per-region; the bars are Hong Kong's.
+        `headroom_m` is the territory's vehicular-underpass headroom, so a
+        per-region copy would be the duplication hard rule 3 forbids."""
+        assert hong_kong.carve is not None
+        assert hong_kong.carve.headroom_m == 5.1
+        # A region maps to edge ids and nothing else. Were it a mapping, a bar
+        # could be set per region and `headroom_m` would stop being one number.
+        assert all(isinstance(ids, tuple) for ids in hong_kong.carve.edges.values())
+
+
 class TestClearance:
     """`P3-29`'s player bar: the car's own width, beside the lane the router uses."""
 

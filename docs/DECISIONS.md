@@ -20207,7 +20207,7 @@ for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by 
 ## `Q120` — Three more regions, and Wan Chai is not the dense extreme
 
 **Status.** 🟡 **Open.** The coefficients are measured and closed. Two defects it found are open:
-the streaming distances (`P4-5`) and `carve.edges` (below).
+the streaming distances (`P4-5`). ✅ `carve.edges` was the second and closed 2026-09-07 (below).
 
 **Origin.** An occlusion-culling evaluation, and the user's reframe behind it: *"we only built
 wanchai for game developement and design iteration and test play, but we will expand into whole hong
@@ -20360,7 +20360,7 @@ does not. The two are routinely conflated; they are opposite answers.
 
 ### ⚠️ What this measurement is not
 
-⚠️ **The three new regions skipped `carve`** (below), so their tile bytes and triangle counts are
+⚠️ **The three new regions carve nothing** (below), so their tile bytes and triangle counts are
 marginally **high** relative to Wan Chai's — `carve` removes triangles on 8 edges. That makes the
 Mong Kok 108% slightly pessimistic, by nothing near 8 points.
 ⚠️ **Four regions is four, and two of them are flat.** `roadsurface`'s vertical span is 59.2 m in
@@ -20373,21 +20373,80 @@ floor; `P0-3b` is still blocked.
 `etl/out/`; only `wan_chai` is synced into `game/assets/generated/`, so the PCK is unchanged. Their
 config blocks in `hong_kong.yaml` are ~8 lines each and cost a build nothing until named.
 
-### 🔴 `carve.edges` is a Wan Chai edge list at config top level
+### ✅ `carve.edges` was a Wan Chai edge list at config top level — FIXED 2026-09-07 (`P5-7`)
 
-`hong_kong.yaml:3193` is `carve: edges: [233, 55, 485, 788, 398, 256, 327, 99]` — **not
-region-scoped**, so every region but `wan_chai` dies at stage 6 of 19:
+`hong_kong.yaml:3193` was `carve: edges: [233, 55, 485, 788, 398, 256, 327, 99]` — **not
+region-scoped**, so every region but `wan_chai` died at stage 6 of 19:
 
 ```
 ValueError: carve names edge 233, which is not in roadgraph.json — a stale id after a source refresh?
 ```
 
-The three regions here were completed by resuming `--from surface`. ⚠️ **The refusal itself is
-right** — it is the stale-id guard doing its job — and the defect is that the ids live at config top
-level where a second region cannot help but collide with them. `carve` is the one stage whose input
-is a hand-picked list of *this region's* edge ids (`Q19`, `e99`), so the ids belong under the region
-that names them. This is the first multi-region defect the project has found, and it was invisible
-while one region existed.
+The three regions here were completed by resuming `--from surface`.
+
+🔴 **The reported failure was the mild half, and the other half is why the obvious fix is worse
+than the bug.** `roads.py`'s `edge_id = len(pending)` makes an edge id a **per-region ordinal**,
+not an identity, and the ids are contiguous `0..n-1` in all four regions. So the list does not
+merely go stale elsewhere — it *resolves*:
+
+| region | edges | of the 8, resolving | first refusal | the roads they name |
+|---|---:|---:|---|---|
+| `wan_chai` | 797 | **8 / 8** | — runs clean | WAN CHAI INTERCHANGE, HUNG HING ROAD FLYOVER, FLEMING ROAD |
+| `causeway_bay` | 211 | 2 / 8 | `e233` | TAI HANG ROAD |
+| `sha_tin` | 250 | 3 / 8 | `e485` | SHA TIN CENTRE STREET |
+| `mong_kok` | 537 | **7 / 8** | `e788` | **ARGYLE STREET, FERRY STREET, HOI WANG ROAD, LIBERTY AVENUE, PITT STREET, WATERLOO ROAD** |
+
+🔴 **The only thing standing between this config and six named Kowloon roads being carved was an
+arithmetic accident.** The largest configured id is **788**, so all eight resolve only in a region
+of **789 edges or more**; `mong_kok` has 537. `wan_chai`'s own **797** clears that bar, so a region
+of its size runs clean — both partitions closing, `facing_away` 0, `check.sh` green — while cutting
+`INFRASTRUCTURE` prisms out of whatever the same integers happen to name. ⚠️ **So "skip the ids
+the graph does not carry" must never be built**: it converts the loud failure into exactly that
+silent one, which is `Q54` inverted — published structure removed on the authority of an id nobody
+surveyed. The refusal stays, and it names the region now.
+
+✅ **Fixed by keying `edges` on the region**, with the four measures left city-wide:
+`station_m`, `floor_below_m`, `headroom_m` and `soffit_clearance_m` are the *bar* and the list is
+the *population*. `headroom_m`'s 5.1 m is the territory's vehicular-underpass headroom carrying a
+paragraph of reasoning, so a per-region `carve:` block was refused — copying it per region is the
+duplication hard rule 3 exists to prevent. ✅ **Region keys are checked against `regions:` at
+config load**, which is the whole gain in moving the check earlier: an edge id can only be caught
+at stage 6, against a graph, and then only when it falls outside that region's range.
+
+⚠️ **A region absent from the block carves nothing, and that is a measurement not yet taken rather
+than an omission.** `Q19`'s population came from running `carriageway_occupancy` over `wan_chai`;
+nobody has run it on the other three. So this makes the pipeline **run** and does **not** make the
+byte comparison above fair — the caveat at *"The three new regions carve nothing"* stands, now
+for a measured reason instead of a broken one.
+
+✅ **Inert on Wan Chai, and proved byte-for-byte.** `_document` writes no timestamp and never
+echoes the configured list, so the proof is a plain `cmp` rather than a row diff: rebuilt via
+`buildings → roads → carve` (a re-run is refused on carved tiles), `carve.json` is **byte-identical**
+and so are all **16** re-emitted tile files; `facing_away` **0** and `widest_tier_vertices`
+**22,486** unmoved; 8 edges cut, 1,108.3 m of wall. **The `Q19` battery is therefore not owed** —
+that bullet fires on a change to *which* edges are carved, and this changed only where the list is
+written. `CARVE_SCHEMA` stays **1**: the document shape does not move, so hard rule 5's *"would a
+consumer be wrong to keep its old interpretation"* is answered no.
+
+✅ **Three mutations, three failures**: skipping a missing id instead of refusing, pooling every
+region's ids into one list, and dropping the declared-region check. ⚠️ **`test_carve.py`'s own
+module docstring claimed the missing-edge refusal was tested and it was not** — the contract was
+written down and never exercised; it is now, and it is the one that matters.
+
+⚠️ **One known property, measured and deliberately left standing.** The no-op path returns before
+reading `buildings.json`, so it does not reach the `carved_edges` re-run guard: carve a region, drop
+its entry, re-run, and `carve.json` publishes `edges: []` while the manifest still says its tiles are
+cut. **Geometry is never corrupted** — nothing reads that key but the guard, and no stage reads
+`carve.json` — so the cost is one false counter in a document. 🔴 **Not closed, because the fix is
+worse than the defect**: reading the manifest on the no-op path re-couples a bundle-only path to a
+file that need not exist, which is precisely `Q19`'s recorded CI failure (`build_region` took a whole
+`Placement` for its `out_dir` and pulled the sheet index in behind it, leaving a test red for **8
+runs across 47 commits**). ⚠️ It is also **not new** — the absent-block path has always behaved this
+way; keying the list only made it reachable per region.
+
+⚠️ **`PagedSource`'s docstring records a per-region block being declined before, and it is not a
+precedent against this one.** That refusal was specific — a per-region source block would duplicate
+`bounds`, which hard rule 3 pins to one place. A carve edge list is duplicated nowhere.
 
 ### ⬜ What this opens
 
@@ -20396,7 +20455,9 @@ while one region existed.
   at 114.188 exactly, so `Q116`'s *"two regions meet at a hard edge with no continuing graph"* is
   testable rather than argued.
 - **The LOD1 ratio is unowned** and is the cheapest triangle lever measured here.
-- **`carve.edges` needs a region scope** before any second region is built as a matter of course.
+- ✅ **`carve.edges` is region-scoped since 2026-09-07** and no longer blocks `P5-7`. ⬜ What it
+  does *not* buy: `Q19`'s starved-edge measurement has never been run on the other three regions,
+  so none of them has a carve list and the byte comparison above keeps its caveat.
 
 **See.** `Q115` for the kit refusal this does not disturb · `Q116` for the region-as-unit argument
 and the ×50 anchor this replaces · `Q87` for a value tuned at one operating point and applied at

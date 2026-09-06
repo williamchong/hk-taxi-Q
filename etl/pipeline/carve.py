@@ -692,8 +692,13 @@ def build_region(
     out_dir = city.out_dir(region_id, out_root)
     report = CarveReport()
     spec = city.carve
-    if spec is None:
-        log.info("  no carve configured; the bundle is unchanged")
+    # ⚠️ **A region with no edges takes the absent block's path**, deliberately:
+    # `Q19`'s population is a measurement run over `wan_chai`, so a region nobody
+    # has measured has nothing to carve rather than a list gone missing. Both
+    # arrive here as "no-op, and the bundle is byte-identical" (`Q95`).
+    carved_edges = () if spec is None else spec.edges_for(region_id)
+    if not carved_edges:
+        log.info("  no carve configured for %s; the bundle is unchanged", region_id)
         write_document(out_dir / CARVE_NAME, _document(city, region_id, report))
         return report
 
@@ -727,12 +732,20 @@ def build_region(
     overhead = _structure_field(out_dir, manifest)
 
     plans: dict[str, list[EdgePlan]] = {}
-    for edge_id in spec.edges:
+    for edge_id in carved_edges:
         edge = by_id.get(edge_id)
         if edge is None:
+            # 🔴 **Refused, never skipped.** An edge id is a per-region ordinal,
+            # so skipping the ones a graph does not carry would let a list
+            # written for one region cut prisms out of whatever the same
+            # integers happen to name in another — 7 of `wan_chai`'s 8 resolve
+            # in `mong_kok`, naming six roads including ARGYLE STREET and
+            # WATERLOO ROAD. That is `Q54` inverted, and it renders as a
+            # perfectly carved city.
             raise ValueError(
-                f"carve names edge {edge_id}, which is not in {ROADGRAPH_NAME} — "
-                "a stale id after a source refresh?"
+                f"carve names edge {edge_id} for region {region_id}, which is not in "
+                f"{ROADGRAPH_NAME} — a list written for another region, or a stale id "
+                f"after a source refresh?"
             )
         plan = _plan_edge(edge, spec, overhead)
         report.edges.append(plan.row)

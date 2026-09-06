@@ -3189,7 +3189,22 @@ roads:
 # exception by having its class and its containment measured, not by being
 # awkward. Numbers in DECISIONS.md Q19.
 carve:
-  edges: [233, 55, 485, 788, 398, 256, 327, 99]
+  # 🔴 Keyed by REGION because an edge id is a per-region ORDINAL and not an
+  # identity: roads.py assigns `edge_id = len(pending)`, so the same eight
+  # integers name the interchange ramps in wan_chai and six Kowloon roads in
+  # mong_kok — ARGYLE, FERRY, HOI WANG, LIBERTY, PITT and WATERLOO — where 7 of the 8 resolve.
+  # Unkeyed, the only thing between this list and six silently mis-carved roads
+  # was that the largest id is 788, so all eight resolve only in a region of 789
+  # edges or more and mong_kok has 537. wan_chai's own 797 clears that bar, so a
+  # region of its size would have run clean with every counter closing and
+  # check.sh green.
+  #
+  # ⚠️ A region absent here carves NOTHING, and that is the correct default
+  # rather than an omission: Q19's population came from running
+  # carriageway_occupancy on wan_chai, and that measurement has never been run
+  # on the other three regions. An empty list is refused — say nothing instead.
+  edges:
+    wan_chai: [233, 55, 485, 788, 398, 256, 327, 99]
 
   # How finely the ribbon is walked; the prism is rebuilt per station, so this
   # is how closely the cut follows a ramp's curve. Half `carriageway`'s own 4 m

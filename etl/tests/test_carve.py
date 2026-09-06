@@ -2,9 +2,10 @@
 
 Two layers, mirroring the module. The prism and the retaining wall are pure
 geometry, tested on hand-built meshes where every triangle's fate is checkable by
-eye. The stage itself is tested for the two things no frame can show: that an
-absent config block leaves the bundle alone, and that a configured edge the graph
-does not carry stops the build rather than being skipped.
+eye. The stage itself is tested for the three things no frame can show: that an
+absent config block leaves the bundle alone, that a region declaring no edges
+takes that same path, and that a configured edge the graph does not carry stops
+the build rather than being skipped.
 
 🔴 **The wall tests are the ones that matter.** Every other way this stage breaks
 renders as a plausible frame — a wall at the wrong height still looks like a
@@ -22,6 +23,7 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
     BUILDINGS_MANIFEST_SCHEMA,
     CARVED_EDGES_KEY,
+    FACADE_MATERIAL,
     facade_uv,
 )
 from pipeline.carve import (
@@ -29,6 +31,7 @@ from pipeline.carve import (
     EdgePlan,
     _double_side,
     _facing_away,
+    _named,
     _prisms,
     _retaining_wall,
     _stations,
@@ -36,8 +39,9 @@ from pipeline.carve import (
     build_region,
 )
 from pipeline.documents import write_document
-from pipeline.gltf import MeshData
+from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import subtract_prism
+from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import mitres
 from tests.helpers import box, line, style
 
@@ -55,6 +59,27 @@ def _plan(points: np.ndarray, *, half_m: float = 3.0) -> EdgePlan:
         floors=floors,
         prisms=_prisms(points, offsets, half_m, floors, ceilings),
     )
+
+
+def _manifest(city_id: str, **extra) -> dict:
+    """A buildings manifest with nothing in it but the keys `carve` reads.
+
+    Two stage tests need one, and the boilerplate is nine keys of which they
+    differ in two — so the shared shape lives here and each test states only
+    what it is actually about.
+    """
+    return {
+        "schema_version": BUILDINGS_MANIFEST_SCHEMA,
+        "city_id": city_id,
+        "region_id": "wan_chai",
+        "tile_size_m": 150,
+        "grid": {},
+        "lod_cell_sizes_m": [],
+        "class_lod_cell_sizes_m": {},
+        "tiles": [],
+        "excluded": {},
+        **extra,
+    }
 
 
 def _uv(mesh: MeshData, class_id: str) -> MeshData:
@@ -280,6 +305,70 @@ class TestStructureSelection:
         assert not _structure(box()).any()
 
 
+class TestRegionScope:
+    """🔴 An edge id is a per-region ORDINAL, so the list is keyed by region.
+
+    `roads.py` assigns `edge_id = len(pending)`. Unkeyed, `wan_chai`'s eight ids
+    resolve **7 of 8** in `mong_kok`, naming six roads — ARGYLE, FERRY, HOI WANG,
+    LIBERTY, PITT and WATERLOO —
+    and the only thing that stopped them being carved is that the largest id is
+    788: all eight resolve only in a region of 789 edges or more, and `mong_kok`
+    has 537 where `wan_chai` has 797.
+    """
+
+    def test_a_region_with_no_edges_carves_nothing(self, tmp_path, hong_kong) -> None:
+        """🔴 **The mutation check that matters.** `causeway_bay` declares no
+        edges, so the stage must take the absent block's path — write its
+        document, re-emit **zero** tiles and touch no manifest — rather than
+        reaching for a list belonging to another region.
+
+        It returns before reading `buildings.json` at all, which is why this
+        needs nothing on disk: an unmeasured region is not a half-built one.
+        """
+        out = tmp_path / "causeway_bay"
+        out.mkdir(parents=True)
+
+        report = build_region(hong_kong, "causeway_bay", out_root=tmp_path)
+
+        assert report.edges == []
+        assert report.tiles_written == []
+        assert not (out / BUILDINGS_MANIFEST_NAME).exists()
+
+    def test_an_edge_the_graph_does_not_carry_stops_the_build(self, tmp_path, hong_kong) -> None:
+        """🔴 **Refused, never skipped**, and the refusal names the region.
+
+        Skipping is the intuitive fix and it is the dangerous one: it would let a
+        list written for one region cut prisms out of whatever the same integers
+        happen to name in another, with both partitions closing, `facing_away` 0
+        and `check.sh` green. That is `Q54` inverted — published structure
+        removed on the authority of an id nobody surveyed.
+        """
+        out = tmp_path / "wan_chai"
+        out.mkdir(parents=True)
+        (out / "tiles").mkdir()
+        tile = _named(_uv(box(), "INFRASTRUCTURE"), "t", FACADE_MATERIAL)
+        write_glb(out / "tiles" / "t.glb", [tile])
+        write_document(
+            out / BUILDINGS_MANIFEST_NAME,
+            _manifest(hong_kong.id, tiles=[{"id": "t", "lods": [{"path": "tiles/t.glb"}]}]),
+        )
+        # A graph carrying none of the configured ids — a region refreshed, or a
+        # list written for its neighbour.
+        write_document(
+            out / ROADGRAPH_NAME,
+            {
+                "schema_version": ROADGRAPH_SCHEMA,
+                "city_id": hong_kong.id,
+                "region_id": "wan_chai",
+                "nodes": [],
+                "edges": [],
+            },
+        )
+
+        with pytest.raises(ValueError, match="for region wan_chai"):
+            build_region(hong_kong, "wan_chai", out_root=tmp_path)
+
+
 class TestReRunning:
     """🔴 A second pass DEGRADES the first rather than repeating it."""
 
@@ -296,18 +385,7 @@ class TestReRunning:
         out.mkdir(parents=True)
         write_document(
             out / BUILDINGS_MANIFEST_NAME,
-            {
-                "schema_version": BUILDINGS_MANIFEST_SCHEMA,
-                "city_id": hong_kong.id,
-                "region_id": "wan_chai",
-                "tile_size_m": 150,
-                "grid": {},
-                "lod_cell_sizes_m": [],
-                "class_lod_cell_sizes_m": {},
-                "tiles": [],
-                "excluded": {},
-                CARVED_EDGES_KEY: [233],
-            },
+            _manifest(hong_kong.id, **{CARVED_EDGES_KEY: [233]}),
         )
         with pytest.raises(ValueError, match="already carved"):
             build_region(hong_kong, "wan_chai", out_root=tmp_path)
