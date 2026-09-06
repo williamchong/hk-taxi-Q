@@ -342,6 +342,47 @@ regions:
       north: 22.284
     tile_size_m: 150.0
 
+  causeway_bay:
+    name: Causeway Bay to North Point
+    # Adjacent to `wan_chai`, sharing its east edge at 114.188 exactly, so the
+    # pair is also the fixture `P5-7`'s graph cut needs: today `roads.py` clips
+    # to the rectangle, and two regions built that way meet at a hard edge with
+    # no continuing graph (`Q116`). Same 0.016 x 0.008 box as `wan_chai`, so
+    # bytes per square kilometre compare without normalising.
+    bounds:
+      west: 114.188
+      east: 114.204
+      south: 22.276
+      north: 22.284
+    tile_size_m: 150.0
+
+  sha_tin:
+    name: Sha Tin
+    # A New Territories new town: towers and podium malls, but also the Shing
+    # Mun River, open space and hillside. Chosen as the density CONTRAST to
+    # `wan_chai`, and it is the sparse end as expected — 10.7 MB/km2 against
+    # 27.4. Same 0.016 x 0.008 box, so bytes compare without normalising.
+    bounds:
+      west: 114.180
+      east: 114.196
+      south: 22.377
+      north: 22.385
+    tile_size_m: 150.0
+
+  mong_kok:
+    name: Mong Kok
+    # Dense Kowloon: a tight pre-war grid of mid-rise over shophouse podiums.
+    # Built to test whether "dense" is one number, and it is NOT: this region is
+    # 35% denser than `wan_chai` (37.0 MB/km2 against 27.4, 2,061 buildings
+    # against 1,419) and is the reason every scaling figure anchored on Wan Chai
+    # was low rather than conservative (`Q120`). Same 0.016 x 0.008 box.
+    bounds:
+      west: 114.162
+      east: 114.178
+      south: 22.312
+      north: 22.320
+    tile_size_m: 150.0
+
 # Direct static URLs, discovered via the data.gov.hk CKAN API. Verified to
 # resolve on 2026-07-29; sizes re-checked 2026-07-30.
 #
