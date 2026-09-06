@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pipeline.buildings import Grid
 from pipeline.gltf import read_glb
 from pipeline.polyline import Segments, plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -33,10 +34,10 @@ from pipeline.surface import (
     MARKING_KERB_DOUBLE,
     MARKING_KERB_NONE,
     MARKING_KERB_SINGLE,
+    SURFACE_DIR,
     SURFACE_MANIFEST_NAME,
     SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
-    SURFACE_NAME,
     DrawnSurface,
     SurfaceReport,
     _Builder,
@@ -54,6 +55,7 @@ from pipeline.surface import (
     downward_facing,
     hull,
     mitres,
+    read_surface,
     trim,
 )
 
@@ -724,8 +726,17 @@ def dualville(tmp_path, testville_config):
     return testville_config, tmp_path
 
 
+def _manifest(tmp_path: Path) -> dict:
+    return json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
+
+
 def _mesh(tmp_path: Path):
-    return read_glb(tmp_path / "out" / "middle" / SURFACE_NAME)[0]
+    """The drawn road as one mesh — merged back from its chunks (`P5-6`).
+
+    Every geometry test below asks a region-wide question, and the merge is the
+    reader every grader uses, so these tests exercise it on the way.
+    """
+    return read_surface(tmp_path / "out" / "middle", _manifest(tmp_path)["chunks"])
 
 
 def _decode(code: float) -> dict[str, int]:
@@ -781,15 +792,71 @@ def _painted(mesh, colour: tuple[int, int, int]) -> np.ndarray:
 
 
 class TestBuildRegion:
-    def test_it_writes_one_mesh_named_for_its_collider(self, testville, tmp_path) -> None:
-        """One GLB, one primitive, one draw call — and the `-col` suffix Godot's
-        importer reads to build the static trimesh collision at import time."""
+    def test_it_writes_one_mesh_per_tile_named_for_its_collider(self, testville, tmp_path) -> None:
+        """One GLB per tile the road touches, one primitive in each, and the
+        `-col` suffix on every one — Godot's importer reads it to build the
+        static trimesh at import time, so each chunk stands on its own (`P5-6`)."""
         report = build_region(testville[0], "middle", out_root=tmp_path / "out")
 
-        meshes = read_glb(tmp_path / "out" / "middle" / SURFACE_NAME)
-        assert len(meshes) == 1
-        assert meshes[0].name == SURFACE_MESH_NAME
-        assert report.triangles == meshes[0].triangle_count
+        chunks = _manifest(tmp_path)["chunks"]
+        # Testville runs 100-700 m on a 150 m grid, so the road cannot fit one tile.
+        assert len(chunks) > 1
+        assert [chunk["id"] for chunk in chunks] == sorted(chunk["id"] for chunk in chunks)
+        for chunk in chunks:
+            assert chunk["file"] == f"{SURFACE_DIR}/{chunk['id']}.glb"
+            meshes = read_glb(tmp_path / "out" / "middle" / chunk["file"])
+            assert len(meshes) == 1
+            assert meshes[0].name == SURFACE_MESH_NAME
+            assert meshes[0].triangle_count == chunk["triangles"]
+            assert len(meshes[0].positions) == chunk["vertices"]
+        assert report.triangles == sum(chunk["triangles"] for chunk in chunks)
+
+    def test_the_chunks_are_a_partition_of_the_built_mesh(self, testville, tmp_path) -> None:
+        """Nothing is cut and nothing moves: every chunk triangle is a built
+        triangle with the same three corners and the same attributes, and the
+        only cost is the station vertices the cut duplicated — published as
+        `cut_vertices` and equal to the difference by construction."""
+        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
+        manifest = _manifest(tmp_path)
+
+        merged = _mesh(tmp_path)
+        assert merged.triangle_count == report.triangles
+        # Zero here, and rightly: Testville's edges are one quad each, so no strip
+        # has a station on a tile line. `TestTheCutFallsAtStations` is where a
+        # cut is forced and the duplicate counted.
+        assert manifest["cut_vertices"] == len(merged.positions) - report.vertices
+        assert manifest["cut_vertices"] >= 0
+        assert manifest["vertices"] == report.vertices
+
+        # The same triangles, corner for corner, whatever order they came out in.
+        merged_corners = {tuple(row) for row in merged.positions[merged.triangles].reshape(-1, 9)}
+        for chunk in manifest["chunks"]:
+            piece = read_glb(tmp_path / "out" / "middle" / chunk["file"])[0]
+            piece_corners = {tuple(row) for row in piece.positions[piece.triangles].reshape(-1, 9)}
+            assert piece_corners <= merged_corners
+
+    def test_a_junction_cap_goes_whole_to_one_chunk(self, testville, tmp_path) -> None:
+        """A cap is a fan from its centroid, so a cap split across two tiles
+        would pop in halves as the streamer loads one and not the other. The
+        centroid vertex belongs to the fan alone, so exactly one chunk carries
+        it — and that chunk carries every corner of the ring too."""
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+        manifest = _manifest(tmp_path)
+        positions_of = {
+            chunk["id"]: {
+                tuple(np.round(row, 3))
+                for row in read_glb(tmp_path / "out" / "middle" / chunk["file"])[0].positions
+            }
+            for chunk in manifest["chunks"]
+        }
+        assert manifest["caps"]
+        for cap in manifest["caps"]:
+            ring = np.asarray(cap["ring"], dtype=np.float64)
+            centroid = tuple(np.round(ring.mean(axis=0), 3))
+            homes = [tile for tile, positions in positions_of.items() if centroid in positions]
+            assert len(homes) == 1, f"cap at level {cap['level']} is in {len(homes)} chunks"
+            corners = {tuple(np.round(corner, 3)) for corner in ring}
+            assert corners <= positions_of[homes[0]]
 
     def test_the_carriageway_is_the_configured_multiple_of_its_lanes(
         self, testville, tmp_path
@@ -972,11 +1039,14 @@ class TestBuildRegion:
     def test_it_writes_a_manifest_for_the_export_stage(self, testville, tmp_path) -> None:
         report = build_region(testville[0], "middle", out_root=tmp_path / "out")
 
-        manifest = json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
-        assert manifest["mesh"] == SURFACE_NAME
+        manifest = _manifest(tmp_path)
+        assert "mesh" not in manifest
         assert manifest["mesh_name"] == SURFACE_MESH_NAME
         assert manifest["triangles"] == report.triangles
+        assert manifest["bytes"] == sum(chunk["bytes"] for chunk in manifest["chunks"])
         assert len(manifest["aabb"]) == 2
+        for chunk in manifest["chunks"]:
+            assert set(chunk) == {"id", "file", "triangles", "vertices", "bytes", "aabb"}
 
     def test_the_manifest_carries_the_drawn_half_width_of_every_edge(
         self, testville, tmp_path
@@ -1098,6 +1168,93 @@ class TestBuildRegion:
 
         with pytest.raises(ValueError, match="schema_version"):
             build_region(city, "middle", out_root=tmp_path / "out")
+
+
+class TestTheCutFallsAtStations:
+    """`_Builder` decides a quad's chunk by the plan centre of its two stations
+    and a cap's by its centroid — the rule `P5-6` is accepted on, pinned on a
+    synthetic grid so it fails on the rule and not on Testville's layout."""
+
+    @staticmethod
+    def _grid() -> Grid:
+        return Grid(tile_size_m=150.0, max_x=300.0, max_z=150.0)
+
+    def test_a_quad_belongs_to_the_tile_its_centre_is_in(self) -> None:
+        builder = _Builder(self._grid())
+        # Stations at x = 10, 140, 160, 290: quad centres 75, 150, 225 -> tiles 0, 1, 1.
+        left = np.array([[10.0, 0.0, 2.0], [140.0, 0.0, 2.0], [160.0, 0.0, 2.0], [290.0, 0.0, 2.0]])
+        right = left + np.array([0.0, 0.0, -4.0])
+        builder.strip(
+            right,
+            left,
+            colour=(1, 2, 3),
+            along=np.array([0.0, 130.0, 150.0, 280.0]),
+            across=(2.0, 0.0),
+            marking=_Marking(0.0, 280.0),
+        )
+        builder.build("cut")
+        chunks = dict(builder.chunk())
+
+        assert set(chunks) == {"t_00_00", "t_01_00"}
+        assert chunks["t_00_00"].triangle_count == 2
+        assert chunks["t_01_00"].triangle_count == 4
+        # The station at x = 140 is on both sides of the cut, at the same place.
+        shared = {tuple(p) for p in chunks["t_00_00"].positions} & {
+            tuple(p) for p in chunks["t_01_00"].positions
+        }
+        assert {p[0] for p in shared} == {140.0}
+        assert len(shared) == 2
+
+    def test_a_cap_belongs_whole_to_the_tile_its_centroid_is_in(self) -> None:
+        builder = _Builder(self._grid())
+        # A ring straddling x = 150 whose centroid is at x = 160: tile 1, all of it.
+        ring = np.array(
+            [[140.0, 0.0, 0.0], [180.0, 0.0, 0.0], [180.0, 0.0, 10.0], [140.0, 0.0, 10.0]]
+        )
+        builder.fan(ring, colour=(1, 2, 3), marking=_Marking(2.0, 0.0))
+        builder.build("cap")
+        chunks = dict(builder.chunk())
+
+        assert set(chunks) == {"t_01_00"}
+        assert chunks["t_01_00"].triangle_count == 4
+
+    def test_a_ribbon_past_the_west_edge_is_clamped_into_the_first_tile(self) -> None:
+        """A widened ribbon along the region edge runs a few metres negative;
+        `//` alone would hand those quads to a tile that does not exist."""
+        builder = _Builder(self._grid())
+        left = np.array([[-6.0, 0.0, 2.0], [-2.0, 0.0, 2.0]])
+        right = left + np.array([0.0, 0.0, -4.0])
+        builder.strip(
+            right,
+            left,
+            colour=(1, 2, 3),
+            along=np.array([0.0, 4.0]),
+            across=(2.0, 0.0),
+            marking=_Marking(0.0, 4.0),
+        )
+        builder.build("edge")
+        assert set(dict(builder.chunk())) == {"t_00_00"}
+
+    def test_chunk_before_build_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="before build"):
+            _Builder(self._grid()).chunk()
+
+    def test_a_builder_is_used_once(self) -> None:
+        """A second `build` would append onto the first's keys and hand `chunk`
+        a key per triangle of a mesh that no longer exists."""
+        builder = _Builder(self._grid())
+        ring = np.array([[0.0, 0.0, 0.0], [40.0, 0.0, 0.0], [40.0, 0.0, 10.0]])
+        builder.fan(ring, colour=(1, 2, 3), marking=_Marking(2.0, 0.0))
+        builder.build("once")
+        with pytest.raises(ValueError, match="already built"):
+            builder.build("twice")
+
+    def test_without_a_grid_everything_is_one_chunk(self) -> None:
+        builder = _Builder()
+        ring = np.array([[0.0, 0.0, 0.0], [400.0, 0.0, 0.0], [400.0, 0.0, 10.0]])
+        builder.fan(ring, colour=(1, 2, 3), marking=_Marking(2.0, 0.0))
+        builder.build("one")
+        assert [tile for tile, _ in builder.chunk()] == ["t_00_00"]
 
 
 class TestMarkingPayload:
@@ -1477,10 +1634,11 @@ class TestMarkingPayload:
         # Read off the document rather than through `read_glb`, which restores
         # geometry and drops the material name — the same reason
         # `test_gltf.py` reads the JSON to pin `city_facade`.
-        raw = (tmp_path / "out" / "middle" / SURFACE_NAME).read_bytes()
-        length, _ = struct.unpack_from("<II", raw, 12)
-        document = json.loads(raw[20 : 20 + length])
-        assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
+        for chunk in _manifest(tmp_path)["chunks"]:
+            raw = (tmp_path / "out" / "middle" / chunk["file"]).read_bytes()
+            length, _ = struct.unpack_from("<II", raw, 12)
+            document = json.loads(raw[20 : 20 + length])
+            assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
 
 
 class TestKerbside:

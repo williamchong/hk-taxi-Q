@@ -160,7 +160,15 @@ const NOT_MEASURED: float = -1.0
 ## 26 since `P5-5` (`Q115`): the manifest names `railings_placements.json`, and
 ## `railings.glb` is a library — one panel per class — tiled along every run.
 ## A v25 reader would draw three panels at the origin and no fence on any kerb.
-const SCHEMA_VERSION: int = 26
+##
+## 27 since `P5-6` (`Q115`, `Q120`): `road_surface` is a LIST of chunks — `{id,
+## file, aabb}`, one per tile of the building grid — where it was the one string
+## `roads.glb`. The road streams with the tiles now, each chunk with its own
+## `-col`. A v26 reader would resolve a list as a path and load no road, which
+## is the loud half; the quiet half is `shipped()` computing a bundle with no
+## road in it, and being wrong about the bundle's contents is what this number
+## is for.
+const SCHEMA_VERSION: int = 27
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -174,6 +182,15 @@ class Tile:
 	## overhang a neighbour by half a footprint. Cull with this, never with a
 	## square derived from `tile_size_m`.
 	var aabb: AABB
+	## A road chunk rather than a building tile (`P5-6`): one tier, so its
+	## streaming bands collapse to resident-or-not, and it is what
+	## `CityStreamer.hold_ground_at` loads under the start line.
+	var is_road: bool = false
+
+	## The node this unit is instantiated as, so the streamer and the preview
+	## name it the same way.
+	func node_name(tier: int) -> String:
+		return "road_%s" % id if is_road else "%s_lod%d" % [id, tier]
 
 	## The file for `tier`, clamped to what this tile actually has.
 	##
@@ -213,12 +230,21 @@ var bounds: AABB
 
 var tiles: Array[Tile] = []
 
+## The drawn road, one chunk per tile of the same grid (`P5-6`). Each is a `Tile`
+## with a single tier — the same class on purpose, so `CityStreamer` streams a
+## chunk by its `aabb` exactly as it streams a building tile and `verify_city.gd`
+## measures it with the same check — and every chunk carries its own `-col`
+## trimesh, so the car stands on whatever is resident. ⚠️ A chunk's `aabb` is the
+## geometry's, like a tile's: a quad belongs to the tile its two stations'
+## centre falls in and may overhang the neighbour by half a quad. Cull with the
+## box, never with a square derived from `tile_size_m`.
+var road_chunks: Array[Tile] = []
+
 ## The three documents `city.json` names but does not contain — resolved to
 ## `res://` paths. The graph alone is 0.65 MB on disk and ~6 MB parsed, and each
 ## consumer wants its document at a different moment, so the manifest points
 ## rather than inlines.
 var road_graph_path: String
-var road_surface_path: String
 var fares_path: String
 var landmarks_path: String
 ## Where P3-29 stands a barrier. Named unconditionally like the four
@@ -447,7 +473,6 @@ static func load_manifest() -> CityManifest:
 	manifest.origin_elevation = float(anchor.get("elevation", 0.0))
 
 	manifest.road_graph_path = _resolve(document.get("road_graph", ""))
-	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
 	manifest.fence_path = _resolve(document.get("fence", ""))
@@ -488,7 +513,19 @@ static func load_manifest() -> CityManifest:
 
 	for entry: Dictionary in document.get("tiles", []):
 		manifest.tiles.append(_tile(entry))
+	for entry: Dictionary in document.get("road_surface", []):
+		manifest.road_chunks.append(_road_chunk(entry))
 	return manifest
+
+
+## Everything the streamer holds: the building tiles, then the road chunks, in
+## one list — the same order `verify_city_streamer.gd` sweeps, so a resident
+## count there is a draw-call count here.
+func streamable_units() -> Array[Tile]:
+	var units: Array[Tile] = []
+	units.assign(tiles)
+	units.append_array(road_chunks)
+	return units
 
 
 ## A game position in the source CRS: **easting, northing, elevation** — in that
@@ -525,9 +562,7 @@ static func bearing_deg(forward: Vector3) -> float:
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
-	var paths: PackedStringArray = [
-		road_graph_path, road_surface_path, fares_path, landmarks_path, fence_path
-	]
+	var paths: PackedStringArray = [road_graph_path, fares_path, landmarks_path, fence_path]
 	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
 	# `etl/pipeline/export.py`'s `shipped()` holds the same names in the same
 	# order, so the two can be read side by side as the mirrors they are. It was
@@ -558,7 +593,21 @@ func shipped() -> PackedStringArray:
 			paths.append(asset_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
+	# One file per chunk (`P5-6`), after the tiles — `etl/pipeline/export.py`'s
+	# `shipped()` lists them too, and `verify_city.gd` compares the counts.
+	for chunk: Tile in road_chunks:
+		paths.append_array(chunk.lods)
 	return paths
+
+
+## Message for the case that reads as "there is no road" rather than an error —
+## the road chunks are the one part of the bundle whose absence strands the car.
+static func road_missing_hint() -> String:
+	return (
+		"No road chunks under %s. Build the region and sync it:\n" % PATH.get_base_dir()
+		+ "  python -m pipeline.surface --region wan_chai\n"
+		+ "  tools/sync_generated.sh wan_chai"
+	)
 
 
 ## Message for the case that reads as "there is no city" rather than an error.
@@ -582,6 +631,31 @@ static func _floats(entry: Dictionary, key: String) -> PackedFloat32Array:
 	return values
 
 
+## One entry of `road_surface` as a single-tier `Tile` (`P5-6`): `file` is its
+## one and only tier, so `lod()` of any tier is this file.
+static func _road_chunk(entry: Dictionary) -> Tile:
+	var chunk := Tile.new()
+	chunk.id = str(entry.get("id", ""))
+	chunk.is_road = true
+	var file: String = _resolve(entry.get("file", ""))
+	if file.is_empty():
+		push_error("road chunk %s names no file" % chunk.id)
+	else:
+		chunk.lods.append(file)
+	chunk.aabb = _aabb_of(entry, "road chunk %s" % chunk.id)
+	return chunk
+
+
+## The two-corner `aabb` an entry publishes, or a zero box with the error
+## pushed — the caller's `what` names the unit in it.
+static func _aabb_of(entry: Dictionary, what: String) -> AABB:
+	var corners: Array = entry.get("aabb", [])
+	if corners.size() != 2:
+		push_error("%s has no usable aabb" % what)
+		return AABB()
+	return box(point(corners[0]), point(corners[1]))
+
+
 static func _tile(entry: Dictionary) -> Tile:
 	var tile := Tile.new()
 	tile.id = str(entry.get("id", ""))
@@ -594,11 +668,7 @@ static func _tile(entry: Dictionary) -> Tile:
 		# neither the tile nor the manifest.
 		push_error("tile %s names no LOD files" % tile.id)
 
-	var corners: Array = entry.get("aabb", [])
-	if corners.size() == 2:
-		tile.aabb = box(point(corners[0]), point(corners[1]))
-	else:
-		push_error("tile %s has no usable aabb" % tile.id)
+	tile.aabb = _aabb_of(entry, "tile %s" % tile.id)
 	return tile
 
 

@@ -62,6 +62,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 from pipeline.config import load_config  # noqa: E402
 from pipeline.export import CITY_SCHEMA  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
+from pipeline.surface import read_surface  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -359,17 +360,17 @@ def structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
 
 
 def drawn_surface(generated: Path, manifest: dict[str, Any]) -> Faces:
-    """The shipped road mesh, indexed for a point query."""
-    drawing = read_glb(generated / manifest["road_surface"])
-    if len(drawing) != 1:
-        # One primitive is what `surface.py` writes, and the whole carriageway
-        # has to be in it. Taking `[0]` of several would measure part of the
-        # road and report the coverage of all of it.
-        raise SystemExit(
-            f"{manifest['road_surface']} holds {len(drawing)} meshes; this expects the one "
-            "carriageway surface"
-        )
-    mesh = drawing[0]
+    """The shipped road mesh, indexed for a point query.
+
+    The road ships as one chunk per tile since `P5-6`, and `city.json`'s
+    `road_surface` lists them; `read_surface` merges them back into the one
+    carriageway every grader here measures. Taking one chunk of several would
+    measure part of the road and report the coverage of all of it, which is what
+    the single-mesh check this replaced was guarding against — the merge keeps
+    that guarantee by construction, because it reads every chunk the manifest
+    names.
+    """
+    mesh = read_surface(generated, manifest["road_surface"])
     return Faces.of(mesh.positions[mesh.triangles].astype(np.float64), signed=False)
 
 

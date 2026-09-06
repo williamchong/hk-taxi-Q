@@ -84,8 +84,9 @@ shadows and no realtime shadow maps.
 distance_fade is NOT a saving, it is a seat at the table. Forward Mobile pairs
 at most 8 spot lights PER RENDERED OBJECT and the fragment shader loops that
 fixed list — measured linear to 8 and then exactly zero from the 9th on, with
-no warning. roads.glb is ONE mesh for the whole region (docs/ARCHITECTURE.md),
-so every beam in the game competes for the same 8 slots: at 2 lamps a car that
+no warning. The road was ONE mesh for the whole region when this was measured
+(one chunk per 150 m tile since `P5-6`, so the bound below is conservative now),
+so every beam in the game competed for the same 8 slots: at 2 lamps a car that
 is FOUR CARS, and which four is decided by pair order rather than by distance,
 so beams would pop on and off the road as the BVH re-pairs. Fading a light out
 frees its slot, measured: 16 spots on one object give 8 units of light, and

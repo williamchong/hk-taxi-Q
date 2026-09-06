@@ -24,7 +24,6 @@
 ## car.
 extends Node3D
 
-const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 
 ## How far the resolved start line may sit from the Taxi's authored transform
@@ -57,6 +56,11 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Fare node the drive starts at. See `RoadSpawn.DEFAULT_FARE_ID`.
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
 
+## The `CityStreamer` asked to hold the road under the start line before the
+## first tick (`P5-6`). Relative to this node, which is the scene root; a scene
+## without one — the preview has no harness — simply skips the request.
+@export var streamer_path: NodePath = NodePath("Tiles")
+
 var _vehicle: VehicleController
 var _spawn: Transform3D
 var _floor_m: float = 0.0
@@ -78,6 +82,21 @@ func _ready() -> void:
 
 	_spawn = _place_on_start_line()
 	_floor_m = _spawn.origin.y - fall_margin_m
+	_hold_ground()
+
+
+## Ask the streamer for the road under the start line before the first physics
+## tick (`P5-6`). The road streams by tile now, and a threaded load lands a few
+## frames in — frames in which the car would fall through the place the road is
+## about to be, `_warn_if_there_is_no_road` would fire on an empty space, and
+## every `drive.sh` timeline would shift by however long the disk took, which is
+## the determinism `Q27`'s A/B frames rest on. A few small synchronous reads on
+## the boot frame keep tick 1 what it was when the road was one mesh.
+func _hold_ground() -> void:
+	var streamer: CityStreamer = get_node_or_null(streamer_path) as CityStreamer
+	if streamer == null:
+		return
+	streamer.hold_ground_at(_spawn.origin)
 
 
 ## Move the car onto the resolved start line, and report where that turned out
@@ -186,7 +205,7 @@ func _physics_process(_delta: float) -> void:
 
 ## Stop before the car falls for ever on a clone where the ETL has not been run.
 ##
-## `assets/generated/` is gitignored, so a fresh checkout has no `roads.glb` and
+## `assets/generated/` is gitignored, so a fresh checkout has no road chunks and
 ## therefore no collider at all — the car would drop through the start line,
 ## respawn, and drop again every two seconds with nothing on screen to explain
 ## why. Checked once, on the first tick, because the physics space has nothing
@@ -199,7 +218,5 @@ func _warn_if_there_is_no_road() -> void:
 	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 		return
 
-	push_warning(
-		"Nothing under the start line. " + GeneratedLayer.missing_hint(GeneratedLayer.ROAD_SURFACE)
-	)
+	push_warning("Nothing under the start line. " + CityManifest.road_missing_hint())
 	set_physics_process(false)

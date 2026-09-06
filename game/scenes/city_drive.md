@@ -26,12 +26,13 @@ buildings still carry no collision — that is an ETL product, see PROGRESS.md.
 at the Taxi — the far plane is on the camera, and it is the camera a look-back
 swings away from the car. See city_streamer.gd for the rest.
 
-## `[node name="RoadSurface" type="Node3D" parent="."]`
-
-The drivable surface (`P1-4`): the one generated layer that COLLIDES — its
-`-col` mesh is what the wheels stand on, and `verify_road_surface.gd` asserts
-it is there. Every layer node below prints its collider count for the
-opposite reason — there must be none — and each says why (`Q74`).
+There is no `RoadSurface` node since `P5-6`: the drivable surface (`P1-4`)
+ships as one chunk per tile and `Tiles` streams it beside the buildings, each
+chunk with the `-col` trimesh the wheels stand on — `verify_road_surface.gd`
+asserts it is there on every chunk, and `drive_harness.gd` asks the streamer
+to hold the chunks under the start line before the first tick. Every layer
+node below prints its collider count for the opposite reason — there must be
+none — and each says why (`Q74`).
 
 ## `[node name="Tramway" type="Node3D" parent="."]`
 

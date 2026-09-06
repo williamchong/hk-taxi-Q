@@ -759,7 +759,11 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     road = drawn_surface(args.generated, manifest)
-    log.info("  %d near-horizontal faces in %s", len(road.corners), manifest["road_surface"])
+    log.info(
+        "  %d near-horizontal faces in %d road chunks",
+        len(road.corners),
+        len(manifest["road_surface"]),
+    )
     corners = paint_triangles(args.generated / asset)
     log.info("  %d paint triangles in %s", len(corners), asset)
 

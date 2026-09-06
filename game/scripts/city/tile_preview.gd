@@ -1,5 +1,6 @@
 extends Node3D
-## Instantiates every tile `city.json` names, for looking at the whole city.
+## Instantiates every tile — and, since `P5-6`, every road chunk — `city.json`
+## names, for looking at the whole city.
 ##
 ## A dev tool, not the streamer. `CityStreamer` (`P2-1`) will load tiles by
 ## distance from the same manifest; this puts all of them in the scene at once
@@ -29,27 +30,35 @@ func _ready() -> void:
 		return
 
 	var loaded: int = 0
+	var roads: int = 0
 	var triangles: int = 0
-	for tile: CityManifest.Tile in manifest.tiles:
-		var path: String = tile.lod(lod)
-		if path.is_empty():
-			# `CityManifest` has already pushed which tile, and `load("")` would
-			# only add a hard error naming neither the tile nor the manifest.
+	# Every unit the streamer would hold, all at once; a road chunk has one
+	# tier, so `lod` clamps to it (`P5-6`).
+	for unit: CityManifest.Tile in manifest.streamable_units():
+		var node: Node3D = _spawn(unit, lod)
+		if node == null:
 			continue
-		var packed := load(path) as PackedScene
-		if packed == null:
-			push_warning("Could not load %s" % path)
-			continue
-		var node: Node3D = packed.instantiate()
-		node.name = tile.id
-		add_child(node)
-		loaded += 1
+		if unit.is_road:
+			roads += 1
+		else:
+			loaded += 1
 		triangles += MeshContract.triangles(node)
+	if roads == 0:
+		push_warning(CityManifest.road_missing_hint())
 
 	print(
 		(
-			"city preview: %s/%s, %d of %d tiles at LOD%d, %d triangles"
-			% [manifest.city_id, manifest.region_id, loaded, manifest.tiles.size(), lod, triangles]
+			"city preview: %s/%s, %d of %d tiles at LOD%d, %d of %d road chunks, %d triangles"
+			% [
+				manifest.city_id,
+				manifest.region_id,
+				loaded,
+				manifest.tiles.size(),
+				lod,
+				roads,
+				manifest.road_chunks.size(),
+				triangles,
+			]
 		)
 	)
 	# The manifest's bounds, not the loaded tiles' — they cover the road surface
@@ -66,3 +75,21 @@ func _ready() -> void:
 	# Deferring puts the emit after every `_ready` in the scene, so the fix
 	# survives someone reordering the nodes.
 	built.emit.call_deferred(manifest.bounds.position, manifest.bounds.end)
+
+
+## One unit instantiated under this node at `tier`, or null with the reason
+## already pushed.
+func _spawn(unit: CityManifest.Tile, tier: int) -> Node3D:
+	var path: String = unit.lod(tier)
+	if path.is_empty():
+		# `CityManifest` has already pushed which unit, and `load("")` would
+		# only add a hard error naming neither the unit nor the manifest.
+		return null
+	var packed := load(path) as PackedScene
+	if packed == null:
+		push_warning("Could not load %s" % path)
+		return null
+	var node: Node3D = packed.instantiate()
+	node.name = unit.node_name(tier)
+	add_child(node)
+	return node

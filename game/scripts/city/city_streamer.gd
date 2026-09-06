@@ -38,6 +38,19 @@ extends Node3D
 ## is 17,617 triangles against a 6,952 median, so a two-tile frame can cook ~35k.
 ## Invisible at 120 fps on a desktop and unmeasured on the device floor; `P2-6`
 ## owns it, and it is the reason that budget is tuning data.
+##
+## **The road is the second content class here since `P5-6`.** `surface.py` cuts
+## the measured ribbon into one chunk per tile of the same grid and `city.json`
+## lists them as `road_surface`; each is a single-tier `CityManifest.Tile`, so it
+## goes through the same three jobs above as a building tile — with two
+## differences. A chunk has one tier, so its bands collapse to resident-or-not
+## (`_tier_wanted`). And the chunks under the start line are loaded
+## **synchronously**, on request, before the first physics tick
+## (`hold_ground_at`): a threaded load lands a few frames in, and in those
+## frames the car would fall through the place the road is about to be, and
+## every `drive.sh` timeline would move by however long the disk took — which
+## is the determinism `Q27`'s A/B frames rest on. Everything else about the
+## road streams like a building.
 
 ## Distance bands, hysteresis and the per-frame budgets. Assign in the scene.
 @export var profile: StreamingProfile
@@ -72,6 +85,9 @@ class Resident:
 
 
 var _manifest: CityManifest = null
+## Everything this streams — `CityManifest.streamable_units()` — indexed like
+## `_residents`.
+var _units: Array[CityManifest.Tile] = []
 var _residents: Array[Resident] = []
 var _loads_in_flight: int = 0
 var _wanted_last_pass: int = 0
@@ -90,17 +106,65 @@ func _ready() -> void:
 		push_error(
 			(
 				(
-					"CityStreamer has no usable StreamingProfile; %d tiles will not stream. "
-					+ "Assign game/tuning/streaming.tres in the scene."
+					"CityStreamer has no usable StreamingProfile; %d tiles and %d road chunks "
+					+ "will not stream. Assign game/tuning/streaming.tres in the scene."
 				)
-				% _manifest.tiles.size()
+				% [_manifest.tiles.size(), _manifest.road_chunks.size()]
 			)
 		)
 		return
 
-	_residents.resize(_manifest.tiles.size())
+	_units = _manifest.streamable_units()
+	_residents.resize(_units.size())
 	for index: int in _residents.size():
 		_residents[index] = Resident.new()
+
+
+## The tier `index` should be at for `distance`, or `UNLOADED`.
+##
+## A road chunk has one tier, so for it the bands collapse to resident-or-not:
+## `tier_for` alone would ask for tier 1 as the camera crossed the band, and the
+## streamer would fetch the same file again and swap the node for itself.
+func _tier_wanted(unit: CityManifest.Tile, distance: float, current: int) -> int:
+	var tier: int = TileStreaming.tier_for(distance, current, profile)
+	if tier != TileStreaming.UNLOADED and unit.is_road:
+		return 0
+	return tier
+
+
+## Make the road within the residency radius of `point` resident **now**, on
+## this thread, before any physics tick — `drive_harness.gd` asks for it at the
+## start line (`P5-6`). Chunks already resident are left alone; the ones loaded
+## here are ordinary residents afterwards and stream out like any other. The
+## radius is the streamer's own, so nothing loaded here is dropped by the first
+## `_collect`.
+func hold_ground_at(point: Vector3) -> void:
+	if _manifest == null or _residents.is_empty():
+		return
+	var radius: float = TileStreaming.residency_radius_m(profile)
+	var loaded: int = 0
+	for index: int in _units.size():
+		var unit: CityManifest.Tile = _units[index]
+		var resident: Resident = _residents[index]
+		if not unit.is_road or resident.node != null:
+			continue
+		if TileStreaming.plan_distance_to(unit.aabb, point) > radius:
+			continue
+		var path: String = unit.lod(0)
+		var packed := load(path) as PackedScene
+		if packed == null:
+			push_warning("Could not load %s" % path)
+			resident.failed_tier = 0
+			continue
+		var node: Node3D = packed.instantiate()
+		node.name = unit.node_name(0)
+		add_child(node)
+		resident.node = node
+		resident.tier = 0
+		loaded += 1
+	print(
+		"road: %d chunks held under (%.1f, %.1f) before the first tick" % [loaded, point.x, point.z]
+	)
 
 
 func _process(_delta: float) -> void:
@@ -125,8 +189,8 @@ func _collect(eye: Vector3) -> void:
 		var resident: Resident = _residents[index]
 		# The rejection, and it happens here — on the `aabb` the manifest
 		# published, with no file named and nothing loaded.
-		var distance: float = TileStreaming.plan_distance_to(_manifest.tiles[index].aabb, eye)
-		var tier: int = TileStreaming.tier_for(distance, resident.tier, profile)
+		var distance: float = TileStreaming.plan_distance_to(_units[index].aabb, eye)
+		var tier: int = _tier_wanted(_units[index], distance, resident.tier)
 
 		if tier == TileStreaming.UNLOADED:
 			_release(resident)
@@ -169,7 +233,7 @@ func _request(index: int, tier: int) -> void:
 		# has no cancel, so the in-flight one is left to finish; `_settle` drops it
 		# on arrival if it is no longer the tier wanted.
 		return
-	var path: String = _manifest.tiles[index].lod(tier)
+	var path: String = _units[index].lod(tier)
 	if path.is_empty():
 		# `CityManifest` has already pushed which tile. Loading "" would add a
 		# hard error naming neither the tile nor the manifest.
@@ -191,7 +255,7 @@ func _settle(eye: Vector3) -> void:
 		if resident.pending_tier == TileStreaming.UNLOADED:
 			continue
 
-		var path: String = _manifest.tiles[index].lod(resident.pending_tier)
+		var path: String = _units[index].lod(resident.pending_tier)
 		var status: ResourceLoader.ThreadLoadStatus = ResourceLoader.load_threaded_get_status(path)
 		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 			continue
@@ -206,8 +270,8 @@ func _settle(eye: Vector3) -> void:
 			continue
 
 		# Wanted at this tier still? The camera may have moved while it loaded.
-		var distance: float = TileStreaming.plan_distance_to(_manifest.tiles[index].aabb, eye)
-		var want: int = TileStreaming.tier_for(distance, resident.tier, profile)
+		var distance: float = TileStreaming.plan_distance_to(_units[index].aabb, eye)
+		var want: int = _tier_wanted(_units[index], distance, resident.tier)
 		# Checked before the budget: an arrival nobody wants costs nothing to drop
 		# and should not consume an instantiation slot to find that out.
 		if want == TileStreaming.UNLOADED:
@@ -237,7 +301,7 @@ func _settle(eye: Vector3) -> void:
 			continue
 
 		var node: Node3D = packed.instantiate()
-		node.name = "%s_lod%d" % [_manifest.tiles[index].id, tier]
+		node.name = _units[index].node_name(tier)
 		add_child(node)
 		instantiated += 1
 
@@ -276,7 +340,7 @@ func _exit_tree() -> void:
 		var resident: Resident = _residents[index]
 		if resident.pending_tier == TileStreaming.UNLOADED:
 			continue
-		ResourceLoader.load_threaded_get(_manifest.tiles[index].lod(resident.pending_tier))
+		ResourceLoader.load_threaded_get(_units[index].lod(resident.pending_tier))
 		_clear_pending(resident)
 
 

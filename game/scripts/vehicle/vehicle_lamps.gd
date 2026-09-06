@@ -307,7 +307,7 @@ var _beam_energies: PackedFloat32Array = PackedFloat32Array()
 ## Whether `BeamBudget` currently allows this car to throw its beams at all.
 ##
 ## ⚠️ **Starts `false`, and the first grant switches it on.** The renderer pairs
-## only 8 spot lights per object and `roads.glb` is one object, so beams are a
+## only 8 spot lights per object and the road chunk under the car is one, so beams are a
 ## rationed resource rather than a per-car decision — see `beam_budget.gd`. A car
 ## that assumed the slot and was later denied would light one frame of road it
 ## had no budget for.

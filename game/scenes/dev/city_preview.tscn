@@ -14,10 +14,6 @@
 [node name="Tiles" type="Node3D" parent="."]
 script = ExtResource("1_tiles")
 
-[node name="RoadSurface" type="Node3D" parent="."]
-script = ExtResource("5_layer")
-layer = "road_surface"
-
 [node name="Tramway" type="Node3D" parent="."]
 script = ExtResource("5_layer")
 layer = "tramway"

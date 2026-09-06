@@ -1,7 +1,7 @@
 ## Where the ETL's one-mesh layers live, and how to load them (`P5-1`).
 ##
-## One table for the nine `.glb` layers that ship as a single mesh per region,
-## replacing a file each. Every one of those files carried the same three
+## One table for the eight `.glb` layers that ship as a single mesh — or a
+## library of props — per region, replacing a file each. Every one of those files carried the same three
 ## functions and the same reason for existing: two things want a layer for
 ## different purposes — the preview draws it, its verify tool checks it — and a
 ## path that only one of them learns about fails silently in the other. That
@@ -12,15 +12,21 @@
 ## (`P1-7`) resolves each path from it; this table is what the preview scene and
 ## the verify tools use, and `verify_city.gd` asserts the two agree per layer.
 ##
-## ⚠️ **Optional is a property of the LAYER, not of the file being there.** The
-## road surface is required — nothing under the start line means the build went
-## wrong — and every other row is optional: a city whose estate publishes no
-## tramway, marking symbols, box polygons, transverse markings, signal layer,
-## railing layer, utility point layer or shape-faced signs ships none, `city.json`
-## names `null` rather than a path, and absence is a state to report rather than a
-## failure to warn about. Each stage also names its asset from what it *drew*, so
-## a declared block that survives no join ships nothing too. A row's `absence`
-## sentence is what says so, and an empty one is what makes the layer required.
+## ⚠️ **Optional is a property of the LAYER, not of the file being there.** Every
+## row here is optional: a city whose estate publishes no tramway, marking
+## symbols, box polygons, transverse markings, signal layer, railing layer,
+## utility point layer or shape-faced signs ships none, `city.json` names `null`
+## rather than a path, and absence is a state to report rather than a failure to
+## warn about. Each stage also names its asset from what it *drew*, so a declared
+## block that survives no join ships nothing too. A row's `absence` sentence is
+## what says so, and an empty one is what would make a layer required.
+##
+## ⚠️ **The road surface is NOT a row here since `P5-6`.** It is the one generated
+## mesh that is required and the one that collides, and it ships as one chunk per
+## tile of the building grid, listed by `city.json` as `road_surface` and streamed
+## by `CityStreamer` beside the tiles — `CityManifest.road_chunks` is where it
+## lives, `CityManifest.road_missing_hint()` is what says it is absent, and
+## `verify_road_surface.gd` walks the chunks.
 ##
 ## ⚠️ **Some absences are more ordinary than others, and the distinction is kept
 ## here rather than lost in the merge.** Signs: 2,364 of Wan Chai's 3,276 are
@@ -80,7 +86,6 @@ const _ROOT: String = "res://assets/generated/"
 ## tool's skip branch exits 0. The `.tscn` nodes carry the same strings by hand
 ## because an exported `String` is what a scene can store; `verify_city.gd`
 ## checks those against `ids()`.
-const ROAD_SURFACE: String = "road_surface"
 const TRAMWAY: String = "tramway"
 const ARROWS: String = "arrows"
 const BOXJUNCTIONS: String = "boxjunctions"
@@ -98,14 +103,6 @@ const SIGNS: String = "signs"
 ## merged. Every row carries every key, and the accessors index rather than
 ## `get`, so a row missing one fails loudly instead of defaulting.
 const LAYERS: Dictionary[String, Dictionary] = {
-	ROAD_SURFACE:
-	{
-		"file": "roads.glb",
-		"noun": "road surface",
-		"module": "surface",
-		"absence": "",
-		"placements": "",
-	},
 	TRAMWAY:
 	{
 		"file": "tram.glb",

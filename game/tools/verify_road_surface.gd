@@ -7,13 +7,20 @@
 ##
 ##     godot --headless --path game --script res://tools/verify_road_surface.gd
 ##
-## Exits non-zero if the surface is missing or fails any check.
+## **One chunk per tile since `P5-6`**, so this walks `city.json`'s
+## `road_surface` list the way `verify_tiles.gd` walks `tiles` — the manifest
+## rather than a directory, so the shipped set is what is checked. Every
+## per-chunk rule is the rule the one mesh was held to; the kerbside-extent
+## rule alone is asked of the **union**, because a 150 m chunk may honestly
+## carry restriction on every kerb in it or on none.
+##
+## Exits non-zero if no chunk is named, or any chunk is missing or fails.
 extends SceneTree
 
-const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's roads cost one draw call — the same
+## One primitive per chunk, so a resident chunk costs one draw call — the same
 ## rule the tiles are held to, and the reason the surface is untextured.
 const SURFACES: int = 1
 
@@ -56,54 +63,97 @@ const MAX_EDGE_M: float = 4000.0
 
 
 func _init() -> void:
-	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.ROAD_SURFACE)
-	if packed == null:
-		printerr(GeneratedLayer.missing_hint(GeneratedLayer.ROAD_SURFACE))
+	var manifest: Manifest = Manifest.load_manifest()
+	if manifest == null:
+		quit(1)
+		return
+	if manifest.road_chunks.is_empty():
+		printerr(
+			"  FAIL  %s names no road chunks. %s" % [Manifest.PATH, Manifest.road_missing_hint()]
+		)
 		quit(1)
 		return
 
-	var scene_root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(scene_root)
-	# Instantiated outside the tree, so nothing else will free it — and a
-	# headless run that leaks buries its own result under exit warnings.
-	scene_root.free()
+	var problems: PackedStringArray = []
+	# The kerbside extent is summed over every chunk and judged once — see the
+	# header.
+	var restricted: int = 0
+	var clear: int = 0
+	var triangles: int = 0
+	for chunk: Manifest.Tile in manifest.road_chunks:
+		var path: String = chunk.lod(0)
+		var packed := load(path) as PackedScene
+		if packed == null:
+			problems.append("%s: %s did not load as a scene" % [chunk.id, path])
+			continue
+		var scene_root: Node3D = packed.instantiate()
+		var checked: Dictionary = _check(scene_root, chunk.id, path)
+		problems.append_array(checked["problems"])
+		restricted += int(checked["restricted"])
+		clear += int(checked["clear"])
+		triangles += MeshContract.triangles(scene_root)
+		# Instantiated outside the tree, so nothing else will free it — and a
+		# headless run that leaks buries its own result under exit warnings.
+		scene_root.free()
+
+	if restricted == 0 or clear == 0:
+		problems.append(
+			(
+				(
+					"COLOR_0.a is uniform across the carriageway (%d restricted, %d clear). "
+					+ "The kerbside extent has stopped shipping, and the markings shader will "
+					+ "paint every kerb in the region — `Q54`, silently"
+				)
+				% [restricted, clear]
+			)
+		)
+	else:
+		print(
+			"  kerbside extent: %d carriageway vertices restricted, %d clear" % [restricted, clear]
+		)
+
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE))
+		print("  ok    %d road chunks, %d triangles" % [manifest.road_chunks.size(), triangles])
 	quit(1 if not problems.is_empty() else 0)
 
 
-func _check(scene_root: Node3D) -> PackedStringArray:
+## One chunk against the contract: `problems`, plus the chunk's `restricted`
+## and `clear` carriageway vertices for the union check in `_init`.
+func _check(scene_root: Node3D, label: String, path: String) -> Dictionary:
 	var problems: PackedStringArray = []
+	var restricted: int = 0
+	var clear: int = 0
 
 	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
 	if mesh == null:
-		return problems
+		for index: int in problems.size():
+			problems[index] = "%s: %s" % [label, problems[index]]
+		return {"problems": problems, "restricted": restricted, "clear": clear}
 
 	for surface: int in mesh.get_surface_count():
-		problems.append_array(MeshContract.check_surface(mesh, surface, "surface %d" % surface))
+		var where: String = "%s surface %d" % [label, surface]
+		problems.append_array(MeshContract.check_surface(mesh, surface, where))
 		# The only rule the road surface adds to the shared contract. The
 		# markings shader in `docs/ART_DESIGN.md` is driven by these: U is a
 		# lane coordinate, V is metres along the carriageway.
 		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
-			problems.append("surface %d carries no UVs" % surface)
+			problems.append("%s carries no UVs" % where)
 		problems.append_array(
-			MeshContract.check_shader_material(
-				mesh, surface, "surface %d" % surface, MARKINGS_MATERIAL
-			)
+			MeshContract.check_shader_material(mesh, surface, where, MARKINGS_MATERIAL)
 		)
-		problems.append_array(_check_marking_payload(mesh, surface, "surface %d" % surface))
-		problems.append_array(_check_kerb_extent(mesh, surface, "surface %d" % surface))
+		problems.append_array(_check_marking_payload(mesh, surface, where))
+		var extent: Dictionary = _check_kerb_extent(mesh, surface, where)
+		problems.append_array(extent["problems"])
+		restricted += int(extent["restricted"])
+		clear += int(extent["clear"])
 
-	problems.append_array(MeshContract.check_collision(scene_root))
-	problems.append_array(
-		MeshContract.check_uv2_import_settings(
-			GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE), "marking payload"
-		)
-	)
+	for problem: String in MeshContract.check_collision(scene_root):
+		problems.append("%s: %s" % [label, problem])
+	problems.append_array(MeshContract.check_uv2_import_settings(path, "marking payload"))
 
-	return problems
+	return {"problems": problems, "restricted": restricted, "clear": clear}
 
 
 ## `COLOR_0.a` still says where the kerbside restrictions run (`P3-13`, `Q54`).
@@ -119,17 +169,20 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ##
 ## - some carriageway vertex is 0 and some is 255. Either extreme alone means
 ##   the channel has stopped carrying an extent, in one direction or the other.
+##   ⚠️ Asked of the **union of the chunks**, in `_init`, since `P5-6`: this
+##   function only returns the two counts, because one chunk may honestly be
+##   all of either.
 ## - every value is one of those two. The ETL writes no third, so anything in
 ##   between is interpolation baked into the vertices — which is what a lightmap
 ##   unwrap or a lossy re-export would leave behind.
 ## - a kerb or a cap is opaque. Those carry no extent, and a zero on one would
 ##   be the rails coming out of `strip` in the wrong order.
-func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> Dictionary:
 	var arrays: Array = mesh.surface_get_arrays(surface)
 	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
 	var uv2s: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
 	if colours.is_empty() or colours.size() != uv2s.size():
-		return PackedStringArray(["%s: COLOR_0 and TEXCOORD_1 do not agree in length" % where])
+		return _extent(["%s: COLOR_0 and TEXCOORD_1 do not agree in length" % where], 0, 0)
 
 	var restricted: int = 0
 	var clear: int = 0
@@ -142,7 +195,7 @@ func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedString
 			restricted += 1 if carriageway else 0
 		elif alpha < 0.001:
 			if not carriageway:
-				return PackedStringArray(
+				return _extent(
 					[
 						(
 							(
@@ -152,11 +205,13 @@ func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedString
 							)
 							% where
 						)
-					]
+					],
+					0,
+					0
 				)
 			clear += 1
 		else:
-			return PackedStringArray(
+			return _extent(
 				[
 					(
 						(
@@ -166,24 +221,17 @@ func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedString
 						)
 						% [where, alpha]
 					)
-				]
+				],
+				0,
+				0
 			)
 
-	if restricted == 0 or clear == 0:
-		return PackedStringArray(
-			[
-				(
-					(
-						"%s: COLOR_0.a is uniform across the carriageway (%d restricted, %d "
-						+ "clear). The kerbside extent has stopped shipping, and the markings "
-						+ "shader will paint every kerb in the region — `Q54`, silently"
-					)
-					% [where, restricted, clear]
-				)
-			]
-		)
-	print("  kerbside extent: %d carriageway vertices restricted, %d clear" % [restricted, clear])
-	return PackedStringArray()
+	return _extent([], restricted, clear)
+
+
+## The shape every branch above returns, so a caller reads names, not slots.
+static func _extent(problems: Array, restricted: int, clear: int) -> Dictionary:
+	return {"problems": PackedStringArray(problems), "restricted": restricted, "clear": clear}
 
 
 ## The marking payload holds the codec's invariants (`P3-12`).

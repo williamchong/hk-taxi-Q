@@ -280,7 +280,7 @@ rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine gr
 | `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today**. Since `Q51` it also grades a number the pipeline publishes for itself — `clearance.py`'s — which read 24 against this tool's 26, reconciled as plan cell size and ratcheted by `tools/clearance_reconcile.py`. ✅ **`--corridor-report`** (2026-08-21) prints the corridor profile per failing edge and asks what stands on the **centreline** at the binding station — `Q19`'s two decisive measurements, which lived in scratch scripts until then. ⚠️ Opt-in, and the default listing is byte-identical with it off; it reports and gates nothing |
 | `tools/paint_clearance.py` | `Q92` — whether the **painted layers are above the road they are painted on**, or inside it. The only one whose subject is a marking rather than the surface, and the one that catches what a top-down raster structurally cannot: a mesh complete in *plan* and wrong in *Y*. Splits a burial into a kerb top reached past the drawn ribbon (registration, never gated) and a wrong height on the road it is drawn on (gated) |
 | `tools/lane_paint.py` | `Q113`/`Q114` — whether the lane the markings shader paints is wide enough to be a lane. The strip is a quotient of two numbers no stage computes together: `lanes` is `carriageway.py`'s and the drawn half-width is `surface.py`'s, and neither stage can see the other's answer, so no counter either of them publishes can ask this. Reports edges, vertices **and metres** under a bar taken from the city's own `width_bounds.lane_m` (3.00 m), sweeps that bar, and carries the width's own verdict on the count from `carriageway_margin.lane_bracket` |
-| `tools/kerbside_error.py` | `Q54` — how much of the kerbside yellow the source supports. Reads the shipped `roads.glb`, clips every carriageway triangle against the shader's own yellow locus, and weighs the chord by the junction fade and `COLOR_0.a`. ⚠️ **It does not grade the join** — the truth side is what `roadgraph.json` publishes, so a restriction on the wrong centreline is agreed with. What it sees is the half nothing else can: the rail the extent is written on, whether the alpha survived glTF, and whether the runs slid by a junction trim. Reads the ETL out tree, because the trims travel in `roadsurface.json` and that does not ship |
+| `tools/kerbside_error.py` | `Q54` — how much of the kerbside yellow the source supports. Reads the shipped road chunks merged back into one mesh, clips every carriageway triangle against the shader's own yellow locus, and weighs the chord by the junction fade and `COLOR_0.a`. ⚠️ **It does not grade the join** — the truth side is what `roadgraph.json` publishes, so a restriction on the wrong centreline is agreed with. What it sees is the half nothing else can: the rail the extent is written on, whether the alpha survived glTF, and whether the runs slid by a junction trim. Reads the ETL out tree, because the trims travel in `roadsurface.json` and that does not ship |
 
 **`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
 `Q19`'s clearances would read at a lower `surface.floor_default_m` — rather than grading what shipped, and it
@@ -399,7 +399,7 @@ hk-taxi-Q/
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
 │   │   ├── carriageway.py       # the width/lane survey roads.py publishes (Q94/Q95)
 │   │   ├── kerbside.py          # NSR restrictions linear-referenced onto the graph
-│   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
+│   │   ├── surface.py           # roadgraph.json → roads/<tile>.glb; ribbon, kerbs, junctions
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
@@ -485,7 +485,10 @@ The interface between ETL and game. **Versioned — change both sides together a
     }
   ],
   "road_graph": "roadgraph.json",
-  "road_surface": "roads.glb",
+  "road_surface": [
+    { "id": "t_00_00", "file": "roads/t_00_00.glb",
+      "aabb": [[-5.154,-2.957,-1.775],[175.845,6.336,151.9]] }
+  ],
   "carriageway": [
     { "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2],
       "clear_width_m": [-1.0, 10.24, 8.5, 0.0] }
@@ -842,16 +845,30 @@ Until then Phase 5's second region is blocked on it, and no streaming unit chang
 the source's intersection layer: two centrelines meeting end to end is one road continuing through a
 geometry break, and the source records those as intersections too.
 
-### `roads.glb` — the drivable surface
+### `roads/<tile>.glb` — the drivable surface
 
-One vertex-coloured mesh for the whole region, generated from `roadgraph.json` by `surface.py`. Not
-tiled: at 32k triangles it is a small fraction of the massing, it is on screen whenever the player is, and
-splitting it would buy nothing but seams and draw calls.
+One vertex-coloured mesh **per tile of the building grid**, generated from `roadgraph.json` by
+`surface.py` and listed by `city.json` as `road_surface: [{id, file, aabb}, …]` (`P5-6`). It was one
+region-wide `roads.glb` until 2026-09-07, on the argument that "splitting it would buy nothing but
+seams and draw calls"; `Q115` and `Q120` overturned that on measurement — a region-wide mesh is one
+AABB spanning ~1,660 m in three of four regions, so it is never culled and never streamed, and the
+draw-call cost is bounded by the *resident* set rather than the region. The ribbon is built per
+station and never decimated, so a cut between two stations that duplicates the shared station's
+vertices on both sides is seamless **by construction** (`Q25` inverted): the chunks are a partition
+of the built mesh by triangle — every triangle keeps its three positions, normals, colours and both
+`TEXCOORD`s, and the only cost is the duplicated station vertices, published as
+`roadsurface.json`'s `cut_vertices` (1,836 on Wan Chai, 39,151 → 40,987). A strip quad belongs to
+the tile the plan centre of its two stations falls in; a junction cap belongs **whole** to the tile
+its centroid falls in, so a junction never pops in halves. `CityStreamer` streams a chunk by its
+`aabb` exactly as it streams a building tile, and `drive_harness.gd` asks it to hold the chunks
+under the start line **synchronously** before the first physics tick, so tick 1 — and every
+`drive.sh` timeline — is what it was when the road was one mesh. `pipeline.surface.read_surface`
+merges the chunks back into the one mesh every grader measures.
 
 | Property | Value |
 |---|---|
-| Mesh name | `road_surface-col` |
-| Primitives | 1 — one draw call, like a tile |
+| Mesh name | `road_surface-col`, in every chunk |
+| Primitives | 1 per chunk — one draw call per resident chunk, like a tile |
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`, `TEXCOORD_1`; no texture |
 | `TEXCOORD_0` | **U is a lane coordinate**, 0 at the **nearside** kerb line and `lanes` at the offside, so an integer U is a lane boundary whatever the widening did to the metres. V is metres along the carriageway. Junction caps carry `(0, 0)` — a junction is not a length of lane |
 | `TEXCOORD_1.x` | The packed **marking state** (`P3-12`), a non-negative integer, constant per edge: `code = class + 4·lanes + 64·direction + 256·bus_lane + 512·tram_tracks`. `class`: 0 carriageway · 1 kerb · 2 junction cap. `lanes` 1–15. `direction`: 1 both · 2 forward, **0 = absent**, so an unrecognised value draws no centre line rather than a guessed one. `bus_lane`, `tram_tracks`: 0/1. `offside_kerb` (1024): 1 where `U = lanes` is a real kerb, **0 = not known to be** — on one half of a dual carriageway it is the middle of the road. `centre` (2048, 6 bits): where an opposed pair's two flows meet, in sixteenths of a lane beyond the centreline, `k − 1` steps, 0 = not half of a pair. `kerb_near` (131072, 2 bits) and `kerb_off` (524288, 2 bits) since `P3-13`: what kind of kerbside no-stopping line that side carries — 0 absent · 1 known unrestricted · 2 single · 3 double. ⚠️ a U-lane is `2·half_width / lanes` on the ground (5.12 m on a widened two-lane street), **not** `lane_width_m`. Max legal code **2,097,151** ≪ 2²⁴, so every code is exact in float32; consumers decode with `floor(x + 0.5)` first |
@@ -892,8 +909,11 @@ station spacing, and being constant it packs the way the tiles' survey channel d
 **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses it by 86%. No triangle moved,
 no draw call and no material was added.
 
-**The `-col` suffix is load-bearing**, for the same reason as on tiles. `verify_road_surface.gd`
-checks that it survived, because nothing on the Python side can see it.
+**The `-col` suffix is load-bearing**, for the same reason as on tiles, and every chunk carries it,
+so the car stands on whatever is resident. `verify_road_surface.gd` checks that it survived on every
+chunk, because nothing on the Python side can see it. ⚠️ **The kerbside-extent rule is asked of the
+union of the chunks**, not per chunk: a 150 m chunk may honestly carry restriction on every kerb in
+it or on none.
 
 **Opposed carriageway pairs are drawn as two overlapping ribbons and deliberately not merged**:
 measured across the region's six pairs, the widening already closes every gap between them.
@@ -1521,7 +1541,7 @@ every region lies inside them.
 
 | System | Responsibility | Status |
 |---|---|---|
-| `CityStreamer` | Load/unload tile meshes by camera distance; owns the LOD tier | ✅ `P2-1` |
+| `CityStreamer` | Load/unload tile meshes **and road chunks** by camera distance; owns the LOD tier | ✅ `P2-1`, `P5-6` |
 | `Landmarks` | Place the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
 | `RoadGraph` | Runtime queries over `roadgraph.json` — nearest edge, lane centre, routing | ✅ `P2-2` |
 | `RoadSpawn` | Where a car starts, resolved from a fare node through `RoadGraph`, and what it is standing in (`Q52`) | ✅ `P2-3` |
@@ -1592,7 +1612,7 @@ the second vehicle anyone built.
 | `scenes/world/golden_hour.tscn`, `scenes/world/clean_daylight.tscn` | The two lighting rigs — `clean_daylight.tscn` is the one both dev scenes instance (`clean_daylight.tres` carries the comparison between them). Instance a rig rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |
 | `tools/verify_city.gd` | `city.json` — georeferencing, per-tier AABB containment, `bounds_game`, and that the named documents exist |
-| `tools/verify_road_surface.gd` | `roads.glb` — one draw call, UVs, trimesh collision |
+| `tools/verify_road_surface.gd` | `roads/<tile>.glb` — every chunk `city.json` names: one draw call each, UVs, trimesh collision, the marking codec, and the kerbside extent over the union |
 | `tools/verify_road_graph.gd` | `RoadGraph`'s queries — the off-grade refusal, edge resolution, lane placement against the published carriageway width, per-station width on a genuinely mixed edge, `Q51`'s passability (every edge measured, `is_routable` agreeing with the published blocked set, and `nearest_edge` **still** answering on a blocked edge), and query time against a 1 ms budget over a region-wide lattice |
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, the resolved edge against the fare node, and since `Q52` that a car **fits** where it is set down. **Builds the transposed basis and requires it to fail**, and builds five start lines whose clearances are known and requires each answer — nothing in the shipped city can fire the clearance guard, which stands in 9.00 m of a 3.20 m lane |
@@ -1760,7 +1780,7 @@ Key techniques, in order of what they buy:
 
 ```
 etl/  →  python -m pipeline --region wan_chai
-      →  etl/out/<region>/{city.json, roadgraph.json, roads.glb, …, tiles/*.glb}
+      →  etl/out/<region>/{city.json, roadgraph.json, roads/*.glb, …, tiles/*.glb}
       →  tools/sync_generated.sh → game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
 ```

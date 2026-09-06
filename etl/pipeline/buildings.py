@@ -257,6 +257,17 @@ class Grid:
         )
 
 
+def tile_id(ix: int, iz: int) -> str:
+    """The id a tile is published under, from its column and row.
+
+    One formatter because two layers now publish on this grid: the building
+    tiles here, and the road chunks `surface.py` cuts on the same 150 m cells
+    (`P5-6`). A chunk that named its tile differently would stream beside the
+    buildings it belongs with under an id nothing else carries.
+    """
+    return f"t_{ix:02d}_{iz:02d}"
+
+
 def assign(
     mesh: MeshData, grid: Grid, bounds: Bounds | None = None
 ) -> Iterator[tuple[tuple[int, int], MeshData]]:
@@ -917,11 +928,11 @@ def _write_tile(
     fits inside one 1.5 m cell now empties at level 0.
     """
     ix, iz = tile
-    tile_id = f"t_{ix:02d}_{iz:02d}"
+    label = tile_id(ix, iz)
     # Sorted so a rerun writes byte-identical tiles: merge order decides vertex
     # order, and a dict's insertion order follows whichever sheet happened to be
     # read first.
-    per_class = {name: merge(by_class[name], name=tile_id) for name in sorted(by_class)}
+    per_class = {name: merge(by_class[name], name=label) for name in sorted(by_class)}
 
     lods: list[LodOutput] = []
     boxes: list[Bounds] = []
@@ -953,17 +964,17 @@ def _write_tile(
             # the coarsest tier for a square holding one sign gantry — the tiers
             # coarsen, so every later one vanishes too, and that must not take
             # the whole region's build down with it.
-            log.info("  %s: nothing survives LOD%d", tile_id, level)
+            log.info("  %s: nothing survives LOD%d", label, level)
             break
         suffix = COLLISION_SUFFIX if level == COLLISION_TIER else ""
         # Named after the merge rather than carried through it: a merged
         # primitive has one material and `merge` refuses to guess which. This is
         # the tile's request for the window-band shader, and the only channel
         # glTF gives for it — see `FACADE_MATERIAL`.
-        tier = replace(merge(pieces, name=f"{tile_id}{suffix}"), material=FACADE_MATERIAL)
+        tier = replace(merge(pieces, name=f"{label}{suffix}"), material=FACADE_MATERIAL)
         boxes.append(tier.aabb())
 
-        relative = Path("tiles") / f"{tile_id}_lod{level}.glb"
+        relative = Path("tiles") / f"{label}_lod{level}.glb"
         size = write_glb(out_dir / relative, [tier])
         lods.append(
             LodOutput(
@@ -978,11 +989,11 @@ def _write_tile(
         # Nothing survived even the finest tier. Warned rather than logged at
         # info: a square of the city vanishing is worth noticing, and the cell
         # size is the thing to look at.
-        log.warning("  %s: nothing survives any tier; the tile is dropped", tile_id)
+        log.warning("  %s: nothing survives any tier; the tile is dropped", label)
         return None
 
     return TileOutput(
-        id=tile_id,
+        id=label,
         ix=ix,
         iz=iz,
         # Source meshes bucketed here. Since `Q25` that excludes the ground,

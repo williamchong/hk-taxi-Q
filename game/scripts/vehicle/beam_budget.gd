@@ -4,9 +4,11 @@ extends Node
 ##
 ## ⚠️ **This exists because the cliff is silent.** Forward Mobile pairs 8 spot
 ## lights per rendered object and the fragment shader loops that fixed list.
-## `roads.glb` is one mesh for the whole region and on screen whenever the player
-## is, so **every beam in the game competes for the same 8 slots** — at two lamps
-## a car, four cars. Past that the ninth light contributes **exactly zero**: no
+## The road was one mesh for the whole region when this was built, so **every
+## beam in the game competed for the same 8 slots** — at two lamps a car, four
+## cars. ⚠️ Since `P5-6` the road is one mesh per 150 m tile, so the list is per
+## chunk and two cars a block apart no longer contend; the rule below is kept as
+## the *conservative* bound, because two cars on one chunk still do. Past that the ninth light contributes **exactly zero**: no
 ## warning, no fallback, no dimming. Worse, which four win is *pair order* rather
 ## than distance, so beams pop as the BVH re-pairs and the player's own car is
 ## not guaranteed a slot in its own frame.

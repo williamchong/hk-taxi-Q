@@ -480,7 +480,11 @@ def main(argv: list[str] | None = None) -> int:
     manifest, _ = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
     road = drawn_surface(args.generated, manifest)
-    log.info("  %d near-horizontal faces in %s", len(road.corners), manifest["road_surface"])
+    log.info(
+        "  %d near-horizontal faces in %d road chunks",
+        len(road.corners),
+        len(manifest["road_surface"]),
+    )
     log.info("  road candidates taken within %.2f m of the paint's own height", args.road_within_m)
 
     bars = Bars.of(args)

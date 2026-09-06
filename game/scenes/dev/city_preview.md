@@ -3,12 +3,14 @@
 Rationale for `game/scenes/dev/city_preview.tscn`. Each heading is the line the block sat above; `Overview` is the
 file as a whole. Why it lives here and not in the file: `Q119`.
 
-## `[node name="RoadSurface" type="Node3D" parent="."]`
+## `[node name="Tiles" type="Node3D" parent="."]`
 
-The drivable surface (`P1-4`): the one generated layer that COLLIDES — its
-`-col` mesh is what the wheels stand on, and `verify_road_surface.gd` asserts
-it is there. Every layer node below prints its collider count for the
-opposite reason — there must be none — and each says why (`Q74`).
+Every tile and, since `P5-6`, every road chunk `city.json` names, at once: the
+drivable surface (`P1-4`) is one chunk per tile now, each with the `-col`
+trimesh the wheels stand on, and `tile_preview.gd` draws them here the way
+`CityStreamer` streams them in the drive. There is no `RoadSurface` node any
+more. Every layer node below prints its collider count for the opposite reason
+— there must be none — and each says why (`Q74`).
 
 ## `[node name="Tramway" type="Node3D" parent="."]`
 

@@ -66,7 +66,7 @@ from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEM
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
-from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -204,7 +204,13 @@ CITY_NAME = "city.json"
 # `pitch_deg` as well as the compass bearing.
 # 26 since `P5-5` (`Q115`): the manifest names `railings_placements.json`, and
 # `railings.glb` is a library — one panel per class — tiled along every run.
-CITY_SCHEMA = 26
+# 27 since `P5-6` (`Q115`, `Q120`): `road_surface` is a LIST of chunks —
+# `{id, file, aabb}` per tile of the building grid — where it was the one string
+# `roads.glb`. A v26 reader reads a list where it wanted a path and loads
+# nothing, which is the loud half; the quiet half is `shipped()`, which would
+# compute a bundle with no road in it. Being wrong about the contents of the
+# bundle is what this number is for.
+CITY_SCHEMA = 27
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -224,7 +230,10 @@ LANDMARKS_SCHEMA = 2
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:
 # a fourth document added to one and not the other is a `KeyError` raised from
 # inside the validator instead of a finding reported by it.
-DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks", "fence")
+#
+# ⚠️ `road_surface` left this tuple at `P5-6`: it is a LIST of chunk entries
+# now, on `tiles`' pattern, and `shipped()` walks it the way it walks the tiles.
+DOCUMENT_KEYS = ("road_graph", "fares", "landmarks", "fence")
 
 # Manifest keys naming an asset that ships **when the region has one**, in the
 # order `shipped()` lists them. Optional and nullable every one: a city whose
@@ -252,7 +261,7 @@ OPTIONAL_ASSET_KEYS = (
     "roadmarks",
     "signals",
 )
-REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "landmark_assets", "bounds_game")
+REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
 # Positions are written at millimetre precision, and `bounds_game` is rounded
 # from the same values. Rounding both can push a coordinate a hair outside its
@@ -425,7 +434,14 @@ def build_region(
         "tile_size_m": buildings["tile_size_m"],
         "tiles": tiles,
         "road_graph": ROADGRAPH_NAME,
-        "road_surface": SURFACE_NAME,
+        # One chunk per tile of the same grid, on `tiles`' pattern (`P5-6`): the
+        # streamer loads and unloads these by `aabb` the way it does the
+        # buildings, and every one carries its own `-col`. Triangle and byte
+        # counts stay in `roadsurface.json`; they are build diagnostics.
+        "road_surface": [
+            {"id": chunk["id"], "file": chunk["file"], "aabb": chunk["aabb"]}
+            for chunk in surface["chunks"]
+        ],
         # Drawn half-width per edge, carried from the surface stage rather than
         # recomputed. `roadgraph.json` publishes the *authored* street width and
         # `config.py` keeps the playability widening on the surface style on
@@ -689,6 +705,7 @@ def shipped(manifest: dict) -> list[str]:
     listing.
     """
     paths = [str(manifest[key]) for key in DOCUMENT_KEYS]
+    paths.extend(str(chunk["file"]) for chunk in manifest.get("road_surface", []))
     for tile in manifest.get("tiles", []):
         paths.extend(str(lod) for lod in tile.get("lods", []))
     paths.extend(str(path) for path in manifest.get("landmark_assets", []))

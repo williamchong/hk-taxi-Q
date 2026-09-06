@@ -2,10 +2,10 @@
 ## (`P5-1`). `layer` names a row of `generated_layer.gd`'s table.
 ##
 ## A dev tool, not the streamer. Each of these layers is region-wide — the
-## carriageway, the tramway, the boxes, the stop lines, the signals and the
-## railings as one mesh each; the signs, the lamps and the arrows as a library
-## of props stood by a placements document (`Q115`) — so there is nothing to
-## stream, and deliberately nothing to LOD: `Q34`'s vertex clustering annihilates
+## tramway, the boxes, the stop lines and the signals as one mesh each; the
+## signs, the lamps, the arrows and the railings as a library of props stood by
+## a placements document (`Q115`) — so there is nothing to stream, and
+## deliberately nothing to LOD: `Q34`'s vertex clustering annihilates
 ## anything thinner than a cell, and a 90 mm column, a 100 mm hatch line or a
 ## 40 mm fence is exactly that.
 ##
@@ -26,15 +26,16 @@
 ## in BOTH scenes, in the same commit as the asset** — and nothing but looking
 ## will tell you it does.
 ##
-## ⚠️ **Absence is a warning for the road surface and a report for everything
-## else.** Nothing under the start line means the build went wrong; a city whose
-## estate publishes no tramway ships none. The table's `absence` sentence is what
-## tells the two apart, so this script does not have to.
+## ⚠️ **Absence is a report here, never a failure.** A city whose estate
+## publishes no tramway ships none. The one required layer — the road, which is
+## also the one that collides — is not a row of this table since `P5-6`: it
+## streams with the tiles, and `tile_preview.gd` draws it in the preview scene.
+## The table's `absence` sentence is kept so a required row could return.
 ##
-## The collider count is printed because for every layer but the road surface
-## there must be **none**, and each layer's reason is its own — they live in
-## `city_drive.md` and `city_preview.md` beside those scenes, under the node
-## that would have to change (`Q74`, `Q119`).
+## The collider count is printed because for every layer here there must be
+## **none**, and each layer's reason is its own — they live in `city_drive.md`
+## and `city_preview.md` beside those scenes, under the node that would have to
+## change (`Q74`, `Q119`).
 extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")

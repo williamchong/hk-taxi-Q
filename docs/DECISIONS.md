@@ -131,7 +131,7 @@ wins.
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
-| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` waits for the second region.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
+| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` built 2026-09-07.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number. The road is **chunked, not kitted**: 65 chunks whose union is the old mesh triangle for triangle, +13 to +17 draw calls on the route, the road culled for the first time |
 | `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — the assignment rule is written (2026-09-07), nothing built; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
 
 | ID | Decision | Status |
@@ -19163,6 +19163,41 @@ its own `-col`. Cost: one draw call per resident chunk instead of one per region
 second tile content class in the streamer, and graders that already loop over building tiles
 looping over road chunks too. ⚠️ It does not solve the region join — `Q116`.
 
+### ✅ `P5-6` is built — one chunk per tile, and the road is culled for the first time
+
+Built 2026-09-07, once `Q120`'s second region made the premise a measurement. `_Builder` keys every
+triangle as it is emitted — a quad by the plan centre of its two stations, so the cut falls exactly
+at a station; a cap by its centroid, so a junction goes whole to one tile — and `chunk()` is a
+partition of the built mesh by `select_triangles`, which moves no vertex. That is the argument above
+made checkable: the **union of the 65 chunks is the old `roads.glb` triangle for triangle** (32,246
+rows, every attribute, order-free), `roadsurface.json`'s `carriageway`, `caps`, `triangles`,
+`vertices` and `aabb` are byte-identical, and the whole cost is **1,836** duplicated station
+vertices (39,151 → 40,987), published as `cut_vertices` rather than derived. 1,679 positions are
+shared exactly across chunk pairs; the seam gap is 0.000 m by construction, not by tolerance.
+
+**The delta, on the driving route.** Draw calls **110/109/108/110/110/109 → 123/122/124/126/127/126**
+(+13 to +17), inside the +20–25 `Q120` bounded and paid once for the territory. `prims` *fall*
+751,570 → 661,754 at t=1: with one AABB per chunk the road is frustum-culled for the first time, and
+the shadow passes stop redrawing 1.7 km of ribbon. Telemetry is **identical to the centimetre** on
+every line, because the streamer holds the chunks under the start line synchronously before the
+first physics tick (13 on Expo Drive) — a threaded load would have landed a few frames in and moved
+every `drive.sh` timeline by however long the disk took. The `Q27` street frame moved **0.0%** of
+pixels. PCK **+154,424 B (+0.31%)**; of the +180,604 B on the raw road layer, ~100 KB is 65 glTF
+containers where there was one and ~81 KB the duplicated vertices' attributes. `verify_city_streamer`'s
+residency sweep reads worst
+289,828 → **311,317** resident triangles — the road counted for the first time, not more road — and
+most-resident 39 tiles → 78 units, 39 of them chunks, against the 150 draw-call budget.
+
+**What moved that was not geometry.** The road left `generated_layer.gd`'s table: it was the one
+required row and the one that collided, and it is `CityManifest.road_chunks` now, streamed by
+`CityStreamer` as a second content class and drawn by `tile_preview.gd` in the preview. Both scenes
+lost their `RoadSurface` node. `verify_road_surface.gd` walks the chunks and asks the kerbside-extent
+rule of their **union**, because a 150 m chunk may honestly be all restricted or all clear. Every
+grader reads through one function, `read_surface`, so `deck_error.drawn_surface`'s single-mesh guard
+became a merge with the same guarantee. ⚠️ **The beam budget's premise — "`roads.glb` is one object,
+so every beam competes for one 8-light list" — is now conservative**: the list is per chunk, so two
+cars a block apart no longer contend, and the budget stays as the bound for cars sharing a chunk.
+
 ### ✅ `P5-1` is built — `generated_layer.gd` and `layer_preview.gd`
 
 Eighteen scripts deleted (nine loaders, nine previews, the road surface's `built` signal and
@@ -19478,9 +19513,10 @@ corner should be a mitred pair rather than a wedge is the review point's, not th
   was when that position was taken. A decision, not a patch.
 
 **Status.** `P5-1`–`P5-5` built, reviewed, and **passed the user's drive 2026-09-06** — the 61.3°
-railing corner stands as a counted wedge, no mitre asked for; `P5-6` and `P5-7` wait for the second
-region, as
-`PLAN.md` says (*"starts when the second region starts, not before"*), and `P5-8` is outline only.
+railing corner stands as a counted wedge, no mitre asked for. ✅ **`P5-6` built 2026-09-07**, once
+`Q120` gave it a second region: 65 chunks, the union the old mesh triangle for triangle, +13 to +17
+draw calls, telemetry identical, review point standing. `P5-7` is next with its rule written in
+`Q116`; `P5-8` is outline only.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
 `Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`

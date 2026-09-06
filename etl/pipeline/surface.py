@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 
+from pipeline.buildings import Grid, tile_id
 from pipeline.config import (
     BOTH,
     FORWARD,
@@ -58,9 +59,9 @@ from pipeline.config import (
 )
 from pipeline.documents import round_position, write_document
 from pipeline.geometry import edge_distances, inside_polygon
-from pipeline.gltf import Bounds, MeshData, normalise, write_glb
+from pipeline.gltf import Bounds, MeshData, normalise, read_glb, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE
-from pipeline.mesh import select_triangles
+from pipeline.mesh import merge, select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -81,8 +82,21 @@ if TYPE_CHECKING:  # pragma: no cover - imported for the annotation alone
 
 log = logging.getLogger(__name__)
 
-SURFACE_NAME = "roads.glb"
+# The drawn road ships as one `.glb` per tile of the building grid, under this
+# directory (`P5-6`). There is no region-wide `roads.glb` any more: the one
+# there was could not be culled or streamed, because Godot culls per
+# `MeshInstance3D` by AABB and a region-wide ribbon is one AABB spanning
+# ~1,660 m in three of four measured regions (`Q120`). `read_surface` merges the
+# chunks back into that one mesh for anything that wants to measure the road
+# whole, which is every grader and most tests.
+SURFACE_DIR = "roads"
 SURFACE_MANIFEST_NAME = "roadsurface.json"
+# 8 since `P5-6`: the mesh is CHUNKED. `mesh` is gone and `chunks[]` names one
+# file per tile — `id` (the building tile's own id), `file`, `triangles`,
+# `vertices`, `bytes`, `aabb` — with `cut_vertices` saying how many vertices the
+# cut duplicated. A reader that keeps opening `mesh` opens a file that no longer
+# exists, which is the loud half; the quiet half is a reader summing `vertices`
+# over the chunks and calling it the mesh's, which is `cut_vertices` too high.
 # 7 since `Q107`: `carriageway[].offset_m` is a **list**, one value per station
 # of that edge's published polyline, saying where the drawn ribbon is centred in
 # `mitres`' LEFT-of-travel frame. 🔴 **A reader that keeps taking
@@ -119,13 +133,41 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # keeps the old interpretation gets no caps at all and rebuilds that defect
 # silently, which is the case hard rule 5 exists for. An intermediate like every
 # field above it; the game reads none of them.
-SURFACE_MANIFEST_SCHEMA = 7
+SURFACE_MANIFEST_SCHEMA = 8
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
 # than building the shape in GDScript at load makes the collision part of the
 # asset, which is what `P1-4` is asked to deliver.
 SURFACE_MESH_NAME = "road_surface-col"
+
+
+def chunk_path(tile: str) -> str:
+    """Where a tile's road chunk is written, relative to the region's out dir."""
+    return f"{SURFACE_DIR}/{tile}.glb"
+
+
+def read_surface(bundle: Path, chunks: Iterable[dict[str, Any]]) -> MeshData:
+    """The drawn road as ONE mesh, merged back from its chunks.
+
+    `chunks` is either `roadsurface.json`'s `chunks` or `city.json`'s
+    `road_surface`; both carry `file` relative to `bundle`. The merge is a plain
+    concatenation, so every triangle, attribute and winding is the chunk's own
+    and only the vertex numbering changes — a station the cut duplicated is two
+    vertices here where the un-chunked build had one, and `cut_vertices` in the
+    manifest is exactly that difference.
+
+    Sorted by file so the merged vertex order does not depend on the order a
+    manifest happened to list its chunks in.
+    """
+    meshes = [
+        read_glb(bundle / str(chunk["file"]))[0]
+        for chunk in sorted(chunks, key=lambda c: str(c["file"]))
+    ]
+    if not meshes:
+        raise ValueError(f"{bundle}: the manifest names no road chunks")
+    return replace(merge(meshes, name=SURFACE_MESH_NAME), material=SURFACE_MATERIAL)
+
 
 # The glTF material name, and the name is the contract: glTF cannot say "use
 # this shader", so `tools/generated_scene_import.gd` dispatches on it and hands
@@ -405,9 +447,18 @@ class SurfaceReport:
     # drew before. Saying how many caps actually grew would mean hulling twice.
     through_movements: int = 0
     triangles: int = 0
+    # Vertices of the mesh as BUILT, before the cut — the count the shader and
+    # every attribute is stated in. `chunk_vertices` is the count after the cut,
+    # summed over the chunks, and their difference is what the cut cost:
+    # `cut_vertices = chunk_vertices - vertices`, published rather than derived.
     vertices: int = 0
+    chunk_vertices: int = 0
     bytes: int = 0
     aabb: Bounds | None = None
+    # One row per road chunk written — `id`, `file`, `triangles`, `vertices`,
+    # `bytes`, `aabb` — in tile-id order. The chunk is the tile the quad's (or
+    # cap's) plan centre falls in; see `_Builder.chunk`.
+    chunks: list[dict[str, Any]] = field(default_factory=list)
     # Ends held back from a node so a cap can fill the middle, and how many of
     # those hit the length ceiling instead of the junction radius. A high clamp
     # count means the trim factor is wide for the region's block size.
@@ -700,14 +751,41 @@ class _Builder:
     applied where it means something.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, grid: Grid | None = None) -> None:
         self._positions: list[np.ndarray] = []
         self._normals: list[np.ndarray] = []
         self._colours: list[np.ndarray] = []
         self._uvs: list[np.ndarray] = []
         self._uv2: list[np.ndarray] = []
         self._triangles: list[np.ndarray] = []
+        # One tile key per triangle, decided as the triangle is emitted (`P5-6`):
+        # a strip's quad by the plan centre of its two stations, so the cut
+        # between two chunks falls exactly at a station; a cap by its centroid,
+        # so a junction goes whole to one chunk. Deciding it here rather than
+        # partitioning the finished mesh by triangle centroid is what makes both
+        # of those true — `buildings.assign` splits by centroid and would put a
+        # cap's fan across two tiles.
+        self._keys: list[np.ndarray] = []
+        self._grid = grid
+        # The mesh `build` returned and the tile key of each triangle it kept,
+        # aligned. `chunk` reads them, so the two cannot drift apart the way a
+        # mesh passed back in beside a stored key array could.
+        self._built: tuple[MeshData, np.ndarray] | None = None
         self._count = 0
+
+    def _tile_keys(self, x: np.ndarray, z: np.ndarray) -> np.ndarray:
+        """Tile key for plan points — `row * columns + column`, or 0 with no grid.
+
+        Clipped into the region first, because `Grid.index` assumes a point
+        already inside and clamps the far side only: a widened ribbon along the
+        region's west or north edge runs a few metres into negative plan
+        coordinates, and `//` alone would hand those to tile -1.
+        """
+        if self._grid is None:
+            return np.zeros(len(x), dtype=np.int64)
+        grid = self._grid
+        ix, iz = grid.index(np.clip(x, 0.0, grid.max_x), np.clip(z, 0.0, grid.max_z))
+        return iz.astype(np.int64) * grid.columns + ix.astype(np.int64)
 
     def strip(
         self,
@@ -760,6 +838,11 @@ class _Builder:
         # One facing for the whole strip width: the two rails differ only by the
         # mitre, and a strip is a flat piece of road, kerb face or lip.
         facing = _rail_normals(left, right)
+        # Both triangles of a quad take the quad's key, in the order the two
+        # triangle blocks above were appended.
+        centre = (left[:-1] + left[1:] + right[:-1] + right[1:]) / 4.0
+        quad_keys = self._tile_keys(centre[:, 0], centre[:, 2])
+        self._keys.append(np.concatenate([quad_keys, quad_keys]))
         self._positions.append(np.vstack([left, right]))
         self._normals.append(np.vstack([facing, facing]))
         self._colours.append(
@@ -791,7 +874,9 @@ class _Builder:
                 ]
             )
         )
-        self._positions.append(np.vstack([ring, ring.mean(axis=0)]))
+        centroid = ring.mean(axis=0)
+        self._keys.append(np.repeat(self._tile_keys(centroid[[0]], centroid[[2]]), len(ring)))
+        self._positions.append(np.vstack([ring, centroid]))
         self._normals.append(np.tile([0.0, 1.0, 0.0], (len(ring) + 1, 1)))
         self._colours.append(_rgba(colour, len(ring) + 1))
         # A junction is not a length of lane, so it carries no marking
@@ -813,6 +898,8 @@ class _Builder:
         in the same place. It draws as nothing and it has no normal, so it is
         dropped here rather than shipped into a collision shape.
         """
+        if self._built is not None:
+            raise ValueError(f"'{name}': already built — a builder is used once")
         if not self._triangles:
             raise ValueError(f"'{name}': nothing to write — the graph produced no ribbon")
         mesh = MeshData(
@@ -826,10 +913,43 @@ class _Builder:
             material=SURFACE_MATERIAL,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        kept = select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
+        keep = twice_area > MIN_TWICE_AREA_M2
+        kept = select_triangles(mesh, keep)
         if kept is None:
             raise ValueError(f"'{name}': every triangle collapsed")
+        # Aligned with `kept.triangles`: `select_triangles` keeps triangle order
+        # and drops nothing but the ones masked out.
+        self._built = (kept, np.concatenate(self._keys)[keep])
         return kept
+
+    def chunk(self) -> list[tuple[str, MeshData]]:
+        """The mesh `build` returned, cut into one mesh per tile.
+
+        A partition by triangle, so nothing is cut and nothing moves: every
+        chunk triangle is a triangle of `mesh` with the same three positions,
+        normals, colours and both `TEXCOORD`s, and two chunks that share a
+        station share its vertex *positions* exactly — `select_triangles`'s own
+        guarantee, and the seam gap of 0.000 m `P5-6` is accepted on. What the
+        cut costs is the duplicated station vertices, which the caller counts.
+
+        Tile-id order, so a rerun writes the same files in the same order.
+        """
+        if self._built is None:
+            raise ValueError("chunk() before build(): nothing has been built yet")
+        mesh, keys = self._built
+        if self._grid is None:
+            return [(tile_id(0, 0), mesh)]
+        pieces: list[tuple[str, MeshData]] = []
+        for key in np.unique(keys):
+            piece = select_triangles(mesh, keys == key)
+            if piece is None:
+                continue
+            ix, iz = int(key % self._grid.columns), int(key // self._grid.columns)
+            pieces.append((tile_id(ix, iz), piece))
+        # Tile-id order rather than key order: the keys are row-major and the
+        # ids are column-major, and the manifest's readers sort by id.
+        pieces.sort(key=lambda piece: piece[0])
+        return pieces
 
 
 class DrawnHeight(NamedTuple):
@@ -1361,7 +1481,7 @@ def build_region(
     _record_hidden_kerbs(graph["edges"], edges, report)
     _read_offside(edges, style, report)
 
-    builder = _Builder()
+    builder = _Builder(Grid.for_region(city, city.region(region_id)))
     for edge in edges:
         if _draw_edge(builder, edge, style, city.roads.lane_width_m, report):
             report.edges += 1
@@ -1381,9 +1501,50 @@ def build_region(
     report.triangles = mesh.triangle_count
     report.vertices = len(mesh.positions)
     report.aabb = mesh.aabb()
-    report.bytes = write_glb(out_dir / SURFACE_NAME, [mesh])
+    _write_chunks(out_dir, builder.chunk(), report)
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def _write_chunks(out_dir: Path, chunks: list[tuple[str, MeshData]], report: SurfaceReport) -> None:
+    """One `.glb` per tile under `SURFACE_DIR`, and the manifest rows for them.
+
+    The directory is emptied of `.glb` files first: a rerun after the grid or
+    the graph moved must not leave a chunk from the previous build beside the
+    new ones, where `export.py` would neither name it nor notice it, and
+    `sync_generated.sh` — which copies what the manifest names — would leave a
+    stale copy in the game until something deleted it by hand.
+
+    Every chunk keeps `SURFACE_MESH_NAME`, so each one gets its own `-col`
+    trimesh at import and the material dispatch (`SURFACE_MATERIAL`) is the
+    same test it was for the region-wide mesh.
+    """
+    chunk_dir = out_dir / SURFACE_DIR
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    for stale in list(chunk_dir.glob("*.glb")):
+        stale.unlink()
+    triangles = 0
+    for tile, piece in chunks:
+        relative = chunk_path(tile)
+        size = write_glb(out_dir / relative, [piece])
+        report.chunks.append(
+            {
+                "id": tile,
+                "file": relative,
+                "triangles": piece.triangle_count,
+                "vertices": len(piece.positions),
+                "bytes": size,
+                "aabb": piece.aabb(),
+            }
+        )
+        report.bytes += size
+        report.chunk_vertices += len(piece.positions)
+        triangles += piece.triangle_count
+    if triangles != report.triangles:
+        raise ValueError(
+            f"road chunks carry {triangles} triangles where the built mesh has "
+            f"{report.triangles} — the partition lost or duplicated some"
+        )
 
 
 def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edge:
@@ -2748,12 +2909,15 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
             "schema_version": SURFACE_MANIFEST_SCHEMA,
             "city_id": city.id,
             "region_id": region_id,
-            "mesh": SURFACE_NAME,
             "mesh_name": SURFACE_MESH_NAME,
             "triangles": report.triangles,
             "vertices": report.vertices,
+            # What the tile cut cost, and nothing else: every chunk vertex is a
+            # built vertex or a station's duplicate on the other side of a cut.
+            "cut_vertices": report.chunk_vertices - report.vertices,
             "bytes": report.bytes,
             "aabb": report.aabb,
+            "chunks": report.chunks,
             "carriageway": [
                 {
                     "edge": edge_id,

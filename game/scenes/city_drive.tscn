@@ -21,10 +21,6 @@ script = ExtResource("1_tiles")
 profile = ExtResource("8_streaming")
 camera_path = NodePath("../CameraRig/Camera3D")
 
-[node name="RoadSurface" type="Node3D" parent="."]
-script = ExtResource("2_layer")
-layer = "road_surface"
-
 [node name="Tramway" type="Node3D" parent="."]
 script = ExtResource("2_layer")
 layer = "tramway"

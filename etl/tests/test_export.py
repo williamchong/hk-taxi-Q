@@ -47,7 +47,7 @@ from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEM
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
-from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
+from pipeline.surface import SURFACE_DIR, SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
 REGION = "middle"
@@ -109,12 +109,32 @@ class _Region:
                 "schema_version": SURFACE_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": REGION,
-                "mesh": SURFACE_NAME,
                 "mesh_name": "road_surface-col",
                 "triangles": 24,
                 "vertices": 48,
-                "bytes": 3,
+                "cut_vertices": 6,
+                "bytes": 6,
                 "aabb": [[-4.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
+                # One chunk per tile the road touches (`P5-6`); `city.json`
+                # carries `id`, `file` and `aabb` of each and nothing else.
+                "chunks": [
+                    {
+                        "id": "t_00_00",
+                        "file": f"{SURFACE_DIR}/t_00_00.glb",
+                        "triangles": 12,
+                        "vertices": 27,
+                        "bytes": 3,
+                        "aabb": [[-4.0, -1.0, -4.0], [150.0, 2.0, 104.0]],
+                    },
+                    {
+                        "id": "t_01_00",
+                        "file": f"{SURFACE_DIR}/t_01_00.glb",
+                        "triangles": 12,
+                        "vertices": 27,
+                        "bytes": 3,
+                        "aabb": [[150.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
+                    },
+                ],
                 # The drawn half-width per edge, which `export.py` carries into
                 # `city.json` so the game can place a car in the nearside lane.
                 "carriageway": [
@@ -322,7 +342,9 @@ class _Region:
             },
         }
 
-        (self.out_dir / SURFACE_NAME).write_bytes(b"glb")
+        (self.out_dir / SURFACE_DIR).mkdir()
+        for chunk in self.documents[SURFACE_MANIFEST_NAME]["chunks"]:
+            (self.out_dir / chunk["file"]).write_bytes(b"glb")
         for tile in self.documents[BUILDINGS_MANIFEST_NAME]["tiles"]:
             for lod in tile["lods"]:
                 (self.out_dir / lod["path"]).write_bytes(b"glb")
@@ -359,7 +381,18 @@ class TestAssembly:
         assert manifest["city_id"] == "hong_kong"
         assert manifest["region_id"] == REGION
         assert manifest["road_graph"] == ROADGRAPH_NAME
-        assert manifest["road_surface"] == SURFACE_NAME
+        assert manifest["road_surface"] == [
+            {
+                "id": "t_00_00",
+                "file": f"{SURFACE_DIR}/t_00_00.glb",
+                "aabb": [[-4.0, -1.0, -4.0], [150.0, 2.0, 104.0]],
+            },
+            {
+                "id": "t_01_00",
+                "file": f"{SURFACE_DIR}/t_01_00.glb",
+                "aabb": [[150.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
+            },
+        ]
         assert manifest["fares"] == FARES_NAME
         assert report.tiles == 2
         assert report.lod_files == 3
@@ -380,7 +413,12 @@ class TestAssembly:
         assert BUILDINGS_MANIFEST_NAME not in names
         assert SURFACE_MANIFEST_NAME not in names
         assert ASSETS_NAME not in names
-        assert set(names) >= {ROADGRAPH_NAME, SURFACE_NAME, FARES_NAME}
+        assert set(names) >= {
+            ROADGRAPH_NAME,
+            f"{SURFACE_DIR}/t_00_00.glb",
+            f"{SURFACE_DIR}/t_01_00.glb",
+            FARES_NAME,
+        }
 
     def test_a_drawn_box_junction_asset_is_shipped_and_a_null_is_not(self, region) -> None:
         """The two halves of the optional-key contract (`P3-18`), in one place:
@@ -759,9 +797,9 @@ class TestValidation:
 
     def test_an_empty_asset_counts_as_missing(self, region) -> None:
         region.build()
-        (region.out_dir / SURFACE_NAME).write_bytes(b"")
+        (region.out_dir / SURFACE_DIR / "t_01_00.glb").write_bytes(b"")
 
-        assert region.check() == ["roads.glb is empty"]
+        assert region.check() == [f"{SURFACE_DIR}/t_01_00.glb is empty"]
 
     def test_a_fare_node_naming_an_edge_the_graph_lost(self, region) -> None:
         """Re-running the road stage renumbers edges. Every `nearest_edge`

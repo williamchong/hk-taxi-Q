@@ -165,16 +165,20 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 	# times over — 195 loads against 165,000.
 	# One more than the edge count: the coarsest band sits past the last edge.
 	var tiers: int = profile.tier_distances_m.size() + 1
+	# Tiles, then road chunks (`P5-6`) — what `CityStreamer` holds, in its
+	# order, so a resident count here is its draw-call count.
+	var units: Array[CityManifest.Tile] = manifest.streamable_units()
 	var counts: Array[PackedInt32Array] = []
-	for tile: CityManifest.Tile in manifest.tiles:
+	for unit: CityManifest.Tile in units:
 		var per_tier := PackedInt32Array()
 		for tier: int in tiers:
-			per_tier.append(_triangles_of(tile, tier))
+			per_tier.append(_triangles_of(unit, tier))
 		counts.append(per_tier)
 
 	var worst_triangles: int = 0
 	var worst_at: Vector3 = Vector3.ZERO
 	var most_tiles: int = 0
+	var most_roads: int = 0
 	var most_tiles_at: Vector3 = Vector3.ZERO
 	var total_triangles: int = 0
 
@@ -186,11 +190,14 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 	for eye: Vector3 in lattice:
 		var triangles: int = 0
 		var resident: int = 0
-		for index: int in manifest.tiles.size():
-			var distance: float = TileStreaming.plan_distance_to(manifest.tiles[index].aabb, eye)
+		var roads: int = 0
+		for index: int in units.size():
+			var distance: float = TileStreaming.plan_distance_to(units[index].aabb, eye)
 			if distance > radius:
 				continue
 			resident += 1
+			if units[index].is_road:
+				roads += 1
 			triangles += counts[index][mini(TileStreaming.band_of(distance, profile), tiers - 1)]
 		total_triangles += triangles
 		# Tracked apart, because they peak in different places: a sample beside a
@@ -202,6 +209,7 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 			worst_at = eye
 		if resident > most_tiles:
 			most_tiles = resident
+			most_roads = roads
 			most_tiles_at = eye
 
 	var samples: int = lattice.size()
@@ -211,13 +219,14 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 
 	print(
 		(
-			"  streaming: %d samples, worst %s triangles at (%.0f, %.0f), most %d tiles at (%.0f, %.0f), mean %s"
+			"  streaming: %d samples, worst %s triangles at (%.0f, %.0f), most %d resident (%d of them road chunks) at (%.0f, %.0f), mean %s"
 			% [
 				samples,
 				_thousands(worst_triangles),
 				worst_at.x,
 				worst_at.z,
 				most_tiles,
+				most_roads,
 				most_tiles_at.x,
 				most_tiles_at.z,
 				_thousands(roundi(float(total_triangles) / float(samples))),
@@ -238,12 +247,16 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 				+ "resident bounds visible from above, and P2-6 measures what is drawn"
 			)
 		)
-	# One tile is one draw call by contract — `verify_tiles.gd` checks that side.
+	# One tile is one draw call by contract — `verify_tiles.gd` checks that side —
+	# and one road chunk is one too, `verify_road_surface.gd`'s side (`P5-6`).
 	if most_tiles > DRAW_CALL_BUDGET:
-		problems.append(
-			(
-				"worst-case residency is %d tiles at (%.0f, %.0f), over the %d draw-call budget"
-				% [most_tiles, most_tiles_at.x, most_tiles_at.z, DRAW_CALL_BUDGET]
+		(
+			problems
+			. append(
+				(
+					"worst-case residency is %d tiles and chunks at (%.0f, %.0f), over the %d draw-call budget"
+					% [most_tiles, most_tiles_at.x, most_tiles_at.z, DRAW_CALL_BUDGET]
+				)
 			)
 		)
 	# The sweep must actually load something, or every check above passed on an

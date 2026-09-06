@@ -60,9 +60,23 @@ func _init() -> void:
 	var problems: PackedStringArray = _check_documents(manifest)
 	problems.append_array(_check_layer_nodes())
 	for tile: Manifest.Tile in manifest.tiles:
-		var found: PackedStringArray = _check_tile(manifest, tile)
+		var found: PackedStringArray = _check_tile(manifest, tile, tile.id)
 		if found.is_empty():
 			print("  ok    ", tile.id)
+		else:
+			problems.append_array(found)
+	# The road chunks are single-tier tiles on the same grid (`P5-6`), so the
+	# same georeferencing check applies: each chunk's imported geometry inside
+	# the box the streamer culls it with, and inside `bounds_game`. A manifest
+	# naming no road is the car falling through the start line, so it fails here
+	# as an empty tile list does above.
+	if manifest.road_chunks.is_empty():
+		problems.append("%s names no road chunks" % Manifest.PATH)
+	for chunk: Manifest.Tile in manifest.road_chunks:
+		var label: String = "road %s" % chunk.id
+		var found: PackedStringArray = _check_tile(manifest, chunk, label)
+		if found.is_empty():
+			print("  ok    ", label)
 		else:
 			problems.append_array(found)
 
@@ -71,11 +85,12 @@ func _init() -> void:
 
 	print(
 		(
-			"%s/%s: %d tiles georeferenced, %d files named, %d problem(s)"
+			"%s/%s: %d tiles and %d road chunks georeferenced, %d files named, %d problem(s)"
 			% [
 				manifest.city_id,
 				manifest.region_id,
 				manifest.tiles.size(),
+				manifest.road_chunks.size(),
 				manifest.shipped().size(),
 				problems.size(),
 			]
@@ -84,7 +99,8 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-## The manifest names five documents. Each must be there, and each must be the
+## The manifest names four documents (the road is a chunk list since `P5-6` and
+## is checked with the tiles). Each must be there, and each must be the
 ## file the dev locators point at — they carry their own constant until `P2-2`
 ## and `P3-1` take the path from the manifest, and this is what stops the two
 ## definitions drifting in the meantime.
@@ -92,13 +108,6 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	problems.append_array(
 		_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH)
-	)
-	problems.append_array(
-		_check_document(
-			"road surface",
-			manifest.road_surface_path,
-			GeneratedLayer.path(GeneratedLayer.ROAD_SURFACE)
-		)
 	)
 	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.PATH))
 	problems.append_array(
@@ -259,11 +268,13 @@ func _check_document(what: String, named: String, locator: String) -> PackedStri
 	return []
 
 
-func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
+## `label` names the unit in a message — a tile by its id, a road chunk as
+## "road <id>" — because both classes share one grid and one id space (`P5-6`).
+func _check_tile(manifest: Manifest, tile: Manifest.Tile, label: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	if tile.lods.is_empty():
-		problems.append("%s names no LOD files" % tile.id)
+		problems.append("%s names no LOD files" % label)
 		return problems
 
 	# Grown on the containing side only, never on both. `encloses` does accept a
@@ -278,7 +289,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 		var path: String = tile.lods[tier]
 		var packed := load(path) as PackedScene
 		if packed == null:
-			problems.append("%s: %s did not load as a scene" % [tile.id, path])
+			problems.append("%s: %s did not load as a scene" % [label, path])
 			continue
 
 		var node: Node3D = packed.instantiate()
@@ -286,7 +297,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 		node.free()
 
 		if measured.size == Vector3.ZERO:
-			problems.append("%s: %s carries no mesh to measure" % [tile.id, path])
+			problems.append("%s: %s carries no mesh to measure" % [label, path])
 			continue
 		measured_boxes.append(measured)
 
@@ -294,7 +305,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 		# streamer drops a tile whose geometry is still on screen.
 		if not declared.encloses(measured):
 			problems.append(
-				"%s: LOD%d spans %s, outside the declared %s" % [tile.id, tier, measured, tile.aabb]
+				"%s: LOD%d spans %s, outside the declared %s" % [label, tier, measured, tile.aabb]
 			)
 
 	# A tier that failed above already has its own problem recorded, and the two
@@ -316,7 +327,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	# coarser tier can stand *taller*, measured at 12.03 m on `t_01_02`.
 	if not envelope.encloses(spanned):
 		problems.append(
-			"%s: tiers span %s, outside bounds_game %s" % [tile.id, spanned, manifest.bounds]
+			"%s: tiers span %s, outside bounds_game %s" % [label, spanned, manifest.bounds]
 		)
 
 	# ...and the declared box must be no *larger* than the tiers it describes.
@@ -343,10 +354,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	)
 	if drift > TOLERANCE_M:
 		problems.append(
-			(
-				"%s: tiers span %s, city.json says %s (%.3f m out)"
-				% [tile.id, spanned, tile.aabb, drift]
-			)
+			"%s: tiers span %s, city.json says %s (%.3f m out)" % [label, spanned, tile.aabb, drift]
 		)
 
 	return problems

@@ -63,7 +63,7 @@ from pipeline import kerbside  # noqa: E402
 from pipeline.config import load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.fares import FARES_NAME, FARES_SCHEMA  # noqa: E402
-from pipeline.gltf import MeshData, read_glb  # noqa: E402
+from pipeline.gltf import MeshData  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 from pipeline.surface import (  # noqa: E402
@@ -74,6 +74,7 @@ from pipeline.surface import (  # noqa: E402
     MARKING_OFFSIDE_KERB,
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,
+    read_surface,
 )
 
 log = logging.getLogger(__name__)
@@ -595,12 +596,14 @@ def main(argv: list[str] | None = None) -> int:
             report.add_restricted(edge_id, side, metres)
 
     attribute = _Attributor(graph["edges"], trims)
-    for mesh in read_glb(out_dir / surface["mesh"]):
-        for point, side, metres, drawable, drawn_m in painted_lines(mesh, tuning):
-            report.painted.add(side, metres)
-            edge_id = attribute.edge_of(point, drawn_m)
-            if edge_id is not None:
-                report.add_painted(edge_id, side, metres, drawable)
+    # One mesh, merged back from the per-tile chunks (`P5-6`): a kerb run is
+    # graded whole, and a station the cut duplicated is one extent either way.
+    mesh = read_surface(out_dir, surface["chunks"])
+    for point, side, metres, drawable, drawn_m in painted_lines(mesh, tuning):
+        report.painted.add(side, metres)
+        edge_id = attribute.edge_of(point, drawn_m)
+        if edge_id is not None:
+            report.add_painted(edge_id, side, metres, drawable)
 
     report.stands, report.stands_restricted, names = stands_in_restriction(fares, edges)
     _log(report, args.worst, names, road_names(graph), tuning)

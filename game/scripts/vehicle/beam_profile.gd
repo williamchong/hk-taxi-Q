@@ -6,9 +6,10 @@
 ## and the fragment shader loops that list, so the ninth light on an object is
 ## not dimmer — it is **absent**, with no warning and no fallback.
 ##
-## ⚠️ **The competition is per *object*, and `roads.glb` is one mesh for the whole
-## region.** Every beam in the game therefore contends for the same list whenever
-## the road is on screen, which is always. Two lamps a car makes `max_spot_lights`
+## ⚠️ **The competition is per *object*, and the road under the car is one
+## object** — the whole region until `P5-6`, one 150 m chunk since. Every beam on
+## the same chunk therefore contends for the same list, and the budget stays as
+## that bound. Two lamps a car makes `max_spot_lights`
 ## a **car** count once divided, and that is why this cannot be left to
 ## `distance_fade` — fade bounds who competes, it does not cap how many win.
 class_name BeamProfile
