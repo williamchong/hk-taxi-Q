@@ -4990,7 +4990,7 @@ like a failing sink, and sent the next person to deepen it.
 
 ## `P3-11` — The taxi is generated, and the chassis generates it
 
-**Status.** 🟡 Awaiting review · **Verdict on the first round.** *reads as 紅的, does not read as a
+**Status.** ✅ Passed review 2026-09-06 · **Verdict on the first round.** *reads as 紅的, does not read as a
 Crown Comfort*
 
 **Claim.** `tools/make_vehicle.py` generates `taxi_body.glb` and `taxi_wheel.glb`. **The chassis is an
@@ -5062,8 +5062,9 @@ far more likely means the change never arrived than that it had no effect.** Run
 
 ## `P3-6` — Two heroes replace their source meshes, and the contract is the deliverable
 
-**Status.** 🟡 Awaiting review · two of five shipped (HKCEC mesh-sourced, Central Plaza
-generated), 2026-08-12 · **amended same day: HKCEC ships as its repainted source mesh**
+**Status.** 🟡 **HKCEC passed the user's review 2026-09-06** · two of five shipped (HKCEC mesh-sourced, Central Plaza
+generated), 2026-08-12 · **amended same day: HKCEC ships as its repainted source mesh** · Central
+Plaza not yet judged; Hopewell, Times Square and the government slabs not built
 
 ### Amendment — the HKCEC hero is the source mesh, repainted (2026-08-12)
 
@@ -5614,7 +5615,7 @@ from the baseline frame and are applied to both.
 
 ## `P3-11d` — The lamps switch, and that is what finally separates the red lens
 
-**Status.** 🟡 Awaiting review — shipped in `tools/make_vehicle.py` (`UV.x` circuits, `DEEP_RED`,
+**Status.** ✅ Passed review 2026-09-06 — shipped in `tools/make_vehicle.py` (`UV.x` circuits, `DEEP_RED`,
 `_high_brake_lamp`), `vehicle_body.gdshader`, `vehicle_body.tres`, `scripts/vehicle/vehicle_lamps.gd`
 and `scripts/vehicle/vehicle_controller.gd`; graded on paired driver frames at `t03.30` ·
 **Owner.** `P3-11`
@@ -12248,6 +12249,8 @@ than a marginal aesthetic gain because it is what makes `P3-5a`'s additions land
 palette declines to join · `Q62` for why a HUD readout cannot be graded against anything published ·
 `P3-24` for the task
 
+**Status.** ✅ `P3-24` passed the user's review 2026-09-06 — the plate names the street and stays still.
+
 ---
 
 ## `Q81` — A wrong-way sign is an interrupt, not a readout, and the nose decides rather than the wheels
@@ -12443,6 +12446,9 @@ not need to because `git status` did.
 proportions and why area alone cannot grade a face · `Q79` for the lettering this icon does not need ·
 `Q62` for why a HUD readout cannot be graded against anything published · `Q72` for why a counter
 must be reachable in both directions · `P3-25` for the task
+
+**Status.** ✅ `P3-25` passed the user's review 2026-09-06 — the sign raises against the flow and stays
+quiet on legal turns.
 
 ## `Q82` — A published vocabulary, a lantern that stays off, and a counter that had to be reachable
 
@@ -18437,10 +18443,10 @@ moved — it is also the only place a reader can see that the off-grade rows rea
 - ⬜ **`P4-3`, `P4-4`, `P4-5` are untouched.** There is no traffic on the elevated network (`P3-3` is
   not started), the ramp step at MARSH ROAD `e248` is a 35.8% lip that is now reachable, and the
   streamer's bands were tuned without 23.3% more drivable area resident.
-- 🔴 **The human review point stands and this does not substitute for it**: *"drive the Wan Chai
+- ✅ **The human review point passed 2026-09-06**: *"drive the Wan Chai
   Interchange from Gloucester Road onto the deck and back down — can you get up there, and does it
-  feel like a road rather than a ramp-shaped bug?"* Phase 4 is also behind the Phase 3 go/no-go,
-  which is the user's.
+  feel like a road rather than a ramp-shaped bug?"* — the user drove it and passed it. Phase 4 is
+  still behind the Phase 3 go/no-go, which is the user's.
 
 **See.** `Q13` for the refusal this reverses · `Q103` for the reachable-and-ungraded finding that
 forced it · `Q108` for the published level-1 clearance and the refused level −1 · `Q110` for the
@@ -19471,7 +19477,9 @@ corner should be a mitred pair rather than a wedge is the review point's, not th
   `ensure_ascii` and the trailing newline and never `indent=2`; the number is five times what it
   was when that position was taken. A decision, not a patch.
 
-**Status.** `P5-1`–`P5-5` built and reviewed; `P5-6` and `P5-7` wait for the second region, as
+**Status.** `P5-1`–`P5-5` built, reviewed, and **passed the user's drive 2026-09-06** — the 61.3°
+railing corner stands as a counted wedge, no mitre asked for; `P5-6` and `P5-7` wait for the second
+region, as
 `PLAN.md` says (*"starts when the second region starts, not before"*), and `P5-8` is outline only.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
@@ -19947,11 +19955,6 @@ road and not one across it — which is the bearing guard's job, and why the two
 
 **Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests at ship and **2,100** after the review, 0 shader errors, **five mutations five failures** — 🔴 **and a sixth SURVIVED on the first pass**: nothing tested the on-carriageway refusal at all, which is why it was extracted into `_on_its_own_carriageway` and given tests of its own, `paint_clearance` inside its gate, frame reproduced twice.
 
-⬜ **Left open.** The 52 refusals are recoverable only by making `DrawnSurface.sample` resolve by
-ribbon *coverage* rather than centreline distance — a change to `Q92`'s one shared accessor, which
-serves the boxes and the arrows too, so it is its own decision. RM1002/RM1003 need a per-line module.
-The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of survey.
-
 ### 🔴 The legibility scale is 1.0: the accurate size, on the user's call
 
 **The user, from the driving seat, the same day: the double white line at 1.88 is too thick, draw the
@@ -19972,6 +19975,11 @@ the line is drawn as published, and below 1.0 is still refused as a transcriptio
 Only widths moved: the quad count, every partition and every host counter are byte-identical, which is
 this change's inertness proof. ⚠️ **The illegibility the 1.88 answered is not gone** — it is the
 shader's recorded sub-pixel defect, and the answer to it is antialiasing there, not a wider line here.
+
+⬜ **Left open.** The 52 refusals are recoverable only by making `DrawnSurface.sample` resolve by
+ribbon *coverage* rather than centreline distance — a change to `Q92`'s one shared accessor, which
+serves the boxes and the arrows too, so it is its own decision. RM1002/RM1003 need a per-line module.
+The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of survey.
 
 **See.** `Q117` for the inferred join this supersedes · `Q54` for sourced-not-invented · `Q92` for
 the height accessor · `Q59` for reading a scanned sheet · `Q69` for the clear-gap trap
