@@ -142,10 +142,10 @@ class RoadMarkReport:
     # 🔴 **0 here, and UNEXERCISED — do not read it as proven.** Driving it needs
     # a published part outside the region and this region has none, so no test in
     # the suite reaches the increment: removing it leaves the whole suite green.
-    # `test_a_part_that_clips_to_nothing_is_counted` pins the two ways `clip`
-    # returns nothing, which is the half that *can* be tested here. Before this
-    # leg existed the identity closed anyway while `parts` leaked, which is the
-    # failure it is written against.
+    # `test_clip_returns_nothing_the_two_ways_the_partition_must_survive` pins
+    # the two ways `clip` returns nothing, which is the half that *can* be tested
+    # here. Before this leg existed the identity closed anyway while `parts`
+    # leaked, which is the failure it is written against.
     outside_region: int = 0
     candidates: int = 0
 

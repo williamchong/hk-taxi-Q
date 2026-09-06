@@ -19945,7 +19945,7 @@ half-width is constant on **721 of 737** edges, the **16** that vary being the r
 refusal exists to catch. ⚠️ It is also a **midpoint** measure, so it catches a line beside the wrong
 road and not one across it — which is the bearing guard's job, and why the two refusals are separate.
 
-**Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests, 0 shader errors, **five mutations five failures** — 🔴 **and a sixth SURVIVED on the first pass**: nothing tested the on-carriageway refusal at all, which is why it was extracted into `_on_its_own_carriageway` and given tests of its own, `paint_clearance` inside its gate, frame reproduced twice.
+**Status.** Shipped 2026-09-06. `check.sh` exit 0, 2,098 tests at ship and **2,100** after the review, 0 shader errors, **five mutations five failures** — 🔴 **and a sixth SURVIVED on the first pass**: nothing tested the on-carriageway refusal at all, which is why it was extracted into `_on_its_own_carriageway` and given tests of its own, `paint_clearance` inside its gate, frame reproduced twice.
 
 ⬜ **Left open.** The 52 refusals are recoverable only by making `DrawnSurface.sample` resolve by
 ribbon *coverage* rather than centreline distance — a change to `Q92`'s one shared accessor, which
