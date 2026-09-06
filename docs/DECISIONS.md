@@ -20070,8 +20070,14 @@ The same review measured the other divergences from the guide and keeps them:
 | `BeamBudget` as an autoload | one `/root/` lookup, dormant until a rig registers | A scene that forgets the node takes the "no arbiter, light everything" branch — the silent 8-slot cliff it exists to stop | Keep |
 | `NodePath` rather than typed node exports | `@export var target: Node3D` is **null in all five variants** from a hand-authored `.tscn` on 4.7.1 (cold and warm cache, after `--import`, either node order); the `NodePath` beside it resolves in all five | Needs an editor-saved scene; re-test after the user's first save | Keep, re-measure |
 
-Followed, in their own commits: `.gitattributes`; `FpsCounter` folded into `DebugHud`; the input
-source injected by `NodePath` into `VehicleController` and `ChaseCamera`; Main / World / GUI.
+Followed, in the commits around this one: `.gitattributes`; the two autoload dependencies in one
+change — `FpsCounter` folded into `DebugHud` (the one autoload whose `_ready` reached into
+another), and the input source injected by `NodePath` into `VehicleController` and `ChaseCamera`
+(after which both parse with no `[autoload]` block at all, where `hud.gd`, dev chrome, still does
+not — the control); then Main / World / GUI. ✅ **Measured inert**: `skidpad.sh` byte-identical
+before and after at 63.02 and 86.36 kph entry (drift 69.8° / 0.87 s and 50.4° / 0.98 s over the
+threshold on both sides), and the driver run's draw calls per debug view unchanged at
+**102 / 110 / 139** (off / minimal / full) with 0 script errors on either side.
 
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`

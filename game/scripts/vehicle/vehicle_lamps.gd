@@ -384,9 +384,10 @@ func set_beams_granted(granted: bool) -> void:
 ## The arbiter, or `null` where the scene runs without one.
 ##
 ## Looked up rather than named as a typed autoload, so a scene loaded by a verify
-## tool or a test harness without the autoload still runs its lenses. These are
-## the project's only `/root/` lookups — every other autoload is reached by its
-## global — so the exception lives in one place rather than at each call site.
+## tool or a test harness without the autoload still runs its lenses. The same
+## shape `VehicleController.input_path` and `ChaseCamera.input_path` use for
+## `InputRouter` since `Q119`; only the dev chrome still names an autoload
+## (`DebugHud`) by its global.
 func _budget() -> Node:
 	return get_node_or_null(^"/root/BeamBudget")
 

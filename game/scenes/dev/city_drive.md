@@ -190,7 +190,7 @@ nothing visible lost at street level.
 The player's HUD (`P3-24`) — speed, the street you are on, and three reserved
 slots that `P3-5a` and `P3-5b` fill. Last in the scene so the Taxi it reads
 already exists when it first looks, and on layer 10 so `DebugHud` (127) and
-`FpsCounter` (128) still win the corners when someone turns them on.
+its frame counter still win the corners when someone turns them on.
 
 ⚠️ `--hud=off` frees it. That is for `P3-9` first — the authenticity test is a
 drive with the direction arrow disabled, and a permanent street plate is

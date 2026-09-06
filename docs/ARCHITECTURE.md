@@ -113,9 +113,22 @@ mode and subdivides the rect per cascade — four 2048² quadrants and one 4096�
 79,592,192 B. Cascades buy geometry submission, not memory. There are no `lights_and_shadows/*` keys
 in `project.godot` at all: cascade count and distance are node properties on the one shared sun.
 
-**Autoloads:** `DebugHud`, `FpsCounter`, `InputRouter`, `BeamBudget`, registered in that order — the
-counter asks the HUD what to show in its `_ready`, and an autoload listed later does not exist yet.
-All four run every frame for the life of the process, so treat them as hot-path code.
+**Autoloads:** three, and each is held to the test Godot's own guidance sets — a wide-scope system
+that owns its own data and that other nodes register with rather than reach into (`Q119`):
+
+- `DebugHud` — every dev readout; overlays hand it a label and ask what to show. The frame counter
+  is a `Label` it builds, not a fourth autoload: `FpsCounter` was the one autoload whose `_ready`
+  reached into another, which made the registration order in `project.godot` load-bearing.
+- `InputRouter` — the one reader of raw input, and the action set every gameplay script samples.
+  Reached by `NodePath` (`^"/root/InputRouter"` by default on `VehicleController` and
+  `ChaseCamera`), never by its global name, so no gameplay script carries a compile-time dependency
+  on an autoload being registered.
+- `BeamBudget` — the renderer-global spot-light cap, dormant until a rig registers. It alters other
+  nodes' state, which the guidance says belongs to a regular node; it stays an autoload because its
+  "no arbiter" branch lights every beam, and a scene that forgot a regular node would take that
+  branch silently — the 8-slot cliff it exists to stop.
+
+All three run for the life of the process, so treat them as hot-path code.
 
 ### The debug overlay
 
@@ -205,12 +218,15 @@ reports success having checked nothing. **Never reference a `class_name` global 
 tool.**
 
 ⚠️ **Autoloads are registered on the first frame, not before, and a verify tool that loads a scene
-must `await process_frame` first.** Anything loaded from `_init` compiles while `InputRouter` is
-unresolvable, so `vehicle_controller.gd` fails to compile, GDScript **caches the broken class**, and
-the scene instances a `RigidBody3D` with a *null script* — measured. The run then prints
-`SCRIPT ERROR`, which `check.sh` fails on, having graded a car that never loaded.
-`tools/verify_vehicle.gd` and `tools/skidpad_ablation.gd` both open with that `await` for this
-reason. A scene instantiated but never added to the tree must also be `free()`d before `quit()`, or
+should still `await process_frame` first.** Until `Q119` this was a compile-time trap: anything
+loaded from `_init` compiled `vehicle_controller.gd` while the `InputRouter` global it named was
+unresolvable, GDScript **cached the broken class**, and the scene instanced a `RigidBody3D` with a
+*null script* — measured, and a run that printed `SCRIPT ERROR` having graded a car that never
+loaded. No gameplay script names an autoload any more — `VehicleController` and `ChaseCamera`
+resolve `InputRouter` by `NodePath` in `_ready`, as `vehicle_lamps.gd` always did for `BeamBudget` —
+so the scripts compile anywhere; the frame now only decides whether the router and the arbiter are
+in the tree when the car goes looking. `tools/verify_vehicle.gd` and `tools/skidpad_ablation.gd`
+both keep the `await` for that. A scene instantiated but never added to the tree must also be `free()`d before `quit()`, or
 Godot reports a page of `ERROR: ... leaked at exit` lines that read like a failure and are not one.
 
 ✅ **Running Godot no longer dirties the two config files** — both are committed in the writer's own
@@ -1548,7 +1564,7 @@ the second vehicle anyone built.
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scripts/ui/debug_hud.gd` | The one owner of dev chrome. Off by default |
-| `scripts/ui/fps_counter.gd` | Frame rate and frame time. Gated by `DebugHud`, and it stops counting while hidden |
+| `scripts/ui/fps_counter.gd` | Frame rate and frame time — a `Label` `DebugHud` builds, styles and tells what to show (`Q119`); it stops counting while hidden |
 | `scripts/ui/hud.gd` | The player's HUD. Samples speed at 10 Hz and the road graph at 5 Hz, sets label text only on a change, and registers a raw-versus-displayed readout with `DebugHud` — the one thing that can see a wrong street plate |
 | `scripts/ui/hud_layout.gd` | Every HUD rect **and** `P2-4`'s touch geometry. ⚠️ Two touch families and the distinction is load-bearing: `touch_zone_*` is where taps are detected and the HUD may overlap it; `thumb_rest_*` is what a fingertip covers and the HUD may not (`Q80`). Also holds the shared placer — `place`, `axis`, `inset_for_safe_area` — because the HUD and `P2-4`'s zones must resolve in the *same* frame (`Q97`) |
 | `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`). ⚠️ Declares **no `@export` defaults**, like `HandlingProfile` and `StreamingProfile` — a default is a second copy of the tuning table, and this one drifted (`Q80`) |

@@ -208,8 +208,9 @@ func _init() -> void:
 
 
 func _run() -> void:
-	# Autoloads are registered on the first frame, not before: `InputRouter` is
-	# unreachable until this returns, and the car reads it every tick.
+	# Autoloads are registered on the first frame, not before: the car resolves
+	# `InputRouter` by path in its `_ready`, so a scene added before this returns
+	# has no pedals.
 	await process_frame
 
 	if _parse_args() and await _boot():

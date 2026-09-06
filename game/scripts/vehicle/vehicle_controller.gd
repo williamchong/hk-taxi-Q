@@ -65,10 +65,24 @@ const GROUP: StringName = &"vehicle"
 
 @export var profile: HandlingProfile
 
+## Where the player's intent comes from, resolved once in `_ready`.
+##
+## A `NodePath` defaulting to the `InputRouter` autoload rather than the global
+## name (`Q119`). Naming an autoload is a compile-time dependency: this script
+## failed to compile — and GDScript cached the broken class — anywhere the
+## autoload was not registered yet, which is every `--script` tool until its
+## first frame. Resolved by path it is a runtime lookup, the shape
+## `vehicle_lamps.gd::_budget` already uses for `BeamBudget`, and a scene with
+## no router is a car with no pedals rather than a car with no script.
+## Duck-typed on purpose: `InputRouter` has no `class_name`, for the same reason.
+@export var input_path: NodePath = ^"/root/InputRouter"
+
 ## Split by chassis geometry once, because the drift scales the two axles
 ## differently, and every per-wheel write goes through one or the other. See
 ## _group_axles for why this is not `use_as_traction`.
 var _front: Array[VehicleWheel3D] = []
+## The resolved `input_path`, or null. See `_physics_process`.
+var _input: Node = null
 var _rear: Array[VehicleWheel3D] = []
 
 ## Steering as a signed fraction of the lock available at this speed: -1.0 is
@@ -79,7 +93,7 @@ var _rear: Array[VehicleWheel3D] = []
 ## steer_angle_at_top_deg near the limiter, so one threshold in degrees means
 ## "a nudge" parked and "everything the car has" at speed.
 ##
-## ⚠️ Sign follows InputRouter.steer, not `steering`. The physics angle is
+## ⚠️ Sign follows `steer_input`, not `steering`. The physics angle is
 ## negated on the way in — a positive rotation about +Y turns -Z forward toward
 ## -X, which is left — and a lamp rig reading the raw angle would flash the
 ## indicator on the wrong side of the car, which looks like a working feature.
@@ -136,7 +150,7 @@ var speed_kph: float = 0.0
 ## The brake/reverse pedal, sampled once per tick.
 ##
 ## ⚠️ **Cached so that this controller is the only thing on the car that reads
-## InputRouter**, which is what makes "the lamps read the car" true rather than
+## the router**, which is what makes "the lamps read the car" true rather than
 ## nearly true: `is_braking()` reading the autoload directly would report the
 ## *player's* pedal for every vehicle sharing this script, and the roster puts
 ## an AI taxi on it. Swapping this field for an AI's own intent is then the whole
@@ -144,10 +158,13 @@ var speed_kph: float = 0.0
 var brake_input: float = 0.0
 ## The handbrake button, sampled once per tick. Cached for both reasons
 ## `brake_input` is: an AI taxi on this script must not read the *player's*
-## handbrake, and the alternative was four autoload lookups a tick — `InputRouter`
+## handbrake, and the alternative was four duck-typed `get()`s a tick — `InputRouter`
 ## has no `class_name`, so those cannot compile to a validated getter the way the
 ## typed `profile` reads do.
 var drift_input: bool = false
+## The steering axis, sampled once per tick for the same reasons, -1 left to +1
+## right. `steer_ratio` above is the answer; this is the ask.
+var steer_input: float = 0.0
 ## The throttle pedal, sampled once per tick. Cached for both reasons `brake_input`
 ## is, and it was the one that got away: read inline it cost two unvalidated
 ## autoload lookups a tick, and an AI taxi on this script would have driven on the
@@ -186,6 +203,11 @@ static func above(node: Node) -> VehicleController:
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	_input = get_node_or_null(input_path)
+	if _input == null:
+		push_warning(
+			"VehicleController found no input source at '%s'; the car has no pedals." % input_path
+		)
 	assert(profile != null, "VehicleController has no HandlingProfile assigned.")
 	# The profile deliberately ships no defaults, so an unassigned resource reads
 	# as all-zeroes. These two would fail as a dead spring and a car with no grip
@@ -277,9 +299,11 @@ func _physics_process(delta: float) -> void:
 		return
 
 	speed_kph = forward_speed_kph()
-	throttle_input = InputRouter.accelerate
-	brake_input = InputRouter.brake_reverse
-	drift_input = InputRouter.drift
+	if _input != null:
+		steer_input = float(_input.get(&"steer"))
+		throttle_input = float(_input.get(&"accelerate"))
+		brake_input = float(_input.get(&"brake_reverse"))
+		drift_input = bool(_input.get(&"drift"))
 
 	_update_steering(delta)
 	_apply_drive()
@@ -324,9 +348,9 @@ func _update_steering(delta: float) -> void:
 	var max_angle: float = deg_to_rad(
 		lerpf(profile.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio)
 	)
-	# Negated: InputRouter.steer is +1 for right, but a positive rotation about
-	# +Y turns the -Z forward vector toward -X, which is left.
-	var target: float = -InputRouter.steer * max_angle
+	# Negated: steer_input is +1 for right, but a positive rotation about +Y
+	# turns the -Z forward vector toward -X, which is left.
+	var target: float = -steer_input * max_angle
 	# Returning to centre is quicker than reaching lock, so the car feels like it
 	# wants to straighten. Rate is expressed as full-lock-per-second.
 	var seconds: float = (

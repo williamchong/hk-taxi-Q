@@ -22,10 +22,15 @@ extends SpringArm3D
 @export var camera_path: NodePath
 
 @export var profile: ChaseProfile
+## Where the look-back button is read from. A `NodePath` to the `InputRouter`
+## autoload rather than its global name, for `VehicleController.input_path`'s
+## reason (`Q119`); a rig with no router simply never looks back.
+@export var input_path: NodePath = ^"/root/InputRouter"
 
 var target: Node3D
 
 var _camera: Camera3D
+var _input: Node = null
 var _yaw: float = 0.0
 ## Speed at which the FOV boost is fully applied. Seeded from the profile and
 ## overridden by a VehicleController target's own HandlingProfile — see
@@ -36,6 +41,7 @@ var _fov_full_kph: float = 0.0
 func _ready() -> void:
 	target = get_node_or_null(target_path) as Node3D
 	_camera = get_node_or_null(camera_path) as Camera3D
+	_input = get_node_or_null(input_path)
 	if target == null or _camera == null or profile == null:
 		push_error("ChaseCamera needs target_path, camera_path and profile to resolve.")
 		set_physics_process(false)
@@ -61,7 +67,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	# Look-back is a yaw flip rather than a second camera: it keeps the spring
 	# arm's collision behaviour and costs nothing to hold.
-	var desired_yaw: float = target.global_rotation.y + (PI if InputRouter.look_back else 0.0)
+	var look_back: bool = _input != null and bool(_input.get(&"look_back"))
+	var desired_yaw: float = target.global_rotation.y + (PI if look_back else 0.0)
 	# Exponential rather than constant-rate, which is the whole of `Q98`: the
 	# rate is proportional to the error, so a small steering correction barely
 	# moves the rig while the look-back flip — a whole PI — still closes

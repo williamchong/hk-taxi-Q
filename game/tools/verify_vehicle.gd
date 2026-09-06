@@ -39,13 +39,17 @@ extends SceneTree
 ## having checked nothing. Nodes are identified by the path of the script they
 ## run, and constants are read out of scripts `load`ed by path.
 ##
-## ⚠️ **The first `await` is load-bearing, and skipping it fails in the direction
-## that looks like a pass.** Autoloads are registered on the first frame, not
-## before, so loading `taxi.tscn` from `_init` compiles `vehicle_controller.gd`
-## while `InputRouter` is unresolvable. GDScript then caches the broken class, the
-## scene instances a `RigidBody3D` with a **null script**, and the run prints
-## `SCRIPT ERROR` — which `check.sh` fails on, having graded a car that never
-## loaded. `skidpad_ablation.gd` documents the same trap from the other side.
+## ⚠️ **The first `await` is still load-bearing, for a narrower reason than it
+## was.** Autoloads are registered on the first frame, not before. Until `Q119`
+## `vehicle_controller.gd` named `InputRouter` as a global, so loading `taxi.tscn`
+## from `_init` compiled it while that name was unresolvable, GDScript cached the
+## broken class, and the scene instanced a `RigidBody3D` with a **null script** —
+## a run that printed `SCRIPT ERROR` having graded a car that never loaded. The
+## car now resolves the router by `NodePath` in `_ready`, so the script compiles
+## anywhere; what the frame still buys is that `BeamBudget` and `InputRouter`
+## exist when the rig and the car go looking, so this grades the wiring a real
+## scene has rather than the "no arbiter" branch. `skidpad_ablation.gd` waits for
+## the same reason.
 ##
 ## Needs no built region: the taxi is a committed authored asset, so this runs
 ## outside `check.sh`'s `VERIFY_GENERATED` gate with `verify_beam_budget.gd`.

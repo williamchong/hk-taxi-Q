@@ -12,8 +12,8 @@ extends CanvasLayer
 ## the task that is not building the second half of it — and for why a thumb and
 ## a tap zone are two different rects.
 ##
-## ⚠️ **Below the dev chrome, deliberately.** `DebugHud` is layer 127 and
-## `FpsCounter` 128; this is 10. When someone turns on the debug overlay to
+## ⚠️ **Below the dev chrome, deliberately.** `DebugHud` is layer 127, frame
+## counter included; this is 10. When someone turns on the debug overlay to
 ## diagnose something, the diagnosis wins the corner. The two do not fight for
 ## the top-left because this HUD does not use it for anything it needs to read.
 ##

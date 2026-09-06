@@ -51,7 +51,7 @@ const TOGGLE_KEY: Key = KEY_F3
 ## `--debug-view=off` is how a screenshot for art review gets a clean frame.
 const VIEW_ARG: String = "--debug-view="
 
-## Kept from `fps_counter.gd`, which no longer gates itself. It now means
+## Kept from the days `fps_counter.gd` was an autoload gating itself. It means
 ## `MINIMAL` — the counter plus the position block — rather than the counter
 ## alone, because the counter is one of this HUD's views and two gates over one
 ## overlay is what created the mess this file exists to end.
@@ -79,6 +79,10 @@ const VIEW_NAMES: PackedStringArray = ["off", "minimal", "full"]
 
 const _MARGIN := Vector2(16.0, 12.0)
 
+## The frame counter, built here since `Q119` rather than autoloaded beside this.
+## `preload`ed by path: the script has no `class_name`, on the verify tools' rule.
+const FpsCounterScript = preload("res://scripts/ui/fps_counter.gd")
+
 var view: View = View.OFF
 
 var _stack: VBoxContainer
@@ -86,6 +90,8 @@ var _position: Label
 ## The registered labels, in a box of their own so their shared visibility is one
 ## property rather than a list this has to keep in step with its own children.
 var _readout_box: VBoxContainer
+## Top right, on this layer. Told what to show in `_set_view`; it never asks.
+var _counter: Label
 var _subject: Node3D = null
 var _manifest: CityManifest = null
 var _looked_for_manifest: bool = false
@@ -142,6 +148,11 @@ func _build() -> void:
 	_readout_box.name = "Readouts"
 	_readout_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stack.add_child(_readout_box)
+
+	_counter = FpsCounterScript.new()
+	_counter.name = "FpsCounter"
+	style_label(_counter, SIZE_STAT)
+	add_child(_counter)
 
 
 ## The house style for debug text: white on a heavy black outline.
@@ -317,6 +328,7 @@ func _learn_where_the_city_is() -> void:
 func _set_view(next: View) -> void:
 	view = next
 	_stack.visible = shows_stats()
+	_counter.show_stats(shows_stats())
 	_readout_box.visible = shows_readouts()
 	# Nothing to compute for a hidden overlay, and this is autoload code: it runs
 	# every frame for the life of the process whether or not anyone asked for it.

@@ -453,9 +453,8 @@ extends Resource
 ## The only function on an otherwise pure schema, and it is here rather than on
 ## VehicleController for two reasons. It is a fact about the profile, which
 ## suspension_rest_length_m already states in prose. And it has to be reachable
-## from a headless --script tool: VehicleController reads the InputRouter
-## autoload, autoloads are not registered under --script, and so anything that
-## touches it there fails to compile. tools/verify_spawn.gd needs this number to
-## check the drop height and must not drag the controller in to get it.
+## from a headless --script tool without dragging the controller in:
+## tools/verify_spawn.gd needs this number to check the drop height, and a
+## profile is a smaller thing to load than the car that reads it.
 func ray_length_m() -> float:
 	return suspension_rest_length_m + wheel_radius_m
