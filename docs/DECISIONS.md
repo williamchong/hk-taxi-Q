@@ -20094,3 +20094,204 @@ and a reader repeating it may hit one of those runs.
 **See.** `Q75` for the first reading of the loss · `Q99` for the `.tres` half and the measurement
 this repeats on 33 files · `Q104` for the `[importer_defaults]` loss this does not explain · `Q91`
 for `msaa_3d` · `Q82` for the importer default · `Q72` for reading a guard by making it fire
+
+---
+
+## `Q120` — Three more regions, and Wan Chai is not the dense extreme
+
+**Status.** 🟡 **Open.** The coefficients are measured and closed. Two defects it found are open:
+the streaming distances (`P4-5`) and `carve.edges` (below).
+
+**Origin.** An occlusion-culling evaluation, and the user's reframe behind it: *"we only built
+wanchai for game developement and design iteration and test play, but we will expand into whole hong
+kong in the game for final product."* Every scaling number this project has published was one region
+multiplied. The user offered ETL time — *"if pulling more region from etl helps, just ask"* — so
+three more regions were built to replace the multiplier with a measurement.
+
+### 🔴 Wan Chai is not the dense extreme, and the projection was anchored on it
+
+Three regions were added to `hong_kong.yaml`, each the **same 0.016° × 0.008° box** as `wan_chai`
+(1.457 km²) so bytes compare without normalising: `causeway_bay` (sharing Wan Chai's east edge at
+114.188 exactly), `sha_tin` (New Territories new town — towers, river, hillside) and `mong_kok`
+(dense Kowloon).
+
+| region | buildings | 0-bldg tiles | LOD0 tri | tile MB | road km | edges |
+|---|---:|---:|---:|---:|---:|---:|
+| `wan_chai` | 1,419 | 2 | 515,025 | 39.9 | 56.15 | 797 |
+| `causeway_bay` | 570 | 30 | 322,864 | 20.6 | 13.43 | 211 |
+| `sha_tin` | 761 | 5 | 245,491 | 15.6 | 22.33 | 250 |
+| `mong_kok` | **2,061** | **0** | **944,004** | **53.9** | 37.97 | 537 |
+
+🔴 **The working assumption was that Wan Chai is the dense end of the territory and that a ×50
+projection was therefore biased high. It is not: `mong_kok` is 35% denser** — 37.0 against
+27.4 MB/km² — with 45% more buildings and 83% more tile triangles in the same area. Anchored on
+Kowloon every published scaling figure comes out *larger*, not smaller. ⚠️ The ≈2.4 GB
+whole-territory estimate is confirmed in order of magnitude, and it was never conservative.
+
+### ✅ The denominators: buildings for tiles, road-km for the thin layers, area for terrain
+
+The point of four regions is not four numbers but which denominator holds still across them.
+
+| region | tile MB/km² | **KB/building** | thin drawn KB | **KB/road-km** |
+|---|---:|---:|---:|---:|
+| `wan_chai` | 27.4 | 28.1 | 3,522.8 | 62.7 |
+| `causeway_bay` | 14.1 | 36.2 | 1,044.7 | 77.8 |
+| `sha_tin` | 10.7 | 20.4 | 1,575.3 | 70.5 |
+| `mong_kok` | 37.0 | 26.2 | 2,005.7 | 52.8 |
+| **spread** | **3.5×** | **1.8×** | | **1.47×** |
+
+✅ **Building count is the denominator for tiles, not area** — 1.8× spread against 3.5× — at
+**27.7 KB/building**. A per-km² figure is the wrong planning unit and should not be quoted alone.
+✅ **The thin drawn layers scale on road-km**, ~66 KB/road-km, which is what `Q116`'s road-graph
+anchor assumed and is now measured rather than assumed. ⚠️ **That figure is the drawn layers only**
+— `roads`, `roadmarks`, `boxjunctions`, `arrows`, `signs`, `railings`, `lamps`, `tram`,
+`signs_text.png`. A first reading of 131 KB/road-km at a 1.2× spread walked the whole output
+directory and so included `carriageway_width.json` and `carve.json`, which are gitignored tool
+output that no build ships; it is withdrawn. The stale `signals.glb` in `wan_chai/` is excluded too
+(`Q77`).
+
+✅ **The libraries are flat, and this is the strongest evidence `P5-2`–`P5-5` were scale work rather
+than tidying.** Across four regions whose placements swing 4–8× (arrows 158 → 824, railings
+1,845 → 5,035), the library mesh counts are **identical to the mesh** — 9 signs, 9 lamps,
+12 railings, 10 arrows — and `lamps.glb` is **byte-identical at 3,568 B in all four regions**.
+
+🔴 **Terrain is a third term, on area, and nobody has costed it.** A 150 m tile with **zero**
+buildings still costs **p50 66,432 B** across both LOD tiers (n=37, range 9,756–124,944). At 44
+tiles per km² that is ~2.9 MB/km² of pure ground. Over a ~100 km² playable territory it is
+**~290 MB — the whole mobile bundle cap, before one building.** Harbour, country park and hillside
+are not free in this architecture.
+
+**Inverted, which is the planning number:** what does a 200 MB bundle buy at current fidelity?
+
+| at the density of | MB/km² | **km² in 200 MB** | × Wan Chai |
+|---|---:|---:|---:|
+| Mong Kok | 40.1 | **5.0** | 3.4× |
+| Wan Chai | 31.9 | **6.3** | 4.3× |
+| Causeway Bay | 15.4 | 13.0 | 8.9× |
+| Sha Tin | 12.9 | 15.5 | 10.6× |
+
+**Roughly 5–15 km²** — the north shore of Hong Kong Island *or* Kowloon, not both, and not the
+territory. This is the number to plan the free/IAP boundary against, and it is a fidelity question
+before it is a region-count one.
+
+### 🔴 The shipped streaming distances go over budget in Kowloon
+
+`streaming.tres` ships `tier_distances_m = [250]` and `unload_distance_m = 400`. Taking every tile
+centre in turn as the camera and summing what the streamer would hold resident at true AABB
+distance — the **worst** camera, not the average:
+
+| region | worst resident tri | + `roads.glb` | **vs 300k budget** |
+|---|---:|---:|---:|
+| `wan_chai` | 181,349 | 32,246 | 71% |
+| `causeway_bay` | 143,895 | 9,878 | 51% |
+| `sha_tin` | 72,463 | 19,687 | 31% |
+| `mong_kok` | 301,647 | 22,173 | **108%** 🔴 |
+
+🔴 **This is `Q87`'s failure mode in a different subsystem** — a value tuned at one operating point
+and applied at another, where a yaw assist tuned at 63 kph spun the car at 84. Wan Chai **could not**
+have shown it: at 71% it looks like comfortable headroom, and the region-average model reads 51%,
+which is why the average is not the statistic. Sweeping the two knobs, worst camera, buildings plus
+roads, as a share of 300k:
+
+| LOD0 / unload | `wan_chai` | `causeway_bay` | `sha_tin` | `mong_kok` |
+|---|---:|---:|---:|---:|
+| **250 / 400 m** (shipped) | 71% | 51% | 31% | **108%** |
+| 200 / 400 m | 65% | 41% | 29% | 90% |
+| 150 / 400 m | 58% | 38% | 26% | 78% |
+| 200 / 300 m | 48% | 35% | 23% | 65% |
+| 120 / 250 m | 32% | 23% | 17% | 40% |
+
+⚠️ **Do not read this as "set it to 120/250".** Pull-in distance is a look decision `Q26` has not
+taken and a streaming-hitch decision `P4-5` owns; the finding is that the shipped pair is not
+headroom, it is 8% over on the one region that resembles the expansion target.
+
+✅ **The cheaper lever is the LOD ratio, and it is ETL-side and free at runtime.** LOD1 carries
+**13.6 of the 22.3** resident tiles and saves only 51–62% of LOD0's triangles — L1/L0 is
+**0.49 / 0.38 / 0.45 / 0.39** across the four. A harsher LOD1, or a third tier, buys more than any
+runtime distance change and costs no draw calls.
+
+### 🔴 The retired triangle-budget risk is falsified and un-retired
+
+`PROGRESS.md` retired *"Building meshes blow the triangle budget"* under `P1-2`/`P2-1` on
+*"worst-case visible is 150,374 against 300k"*. That figure is Wan Chai's, at a different resident
+model, and Kowloon reads **301,647**. ⚠️ **The retirement was not wrong when it was written — it was
+single-region, and nothing said so.** It is un-retired rather than corrected, because the lesson is
+about the evidence and not the number.
+
+### ✅ Draw calls are region-invariant, and that re-prices `P5-6`
+
+The library counts above are the finding: **40 library meshes in every region regardless of what is
+in it.** Only bytes and triangles scale with the city; the draw-call budget does not. ✅ So chunking
+`roads.glb` costs a **bounded** +20–25 draw calls — paid once, for the whole territory, not per km²
+— because the chunk count is bounded by the *resident* set and not by the region. That is a
+materially better price than the earlier per-region framing, and it stands alongside the geometric
+argument: `roadsurface` spans **~1,660 m in three of the four regions** (`causeway_bay`'s 1,165 m is
+the region clipping it), so one un-cullable, un-streamable instance per region is structural and not
+a Wan Chai artefact. Frustum culling and distance streaming both fail on it everywhere.
+
+### 🚫 A road component system is refused again, and the reason has inverted
+
+`Q115` refused a road kit on geometry — measured carriageways do not tile, and a kit would be
+`Q54`'s invented road. That refusal stands untouched. **What the four regions add is that the
+*payoff* is small and shrinks exactly where the problem is:**
+
+| region | tiles MB | thin MB | total MB | `roads.glb` | **roads %** | all road geometry % |
+|---|---:|---:|---:|---:|---:|---:|
+| `wan_chai` | 39.9 | 3.52 | 43.4 | 1.92 MB | 4.4% | 7.3% |
+| `causeway_bay` | 20.6 | 1.04 | 21.7 | 0.58 MB | 2.7% | 4.3% |
+| `sha_tin` | 15.6 | 1.58 | 17.1 | 1.09 MB | 6.4% | 8.6% |
+| `mong_kok` | 53.9 | 2.01 | 55.9 | 1.33 MB | **2.4%** | **3.4%** |
+
+🔴 **The denser the region, the smaller roads' share** — Mong Kok, which *is* the bundle problem, has
+the lowest at 2.4%, because buildings grow with density and the road network does not. A component
+system that eliminated `roads.glb` entirely would return **2.4% of the bundle** in the region that
+needs it most. Buildings are 83%+; the lever is there, or in fidelity, and it is not here.
+
+⚠️ **Chunking is not a kit and is not refused with it.** `P5-6` splits the *same measured geometry*
+into streamable pieces and invents nothing, which is why it survives `Q115` and a component library
+does not. The two are routinely conflated; they are opposite answers.
+
+### ⚠️ What this measurement is not
+
+⚠️ **The three new regions skipped `carve`** (below), so their tile bytes and triangle counts are
+marginally **high** relative to Wan Chai's — `carve` removes triangles on 8 edges. That makes the
+Mong Kok 108% slightly pessimistic, by nothing near 8 points.
+⚠️ **Four regions is four, and two of them are flat.** `roadsurface`'s vertical span is 59.2 m in
+`wan_chai` and 42.4 m in `mong_kok`, against **183.1 m** in `causeway_bay` and 132.7 m in `sha_tin`
+— the hillside regions carry vertical complexity that the two regions the coefficients are anchored
+on do not have.
+⚠️ **No handset ran any of this.** The triangle budget is a written budget, not a measured device
+floor; `P0-3b` is still blocked.
+🚫 **Nothing here is shipped.** The three regions are local build output under gitignored
+`etl/out/`; only `wan_chai` is synced into `game/assets/generated/`, so the PCK is unchanged. Their
+config blocks in `hong_kong.yaml` are ~8 lines each and cost a build nothing until named.
+
+### 🔴 `carve.edges` is a Wan Chai edge list at config top level
+
+`hong_kong.yaml:3193` is `carve: edges: [233, 55, 485, 788, 398, 256, 327, 99]` — **not
+region-scoped**, so every region but `wan_chai` dies at stage 6 of 19:
+
+```
+ValueError: carve names edge 233, which is not in roadgraph.json — a stale id after a source refresh?
+```
+
+The three regions here were completed by resuming `--from surface`. ⚠️ **The refusal itself is
+right** — it is the stale-id guard doing its job — and the defect is that the ids live at config top
+level where a second region cannot help but collide with them. `carve` is the one stage whose input
+is a hand-picked list of *this region's* edge ids (`Q19`, `e99`), so the ids belong under the region
+that names them. This is the first multi-region defect the project has found, and it was invisible
+while one region existed.
+
+### ⬜ What this opens
+
+- **`P4-5` owns the streaming distances**, and now has a second operating point to tune against.
+- **`P5-7`'s join fixture exists for the first time.** `causeway_bay` shares `wan_chai`'s east edge
+  at 114.188 exactly, so `Q116`'s *"two regions meet at a hard edge with no continuing graph"* is
+  testable rather than argued.
+- **The LOD1 ratio is unowned** and is the cheapest triangle lever measured here.
+- **`carve.edges` needs a region scope** before any second region is built as a matter of course.
+
+**See.** `Q115` for the kit refusal this does not disturb · `Q116` for the region-as-unit argument
+and the ×50 anchor this replaces · `Q87` for a value tuned at one operating point and applied at
+another · `Q19` for `carve`'s hand-picked edges · `Q82` for the vertex compression that makes these
+byte figures comparable · `Q77` for why `signals.glb` is excluded
