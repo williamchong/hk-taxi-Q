@@ -1068,6 +1068,48 @@ because its acceptance is a byte-identity against today's `roads.glb` and the jo
 under it; `P5-7` with its rule already written in `Q116`; `P5-9` last, because two regions can only
 be resident once they join. `P5-8` waits on all four and on Phase 3's builds.
 
+### Phase 5b — The asset seam (`Q121`)
+
+**Goal:** a hand-made asset from a DCC tool can enter the bundle, be told apart in it, and be
+collided, culled and textured by the engine's own machinery — without the generated city giving up
+its one-draw-call tiles. **Broken down** from a 3D developer's review of the mesh contract (`Q121`,
+2026-09-07): the reviewer's six gaps, priced against the code and against two facts measured on
+Godot 4.7.1 — glTF node and mesh `extras` **survive import as metadata**, and custom `_`-prefixed
+vertex attributes **do not** (`CUSTOM0` absent after import). ⚠️ **The scope is the seam, not the
+style**: every task below keeps the merged tile, the vertex-colour albedo and the procedural facade
+as the default, and adds the hook a conventional asset plugs into. 🔴 **Every step owes the
+inertness proof `Q96` and `Q117` set** — name the channels that must be byte-identical and the one
+that may move — **and an A/B frame at one fixed camera, shot twice a side and `cmp`'d** (`Q62`).
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P5-10` | **The authored door, tested** — `landmarks:` generalised to `authored_assets:` (an entry names a `.glb` under `game/assets/authored/`, a placement, and optionally `replaces_source_ids`), documented in `ARCHITECTURE.md` as the artist's entry point with the material convention stated once: a recognised material name takes its `.tres`, anything else keeps the imported material with vertex colour as albedo, and a textured PBR material passes through under a declared budget. Plus **the round-trip test the repo has never run**: a committed fixture `.glb` exported from Blender (a Khronos sample asset if no Blender is to hand — fetch it, `fetch-more-data` stands), multi-node, PBR, textured | `check.sh` exit 0 with the fixture placed; its material, textures and node names **unchanged** after import, asserted by a `verify_authored.gd`; `sync_generated.sh` run twice and `git status` clean — it never touches `authored/`. Wan Chai bundle **byte-identical** (`shasum` over the manifest's files). Frame at one camera with the fixture in view, `cmp`'d. ⚠️ `verify_landmarks.gd` grades only a triangle budget today — that is the whole of the door's contract and this task writes the rest down |
+| `P5-11` | **Identity and the channel contract, one schema bump** — (a) each tile mesh carries an `extras` table, one row per merged source object: `id`, class, AABB, storey estimate; (b) `TEXCOORD_0` on tiles becomes a **real planar UV** — metres along the face, metres up — so the facade shader reads the along coordinate it already computes from world position off the vertex instead; (c) the payload moves to `TEXCOORD_1`: height above own base, class marker, phase, and a **per-building index** into the table; (d) one `pick_building(ray)` helper — hit → face → vertex → index → row; (e) the three copies of the road codec constants generated from one Python source, or a test that diffs them | `POSITION`, `NORMAL`, `COLOR_0` and every index **byte-identical** on all 132 tiles — the inertness proof; only the two `TEXCOORD`s move, asserted field by field. `Q27` street frame **0 of 2,073,600 px** differing, because the shader reads the same numbers from a different channel. Every vertex of every tier resolves to a row; a raycast from the driver's seat at three named buildings returns their source stems. `verify_tiles.gd`'s `TEXCOORD_1` **absence** assertion becomes a range check; `light_baking = 1` stays pinned. PCK delta pasted against `Q102`'s +0.24 MB precedent for a per-building constant. `city.json` schema bumped, both sides one commit. 🚫 **Per-building nodes refused** — no static batching in Godot 4, ~50 draw calls a tile on a 150 budget. 🚫 **Custom attributes refused on measurement**, not preference |
+| `P5-12` | **Colliders separated from render meshes** — each tile ships a `<tile>_collision-colonly` node built from a dedicated collapse (cell stated, not the 4 m LOD1 grid), and the render node drops `-col`; roads likewise a `-colonly` ribbon so the two may diverge later. ⚠️ **The kerb riser stays in the collider** — kerbs are mountable by design (`GAME_DESIGN.md`, `P2-3`) | Collider triangles per tile pasted before/after. **The wall-offset distribution** between the collider and the LOD0 facade — p50/p90/max — pasted, max under a stated bar (0.25 m proposed), because a coarse collider is a wall the car drives into or through. `drive.sh` timeline on the throttle route **identical to the centimetre**; physics time per tick pasted. `verify_tiles.gd` and `verify_road_surface.gd` assert the collider on the `-colonly` node and **none** on any render node. Every `Q19` grader reads the render mesh and reproduces its tables. 🚫 Convex hulls per building refused — `-convcolonly` is one hull and an L-shaped podium's hull blocks the street. 🚫 Heightfield terrain refused — the ground is a decimated source mesh, not a grid |
+| `P5-13` | **Two importer wins** — an `-occ` occluder node per tile built from LOD1, with `rendering/occlusion_culling/use_occlusion_culling` on and pinned by `verify_settings.gd`; `meshes/generate_lods = false` in `[importer_defaults]`, because the ETL ships the tiers and the importer's own are wasted import time and cache | Draw calls and `prims` on the throttle route pasted; the residency sweep's worst camera (`Q120`, 108% in Kowloon) re-measured. Frames `cmp`-identical on both sides — occlusion changes what is submitted, never a pixel. Import time of a clean `--import` pasted before/after. Sidecars deleted and re-imported (`Q82`: `[importer_defaults]` seeds only a new `.import`) |
+| `P5-14` | **Textures as an option on tiles** — `merge` carries a texture when **every** input shares the same one (an atlas or trim sheet), tiles declare a `texture_budget_px` on `P3-20`'s mechanism, and the facade shader gains a gated `albedo_atlas` sampler. Procedural windows stay the default; the atlas is an override per material class. After `P5-11`, which gives it a real UV to sample with | With the sampler off: bundle and frame **byte-identical** to `P5-11`'s. With one 1024² atlas declared: `mesh_contract.gd` passes on the declared budget and fails one pixel over it; the mobile texture budget (128 MB) quoted with the atlas's footprint; A/B frame at the `Q27` street. `merge`'s untextured guard still refuses two different textures |
+
+**Held, with the reason each waits on** — not refused, and not re-proposed without the trigger:
+
+- **A non-convex junction cap** (union boundary, not hull) — polygon clipping, the most expensive
+  item priced; the prerequisite for anything hand-drawn *on* a cap (`Q53`). Trigger: the first
+  authored junction piece or box junction that must sit on a cap.
+- **An `authored_roads:` seam** — a node id and a `.glb`; the ETL skips that node's cap and arm
+  trims, the game places the piece as a landmark; routing untouched because the graph does not move.
+  Cheap to build, worthless without an artist. Trigger: an artist.
+- **Markings as `Decal` nodes** — refused by `Q115` on the Mobile renderer and on cost; the lifted
+  meshes are built, graded (`paint_clearance.py`) and measured. Trigger: a measured need to edit
+  paint by hand, and a Mobile-renderer decal test first.
+- **The opposed-ribbon overlap in the road collider** — the same polygon union as the cap.
+- **A landmark LOD tier** for the 173k-vertex HKCEC — trigger: the mobile tier (`P0-3b`) to measure
+  it against.
+
+**Order.** `P5-10` first because it is the cheapest and it is the test that would have caught the
+review; `P5-11` next because `P5-12`–`P5-14` are easier once identity and the channels are settled,
+and it is the one schema bump; `P5-12`, `P5-13` in either order; `P5-14` last, on `P5-11`'s UV.
+Independent of `P5-7`/`P5-9`, and can run beside them; `P5-11` and `P5-7` both bump `city.json`, so
+whichever lands second rebases its number.
+
 ### Outline only — refine once Phase 3 lands
 
 - **`P3-27` (candidate, unscheduled) — Pedestrian crossings and footway extent.** Re-opened by

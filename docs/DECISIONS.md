@@ -20668,3 +20668,90 @@ list would move `causeway_bay`'s tiles, and none is written.
 and the ×50 anchor this replaces · `Q87` for a value tuned at one operating point and applied at
 another · `Q19` for `carve`'s hand-picked edges · `Q82` for the vertex compression that makes these
 byte figures comparable · `Q77` for why `signals.glb` is excluded
+
+## `Q121` — The mesh contract against a DCC workflow
+
+**Status.** 🟡 **Open — reviewed and planned 2026-09-07, nothing built.** The plan is `PLAN.md`
+Phase 5b, `P5-10`–`P5-14`.
+
+**The question.** A 3D developer reviewing the project said the way buildings and roads are built
+"is not best practice and would cost issues in future development, especially with a traditional 3D
+asset and game-developer workflow." The user asked for the mesh, script and scene to be read on that
+premise, with this file's earlier justifications set aside for the reading. This entry records what
+the reading found, what was measured, and what is planned, refused and held.
+
+**What ships, read off the binaries.** Every mesh in the game, generated *or* authored, comes out of
+one hand-rolled writer (`etl/pipeline/gltf.py`) in one shape: one scene, one node, one mesh, one
+primitive, one placeholder PBR material whose only meaningful property is its **name**. No
+`extras`, no per-object nodes, no textures but the sign atlas. The three assets under
+`game/assets/authored/` were also written by Python (`tools/make_vehicle.py`, `make_landmark.py`,
+`make_barrier.py`; their `generator` field says so), so **nothing in the repository has ever gone
+Blender → Godot**, and none of the constraints below has been exercised by an external asset.
+
+**The six gaps, in the order they block things.**
+
+1. **Identity is destroyed at build time.** A tile is every building, structure and the ground
+   merged into one primitive; no id, no name, no per-object node. The only trace of one building is
+   a 256-step phase in a UV fraction and a jittered colour. Nothing can pick a building, attach data
+   to one, or swap one without editing ETL config.
+2. **Standard channels carry semantic payloads.** Tiles: `TEXCOORD_0` = (metres above own base,
+   class + phase). Roads: `TEXCOORD_1.x` a nine-field bitfield, `COLOR_0.a` a restriction flag.
+   Every UV- or colour-touching tool corrupts it, and the repo already carries the scars —
+   `light_baking = 1` pinned, `force_disable_compression` project-wide, an *absence* assertion on
+   `TEXCOORD_1`, and the road codec copied in three files.
+3. **Textures are contractually forbidden**, not merely unused: `mesh_contract.gd` fails any
+   `Texture` on any uniform unless a budget is declared. The facade is an 875-line procedural
+   shader; no trim sheet, no decal, no painted shopfront, and the along-coordinate is world X or Z,
+   so a rotated building changes its face.
+4. **Collision is the render mesh.** Every `-col` is a trimesh of the full render geometry, facade
+   triangles, ground and kerb lips included, LOD0 only; the seam the docs describe is two *opposed
+   ribbons'* colliders overlapping.
+5. **The road is a ribbon overlay with no override layer** — regenerated every build, laid at
+   sampled height over terrain and buildings, convex caps overlapping their arms by up to 4.21 m, no
+   pavement past a 0.5 m lip, markings floated 12–16 mm as separate meshes where decals would go.
+6. **One path in, and it deletes strangers**: assets are reached only through `city.json`, and
+   `sync_generated.sh` removes what the manifest does not name (⚠️ under `generated/` only —
+   `authored/` is untouched, and the `landmarks:` entry with `replaces_source_ids` **is already an
+   authored door**, graded by `verify_landmarks.gd` on a triangle budget alone).
+
+Plus the engine features left off: no occluders, no `visibility_range`, no lightmaps, no navmesh;
+the importer's own `generate_lods` running on top of the ETL's tiers; a 173k-vertex hero loaded whole.
+
+**Where the review overshoots.** Metres, Y-up, region-local origin and the `-col` name hook are
+conventional. One draw call per 150 m tile and vertex-colour albedo are legitimate mobile choices,
+and Godot 4 has no static batching, so per-building nodes would cost ~50 draw calls a tile. The
+defect is not "generated from data"; it is that there is **no seam** between the generated world and
+a hand-authored asset.
+
+**Measured on Godot 4.7.1, 2026-09-07**, with a probe `.glb` carrying `_HEIGHT` (VEC4) and `_ID`
+(SCALAR) attributes plus node and mesh `extras`, imported headless and read back:
+
+| Fact | Result |
+|---|---|
+| Node `extras` | imported — `get_meta_list()` → `[&"extras"]` |
+| Mesh `extras` | imported — same |
+| Custom `_` vertex attributes | **dropped** — `ARRAY_FORMAT_CUSTOM0` false, `ARRAY_CUSTOM0` null |
+| glTF material | kept as `StandardMaterial3D`, `resource_name` preserved |
+
+So per-object identity is cheap (a table in `extras`), and per-vertex identity has to travel in a
+UV channel — custom attributes are refused **on measurement**, not on preference.
+
+**Verdict — GO WITH CAVEATS, as `P5-10`–`P5-14`.** The authored door and the round-trip test the
+repo has never run; identity and the channel contract as one schema bump (`TEXCOORD_0` a real UV,
+payload and building index in `TEXCOORD_1`, `extras` table, a picker); colliders separated from
+render meshes with the wall-offset distribution pasted; occluders and the importer's LODs off;
+textures as an *option* on tiles under `P3-20`'s budget. Each keeps the merged tile and the
+procedural facade as the default.
+
+**Refused, with the reason.** Per-building nodes (draw calls, above). Custom vertex attributes
+(measured, above). Convex hulls per building (`-convcolonly` is one hull; an L-shaped podium's hull
+blocks the street). Heightfield terrain (the ground is a decimated source mesh, not a grid).
+
+**Held, with the trigger** — the non-convex cap (an authored piece on a cap), `authored_roads:`
+(an artist), decals (`Q115` stands; a Mobile-renderer decal test first), the opposed-ribbon
+collider union (the same clipping as the cap), a landmark LOD tier (`P0-3b`).
+
+**See.** `Q115` for the kit and decal refusals this leaves standing · `Q102` for the last time
+`TEXCOORD_1` carried a per-building constant and what it cost · `Q63` for the texture budget the
+option rides on · `Q82` for the compression setting that protects the payload · `Q53` for the cap
+overlap · `Q62` for why every step here owes a frame
