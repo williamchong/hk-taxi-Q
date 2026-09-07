@@ -20671,8 +20671,17 @@ byte figures comparable · `Q77` for why `signals.glb` is excluded
 
 ## `Q121` — The mesh contract against a DCC workflow
 
-**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10` built the same day.** The plan is
-`PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-10`**: the `landmarks:` block is the door, generalised
+**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10` and `P5-11` built the same day.**
+The plan is `PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-11`** (schema 28): `TEXCOORD_0` is a
+planar façade UV in metres, `TEXCOORD_1` carries marker, phase and object row, and each tier ships
+its object table as mesh `extras` (3,013 rows on Wan Chai). Proved inert against a clean worktree
+build of the previous commit — every tile byte-identical in every channel but the two that moved,
+the along-coordinate reproduced to 0.000000, the reference frame 0 px moved — and graded by
+`verify_tiles.gd` (3 mutations, 3 failures). 🔴 **PCK +10.9%, of which the identity channel is
++0.65% and the per-vertex along-coordinate +10.2%**: the price of a real UV, reversible in one
+line and the user's call. 🔴 Three unlisted consumers of the old channel were found and fixed in
+the carve — the stage that reads tiles back — and `read_glb` had to learn `extras`. Numbers in
+`PLAN.md` `P5-11`. ✅ **`P5-10`**: the `landmarks:` block is the door, generalised
 rather than renamed — `replaces_source_ids` optional for an authored asset — and the repository's
 first DCC export (`tools/make_dcc_fixture.py`, Blender 5.2, byte-identical on regeneration) is
 graded by `tools/verify_authored.gd` in `check.sh`'s always-on set: names, hierarchy, the untouched

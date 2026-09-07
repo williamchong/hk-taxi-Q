@@ -51,6 +51,7 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_SCHEMA,
     CARVED_EDGES_KEY,
     FACADE_MATERIAL,
+    stamp_along,
     union,
 )
 from pipeline.config import Carve, Config, SurfaceClass, load_config
@@ -305,11 +306,50 @@ def _retaining_wall(
             if removed.colours is None
             else np.tile(removed.colours[0], (len(positions), 1)),
             uvs=None if removed.uvs is None else np.tile(removed.uvs[0], (len(positions), 1)),
-            uv2=None if removed.uv2 is None else np.tile(removed.uv2[0], (len(positions), 1)),
+            uv2=None if removed.uv2 is None else _wall_rows(positions, removed),
             material=source.material,
         ),
         metres,
     )
+
+
+def _wall_rows(positions: np.ndarray, removed: MeshData) -> np.ndarray:
+    """The wall's `TEXCOORD_1`: marker and phase tiled from vertex 0 like the
+    colour, the object row per vertex from the nearest removed vertex.
+
+    `removed` is every structure the prism met, so one row across a wall that
+    spans several put 348 wall vertices 27.6 m outside the box of the one
+    object it named (`P5-11`); the nearest removed vertex is the structure
+    this piece of wall stands in for. ⚠️ The phase is *not* taken per vertex:
+    it seeds the window hash, the wall drew with vertex 0's before `P5-11`,
+    and a per-vertex phase would move the carved tiles' frame.
+    """
+    assert removed.uv2 is not None
+    uv2 = np.tile(removed.uv2[0], (len(positions), 1))
+    uv2[:, 1] = removed.uv2[_nearest(positions, removed), 1]
+    return uv2
+
+
+# Elements of the `(chunk, targets, 3)` float64 difference `_nearest` forms at
+# a time: 24 MB, whatever the two counts are.
+_NEAREST_CHUNK_ELEMENTS = 1_000_000
+
+
+def _nearest(positions: np.ndarray, removed: MeshData) -> np.ndarray:
+    """Index of the removed vertex nearest each position.
+
+    Brute force — the ETL carries no spatial index (`sign_sheets.py` records
+    the refusal of scipy) — chunked by the *target* count, so the transient is
+    bounded whatever a region's structure density does to `removed`.
+    """
+    out = np.empty(len(positions), dtype=np.int64)
+    targets = removed.positions
+    chunk = max(1, _NEAREST_CHUNK_ELEMENTS // max(1, len(targets)))
+    for start in range(0, len(positions), chunk):
+        block = positions[start : start + chunk]
+        distance = ((block[:, None, :] - targets[None, :, :]) ** 2).sum(axis=2)
+        out[start : start + chunk] = distance.argmin(axis=1)
+    return out
 
 
 def _double_side(wall: MeshData) -> MeshData:
@@ -492,7 +532,15 @@ def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveR
         # 🔴 `read_glb` does not read a primitive's material back, so a tile
         # re-emitted without this imports on the default `BaseMaterial3D` and the
         # window-band shader disappears from ten tiles, silently.
-        carved = _named(carved, source.name, FACADE_MATERIAL)
+        carved = _named(carved, source.name, FACADE_MATERIAL, source.extras)
+        # 🔴 And `TEXCOORD_0.x` is re-stamped over the whole carved tier, because
+        # it is a function of the vertex that ships: a cut vertex interpolates
+        # its UV linearly along the edge, and the along-coordinate is not linear
+        # where the normal turns — on the smooth-shaded ground it read up to
+        # 124 m off — and the wall copied a structure vertex's, 754 m off. The
+        # shader used to derive it from world position at exactly this vertex,
+        # so stamping it here is what keeps the carved tiles' frame where it was.
+        carved = stamp_along(carved)
         lod["bytes"] = write_glb(path, [carved])
         lod["triangles"] = carved.triangle_count
         lod["vertices"] = len(carved.positions)
@@ -578,15 +626,20 @@ def _account(row: EdgeCarve, cut: MeshData) -> None:
     row.carved_area_m2 += float(np.linalg.norm(cut.triangle_cross(), axis=1).sum() / 2.0)
 
 
-def _named(mesh: MeshData, name: str, material: str) -> MeshData:
+def _named(mesh: MeshData, name: str, material: str, extras: dict | None = None) -> MeshData:
     """`merge` drops both, deliberately, so the caller renames what it merged.
 
     🔴 The name carries `COLLISION_SUFFIX` on LOD0, which is what gives the tile
     its trimesh collider. Reconstructing it from the tile id would lose the
     suffix on any tier that carries one, so it is taken from the mesh that was
     read.
+
+    The `extras` object table (`P5-11`) is the third thing `merge` drops. The
+    carve keeps the tile's local row indices — the wall inherits the removed
+    structure's row, and `rest` is a selection — so the table read back is
+    still the right one and is reattached whole.
     """
-    return replace(mesh, name=name, material=material)
+    return replace(mesh, name=name, material=material, extras=extras)
 
 
 def _retile_aabb(tile: dict, boxes: list) -> None:
@@ -661,10 +714,16 @@ def _document(city: Config, region_id: str, report: CarveReport) -> dict:
 
 
 def _structure(mesh: MeshData) -> np.ndarray:
-    """Which triangles came from `INFRASTRUCTURE`, read off `TEXCOORD_0.y`."""
-    if mesh.uvs is None:
+    """Which triangles came from `INFRASTRUCTURE`, read off `TEXCOORD_1.x`.
+
+    `TEXCOORD_0.y` until `P5-11`, when the marker moved to the identity channel
+    and `TEXCOORD_0` became a planar UV. ⚠️ Reading the wrong channel here does
+    not fail: every prism finds no soffit, `soffit_bounded` reads 0 on every
+    edge and the cut goes through the deck — which is how the move was caught.
+    """
+    if mesh.uv2 is None:
         return np.zeros(len(mesh.triangles), dtype=bool)
-    classes = np.floor(mesh.uvs[:, 1]).astype(int)
+    classes = np.floor(mesh.uv2[:, 0]).astype(int)
     return classes[mesh.triangles].min(axis=1) == int(SurfaceClass.STRUCTURE)
 
 

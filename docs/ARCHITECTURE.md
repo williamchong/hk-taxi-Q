@@ -469,7 +469,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 21,
+  "schema_version": 28,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -617,8 +617,9 @@ tiles an `aabb` but no position.
 
 **Tile output carries no textures.** One material, one primitive, colour in `COLOR_0` — that is what
 makes a tile one draw call, checked in-engine by `verify_tiles.gd`. Since `P3-7` it also carries
-`TEXCOORD_0`, which is **not** a texture coordinate: no image is sampled, and `merge` still refuses a
-textured mesh outright.
+`TEXCOORD_0`, and since `P5-11` that **is** a texture coordinate — a planar façade UV in metres —
+though no image is sampled and `merge` still refuses a textured mesh outright; the shader payload
+rides `TEXCOORD_1` and the object table rides the mesh `extras`.
 
 ⚠️ **"No textures" is stricter than it sounds, and the strict part is enforced in code rather than
 only stated here.** `scripts/city/mesh_contract.gd` walks **every shader uniform** and fails on any
@@ -632,9 +633,11 @@ that conversation rather than to make it impossible.
 | Attribute | Meaning |
 |---|---|
 | `COLOR_0.rgb` | The surface's albedo, **sRGB-encoded**, as normalised `uint8`. Every consumer must linearise it — see the warning below |
-| `TEXCOORD_0.x` | Metres above **that source object's own base**. A vertex knows its world Y, not where its building starts, and the region's ground moves 40 m — so world Y is not even a proxy. Metres rather than a 0-1 fraction because the floor *count* is the signature the window shader exists to carry |
-| `TEXCOORD_0.y` | `floor()` is a `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps, so neighbouring towers do not line their window rows up |
-| `TEXCOORD_1` | 🚫 **Not shipped since schema 20** (`Q102`). From schema 6 to 19 `x` held a packed façade-survey state — `code = glz + 4·tint + 1024·grammar`, every field's 0 meaning "refused → fall back to the hash" — and `y` was reserved at a documented layout for `Q42`'s riders (storey pitch, podium floors, balconies, emphasis). The only producer of a committed value was `Q41`'s vision reader, withdrawn on cost, so the channel could carry nothing but the refusal sentinel. It was **removed rather than shipped all-zero**: zero was a legal code, so an all-sentinel tile is indistinguishable from a survey that ran and declined every building, and the bundle would have claimed a survey it did not carry. `verify_tiles.gd` now asserts the attribute's *absence*, which is also what catches a lightmap unwrap synthesising one |
+| `TEXCOORD_0.x` | **Metres along the wall** (`P5-11`, schema 28): the world axis *chosen* by the vertex normal — a wall facing X runs along Z and vice versa, blended over 45° — which is the rule `city_facade_clean.gdshader` computed at the vertex until `P5-11` and reads off the vertex since (`buildings.along_m`). ⚠️ **Stamped on the shipped tier, after `collapse`**, because it is a function of the vertex that ships; the carve re-stamps it too, because a cut vertex interpolates its UV linearly and the rule is not linear where the normal turns. With `.y` this makes `TEXCOORD_0` a **real planar UV in metres** an artist can texture with, and that is the point: nothing the shader reads now sits where an unwrap or a decal would land
+| `TEXCOORD_0.y` | Metres above **that source object's own base** (`TEXCOORD_0.x` until schema 28). A vertex knows its world Y, not where its building starts, and the region's ground moves 40 m — so world Y is not even a proxy. Metres rather than a 0-1 fraction because the floor *count* is the signature the window shader exists to carry
+| `TEXCOORD_1.x` | `floor()` is a `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps, so neighbouring towers do not line their window rows up. (`TEXCOORD_0.y` until schema 28.) ⚠️ The channel was 🚫 **not shipped from schema 20 to 27** (`Q102`): from 6 to 19 `x` held a packed façade-survey state whose only producer, the vision reader, was withdrawn on cost, so it could carry nothing but its refusal sentinel and was removed rather than shipped all-zero. This payload has no sentinel — every value names a real marker and a real row — which is what makes shipping the channel honest again |
+| `TEXCOORD_1.y` | **The object row** (`P5-11`): an exact integer indexing the tier's `extras` table below, constant per source object — the one shape `collapse` can carry, since it takes one representative per cluster. `verify_tiles.gd` holds every vertex to a row that exists and to that row's box within `BuildingIndex.ROW_SLACK_M` (8 m, a decimation cell) |
+| Mesh `extras` | **The object table** (`P5-11`): `{"objects": [{"id", "class", "aabb"}, …]}` on the glTF mesh, one row per source object with at least one vertex left in the tier — the cross-dataset stem for a building, the sheet name for the ground, the source directory, and the source mesh's own game-space AABB **before** decimation. Godot 4.7 imports it as `Mesh.get_meta("extras")` (measured, `Q121`); `scripts/city/building_index.gd` is the reader, and `object_at(root, point)` answers by the smallest containing box, ties among overlapping boxes broken by the row of the nearest vertex — exact at a raycast hit. ⚠️ Custom `_` vertex attributes were measured **dropped** by the importer, which is why the row rides a UV and the table rides `extras`
 | Material name | **`city_facade`**, and the name is the contract. glTF cannot say "use this shader", so `tools/generated_scene_import.gd` dispatches on the name and hands the tile `tuning/city_facade.tres`; everything else in the bundle keeps its `BaseMaterial3D` |
 
 ⚠️ **The `TEXCOORD_1` codec constants were contract rather than tuning, and the rule outlived
@@ -725,21 +728,23 @@ all zeros. That is the figure the removal gives back.
 withdrawn on cost, which left every field able to hold only its own `0` — and `0` meant "refused →
 fall back to the hash". A channel that can only say "refused" is not a cheap channel, it is a
 bundle asserting a survey it does not carry, and no consumer could tell that state from a survey
-that ran and declined every building. So the attribute goes, `verify_tiles.gd` asserts its
-**absence**, and `schema_version` bumps on `P3-6`'s removal precedent.
+that ran and declined every building. So the attribute went, `verify_tiles.gd` asserted its
+**absence** from schema 20 to 27, and `schema_version` bumped on `P3-6`'s removal precedent.
+✅ **`P5-11` (schema 28) filled it again with a payload that has no sentinel** — marker, phase and
+object row, every value naming something real — which was the argument this paragraph owed.
 
-⚠️ **The importer hazard outlived the payload.** `meshes/light_baking = 2` (Static Lightmaps) makes
-Godot's importer generate its own UV2 unwrap; it used to overwrite the payload with fractions in
-`[0, 1]` that pass every visual inspection, and now it would *fabricate* a channel the contract
-forbids. The tiles ship `= 1` (Static), `verify_tiles.gd` asserts that setting directly, and its
-absence check catches the same regression a second way — more cheaply than the per-vertex codec
-scan it replaced, and with no legal value to be confused with a corrupt one.
+⚠️ **The importer hazard outlived the payload and outlives the refill.** `meshes/light_baking = 2`
+(Static Lightmaps) makes Godot's importer generate its own UV2 unwrap; it overwrote the survey
+payload with fractions in `[0, 1]` that pass every visual inspection, and would overwrite the
+identity payload the same way. The tiles ship `= 1` (Static), `verify_tiles.gd` asserts that setting
+directly, and its per-vertex row check catches the same regression a second way: an unwrap's
+fractions fail the row-index test on every vertex of every object but the first.
 
 ⚠️ **The ground marker was reserved here rather than left to a later task.** Merging bought the
 ground a free draw call and cost it its own material, so a ground-only treatment — slope blending, a
 PBR-ish roughness variation, any ground shader — had nothing to select on. `SurfaceClass.GROUND` is in
 the payload now and the shader ignores it, which cost one commit instead of a second schema bump. What
-it does **not** buy is a usable height: `TEXCOORD_0.x` measures from each source mesh's own base, and
+it does **not** buy is a usable height: `TEXCOORD_0.y` measures from each source mesh's own base, and
 the ground's meshes are sheet-shaped, so the value is not comparable across a sheet boundary.
 
 ⚠️ **`COLOR_0` is sRGB-encoded, and every consumer has to linearise it itself.** The ETL picks

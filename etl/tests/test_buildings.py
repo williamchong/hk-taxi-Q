@@ -29,11 +29,13 @@ from pipeline.buildings import (
     _material_seed,
     _seed,
     _tile_ground,
+    along_m,
     assign,
     build_region,
     colour_for,
     facade_uv,
     game_offset,
+    identity_uv2,
     material_for,
     podium_blocks,
 )
@@ -560,9 +562,15 @@ class TestWeightedDraw:
 
 
 class TestFacadeUv:
-    """`P3-7`'s vertex payload: what the window-band shader cannot derive."""
+    """`P3-7`'s vertex payload: what the window-band shader cannot derive.
 
-    def test_u_is_measured_from_the_mesh_s_own_base(self) -> None:
+    Since `P5-11` it is two channels: `TEXCOORD_0` is a planar façade UV —
+    `u` metres along (stamped on the finished tier by `along_m`), `v` metres
+    above the object's own base — and `TEXCOORD_1` carries the marker, the
+    phase and the object row.
+    """
+
+    def test_v_is_measured_from_the_mesh_s_own_base(self) -> None:
         """The whole reason this ships. A vertex knows its world Y, and Wan Chai's
         ground moves 40 m across the region — so world Y says nothing about which
         floor a wall vertex is on."""
@@ -570,24 +578,30 @@ class TestFacadeUv:
 
         uvs = facade_uv(style(), "BUILDING", on_a_hill)
 
-        assert uvs[:, 0].min() == pytest.approx(0.0)
-        assert uvs[:, 0].max() == pytest.approx(30.0)
+        assert uvs[:, 1].min() == pytest.approx(0.0)
+        assert uvs[:, 1].max() == pytest.approx(30.0)
 
-    def test_u_is_metres_rather_than_a_fraction_of_the_building(self) -> None:
+    def test_u_is_a_placeholder_until_the_tier_is_stamped(self) -> None:
+        """The along-coordinate is a function of the vertex that *ships*, so
+        `facade_uv` leaves it at zero and `_identify` stamps it after the
+        collapse — see `along_m`."""
+        assert not facade_uv(style(), "BUILDING", flat_mesh("B1", 9.0))[:, 0].any()
+
+    def test_v_is_metres_rather_than_a_fraction_of_the_building(self) -> None:
         """The correction to `ART_DESIGN.md`'s original `(0-1)`. Normalised, a
         shophouse and a tower get the same number of window rows, and the floor
         *count* is the density signature the effect exists to carry."""
         shophouse = facade_uv(style(), "BUILDING", flat_mesh("B1", 9.0))
         tower = facade_uv(style(), "BUILDING", flat_mesh("B2", 120.0))
 
-        assert shophouse[:, 0].max() == pytest.approx(9.0)
-        assert tower[:, 0].max() == pytest.approx(120.0)
+        assert shophouse[:, 1].max() == pytest.approx(9.0)
+        assert tower[:, 1].max() == pytest.approx(120.0)
 
     def test_the_marker_separates_the_three_kinds_of_surface(self) -> None:
         """A tile is one merged primitive, so nothing else tells a façade from a
         viaduct soffit from the pavement."""
         markers = {
-            class_id: np.floor(facade_uv(style(), class_id, flat_mesh("m", 8.0))[:, 1])[0]
+            class_id: np.floor(identity_uv2(style(), class_id, flat_mesh("m", 8.0), 0)[:, 0])[0]
             for class_id in ("BUILDING", "INFRASTRUCTURE", "TERRAIN")
         }
 
@@ -600,11 +614,37 @@ class TestFacadeUv:
     def test_the_phase_shares_the_colour_jitter_s_seed(self) -> None:
         """One seed for both, so a rebuild cannot move a building's window rows
         while leaving its brightness alone."""
-        first = facade_uv(style(), "BUILDING", flat_mesh("B12345", 8.0))
-        second = facade_uv(style(), "BUILDING", flat_mesh("B12345", 8.0))
+        first = identity_uv2(style(), "BUILDING", flat_mesh("B12345", 8.0), 0)
+        second = identity_uv2(style(), "BUILDING", flat_mesh("B12345", 8.0), 0)
 
         assert (first == second).all()
-        assert facade_uv(style(), "BUILDING", flat_mesh("B99999", 8.0))[0, 1] != first[0, 1]
+        assert identity_uv2(style(), "BUILDING", flat_mesh("B99999", 8.0), 0)[0, 0] != first[0, 0]
+
+    def test_the_row_is_the_ordinal_and_is_exact(self) -> None:
+        """`TEXCOORD_1.y` names the object's row, constant per mesh — the one
+        shape `collapse` can carry — and exact in float32 far past any region's
+        object count."""
+        uv2 = identity_uv2(style(), "BUILDING", flat_mesh("B1", 8.0), 2_345)
+        assert (uv2[:, 1] == 2_345.0).all()
+        assert np.float32(2**24) - np.float32(2**24 - 1) == 1.0
+
+    def test_along_is_the_shader_s_rule(self) -> None:
+        """A wall facing X runs along Z and vice versa, blended over 45°: the
+        axis-chosen projection `city_facade_clean.gdshader` computed at the
+        vertex until `P5-11`, transcribed. A per-face tangent — the rule this
+        replaced in the shader — gives a curved podium a seam per triangle."""
+        positions = np.array([[10.0, 0.0, 20.0], [10.0, 0.0, 20.0], [10.0, 0.0, 20.0]])
+        faces_x = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+        faces_z = np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
+        diagonal = np.array([[0.7071, 0.0, 0.7071]], dtype=np.float32)
+        normals = np.concatenate([faces_x, faces_z, diagonal])
+
+        along = along_m(positions, normals)
+
+        assert along[0] == pytest.approx(20.0)  # facing X: runs along Z
+        assert along[1] == pytest.approx(10.0)  # facing Z: runs along X
+        assert along[2] == pytest.approx(15.0)  # the blend band's midpoint
+        assert along.dtype == np.float32
 
     def test_a_high_phase_never_rounds_into_the_next_marker(self) -> None:
         """⚠️ The defect this was written against, and it was a real one. The raw
@@ -642,8 +682,8 @@ class TestFacadeUv:
 
         assert len(pieces) > 1
         for piece in pieces:
-            assert piece.uvs[:, 0].min() == pytest.approx(0.0)
-            assert piece.uvs[:, 0].max() == pytest.approx(40.0)
+            assert piece.uvs[:, 1].min() == pytest.approx(0.0)
+            assert piece.uvs[:, 1].max() == pytest.approx(40.0)
 
     def test_jitter_distinguishes_neighbours(self) -> None:
         """Without it a height band renders as one flat mass and the block reads
@@ -750,19 +790,37 @@ class TestBuildRegion:
         assert tile.colours is not None
         assert tile.texture is None
 
-    def test_tiles_ship_no_survey_channel_at_all(self, hong_kong, sources, tmp_path) -> None:
-        """`Q102`'s ratchet. Schema 6 shipped `TEXCOORD_1` on every tile — a
-        packed facade-survey state whose only producer was the vision reader,
-        withdrawn on cost. The channel is gone rather than shipped all-zero,
-        and this is what says so: an absent attribute is a schema-20 fact a
-        v19 reader cannot mistake for the sentinel, which was a legal code
-        meaning "refused" and would have read as a whole city refusing.
-        """
+    def test_tiles_ship_the_identity_channel_and_its_table(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`P5-11`: every tier carries `TEXCOORD_1` — marker + phase in `x`, the
+        object row in `y` — and an `extras` object table the rows index. `Q102`
+        removed the channel rather than ship a sentinel; this payload has none,
+        which is what makes shipping it honest again. And `TEXCOORD_0.x` is
+        the along-coordinate of the *shipped* vertex — recomputed here from
+        the tier's own positions and normals, it must match exactly."""
         self.build(hong_kong, sources, tmp_path)
         tiles = tmp_path / "out" / "wan_chai" / "tiles"
         for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
             [tile] = read_glb(tiles / f"t_00_00_lod{level}.glb")
-            assert tile.uv2 is None
+            assert tile.uv2 is not None and tile.uvs is not None
+            assert tile.extras is not None
+            rows = tile.extras["objects"]
+            assert rows, "a tier with vertices names at least one object"
+            ordinal = tile.uv2[:, 1]
+            assert (ordinal == np.rint(ordinal)).all()
+            assert ordinal.min() >= 0 and ordinal.max() < len(rows)
+            assert set(np.floor(tile.uv2[:, 0]).astype(int)) <= {int(m) for m in SurfaceClass}
+            assert np.array_equal(tile.uvs[:, 0], along_m(tile.positions, tile.normals))
+            for row in rows:
+                assert set(row) == {"id", "class", "aabb"}
+            # Every vertex stands in the source box of the row it names, within
+            # a cell of decimation.
+            slack = max(hong_kong.buildings.lod_cell_sizes_m)
+            for index, row in enumerate(rows):
+                points = tile.positions[ordinal == index]
+                low, high = (np.array(corner) for corner in row["aabb"])
+                assert (points >= low - slack).all() and (points <= high + slack).all()
 
     def test_both_height_bands_survive_the_merge(self, hong_kong, sources, tmp_path) -> None:
         """Two boxes in one tile, 10 m and 90 m, so two different bands. Merging
@@ -889,10 +947,11 @@ class TestBuildRegion:
             assert meshes[0].texture is None
             assert meshes[0].colours is not None
             # The source's UVs index an orthophoto and run 0-1 across a sheet.
-            # Ours are metres above a base and a surface marker, so the ground's
-            # `v` is exactly `GROUND` — a value the source could not produce.
-            assert meshes[0].uvs is not None
-            markers = set(np.unique(np.floor(meshes[0].uvs[:, 1])).tolist())
+            # Ours are metres along and above a base, and the marker rides in
+            # `TEXCOORD_1.x` (`P5-11`), so the ground's marker is exactly
+            # `GROUND` — a value the source could not produce.
+            assert meshes[0].uvs is not None and meshes[0].uv2 is not None
+            markers = set(np.unique(np.floor(meshes[0].uv2[:, 0])).tolist())
             assert float(SurfaceClass.GROUND) in markers
             assert markers <= {float(member) for member in SurfaceClass}
 

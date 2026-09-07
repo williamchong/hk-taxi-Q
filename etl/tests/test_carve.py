@@ -25,6 +25,7 @@ from pipeline.buildings import (
     CARVED_EDGES_KEY,
     FACADE_MATERIAL,
     facade_uv,
+    identity_uv2,
 )
 from pipeline.carve import (
     EdgeCarve,
@@ -90,7 +91,11 @@ def _uv(mesh: MeshData, class_id: str) -> MeshData:
     the shipped encoder moves — which is the one failure `_structure` exists to
     catch.
     """
-    return replace(mesh, uvs=facade_uv(style(), class_id, mesh))
+    return replace(
+        mesh,
+        uvs=facade_uv(style(), class_id, mesh),
+        uv2=identity_uv2(style(), class_id, mesh, 0),
+    )
 
 
 class TestStations:
@@ -272,7 +277,7 @@ class TestRetainingWall:
 
     def test_the_mirror_carries_per_vertex_attributes_rather_than_tiling_one(self) -> None:
         """🔴 The spelling that rebuilds the buffers has to tile vertex 0's value,
-        and `TEXCOORD_0.y` is the `SurfaceClass` channel `_structure` cuts on — so
+        and `TEXCOORD_1.x` is the `SurfaceClass` channel `_structure` cuts on — so
         that spelling misclassifies a wall silently. Nothing about the wall's own
         geometry can catch it, because `_retaining_wall` happens to emit constant
         attributes; this hands it varying ones and checks both halves survive."""
@@ -292,14 +297,14 @@ class TestRetainingWall:
 
 class TestStructureSelection:
     def test_only_infrastructure_is_cut(self) -> None:
-        """🔴 A tile is one merged primitive, so `TEXCOORD_0.y` is the only thing
+        """🔴 A tile is one merged primitive, so `TEXCOORD_1.x` is the only thing
         telling a viaduct from a shopfront. Selecting on anything else here would
         carve buildings, which `Q19` measured as a different problem and refused."""
         assert _structure(_uv(box(), "INFRASTRUCTURE")).all()
         assert not _structure(_uv(box(), "BUILDING")).any()
         assert not _structure(_uv(box(), "TERRAIN(TB)")).any()
 
-    def test_a_tile_without_uvs_is_cut_nothing(self) -> None:
+    def test_a_tile_without_the_identity_channel_is_cut_nothing(self) -> None:
         """Rather than raising: `landmarks/*.glb` carry no class payload, and a
         stage that refused them would fail on a bundle that is correct."""
         assert not _structure(box()).any()

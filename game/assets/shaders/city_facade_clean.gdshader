@@ -28,17 +28,23 @@
 //      solid walls is what keeps a white city from reading as grey cardboard,
 //      and it cools the shadowed faces the way the reference art does.
 //
-// The inputs are `city_facade`'s, unchanged and documented there in full:
+// The inputs are `city_facade`'s, unchanged and documented there in full.
+// Since `P5-11` (schema 28) they arrive on two channels:
 //
-//   UV.x   metres above this object's own base
-//   UV.y   `floor()` is the surface marker, `fract()` is a per-object phase
+//   UV.x   metres along the wall — the ETL's `along_m`, the rule this shader's
+//          vertex stage used to compute from world position, transcribed
+//   UV.y   metres above this object's own base
+//   UV2.x  `floor()` is the surface marker, `fract()` is a per-object phase
+//   UV2.y  the object's row in the tile's `extras` table — unread here
 //
-// ⚠️ **There is no `UV2` since schema 20** (`Q102`). This shader alone used to
-// consume a packed per-building facade-survey state there — a glazed verdict,
-// a glass-tint bin and a grammar, each field 0 = refused → the hash. The
-// vision reader that produced it was withdrawn on cost, so every building now
-// takes the hashed treatment that was always the fallback. The four grammars
-// below are unaffected: the seed picked them before the survey existed.
+// ⚠️ `TEXCOORD_0` is a real planar UV now, and that is the point (`Q121`): an
+// artist can put a texture on it, and nothing this shader reads sits where an
+// unwrap or a decal would land. `UV2` carried a packed facade-survey state
+// until schema 20 (`Q102`) — a glazed verdict, a glass-tint bin and a grammar,
+// each field 0 = refused → the hash — whose one producer, the vision reader,
+// was withdrawn on cost; every building takes the hashed treatment that was
+// always the fallback. The four grammars below are unaffected: the seed picked
+// them before the survey existed.
 //
 // ⚠️ Like its sibling, this replaces a `BaseMaterial3D` that had
 // `vertex_color_use_as_albedo` set at import, so it must apply `COLOR` itself.
@@ -287,7 +293,7 @@ uniform float wall_sky_tint : hint_range(0.0, 1.0) = 0.18;
 // like the same material as the tower above it.
 uniform float floor_line_darkness : hint_range(0.0, 1.0) = 0.07;
 // Grounding a wall where it meets the pavement does more for perceived quality
-// than per-building colour accuracy, and costs nothing now that UV.x exists.
+// than per-building colour accuracy, and costs nothing now that UV.y exists.
 uniform float grounding_height_m : hint_range(0.0, 12.0) = 3.0;
 uniform float grounding_darkness : hint_range(0.0, 1.0) = 0.16;
 uniform float wall_roughness : hint_range(0.0, 1.0) = 0.82;
@@ -307,7 +313,7 @@ uniform float roof_darkness : hint_range(0.0, 1.0) = 0.2;
 group_uniforms distance_fade;
 // ⚠️ **The fade must finish before the LOD switch, and that is a hard constraint
 // rather than a taste.** `tuning/streaming.tres` swaps to LOD1 at **250 m**,
-// where buildings are vertex-clustered at 4 m cells — and `TEXCOORD_0.x` comes
+// where buildings are vertex-clustered at 4 m cells — and `TEXCOORD_0.y` comes
 // from a *cluster representative*, so out there "metres above the base" is wrong
 // by up to a storey and a half and neighbouring triangles disagree about it. Draw
 // a grid on that and it shatters into blocky patches and coloured streaks.
@@ -449,9 +455,10 @@ float draw(float seed, float n) {
 }
 
 void vertex() {
-	height_m = UV.x;
-	marker = floor(UV.y);
-	phase = fract(UV.y);
+	along_m = UV.x;
+	height_m = UV.y;
+	marker = floor(UV2.x);
+	phase = fract(UV2.x);
 
 	// The hashed pane (`Q45`), the same seed and draw slot the fragment
 	// always used. Modulated per building in CIELAB: `L*`/`b*` jitter on the
@@ -493,7 +500,9 @@ void vertex() {
 	vec3 world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	upness = abs(world_normal.y);
 
-	// Distance along the wall, in metres, from a consistent origin.
+	// `along_m` — distance along the wall, in metres, from a consistent origin —
+	// was computed here until `P5-11` and now arrives on `UV.x`, by the same
+	// rule, from `etl/pipeline/buildings.py::along_m`:
 	//
 	// ⚠️ **Not the plan-perpendicular of the face normal, which is what this used
 	// to be and what broke every curved podium.** Deriving the tangent from the
@@ -505,13 +514,9 @@ void vertex() {
 	// Projecting onto a world axis *chosen* by the normal is continuous as the
 	// normal turns: a wall facing X runs along Z, and vice versa. The blend band
 	// stretches the bays slightly near 45°, which is far cheaper than a seam.
-	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	float faces_x = abs(world_normal.x);
-	float faces_z = abs(world_normal.z);
-	float pick = faces_x / max(faces_x + faces_z, 1e-4);
-	along_m = mix(world.x, world.z, smoothstep(0.35, 0.65, pick));
-
-	world_pos = world;
+	// The ETL stamps it on the *shipped* vertex, after decimation, which is what
+	// keeps the frame where it was.
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = world_normal;
 }
 

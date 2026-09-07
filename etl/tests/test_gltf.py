@@ -154,6 +154,17 @@ class TestWriting:
         assert restored.positions == pytest.approx(original.positions)
         assert restored.triangles.tolist() == original.triangles.tolist()
 
+    def test_extras_round_trip_on_the_mesh(self, tmp_path) -> None:
+        """`P5-11`: the object table rides as glTF mesh `extras`, which the
+        engine imports as metadata — and `read_glb` must hand it back, or the
+        carve stage re-emits a tile with no table (which is how the reader
+        gained it)."""
+        original = replace(self.box(), extras={"objects": [{"id": "B1", "class": "BUILDING"}]})
+        write_glb(tmp_path / "t.glb", [original])
+        [restored] = read_glb(tmp_path / "t.glb")
+        assert restored.extras == original.extras
+        assert self.document_of(tmp_path / "t.glb")["meshes"][0]["extras"] == original.extras
+
     def test_declared_length_matches_the_file(self, tmp_path) -> None:
         size = write_glb(tmp_path / "t.glb", [self.box()])
         raw = (tmp_path / "t.glb").read_bytes()

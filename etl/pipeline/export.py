@@ -210,7 +210,7 @@ CITY_NAME = "city.json"
 # nothing, which is the loud half; the quiet half is `shipped()`, which would
 # compute a bundle with no road in it. Being wrong about the contents of the
 # bundle is what this number is for.
-CITY_SCHEMA = 27
+CITY_SCHEMA = 28
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

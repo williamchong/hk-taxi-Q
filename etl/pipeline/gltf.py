@@ -116,6 +116,13 @@ class MeshData:
     # nothing else — this is the only channel glTF offers for that, and it is the
     # same shape as the `-col` node-name suffix already carrying collision.
     material: str | None = None
+    # glTF `extras` on the mesh — free-form JSON the engine imports as metadata
+    # (`P5-11`: Godot 4.7 surfaces it as `get_meta("extras")` on the imported
+    # `Mesh`, measured in `Q121`). The per-object table a merged tile ships,
+    # because `merge` erases every other trace of identity. Carried by the
+    # one-in-one-out operations the way `material` is; `merge` leaves it unset
+    # for the caller to name.
+    extras: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         count = len(self.positions)
@@ -280,8 +287,18 @@ def _walk(
     transform = parent @ _node_matrix(node)
 
     if "mesh" in node:
-        for primitive in gltf["meshes"][node["mesh"]].get("primitives", []):
-            out.append(_primitive(gltf, primitive, transform, buffers, _name(gltf, index, node)))
+        mesh = gltf["meshes"][node["mesh"]]
+        for primitive in mesh.get("primitives", []):
+            out.append(
+                _primitive(
+                    gltf,
+                    primitive,
+                    transform,
+                    buffers,
+                    _name(gltf, index, node),
+                    extras=mesh.get("extras"),
+                )
+            )
 
     for child in node.get("children", []):
         _walk(gltf, child, transform, buffers, out)
@@ -338,6 +355,7 @@ def _primitive(
     transform: np.ndarray,
     buffers: _BufferCache,
     name: str,
+    extras: dict[str, Any] | None = None,
 ) -> MeshData:
     mode = primitive.get("mode", _MODE_TRIANGLES)
     if mode != _MODE_TRIANGLES:
@@ -377,6 +395,7 @@ def _primitive(
         uvs=uvs,
         uv2=uv2,
         texture=_texture(gltf, primitive, buffers),
+        extras=extras,
     )
 
 
@@ -590,19 +609,20 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
             _ELEMENT_ARRAY_BUFFER,
         )
 
-        gltf["meshes"].append(
-            {
-                "name": mesh.name,
-                "primitives": [
-                    {
-                        "attributes": attributes,
-                        "indices": indices,
-                        "material": _material(gltf, binary, mesh, textures),
-                        "mode": _MODE_TRIANGLES,
-                    }
-                ],
-            }
-        )
+        entry: dict[str, Any] = {
+            "name": mesh.name,
+            "primitives": [
+                {
+                    "attributes": attributes,
+                    "indices": indices,
+                    "material": _material(gltf, binary, mesh, textures),
+                    "mode": _MODE_TRIANGLES,
+                }
+            ],
+        }
+        if mesh.extras is not None:
+            entry["extras"] = mesh.extras
+        gltf["meshes"].append(entry)
         gltf["nodes"].append({"name": mesh.name, "mesh": len(gltf["meshes"]) - 1})
 
     gltf["buffers"] = [{"byteLength": len(binary)}]

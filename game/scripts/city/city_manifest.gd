@@ -168,7 +168,7 @@ const NOT_MEASURED: float = -1.0
 ## is the loud half; the quiet half is `shipped()` computing a bundle with no
 ## road in it, and being wrong about the bundle's contents is what this number
 ## is for.
-const SCHEMA_VERSION: int = 27
+const SCHEMA_VERSION: int = 28
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

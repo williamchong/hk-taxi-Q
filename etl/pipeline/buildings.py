@@ -55,6 +55,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
 from hashlib import blake2b
 from pathlib import Path, PurePosixPath
+from typing import Any
 from urllib.parse import unquote
 from zlib import crc32
 
@@ -65,7 +66,7 @@ from pipeline import gdb
 from pipeline.colour import chroma_and_hue, with_hue
 from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_config
 from pipeline.crs import GameTransform
-from pipeline.documents import write_document
+from pipeline.documents import round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
 from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
@@ -106,6 +107,10 @@ BUILDINGS_MANIFEST_SCHEMA = 3
 # clears it for free. It lives here rather than in `carve.py` because this
 # module owns the document, and `export.py` and `clearance.py` read it too.
 CARVED_EDGES_KEY = "carved_edges"
+
+# The key of a tier's object table in its glTF mesh `extras` (`P5-11`). Mirrored
+# by `BuildingIndex.OBJECTS_KEY` in `game/scripts/city/building_index.gd`.
+OBJECTS_KEY = "objects"
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. `write_glb` writes the
@@ -151,6 +156,10 @@ class LodOutput:
     triangles: int
     vertices: int
     bytes: int
+    # Rows in the tier's `extras` object table (`P5-11`): the source objects
+    # with at least one vertex left at this cell size. Per tier, because a
+    # coarser tier drops what is thinner than its cell.
+    objects: int
 
 
 @dataclass(frozen=True)
@@ -266,6 +275,29 @@ def tile_id(ix: int, iz: int) -> str:
     buildings it belongs with under an id nothing else carries.
     """
     return f"t_{ix:02d}_{iz:02d}"
+
+
+def _object_row(object_id: str, class_id: str, bounds: Bounds) -> dict[str, Any]:
+    """One row of a tile's `extras` object table (`P5-11`).
+
+    The id is the cross-dataset stem for a building (`docs/DATA_SOURCES.md`),
+    the class is the source directory, and the box is the source mesh's own
+    game-space AABB — **before** decimation, so a tier's vertex can stand up to
+    a cell outside it. Rounded to the millimetre so a rebuild is byte-stable.
+    """
+    low, high = bounds
+    return {"id": object_id, "class": class_id, "aabb": [round_position(low), round_position(high)]}
+
+
+def _register(objects: list[dict[str, Any]], object_id: str, class_id: str, bounds: Bounds) -> int:
+    """Append an object's row and return the ordinal its vertices will carry.
+
+    One call rather than `len(objects)` followed by an `append`, because the
+    ordinal stamped into `TEXCOORD_1.y` must be the index the row lands at, and
+    two separate steps can be reordered without anything failing.
+    """
+    objects.append(_object_row(object_id, class_id, bounds))
+    return len(objects) - 1
 
 
 def assign(
@@ -558,54 +590,108 @@ def colour_for(
 def facade_uv(
     style: BuildingStyle, class_id: str, mesh: MeshData, bounds: Bounds | None = None
 ) -> np.ndarray:
-    """One `TEXCOORD_0` row per vertex, for the window-band shader (`P3-7`).
+    """One `TEXCOORD_0` row per vertex: a planar façade UV in metres (`P5-11`).
 
-    Two things the shader cannot derive and the ETL therefore must ship:
+    `u` is metres **along** the wall and `v` metres **up** from this mesh's own
+    base — an ordinary planar unwrap an artist could put a texture on, and the
+    two numbers the window-band shader (`P3-7`) reads. `v` is the payload the
+    shader cannot derive: a vertex knows its world Y, not where its building
+    starts, and Wan Chai's ground moves 40 m across the region, so world Y is
+    not even a proxy. **Metres rather than the 0-1 `ART_DESIGN.md` first
+    specified**: normalised, a 3-storey shophouse and a 40-storey tower each get
+    the same number of window rows, and the floor *count* is the density
+    signature the whole effect exists to carry.
 
-    - **`u` is metres above this mesh's own base.** A vertex knows its world Y,
-      not where its building starts, so a podium vertex and a 30th-floor vertex
-      are indistinguishable to a shader — and Wan Chai's ground moves 40 m across
-      the region, so world Y is not even a proxy. **Metres rather than the 0-1
-      `ART_DESIGN.md` first specified**: normalised, a 3-storey shophouse and a
-      40-storey tower each get the same number of window rows, and the floor
-      *count* is the density signature the whole effect exists to carry.
-    - **`v` is `surface_class + seed`.** The integer part says what this vertex
-      belongs to, because a tile is one merged primitive and nothing else
-      distinguishes a façade from a viaduct. The fraction is a per-object phase,
-      so neighbouring towers do not line their window rows up.
-
-    Packed into one VEC2 rather than taking a second attribute, and a tile
-    ships no `TEXCOORD_1` at all: the payload that once needed one was the
-    vision reader's facade verdicts, withdrawn with the reader (`Q102`). The
-    bar for adding a second attribute stands where that objection left it — a
-    payload that cannot fit here, not one more number that never varies within
-    a mesh.
-
-    ⚠️ **The horizontal window coordinate is deliberately *not* here.** It is
-    derivable in the shader from world position and the wall normal, and a
-    payload that ships what the geometry already knows is bytes on every vertex
-    of every tile forever.
+    ⚠️ **`u` is a placeholder here and is stamped by `along_m` on the finished
+    tier**, in `_write_tile`, because it is a function of the vertex the tile
+    *ships*: `collapse` moves positions to cluster means and takes UVs from one
+    representative, so an along-coordinate computed now would describe a vertex
+    that no longer exists. Until `P5-11` the shader derived it from world
+    position for exactly that reason; shipping it instead is what makes
+    `TEXCOORD_0` a real UV, and computing it after the collapse is what keeps
+    the frame the same.
 
     ⚠️ **Computed on the whole source mesh, before `assign` splits it**, for the
     same reason the colour is: a viaduct partitioned across four tiles must keep
     one base, or the four pieces disagree about where the ground was.
 
-    ⚠️ Unlike `colour_for`, this cannot be a broadcast view — `u` varies per
-    vertex — so it is 8 bytes a vertex through the bucket phase.
-
     ⚠️ **"Its own base" means the source mesh's, which is an object only where
     the source ships one mesh per object.** True of buildings, false of the
     ground, whose sheet-sized meshes each measure from their own lowest corner —
-    so `u` on ground is not comparable across a sheet boundary. Harmless while
+    so `v` on ground is not comparable across a sheet boundary. Harmless while
     `GROUND` is reserved and unread, and the same caveat `jitter_for` already
     records for colour. A ground treatment that wants a height must say which
     height, and that is a schema question rather than a shader one.
     """
     low, _ = bounds if bounds is not None else mesh.aabb()
-    uvs = np.empty((len(mesh.positions), 2), dtype=np.float32)
-    uvs[:, 0] = mesh.positions[:, 1] - low[1]
-    uvs[:, 1] = float(style.surface_class(class_id)) + _phase(mesh)
+    uvs = np.zeros((len(mesh.positions), 2), dtype=np.float32)
+    uvs[:, 1] = mesh.positions[:, 1] - low[1]
     return uvs
+
+
+def identity_uv2(style: BuildingStyle, class_id: str, mesh: MeshData, ordinal: int) -> np.ndarray:
+    """One `TEXCOORD_1` row per vertex: the surface marker, the phase, and which
+    object the vertex belongs to (`P5-11`).
+
+    - **`x` is `surface_class + seed`.** The integer part says what this vertex
+      belongs to, because a tile is one merged primitive and nothing else
+      distinguishes a façade from a viaduct. The fraction is a per-object phase,
+      so neighbouring towers do not line their window rows up.
+    - **`y` is the object's ordinal**, region-wide here and remapped by
+      `_write_tile` to a row of the tier's `extras` table. Constant per mesh, so
+      it survives `collapse` taking one representative per cluster — the rule
+      `collapse` states for any UV2 payload. Integers to 2**24 are exact in
+      float32; a region has thousands of objects, not millions.
+
+    The channel `Q102` emptied: its packed survey state had one producer, the
+    vision reader, withdrawn on cost, so it could carry only its own refusal
+    sentinel and was removed rather than shipped all-zero. This payload has no
+    sentinel — every row names a real object — which is what makes shipping
+    the channel honest again.
+    """
+    uv2 = np.empty((len(mesh.positions), 2), dtype=np.float32)
+    uv2[:, 0] = float(style.surface_class(class_id)) + _phase(mesh)
+    uv2[:, 1] = float(ordinal)
+    return uv2
+
+
+def along_m(positions: np.ndarray, normals: np.ndarray) -> np.ndarray:
+    """Metres along a wall, from a consistent origin: the shader's own rule.
+
+    Projects the vertex onto a world axis *chosen* by its normal — a wall facing
+    X runs along Z and vice versa, blended over the 45° band — which is
+    continuous as a curved façade turns, where a per-face tangent gave every
+    triangle of a round podium its own grid origin (`city_facade_clean.gdshader`
+    records the chevrons that made). ⚠️ **This is the shader's vertex-stage
+    arithmetic transcribed, in float32, and it must stay so**: the shader read
+    it off world position until `P5-11` and reads `TEXCOORD_0.x` since, and the
+    proof the change is inert is a frame that does not move.
+    """
+    n = normals.astype(np.float32)
+    n = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), np.float32(1e-12))
+    faces_x = np.abs(n[:, 0])
+    faces_z = np.abs(n[:, 2])
+    pick = faces_x / np.maximum(faces_x + faces_z, np.float32(1e-4))
+    # GLSL smoothstep(0.35, 0.65, pick), then mix(x, z, t) = x * (1 - t) + z * t.
+    t = np.clip((pick - np.float32(0.35)) / np.float32(0.3), np.float32(0.0), np.float32(1.0))
+    t = t * t * (np.float32(3.0) - np.float32(2.0) * t)
+    world = positions.astype(np.float32)
+    return (world[:, 0] * (np.float32(1.0) - t) + world[:, 2] * t).astype(np.float32)
+
+
+def stamp_along(mesh: MeshData) -> MeshData:
+    """The mesh with `TEXCOORD_0.x` recomputed from the vertices it has now.
+
+    Called on a *finished* mesh — after `collapse`, and again after a carve —
+    because the along-coordinate is a function of the vertex that ships (see
+    `facade_uv`). A copy rather than a write in place: `replace` shares arrays
+    between meshes, and a column written through one is written in all.
+    """
+    if mesh.uvs is None:
+        return mesh
+    uvs = mesh.uvs.copy()
+    uvs[:, 0] = along_m(mesh.positions, mesh.normals)
+    return replace(mesh, uvs=uvs)
 
 
 # Distinct window phases. A power of two so `_phase` lands on values float32
@@ -727,6 +813,11 @@ def build_region(
     # The ground does not go in there — see `_tile_ground` for why it is held
     # whole until every sheet has been read.
     ground: list[MeshData] = []
+    # One row per source object the region keeps, in the order they are read,
+    # indexed by the ordinal every vertex carries in `TEXCOORD_1.y` (`P5-11`).
+    # This is the last moment a mesh has an identity — `merge` erases it — so
+    # the row is recorded here and the tile's `extras` table is cut from it.
+    objects: list[dict[str, Any]] = []
 
     for sheet_id, sheet_path in place.sheets:
         kept = 0
@@ -745,11 +836,15 @@ def build_region(
                 if inside is None:
                     report.clipped += 1
                     continue
+                # A sheet's ground is one object, keyed by its own name: `stem`
+                # is a building's variant suffix and means nothing on terrain.
+                ordinal = _register(objects, inside.name, class_id, inside.aabb())
                 ground.append(
                     replace(
                         inside,
                         colours=colour_for(style, class_id, inside),
                         uvs=facade_uv(style, class_id, inside),
+                        uv2=identity_uv2(style, class_id, inside, ordinal),
                     )
                 )
                 kept += 1
@@ -777,10 +872,12 @@ def build_region(
             # Colour and shader payload both come from the whole mesh, before any
             # splitting, so a viaduct partitioned across four tiles stays one
             # colour and keeps one base to measure its height above.
+            ordinal = _register(objects, key, class_id, bounds)
             coloured = replace(
                 placed,
                 colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue),
                 uvs=facade_uv(style, class_id, placed, bounds),
+                uv2=identity_uv2(style, class_id, placed, ordinal),
             )
             placements = list(assign(coloured, place.grid, bounds))
             for tile, piece in placements:
@@ -812,7 +909,7 @@ def build_region(
     # source geometry.
     for tile in sorted(set(buckets) | set(tiers)):
         written = _write_tile(
-            place.out_dir, tile, buckets.pop(tile, {}), tiers.pop(tile, {}), style
+            place.out_dir, tile, buckets.pop(tile, {}), tiers.pop(tile, {}), style, objects
         )
         if written is not None:
             report.tiles.append(written)
@@ -911,12 +1008,34 @@ def _within_region(mesh: MeshData, grid: Grid) -> MeshData | None:
     return select_triangles(mesh, inside)
 
 
+def _identify(tier: MeshData, objects: list[dict[str, Any]]) -> MeshData:
+    """Stamp the finished tier with what only the finished tier knows (`P5-11`).
+
+    Two things, both a function of the vertices that *ship* rather than the
+    source: `TEXCOORD_0.x`, metres along the wall, from the collapsed positions
+    and normals (see `facade_uv` for why not earlier); and `TEXCOORD_1.y`, the
+    region-wide ordinal each vertex carries, remapped to a row of this tier's
+    own `extras` table so a consumer indexes a list the mesh brought with it.
+    Rows are cut in ordinal order, so the table is byte-stable across rebuilds
+    and a tier that lost an object to its cell size simply has one row fewer.
+    """
+    if tier.uvs is None or tier.uv2 is None:
+        raise ValueError(f"tile '{tier.name}' reached the write stage without its payload")
+    ordinals = np.rint(tier.uv2[:, 1]).astype(np.int64)
+    present, local = np.unique(ordinals, return_inverse=True)
+    uv2 = tier.uv2.copy()
+    uv2[:, 1] = local.reshape(-1).astype(np.float32)
+    table = {OBJECTS_KEY: [objects[int(ordinal)] for ordinal in present]}
+    return replace(stamp_along(tier), uv2=uv2, extras=table)
+
+
 def _write_tile(
     out_dir: Path,
     tile: tuple[int, int],
     by_class: dict[str, list[MeshData]],
     ground: dict[int, MeshData],
     style: BuildingStyle,
+    objects: list[dict[str, Any]],
 ) -> TileOutput | None:
     """One tile at every tier it has, or `None` when it has none.
 
@@ -971,7 +1090,9 @@ def _write_tile(
         # primitive has one material and `merge` refuses to guess which. This is
         # the tile's request for the window-band shader, and the only channel
         # glTF gives for it — see `FACADE_MATERIAL`.
-        tier = replace(merge(pieces, name=f"{label}{suffix}"), material=FACADE_MATERIAL)
+        tier = _identify(
+            replace(merge(pieces, name=f"{label}{suffix}"), material=FACADE_MATERIAL), objects
+        )
         boxes.append(tier.aabb())
 
         relative = Path("tiles") / f"{label}_lod{level}.glb"
@@ -982,6 +1103,7 @@ def _write_tile(
                 triangles=tier.triangle_count,
                 vertices=len(tier.positions),
                 bytes=size,
+                objects=len((tier.extras or {}).get(OBJECTS_KEY, [])),
             )
         )
 

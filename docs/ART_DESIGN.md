@@ -235,13 +235,13 @@ window rows, procedurally. Dense repetitive window grids are the defining visual
 residential towers.
 
 ```
-Inputs:  face normal, TEXCOORD_0.x = metres above the building's own base,
-                      TEXCOORD_0.y = surface marker + per-object phase
+Inputs:  face normal, TEXCOORD_0 = (metres along the wall, metres above the building's own base),
+                      TEXCOORD_1 = (surface marker + per-object phase, object row)   [P5-11]
 Output:  band mask → darkened window rows, occasional lit window (emissive at night)
 Cost:    a few instructions, zero texture memory
 ```
 
-⚠️ **`TEXCOORD_0.x` is metres above the building's base, never normalised `0-1`, and the difference
+⚠️ **`TEXCOORD_0.y` (`.x` until schema 28) is metres above the building's base, never normalised `0-1`, and the difference
 is load-bearing.** Normalised, a vertex says what fraction of its own building it is up, and the shader
 cannot recover the building's height from that — so a 3-storey shophouse and a 40-storey tower get
 the *same number of window rows*. The floor count is the signature. In metres the row spacing is a
@@ -259,24 +259,24 @@ vertex are indistinguishable to the shader — and it has no seed at all, so nei
 share a window pattern. Buildings shipped **no UVs** when this was written, so `TEXCOORD_0` was free
 (shipped float32 rather than the "2 bytes quantised" predicted here — `ARCHITECTURE.md` has the
 measured cost), and it survives vertex clustering through the same representative-selection path that
-already carries colours. **`TEXCOORD_1` is free again** (schema 20): the `Q40`/`Q41` survey
+already carries colours. **`TEXCOORD_1` was free from schema 20 to 27 and carries the marker, phase and object row since `P5-11`** — the first channel now being a planar UV in metres (`ARCHITECTURE.md`): the `Q40`/`Q41` survey
 verdicts rode it from schema 6 as one packed per-building state code, with the second float
 reserved for `Q42`'s riders, and it was withdrawn with the vision reader at `Q102`. The channel
-table in `ARCHITECTURE.md` is the contract, and it now says the attribute must be **absent** —
-so a future payload here is a schema bump and a new argument, not a free slot to fill.
+table in `ARCHITECTURE.md` is the contract; it said the attribute must be **absent** from schema
+20 to 27, and `P5-11` filled it with a payload that has no sentinel — which was the argument owed.
 
 ⚠️ **Not `COLOR_0.a`**, although it is free and currently a constant `255`: the project-wide import
 default sets `vertex_color_use_as_albedo`, and an opaque material ignores albedo alpha only until
 somebody enables transparency on a tile, at which point the city goes see-through with no error.
 
-A third thing comes for nothing once `TEXCOORD_0.x` exists: **darken the bottom couple of metres of
+A third thing comes for nothing once the height payload exists: **darken the bottom couple of metres of
 every building.** Grounding a wall where it meets the pavement does more for perceived quality than
 per-building colour accuracy.
 
 ⚠️ **This said "bake a vertical gradient into `COLOR_0`" and is now done in the shader instead**,
 because it was written before the height payload existed. Baking it would force `colour_for` to
 materialise a per-vertex colour array where it currently returns a read-only broadcast view of four
-bytes — real memory through the bucket phase, for a result `smoothstep(0, h, UV.x)` gives free.
+bytes — real memory through the bucket phase, for a result `smoothstep(0, h, UV.y)` gives free.
 
 Windows must **not** appear on roofs or ground-level podium faces — mask by normal and by height above
 the building's own base. Both are in `assets/shaders/city_facade.gdshader`; the numbers are in
@@ -343,7 +343,7 @@ they differ. `tuning/city_facade.tres` is the authority for the clean column and
 
 Three renderer tricks do the work, and none of them is a texture:
 
-1. **Per-building treatment**, hashed from the `TEXCOORD_0` phase the ETL already ships. Two in five
+1. **Per-building treatment**, hashed from the `TEXCOORD_1` phase the ETL already ships. Two in five
    buildings repeat *nothing*, which is what stops a block reading as one wallpapered surface.
 2. **Fresnel sky reflection** — `pow(1 - dot(NORMAL, VIEW), p)` mixed toward a sky colour is a
    mirrored tower for a few ALU instructions, with no reflection probe. Probes stay an anti-goal.
@@ -424,7 +424,7 @@ buildings that matter, which `P3-6` already provides for.
 
 ⚠️ **The distance fade must finish before the LOD switch, and that is a hard constraint rather than a
 taste.** `tuning/streaming.tres` swaps to LOD1 at **250 m**, where buildings are clustered at 4 m
-cells — and `TEXCOORD_0.x` comes from a *cluster representative*, so out there "metres above the
+cells — and `TEXCOORD_0.y` comes from a *cluster representative*, so out there "metres above the
 base" is wrong by up to a storey and a half and neighbouring triangles disagree about it. A grid
 drawn on that shatters into blocky patches. `P3-7`'s 90–240 m fade was safe by being conservative;
 moving it to 260–420 m on the reasoning that a 9 m bay survives to the far plane was true about

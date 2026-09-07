@@ -124,6 +124,7 @@ def select_triangles(mesh: MeshData, keep: np.ndarray) -> MeshData | None:
         uv2=None if mesh.uv2 is None else mesh.uv2[used],
         texture=mesh.texture,
         material=mesh.material,
+        extras=mesh.extras,
     )
 
 
@@ -245,6 +246,7 @@ def _rebuild(mesh: MeshData, corners: np.ndarray, widths: list[int]) -> MeshData
         uv2=None if mesh.uv2 is None else next(optional).astype(np.float32),
         texture=mesh.texture,
         material=mesh.material,
+        extras=mesh.extras,
     )
 
 
@@ -390,6 +392,7 @@ def weld(mesh: MeshData) -> MeshData:
         uv2=None if mesh.uv2 is None else mesh.uv2[representative],
         texture=mesh.texture,
         material=mesh.material,
+        extras=mesh.extras,
     )
 
 
@@ -504,6 +507,7 @@ def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> Me
         uv2=None if mesh.uv2 is None else mesh.uv2[representative][used],
         texture=mesh.texture,
         material=mesh.material,
+        extras=mesh.extras,
     )
 
 

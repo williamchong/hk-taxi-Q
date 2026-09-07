@@ -6,28 +6,40 @@
 // makes the case; what is worth knowing here is how it gets its inputs.
 //
 // Two of them cannot be derived from geometry, so `etl/pipeline/buildings.py`
-// ships them in `TEXCOORD_0`:
+// ships them — since `P5-11` (schema 28) on two channels, `TEXCOORD_0` being a
+// real planar UV and `TEXCOORD_1` the payload:
 //
-//   UV.x  metres above this object's own base. A vertex knows its world Y, and
+//   UV.x  metres along the wall (`along_m`, stamped by the ETL on the shipped
+//         vertex). ⚠️ Until `P5-11` this shader derived its own from the face
+//         normal's plan-perpendicular; it reads the ETL's now, which is the
+//         axis-chosen rule `city_facade_clean` documents — continuous on a
+//         curved podium where the per-face tangent shattered the columns.
+//   UV.y  metres above this object's own base. A vertex knows its world Y, and
 //         Wan Chai's ground moves 40 m across the region — so world Y says
 //         nothing about which floor a wall vertex is on. Metres rather than a
 //         0-1 fraction because the floor *count* is the signature: normalised, a
 //         3-storey shophouse and a 40-storey tower get the same number of rows.
-//   UV.y  `floor()` is the surface marker, `fract()` is a per-object phase.
+//   UV2.x `floor()` is the surface marker, `fract()` is a per-object phase.
 //         A tile is one merged primitive, so nothing else tells a facade from a
 //         viaduct soffit from the pavement, and without a phase every tower in
 //         a block lines its window rows up.
+//   UV2.y the object's row in the tile's `extras` table — unread here.
 //
-// ⚠️ The horizontal coordinate is deliberately *not* shipped. It is derivable
-// here from world position and the wall normal, and a payload carrying what the
-// geometry already knows costs bytes on every vertex of every tile forever.
+// ⚠️ Until `P5-11` the horizontal coordinate was deliberately *not* shipped:
+// it is derivable here from world position and the wall normal, and a payload
+// carrying what the geometry already knows costs bytes on every vertex of every
+// tile forever. It ships now because a real planar UV is the point (`Q121`),
+// at a measured +10.2% of PCK — priced in `PLAN.md` `P5-11`, and reversible in
+// one line if the user decides the UV is not worth it.
 //
 // ⚠️ From schema 6 to 19 every tile also shipped `TEXCOORD_1` — the packed
 // facade survey state (`Q40`/`Q41`) — and this shader deliberately never read
 // it, which was the documented asymmetry in the `.tres`-swap contract: picking
 // this shader forfeited the surveyed verdicts as well as the clean look. The
-// asymmetry is gone at schema 20 (`Q102`): the vision reader was withdrawn on
-// cost, `TEXCOORD_1` with it, and the swap is now a pure look change again.
+// asymmetry went at schema 20 (`Q102`): the vision reader was withdrawn on
+// cost, `TEXCOORD_1` with it, and the swap became a pure look change again.
+// Schema 28 refilled the channel with the marker, phase and object row, which
+// both shaders read identically, so the swap stays a pure look change.
 //
 // ⚠️ This replaces a `BaseMaterial3D` that had `vertex_color_use_as_albedo` set
 // at import, so it must apply `COLOR` itself. Drop that and the city renders
@@ -79,7 +91,7 @@ uniform float window_opacity : hint_range(0.0, 1.0) = 0.62;
 // podium looking like the same material as the tower above it.
 uniform float floor_line_darkness : hint_range(0.0, 1.0) = 0.12;
 // Grounding a wall where it meets the pavement does more for perceived quality
-// than per-building colour accuracy, and costs nothing now that UV.x exists.
+// than per-building colour accuracy, and costs nothing now that UV.y exists.
 uniform float grounding_height_m : hint_range(0.0, 12.0) = 3.0;
 uniform float grounding_darkness : hint_range(0.0, 1.0) = 0.22;
 
@@ -130,21 +142,13 @@ float band(float u, float low, float high) {
 }
 
 void vertex() {
-	height_m = UV.x;
-	marker = floor(UV.y);
-	phase = fract(UV.y);
+	along_m = UV.x;
+	height_m = UV.y;
+	marker = floor(UV2.x);
+	phase = fract(UV2.x);
 
 	vec3 world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	upness = abs(world_normal.y);
-
-	// Distance along the wall, in metres, from an arbitrary but *consistent*
-	// origin: the plan-perpendicular of the face normal. Two faces of one
-	// building that share a normal therefore share a column grid, and a corner
-	// is where the grid changes — which is what a real building does.
-	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	vec2 tangent = vec2(-world_normal.z, world_normal.x);
-	float span = length(tangent);
-	along_m = span > 1e-4 ? dot(world.xz, tangent / span) : 0.0;
 }
 
 void fragment() {

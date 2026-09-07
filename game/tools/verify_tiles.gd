@@ -10,6 +10,7 @@
 ## Exits non-zero on the first tile that fails.
 extends SceneTree
 
+const BuildingIndex = preload("res://scripts/city/building_index.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
@@ -34,6 +35,18 @@ const COLLISION_TIER: int = 0
 ## other check here, and render in flat vertex colour — which is exactly what the
 ## city looked like before `P3-7`. There is nothing to see and nothing to catch.
 const FACADE_MATERIAL: String = "res://tuning/city_facade.tres"
+
+## The surface markers `TEXCOORD_1.x` may carry, mirroring `SurfaceClass` in
+## `etl/pipeline/config.py`: 0 facade, 1 ground, 2 structure.
+const MARKER_MAX: int = 2
+
+## The decimation slack every vertex is held to, the picker's own.
+const ROW_SLACK_M: float = BuildingIndex.ROW_SLACK_M
+
+## How many rows per tier the picker is asked to resolve from their own box
+## centre. Every row is checked vertex by vertex; this is the end-to-end walk
+## through `BuildingIndex.object_at`, on a sample.
+const PICKS_PER_TIER: int = 3
 
 
 func _init() -> void:
@@ -98,7 +111,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 			var where: String = "%s surface %d" % [instance.name, surface]
 			problems.append_array(MeshContract.check_surface(mesh, surface, where))
 			problems.append_array(_check_facade_payload(mesh, surface, where))
-			problems.append_array(_check_no_survey_channel(mesh, surface, where))
+			problems.append_array(_check_identity(instance, mesh, surface, where))
 
 	# One draw call per surface. The budget is stated in draw calls because that
 	# is what the mobile tier runs out of first.
@@ -106,14 +119,11 @@ func _check(path: String, tier: int) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	problems.append_array(_check_collision(scene_root, tier))
-	# Still pinned with no payload left to protect (`Q102`): Static Lightmaps
-	# would *create* the UV2 `_check_no_survey_channel` now requires to be
-	# absent, and catching it at the import setting names the fix, where the
-	# mesh check only names the symptom. ⚠️ The shared helper's sentence is an
-	# *overwrite* framing, so the noun has to be the empty slot rather than a
-	# payload — there is no payload here to overwrite.
+	# Static Lightmaps would regenerate UV2 over the identity payload (`P5-11`),
+	# and catching it at the import setting names the fix, where the mesh check
+	# only names the symptom.
 	problems.append_array(
-		MeshContract.check_uv2_import_settings(path, "UV2 slot the tiles must keep empty")
+		MeshContract.check_uv2_import_settings(path, "identity payload in TEXCOORD_1")
 	)
 
 	scene_root.free()
@@ -123,11 +133,12 @@ func _check(path: String, tier: int) -> PackedStringArray:
 ## The window-band shader reached the tile, and has something to read (`P3-7`).
 ##
 ## Both halves are silent failures, which is the only reason they are worth a
-## check. `TEXCOORD_0` is height above the object's own base and a surface
-## marker — the two things a shader cannot derive from a vertex — and the
-## material is how the shader arrives at all. Lose either and the tile renders in
-## flat vertex colour, which is precisely what the city looked like *before*
-## `P3-7`: no error, no missing file, nothing on screen that reads as broken.
+## check. `TEXCOORD_0` is the planar façade UV — metres along and metres above
+## the object's own base — and `TEXCOORD_1` the marker, phase and object row
+## (`P5-11`): the things a shader cannot derive from a vertex. The material is
+## how the shader arrives at all. Lose any and the tile renders in flat vertex
+## colour, which is precisely what the city looked like *before* `P3-7`: no
+## error, no missing file, nothing on screen that reads as broken.
 ##
 ## Every tier is checked, not just the finest. The payload is a property of the
 ## geometry, and which tiers actually draw bands is the shader's distance fade to
@@ -135,39 +146,126 @@ func _check(path: String, tier: int) -> PackedStringArray:
 func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
+	var format: int = mesh.surface_get_format(surface)
+	if not (format & Mesh.ARRAY_FORMAT_TEX_UV):
 		problems.append("%s carries no TEXCOORD_0; the window shader has nothing to read" % where)
+	if not (format & Mesh.ARRAY_FORMAT_TEX_UV2):
+		problems.append("%s carries no TEXCOORD_1; the marker and object row are missing" % where)
 
 	problems.append_array(MeshContract.check_shader_material(mesh, surface, where, FACADE_MATERIAL))
 	return problems
 
 
-## No tile carries a TEXCOORD_1 at all (schema 20, `Q102`).
+## The identity channel and its table agree (`P5-11`).
 ##
-## ⚠️ **This check was inverted rather than deleted, and it still catches the
-## hazard it was written for.** Until `Q102` it decoded a packed facade-survey
-## payload here and held every vertex to the codec's field ceilings, which made
-## it the tripwire for a lightmap unwrap (`meshes/light_baking = 2`) or 16-bit
-## attribute compression rewriting the channel. The vision reader that filled
-## the payload was withdrawn on cost, so the ETL ships no UV2 — and a lightmap
-## unwrap *writes* UV2, so the presence of the channel is now the whole signal.
-## Cheaper and stricter than the codec scan it replaces: it needs no vertex
-## walk, and there is no legal value to be confused with a corrupted one.
-func _check_no_survey_channel(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
-	if mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2:
-		return PackedStringArray(
-			[
-				(
-					(
-						"%s carries a TEXCOORD_1; the ETL ships none since schema 20, so "
-						+ "the importer wrote it (lightmap unwrap or a stale .import "
-						+ "sidecar) or the bundle predates the survey's withdrawal"
-					)
-					% where
-				)
-			]
+## Three things, each a silent failure on its own: the table arrived (an
+## importer that dropped `extras` leaves a tile nobody can pick a building in,
+## rendering perfectly); every vertex names a row that exists and a marker the
+## shader knows; and every vertex stands inside the box its row claims, within
+## `ROW_SLACK_M` — a vertex far outside is a row index that survived a
+## `collapse` it should not have, or a table cut from the wrong ordinals. Then
+## the end-to-end walk on a sample: `BuildingIndex.object_at` asked for the
+## centre of a row's own box returns that row, or a smaller box nested in it.
+##
+## ⚠️ This is also the tripwire for a lightmap unwrap (`meshes/light_baking =
+## 2`) or a stale `.import` rewriting UV2: an unwrap writes fractions in
+## `[0, 1]`, which fail the row check on every vertex of every object but the
+## first.
+func _check_identity(
+	instance: MeshInstance3D, mesh: Mesh, surface: int, where: String
+) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var rows: Array = BuildingIndex.objects_of(mesh)
+	if rows.is_empty():
+		problems.append("%s brought no object table (mesh extras)" % where)
+		return problems
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2):
+		return problems
+
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var uv2: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var boxes: Array[AABB] = []
+	for row: Dictionary in rows:
+		var box: Variant = BuildingIndex.box_of(row)
+		if box == null:
+			problems.append("%s: row %s has no usable aabb" % [where, row.get("id")])
+			return problems
+		boxes.append((box as AABB).grow(ROW_SLACK_M))
+
+	var bad_row: int = 0
+	var bad_marker: int = 0
+	var outside: int = 0
+	# The first vertex each row owns, `-1` where it owns none in this tier —
+	# recorded on this walk so the picker probe below needs no second one.
+	var first_vertex_of_row: PackedInt32Array = PackedInt32Array()
+	first_vertex_of_row.resize(rows.size())
+	first_vertex_of_row.fill(-1)
+	for i: int in vertices.size():
+		var index: int = BuildingIndex.row_of(uv2[i])
+		if index < 0 or index >= rows.size() or absf(uv2[i].y - float(index)) > 1e-4:
+			bad_row += 1
+			continue
+		if first_vertex_of_row[index] < 0:
+			first_vertex_of_row[index] = i
+		var marker: int = int(floor(uv2[i].x))
+		if marker < 0 or marker > MARKER_MAX:
+			bad_marker += 1
+		if not boxes[index].has_point(vertices[i]):
+			outside += 1
+	if bad_row > 0:
+		problems.append(
+			"%s: %d vertices name no row of the %d-row table" % [where, bad_row, rows.size()]
 		)
-	return PackedStringArray()
+	if bad_marker > 0:
+		problems.append("%s: %d vertices carry a marker above %d" % [where, bad_marker, MARKER_MAX])
+	if outside > 0:
+		problems.append(
+			(
+				"%s: %d vertices stand over %.0f m outside their row's box"
+				% [where, outside, ROW_SLACK_M]
+			)
+		)
+
+	# The picker, end to end, on a sample of rows spread through the table:
+	# asked at a vertex the row itself owns — where a raycast hit would land —
+	# it must answer that row, whatever neighbouring boxes overlap it.
+	# `floori` of a float divide rather than an integer one: GDScript warns on
+	# integer division and `check.sh` promotes warnings to errors.
+	var step: int = maxi(1, floori(rows.size() / float(PICKS_PER_TIER)))
+	for k: int in range(0, rows.size(), step):
+		var row: Dictionary = rows[k]
+		var probe: int = first_vertex_of_row[k]
+		if probe < 0:
+			problems.append("%s: row %s owns no vertex in this tier" % [where, row.get("id")])
+			continue
+		var found: Dictionary = BuildingIndex.object_at(instance, vertices[probe])
+		if found != row and not _shares_vertex(found, rows, vertices, uv2, vertices[probe]):
+			problems.append(
+				(
+					"%s: object_at at a vertex of %s answered %s"
+					% [where, row.get("id"), found.get("id", "nothing")]
+				)
+			)
+	return problems
+
+
+## Whether `other` owns a vertex at exactly `at` — two buildings sharing a wall
+## corner tie at distance zero, and which the picker answers is not a defect.
+func _shares_vertex(
+	other: Dictionary,
+	rows: Array,
+	vertices: PackedVector3Array,
+	uv2: PackedVector2Array,
+	at: Vector3
+) -> bool:
+	var index: int = rows.find(other)
+	if index < 0:
+		return false
+	for i: int in vertices.size():
+		if BuildingIndex.row_of(uv2[i]) == index and vertices[i] == at:
+			return true
+	return false
 
 
 ## Collision is present on the finest tier and absent everywhere else.
