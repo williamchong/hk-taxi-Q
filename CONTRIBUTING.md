@@ -43,6 +43,12 @@ cd etl && pytest && cd ..
 tools/check.sh
 ```
 
+⚠️ **Git LFS is required, before the clone.** The authored binaries are LFS objects (`P5-27`); a
+clone without `git-lfs` holds pointer files; `tools/check.sh`'s import logs FreeType failing on the
+font and its first `FAIL` is `verify_vehicle`'s *no node in taxi.tscn runs vehicle_lamps.gd*, because
+the taxi body is a pointer and the mesh never instances. `brew install git-lfs && git lfs install`, then `git lfs pull` in
+a clone already made.
+
 ⚠️ **Do not run the Godot steps by hand and read the output.** Godot exits `0` even when a script
 fails to parse, so only `tools/check.sh`'s exit code means anything. This has produced a green check
 that checked nothing more than once.

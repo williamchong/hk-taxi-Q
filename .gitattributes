@@ -5,7 +5,15 @@
 # no committed byte.
 * text=auto eol=lf
 
-# Binary assets are never normalised or diffed as text.
-*.glb binary
-*.ttf binary
-*.png binary
+# Binary assets go through Git LFS (P5-27, Q124), tracked forward from the
+# commit that added these rows: history was not rewritten, the eight files
+# tracked then were renormalised into LFS objects in that commit, and every
+# binary added since is a pointer in git and an object in LFS. A clone without
+# git-lfs installed checks out pointer files; tools/check.sh's import logs
+# FreeType failing on the font, and its first FAIL is verify_vehicle's "no node
+# in taxi.tscn runs vehicle_lamps.gd" — the body is a pointer, so the mesh
+# never instances. That is the message a collaborator sees first.
+# `filter=lfs` implies -text; `diff=lfs` and `merge=lfs` keep them undiffed.
+*.glb filter=lfs diff=lfs merge=lfs -text
+*.ttf filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text

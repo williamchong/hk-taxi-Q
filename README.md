@@ -63,7 +63,11 @@ The ETL runs **at build time only**. The game ships static assets and makes no n
 
 ## Getting started
 
-You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cask godot` — and
+You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cask godot` — **and
+[Git LFS](https://git-lfs.com/) before you clone** (`brew install git-lfs && git lfs install`): the
+authored `.glb`, `.png` and `.ttf` under `game/assets/authored/` are LFS objects, and a clone made
+without it holds pointer files that `tools/check.sh` fails on at its first asset check. A clone
+already made without it is repaired by `git lfs install && git lfs pull`. You also need
 Python 3.11+.
 
 **Build the city.** The first run downloads ~320 MB of source data and caches it; after that the

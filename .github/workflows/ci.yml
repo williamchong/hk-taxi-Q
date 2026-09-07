@@ -36,6 +36,10 @@ jobs:
         python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The authored .glb/.png/.ttf are LFS objects since P5-27; without
+          # this the checkout holds pointer files and every asset check fails.
+          lfs: true
 
       - uses: actions/setup-python@v6
         with:
@@ -72,6 +76,10 @@ jobs:
       GODOT_VERSION: 4.7.1-stable
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The authored .glb/.png/.ttf are LFS objects since P5-27; without
+          # this the checkout holds pointer files and every asset check fails.
+          lfs: true
 
       # No pip cache here, deliberately. setup-python keys its cache on the OS,
       # the Python version and the hash of the dependency file — with no job
