@@ -107,12 +107,145 @@ const TEXTURED: Dictionary = {
 	"signs_text": {"material": "res://tuning/signs_text.tres", "uniform": "glyph_atlas"},
 }
 
+## The vehicle door (`P5-23`, `Q124`). A body arrives with one material slot
+## per part, named from this table — `vehicle_paint`, `vehicle_glass`, a
+## `vehicle_lamp_*` per switched circuit — and leaves as the one `vehicle_body`
+## surface `vehicle_body.gdshader` reads, with `UV = (circuit, marker)` stamped
+## on every vertex from the name. That payload used to be stamped by
+## `tools/make_vehicle.py` alone, which no DCC export could reproduce; the
+## generator now emits these names too, so the shipped taxi and a hand-made
+## car go through one rule. ⚠️ Mirrors `MATERIAL_OF_PAYLOAD` there, and
+## `etl/tests/test_make_vehicle.py` binds the two tables by name.
+##
+## The value is `(circuit, marker)` in `UV.x`/`UV.y` order: markers 0 paint,
+## 1 glass, 2 lamp, 3 trim; circuits 1 brake, 2 reverse, 3/4 indicators, 5
+## sidelamp, 6 headlamp, 7 roof sign, 0 none — `vehicle_body.gdshader`'s own
+## constants. ⚠️ A name that starts `vehicle_` and is not here is REFUSED, not
+## guessed: the body is left as authored, unlit and unmerged, and
+## `push_error` names the slot — a misspelt lens fails loudly here rather
+## than shipping dark.
+const VEHICLE: Dictionary = {
+	"vehicle_paint": Vector2(0.0, 0.0),
+	"vehicle_glass": Vector2(0.0, 1.0),
+	"vehicle_trim": Vector2(0.0, 3.0),
+	"vehicle_lamp": Vector2(0.0, 2.0),
+	"vehicle_lamp_brake": Vector2(1.0, 2.0),
+	"vehicle_lamp_reverse": Vector2(2.0, 2.0),
+	"vehicle_lamp_indicator_left": Vector2(3.0, 2.0),
+	"vehicle_lamp_indicator_right": Vector2(4.0, 2.0),
+	"vehicle_lamp_sidelamp": Vector2(5.0, 2.0),
+	"vehicle_lamp_headlamp": Vector2(6.0, 2.0),
+	"vehicle_lamp_roofsign": Vector2(7.0, 2.0),
+}
+const VEHICLE_PREFIX: String = "vehicle_"
+## The name of the merged surface and of the `.tres` it renders with — also
+## what a body that arrives already stamped (the pre-`P5-23` form) is named,
+## which `SHADERS` still dispatches as before.
+const VEHICLE_BODY: String = "vehicle_body"
+
 
 func _post_import(scene: Node) -> Object:
 	for instance: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
-		if instance.mesh != null:
-			_apply(instance.mesh)
+		if instance.mesh == null:
+			continue
+		var body: ArrayMesh = vehicle_body(instance.mesh)
+		if body != null:
+			instance.mesh = body
+			continue
+		_apply(instance.mesh)
 	return scene
+
+
+## The vehicle door. Null where the mesh is not a body — no slot carries a
+## `vehicle_` name — or where one slot carries a name the table lacks, which is
+## refused with the slot named. Otherwise one surface: every slot's vertices
+## concatenated, `UV` stamped from the name, and `COLOR_0` carried as authored
+## or, where a slot has none, filled from its material's base colour in the
+## sRGB encoding the ETL writes and the shader linearises (`Q27`).
+static func vehicle_body(mesh: Mesh) -> ArrayMesh:
+	var materials: Array[Material] = []
+	for surface: int in mesh.get_surface_count():
+		materials.append(mesh.surface_get_material(surface))
+	if not materials.any(_claims_the_door):
+		return null
+	var names: PackedStringArray = []
+	for material: Material in materials:
+		var name: String = "" if material == null else material.resource_name
+		names.append(name)
+		if not VEHICLE.has(name):
+			push_error(
+				(
+					"generated_scene_import: '%s' is not a vehicle material, so the body is left as authored and will not light; the names are %s"
+					% [name, VEHICLE.keys()]
+				)
+			)
+			return null
+
+	var positions := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colours := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for surface: int in mesh.get_surface_count():
+		var arrays: Array = mesh.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var surface_normals: Variant = arrays[Mesh.ARRAY_NORMAL]
+		if typeof(surface_normals) != TYPE_PACKED_VECTOR3_ARRAY:
+			push_error("generated_scene_import: '%s' carries no normals" % names[surface])
+			return null
+		var base: int = positions.size()
+		positions.append_array(vertices)
+		normals.append_array(surface_normals)
+		var stamp := PackedVector2Array()
+		stamp.resize(vertices.size())
+		stamp.fill(VEHICLE[names[surface]])
+		uvs.append_array(stamp)
+		var colour: Variant = arrays[Mesh.ARRAY_COLOR]
+		if typeof(colour) == TYPE_PACKED_COLOR_ARRAY:
+			colours.append_array(colour)
+		else:
+			var authored := materials[surface] as BaseMaterial3D
+			if authored == null:
+				push_error(
+					(
+						"generated_scene_import: '%s' has no vertex colour and no base colour"
+						% names[surface]
+					)
+				)
+				return null
+			var baked := PackedColorArray()
+			baked.resize(vertices.size())
+			baked.fill(authored.albedo_color.linear_to_srgb())
+			colours.append_array(baked)
+		var index: Variant = arrays[Mesh.ARRAY_INDEX]
+		if typeof(index) == TYPE_PACKED_INT32_ARRAY:
+			for value: int in index:
+				indices.append(value + base)
+		else:
+			for vertex: int in vertices.size():
+				indices.append(base + vertex)
+
+	var merged: Array = []
+	merged.resize(Mesh.ARRAY_MAX)
+	merged[Mesh.ARRAY_VERTEX] = positions
+	merged[Mesh.ARRAY_NORMAL] = normals
+	merged[Mesh.ARRAY_COLOR] = colours
+	merged[Mesh.ARRAY_TEX_UV] = uvs
+	merged[Mesh.ARRAY_INDEX] = indices
+	var body := ArrayMesh.new()
+	body.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)
+	body.surface_set_name(0, VEHICLE_BODY)
+	body.surface_set_material(0, load(SHADERS[VEHICLE_BODY]))
+	return body
+
+
+## A slot named from the vocabulary, or misnamed into it — a body that arrives
+## already stamped is `vehicle_body` and is not this door's.
+static func _claims_the_door(material: Material) -> bool:
+	if material == null:
+		return false
+	var name: String = material.resource_name
+	return name.begins_with(VEHICLE_PREFIX) and name != VEHICLE_BODY
 
 
 func _apply(mesh: Mesh) -> void:

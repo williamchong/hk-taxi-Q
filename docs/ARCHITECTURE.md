@@ -1553,6 +1553,24 @@ its stems, because the stage extracts the model *from* them. The contract an art
 | Textures | a packed image is **extracted beside the asset** on first import (`dcc_roundtrip_kiosk_paint.png`), Godot's default; commit it and both `.import` sidecars. The bundle's no-texture contract is a rule about *generated* tiles (`mesh_contract.gd`), not about this door |
 | Budget | `triangle_budget` per entry, 8,000 by default (`verify_landmarks.gd`) |
 
+#### The vehicle door — a car with named material slots (`P5-23`, `Q124`)
+
+**A car's contract is not modelling, and until `P5-23` no DCC export could meet it**: the body
+carries a surface marker in `UV.y` and a switched lamp circuit in `UV.x`, which
+`vehicle_body.gdshader` reads and `verify_vehicle.gd` asserts survived the import, and only
+`tools/make_vehicle.py` could stamp them. The payload is now a **material name**, stamped at
+import by `generated_scene_import.gd::vehicle_body` from its `VEHICLE` table, and the generator
+emits the same names — so the shipped taxi and a hand-made car go through one rule, and
+`etl/tests/test_make_vehicle.py` binds the two tables. The contract an artist's export meets:
+
+| Rule | What happens |
+|---|---|
+| Slots | one material slot per part, named from the table: `vehicle_paint`, `vehicle_glass`, `vehicle_trim`, `vehicle_lamp` (unswitched), and a switched lens per circuit — `vehicle_lamp_brake`, `_reverse`, `_indicator_left`, `_indicator_right`, `_sidelamp`, `_headlamp`, `_roofsign`. The importer stamps `UV = (circuit, marker)` on every vertex of the slot and merges every slot into **one** `vehicle_body` surface rendering with `tuning/vehicle_body.tres` |
+| Colour | the slot's base colour, baked into `COLOR_0` at import in the sRGB encoding the shader linearises (`Q27`); a slot that already carries `COLOR_0` keeps it, and that colour must then be sRGB-encoded as the ETL writes it |
+| Geometry | **one object** (join the parts; a slot per part), transforms **applied**, origin at the ground centre with `y = 0` at the base, nose toward `-z` — the way the taxi faces. Flat-shaded, so no vertex is shared between parts |
+| Refusal | a slot named `vehicle_…` that is not in the table is **refused, not guessed**: `push_error` names the slot and the vocabulary, and the body is left as authored — four unlit surfaces, which `verify_authored.gd` then fails as "not one surface". A misspelt lens fails the check rather than shipping dark |
+| Fixture | `assets/authored/fixtures/dcc_vehicle.glb`, a Blender export by `tools/make_dcc_fixture.py --vehicle`: four boxes joined into one object with four slots and no vertex colours. `verify_authored.gd` reads the merged body back and classifies every vertex by the box it lies in, so the stamped payload is checked per part after the slot is gone. The misspelt variant (`--vehicle <out> vehicle_lamp_break`) is the mutation |
+
 ⚠️ **Nothing in the repository had come through a DCC tool before `P5-10`** — the three assets
 under `authored/` were written by `tools/make_*.py` through the ETL's own `gltf.py`. The fixture
 `assets/authored/fixtures/dcc_roundtrip.glb` is a real Blender export (Khronos exporter, an
@@ -1719,7 +1737,7 @@ the second vehicle anyone built.
 | `tools/verify_mesh_contract.gd` | The `Q63` amendment itself — an undeclared texture is refused, a declared one inside its budget is admitted, one over budget is refused, and a declared texture that **never arrives** is refused. ⚠️ It asserts the *failures*, because every other verify tool proves an asset conforms and the risk here is the opposite one: a check that has quietly stopped catching anything. ⚠️ Needs **no built region** — it builds its own one-triangle meshes — which matters because no shipped asset declares a texture, so nothing else exercises these branches at all |
 | `tools/verify_input.gd` | The touch scheme (`P2-4`) — zone geometry, both relative axes, two thumbs at once, and that touch **overrides** the action map per axis rather than replacing it. Drives the router's `_input` directly with invented fingers, so the events stay out of the real queue. ⚠️ Needs **no built region**, and unlike the others it is the *only* exercise the touch path gets until `P0-3b` lands a handset. ⚠️ It also covers `--touch=mouse`, which no scripted run can reach because `driver.gd` presses the action map and cannot move a pointer. 🔴 **It carries a watchdog and the others do not**: a `SceneTree` tool that aborts before its `quit()` never exits, so a depended script failing to compile wedges `check.sh` instead of failing it — which is worse than the green-over-nothing run `verify_hud.gd` warns about, and it happened here on the first run. ⚠️ **A wedged instance also rewrites `project.godot`**: the one from that first run was alive seven hours later and stripped every comment plus three warning promotions on shutdown, which is the editor incident this document records, reached with no editor (`Q97`) |
 | `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
-| `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
+| `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above. Also the **vehicle door** (`P5-23`): a mesh whose slots carry `vehicle_*` names is stamped and merged into the one `vehicle_body` surface, and an unknown `vehicle_*` name is refused with the slot named |
 
 ---
 

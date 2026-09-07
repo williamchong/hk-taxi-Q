@@ -979,7 +979,7 @@ widening over-draws, so it cuts into a cross-slope at the kerb, and the outer ri
 | Property | Target |
 |---|---|
 | Triangles | 800–2,000 |
-| Materials | 1–2, flat shaded — the body's is a `ShaderMaterial` since `P3-11c`, still one |
+| Materials | 1–2, flat shaded — the body's is a `ShaderMaterial` since `P3-11c`, still one. ⚠️ The *source* carries a slot per part — `vehicle_paint`, `vehicle_glass`, `vehicle_lamp_*` — which the import merges into that one surface (`P5-23`); the budget is what renders |
 | Colours | 3–5 flat colours per vehicle |
 | Wheels | Oversized, separate mesh, simple rotation |
 | Windows | Flat dark colour with a fixed specular hint — no reflection probes |

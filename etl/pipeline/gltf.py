@@ -594,12 +594,40 @@ def _face_normals(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 # --------------------------------------------------------------------------
 
 
-def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
+@dataclass(frozen=True)
+class MeshGroup:
+    """One node and one mesh carrying several primitives, one per part.
+
+    Each part keeps its own material, which is what a DCC export with several
+    material slots looks like and what `generated_scene_import.gd`'s vehicle
+    door reads its payload from (`P5-23`). Still one node and one mesh: the
+    engine imports the parts as surfaces of one `ArrayMesh`, not as nodes.
+    """
+
+    name: str
+    parts: tuple[MeshData, ...]
+    extras: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.parts:
+            raise ValueError(f"mesh group '{self.name}' has no parts")
+
+
+def _parts(entry: MeshData | MeshGroup) -> tuple[MeshData, ...]:
+    return entry.parts if isinstance(entry, MeshGroup) else (entry,)
+
+
+def _flatten(entries: Sequence[MeshData | MeshGroup]) -> list[MeshData]:
+    return [part for entry in entries for part in _parts(entry)]
+
+
+def write_glb(path: Path, meshes: Sequence[MeshData | MeshGroup]) -> int:
     """Write a binary glTF and return **its own** size in bytes.
 
     One node, mesh, primitive and material per entry, so the entry count is the
     tile's draw-call count — which is the thing `P1-2`'s acceptance criteria
-    are stated in.
+    are stated in. A `MeshGroup` entry is still one node and one mesh, with one
+    primitive per part.
 
     ⚠️ **It may write more than one file.** A `Texture` carrying a `uri` lives
     beside the container rather than inside it (`Q70`), and this writes it —
@@ -614,7 +642,7 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
     # fewer way for the first import of a fresh clone to resolve the reference to
     # null. It also means a failure here writes no `.glb` at all, rather than one
     # that points at a file that never arrived.
-    _write_external_images(path, meshes)
+    _write_external_images(path, _flatten(meshes))
 
     gltf: dict[str, Any] = {
         "asset": {"version": "2.0", "generator": "hk-taxi-Q etl"},
@@ -629,64 +657,71 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
     binary = bytearray()
     textures: dict[int, int] = {}
 
-    for mesh in meshes:
-        attributes = {
-            "POSITION": _accessor(
-                gltf, binary, mesh.positions.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
-            ),
-            "NORMAL": _accessor(
-                gltf, binary, mesh.normals.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
-            ),
-        }
-        if mesh.colours is not None:
-            # VEC4 rather than VEC3 because glTF requires each vertex attribute
-            # element to start on a 4-byte boundary, and a 3-byte RGB does not.
-            attributes["COLOR_0"] = _accessor(
-                gltf,
-                binary,
-                np.asarray(mesh.colours, dtype=np.uint8),
-                "VEC4",
-                _UNSIGNED_BYTE,
-                _ARRAY_BUFFER,
-                normalized=True,
-            )
-        if mesh.uvs is not None:
-            attributes["TEXCOORD_0"] = _accessor(
-                gltf, binary, mesh.uvs.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
-            )
-        if mesh.uv2 is not None:
-            attributes["TEXCOORD_1"] = _accessor(
-                gltf, binary, mesh.uv2.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
-            )
-
-        index_dtype = np.uint16 if len(mesh.positions) <= _UINT16_LIMIT else np.uint32
-        indices = _accessor(
-            gltf,
-            binary,
-            mesh.triangles.astype(index_dtype).reshape(-1),
-            "SCALAR",
-            _UNSIGNED_SHORT if index_dtype is np.uint16 else _UNSIGNED_INT,
-            _ELEMENT_ARRAY_BUFFER,
-        )
-
-        entry: dict[str, Any] = {
-            "name": mesh.name,
+    for entry in meshes:
+        mesh_entry: dict[str, Any] = {
+            "name": entry.name,
             "primitives": [
-                {
-                    "attributes": attributes,
-                    "indices": indices,
-                    "material": _material(gltf, binary, mesh, textures),
-                    "mode": _MODE_TRIANGLES,
-                }
+                _primitive_entry(gltf, binary, part, textures) for part in _parts(entry)
             ],
         }
-        if mesh.extras is not None:
-            entry["extras"] = mesh.extras
-        gltf["meshes"].append(entry)
-        gltf["nodes"].append({"name": mesh.name, "mesh": len(gltf["meshes"]) - 1})
+        if entry.extras is not None:
+            mesh_entry["extras"] = entry.extras
+        gltf["meshes"].append(mesh_entry)
+        gltf["nodes"].append({"name": entry.name, "mesh": len(gltf["meshes"]) - 1})
 
     gltf["buffers"] = [{"byteLength": len(binary)}]
     return _write_container(path, gltf, binary)
+
+
+def _primitive_entry(
+    gltf: dict[str, Any], binary: bytearray, mesh: MeshData, textures: dict[int, int]
+) -> dict[str, Any]:
+    """One primitive: the attribute accessors, the index accessor and the material."""
+    attributes = {
+        "POSITION": _accessor(
+            gltf, binary, mesh.positions.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
+        ),
+        "NORMAL": _accessor(
+            gltf, binary, mesh.normals.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
+        ),
+    }
+    if mesh.colours is not None:
+        # VEC4 rather than VEC3 because glTF requires each vertex attribute
+        # element to start on a 4-byte boundary, and a 3-byte RGB does not.
+        attributes["COLOR_0"] = _accessor(
+            gltf,
+            binary,
+            np.asarray(mesh.colours, dtype=np.uint8),
+            "VEC4",
+            _UNSIGNED_BYTE,
+            _ARRAY_BUFFER,
+            normalized=True,
+        )
+    if mesh.uvs is not None:
+        attributes["TEXCOORD_0"] = _accessor(
+            gltf, binary, mesh.uvs.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
+        )
+    if mesh.uv2 is not None:
+        attributes["TEXCOORD_1"] = _accessor(
+            gltf, binary, mesh.uv2.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
+        )
+
+    index_dtype = np.uint16 if len(mesh.positions) <= _UINT16_LIMIT else np.uint32
+    indices = _accessor(
+        gltf,
+        binary,
+        mesh.triangles.astype(index_dtype).reshape(-1),
+        "SCALAR",
+        _UNSIGNED_SHORT if index_dtype is np.uint16 else _UNSIGNED_INT,
+        _ELEMENT_ARRAY_BUFFER,
+    )
+
+    return {
+        "attributes": attributes,
+        "indices": indices,
+        "material": _material(gltf, binary, mesh, textures),
+        "mode": _MODE_TRIANGLES,
+    }
 
 
 def _material(

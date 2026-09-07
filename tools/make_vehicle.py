@@ -38,8 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pipeline.gltf import MeshData, write_glb  # noqa: E402
-from pipeline.mesh import merge  # noqa: E402
+from pipeline.gltf import MeshData, MeshGroup, write_glb  # noqa: E402
+from pipeline.mesh import merge, select_triangles  # noqa: E402
 from primitives import (  # noqa: E402
     Colour,
     box,
@@ -1080,6 +1080,63 @@ def _marked(part: MeshData) -> MeshData:
     return replace(part, uvs=uvs)
 
 
+# The payload as a MATERIAL NAME — the vehicle door (`P5-23`, `Q124`). The
+# written `.glb` carries one primitive per entry here and no UVs at all;
+# `game/tools/generated_scene_import.gd` stamps `(circuit, marker)` back into
+# `UV` from the name and merges the primitives into the one `vehicle_body`
+# surface the shader reads. An artist names material slots in Blender from
+# this same table, so the shipped taxi and a hand-made car go through one rule.
+# ⚠️ Mirrors `VEHICLE` in that script, and `test_make_vehicle.py` binds the two.
+MATERIAL_OF_PAYLOAD: dict[tuple[float, float], str] = {
+    (CIRCUIT_NONE, MARKER_PAINT): "vehicle_paint",
+    (CIRCUIT_NONE, MARKER_GLASS): "vehicle_glass",
+    (CIRCUIT_NONE, MARKER_TRIM): "vehicle_trim",
+    (CIRCUIT_NONE, MARKER_LAMP): "vehicle_lamp",
+    (CIRCUIT_BRAKE, MARKER_LAMP): "vehicle_lamp_brake",
+    (CIRCUIT_REVERSE, MARKER_LAMP): "vehicle_lamp_reverse",
+    (CIRCUIT_INDICATOR_L, MARKER_LAMP): "vehicle_lamp_indicator_left",
+    (CIRCUIT_INDICATOR_R, MARKER_LAMP): "vehicle_lamp_indicator_right",
+    (CIRCUIT_SIDELAMP, MARKER_LAMP): "vehicle_lamp_sidelamp",
+    (CIRCUIT_HEADLAMP, MARKER_LAMP): "vehicle_lamp_headlamp",
+    (CIRCUIT_ROOFSIGN, MARKER_LAMP): "vehicle_lamp_roofsign",
+}
+
+
+def material_parts(body: MeshData) -> MeshGroup:
+    """Split a stamped body into one primitive per material name.
+
+    The payload leaves the vertices and becomes the primitive's material, which
+    is the form a DCC export takes and the form the import hook reads. Exact by
+    construction on this body: it is flat-shaded, so no vertex is shared between
+    faces and every triangle's three vertices carry one payload — a triangle
+    that does not is refused rather than assigned.
+    """
+    if body.uvs is None:
+        raise ValueError(f"'{body.name}' carries no payload to split by")
+    payloads = body.uvs[body.triangles]
+    mixed = np.any(payloads != payloads[:, :1, :], axis=(1, 2))
+    if np.any(mixed):
+        raise ValueError(
+            f"'{body.name}': {int(mixed.sum())} triangle(s) carry more than one payload"
+        )
+    # One pass for the distinct payloads and each triangle's label; the parts
+    # are then written in order of first appearance, so the file's primitive
+    # order follows the build order rather than the sort.
+    keys, first, labels = np.unique(
+        payloads[:, 0, :], axis=0, return_index=True, return_inverse=True
+    )
+    parts: list[MeshData] = []
+    for index in np.argsort(first):
+        key = (float(keys[index, 0]), float(keys[index, 1]))
+        material = MATERIAL_OF_PAYLOAD.get(key)
+        if material is None:
+            raise ValueError(f"'{body.name}': payload {key} has no material name")
+        part = select_triangles(body, labels.reshape(-1) == index)
+        assert part is not None  # every distinct key has at least one triangle
+        parts.append(replace(part, uvs=None, material=material))
+    return MeshGroup(body.name, tuple(parts))
+
+
 def _plates(shape: Proportions) -> list[MeshData]:
     """Front and rear registration plates, in that order.
 
@@ -1432,11 +1489,12 @@ def write_taxi(
 ) -> list[tuple[Path, int, MeshData]]:
     """Write one `.glb` per mesh and return what went where."""
     body, wheel = build_taxi(chassis, shape)
-    written = []
-    for filename, mesh in ((BODY_FILE, body), (WHEEL_FILE, wheel)):
-        path = out_dir / filename
-        written.append((path, write_glb(path, [mesh]), mesh))
-    return written
+    body_path = out_dir / BODY_FILE
+    wheel_path = out_dir / WHEEL_FILE
+    return [
+        (body_path, write_glb(body_path, [material_parts(body)]), body),
+        (wheel_path, write_glb(wheel_path, [wheel]), wheel),
+    ]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

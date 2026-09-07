@@ -32,6 +32,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
+import make_vehicle
 import numpy as np
 import pytest
 from make_vehicle import (
@@ -1144,3 +1145,66 @@ class TestLampCircuits:
         _check_wiring(parts)
         with pytest.raises(ValueError, match="wired to nothing"):
             _check_wiring(parts[1:])
+
+
+class TestTheMaterialDoor:
+    """`material_parts` — the payload as a material name (`P5-23`, `Q124`).
+
+    What ships is one primitive per name and no UVs; the import hook stamps the
+    payload back. So the Python table and the GDScript table must agree, and
+    the split must be exact, or a lens ships dark with every counter green.
+    """
+
+    HOOK = Path(__file__).resolve().parents[2] / "game" / "tools" / "generated_scene_import.gd"
+
+    @pytest.fixture(scope="class")
+    def body(self) -> MeshData:
+        return build_taxi(make_vehicle.Chassis(), make_vehicle.Proportions())[0]
+
+    @pytest.fixture(scope="class")
+    def hook_names(self) -> set[str]:
+        text = self.HOOK.read_text()
+        start = text.index("const VEHICLE")
+        end = text.index("\n}\n", start)
+        return set(re.findall(r'"(vehicle_[a-z_]+)"', text[start:end]))
+
+    def test_every_name_the_generator_emits_is_in_the_hook_table(
+        self, hook_names: set[str]
+    ) -> None:
+        emitted = set(make_vehicle.MATERIAL_OF_PAYLOAD.values())
+        assert emitted <= hook_names, (
+            f"names the hook does not know: {sorted(emitted - hook_names)}"
+        )
+
+    def test_the_hook_table_names_nothing_the_generator_cannot_emit(
+        self, hook_names: set[str]
+    ) -> None:
+        emitted = set(make_vehicle.MATERIAL_OF_PAYLOAD.values())
+        assert hook_names <= emitted, f"names with no payload here: {sorted(hook_names - emitted)}"
+
+    def test_every_payload_the_body_stamps_has_a_name(self, body: MeshData) -> None:
+        assert body.uvs is not None
+        stamped = {(float(uv[0]), float(uv[1])) for uv in body.uvs}
+        assert stamped <= set(make_vehicle.MATERIAL_OF_PAYLOAD), stamped - set(
+            make_vehicle.MATERIAL_OF_PAYLOAD
+        )
+
+    def test_the_split_keeps_every_triangle_and_carries_no_payload(self, body: MeshData) -> None:
+        group = make_vehicle.material_parts(body)
+        before = {tuple(sorted(map(tuple, body.positions[tri]))) for tri in body.triangles}
+        after: set = set()
+        for part in group.parts:
+            assert part.uvs is None, part.material
+            assert part.material in make_vehicle.MATERIAL_OF_PAYLOAD.values()
+            after |= {tuple(sorted(map(tuple, part.positions[tri]))) for tri in part.triangles}
+        assert after == before
+        assert len(group.parts) == len({part.material for part in group.parts})
+
+    def test_a_triangle_with_two_payloads_is_refused(self, body: MeshData) -> None:
+        assert body.uvs is not None
+        uvs = body.uvs.copy()
+        first = body.triangles[0]
+        uvs[first[0]] = (make_vehicle.CIRCUIT_BRAKE, make_vehicle.MARKER_LAMP)
+        uvs[first[1]] = (make_vehicle.CIRCUIT_NONE, make_vehicle.MARKER_PAINT)
+        with pytest.raises(ValueError, match="more than one payload"):
+            make_vehicle.material_parts(replace(body, uvs=uvs))

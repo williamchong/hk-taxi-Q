@@ -16,7 +16,15 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from pipeline.gltf import MeshData, Texture, placed_positions, read_glb, read_scene, write_glb
+from pipeline.gltf import (
+    MeshData,
+    MeshGroup,
+    Texture,
+    placed_positions,
+    read_glb,
+    read_scene,
+    write_glb,
+)
 
 # The rotation LandsD ships on every node: local Z-up to Godot's Y-up, with the
 # grid position in the translation column. Column-major, as glTF requires.
@@ -408,3 +416,69 @@ class TestPlacedPositions:
         # And a half pitch at bearing 90 lands the nose east and up equally.
         half = placed_positions(north, (0.0, 0.0, 0.0), 90.0, pitch_deg=45.0)
         assert np.allclose(half, [[math.sqrt(0.5), math.sqrt(0.5), 0.0]], atol=1e-12)
+
+
+def _part(name: str, material: str, x: float) -> MeshData:
+    positions = np.array([[x, 0, 0], [x + 1, 0, 0], [x, 1, 0]], dtype=np.float64)
+    return MeshData(
+        name=name,
+        positions=positions,
+        normals=np.array([[0, 0, 1]] * 3, dtype=np.float32),
+        triangles=np.array([[0, 1, 2]], dtype=np.int32),
+        material=material,
+    )
+
+
+class TestMeshGroup:
+    """One node, one mesh, several primitives — the shape of a DCC export with
+    material slots, and the shape the vehicle door reads (`P5-23`)."""
+
+    def test_a_group_writes_one_mesh_with_one_primitive_per_part(self, tmp_path) -> None:
+        path = tmp_path / "group.glb"
+        write_glb(
+            path,
+            [
+                MeshGroup(
+                    "car", (_part("a", "vehicle_paint", 0.0), _part("b", "vehicle_glass", 5.0))
+                )
+            ],
+        )
+        with path.open("rb") as handle:
+            handle.read(12)
+            length, kind = struct.unpack("<II", handle.read(8))
+            assert kind == 0x4E4F534A
+            gltf = json.loads(handle.read(length))
+        assert len(gltf["meshes"]) == 1
+        assert len(gltf["nodes"]) == 1
+        assert gltf["meshes"][0]["name"] == "car"
+        assert [primitive["material"] for primitive in gltf["meshes"][0]["primitives"]] == [0, 1]
+        assert [material["name"] for material in gltf["materials"]] == [
+            "vehicle_paint",
+            "vehicle_glass",
+        ]
+
+    def test_a_group_reads_back_as_one_part_per_primitive_under_the_group_name(
+        self, tmp_path
+    ) -> None:
+        path = tmp_path / "group.glb"
+        write_glb(
+            path,
+            [
+                MeshGroup(
+                    "car", (_part("a", "vehicle_paint", 0.0), _part("b", "vehicle_glass", 5.0))
+                )
+            ],
+        )
+        read = read_glb(path)
+        assert [mesh.name for mesh in read] == ["car", "car"]
+        assert read[1].positions[0, 0] == pytest.approx(5.0)
+
+    def test_an_empty_group_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="no parts"):
+            MeshGroup("car", ())
+
+    def test_a_plain_mesh_still_writes_as_before(self, tmp_path) -> None:
+        path = tmp_path / "plain.glb"
+        write_glb(path, [_part("a", "vehicle_paint", 0.0)])
+        read = read_glb(path)
+        assert [mesh.name for mesh in read] == ["a"]

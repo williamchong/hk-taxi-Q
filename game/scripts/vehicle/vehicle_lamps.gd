@@ -3,7 +3,8 @@ extends Node3D
 ## Switches the taxi's lamp circuits from what the car is doing (`P3-11d`).
 ##
 ## The body is one merged primitive, so there is no lamp *node* to show or hide.
-## `tools/make_vehicle.py` stamps each lens with a circuit id in `UV.x` and
+## The import hook stamps each lens with a circuit id in `UV.x` from its
+## material slot's name (`P5-23`; `tools/make_vehicle.py` emits those names) and
 ## `vehicle_body.gdshader` lights the ones this script names — brake, reverse,
 ## an indicator per side, the two front circuits, and the roof sign.
 ##
