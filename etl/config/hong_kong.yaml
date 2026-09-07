@@ -786,14 +786,22 @@ buildings:
     INFRASTRUCTURE: 0.5
     TERRAIN(TB): 4.0
 
-  # The tile OCCLUDER (P5-13): a `<tile>_occluder-occonly` primitive in every
-  # tier file, which the importer turns into an OccluderInstance3D and removes
-  # the mesh of. Clustered at its own stated cell, like the collider above, and
+  # The tile OCCLUDER (P5-13): a `<tile>_occluder-occonly` primitive in a tier
+  # file, which the importer turns into an OccluderInstance3D and removes the
+  # mesh of. Clustered at its own stated cell, like the collider above, and
   # from these classes only. The ground is left out: it is the region's largest
   # surface, and a hillside occludes little that the buildings in front of it
   # do not. rendering/occlusion_culling in game/project.godot is what reads it;
   # docs/ARCHITECTURE.md has the numbers and the sweep that priced this cell.
-  occluder_cell_m: 4.0
+  #
+  # PER TIER since P5-17 (Q122): one entry per lod_cell_sizes_m entry, null for
+  # a tier that carries no occluder. The streamer swaps whole tier scenes, so
+  # an occluder is either in the resident tier or nowhere, and its PCK price is
+  # paid once per tier that names a cell. [4.0, 4.0] is P5-13's build exactly;
+  # [4.0, null] keeps it in the near tier only; [null, null] is a bundle with
+  # none, which is what the web cut wants because the stock Web export template
+  # cannot cull (Q122). The far-tier decision is measured in PLAN.md P5-17.
+  occluder_cell_m: [4.0, 4.0]
   class_occluder_cell_m:
     INFRASTRUCTURE: 1.0
   occluder_classes: [BUILDING, INFRASTRUCTURE]

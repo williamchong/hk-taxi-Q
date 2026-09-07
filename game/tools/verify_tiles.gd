@@ -124,7 +124,7 @@ func _check(path: String, tier: int, tile: Manifest.Tile) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	problems.append_array(_check_collision(scene_root, tier, tile.id))
-	problems.append_array(_check_occluder(scene_root, tile))
+	problems.append_array(_check_occluder(scene_root, tier, tile))
 	# Static Lightmaps would regenerate UV2 over the identity payload (`P5-11`),
 	# and catching it at the import setting names the fix, where the mesh check
 	# only names the symptom.
@@ -274,15 +274,26 @@ func _shares_vertex(
 	return false
 
 
-## The occluder is a `-occonly` node beside EVERY tier, exactly where the
-## manifest says the ETL built one (`P5-13`) — and nowhere the manifest says
-## it did not, which is what makes a dropped occluder a failure rather than a
-## tile that happens to occlude nothing. ⚠️ Unlike the collider it cannot be
-## asserted by name: the importer names every one `OccluderInstance3D`.
-func _check_occluder(scene_root: Node, tile: Manifest.Tile) -> PackedStringArray:
-	if tile.occluder:
+## The occluder is a `-occonly` node beside exactly the tiers the manifest
+## says the ETL built one for (`P5-13`, per tier since `P5-17`) — and nowhere
+## it says it did not, which is what makes a dropped occluder a failure rather
+## than a tile that happens to occlude nothing, and an occluder in a tier the
+## policy left bare a failure rather than a free win. ⚠️ Unlike the collider
+## it cannot be asserted by name: the importer names every one
+## `OccluderInstance3D`.
+func _check_occluder(scene_root: Node, tier: int, tile: Manifest.Tile) -> PackedStringArray:
+	if tile.occluder.size() != tile.lods.size():
+		return PackedStringArray(
+			[
+				(
+					"the manifest names %d occluder flags for %d tiers"
+					% [tile.occluder.size(), tile.lods.size()]
+				)
+			]
+		)
+	if tile.has_occluder(tier):
 		return MeshContract.check_occluder_only(scene_root)
-	return MeshContract.check_no_occluder(scene_root, tile.id)
+	return MeshContract.check_no_occluder(scene_root, "%s tier %d" % [tile.id, tier])
 
 
 ## Collision is a `-colonly` body beside the finest tier, named for the tile,

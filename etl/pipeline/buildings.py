@@ -119,7 +119,11 @@ BUILDINGS_MANIFEST_NAME = "buildings.json"
 # `occluder_vertices` while the tile row says whether it has one (`occluder`).
 # A v4 reader that took every non-drawn primitive for the collider would read
 # the occluder's triangles as collision.
-BUILDINGS_MANIFEST_SCHEMA = 5
+# 6 since `P5-17` (`Q122`): the occluder is a PER-TIER decision — `occluder_cell_m`
+# is a list with `null` for a tier that carries none — so `occluder` moves from
+# the tile row to the tier row. A v5 reader asking every tier for the occluder
+# the tile row promised would fail a far tier the build deliberately left bare.
+BUILDINGS_MANIFEST_SCHEMA = 6
 
 # Set by `pipeline/carve.py` on a manifest whose tiles it has cut (`P3-28`).
 # Not a schema field — nothing here writes or reads it, and its absence is what
@@ -218,10 +222,17 @@ class LodOutput:
     # reader summing them would report a wall twice.
     collision_triangles: int
     collision_vertices: int
-    # The `-occonly` occluder written beside this tier (`P5-13`) — the same
-    # geometry in every tier, 0 where the tile has nothing of an occluder class.
+    # The `-occonly` occluder written beside this tier (`P5-13`), at this tier's
+    # own `occluder_cell_m` entry (`P5-17`) — 0 where the tier carries none, or
+    # where the tile has nothing of an occluder class.
     occluder_triangles: int
     occluder_vertices: int
+    # Whether this tier's file carries the occluder (`P5-17`): false where the
+    # policy names no cell for the tier, and false where nothing of an occluder
+    # class survives its cell. `export.py` ships it per tier so `verify_tiles.gd`
+    # can ask for the occluder exactly where one was built, and refuse one
+    # wherever the build left a tier bare.
+    occluder: bool
 
 
 @dataclass(frozen=True)
@@ -232,12 +243,6 @@ class TileOutput:
     meshes: int
     aabb: Bounds
     lods: list[LodOutput]
-    # Whether every tier carries an occluder (`P5-13`): false only where the
-    # tile has nothing of an occluder class left at `occluder_cell_m` —
-    # a square of bare ground. `export.py` ships it so `verify_tiles.gd` can
-    # ask for the occluder exactly where one was built, rather than wherever
-    # one happens to be.
-    occluder: bool
 
 
 @dataclass
@@ -1203,17 +1208,31 @@ def _bare(label: str, kind: str, name: str, pieces: list[MeshData]) -> MeshData:
 
 
 def _occluder(
-    label: str, per_class: dict[str, MeshData], style: BuildingStyle, collapsed: _Collapsed
+    label: str,
+    per_class: dict[str, MeshData],
+    style: BuildingStyle,
+    collapsed: _Collapsed,
+    level: int,
 ) -> MeshData | None:
-    """The tile's `-occonly` occluder (`P5-13`), or `None` where nothing occludes.
+    """Tier `level`'s `-occonly` occluder (`P5-13`), or `None` where the tier
+    carries none (`P5-17`) or nothing of an occluder class survives its cell.
 
-    `occluder_classes` at `occluder_cell_m`, through the same cache the tiers
-    read, so a cell equal to a tier's is exactly that tier's geometry for those
-    classes — no ground, which `occluder_classes` leaves out. The same bare
-    payload as the collider, `_bare`, so the carve can cut it too.
+    `occluder_classes` at the tier's `occluder_cell_m` entry, through the same
+    cache the tiers read, so a cell equal to a tier's is exactly that tier's
+    geometry for those classes — no ground, which `occluder_classes` leaves
+    out — and two tiers naming one cell decimate once and write the same bytes.
+    The same bare payload as the collider, `_bare`, so the carve can cut it too.
     """
+    if style.occluder_cell_m[level] is None:
+        return None
     chosen = {name: mesh for name, mesh in per_class.items() if name in style.occluder_classes}
-    pieces = _decimated(chosen, {}, style.terrain_class, style.occluder_cell_size_m, collapsed)
+    pieces = _decimated(
+        chosen,
+        {},
+        style.terrain_class,
+        partial(style.occluder_cell_size_m, level=level),
+        collapsed,
+    )
     if not pieces:
         return None
     return _bare(label, "occluder", occluder_name(label), pieces)
@@ -1232,10 +1251,11 @@ def _write_tile(
     The finest tier's file also carries the tile's collider (`P5-12`), a second
     primitive named by `collider_name` and built by `_collider` from the same
     classes at their own stated cell. `ground` is keyed by cell size, so the
-    collider and any tier at the same cell read one decimation. Every tier's
-    file also carries the occluder (`P5-13`), one primitive built once by
-    `_occluder` and written beside each tier, because the streamer swaps whole
-    tier scenes.
+    collider and any tier at the same cell read one decimation. A tier's file
+    also carries the occluder (`P5-13`) wherever `occluder_cell_m` names a cell
+    for that tier (`P5-17`), built by `_occluder` per tier through the same
+    cache, because the streamer swaps whole tier scenes and an occluder is
+    either in the tier that is resident or nowhere.
 
     A tile with no tier ships nothing, so publishing it would put a square in
     the manifest that names no file — which `export.py` and `verify_city.gd`
@@ -1257,10 +1277,6 @@ def _write_tile(
     # keyed by `id()`, CPython reused two freed addresses and two tiles were
     # written with another tile's geometry at both tiers.
     collapsed: _Collapsed = {}
-    # Before the tiers, so a cell equal to a tier's is collapsed once and that
-    # tier reads it back from the cache; a tile that empties at level 0 has
-    # nothing of an occluder class either, so this is cheap there.
-    occluder = _occluder(label, per_class, style, collapsed)
     for level in range(len(style.lod_cell_sizes_m)):
         # Collapsed per class then merged, and why is `_decimated`'s docstring.
         pieces = _decimated(
@@ -1294,6 +1310,9 @@ def _write_tile(
         )
         if collider is not None:
             meshes.append(collider)
+        # Per tier (`P5-17`): the cache means a cell shared with a tier, or with
+        # another tier's occluder, is collapsed once and read back.
+        occluder = _occluder(label, per_class, style, collapsed, level)
         if occluder is not None:
             meshes.append(occluder)
         relative = Path("tiles") / f"{label}_lod{level}.glb"
@@ -1309,6 +1328,7 @@ def _write_tile(
                 collision_vertices=len(collider.positions) if collider else 0,
                 occluder_triangles=occluder.triangle_count if occluder else 0,
                 occluder_vertices=len(occluder.positions) if occluder else 0,
+                occluder=occluder is not None,
             )
         )
 
@@ -1323,7 +1343,6 @@ def _write_tile(
         id=label,
         ix=ix,
         iz=iz,
-        occluder=occluder is not None,
         # Source meshes bucketed here. Since `Q25` that excludes the ground,
         # which no longer *has* a per-tile source count — it is decimated as one
         # surface for the whole region before anything is cut, so a ground-only
@@ -1515,21 +1534,28 @@ def main(argv: list[str] | None = None) -> int:
         COLLISION_TIER,
         len(colliders),
     )
-    with_occluder = [tile for tile in report.tiles if tile.occluder]
+    # Per tier since `P5-17`: which tiers pay for the occluder is the policy, and
+    # a reader has to be able to see it in the build log as well as the config.
     overrides = ", ".join(
-        f"{name} {cell:.1f} m"
-        for name, cell in sorted(style.class_occluder_cell_m.items())
-        if cell != style.occluder_cell_m
+        f"{name} {cell:.1f} m" for name, cell in sorted(style.class_occluder_cell_m.items())
     )
-    log.info(
-        "  occluder (%.1f m cells%s; %s): %8d triangles in every tier, %d of %d tiles",
-        style.occluder_cell_m,
-        f"; {overrides}" if overrides else "",
-        ", ".join(style.occluder_classes),
-        sum(tile.lods[0].occluder_triangles for tile in with_occluder),
-        len(with_occluder),
-        len(report.tiles),
-    )
+    for level, cell in enumerate(style.occluder_cell_m):
+        with_occluder = [
+            tile for tile in report.tiles if level < len(tile.lods) and tile.lods[level].occluder
+        ]
+        if cell is None:
+            log.info("  occluder tier %d: none — the policy names no cell", level)
+            continue
+        log.info(
+            "  occluder tier %d (%.1f m cells%s; %s): %8d triangles, %d of %d tiles",
+            level,
+            cell,
+            f"; {overrides}" if overrides else "",
+            ", ".join(style.occluder_classes),
+            sum(tile.lods[level].occluder_triangles for tile in with_occluder),
+            len(with_occluder),
+            len(report.tiles),
+        )
 
     if args.terrain:
         log.info("textured terrain (evaluation output; the tiles above ship it untextured):")

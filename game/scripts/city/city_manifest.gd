@@ -176,7 +176,12 @@ const NOT_MEASURED: float = -1.0
 ## `-occonly` occluder (`occluder`), so `verify_tiles.gd` asks for one exactly
 ## where the ETL built one. A v28 reader has no way to tell a tile that shipped
 ## no occluder from one that lost it at import.
-const SCHEMA_VERSION: int = 29
+##
+## 30 since `P5-17` (`Q122`): `occluder` is a LIST parallel to `lods`, one flag
+## per tier file, because the occluder is a per-tier decision and a far tier
+## may deliberately ship none. A v29 reader taking the tile-wide bool would ask
+## every tier for an occluder the build left out of the far one.
+const SCHEMA_VERSION: int = 30
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -194,11 +199,18 @@ class Tile:
 	## streaming bands collapse to resident-or-not, and it is what
 	## `CityStreamer.hold_ground_at` loads under the start line.
 	var is_road: bool = false
-	## Whether every tier of this tile carries a `-occonly` occluder (`P5-13`),
-	## false for a square of bare ground. Read by `verify_tiles.gd`; the game
-	## needs nothing from it, because the importer has already stood the
-	## `OccluderInstance3D` inside the tier scene.
-	var occluder: bool = false
+	## Per tier, parallel to `lods`: whether that tier's file carries a
+	## `-occonly` occluder (`P5-13`, per tier since `P5-17`) — false for a
+	## square of bare ground, and false for a tier the ETL's policy left bare.
+	## Read by `verify_tiles.gd`; the game needs nothing from it, because the
+	## importer has already stood the `OccluderInstance3D` inside the tier scene.
+	var occluder: Array[bool] = []
+
+	## Whether tier `tier`'s file is meant to carry an occluder. Out of range is
+	## false, so a manifest that says less than it should reads as "none" and
+	## the verifier's parity assertion is what names the shortfall.
+	func has_occluder(tier: int) -> bool:
+		return tier >= 0 and tier < occluder.size() and occluder[tier]
 
 	## The node this unit is instantiated as, so the streamer and the preview
 	## name it the same way.
@@ -683,7 +695,17 @@ static func _tile(entry: Dictionary) -> Tile:
 		push_error("tile %s names no LOD files" % tile.id)
 
 	tile.aabb = _aabb_of(entry, "tile %s" % tile.id)
-	tile.occluder = bool(entry.get("occluder", false))
+	for flag: Variant in entry.get("occluder", []):
+		tile.occluder.append(bool(flag))
+	if tile.occluder.size() != tile.lods.size():
+		# One flag per tier file is the contract; anything else is a manifest
+		# the verifier cannot ask a per-tier question of.
+		push_error(
+			(
+				"tile %s names %d LOD files and %d occluder flags"
+				% [tile.id, tile.lods.size(), tile.occluder.size()]
+			)
+		)
 	return tile
 
 

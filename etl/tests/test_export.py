@@ -91,10 +91,19 @@ class _Region:
                         "ix": 0,
                         "iz": 0,
                         "aabb": [[0.0, 0.0, 0.0], [150.0, 40.0, 150.0]],
-                        "occluder": True,
                         "lods": [
-                            {"path": "tiles/t_00_00_lod0.glb", "triangles": 12, "bytes": 3},
-                            {"path": "tiles/t_00_00_lod1.glb", "triangles": 6, "bytes": 3},
+                            {
+                                "path": "tiles/t_00_00_lod0.glb",
+                                "triangles": 12,
+                                "bytes": 3,
+                                "occluder": True,
+                            },
+                            {
+                                "path": "tiles/t_00_00_lod1.glb",
+                                "triangles": 6,
+                                "bytes": 3,
+                                "occluder": False,
+                            },
                         ],
                     },
                     {
@@ -102,8 +111,14 @@ class _Region:
                         "ix": 1,
                         "iz": 0,
                         "aabb": [[150.0, 0.0, 0.0], [self.far_x, 90.0, 150.0]],
-                        "occluder": False,
-                        "lods": [{"path": "tiles/t_01_00_lod0.glb", "triangles": 12, "bytes": 3}],
+                        "lods": [
+                            {
+                                "path": "tiles/t_01_00_lod0.glb",
+                                "triangles": 12,
+                                "bytes": 3,
+                                "occluder": False,
+                            }
+                        ],
                     },
                 ],
             },
@@ -405,6 +420,18 @@ class TestAssembly:
 
         assert tile["id"] == "t_00_00"
         assert tile["lods"] == ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb"]
+
+    def test_tiles_carry_the_occluder_per_tier_parallel_to_their_lods(self, region) -> None:
+        """`P5-17` (`Q122`): the occluder is a per-tier decision, so `city.json`
+        says per tier file whether it carries one — `verify_tiles.gd` asks for an
+        occluder exactly there and refuses one anywhere else."""
+        region.build()
+        tiles = {tile["id"]: tile for tile in region.manifest()["tiles"]}
+
+        assert tiles["t_00_00"]["occluder"] == [True, False]
+        assert tiles["t_01_00"]["occluder"] == [False]
+        for tile in tiles.values():
+            assert len(tile["occluder"]) == len(tile["lods"])
 
     def test_the_intermediates_are_not_shipped(self, region) -> None:
         """`buildings.json` and `roadsurface.json` sit in the same directory and

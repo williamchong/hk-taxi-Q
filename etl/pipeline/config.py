@@ -459,12 +459,19 @@ class BuildingStyle:
     # the same classes, for the same reasons, as `class_lod_cell_sizes_m`.
     class_collision_cell_m: dict[str, float]
     # The cell the tile OCCLUDER is clustered at (`P5-13`), its own value like
-    # the collider's: it is rasterised on the CPU every frame and rides in every
-    # tier's file, so it wants the coarsest geometry that still stands where the
-    # buildings do, and a stated cell is what a sweep can price.
-    occluder_cell_m: float
+    # the collider's: it is rasterised on the CPU every frame, so it wants the
+    # coarsest geometry that still stands where the buildings do, and a stated
+    # cell is what a sweep can price. 🔴 **Per TIER since `P5-17` (`Q122`), one
+    # entry per `lod_cell_sizes_m` entry, `None` meaning that tier carries no
+    # occluder at all.** The streamer swaps whole tier scenes, so the occluder
+    # rides in every tier that wants one and its PCK price is paid once per
+    # tier — the duplication `Q121` left unpriced. One list covers the finest-
+    # tier-only experiment, a coarser far tier, and a bundle with none (the web
+    # cut, whose stock export template cannot cull).
+    occluder_cell_m: tuple[float | None, ...]
     # The occluder's cell for a class that must not decimate like the rest —
-    # the same classes, for the same reasons, as `class_lod_cell_sizes_m`.
+    # the same classes, for the same reasons, as `class_lod_cell_sizes_m`. A
+    # class statement, so it applies in every tier that carries an occluder.
     class_occluder_cell_m: dict[str, float]
     # The classes the occluder is built from — a subset of `classes`. The ground
     # is left out on purpose: a hillside occludes little a building in front of
@@ -545,9 +552,17 @@ class BuildingStyle:
         """Clustering cell for one class in the tile collider (`P5-12`)."""
         return self.class_collision_cell_m.get(class_id, self.collision_cell_m)
 
-    def occluder_cell_size_m(self, class_id: str) -> float:
-        """Clustering cell for one class in the tile occluder (`P5-13`)."""
-        return self.class_occluder_cell_m.get(class_id, self.occluder_cell_m)
+    def occluder_cell_size_m(self, class_id: str, level: int) -> float | None:
+        """Clustering cell for one class in tier `level`'s occluder (`P5-13`),
+        or `None` where that tier carries no occluder (`P5-17`)."""
+        cell = self.occluder_cell_m[level]
+        if cell is None:
+            return None
+        return self.class_occluder_cell_m.get(class_id, cell)
+
+    def occluder_tiers(self) -> tuple[int, ...]:
+        """The tier indices that carry an occluder."""
+        return tuple(level for level, cell in enumerate(self.occluder_cell_m) if cell is not None)
 
     def is_ground(self, class_id: str) -> bool:
         """Whether this class is the region's ground rather than something on it.
@@ -3792,6 +3807,45 @@ def _cell_table(
     return cell, per_class
 
 
+def _occluder_cells(
+    body: dict[str, Any], where: str, classes: tuple[str, ...], tiers: int
+) -> tuple[tuple[float | None, ...], dict[str, float]]:
+    """The occluder's cell per tier (`P5-17`) and its per-class overrides.
+
+    A list with one entry per tier of `lod_cell_sizes_m`, `null` meaning the
+    tier carries no occluder; a short or long list is refused for the reason
+    `class_lod_cell_sizes_m` refuses one. A scalar is refused too, rather than
+    broadcast: the whole point of the list is that a reader can see which tiers
+    pay for the occluder, and a scalar would hide that again. The overrides are
+    `_cell_table`'s rules — a misspelled class parses and overrides nothing.
+    """
+    raw = _require(body, "occluder_cell_m", where)
+    field = f"{where}:occluder_cell_m"
+    if not isinstance(raw, list):
+        raise ValueError(f"{field} must be a list with one cell per tier, null for none")
+    if len(raw) != tiers:
+        raise ValueError(f"{field} has {len(raw)} tiers, but lod_cell_sizes_m has {tiers}")
+    cells: list[float | None] = []
+    for level, value in enumerate(raw):
+        if value is None:
+            cells.append(None)
+            continue
+        cell = _number(value, f"{field}[{level}]")
+        if cell < 0.0:
+            raise ValueError(f"{field}[{level}] must not be negative ({cell})")
+        cells.append(cell)
+    per_class: dict[str, float] = {}
+    for name, size in (body.get("class_occluder_cell_m") or {}).items():
+        override_field = f"{where}:class_occluder_cell_m.{name}"
+        if str(name) not in classes:
+            raise ValueError(f"{override_field} is not in classes ({', '.join(classes)})")
+        override = _number(size, override_field)
+        if override < 0.0:
+            raise ValueError(f"{override_field} must not be negative ({override})")
+        per_class[str(name)] = override
+    return tuple(cells), per_class
+
+
 def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> BuildingStyle:
     assignment = _material_assignment(
         _require(body, "material_assignment", where), table, f"{where}:material_assignment"
@@ -3868,7 +3922,7 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         class_cells[str(name)] = override
 
     collision_cell, class_collision = _cell_table(body, where, "collision_cell_m", classes)
-    occluder_cell, class_occluder = _cell_table(body, where, "occluder_cell_m", classes)
+    occluder_cell, class_occluder = _occluder_cells(body, where, classes, len(cells))
     occluder_classes = tuple(str(name) for name in _require(body, "occluder_classes", where))
     if not occluder_classes:
         raise ValueError(

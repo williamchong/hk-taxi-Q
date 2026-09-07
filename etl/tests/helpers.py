@@ -181,7 +181,7 @@ def style(jitter: float = 0.0) -> BuildingStyle:
         class_lod_cell_sizes_m={},
         collision_cell_m=0.0,
         class_collision_cell_m={},
-        occluder_cell_m=0.0,
+        occluder_cell_m=(0.0,),
         class_occluder_cell_m={},
         occluder_classes=("BUILDING",),
         ground_sink_m=0.0,
@@ -332,7 +332,7 @@ CITY_YAML = textwrap.dedent(
       colour_jitter: 0.0
       lod_cell_sizes_m: [0.0]
       collision_cell_m: 0.0
-      occluder_cell_m: 0.0
+      occluder_cell_m: [0.0]
       occluder_classes: [BUILDING]
     roads:
       source: roads

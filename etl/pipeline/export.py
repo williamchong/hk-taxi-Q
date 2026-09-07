@@ -216,7 +216,11 @@ CITY_NAME = "city.json"
 # `-occonly` occluder (`occluder`), so `verify_tiles.gd` asks for one exactly
 # where the ETL built one. A v28 reader has no way to tell a tile that shipped
 # no occluder from one that lost it at import.
-CITY_SCHEMA = 29
+# 30 since `P5-17` (`Q122`): `occluder` is a LIST parallel to `lods` — which
+# tier files carry the occluder — because the policy is per tier and a far
+# tier may deliberately ship none. A v29 reader taking the tile-wide bool would
+# ask every tier for an occluder the build left out of the far one.
+CITY_SCHEMA = 30
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -395,7 +399,10 @@ def build_region(
             # and the streamer has no use for them.
             "lods": [lod["path"] for lod in tile["lods"]],
             "aabb": tile["aabb"],
-            "occluder": bool(tile["occluder"]),
+            # Per tier since `P5-17`, parallel to `lods`: which tier files carry
+            # the `-occonly` occluder, so `verify_tiles.gd` asks for one exactly
+            # where the ETL built one and refuses one where it did not.
+            "occluder": [bool(lod["occluder"]) for lod in tile["lods"]],
         }
         for tile in buildings["tiles"]
     ]

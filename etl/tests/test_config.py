@@ -317,19 +317,24 @@ class TestBuildingStyle:
         sweep can move. Buildings and structure, no ground."""
         style = hong_kong.buildings
         coarsest = len(style.lod_cell_sizes_m) - 1
-        assert style.occluder_cell_size_m("BUILDING") == style.occluder_cell_m
-        assert style.occluder_cell_size_m("INFRASTRUCTURE") < style.occluder_cell_m
+        assert len(style.occluder_cell_m) == len(style.lod_cell_sizes_m)
+        for level in style.occluder_tiers():
+            cell = style.occluder_cell_m[level]
+            assert style.occluder_cell_size_m("BUILDING", level) == cell
+            assert style.occluder_cell_size_m("INFRASTRUCTURE", level) < cell
         assert style.terrain_class not in style.occluder_classes
         assert set(style.occluder_classes) <= set(style.classes)
         for class_id in style.occluder_classes:
-            assert style.occluder_cell_size_m(class_id) == style.cell_size_m(class_id, coarsest)
+            assert style.occluder_cell_size_m(class_id, coarsest) == style.cell_size_m(
+                class_id, coarsest
+            )
 
     def test_the_occluder_cell_is_required_and_not_negative(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             del doc["buildings"]["occluder_cell_m"]
 
         def negate(doc: dict[str, Any]) -> None:
-            doc["buildings"]["occluder_cell_m"] = -1.0
+            doc["buildings"]["occluder_cell_m"] = [-1.0, 4.0]
 
         def misspell(doc: dict[str, Any]) -> None:
             doc["buildings"]["class_occluder_cell_m"] = {"INFRA": 1.0}
@@ -340,6 +345,36 @@ class TestBuildingStyle:
             load_config(rewrite(negate))
         with pytest.raises(ValueError, match="not in classes"):
             load_config(rewrite(misspell))
+
+    def test_the_occluder_policy_is_one_entry_per_tier_and_null_means_none(self, rewrite) -> None:
+        """`P5-17` (`Q122`): the list is per tier, `null` is a tier with no
+        occluder, and a scalar or a list of the wrong length is refused — the
+        list exists so a reader can see which tiers pay, and a broadcast scalar
+        would hide that again."""
+
+        def scalar(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_cell_m"] = 4.0
+
+        def short(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_cell_m"] = [4.0]
+
+        def near_only(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_cell_m"] = [4.0, None]
+
+        def none_at_all(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_cell_m"] = [None, None]
+
+        with pytest.raises(ValueError, match="one cell per tier"):
+            load_config(rewrite(scalar))
+        with pytest.raises(ValueError, match="lod_cell_sizes_m has 2"):
+            load_config(rewrite(short))
+        style = load_config(rewrite(near_only)).buildings
+        assert style.occluder_cell_m == (4.0, None)
+        assert style.occluder_tiers() == (0,)
+        assert style.occluder_cell_size_m("BUILDING", 1) is None
+        assert style.occluder_cell_size_m("INFRASTRUCTURE", 0) == 1.0
+        bare = load_config(rewrite(none_at_all)).buildings
+        assert bare.occluder_tiers() == ()
 
     def test_occluder_classes_must_name_real_classes(self, rewrite) -> None:
         def misspell(doc: dict[str, Any]) -> None:

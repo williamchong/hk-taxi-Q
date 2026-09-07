@@ -779,7 +779,8 @@ class TestBuildRegion:
             expected = ["t_00_00"]
             if level == COLLISION_TIER:
                 expected.append(collider_name("t_00_00"))
-            expected.append(occluder_name("t_00_00"))
+            if level in hong_kong.buildings.occluder_tiers():
+                expected.append(occluder_name("t_00_00"))
             assert [mesh.name for mesh in meshes] == expected
             assert [mesh.name for mesh in read_render(tiles / f"t_00_00_lod{level}.glb")] == [
                 "t_00_00"
@@ -788,20 +789,24 @@ class TestBuildRegion:
     def test_the_occluder_rides_in_every_tier_and_is_the_stated_tier_s_classes(
         self, hong_kong, sources, tmp_path
     ) -> None:
-        """`P5-13`: the same `-occonly` primitive in every tier file — the
-        streamer swaps whole tier scenes — built from `occluder_classes` alone
-        at `occluder_cell_m`, so the ground is not in it, and at the fixture's
-        cell it is the coarsest tier's own building geometry. Bare like the
-        collider: marker only, row zero, no colour, no UV, no table."""
+        """`P5-13`: the same `-occonly` primitive in every tier file the policy
+        names — the streamer swaps whole tier scenes — built from
+        `occluder_classes` alone at that tier's `occluder_cell_m` entry, so the
+        ground is not in it, and at the fixture's cell it is the coarsest
+        tier's own building geometry. Bare like the collider: marker only, row
+        zero, no colour, no UV, no table."""
         style = hong_kong.buildings
         assert style.terrain_class not in style.occluder_classes
         coarsest = len(style.lod_cell_sizes_m) - 1
+        assert style.occluder_tiers() == tuple(range(len(style.lod_cell_sizes_m)))
         for class_id in style.occluder_classes:
-            assert style.occluder_cell_size_m(class_id) == style.cell_size_m(class_id, coarsest)
+            assert style.occluder_cell_size_m(class_id, coarsest) == style.cell_size_m(
+                class_id, coarsest
+            )
         report = self.build(hong_kong, sources, tmp_path, self.ground())
         out = tmp_path / "out" / "wan_chai"
         tile = self.tile(report, "t_00_00")
-        assert tile.occluder
+        assert all(lod.occluder for lod in tile.lods)
         occluders = [read_glb(out / lod.path)[-1] for lod in tile.lods]
         for occluder, lod in zip(occluders, tile.lods, strict=True):
             assert occluder.name == occluder_name("t_00_00")
@@ -827,13 +832,71 @@ class TestBuildRegion:
         shipped = hong_kong.buildings
         self.build(hong_kong, sources, tmp_path)
         coarser = replace(
-            hong_kong, buildings=replace(shipped, occluder_cell_m=30.0, class_occluder_cell_m={})
+            hong_kong,
+            buildings=replace(
+                shipped,
+                occluder_cell_m=tuple(30.0 for _ in shipped.occluder_cell_m),
+                class_occluder_cell_m={},
+            ),
         )
         self.build(coarser, sources, tmp_path, out="coarse")
         fine = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         coarse = read_glb(tmp_path / "coarse" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert np.array_equal(fine[0].positions, coarse[0].positions)
         assert len(coarse[-1].positions) < len(fine[-1].positions)
+
+    def test_a_tier_whose_policy_names_no_cell_ships_no_occluder(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`P5-17` (`Q122`): the occluder is per tier. `[cell, None]` writes it
+        beside the finest tier only and says so per tier in the manifest —
+        `verify_tiles.gd` asks exactly there — and `[None, None]` is a bundle
+        with none, the web cut's. The render tiers do not move either way."""
+        shipped = hong_kong.buildings
+        two_tier = replace(
+            hong_kong,
+            buildings=replace(
+                shipped,
+                lod_cell_sizes_m=(0.0, 5.0),
+                class_lod_cell_sizes_m={},
+                occluder_cell_m=(5.0, 5.0),
+                class_occluder_cell_m={},
+            ),
+        )
+        both = self.build(two_tier, sources, tmp_path, self.ground(), out="both")
+        near_only = replace(
+            two_tier,
+            buildings=replace(two_tier.buildings, occluder_cell_m=(5.0, None)),
+        )
+        near = self.build(near_only, sources, tmp_path, self.ground(), out="near")
+        none_at_all = replace(
+            two_tier,
+            buildings=replace(two_tier.buildings, occluder_cell_m=(None, None)),
+        )
+        bare = self.build(none_at_all, sources, tmp_path, self.ground(), out="bare")
+
+        assert [lod.occluder for lod in self.tile(both, "t_00_00").lods] == [True, True]
+        assert [lod.occluder for lod in self.tile(near, "t_00_00").lods] == [True, False]
+        assert [lod.occluder for lod in self.tile(bare, "t_00_00").lods] == [False, False]
+        for level in (0, 1):
+            file = f"t_00_00_lod{level}.glb"
+            with_both = read_glb(tmp_path / "both" / "wan_chai" / "tiles" / file)
+            with_near = read_glb(tmp_path / "near" / "wan_chai" / "tiles" / file)
+            with_none = read_glb(tmp_path / "bare" / "wan_chai" / "tiles" / file)
+            # The render tier is untouched by the policy.
+            assert np.array_equal(with_both[0].positions, with_near[0].positions)
+            assert np.array_equal(with_both[0].positions, with_none[0].positions)
+            assert with_both[-1].name == occluder_name("t_00_00")
+            assert not any(mesh.name == occluder_name("t_00_00") for mesh in with_none)
+            near_names = [mesh.name for mesh in with_near]
+            assert (occluder_name("t_00_00") in near_names) == (level == 0)
+        near_lods = self.tile(near, "t_00_00").lods
+        assert near_lods[0].occluder_triangles > 0 and near_lods[1].occluder_triangles == 0
+        # A near-only occluder is byte-for-byte the both-tier one on the tier it keeps.
+        assert np.array_equal(
+            read_glb(tmp_path / "both" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")[-1].positions,
+            read_glb(tmp_path / "near" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")[-1].positions,
+        )
 
     def test_a_tile_of_bare_ground_carries_no_occluder(self, hong_kong, sources, tmp_path) -> None:
         """A square with nothing of an occluder class ships no `-occonly`
@@ -848,9 +911,9 @@ class TestBuildRegion:
             ),
         ]
         report = self.build(hong_kong, sources, tmp_path, fixtures)
-        bare = [tile for tile in report.tiles if not tile.occluder]
+        bare = [tile for tile in report.tiles if not any(lod.occluder for lod in tile.lods)]
         assert "t_01_00" in {tile.id for tile in bare}
-        assert self.tile(report, "t_00_00").occluder
+        assert all(lod.occluder for lod in self.tile(report, "t_00_00").lods)
         out = tmp_path / "out" / "wan_chai"
         for tile in bare:
             for lod in tile.lods:

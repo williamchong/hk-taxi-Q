@@ -472,7 +472,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 29,
+  "schema_version": 30,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -485,7 +485,7 @@ The interface between ETL and game. **Versioned — change both sides together a
       "id": "t_00_00",
       "lods": ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb"],
       "aabb": [[8.37,4.935,-16.588],[167.562,70.801,165.268]],
-      "occluder": true
+      "occluder": [true, true]
     }
   ],
   "road_graph": "roadgraph.json",
@@ -703,25 +703,32 @@ first cost, 5.17 MB of PCK for the one tier that ships it (21.10 → 26.27 MB), 
 `P2-5`. ⚠️ Every grader reads the tile through `gltf.read_render`, which drops the `-colonly`
 primitive; reading the file whole counts every wall twice.
 
-**Every tier ships an occluder as a third primitive since `P5-13`.** `<tile_id>_occluder-occonly`,
+**A tier ships an occluder as a third primitive since `P5-13`, wherever the per-tier policy names a
+cell (`P5-17`).** `<tile_id>_occluder-occonly`,
 which the importer reads into an `OccluderInstance3D` carrying an `ArrayOccluder3D` **and removes the
 mesh of**; `rendering/occlusion_culling/use_occlusion_culling` is what makes the engine rasterise it.
-In *every* tier, because `CityStreamer` swaps whole tier scenes and an occluder in one tier would
-leave with the swap. Built from `buildings.occluder_classes` — `BUILDING` and `INFRASTRUCTURE`, never
+Per tier, because `CityStreamer` swaps whole tier scenes: an occluder is in the tier that is resident
+or nowhere, so `buildings.occluder_cell_m` is a **list**, one entry per `lod_cell_sizes_m` entry and
+`null` for a tier that carries none — `[4.0, 4.0]` is `P5-13`'s build, `[4.0, null]` the near tier
+only, `[null, null]` a bundle with none, which is what the web cut wants because 🔴 **stock Web export
+templates omit the raycast module and cannot cull at all** (`Q122`). Built from
+`buildings.occluder_classes` — `BUILDING` and `INFRASTRUCTURE`, never
 the ground, the region's largest surface and one that occludes little a building in front of it does
-not — at its own **stated** cell, `occluder_cell_m` per class like the collider's; the shipped 4 m
+not — at its own **stated** cell, with `class_occluder_cell_m` per class like the collider's applying
+in every tier that carries one; the shipped 4 m
 and 1 m equal LOD1's by value, and the tile files were byte-identical when the tier index they
-replaced was retired. `city.json`'s `occluder` says whether a tile carries one (false for a square of
+replaced was retired. `city.json`'s `occluder` is a list parallel to `lods` saying which tier files
+carry one (all false for a square of
 bare ground), and `verify_tiles.gd` asserts exactly one `OccluderInstance3D` with vertices and no mesh
 beneath it wherever it does, and none wherever it does not — ⚠️ never by name, because the importer
 names every one `OccluderInstance3D`. ⚠️ **The culling unit is the instance, and that is what decides
 what this buys**: every instance here is a 150 m tile, a 150 m road chunk or a region-wide `MultiMesh`,
 so it culls **2** draw calls on Wan Chai's throttle route and **12–47** at Mong Kok's worst camera,
 frames 0 px either way. 🔴 **It costs PCK — +5,734,832 B (+10.3%)** — because the pack stores the
-occluder's vertices and indices in both tiers; the sweep in `PLAN.md` `P5-13` prices 8 m (east win
-kept, west lost, −5.15 MB) and 16 m (win gone); an occluder streamed as its own unit, held across
-tier swaps, would halve the price at any cell and is unbuilt. The CPU it costs on a handset is not
-measured. The
+occluder's vertices and indices in every tier that carries one; the sweep in `PLAN.md` `P5-13`
+prices 8 m (east win kept, west lost, −5.15 MB) and 16 m (win gone), and `P5-17`'s prices the
+per-tier policies against it. An occluder streamed as its own unit, held across tier swaps, is held
+behind that measurement (`Q122`). The CPU it costs on a handset is not measured. The
 carve cuts all three primitives; `gltf.read_render` drops both helpers.
 
 **Terrain ships in the tile primitive since `P3-10`.** It is one more entry in `buildings.classes`,
