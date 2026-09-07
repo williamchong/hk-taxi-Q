@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://bt81sjf3fdqqu"]
 
-[ext_resource type="Shader" path="res://assets/shaders/tramway.gdshader" id="1_tramway"]
+[ext_resource type="Shader" uid="uid://bxghhas3onydm" path="res://assets/shaders/tramway.gdshader" id="1_tramway"]
 
 [resource]
 resource_name = "tramway"

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="TouchProfile" format=3]
+[gd_resource type="Resource" script_class="TouchProfile" format=3 uid="uid://yuad87or8f6f"]
 
-[ext_resource type="Script" path="res://scripts/input/touch_profile.gd" id="1_touch"]
+[ext_resource type="Script" uid="uid://705wjvh5h0vi" path="res://scripts/input/touch_profile.gd" id="1_touch"]
 
 [resource]
 script = ExtResource("1_touch")

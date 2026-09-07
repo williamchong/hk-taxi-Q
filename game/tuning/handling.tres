@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="HandlingProfile" format=3]
+[gd_resource type="Resource" script_class="HandlingProfile" format=3 uid="uid://cuoueqljk6jex"]
 
-[ext_resource type="Script" path="res://scripts/vehicle/handling_profile.gd" id="1_handling"]
+[ext_resource type="Script" uid="uid://nvfowqxetd2p" path="res://scripts/vehicle/handling_profile.gd" id="1_handling"]
 
 [resource]
 script = ExtResource("1_handling")

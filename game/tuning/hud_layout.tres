@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="HudLayout" format=3]
+[gd_resource type="Resource" script_class="HudLayout" format=3 uid="uid://duh8i5c8puge4"]
 
-[ext_resource type="Script" path="res://scripts/ui/hud_layout.gd" id="1_hud_layout"]
+[ext_resource type="Script" uid="uid://dehyd5bceu2ww" path="res://scripts/ui/hud_layout.gd" id="1_hud_layout"]
 
 [resource]
 script = ExtResource("1_hud_layout")

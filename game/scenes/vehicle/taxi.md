@@ -79,7 +79,9 @@ arc, which is what spot_range alone does.
 light_energy is per lamp, and two overlapping cones add where they cross —
 which is the middle of the road. shadow_enabled stays off, and that is the
 mobile tier's rule rather than a saving: docs/ART_DESIGN.md allows vehicle blob
-shadows and no realtime shadow maps.
+shadows and no realtime shadow maps. The line is not in the file because off is
+the engine default, and the editor's writer omits every default-equal value
+(Q119); it was written out until the first editor save dropped it (P5-21).
 
 distance_fade is NOT a saving, it is a seat at the table. Forward Mobile pairs
 at most 8 spot lights PER RENDERED OBJECT and the fragment shader loops that

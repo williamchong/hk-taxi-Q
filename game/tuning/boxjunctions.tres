@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://dgamcrilvx4nv"]
 
-[ext_resource type="Shader" path="res://assets/shaders/marking_paint.gdshader" id="1_boxjunctions"]
+[ext_resource type="Shader" uid="uid://8sdhlscc5cjf" path="res://assets/shaders/marking_paint.gdshader" id="1_boxjunctions"]
 
 [resource]
 resource_name = "boxjunctions"

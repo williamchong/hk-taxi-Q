@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://c1u8kdo6g7hlg"]
 
-[ext_resource type="Shader" path="res://assets/shaders/road_markings.gdshader" id="1_markings"]
+[ext_resource type="Shader" uid="uid://cepbkve23hnsf" path="res://assets/shaders/road_markings.gdshader" id="1_markings"]
 
 [resource]
 resource_name = "road_markings"

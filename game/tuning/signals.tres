@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cph7dstpa1cnl"]
 
-[ext_resource type="Shader" path="res://assets/shaders/signs.gdshader" id="1_signs"]
+[ext_resource type="Shader" uid="uid://duwcra4wo2e46" path="res://assets/shaders/signs.gdshader" id="1_signs"]
 
 [resource]
 resource_name = "signals"

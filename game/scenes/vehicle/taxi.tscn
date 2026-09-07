@@ -1,80 +1,78 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cnmpjyxsjoqcu"]
 
-[ext_resource type="Script" path="res://scripts/vehicle/vehicle_controller.gd" id="1_ctrl"]
-[ext_resource type="Resource" path="res://tuning/handling.tres" id="3_handling"]
-[ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_body.glb" id="4_body"]
-[ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_tyre.glb" id="5_wheelmesh"]
-[ext_resource type="Script" path="res://scripts/vehicle/sun_glint.gd" id="7_glint"]
-[ext_resource type="Material" path="res://tuning/vehicle_body.tres" id="8_bodymat"]
-[ext_resource type="Script" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
+[ext_resource type="Script" uid="uid://bni4j6vjtptes" path="res://scripts/vehicle/vehicle_controller.gd" id="1_ctrl"]
+[ext_resource type="Resource" uid="uid://cuoueqljk6jex" path="res://tuning/handling.tres" id="3_handling"]
+[ext_resource type="PackedScene" uid="uid://m55xjkpmfpv2" path="res://assets/authored/vehicles/taxi_body.glb" id="4_body"]
+[ext_resource type="PackedScene" uid="uid://gmd5n2k3tef0" path="res://assets/authored/vehicles/taxi_tyre.glb" id="5_wheelmesh"]
+[ext_resource type="Script" uid="uid://ijwc4ig2wcn5" path="res://scripts/vehicle/sun_glint.gd" id="7_glint"]
+[ext_resource type="Material" uid="uid://8021hi0isst6" path="res://tuning/vehicle_body.tres" id="8_bodymat"]
+[ext_resource type="Script" uid="uid://0hn8wip47gb4" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(1.8, 0.7, 4)
 
-[node name="Taxi" type="VehicleBody3D"]
+[node name="Taxi" type="VehicleBody3D" unique_id=1800590424]
 mass = 1200.0
 script = ExtResource("1_ctrl")
 profile = ExtResource("3_handling")
 
-[node name="Body" type="CollisionShape3D" parent="."]
+[node name="Body" type="CollisionShape3D" parent="." unique_id=1062071944]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 shape = SubResource("BoxShape3D_body")
 
-[node name="Mesh" parent="." instance=ExtResource("4_body")]
+[node name="Mesh" parent="." unique_id=1596244631 instance=ExtResource("4_body")]
 script = ExtResource("9_lamps")
 
-[node name="HeadlampL" type="SpotLight3D" parent="."]
+[node name="HeadlampL" type="SpotLight3D" parent="." unique_id=1438472936]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.24192, 0, -0.24192, 0.9703, -0.58, 0.5, -2.05)
 visible = false
 light_color = Color(1, 0.97, 0.91, 1)
 light_energy = 7.0
-shadow_enabled = false
-spot_range = 32.0
-spot_angle = 13.0
-spot_angle_attenuation = 2.2
-spot_attenuation = 0.9
 distance_fade_enabled = true
 distance_fade_begin = 35.0
 distance_fade_length = 15.0
+spot_range = 32.0
+spot_attenuation = 0.9
+spot_angle = 13.0
+spot_angle_attenuation = 2.2
 
-[node name="HeadlampR" type="SpotLight3D" parent="."]
+[node name="HeadlampR" type="SpotLight3D" parent="." unique_id=1366443503]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.24192, 0, -0.24192, 0.9703, 0.58, 0.5, -2.05)
 visible = false
 light_color = Color(1, 0.97, 0.91, 1)
 light_energy = 7.0
-shadow_enabled = false
-spot_range = 32.0
-spot_angle = 13.0
-spot_angle_attenuation = 2.2
-spot_attenuation = 0.9
 distance_fade_enabled = true
 distance_fade_begin = 35.0
 distance_fade_length = 15.0
+spot_range = 32.0
+spot_attenuation = 0.9
+spot_angle = 13.0
+spot_angle_attenuation = 2.2
 
-[node name="SunGlint" type="Node3D" parent="."]
+[node name="SunGlint" type="Node3D" parent="." unique_id=4535337]
 script = ExtResource("7_glint")
 material = ExtResource("8_bodymat")
 
-[node name="WheelFL" type="VehicleWheel3D" parent="."]
+[node name="WheelFL" type="VehicleWheel3D" parent="." unique_id=750019216]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -1.3)
 use_as_steering = true
 
-[node name="Visual" parent="WheelFL" instance=ExtResource("5_wheelmesh")]
+[node name="Visual" parent="WheelFL" unique_id=92052752 instance=ExtResource("5_wheelmesh")]
 
-[node name="WheelFR" type="VehicleWheel3D" parent="."]
+[node name="WheelFR" type="VehicleWheel3D" parent="." unique_id=1920257588]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, -1.3)
 use_as_steering = true
 
-[node name="Visual" parent="WheelFR" instance=ExtResource("5_wheelmesh")]
+[node name="Visual" parent="WheelFR" unique_id=107837231 instance=ExtResource("5_wheelmesh")]
 
-[node name="WheelRL" type="VehicleWheel3D" parent="."]
+[node name="WheelRL" type="VehicleWheel3D" parent="." unique_id=1374395292]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, 1.3)
 use_as_traction = true
 
-[node name="Visual" parent="WheelRL" instance=ExtResource("5_wheelmesh")]
+[node name="Visual" parent="WheelRL" unique_id=1945494775 instance=ExtResource("5_wheelmesh")]
 
-[node name="WheelRR" type="VehicleWheel3D" parent="."]
+[node name="WheelRR" type="VehicleWheel3D" parent="." unique_id=1367133105]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, 1.3)
 use_as_traction = true
 
-[node name="Visual" parent="WheelRR" instance=ExtResource("5_wheelmesh")]
+[node name="Visual" parent="WheelRR" unique_id=174779688 instance=ExtResource("5_wheelmesh")]

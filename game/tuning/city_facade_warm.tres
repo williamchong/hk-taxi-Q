@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://c6snjappl7s0r"]
 
-[ext_resource type="Shader" path="res://assets/shaders/city_facade.gdshader" id="1_facade"]
+[ext_resource type="Shader" uid="uid://bjeru8cwsquwx" path="res://assets/shaders/city_facade.gdshader" id="1_facade"]
 
 [resource]
 resource_name = "city_facade"

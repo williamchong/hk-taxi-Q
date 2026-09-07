@@ -1,67 +1,67 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://b1c8sod65i7i8"]
 
-[ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
-[ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
-[ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
-[ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
-[ext_resource type="Script" path="res://scripts/city/layer_preview.gd" id="5_layer"]
-[ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
-[ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
-[ext_resource type="Script" path="res://scripts/city/fence.gd" id="16_fence"]
+[ext_resource type="Script" uid="uid://ljm1hs7e81eg" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
+[ext_resource type="Script" uid="uid://cm7bqg7vy3mic" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
+[ext_resource type="PackedScene" uid="uid://b4u0ble8tc3t" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
+[ext_resource type="Script" uid="uid://c74qqxf52uhek" path="res://scripts/city/road_preview.gd" id="4_roads"]
+[ext_resource type="Script" uid="uid://eixrig5rqabo" path="res://scripts/city/layer_preview.gd" id="5_layer"]
+[ext_resource type="Script" uid="uid://bbklqum2ig2i1" path="res://scripts/city/fare_preview.gd" id="6_fares"]
+[ext_resource type="Script" uid="uid://456d2wfy508d" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
+[ext_resource type="Script" uid="uid://wrjn3akqp6qv" path="res://scripts/city/fence.gd" id="16_fence"]
 
-[node name="CityPreview" type="Node3D"]
+[node name="CityPreview" type="Node3D" unique_id=772708994]
 
-[node name="Tiles" type="Node3D" parent="."]
+[node name="Tiles" type="Node3D" parent="." unique_id=1028960518]
 script = ExtResource("1_tiles")
 
-[node name="Tramway" type="Node3D" parent="."]
+[node name="Tramway" type="Node3D" parent="." unique_id=785147279]
 script = ExtResource("5_layer")
 layer = "tramway"
 
-[node name="Arrows" type="Node3D" parent="."]
+[node name="Arrows" type="Node3D" parent="." unique_id=122570223]
 script = ExtResource("5_layer")
 layer = "arrows"
 
-[node name="BoxJunctions" type="Node3D" parent="."]
+[node name="BoxJunctions" type="Node3D" parent="." unique_id=1896618266]
 script = ExtResource("5_layer")
 layer = "boxjunctions"
 
-[node name="RoadMarks" type="Node3D" parent="."]
+[node name="RoadMarks" type="Node3D" parent="." unique_id=1124123633]
 script = ExtResource("5_layer")
 layer = "roadmarks"
 
-[node name="Signals" type="Node3D" parent="."]
+[node name="Signals" type="Node3D" parent="." unique_id=1153482519]
 script = ExtResource("5_layer")
 layer = "signals"
 
-[node name="Railings" type="Node3D" parent="."]
+[node name="Railings" type="Node3D" parent="." unique_id=204514839]
 script = ExtResource("5_layer")
 layer = "railings"
 
-[node name="Lamps" type="Node3D" parent="."]
+[node name="Lamps" type="Node3D" parent="." unique_id=1710098553]
 script = ExtResource("5_layer")
 layer = "lamps"
 
-[node name="Signs" type="Node3D" parent="."]
+[node name="Signs" type="Node3D" parent="." unique_id=525474800]
 script = ExtResource("5_layer")
 layer = "signs"
 
-[node name="Landmarks" type="Node3D" parent="."]
+[node name="Landmarks" type="Node3D" parent="." unique_id=1005690494]
 script = ExtResource("7_landmarks")
 
-[node name="Fence" type="Node3D" parent="."]
+[node name="Fence" type="Node3D" parent="." unique_id=169523651]
 script = ExtResource("16_fence")
 
-[node name="Fares" type="Node3D" parent="."]
+[node name="Fares" type="Node3D" parent="." unique_id=938390375]
 script = ExtResource("6_fares")
 
-[node name="Roads" type="Node3D" parent="."]
+[node name="Roads" type="Node3D" parent="." unique_id=1877060882]
 visible = false
 script = ExtResource("4_roads")
 
-[node name="Lighting" parent="." instance=ExtResource("3_light")]
+[node name="Lighting" parent="." unique_id=1916885045 instance=ExtResource("3_light")]
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1698393136]
 far = 6000.0
 script = ExtResource("2_camera")
 frame_target = NodePath("../Tiles")

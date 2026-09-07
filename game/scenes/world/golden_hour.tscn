@@ -1,13 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dbn60sxhmasgw"]
 
-[ext_resource type="Environment" path="res://tuning/golden_hour.tres" id="1_env"]
+[ext_resource type="Environment" uid="uid://cr87j8pg3bca7" path="res://tuning/golden_hour.tres" id="1_env"]
 
-[node name="GoldenHour" type="Node3D"]
+[node name="GoldenHour" type="Node3D" unique_id=130366232]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1807605507]
 environment = ExtResource("1_env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1258081289]
 transform = Transform3D(0.866025, -0.25, 0.433013, 0, 0.866025, 0.5, -0.5, -0.433013, 0.75, 0, 300, 0)
 light_color = Color(1, 0.92, 0.79, 1)
 light_energy = 1.4

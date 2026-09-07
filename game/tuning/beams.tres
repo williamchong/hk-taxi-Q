@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="BeamProfile" format=3]
+[gd_resource type="Resource" script_class="BeamProfile" format=3 uid="uid://b6lv74suljwgc"]
 
-[ext_resource type="Script" path="res://scripts/vehicle/beam_profile.gd" id="1_beams"]
+[ext_resource type="Script" uid="uid://b6vu0dqy0l6om" path="res://scripts/vehicle/beam_profile.gd" id="1_beams"]
 
 [resource]
 script = ExtResource("1_beams")

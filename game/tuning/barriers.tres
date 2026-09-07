@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://drovpm8fiw2bu"]
 
-[ext_resource type="Shader" path="res://assets/shaders/railings.gdshader" id="1_railings"]
+[ext_resource type="Shader" uid="uid://dqq8ueupv16cd" path="res://assets/shaders/railings.gdshader" id="1_railings"]
 
 [resource]
 resource_name = "barriers"
