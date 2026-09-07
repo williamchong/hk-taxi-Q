@@ -444,7 +444,7 @@ hk-taxi-Q/
 │   ├── scenes/
 │   │   ├── main.tscn            # Main / World / GUI — the boot scene
 │   │   ├── city_drive.tscn      # the level World holds: streamer, layers, taxi, chase camera
-│   │   ├── dev/                 # grey-box circuit, skidpad, city preview
+│   │   ├── dev/                 # grey-box circuit, skidpad, city preview, asset viewer
 │   │   ├── vehicle/             # taxi.tscn
 │   │   └── world/               # shared rigs: lighting, sky
 │   ├── scripts/
@@ -1695,6 +1695,7 @@ the second vehicle anyone built.
 | `scripts/city/*_preview.gd` | Dev previews: `tile`, `road` and `fare` are their own scripts, and `layer_preview.gd` draws any of the nine `.glb` layers by the `layer` id set on its node — nine nodes in each scene, `signals` latent (the manifest names no asset, `Q77`). 🔴 **Adding a drawn layer means adding its node to `city_drive.tscn` AND `city_preview.tscn`** — `verify_city.gd` now holds both scenes' `layer` ids against `generated_layer.gd`'s table in both directions (`Q115`), which is the check `Q73` could not have. `roadmarks` had everything else and no node at all (`Q73`); `lamps` then shipped into the preview scene only, so it was built, verified, and **invisible in the game** — found by driving it, not by a check (`Q82`). ⚠️ **Two nodes are deliberately preview-only and are NOT counterexamples**: `road` is `P1-3`'s graph diagnostic, kept hidden because it z-fights the surface, and `city_drive.tscn` carries `GraphOverlay` instead; `fare` is `P1-5`'s pins, and `P3-1a` has not started. Everything that draws a *generated mesh* is in both. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
+| `scripts/city/asset_viewer.gd` | Dev: one `.glb` named by `--asset=` stood under `clean_daylight.tscn`, with a readout of what the importer did — triangles, AABB, each mesh's parent and collider, each surface's material and whether it resolved to a `.tres` or was kept as authored, its texture, `COLOR_0` (`P5-22`, `Q124`). The artist's loop: needs no built region. Not a measurement |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scripts/ui/debug_hud.gd` | The one owner of dev chrome. Off by default |
 | `scripts/ui/fps_counter.gd` | Frame rate and frame time — a `Label` `DebugHud` builds, styles and tells what to show (`Q119`); it stops counting while hidden |

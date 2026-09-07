@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://v8ss4t23fvr7"]
+
+[ext_resource type="Script" uid="uid://cvyskj6gu73xr" path="res://scripts/city/asset_viewer.gd" id="1_viewer"]
+[ext_resource type="Script" uid="uid://cm7bqg7vy3mic" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
+[ext_resource type="PackedScene" uid="uid://b4u0ble8tc3t" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
+
+[node name="AssetViewer" type="Node3D" unique_id=1382406881]
+script = ExtResource("1_viewer")
+
+[node name="Lighting" parent="." unique_id=1227169263 instance=ExtResource("3_light")]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=355392649 node_paths=PackedStringArray("frame_source")]
+script = ExtResource("2_camera")
+frame_source = NodePath("..")

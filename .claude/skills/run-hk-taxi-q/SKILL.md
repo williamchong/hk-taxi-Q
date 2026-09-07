@@ -83,7 +83,8 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 
 | Argument | Meaning |
 |---|---|
-| `--scene=res://…` | default `res://scenes/main.tscn` (the drive, HUD included); also `res://scenes/dev/city_preview.tscn` |
+| `--scene=res://…` | default `res://scenes/main.tscn` (the drive, HUD included); also `res://scenes/dev/city_preview.tscn` and `res://scenes/dev/asset_viewer.tscn` |
+| `--asset=res://…` | the `.glb` `asset_viewer.tscn` stands (`P5-22`); default the DCC fixture. Ignored by every other scene |
 | `--seconds=6` | how long to simulate |
 | `--shots=0.5,3,6` | sim times to capture |
 | `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |
@@ -92,6 +93,14 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
+
+One authored asset under the shipped rig, no city needed — the readout prints as `asset:` lines and
+is drawn in the frame:
+
+```bash
+.claude/skills/run-hk-taxi-q/drive.sh --scene=res://scenes/dev/asset_viewer.tscn \
+  --asset=res://assets/authored/vehicles/taxi_body.glb --seconds=1 --shots=0.8 --debug-view=off
+```
 
 Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
 `steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.

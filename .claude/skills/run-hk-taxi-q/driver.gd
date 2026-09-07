@@ -484,6 +484,10 @@ func _parse_args() -> bool:
 				if not ["mouse", "off"].has(value):
 					_fail("--touch=%s is not mouse or off" % value)
 					return false
+			"--asset":
+				# `asset_viewer.gd` reads this one itself (`P5-22`); it is named
+				# here so the scene's one flag is not refused as unknown.
+				pass
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false
