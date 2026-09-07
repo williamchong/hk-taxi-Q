@@ -672,6 +672,8 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 	# from `e0` and never reaches them.
 	var single: int = 0
 	var single_available: int = 0
+	var at_node: int = 0
+	var tied_elsewhere: int = 0
 	for edge: Dictionary in edges:
 		if int(edge.get("elevation_level", 0)) != 0:
 			continue
@@ -690,8 +692,24 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		# drawn width varies along an edge and "the drawn half-width" is not a
 		# question you can ask without saying where.
 		var station: int = floori(points.size() / 2.0)
-		var mid: Array = points[station]
-		var hit: RoadGraph.Hit = graph.nearest_edge(Vector3(mid[0], mid[1], mid[2]))
+		# 🔴 **The sample is the MIDPOINT of the middle segment, never a vertex**
+		# (`Q122`). On a two-point edge the "mid" vertex is the end node, where
+		# three edges tie at 0.000 m in plan and `nearest_edge` hands back
+		# whichever it scanned first — on `mong_kok` that was `e21`, three lanes
+		# over 13.111 m, graded against `e30`'s two over 12.044 m, and the check
+		# went red on a lane centre that was right. Wan Chai had four of the
+		# same tie and passed by index order alone. An interior point of the
+		# edge's own segment is nearest to that edge by construction, so the
+		# hit below can be *asserted* to be the sampled edge rather than assumed.
+		var seg: int = mini(station, points.size() - 2)
+		var a: Array = points[seg]
+		var b: Array = points[seg + 1]
+		var mid := Vector3(
+			(float(a[0]) + float(b[0])) * 0.5,
+			(float(a[1]) + float(b[1])) * 0.5,
+			(float(a[2]) + float(b[2])) * 0.5
+		)
+		var hit: RoadGraph.Hit = graph.nearest_edge(mid)
 		if not hit.hit():
 			continue
 		if is_single:
@@ -703,7 +721,29 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		# not the authored width the graph publishes. On a two-lane street those
 		# differ by a quarter of the widening.
 		var edge_id: int = int(edge.get("id", -1))
-		var drawn_half: float = graph.drawn_half_width_of(edge_id, station)
+		# A finding, not a skip: the count of samples is the evidence that every
+		# one was interior, and a midpoint that resolves elsewhere is either a
+		# duplicate edge lying on this one or the sample having stopped being
+		# interior — both are the defect `Q122` found, arriving again.
+		if hit.edge_id != edge_id:
+			problems.append(
+				(
+					(
+						"edge %d's segment midpoint resolves to edge %d — the sample is not "
+						+ "on its own edge"
+					)
+					% [edge_id, hit.edge_id]
+				)
+			)
+			break
+		# Lerped between the segment's two stations exactly as `_half_at` does
+		# for the hit, so the expectation is the graph's own reading at that
+		# point and not the nearer station's.
+		var drawn_half: float = lerpf(
+			graph.drawn_half_width_of(edge_id, seg),
+			graph.drawn_half_width_of(edge_id, seg + 1),
+			0.5
+		)
 		var expected: float = RoadGraph.lane_offset(drawn_half * 2.0, lanes)
 		var actual: float = hit.lane_centre.distance_to(hit.point)
 		if absf(actual - expected) > 0.01:
@@ -711,12 +751,32 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				(
 					(
 						"edge %d's lane centre is %.3f m off the centreline, expected %.3f m "
-						+ "from its drawn half-width of %.3f m at station %d"
+						+ "from its drawn half-width of %.3f m at the midpoint of segment %d"
 					)
-					% [edge_id, actual, expected, drawn_half, station]
+					% [edge_id, actual, expected, drawn_half, seg]
 				)
 			)
 			break
+		# Reported, never gated (`Q122`): what the vertex sample this replaced
+		# would have seen. `at_node` counts samples whose mid vertex is the edge's
+		# end node; `tied_elsewhere` counts those the graph resolves to ANOTHER
+		# edge with a different lane offset — the exact shape of the red check.
+		# Printed so a reader can see the population the old sample was exposed
+		# to on this region, and so a region where it reads 0 is not taken for
+		# one where the ambiguity does not exist.
+		var vertex: Array = points[station]
+		var at_vertex: RoadGraph.Hit = graph.nearest_edge(
+			Vector3(float(vertex[0]), float(vertex[1]), float(vertex[2]))
+		)
+		if station == points.size() - 1:
+			at_node += 1
+		if at_vertex.hit() and at_vertex.edge_id != edge_id:
+			var vertex_expected: float = RoadGraph.lane_offset(
+				graph.drawn_half_width_of(edge_id, station) * 2.0, lanes
+			)
+			var vertex_actual: float = at_vertex.lane_centre.distance_to(at_vertex.point)
+			if absf(vertex_actual - vertex_expected) > 0.01:
+				tied_elsewhere += 1
 		# ⚠️ Conditional since `Q23`, and 🔴 **NOT-NARROWER since `Q95`, where it
 		# used to be strictly wider.** The widening became a floor —
 		# `max(width_m, floor)` — rather than a multiplier, so an edge whose
@@ -727,8 +787,13 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		# that actually matters, is that the ribbon is never drawn *narrower*
 		# than the road the graph publishes. On structure the two are equal for
 		# the older reason: a deck ends at a parapet, so its floor is 0.0 m.
+		# Either end of the sampled segment on structure counts: the lerped
+		# half-width is between two stations, and a deck ends at whichever.
 		var flags: Array = edge.get("on_structure", [])
-		var on_structure: bool = station < flags.size() and bool(flags[station])
+		var on_structure: bool = (
+			(seg < flags.size() and bool(flags[seg]))
+			or (seg + 1 < flags.size() and bool(flags[seg + 1]))
+		)
 		if not on_structure and drawn_half > graph.width_of(edge_id) * 0.5 + 0.001:
 			widened += 1
 		if drawn_half < graph.width_of(edge_id) * 0.5 - 0.001:
@@ -736,10 +801,10 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				(
 					(
 						"edge %d's drawn half-width %.3f m is NARROWER than half its "
-						+ "authored width %.3f m at station %d (on structure: %s) — "
-						+ "the ribbon does not cover the road it publishes"
+						+ "authored width %.3f m at the midpoint of segment %d "
+						+ "(on structure: %s) — the ribbon does not cover the road it publishes"
 					)
-					% [edge_id, drawn_half, graph.width_of(edge_id) * 0.5, station, on_structure]
+					% [edge_id, drawn_half, graph.width_of(edge_id) * 0.5, seg, on_structure]
 				)
 			)
 			break
@@ -804,6 +869,16 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				+ "driving line off the centreline"
 			)
 			% [single, single_available]
+		)
+	)
+	print(
+		(
+			(
+				"  Q122: %d of %d lane-centre samples have their mid vertex at the edge's end "
+				+ "node, %d of which the graph resolves to another edge with a different "
+				+ "offset — every sample above was taken at a segment midpoint instead"
+			)
+			% [at_node, checked + single, tied_elsewhere]
 		)
 	)
 	problems.append_array(_check_lane_source(edges))
