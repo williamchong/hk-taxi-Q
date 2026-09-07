@@ -20693,13 +20693,13 @@ duplication itself**: the occluder is byte-identical in both tiers, so one occlu
 held across tier swaps would halve the price at any cell, and that is a `CityStreamer` change and
 the user's call. Import +1.8 s and +6 MB of cache. ⚠️ **Not measured**: the
 CPU the occluder costs on a handset (Embree raycast per frame, BVH rebuild at every tile swap;
-`P0-3b` is still blocked), and whether the web cut's Compatibility renderer honours it at all.
+`P0-3b` is still blocked), and whether the web cut's Compatibility renderer honours it at all — ⚠️ **answered 2026-09-08 (`Q122`)**: not by default, and the constraint is the Web export template, not the renderer.
 🔴 **`meshes/generate_lods = false` ships as planned, and the plan's stated reasons were wrong**:
 the importer's LODs were **not** wasted — the engine was drawing them, pixel-identically, and turning
 them off leaves draw calls and frames identical while primitives submitted rise **16–30%** on the
 throttle route (661,048 → 768,476 at t=1; 359,594 → 467,022 at t=6). What it buys is **−5,262,224 B
 of PCK (−8.6%)**, −5 MB of import cache, and nothing measurable in import time (7.2 / 7.1 s → 7.4 /
-6.2 s clean). Bytes against vertex work, reversible in one value; the triangle relief `Q120` wants is
+6.2 s clean). Bytes against vertex work, reversible in one value ⚠️ **plus deleting every generated `.import` sidecar (`Q122`, `P5-16`)**; the triangle relief `Q120` wants is
 the ETL's LOD ratio, not the importer's. Final PCK **55,955,496 B**. Numbers in `PLAN.md` `P5-13`.
 ✅ **`P5-12`**: the collider is its own
 `<tile>_collision-colonly` primitive beside the render tier, decimated at a **stated** cell
@@ -20809,3 +20809,123 @@ collider union (the same clipping as the cap), a landmark LOD tier (`P0-3b`).
 `TEXCOORD_1` carried a per-building constant and what it cost · `Q63` for the texture budget the
 option rides on · `Q82` for the compression setting that protects the payload · `Q53` for the cap
 overlap · `Q62` for why every step here owes a frame
+
+
+## `Q122` — The red check on the second region, and the occluder the web cut cannot use
+
+**Status.** 🟡 **Open — planned 2026-09-08.** The plan is `PLAN.md` Phase 5b, `P5-15`–`P5-18`.
+
+**The question.** An outside evaluation of `P5-13` was asked to rule on two follow-ups — keep the
+importer's LODs off, and build the occluder as its own streamed unit — and put two items ahead of
+both: the `mong_kok` `check.sh` failure `Q120` recorded on 2026-09-07 and did not look at, and
+whether the web cut honours occlusion culling at all. This entry records what each turned out to
+be when read against the code and the bundles, what the evaluation got right, where its remedies do
+not fit this repository, and what is planned, refused and held.
+
+**The red check is the verifier, not the road.** The failing line was *edge 30's lane centre is
+4.371 m off the centreline, expected 3.011 m from its drawn half-width of 6.022 m at station 1*.
+`e30` SHANGHAI STREET is a **two-point** polyline, so `verify_road_graph.gd`'s "mid station",
+`floori(points.size() / 2.0)`, is its **end node** (33), where three edges meet at 0.000 m in plan.
+`RoadGraph.nearest_edge` breaks an exact tie by scan order — strict `<` on the distance — so the
+lowest-indexed segment wins, and the verifier never asserts that `hit.edge_id` is the edge it
+sampled:
+
+| edge at node 33 | lanes (`lanes_source`) | `width_m` | `lane_offset` |
+|---|---|---:|---:|
+| `e21` SHANGHAI STREET | 3 (`arrows`) | 13.111 | **4.371** |
+| `e30` SHANGHAI STREET | 2 (`authored`) | 12.044 | 3.011 |
+| `e441` CHANGSHA STREET | 2 (`authored`) | 9.735 | 2.560 |
+
+The 4.371 is `e21`'s, exactly; the 3.011 is `e30`'s. Both driving lines sit inside their own
+paint, so this is **not** `Q114`'s territory and no ETL value is wrong. What it is instead is a
+verifier assumption that held on Wan Chai by index order. Emulating the verifier's sampling — the
+first 50 multi-lane and 10 single-lane at-grade edges in document order, station `size / 2` — over
+the four bundles:
+
+| region | sampled | station is an end node | end node with a tied edge whose offset differs |
+|---|---:|---:|---:|
+| `wan_chai` | 60 | 18 | **4** |
+| `mong_kok` | 60 | 22 | **12** |
+| `causeway_bay` | 60 | 13 | 0 |
+| `sha_tin` | 59 | 15 | **6** |
+
+Wan Chai has four of the same ambiguity and passed because on each the sampled edge carried the
+lower id (`e0` against `e245`, 2.56 against 3.925 m); `e30` against `e21` breaks that. `sha_tin`
+may fail the same way on its next sync. ⚠️ **The fix is the verifier's alone**: sample the interior
+of the middle segment, expect the lerp of its two bounding stations' drawn half-widths, and assert
+the hit came back on the sampled edge — a mismatch is then a finding, not a skip. No ETL change and
+no schema change. That is `P5-15`, and it goes first because a red `check.sh` on a declared region
+is the repository's own bar for "done".
+
+**The web cut cannot cull, and the answer is documented rather than measured.** The evaluation
+asked for one export and one frame comparison. The `OccluderInstance3D` class reference already
+says it: *"Due to memory constraints, occlusion culling is not supported by default in Web export
+templates"* — enabling it means custom templates built with `module_raycast_enabled=yes`. Godot's
+occlusion culling is a CPU rasteriser on Embree, which is the `raycast` module, and stock Web
+templates ship without it. ⚠️ **The constraint is the export template, not the renderer** — the
+evaluation framed it as the Compatibility renderer, and `project.godot` sets no
+`rendering_method.web`, so the web cut takes that renderer's default; but Compatibility on a
+desktop does cull, and the web template would not whichever renderer it ran. On the itch.io cut,
+which is the artefact `P3-9a` actually puts in front of drivers, the occluder is therefore **pure
+download cost** unless the templates are rebuilt. 🔴 **The remedy the evaluation drew — "the 8 m
+cell for the web cut" — is wrong twice.** An inert occluder wants **zero** bytes, not a coarser
+cell, and 8 m still pays ~4 of the 5 MB for nothing (Mong Kok PCK 84.96 / 79.81 / 77.15 MB at
+4 / 8 / 16 m). And there is no per-cut setting to give it either: the occluder is a primitive
+inside every tile's `.glb`, the export preset's `exclude_filter` works per file, and one bundle
+under `game/assets/generated/` serves every preset. A web cut without the occluder is a **second
+ETL build** with the occluder switched off — which `verify_tiles.gd` already accepts, because it
+counts against the manifest — and that is a build-matrix decision and the user's call, priced at
+the full +10.3% rather than the 8 m delta. `P5-17` makes the switch config and per tier, so the
+same key serves the web bundle, the finest-tier experiment and a coarser far tier.
+
+**Reversibility was overstated, and the ratchet is cheaper than the caveat.** `Q121`, `PLAN.md`
+`P5-13` and `PROGRESS.md` all say the LODs are "one value to reverse". They are one value **plus
+deleting every generated `.import` sidecar and re-importing**: `[importer_defaults]` seeds a *new*
+sidecar only (`Q82`), and `sync_generated.sh` keeps a sidecar wherever its asset persists — it
+removes them only beside a stale asset. `ARCHITECTURE.md`'s row already says so; the three summaries
+did not, and `check.sh` cannot see a stale sidecar. Rather than a fourth caveat, `P5-16` makes it a
+check: every generated sidecar present must carry the pinned `generate_lods` and
+`force_disable_compression` values, asserting nothing on an empty tree so `check.sh` still needs no
+built region.
+
+**The 108% needs a sentence, not a re-measure.** The evaluation asked for `Q120`'s worst-camera
+figure to be re-shot after LODs-off. That figure sums the **manifest's** tier triangle counts for
+whatever the streamer would hold resident; the importer's LODs never entered it, because they were
+a second set the engine chose from at draw time. With them off, the manifest count *is* the drawn
+count for a resident tile, so 301,647 is now exact where it was an upper bound on the drawn set —
+which is the real argument for the change, and `P5-18` records it beside the LOD1 sweep.
+
+**On the two follow-ups the evaluation ruled on.** *Keep LODs off* — agreed, with the four
+conditions reshaped as above: the reversibility becomes `P5-16`, the LOD1 ratio gets an owner in
+`P5-18`, the re-measure becomes a recorded sentence, and the cost side stays provisional until a
+handset runs it (`P0-3b`; "frames unchanged" on a desktop says nothing about an Adreno 618).
+*The occluder as its own streamed unit* — agreed it is the unpriced lever and agreed it is the most
+expensive instrument for the question; refused for now, below. ⚠️ **"One ETL line" understates the
+cheap experiment**: `city.json`'s `occluder` is per **tile**, and `_check_occluder` asks every
+tier's scene for one, so a finest-tier-only occluder needs the flag per tier, a manifest bump
+(29 → 30 — a consumer keeping the per-tile reading would be wrong) and the verifier moved. Still an
+afternoon, and still no runtime invariant.
+
+**Verdict — GO WITH CAVEATS, as `P5-15`–`P5-18`, in that order.** The verifier fix before anything
+else in the phase; the sidecar ratchet beside it; the per-tier occluder policy before the next
+itch.io cut, because it decides what that cut carries; the LOD1 ratio after, and ahead of any
+streamer work, because it repays both budgets and moves nothing at runtime. `P5-11`'s +10.2%
+along-coordinate reversal is likewise larger than halving the occluder and carries no runtime risk;
+it stays the user's call.
+
+**Refused, with the reason.** The occluder as a streamer content class, for now — a new resident
+unit, its own load/unload, and a `verify` invariant, to answer a question `P5-17` answers with a
+config key. An 8 m occluder "for the web" — an inert occluder wants none, and no per-preset setting
+exists to carry either. Fixing the red check in the ETL — the lane offsets are right; the sample
+was ambiguous. Skipping ambiguous samples silently — the count is the evidence that the sample is
+now interior, so a mismatch is asserted.
+
+**Held, with the trigger.** The streamer content class — `P5-17` showing the far-tier occluder
+culls something the finest-tier one does not, at a byte price the per-tier policy cannot reach.
+Custom Web export templates with the raycast module — a measured draw-call problem on the web cut,
+which `Q120` says is a density problem and the web demo is Wan Chai. The handset CPU cost of the
+occluder — `P0-3b`.
+
+**See.** `Q121` for the review this follows and the two claims it corrects · `Q120` for the
+108% and the red check it recorded · `Q114` for why the lane count is the road's and not this ·
+`Q82` for the sidecar gap `P5-16` closes · `Q62` for why `P5-17`'s evidence is a frame
