@@ -19639,14 +19639,17 @@ owns the road.
 
 **What it costs, and what is open until it is built.**
 
-- ⚠️ **The owner measures a far half over sources its rectangle never selected.** `_Source.read`'s
-  bbox and the `Q95` survey rays have to expand to the owned graph's extent plus the ray cap, and the
-  fetch has to cover it — **133 m** past the line at most here, on the level-1 ramp `e496`. Whether
-  the sheets Wan Chai already fetches cover the nine far halves is **unmeasured**; a
-  `foreign_unmeasured_stations` counter refuses what is uncovered rather than inventing it (`Q54`).
-- ⚠️ **The two longest crossings are the level-1 ramps** (90–133 m), whose deck heights come from
-  `INFRASTRUCTURE` meshes in the neighbour's building sheets. Same coverage question, higher stakes:
-  `Q90` is what a ramp with no deck to sample looks like.
+- 🔴 **The owner measures a far half over sources its rectangle never selected, and the sheets do
+  NOT cover it — measured 2026-09-07.** Wan Chai's six building and topography sheets reach
+  longitude **114.18883**, about **85 m** past the shared edge; seven of the nine far halves fit
+  inside that and the two that do not are the **level-1 ramps** — `e496` at **133 m** and `e364`
+  at 110 m — whose deck heights come from `INFRASTRUCTURE` in exactly those sheets. `Q90` is what a
+  ramp with no deck to sample looks like. ✅ **Decided the same day (user): fetch.** *"We should
+  always fetch more data if useful"* — a `join.reach_m` margin, 133 m today, widens sheet selection
+  and every source-read bbox on the sides where a declared neighbour shares an edge; `bounds` and
+  the tile grid do not move (`Q10`), and a region with no neighbour is byte-identical, which is the
+  inertness proof. Two more sheets (~130 MB) for Wan Chai. A `foreign_unmeasured_stations` counter
+  still refuses whatever falls outside the margin rather than inventing it (`Q54`).
 - ⚠️ **The two tile grids are not aligned** — the origins are 1,649 m apart, not a multiple of
   150 m — so an owned edge's far half lies over the neighbour's grid. `P5-6`'s chunk is culled by its
   own AABB and this costs nothing, but *caps whole to one tile* means one **owner** tile.
