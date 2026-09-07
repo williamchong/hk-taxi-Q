@@ -26,3 +26,10 @@ takes a path, for when the roster has a second car worth grading here.
 
 Facing +X, the same basis `greybox.tscn` uses. Row-major, and forward is the
 -Z column — do not rewrite these from a direction.
+
+`sun` points the car at this scene's own key light (`P5-24`): the glint and
+the lamps read `VehicleController.sun` instead of searching the window for a
+`DirectionalLight3D`, so the scene that owns the rig is the one that names it.
+Unset, the car reads no rig — no daylight to be in or out of — and drives with
+its front lamps out, which is `vehicle_lamps.gd`'s stated rule for a car with
+no world around it.

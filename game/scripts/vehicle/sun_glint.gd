@@ -2,11 +2,13 @@ class_name SunGlint
 extends Node3D
 ## Feeds the scene's real sun direction into `vehicle_body.gdshader`.
 ##
-## ⚠️ **`class_name` is here for `find_sun` and not for this node.** Nothing
+## ⚠️ **`class_name` is here for `toward` and not for this node.** Nothing
 ## instances this by type — `taxi.tscn` names the script by path — but
-## `vehicle_lamps.gd` needs the same sun this does, and the lookup below is
-## worth more than it looks: it is the one that had to learn `current_scene` is
-## null in a driver run. A private second copy would relearn that the same way.
+## `vehicle_lamps.gd` needs the same -Z/+Z convention this does, and a private
+## second copy is a silent failure in both consumers. The sun itself is the
+## controller's `sun`, handed in by the scene that owns the rig (`P5-24`);
+## until then this searched the window root for a `DirectionalLight3D`, and
+## had to learn that `current_scene` is null in a driver run to do it.
 ##
 ## The glint needs to know where the sun is, and the shader cannot ask: Godot 4
 ## exposes light only inside a `light()` function, and writing one there would
@@ -59,7 +61,7 @@ func apply() -> void:
 		push_warning("sun_glint: no material assigned; the taxi's glint will not track the sun")
 		return
 
-	var sun: DirectionalLight3D = find_sun(self)
+	var sun: DirectionalLight3D = rig_sun(self)
 	if sun == null:
 		# The taxi was loaded without a world around it — a verify tool, an
 		# import, the editor. There is no rig to read and no frame to be wrong,
@@ -92,23 +94,13 @@ static func toward(sun: DirectionalLight3D) -> Vector3:
 
 ## The scene's key light, or null where there is no rig loaded.
 ##
-## Static, and shared with `vehicle_lamps.gd`: the glint needs where the sun is
-## and the lamps need whether there is one, and those are the same question
-## asked twice. `from` is any node in the tree — the search does not start there.
-##
-## Search from the window root, **not `get_tree().current_scene`**.
-##
-## ⚠️ **`current_scene` is null in a driver run and this cost a whole round of
-## tuning.** `.claude/skills/run-hk-taxi-q/driver.gd` instantiates the scene and
-## `add_child`s it to the root; nothing assigns `current_scene`, which only
-## `change_scene_to_*` and the boot path set. An earlier version returned early
-## on a null `current_scene` — a guard added to suppress a `check.sh` warning —
-## and so silently left `sun_toward` at its default in **every** measured
-## drive, which read as "the glint does nothing" rather than as "the glint never
-## ran". The window root is populated on every load path there is.
-static func find_sun(from: Node) -> DirectionalLight3D:
-	var root: Node = from.get_tree().root
-	for light: DirectionalLight3D in root.find_children("*", "DirectionalLight3D", true, false):
-		if light.visible:
-			return light
-	return null
+## The rig's sun as the controller above `node` was handed it, or null where
+## there is no controller, no rig, or the light is hidden — a hidden key light
+## is no rig, as it was when this searched for one. Static, and shared with `vehicle_lamps.gd`:
+## the glint needs where the sun is and the lamps need whether there is one,
+## and those are the same question asked twice.
+static func rig_sun(node: Node) -> DirectionalLight3D:
+	var controller: VehicleController = VehicleController.above(node)
+	if controller == null or controller.sun == null or not controller.sun.visible:
+		return null
+	return controller.sun

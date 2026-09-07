@@ -170,6 +170,13 @@ tools/verify_spawn.gd is what asserts the resolved basis against the edge.
 
 See docs/ARCHITECTURE.md "To drive it".
 
+`sun` points the car at this scene's own key light (`P5-24`): the glint and
+the lamps read `VehicleController.sun` instead of searching the window for a
+`DirectionalLight3D`, so the scene that owns the rig is the one that names it.
+Unset, the car reads no rig — no daylight to be in or out of — and drives with
+its front lamps out, which is `vehicle_lamps.gd`'s stated rule for a car with
+no world around it.
+
 ## `[node name="GraphOverlay" type="Node3D" parent="."]`
 
 `P2-2`'s debug overlay: what `RoadGraph` believes is under the car, drawn on

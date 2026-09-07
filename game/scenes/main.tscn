@@ -2,8 +2,12 @@
 
 [ext_resource type="PackedScene" uid="uid://bly4o26y51bdn" path="res://scenes/city_drive.tscn" id="1_world"]
 [ext_resource type="Script" uid="uid://ddp75fdft6cd5" path="res://scripts/ui/hud.gd" id="2_hud"]
+[ext_resource type="Script" uid="uid://d1dvv4ljn83sk" path="res://scripts/main.gd" id="3_main"]
 
-[node name="Main" type="Node" unique_id=900714504]
+[node name="Main" type="Node" unique_id=900714504 node_paths=PackedStringArray("level", "hud")]
+script = ExtResource("3_main")
+level = NodePath("World/CityDrive")
+hud = NodePath("GUI/Hud")
 
 [node name="World" type="Node" parent="." unique_id=379721513]
 

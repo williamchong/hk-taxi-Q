@@ -17,6 +17,15 @@ requires all land under `GUI`, which is why the split precedes them.
 `PROGRESS.md` had already stopped calling it a dev scene; the dev previews,
 the skidpad and the grey box stay there.
 
+## `[node name="Main" type="Node"]`
+
+`main.gd` (`P5-24`): the entry point is the one node holding both `World` and
+`GUI`, so it is the one that hands the HUD its car — `level` and `hud` are
+typed exports pointing down into each. Before this the HUD found the first
+car in a group, a sibling reaching across the World / GUI boundary from below;
+now nothing under `GUI` searches for one, and a level change hands the next
+car in here. Both exports are checked for null with a warning, never a crash.
+
 ## `[node name="GUI" type="Node" parent="."]`
 
 After `World`, and that order is load-bearing: a sibling's subtree is readied

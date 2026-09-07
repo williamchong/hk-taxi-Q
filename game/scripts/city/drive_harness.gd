@@ -1,3 +1,4 @@
+class_name DriveHarness
 ## Puts the car on the start line and keeps it on the map (`P0-5`, `P2-3`).
 ##
 ## The kerbs are 0.15 m and mountable by design, so leaving the road is easy.

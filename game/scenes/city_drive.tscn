@@ -62,8 +62,9 @@ script = ExtResource("20_fence")
 
 [node name="Lighting" parent="." unique_id=251713311 instance=ExtResource("3_light")]
 
-[node name="Taxi" parent="." unique_id=1719665544 instance=ExtResource("4_taxi")]
+[node name="Taxi" parent="." unique_id=1719665544 node_paths=PackedStringArray("sun") instance=ExtResource("4_taxi")]
 transform = Transform3D(0.0704, 0, -0.9975, 0, 1, 0, 0.9975, 0, 0.0704, 172.3485, 6.5796, 26.9396)
+sun = NodePath("../Lighting/Sun")
 
 [node name="GraphOverlay" type="Node3D" parent="." unique_id=16740415 node_paths=PackedStringArray("vehicle")]
 script = ExtResource("7_graph")

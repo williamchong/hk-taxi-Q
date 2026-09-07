@@ -77,6 +77,15 @@ const GROUP: StringName = &"vehicle"
 ## Duck-typed on purpose: `InputRouter` has no `class_name`, for the same reason.
 @export var input_path: NodePath = ^"/root/InputRouter"
 
+## The rig's key light, handed in by the scene that owns the rig (`P5-24`):
+## `city_drive.tscn`, the skidpad and the grey box each point it at their own
+## `Sun`. The glint and the lamps read it from here rather than searching the
+## window for a `DirectionalLight3D`, which is what the guide calls a sibling
+## reaching past its own hierarchy. Null is "no rig" — a verify tool or an
+## import loads the car alone — and both consumers treat that as no daylight
+## to be in or out of, not as night.
+@export var sun: DirectionalLight3D
+
 ## Split by chassis geometry once, because the drift scales the two axles
 ## differently, and every per-wheel write goes through one or the other. See
 ## _group_axles for why this is not `use_as_traction`.

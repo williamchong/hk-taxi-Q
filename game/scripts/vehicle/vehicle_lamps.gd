@@ -453,7 +453,7 @@ func _exit_tree() -> void:
 ## is indistinguishable from no rig and would drive dark; a night rig should dim
 ## or drop its key light, not remove it.
 func read_rig() -> void:
-	var sun: DirectionalLight3D = SunGlint.find_sun(self)
+	var sun: DirectionalLight3D = SunGlint.rig_sun(self)
 	if sun == null:
 		_sun_toward = Vector3.ZERO
 		_night = false

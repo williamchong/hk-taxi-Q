@@ -1,3 +1,4 @@
+class_name Hud
 extends CanvasLayer
 ## The player's HUD: how fast, and what street (`P3-24`).
 ##
@@ -46,7 +47,14 @@ var _style: HudStyle = null
 var _tracker: StreetTracker = null
 var _monitor: WrongWayMonitor = null
 var _graph: RoadGraph = null
-var _car: VehicleController = null
+## The car this HUD reads, handed in by `Main` (`P5-24`) — the ancestor that
+## holds both `World` and `GUI` is the one that knows which car is in play.
+## Until then this took the first car in the group, which is a sibling reaching
+## across the World / GUI boundary. Null draws the plate empty and the speed at
+## rest, never a crash; a level change hands in the next car.
+var vehicle: VehicleController = null
+## The car the speed filter was last seeded for, so a hand-over reseeds it once.
+var _followed: VehicleController = null
 
 var _plate: ChamferPanel = null
 var _plate_en: Label = null
@@ -542,12 +550,12 @@ func _update_warning(delta: float) -> void:
 ## followed is freed and the stale reference still reads as non-null. The same
 ## trap `debug_hud.gd::_process` documents.
 func _vehicle() -> VehicleController:
-	if not is_instance_valid(_car):
-		_car = null
-	if _car == null:
-		_car = VehicleController.first_in(get_tree())
+	if not is_instance_valid(vehicle):
+		vehicle = null
+	if vehicle != _followed:
+		_followed = vehicle
 		# ⚠️ A fresh car is not a continuation of the old one's velocity. Without
 		# this the first sample after a respawn or a scene change differentiates
 		# across the gap and pins the bar hard over for a filter time-constant.
-		_last_speed_ms = 0.0 if _car == null else _car.speed_kph / 3.6
-	return _car
+		_last_speed_ms = 0.0 if vehicle == null else vehicle.speed_kph / 3.6
+	return vehicle

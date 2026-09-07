@@ -33,9 +33,8 @@ extends Node3D
 
 const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
-## What the overlay follows. Left unassigned it takes the first
-## `VehicleController` it can find, so dropping the node into a drive scene is
-## enough.
+## What the overlay follows. Assign in the scene: a sibling is not searched
+## for (`P5-24`), and an unassigned overlay says so and draws nothing.
 @export var vehicle: Node3D
 
 ## Lifted clear of the carriageway so it does not z-fight the road surface it is
@@ -76,11 +75,9 @@ func _ready() -> void:
 
 	_vehicle = vehicle
 	if _vehicle == null:
-		_vehicle = VehicleController.first_in(get_tree())
-		if _vehicle == null:
-			push_warning("road graph overlay: no vehicle to follow")
-			set_physics_process(false)
-			return
+		push_warning("road graph overlay: no vehicle assigned to follow")
+		set_physics_process(false)
+		return
 
 	var material: StandardMaterial3D = PreviewDraw.unshaded_material()
 	# Depth test off: the whole point is to see the lane centre through the car
