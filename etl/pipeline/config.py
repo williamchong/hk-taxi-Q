@@ -2215,6 +2215,10 @@ class Landmark:
     unvalidated in shape here (an id format is a publisher's spelling, hard
     rule 3); a stem that matches nothing is caught by `export.py`'s
     set-equality check against what the building stage actually dropped.
+    **Optional for an authored asset since `P5-10`** — a prop standing beside
+    the city replaces nothing, and this block is the door every hand-made
+    `.glb` enters by (`Q121`). Required for a mesh-sourced hero, which is
+    extracted *from* its stems.
 
     The position is authored in the city's projected CRS with elevation in the
     source datum, because that is what the surveyed blocks and meshes are
@@ -6006,11 +6010,20 @@ def _landmark(body: dict[str, Any], where: str, table: _MaterialTable) -> Landma
             "authored landmark models are committed there (docs/ARCHITECTURE.md)"
         )
     names = _require(body, "name", where)
-    replaces = _require(body, "replaces_source_ids", where)
-    if not isinstance(replaces, list) or not replaces:
-        # An empty list would place a hero inside the source building it was
-        # meant to replace — the z-fighting the field exists to prevent.
-        raise ValueError(f"{where}:replaces_source_ids must be a non-empty list")
+    replaces = body.get("replaces_source_ids")
+    if replaces is None:
+        replaces = []
+    if not isinstance(replaces, list):
+        raise ValueError(f"{where}:replaces_source_ids must be a list of stems")
+    if paint is not None and not replaces:
+        # A mesh-sourced hero *is* its stems — the stage extracts the model from
+        # them — so an empty list is a model with no source, not a free-standing
+        # prop. An authored asset may stand beside the city replacing nothing
+        # (`P5-10`); that is the door's ordinary case.
+        raise ValueError(
+            f"{where}:replaces_source_ids must name the stems a mesh-sourced landmark is "
+            "extracted from"
+        )
     position = _measures(
         _require(body, "pos", where), f"{where}:pos", ("easting", "northing", "elevation")
     )

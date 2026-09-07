@@ -130,6 +130,11 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 
 ## No tier-0 tile triangle may stand in the excluded footprint's interior core.
 func _probe_tiles(manifest: Manifest, entry: Dictionary, landmark_id: String) -> PackedStringArray:
+	if GeneratedLandmarks.stems_of(entry).is_empty():
+		# An authored asset that replaces nothing has no footprint to probe
+		# (`P5-10`); `export.py --check` is what refuses a claimed stem that
+		# excluded nothing.
+		return []
 	var footprint: Variant = GeneratedLandmarks.excluded_bounds_of(entry)
 	if footprint == null:
 		return ["%s: no usable excluded_bounds to probe" % landmark_id]

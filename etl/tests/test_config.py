@@ -1593,15 +1593,40 @@ class TestLandmarks:
         with pytest.raises(ValueError, match="already claimed"):
             load_config(rewrite(share))
 
-    def test_an_empty_replacement_list_is_rejected(self, rewrite) -> None:
-        """A hero replacing nothing lands inside the source building it was
-        meant to replace — the z-fighting the field exists to prevent."""
+    def test_a_mesh_sourced_hero_must_name_its_stems(self, rewrite) -> None:
+        """The stage extracts the model *from* the stems, so an empty list is a
+        model with no source. [0] is HKCEC, the mesh-sourced kind."""
 
         def strip(doc: dict[str, Any]) -> None:
             doc["landmarks"][0]["replaces_source_ids"] = []
 
-        with pytest.raises(ValueError, match="non-empty"):
+        with pytest.raises(ValueError, match="mesh-sourced"):
             load_config(rewrite(strip))
+
+    def test_an_authored_asset_may_replace_nothing(self, rewrite) -> None:
+        """The authored door's ordinary case (`P5-10`): a prop stands beside
+        the city and excludes no building. [1] is Central Plaza, the authored
+        kind; the key may be empty or absent."""
+
+        def strip(doc: dict[str, Any]) -> None:
+            doc["landmarks"][1]["replaces_source_ids"] = []
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["landmarks"][1]["replaces_source_ids"]
+
+        for mutate in (strip, drop):
+            by_id = {entry.id: entry for entry in load_config(rewrite(mutate)).landmarks}
+            assert by_id["central_plaza"].replaces_source_ids == ()
+
+    def test_a_replacement_list_that_is_not_a_list_is_rejected(self, rewrite) -> None:
+        """Only an absent key defaults to empty; a falsy slip like `0` or
+        `false` is still the wrong shape and must not read as "replaces nothing"."""
+
+        def slip(doc: dict[str, Any]) -> None:
+            doc["landmarks"][1]["replaces_source_ids"] = 0
+
+        with pytest.raises(ValueError, match="list of stems"):
+            load_config(rewrite(slip))
 
     def test_an_authored_asset_outside_the_authored_directory_is_rejected(self, rewrite) -> None:
         def relocate(doc: dict[str, Any]) -> None:

@@ -45,6 +45,13 @@ static func placement_of(entry: Dictionary) -> Variant:
 	return Transform3D(basis, Vector3(values[0], values[1], values[2]))
 
 
+## The stems a landmark replaces — empty for an authored asset that stands
+## beside the city replacing nothing (`P5-10`), which is not an error.
+static func stems_of(entry: Dictionary) -> Array:
+	var stems: Variant = entry.get("replaces_source_ids")
+	return stems if stems is Array else []
+
+
 ## A landmark's excluded source footprint as an AABB, or `null` where the
 ## document carries none. Null for the reason `placement_of` gives: a zero-size
 ## box sits at the region origin, a real place, and a missing footprint must

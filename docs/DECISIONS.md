@@ -20671,8 +20671,13 @@ byte figures comparable · `Q77` for why `signals.glb` is excluded
 
 ## `Q121` — The mesh contract against a DCC workflow
 
-**Status.** 🟡 **Open — reviewed and planned 2026-09-07, nothing built.** The plan is `PLAN.md`
-Phase 5b, `P5-10`–`P5-14`.
+**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10` built the same day.** The plan is
+`PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-10`**: the `landmarks:` block is the door, generalised
+rather than renamed — `replaces_source_ids` optional for an authored asset — and the repository's
+first DCC export (`tools/make_dcc_fixture.py`, Blender 5.2, byte-identical on regeneration) is
+graded by `tools/verify_authored.gd` in `check.sh`'s always-on set: names, hierarchy, the untouched
+PBR material and its extracted 64² texture, the `-col` collider, 22 triangles, the placement
+convention; four mutations, four failures. Bundle byte-identical but for `generated_utc`.
 
 **The question.** A 3D developer reviewing the project said the way buildings and roads are built
 "is not best practice and would cost issues in future development, especially with a traditional 3D

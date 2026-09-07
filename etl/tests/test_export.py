@@ -612,6 +612,18 @@ class TestLandmarks:
         problems = region.check()
         assert any("never excluded" in problem for problem in problems)
 
+    def test_an_authored_asset_replacing_nothing_ships_with_no_footprint(self, region) -> None:
+        """The authored door's ordinary case (`P5-10`): a prop that claims no
+        stems has no footprint, and that is not the stem mismatch `validate`
+        reports — mutation: restore the `is None` branch to unconditional and
+        this fails on "no excluded_bounds"."""
+        self.hero(region, stems=(), excluded=False)
+        region.build()
+        [entry] = self.landmarks_document(region)["landmarks"]
+        assert entry["replaces_source_ids"] == []
+        assert entry["excluded_bounds"] is None
+        assert region.check() == []
+
     def test_an_orphaned_exclusion_is_flagged(self, region) -> None:
         region.documents[BUILDINGS_MANIFEST_NAME]["excluded"] = {
             "orphan": [[0.0, 0.0, 0.0], [10.0, 10.0, 10.0]]

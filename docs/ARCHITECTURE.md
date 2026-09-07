@@ -1449,7 +1449,8 @@ building stage actually dropped.
 `buildings.py` at exclusion time — the only moment a mesh still has an identity, since `merge`
 erases it. `verify_landmarks.gd` probes the shipped tier-0 tiles against its interior core, which
 is the in-engine half of "source geometry excluded"; `null` means no stem matched, which
-validation refuses.
+validation refuses wherever a stem was claimed — an authored asset claiming none ships `null`
+honestly (`P5-10`, below).
 
 **`transform.pos`** is game-space metres with `y` the building's base elevation; models are
 authored footprint-centred with `y = 0` at the base. **`rot_y_deg` is a compass bearing** — 0 at
@@ -1465,6 +1466,31 @@ government's own building mesh repainted by `pipeline/landmarks.py` — generate
 government terms, gitignored, shipped from `game/assets/generated/landmarks/`, and never
 committed. The config's `source_paint` block is what declares the second kind, and it forces
 `rot_y_deg: 0.0` because the extracted mesh keeps its source orientation.
+
+#### The authored door — a hand-made `.glb` (`P5-10`, `Q121`)
+
+**The `landmarks:` block is the one way a DCC-authored asset enters the bundle**, and since `P5-10`
+it is a door and not only a hero swap: `replaces_source_ids` is **optional** for an authored asset,
+so a prop can stand beside the city excluding nothing (`excluded_bounds` is then `null`, and
+`export.py --check` and `verify_landmarks.gd` both let that stand). A mesh-sourced hero still needs
+its stems, because the stage extracts the model *from* them. The contract an artist's export meets:
+
+| Rule | What happens |
+|---|---|
+| Path | a `.glb` under `game/assets/authored/landmarks/`, committed, CC BY-SA 4.0 (`LICENSING.md`). `sync_generated.sh` never touches `authored/` |
+| Units and axes | metres, Y-up, modelled footprint-centred with `y = 0` at the base; the exporter's Y-up conversion is the artist's, and `transform.pos` stands the base at that height |
+| Nodes | names and parent-child structure survive import as they were exported, with Godot's own suffixes honoured: `-col` grows a trimesh collider on that node and nowhere else |
+| Materials | an **unrecognised** material name keeps the PBR material exactly as authored — texture, colour, name — with no shader swapped in. A **recognised** name (`city_facade`, `road_markings`, …) takes that layer's `.tres`; the table is `tools/generated_scene_import.gd::SHADERS`. A mesh carrying `COLOR_0` under an unrecognised name gets `vertex_color_use_as_albedo` and `vertex_color_is_srgb` set |
+| Textures | a packed image is **extracted beside the asset** on first import (`dcc_roundtrip_kiosk_paint.png`), Godot's default; commit it and both `.import` sidecars. The bundle's no-texture contract is a rule about *generated* tiles (`mesh_contract.gd`), not about this door |
+| Budget | `triangle_budget` per entry, 8,000 by default (`verify_landmarks.gd`) |
+
+⚠️ **Nothing in the repository had come through a DCC tool before `P5-10`** — the three assets
+under `authored/` were written by `tools/make_*.py` through the ETL's own `gltf.py`. The fixture
+`assets/authored/fixtures/dcc_roundtrip.glb` is a real Blender export (Khronos exporter, an
+unapplied child scale, a packed image, a `-col` node), authored by `tools/make_dcc_fixture.py` and
+reproducible byte for byte; `tools/verify_authored.gd` grades every row of the table above against
+it and runs whether or not a region is built. Its assertions are mutation-checked, not read: a wrong
+name, texture size, triangle count or material each fail it.
 
 ### Not part of the contract
 

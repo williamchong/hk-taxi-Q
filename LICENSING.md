@@ -9,7 +9,7 @@ down is a licence breach waiting to be discovered by someone else.
 | What | Where | Licence |
 |---|---|---|
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/scenes/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
-| **Hand-authored assets** — authored hero buildings, vehicles, street furniture, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
+| **Hand-authored assets** — authored hero buildings, vehicles, street furniture, the DCC test fixture, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
 | **Bundled third-party assets** — the CJK typeface the street plate is set in | `game/assets/authored/fonts/` | **CC BY 4.0** — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 

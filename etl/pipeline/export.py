@@ -631,7 +631,8 @@ def _landmarks_document(
     AABBs `buildings.json` recorded at exclusion time — the geometry the
     in-engine verifier probes the tiles against. `None` when no stem matched
     anything; written rather than omitted so `validate` reports the mismatch
-    instead of this function hiding it.
+    instead of this function hiding it — and honestly `None` for an authored
+    asset that claims no stems (`P5-10`), which `validate` lets stand.
     """
     high_x, high_z = city.region_high(region_id)
     excluded = buildings.get("excluded", {})
@@ -891,10 +892,14 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict, assets: d
             problems.append(f"landmark {landmark_id} sits outside bounds_game: {pos}")
         footprint = entry.get("excluded_bounds")
         if footprint is None:
-            problems.append(
-                f"landmark {landmark_id} has no excluded_bounds — none of its stems "
-                "matched a source mesh"
-            )
+            # An authored asset that claims no stems replaces nothing and has
+            # no footprint to stand on (`P5-10`); one that claims stems and
+            # excluded nothing is the mismatch this exists to report.
+            if entry.get("replaces_source_ids"):
+                problems.append(
+                    f"landmark {landmark_id} has no excluded_bounds — none of its stems "
+                    "matched a source mesh"
+                )
         else:
             # The authored position should stand on the footprint it replaced.
             # One metre of slack: a centroid is not a centre, not misregistration.

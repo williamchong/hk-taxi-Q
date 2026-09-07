@@ -57,7 +57,14 @@ VERIFY_TOOLS=(
 # until it lands that tool is the only thing that exercises the touch scheme at
 # all. Gating it on a built region would mean the input path went unchecked on
 # exactly the branches where input work happens.
-ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input)
+#
+# verify_authored is here because its subject is committed: the Blender-exported
+# fixture under assets/authored/fixtures/ and what the importer does with it
+# (P5-10). A branch with no city is exactly where a hand-made asset arrives.
+ALWAYS_TOOLS=(
+	verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input
+	verify_authored
+)
 
 # Tuning resources and scenes that carry no sidecar .md, and are allowed not
 # to. The `tuning` step below fails anything else without one, so the default
