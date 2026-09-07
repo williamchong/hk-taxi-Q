@@ -225,6 +225,41 @@ class TestTheGeometry:
         border_polygons(tabbed, spec, report)
         assert report.degenerate_border_segments > 0
 
+    def test_a_pointed_thorn_crosses_sideways_and_is_dropped_too(self, spec):
+        """The same tab brought to a point instead of squared off (`Q123`).
+
+        Its flanks are ~12 deg apart, so the mitre at the tip points almost
+        *along* the edge rather than into the ring: the inner edge still runs
+        the right way — the test above sees nothing — and the quad comes out
+        simple, correctly wound and **non-convex**. `FlatBuilder` fans from
+        vertex 0, so what ships is a triangle facing the ground.
+
+        This is the shape `sha_tin`'s one inverted triangle had, and the two
+        fixtures are one vertex apart on purpose: squared off, the offset
+        reverses along its edge; pointed, it crosses sideways.
+        """
+        thorn = np.array(
+            [
+                [0.0, 0.0],
+                [10.0, 0.0],
+                [10.0, 10.0],
+                [5.2, 10.0],
+                [5.0, 12.0],
+                [4.8, 10.0],
+                [0.0, 10.0],
+            ]
+        )
+        report = BoxJunctionReport()
+        quads = border_polygons(thorn, spec, report)
+        assert report.degenerate_border_segments == 2
+
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
+        for quad in quads:
+            builder.polygon(quad, np.zeros(len(quad)))
+        mesh = builder.build("boxjunctions")
+        assert mesh is not None
+        assert downward_facing(mesh) == (0, 0.0)
+
     def test_a_polygon_takes_the_grade_of_the_road_under_it(self, spec):
         """Per-vertex heights off the snap, plus the lift — a box across a
         crown must bend with it, because `lift_m` is 12 mm and a chorded end

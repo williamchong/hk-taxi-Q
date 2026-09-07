@@ -55,7 +55,7 @@ from pipeline.arrows import ArrowReport
 from pipeline.config import BoxJunctions, Config, GameTransform, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.geometry import twice_area, wound_up
+from pipeline.geometry import orient, twice_area, wound_up
 from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, frame, game_heading_deg
@@ -166,7 +166,12 @@ class BoxJunctionReport:
 
     # Border segments whose inward offset crossed itself at a tight reflex
     # vertex and were dropped rather than guessed at. Each leaves a small gap
-    # in the boundary line; the count is the only sign of it.
+    # in the boundary line; the count is the only sign of it. ⚠️ **Two tests
+    # feed it and that is deliberate** (`Q123`): the offset can reverse along
+    # its own edge, or cross sideways into a non-convex quad. Same crossing,
+    # same remedy, same gap — but the second subsumes the first on every ring
+    # built so far, so this is one population and not two; `border_polygons`
+    # has the counts.
     degenerate_border_segments: int = 0
     # Triangles dropped for being thinner than the engine's import lattice,
     # and the lattice pitch they were judged against. See `_import_quantum_m`:
@@ -522,16 +527,55 @@ def _stations(polygon: np.ndarray, along: np.ndarray, station_m: float) -> list[
     return pieces
 
 
+def _turns_one_way(polygon: np.ndarray) -> bool:
+    """Whether a plan polygon turns the same way at every vertex.
+
+    Stands in for `FlatBuilder.polygon`'s untested convexity precondition: it
+    fans from vertex 0, which triangulates only while the 0-2 diagonal stays
+    inside, so one reflex corner folds a triangle under the mesh where
+    `cull_back` then draws nothing (`Q123`).
+
+    Convexity is the bar rather than the narrower *reflex at 1 or 3* that
+    actually breaks a quad's fan, so the answer does not depend on which vertex
+    the mitre happened to turn back at. A collinear corner turns by zero and
+    passes either way, which is right: it fans correctly.
+
+    🔴 **Same-sign turns is convexity only for a SIMPLE polygon, so this is
+    NOT a general fan guard and must not be reused as one.** A star polygon
+    turns one way at every vertex and still folds — a regular pentagram passes
+    here and fans 1 of its 3 triangles downward. It is sound at the one call
+    site because a *quad* cannot do that: over 92,784 random self-intersecting
+    quads, none passed.
+    """
+    turns = orient(polygon, np.roll(polygon, -1, axis=0), np.roll(polygon, -2, axis=0))
+    return bool(np.all(turns >= 0.0) or np.all(turns <= 0.0))
+
+
 def border_polygons(
     ring: np.ndarray, spec: BoxJunctions, report: BoxJunctionReport
 ) -> list[np.ndarray]:
     """The boundary line as inward quads along each ring edge, facing `+Y`.
 
     Mitred at each vertex, with the mitre length clamped at `_MITRE_LIMIT`
-    times the border width. A segment whose inner edge comes out running
-    against its outer edge has been crossed by the offset at a tight reflex
-    vertex; it is dropped and counted, never repaired — the repair would be
-    invented geometry on a ring the publisher drew.
+    times the border width. A segment whose offset has crossed itself at a
+    tight reflex vertex is dropped and counted, never repaired — the repair
+    would be invented geometry on a ring the publisher drew.
+
+    ⚠️ **That crossing has two forms and both are refused here** (`Q123`). The
+    inner edge can come out running *against* its outer edge, which the dot
+    product below catches; or it can cross *sideways*, leaving a quad that is
+    simple and correctly wound but **non-convex**. The second renders as a
+    triangle facing the ground, because `FlatBuilder` fans from vertex 0 and a
+    reflex corner puts that diagonal outside the quad — one `sha_tin` border
+    quad shipped exactly that, 0.0327 m² under `cull_back`.
+
+    🔴 **The second test SUBSUMES the first on every ring this project has
+    built, so do not read the pair as two reachable populations.** Over 720
+    ring vertices across the four regions: **0** refused by the dot product
+    alone, **1** by convexity alone, **11** by both. The dot product stays
+    because it is the narrower and older statement and it is the cheaper test
+    to run first — not because anything here can mutation-fail it, which
+    nothing can (`Q72`).
     """
     wound = wound_up(ring)
     count = len(wound)
@@ -564,10 +608,10 @@ def border_polygons(
     for index in range(count):
         following = (index + 1) % count
         inner_edge = inner[following] - inner[index]
-        if float(inner_edge @ units[index]) <= 0.0:
+        quad = np.array([wound[index], wound[following], inner[following], inner[index]])
+        if float(inner_edge @ units[index]) <= 0.0 or not _turns_one_way(quad):
             report.degenerate_border_segments += 1
             continue
-        quad = np.array([wound[index], wound[following], inner[following], inner[index]])
         along = units[index]
         quads.extend(_stations(quad, along, spec.station_m))
     return quads

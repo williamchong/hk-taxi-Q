@@ -43,6 +43,18 @@ class FlatBuilder:
 
     Every polygon is horizontal and convex, so a fan from its first vertex
     triangulates it, and the normal is up.
+
+    🔴 **That convexity is a PRECONDITION and this class does not test it**
+    (`Q123`). The fan is valid only while the `0`-`2` diagonal stays inside the
+    polygon, so on a quad it survives a reflex corner at `v0` or `v2` and folds
+    at `v1` or `v3` — one triangle wound the wrong way, which `cull_back` draws
+    as nothing. ⚠️ **Each caller owns its own producers**: `boxjunctions.py`'s
+    mitred border quads can go reflex and `border_polygons` refuses those,
+    counted; the arrows' glyphs and the road marks' bars are convex by
+    construction. What holds the class open is that all three stages publish an
+    `inverted` counter over the built mesh, so a fold is visible wherever this
+    builder is used — provided somebody reads that region's manifest, which is
+    the half of `Q123` no code closes.
     """
 
     def __init__(self, material: str) -> None:

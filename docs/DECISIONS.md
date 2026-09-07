@@ -20940,3 +20940,189 @@ occluder — `P0-3b`.
 **See.** `Q121` for the review this follows and the two claims it corrects · `Q120` for the
 108% and the red check it recorded · `Q114` for why the lane count is the road's and not this ·
 `Q82` for the sidecar gap `P5-16` closes · `Q62` for why `P5-17`'s evidence is a frame
+
+---
+
+## `Q123` — The fan folds where the mitre turns back, and the counter that saw it was never read
+
+**Status.** 🟢 **Closed 2026-09-08 — diagnosed, planned and built as `P5-19` the same day.** One
+border quad on one `sha_tin` box junction was **simple, correctly wound and non-convex**, so
+`FlatBuilder`'s fan from vertex 0 crossed an exterior diagonal and emitted one backward needle —
+0.0327 m², invisible under `cull_back`. The producer is `boxjunctions.border_polygons`' mitre, and
+the fix is that function's own guard, extended to the second form of the crossing it already claims
+to drop. `sha_tin` reads `inverted` **0** and `check.sh` is exit 0 on **all four** regions, with
+`boxjunctions.glb` byte-identical on the other three. Numbers in `PLAN.md` `P5-19`.
+
+**The question.** `P5-15` synced all four regions for the first time and `sha_tin` came back red on
+`verify_boxjunctions` — *1 of 3,301 triangles do not face up*. It was recorded as a pre-existing
+defect of a bundle that had never been checked and left unread (`Q122`, `PROGRESS.md`'s risk
+table). This entry is what it turned out to be when the bundle was actually opened, and what is
+planned, refused and held on it.
+
+**🔴 It was never hidden — the ETL published it, and nobody read that region's manifest.**
+`etl/out/sha_tin/boxjunctions.json` has carried `inverted: 1` and `inverted_area_m2: 0.0327` since
+`Q120` built the region:
+
+| region | `inverted` | `inverted_area_m2` | `triangles` | `degenerate_border_segments` | `slivers_dropped` |
+|---|---:|---:|---:|---:|---:|
+| `wan_chai` | 0 | 0.0 | 10,165 | 7 | 2,032 |
+| `causeway_bay` | 0 | 0.0 | 681 | 0 | 21 |
+| **`sha_tin`** | **1** | **0.0327** | **3,301** | 3 | 1,716 |
+| `mong_kok` | 0 | 0.0 | 2,291 | 1 | 234 |
+
+⚠️ **So the two winding tests agree, which `Q59` does not guarantee.** The ETL-side counter and
+`verify_boxjunctions.gd`'s engine-side check exist separately because they can disagree — that is
+what caught the 217 lattice-flipped triangles `_import_quantum_m` records. Here they concur on the
+same single triangle, which is what says this is a plan-winding fault in the stage rather than
+anything the importer did. 🔴 **`BoxJunctionReport.inverted` carries "⚠️ Must be 0" in its own
+docstring and nothing in the ETL enforces it**; only the engine gates, and only on a synced bundle.
+
+**The triangle, read out of the shipped `boxjunctions.glb`.**
+
+```
+triangle 824, indices [1708 1710 1711]
+facing  -0.9999          flat and fully reversed, not a tilt
+area     0.0327 m²       equals inverted_area_m2 exactly
+sides    1.3239 / 0.9196 / 0.4086 m
+y spread 0.0055 m
+```
+
+Its polygon is the four vertices at base 1708, fanned as `(0,1,2)` and `(0,2,3)`. 🔴 **One of its
+edges is 0.3002 m — `boxjunctions.border_width_m` — so this is a border quad and not hatch.**
+
+**🔴 The quad is non-convex, and `FlatBuilder`'s precondition is assumed rather than checked.**
+In plan, the turn at each vertex:
+
+| at `v1` | at `v2` | at `v3` | at `v0` | signed twice-area |
+|---:|---:|---:|---:|---:|
+| −0.383 | −0.262 | **+0.065** | −0.056 | −0.318 |
+
+One reflex vertex, at `v3`; the quad as a whole is wound the correct way. `FlatBuilder.polygon`
+fans from vertex 0, and its docstring states the precondition — *"Every polygon is horizontal and
+convex, so a fan from its first vertex triangulates it, and the normal is up"* — without testing
+it. ⚠️ **The exact condition is narrower than convexity**: a fan from `v0` is valid iff the 0–2
+diagonal is interior, i.e. iff the reflex vertex is `v0` or `v2`. Reflex at `v1` or `v3` puts the
+diagonal outside and folds one triangle. Here it is `v3`, and the folded triangle is `(0,2,3)` —
+index 824 exactly.
+
+✅ **The sliver bar was right not to catch it, and this is not `Q58`'s class.** The needle's plan
+twice-area over its longest edge is `2 × 0.0327 / 1.3239 = 0.0494 m` against the bar's
+`2 × import_quantum_m = 0.0446 m`; it clears by 11%. The bar exists for fragments the import
+lattice flips (`_import_quantum_m`, 217 of the first build's 12,181). This one is wound backwards
+before the importer ever sees it. 🔴 **Widening the bar to swallow it would be answering a winding
+fault with a thinness rule** — and at 2.2 quanta wide it is a legitimately drawn fragment.
+
+**🔴 The producer is `border_polygons`, and its guard already owns this phenomenon in another
+form.** That function's docstring: *"A segment whose inner edge comes out running against its outer
+edge has been crossed by the offset at a tight reflex vertex; it is dropped and counted, never
+repaired — the repair would be invented geometry on a ring the publisher drew."* The test it
+applies is `inner_edge · units[index] > 0` — the mitre **reversing along** the edge, which fires 3
+times on `sha_tin` and 7 on `wan_chai`. It does not see the mitre going reflex **sideways**, which
+is the same crossed offset at the same tight reflex vertex, and is what this quad is.
+
+**✅ A convexity guard is inert on the shipping region, and that is measured rather than argued.**
+Every surviving quad fan in all four bundles, reconstructed by index pattern from the shipped
+meshes:
+
+| region | quad fans | non-convex | of which fan-breaking |
+|---|---:|---:|---:|
+| `wan_chai` | 4,816 | **0** | 0 |
+| `causeway_bay` | 319 | **0** | 0 |
+| `sha_tin` | 1,566 | **1** | **1** |
+| `mong_kok` | 1,106 | **0** | 0 |
+
+One in 7,807. ⚠️ **This is a reading of the shipped mesh and not a proof**: it can only see quads
+whose *both* triangles survived the area and thinness filters, so a non-convex quad whose fold was
+already dropped as a sliver is invisible to it and **would** move bytes under a convexity guard.
+The byte-identical rebuild of the three other regions is what settles it, and that is `P5-19`'s
+acceptance, not this table.
+
+**🚫 Filtering inverted triangles out of `FlatBuilder.build` is refused, and it is the tempting
+one-liner.** A `& ~inverted` mask beside the area and thinness masks makes `inverted` **0 by
+construction** — `Q58`'s `drawn_gauge_m` trap and `Q72`'s tautology, in the one counter that can
+see this class. `railings.py` carries the same refusal in the same words: winding each quad to
+whatever normal it was handed, or dropping the triangles that disagree, *"makes `facing_away` 0 by
+construction"*. The counter would stop being able to report its own defect and would keep reading
+green through every region built after this one.
+
+**⚠️ Repair versus drop, and why the drop wins here.** Re-triangulating on the interior diagonal is
+**not** invented geometry — same four vertices, same area, correct triangulation — so `Q54` does
+not decide it. What decides it is blast radius: the repair belongs in `FlatBuilder`, which
+`arrows.py` and `roadmarks.py` also use, and a general version needs ear clipping because hatch
+pieces are `_clip` output of arbitrary span. What is given up by dropping instead is **0.03 m² — a
+5 cm notch in one boundary stripe on one `sha_tin` box**, against a function whose stated policy is
+already to drop and count. 🔴 **The repair is the better answer at a scale this defect has not
+reached**: one quad in four regions is not yet the population that justifies triangulation
+machinery in shared code.
+
+**✅ The class is already instrumented everywhere, and the gap is process rather than machinery.**
+All three `FlatBuilder` consumers publish an `inverted` counter that must be 0 — `arrows.json`,
+`roadmarks.json` and `boxjunctions.json` — so a fan that folds is visible at every site this
+builder is used. What failed is that **an unsynced region's manifest is never read**: `check.sh`
+gates only what is synced, and `sha_tin` was built at `Q120` for a byte measurement and never
+checked. 🔴 **That is not fixed by a new bar**, and a sweep over every region's manifests is held
+below rather than built, because one instance is a finding and not yet a population.
+
+**Verdict — GO WITH CAVEATS, as `P5-19`.** Small, local, provably scoped, and it clears the only
+red check across the four regions. ⚠️ **Sized as hygiene, not as a phase item**: the evidence bill
+is `CLAUDE.md`'s box-junctions bullet — `tools/box_extent.py`'s per-box table and its `--ray-m`
+sweep — plus the four manifests and a byte-diff, and it should not accrete the ceremony of a
+widening change. ⚠️ **No player sees this**: `sha_tin` is `Q120`'s sparse density contrast, the
+locked PoC is Wan Chai → Causeway Bay, and even on `sha_tin` it is one 327 cm² sliver that renders
+as nothing. The value is that a known-red `check.sh` is the one signal this repository's whole
+review practice rests on, and that `Wan Chai`'s clean `inverted: 0` is geometric luck rather than a
+property of the code — the `Q120`/`P4-5` programme is about building more regions.
+
+**Refused, with the reason.** Dropping inverted triangles in `FlatBuilder.build` — it zeroes the
+counter by construction and blinds the instrument that caught this. Widening the sliver bar — it
+answers a winding fault with a thinness rule, and the fragment is 2.2 quanta wide. A hard
+build-stopping assertion in `FlatBuilder` — it would fire on an unbuilt region for a polygon no
+frame is waiting on, and the runtime counters already report the class at all three sites. Making
+the ETL refuse a non-zero `inverted` — `CLAUDE.md`'s standing rule is *a finding to go and look at,
+never a bar*, and the engine already gates it where it matters.
+
+**Held, with the trigger.** Ear clipping in `FlatBuilder`, or a fan apex chosen for validity — a
+**second** producer of non-convex polygons, or a region where the dropped border metres are large
+enough to see. A manifest-invariant sweep across every `etl/out/<region>/*.json` (the counters that
+must read 0) — a second region publishing a non-zero one, which would make this a population
+instead of an instance.
+
+**What the build settled, and the one thing it corrected.** The predicted counts landed —
+`triangles` 3,301 → **3,299**, `degenerate_border_segments` 3 → **4** — but the reason given for the
+count was wrong: the refused segment is **two** stations rather than one, so it carried 4 triangles,
+of which 2 were already refused as slivers. That is also why `slivers_dropped` falls 1,716 → 1,714.
+⚠️ **`box_extent.py` says the two triangles were ON-ROAD paint** — pooled `on road` 2,425 → 2,423 /
+161.88 → 161.66 m², with the void, past-kerb and isolated classes, the 61.74 m² off-road total, the
+whole distance distribution and the entire `--ray-m` sweep **identical** — which is what a border
+quad at a thorn inside the carriageway should look like, and is a second reading that nothing
+`P3-31` or `P3-32` cares about moved.
+
+**Two claims the review pass had to weaken, and one reuse it found.** 🔴 **The second test
+SUBSUMES the first, so "two forms, both refused" is not two reachable populations.** Over the 720
+ring vertices in all four regions: **0** segments refused by the dot product alone, **1** by
+convexity alone — `sha_tin`'s — and **11** by both. The dot product stays, as the narrower and
+older statement and as the cheaper test to run first, but nothing here can mutation-fail it and the
+docstrings now say so rather than implying a pair (`Q72`). 🔴 **And `_turns_one_way` is a QUAD rule,
+not a general fan guard**: same-sign turns is convexity only for a *simple* polygon, so a regular
+pentagram passes it and still fans 1 of its 3 triangles downward. It is sound at the one call site
+because a quad cannot do that — **0 of 92,784** random self-intersecting quads passed — and
+`test_a_star_polygon_turns_one_way_and_folds_anyway` pins the limit so the helper is not reused past
+it. ✅ **The arithmetic is `geometry.orient`'s**, the pipeline's own broadcast 2-D cross product
+(written out because numpy 2.0 dropped 2-vector `np.cross`), which `carriageway.py` already uses by
+that name; adopting it left all four bundles **bit-identical**. ⚠️ **Cost, quoted not gated**:
+`border_polygons` over Wan Chai's 20 boxes runs **8.73 → 13.30 ms**, which is **0.27%** of a 1.70 s
+stage and invisible in its wall time. A batched form over all 430 quads at once is ~180× cheaper
+than the per-segment call and is available if that ever matters; it does not today.
+
+**A second `sha_tin` defect surfaced and is NOT this one.** `box_extent.py` reports **5 triangles
+(0.053 m², 0.15% of the layer) inside no published ring** on that region, where `unattributed` must
+be **0** — the point-in-polygon attribution that replaced clustering has a hole in it. Identical
+before and after, so pre-existing and untouched here; `PROGRESS.md`'s risk table carries it.
+⚠️ **It is the same shape of finding as this one** — a counter that has been publishing a non-zero
+value on a region nobody synced — which is the half of `Q123` that no code closes.
+
+**See.** `Q122` for `P5-15`'s four-region sweep that surfaced it and the risk row it was parked in ·
+`Q120` for why `sha_tin` exists and what it is measured for · `Q59` for the two winding tests and
+their opposite signs · `Q58` for the confined-by-construction trap this refuses twice · `Q72` for
+the tautology test a counter here has to pass · `Q82` for the compression setting that retired the
+import lattice without retiring the bar · `Q104` for the box-junction layer's own history
