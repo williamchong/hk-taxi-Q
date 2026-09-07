@@ -21126,3 +21126,116 @@ value on a region nobody synced — which is the half of `Q123` that no code clo
 their opposite signs · `Q58` for the confined-by-construction trap this refuses twice · `Q72` for
 the tautology test a counter here has to pass · `Q82` for the compression setting that retired the
 import lattice without retiring the bar · `Q104` for the box-junction layer's own history
+
+---
+
+## `Q124` — The distance to the Godot guide is now the distance to three collaborators
+
+**Status.** 🟡 **Open — planned 2026-09-08.** The plan is `PLAN.md` Phase 5c, `P5-20`–`P5-28`.
+
+**The question.** How far the project stands from Godot's "Best practices" series *now*, after
+`Q119` graded it against those pages and `Q121`–`Q123` built `P5-10`–`P5-19`, and what to change
+for a future collaboration with a traditional 3D asset artist, a computer-graphics engineer and a
+Godot game developer. This entry records what a fresh reading of the twelve pages and of `game/`
+found, what is planned, refused and held. ⚠️ **It is a delta on `Q119` and `Q121`, not a third
+review of the same ground** — every divergence those two priced and kept stands unless a number
+here moves it.
+
+### The pages, re-read against the tree
+
+| Page | Standing | What the tree says |
+|---|---|---|
+| Scene organization | Met, three reaches left | `main.tscn` is Main / World / GUI. Every node reference is an `@export NodePath` resolved with `get_node_or_null` and a warning; `$` and `%` appear **0** times. What remains is a child reaching for a stranger: `hud.gd:548` and `debug_hud.gd:269` find the taxi by **group lookup** across the World / GUI boundary, `road_graph_overlay.gd:76` falls back to the same, and `sun_glint.gd:111` scans the whole window tree for a `DirectionalLight3D`. ⚠️ `Tiles`' `../CameraRig/Camera3D` is **not** one of them — it is the parent scene initialising a `NodePath`, the guide's own fifth injection method |
+| Scenes versus scripts | Priced and kept | The HUD and every city layer are built in code. `Q119` measured 387 µs against 140 µs from a `PackedScene` and kept it because a scene would be a second copy of `hud_layout.tres` and `hud_style.tres` |
+| Autoloads | Met, one undeclared | Three, each with its `Q119` reason. A fourth singleton is not in `[autoload]`: `RoadGraph.shared()`, a `static var WeakRef` (`road_graph.gd:230`), reached from six sites. And `DebugHud` carries the project's command-line parser as three `static func`s (`debug_hud.gd:341-367`) that `hud.gd` and `input_router.gd` reach through the autoload — the guide's own "put a helper on a `class_name` static" case |
+| Node alternatives | Met | 16 `RefCounted`, 7 `Resource`, `scripts/core/` engine-free and headlessly tested |
+| Interfaces | Met, one re-test owed | `@export var x: Node3D` read **null in all five variants** from a hand-authored scene on 4.7.1 (`Q119`), and the re-test was to follow the user's first editor save. **0 of 8** scenes carry `uid=`, so that save has not been committed and the re-test is still owed |
+| Notifications | Refused with reason | Input is polled in `_physics_process` because `driver.gd` replays through `Input.action_press` (`Q119`). ⚠️ The four `InputRouter` signals are emitted and **connected by nothing** — `unused_signal` cannot see an emitted signal nobody listens to |
+| Data preferences | Met, with one debt | Typed throughout, 19 warnings promoted to errors, tuning in `.tres`. **36** unit-suffixed constants still live in scripts, the largest cluster `WrongWayMonitor`'s and `StreetTracker`'s `DEFAULT_*` thresholds, which have no `.tres` behind them — `ARCHITECTURE.md`'s Constraint 4 already forbids that |
+| Logic preferences | Met | `preload` into `const`; `load` only for tuning by path |
+| Project organization | Divergent by layout, kept | Scripts by type under `scripts/`, scenes by type under `scenes/`; the guide wants feature folders. Refused below |
+| Version control | Met, LFS absent | `.gitignore`, `.gitattributes` (LF, binaries), `.import` sidecars committed. No LFS, on five `.glb` totalling under a megabyte |
+
+**So the guide's checkable rules are inside the tree, and the exceptions are recorded.** The
+distance that matters is not on those pages. It is what each of the three people will hit on their
+first day, and most of it is invisible to the guide.
+
+### 🔴 The artist: the door is tested and nothing they will be asked for goes through it
+
+`P5-10`'s `landmarks:` door takes a Blender export and grades it. But **the first asset a taxi game
+commissions is the taxi**, and its contract is not modelling: `taxi_body.glb` carries a lamp
+circuit id in `UV.x` and a surface marker in `UV.y`, stamped by `tools/make_vehicle.py`, which
+`vehicle_body.gdshader` reads and `verify_vehicle.gd` asserts survived the import. A DCC export
+cannot reproduce that by hand, no recipe says how, and the check fails it. Three more:
+
+- 🔴 **Every committed authored `.import` sidecar contradicts the pins.** All **5** carry
+  `meshes/generate_lods=true` against `[importer_defaults]`' `false`, and **3** — `taxi_body`,
+  `taxi_tyre`, `central_plaza` — carry `force_disable_compression=false`, the setting `Q82` turned
+  off project-wide to protect a payload, on the one authored mesh that carries one. `P5-16`'s
+  `sidecars` step reads `assets/generated/` only, so `check.sh` is green over it. An artist's export
+  inherits the same defaults, because a fresh `.import` is seeded from the project and a committed
+  one is not.
+- **There is no way to look at one asset.** The dev scenes draw a region or the greybox; seeing a
+  prop under the shipped rig and shaders needs Python, a 320 MB fetch and a build, and a fresh clone
+  boots to an empty world.
+- **Shader dispatch is by material name** (`generated_scene_import.gd::SHADERS`, project-wide). A
+  mesh whose material happens to be called `signs` takes that shader silently. Documented; still a
+  convention the artist has to be told before the first export, beside `ART_DESIGN.md`'s anti-goals
+  (no building textures, no atlas, no metalness), which are the other thing to read first.
+
+### The CG engineer: a backlog that is already written down, behind one rebuild
+
+The fit is the strongest of the three — `frame_stats.py`, `Q33`'s reflectance discipline and
+sixteen `ShaderMaterial`s whose every uniform is Inspector-editable — and three things slow it down.
+🔴 **Exposure is baked into `COLOR_0` at build time (`Q38`)**, so a lighting iteration is an ETL
+rebuild, a sync and a re-import, and `ART_DESIGN.md` already says the clean rig is tuned against
+a colour-space bug that no longer exists and is overdue a pass. **Standard channels still carry
+payloads**: `P5-11` made `TEXCOORD_0` a real UV, but `TEXCOORD_1` is a bitfield and `COLOR_0.a` a
+flag, which is `Q121`'s gap 2 still open, and it is why light baking and compression are pinned
+off. And the 880-line facade shader has no editor preview: **2** scripts are `@tool`. The web cut
+crushing a third of the frame under `L*` 10, undiagnosed, and the mobile rig never built are both
+their work and both in `PROGRESS.md`'s risk table.
+
+### The Godot developer: a disciplined project that does several things they will not expect
+
+The HUD has no scene. Their first editor save rewrites all eight scenes with `uid=` and reruns
+`Q119`'s pending re-test, which nobody should discover in a diff. `DebugHud` parses the command
+line for the whole project and `RoadGraph.shared()` is an undeclared singleton. A `.tres`'s
+rationale lives in a sidecar `.md` that `check.sh` requires, which is right since `Q119` and unlike
+any other Godot project. And the tooling is bash, a Python venv and `gdformat`, with CI on Linux —
+a Windows Godot developer has no supported path today.
+
+**Verdict — GO WITH CAVEATS, as `P5-20`–`P5-28`.** Seven are ordinary work: the authored sidecars
+held to the pins, the editor save committed alone, an asset viewer that needs no built region, the
+ancestor mediating the three reaches, the two globals named for what they are, the core thresholds
+as `.tres`, and LFS before the first sculpted asset. Two are decisions and stay the user's: **the
+shape of the vehicle contract** (`P5-23` — a naming convention the import hook stamps, so the
+committed `.glb` is the artist's export unmodified) and **reopening `Q38`** (`P5-28`), which is the
+difference between a lighting pass measured in seconds and one measured in rebuilds. Each keeps the
+merged tile, the procedural facade and the code-built HUD as they are, and each owes `Q119`'s
+inertness proof — `skidpad.sh` byte-identical at both entry speeds and the driver run's draw calls
+per debug view unchanged — because none of them is meant to move a frame.
+
+**Refused, with the reason.** **Feature-folder reorganisation** — it moves every script across the
+`ext_resource` paths of every scene for no behaviour, which is the ground `P5-10` refused the
+`authored_assets:` rename on. **Making `Tiles`' camera path "consistent"** — it is already the
+parent initialising a `NodePath`. **Event-driven input** — `Q119` measured 0.149 µs per tick and
+`driver.gd` cannot emit events. **Connecting the four `InputRouter` signals to give them a
+listener** — a listener added to satisfy a grep is `Q72`'s tautology; they stay as the API `P2-4`'s
+touch consumers will take, and the finding is recorded here rather than closed.
+
+**Held, with the trigger.** **The HUD as a `.tscn`** — `Q119` priced it and the price changes only
+with a Godot developer iterating the HUD in the editor; that person is the trigger. **A no-Python
+onboarding path** — a pre-built bundle handed to a collaborator, or a CI artefact; `LICENSING.md`
+says the data is regenerated rather than redistributed, so this is a licensing call and it goes on
+that file's open-questions list, triggered by the first collaborator who will not run the ETL.
+**A Windows path for `check.sh`** — trigger: a Windows contributor. **`P5-14`, textures as an
+option** — its trigger was already "an artist" and stays so. **History migration into LFS** —
+`git lfs migrate` rewrites every commit; `P5-27` tracks forward only and the rewrite is the user's
+call.
+
+**See.** `Q119` for the review this is a delta on and the four divergences it priced · `Q121` for
+the DCC review and the six gaps, two of which this finds still open · `Q122` for `P5-16`'s sidecar
+step and why it stops at `generated/` · `Q82` for the compression setting the authored sidecars
+contradict · `Q38` for the baked anchor `P5-28` would lift · `Q72` for the tautology test a listener
+or a counter has to pass · `Q62` for why every step here owes a frame
