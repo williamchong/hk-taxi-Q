@@ -1038,8 +1038,8 @@ Common emoji for this project:
   interchangeable** — the HUD may overlap a tap zone and may not overlap a thumb, and the check
   asserts **both** directions so that "tightening" it back onto zones fails rather than silently
   banning the corners every shipped reference uses (`Q80`).
-- **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, or the `warn_*` keys in
-  `hud_style.tres`: `tools/check.sh` (which runs the 23 `way:` assertions), plus a drive that
+- **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `tuning/wrong_way.tres` (the two
+  bars and two dwells since `P5-26`), or the `warn_*` keys in `hud_style.tres`: `tools/check.sh` (which runs the 23 `way:` assertions), plus a drive that
   actually goes the wrong way, and the draw-call delta pasted.** 🔴 **The nose raises the sign and
   the velocity may only withhold it, and that asymmetry is the user's call, not a detail to
   "restore consistency" on** — reversing while pointed the legal way is not wrong-way, because

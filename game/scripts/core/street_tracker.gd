@@ -29,14 +29,8 @@ extends RefCounted
 ## `CityStreamer`'s hysteresis is the same idea against the same failure — a
 ## boundary that a moving thing sits exactly on.
 
-## How long a different street must stay nearest before the plate follows it.
-##
-## Not a distance. A dwell in metres is speed-invariant and sounds more
-## principled, but the artefact being suppressed is **visual** — a name changing
-## faster than it can be read — and that is a property of seconds. At 50 kph
-## this is ~8 m, comfortably inside a junction mouth and well short of the
-## region's ~50-150 m blocks.
-const DEFAULT_DWELL_S: float = 0.6
+## The dwell is `StreetTrackerProfile` (`tuning/street_tracker.tres`), handed
+## in at construction and never defaulted here (`P5-26`).
 
 ## The street being displayed. Empty only before the first named sample.
 var street_en: String = ""
@@ -55,7 +49,9 @@ var edge_id: int = -1
 ## needing someone to notice a flicker.
 var changes: int = 0
 
-var _dwell_s: float = DEFAULT_DWELL_S
+## False until a profile was handed in; no sample is taken before then.
+var _usable: bool = false
+var _dwell_s: float = 0.0
 # The candidate currently serving its dwell, and how long it has served. Held
 # separately from the displayed street so that a candidate which loses its
 # nearest-ness before the dwell elapses simply expires, having changed nothing.
@@ -67,8 +63,22 @@ var _pending_edge: int = -1
 var _pending_s: float = 0.0
 
 
-func _init(dwell_s: float = DEFAULT_DWELL_S) -> void:
-	_dwell_s = dwell_s
+## A missing or zeroed profile makes an INERT tracker — the plate never
+## changes and the error names why — never one running on a literal.
+func _init(profile: StreetTrackerProfile) -> void:
+	if profile == null:
+		push_error("StreetTracker: no StreetTrackerProfile handed in; the plate will never change.")
+		return
+	if profile.dwell_s <= 0.0:
+		push_error(
+			(
+				"StreetTracker: %s has a zero dwell; the plate will never change."
+				% profile.resource_path
+			)
+		)
+		return
+	_dwell_s = profile.dwell_s
+	_usable = true
 
 
 ## Feed one sample of what the graph says is under the car.
@@ -86,6 +96,8 @@ func _init(dwell_s: float = DEFAULT_DWELL_S) -> void:
 ## cap between them; resetting on those would mean a dwell could never be served
 ## at the exact place this exists to survive.
 func sample(id: int, en: String, zh: String, delta_s: float) -> void:
+	if not _usable:
+		return
 	if id < 0 or en.is_empty():
 		return
 

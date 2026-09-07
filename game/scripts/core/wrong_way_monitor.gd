@@ -67,59 +67,11 @@ extends RefCounted
 ## asymmetric cost: the tracker's wrong answer is a stale street name, and this
 ## one's is a siren.
 
-## How long the car must be going the wrong way before the sign goes up.
-##
-## Seconds and not metres, `street_tracker.gd`'s reasoning: the artefact being
-## suppressed is a sign appearing at a junction the player is driving straight
-## through, and that is a property of time. Long enough to cover a junction mouth
-## at speed, short enough that it is up while there is still road to correct on —
-## at 50 kph this is ~7 m, plus up to one sample interval of latency.
-const DEFAULT_RAISE_S: float = 0.5
-
-## How long the car must be going the right way before it comes down.
-##
-## ⚠️ **Deliberately longer than the raise**, which is the hysteresis. Driving
-## the wrong way *through* a junction hands the monitor the cross street for a
-## moment, and a symmetric clear would blink the sign off in the middle of the
-## emergency it is reporting. A sign that flickers reads as a glitch rather than
-## as an instruction.
-const DEFAULT_CLEAR_S: float = 0.8
-
-## How far off the legal direction the car must be **pointed** to count as
-## against it, in degrees.
-##
-## ⚠️ **The nose only.** The wheels are judged against `CORRECTING_ANGLE_DEG`,
-## which is a different question and deliberately a different number.
-##
-## 🔴 **Not 90, and this is the number that stops a turn from ringing the
-## alarm.** A car turning across or crossing a one-way street passes through
-## perpendicular, and everything past 90 degrees would be "against" — so a legal
-## right turn over a one-way carriageway would raise a warning halfway round.
-## At 120 the car has to be pointed substantially back down the street before
-## anything happens, which is what actually being on it the wrong way looks like.
-const DEFAULT_ANGLE_DEG: float = 120.0
-
-## Below this, the car is not going anywhere and its velocity is noise.
-##
-## ⚠️ **Read on the withholding side only.** A car slower than this cannot be
-## "already correcting", so the sign stands — which is what a car stopped dead
-## facing the wrong way should get, since being stationary is not being right.
-const DEFAULT_MIN_KPH: float = 10.0
-
-## How close to the legal direction the car must be *travelling* before its
-## wheels are allowed to withhold the sign, in degrees.
-##
-## 🔴 **A second bar, and reusing the 120 above was a defect.** "Already
-## correcting" is not the complement of "pointed the wrong way": at 120 a car
-## pointed fully backwards while sliding **sideways** — 90 degrees off the law,
-## which is a drift through a junction — counted as carrying itself back the
-## legal way, and the sign was withheld from exactly the moment it is for. The
-## withholding case is the reverse out of a mistake, where travel is squarely
-## *with* the flow, so the bar is the neutral split and nothing wider.
-##
-## Found by mutation: dropping the nose bar to 90 left every assertion green,
-## because this one absorbed the change.
-const CORRECTING_ANGLE_DEG: float = 90.0
+## The bars and dwells are `WrongWayProfile` (`tuning/wrong_way.tres`), handed
+## in at construction and never defaulted here (`P5-26`): a default is a
+## second copy of the table, and this file's *were* the table until `Q124`.
+## Two bars — the nose's `angle_deg` and the wheels' `correcting_angle_deg` —
+## and they must stay two; `tuning/wrong_way.md` records the defect of one.
 
 ## What `angle_deg` reads when the last sample carried no measurable direction.
 const NOT_MEASURED: float = -1.0
@@ -151,7 +103,13 @@ var angle_deg: float = NOT_MEASURED
 # dwells and the speed floor are read straight off their constants: making them
 # injectable meant a test restating two defaults positionally to reach the third
 # argument, which is a silent mis-grade the day the order changes.
-var _angle_deg: float = DEFAULT_ANGLE_DEG
+## False until a whole profile was handed in; nothing is judged before then.
+var _usable: bool = false
+var _angle_deg: float = 0.0
+var _correcting_deg: float = 0.0
+var _min_kph: float = 0.0
+var _raise_s: float = 0.0
+var _clear_s: float = 0.0
 # The two clocks. Held separately, and each resets the other, so that evidence
 # has to be consecutive to count — two glimpses of the wrong way with a legal
 # sample between them must not add up to a raise.
@@ -159,8 +117,32 @@ var _against_s: float = 0.0
 var _for_s: float = 0.0
 
 
-func _init(angle_deg_bar: float = DEFAULT_ANGLE_DEG) -> void:
-	_angle_deg = angle_deg_bar
+## A missing or zeroed profile makes an INERT monitor — the sign never rises
+## and the error names why — never one running on a literal. `_init` cannot
+## refuse to return, and a zero dwell would raise on the first sample.
+func _init(profile: WrongWayProfile) -> void:
+	if profile == null:
+		push_error("WrongWayMonitor: no WrongWayProfile handed in; the sign will never rise.")
+		return
+	if profile.raise_s <= 0.0 or profile.clear_s <= 0.0:
+		push_error(
+			(
+				"WrongWayMonitor: %s has a zero dwell; the sign will never rise."
+				% profile.resource_path
+			)
+		)
+		return
+	if profile.angle_deg <= 0.0 or profile.correcting_angle_deg <= 0.0:
+		push_error(
+			"WrongWayMonitor: %s has a zero bar; the sign will never rise." % profile.resource_path
+		)
+		return
+	_angle_deg = profile.angle_deg
+	_correcting_deg = profile.correcting_angle_deg
+	_min_kph = profile.min_kph
+	_raise_s = profile.raise_s
+	_clear_s = profile.clear_s
+	_usable = true
 
 
 ## True once `angle_deg` holds a real reading.
@@ -189,6 +171,8 @@ func has_angle() -> bool:
 func sample(
 	one_way: bool, legal: Vector3, heading: Vector3, velocity: Vector3, delta_s: float
 ) -> void:
+	if not _usable:
+		return
 	var law := Vector3(legal.x, 0.0, legal.z)
 	angle_deg = _plan_angle_deg(heading, law)
 
@@ -201,7 +185,7 @@ func sample(
 	if one_way and angle_deg > _angle_deg and not _correcting(law, velocity):
 		_against_s += delta_s
 		_for_s = 0.0
-		if not wrong_way and _against_s >= DEFAULT_RAISE_S:
+		if not wrong_way and _against_s >= _raise_s:
 			wrong_way = true
 			raises += 1
 		return
@@ -230,17 +214,17 @@ func stand_down(delta_s: float) -> void:
 ## ordinary case, not an alarm.
 func _correcting(law: Vector3, velocity: Vector3) -> bool:
 	var travel := Vector3(velocity.x, 0.0, velocity.z)
-	if travel.length() * 3.6 < DEFAULT_MIN_KPH:
+	if travel.length() * 3.6 < _min_kph:
 		return false
 	var travel_deg: float = _plan_angle_deg(travel, law)
-	return travel_deg != NOT_MEASURED and travel_deg < CORRECTING_ANGLE_DEG
+	return travel_deg != NOT_MEASURED and travel_deg < _correcting_deg
 
 
 ## Serve the clearing clock. The tail of `sample`, and `stand_down`'s whole body.
 func _stand_down(delta_s: float) -> void:
 	_for_s += delta_s
 	_against_s = 0.0
-	if wrong_way and _for_s >= DEFAULT_CLEAR_S:
+	if wrong_way and _for_s >= _clear_s:
 		wrong_way = false
 
 

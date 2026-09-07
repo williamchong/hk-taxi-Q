@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WrongWayProfile" format=3 uid="uid://d8qiwxqrqxiq"]
+
+[ext_resource type="Script" uid="uid://bastu3golbo7e" path="res://scripts/core/wrong_way_profile.gd" id="1_wrong_way"]
+
+[resource]
+script = ExtResource("1_wrong_way")
+raise_s = 0.5
+clear_s = 0.8
+angle_deg = 120.0
+min_kph = 10.0
+correcting_angle_deg = 90.0

@@ -35,7 +35,7 @@ extends SceneTree
 ##
 ## 🔴 **This tool CAN print `verify_hud: ok` having checked nothing, and no guard
 ## inside it can prevent that.** If a `preload`ed script fails to compile — one
-## promoted warning is enough — `MonitorScript.new()` raises a script error and
+## promoted warning is enough — `MonitorScript.new(_shipped)` raises a script error and
 ## GDScript **aborts the calling function on the spot**. Every assertion after it
 ## is skipped, `_failed` stays 0, and `_init` runs on to print `ok` and `quit(0)`.
 ## Demonstrated during `P3-25`: mutating `_correcting` to `return false` left its
@@ -58,13 +58,15 @@ const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 const AccentBarScript = preload("res://scripts/ui/accent_bar.gd")
 const MonitorScript = preload("res://scripts/core/wrong_way_monitor.gd")
+const WrongWayProfileScript = preload("res://scripts/core/wrong_way_profile.gd")
+const TrackerProfileScript = preload("res://scripts/core/street_tracker_profile.gd")
 const NoEntryIconScript = preload("res://scripts/ui/no_entry_icon.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
 ## file — the one failure a verify tool cannot be allowed to have.
 
-## Long enough to clear `StreetTracker.DEFAULT_DWELL_S` in one sample where a
+## Long enough to clear the shipped `street_tracker.tres` dwell in one sample where a
 ## test means to, and used as a fraction where a test means not to.
 const LONG_S: float = 1.0
 
@@ -95,15 +97,26 @@ const MAX_BLINK_HZ: float = 3.0
 ## and it was written out three times before it had a name.
 const MIN_CONTRAST: float = 0.30
 
-## A speed comfortably over `WrongWayMonitor.DEFAULT_MIN_KPH`, and one well
+## A speed comfortably over the shipped `wrong_way.tres` `min_kph`, and one well
 ## under it, in m/s. 10 m/s is 36 kph; 1.0 is 3.6.
 const FAST: float = 10.0
 const CRAWL: float = 1.0
 
 var _failed: int = 0
 
+## The shipped tables, read once: every tracker and monitor below is built from
+## them, so the assertions grade the numbers that ship and not a copy (`P5-26`).
+var _shipped: WrongWayProfile = null
+var _tracking: StreetTrackerProfile = null
+
 
 func _init() -> void:
+	_shipped = load(WrongWayProfileScript.PATH) as WrongWayProfile
+	_tracking = load(TrackerProfileScript.PATH) as StreetTrackerProfile
+	if _shipped == null or _tracking == null:
+		_fail("tuning", "wrong_way.tres or street_tracker.tres did not load as its profile")
+		quit(1)
+		return
 	_check_layout()
 	_check_style()
 	_check_bar()
@@ -433,7 +446,7 @@ func _check_tracker() -> void:
 	# A first named street is adopted at once. There is nothing on the plate to
 	# protect, so making the player wait 0.6 s to be told where they started
 	# would be the dwell working against its own purpose.
-	var first := TrackerScript.new()
+	var first := TrackerScript.new(_tracking)
 	first.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	_expect(first.street_en == "HENNESSY ROAD", "tracker", "first named street is adopted")
 	_expect(first.street_zh == "軒尼詩道", "tracker", "the Chinese name comes with it")
@@ -444,7 +457,7 @@ func _check_tracker() -> void:
 	# The dwell, from the side that must NOT move. This is the junction case:
 	# the graph offers a different road for a moment and the plate must ignore
 	# it.
-	var brief := TrackerScript.new()
+	var brief := TrackerScript.new(_tracking)
 	brief.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	brief.sample(2, "FLEMING ROAD", "菲林明道", 0.2)
 	_expect(
@@ -466,7 +479,7 @@ func _check_tracker() -> void:
 	# A candidate that loses its nearest-ness before the dwell elapses must
 	# expire rather than bank its progress. Two 0.4 s glimpses of a road, with a
 	# glimpse of a third in between, must not add up to a 0.6 s dwell.
-	var flapping := TrackerScript.new()
+	var flapping := TrackerScript.new(_tracking)
 	flapping.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	flapping.sample(2, "FLEMING ROAD", "菲林明道", 0.4)
 	flapping.sample(3, "O'BRIEN ROAD", "柯布連道", 0.4)
@@ -479,7 +492,7 @@ func _check_tracker() -> void:
 
 	# The 74 unnamed edges, and the miss. Neither is evidence about which street
 	# the player is on, so neither may blank the plate.
-	var unnamed := TrackerScript.new()
+	var unnamed := TrackerScript.new(_tracking)
 	unnamed.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	unnamed.sample(9, "", "", LONG_S)
 	_expect(
@@ -494,7 +507,7 @@ func _check_tracker() -> void:
 	# ⚠️ An unnamed sample must not RESET a pending candidate either. A junction
 	# interleaves two named roads with the unnamed cap between them, so a reset
 	# would mean the dwell could never be served at the one place it exists for.
-	var through_cap := TrackerScript.new()
+	var through_cap := TrackerScript.new(_tracking)
 	through_cap.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	through_cap.sample(2, "FLEMING ROAD", "菲林明道", 0.4)
 	through_cap.sample(-1, "", "", 0.4)
@@ -508,7 +521,7 @@ func _check_tracker() -> void:
 	# Hennessy Road is 40-odd edges. Crossing from one to the next is not a
 	# change of street and must not start a dwell against a name that is not
 	# changing — if it did, the plate would blink off and on along one road.
-	var same_name := TrackerScript.new()
+	var same_name := TrackerScript.new(_tracking)
 	same_name.sample(1, "HENNESSY ROAD", "軒尼詩道", LONG_S)
 	same_name.sample(2, "HENNESSY ROAD", "軒尼詩道", 0.1)
 	_expect(same_name.changes == 0, "tracker", "a second edge of the same street is not a change")
@@ -516,7 +529,7 @@ func _check_tracker() -> void:
 
 	# Nothing named yet: the plate must stay hidden rather than draw an empty
 	# sign, which is every frame on a clone with no generated city.
-	var empty := TrackerScript.new()
+	var empty := TrackerScript.new(_tracking)
 	_expect(not empty.has_street(), "tracker", "no street before the first named sample")
 	empty.sample(-1, "", "", LONG_S)
 	_expect(not empty.has_street(), "tracker", "and a miss does not invent one")
@@ -535,8 +548,28 @@ func _check_tracker() -> void:
 func _check_wrong_way() -> void:
 	var legal := Vector3.FORWARD
 
+	# 🔴 The two bars are two numbers, and the nose bar is 120: the region is
+	# 93.5% one-way by drivable length, a bar at 90 rings on every legal turn
+	# across a one-way street, and reusing one number for both let a car
+	# pointed backwards while drifting sideways read as already correcting
+	# (`Q81`). The dwell literals below were written against 0.5 s and 0.8 s;
+	# a retune moves them together or this says so.
+	_expect(
+		_shipped.angle_deg == 120.0 and _shipped.correcting_angle_deg == 90.0,
+		"way",
+		(
+			"the nose bar is 120 and the withholding bar is 90 (%.0f / %.0f)"
+			% [_shipped.angle_deg, _shipped.correcting_angle_deg]
+		)
+	)
+	_expect(
+		_shipped.raise_s == 0.5 and _shipped.clear_s == 0.8 and _shipped.clear_s > _shipped.raise_s,
+		"way",
+		"the dwells are the 0.5 s raise and 0.8 s clear the samples below are written against"
+	)
+
 	# Driving the legal way down a one-way street, for four seconds. Nothing.
-	var with_flow := MonitorScript.new()
+	var with_flow := MonitorScript.new(_shipped)
 	_drive(with_flow, legal, 0.0, 0.0, FAST, 20)
 	_expect(
 		with_flow.raises == 0 and not with_flow.wrong_way,
@@ -549,7 +582,7 @@ func _check_wrong_way() -> void:
 	# — which is how this was built first — backing off the start line raises a NO
 	# ENTRY at 40 kph, and the sign's instruction is *turn around*, which a driver
 	# already facing the right way must not be given.
-	var backing := MonitorScript.new()
+	var backing := MonitorScript.new(_shipped)
 	_drive(backing, legal, 0.0, 180.0, FAST, 20)
 	_expect(
 		backing.raises == 0,
@@ -560,7 +593,7 @@ func _check_wrong_way() -> void:
 	# ...and the same street driven at it nose-first does, which is what makes
 	# both assertions above mean something. From both sides of the dwell, so this
 	# one stays expanded rather than folded into `_drive`.
-	var against := MonitorScript.new()
+	var against := MonitorScript.new(_shipped)
 	against.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
 	_expect(not against.wrong_way, "way", "the sign does not go up before the dwell is served")
 	against.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.2)
@@ -572,7 +605,7 @@ func _check_wrong_way() -> void:
 	# ⚠️ The other half of the nose rule: a car pointed the wrong way whose wheels
 	# are carrying it the RIGHT way is reversing out of its own mistake, and a
 	# sign that stays up through the correction is one the player drives through.
-	var correcting := MonitorScript.new()
+	var correcting := MonitorScript.new(_shipped)
 	_drive(correcting, legal, 180.0, 0.0, FAST, 20)
 	_expect(correcting.raises == 0, "way", "backing out of a mistake is not signed while it works")
 
@@ -582,13 +615,13 @@ func _check_wrong_way() -> void:
 	# itself back the legal way" and the sign was withheld from the exact moment
 	# it exists for. Found by mutation — dropping the nose bar to 90 left every
 	# other assertion here green, because the withholding bar absorbed it.
-	var drifting := MonitorScript.new()
+	var drifting := MonitorScript.new(_shipped)
 	_drive(drifting, legal, 180.0, 90.0, FAST, 10)
 	_expect(drifting.wrong_way, "way", "a car pointed backwards and sliding sideways is signed")
 
 	# ...but being stationary is not being right. A car stopped dead facing the
 	# wrong way is exactly who the sign is for.
-	var stalled := MonitorScript.new()
+	var stalled := MonitorScript.new(_shipped)
 	_drive(stalled, legal, 180.0, 0.0, CRAWL, 20)
 	_expect(stalled.wrong_way, "way", "a car stopped facing the wrong way is signed, not excused")
 
@@ -597,27 +630,27 @@ func _check_wrong_way() -> void:
 	# perpendicular, and at 90 everything past it counts as against the flow — so
 	# a legal right turn over a one-way carriageway would ring the alarm halfway
 	# round the corner.
-	var crossing := MonitorScript.new()
+	var crossing := MonitorScript.new(_shipped)
 	_drive(crossing, legal, 90.0, 90.0, FAST, 10)
 	_expect(
 		crossing.raises == 0, "way", "crossing a one-way street square on is not driving down it"
 	)
 
-	var oblique := MonitorScript.new()
+	var oblique := MonitorScript.new(_shipped)
 	_drive(oblique, legal, 100.0, 100.0, FAST, 10)
 	_expect(oblique.raises == 0, "way", "nor is a turn that carries 100 degrees across the flow")
 
 	# ⚠️ ...and the bar is what refused those, rather than the samples being
 	# harmless. Without this, an angle test that had been broken to `false` would
 	# pass both assertions above.
-	var tight := MonitorScript.new(90.0)
+	var tight := MonitorScript.new(_with_nose_bar(90.0))
 	_drive(tight, legal, 100.0, 100.0, FAST, 10)
 	_expect(tight.raises == 1, "way", "and at a 90 degree bar that same drive DOES raise")
 
 	# Evidence has to be consecutive. Two glimpses of the wrong way with a legal
 	# sample between them must not bank into a raise — `street_tracker.gd`'s
 	# interleaved-candidate case, at a louder readout.
-	var flapping := MonitorScript.new()
+	var flapping := MonitorScript.new(_shipped)
 	flapping.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
 	flapping.sample(true, legal, _at(legal, 0.0, 1.0), _at(legal, 0.0, FAST), 0.2)
 	flapping.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
@@ -673,8 +706,16 @@ func _check_wrong_way() -> void:
 
 
 ## A monitor whose sign is already up, for the clearing tests.
+## The shipped profile with only the nose bar moved — how a bar is mutated
+## without touching the dwells the samples are written against.
+func _with_nose_bar(angle_deg: float) -> WrongWayProfile:
+	var moved := _shipped.duplicate() as WrongWayProfile
+	moved.angle_deg = angle_deg
+	return moved
+
+
 func _raised(legal: Vector3) -> MonitorScript:
-	var monitor := MonitorScript.new()
+	var monitor := MonitorScript.new(_shipped)
 	monitor.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), LONG_S)
 	if not monitor.wrong_way:
 		_fail("way", "the fixture could not raise the sign — every clearing test below is inert")

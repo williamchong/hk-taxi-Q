@@ -46,6 +46,8 @@ var _layout: HudLayout = null
 var _style: HudStyle = null
 var _tracker: StreetTracker = null
 var _monitor: WrongWayMonitor = null
+var _tracking: StreetTrackerProfile = null
+var _wrong_way: WrongWayProfile = null
 var _graph: RoadGraph = null
 ## The car this HUD reads, handed in by `Main` (`P5-24`) — the ancestor that
 ## holds both `World` and `GUI` is the one that knows which car is in play.
@@ -103,8 +105,8 @@ func _ready() -> void:
 		queue_free()
 		return
 
-	_tracker = StreetTracker.new()
-	_monitor = WrongWayMonitor.new()
+	_tracker = StreetTracker.new(_tracking)
+	_monitor = WrongWayMonitor.new(_wrong_way)
 	_graph = RoadGraph.shared()
 	_build()
 
@@ -134,6 +136,14 @@ func _load_layout() -> bool:
 	_style = load(HudStyle.PATH) as HudStyle
 	if _style == null:
 		push_warning("hud: %s did not load; no HUD this run" % HudStyle.PATH)
+		return false
+	_tracking = load(StreetTrackerProfile.PATH) as StreetTrackerProfile
+	if _tracking == null:
+		push_warning("hud: %s did not load; no HUD this run" % StreetTrackerProfile.PATH)
+		return false
+	_wrong_way = load(WrongWayProfile.PATH) as WrongWayProfile
+	if _wrong_way == null:
+		push_warning("hud: %s did not load; no HUD this run" % WrongWayProfile.PATH)
 		return false
 	return true
 

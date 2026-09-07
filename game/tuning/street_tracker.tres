@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="StreetTrackerProfile" format=3 uid="uid://d3tky1v84oy4u"]
+
+[ext_resource type="Script" uid="uid://0mhho6o0m1ei" path="res://scripts/core/street_tracker_profile.gd" id="1_street_tracker"]
+
+[resource]
+script = ExtResource("1_street_tracker")
+dwell_s = 0.6
