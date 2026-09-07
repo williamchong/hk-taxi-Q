@@ -73,22 +73,13 @@ var auto_accelerate: bool = false
 ## collided with `free_look_camera.gd`'s mouse capture in the preview scenes.
 const TOUCH_ARG: String = "--touch="
 
-## Where `DebugHud` lives once the autoloads have registered.
-##
-## 🔴 **Looked up by path, never named as an identifier and never `preload`ed,
-## and both of those were tried.** An autoload identifier does not exist for a
-## `--script` tool, so naming `DebugHud` here makes this whole script
-## uncompilable outside a running game; `verify_input.gd` then fails to build the
-## router, aborts mid-function, and never reaches its own `quit()` — a hang, not
-## a failure. `preload`ing `debug_hud.gd` instead only moves the problem: it
-## drags in `vehicle_controller.gd`, which names the `InputRouter` autoload, and
-## the same error arrives one script further away. A path resolves at runtime and
-## has neither dependency.
-##
-## ⚠️ **Absent is a legitimate answer** — it is what a headless tool gets — and
-## it means `--touch=mouse` is simply off, which is the right default for
-## everything that is not a person at a desk.
-const DEBUG_HUD_PATH: NodePath = ^"/root/DebugHud"
+## ⚠️ **`Cmdline` is a `class_name`, and that is what makes naming it here safe.**
+## The reader this replaced lived on the `DebugHud` autoload, and an autoload
+## identifier does not exist for a `--script` tool: naming one here made this
+## whole script uncompilable outside a running game, `verify_input.gd` then
+## failed to build the router, aborted mid-function and never reached its own
+## `quit()` — a hang, not a failure — so it was reached by path. A `class_name`
+## resolves out of the class cache the import writes, which every tool has.
 
 ## The index a mouse-as-finger reports as. Negative because real touch indices
 ## start at 0, so no arrangement of fingers can collide with it.
@@ -161,19 +152,13 @@ var _steer_thumb: Thumb = Thumb.new()
 var _drive_thumb: Thumb = Thumb.new()
 var _mouse_is_down: bool = false
 ## Whether `--touch=mouse` was passed. Resolved once: a command line does not
-## change while the game runs, and the lookup that answers it needs the autoloads
-## to have registered.
+## change while the game runs.
 var _mouse_is_a_finger: bool = false
 
 
 func _ready() -> void:
 	_build_zones()
-	# `DebugHud` registers before this autoload — `project.godot` lists it first —
-	# so it is already there. Absent means a headless tool, and mouse-as-finger
-	# stays off.
-	var debug_hud: Node = get_node_or_null(DEBUG_HUD_PATH)
-	if debug_hud != null:
-		_mouse_is_a_finger = str(debug_hud.cmdline_value(TOUCH_ARG)).to_lower() == "mouse"
+	_mouse_is_a_finger = Cmdline.value(TOUCH_ARG).to_lower() == "mouse"
 
 
 ## Resolve the two touch zones onto the real screen, as Controls.

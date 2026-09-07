@@ -146,6 +146,22 @@ that owns its own data and that other nodes register with rather than reach into
   "no arbiter" branch lights every beam, and a scene that forgot a regular node would take that
   branch silently — the 8-slot cliff it exists to stop.
 
+**And one singleton that is not an autoload, declared here so it is not a hidden fourth (`P5-25`,
+`Q124`): `RoadGraph.shared()`.** A `static var WeakRef` on the class, not a node — the graph every
+consumer in a scene shares, parsed once per scene *because the scene's own nodes keep it alive and
+dropping the scene drops it*. An autoload would hold 6 MB for the life of the process and serve a
+stale graph across an ETL re-run inside the editor; a per-consumer parse was the objection
+`fare_preview.gd` raised against caching at all. It holds no node state and alters none, which is
+the test the three above are held to. Six readers today (`hud.gd`, `drive_harness.gd`,
+`road_graph_overlay.gd`, the road and fare previews, `verify_spawn.gd`); `verify_road_graph.gd`
+builds its own through `from_document`.
+
+**And no command-line reader on an autoload (`P5-25`).** `Cmdline` (`scripts/core/cmdline.gd`) is a
+`class_name` static — the guidance's own form for a helper that needs no node — and `--debug-view=`,
+`--hud=`, `--touch=` and `--asset=` all go through it. It lived on `DebugHud` as `cmdline_value`,
+which gave the HUD, the router and the asset viewer a dependency on dev chrome for a string lookup,
+and the router reached it through `/root/DebugHud` by path to avoid saying so.
+
 All three run for the life of the process, so treat them as hot-path code.
 
 ### The debug overlay
@@ -1723,6 +1739,7 @@ the second vehicle anyone built.
 | `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`). ⚠️ Declares **no `@export` defaults**, like `HandlingProfile` and `StreamingProfile` — a default is a second copy of the tuning table, and this one drifted (`Q80`) |
 | `scripts/ui/chamfer_panel.gd` | The HUD's one shape: a flat polygon with cut corners. Not a `StyleBox` — a chamfer is not a corner radius, and this bundle ships no UI textures |
 | `scripts/ui/accent_bar.gd` | A `ChamferPanel` that also carries one signed reading — the speed chip's acceleration bar. Split out so the plate and the reserved slots are not carrying five inert speedometer properties. `bar_span` is a pure static precisely so `verify_hud.gd` can grade the bar's **direction**, which is the one thing here that renders perfectly while being wrong |
+| `scripts/core/cmdline.gd` | `Cmdline`, the one reader of the command line — both halves of it, the engine's and the caller's after `--` — as `class_name` statics (`P5-25`). Every `--flag=` in the project is read here |
 | `scripts/core/street_tracker.gd` | Pure: which street the plate should say you are on. Owns the dwell that stops it strobing at a junction, the rule that an unnamed edge is not evidence, and the `changes` counter that grades both |
 | `scenes/world/golden_hour.tscn`, `scenes/world/clean_daylight.tscn` | The two lighting rigs — `clean_daylight.tscn` is the one both dev scenes instance (`clean_daylight.tres` carries the comparison between them). Instance a rig rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |

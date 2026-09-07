@@ -106,8 +106,8 @@ func _ready() -> void:
 	# dummy rasteriser draws nothing, so the only thing an overlay could do there
 	# is cost the verify tools a tree walk and a second parse of `city.json`
 	# every frame. Every check.sh tool and every telemetry run is headless.
-	var requested: String = cmdline_value(VIEW_ARG)
-	var counter_asked_for: bool = _cmdline().has(FPS_ARG)
+	var requested: String = Cmdline.value(VIEW_ARG)
+	var counter_asked_for: bool = Cmdline.has(FPS_ARG)
 	var forced: bool = not requested.is_empty() or counter_asked_for
 	if DisplayServer.get_name() == "headless" or (not OS.is_debug_build() and not forced):
 		# Not freed, unlike the counter this replaced the gate of: two scripts
@@ -344,28 +344,3 @@ static func _parse_view(requested: String) -> View:
 		push_warning("%s%s is not %s; showing everything" % [VIEW_ARG, requested, VIEW_NAMES])
 		return View.FULL
 	return found as View
-
-
-## Both argument lists, because the flag arrives through either.
-##
-## Godot splits the command line at `--`: what comes before is the engine's and
-## reaches `get_cmdline_args`, what comes after is the caller's and reaches
-## `get_cmdline_user_args` alone. `drive.sh` passes everything after the dashes,
-## so reading only the first list — which is what `fps_counter.gd` did — misses
-## every flag a scripted run sends.
-static func _cmdline() -> PackedStringArray:
-	var arguments: PackedStringArray = OS.get_cmdline_args()
-	arguments.append_array(OS.get_cmdline_user_args())
-	return arguments
-
-
-## ⚠️ **Public, like `style_label`, and for the same reason**: `hud.gd` needs a
-## command-line flag before its own `_ready` has done anything, and a second
-## copy of this is how `fps_counter.gd` came to read only `get_cmdline_args()`
-## and miss every flag a scripted run sends. That defect is recorded in
-## `_cmdline` above; a third copy would be the same one waiting to happen.
-static func cmdline_value(prefix: String) -> String:
-	for argument: String in _cmdline():
-		if argument.begins_with(prefix):
-			return argument.trim_prefix(prefix)
-	return ""

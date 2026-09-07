@@ -145,7 +145,7 @@ func _load_layout() -> bool:
 ## nodes, because "the HUD failed to build" is exactly the kind of thing a
 ## headless check should be able to notice. Nothing is rasterised either way.
 func _wanted() -> bool:
-	return DebugHud.cmdline_value(HUD_ARG).to_lower() != "off"
+	return Cmdline.value(HUD_ARG).to_lower() != "off"
 
 
 func _build() -> void:

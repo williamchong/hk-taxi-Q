@@ -222,6 +222,9 @@ var _columns: int = 0
 var _rows: int = 0
 var _origin: Vector2 = Vector2.ZERO
 
+# The project's fourth singleton, and deliberately not its fourth autoload —
+# `ARCHITECTURE.md`'s autoload list says why (`P5-25`).
+#
 # Held weakly on purpose. A plain static reference would satisfy "one parse" by
 # holding 6 MB resident for the life of the process and serving a stale graph
 # across an ETL re-run inside the editor — the objection `fare_preview.gd` raised

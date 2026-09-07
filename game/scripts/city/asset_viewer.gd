@@ -34,7 +34,7 @@ var _asset: Node3D = null
 
 
 func _ready() -> void:
-	var path: String = DebugHud.cmdline_value(ASSET_ARG)
+	var path: String = Cmdline.value(ASSET_ARG)
 	if path.is_empty():
 		path = DEFAULT_ASSET
 	if not ResourceLoader.exists(path, "PackedScene"):
