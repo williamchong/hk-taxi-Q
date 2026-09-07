@@ -786,6 +786,18 @@ buildings:
     INFRASTRUCTURE: 0.5
     TERRAIN(TB): 4.0
 
+  # The tile OCCLUDER (P5-13): a `<tile>_occluder-occonly` primitive in every
+  # tier file, which the importer turns into an OccluderInstance3D and removes
+  # the mesh of. Clustered at its own stated cell, like the collider above, and
+  # from these classes only. The ground is left out: it is the region's largest
+  # surface, and a hillside occludes little that the buildings in front of it
+  # do not. rendering/occlusion_culling in game/project.godot is what reads it;
+  # docs/ARCHITECTURE.md has the numbers and the sweep that priced this cell.
+  occluder_cell_m: 4.0
+  class_occluder_cell_m:
+    INFRASTRUCTURE: 1.0
+  occluder_classes: [BUILDING, INFRASTRUCTURE]
+
 # The iB1000 building-block layer — Q47's primary podium-boundary route. One
 # `Building` polygon layer whose `TYPEOFBUILDINGBLOCK` domain splits towers
 # from podium blocks, with base/roof levels in mPD that are 100% filled on

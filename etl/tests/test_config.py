@@ -310,6 +310,44 @@ class TestBuildingStyle:
         for class_id in style.classes:
             assert style.collision_cell_size_m(class_id) == style.cell_size_m(class_id, 0)
 
+    def test_the_occluder_cell_is_stated_per_class_like_the_collider(self, hong_kong) -> None:
+        """`P5-13`: the occluder's cell is its own value, and the shipped one
+        equals the coarsest tier's for every occluder class — by value, not by
+        reference, so the tier-1 collapse the occluder is today is a choice a
+        sweep can move. Buildings and structure, no ground."""
+        style = hong_kong.buildings
+        coarsest = len(style.lod_cell_sizes_m) - 1
+        assert style.occluder_cell_size_m("BUILDING") == style.occluder_cell_m
+        assert style.occluder_cell_size_m("INFRASTRUCTURE") < style.occluder_cell_m
+        assert style.terrain_class not in style.occluder_classes
+        assert set(style.occluder_classes) <= set(style.classes)
+        for class_id in style.occluder_classes:
+            assert style.occluder_cell_size_m(class_id) == style.cell_size_m(class_id, coarsest)
+
+    def test_the_occluder_cell_is_required_and_not_negative(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["occluder_cell_m"]
+
+        def negate(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_cell_m"] = -1.0
+
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_occluder_cell_m"] = {"INFRA": 1.0}
+
+        with pytest.raises(ValueError, match="occluder_cell_m"):
+            load_config(rewrite(drop))
+        with pytest.raises(ValueError, match="not be negative"):
+            load_config(rewrite(negate))
+        with pytest.raises(ValueError, match="not in classes"):
+            load_config(rewrite(misspell))
+
+    def test_occluder_classes_must_name_real_classes(self, rewrite) -> None:
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["buildings"]["occluder_classes"] = ["BUILDINGS"]
+
+        with pytest.raises(ValueError, match="not in classes"):
+            load_config(rewrite(misspell))
+
     def test_the_collision_cell_is_required(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             del doc["buildings"]["collision_cell_m"]

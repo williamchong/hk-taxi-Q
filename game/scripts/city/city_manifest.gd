@@ -168,7 +168,15 @@ const NOT_MEASURED: float = -1.0
 ## is the loud half; the quiet half is `shipped()` computing a bundle with no
 ## road in it, and being wrong about the bundle's contents is what this number
 ## is for.
-const SCHEMA_VERSION: int = 28
+##
+## 28 since `P5-11` (`Q121`): `TEXCOORD_0` on a tile is a planar UV and the
+## payload rides `TEXCOORD_1` and the mesh `extras`.
+##
+## 29 since `P5-13` (`Q121`): a tile entry says whether its tiers carry an
+## `-occonly` occluder (`occluder`), so `verify_tiles.gd` asks for one exactly
+## where the ETL built one. A v28 reader has no way to tell a tile that shipped
+## no occluder from one that lost it at import.
+const SCHEMA_VERSION: int = 29
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -186,6 +194,11 @@ class Tile:
 	## streaming bands collapse to resident-or-not, and it is what
 	## `CityStreamer.hold_ground_at` loads under the start line.
 	var is_road: bool = false
+	## Whether every tier of this tile carries a `-occonly` occluder (`P5-13`),
+	## false for a square of bare ground. Read by `verify_tiles.gd`; the game
+	## needs nothing from it, because the importer has already stood the
+	## `OccluderInstance3D` inside the tier scene.
+	var occluder: bool = false
 
 	## The node this unit is instantiated as, so the streamer and the preview
 	## name it the same way.
@@ -670,6 +683,7 @@ static func _tile(entry: Dictionary) -> Tile:
 		push_error("tile %s names no LOD files" % tile.id)
 
 	tile.aabb = _aabb_of(entry, "tile %s" % tile.id)
+	tile.occluder = bool(entry.get("occluder", false))
 	return tile
 
 

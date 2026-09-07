@@ -458,6 +458,18 @@ class BuildingStyle:
     # The collider's cell for a class that must not decimate like the rest —
     # the same classes, for the same reasons, as `class_lod_cell_sizes_m`.
     class_collision_cell_m: dict[str, float]
+    # The cell the tile OCCLUDER is clustered at (`P5-13`), its own value like
+    # the collider's: it is rasterised on the CPU every frame and rides in every
+    # tier's file, so it wants the coarsest geometry that still stands where the
+    # buildings do, and a stated cell is what a sweep can price.
+    occluder_cell_m: float
+    # The occluder's cell for a class that must not decimate like the rest —
+    # the same classes, for the same reasons, as `class_lod_cell_sizes_m`.
+    class_occluder_cell_m: dict[str, float]
+    # The classes the occluder is built from — a subset of `classes`. The ground
+    # is left out on purpose: a hillside occludes little a building in front of
+    # it does not, and the terrain is the largest single surface in the region.
+    occluder_classes: tuple[str, ...]
     # How far below its sampled height the drawn ground is placed, in metres.
     #
     # `roads.py` lays the level-0 carriageway at `terrain + 0.0`, so ground and
@@ -532,6 +544,10 @@ class BuildingStyle:
     def collision_cell_size_m(self, class_id: str) -> float:
         """Clustering cell for one class in the tile collider (`P5-12`)."""
         return self.class_collision_cell_m.get(class_id, self.collision_cell_m)
+
+    def occluder_cell_size_m(self, class_id: str) -> float:
+        """Clustering cell for one class in the tile occluder (`P5-13`)."""
+        return self.class_occluder_cell_m.get(class_id, self.occluder_cell_m)
 
     def is_ground(self, class_id: str) -> bool:
         """Whether this class is the region's ground rather than something on it.
@@ -3750,6 +3766,32 @@ def _material_assignment(
     return MaterialAssignment(by_height=bands, rings=rings)
 
 
+def _cell_table(
+    body: dict[str, Any], where: str, key: str, classes: tuple[str, ...]
+) -> tuple[float, dict[str, float]]:
+    """A stated clustering cell and its per-class overrides — `collision_cell_m`
+    with `class_collision_cell_m` (`P5-12`), and the occluder's pair (`P5-13`).
+
+    0.0 is an exact weld, as in `lod_cell_sizes_m` (`Q16`) — legal, and a
+    bundle decision: it ships the full massing. A misspelled class key is the
+    same trap as `class_lod_cell_sizes_m`'s: it parses, loads, and silently
+    overrides nothing, so it is refused here.
+    """
+    cell = _number(_require(body, key, where), f"{where}:{key}")
+    if cell < 0.0:
+        raise ValueError(f"{where}:{key} must not be negative ({cell})")
+    per_class: dict[str, float] = {}
+    for name, size in (body.get(f"class_{key}") or {}).items():
+        field = f"{where}:class_{key}.{name}"
+        if str(name) not in classes:
+            raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
+        override = _number(size, field)
+        if override < 0.0:
+            raise ValueError(f"{field} must not be negative ({override})")
+        per_class[str(name)] = override
+    return cell, per_class
+
+
 def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> BuildingStyle:
     assignment = _material_assignment(
         _require(body, "material_assignment", where), table, f"{where}:material_assignment"
@@ -3825,22 +3867,19 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
             )
         class_cells[str(name)] = override
 
-    collision_cell = _number(_require(body, "collision_cell_m", where), f"{where}:collision_cell_m")
-    if collision_cell < 0.0:
-        # 0.0 is an exact weld, as in `lod_cell_sizes_m` (`Q16`) — legal, and a
-        # bundle decision: it ships the full massing as a trimesh.
-        raise ValueError(f"{where}:collision_cell_m must not be negative ({collision_cell})")
-    class_collision: dict[str, float] = {}
-    for name, size in (body.get("class_collision_cell_m") or {}).items():
-        field = f"{where}:class_collision_cell_m.{name}"
-        if str(name) not in classes:
-            # Same trap as `class_lod_cell_sizes_m`: a misspelled key parses,
-            # loads, and silently overrides nothing.
-            raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
-        cell = _number(size, field)
-        if cell < 0.0:
-            raise ValueError(f"{field} must not be negative ({cell})")
-        class_collision[str(name)] = cell
+    collision_cell, class_collision = _cell_table(body, where, "collision_cell_m", classes)
+    occluder_cell, class_occluder = _cell_table(body, where, "occluder_cell_m", classes)
+    occluder_classes = tuple(str(name) for name in _require(body, "occluder_classes", where))
+    if not occluder_classes:
+        raise ValueError(
+            f"{where}:occluder_classes is empty — an occluder of nothing occludes nothing"
+        )
+    unknown = set(occluder_classes) - set(classes)
+    if unknown:
+        raise ValueError(
+            f"{where}:occluder_classes names {', '.join(sorted(unknown))}, "
+            f"which is not in classes ({', '.join(classes)})"
+        )
 
     structure = body.get("structure_class")
     if structure is not None and str(structure) not in classes:
@@ -3905,6 +3944,9 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         class_lod_cell_sizes_m=class_cells,
         collision_cell_m=collision_cell,
         class_collision_cell_m=class_collision,
+        occluder_cell_m=occluder_cell,
+        class_occluder_cell_m=class_occluder,
+        occluder_classes=occluder_classes,
         ground_sink_m=sink,
     )
 

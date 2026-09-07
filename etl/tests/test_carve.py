@@ -28,6 +28,7 @@ from pipeline.buildings import (
     collider_name,
     facade_uv,
     identity_uv2,
+    occluder_name,
 )
 from pipeline.carve import (
     CarveReport,
@@ -394,8 +395,9 @@ class TestCollider:
         drawn tier with every payload, and the collider with the marker alone."""
         drawn = cls._drawn()
         collider = replace(drawn, name=collider_name("t"), colours=None, uvs=None, material=None)
+        occluder = replace(collider, name=occluder_name("t"))
         (out / "tiles").mkdir(parents=True)
-        write_glb(out / "tiles" / "t_lod0.glb", [drawn, collider])
+        write_glb(out / "tiles" / "t_lod0.glb", [drawn, collider, occluder])
         return {
             "id": "t",
             "aabb": drawn.aabb(),
@@ -413,11 +415,14 @@ class TestCollider:
 
         _carve_tile(tmp_path, tile, [plan], report)
 
-        drawn, collider = read_glb(tmp_path / "tiles" / "t_lod0.glb")
+        drawn, collider, occluder = read_glb(tmp_path / "tiles" / "t_lod0.glb")
         assert collider.name == collider_name("t")
+        assert occluder.name == occluder_name("t")
         assert drawn.triangle_count > 12 and collider.triangle_count > 12
-        assert not ((drawn.positions[:, 2] > -2.9) & (drawn.positions[:, 2] < 2.9)).any()
-        assert not ((collider.positions[:, 2] > -2.9) & (collider.positions[:, 2] < 2.9)).any()
+        assert occluder.triangle_count > 12
+        for mesh in (drawn, collider, occluder):
+            assert not ((mesh.positions[:, 2] > -2.9) & (mesh.positions[:, 2] < 2.9)).any()
+        assert tile["lods"][0]["occluder_triangles"] == occluder.triangle_count
         assert collider.colours is None and collider.uvs is None and collider.uv2 is not None
         assert drawn.colours is not None and drawn.uvs is not None
         assert tile["lods"][0]["triangles"] == drawn.triangle_count

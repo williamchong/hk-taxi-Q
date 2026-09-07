@@ -294,6 +294,53 @@ static func check_collision_only(node: Node, body_name: String) -> PackedStringA
 	return problems
 
 
+## Problems with a `-occonly` occluder standing beside a render mesh (`P5-13`),
+## or an empty array if it conforms — `check_collision_only`'s shape for the
+## other helper the importer removes the mesh of.
+##
+## Exactly one `OccluderInstance3D`, carrying an `ArrayOccluder3D` with
+## vertices and indices — an empty occluder culls nothing and passes every
+## other check — and no mesh beneath it. A render mesh must carry no occluder
+## of its own: `-occ` would bake one from the full tier, which is the CPU cost
+## `occluder_cell_m` exists to avoid. ⚠️ **No name is asserted, because the
+## importer keeps none** — measured on 4.7.1: `-colonly` imports as a body
+## named for its node, `-occonly` as a node named `OccluderInstance3D`. The
+## count against the manifest's `occluder` flag is what stands in for it.
+static func check_occluder_only(node: Node) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var occluders: Array[Node] = node.find_children("*", "OccluderInstance3D", true, false)
+	if occluders.size() != 1:
+		problems.append(
+			"%d OccluderInstance3D nodes; a `-occonly` occluder is exactly one" % occluders.size()
+		)
+	for found: Node in occluders:
+		var instance := found as OccluderInstance3D
+		var shape := instance.occluder as ArrayOccluder3D
+		if shape == null:
+			problems.append("'%s' carries no ArrayOccluder3D" % instance.name)
+		elif shape.vertices.is_empty() or shape.indices.is_empty():
+			problems.append("'%s' is an empty occluder; it culls nothing" % instance.name)
+		if not instance.find_children("*", "MeshInstance3D", true, false).is_empty():
+			problems.append(
+				(
+					"'%s' carries a mesh; `-occonly` removes it, so this is `-occ` spelled wrong"
+					% instance.name
+				)
+			)
+	return problems
+
+
+## Problems where a scene carries an occluder it must not (`P5-13`): a tile
+## `buildings.json` built none for, or a render mesh that grew one at import.
+static func check_no_occluder(node: Node, where: String) -> PackedStringArray:
+	var occluders: Array[Node] = node.find_children("*", "OccluderInstance3D", true, false)
+	if occluders.is_empty():
+		return PackedStringArray()
+	return PackedStringArray(
+		["%s carries %d occluder(s) the manifest says it has none of" % [where, occluders.size()]]
+	)
+
+
 ## The surface ended up on the shader its ETL asked for, or why it did not.
 ##
 ## glTF cannot say "use this shader", so the ETL writes a material *name* and

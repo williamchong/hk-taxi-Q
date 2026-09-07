@@ -56,7 +56,16 @@ from pipeline.buildings import (
 )
 from pipeline.config import Carve, Config, SurfaceClass, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.gltf import MeshData, normalise, read_glb, read_render, split_colliders, write_glb
+from pipeline.gltf import (
+    MeshData,
+    is_collider,
+    is_occluder,
+    normalise,
+    partition,
+    read_glb,
+    read_render,
+    write_glb,
+)
 from pipeline.mesh import merge, select_triangles, subtract_prism
 from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -499,30 +508,35 @@ class _Cut:
 def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveReport) -> None:
     """Cut every plan out of one tile, both tiers, and re-emit the tiers it cut.
 
-    The finest tier's file holds the render mesh and its `-colonly` collider
-    (`P5-12`), and the prisms are taken out of **both** — a wall carved from
-    what the player sees and left in what the car hits is the stranding the
-    carve exists to end. The counters are the render mesh's alone: the two are
-    decimated at their own cells, so their removals are not one number.
+    A tier's file holds the render mesh and its helpers — the `-colonly`
+    collider on the finest tier (`P5-12`) and the `-occonly` occluder on every
+    tier (`P5-13`) — and the prisms are taken out of **all of them**: a wall
+    carved from what the player sees and left in what the car hits is the
+    stranding the carve exists to end, and one left in the occluder culls what
+    stands behind a wall that is no longer there. The counters are the render
+    mesh's alone: each helper is decimated at its own cell, so their removals
+    are not one number.
     """
     boxes: list = []
     rewritten = False
     for tier, lod in enumerate(tile["lods"]):
         path = out_dir / lod["path"]
-        drawn, colliders = split_colliders(read_glb(path))
-        if len(drawn) != 1 or len(colliders) > 1:
+        drawn, helpers = partition(read_glb(path))
+        colliders = sum(is_collider(mesh) for mesh in helpers)
+        occluders = sum(is_occluder(mesh) for mesh in helpers)
+        if len(drawn) != 1 or colliders > 1 or occluders > 1:
             raise ValueError(
-                f"{lod['path']} holds {len(drawn)} render and {len(colliders)} collider "
-                "primitives, expected one and at most one"
+                f"{lod['path']} holds {len(drawn)} render, {colliders} collider and "
+                f"{occluders} occluder primitives, expected one and at most one of each"
             )
         source = drawn[0]
         boxes.append(source.aabb())
 
         cut = _carve_mesh(source, plans, FACADE_MATERIAL)
-        cut_collider = _carve_mesh(colliders[0], plans, None) if colliders else None
+        cut_helpers = [_carve_mesh(helper, plans, None) for helper in helpers]
         # A tier the prisms never met is left exactly as `buildings.py` wrote it
         # — not rewritten identically, but never opened for writing at all.
-        if cut is None and cut_collider is None:
+        if cut is None and all(each is None for each in cut_helpers):
             continue
 
         if cut is not None:
@@ -533,11 +547,19 @@ def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveR
             report.facing_away += sum(_facing_away(wall, plan.points) for wall, plan in cut.walls)
         carved = source if cut is None else cut.mesh
         written = [carved]
-        if colliders:
-            collider = colliders[0] if cut_collider is None else cut_collider.mesh
-            written.append(collider)
-            lod["collision_triangles"] = collider.triangle_count
-            lod["collision_vertices"] = len(collider.positions)
+        for helper, cut_helper in zip(helpers, cut_helpers, strict=True):
+            mesh = helper if cut_helper is None else cut_helper.mesh
+            written.append(mesh)
+            if is_collider(mesh):
+                lod["collision_triangles"] = mesh.triangle_count
+                lod["collision_vertices"] = len(mesh.positions)
+            elif is_occluder(mesh):
+                lod["occluder_triangles"] = mesh.triangle_count
+                lod["occluder_vertices"] = len(mesh.positions)
+            else:
+                # A helper kind this stage cannot book: its counters would go
+                # stale in `buildings.json` with the geometry cut correctly.
+                raise ValueError(f"{lod['path']}: unrecognised helper primitive {mesh.name!r}")
         lod["bytes"] = write_glb(path, written)
         lod["triangles"] = carved.triangle_count
         lod["vertices"] = len(carved.positions)

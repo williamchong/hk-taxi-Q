@@ -38,6 +38,7 @@ from pipeline.buildings import (
     game_offset,
     identity_uv2,
     material_for,
+    occluder_name,
     podium_blocks,
 )
 from pipeline.config import (
@@ -778,10 +779,84 @@ class TestBuildRegion:
             expected = ["t_00_00"]
             if level == COLLISION_TIER:
                 expected.append(collider_name("t_00_00"))
+            expected.append(occluder_name("t_00_00"))
             assert [mesh.name for mesh in meshes] == expected
             assert [mesh.name for mesh in read_render(tiles / f"t_00_00_lod{level}.glb")] == [
                 "t_00_00"
             ]
+
+    def test_the_occluder_rides_in_every_tier_and_is_the_stated_tier_s_classes(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`P5-13`: the same `-occonly` primitive in every tier file — the
+        streamer swaps whole tier scenes — built from `occluder_classes` alone
+        at `occluder_cell_m`, so the ground is not in it, and at the fixture's
+        cell it is the coarsest tier's own building geometry. Bare like the
+        collider: marker only, row zero, no colour, no UV, no table."""
+        style = hong_kong.buildings
+        assert style.terrain_class not in style.occluder_classes
+        coarsest = len(style.lod_cell_sizes_m) - 1
+        for class_id in style.occluder_classes:
+            assert style.occluder_cell_size_m(class_id) == style.cell_size_m(class_id, coarsest)
+        report = self.build(hong_kong, sources, tmp_path, self.ground())
+        out = tmp_path / "out" / "wan_chai"
+        tile = self.tile(report, "t_00_00")
+        assert tile.occluder
+        occluders = [read_glb(out / lod.path)[-1] for lod in tile.lods]
+        for occluder, lod in zip(occluders, tile.lods, strict=True):
+            assert occluder.name == occluder_name("t_00_00")
+            assert np.array_equal(occluder.positions, occluders[0].positions)
+            assert lod.occluder_triangles == occluder.triangle_count
+            assert lod.occluder_vertices == len(occluder.positions)
+            assert occluder.colours is None and occluder.uvs is None and occluder.extras is None
+            assert occluder.uv2 is not None and not occluder.uv2[:, 1].any()
+        markers = set(np.floor(occluders[0].uv2[:, 0]).astype(int).tolist())
+        assert int(SurfaceClass.GROUND) not in markers
+        # The coarsest tier's own building geometry, and not the finest's.
+        coarsest_tier = read_render(out / tile.lods[coarsest].path)[0]
+        drawn = np.floor(coarsest_tier.uv2[:, 0]).astype(int) != int(SurfaceClass.GROUND)
+        assert len(occluders[0].positions) == int(drawn.sum())
+        assert len(occluders[0].positions) < len(read_render(out / tile.lods[0].path)[0].positions)
+
+    def test_a_coarser_occluder_cell_ships_fewer_vertices(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The occluder's cell is its own: coarsen it and the render tiers do
+        not move while the `-occonly` primitive does — what `docs/ARCHITECTURE.md`'s
+        sweep priced."""
+        shipped = hong_kong.buildings
+        self.build(hong_kong, sources, tmp_path)
+        coarser = replace(
+            hong_kong, buildings=replace(shipped, occluder_cell_m=30.0, class_occluder_cell_m={})
+        )
+        self.build(coarser, sources, tmp_path, out="coarse")
+        fine = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        coarse = read_glb(tmp_path / "coarse" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        assert np.array_equal(fine[0].positions, coarse[0].positions)
+        assert len(coarse[-1].positions) < len(fine[-1].positions)
+
+    def test_a_tile_of_bare_ground_carries_no_occluder(self, hong_kong, sources, tmp_path) -> None:
+        """A square with nothing of an occluder class ships no `-occonly`
+        primitive and says so in the manifest, which is what lets
+        `verify_tiles.gd` refuse an occluder that went missing elsewhere."""
+        # One building in tile (0, 0) under a patch of ground wide enough to
+        # reach tile (1, 0), where nothing stands.
+        fixtures = [
+            Fixture("B0100", "BUILDING", 75.0, 75.0, 60.0),
+            Fixture(
+                "G0100", "TERRAIN(TB)", 150.0, 75.0, height=0.5, footprint=280.0, textured=True
+            ),
+        ]
+        report = self.build(hong_kong, sources, tmp_path, fixtures)
+        bare = [tile for tile in report.tiles if not tile.occluder]
+        assert "t_01_00" in {tile.id for tile in bare}
+        assert self.tile(report, "t_00_00").occluder
+        out = tmp_path / "out" / "wan_chai"
+        for tile in bare:
+            for lod in tile.lods:
+                meshes = read_glb(out / lod.path)
+                assert not any(mesh.name == occluder_name(tile.id) for mesh in meshes)
+                assert lod.occluder_triangles == 0
 
     def test_the_collider_carries_the_marker_and_nothing_else(
         self, hong_kong, sources, tmp_path
@@ -792,7 +867,7 @@ class TestBuildRegion:
         material: the importer removes the mesh, so anything else is PCK bytes
         nothing reads."""
         self.build(hong_kong, sources, tmp_path)
-        _, collider = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        _, collider, _ = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert collider.colours is None and collider.uvs is None
         assert collider.extras is None and collider.texture is None
         assert collider.uv2 is not None
@@ -813,7 +888,7 @@ class TestBuildRegion:
         for class_id in shipped.classes:
             assert shipped.collision_cell_size_m(class_id) == shipped.cell_size_m(class_id, 0)
         self.build(hong_kong, sources, tmp_path)
-        tier, collider = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        tier, collider, _ = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert np.array_equal(collider.positions, tier.positions)
         assert np.array_equal(collider.triangles, tier.triangles)
 
@@ -824,7 +899,9 @@ class TestBuildRegion:
             buildings=replace(shipped, collision_cell_m=30.0, class_collision_cell_m={}),
         )
         self.build(coarser, sources, tmp_path, out="coarse")
-        tier, collider = read_glb(tmp_path / "coarse" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        tier, collider, _ = read_glb(
+            tmp_path / "coarse" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
+        )
         assert len(collider.positions) < len(tier.positions)
 
     def test_the_manifest_counts_the_collider_apart(self, hong_kong, sources, tmp_path) -> None:
@@ -833,7 +910,7 @@ class TestBuildRegion:
         report a wall twice."""
         report = self.build(hong_kong, sources, tmp_path)
         lods = self.tile(report, "t_00_00").lods
-        tier, collider = read_glb(tmp_path / "out" / "wan_chai" / lods[0].path)
+        tier, collider, _ = read_glb(tmp_path / "out" / "wan_chai" / lods[0].path)
         assert lods[0].triangles == tier.triangle_count
         assert lods[0].collision_triangles == collider.triangle_count
         assert lods[0].collision_vertices == len(collider.positions)

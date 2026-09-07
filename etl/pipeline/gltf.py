@@ -71,30 +71,52 @@ Bounds = tuple[tuple[float, float, float], tuple[float, float, float]]
 # so a reader that wants "the mesh" has to say which: `render_meshes` below.
 COLLISION_ONLY_SUFFIX = "-colonly"
 
+# The same shape for occlusion (`P5-13`): the importer turns the node into an
+# `OccluderInstance3D` carrying an `ArrayOccluder3D` and removes the mesh, so
+# the geometry is rasterised into the culling buffer and never drawn.
+OCCLUDER_ONLY_SUFFIX = "-occonly"
+
 
 def is_collider(mesh: MeshData) -> bool:
     """Whether the mesh is a `-colonly` collider rather than something drawn."""
     return mesh.name.endswith(COLLISION_ONLY_SUFFIX)
 
 
+def is_occluder(mesh: MeshData) -> bool:
+    """Whether the mesh is a `-occonly` occluder rather than something drawn."""
+    return mesh.name.endswith(OCCLUDER_ONLY_SUFFIX)
+
+
+def is_helper(mesh: MeshData) -> bool:
+    """A primitive the importer removes — collider or occluder — and nobody draws."""
+    return is_collider(mesh) or is_occluder(mesh)
+
+
 def render_meshes(meshes: Iterable[MeshData]) -> list[MeshData]:
-    """The meshes the engine draws — every entry that is not a `-colonly` collider.
+    """The meshes the engine draws — every entry that is not a helper.
 
     Every grader of the shipped city measures what is *drawn*, and since `P5-12`
-    a tile's `.glb` also carries the collider the car stands on. Reading the
-    file whole counts every wall twice; this is the one filter, so the rule is
-    spelled once.
+    a tile's `.glb` also carries the collider the car stands on, and since
+    `P5-13` the occluder the culling buffer rasterises. Reading the file whole
+    counts every wall two or three times; this is the one filter, so the rule
+    is spelled once.
     """
-    return [mesh for mesh in meshes if not is_collider(mesh)]
+    return [mesh for mesh in meshes if not is_helper(mesh)]
+
+
+def partition(meshes: Iterable[MeshData]) -> tuple[list[MeshData], list[MeshData]]:
+    """The meshes as `(drawn, helpers)` — the whole file, with the rule spelled once."""
+    drawn: list[MeshData] = []
+    helpers: list[MeshData] = []
+    for mesh in meshes:
+        (helpers if is_helper(mesh) else drawn).append(mesh)
+    return drawn, helpers
 
 
 def split_colliders(meshes: Iterable[MeshData]) -> tuple[list[MeshData], list[MeshData]]:
-    """The meshes as `(drawn, colliders)` — the whole file, with the rule spelled once."""
-    drawn: list[MeshData] = []
-    colliders: list[MeshData] = []
-    for mesh in meshes:
-        (colliders if is_collider(mesh) else drawn).append(mesh)
-    return drawn, colliders
+    """The meshes as `(drawn, colliders)`; an occluder is in neither list."""
+    drawn, helpers = partition(meshes)
+    return drawn, [mesh for mesh in helpers if is_collider(mesh)]
 
 
 def read_render(path: Path) -> list[MeshData]:

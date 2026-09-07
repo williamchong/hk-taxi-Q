@@ -99,6 +99,8 @@ sidecar, refuses any `;` line in a resource, and fails an orphan sidecar or a st
 | `display/window/stretch/mode` | `canvas_items` | Resolution-independent UI; desktop is a target alongside phones |
 | `[importer_defaults] scene.import_script/path` | `res://tools/generated_scene_import.gd` | Godot 4.7's glTF importer reads `COLOR_0` but leaves `vertex_color_use_as_albedo` **off**, so every generated tile imports as a white block. Nothing in the glTF can express it. Set as an importer *default* rather than per file: generated assets are gitignored, so their `.import` files do not survive a fresh clone |
 | `[importer_defaults] scene.meshes/force_disable_compression` | `true` | 🔴 **Godot quantises imported vertex positions over the mesh's OWN AABB**, so the step scales with how wide the layer is, not with how big its objects are. Measured on `lamps.glb`: a **1,646 m** AABB gives a **0.025 m** step, against a bracket arm of **0.06 m** radius — the arm's 7,176 flank triangles leave a clean `\|n.y\|` of 0.477 and smear across 0.10-0.70, while the axis-aligned column and lantern survive exactly. ⚠️ **`signs.glb` is the worse case**: its poles are **0.032 m**, thinner than the step. Off costs **+958,720 B (+2.002%)** of PCK — 47,897,332 → 48,856,052, two exports one setting apart — and every generated mesh then imports exactly as the ETL built it, which is what lets a verify tool's count agree with the stage's own: `verify_lamps` went from 18,484 upright to the ETL's exact 17,940. ⚠️ **Project-wide rather than per asset, and not by preference**: the comment directly above this block already records why, since `game/assets/generated/` is gitignored and a `.import` there does not survive a fresh clone. Lamps alone would have been +69,264 B, and is not available durably. 🔴 **`[importer_defaults]` seeds only a NEWLY CREATED `.import`, so setting it does not migrate assets that already have one** — 133 of 141 sidecars kept `false` after the commit, including `hkcec.glb`, the bundle's largest mesh, which went on importing compressed. That is why this row first recorded **+446,128 B**: `hkcec.glb` was identical on both sides and fell out of the delta. Delete the sidecars and re-import after changing this key, and note `check.sh` pins the `project.godot` value and **cannot see a stale sidecar**. ⚠️ Three *authored* imports still carry `false` — the taxi body, the tyre and `central_plaza.glb` — left deliberately: their AABBs are metres, so the quantum is sub-millimetre, and re-importing the committed taxi would move `verify_vehicle`'s figures for nothing. ⚠️ **The 132 tiles and `roads.glb` never compress in either state** (40 B/vertex both ways), so a per-asset alternative would buy nothing on the bulk of the bundle. ⚠️ **Two exports of this setting differed by 80 B** — `project.godot`'s own comment churn getting packed as `project.binary` — so quote a delta from a baseline measured the same way. `check.sh`'s `settings` step pins the value (mutation-checked). `Q82` |
+| `[importer_defaults] scene.meshes/generate_lods` | `false` | The ETL ships the tiers, so the importer's own LODs are a second set per mesh (`P5-13`). ⚠️ **They were not wasted, and the plan's reason for this row was wrong**: the engine draws them, pixel-identically, so off leaves draw calls and frames identical and raises primitives submitted **16–30%** on the throttle route (661,048 → 768,476 at t=1). What it buys is **−5,262,224 B of PCK (−8.6%)** and −5 MB of import cache; a clean `--import` is 7.2 / 7.1 s against 7.4 / 6.2 s, noise. Bytes against vertex work, one value to reverse; the triangle relief `Q120` asks for is the ETL's LOD ratio, which costs no bytes. Same `[importer_defaults]` caveat as the row above: it seeds a **new** `.import` only, so delete the sidecars and re-import |
+| `rendering/occlusion_culling/use_occlusion_culling` | `true` | Reads the `-occonly` occluder every tile ships since `P5-13` (data contract below). Off, the `OccluderInstance3D` nodes are inert. The Mobile renderer has no depth prepass, which is where Godot says the gain is largest; whether the web cut's Compatibility renderer honours it is unverified |
 
 **Deliberately not set**, both measured rather than reasoned:
 
@@ -184,7 +186,7 @@ note below the table. A new step goes in at its real position.
 | `gdformat --check` | Layout across all of `game/`. ⚠️ **The file count is asserted, not just the status** — pointed at a tree with no `.gd` it prints `0 files would be left unchanged` and exits 0 (`Q119`) | yes |
 | `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it, that no resource carries a `;` comment, and that neither an orphan sidecar nor a stale exemption stands (`Q119`) | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
-| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and both `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`). ⚠️ **Runs AFTER `--import`, and that is load-bearing** — the `class_name` note below has why, and why obeying its rule would not have saved this step | yes |
+| `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value and all three `[importer_defaults]` keys, read back through `ProjectSettings` rather than grepped, so a canonical editor-written file passes and a lost setting fails (`Q119`). ⚠️ **Runs AFTER `--import`, and that is load-bearing** — the `class_name` note below has why, and why obeying its rule would not have saved this step | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error`. ⚠️ **An empty file list is FATAL and the swept count is printed** (71 today): `cd` inside a `$( )` exits the subshell, so the step used to report `ok` having swept nothing. 🔴 **And the pattern is `treated as error|Parse Error`, never `$FATAL`** — a semantic parse error in a file no autoload reaches formats clean and matched neither term, so `check.sh` printed `All checks passed` over a script the engine cannot parse; `$FATAL` itself would fire on 4 healthy lines (`Q119`) | yes |
 | `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
 | `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
@@ -469,7 +471,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 28,
+  "schema_version": 29,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -481,7 +483,8 @@ The interface between ETL and game. **Versioned — change both sides together a
     {
       "id": "t_00_00",
       "lods": ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb"],
-      "aabb": [[8.37,4.935,-16.588],[167.562,70.801,165.268]]
+      "aabb": [[8.37,4.935,-16.588],[167.562,70.801,165.268]],
+      "occluder": true
     }
   ],
   "road_graph": "roadgraph.json",
@@ -698,6 +701,27 @@ the imported scene, and the shape it held before was built from the same triangl
 first cost, 5.17 MB of PCK for the one tier that ships it (21.10 → 26.27 MB), was measured at
 `P2-5`. ⚠️ Every grader reads the tile through `gltf.read_render`, which drops the `-colonly`
 primitive; reading the file whole counts every wall twice.
+
+**Every tier ships an occluder as a third primitive since `P5-13`.** `<tile_id>_occluder-occonly`,
+which the importer reads into an `OccluderInstance3D` carrying an `ArrayOccluder3D` **and removes the
+mesh of**; `rendering/occlusion_culling/use_occlusion_culling` is what makes the engine rasterise it.
+In *every* tier, because `CityStreamer` swaps whole tier scenes and an occluder in one tier would
+leave with the swap. Built from `buildings.occluder_classes` — `BUILDING` and `INFRASTRUCTURE`, never
+the ground, the region's largest surface and one that occludes little a building in front of it does
+not — at its own **stated** cell, `occluder_cell_m` per class like the collider's; the shipped 4 m
+and 1 m equal LOD1's by value, and the tile files were byte-identical when the tier index they
+replaced was retired. `city.json`'s `occluder` says whether a tile carries one (false for a square of
+bare ground), and `verify_tiles.gd` asserts exactly one `OccluderInstance3D` with vertices and no mesh
+beneath it wherever it does, and none wherever it does not — ⚠️ never by name, because the importer
+names every one `OccluderInstance3D`. ⚠️ **The culling unit is the instance, and that is what decides
+what this buys**: every instance here is a 150 m tile, a 150 m road chunk or a region-wide `MultiMesh`,
+so it culls **2** draw calls on Wan Chai's throttle route and **12–47** at Mong Kok's worst camera,
+frames 0 px either way. 🔴 **It costs PCK — +5,734,832 B (+10.3%)** — because the pack stores the
+occluder's vertices and indices in both tiers; the sweep in `PLAN.md` `P5-13` prices 8 m (east win
+kept, west lost, −5.15 MB) and 16 m (win gone); an occluder streamed as its own unit, held across
+tier swaps, would halve the price at any cell and is unbuilt. The CPU it costs on a handset is not
+measured. The
+carve cuts all three primitives; `gltf.read_render` drops both helpers.
 
 **Terrain ships in the tile primitive since `P3-10`.** It is one more entry in `buildings.classes`,
 so it collapses at its own cell size (4 m / 8 m) and then merges with the massing: **+87,649

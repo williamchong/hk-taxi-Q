@@ -60,6 +60,7 @@ const PINNED: Dictionary = {
 	"physics/3d/physics_engine": "Jolt Physics",
 	"rendering/textures/vram_compression/import_etc2_astc": true,
 	"display/window/stretch/mode": "canvas_items",
+	"rendering/occlusion_culling/use_occlusion_culling": true,
 }
 
 ## `[importer_defaults]` seeds every NEW `.import`; `Q82` and the importer
@@ -67,6 +68,7 @@ const PINNED: Dictionary = {
 const IMPORTER_SCENE: Dictionary = {
 	"import_script/path": "res://tools/generated_scene_import.gd",
 	"meshes/force_disable_compression": true,
+	"meshes/generate_lods": false,
 }
 
 var _failed: int = 0

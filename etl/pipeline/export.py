@@ -210,7 +210,13 @@ CITY_NAME = "city.json"
 # nothing, which is the loud half; the quiet half is `shipped()`, which would
 # compute a bundle with no road in it. Being wrong about the contents of the
 # bundle is what this number is for.
-CITY_SCHEMA = 28
+# 28 since `P5-11` (`Q121`): `TEXCOORD_0` on a tile is a planar UV and the
+# payload rides `TEXCOORD_1` and the mesh `extras`.
+# 29 since `P5-13` (`Q121`): a tile entry says whether its tiers carry an
+# `-occonly` occluder (`occluder`), so `verify_tiles.gd` asks for one exactly
+# where the ETL built one. A v28 reader has no way to tell a tile that shipped
+# no occluder from one that lost it at import.
+CITY_SCHEMA = 29
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -389,6 +395,7 @@ def build_region(
             # and the streamer has no use for them.
             "lods": [lod["path"] for lod in tile["lods"]],
             "aabb": tile["aabb"],
+            "occluder": bool(tile["occluder"]),
         }
         for tile in buildings["tiles"]
     ]

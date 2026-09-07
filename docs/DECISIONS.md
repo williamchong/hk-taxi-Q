@@ -20671,8 +20671,37 @@ byte figures comparable · `Q77` for why `signals.glb` is excluded
 
 ## `Q121` — The mesh contract against a DCC workflow
 
-**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10`, `P5-11` and `P5-12` built the same day.**
-The plan is `PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-12`**: the collider is its own
+**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10`–`P5-13` built the same day.**
+The plan is `PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-13`**: every tier file carries a
+`<tile>_occluder-occonly` primitive — the importer stands an `OccluderInstance3D` and removes the
+mesh — built from `BUILDING` and `INFRASTRUCTURE` at a **stated** cell (`buildings.occluder_cell_m`,
+per class, the collider's shape; 4 m and 1 m, LOD1's by value, and proved inert against the tier
+index it replaced: 132 Wan Chai tile files byte-identical). `rendering/occlusion_culling` is on and
+pinned, `city.json` 28 → **29** carries `occluder` per tile so `verify_tiles.gd` asks for one exactly
+where the ETL built one, and the carve cuts all three primitives. 🔴 **Where it bites is a property
+of the instance size, not the occluder.** The culling unit is an instance, and every instance here is
+a 150 m tile, a 150 m road chunk or a region-wide `MultiMesh`, so on Wan Chai's throttle route it
+culls **2** draw calls and ~450 primitives at every second, and 2 in the Hennessy Road canyon. At
+`Q120`'s worst camera in Mong Kok (694, 392), street level, it culls **18 / 12 / 47 / 20** draw calls
+N/S/E/W — 205 → 158 facing east — and 6–18% of primitives, with every frame **0 px** moved on both
+regions, shot twice per side. 🔴 **The price is PCK, +5,734,832 B (+10.3%) on Wan Chai** against a
+clean worktree build of the previous commit, because the occluder rides in *both* tiers and the
+pack stores its vertices and indices; the sweep prices the cheaper cell — 8 m keeps the east win
+(160) and loses west (154 against 135) for −5.15 MB on Mong Kok, 16 m loses the win entirely (203)
+— so 4 m ships and one line moves it. ⚠️ **The lever the sweep does not price is the
+duplication itself**: the occluder is byte-identical in both tiers, so one occluder unit per tile
+held across tier swaps would halve the price at any cell, and that is a `CityStreamer` change and
+the user's call. Import +1.8 s and +6 MB of cache. ⚠️ **Not measured**: the
+CPU the occluder costs on a handset (Embree raycast per frame, BVH rebuild at every tile swap;
+`P0-3b` is still blocked), and whether the web cut's Compatibility renderer honours it at all.
+🔴 **`meshes/generate_lods = false` ships as planned, and the plan's stated reasons were wrong**:
+the importer's LODs were **not** wasted — the engine was drawing them, pixel-identically, and turning
+them off leaves draw calls and frames identical while primitives submitted rise **16–30%** on the
+throttle route (661,048 → 768,476 at t=1; 359,594 → 467,022 at t=6). What it buys is **−5,262,224 B
+of PCK (−8.6%)**, −5 MB of import cache, and nothing measurable in import time (7.2 / 7.1 s → 7.4 /
+6.2 s clean). Bytes against vertex work, reversible in one value; the triangle relief `Q120` wants is
+the ETL's LOD ratio, not the importer's. Final PCK **55,955,496 B**. Numbers in `PLAN.md` `P5-13`.
+✅ **`P5-12`**: the collider is its own
 `<tile>_collision-colonly` primitive beside the render tier, decimated at a **stated** cell
 (`buildings.collision_cell_m`, per class), and every road chunk carries a `-colonly` ribbon likewise.
 The shipped cells equal the finest tier's by value, so the collider is that tier's own triangles:

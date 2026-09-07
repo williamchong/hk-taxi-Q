@@ -73,7 +73,7 @@ func _init() -> void:
 		for tier: int in tile.lods.size():
 			var file: String = tile.lods[tier]
 			checked += 1
-			var problems: PackedStringArray = _check(file, tier, tile.id)
+			var problems: PackedStringArray = _check(file, tier, tile)
 			if problems.is_empty():
 				print("  ok    ", file.get_file())
 			else:
@@ -90,7 +90,7 @@ func _init() -> void:
 	quit(1 if failures > 0 else 0)
 
 
-func _check(path: String, tier: int, tile_id: String) -> PackedStringArray:
+func _check(path: String, tier: int, tile: Manifest.Tile) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	var packed := load(path) as PackedScene
@@ -123,7 +123,8 @@ func _check(path: String, tier: int, tile_id: String) -> PackedStringArray:
 	if surfaces > MAX_SURFACES:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
-	problems.append_array(_check_collision(scene_root, tier, tile_id))
+	problems.append_array(_check_collision(scene_root, tier, tile.id))
+	problems.append_array(_check_occluder(scene_root, tile))
 	# Static Lightmaps would regenerate UV2 over the identity payload (`P5-11`),
 	# and catching it at the import setting names the fix, where the mesh check
 	# only names the symptom.
@@ -271,6 +272,17 @@ func _shares_vertex(
 		if BuildingIndex.row_of(uv2[i]) == index and vertices[i] == at:
 			return true
 	return false
+
+
+## The occluder is a `-occonly` node beside EVERY tier, exactly where the
+## manifest says the ETL built one (`P5-13`) — and nowhere the manifest says
+## it did not, which is what makes a dropped occluder a failure rather than a
+## tile that happens to occlude nothing. ⚠️ Unlike the collider it cannot be
+## asserted by name: the importer names every one `OccluderInstance3D`.
+func _check_occluder(scene_root: Node, tile: Manifest.Tile) -> PackedStringArray:
+	if tile.occluder:
+		return MeshContract.check_occluder_only(scene_root)
+	return MeshContract.check_no_occluder(scene_root, tile.id)
 
 
 ## Collision is a `-colonly` body beside the finest tier, named for the tile,

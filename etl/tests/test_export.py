@@ -91,6 +91,7 @@ class _Region:
                         "ix": 0,
                         "iz": 0,
                         "aabb": [[0.0, 0.0, 0.0], [150.0, 40.0, 150.0]],
+                        "occluder": True,
                         "lods": [
                             {"path": "tiles/t_00_00_lod0.glb", "triangles": 12, "bytes": 3},
                             {"path": "tiles/t_00_00_lod1.glb", "triangles": 6, "bytes": 3},
@@ -101,6 +102,7 @@ class _Region:
                         "ix": 1,
                         "iz": 0,
                         "aabb": [[150.0, 0.0, 0.0], [self.far_x, 90.0, 150.0]],
+                        "occluder": False,
                         "lods": [{"path": "tiles/t_01_00_lod0.glb", "triangles": 12, "bytes": 3}],
                     },
                 ],

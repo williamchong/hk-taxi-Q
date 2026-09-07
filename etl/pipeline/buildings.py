@@ -69,7 +69,14 @@ from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_
 from pipeline.crs import GameTransform
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
-from pipeline.gltf import COLLISION_ONLY_SUFFIX, Bounds, MeshData, read_scene, write_glb
+from pipeline.gltf import (
+    COLLISION_ONLY_SUFFIX,
+    OCCLUDER_ONLY_SUFFIX,
+    Bounds,
+    MeshData,
+    read_scene,
+    write_glb,
+)
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
 
 log = logging.getLogger(__name__)
@@ -106,7 +113,13 @@ BUILDINGS_MANIFEST_NAME = "buildings.json"
 # `collision_triangles` / `collision_vertices`. A v3 reader taking the file's
 # meshes as what is drawn counts every wall twice, which is exactly the wrong
 # interpretation hard rule 5 bumps for.
-BUILDINGS_MANIFEST_SCHEMA = 4
+# 5 since `P5-13`: every tier's `.glb` may hold a THIRD primitive, the
+# `<tile>_occluder-occonly` occluder built from `occluder_classes` collapsed at
+# `occluder_cell_m`, and the tier row carries its `occluder_triangles` /
+# `occluder_vertices` while the tile row says whether it has one (`occluder`).
+# A v4 reader that took every non-drawn primitive for the collider would read
+# the occluder's triangles as collision.
+BUILDINGS_MANIFEST_SCHEMA = 5
 
 # Set by `pipeline/carve.py` on a manifest whose tiles it has cut (`P3-28`).
 # Not a schema field — nothing here writes or reads it, and its absence is what
@@ -139,6 +152,21 @@ COLLIDER_NAME_SUFFIX = "_collision"
 def collider_name(tile: str) -> str:
     """The `-colonly` primitive that stands beside a tile's finest tier."""
     return f"{tile}{COLLIDER_NAME_SUFFIX}{COLLISION_ONLY_SUFFIX}"
+
+
+# The tile occluder's name: `<tile>_occluder-occonly` (`P5-13`), a primitive in
+# EVERY tier's `.glb` — the streamer swaps whole tier scenes, so an occluder in
+# one tier only would vanish with the swap. Godot's importer turns `-occonly`
+# into an `OccluderInstance3D` with an `ArrayOccluder3D` and removes the mesh;
+# `rendering/occlusion_culling/use_occlusion_culling` in `project.godot` is
+# what makes the engine read it. `game/tools/verify_tiles.gd` asserts it by
+# this name wherever `buildings.json` says the tile carries one.
+OCCLUDER_NAME_SUFFIX = "_occluder"
+
+
+def occluder_name(tile: str) -> str:
+    """The `-occonly` primitive that rides in every tier of a tile."""
+    return f"{tile}{OCCLUDER_NAME_SUFFIX}{OCCLUDER_ONLY_SUFFIX}"
 
 
 # The collider ships beside the finest tier only, and that is policy rather
@@ -190,6 +218,10 @@ class LodOutput:
     # reader summing them would report a wall twice.
     collision_triangles: int
     collision_vertices: int
+    # The `-occonly` occluder written beside this tier (`P5-13`) — the same
+    # geometry in every tier, 0 where the tile has nothing of an occluder class.
+    occluder_triangles: int
+    occluder_vertices: int
 
 
 @dataclass(frozen=True)
@@ -200,6 +232,12 @@ class TileOutput:
     meshes: int
     aabb: Bounds
     lods: list[LodOutput]
+    # Whether every tier carries an occluder (`P5-13`): false only where the
+    # tile has nothing of an occluder class left at `occluder_cell_m` —
+    # a square of bare ground. `export.py` ships it so `verify_tiles.gd` can
+    # ask for the occluder exactly where one was built, rather than wherever
+    # one happens to be.
+    occluder: bool
 
 
 @dataclass
@@ -1146,12 +1184,39 @@ def _collider(
     )
     if not pieces:
         raise ValueError(f"{label}: nothing survives the collision cell, but a tier did")
-    merged = merge(pieces, name=collider_name(label))
+    return _bare(label, "collider", collider_name(label), pieces)
+
+
+def _bare(label: str, kind: str, name: str, pieces: list[MeshData]) -> MeshData:
+    """`pieces` merged as a helper primitive carrying the marker and nothing else.
+
+    Positions, normals, triangles and `TEXCOORD_1.x`; `TEXCOORD_1.y` zero because
+    a helper names no object. The collider and the occluder both ship this way
+    (`P5-12`, `P5-13`), and `_collider`'s docstring is why.
+    """
+    merged = merge(pieces, name=name)
     if merged.uv2 is None:
-        raise ValueError(f"{label}: the collider lost its marker channel")
+        raise ValueError(f"{label}: the {kind} lost its marker channel")
     uv2 = merged.uv2.copy()
     uv2[:, 1] = 0.0
     return replace(merged, colours=None, uvs=None, uv2=uv2, extras=None, material=None)
+
+
+def _occluder(
+    label: str, per_class: dict[str, MeshData], style: BuildingStyle, collapsed: _Collapsed
+) -> MeshData | None:
+    """The tile's `-occonly` occluder (`P5-13`), or `None` where nothing occludes.
+
+    `occluder_classes` at `occluder_cell_m`, through the same cache the tiers
+    read, so a cell equal to a tier's is exactly that tier's geometry for those
+    classes — no ground, which `occluder_classes` leaves out. The same bare
+    payload as the collider, `_bare`, so the carve can cut it too.
+    """
+    chosen = {name: mesh for name, mesh in per_class.items() if name in style.occluder_classes}
+    pieces = _decimated(chosen, {}, style.terrain_class, style.occluder_cell_size_m, collapsed)
+    if not pieces:
+        return None
+    return _bare(label, "occluder", occluder_name(label), pieces)
 
 
 def _write_tile(
@@ -1167,7 +1232,10 @@ def _write_tile(
     The finest tier's file also carries the tile's collider (`P5-12`), a second
     primitive named by `collider_name` and built by `_collider` from the same
     classes at their own stated cell. `ground` is keyed by cell size, so the
-    collider and any tier at the same cell read one decimation.
+    collider and any tier at the same cell read one decimation. Every tier's
+    file also carries the occluder (`P5-13`), one primitive built once by
+    `_occluder` and written beside each tier, because the streamer swaps whole
+    tier scenes.
 
     A tile with no tier ships nothing, so publishing it would put a square in
     the manifest that names no file — which `export.py` and `verify_city.gd`
@@ -1189,6 +1257,10 @@ def _write_tile(
     # keyed by `id()`, CPython reused two freed addresses and two tiles were
     # written with another tile's geometry at both tiers.
     collapsed: _Collapsed = {}
+    # Before the tiers, so a cell equal to a tier's is collapsed once and that
+    # tier reads it back from the cache; a tile that empties at level 0 has
+    # nothing of an occluder class either, so this is cheap there.
+    occluder = _occluder(label, per_class, style, collapsed)
     for level in range(len(style.lod_cell_sizes_m)):
         # Collapsed per class then merged, and why is `_decimated`'s docstring.
         pieces = _decimated(
@@ -1212,14 +1284,20 @@ def _write_tile(
         tier = _identify(replace(merge(pieces, name=label), material=FACADE_MATERIAL), objects)
         boxes.append(tier.aabb())
 
-        # The render primitive first, the collider second: `read_glb` returns
-        # them in file order, and `render_meshes` is the filter, not the index.
+        # The render primitive first, then the helpers: `read_glb` returns them
+        # in file order, and `render_meshes` is the filter, not the index.
         meshes = [tier]
-        if level == COLLISION_TIER:
-            meshes.append(_collider(label, per_class, ground, style, collapsed))
+        collider = (
+            _collider(label, per_class, ground, style, collapsed)
+            if level == COLLISION_TIER
+            else None
+        )
+        if collider is not None:
+            meshes.append(collider)
+        if occluder is not None:
+            meshes.append(occluder)
         relative = Path("tiles") / f"{label}_lod{level}.glb"
         size = write_glb(out_dir / relative, meshes)
-        collider = meshes[1] if len(meshes) > 1 else None
         lods.append(
             LodOutput(
                 path=relative.as_posix(),
@@ -1229,6 +1307,8 @@ def _write_tile(
                 objects=len((tier.extras or {}).get(OBJECTS_KEY, [])),
                 collision_triangles=collider.triangle_count if collider else 0,
                 collision_vertices=len(collider.positions) if collider else 0,
+                occluder_triangles=occluder.triangle_count if occluder else 0,
+                occluder_vertices=len(occluder.positions) if occluder else 0,
             )
         )
 
@@ -1243,6 +1323,7 @@ def _write_tile(
         id=label,
         ix=ix,
         iz=iz,
+        occluder=occluder is not None,
         # Source meshes bucketed here. Since `Q25` that excludes the ground,
         # which no longer *has* a per-tile source count — it is decimated as one
         # surface for the whole region before anything is cut, so a ground-only
@@ -1433,6 +1514,21 @@ def main(argv: list[str] | None = None) -> int:
         sum(tier.collision_triangles for tier in colliders),
         COLLISION_TIER,
         len(colliders),
+    )
+    with_occluder = [tile for tile in report.tiles if tile.occluder]
+    overrides = ", ".join(
+        f"{name} {cell:.1f} m"
+        for name, cell in sorted(style.class_occluder_cell_m.items())
+        if cell != style.occluder_cell_m
+    )
+    log.info(
+        "  occluder (%.1f m cells%s; %s): %8d triangles in every tier, %d of %d tiles",
+        style.occluder_cell_m,
+        f"; {overrides}" if overrides else "",
+        ", ".join(style.occluder_classes),
+        sum(tile.lods[0].occluder_triangles for tile in with_occluder),
+        len(with_occluder),
+        len(report.tiles),
     )
 
     if args.terrain:

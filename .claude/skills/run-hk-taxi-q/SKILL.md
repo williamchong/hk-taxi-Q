@@ -76,7 +76,10 @@ to read the other two correctly:
 
 ### Arguments
 
-Everything after `drive.sh` goes to `driver.gd`.
+Everything after `drive.sh` goes to `driver.gd`. ⚠️ **The defaults above apply only when there are
+no arguments at all** — pass any flag, even `--out=`, and the throttle hold is gone with them, so a
+"throttle route" run with overlays off is `--seconds=6 --shots=0.5,3,6 --hold=accelerate@0.5+5.5
+--debug-view=off --hud=off`. Six stationary seconds still print `DRIVER OK`.
 
 | Argument | Meaning |
 |---|---|
