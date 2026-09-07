@@ -233,8 +233,9 @@ var tiles: Array[Tile] = []
 ## The drawn road, one chunk per tile of the same grid (`P5-6`). Each is a `Tile`
 ## with a single tier — the same class on purpose, so `CityStreamer` streams a
 ## chunk by its `aabb` exactly as it streams a building tile and `verify_city.gd`
-## measures it with the same check — and every chunk carries its own `-col`
-## trimesh, so the car stands on whatever is resident. ⚠️ A chunk's `aabb` is the
+## measures it with the same check — and every chunk carries its own `-colonly`
+## trimesh beside the ribbon (`P5-12`), so the car stands on whatever is
+## resident. ⚠️ A chunk's `aabb` is the
 ## geometry's, like a tile's: a quad belongs to the tile its two stations'
 ## centre falls in and may overhang the neighbour by half a quad. Cull with the
 ## box, never with a square derived from `tile_size_m`.

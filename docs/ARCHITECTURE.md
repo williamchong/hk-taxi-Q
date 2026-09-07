@@ -676,16 +676,28 @@ tile keeps its default `BaseMaterial3D` and renders in flat vertex colour, which
 looked like *before* `P3-7`. There is no error and nothing on screen that reads as broken.
 `verify_tiles.gd` therefore asserts both the payload and the resolved material path.
 
-**The finest tier ships collision; no other tier does.** The tier-0 mesh is named `<tile_id>-col`,
-and Godot's glTF importer reads that suffix into a `StaticBody3D` carrying a
-`ConcavePolygonShape3D` — the same mechanism `roads.glb` uses, chosen for the same reason: the
-collider is part of the asset, so `CityStreamer` builds no shape at load and the collider cannot
-drift from the geometry it is drawn from. Only the finest tier, because a tier is selected by
-distance and the coarse one is resident only *beyond* the 250 m near band, where nothing can touch a
-building. `verify_tiles.gd` asserts it in both directions — present on tier 0, absent on every other
-— because a suffix that spread would be invisible in every screenshot and show up only as bundle
-bytes. **Measured cost: 5.17 MB of PCK** (21.10 → 26.27 MB, one variable changed), not the 14.91 MB
-tier 0's 434,149 triangles come to as raw faces; the pack compresses them.
+**The finest tier ships collision as its own primitive; no other tier ships any.** Since `P5-12`
+the tier-0 `.glb` holds **two** primitives: the render mesh, named `<tile_id>` with no suffix, and
+`<tile_id>_collision-colonly`, which Godot's glTF importer reads into a `StaticBody3D` named
+`<tile_id>_collision` carrying a `ConcavePolygonShape3D` **and removes the mesh of** — so the
+collider draws nothing and the render mesh collides with nothing. The same mechanism every road
+chunk uses, chosen for the same reason: the collider is part of the asset, so `CityStreamer` builds
+no shape at load and the collider arrives and leaves with the tier it stands beside. ⚠️ **It is
+decimated at its own stated cell** — `buildings.collision_cell_m`, per class like the tiers — so it
+*may* differ from what is drawn; the shipped cells equal the finest tier's **by value**, so today it
+is that tier's own triangles, `tools/collider_offset.py` reads **0.000 m** in every class, and the
+throttle-route drive is identical to the centimetre across the change. That tool's sweep prices a
+coarser one: at 2 / 3 / 4 m the trimesh is 87.8 / 72.9 / 63.5% of the render triangles and the
+facade offset's p90 is 0.47 / 0.62 / 0.91 m. Only the finest tier, because a tier is selected by
+distance and the coarse one is resident only *beyond* the 250 m near band, where nothing can touch
+a building. `verify_tiles.gd` asserts all of it — one body, named for the tile, mesh-less, on tier
+0; no body under any render mesh; none at all on every other tier — because a collider that spread,
+or a render mesh that collided on its own, would be invisible in every screenshot. **Measured cost
+of the split: +2,272 B of PCK** (55,138,824 → 55,141,096, one variable changed): the pack carries
+the imported scene, and the shape it held before was built from the same triangles. The collider's
+first cost, 5.17 MB of PCK for the one tier that ships it (21.10 → 26.27 MB), was measured at
+`P2-5`. ⚠️ Every grader reads the tile through `gltf.read_render`, which drops the `-colonly`
+primitive; reading the file whole counts every wall twice.
 
 **Terrain ships in the tile primitive since `P3-10`.** It is one more entry in `buildings.classes`,
 so it collapses at its own cell size (4 m / 8 m) and then merges with the massing: **+87,649
@@ -872,8 +884,8 @@ merges the chunks back into the one mesh every grader measures.
 
 | Property | Value |
 |---|---|
-| Mesh name | `road_surface-col`, in every chunk |
-| Primitives | 1 per chunk — one draw call per resident chunk, like a tile |
+| Mesh name | `road_surface`, in every chunk; beside it `road_surface_collision-colonly` since `P5-12` |
+| Primitives | 1 **drawn** per chunk — one draw call per resident chunk, like a tile — plus the collider, whose mesh the importer removes |
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`, `TEXCOORD_1`; no texture |
 | `TEXCOORD_0` | **U is a lane coordinate**, 0 at the **nearside** kerb line and `lanes` at the offside, so an integer U is a lane boundary whatever the widening did to the metres. V is metres along the carriageway. Junction caps carry `(0, 0)` — a junction is not a length of lane |
 | `TEXCOORD_1.x` | The packed **marking state** (`P3-12`), a non-negative integer, constant per edge: `code = class + 4·lanes + 64·direction + 256·bus_lane + 512·tram_tracks`. `class`: 0 carriageway · 1 kerb · 2 junction cap. `lanes` 1–15. `direction`: 1 both · 2 forward, **0 = absent**, so an unrecognised value draws no centre line rather than a guessed one. `bus_lane`, `tram_tracks`: 0/1. `offside_kerb` (1024): 1 where `U = lanes` is a real kerb, **0 = not known to be** — on one half of a dual carriageway it is the middle of the road. `centre` (2048, 6 bits): where an opposed pair's two flows meet, in sixteenths of a lane beyond the centreline, `k − 1` steps, 0 = not half of a pair. `kerb_near` (131072, 2 bits) and `kerb_off` (524288, 2 bits) since `P3-13`: what kind of kerbside no-stopping line that side carries — 0 absent · 1 known unrestricted · 2 single · 3 double. ⚠️ a U-lane is `2·half_width / lanes` on the ground (5.12 m on a widened two-lane street), **not** `lane_width_m`. Max legal code **2,097,151** ≪ 2²⁴, so every code is exact in float32; consumers decode with `floor(x + 0.5)` first |
@@ -914,11 +926,15 @@ station spacing, and being constant it packs the way the tiles' survey channel d
 **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses it by 86%. No triangle moved,
 no draw call and no material was added.
 
-**The `-col` suffix is load-bearing**, for the same reason as on tiles, and every chunk carries it,
-so the car stands on whatever is resident. `verify_road_surface.gd` checks that it survived on every
-chunk, because nothing on the Python side can see it. ⚠️ **The kerbside-extent rule is asked of the
-union of the chunks**, not per chunk: a 150 m chunk may honestly carry restriction on every kerb in
-it or on none.
+**The `-colonly` collider is load-bearing**, for the same reason as on tiles, and every chunk carries
+one, so the car stands on whatever is resident. It is the ribbon's own triangles today — kerb riser
+included, because kerbs are mountable by design (`P2-3`) — bare of colour and marking code, and its
+own primitive rather than a `-col` suffix on the ribbon so the two may diverge later (`Q121`).
+`verify_road_surface.gd` checks that it imported as the one mesh-less body beside an un-colliding
+ribbon on every chunk, because nothing on the Python side can see it; `tools/collider_offset.py`
+counts the chunks whose collider is identical to the ribbon (65 of 65). ⚠️ **The kerbside-extent
+rule is asked of the union of the chunks**, not per chunk: a 150 m chunk may honestly carry
+restriction on every kerb in it or on none.
 
 **Opposed carriageway pairs are drawn as two overlapping ribbons and deliberately not merged**:
 measured across the region's six pairs, the widening already closes every gap between them.

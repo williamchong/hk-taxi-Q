@@ -338,7 +338,7 @@ def sweep_report(
     sections = _Sections(corridor)
     if only != LANDMARK:
         for path in tiles:
-            meshes = gltf.read_glb(path)
+            meshes = gltf.read_render(path)
             occupy(
                 sections,
                 meshes if only is None else class_meshes(meshes, city, only),

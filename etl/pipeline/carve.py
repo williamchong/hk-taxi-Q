@@ -56,7 +56,7 @@ from pipeline.buildings import (
 )
 from pipeline.config import Carve, Config, SurfaceClass, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.gltf import MeshData, normalise, read_glb, write_glb
+from pipeline.gltf import MeshData, normalise, read_glb, read_render, split_colliders, write_glb
 from pipeline.mesh import merge, select_triangles, subtract_prism
 from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -429,7 +429,7 @@ def _structure_field(out_dir: Path, manifest: dict) -> HeightField:
     """
     meshes = []
     for tile in manifest["tiles"]:
-        mesh = read_glb(out_dir / tile["lods"][0]["path"])[0]
+        [mesh] = read_render(out_dir / tile["lods"][0]["path"])
         keep = _structure(mesh)
         if keep.any():
             meshes.append(select_triangles(mesh, keep))
@@ -485,73 +485,119 @@ def _tiles_for(plan: EdgePlan, tiles: dict) -> list[str]:
     return sorted(out)
 
 
+@dataclass(frozen=True)
+class _Cut:
+    """One mesh after every plan has been taken out of it."""
+
+    mesh: MeshData
+    # The inward-only wall each plan built, before `_double_side`.
+    walls: list[tuple[MeshData, EdgePlan]]
+    # What each plan removed and the metres of wall it drew, for `_account`.
+    removals: list[tuple[EdgePlan, MeshData, float]]
+
+
 def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveReport) -> None:
-    """Cut every plan out of one tile, both tiers, and re-emit the tiers it cut."""
+    """Cut every plan out of one tile, both tiers, and re-emit the tiers it cut.
+
+    The finest tier's file holds the render mesh and its `-colonly` collider
+    (`P5-12`), and the prisms are taken out of **both** — a wall carved from
+    what the player sees and left in what the car hits is the stranding the
+    carve exists to end. The counters are the render mesh's alone: the two are
+    decimated at their own cells, so their removals are not one number.
+    """
     boxes: list = []
     rewritten = False
     for tier, lod in enumerate(tile["lods"]):
         path = out_dir / lod["path"]
-        meshes = read_glb(path)
-        if len(meshes) != 1:
-            raise ValueError(f"{lod['path']} holds {len(meshes)} primitives, expected one")
-        source = meshes[0]
+        drawn, colliders = split_colliders(read_glb(path))
+        if len(drawn) != 1 or len(colliders) > 1:
+            raise ValueError(
+                f"{lod['path']} holds {len(drawn)} render and {len(colliders)} collider "
+                "primitives, expected one and at most one"
+            )
+        source = drawn[0]
         boxes.append(source.aabb())
 
-        keep = _structure(source)
-        if not keep.any():
-            continue
-        structure = select_triangles(source, keep)
-        rest = select_triangles(source, ~keep)
-
-        built: list[tuple[MeshData, EdgePlan]] = []
-        removed_any = False
-        for plan in plans:
-            structure, cut, wall, metres = _carve_plan(structure, plan, source)
-            if cut is None:
-                continue
-            removed_any = True
-            if tier == 0:
-                _account(plan.row, cut)
-                plan.row.wall_m += metres
-            if wall is not None:
-                built.append((wall, plan))
-
+        cut = _carve_mesh(source, plans, FACADE_MATERIAL)
+        cut_collider = _carve_mesh(colliders[0], plans, None) if colliders else None
         # A tier the prisms never met is left exactly as `buildings.py` wrote it
         # — not rewritten identically, but never opened for writing at all.
-        if not removed_any:
+        if cut is None and cut_collider is None:
             continue
 
-        # 🔴 `built` keeps the inward-only wall; the mirror happens here so that
-        # `_facing_away` below still grades a mesh whose every triangle should
-        # face the road. See `_double_side`.
-        walls = [_double_side(wall) for wall, _ in built]
-        parts = [part for part in (rest, structure, *walls) if part is not None]
-        if not parts:
-            continue
-        carved = merge(parts, name=source.name)
-        # 🔴 `read_glb` does not read a primitive's material back, so a tile
-        # re-emitted without this imports on the default `BaseMaterial3D` and the
-        # window-band shader disappears from ten tiles, silently.
-        carved = _named(carved, source.name, FACADE_MATERIAL, source.extras)
-        # 🔴 And `TEXCOORD_0.x` is re-stamped over the whole carved tier, because
-        # it is a function of the vertex that ships: a cut vertex interpolates
-        # its UV linearly along the edge, and the along-coordinate is not linear
-        # where the normal turns — on the smooth-shaded ground it read up to
-        # 124 m off — and the wall copied a structure vertex's, 754 m off. The
-        # shader used to derive it from world position at exactly this vertex,
-        # so stamping it here is what keeps the carved tiles' frame where it was.
-        carved = stamp_along(carved)
-        lod["bytes"] = write_glb(path, [carved])
+        if cut is not None:
+            if tier == 0:
+                for plan, removed, metres in cut.removals:
+                    _account(plan.row, removed)
+                    plan.row.wall_m += metres
+            report.facing_away += sum(_facing_away(wall, plan.points) for wall, plan in cut.walls)
+        carved = source if cut is None else cut.mesh
+        written = [carved]
+        if colliders:
+            collider = colliders[0] if cut_collider is None else cut_collider.mesh
+            written.append(collider)
+            lod["collision_triangles"] = collider.triangle_count
+            lod["collision_vertices"] = len(collider.positions)
+        lod["bytes"] = write_glb(path, written)
         lod["triangles"] = carved.triangle_count
         lod["vertices"] = len(carved.positions)
         boxes[-1] = carved.aabb()
         rewritten = True
         report.tiles_written.append(lod["path"])
-        report.facing_away += sum(_facing_away(wall, plan.points) for wall, plan in built)
         report.widest_tier_vertices = max(report.widest_tier_vertices, len(carved.positions))
 
     if rewritten:
         _retile_aabb(tile, boxes)
+
+
+def _carve_mesh(source: MeshData, plans: list[EdgePlan], material: str | None) -> _Cut | None:
+    """Every plan taken out of one mesh, or `None` where no prism met it.
+
+    `material` is stated by the caller because `read_glb` does not read one
+    back: `FACADE_MATERIAL` for the render tier, nothing for the collider.
+    """
+    keep = _structure(source)
+    if not keep.any():
+        return None
+    structure = select_triangles(source, keep)
+    rest = select_triangles(source, ~keep)
+
+    walls: list[tuple[MeshData, EdgePlan]] = []
+    removals: list[tuple[EdgePlan, MeshData, float]] = []
+    for plan in plans:
+        structure, removed, wall, metres = _carve_plan(structure, plan, source)
+        if removed is None:
+            continue
+        removals.append((plan, removed, metres))
+        if wall is not None:
+            walls.append((wall, plan))
+    if not removals:
+        return None
+
+    # 🔴 `walls` keeps the inward-only wall; the mirror happens here so that
+    # `_facing_away` still grades a mesh whose every triangle should face the
+    # road. See `_double_side`.
+    parts = [
+        part
+        for part in (rest, structure, *(_double_side(wall) for wall, _ in walls))
+        if part is not None
+    ]
+    if not parts:
+        return None
+    carved = merge(parts, name=source.name)
+    # 🔴 `read_glb` does not read a primitive's material back, so a tile
+    # re-emitted without this imports on the default `BaseMaterial3D` and the
+    # window-band shader disappears from ten tiles, silently.
+    carved = _named(carved, source.name, material, source.extras)
+    # 🔴 And `TEXCOORD_0.x` is re-stamped over the whole carved tier, because
+    # it is a function of the vertex that ships: a cut vertex interpolates
+    # its UV linearly along the edge, and the along-coordinate is not linear
+    # where the normal turns — on the smooth-shaded ground it read up to
+    # 124 m off — and the wall copied a structure vertex's, 754 m off. The
+    # shader used to derive it from world position at exactly this vertex,
+    # so stamping it here is what keeps the carved tiles' frame where it was.
+    # (A no-op on the collider, which ships no `TEXCOORD_0`.)
+    return _Cut(stamp_along(carved), walls, removals)
 
 
 def _carve_plan(
@@ -626,13 +672,13 @@ def _account(row: EdgeCarve, cut: MeshData) -> None:
     row.carved_area_m2 += float(np.linalg.norm(cut.triangle_cross(), axis=1).sum() / 2.0)
 
 
-def _named(mesh: MeshData, name: str, material: str, extras: dict | None = None) -> MeshData:
+def _named(mesh: MeshData, name: str, material: str | None, extras: dict | None = None) -> MeshData:
     """`merge` drops both, deliberately, so the caller renames what it merged.
 
-    🔴 The name carries `COLLISION_SUFFIX` on LOD0, which is what gives the tile
-    its trimesh collider. Reconstructing it from the tile id would lose the
-    suffix on any tier that carries one, so it is taken from the mesh that was
-    read.
+    🔴 The name carries `-colonly` on the collider, which is what gives the tile
+    its trimesh (`P5-12`). Reconstructing it from the tile id would lose the
+    suffix, so it is taken from the mesh that was read — as is the material,
+    which is `FACADE_MATERIAL` on the render tier and nothing on the collider.
 
     The `extras` object table (`P5-11`) is the third thing `merge` drops. The
     carve keeps the tile's local row indices — the wall inherits the removed

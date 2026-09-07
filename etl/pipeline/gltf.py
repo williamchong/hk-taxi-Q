@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import math
 import struct
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -62,6 +62,44 @@ _UINT16_LIMIT = 65_535
 
 # A mesh's axis-aligned bounds: (low xyz, high xyz).
 Bounds = tuple[tuple[float, float, float], tuple[float, float, float]]
+
+# Godot's importer reads this node-name suffix into a `StaticBody3D` carrying a
+# trimesh, and **removes the mesh** — the node draws nothing (`P5-12`). Where
+# `-col` keeps the geometry visible and colliding as one, `-colonly` is a
+# collider standing beside a render mesh it may differ from. A tile and a road
+# chunk each ship one render primitive and one of these in the same `.glb`,
+# so a reader that wants "the mesh" has to say which: `render_meshes` below.
+COLLISION_ONLY_SUFFIX = "-colonly"
+
+
+def is_collider(mesh: MeshData) -> bool:
+    """Whether the mesh is a `-colonly` collider rather than something drawn."""
+    return mesh.name.endswith(COLLISION_ONLY_SUFFIX)
+
+
+def render_meshes(meshes: Iterable[MeshData]) -> list[MeshData]:
+    """The meshes the engine draws — every entry that is not a `-colonly` collider.
+
+    Every grader of the shipped city measures what is *drawn*, and since `P5-12`
+    a tile's `.glb` also carries the collider the car stands on. Reading the
+    file whole counts every wall twice; this is the one filter, so the rule is
+    spelled once.
+    """
+    return [mesh for mesh in meshes if not is_collider(mesh)]
+
+
+def split_colliders(meshes: Iterable[MeshData]) -> tuple[list[MeshData], list[MeshData]]:
+    """The meshes as `(drawn, colliders)` — the whole file, with the rule spelled once."""
+    drawn: list[MeshData] = []
+    colliders: list[MeshData] = []
+    for mesh in meshes:
+        (colliders if is_collider(mesh) else drawn).append(mesh)
+    return drawn, colliders
+
+
+def read_render(path: Path) -> list[MeshData]:
+    """`read_glb`, minus the `-colonly` colliders — what the engine draws."""
+    return render_meshes(read_glb(path))
 
 
 @dataclass(frozen=True)

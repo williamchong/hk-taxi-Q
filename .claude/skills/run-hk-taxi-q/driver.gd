@@ -284,9 +284,14 @@ func _release_everything() -> void:
 ## The reading is one frame stale and unsynchronised — the project runs the
 ## multi-threaded render model, so this is whatever the render thread last
 ## wrote. Fine for a per-second harness line; not a frame-accurate sample.
+##
+## `phys` is the last physics tick's `_physics_process` time in milliseconds
+## (`Performance.TIME_PHYSICS_PROCESS`), added for `P5-12` so a collider change
+## has a per-tick cost a run can repeat. One tick, not an average — read the
+## whole column.
 func _rendering() -> String:
 	return (
-		"  prims=%d draws=%d"
+		"  prims=%d draws=%d phys=%.3fms"
 		% [
 			RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
@@ -294,6 +299,7 @@ func _rendering() -> String:
 			RenderingServer.get_rendering_info(
 				RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
 			),
+			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 		]
 	)
 

@@ -1166,6 +1166,22 @@ Common emoji for this project:
   the credits screen must when it exists — it does not yet, a recorded licence gap (`Q79`).
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
+- 🔴 **Collider changes — `buildings.collision_cell_m`, `class_collision_cell_m`, `_collider`,
+  `surface._road_collider`, or anything that moves the finest tier's geometry: also
+  `tools/collider_offset.py`, before and after, with `--sweep`, and a throttle-route drive whose
+  timeline is compared to the centimetre** (`P5-12`). The collider is its own `-colonly` primitive
+  beside the render tier and road ribbon, decimated at its own **stated** cell, so it *can* differ
+  from what is drawn and nothing in a frame can show that: a wall the car hits before it reaches the
+  one it sees, or drives through. ⚠️ **The shipped cells equal the finest tier's by VALUE, not by
+  reference** — the offset reads 0.000 m because two config lines agree, and a test pins the
+  equality so the seam cannot open silently; ⚠️ **the sweep's censored tail is not the cell moving a
+  vertex** — it is thin geometry surviving one world-anchored grid and not the other, which is why a
+  coarser collider is priced and not taken. 🔴 **Every tile reader goes through `gltf.read_render`**:
+  the `.glb` holds two primitives and a grader reading it whole counts every wall twice — a table
+  that moves on a collider-only change is a reader that stopped filtering. ⚠️ **The carve cuts both
+  primitives and books the render mesh's counters alone**; a change to `_carve_tile` that cuts one
+  strands the car on a wall the player cannot see. ⚠️ The PCK is inert to the split (+2,272 B) because
+  the importer removes the collider's mesh; the `.glb` on disk is not, and is not shipped.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.
 

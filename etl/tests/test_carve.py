@@ -15,6 +15,7 @@ wall — and the estate is not watertight, so nothing can check the cut closed.
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,12 +25,15 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_SCHEMA,
     CARVED_EDGES_KEY,
     FACADE_MATERIAL,
+    collider_name,
     facade_uv,
     identity_uv2,
 )
 from pipeline.carve import (
+    CarveReport,
     EdgeCarve,
     EdgePlan,
+    _carve_tile,
     _double_side,
     _facing_away,
     _named,
@@ -40,7 +44,7 @@ from pipeline.carve import (
     build_region,
 )
 from pipeline.documents import write_document
-from pipeline.gltf import MeshData, write_glb
+from pipeline.gltf import MeshData, read_glb, write_glb
 from pipeline.mesh import subtract_prism
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import mitres
@@ -372,6 +376,80 @@ class TestRegionScope:
 
         with pytest.raises(ValueError, match="for region wan_chai"):
             build_region(hong_kong, "wan_chai", out_root=tmp_path)
+
+
+class TestCollider:
+    """🔴 The finest tier's collider is cut beside the render mesh (`P5-12`)."""
+
+    @staticmethod
+    def _drawn() -> MeshData:
+        """A structure across the ribbon, tagged and named as a render tier is."""
+        return _named(
+            _uv(box(origin=(8.0, 0.0, -6.0), size=12.0), "INFRASTRUCTURE"), "t", FACADE_MATERIAL
+        )
+
+    @classmethod
+    def _tile(cls, out: Path) -> dict:
+        """One LOD0 file holding a structure across the ribbon twice over: the
+        drawn tier with every payload, and the collider with the marker alone."""
+        drawn = cls._drawn()
+        collider = replace(drawn, name=collider_name("t"), colours=None, uvs=None, material=None)
+        (out / "tiles").mkdir(parents=True)
+        write_glb(out / "tiles" / "t_lod0.glb", [drawn, collider])
+        return {
+            "id": "t",
+            "aabb": drawn.aabb(),
+            "lods": [{"path": "tiles/t_lod0.glb", "triangles": 12, "vertices": 24}],
+        }
+
+    def test_the_collider_is_cut_where_the_render_tier_is(self, tmp_path) -> None:
+        """A wall carved from what the player sees and left in what the car
+        hits is the stranding the carve exists to end. Both primitives lose
+        the prism, the collider keeps its name and its bare payload, and the
+        counters are the render tier's alone."""
+        tile = self._tile(tmp_path)
+        plan = _plan(line((0, 2.0, 0), (30, 2.0, 0)))
+        report = CarveReport()
+
+        _carve_tile(tmp_path, tile, [plan], report)
+
+        drawn, collider = read_glb(tmp_path / "tiles" / "t_lod0.glb")
+        assert collider.name == collider_name("t")
+        assert drawn.triangle_count > 12 and collider.triangle_count > 12
+        assert not ((drawn.positions[:, 2] > -2.9) & (drawn.positions[:, 2] < 2.9)).any()
+        assert not ((collider.positions[:, 2] > -2.9) & (collider.positions[:, 2] < 2.9)).any()
+        assert collider.colours is None and collider.uvs is None and collider.uv2 is not None
+        assert drawn.colours is not None and drawn.uvs is not None
+        assert tile["lods"][0]["triangles"] == drawn.triangle_count
+        assert tile["lods"][0]["collision_triangles"] == collider.triangle_count
+        assert report.tiles_written == ["tiles/t_lod0.glb"]
+        # The counters are the render tier's alone: the same cut of the same
+        # box with no collider beside it books the same removal.
+        alone = _plan(line((0, 2.0, 0), (30, 2.0, 0)))
+        _carve_tile(
+            tmp_path / "alone", self._render_only(tmp_path / "alone"), [alone], CarveReport()
+        )
+        assert plan.row.triangles_removed == alone.row.triangles_removed > 0
+        assert plan.row.wall_m == alone.row.wall_m > 0.0
+
+    @classmethod
+    def _render_only(cls, out: Path) -> dict:
+        """The same structure with no collider beside it."""
+        drawn = cls._drawn()
+        (out / "tiles").mkdir(parents=True)
+        write_glb(out / "tiles" / "t_lod0.glb", [drawn])
+        return {"id": "t", "aabb": drawn.aabb(), "lods": [{"path": "tiles/t_lod0.glb"}]}
+
+    def test_a_tile_without_a_collider_is_still_carved(self, tmp_path) -> None:
+        """The stage does not require the second primitive: a tile written
+        before `P5-12`, or a fixture, carves as it always did."""
+        tile = self._render_only(tmp_path)
+
+        _carve_tile(tmp_path, tile, [_plan(line((0, 2.0, 0), (30, 2.0, 0)))], CarveReport())
+
+        [carved] = read_glb(tmp_path / "tiles" / "t_lod0.glb")
+        assert carved.triangle_count > 12
+        assert "collision_triangles" not in tile["lods"][0]
 
 
 class TestReRunning:

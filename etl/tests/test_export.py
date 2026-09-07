@@ -109,7 +109,7 @@ class _Region:
                 "schema_version": SURFACE_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": REGION,
-                "mesh_name": "road_surface-col",
+                "mesh_name": "road_surface",
                 "triangles": 24,
                 "vertices": 48,
                 "cut_vertices": 6,

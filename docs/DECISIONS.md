@@ -20671,8 +20671,19 @@ byte figures comparable · `Q77` for why `signals.glb` is excluded
 
 ## `Q121` — The mesh contract against a DCC workflow
 
-**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10` and `P5-11` built the same day.**
-The plan is `PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-11`** (schema 28): `TEXCOORD_0` is a
+**Status.** 🟡 **Open — reviewed and planned 2026-09-07; `P5-10`, `P5-11` and `P5-12` built the same day.**
+The plan is `PLAN.md` Phase 5b, `P5-10`–`P5-14`. ✅ **`P5-12`**: the collider is its own
+`<tile>_collision-colonly` primitive beside the render tier, decimated at a **stated** cell
+(`buildings.collision_cell_m`, per class), and every road chunk carries a `-colonly` ribbon likewise.
+The shipped cells equal the finest tier's by value, so the collider is that tier's own triangles:
+`tools/collider_offset.py` reads **0.000 m** in every class, the throttle-route drive is identical to
+the centimetre, the `Q27` frame 0 px, every `Q19` grader line-identical through `gltf.read_render`,
+and the PCK **+2,272 B** because the importer removes the collider's mesh and stores the same shape
+it stored before. The sweep prices what the seam is for — 2 / 3 / 4 m cells buy 87.8 / 72.9 / 63.5%
+of the render triangles at a facade p90 offset of 0.47 / 0.62 / 0.91 m, with a censored tail of thin
+geometry that survives one world-anchored grid and not the other. The carve cuts both primitives.
+`buildings.json` 3 → 4, `roadsurface.json` 8 → 9, `city.json` unchanged. Numbers in `PLAN.md`
+`P5-12`. ✅ **`P5-11`** (schema 28): `TEXCOORD_0` is a
 planar façade UV in metres, `TEXCOORD_1` carries marker, phase and object row, and each tier ships
 its object table as mesh `extras` (3,013 rows on Wan Chai). Proved inert against a clean worktree
 build of the previous commit — every tile byte-identical in every channel but the two that moved,

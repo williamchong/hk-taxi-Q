@@ -50,9 +50,9 @@ Six seconds of full throttle from the start line, three screenshots into `build/
 
 ```
 vehicle: Taxi at (172.3485, 6.45805, 26.9396)
-t= 0.00  pos=(  172.35,    6.46,    26.94)  speed=   0.00 kph  prims=142223 draws=5
+t= 0.00  pos=(  172.35,    6.46,    26.94)  speed=   0.00 kph  prims=142223 draws=5 phys=0.000ms
 shot:    /Users/william/hk-taxi-Q/build/driver/t00.50.png  1920x1080  29 distinct colours
-t= 3.00  pos=(  190.17,    6.20,    25.68)  speed=  45.30 kph  prims=132845 draws=33
+t= 3.00  pos=(  190.17,    6.20,    25.68)  speed=  45.30 kph  prims=132845 draws=33 phys=0.720ms
 DRIVER OK
 ```
 
@@ -60,7 +60,10 @@ DRIVER OK
 looked right.
 
 `prims` and `draws` make a measurement a `drive.sh` run anyone can repeat, rather than a throwaway
-probe that is deleted before the number is questioned. Three things to read them correctly:
+probe that is deleted before the number is questioned. `phys` is the last physics tick's
+`_physics_process` time in milliseconds (`P5-12`) — one tick, not an average, and run-to-run spread
+on this machine is ±0.5 ms, so read the whole column and compare runs, never one line. Three things
+to read the other two correctly:
 
 - **Both are 0 under `--headless`** — the dummy rasteriser draws nothing.
 - **`draws` is a budget metric directly; `prims` is not.** The budget in `docs/ARCHITECTURE.md` is

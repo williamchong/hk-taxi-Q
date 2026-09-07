@@ -1,9 +1,9 @@
 ## Checks the generated road surface against the data contract, headless.
 ##
 ## `P1-4` delivers a drivable surface with collision. Whether Godot's importer
-## actually built that collider from the `-col` suffix in the mesh name is an
-## engine-side fact, so the ETL cannot assert it and its own tests cannot see
-## it — the same gap `verify_tiles.gd` exists to close. Run:
+## actually built that collider from the `-colonly` primitive beside the ribbon
+## (`P5-12`) is an engine-side fact, so the ETL cannot assert it and its own
+## tests cannot see it — the same gap `verify_tiles.gd` exists to close. Run:
 ##
 ##     godot --headless --path game --script res://tools/verify_road_surface.gd
 ##
@@ -23,6 +23,11 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## One primitive per chunk, so a resident chunk costs one draw call — the same
 ## rule the tiles are held to, and the reason the surface is untextured.
 const SURFACES: int = 1
+
+## The chunk collider's node, less its `-colonly` suffix: `SURFACE_COLLIDER_NAME`
+## in `etl/pipeline/surface.py` (`P5-12`). The importer strips the suffix and
+## keeps the rest as the `StaticBody3D`'s name.
+const COLLIDER_BODY: String = "road_surface_collision"
 
 ## The material the surface must end up with, mirroring `SHADERS` in
 ## `tools/generated_scene_import.gd` and `SURFACE_MATERIAL` in
@@ -149,7 +154,7 @@ func _check(scene_root: Node3D, label: String, path: String) -> Dictionary:
 		restricted += int(extent["restricted"])
 		clear += int(extent["clear"])
 
-	for problem: String in MeshContract.check_collision(scene_root):
+	for problem: String in MeshContract.check_collision_only(scene_root, COLLIDER_BODY):
 		problems.append("%s: %s" % [label, problem])
 	problems.append_array(MeshContract.check_uv2_import_settings(path, "marking payload"))
 

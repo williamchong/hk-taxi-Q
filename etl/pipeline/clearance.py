@@ -1012,7 +1012,7 @@ def build_region(
     # only the slice standing near the road survives the prune, so holding them
     # all at once would cost a hundredfold what the measurement needs.
     for path in tile_meshes(out_dir, buildings):
-        report.count(occupy(sections, gltf.read_glb(path), ground, jitter))
+        report.count(occupy(sections, gltf.read_render(path), ground, jitter))
         report.tiles_read += 1
     heroes = landmark_meshes(city, region_id, out_dir)
     report.count(occupy(sections, heroes, ground, jitter))

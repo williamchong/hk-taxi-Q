@@ -25,12 +25,15 @@ extends Node3D
 ## already sits where it belongs. That is also why a tile entry publishes an
 ## `aabb` but no position.
 ##
-## **Tile collision arrives with the mesh, and this adds none of it.** The ETL
-## names the finest tier `<tile>-col`, Godot's importer builds the static
-## trimesh at import time, and it is already inside the `PackedScene` this
-## instantiates — so the collider cannot fall out of step with the geometry it
-## is drawn from. The coarse tier ships none: it is only ever resident past the
-## near band, where nothing can reach a building.
+## **Tile collision arrives in the finest tier's scene, and this adds none of
+## it.** The ETL writes a `<tile>_collision-colonly` primitive beside the render
+## mesh (`P5-12`), Godot's importer builds the static trimesh from it at import
+## time and removes its mesh, and the body is already inside the `PackedScene`
+## this instantiates — so the collider arrives and leaves with the tier it
+## stands beside. It is its own mesh, decimated at its own stated cell, so it
+## *can* differ from what is drawn; today the cells are equal and it does not.
+## The coarse tier ships none: it is only ever resident past the near band,
+## where nothing can reach a building.
 ##
 ## ⚠️ **Off the load thread is not the same as free.** Jolt builds the shape's
 ## AABB tree when the body enters the world, and that is `add_child` below — main

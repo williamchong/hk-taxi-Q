@@ -246,7 +246,9 @@ static func check_collision(node: Node) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var bodies: Array[Node] = node.find_children("*", "StaticBody3D", true, false)
 	if bodies.is_empty():
-		problems.append("no StaticBody3D — the `-col` name suffix did not import as collision")
+		problems.append(
+			"no StaticBody3D — no `-col` or `-colonly` name suffix imported as collision"
+		)
 		return problems
 
 	var shapes: Array[Node] = bodies[0].find_children("*", "CollisionShape3D", true, false)
@@ -254,6 +256,41 @@ static func check_collision(node: Node) -> PackedStringArray:
 		problems.append("the StaticBody3D has no CollisionShape3D")
 	elif ((shapes[0] as CollisionShape3D).shape as ConcavePolygonShape3D) == null:
 		problems.append("collision is not a ConcavePolygonShape3D")
+	return problems
+
+
+## Problems with a `-colonly` collider standing beside a render mesh (`P5-12`),
+## or an empty array if it conforms.
+##
+## Four things, and every one is a silent failure on its own. The body must be
+## the ONE static body in the scene and be named `body_name` — the importer
+## strips the suffix, so `<tile>_collision-colonly` imports as a `StaticBody3D`
+## called `<tile>_collision`, and a body under any other name is a collider
+## nobody meant to ship. It carries a trimesh (`check_collision`). It has NO
+## mesh under it: `-colonly` removes the mesh, and a mesh there is `-col`
+## spelled wrong, drawing a second copy of the city over the first. And no
+## render `MeshInstance3D` has a body beneath it: the render mesh collides
+## with nothing, which is what lets the two be decimated apart.
+static func check_collision_only(node: Node, body_name: String) -> PackedStringArray:
+	var problems: PackedStringArray = check_collision(node)
+	var bodies: Array[Node] = node.find_children("*", "StaticBody3D", true, false)
+	if bodies.size() != 1:
+		problems.append("%d static bodies; a `-colonly` collider is exactly one" % bodies.size())
+	for body: Node in bodies:
+		if body.name != body_name:
+			problems.append("static body is named '%s', not '%s'" % [body.name, body_name])
+		if not body.find_children("*", "MeshInstance3D", true, false).is_empty():
+			problems.append(
+				(
+					"'%s' carries a mesh; `-colonly` removes it, so this is `-col` spelled wrong"
+					% body.name
+				)
+			)
+	for instance: Node in node.find_children("*", "MeshInstance3D", true, false):
+		if has_collision(instance):
+			problems.append(
+				"render mesh '%s' collides on its own; only the `-colonly` body may" % instance.name
+			)
 	return problems
 
 

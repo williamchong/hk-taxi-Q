@@ -32,6 +32,7 @@ from pipeline.buildings import (
     along_m,
     assign,
     build_region,
+    collider_name,
     colour_for,
     facade_uv,
     game_offset,
@@ -48,7 +49,7 @@ from pipeline.config import (
     SurfaceClass,
     WeightedDraw,
 )
-from pipeline.gltf import MeshData, read_glb
+from pipeline.gltf import MeshData, read_glb, read_render
 from pipeline.mesh import collapse
 from tests.helpers import BOX_FACES, box_corners, box_soup, covered, flat_mesh, soup, style
 
@@ -754,19 +755,19 @@ class TestBuildRegion:
             for lod in tile.lods:
                 assert (out / lod.path).exists()
 
-    def test_only_the_finest_tier_is_named_for_collision(
-        self, hong_kong, sources, tmp_path
-    ) -> None:
-        """The `-col` suffix is what Godot's importer turns into a static
-        trimesh, so the name *is* the collision contract.
+    def test_only_the_finest_tier_carries_the_collider(self, hong_kong, sources, tmp_path) -> None:
+        """The `-colonly` primitive is what Godot's importer turns into a static
+        trimesh (`P5-12`), so the name *is* the collision contract — and the
+        render primitive carries no `-col` at any tier, so nothing drawn
+        collides on its own.
 
         Asserted here as well as in `game/tools/verify_tiles.gd` because the two
         run in different places: `Q17` records that CI runs `tools/check.sh`
         without the generated-asset verifiers, so on a pull request this test is
         the only thing standing between a rename and a city the car drives
-        through. Both directions, because a suffix that spread to every tier
-        would still pass a present-on-tier-0 check while paying for a collider
-        in the bundle for geometry 300 m away.
+        through. Both directions, because a collider that spread to every tier
+        would still pass a present-on-tier-0 check while paying for one in the
+        bundle for geometry 300 m away.
         """
         self.build(hong_kong, sources, tmp_path)
         tiles = tmp_path / "out" / "wan_chai" / "tiles"
@@ -774,19 +775,83 @@ class TestBuildRegion:
 
         for level in levels:
             meshes = read_glb(tiles / f"t_00_00_lod{level}.glb")
-            expected = "t_00_00-col" if level == COLLISION_TIER else "t_00_00"
-            assert [mesh.name for mesh in meshes] == [expected]
+            expected = ["t_00_00"]
+            if level == COLLISION_TIER:
+                expected.append(collider_name("t_00_00"))
+            assert [mesh.name for mesh in meshes] == expected
+            assert [mesh.name for mesh in read_render(tiles / f"t_00_00_lod{level}.glb")] == [
+                "t_00_00"
+            ]
+
+    def test_the_collider_carries_the_marker_and_nothing_else(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """Positions, normals, triangles and `TEXCOORD_1` — the last so the
+        carve can tell a viaduct from a wall when it cuts the collider beside
+        the render tier. No colour, no `TEXCOORD_0`, no object table and no
+        material: the importer removes the mesh, so anything else is PCK bytes
+        nothing reads."""
+        self.build(hong_kong, sources, tmp_path)
+        _, collider = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        assert collider.colours is None and collider.uvs is None
+        assert collider.extras is None and collider.texture is None
+        assert collider.uv2 is not None
+        assert set(np.floor(collider.uv2[:, 0]).astype(int)) <= {int(m) for m in SurfaceClass}
+        # No object row: the collider never passes through `_identify`, so a
+        # non-zero here would be a region ordinal indexing no table.
+        assert not collider.uv2[:, 1].any()
+
+    def test_the_collider_is_the_finest_tier_at_the_same_cell(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The shipped config states the collision cell equal to the finest
+        tier's, per class, so the collider is the same triangles that tier
+        draws — which is what keeps a drive timeline reproducible across
+        `P5-12`. Equality is by value and not by construction: at a coarser
+        stated cell the two diverge, and that is the seam this task opens."""
+        shipped = hong_kong.buildings
+        for class_id in shipped.classes:
+            assert shipped.collision_cell_size_m(class_id) == shipped.cell_size_m(class_id, 0)
+        self.build(hong_kong, sources, tmp_path)
+        tier, collider = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        assert np.array_equal(collider.positions, tier.positions)
+        assert np.array_equal(collider.triangles, tier.triangles)
+
+        # A cell wider than the fixture boxes, so their corners cluster and
+        # the collider stops being the tier it stands beside.
+        coarser = replace(
+            hong_kong,
+            buildings=replace(shipped, collision_cell_m=30.0, class_collision_cell_m={}),
+        )
+        self.build(coarser, sources, tmp_path, out="coarse")
+        tier, collider = read_glb(tmp_path / "coarse" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        assert len(collider.positions) < len(tier.positions)
+
+    def test_the_manifest_counts_the_collider_apart(self, hong_kong, sources, tmp_path) -> None:
+        """`triangles` is what is drawn; the collider has its own two counters,
+        zero on every tier that carries none, so a reader summing them cannot
+        report a wall twice."""
+        report = self.build(hong_kong, sources, tmp_path)
+        lods = self.tile(report, "t_00_00").lods
+        tier, collider = read_glb(tmp_path / "out" / "wan_chai" / lods[0].path)
+        assert lods[0].triangles == tier.triangle_count
+        assert lods[0].collision_triangles == collider.triangle_count
+        assert lods[0].collision_vertices == len(collider.positions)
+        for lod in lods[1:]:
+            assert lod.collision_triangles == 0 and lod.collision_vertices == 0
 
     def test_a_tile_is_one_mesh_and_so_one_draw_call(self, hong_kong, sources, tmp_path) -> None:
         """`P1-2` accepts under three draw calls per tile. Merging every
-        building into one primitive is how the untextured dataset pays off."""
+        building into one primitive is how the untextured dataset pays off.
+        The collider beside it is not a draw call: the importer removes its
+        mesh (`P5-12`)."""
         self.build(hong_kong, sources, tmp_path)
         path = tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
-        assert len(read_glb(path)) == 1
+        assert len(read_render(path)) == 1
 
     def test_tiles_carry_vertex_colours_and_no_texture(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)
-        [tile] = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        [tile] = read_render(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert tile.colours is not None
         assert tile.texture is None
 
@@ -802,7 +867,7 @@ class TestBuildRegion:
         self.build(hong_kong, sources, tmp_path)
         tiles = tmp_path / "out" / "wan_chai" / "tiles"
         for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
-            [tile] = read_glb(tiles / f"t_00_00_lod{level}.glb")
+            [tile] = read_render(tiles / f"t_00_00_lod{level}.glb")
             assert tile.uv2 is not None and tile.uvs is not None
             assert tile.extras is not None
             rows = tile.extras["objects"]
@@ -827,7 +892,7 @@ class TestBuildRegion:
         into one primitive is what makes the tile one draw call — and the thing
         it must not cost is per-building colour."""
         self.build(hong_kong, sources, tmp_path)
-        [tile] = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        [tile] = read_render(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert len(set(map(tuple, tile.colours))) == 2
 
     def test_geometry_lands_in_the_region(self, hong_kong, sources, tmp_path) -> None:
@@ -942,7 +1007,7 @@ class TestBuildRegion:
 
         out = tmp_path / "out" / "wan_chai"
         for lod in self.tile(report, "t_00_00").lods:
-            meshes = read_glb(out / lod.path)
+            meshes = read_render(out / lod.path)
             assert len(meshes) == 1
             assert meshes[0].texture is None
             assert meshes[0].colours is not None
@@ -1034,7 +1099,7 @@ class TestBuildRegion:
         def shades(city) -> int:
             report = self.build(city, sources, tmp_path, two_sheets, out=str(id(city)))
             path = tmp_path / str(id(city)) / "wan_chai"
-            colours = read_glb(path / self.tile(report, "t_00_00").lods[0].path)[0].colours
+            colours = read_render(path / self.tile(report, "t_00_00").lods[0].path)[0].colours
             return len(np.unique(colours[:, :3], axis=0))
 
         jittered = replace(
@@ -1053,7 +1118,7 @@ class TestBuildRegion:
 
         out = tmp_path / "out" / "wan_chai"
         for lod in self.tile(report, "t_00_00").lods:
-            assert len(read_glb(out / lod.path)) == 1
+            assert len(read_render(out / lod.path)) == 1
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)
@@ -1245,19 +1310,21 @@ class TestTileGround:
         torn = [
             collapse(piece, cell_m=4.0, height_field=True) for _, piece in assign(sheet, self.GRID)
         ]
-        whole = [tiers[0] for tiers in _tile_ground([sheet], self.GRID, cells).values()]
+        whole = [tiers[4.0] for tiers in _tile_ground([sheet], self.GRID, cells).values()]
 
         assert self._holes(torn) > 0
         assert self._holes(whole) == 0
 
-    def test_every_tier_reaches_every_tile_the_ground_covers(self) -> None:
+    def test_every_cell_reaches_every_tile_the_ground_covers(self) -> None:
+        """Keyed by cell since `P5-12`: the tiers' cells and the collider's,
+        each decimated once, so a cell two consumers share is one piece."""
         sheet = self._sheet(step=1.5)
-        cells = self._style((4.0, 8.0))
+        cells = replace(self._style((4.0, 8.0)), collision_cell_m=4.0)
 
         tiers = _tile_ground([sheet], self.GRID, cells)
         assert len(tiers) == 2  # x=60-240 straddles the boundary at 150
         for tile in tiers.values():
-            assert sorted(tile) == [0, 1]
+            assert sorted(tile) == [4.0, 8.0]
 
     def test_a_region_with_no_ground_produces_no_tiers(self) -> None:
         """A city that does not tile its ground reaches this with nothing, and

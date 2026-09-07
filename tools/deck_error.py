@@ -61,7 +61,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline.config import load_config  # noqa: E402
 from pipeline.export import CITY_SCHEMA  # noqa: E402
-from pipeline.gltf import read_glb  # noqa: E402
+from pipeline.gltf import read_render  # noqa: E402
 from pipeline.surface import read_surface  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -303,7 +303,7 @@ def class_triangles(
     is two places for it to stop being true.
     """
     for path in paths:
-        for mesh in read_glb(path):
+        for mesh in read_render(path):
             if mesh.colours is None or not len(mesh.triangles):
                 continue
             worn = keep(mesh.colours[:, :3])

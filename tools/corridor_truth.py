@@ -95,7 +95,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from carriageway_occupancy import edges_argument, edges_label, road_names  # noqa: E402
 from deck_error import bundle_arguments, load_bundle, log_bundle  # noqa: E402
 from overhang import drawn_offsets, half_widths, left_of  # noqa: E402
-from pipeline.gltf import read_glb  # noqa: E402
+from pipeline.gltf import read_render  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ def tile_triangles(paths: list[Path]) -> np.ndarray:
     """
     blocks: list[np.ndarray] = []
     for path in paths:
-        for mesh in read_glb(path):
+        for mesh in read_render(path):
             if len(mesh.triangles) == 0:
                 continue
             blocks.append(mesh.positions[mesh.triangles])

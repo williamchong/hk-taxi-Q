@@ -53,6 +53,7 @@ import math
 import zipfile
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
+from functools import partial
 from hashlib import blake2b
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -68,7 +69,7 @@ from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_
 from pipeline.crs import GameTransform
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
-from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
+from pipeline.gltf import COLLISION_ONLY_SUFFIX, Bounds, MeshData, read_scene, write_glb
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
 
 log = logging.getLogger(__name__)
@@ -99,7 +100,13 @@ BUILDINGS_MANIFEST_NAME = "buildings.json"
 # only place that can record it, because identity dies at `merge`. `export.py`
 # checks its landmarks against it and ships each hero's `excluded_bounds` from
 # it. A v2 reader would not know an exclusion had happened at all.
-BUILDINGS_MANIFEST_SCHEMA = 3
+# 4 since `P5-12`: the finest tier's `.glb` holds TWO primitives — the render
+# mesh, no longer suffixed `-col`, and a `<tile>_collision-colonly` collider
+# built at its own stated cell — and the tier row carries the collider's
+# `collision_triangles` / `collision_vertices`. A v3 reader taking the file's
+# meshes as what is drawn counts every wall twice, which is exactly the wrong
+# interpretation hard rule 5 bumps for.
+BUILDINGS_MANIFEST_SCHEMA = 4
 
 # Set by `pipeline/carve.py` on a manifest whose tiles it has cut (`P3-28`).
 # Not a schema field — nothing here writes or reads it, and its absence is what
@@ -114,20 +121,37 @@ OBJECTS_KEY = "objects"
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. `write_glb` writes the
-# mesh name as the node name, which is where the importer looks. The same
-# mechanism `surface.py` uses for the carriageway.
+# mesh name as the node name, which is where the importer looks. ⚠️ **Tiles no
+# longer carry it since `P5-12`** — the tile collider is its own `-colonly` mesh
+# (`collider_name`) — and the constant stays for the landmarks and props that
+# still collide as the mesh they draw (`landmarks.py`, `tools/make_*.py`).
 COLLISION_SUFFIX = "-col"
 
-# Only the finest tier, and that is policy rather than oversight. A tier is
-# chosen by distance to the camera, so the coarser one is resident only *beyond*
-# the near band, where nothing can touch a building — suffixing it would pay for
-# a `ConcavePolygonShape3D` in the bundle to be looked at from 300 m away.
-# Measured at 5.17 MB of PCK for the one tier that ships it; see docs/DECISIONS.md, P2-5.
+# The tile collider's name: `<tile>_collision-colonly` (`P5-12`), the second
+# primitive of the finest tier's `.glb`. Godot's importer turns `-colonly` into
+# a `StaticBody3D` with a trimesh and removes the mesh, so the collider draws
+# nothing and the render primitive collides with nothing — which is what lets
+# the two be decimated at different cells (`BuildingStyle.collision_cell_m`).
+# `game/tools/verify_tiles.gd` asserts both halves, by this name.
+COLLIDER_NAME_SUFFIX = "_collision"
+
+
+def collider_name(tile: str) -> str:
+    """The `-colonly` primitive that stands beside a tile's finest tier."""
+    return f"{tile}{COLLIDER_NAME_SUFFIX}{COLLISION_ONLY_SUFFIX}"
+
+
+# The collider ships beside the finest tier only, and that is policy rather
+# than oversight. A tier is chosen by distance to the camera, so the coarser one
+# is resident only *beyond* the near band, where nothing can touch a building —
+# a collider there would pay for a `ConcavePolygonShape3D` in the bundle to be
+# looked at from 300 m away. Measured at 5.17 MB of PCK for the one tier that
+# ships it; see docs/DECISIONS.md, P2-5.
 #
-# The suffix goes on the *merged* tier, so it covers every class in it. Since
-# `P3-10` that includes the ground, which is the whole reason the ground can be
-# driven on. Anything added to `classes` from here on inherits collision on this
-# tier whether or not it was asked for — worth knowing before adding one.
+# The collider is built from every class in the tier, ground included since
+# `P3-10`, which is the whole reason the ground can be driven on. Anything
+# added to `classes` from here on is in the collider whether or not it was
+# asked for — worth knowing before adding one.
 COLLISION_TIER = 0
 
 # The glTF material name a tile ships so the engine knows to give it the
@@ -160,6 +184,12 @@ class LodOutput:
     # with at least one vertex left at this cell size. Per tier, because a
     # coarser tier drops what is thinner than its cell.
     objects: int
+    # The `-colonly` collider written beside this tier (`P5-12`) — 0 on every
+    # tier but `COLLISION_TIER`. Counted apart from `triangles`, which is what
+    # is DRAWN, because the two are decimated at different stated cells and a
+    # reader summing them would report a wall twice.
+    collision_triangles: int
+    collision_vertices: int
 
 
 @dataclass(frozen=True)
@@ -920,8 +950,14 @@ def build_region(
 
 def _tile_ground(
     meshes: list[MeshData], grid: Grid, style: BuildingStyle
-) -> dict[tuple[int, int], dict[int, MeshData]]:
-    """The region's ground, decimated **once per tier** and then cut into tiles.
+) -> dict[tuple[int, int], dict[float, MeshData]]:
+    """The region's ground, decimated **once per cell size** and then cut into tiles.
+
+    Keyed by the cell in metres rather than by tier since `P5-12`, because the
+    collider wants the ground at its own stated cell: a cell two consumers
+    share — the finest tier and the collider today — is decimated once and
+    both read the same piece, so equal cells give identical ground by
+    construction rather than by a second collapse that happens to agree.
 
     ⚠️ **The order is the whole point, and it is the reverse of every other
     class** (`Q25`). `collapse` bins on `floor(position / cell_m)`, which is
@@ -960,20 +996,23 @@ def _tile_ground(
     whole = merge(meshes, name=style.terrain_class)
     meshes.clear()
 
-    tiers: dict[tuple[int, int], dict[int, MeshData]] = {}
-    for level in range(len(style.lod_cell_sizes_m)):
+    cells = [
+        style.cell_size_m(style.terrain_class, level)
+        for level in range(len(style.lod_cell_sizes_m))
+    ]
+    cells.append(style.collision_cell_size_m(style.terrain_class))
+    by_cell: dict[tuple[int, int], dict[float, MeshData]] = {}
+    for cell_m in sorted(set(cells)):
         try:
-            decimated = collapse(
-                whole, cell_m=style.cell_size_m(style.terrain_class, level), height_field=True
-            )
+            decimated = collapse(whole, cell_m=cell_m, height_field=True)
         except EmptyMeshError:
             # The whole region's ground is smaller than one cell. Not reachable
             # on any real region, and `config.py` refuses a cell table that is
-            # not ascending, so no coarser tier can survive what this one did not.
+            # not ascending, so no coarser cell can survive what this one did not.
             break
         for tile, piece in assign(decimated, grid):
-            tiers.setdefault(tile, {})[level] = piece
-    return tiers
+            by_cell.setdefault(tile, {})[cell_m] = piece
+    return by_cell
 
 
 def _within_region(mesh: MeshData, grid: Grid) -> MeshData | None:
@@ -1029,15 +1068,106 @@ def _identify(tier: MeshData, objects: list[dict[str, Any]]) -> MeshData:
     return replace(stamp_along(tier), uv2=uv2, extras=table)
 
 
+# One tile's collapses so far, by `(class, cell)`: `None` where the class has
+# nothing left at that cell. The finest tier and the collider ask for the same
+# cells today, and `collapse` is a pure function of its inputs, so the second
+# asker reads the first's answer — which is what makes equal cells give
+# identical geometry by construction rather than by two agreeing runs.
+_Collapsed = dict[tuple[str, float], MeshData | None]
+
+
+def _decimated(
+    per_class: dict[str, MeshData],
+    ground: dict[float, MeshData],
+    terrain_class: str,
+    cell_for: Callable[[str], float],
+    collapsed: _Collapsed,
+) -> list[MeshData]:
+    """Every class of one tile collapsed at `cell_for(class)`, ground last.
+
+    Collapsed per class, then merged by the caller — for every class that
+    arrives here. Merging first would put a thin bridge deck and a building
+    wall in the same cluster grid and force one cell size on both, which is the
+    thing this exists to stop. Merging after keeps the tile **one mesh and one
+    draw call**, the contract `game/tools/verify_tiles.gd` enforces.
+
+    ⚠️ The ground does not arrive in `per_class`, and runs the other way round
+    for a reason that does not apply to any of these — see `_tile_ground`. It
+    arrives already decimated, keyed by cell, and is appended after the sorted
+    classes rather than merged into them: `TERRAIN(TB)` already sorted last, so
+    this is the order the tiles have always had, and merge order is vertex
+    order.
+    """
+    pieces: list[MeshData] = []
+    for class_id, mesh in per_class.items():
+        cell = cell_for(class_id)
+        if (class_id, cell) not in collapsed:
+            try:
+                collapsed[class_id, cell] = collapse(mesh, cell_m=cell)
+            except EmptyMeshError:
+                # This class has nothing left at this cell size; another may.
+                collapsed[class_id, cell] = None
+        piece = collapsed[class_id, cell]
+        if piece is not None:
+            pieces.append(piece)
+    # ⚠️ Keyed by the float the config parsed: two cells share a decimation
+    # only when they are the same number bit for bit, which two YAML literals
+    # are and a derived value may not be. A miss here costs a second collapse
+    # that should agree, never a wrong tile.
+    terrain_cell = cell_for(terrain_class)
+    if terrain_cell in ground:
+        pieces.append(ground[terrain_cell])
+    return pieces
+
+
+def _collider(
+    label: str,
+    per_class: dict[str, MeshData],
+    ground: dict[float, MeshData],
+    style: BuildingStyle,
+    collapsed: _Collapsed,
+) -> MeshData:
+    """The tile's `-colonly` collider (`P5-12`): the same classes, at their own cell.
+
+    What it keeps is what a collider and the carve need and nothing else —
+    positions, normals, triangles, and `TEXCOORD_1.x` so `carve._structure` can
+    tell a viaduct from a wall when it cuts the collider alongside the render
+    tier. No colours, no `TEXCOORD_0`, no object table and no material: the
+    importer removes the mesh, so anything else here is bytes in the PCK that
+    nothing reads. ⚠️ **`TEXCOORD_1.y` is zero on every vertex**: the collider
+    names no object — it never passes through `_identify`, so leaving the
+    region ordinal there would ship a row that indexes no table. ⚠️ **At the
+    finest tier's cells this is the same triangles that tier draws**, which is
+    what makes a drive timeline reproducible across the change; the stated
+    cell is what lets it stop being so.
+    """
+    pieces = _decimated(
+        per_class, ground, style.terrain_class, style.collision_cell_size_m, collapsed
+    )
+    if not pieces:
+        raise ValueError(f"{label}: nothing survives the collision cell, but a tier did")
+    merged = merge(pieces, name=collider_name(label))
+    if merged.uv2 is None:
+        raise ValueError(f"{label}: the collider lost its marker channel")
+    uv2 = merged.uv2.copy()
+    uv2[:, 1] = 0.0
+    return replace(merged, colours=None, uvs=None, uv2=uv2, extras=None, material=None)
+
+
 def _write_tile(
     out_dir: Path,
     tile: tuple[int, int],
     by_class: dict[str, list[MeshData]],
-    ground: dict[int, MeshData],
+    ground: dict[float, MeshData],
     style: BuildingStyle,
     objects: list[dict[str, Any]],
 ) -> TileOutput | None:
     """One tile at every tier it has, or `None` when it has none.
+
+    The finest tier's file also carries the tile's collider (`P5-12`), a second
+    primitive named by `collider_name` and built by `_collider` from the same
+    classes at their own stated cell. `ground` is keyed by cell size, so the
+    collider and any tier at the same cell read one decimation.
 
     A tile with no tier ships nothing, so publishing it would put a square in
     the manifest that names no file — which `export.py` and `verify_city.gd`
@@ -1055,29 +1185,19 @@ def _write_tile(
 
     lods: list[LodOutput] = []
     boxes: list[Bounds] = []
+    # Per tile, keyed by `(class, cell)` and never by the identity of a mesh:
+    # keyed by `id()`, CPython reused two freed addresses and two tiles were
+    # written with another tile's geometry at both tiers.
+    collapsed: _Collapsed = {}
     for level in range(len(style.lod_cell_sizes_m)):
-        # Collapsed per class, then merged — for every class that arrives here.
-        # Merging first would put a thin bridge deck and a building wall in the
-        # same cluster grid and force one cell size on both, which is the thing
-        # this exists to stop. Merging after keeps the tile **one mesh and one
-        # draw call**, the contract `game/tools/verify_tiles.gd` enforces.
-        #
-        # ⚠️ The ground does not arrive here, and runs the other way round for
-        # a reason that does not apply to any of these — see `_tile_ground`.
-        pieces: list[MeshData] = []
-        for class_id, mesh in per_class.items():
-            try:
-                pieces.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
-            except EmptyMeshError:
-                # This class has nothing left at this cell size; another may.
-                continue
-        # The ground arrives already decimated, by `_tile_ground`, because it is
-        # the one class that must be collapsed *before* it is cut. Appended after
-        # the sorted classes rather than merged into them: `TERRAIN(TB)` already
-        # sorted last, so this is the order the tiles have always had, and merge
-        # order is vertex order.
-        if level in ground:
-            pieces.append(ground[level])
+        # Collapsed per class then merged, and why is `_decimated`'s docstring.
+        pieces = _decimated(
+            per_class,
+            ground,
+            style.terrain_class,
+            partial(style.cell_size_m, level=level),
+            collapsed,
+        )
         if not pieces:
             # Everything left in this tile is smaller than the cell. Expected at
             # the coarsest tier for a square holding one sign gantry — the tiers
@@ -1085,18 +1205,21 @@ def _write_tile(
             # the whole region's build down with it.
             log.info("  %s: nothing survives LOD%d", label, level)
             break
-        suffix = COLLISION_SUFFIX if level == COLLISION_TIER else ""
         # Named after the merge rather than carried through it: a merged
         # primitive has one material and `merge` refuses to guess which. This is
         # the tile's request for the window-band shader, and the only channel
         # glTF gives for it — see `FACADE_MATERIAL`.
-        tier = _identify(
-            replace(merge(pieces, name=f"{label}{suffix}"), material=FACADE_MATERIAL), objects
-        )
+        tier = _identify(replace(merge(pieces, name=label), material=FACADE_MATERIAL), objects)
         boxes.append(tier.aabb())
 
+        # The render primitive first, the collider second: `read_glb` returns
+        # them in file order, and `render_meshes` is the filter, not the index.
+        meshes = [tier]
+        if level == COLLISION_TIER:
+            meshes.append(_collider(label, per_class, ground, style, collapsed))
         relative = Path("tiles") / f"{label}_lod{level}.glb"
-        size = write_glb(out_dir / relative, [tier])
+        size = write_glb(out_dir / relative, meshes)
+        collider = meshes[1] if len(meshes) > 1 else None
         lods.append(
             LodOutput(
                 path=relative.as_posix(),
@@ -1104,6 +1227,8 @@ def _write_tile(
                 vertices=len(tier.positions),
                 bytes=size,
                 objects=len((tier.extras or {}).get(OBJECTS_KEY, [])),
+                collision_triangles=collider.triangle_count if collider else 0,
+                collision_vertices=len(collider.positions) if collider else 0,
             )
         )
 
@@ -1295,6 +1420,20 @@ def main(argv: list[str] | None = None) -> int:
             sum(tier.bytes for tier in tiers) / 1e6,
             len(tiers),
         )
+    colliders = [tile.lods[COLLISION_TIER] for tile in report.tiles]
+    overrides = ", ".join(
+        f"{name} {cell:.1f} m"
+        for name, cell in sorted(style.class_collision_cell_m.items())
+        if cell != style.collision_cell_m
+    )
+    log.info(
+        "  collider (%.1f m cells%s): %8d triangles beside LOD%d, %d tiles",
+        style.collision_cell_m,
+        f"; {overrides}" if overrides else "",
+        sum(tier.collision_triangles for tier in colliders),
+        COLLISION_TIER,
+        len(colliders),
+    )
 
     if args.terrain:
         log.info("textured terrain (evaluation output; the tiles above ship it untextured):")

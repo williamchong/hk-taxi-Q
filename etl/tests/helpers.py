@@ -179,6 +179,8 @@ def style(jitter: float = 0.0) -> BuildingStyle:
         class_colour_jitter={},
         lod_cell_sizes_m=(0.0,),
         class_lod_cell_sizes_m={},
+        collision_cell_m=0.0,
+        class_collision_cell_m={},
         ground_sink_m=0.0,
     )
 
@@ -326,6 +328,7 @@ CITY_YAML = textwrap.dedent(
             - {up_to_m: .inf, material: facade}
       colour_jitter: 0.0
       lod_cell_sizes_m: [0.0]
+      collision_cell_m: 0.0
     roads:
       source: roads
       centrelines:

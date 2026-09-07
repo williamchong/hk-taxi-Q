@@ -36,6 +36,11 @@ const COLLISION_TIER: int = 0
 ## city looked like before `P3-7`. There is nothing to see and nothing to catch.
 const FACADE_MATERIAL: String = "res://tuning/city_facade.tres"
 
+## What the ETL names the tile collider's node, less its `-colonly` suffix
+## (`P5-12`): `COLLIDER_NAME_SUFFIX` in `etl/pipeline/buildings.py`. The
+## importer strips the suffix and keeps the rest as the `StaticBody3D`'s name.
+const COLLIDER_BODY_SUFFIX: String = "_collision"
+
 ## The surface markers `TEXCOORD_1.x` may carry, mirroring `SurfaceClass` in
 ## `etl/pipeline/config.py`: 0 facade, 1 ground, 2 structure.
 const MARKER_MAX: int = 2
@@ -68,7 +73,7 @@ func _init() -> void:
 		for tier: int in tile.lods.size():
 			var file: String = tile.lods[tier]
 			checked += 1
-			var problems: PackedStringArray = _check(file, tier)
+			var problems: PackedStringArray = _check(file, tier, tile.id)
 			if problems.is_empty():
 				print("  ok    ", file.get_file())
 			else:
@@ -85,7 +90,7 @@ func _init() -> void:
 	quit(1 if failures > 0 else 0)
 
 
-func _check(path: String, tier: int) -> PackedStringArray:
+func _check(path: String, tier: int, tile_id: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	var packed := load(path) as PackedScene
@@ -118,7 +123,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 	if surfaces > MAX_SURFACES:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
-	problems.append_array(_check_collision(scene_root, tier))
+	problems.append_array(_check_collision(scene_root, tier, tile_id))
 	# Static Lightmaps would regenerate UV2 over the identity payload (`P5-11`),
 	# and catching it at the import setting names the fix, where the mesh check
 	# only names the symptom.
@@ -268,20 +273,21 @@ func _shares_vertex(
 	return false
 
 
-## Collision is present on the finest tier and absent everywhere else.
+## Collision is a `-colonly` body beside the finest tier, named for the tile,
+## and absent everywhere else (`P5-12`).
 ##
 ## The shape of the collider is `MeshContract`'s to judge; the tier it belongs
 ## to is this tool's, because only the manifest knows how many tiers a tile has.
-func _check_collision(scene_root: Node, tier: int) -> PackedStringArray:
+func _check_collision(scene_root: Node, tier: int, tile_id: String) -> PackedStringArray:
 	if tier == COLLISION_TIER:
-		return MeshContract.check_collision(scene_root)
+		return MeshContract.check_collision_only(scene_root, tile_id + COLLIDER_BODY_SUFFIX)
 
 	if MeshContract.has_collision(scene_root):
 		return PackedStringArray(
 			[
 				(
 					(
-						"LOD%d carries collision; only LOD%d should. A `-col` suffix has "
+						"LOD%d carries collision; only LOD%d should. A collider has "
 						+ "spread to a tier nothing can touch."
 					)
 					% [tier, COLLISION_TIER]

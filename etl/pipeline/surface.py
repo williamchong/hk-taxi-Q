@@ -59,7 +59,14 @@ from pipeline.config import (
 )
 from pipeline.documents import round_position, write_document
 from pipeline.geometry import edge_distances, inside_polygon
-from pipeline.gltf import Bounds, MeshData, normalise, read_glb, write_glb
+from pipeline.gltf import (
+    COLLISION_ONLY_SUFFIX,
+    Bounds,
+    MeshData,
+    normalise,
+    read_render,
+    write_glb,
+)
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import merge, select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
@@ -133,13 +140,20 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # keeps the old interpretation gets no caps at all and rebuilds that defect
 # silently, which is the case hard rule 5 exists for. An intermediate like every
 # field above it; the game reads none of them.
-SURFACE_MANIFEST_SCHEMA = 8
+# 9 since `P5-12`: every chunk `.glb` holds TWO primitives — the render mesh,
+# no longer suffixed `-col`, and a `road_surface_collision-colonly` collider —
+# and each chunk row carries `collision_triangles`. A v8 reader taking the
+# file's meshes as the drawn road measures every quad twice.
+SURFACE_MANIFEST_SCHEMA = 9
 
-# Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
-# trimesh collider at import time and leaves it visible. Naming it here rather
-# than building the shape in GDScript at load makes the collision part of the
-# asset, which is what `P1-4` is asked to deliver.
-SURFACE_MESH_NAME = "road_surface-col"
+# The drawn road's primitive, in every chunk. ⚠️ **No `-col` since `P5-12`**:
+# the collider is its own `-colonly` primitive beside it (`SURFACE_COLLIDER_NAME`),
+# built by `_road_collider` from the same triangles today and free to diverge —
+# the seam `Q121` asked for. Naming the collider in the asset rather than
+# building the shape in GDScript at load keeps the collision part of the asset,
+# which is what `P1-4` is asked to deliver.
+SURFACE_MESH_NAME = "road_surface"
+SURFACE_COLLIDER_NAME = f"road_surface_collision{COLLISION_ONLY_SUFFIX}"
 
 
 def chunk_path(tile: str) -> str:
@@ -161,7 +175,7 @@ def read_surface(bundle: Path, chunks: Iterable[dict[str, Any]]) -> MeshData:
     manifest happened to list its chunks in.
     """
     meshes = [
-        read_glb(bundle / str(chunk["file"]))[0]
+        read_render(bundle / str(chunk["file"]))[0]
         for chunk in sorted(chunks, key=lambda c: str(c["file"]))
     ]
     if not meshes:
@@ -1506,6 +1520,25 @@ def build_region(
     return report
 
 
+def _road_collider(piece: MeshData) -> MeshData:
+    """The chunk's `-colonly` collider (`P5-12`): the ribbon's triangles, bare.
+
+    The same geometry the chunk draws — the kerb riser included, because kerbs
+    are mountable by design (`P2-3`) — carrying positions, normals and indices
+    and nothing else: the importer removes the mesh, so a colour or a marking
+    code here is bytes nothing reads. Its own primitive rather than the `-col`
+    suffix on the render mesh so the two may diverge later (`Q121`); today
+    they do not, and `verify_road_surface.gd` asserts the collider stands
+    beside every chunk.
+    """
+    return MeshData(
+        name=SURFACE_COLLIDER_NAME,
+        positions=piece.positions,
+        normals=piece.normals,
+        triangles=piece.triangles,
+    )
+
+
 def _write_chunks(out_dir: Path, chunks: list[tuple[str, MeshData]], report: SurfaceReport) -> None:
     """One `.glb` per tile under `SURFACE_DIR`, and the manifest rows for them.
 
@@ -1515,9 +1548,10 @@ def _write_chunks(out_dir: Path, chunks: list[tuple[str, MeshData]], report: Sur
     `sync_generated.sh` — which copies what the manifest names — would leave a
     stale copy in the game until something deleted it by hand.
 
-    Every chunk keeps `SURFACE_MESH_NAME`, so each one gets its own `-col`
-    trimesh at import and the material dispatch (`SURFACE_MATERIAL`) is the
-    same test it was for the region-wide mesh.
+    Every chunk keeps `SURFACE_MESH_NAME` and carries its own collider beside
+    it (`P5-12`), so each one stands on its own at import and the material
+    dispatch (`SURFACE_MATERIAL`) is the same test it was for the region-wide
+    mesh.
     """
     chunk_dir = out_dir / SURFACE_DIR
     chunk_dir.mkdir(parents=True, exist_ok=True)
@@ -1526,13 +1560,15 @@ def _write_chunks(out_dir: Path, chunks: list[tuple[str, MeshData]], report: Sur
     triangles = 0
     for tile, piece in chunks:
         relative = chunk_path(tile)
-        size = write_glb(out_dir / relative, [piece])
+        collider = _road_collider(piece)
+        size = write_glb(out_dir / relative, [piece, collider])
         report.chunks.append(
             {
                 "id": tile,
                 "file": relative,
                 "triangles": piece.triangle_count,
                 "vertices": len(piece.positions),
+                "collision_triangles": collider.triangle_count,
                 "bytes": size,
                 "aabb": piece.aabb(),
             }

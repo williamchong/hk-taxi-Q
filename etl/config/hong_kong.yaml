@@ -769,6 +769,23 @@ buildings:
   # plus a rebuild. See docs/ART_DESIGN.md "LOD policy" and Q16.
   lod_cell_sizes_m: [1.5, 4.0]
 
+  # The cell the tile COLLIDER is clustered at, in metres (P5-12) — its own
+  # mesh, `<tile>_collision-colonly` beside the render tiers, so it is stated
+  # here rather than borrowed from the finest tier above.
+  #
+  # Equal to that tier today, on purpose and by value rather than by reference:
+  # the collider is then the same triangles the finest tier draws, the drive
+  # timeline is what it was when the render mesh collided, and the wall offset
+  # `tools/collider_offset.py` measures is 0.00 m. A coarser cell buys a smaller
+  # trimesh and costs an offset between what the car hits and what it sees;
+  # that tool's sweep prices it. Per-class overrides mirror
+  # class_lod_cell_sizes_m and for the same reasons — a deck thinner than the
+  # cell folds, and the ground has extent rather than silhouette.
+  collision_cell_m: 1.5
+  class_collision_cell_m:
+    INFRASTRUCTURE: 0.5
+    TERRAIN(TB): 4.0
+
 # The iB1000 building-block layer — Q47's primary podium-boundary route. One
 # `Building` polygon layer whose `TYPEOFBUILDINGBLOCK` domain splits towers
 # from podium blocks, with base/roof levels in mPD that are 100% filled on

@@ -447,6 +447,17 @@ class BuildingStyle:
     # Cell sizes for a class that must not decimate like the rest, overriding
     # the table above. Same length, same ordering rule.
     class_lod_cell_sizes_m: dict[str, tuple[float, ...]]
+    # The clustering cell the tile COLLIDER is built at, in metres (`P5-12`).
+    #
+    # Stated on its own rather than borrowed from a tier, because the collider
+    # is its own mesh now — `<tile>_collision-colonly` beside the render tiers —
+    # and the two are allowed to diverge. A collider coarser than the facade is
+    # a wall the car drives into or through, so `tools/collider_offset.py`
+    # measures the offset between them and this value is what it sweeps.
+    collision_cell_m: float
+    # The collider's cell for a class that must not decimate like the rest —
+    # the same classes, for the same reasons, as `class_lod_cell_sizes_m`.
+    class_collision_cell_m: dict[str, float]
     # How far below its sampled height the drawn ground is placed, in metres.
     #
     # `roads.py` lays the level-0 carriageway at `terrain + 0.0`, so ground and
@@ -517,6 +528,10 @@ class BuildingStyle:
         measured that on screen at Gloucester Road.
         """
         return self.class_lod_cell_sizes_m.get(class_id, self.lod_cell_sizes_m)[level]
+
+    def collision_cell_size_m(self, class_id: str) -> float:
+        """Clustering cell for one class in the tile collider (`P5-12`)."""
+        return self.class_collision_cell_m.get(class_id, self.collision_cell_m)
 
     def is_ground(self, class_id: str) -> bool:
         """Whether this class is the region's ground rather than something on it.
@@ -3810,6 +3825,23 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
             )
         class_cells[str(name)] = override
 
+    collision_cell = _number(_require(body, "collision_cell_m", where), f"{where}:collision_cell_m")
+    if collision_cell < 0.0:
+        # 0.0 is an exact weld, as in `lod_cell_sizes_m` (`Q16`) — legal, and a
+        # bundle decision: it ships the full massing as a trimesh.
+        raise ValueError(f"{where}:collision_cell_m must not be negative ({collision_cell})")
+    class_collision: dict[str, float] = {}
+    for name, size in (body.get("class_collision_cell_m") or {}).items():
+        field = f"{where}:class_collision_cell_m.{name}"
+        if str(name) not in classes:
+            # Same trap as `class_lod_cell_sizes_m`: a misspelled key parses,
+            # loads, and silently overrides nothing.
+            raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
+        cell = _number(size, field)
+        if cell < 0.0:
+            raise ValueError(f"{field} must not be negative ({cell})")
+        class_collision[str(name)] = cell
+
     structure = body.get("structure_class")
     if structure is not None and str(structure) not in classes:
         # This one must be inside `classes`: `P2-7` lays the carriageway on this
@@ -3871,6 +3903,8 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         facade_hue_vegetation_max=hue_vegetation_max,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
+        collision_cell_m=collision_cell,
+        class_collision_cell_m=class_collision,
         ground_sink_m=sink,
     )
 

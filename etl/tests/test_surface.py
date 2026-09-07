@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 from pipeline.buildings import Grid
-from pipeline.gltf import read_glb
+from pipeline.gltf import read_glb, read_render
 from pipeline.polyline import Segments, plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import (
@@ -34,6 +34,7 @@ from pipeline.surface import (
     MARKING_KERB_DOUBLE,
     MARKING_KERB_NONE,
     MARKING_KERB_SINGLE,
+    SURFACE_COLLIDER_NAME,
     SURFACE_DIR,
     SURFACE_MANIFEST_NAME,
     SURFACE_MATERIAL,
@@ -792,10 +793,12 @@ def _painted(mesh, colour: tuple[int, int, int]) -> np.ndarray:
 
 
 class TestBuildRegion:
-    def test_it_writes_one_mesh_per_tile_named_for_its_collider(self, testville, tmp_path) -> None:
-        """One GLB per tile the road touches, one primitive in each, and the
-        `-col` suffix on every one — Godot's importer reads it to build the
-        static trimesh at import time, so each chunk stands on its own (`P5-6`)."""
+    def test_it_writes_one_render_mesh_and_one_collider_per_tile(self, testville, tmp_path) -> None:
+        """One GLB per tile the road touches, and in each the drawn ribbon plus
+        its `-colonly` collider (`P5-12`) — Godot's importer reads the suffix to
+        build the static trimesh at import time, so each chunk stands on its
+        own (`P5-6`). The collider is the ribbon's own triangles, bare: no
+        colour, no lane coordinate, no marking code."""
         report = build_region(testville[0], "middle", out_root=tmp_path / "out")
 
         chunks = _manifest(tmp_path)["chunks"]
@@ -805,10 +808,17 @@ class TestBuildRegion:
         for chunk in chunks:
             assert chunk["file"] == f"{SURFACE_DIR}/{chunk['id']}.glb"
             meshes = read_glb(tmp_path / "out" / "middle" / chunk["file"])
-            assert len(meshes) == 1
-            assert meshes[0].name == SURFACE_MESH_NAME
-            assert meshes[0].triangle_count == chunk["triangles"]
-            assert len(meshes[0].positions) == chunk["vertices"]
+            assert [mesh.name for mesh in meshes] == [SURFACE_MESH_NAME, SURFACE_COLLIDER_NAME]
+            drawn, collider = meshes
+            assert drawn.triangle_count == chunk["triangles"]
+            assert len(drawn.positions) == chunk["vertices"]
+            assert collider.triangle_count == chunk["collision_triangles"]
+            assert np.array_equal(collider.positions, drawn.positions)
+            assert np.array_equal(collider.triangles, drawn.triangles)
+            assert collider.colours is None and collider.uvs is None and collider.uv2 is None
+            assert [
+                mesh.name for mesh in read_render(tmp_path / "out" / "middle" / chunk["file"])
+            ] == [SURFACE_MESH_NAME]
         assert report.triangles == sum(chunk["triangles"] for chunk in chunks)
 
     def test_the_chunks_are_a_partition_of_the_built_mesh(self, testville, tmp_path) -> None:
@@ -831,7 +841,7 @@ class TestBuildRegion:
         # The same triangles, corner for corner, whatever order they came out in.
         merged_corners = {tuple(row) for row in merged.positions[merged.triangles].reshape(-1, 9)}
         for chunk in manifest["chunks"]:
-            piece = read_glb(tmp_path / "out" / "middle" / chunk["file"])[0]
+            piece = read_render(tmp_path / "out" / "middle" / chunk["file"])[0]
             piece_corners = {tuple(row) for row in piece.positions[piece.triangles].reshape(-1, 9)}
             assert piece_corners <= merged_corners
 
@@ -845,7 +855,7 @@ class TestBuildRegion:
         positions_of = {
             chunk["id"]: {
                 tuple(np.round(row, 3))
-                for row in read_glb(tmp_path / "out" / "middle" / chunk["file"])[0].positions
+                for row in read_render(tmp_path / "out" / "middle" / chunk["file"])[0].positions
             }
             for chunk in manifest["chunks"]
         }
@@ -1046,7 +1056,15 @@ class TestBuildRegion:
         assert manifest["bytes"] == sum(chunk["bytes"] for chunk in manifest["chunks"])
         assert len(manifest["aabb"]) == 2
         for chunk in manifest["chunks"]:
-            assert set(chunk) == {"id", "file", "triangles", "vertices", "bytes", "aabb"}
+            assert set(chunk) == {
+                "id",
+                "file",
+                "triangles",
+                "vertices",
+                "collision_triangles",
+                "bytes",
+                "aabb",
+            }
 
     def test_the_manifest_carries_the_drawn_half_width_of_every_edge(
         self, testville, tmp_path
@@ -1638,7 +1656,12 @@ class TestMarkingPayload:
             raw = (tmp_path / "out" / "middle" / chunk["file"]).read_bytes()
             length, _ = struct.unpack_from("<II", raw, 12)
             document = json.loads(raw[20 : 20 + length])
-            assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
+            # The collider's material is named after its mesh and never read:
+            # the importer removes the mesh with it (`P5-12`).
+            assert [material["name"] for material in document["materials"]] == [
+                SURFACE_MATERIAL,
+                f"{SURFACE_COLLIDER_NAME}_material",
+            ]
 
 
 class TestKerbside:

@@ -300,6 +300,37 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match="coarsest last"):
             load_config(rewrite(invert))
 
+    def test_the_collision_cell_is_stated_per_class_like_the_tiers(self, hong_kong) -> None:
+        """`P5-12`: the collider's cell is its own value, and the shipped one
+        equals the finest tier's for every class — by value, not by reference,
+        which the sibling test in `test_buildings.py` mutates to prove."""
+        style = hong_kong.buildings
+        assert style.collision_cell_size_m("BUILDING") == style.collision_cell_m
+        assert style.collision_cell_size_m("INFRASTRUCTURE") < style.collision_cell_m
+        for class_id in style.classes:
+            assert style.collision_cell_size_m(class_id) == style.cell_size_m(class_id, 0)
+
+    def test_the_collision_cell_is_required(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["collision_cell_m"]
+
+        with pytest.raises(ValueError, match="collision_cell_m"):
+            load_config(rewrite(drop))
+
+    def test_a_negative_collision_cell_is_rejected(self, rewrite) -> None:
+        def negate(doc: dict[str, Any]) -> None:
+            doc["buildings"]["collision_cell_m"] = -1.0
+
+        with pytest.raises(ValueError, match="negative"):
+            load_config(rewrite(negate))
+
+    def test_class_collision_override_must_name_a_real_class(self, rewrite) -> None:
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_collision_cell_m"] = {"INFRASTRUCTUR": 0.5}
+
+        with pytest.raises(ValueError, match="not in classes"):
+            load_config(rewrite(misspell))
+
     def test_jitter_outside_zero_to_one_is_rejected(self, rewrite) -> None:
         def overdo_it(doc: dict[str, Any]) -> None:
             doc["buildings"]["colour_jitter"] = 1.5
@@ -426,7 +457,12 @@ class TestBuildingStyle:
             doc["buildings"]["classes"] = [
                 name for name in doc["buildings"]["classes"] if name != terrain
             ]
-            for table in ("class_materials", "class_colour_jitter", "class_lod_cell_sizes_m"):
+            for table in (
+                "class_materials",
+                "class_colour_jitter",
+                "class_lod_cell_sizes_m",
+                "class_collision_cell_m",
+            ):
                 doc["buildings"][table].pop(terrain, None)
             # ⚠️ The extra line *is* `_check_every_material_is_used` working. The
             # ground was the only thing referencing `concrete_paving`, so dropping
