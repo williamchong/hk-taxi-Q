@@ -15,7 +15,7 @@ extends Camera3D
 ## Node emitting `built(low, high)` to frame on startup — normally the tile
 ## preview. Framing what was actually loaded keeps this region-agnostic; a
 ## hardcoded look-at target would be a Hong Kong fact in the viewer.
-@export var frame_target: NodePath
+@export var frame_source: Node
 
 var _yaw: float = 0.0
 var _pitch: float = 0.0
@@ -24,11 +24,8 @@ var _mouse_captured: bool = false
 
 func _ready() -> void:
 	_store_rotation()
-	if frame_target.is_empty():
-		return
-	var source: Node = get_node_or_null(frame_target)
-	if source != null and source.has_signal("built"):
-		source.built.connect(frame)
+	if frame_source != null and frame_source.has_signal("built"):
+		frame_source.built.connect(frame)
 
 
 ## Pull back far enough to see the whole box, looking down at its centre.

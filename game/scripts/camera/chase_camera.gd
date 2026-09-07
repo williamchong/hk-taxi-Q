@@ -15,11 +15,10 @@ extends SpringArm3D
 ## defaults here until `Q98`; chase_profile.gd says why that was hard rule 4 in
 ## name only.
 
-## NodePaths rather than typed node exports: a typed node export only round-trips
-## through scene files the editor wrote itself, so a hand-authored .tscn leaves
-## it silently null and the camera never moves.
-@export var target_path: NodePath
-@export var camera_path: NodePath
+## A typed node export since `P5-21`, which measured `Q119`'s null as a missing
+## `node_paths=` attribute on the node line, not as the hand-authored scene.
+@export var target: Node3D
+@export var camera: Camera3D
 
 @export var profile: ChaseProfile
 ## Where the look-back button is read from. A `NodePath` to the `InputRouter`
@@ -27,9 +26,6 @@ extends SpringArm3D
 ## reason (`Q119`); a rig with no router simply never looks back.
 @export var input_path: NodePath = ^"/root/InputRouter"
 
-var target: Node3D
-
-var _camera: Camera3D
 var _input: Node = null
 var _yaw: float = 0.0
 ## Speed at which the FOV boost is fully applied. Seeded from the profile and
@@ -39,11 +35,9 @@ var _fov_full_kph: float = 0.0
 
 
 func _ready() -> void:
-	target = get_node_or_null(target_path) as Node3D
-	_camera = get_node_or_null(camera_path) as Camera3D
 	_input = get_node_or_null(input_path)
-	if target == null or _camera == null or profile == null:
-		push_error("ChaseCamera needs target_path, camera_path and profile to resolve.")
+	if target == null or camera == null or profile == null:
+		push_error("ChaseCamera needs target, camera and profile assigned.")
 		set_physics_process(false)
 		return
 
@@ -93,8 +87,8 @@ func _physics_process(delta: float) -> void:
 	if target is VehicleController:
 		kph = absf((target as VehicleController).forward_speed_kph())
 	var fov: float = profile.fov_base + profile.fov_boost * clampf(kph / _fov_full_kph, 0.0, 1.0)
-	if not is_equal_approx(fov, _camera.fov):
-		_camera.fov = fov
+	if not is_equal_approx(fov, camera.fov):
+		camera.fov = fov
 
 
 ## Fraction of a remaining gap a first-order filter closes over `delta` at rate

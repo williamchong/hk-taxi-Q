@@ -60,8 +60,8 @@ extends Node3D
 
 ## What the streaming distance is measured from. The chase camera, not the car:
 ## the camera is what has a far plane, and a look-back swings it a car length
-## the other way.
-@export var camera_path: NodePath
+## the other way. Assign in the scene.
+@export var camera: Node3D
 
 ## Emitted once the first pass has settled, with the manifest's bounds — the
 ## same contract `tile_preview.gd` offers, so a camera can frame the region
@@ -173,7 +173,6 @@ func hold_ground_at(point: Vector3) -> void:
 func _process(_delta: float) -> void:
 	if _manifest == null or _residents.is_empty():
 		return
-	var camera: Node3D = get_node_or_null(camera_path) as Node3D
 	if camera == null:
 		return
 

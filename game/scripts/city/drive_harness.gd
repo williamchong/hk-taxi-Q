@@ -35,10 +35,10 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 ## assets, so a gap is news about the scene file, not a fault in the spawn.
 const AUTHORED_DRIFT_M: float = 1.0
 
-## The car to catch. A NodePath rather than a typed node export because a typed
-## one only round-trips through scene files the editor wrote itself, and this
-## scene is hand-authored — see `chase_camera.gd`, which hit the same thing.
-@export var vehicle_path: NodePath
+## The car to catch. Assign in the scene.
+## A typed node export since `P5-21`, which measured `Q119`'s null as a missing
+## `node_paths=` attribute on the node line, not as the hand-authored scene.
+@export var vehicle: VehicleController
 
 ## How far below its own spawn the car has to get before it counts as gone.
 ##
@@ -57,11 +57,10 @@ const AUTHORED_DRIFT_M: float = 1.0
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
 
 ## The `CityStreamer` asked to hold the road under the start line before the
-## first tick (`P5-6`). Relative to this node, which is the scene root; a scene
-## without one — the preview has no harness — simply skips the request.
-@export var streamer_path: NodePath = NodePath("Tiles")
+## first tick (`P5-6`). Assign in the scene; a scene without one — the preview
+## has no harness — simply skips the request.
+@export var streamer: CityStreamer
 
-var _vehicle: VehicleController
 var _spawn: Transform3D
 var _floor_m: float = 0.0
 var _falls: int = 0
@@ -69,14 +68,8 @@ var _checked_for_road: bool = false
 
 
 func _ready() -> void:
-	_vehicle = get_node_or_null(vehicle_path) as VehicleController
-	if _vehicle == null:
-		push_warning(
-			(
-				"Drive harness found no VehicleController at '%s'; nothing will be caught."
-				% vehicle_path
-			)
-		)
+	if vehicle == null:
+		push_warning("Drive harness has no VehicleController assigned; nothing will be caught.")
 		set_physics_process(false)
 		return
 
@@ -93,7 +86,6 @@ func _ready() -> void:
 ## the determinism `Q27`'s A/B frames rest on. A few small synchronous reads on
 ## the boot frame keep tick 1 what it was when the road was one mesh.
 func _hold_ground() -> void:
-	var streamer: CityStreamer = get_node_or_null(streamer_path) as CityStreamer
 	if streamer == null:
 		return
 	streamer.hold_ground_at(_spawn.origin)
@@ -110,14 +102,14 @@ func _hold_ground() -> void:
 ## somewhere sensible while the real message gets read, not about pretending the
 ## spawn worked.
 func _place_on_start_line() -> Transform3D:
-	var authored: Transform3D = _vehicle.global_transform
+	var authored: Transform3D = vehicle.global_transform
 
 	# A local: the graph is wanted for this one query and nothing here reads it
 	# again. `road_graph_overlay.gd` in this same scene holds its own reference,
 	# and `RoadGraph.shared()` is what makes that one parse rather than two.
 	var graph: RoadGraph = RoadGraph.shared()
 	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(
-		graph, GeneratedFares.load_fares(), spawn_fare_id, _vehicle.profile.ray_length_m()
+		graph, GeneratedFares.load_fares(), spawn_fare_id, vehicle.profile.ray_length_m()
 	)
 	if not pose.resolved():
 		push_warning(
@@ -143,7 +135,7 @@ func _place_on_start_line() -> Transform3D:
 			)
 		)
 
-	_vehicle.place_at(pose.transform)
+	vehicle.place_at(pose.transform)
 	_report_spawn(pose, authored)
 	return pose.transform
 
@@ -195,12 +187,12 @@ func _physics_process(_delta: float) -> void:
 	if not _checked_for_road:
 		_checked_for_road = true
 		_warn_if_there_is_no_road()
-	if _vehicle.global_position.y > _floor_m:
+	if vehicle.global_position.y > _floor_m:
 		return
 
 	_falls += 1
 	print("fell out of the world (%d); back to the start line" % _falls)
-	_vehicle.place_at(_spawn)
+	vehicle.place_at(_spawn)
 
 
 ## Stop before the car falls for ever on a clone where the ETL has not been run.
@@ -214,7 +206,7 @@ func _warn_if_there_is_no_road() -> void:
 	var query := PhysicsRayQueryParameters3D.new()
 	query.from = _spawn.origin
 	query.to = _spawn.origin + Vector3.DOWN * fall_margin_m
-	query.exclude = [_vehicle.get_rid()]
+	query.exclude = [vehicle.get_rid()]
 	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 		return
 

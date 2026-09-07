@@ -33,9 +33,10 @@ extends Node3D
 
 const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
-## What the overlay follows. Left empty it takes the first `VehicleController`
-## it can find, so dropping the node into a drive scene is enough.
-@export var vehicle_path: NodePath = NodePath()
+## What the overlay follows. Left unassigned it takes the first
+## `VehicleController` it can find, so dropping the node into a drive scene is
+## enough.
+@export var vehicle: Node3D
 
 ## Lifted clear of the carriageway so it does not z-fight the road surface it is
 ## drawn on top of. Larger than `road_preview.gd`'s 0.15 m because this is drawn
@@ -73,7 +74,7 @@ func _ready() -> void:
 		set_physics_process(false)
 		return
 
-	_vehicle = get_node_or_null(vehicle_path) as Node3D
+	_vehicle = vehicle
 	if _vehicle == null:
 		_vehicle = VehicleController.first_in(get_tree())
 		if _vehicle == null:

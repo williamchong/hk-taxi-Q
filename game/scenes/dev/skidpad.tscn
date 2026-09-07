@@ -28,12 +28,12 @@ script = ExtResource("1_builder")
 [node name="Taxi" parent="." unique_id=163217350 instance=ExtResource("2_taxi")]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -400, 1, -500)
 
-[node name="CameraRig" type="SpringArm3D" parent="." unique_id=1031951982]
+[node name="CameraRig" type="SpringArm3D" parent="." unique_id=1031951982 node_paths=PackedStringArray("target", "camera")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -400, 3, -500)
 margin = 0.3
 script = ExtResource("3_camera")
-target_path = NodePath("../Taxi")
-camera_path = NodePath("Camera3D")
+target = NodePath("../Taxi")
+camera = NodePath("Camera3D")
 profile = ExtResource("4_cameratune")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1216137459]

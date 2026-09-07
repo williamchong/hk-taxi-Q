@@ -52,7 +52,11 @@ godot-rust). It preserves every export target, including web. Do not reach for C
 ## Project settings
 
 ✅ **`game/project.godot` is committed in the form Godot's own writer produces, so an editor save is
-a no-op on it (`Q119`).** The writer — Project Settings in the editor and `ProjectSettings.save()`
+a no-op on it (`Q119`, corrected by `P5-21`).** ⚠️ **"The writer" is the editor's, and it is not
+quite `ProjectSettings.save()`'s**: the GUI orders `[rendering]` with `occlusion_culling` last where
+the headless call put it second, so the `Q119` file was one line out of the editor's form and the
+first GUI save moved it. The committed file is the editor's form since `P5-21`; `verify_settings.gd`
+read every value unchanged across the move. The writer — Project Settings in the editor and `ProjectSettings.save()`
 alike — regenerates the file from memory, drops every comment, and **omits every key whose value
 equals the engine's registered default**. That last rule is what three decision entries read as "the
 editor dropped the settings": `native_method_override`, `get_node_default_without_onready` and
@@ -74,10 +78,22 @@ than inherit one, and `verify_settings.gd` asserts it whether or not the file ca
 
 ✅ **Headless is safe, measured twice.** A full `tools/check.sh` — `--import` and the `--check-only`
 sweep included — leaves the file byte-identical, and a headless editor open-and-quit writes nothing.
-Only a GUI save writes it, and since `Q119` that write is a no-op.
+Only a GUI save writes it, and since `P5-21` that write is a no-op — `Q119` said the same one line
+too early, which is the measurement above.
 
 🔴 **`.tres` and `.tscn` are rewritten by the same writer, and their rationale therefore lives in a
-sidecar `.md` beside each file, never in the file (`Q119`, superseding `Q99`).** On 2026-09-07 the
+sidecar `.md` beside each file, never in the file (`Q119`, superseding `Q99`).** ✅ **Every scene and
+resource has been through the editor's writer once since `P5-21`**, so each carries its `uid=`, every
+`ext_resource` its target's, and 4.7's `unique_id=` per node; ⚠️ **one pass is not a fixed point** —
+a scene saved before the scene it instances has a uid does not carry that uid, so a full save takes
+two passes, and the second changed one line. ⚠️ **A typed node export needs `node_paths=` on the node
+line**: `@export var camera: Camera3D` is stored as a `NodePath` and resolved to the node at
+instantiate only where the node line lists the property in `node_paths=PackedStringArray(...)`. The
+editor writes it; a hand author must, or the export reads null — which is the whole of what `Q119`
+measured as "typed exports are null from a hand-authored scene". The seven scene-internal references
+are typed exports since `P5-21`; the two that reach the `InputRouter` autoload stay `NodePath`,
+because a `node_paths=` entry resolves against the scene being instantiated and an autoload is not
+in it. On 2026-09-07 the
 1,334 comment lines then inside 26 resources moved to `<name>.md` next to each — `handling.tres`
 reads `handling.md`, `city_drive.tscn` reads `city_drive.md` — each heading the line the block sat
 above. Every resource was then re-saved through `ResourceSaver` and compared property by property

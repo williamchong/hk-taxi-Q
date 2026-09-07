@@ -61,7 +61,7 @@ script = ExtResource("4_roads")
 
 [node name="Lighting" parent="." unique_id=1916885045 instance=ExtResource("3_light")]
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=1698393136]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1698393136 node_paths=PackedStringArray("frame_source")]
 far = 6000.0
 script = ExtResource("2_camera")
-frame_target = NodePath("../Tiles")
+frame_source = NodePath("../Tiles")
