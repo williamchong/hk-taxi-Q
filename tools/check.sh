@@ -290,13 +290,19 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 # sidecar; and a sidecar from before P5-13 imports the importer's own LODs on
 # top of the ETL's tiers, with check.sh green.
 #
-# This reads the pinned scene keys out of the project and asserts every
-# generated scene sidecar present carries them verbatim. Over whatever is
-# there, deliberately: a clone with no city has no sidecars, and this must not
-# become the step that makes check.sh need a built region — so an empty tree
-# reports 0 checked and passes, while verify_settings above still pins the
-# values themselves. The fix a failure names is the one that works: delete the
-# sidecar and re-import; editing it by hand is what the next --import undoes.
+# This reads the pinned scene keys out of the project and asserts every scene
+# sidecar present — under generated/ AND authored/ — carries them verbatim.
+# Over whatever is there, deliberately: a clone with no city has no generated
+# sidecars, and this must not become the step that makes check.sh need a built
+# region — so an empty tree reports 0 checked and passes, while verify_settings
+# above still pins the values themselves. The fix a failure names is the one
+# that works: delete the sidecar and re-import; editing it by hand is what the
+# next --import undoes. An authored sidecar is committed, so after the
+# re-import it is committed again in the importer's own form.
+#
+# ⚠️ authored/ is checked too, and must stay so (P5-20, Q124): a committed
+# sidecar is what a clone imports under, not [importer_defaults], and all five
+# committed ones contradicted the pins while this read generated/ alone.
 #
 # ⚠️ The keys come from the project file, not from a list here, so a key added
 # to [importer_defaults] is checked without touching this script — and the
@@ -305,14 +311,14 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 echo "==> sidecars"
 pinned="$(sed -n 's/^"\(meshes\/[a-z_]*\)": \([a-z0-9.]*\),*$/\1=\2/p' "$ROOT/game/project.godot")"
 pinned_count="$(grep -c . <<<"$pinned")"
-sidecars="$(find "$ROOT/game/assets/generated" -type f -name '*.glb.import' 2>/dev/null | sort)"
+sidecars="$(find "$ROOT/game/assets/generated" "$ROOT/game/assets/authored" -type f -name '*.glb.import' 2>/dev/null | sort)"
 sidecar_count="$(grep -c . <<<"$sidecars")"
 if ((pinned_count < 2)); then
 	echo "  FAIL  sidecars — read $pinned_count meshes/* keys out of [importer_defaults]," >&2
 	echo "        so there is nothing to hold the sidecars to. See verify_settings above." >&2
 	failed=1
 elif [[ -z "$sidecars" ]]; then
-	echo "  ok    sidecars — 0 checked (no generated scene sidecars present; the"
+	echo "  ok    sidecars — 0 checked (no scene sidecars present; the"
 	echo "        importer defaults are still pinned by verify_settings above)"
 else
 	stale_sidecars="$(
@@ -328,7 +334,8 @@ else
 		echo "$stale_sidecars"
 		echo "  FAIL  sidecars — the sidecars above import under a value project.godot" >&2
 		echo "        no longer pins. [importer_defaults] seeds a NEW sidecar only:" >&2
-		echo "        delete them and re-import (godot --headless --path game --import)." >&2
+		echo "        delete them and re-import (godot --headless --path game --import)," >&2
+		echo "        and commit the reseeded ones under assets/authored/." >&2
 		failed=1
 	else
 		echo "  ok    sidecars — $sidecar_count checked against $pinned_count pinned keys"

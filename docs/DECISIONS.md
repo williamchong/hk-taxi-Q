@@ -21131,7 +21131,7 @@ import lattice without retiring the bar · `Q104` for the box-junction layer's o
 
 ## `Q124` — The distance to the Godot guide is now the distance to three collaborators
 
-**Status.** 🟡 **Open — planned 2026-09-08.** The plan is `PLAN.md` Phase 5c, `P5-20`–`P5-28`.
+**Status.** 🟡 **Open — planned 2026-09-08; ✅ `P5-20` built the same day.** The plan is `PLAN.md` Phase 5c, `P5-20`–`P5-28`. ✅ **`P5-20`**: `check.sh`'s `sidecars` step reads `authored/` beside `generated/`, was red naming all five committed sidecars, and is green at 210 checked after a reseed; ⚠️ the taxi frame was expected to move by `Q82`'s quantum and did not — ~0.07 mm over a 4.5 m AABB is sub-pixel at chase distance. Numbers in `PLAN.md` `P5-20`.
 
 **The question.** How far the project stands from Godot's "Best practices" series *now*, after
 `Q119` graded it against those pages and `Q121`–`Q123` built `P5-10`–`P5-19`, and what to change
