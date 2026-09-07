@@ -280,6 +280,61 @@ run_godot "import" --headless --path "$ROOT/game" --import
 echo "==> settings"
 run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools/verify_settings.gd"
 
+# The importer's sidecars, against [importer_defaults] (P5-16, Q122).
+#
+# [importer_defaults] seeds a NEW .import only (Q82): change a key in
+# project.godot and every asset that already has a sidecar keeps importing under
+# the old value, silently, and nothing above can see it — verify_settings reads
+# the project back and the import reads the sidecar. So "one value to reverse",
+# which P5-13's LODs-off shipped on, was one value plus deleting every generated
+# sidecar; and a sidecar from before P5-13 imports the importer's own LODs on
+# top of the ETL's tiers, with check.sh green.
+#
+# This reads the pinned scene keys out of the project and asserts every
+# generated scene sidecar present carries them verbatim. Over whatever is
+# there, deliberately: a clone with no city has no sidecars, and this must not
+# become the step that makes check.sh need a built region — so an empty tree
+# reports 0 checked and passes, while verify_settings above still pins the
+# values themselves. The fix a failure names is the one that works: delete the
+# sidecar and re-import; editing it by hand is what the next --import undoes.
+#
+# ⚠️ The keys come from the project file, not from a list here, so a key added
+# to [importer_defaults] is checked without touching this script — and the
+# count of keys is asserted, because a project.godot that had lost the block
+# would otherwise make this pass on every sidecar with nothing to compare.
+echo "==> sidecars"
+pinned="$(sed -n 's/^"\(meshes\/[a-z_]*\)": \([a-z0-9.]*\),*$/\1=\2/p' "$ROOT/game/project.godot")"
+pinned_count="$(grep -c . <<<"$pinned")"
+sidecars="$(find "$ROOT/game/assets/generated" -type f -name '*.glb.import' 2>/dev/null | sort)"
+sidecar_count="$(grep -c . <<<"$sidecars")"
+if ((pinned_count < 2)); then
+	echo "  FAIL  sidecars — read $pinned_count meshes/* keys out of [importer_defaults]," >&2
+	echo "        so there is nothing to hold the sidecars to. See verify_settings above." >&2
+	failed=1
+elif [[ -z "$sidecars" ]]; then
+	echo "  ok    sidecars — 0 checked (no generated scene sidecars present; the"
+	echo "        importer defaults are still pinned by verify_settings above)"
+else
+	stale_sidecars="$(
+		while IFS= read -r sidecar; do
+			while IFS= read -r line; do
+				if ! grep -qxF "$line" "$sidecar"; then
+					echo "  ${sidecar#"$ROOT/"} — lacks $line"
+				fi
+			done <<<"$pinned"
+		done <<<"$sidecars"
+	)"
+	if [[ -n "$stale_sidecars" ]]; then
+		echo "$stale_sidecars"
+		echo "  FAIL  sidecars — the sidecars above import under a value project.godot" >&2
+		echo "        no longer pins. [importer_defaults] seeds a NEW sidecar only:" >&2
+		echo "        delete them and re-import (godot --headless --path game --import)." >&2
+		failed=1
+	else
+		echo "  ok    sidecars — $sidecar_count checked against $pinned_count pinned keys"
+	fi
+fi
+
 # The GDScript lint pass. --import alone is not it: measured, it compiles
 # autoloads and what they reach, so an untyped variable planted in
 # greybox_builder.gd — reachable only through a dev scene — went unreported.
