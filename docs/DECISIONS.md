@@ -3209,6 +3209,7 @@ leaves 15.6 `L*` of separation, so the 0.15 m riser reads as an edge.
 cannot also be checked by it, and they read 49–62% — at the top of what render and tile do. That soft
 spot is what opened `Q34`.
 
+
 **The method lesson.** A palette compared only to itself cannot tell you its outlier is its only
 correct member. The fix is not more rigour, it is an **external referent**.
 
@@ -3475,7 +3476,7 @@ away from a linear-light mean, and the same family as the bug `Q27` closed. **Ch
 
 ## `Q38` — `exposure_anchor` is baked into `COLOR_0` at build time
 
-**Status.** 🟡 Open, and **deliberately not fixed now** · **Owner.** night mode
+**Status.** 🟡 Open — **planned 2026-09-08 as `PLAN.md` `P5-28a`–`P5-28d`, on three of the user's calls**: the survey tint is applied at reflectance level and the look re-judged (`P5-28d`), `render_cool` is moved one code under its cited range rather than the range widened (`P5-28a`), and the anchor lives in the lighting rig as a global shader parameter (`P5-28b`). ⚠️ **The claim below is corrected by that plan**: the anchor stopped being "one invertible, spatially-uniform scalar" when `Q40` shipped the CIELAB hue tint on the baked colour — measured ΔE 1.2–6.0 between tinting before and after the scale, almost all in b*. And the road is a `ShaderMaterial` since `P3-12`, so the `albedo_color` route is stale; the rig's global reaches it through `road_markings.gdshader` · **Owner.** night mode
 
 **Claim.** `config.py` applies the anchor at load, so the product ships it baked into the vertex
 stream — and changing the time of day is a full tile rebuild. It is also the one place the project
