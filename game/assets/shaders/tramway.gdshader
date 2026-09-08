@@ -19,6 +19,23 @@ render_mode cull_back;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
+// The rig's exposure (`Q38`, `P5-28b`). One global shader parameter, declared in
+// `project.godot` `[shader_globals]` and set by `scripts/world/lighting_rig.gd`
+// from an export on the rig scene, so the time of day is a number in a scene
+// rather than a value baked into every vertex of every tile at build time.
+//
+// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
+// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
+// different operation and applied to a `.tres` colour it would move paint,
+// glazing and rail colour that are authored at their rendered value already.
+// Only `COLOR_0` — the ETL's `materials:` table, which is what `Q33`'s
+// `reflectance x exposure_anchor` rule is about — passes through it.
+//
+// ⚠️ **It ships at 1.0 and is inert until `P5-28c` un-bakes the ETL side.**
+// Both halves of a `reflectance x anchor` product must move in one commit or the
+// city renders at the square of the anchor, or at none of it.
+global uniform float exposure_anchor;
+
 group_uniforms surface;
 // ⚠️ **Roughness is the load-bearing value here, not colour.** `hong_kong.yaml`
 // already places both albedos against published albedo under `Q33`'s palette
@@ -69,7 +86,7 @@ const float TRAMWAY_CLASS_RAIL = 1.0;
 varying flat float is_rail;
 
 void vertex() {
-	albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
+	albedo_linear = vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor;
 	// `floor(x + 0.5)` first, on the same promise `road_markings.gdshader`
 	// decodes under: the field is a small exact integer in float32.
 	is_rail = step(TRAMWAY_CLASS_RAIL - 0.5, floor(UV2.x + 0.5));

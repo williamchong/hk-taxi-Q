@@ -6,5 +6,6 @@
 resource_name = "lamps"
 render_priority = 0
 shader = ExtResource("1_signs")
+shader_parameter/apply_exposure = true
 shader_parameter/plate_roughness = 0.8
 shader_parameter/sheeting_glow = 0.0

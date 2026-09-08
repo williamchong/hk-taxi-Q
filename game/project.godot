@@ -111,3 +111,10 @@ renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_3d=2
 occlusion_culling/use_occlusion_culling=true
+
+[shader_globals]
+
+exposure_anchor={
+"type": "float",
+"value": 1.0
+}

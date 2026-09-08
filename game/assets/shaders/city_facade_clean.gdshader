@@ -63,6 +63,31 @@ render_mode cull_back;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
+// The rig's exposure (`Q38`, `P5-28b`). One global shader parameter, declared in
+// `project.godot` `[shader_globals]` and set by `scripts/world/lighting_rig.gd`
+// from an export on the rig scene, so the time of day is a number in a scene
+// rather than a value baked into every vertex of every tile at build time.
+//
+// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
+// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
+// different operation and applied to a `.tres` colour it would move paint,
+// glazing and rail colour that are authored at their rendered value already.
+// Only `COLOR_0` — the ETL's `materials:` table, which is what `Q33`'s
+// `reflectance x exposure_anchor` rule is about — passes through it.
+//
+// ⚠️ **It ships at 1.0 and is inert until `P5-28c` un-bakes the ETL side.**
+// Both halves of a `reflectance x anchor` product must move in one commit or the
+// city renders at the square of the anchor, or at none of it.
+global uniform float exposure_anchor;
+
+// ⚠️ **Read at BOTH sites `COLOR` is consumed here, and that is not a
+// convenience.** The vertex stage takes the building's colour into CIELAB to
+// pull the pane's chromaticity toward it (`Q45`), and the fragment stage uses it
+// as albedo. Lab is not a linear space, so scaling before the conversion and
+// scaling after it are different pulls — and the pull the `A‴` frames were
+// accepted on is the one taken on the *exposed* colour, because that is what the
+// ETL baked. Anchor first, then convert.
+
 // Marker values, matching `SurfaceClass` in `etl/pipeline/config.py`.
 const float MARKER_FACADE = 0.0;
 const float MARKER_GROUND = 1.0;
@@ -490,7 +515,7 @@ void vertex() {
 				// (1 − pull). Both effects are in the `A‴` frames the look was
 				// accepted on — change the order or the maths and the accepted
 				// look moves.
-				vec3 building_lab = linear_to_lab(vertex_srgb_to_linear(COLOR.rgb));
+				vec3 building_lab = linear_to_lab(vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor);
 				pane_lab.yz = mix(pane_lab.yz, building_lab.yz, pane_hue_pull);
 			}
 			fallback_pane = lab_to_linear(pane_lab);
@@ -553,7 +578,11 @@ void fragment() {
 	bool is_facade = marker < MARKER_FACADE + 0.5;
 	float seed = floor(phase * PHASE_STEPS + 0.5);
 
-	vec3 albedo = mix(vertex_srgb_to_linear(COLOR.rgb), base_colour, is_facade ? base_wash : 0.0);
+	vec3 albedo = mix(
+			vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor,
+			base_colour,
+			is_facade ? base_wash : 0.0
+		);
 	if (is_facade) {
 		// Put back the per-building variation the wash just flattened, and
 		// ground the wall where it meets the pavement.

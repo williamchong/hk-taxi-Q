@@ -3497,6 +3497,43 @@ away from a linear-light mean, and the same family as the bug `Q27` closed. **Ch
 
 **Status.** 🟡 Open — **planned 2026-09-08 as `PLAN.md` `P5-28a`–`P5-28d`, on three of the user's calls**: the survey tint is applied at reflectance level and the look re-judged (`P5-28d`), `render_cool` is moved one code under its cited range rather than the range widened (`P5-28a`), and the anchor lives in the lighting rig as a global shader parameter (`P5-28b`). ⚠️ **The claim below is corrected by that plan**: the anchor stopped being "one invertible, spatially-uniform scalar" when `Q40` shipped the CIELAB hue tint on the baked colour — measured ΔE 1.2–6.0 between tinting before and after the scale, almost all in b*. And the road is a `ShaderMaterial` since `P3-12`, so the `albedo_color` route is stale; the rig's global reaches it through `road_markings.gdshader` · **Owner.** night mode
 
+**`P5-28b` (2026-09-08) — the engine side, shipped inert.** `project.godot` declares
+`[shader_globals] exposure_anchor` as a `float` at **1.0**; `scripts/world/lighting_rig.gd` sets it in
+`_ready` from an `@export` on `clean_daylight.tscn` and `golden_hour.tscn`, both at 1.0; six shaders
+read it after `vertex_srgb_to_linear` and never on a `.tres` colour — `city_facade`,
+`city_facade_clean`, `road_markings`, `tramway`, the new `vertex_albedo`, and `signs` behind a
+per-`.tres` `apply_exposure` that only `lamps.tres` sets. ⚠️ **`city_facade_clean` reads it at BOTH
+sites `COLOR` is consumed**, the fragment albedo and `Q45`'s vertex-stage CIELAB pane pull: Lab is not
+linear, so scaling before the conversion and after it are different pulls, and the one the `A‴` frames
+were accepted on is the pull taken on the exposed colour.
+
+🔴 **`landmark_vertex` and `barrier_vertex` left the import hook's `BaseMaterial3D` branch, and
+reproducing that branch in GLSL took two things that are not the sRGB conversion.** A
+`StandardMaterial3D` reports `diffuse_mode = 0` and `specular_mode = 0` and writes both into the
+shader it generates; a hand-written spatial shader naming neither gets the *language's* defaults —
+**10,234 px** of the `Q31` skyline at up to 4 codes. And it linearises in the **vertex** stage and
+interpolates the linear result, where every other shader here converts per fragment; sRGB-to-linear is
+convex, so the fragment-stage form is uniformly darker by Jensen. With both stated the residual is
+**101 px at ≤ 2 codes**, 96 of them on Central Plaza — bounded and measured, not explained, and
+**Godot's own curve spelling was tested and is not the cause** (identical 101). The `Q27` street frame
+is **9 px at ≤ 2 codes**. ⚠️ **That is not byte-identical and the plan asked for byte-identical**;
+what it is instead is a two-order-of-magnitude reduction from the render-mode default, published
+rather than absorbed.
+
+✅ **Otherwise inert, measured.** Throttle route `prims` and `draws` **identical at every second**
+(105/105/104/106/109/107) and the car's position identical to the centimetre; PCK
+56,324,108 → **56,330,396 B (+6,288, +0.0112%)**; `check.sh` green including the new `settings` pin,
+which mutation-fails at `1.0` → `0.9`. 🔴 **And the shaders demonstrably read it**: at
+`exposure_anchor = 0.5` in both rigs, 91.5% of the driven frame moves and **0 of 17,889** interior
+red bodywork pixels do; on the `Q27` street frame 71.3% of the skyline responds at p50 12.2 `L*` while
+**0 of 33** interior NO ENTRY red pixels move. An unread global renders perfectly at any value
+(`Q72`), so that pair is the test, not the counter.
+
+⚠️ **`asset_viewer.tscn` is the wrong instrument for this** and cost a wrong first reading: its
+free-look camera framed the taxi **one pixel** further left in the second run, so 18,040 px "moved" at
+up to 202 codes with the shading identical. A cross-correlation found the shift; the drive scene's
+chase camera is on the physics clock and does not have it.
+
 **Claim.** `config.py` applies the anchor at load, so the product ships it baked into the vertex
 stream — and changing the time of day is a full tile rebuild. It is also the one place the project
 puts an illumination term in the albedo channel it otherwise guards strictly (`Q27`, `Q36`), though a

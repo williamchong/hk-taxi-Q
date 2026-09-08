@@ -43,6 +43,23 @@ render_mode cull_back;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
+// The rig's exposure (`Q38`, `P5-28b`). One global shader parameter, declared in
+// `project.godot` `[shader_globals]` and set by `scripts/world/lighting_rig.gd`
+// from an export on the rig scene, so the time of day is a number in a scene
+// rather than a value baked into every vertex of every tile at build time.
+//
+// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
+// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
+// different operation and applied to a `.tres` colour it would move paint,
+// glazing and rail colour that are authored at their rendered value already.
+// Only `COLOR_0` — the ETL's `materials:` table, which is what `Q33`'s
+// `reflectance x exposure_anchor` rule is about — passes through it.
+//
+// ⚠️ **It ships at 1.0 and is inert until `P5-28c` un-bakes the ETL side.**
+// Both halves of a `reflectance x anchor` product must move in one commit or the
+// city renders at the square of the anchor, or at none of it.
+global uniform float exposure_anchor;
+
 // Must match the `MARKING_*` codec constants in `etl/pipeline/surface.py`.
 // ⚠️ Contract, not tuning — `docs/ARCHITECTURE.md` is the tiebreak if these and
 // the ETL ever disagree, and `tools/verify_road_surface.gd` is what notices.
@@ -256,7 +273,7 @@ void vertex() {
 	// one colour per strip, and that argument covers the colour and not the
 	// alpha — which now varies per vertex on purpose. Folding the two into one
 	// varying would make the extent flat and silently undo `P3-13`.
-	albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
+	albedo_linear = vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor;
 }
 
 // Coverage of a line of half-width `half_w` centred at `at`, over a fragment

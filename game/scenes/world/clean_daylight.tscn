@@ -1,8 +1,11 @@
-[gd_scene format=3 uid="uid://b4u0ble8tc3t"]
+[gd_scene load_steps=3 format=3 uid="uid://b4u0ble8tc3t"]
 
 [ext_resource type="Environment" uid="uid://gvsisvctocxo" path="res://tuning/clean_daylight.tres" id="1_env"]
+[ext_resource type="Script" uid="uid://dmnika1m6lujo" path="res://scripts/world/lighting_rig.gd" id="2_rig"]
 
 [node name="CleanDaylight" type="Node3D" unique_id=300758112]
+script = ExtResource("2_rig")
+exposure_anchor = 1.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2008482965]
 environment = ExtResource("1_env")

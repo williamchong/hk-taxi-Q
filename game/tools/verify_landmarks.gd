@@ -47,6 +47,10 @@ const STREETSCAPE_CLEARANCE_M: float = 16.0
 ## slack costs the check nothing it was catching.
 const PLACEMENT_ALLOWANCE_M: float = 15.0
 
+## The material `tools/generated_scene_import.gd` dispatches `landmark_vertex`
+## to, mirrored from its `SHADERS` table (`P5-28b`).
+const HERO_MATERIAL: String = "res://tuning/landmarks.tres"
+
 
 func _init() -> void:
 	var manifest: Manifest = Manifest.load_manifest()
@@ -100,6 +104,11 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 	# nothing but a drive. `check_collision` rather than `has_collision` for the
 	# richer report, the same reason `verify_tiles.gd` uses it.
 	var collision: PackedStringArray = MeshContract.check_collision(node)
+	# The hero's albedo has to read `exposure_anchor` (`P5-28b`), and only a
+	# `ShaderMaterial` can. A hero left on the importer's `BaseMaterial3D`
+	# branch draws in the right place in a plausible colour and is wrong by a
+	# constant factor, which no other check here can see.
+	var materials: PackedStringArray = _check_materials(node, HERO_MATERIAL)
 	node.free()
 
 	if measured.size == Vector3.ZERO:
@@ -109,6 +118,8 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 	if triangles > budget:
 		problems.append("%s: %d triangles against the %d budget" % [landmark_id, triangles, budget])
 	for problem: String in collision:
+		problems.append("%s: %s" % [landmark_id, problem])
+	for problem: String in materials:
 		problems.append("%s: %s" % [landmark_id, problem])
 
 	var placement: Variant = GeneratedLandmarks.placement_of(entry)
@@ -170,3 +181,26 @@ func _probe_tiles(manifest: Manifest, entry: Dictionary, landmark_id: String) ->
 			)
 		]
 	return []
+
+
+## Every mesh below `node` uses `expected`, dispatched by `resource_path`.
+##
+## 🔴 **`check_shader_material` and never `check_shader_source`** (`P5-28b`):
+## `landmarks.tres` and `barrier_vertex.tres` share `vertex_albedo.gdshader`, so
+## the source cannot tell a hero handed the barrier's material from a correct one
+## — and both render perfectly either way, because they differ in nothing today.
+## The path is the only thing that can fail here, which is exactly `Q61`'s
+## argument for the railing classes.
+func _check_materials(node: Node, expected: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var instance := node as MeshInstance3D
+	if instance != null and instance.mesh != null:
+		for surface: int in instance.mesh.get_surface_count():
+			problems.append_array(
+				MeshContract.check_shader_material(
+					instance.mesh, surface, "%s surface %d" % [node.name, surface], expected
+				)
+			)
+	for child: Node in node.get_children():
+		problems.append_array(_check_materials(child, expected))
+	return problems

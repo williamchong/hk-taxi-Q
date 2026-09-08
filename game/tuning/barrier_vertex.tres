@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://drqk4l1jv6c8n"]
+
+[ext_resource type="Shader" uid="uid://bwvvyb3tf7lj3" path="res://assets/shaders/vertex_albedo.gdshader" id="1_albedo"]
+
+[resource]
+resource_name = "barrier_vertex"
+render_priority = 0
+shader = ExtResource("1_albedo")
+shader_parameter/roughness_value = 0.9

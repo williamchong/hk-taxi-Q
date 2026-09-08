@@ -36,6 +36,10 @@ const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 ## grades the generator where this grades the shipped import.
 const TRIANGLE_BUDGET: int = 600
 
+## The material `tools/generated_scene_import.gd` dispatches `barrier_vertex`
+## to, mirrored from its `SHADERS` table (`P5-28b`).
+const BARRIER_MATERIAL: String = "res://tuning/barrier_vertex.tres"
+
 ## How far outside `bounds_game` a barrier may stand. A mouth sits inside the
 ## region by construction — it is a node on a published edge — so the honest
 ## slack is the row's own reach: half a span of units swung about the mouth,
@@ -139,6 +143,11 @@ func _check_the_prop(document: Dictionary, placements: int) -> PackedStringArray
 	# `check_collision` rather than `has_collision` for the richer report, the
 	# same reason `verify_landmarks.gd` uses it.
 	var collision: PackedStringArray = MeshContract.check_collision(node)
+	# The prop's albedo has to read `exposure_anchor` (`P5-28b`), and only a
+	# `ShaderMaterial` can. ⚠️ **`barrier_vertex.tres`, never `barriers.tres`** —
+	# the second is the railing class of the same word, and a barrier handed it
+	# draws a picket fence in the right place.
+	var materials: PackedStringArray = _check_materials(node, BARRIER_MATERIAL)
 	node.free()
 
 	if bounds.size == Vector3.ZERO:
@@ -151,6 +160,8 @@ func _check_the_prop(document: Dictionary, placements: int) -> PackedStringArray
 	for problem: String in collision:
 		# 🔴 The inversion of `verify_railings.gd`'s rule. A barrier the car
 		# drives through is `Q19`'s invisible wall with a picture over it.
+		problems.append("%s: %s" % [asset, problem])
+	for problem: String in materials:
 		problems.append("%s: %s" % [asset, problem])
 	# Authored standing on the road, continuing below it. A prop authored the
 	# other way up places every barrier in the region buried or floating, by the
@@ -323,3 +334,26 @@ func _undressed_in_the_fenced_set(
 		if not reached.has(edge_id):
 			undressed.append(edge_id)
 	return undressed
+
+
+## Every mesh below `node` uses `expected`, dispatched by `resource_path`.
+##
+## 🔴 **`check_shader_material` and never `check_shader_source`** (`P5-28b`):
+## `landmarks.tres` and `barrier_vertex.tres` share `vertex_albedo.gdshader`, so
+## the source cannot tell a hero handed the barrier's material from a correct one
+## — and both render perfectly either way, because they differ in nothing today.
+## The path is the only thing that can fail here, which is exactly `Q61`'s
+## argument for the railing classes.
+func _check_materials(node: Node, expected: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var instance := node as MeshInstance3D
+	if instance != null and instance.mesh != null:
+		for surface: int in instance.mesh.get_surface_count():
+			problems.append_array(
+				MeshContract.check_shader_material(
+					instance.mesh, surface, "%s surface %d" % [node.name, surface], expected
+				)
+			)
+	for child: Node in node.get_children():
+		problems.append_array(_check_materials(child, expected))
+	return problems

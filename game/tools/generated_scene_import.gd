@@ -74,6 +74,22 @@ const SHADERS: Dictionary = {
 	# shader.
 	"lamps": "res://tuning/lamps.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
+	# The two authored props (`P5-28b`). 🔴 **They are here because a
+	# `BaseMaterial3D` cannot read a global shader parameter**, not because they
+	# wanted a shader: both used to fall through to the last branch of `_apply`
+	# below, which is the `Q27` fix in its `BaseMaterial3D` form and is entirely
+	# correct for what it does. What it cannot do is scale an albedo by
+	# `exposure_anchor`, so once the ETL stops baking the anchor into `COLOR_0`
+	# (`P5-28c`) a prop left on that branch renders pale by a constant factor —
+	# which reads as a lighting choice rather than as a bug. They share
+	# `vertex_albedo.gdshader`, the smallest shader here, and differ in nothing
+	# today; ⚠️ **two rows and two `.tres` anyway**, because one shared material
+	# would leave `verify_landmarks.gd` and `verify_fence.gd` nothing to tell
+	# apart. ⚠️ **`barrier_vertex`, never `barriers`** — that name is taken by the
+	# railing class of the same word, and a prop handed `barriers.tres` draws a
+	# picket fence where a road barrier should stand.
+	"landmark_vertex": "res://tuning/landmarks.tres",
+	"barrier_vertex": "res://tuning/barrier_vertex.tres",
 }
 
 ## The one material in the bundle that arrives carrying an image (`P3-20`).

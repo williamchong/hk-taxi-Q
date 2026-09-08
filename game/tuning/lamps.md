@@ -64,6 +64,21 @@ Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, on
 rigs — the second because the glow parameter is the one that misbehaves in low
 light, and a dark lantern that reads as lit is exactly the failure above.
 
+## `shader_parameter/apply_exposure = true`
+
+🔴 **`true` here and absent — so `false` — on `signs.tres` and `signals.tres`,
+which is the whole reason the flag exists** (`P5-28b`). All three sit on
+`signs.gdshader`, and only one of them is an *exposed* material: a lamp column's
+colour comes from `hong_kong.yaml`'s `materials:` table, so it is `Q33`'s
+`reflectance x exposure_anchor` and has to scale with the rig. A sign's livery is
+a printed specification — TD prints NO ENTRY red — so `signs.colours` is exempt
+from the palette rule and must not move with the time of day.
+
+⚠️ **The default is off, deliberately.** A fourth `.tres` on this shader that
+forgets the flag keeps a printed colour printed, which is the safe failure: an
+over-exposed lamp post is visible in any frame, and an under-exposed sign face is
+a livery nobody can grade by eye.
+
 ## `shader_parameter/plate_roughness = 0.80`
 
 Rougher than a sign plate's 0.55 and rougher than a signal head's 0.72. A lamp

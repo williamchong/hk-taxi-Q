@@ -30,6 +30,24 @@ shader_type spatial;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
+// The rig's exposure (`Q38`, `P5-28b`), read **conditionally** — the one shader
+// here that does.
+//
+// 🔴 **Three layers share this file and only one of them is an exposed material.**
+// `lamps.tres` colours a galvanised column out of `hong_kong.yaml`'s `materials:`
+// table, so it is `Q33`'s `reflectance x exposure_anchor` and must scale with the
+// rig. `signs.tres` and `signals.tres` colour a printed specification — TD prints
+// NO ENTRY red, and a red that changes with the time of day is a different sign —
+// so `signs.colours` is exempt from the palette rule and must not scale.
+//
+// ⚠️ **A `.tres` parameter rather than a second shader**, which is `Q61`'s and
+// `Q71`'s rule at a third layer: a layer is a parameterisation. It defaults
+// **off**, so a new `.tres` that forgets the flag keeps a printed colour printed
+// — the safe side, because an over-exposed lamp post is visible and an
+// under-exposed sign face is a livery nobody can grade.
+global uniform float exposure_anchor;
+uniform bool apply_exposure = false;
+
 // ⚠️ **`cull_back`, so winding decides visibility and the normal attribute does
 // not** — and this is the opposite call from `railings.gdshader`, which is the
 // bundle's only `cull_disabled` mesh. `Q61` made it so because a fence is one
@@ -52,7 +70,8 @@ uniform float plate_roughness : hint_range(0.0, 1.0) = 0.55;
 uniform float sheeting_glow : hint_range(0.0, 1.0) = 0.06;
 
 void fragment() {
-	vec3 albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
+	vec3 albedo_linear = vertex_srgb_to_linear(COLOR.rgb)
+		* (apply_exposure ? exposure_anchor : 1.0);
 	ALBEDO = albedo_linear;
 	ROUGHNESS = plate_roughness;
 	// Tinted by the plate's own colour rather than added white, so the glow

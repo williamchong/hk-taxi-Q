@@ -1,8 +1,11 @@
-[gd_scene format=3 uid="uid://dbn60sxhmasgw"]
+[gd_scene load_steps=3 format=3 uid="uid://dbn60sxhmasgw"]
 
 [ext_resource type="Environment" uid="uid://cr87j8pg3bca7" path="res://tuning/golden_hour.tres" id="1_env"]
+[ext_resource type="Script" uid="uid://dmnika1m6lujo" path="res://scripts/world/lighting_rig.gd" id="2_rig"]
 
 [node name="GoldenHour" type="Node3D" unique_id=130366232]
+script = ExtResource("2_rig")
+exposure_anchor = 1.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1807605507]
 environment = ExtResource("1_env")
