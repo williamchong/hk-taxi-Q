@@ -102,8 +102,8 @@ materials:
     reflectance: 61.5
     source: "back-derived from 235aa4f, not cited; ceramic facade tile is 45-65%"
   render_cool:
-    colour: "#949995"
-    reflectance: 60.1
+    colour: "#939995"
+    reflectance: 59.9
     source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
   panel_grey:
     colour: "#8e9393"

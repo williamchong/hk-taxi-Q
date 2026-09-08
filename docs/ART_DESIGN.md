@@ -64,7 +64,7 @@ Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it i
 | `render_warm` | 48.7% | ⚠️ **back-derived, not cited** | `#968872` |
 | `render_pale` | 58.4% | ⚠️ **back-derived, not cited** | `#9d9586` |
 | `tile_neutral` | 61.5% | ⚠️ **back-derived, not cited** | `#9a9a90` |
-| `render_cool` | 60.1% | ⚠️ **back-derived, not cited** | `#949995` |
+| `render_cool` | 59.9% | ⚠️ **back-derived, not cited** | `#939995` |
 | `panel_grey` | 55.2% | ⚠️ **back-derived, not cited** | `#8e9393` |
 | `concrete_kerb` | 25.0% | weathered concrete, 20–30% | `#68655c` |
 | `concrete_sooty` | 22.0% | weathered + sooty concrete | `#615f5a` |
@@ -76,6 +76,9 @@ unchanged by the rule, so their reflectance is simply what the shipped colour cl
 is divided out — the rule is calibrated *on* them and therefore cannot also check them. They read
 49–62%, at the top of what painted render and ceramic tile do. If that is wrong the anchor is wrong
 with it and every other colour moves. Recorded as a number precisely so it is arguable.
+⚠️ **`render_cool` read 60.1% until `P5-28a` and was the one entry outside the range its own source
+names.** It was moved one 8-bit code, `#949995` → `#939995`, to 59.9% — the colour was corrected and
+the range was not widened, which is the direction this rule only works in.
 
 ⚠️ **Five names for what is really one material family** at five lightnesses. That is a real claim,
 and a deliberately weaker one than a height→material mapping would make (`Q34`). Do not rename the

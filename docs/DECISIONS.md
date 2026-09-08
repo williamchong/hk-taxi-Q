@@ -3209,6 +3209,25 @@ leaves 15.6 `L*` of separation, so the 0.15 m riser reads as an edge.
 cannot also be checked by it, and they read 49–62% — at the top of what render and tile do. That soft
 spot is what opened `Q34`.
 
+✅ **`P5-28a` (2026-09-08) closed the one entry that sat outside its own stated range**, and closed it
+in the direction this rule only works in: `render_cool` read **60.1%** against a `source:` naming
+30–60% for painted render, so the *colour* was moved one 8-bit code — `#949995` → `#939995`, 59.9% —
+and the range was **not** widened. A back-derived reflectance is not evidence, so it cannot be the
+thing that yields; what it can do is stay inside the band the source names, which is the only claim it
+is making. Measured: `_check_exposure` green (luminance 31.155% against the 31.148% the claim
+predicts, a twentieth of the 0.5 pt tolerance); every bundle file byte-identical bar 72 of 132 tile
+files and `city.json`'s timestamp; **no field but `COLOR_0` moved in any of them**, asserted field by
+field over positions, normals, triangles, `TEXCOORD_0` and `TEXCOORD_1`; 36,873 of 699,492 vertices
+(5.3%) moved, none by more than **one code in any channel**, at a rendered **L\* p50 −0.09** and worst
+−0.38. `facade_chroma.py --shipped` moved ≤ **0.04 `C*`** at the shipped strength. Both `Q27` cameras
+differ and neither shows a **0.5 `L*` responding pixel**.
+
+⚠️ **9,045 of those 36,873 vertices moved in two or three channels, not one** — a −1 in red alone,
+handed through `with_hue`'s CIELAB round trip and re-quantised. That is the non-commutativity `P5-28`
+is about, arriving in miniature: the tint does not carry a linear change to the base colour through
+unchanged. It is also why `frame_stats.py` printed *"Nothing moved — check the reimport"* on a pair
+`cmp` says differs: its responding-pixel bar is 0.5 `L*` and the whole move is a fifth of that. Read
+that warning as "under the bar", not as a stale import, whenever `cmp` disagrees with it.
 
 **The method lesson.** A palette compared only to itself cannot tell you its outlier is its only
 correct member. The fix is not more rigour, it is an **external referent**.
