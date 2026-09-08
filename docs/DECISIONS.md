@@ -19924,8 +19924,47 @@ ties); cutting both regions at one agreed easting (a cut vertex is still not a g
 attribute seam stays); omitting the non-owner's foreign copy (the boundary junction loses a mouth and
 the merged runtime graph has no handover edge); moving `bounds` to a grid-aligned line (`Q10`).
 
-**Status.** 🟡 **Open — the rule is written; nothing built.** Owned by `P5-7`, with the runtime half
-in `P5-9`.
+### ✅ The rule applied to the nine, and two things it did not say — planned 2026-09-08 (`P5-7b`–`P5-7g`)
+
+Read off the two shipped graphs before any code: the boundary node is the Wan Chai edge's `to` where
+travel runs east and its `from` where it runs west, so the owner falls out of the published direction.
+
+| feature | level | `wan_chai` | `causeway_bay` | owner | far half the owner measures |
+|---|---|---|---|---|---|
+| CENTRAL-WAN CHAI BYPASS TUNNEL | −1 | `e489` | `e93` | causeway_bay | 111 m west |
+| unnamed ramp | 1 | `e364` | `e85` | wan_chai | 110 m east |
+| unnamed ramp | 1 | `e496` | `e96` | causeway_bay | 133 m west |
+| GLOUCESTER ROAD | 0 | `e171` | `e32` | wan_chai | 54 m east |
+| CAUSEWAY ROAD | 0 | `e356` | `e80` | wan_chai | 54 m east |
+| CAUSEWAY ROAD | 0 | `e117` | `e20` | causeway_bay | 26 m west |
+| TUNG LO WAN ROAD, two-way | 0 | `e10` | `e1` | causeway_bay (source order) | 37 m west |
+| COTTON PATH | 0 | `e691` | `e176` | wan_chai | 52 m east |
+| CAROLINE HILL ROAD | 0 | `e61` | `e11` | causeway_bay | 40 m west |
+
+Four to Wan Chai and five to Causeway Bay, and the two level-1 ramps split one each way — so the
+reach fetch is owed by **both** regions, not by Wan Chai alone as the paragraph above assumed.
+
+🔴 **The outer strip.** Rule 1 tests the geodetic box, but `GameTransform.from_bounds` floors the
+origin *outward* (`Q7`), so the clip rectangle is up to 0.56 m wider than the geodetic box on the
+west and north. A run clipped at an outer edge therefore starts at a point inside no declared region.
+The fallback is the clip rectangle itself, which cannot conflict because no neighbour lies beyond an
+outer edge, and the build asserts the fallback never fires on an internal line.
+
+🔴 **The inertness proof is not byte-identity on 788 edges.** Widening the read box lets a survey ray
+from a station within `max_ray_m` of the shared line reach kerb lines the rectangle used to cut off,
+so a few measured widths near the line will move, correctly. The proof is: predict that set, require
+every moved edge to be in it, and byte-identity on the rest.
+
+🔴 **Causeway Bay's own calls, recorded so the build does not make them by default**: no carve —
+`e45` is a ramp's mass descending through the path and `e46` is a `Q90` touchdown for `P2-7` — with
+the fence's 170 of 39,402 pairs as the number a carve has to beat; the `clearance_reconcile` ratchet
+region-keyed because a count is per region, and the `BUILDING` share and ground-proud bars left as
+recorded findings of `Q19`'s and `Q24`'s classes rather than retuned; the owner's far half has no
+tiles under it, so its `clear_width_m` is refused and counted over at most 133 m on nine edges, not
+read off the neighbour's `etl/out`, which would make one region's build depend on another's.
+
+**Status.** 🟡 **Open — the rule is written and broken down as `P5-7b`–`P5-7g` (2026-09-08); nothing
+built.** Owned by `P5-7`, with the runtime half in `P5-9`.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught
