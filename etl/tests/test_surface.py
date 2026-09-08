@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pipeline import roads
 from pipeline.buildings import Grid
 from pipeline.gltf import read_glb, read_render
 from pipeline.polyline import Segments, plan_lengths
@@ -2215,3 +2216,71 @@ class TestTheClampReachesTheBuiltRibbon:
         )
         assert entry["half_width_m"] == pytest.approx(wide["half_width_m"])
         assert entry["offset_m"] == pytest.approx(wide["offset_m"])
+
+
+class TestJoinCaps:
+    """`Q116`'s one exception to "the non-owner draws nothing" (`P5-7f`): a
+    junction cap admits the mouth of a neighbour-owned run, and a cap goes
+    whole to the region containing its node.
+
+    Built through the roads stage on `testville_pair`, because the question is
+    about two regions' documents agreeing: `middle` holds the junction at
+    (700, 620) where its SPOKE leaves east's LONG, and `east` holds the one at
+    (1100, 100) where middle's MAIN meets east's BACK. Each region has one
+    owned arm and one foreign arm at *both* nodes, so which region caps which
+    is decided by the node alone.
+    """
+
+    @staticmethod
+    def _build(city, tmp_path: Path) -> dict[str, tuple[SurfaceReport, dict]]:
+        out = {}
+        for region in ("middle", "east"):
+            roads.build_region(
+                city, region, sources_root=tmp_path / "sources", out_root=tmp_path / "out"
+            )
+            report = build_region(city, region, out_root=tmp_path / "out")
+            manifest = json.loads((tmp_path / "out" / region / SURFACE_MANIFEST_NAME).read_text())
+            out[region] = (report, manifest)
+        return out
+
+    def test_each_seam_junction_is_capped_by_the_region_holding_its_node(
+        self, testville_pair, tmp_path
+    ) -> None:
+        city, sources = testville_pair
+        built = self._build(city, sources)
+
+        for region in ("middle", "east"):
+            report, manifest = built[region]
+            assert report.caps_with_foreign_mouth == 1
+            assert report.caps_in_neighbour == 1
+            assert manifest["join"] == {
+                "foreign_ends": report.foreign_ends,
+                "caps_with_foreign_mouth": 1,
+                "caps_in_neighbour": 1,
+            }
+            # Drawn, trimmed and measured: the owned edges and nothing else.
+            graph = json.loads((sources / "out" / region / ROADGRAPH_NAME).read_text())
+            owned = {int(edge["id"]) for edge in graph["edges"]}
+            assert {int(row["edge"]) for row in manifest["carriageway"]} == owned
+            assert report.edges == len(owned)
+
+    def test_without_the_foreign_list_the_seam_junction_has_no_cap(
+        self, testville_pair, tmp_path
+    ) -> None:
+        """The mutation: strip `foreign_edges` from east's graph and its cap at
+        (1100, 100) is a lone arm with nothing to join — one cap fewer, and the
+        counters at 0. That is what says the cap came from the foreign mouth."""
+        city, sources = testville_pair
+        built = self._build(city, sources)
+        with_foreign, _ = built["east"]
+
+        path = sources / "out" / "east" / ROADGRAPH_NAME
+        graph = json.loads(path.read_text(encoding="utf-8"))
+        graph["foreign_edges"] = []
+        path.write_text(json.dumps(graph), encoding="utf-8")
+        without = build_region(city, "east", out_root=sources / "out")
+
+        assert without.junctions == with_foreign.junctions - 1
+        assert without.caps_with_foreign_mouth == 0
+        assert without.caps_in_neighbour == 0
+        assert without.foreign_ends == 0

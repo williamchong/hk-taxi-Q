@@ -232,7 +232,7 @@ class TestJoin:
         reports, _ = _pair_graphs(city, tmp_path)
         middle, east = reports["middle"], reports["east"]
 
-        assert {e.source_id for e in middle.edges} == {1, 4, 6}
+        assert {e.source_id for e in middle.edges} == {1, 4, 6, 7}
         assert {(e.source_id, e.foreign) for e in middle.foreign_edges} == {
             (2, "east"),
             (5, "east"),
@@ -244,10 +244,11 @@ class TestJoin:
         assert {(e.source_id, e.foreign) for e in east.foreign_edges} == {
             (1, "middle"),
             (6, "middle"),
+            (7, "middle"),
         }
         # Read within the reach, never touching middle: dropped and counted.
         assert middle.margin_dropped == 1
-        assert middle.owned_crossing == 2 and east.owned_crossing == 2
+        assert middle.owned_crossing == 3 and east.owned_crossing == 2
 
     def test_both_copies_of_a_run_end_at_the_same_place_in_the_city(self, testville_pair) -> None:
         """The whole point of the cut: the seam is a shared node, not two
@@ -266,7 +267,7 @@ class TestJoin:
             for region, report in reports.items()
         }
         shared = by_identity["middle"].keys() & by_identity["east"].keys()
-        assert {source for source, _ in shared} == {1, 2, 5, 6}
+        assert {source for source, _ in shared} == {1, 2, 5, 6, 7}
         for key in shared:
             a, b = by_identity["middle"][key], by_identity["east"][key]
             for end in ("from_node", "to_node"):

@@ -965,8 +965,11 @@ of the built mesh by triangle — every triangle keeps its three positions, norm
 `TEXCOORD`s, and the only cost is the duplicated station vertices, published as
 `roadsurface.json`'s `cut_vertices` (1,836 on Wan Chai, 39,151 → 40,987). A strip quad belongs to
 the tile the plan centre of its two stations falls in; a junction cap belongs **whole** to the tile
-its centroid falls in, so a junction never pops in halves. `CityStreamer` streams a chunk by its
-`aabb` exactly as it streams a building tile, and `drive_harness.gd` asks it to hold the chunks
+its centroid falls in, so a junction never pops in halves. Since `P5-7e` an owned run's far half
+past the region join rides in the **last column's** chunk — `_tile_keys` clips a station into the
+grid — with an `aabb` that reaches past the region, and a seam junction's cap admits the neighbour's
+mouth and is built by the region holding the node (`roadsurface.json`'s `join` block, `P5-7f`).
+`CityStreamer` streams a chunk by its `aabb` exactly as it streams a building tile, and `drive_harness.gd` asks it to hold the chunks
 under the start line **synchronously** before the first physics tick, so tick 1 — and every
 `drive.sh` timeline — is what it was when the road was one mesh. `pipeline.surface.read_surface`
 merges the chunks back into the one mesh every grader measures.

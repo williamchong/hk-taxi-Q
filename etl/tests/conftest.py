@@ -185,15 +185,20 @@ def testville_pair(tmp_path):
             line_wkb([at(1150.0, 620.0), at(700.0, 620.0)]),
             # 6: middle's, running 20 m beside 5 and across the line with it.
             line_wkb([at(950.0, 640.0), at(1100.0, 640.0)]),
+            # 7: middle's, leaving 5's far end inside middle and crossing the
+            # line — so the junction at (700, 620) has one owned arm and one
+            # foreign arm in middle, and one of each the other way round in
+            # east, where the node is not.
+            line_wkb([at(700.0, 620.0), at(1100.0, 400.0)]),
         ],
         {
-            "ELEVATION": np.array([0, 0, 0, 0, 0, 0]),
-            "TRAVEL_DIRECTION": np.array([1, 2, 3, 3, 1, 3]),
-            "ROUTE_ID": np.array([21, 22, 23, 24, 25, 26]),
+            "ELEVATION": np.array([0, 0, 0, 0, 0, 0, 0]),
+            "TRAVEL_DIRECTION": np.array([1, 2, 3, 3, 1, 3, 3]),
+            "ROUTE_ID": np.array([21, 22, 23, 24, 25, 26, 27]),
             "STREET_ENAME": np.array(
-                ["MAIN", "BACK", "INSIDE", "WEST", "LONG", "BESIDE"], dtype=object
+                ["MAIN", "BACK", "INSIDE", "WEST", "LONG", "BESIDE", "SPOKE"], dtype=object
             ),
-            "STREET_CNAME": np.array(["-99"] * 6, dtype=object),
+            "STREET_CNAME": np.array(["-99"] * 7, dtype=object),
         },
     )
     write_layer(

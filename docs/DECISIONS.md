@@ -132,7 +132,7 @@ wins.
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
 | `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` built 2026-09-07.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number. The road is **chunked, not kitted**: 65 chunks whose union is the old mesh triangle for triangle, +13 to +17 draw calls on the route, the road culled for the first time |
-| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — `P5-7b`–`P5-7e` built 2026-09-08: the cut is on the graph, nine crossings whole with one owner each and the seam a shared node; caps (`P5-7f`) and proofs (`P5-7g`) remain; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
+| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — `P5-7b`–`P5-7f` built 2026-09-08: the cut is on the graph, nine crossings whole with one owner each, the seam a shared node, and the seam junctions capped by the region holding the node; the proofs (`P5-7g`) remain; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -20022,8 +20022,31 @@ metres **13,676 → 13,818** and **2,972 → 3,228**, the far halves' runs. The 
 (`testville_pair`) with a `BACKWARD`-coded road and a two-way one drawn east to west, and the seam
 coincidence by `test_both_copies_of_a_run_end_at_the_same_place_in_the_city`.
 
-**Status.** 🟡 **Open — `P5-7b`–`P5-7e` built 2026-09-08; the caps (`P5-7f`) and the proofs
-(`P5-7g`) remain.** Owned by `P5-7`, with the runtime half in `P5-9`.
+✅ **`P5-7f` built 2026-09-08 — the caps admit the foreign mouth, and the chunk half needed no
+code.** `surface.py` prepares and shapes the neighbour's runs beside its own — against a scratch
+report, so none of it moves a counter — and their ends join the node groups, so a cap's hull reads
+every mouth at the node and a foreign arm is trimmed where the owner will draw it. 🔴 **A cap goes
+whole to the region containing its node, decided by `roads.Ownership`** — the same half-open
+geodetic test that owns a run — because with the neighbour's runs in the groups a node in the
+neighbour can gather two arms here as well, and capping it would draw one junction twice. Wan Chai:
+**10** foreign ends offered, **3** caps took a mouth, **1** left to Causeway Bay, **456 → 455**;
+Causeway Bay **8 / 3 / 1**, **117 → 119**. `roadsurface.json` publishes the three under `join`; the
+mutation that strips `foreign_edges` drops the seam cap and zeroes them, bound by
+`test_without_the_foreign_list_the_seam_junction_has_no_cap`. **0** foreign ribbon drawn.
+⚠️ **The chunk prediction was wrong in the harmless direction**: `_Builder._tile_keys` clips a
+station into the grid, so an owned far half rides in the last column's chunk with an honest `aabb`
+(`t_10_03` spans 1489–1760 m on a 1650 m region), and `city_streamer.gd` picks by `aabb` and never
+by tile id — no chunk lies in a column with no building tile, and nothing was asked of
+`verify_city.gd`. 🔴 **Two seam gaps are recorded and not closed here.** A foreign arm's trim is this
+region's radius while its ribbon is the owner's: where the owner sees fewer arms at that node its
+ribbon reaches further into the cap, which is overlap and not a gap, and it is the kind of overlap
+caps already carry. And `_read_offside` still pairs owned edges only, so a crossing carriageway's
+opposed partner across the line is unseen; the `edge ends are half of an opposed pair` line reads
+**93 / 6 / 5** before and after, which proves nothing moved and not that the seam pairs. Both are
+`P5-7g`'s to measure and `P5-9`'s to see.
+
+**Status.** 🟡 **Open — `P5-7b`–`P5-7f` built 2026-09-08; the proofs (`P5-7g`) remain.** Owned by
+`P5-7`, with the runtime half in `P5-9`.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught

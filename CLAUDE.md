@@ -1200,7 +1200,13 @@ Common emoji for this project:
   the shared axis ONLY** — the same latitude projects 4 cm apart 1.65 km east, and a union across that
   axis moved 45 of Wan Chai's own outer-edge cuts. Prove a change here with `join_seam.py`'s
   **one owner per run / 0 + 0 nodes on the line / 0 unmatched copies** and a field-by-field diff of
-  the non-crossing edges — node ids renumber, everything else must not.
+  the non-crossing edges — node ids renumber, everything else must not. 🔴 **A junction cap admits a
+  foreign mouth and goes WHOLE to the region containing its node, by `roads.Ownership`** (`P5-7f`):
+  `surface.py` shapes the foreign runs so the hull can read them and draws none; paste
+  `roadsurface.json`'s `join` block (`foreign_ends` / `caps_with_foreign_mouth` / `caps_in_neighbour`)
+  and mutation-check it by stripping `foreign_edges`. ⚠️ **The far half rides in the LAST column's
+  chunk** — `_tile_keys` clips into the grid and the streamer picks by `aabb` — so do not build an
+  out-of-grid tile id for it.
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - 🔴 **Collider changes — `buildings.collision_cell_m`, `class_collision_cell_m`, `_collider`,

@@ -942,7 +942,7 @@ def build_region(
     region_high = city.region_high(region_id)
     clip_low, clip_high = city.clip_extent(region_id)
     read_low, read_high = city.read_extent(region_id)
-    owner_of = _Ownership(city, region_id, transform)
+    owner_of = Ownership(city, region_id, transform)
 
     surfaces = _surfaces(city, region_id, sources_root)
     report = RoadReport(read=len(parts))
@@ -1329,8 +1329,12 @@ def _outside(plan: np.ndarray, low: tuple[float, float], high: tuple[float, floa
 _OUTER_STRIP_M = 1.5
 
 
-class _Ownership:
+class Ownership:
     """Which declared region a plan point belongs to (`Q116` rule 1).
+
+    Public because `surface.py` asks the same question of a node — a junction
+    cap goes whole to the region containing it — and a second containment test
+    written there would be two regions answering differently at the line.
 
     Membership is decided on the geodetic `bounds`, half-open — `west <= lon <
     east`, `south <= lat < north` — and never on the projected rectangle, so the

@@ -71,7 +71,7 @@ from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import merge, select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_steps
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 
 # ⚠️ **The barycentric point-in-triangle test is `terrain`'s, not a fourth copy.**
 # `deck_error.py` books its own copy as a known cost — importing the pipeline
@@ -433,6 +433,12 @@ class SurfaceReport:
     # the caps and tell nobody which answer was right.
     cap_rings: list[tuple[int, np.ndarray]] = field(default_factory=list)
     junctions: int = 0
+    # The region join (`P5-7f`, `Q116`'s one exception): ends of the
+    # neighbour's runs offered to the cap hull, caps that took one, and caps
+    # refused because their node lies in the neighbour — whose build draws them.
+    foreign_ends: int = 0
+    caps_with_foreign_mouth: int = 0
+    caps_in_neighbour: int = 0
     # Edge **ends** that resolved to half of an opposed one-way pair — two per
     # pair, because each half publishes its own offset. Reported because it is
     # the population two markings depend on and neither the graph nor the ribbon
@@ -1267,6 +1273,9 @@ class _End:
 
     edge: int
     at_start: bool
+    # A neighbour-owned run's end (`P5-7f`): it takes a trim so the cap hull
+    # can read its mouth where the owner will draw it, and it moves no counter.
+    foreign: bool = False
 
 
 class _Cap(NamedTuple):
@@ -1440,6 +1449,14 @@ def build_region(
 
     report = SurfaceReport()
     edges = [_prepare(edge, style, report) for edge in graph["edges"]]
+    # The neighbour's runs reaching into this region (`P5-7e`), prepared and
+    # shaped the same way so a junction cap can meet their mouths — `Q116`'s
+    # one exception to "the non-owner draws nothing". Prepared against a scratch
+    # report: nothing below draws, trims, hides or measures a foreign edge, so
+    # nothing it does may move a counter.
+    foreign_published = graph.get("foreign_edges", [])
+    foreign = [_prepare(edge, style, SurfaceReport()) for edge in foreign_published]
+    every_edge = [*edges, *foreign]
     # Zipped rather than looked up: `_prepare` maps the published edges one for
     # one and in order, so the pairing is the list's own construction. The
     # *published* widths, not the ribbon's — `dedupe` has already dropped
@@ -1461,31 +1478,50 @@ def build_region(
     report.structure_bounded_m = sum(
         _on_structure_length_m(edge, "structure_bounded") for edge in graph["edges"]
     )
-    ends = _ends_by_node_and_level(graph["edges"], edges)
-    _assign_trims(ends, edges, style, report)
+    ends = _ends_by_node_and_level([*graph["edges"], *foreign_published], every_edge)
+    report.foreign_ends = sum(end.foreign for group in ends.values() for end in group)
+    _assign_trims(ends, every_edge, style, report)
     # After the assignment, not beside `carriageway` above: the trims do not
     # exist until `_assign_trims` has seen every end that meets every node.
     report.trims_m = {
         int(published["id"]): (round(prepared.trim_start_m, 3), round(prepared.trim_end_m, 3))
         for published, prepared in zip(graph["edges"], edges, strict=True)
     }
-    _measure_level_steps(ends, edges, report)
-    for edge in edges:
+    _measure_level_steps(ends, every_edge, report)
+    for index, edge in enumerate(every_edge):
         # After the trims and before the offsets: a boundary outside the drawn
         # ribbon needs no station, and `_shape` is what turns stations into
-        # rails. See `_add_kerb_stations`.
-        report.kerb_stations += _add_kerb_stations(edge)
+        # rails. See `_add_kerb_stations`. A foreign edge is shaped so its
+        # rails exist for the cap hull to read, and counted nowhere.
+        stations = _add_kerb_stations(edge)
         _shape(edge, style)
+        if index < len(edges):
+            report.kerb_stations += stations
 
     # Capped after every ribbon exists, because a cap is defined by where the
     # ribbons it joins actually ended — including where a trim was clamped. The
     # rings are held rather than drawn straight away: a cap covers kerb too, so
     # `_hide_buried_kerbs` has to see them before any of it is emitted.
-    caps = [
-        _Cap(level, ring)
-        for (_, level), group in ends.items()
-        if (ring := _cap_ring(group, edges, report)) is not None
-    ]
+    # 🔴 **A cap goes whole to the region containing its node** (`Q116`): with
+    # the neighbour's runs in the groups, a node in the neighbour can gather
+    # two arms here too, and capping it would draw the same junction twice.
+    # Membership is `roads.Ownership`'s — the geodetic bounds, half-open — so
+    # the two builds cannot both claim a node or both refuse it.
+    owner_of = Ownership(city, region_id, city.game_transform(region_id))
+    node_plan = {int(node["id"]): (node["pos"][0], node["pos"][2]) for node in graph["nodes"]}
+    caps: list[_Cap] = []
+    for (node, level), group in ends.items():
+        if len(group) >= 2 and owner_of(np.asarray(node_plan[node])) != region_id:
+            # An upper bound on what the neighbour draws: `_cap_ring` can still
+            # refuse a group of two whose corners do not make a ring.
+            report.caps_in_neighbour += 1
+            continue
+        ring = _cap_ring(group, every_edge, report)
+        if ring is None:
+            continue
+        caps.append(_Cap(level, ring))
+        if any(end.foreign for end in group):
+            report.caps_with_foreign_mouth += 1
     _hide_buried_kerbs(edges, caps, report)
     # Held here rather than beside the `builder.fan` loop below, because that
     # loop is the *drawing* and this is the record of what will be drawn. A cap
@@ -2040,8 +2076,11 @@ def _ends_by_node_and_level(
         geometry = edges[index]
         if len(geometry.points) < 2:
             continue
+        foreign = "foreign" in edge
         for node, at_start in ((edge["from"], True), (edge["to"], False)):
-            groups[(node, geometry.level)].append(_End(edge=index, at_start=at_start))
+            groups[(node, geometry.level)].append(
+                _End(edge=index, at_start=at_start, foreign=foreign)
+            )
     return groups
 
 
@@ -2077,6 +2116,8 @@ def _assign_trims(
                 edge.trim_start_m = min(radius, ceiling)
             else:
                 edge.trim_end_m = min(radius, ceiling)
+            if end.foreign:
+                continue
             report.trimmed_ends += 1
             if ceiling < radius:
                 report.clamped_trims += 1
@@ -2954,6 +2995,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
             "bytes": report.bytes,
             "aabb": report.aabb,
             "chunks": report.chunks,
+            "join": {
+                "foreign_ends": report.foreign_ends,
+                "caps_with_foreign_mouth": report.caps_with_foreign_mouth,
+                "caps_in_neighbour": report.caps_in_neighbour,
+            },
             "carriageway": [
                 {
                     "edge": edge_id,
@@ -3000,6 +3046,13 @@ def main(argv: list[str] | None = None) -> int:
         report.triangles,
         report.vertices,
         report.bytes / 1e6,
+    )
+    log.info(
+        "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "
+        "%d caps left to the neighbour containing their node",
+        report.foreign_ends,
+        report.caps_with_foreign_mouth,
+        report.caps_in_neighbour,
     )
     log.info(
         "  %d ends trimmed back from a junction, %d of them clamped by edge length",
