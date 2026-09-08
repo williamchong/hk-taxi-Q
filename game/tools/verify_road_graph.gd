@@ -241,6 +241,7 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 
 	# --- Q54: the kerbside restrictions are well formed ---------------------
 	problems.append_array(_check_kerbside(edges))
+	problems.append_array(_check_foreign(edges, document.get("foreign_edges", [])))
 
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
@@ -1177,4 +1178,32 @@ func _check_car_bar(graph: RoadGraph, edges: Array, manifest: CityManifest) -> P
 			% [between, manifest.lane_width_m, manifest.car_width_m]
 		)
 	)
+	return problems
+
+
+## `P5-7e`: the neighbour-owned runs a region publishes for the join live in
+## their own list and never in `edges`. What would fail silently is a foreign
+## run leaking into `edges` — drawn by nothing, yet drivable — or an id shared
+## between the two lists, which a turn restriction naming it could not resolve.
+## Every entry of `foreign_edges` must name its owner, and ids stay unique
+## across both lists: an owned edge keeps its read ordinal, so `edges` has gaps
+## where a run turned foreign and no reader may index it by position.
+func _check_foreign(edges: Array, foreign: Array) -> PackedStringArray:
+	var problems: PackedStringArray = PackedStringArray()
+	var ids: Dictionary = {}
+	for edge: Dictionary in edges:
+		var id: int = int(edge.get("id", -1))
+		if ids.has(id):
+			problems.append("edge %d appears twice in `edges`" % id)
+		if edge.has("foreign"):
+			problems.append("edge %d is flagged foreign but sits in `edges`" % id)
+		ids[id] = true
+	for edge: Dictionary in foreign:
+		var id: int = int(edge.get("id", -1))
+		if ids.has(id):
+			problems.append("foreign edge %d shares an id with an owned edge" % id)
+		if str(edge.get("foreign", "")).is_empty():
+			problems.append("foreign edge %d names no owner" % id)
+		if not edge.has("source_id") or not edge.has("run"):
+			problems.append("foreign edge %d carries no (source_id, run) identity" % id)
 	return problems

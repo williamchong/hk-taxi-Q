@@ -2548,6 +2548,27 @@ class TestRegionJoin:
             region.north,
         )
 
+    def test_the_clip_box_extends_along_the_shared_axis_only(self, hong_kong) -> None:
+        """`P5-7e`: the union of two rectangles across the shared axis moved
+        45 of Wan Chai's own outer-edge cuts by centimetres of meridian
+        convergence, so the box widens only toward the neighbour."""
+        wc_high = hong_kong.region_high("wan_chai")
+        (low, high) = hong_kong.clip_extent("wan_chai")
+        (_, cb_high_in_wc) = hong_kong.rect_of("causeway_bay", frame="wan_chai")
+
+        assert low == (0.0, 0.0)
+        assert high == (cb_high_in_wc[0], wc_high[1])
+        assert high[0] > wc_high[0]
+
+        cb_high = hong_kong.region_high("causeway_bay")
+        (low, high) = hong_kong.clip_extent("causeway_bay")
+        (wc_low_in_cb, _) = hong_kong.rect_of("wan_chai", frame="causeway_bay")
+        assert low == (wc_low_in_cb[0], 0.0)
+        assert low[0] < 0.0
+        assert high == cb_high
+
+        assert hong_kong.clip_extent("mong_kok") == ((0.0, 0.0), hong_kong.region_high("mong_kok"))
+
     def test_a_region_with_no_neighbour_reads_its_own_frame(self, hong_kong) -> None:
         """The inertness proof in code form: `mong_kok` reads what it always read."""
         assert hong_kong.read_box("mong_kok") == hong_kong.projected_bounds("mong_kok")

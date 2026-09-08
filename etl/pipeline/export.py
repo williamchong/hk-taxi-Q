@@ -1012,11 +1012,14 @@ def _check_fares(fares: dict, graph: dict) -> list[str]:
 
 def _check_graph(graph: dict) -> list[str]:
     nodes = {int(node["id"]) for node in graph.get("nodes", [])}
-    edges = {int(edge["id"]) for edge in graph.get("edges", [])}
+    # A turn may name a foreign arm (`P5-7e`): the region owning the pivot
+    # publishes the movement, and the crossing road is the neighbour's.
+    every_edge = graph.get("edges", []) + graph.get("foreign_edges", [])
+    edges = {int(edge["id"]) for edge in every_edge}
 
     dangling = [
         edge["id"]
-        for edge in graph.get("edges", [])
+        for edge in every_edge
         if int(edge["from"]) not in nodes or int(edge["to"]) not in nodes
     ]
     broken = [

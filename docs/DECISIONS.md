@@ -132,7 +132,7 @@ wins.
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
 | `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` built 2026-09-07.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number. The road is **chunked, not kitted**: 65 chunks whose union is the old mesh triangle for triangle, +13 to +17 draw calls on the route, the road culled for the first time |
-| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — the assignment rule is written (2026-09-07), nothing built; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
+| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — `P5-7b`–`P5-7e` built 2026-09-08: the cut is on the graph, nine crossings whole with one owner each and the seam a shared node; caps (`P5-7f`) and proofs (`P5-7g`) remain; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -19974,8 +19974,56 @@ half, which nothing publishes until `P5-7e`. The sheet fetch cost **0 bytes**: W
 sheets were cached by `Q120`'s Causeway Bay build, and Causeway Bay's own selection already reached
 133 m west.
 
-**Status.** 🟡 **Open — `P5-7b`–`P5-7d` built 2026-09-08; the cut (`P5-7e`), the caps (`P5-7f`) and
-the proofs (`P5-7g`) remain.** Owned by `P5-7`, with the runtime half in `P5-9`.
+✅ **`P5-7e` built 2026-09-08 — the cut is on the graph, and it departs from the plan row in four
+places, each for a measured reason.** Both regions clip to `Config.clip_extent`, the own rectangle
+extended **along the shared axis only** toward the neighbour's far edge: the same latitude projects
+**4.2 cm** apart 1.65 km east, and the union across that axis too — the first build — moved where
+**45** of Wan Chai's own outer-edge runs were cut, for nothing. The price is that the two boxes differ
+by those centimetres across the shared axis, so a feature cut at the *outer* edge inside the
+neighbour's territory is cut at two places 4 cm apart: CAROLINE HILL ROAD's south end reads 886.883 in
+one frame and 886.841 in the other, which is the one seam node of sixteen not at 0.000 m; the merge
+takes the owner's copy and never sees it, and `join_seam.py` counts a foreign copy whose run the owner
+does not publish, which is what a *different run count* would read as.
+
+1. **The non-owner's copies live under a separate top-level `foreign_edges` list, not behind a
+   loader filter.** Nineteen stages and tools iterate `edges`; a list none of them opens is inert by
+   construction, where a filter with an opt-in is nineteen places to forget it and draw a road nobody
+   owns. `ROADGRAPH_SCHEMA` 12. **`CITY_SCHEMA` stays 31**: no byte of `city.json` moved and no reader
+   of it is wrong, which is hard rule 5's test; `P5-7f` bumps it if a chunk lands outside the tile grid.
+2. **Ids keep their read ordinal, with gaps.** Wan Chai publishes **792 + 5 = 797**, the old count
+   exactly, and `e99`, `e207`, `e233` and the carve list name what they named; renumbering would have
+   shifted every id after the first crossing, which is `Q120`'s carve defect from the other side.
+   ⚠️ **Node ids did renumber** — nine boundary nodes left, eight far ends arrived — so `from`/`to`
+   differ on **391 of 788** non-crossing Wan Chai edges while every other field is byte-identical.
+   No document or config cites a node id.
+3. **A foreign copy's `width_source` is `authored`, not the planned `foreign`.** The copy *is* the
+   authored width, and `foreign: <owner>` already says whose measurement a merge takes. So the
+   acceptance "`width_m` and `lanes` agree on 9 of 9" is restated: they can agree only where the owner
+   also authored, and `lanes` disagrees on **4 of 9** today *because* the owner measured. The grader's
+   bar is **one owner per run, 0 nodes on the line, 0 unmatched copies** — 9 / 9, 0 + 0, 0.
+4. **Foreign edges are offered to the kerbside join as tracks and published on nothing.** Past the
+   line the nearest road is usually the neighbour's, and with only owned tracks a Wan Chai restriction
+   20 m into Causeway Bay's read box snapped to Causeway Bay's `e0` and painted an offside run on a
+   kerb it was never posted on. Found because the moved set read four non-crossing CAUSEWAY ROAD
+   edges where the prediction was zero; with foreign tracks the moved set is the nine crossing runs
+   exactly. And the turn resolver indexes its sequence by id, so `owned + foreign` — the gaps closed —
+   resolved **35 → 11** turns in Causeway Bay with nothing raised; the sequence handed to it stays in
+   id order, and `test_a_turn_is_published_by_the_region_owning_its_pivot` fails if it does not.
+
+Measured on the pair: Wan Chai **4** owned runs cross (`e171` GLOUCESTER ROAD, `e356` CAUSEWAY
+ROAD, `e364`, `e691` COTTON PATH) and publishes **5** foreign; Causeway Bay **5** owned (`e1` TUNG LO
+WAN ROAD, `e11` CAROLINE HILL ROAD, `e20` CAUSEWAY ROAD, `e93` the bypass tunnel, `e96`) and **4**
+foreign — the table above, run for run. **0** edges cut at the internal line; turns **217 / 35**,
+unchanged; runs read in the margin and dropped **24 / 29**; owned stations beyond the reach **3 / 1**
+(`stations_beyond_reach`, the row's `foreign_unmeasured_stations`); owners decided by the outer strip
+**42 / 9**, reachable only off every geodetic box and so never on the internal line; kerbside single
+metres **13,676 → 13,818** and **2,972 → 3,228**, the far halves' runs. The ownership rule is bound by
+`test_a_crossing_run_is_owned_by_its_travel_start_and_foreign_opposite` on a two-region fixture
+(`testville_pair`) with a `BACKWARD`-coded road and a two-way one drawn east to west, and the seam
+coincidence by `test_both_copies_of_a_run_end_at_the_same_place_in_the_city`.
+
+**Status.** 🟡 **Open — `P5-7b`–`P5-7e` built 2026-09-08; the caps (`P5-7f`) and the proofs
+(`P5-7g`) remain.** Owned by `P5-7`, with the runtime half in `P5-9`.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught

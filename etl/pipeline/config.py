@@ -29,6 +29,7 @@ from pipeline.colour import reflectance
 from pipeline.crs import (
     GameTransform,
     GeodeticBounds,
+    PlanExtent,
     ProjectedBounds,
     project_bounds,
 )
@@ -3279,7 +3280,7 @@ class Config:
             max_northing=bounds.max_northing + reach["north"],
         )
 
-    def read_extent(self, region_id: str) -> tuple[tuple[float, float], tuple[float, float]]:
+    def read_extent(self, region_id: str) -> PlanExtent:
         """`(low, high)` in game plan metres — `region_high`'s box, widened by the reach.
 
         `low` is `(0, 0)` for a region with no western or northern neighbour and
@@ -3292,6 +3293,60 @@ class Config:
             (-reach["west"], -reach["north"]),
             (high_x + reach["east"], high_z + reach["south"]),
         )
+
+    def rect_of(self, other_id: str, *, frame: str) -> PlanExtent:
+        """`other_id`'s own clip rectangle — `(0, 0)` to its `region_high` in its
+        frame — expressed in `frame`'s game plan metres as `(low, high)`.
+
+        The two origins are whole metres (`GameTransform.from_bounds` floors and
+        ceils them), so the translation between frames is exact in float and
+        two neighbours computing the same rectangle from opposite sides get the
+        same numbers. That is what lets `clip_extent` be identical in both
+        builds, which is what `Q116`'s cut rests on.
+        """
+        own = self.game_transform(frame)
+        other = self.game_transform(other_id)
+        bounds = self.projected_bounds(other_id)
+        low_x, _, low_z = own.to_game(other.origin_easting, other.origin_northing)
+        high_x, _, high_z = own.to_game(bounds.max_easting, bounds.min_northing)
+        return ((low_x, low_z), (high_x, high_z))
+
+    def clip_extent(self, region_id: str) -> PlanExtent:
+        """The box a region's roads are clipped to (`Q116`, `P5-7e`): the union
+        of its own rectangle and every declared neighbour's.
+
+        A rectangle, because `neighbours` admits only whole shared edges, so
+        `roads.clip` needs no second shape. A region with no neighbour gets
+        `(0, 0)`-`region_high`, the pre-`P5-7` clip exactly. ⚠️ **This is not the
+        read box**: sources are read `join.reach_m` past the shared edge and
+        roads are kept whole across it, so a crossing run longer than the reach
+        carries stations no source covered — `roads.py` counts them.
+
+        🔴 **Extended along the shared axis ONLY.** The two regions share the
+        same latitudes, but a latitude projects to a slightly different
+        northing 1.5 km further east, so a neighbour's rectangle sits a few
+        centimetres north or south of this one. Taking the union across that
+        axis too moved where **45** of Wan Chai's own outer-edge runs were cut,
+        for nothing. The price is that the two neighbours' boxes differ by
+        those centimetres across the shared axis, so a feature cut at the outer
+        edge *inside the neighbour's territory* could in principle split into
+        a different number of runs on the two sides; `tools/join_seam.py`
+        counts a foreign copy whose identity the owner does not publish.
+        """
+        (low_x, low_z), (high_x, high_z) = self.rect_of(region_id, frame=region_id)
+        for side, other in self.neighbours(region_id).items():
+            (x0, z0), (x1, z1) = self.rect_of(other, frame=region_id)
+            if side == "west":
+                low_x = min(low_x, x0)
+            elif side == "east":
+                high_x = max(high_x, x1)
+            elif side == "north":
+                low_z = min(low_z, z0)
+            elif side == "south":
+                high_z = max(high_z, z1)
+            else:
+                raise ValueError(f"neighbour side {side!r} is not one of {SIDES}")
+        return ((low_x, low_z), (high_x, high_z))
 
     def deck_height_m(self, elevation_level: int) -> float:
         """Authored height for a road-graph ELEVATION value.

@@ -55,7 +55,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.config import KerbsideRestrictions
-from pipeline.crs import GameTransform
+from pipeline.crs import GameTransform, inside_plan
 from pipeline.polyline import plan_lengths_2d
 
 log = logging.getLogger(__name__)
@@ -164,6 +164,8 @@ def build(
     transform: GameTransform,
     region_high: tuple[float, float],
     tracks: list[tuple[int, np.ndarray]],
+    *,
+    region_low: tuple[float, float] = (0.0, 0.0),
 ) -> KerbsideReport:
     """Every restriction the region's drivable edges carry.
 
@@ -176,7 +178,7 @@ def build(
     lines = _lines(layer, spec, transform, report)
     if not lines or not tracks:
         return report
-    _assign(lines, tracks, spec, region_high, report)
+    _assign(lines, tracks, spec, region_high, report, region_low=region_low)
     return report
 
 
@@ -222,8 +224,15 @@ def _assign(
     spec: KerbsideRestrictions,
     region_high: tuple[float, float],
     report: KerbsideReport,
+    *,
+    region_low: tuple[float, float] = (0.0, 0.0),
 ) -> None:
-    """Sample every line, put each sample on an edge and a side, and merge runs."""
+    """Sample every line, put each sample on an edge and a side, and merge runs.
+
+    `region_low` is below `(0, 0)` where the road stage reads past a shared
+    edge (`P5-7e`): an owned run's far half has kerbs, and its restriction
+    lines were read within the reach.
+    """
     index = SideIndex(tracks, spec.max_offset_m)
     # `(edge, side) -> cell -> kind -> samples`. A dict of counters rather than a
     # set because the cell is where two overlapping features are deduped, and
@@ -233,12 +242,7 @@ def _assign(
     points, kinds = resample(lines, spec.sample_m)
     report.samples = len(points)
     report.metres_sampled = len(points) * spec.sample_m
-    inside = (
-        (points[:, 0] >= 0.0)
-        & (points[:, 1] >= 0.0)
-        & (points[:, 0] <= region_high[0])
-        & (points[:, 1] <= region_high[1])
-    )
+    inside = inside_plan(points[:, 0], points[:, 1], region_low, region_high)
     report.samples_outside_region = int((~inside).sum())
 
     assigned, unassigned = index.nearest(points[inside], kinds[inside])

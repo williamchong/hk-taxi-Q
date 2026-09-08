@@ -48,7 +48,7 @@ from pipeline.config import (
     SourceLayer,
     load_config,
 )
-from pipeline.crs import GameTransform
+from pipeline.crs import GameTransform, PlanExtent, inside_plan, transformer
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import cached_source
 from pipeline.gltf import normalise
@@ -156,7 +156,24 @@ ROADGRAPH_NAME = "roadgraph.json"
 # this region's 36 deck edges sit *below* their ceiling untouched.
 # ⚠️ **`width_m` does NOT move in either half.** A lane count is not a width
 # (hard rule 4), and the drawn ribbon is `max(width_m, floor)` either way.
-ROADGRAPH_SCHEMA = 11
+#
+# 12 since `P5-7e` (`Q116`): the cut moved from the rectangle to the graph. A
+# feature crossing into a declared neighbour is kept whole and owned by the
+# region holding its travel-start vertex; every edge carries `source_id` and
+# `run`, the identity a consumer merging two regions dedupes on; and the
+# non-owner publishes its copy under a SEPARATE top-level `foreign_edges` list,
+# each flagged `foreign: <owner>`. `id` stays the read ordinal on both lists, so
+# `edges` keeps every id it had and gains gaps where a run turned foreign —
+# `e207`, `e233` and the carve list mean what they meant, and no consumer
+# indexed by position (checked: every reader keys a dict on `id`).
+# 🔴 **A separate list rather than a flag on `edges`, so every reader of
+# `edges` is inert by construction** — nineteen stages and tools iterate that
+# list, and a flag each of them had to honour would be nineteen places to draw
+# a road nobody owns. `turn_restrictions` may name a foreign id, because the
+# region owning the pivot node publishes the turn and one arm may be the
+# neighbour's road. Bumped because a consumer merging two graphs would be
+# wrong to treat `id` as identity.
+ROADGRAPH_SCHEMA = 12
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -308,6 +325,13 @@ class Edge:
     # sum and the median difference — so the three can disagree along an edge
     # and that disagreement is the point rather than an inconsistency.
     deck_rim_m: tuple[tuple[float, float], ...] = ()
+    # Which run of `source_id` this is, after clipping split the feature: the
+    # second half of the identity `(source_id, run)` that survives across
+    # regions (`Q116`). `edge_id` is a per-region ordinal and does not.
+    run: int = 0
+    # The region that owns this edge, where it is not this one (`P5-7e`). Set on
+    # every entry of `foreign_edges` and on nothing in `edges`.
+    foreign: str | None = None
 
 
 @dataclass(frozen=True)
@@ -321,7 +345,24 @@ class TurnRestriction:
 class RoadReport:
     nodes: list[Node] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
+    # The neighbour-owned runs this region publishes for the join (`P5-7e`):
+    # drawn by nothing, measured by nothing, there so a boundary junction keeps
+    # its mouth and a merged graph has its handover edge.
+    foreign_edges: list[Edge] = field(default_factory=list)
     turn_restrictions: list[TurnRestriction] = field(default_factory=list)
+    # Owned runs that reach past this region's own rectangle into a neighbour,
+    # and runs read within the reach that never touch this region at all.
+    owned_crossing: int = 0
+    margin_dropped: int = 0
+    # Owned-run vertices outside the read extent: stations no source covered,
+    # so a width or height there is the fallback and not a reading (`Q54`).
+    stations_beyond_reach: int = 0
+    # Ownership decided by the clip rectangle rather than the geodetic box —
+    # only reachable on the floored outer strip, and asserted never on an
+    # internal line.
+    owner_fallback: int = 0
+    # Turns resolved on both arms but whose pivot node another region owns.
+    turns_foreign_pivot: int = 0
     # Centreline parts read, and how many the region boundary left nothing of.
     # The geodatabase's spatial filter selects on bounding box, so a long
     # feature can be selected without ever entering the region.
@@ -584,8 +625,14 @@ def resample_anchored(plan: np.ndarray, spacing_m: float) -> tuple[np.ndarray, n
     return np.vstack([stations, plan[-1]]), anchors
 
 
-def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) -> list[np.ndarray]:
-    """The runs of a polyline that lie inside `(0, 0)`-`high`, in game plan metres.
+def clip(
+    points: np.ndarray,
+    high: tuple[float, float],
+    *,
+    min_length_m: float,
+    low: tuple[float, float] = (0.0, 0.0),
+) -> list[np.ndarray]:
+    """The runs of a polyline that lie inside `low`-`high`, in game plan metres.
 
     Roads are cut at the region boundary rather than kept whole the way
     buildings are. A building overhanging its tile is half a footprint; a road
@@ -602,14 +649,14 @@ def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) 
     Runs shorter than `min_length_m` are dropped — a feature clipping a corner
     of the region contributes a stub no vehicle can occupy.
 
-    ⚠️ **This rectangle is also the region join, and that is open (`Q116`).**
-    "Nothing to seam" is true of one region on its own; two neighbours built
-    this way meet at a hard edge with no continuing graph, ribbon, kerb run
-    or lamp row, because each cut its polylines where its own rectangle fell.
-    The planned fix (`P5-7`) moves the cut onto the graph — an edge whole to
-    one region, its boundary nodes published by both — and keeps this
-    rectangle as the sheet selector only. Until then a second region cannot
-    be joined to this one, and no streaming unit changes that.
+    ⚠️ **This rectangle is no longer the region join (`Q116`, `P5-7e`).** Two
+    neighbours built on their own rectangles met at a hard edge with no
+    continuing graph, ribbon, kerb run or lamp row. The box is now
+    `Config.clip_extent` — the union of the region and its declared neighbours,
+    with `low` below `(0, 0)` where a neighbour lies west or north — so a
+    crossing feature is kept whole across the internal line and cut only at the
+    outer edge of declared territory. Which region publishes it as its own is
+    `build_region`'s ownership rule; the rectangle stays as the sheet selector.
     """
     if len(points) < 2:
         # A NULL or single-vertex geometry is legal in a geodatabase and is not
@@ -624,13 +671,13 @@ def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) 
     # three quarters belonging to five over-densified features that never leave
     # it. Testing the whole array first keeps that off the slow path. It still
     # goes through `_close`, so the minimum length is one rule rather than two.
-    if points.min() >= 0.0 and points[:, 0].max() <= high[0] and points[:, 1].max() <= high[1]:
+    if inside_plan(points[:, 0], points[:, 1], low, high).all():
         _close(runs, points, min_length_m)
         return runs
 
     current: list[np.ndarray] = []
     for start, end in itertools.pairwise(points):
-        span = _segment_inside(start, end, high)
+        span = _segment_inside(start, end, high, low)
         if span is None:
             _close(runs, current, min_length_m)
             current = []
@@ -662,14 +709,17 @@ def _close(
 
 
 def _segment_inside(
-    start: np.ndarray, end: np.ndarray, high: tuple[float, float]
+    start: np.ndarray,
+    end: np.ndarray,
+    high: tuple[float, float],
+    low: tuple[float, float] = (0.0, 0.0),
 ) -> tuple[float, float] | None:
     """Liang-Barsky: the parameter interval of a segment inside the rectangle."""
     delta = end - start
     lower, upper = 0.0, 1.0
     for axis in (0, 1):
         for gradient, offset in (
-            (-delta[axis], start[axis]),
+            (-delta[axis], start[axis] - low[axis]),
             (delta[axis], high[axis] - start[axis]),
         ):
             if gradient == 0.0:
@@ -890,6 +940,9 @@ def build_region(
     owners, parts = gdb.polylines(centrelines)
 
     region_high = city.region_high(region_id)
+    clip_low, clip_high = city.clip_extent(region_id)
+    read_low, read_high = city.read_extent(region_id)
+    owner_of = _Ownership(city, region_id, transform)
 
     surfaces = _surfaces(city, region_id, sources_root)
     report = RoadReport(read=len(parts))
@@ -908,7 +961,6 @@ def build_region(
     # every edge has been placed. `_Nodes` keys on plan position alone, so node
     # *identity* survives the split intact and only heights wait.
     pending: list[_Pending] = []
-    edges_of_source: dict[int, list[int]] = {}
     for owner, points in zip(owners, parts, strict=True):
         report.vertices_read += len(points)
 
@@ -927,22 +979,39 @@ def build_region(
 
         game_x, _, game_z = transform.to_game(points[:, 0], points[:, 1])
         plan = np.column_stack([game_x, game_z])
-        runs = clip(plan, region_high, min_length_m=style.min_edge_length_m)
+        # Cut at the outer edge of declared territory and kept whole across the
+        # internal line (`Q116`). Both neighbours clip a feature to the same
+        # box along the shared axis, so `run` below is the same ordinal in both
+        # builds; `Config.clip_extent` says by how much they differ across it.
+        runs = clip(plan, clip_high, low=clip_low, min_length_m=style.min_edge_length_m)
         if not runs:
             report.clipped += 1
-        for run in runs:
+        for ordinal, run in enumerate(runs):
             # Simplified after clipping, so the vertices the cut introduced are
             # endpoints and therefore cannot be moved.
             run = simplify(run, style.simplify_tolerance_m)
+            if not _touches(run, region_high):
+                # Read within the reach and wholly the neighbour's: nothing to
+                # publish here, and counted so the reach is seen to be read.
+                report.margin_dropped += 1
+                continue
             report.vertices_kept += len(run)
+            # The owner is the region holding the run's first vertex in the
+            # direction of travel — after the `BACKWARD` reversal above, source
+            # order for `both`. Tolerance-free, and the same answer from either
+            # region's build, because both read the same whole feature.
+            owner_region = owner_of(run[0])
+            foreign = None if owner_region == region_id else owner_region
+            if foreign is None and not _touches_only(run, region_high):
+                report.owned_crossing += 1
 
-            edge_id = len(pending)
-            edges_of_source.setdefault(source_id, []).append(edge_id)
             pending.append(
                 _Pending(
                     edge=Edge(
-                        id=edge_id,
+                        id=len(pending),
                         source_id=source_id,
+                        run=ordinal,
+                        foreign=foreign,
                         from_node=nodes.id_for(run[0, 0], run[0, 1]),
                         to_node=nodes.id_for(run[-1, 0], run[-1, 1]),
                         polyline=[],
@@ -964,21 +1033,51 @@ def build_region(
                 )
             )
 
+    edges_of_source: dict[int, list[int]] = {}
+    for item in pending:
+        edges_of_source.setdefault(item.edge.source_id, []).append(item.edge.id)
+
+    # Every run gets its heights, because a foreign run's near half is in this
+    # region and its far-end node needs a height like any other; only an owned
+    # run's counts are published, so a neighbour's road moves no counter here.
+    # 🔴 **`every_edge` stays in id order** — `_turn_restrictions` indexes it by
+    # id — where `report.edges` has a gap at every foreign run. Built once as
+    # `edges + foreign_edges`, and every turn past the first foreign id resolved
+    # against the wrong edge: 35 → 11 in Causeway Bay, with nothing raised.
     levels = _levels_at_node(item.edge for item in pending)
+    every_edge: list[Edge] = []
     for item in pending:
         edge, counts = _measured(
             item, surfaces, city.deck_height_m(item.edge.elevation_level), levels
         )
-        report.edges.append(edge)
-        report.add(counts)
-
-    heights = _node_heights(len(nodes), report.edges)
-    report.nodes = _nodes_with_kind(nodes.positions(heights), report.edges)
-    report.turn_restrictions, report.turns_unresolved = _turn_restrictions(
-        source, style, report.edges, edges_of_source
+        every_edge.append(edge)
+        if edge.foreign is None:
+            report.edges.append(edge)
+            report.add(counts)
+        else:
+            report.foreign_edges.append(edge)
+    report.stations_beyond_reach = sum(
+        _outside(np.asarray(edge.polyline)[:, [0, 2]], read_low, read_high) for edge in report.edges
     )
-    report.components = _components(len(nodes), report.edges)
-    _kerbside(source, style, transform, region_high, report)
+
+    heights = _node_heights(len(nodes), every_edge)
+    report.nodes = _nodes_with_kind(nodes.positions(heights), every_edge)
+    turns, report.turns_unresolved = _turn_restrictions(source, style, every_edge, edges_of_source)
+    # A turn is published by the region owning its pivot node (`Q116` rule 7),
+    # so two regions never publish one movement twice and a merge needs no
+    # dedupe of turns. Its arms may be foreign ids — the crossing road is one.
+    report.turn_restrictions = []
+    for turn in turns:
+        pivot = report.nodes[turn.via_node].pos
+        if owner_of(np.array([pivot[0], pivot[2]])) == region_id:
+            report.turn_restrictions.append(turn)
+        else:
+            report.turns_foreign_pivot += 1
+    report.owner_fallback = owner_of.fallbacks
+    # Over every edge, so the far end of a foreign run — a node this region
+    # publishes only because of the join — is never counted as an island.
+    report.components = _components(len(nodes), every_edge)
+    _kerbside(source, style, transform, read_low, read_high, report)
     _carriageway(city, region_id, transform, report, surfaces.deck)
 
     _write(out_root, city, region_id, report)
@@ -1019,6 +1118,7 @@ def _kerbside(
     source: _Source,
     style: RoadNetwork,
     transform: GameTransform,
+    region_low: tuple[float, float],
     region_high: tuple[float, float],
     report: RoadReport,
 ) -> None:
@@ -1036,13 +1136,27 @@ def _kerbside(
     """
     if style.kerbside is None:
         return
+    # 🔴 **Foreign edges are offered as tracks and published on nothing.** The
+    # join is nearest-road, and past the shared line the nearest road is
+    # usually the neighbour's: with only owned tracks to choose from, a Wan
+    # Chai restriction 20 m into Causeway Bay's read box snapped to Causeway
+    # Bay's `e0` and painted a run on a kerb it was never posted on. Offered,
+    # the foreign copy takes the sample and drops it here; its owner reads the
+    # same line and publishes it (`P5-7e`).
     tracks = [
         (edge.id, np.asarray(edge.polyline, dtype=np.float64))
-        for edge in report.edges
+        for edge in (*report.edges, *report.foreign_edges)
         if edge.elevation_level == 0 and len(edge.polyline) > 1
     ]
+    # The read extent, not the rectangle: an owned run's far half has kerbs
+    # too, and the restriction lines there were read within the reach.
     found = kerbside.build(
-        source.read(style.kerbside.layer), style.kerbside, transform, region_high, tracks
+        source.read(style.kerbside.layer),
+        style.kerbside,
+        transform,
+        region_high,
+        tracks,
+        region_low=region_low,
     )
     report.kerbside = found
 
@@ -1175,6 +1289,101 @@ def _direction(style: RoadNetwork, code: int, layer: str) -> str:
             f"direction for. Mapped: {known}"
         )
     return style.travel_directions[code]
+
+
+def _touches(run: np.ndarray, high: tuple[float, float]) -> bool:
+    """Whether a run has any point inside this region's own rectangle.
+
+    The vertex test is the fast path; the segment walk is what decides for a
+    run whose vertices all lie outside. With one neighbour the margin is a
+    convex strip and a segment between two of its points cannot re-enter, so
+    the walk never says yes today — it is reachable only with neighbours on two
+    perpendicular sides, where the margin is L-shaped.
+    """
+    if _outside(run, (0.0, 0.0), high) != len(run):
+        return True
+    return any(
+        _segment_inside(start, end, high) is not None for start, end in itertools.pairwise(run)
+    )
+
+
+def _touches_only(run: np.ndarray, high: tuple[float, float]) -> bool:
+    """Whether every vertex of a run lies inside this region's own rectangle.
+
+    With a micrometre of slack: a vertex the clip put *on* the outer edge sits
+    past it by float epsilon, and read exactly that counted TAI HANG ROAD as
+    crossing into a neighbour it does not touch.
+    """
+    slack = 1e-6
+    return _outside(run, (-slack, -slack), (high[0] + slack, high[1] + slack)) == 0
+
+
+def _outside(plan: np.ndarray, low: tuple[float, float], high: tuple[float, float]) -> int:
+    """How many plan points fall outside `low`-`high`."""
+    return int((~inside_plan(plan[:, 0], plan[:, 1], low, high)).sum())
+
+
+# How far outside every region's projected box a point may lie and still be
+# assigned to the nearest one: the outward flooring is under 1 m and the
+# convergence sliver under 0.1 m, so anything further is not the outer strip.
+_OUTER_STRIP_M = 1.5
+
+
+class _Ownership:
+    """Which declared region a plan point belongs to (`Q116` rule 1).
+
+    Membership is decided on the geodetic `bounds`, half-open — `west <= lon <
+    east`, `south <= lat < north` — and never on the projected rectangle, so the
+    0.624 m strip where two rectangles overlap belongs to exactly one region.
+
+    🔴 **With one fallback the written rule did not cover.** The clip rectangle
+    is floored *outward* by up to 0.56 m (`Q7`), so a run cut at the west or
+    north outer edge starts at a point inside no geodetic box. There the
+    NEAREST box decides — each region's projected bounds, in this frame's
+    metres — within `_OUTER_STRIP_M`. The boxes and not the clip rectangles,
+    because a rectangle is floored outward and two of them overlap on the
+    shared side, where a tie would be decided on the region id rather than on
+    where the point is. It cannot conflict on the internal line, where every
+    point is inside one geodetic box, and the same point reads the same from
+    both sides — the one thing an ownership rule must do.
+    """
+
+    def __init__(self, city: Config, region_id: str, transform: GameTransform) -> None:
+        self._region_id = region_id
+        self._transform = transform
+        self._to_geodetic = transformer(city.projected_crs, city.geodetic_crs)
+        candidates = [region_id, *city.neighbours(region_id).values()]
+        self._bounds = [(rid, city.region(rid).bounds) for rid in candidates]
+        own = city.game_transform(region_id)
+        self._boxes: list[tuple[str, PlanExtent]] = []
+        for rid in candidates:
+            box = city.projected_bounds(rid)
+            low_x, _, low_z = own.to_game(box.min_easting, box.max_northing)
+            high_x, _, high_z = own.to_game(box.max_easting, box.min_northing)
+            self._boxes.append((rid, ((low_x, low_z), (high_x, high_z))))
+        self.fallbacks = 0
+
+    def __call__(self, point: np.ndarray) -> str:
+        easting, northing, _ = self._transform.to_source(float(point[0]), 0.0, float(point[1]))
+        lon, lat = self._to_geodetic.transform(easting, northing)
+        for rid, b in self._bounds:
+            if b.west <= lon < b.east and b.south <= lat < b.north:
+                return rid
+        distance, rid = min(
+            (
+                max(0.0, x0 - point[0], point[0] - x1, z0 - point[1], point[1] - z1),
+                rid,
+            )
+            for rid, ((x0, z0), (x1, z1)) in self._boxes
+        )
+        if distance > _OUTER_STRIP_M:
+            raise ValueError(
+                f"point ({point[0]:.3f}, {point[1]:.3f}) in region {self._region_id!r} lies in "
+                f"no geodetic box and {distance:.3f} m from the nearest projected box — "
+                f"outside the outer strip the fallback exists for"
+            )
+        self.fallbacks += 1
+        return rid
 
 
 def _levels_at_node(edges: Iterable[Edge]) -> dict[int, set[int]]:
@@ -1971,46 +2180,53 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: RoadRepo
             {"id": node.id, "pos": round_position(node.pos), "kind": node.kind}
             for node in report.nodes
         ],
-        "edges": [
-            {
-                "id": edge.id,
-                "from": edge.from_node,
-                "to": edge.to_node,
-                "polyline": [round_position(point) for point in edge.polyline],
-                "on_structure": edge.on_structure,
-                "structure_bounded": edge.structure_bounded,
-                "direction": edge.direction,
-                "lanes": edge.lanes,
-                "lanes_source": edge.lanes_source,
-                "width_m": edge.width_m,
-                "width_source": edge.width_source,
-                "width_publisher": edge.width_publisher,
-                "offset_m": edge.offset_m,
-                "offset_source": edge.offset_source,
-                "deck_rim_m": [list(pair) for pair in edge.deck_rim_m],
-                "speed_limit_kph": edge.speed_limit_kph,
-                "bus_lane": edge.bus_lane,
-                "tram_tracks": edge.tram_tracks,
-                "elevation_level": edge.elevation_level,
-                "road_name": edge.road_name,
-                "kerbside": [
-                    {
-                        "side": run.side,
-                        "from_m": run.start_m,
-                        "to_m": run.end_m,
-                        "kind": run.kind,
-                    }
-                    for run in edge.kerbside
-                ],
-            }
-            for edge in report.edges
-        ],
+        "edges": [_edge_document(edge) for edge in report.edges],
+        "foreign_edges": [_edge_document(edge) for edge in report.foreign_edges],
         "turn_restrictions": [
             {"from_edge": turn.from_edge, "via_node": turn.via_node, "to_edge": turn.to_edge}
             for turn in report.turn_restrictions
         ],
     }
     return write_document(out_dir / ROADGRAPH_NAME, document)
+
+
+def _edge_document(edge: Edge) -> dict:
+    document = {
+        "id": edge.id,
+        "source_id": edge.source_id,
+        "run": edge.run,
+        "from": edge.from_node,
+        "to": edge.to_node,
+        "polyline": [round_position(point) for point in edge.polyline],
+        "on_structure": edge.on_structure,
+        "structure_bounded": edge.structure_bounded,
+        "direction": edge.direction,
+        "lanes": edge.lanes,
+        "lanes_source": edge.lanes_source,
+        "width_m": edge.width_m,
+        "width_source": edge.width_source,
+        "width_publisher": edge.width_publisher,
+        "offset_m": edge.offset_m,
+        "offset_source": edge.offset_source,
+        "deck_rim_m": [list(pair) for pair in edge.deck_rim_m],
+        "speed_limit_kph": edge.speed_limit_kph,
+        "bus_lane": edge.bus_lane,
+        "tram_tracks": edge.tram_tracks,
+        "elevation_level": edge.elevation_level,
+        "road_name": edge.road_name,
+        "kerbside": [
+            {
+                "side": run.side,
+                "from_m": run.start_m,
+                "to_m": run.end_m,
+                "kind": run.kind,
+            }
+            for run in edge.kerbside
+        ],
+    }
+    if edge.foreign is not None:
+        document["foreign"] = edge.foreign
+    return document
 
 
 def _surfaces(
@@ -2047,7 +2263,9 @@ def _surfaces(
         city, region_id, sources_root, None, bounds=city.read_bounds(region_id)
     )
     low, high = city.read_extent(region_id)
-    ground = _field(place, low, high, city.buildings.terrain_class, city, region_id)
+    ground = _field(
+        place, low, high, class_name=city.buildings.terrain_class, city=city, region_id=region_id
+    )
 
     thresholds, structure_class = city.roads.deck, city.buildings.structure_class
     if thresholds is None or structure_class is None:
@@ -2056,7 +2274,9 @@ def _surfaces(
         ground=ground,
         profile=profile,
         deck=_Deck(
-            field=_field(place, low, high, structure_class, city, region_id),
+            field=_field(
+                place, low, high, class_name=structure_class, city=city, region_id=region_id
+            ),
             thresholds=thresholds,
             level_zero_m=city.deck_height_m(0),
         ),
@@ -2067,6 +2287,7 @@ def _field(
     place: Placement,
     region_low: tuple[float, float],
     region_high: tuple[float, float],
+    *,
     class_name: str,
     city: Config,
     region_id: str,
@@ -2135,6 +2356,17 @@ def main(argv: list[str] | None = None) -> int:
         len(report.edges),
         len(report.nodes),
         len(report.turn_restrictions),
+    )
+    log.info(
+        "  join: %d owned edges cross into a neighbour, %d foreign edges published, "
+        "%d runs in the margin dropped, %d owned stations beyond the reach, "
+        "%d turns with a foreign pivot, %d owners decided by the outer strip",
+        report.owned_crossing,
+        len(report.foreign_edges),
+        report.margin_dropped,
+        report.stations_beyond_reach,
+        report.turns_foreign_pivot,
+        report.owner_fallback,
     )
     log.info(
         "  %d vertices simplified to %d (%.1f%%)",

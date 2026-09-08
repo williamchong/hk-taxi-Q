@@ -16,6 +16,18 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## Schema this understands, matching `ROADGRAPH_SCHEMA` in
 ## `etl/pipeline/roads.py`.
 ##
+## 12 since `P5-7e` (`Q116`): the cut moved from the rectangle to the graph.
+## Every edge carries `source_id` and `run`, the identity that survives across
+## regions, and a region publishes the neighbour-owned runs that reach into it
+## under a separate top-level `foreign_edges` list, flagged `foreign: <owner>`.
+## 🔴 **This reader does not read that list and must not**: `RoadGraph` is
+## single-region until `P5-9`, and a foreign edge has no ribbon, no clearance
+## row and no fare under it — drawn by nothing, driven on by nobody. The bump is
+## for the consumer that merges two graphs, which would be wrong to treat `id`
+## as identity. `edges` keeps every id it had, with a gap wherever a run
+## turned foreign — `e207` still names what it named — so nothing may index it
+## by position, and this reader keys on `id`.
+##
 ## 11 since `Q114`, and it adds no field at all — it withdraws a guarantee and
 ## widens a vocabulary. `lanes` may now be **1**, where every schema before it
 ## floored a measured single lane to two. This reader passes the count straight
@@ -101,7 +113,7 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## `polyline ± width_m / 2` is now wrong about the whole elevated network, and
 ## nothing else in the document says so — `width_m` gives the size, this gives
 ## the place. Positive is left of travel, `surface.mitres`' frame.
-const SCHEMA_VERSION: int = 11
+const SCHEMA_VERSION: int = 12
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

@@ -165,10 +165,23 @@ class TestOwners:
             {0: (0, 0, 0), 1: (1, 0, 0)},
             [_edge(0, 5, 0, foreign="a"), _edge(1, 6, 0), _edge(2, 7, 0, foreign="a", lanes=3)],
         )
-        shared, one_owner, lanes_off = report_crossings_by_identity(a, b)
+        shared, one_owner, lanes_off, unmatched = report_crossings_by_identity(a, b)
         assert shared == 3
         assert one_owner == 1  # source 6 has two owners, source 7 none
         assert lanes_off == 1
+        assert unmatched == 0
+
+    def test_a_foreign_copy_with_no_run_opposite_is_counted(self) -> None:
+        """The two builds numbering a feature's runs differently is invisible
+        to every other counter: the owner's copy is simply an owned edge and
+        the foreign one pairs with nothing."""
+        a = _graph("a", {0: (0, 0, 0), 1: (1, 0, 0)}, [_edge(0, 5, 0)])
+        b = _graph("b", {0: (0, 0, 0), 1: (1, 0, 0)}, [_edge(0, 5, 1, foreign="a")])
+        b = Graph(**{**b.__dict__, "edges": [], "foreign_edges": b.edges})
+
+        shared, _, _, unmatched = report_crossings_by_identity(a, b)
+        assert shared == 0
+        assert unmatched == 1
 
     def test_no_identity_means_no_shared_edges(self) -> None:
         plain = {

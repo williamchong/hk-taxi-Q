@@ -126,6 +126,16 @@ class TestClip:
         selected without ever entering the region."""
         assert clip(np.array([(200.0, 200.0), (300.0, 300.0)]), self.HIGH, min_length_m=2.0) == []
 
+    def test_a_low_corner_below_the_origin_keeps_a_line_that_crosses_it(self) -> None:
+        """`P5-7e`: a west or north neighbour lies at negative coordinates, so
+        the box must open below `(0, 0)`; the default is the old clip exactly."""
+        line = np.array([(-50.0, 50.0), (50.0, 50.0)])
+
+        (kept,) = clip(line, self.HIGH, low=(-100.0, 0.0), min_length_m=2.0)
+        np.testing.assert_array_equal(kept, line)
+        (cut,) = clip(line, self.HIGH, min_length_m=2.0)
+        np.testing.assert_allclose(cut, [(0.0, 50.0), (50.0, 50.0)])
+
     def test_a_stub_shorter_than_the_minimum_is_dropped(self) -> None:
         line = np.array([(99.0, 150.0), (99.0, 99.5), (150.0, 99.5)])
         assert clip(line, self.HIGH, min_length_m=2.0) == []
@@ -191,6 +201,160 @@ def _graph(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "out" / "middle" / "roadgraph.json").read_text())
 
 
+def _pair_graphs(city, tmp_path: Path) -> tuple[dict, dict]:
+    """Both regions of `testville_pair` built, and their documents read back."""
+    reports = {
+        region: build_region(
+            city, region, sources_root=tmp_path / "sources", out_root=tmp_path / "out"
+        )
+        for region in ("middle", "east")
+    }
+    docs = {
+        region: json.loads((tmp_path / "out" / region / "roadgraph.json").read_text())
+        for region in reports
+    }
+    return reports, docs
+
+
+class TestJoin:
+    """The cut on the graph rather than the rectangle (`P5-7e`, `Q116`).
+
+    What would fail silently: a crossing run owned by both regions or neither,
+    a foreign run drawn as if owned, a run's two copies whose ends do not
+    coincide, and a turn resolved against the wrong edge once the id sequence
+    has a gap in it — every one of those builds, writes and reads back.
+    """
+
+    def test_a_crossing_run_is_owned_by_its_travel_start_and_foreign_opposite(
+        self, testville_pair
+    ) -> None:
+        city, tmp_path = testville_pair
+        reports, _ = _pair_graphs(city, tmp_path)
+        middle, east = reports["middle"], reports["east"]
+
+        assert {e.source_id for e in middle.edges} == {1, 4, 6}
+        assert {(e.source_id, e.foreign) for e in middle.foreign_edges} == {
+            (2, "east"),
+            (5, "east"),
+        }
+        # Source order was (900, 300) -> (1100, 100); BACKWARD reversed it, so
+        # the run *starts* in east and east owns it. And source 5 is east's
+        # by its start alone: three quarters of its length lies in middle.
+        assert {e.source_id for e in east.edges} == {2, 3, 5}
+        assert {(e.source_id, e.foreign) for e in east.foreign_edges} == {
+            (1, "middle"),
+            (6, "middle"),
+        }
+        # Read within the reach, never touching middle: dropped and counted.
+        assert middle.margin_dropped == 1
+        assert middle.owned_crossing == 2 and east.owned_crossing == 2
+
+    def test_both_copies_of_a_run_end_at_the_same_place_in_the_city(self, testville_pair) -> None:
+        """The whole point of the cut: the seam is a shared node, not two
+        nodes 0.6 m apart on two clip lines (`Q116`)."""
+        city, tmp_path = testville_pair
+        reports, _ = _pair_graphs(city, tmp_path)
+        frames = {r: city.game_transform(r) for r in reports}
+
+        def in_source(region: str, node: int) -> tuple[float, float]:
+            x, _, z = reports[region].nodes[node].pos
+            easting, northing, _ = frames[region].to_source(x, 0.0, z)
+            return easting, northing
+
+        by_identity = {
+            region: {(e.source_id, e.run): e for e in (*report.edges, *report.foreign_edges)}
+            for region, report in reports.items()
+        }
+        shared = by_identity["middle"].keys() & by_identity["east"].keys()
+        assert {source for source, _ in shared} == {1, 2, 5, 6}
+        for key in shared:
+            a, b = by_identity["middle"][key], by_identity["east"][key]
+            for end in ("from_node", "to_node"):
+                np.testing.assert_allclose(
+                    in_source("middle", getattr(a, end)),
+                    in_source("east", getattr(b, end)),
+                    atol=1e-3,
+                )
+            np.testing.assert_allclose(
+                np.asarray(a.polyline)[:, [0, 2]] + [frames["middle"].origin_easting, 0.0],
+                np.asarray(b.polyline)[:, [0, 2]] + [frames["east"].origin_easting, 0.0],
+                atol=1e-3,
+            )
+
+    def test_the_outer_strip_fallback_fires_only_at_the_floored_edge(self, testville_pair) -> None:
+        """A run cut at the western outer edge starts on the floored strip,
+        which lies in no geodetic box; the crossing runs on the internal line
+        never reach the fallback. Whether the strip exists at all depends on
+        the fraction the origin was floored by, so that is computed here rather
+        than assumed."""
+        city, tmp_path = testville_pair
+        reports, _ = _pair_graphs(city, tmp_path)
+        strip_m = (
+            city.projected_bounds("middle").min_easting
+            - city.game_transform("middle").origin_easting
+        )
+
+        assert reports["middle"].owner_fallback == (1 if strip_m > 0.0 else 0)
+        assert reports["east"].owner_fallback == 0
+        assert {e.source_id for e in reports["middle"].edges if e.foreign is None} >= {4}
+
+    def test_a_turn_is_published_by_the_region_owning_its_pivot(self, testville_pair) -> None:
+        """Middle resolves the turn — both arms are its edges, one foreign —
+        and hands it to east, whose copy names middle's road by its foreign id.
+        The resolver indexes edges by id, so this is also the test that fails
+        when the id sequence handed to it has a gap in it."""
+        city, tmp_path = testville_pair
+        reports, docs = _pair_graphs(city, tmp_path)
+
+        assert reports["middle"].turn_restrictions == []
+        assert reports["middle"].turns_foreign_pivot == 1
+        assert reports["east"].turns_foreign_pivot == 0
+        (turn,) = docs["east"]["turn_restrictions"]
+        foreign_ids = {e["id"] for e in docs["east"]["foreign_edges"]}
+        owned_ids = {e["id"] for e in docs["east"]["edges"]}
+        assert turn["from_edge"] in foreign_ids
+        assert turn["to_edge"] in owned_ids
+        # The pivot is where middle's road ends and east's begins: one node,
+        # two edge ends, so an `endpoint` and a turn all the same.
+        by_id = {e["id"]: e for e in (*docs["east"]["edges"], *docs["east"]["foreign_edges"])}
+        assert turn["via_node"] == by_id[turn["from_edge"]]["to"] == by_id[turn["to_edge"]]["from"]
+
+    def test_a_restriction_beside_a_foreign_road_is_not_painted_on_the_owned_one(
+        self, testville_pair
+    ) -> None:
+        """The kerbside join is nearest-road. Past the line the nearest road is
+        usually the neighbour's, so the foreign copy must be offered as a track
+        or the sample lands on the nearest *owned* road 14 m away — a run on a
+        kerb nothing was posted on, which renders as a perfectly good yellow
+        line. The owner publishes it; here it is dropped."""
+        city, tmp_path = testville_pair
+        reports, _ = _pair_graphs(city, tmp_path)
+        by_source = {
+            region: {e.source_id: e for e in report.edges} for region, report in reports.items()
+        }
+
+        assert by_source["middle"][6].kerbside == ()
+        assert by_source["middle"][1].kerbside != ()
+        assert by_source["east"][5].kerbside != ()
+
+    def test_ids_keep_their_read_ordinal_and_the_lists_do_not_overlap(self, testville_pair) -> None:
+        """A foreign run consumes an id and leaves a gap in `edges`, so `e207`
+        still names what it named on the day the cut moved (`Q120`'s carve
+        list); the alternative, renumbering, shifts every id after the first
+        crossing. The document says which list a run is in, never a flag."""
+        city, tmp_path = testville_pair
+        _, docs = _pair_graphs(city, tmp_path)
+        middle = docs["middle"]
+
+        owned = {e["id"] for e in middle["edges"]}
+        foreign = {e["id"] for e in middle["foreign_edges"]}
+        assert owned | foreign == set(range(len(owned) + len(foreign)))
+        assert owned & foreign == set()
+        assert all("foreign" not in e for e in middle["edges"])
+        assert all(e["foreign"] == "east" for e in middle["foreign_edges"])
+        assert middle["schema_version"] == ROADGRAPH_SCHEMA
+
+
 class TestBuildRegion:
     def test_it_writes_a_graph_matching_the_contract(self, testville) -> None:
         city, tmp_path = testville
@@ -203,6 +367,8 @@ class TestBuildRegion:
         assert len(document["edges"]) == len(report.edges) == 4
         assert {key for edge in document["edges"] for key in edge} == {
             "id",
+            "source_id",
+            "run",
             "from",
             "to",
             "polyline",

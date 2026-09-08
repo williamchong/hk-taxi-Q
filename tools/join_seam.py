@@ -38,7 +38,7 @@ import argparse
 import logging
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -61,6 +61,7 @@ log = logging.getLogger(__name__)
 # in game space: +x is east, -x is west, +z is south, -z is north.
 Side = tuple[str, int]
 SIDE_OF = {"east": ("x", 1), "west": ("x", -1), "south": ("z", 1), "north": ("z", -1)}
+COMPASS = {side: name for name, side in SIDE_OF.items()}
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,9 @@ class Graph:
     high: tuple[float, float]
     offset: np.ndarray
     names: dict[int, str]
+    # The neighbour-owned runs this region publishes for the join (`P5-7e`),
+    # under their own list so no reader of `edges` sees a road nobody owns.
+    foreign_edges: list[dict[str, Any]] = field(default_factory=list)
 
     @cached_property
     def incident(self) -> dict[int, list[dict[str, Any]]]:
@@ -84,10 +88,11 @@ class Graph:
 
     @cached_property
     def identities(self) -> dict[tuple[int, int], dict[str, Any]]:
-        """Edges keyed by `(source_id, run)`, empty on a schema that publishes neither."""
+        """Every edge, owned or foreign, keyed by `(source_id, run)` — empty on
+        a schema that publishes neither."""
         return {
             (edge["source_id"], edge["run"]): edge
-            for edge in self.edges
+            for edge in (*self.edges, *self.foreign_edges)
             if "source_id" in edge and "run" in edge
         }
 
@@ -146,7 +151,8 @@ def load_graph(city: Config, region: str, out_root: Path | None) -> Graph:
         edges=graph["edges"],
         high=city.region_high(region),
         offset=offset,
-        names=road_names(graph),
+        names=road_names({"edges": [*graph["edges"], *graph.get("foreign_edges", [])]}),
+        foreign_edges=graph.get("foreign_edges", []),
     )
 
 
@@ -235,11 +241,14 @@ def report_crossings_by_node(a: Graph, b: Graph, pairs: list[NodePair]) -> tuple
     return width_off, lanes_off
 
 
-def report_crossings_by_identity(a: Graph, b: Graph) -> tuple[int, int, int]:
+def report_crossings_by_identity(a: Graph, b: Graph) -> tuple[int, int, int, int]:
     """After the cut: every edge both regions publish, by `(source_id, run)`.
 
-    Returns the shared count, how many have exactly one owner, and how many
-    disagree on `lanes` between the owner's copy and the foreign one.
+    Returns the shared count, how many have exactly one owner, how many
+    disagree on `lanes` between the owner's copy and the foreign one, and how
+    many foreign copies name a run the region opposite does not publish at all
+    — the counter that reads non-zero if the two builds ever number a
+    feature's runs differently, which nothing else here can see.
     """
     shared = sorted(a.identities.keys() & b.identities.keys())
     one_owner = lanes_off = 0
@@ -250,7 +259,20 @@ def report_crossings_by_identity(a: Graph, b: Graph) -> tuple[int, int, int]:
         one_owner += owners == 1
         lanes_off += xa["lanes"] != xb["lanes"]
         _log_crossing(a, b, xa, xb, "" if owners == 1 else f"  ⚠ {owners} owners")
-    return len(shared), one_owner, lanes_off
+    unmatched = 0
+    for mine, theirs in ((a, b), (b, a)):
+        for edge in mine.foreign_edges:
+            if (edge["source_id"], edge["run"]) not in theirs.identities:
+                unmatched += 1
+                log.info(
+                    "  %-32s %3d  %s has no run (%d, %d) opposite",
+                    mine.names.get(edge["id"], "unnamed")[:32],
+                    edge["elevation_level"],
+                    mine.describe(edge),
+                    edge["source_id"],
+                    edge["run"],
+                )
+    return len(shared), one_owner, lanes_off, unmatched
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -271,14 +293,16 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_config()
     side = shared_side(city, args.region_a, args.region_b)
-    side_name = next(name for name, value in SIDE_OF.items() if value == side)
+    side_name = COMPASS[side]
     a = load_graph(city, args.region_a, args.out)
     b = load_graph(city, args.region_b, args.out)
     log.info("  %s lies %s of %s", args.region_b, side_name, args.region_a)
 
     # Before the cut every candidate stands on the internal line; after it
-    # nothing does, and the shared nodes are the crossing runs' far ends, found
-    # through the edges both regions publish.
+    # nothing should, and the shared nodes are the crossing runs' two ends,
+    # found through the edges both regions publish.
+    on_line_a = near_line(a, side, args.pair_within_m)
+    on_line_b = near_line(b, (side[0], -side[1]), args.pair_within_m)
     shared = a.identities.keys() & b.identities.keys()
     if shared:
         cand_a = sorted(
@@ -288,8 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             {n for k in shared for n in (b.identities[k]["from"], b.identities[k]["to"])}
         )
     else:
-        cand_a = near_line(a, side, args.pair_within_m)
-        cand_b = near_line(b, (side[0], -side[1]), args.pair_within_m)
+        cand_a, cand_b = on_line_a, on_line_b
 
     pairs, lone_a, lone_b = pair_nodes(a, b, cand_a, cand_b, args.pair_within_m)
     log.info("")
@@ -307,10 +330,11 @@ def main(argv: list[str] | None = None) -> int:
     plan_max = max((p.plan_m for p in pairs), default=0.0)
 
     if shared:
-        count, one_owner, lanes_off = report_crossings_by_identity(a, b)
+        count, one_owner, lanes_off, unmatched = report_crossings_by_identity(a, b)
         crossings = (
             f"{count} shared edges, {one_owner} with exactly one owner, "
-            f"{lanes_off} disagreeing on lanes"
+            f"{lanes_off} disagreeing on lanes, {unmatched} foreign copies with no run "
+            f"opposite; {len(on_line_a)} + {len(on_line_b)} nodes still on the internal line"
         )
     else:
         width_off, lanes_off = report_crossings_by_node(a, b, pairs)

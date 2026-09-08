@@ -879,11 +879,11 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 
 ```json
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "nodes": [{ "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }],
   "edges": [
     {
-      "id": 1, "from": 1, "to": 2,
+      "id": 1, "source_id": 4021, "run": 0, "from": 1, "to": 2,
       "polyline": [[120.5, 4.0, 300.2], [180.0, 4.1, 305.0]],
       "on_structure": [false, false],
       "structure_bounded": [false, false],
@@ -901,6 +901,9 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
       "kerbside": [{ "side": "near", "from_m": 12.4, "to_m": 88.1, "kind": "double" }]
     }
   ],
+  "foreign_edges": [
+    { "id": 7, "source_id": 5310, "run": 0, "foreign": "causeway_bay", "...": "the same fields" }
+  ],
   "turn_restrictions": [{ "from_edge": 1, "via_node": 2, "to_edge": 5 }]
 }
 ```
@@ -908,7 +911,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 | Field | Source |
 |---|---|
 | `direction` | `TRAVEL_DIRECTION` (1 = bidirectional → `both`, 3 = one-way → `forward`). Closed vocabulary: **only `both` and `forward` are ever written.** A city whose source codes direction against its own digitisation declares `backward` in config, and the ETL normalises it away by reversing the polyline |
-| `turn_restrictions` | `TURN_ID` + `EDGE(1-8)FID`. Edge references are **indices into `edges`**, not source ids |
+| `turn_restrictions` | `TURN_ID` + `EDGE(1-8)FID`. Edge references are **edge `id`s**, not source ids — and since schema 12 one arm may name an entry of `foreign_edges`, because the region owning the pivot node publishes the movement and the crossing road is the neighbour's |
 | `speed_limit_kph` | `SPEED_LIMIT` layer where present, joined on `ROUTE_ID`; otherwise the city default. Hong Kong signs only exceptions, so **the default covers ~90% of edges** |
 | `bus_lane` | `BUS_ONLY_LANE` layer, joined on `ROUTE_ID` |
 | `tram_tracks` | ⚠️ **Hand-authored.** Not in the source. A list of street names in city config |
@@ -922,21 +925,27 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing |
 | `kerbside` | `NSR`, added in schema 4 (`P3-13`, closes `Q54`). Runs of one kerb a published no-stopping restriction covers. ⚠️ **The only overlay here that is not a key join** — `NSR` carries street codes, not `ROUTE_ID`, so `pipeline/kerbside.py` linear-references it onto the finished graph. `side` is the ribbon's own, `near` at `TEXCOORD_0`'s `U = 0` and `off` at `U = lanes`; `from_m`/`to_m` are measured along **this** polyline, so a consumer drawing on the trimmed ribbon subtracts its own `trim_start_m`. `kind` is `double` (a 24-hour restriction) or `single` (posted hours), from `TIME_ZONE`. ⚠️ **Only `VEHICLE_TYPE = 1` is here** — a taxi, PLB or goods-vehicle restriction is a sign, and `5` "Others" names no class. Runs are ordered and disjoint per side. **26,065 m over 650 edge sides** in Wan Chai |
 
+| `source_id` / `run` | 🔴 **The identity that survives across regions (schema 12, `P5-7e`, `Q116`)**: the source feature's fid and which clipped run of it this edge is. `id` is a per-region **read ordinal**, kept with a gap wherever a run turned foreign — `e207` still names what it named — so nothing may index `edges` by position. A consumer merging two regions dedupes on `(source_id, run)` and would be wrong to dedupe on `id`; that is why the schema bumped |
+| `foreign_edges` | 🔴 **The neighbour-owned runs this region publishes for the join, under their OWN list and never as a flag on `edges`.** A feature crossing into a declared neighbour is kept whole and owned by the region whose geodetic `bounds` contain its travel-start vertex (after the `BACKWARD` reversal), half-open; the owner measures and draws the whole run, far half included, and the non-owner publishes the same run here with `foreign: <owner>` and the **authored** width — drawn by nothing, driven on by nobody, there so a boundary junction keeps its mouth (`P5-7f`) and a merged graph (`P5-9`) has its handover edge. A separate list because nineteen stages and tools iterate `edges`, and a list they never read is inert by construction where a flag is nineteen places to draw a road nobody owns. **5** in Wan Chai, **4** in Causeway Bay; `nodes` includes their far ends |
+
 **Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross: two
 roads crossing in plan at different `ELEVATION` share no endpoint, so no junction is invented.
 Conversely `ELEVATION` is deliberately **not** part of a node's identity — every place two levels
 meet at a shared endpoint is a ramp touching down, and splitting there severs the elevated network
 from the ground one.
 
-**Geometry is clipped to the region, not kept whole.** Unlike a building — assigned to a tile whole
-and allowed to overhang — a road feature is cut at the boundary, because a polyline cut in two is two
-polylines with nothing to seam. Without it, 14% of the region's road length is geometry the player
-cannot reach, including a tunnel running 570 m out into the harbour.
-⚠️ **That is also why two regions cannot yet be joined (`Q116`).** "Nothing to seam" holds for one
-region alone; two neighbours each cut on their own rectangle meet at a hard edge with no continuing
-graph, ribbon, kerb run or lamp row. `P5-7` moves the cut onto the graph — an edge belongs whole to
-one region and a boundary node is published by both — and the rectangle stays as the sheet selector.
-Until then Phase 5's second region is blocked on it, and no streaming unit changes that.
+**Geometry is clipped to declared territory, not kept whole.** Unlike a building — assigned to a
+tile whole and allowed to overhang — a road feature is cut at the outer edge of the region *and its
+declared neighbours* (`Config.clip_extent`), because a polyline cut in two is two polylines with
+nothing to seam. Without it, 14% of the region's road length is geometry the player cannot reach,
+including a tunnel running 570 m out into the harbour.
+✅ **Since `P5-7e` the cut is on the graph and not on the rectangle (`Q116`).** Two neighbours each
+cut on their own rectangle met at a hard edge with no continuing graph, ribbon, kerb run or lamp row,
+0.624 m apart. Now a crossing feature is kept whole across the internal line, owned by one region and
+published `foreign` by the other (the two rows above), so the seam is a shared node rather than two.
+The clip box widens **along the shared axis only**: the same latitude projects 4 cm apart 1.65 km
+east, and a union across that axis moved 45 of Wan Chai's own outer-edge cuts for nothing. The
+rectangle still selects sheets and `bounds` do not move (`Q10`); the runtime half is `P5-9`.
 
 `node.kind` is `junction` where three or more edge ends meet and `endpoint` otherwise. Degree, not
 the source's intersection layer: two centrelines meeting end to end is one road continuing through a

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import struct
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ import numpy as np
 from pyogrio.raw import write as _ogr_write
 
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
+from pipeline.crs import GameTransform
 from pipeline.gltf import MeshData
 from pipeline.terrain import HeightField
 
@@ -459,3 +461,18 @@ def area(mesh: MeshData) -> float:
     `test_make_vehicle.py` each had this expression.
     """
     return float(np.linalg.norm(mesh.triangle_cross(), axis=1).sum() / 2.0)
+
+
+def game_to_source(transform: GameTransform) -> Callable[[float, float], tuple[float, float]]:
+    """`at(x, z)`: region-local game metres to source easting/northing.
+
+    Through the transform rather than off the projected bounds: the origin is
+    rounded outward to whole metres, so the two differ by up to a metre and a
+    fixture's expected coordinates can be stated exactly.
+    """
+
+    def at(x: float, z: float) -> tuple[float, float]:
+        easting, northing, _ = transform.to_source(x, 0.0, z)
+        return (easting, northing)
+
+    return at

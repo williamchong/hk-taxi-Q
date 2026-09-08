@@ -230,3 +230,23 @@ class GameTransform:
             self.origin_northing - z,
             y + self.origin_elevation,
         )
+
+
+# A rectangle in game plan metres, `((low_x, low_z), (high_x, high_z))`. `low`
+# is `(0, 0)` for a region on its own and negative where a neighbour lies west
+# or north of it (`P5-7c`), because x runs east and z runs south from the
+# origin, so a neighbour on either of those sides is at negative coordinates.
+PlanExtent = tuple[tuple[float, float], tuple[float, float]]
+
+
+def inside_plan(
+    x: np.ndarray, z: np.ndarray, low: tuple[float, float], high: tuple[float, float]
+) -> np.ndarray:
+    """Which plan points lie inside `low`-`high`, closed on every side.
+
+    One membership test for the road clip, the kerbside join and the region
+    counters: each had written the four comparisons out for itself, and a box
+    that is closed on one side in one copy and open in another is the kind of
+    difference nothing reports.
+    """
+    return (x >= low[0]) & (x <= high[0]) & (z >= low[1]) & (z <= high[1])

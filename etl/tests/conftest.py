@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from pipeline.config import load_config
-from tests.helpers import CITY_YAML, NULL_SENTINELS, line_wkb, write_layer
+from tests.helpers import CITY_YAML, NULL_SENTINELS, game_to_source, line_wkb, write_layer
 
 
 @pytest.fixture
@@ -62,17 +62,7 @@ def testville(tmp_path, testville_config):
     """
     city = testville_config
 
-    transform = city.game_transform("middle")
-
-    def at(x: float, z: float) -> tuple[float, float]:
-        """Region-local game metres to source easting/northing.
-
-        Through the transform rather than off the projected bounds: the origin
-        is rounded outward to whole metres, so the two differ by up to a metre
-        and the expected coordinates below are stated exactly.
-        """
-        easting, northing, _ = transform.to_source(x, 0.0, z)
-        return (easting, northing)
+    at = game_to_source(city.game_transform("middle"))
 
     gpkg = tmp_path / "sources" / "roads" / "roads.gpkg"
     gpkg.parent.mkdir(parents=True)
@@ -136,6 +126,108 @@ def testville(tmp_path, testville_config):
             "EDGE1FID": np.array([1]),
             "EDGE1END": np.array(["Y"], dtype=object),
             "EDGE2FID": np.array([3]),
+        },
+    )
+    return city, tmp_path
+
+
+@pytest.fixture
+def testville_pair(tmp_path):
+    """Two regions sharing a whole edge — `middle` and `east` — and roads that
+    cross it (`P5-7e`, `Q116`).
+
+    Its own city rather than a neighbour bolted on to `testville`: giving
+    `middle` a neighbour widens its clip box and its read box, and every count
+    the single-region tests assert would move with it. Coordinates are in
+    `middle`'s frame; the shared line is at x ≈ 1,029 m.
+    """
+    yaml = CITY_YAML
+    for old, new in (
+        (
+            "    bounds: {west: 114.170, east: 114.180, south: 22.276, north: 22.282}\n"
+            "    tile_size_m: 150.0\n",
+            "    bounds: {west: 114.170, east: 114.180, south: 22.276, north: 22.282}\n"
+            "    tile_size_m: 150.0\n"
+            "  east:\n"
+            "    name: East\n"
+            "    bounds: {west: 114.180, east: 114.190, south: 22.276, north: 22.282}\n"
+            "    tile_size_m: 150.0\n",
+        ),
+        ("sources:\n", "join:\n  reach_m: 150.0\nsources:\n"),
+        ("    3: forward\n", "    3: forward\n    2: backward\n"),
+    ):
+        assert yaml.count(old) == 1, old
+        yaml = yaml.replace(old, new)
+    path = tmp_path / "testville_pair.yaml"
+    path.write_text(yaml, encoding="utf-8")
+    city = load_config(path)
+
+    at = game_to_source(city.game_transform("middle"))
+
+    gpkg = tmp_path / "sources" / "roads" / "roads.gpkg"
+    gpkg.parent.mkdir(parents=True)
+    write_layer(
+        gpkg,
+        "CENTERLINE",
+        [
+            # 1: two-way, west to east, crossing the line: middle's by its start.
+            line_wkb([at(100.0, 100.0), at(900.0, 100.0), at(1100.0, 100.0)]),
+            # 2: coded BACKWARD, so travel runs (1100, 100) -> (900, 300) and
+            # the start is east's, though the run ends in middle.
+            line_wkb([at(900.0, 300.0), at(1100.0, 100.0)]),
+            # 3: wholly in east, within middle's reach: read, then dropped.
+            line_wkb([at(1100.0, 500.0), at(1150.0, 500.0)]),
+            # 4: enters middle across its western outer edge, where the clip
+            # rectangle is floored outward past the geodetic box.
+            line_wkb([at(-50.0, 600.0), at(200.0, 600.0)]),
+            # 5: two-way, drawn east to west: east's by its start, though
+            # three quarters of it lies in middle (length share refused).
+            line_wkb([at(1150.0, 620.0), at(700.0, 620.0)]),
+            # 6: middle's, running 20 m beside 5 and across the line with it.
+            line_wkb([at(950.0, 640.0), at(1100.0, 640.0)]),
+        ],
+        {
+            "ELEVATION": np.array([0, 0, 0, 0, 0, 0]),
+            "TRAVEL_DIRECTION": np.array([1, 2, 3, 3, 1, 3]),
+            "ROUTE_ID": np.array([21, 22, 23, 24, 25, 26]),
+            "STREET_ENAME": np.array(
+                ["MAIN", "BACK", "INSIDE", "WEST", "LONG", "BESIDE"], dtype=object
+            ),
+            "STREET_CNAME": np.array(["-99"] * 6, dtype=object),
+        },
+    )
+    write_layer(
+        gpkg,
+        "SPEED_LIMIT",
+        [line_wkb([at(100.0, 100.0), at(900.0, 100.0)])],
+        {"ROAD_ROUTE_ID": np.array([21]), "SPEED_LIMIT": np.array(["50 km/h"], dtype=object)},
+    )
+    write_layer(
+        gpkg,
+        "BUS_ONLY_LANE",
+        [line_wkb([at(100.0, 100.0), at(300.0, 100.0)])],
+        {"ROAD_ROUTE_ID": np.array([21])},
+    )
+    write_layer(
+        gpkg,
+        "NSR",
+        [
+            line_wkb([at(110.0, 94.0), at(890.0, 94.0)]),
+            # Posted on 5's kerb, 6 m from it and 14 m from 6, wholly past the
+            # line: east's restriction, inside middle's read box.
+            line_wkb([at(1040.0, 626.0), at(1090.0, 626.0)]),
+        ],
+        {"VEHICLE_TYPE": np.array([1, 1]), "TIME_ZONE": np.array([1, 1])},
+    )
+    write_layer(
+        gpkg,
+        "TURN",
+        # 1 -> 2 at (1100, 100): a turn whose pivot node lies in east.
+        [line_wkb([at(1000.0, 100.0), at(1000.0, 200.0)])],
+        {
+            "EDGE1FID": np.array([1]),
+            "EDGE1END": np.array(["Y"], dtype=object),
+            "EDGE2FID": np.array([2]),
         },
     )
     return city, tmp_path

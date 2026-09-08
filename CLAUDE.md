@@ -1189,7 +1189,18 @@ Common emoji for this project:
   where it *is* — `bounds`, `region_high` and the tile grid do not move (`Q10`) — so a change that
   moves `mong_kok`'s graph has widened the wrong thing. ⚠️ **Byte-identity on the region WITH a
   neighbour is not the proof and is not expected** once `P5-7e` publishes the far halves; until then
-  it holds, and `P5-7c` measured it holding through 24 extra parts read.
+  it holds, and `P5-7c` measured it holding through 24 extra parts read. 🔴 **Since `P5-7e` the neighbour's runs ship under
+  `roadgraph.json`'s own `foreign_edges` list, never as a flag on `edges`** — nineteen readers iterate
+  `edges` and a list they never open is inert by construction. ⚠️ **`edges` keeps its ids WITH GAPS**
+  where a run turned foreign (`e207` still names what it named); nothing may index it by position, and
+  the sequence handed to `_turn_restrictions` must stay in **id order** — `owned + foreign` resolved
+  35 → 11 turns in Causeway Bay with nothing raised. ⚠️ **Foreign edges are kerbside TRACKS and are
+  published on nothing**: past the line the nearest road is the neighbour's, and with only owned
+  tracks a restriction painted a run on Causeway Bay's `e0`. ⚠️ **`Config.clip_extent` widens along
+  the shared axis ONLY** — the same latitude projects 4 cm apart 1.65 km east, and a union across that
+  axis moved 45 of Wan Chai's own outer-edge cuts. Prove a change here with `join_seam.py`'s
+  **one owner per run / 0 + 0 nodes on the line / 0 unmatched copies** and a field-by-field diff of
+  the non-crossing edges — node ids renumber, everything else must not.
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - 🔴 **Collider changes — `buildings.collision_cell_m`, `class_collision_cell_m`, `_collider`,
