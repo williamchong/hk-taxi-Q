@@ -72,6 +72,12 @@ log = logging.getLogger(__name__)
 # the one that ships, and the midpoint that says whether the tail grows linearly.
 # Re-measuring on a different set would answer a different question — keeping
 # these is what makes a new row comparable with the old one.
+#
+# ⚠️ **`--strengths` overrides them, and the default is the point.** `P5-28d`
+# has to sweep *upward* from the shipped value, which is a different question
+# from the one this table asks, and the alternative was the scratch script
+# `Q37` and `Q55` are both open debts about. A run that names its own set is
+# answering its own question and has to say so beside the numbers.
 STRENGTHS = (1.0, 1.5, 2.0)
 
 # The line `ART_DESIGN.md` draws for "more saturated than anything the direction
@@ -80,6 +86,16 @@ STRENGTHS = (1.0, 1.5, 2.0)
 # what the authored bands actually reach, which is the check that 20 is still a
 # sane place to put it.
 SANCTIONED_MAX = 20.0
+
+# The other end: below this a façade reads as grey rather than as a colour.
+# 🔴 **The two bars answer opposite complaints and the table needs both** — the
+# config comment calls `strength` "the line to move if the city reads too grey or
+# too candy", and `over` alone can only see the second. `Q30`'s own reading is
+# that the distribution is *both at once*, which is a statement about a middle
+# that neither tail reports. 8 is `Q34`'s neutrality threshold, held here for the
+# reason `SANCTIONED_MAX` is: a bar that moves between measurements makes the
+# rows incomparable.
+MUTED_MAX = 8.0
 
 
 def rendered(lab: np.ndarray, anchor: float) -> np.ndarray:
@@ -106,6 +122,7 @@ class Spread:
     p99: float
     highest: float
     over: float
+    muted: float
     lightness: float
 
     @classmethod
@@ -119,6 +136,7 @@ class Spread:
             p99=float(np.percentile(found, 99)),
             highest=float(found.max()),
             over=100.0 * float((found > SANCTIONED_MAX).mean()),
+            muted=100.0 * float((found < MUTED_MAX).mean()),
             lightness=float(lab[:, 0].mean()),
         )
 
@@ -205,7 +223,13 @@ def band_chroma(style: BuildingStyle, anchor: float) -> tuple[float, float]:
     return float(found.min()), float(found.max())
 
 
-def shipped(city: Config, region_id: str, *, root: Path | None = None) -> dict[float, np.ndarray]:
+def shipped(
+    city: Config,
+    region_id: str,
+    *,
+    root: Path | None = None,
+    strengths: tuple[float, ...] = STRENGTHS,
+) -> dict[float, np.ndarray]:
     """`(n, 3)` CIELAB every surveyed building actually receives, per strength.
 
     The whole pipeline path — material draw, `with_hue`, jitter and clamping —
@@ -225,8 +249,8 @@ def shipped(city: Config, region_id: str, *, root: Path | None = None) -> dict[f
     style = city.buildings
     place = Placement.resolve(city, region_id, root, None)
     hues = facade_hue(style, root=root)
-    styles = {strength: replace(style, facade_hue_strength=strength) for strength in STRENGTHS}
-    found: dict[float, list[np.ndarray]] = {strength: [] for strength in STRENGTHS}
+    styles = {strength: replace(style, facade_hue_strength=strength) for strength in strengths}
+    found: dict[float, list[np.ndarray]] = {strength: [] for strength in strengths}
     for _, sheet_path in place.sheets:
         for class_id, mesh in read_sheet(sheet_path, style.classes):
             if style.is_ground(class_id) or stem(mesh.name) not in hues:
@@ -250,13 +274,14 @@ def _row(strength: float, found: Spread, suffix: str = "") -> None:
     header above them, so a format that drifted would misalign in silence — and
     reading the two against each other is the whole reason `--shipped` exists."""
     log.info(
-        "      %.1f   | %6.2f  %6.2f  %6.2f  %6.2f  %6.2f |     %5.1f%% | %5.1f%s",
+        "      %.1f   | %6.2f  %6.2f  %6.2f  %6.2f  %6.2f |  %5.1f%%  %5.1f%% | %5.1f%s",
         strength,
         found.mean,
         found.median,
         found.p90,
         found.p99,
         found.highest,
+        found.muted,
         found.over,
         found.lightness,
         suffix,
@@ -264,7 +289,12 @@ def _row(strength: float, found: Spread, suffix: str = "") -> None:
 
 
 def report(
-    city: Config, region_id: str | None, *, root: Path | None = None, rig: Path = DEFAULT_RIG
+    city: Config,
+    region_id: str | None,
+    *,
+    root: Path | None = None,
+    rig: Path = DEFAULT_RIG,
+    strengths: tuple[float, ...] = STRENGTHS,
 ) -> int:
     anchor = rig_exposure(rig)
     style = city.buildings
@@ -272,7 +302,7 @@ def report(
     if not len(people):
         log.error("no facade survey for %s — there is no shipped chroma to measure", city.id)
         return 1
-    asked = {strength: people.requested(strength) for strength in STRENGTHS}
+    asked = {strength: people.requested(strength) for strength in strengths}
 
     low, high = band_chroma(style, anchor)
     log.info("")
@@ -282,7 +312,9 @@ def report(
     log.info("  ships at facade_hue.strength %.1f", style.facade_hue_strength)
     log.info("")
     log.info(
-        "  strength |   mean  median     p90     p99     max | over C* %.0f |    L*", SANCTIONED_MAX
+        "  strength |   mean  median     p90     p99     max | under %.0f  over %.0f |    L*",
+        MUTED_MAX,
+        SANCTIONED_MAX,
     )
     for strength, lab in asked.items():
         # The colour that survives the round trip, not the one asked for: above
@@ -306,7 +338,7 @@ def report(
     if region_id is not None:
         log.info("")
         log.info("  the full pipeline path over %s, for comparison:", region_id)
-        for strength, lab in shipped(city, region_id, root=root).items():
+        for strength, lab in shipped(city, region_id, root=root, strengths=strengths).items():
             found = Spread.of(rendered(lab, anchor))
             _row(strength, found, f"  ({found.count} meshes)")
     return 0
@@ -331,6 +363,14 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_RIG,
         help="lighting rig scene to read exposure_anchor from",
     )
+    parser.add_argument(
+        "--strengths",
+        type=float,
+        nargs="+",
+        default=list(STRENGTHS),
+        metavar="S",
+        help=f"facade_hue.strength values to measure (default {' '.join(map(str, STRENGTHS))})",
+    )
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -341,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         None if arguments.shipped is None else region,
         root=arguments.sources_root,
         rig=arguments.rig,
+        strengths=tuple(arguments.strengths),
     )
 
 

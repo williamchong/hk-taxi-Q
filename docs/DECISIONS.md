@@ -3569,10 +3569,18 @@ Authored height bands `C*` **1.92-13.84 → 1.76-13.83**.
 | `skyline` | 60.5 → 60.4 | 25.9 → 25.2 | 5.1% | 0.63 |
 | `kerb` | 29.4 → 29.4 | 28.5 → 25.1 | 6.5% | 0.71 |
 
-⚠️ **`Q31`'s pathology got slightly worse at `kerb` and that is the chroma reaching the tone curve**:
-under `L*` 10 went **29.0% → 33.2%** and the 10-30 band **24.2% → 20.0%**, on a frame whose mean `L*`
-did not move at all. The tonemapper is per-channel, so desaturating a pixel moves its mapped
-lightness even when its albedo lightness is fixed. A second reason `P5-28d` matters.
+⚠️ **`Q31`'s pathology got slightly worse at `kerb`**: under `L*` 10 went **29.0% → 33.2%** and the
+10-30 band **24.2% → 20.0%**, on a frame whose mean `L*` did not move at all.
+
+🔴 **The obvious explanation is measured FALSE.** It was written here as "the chroma reaching the
+tone curve" — the tonemapper is per-channel, so desaturating a pixel should move its mapped lightness
+even at fixed albedo lightness. `P5-28d`'s sweep refutes it: across `facade_hue.strength` 2.0, 2.5
+and 3.0 the `kerb` frame's `C*` p90 runs **25.1 → 28.0 → 31.2** while the two band shares are
+**33.2% / 20.0% at all three**, to the decimal. Chroma moves six points and the bands do not move at
+all, so chroma is not what moved them. ⚠️ **The cause is unidentified.** The leading candidate is the
+two clips below — both changed *which* buildings take a real lightness shift, up to 13 `L*` — and a
+shaded frame is a handful of large surfaces, so a few buildings can carry it. That is a lead, not a
+finding, and raising `strength` does not address it.
 
 ✅ **Runtime inertness.** `tools/skidpad.sh` at the default run-up is byte-identical on all five
 rows either side (`corner` 2.0 deg peak slip, `drift` 69.8 / 0.87 s, `tap` 20.5 / 0.40 s, `brake`
@@ -3613,6 +3621,37 @@ which is the failure mode worth naming: a correct assertion does not audit the s
 time returned 172 and 174 distinct colours; at `t=2.0` four runs returned one hash. The tile streamer
 is still instancing at 0.8 s from that viewpoint. Shoot the skyline at `t=2.0` and keep shooting
 until a hash repeats.
+
+**`P5-28d` (2026-09-08) — the re-judge, swept and put to the user.** `facade_hue.strength` is
+authored art direction, so retuning it is legitimate; what is not is calling the result faithful.
+Swept with `tools/facade_chroma.py --shipped --strengths 2.0 2.5 3.0 3.5` — ⚠️ **the flag is new and
+its default is still `Q30`'s (1.0, 1.5, 2.0)**, because a run that names its own set is answering its
+own question. Full pipeline path, 2,163 meshes, rendered at the rig's 0.520:
+
+| strength | mean | p50 | p90 | p99 | max | under `C*` 8 | over `C*` 20 | outside sRGB | clamped |
+|---|---|---|---|---|---|---|---|---|---|
+| *pre-un-bake at 2.0* | *15.45* | *12.25* | *30.68* | *102.37* | — | — | *26.5%* | *0.6%* | *0.09%* |
+| **2.0 (ships)** | 12.29 | 9.90 | 24.37 | 44.25 | 79.14 | 39.9% | 16.6% | 2.6% | 1.94% |
+| 2.5 | 15.18 | 12.38 | 29.52 | 55.21 | 82.32 | 31.3% | 26.8% | 4.7% | 4.11% |
+| 3.0 | 17.97 | 14.86 | 34.97 | 64.64 | 82.32 | 24.8% | 35.2% | 7.8% | 5.50% |
+| 3.5 | 20.65 | 17.24 | 40.34 | 66.37 | 84.07 | 19.4% | 42.9% | 11.2% | 7.21% |
+
+✅ **2.5 reproduces the shipped look to within measurement noise**: p50 12.38 against the old 12.25,
+over-`C*`-20 26.8% against 26.5%, and in the frame `C*` p90 32.0 against 32.9 (`street`) and 28.0
+against 28.5 (`kerb`). ⚠️ **It is not free, and both costs are new since `P5-28c`**: the sRGB gamut
+share goes 0.6% → **4.7%** and the jitter clamp 0.09% → **4.11%**, because the tint is now asked for
+at a lighter `L*` where there is less 8-bit and less gamut to give. ⚠️ **The `max` column saturates**
+— 82-84 at 2.5, 3.0 and 3.5 alike, against 102 before — which is the gamut ceiling reporting itself:
+above 2.5 the loudest buildings stop getting louder and only *more* of them clip.
+
+🔴 **`under C* 8` is a new column and it is the half `Q30` could never see.** The config comment calls
+`strength` "the line to move if the city reads too grey or too candy" and `over C* 20` can only
+report the second complaint. Both bars now ship, because `Q30`'s actual reading is that the
+distribution is *both at once* — at the shipped 2.0, **39.9%** of façades are under `C*` 8 while
+16.6% are over 20.
+
+⚠️ **`L*` is flat across the sweep** — 61.4 / 61.4 / 61.3 / 61.2 — which is what says `strength`
+assigns chroma and does not move lightness, the property `P5-28d` required.
 
 **`P5-28b` (2026-09-08) — the engine side, shipped inert.** `project.godot` declares
 `[shader_globals] exposure_anchor` as a `float` at **1.0**; `scripts/world/lighting_rig.gd` sets it in
