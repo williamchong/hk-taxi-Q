@@ -779,11 +779,29 @@ buildings:
   # ordering stays evidence while the amount becomes art direction. This is the
   # line to move if the city reads too grey or too candy.
   #
-  # ⚠️ At 2.0 the city reads as both at once, so this line cannot reach the
-  # state it describes — one building in four exceeds C* 20, above anything
-  # ART_DESIGN.md's palette authorises, and the middle is still muted. `Q30` has
-  # why. Moving this or the survey invalidates both; `tools/facade_chroma.py`
-  # re-measures them.
+  # ⚠️ **This line cannot reach the state it describes, and 3.0 does not change
+  # that — it chooses an end.** At the shipped 3.0, 35.2% of facades exceed
+  # C* 20, above anything ART_DESIGN.md's palette authorises, while 24.8% are
+  # still under C* 8: the city is loud and grey at once, and moving this number
+  # trades one complaint for the other rather than fixing either. `Q30` has why.
+  #
+  # 🔴 **3.0 was chosen by the user at `P5-28d`, on a sweep, and it is NOT a
+  # restoration.** `P5-28c` un-baked the exposure, so `with_hue` now assigns
+  # (a*, b*) at reflectance level and the rig's 0.520 scales C* by 0.520**(1/3)
+  # afterwards — the same strength delivers 0.804x the chroma it used to. 2.5 was
+  # measured to reproduce the old look to noise (p50 12.38 against 12.25) and was
+  # **not** taken. 3.0 is louder than anything this project has shipped.
+  #
+  # ⚠️ **Two costs, both new since the un-bake, both measured and accepted**:
+  # 7.8% of facades fall outside sRGB (was 0.6%) and `colour_for`'s jitter clamp
+  # fires on 5.50% of buildings (was 0.09%), because the tint is asked for at a
+  # lighter L* where there is less gamut and less 8-bit to give. ⚠️ **`max`
+  # saturates at 82.32 here and at 2.5 alike** — that is the gamut ceiling, not
+  # the palette, so raising this further makes more buildings clip without making
+  # any of them louder.
+  #
+  # Moving this or the survey invalidates both; `tools/facade_chroma.py`
+  # re-measures them, and `--strengths` is what sweeps this line.
   #
   # `vegetation_max` drops a survey row whose sample was more than this fraction
   # canopy — 36 of Wan Chai's 2,213 at 0.5. They sit 4.45 a* to the green side of
@@ -797,7 +815,7 @@ buildings:
   # layout. A city's own config never repeats its own id.
   facade_hue:
     source: facade_lab.json
-    strength: 2.0
+    strength: 3.0
     vegetation_max: 0.5
 
   # Vertex-clustering cell size per LOD tier, in metres, coarsest last.

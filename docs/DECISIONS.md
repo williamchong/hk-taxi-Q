@@ -57,7 +57,7 @@ wins.
 | `Q27` | `COLOR_0` is authored sRGB and must be linearised by the consumer | ✅ Closed |
 | `Q28` | A per-object seed must be `flat`, or the GPU interpolates it into bands | ✅ Closed |
 | `Q29` | The ground's normals are rebuilt in the fragment stage | ✅ Closed |
-| `Q30` | The shipped façade palette is not the one `ART_DESIGN.md` authorises | 🔴 Open |
+| `Q30` | The shipped façade palette is not the one `ART_DESIGN.md` authorises | 🔴 Open, **widened on purpose 2026-09-08** — `P5-28d` shipped `strength` 3.0 on the user's pick: one façade in **three** over `C*` 20 and a quarter under 8, with 2.5's faithful-to-the-old-look row declined. Both tails are instrumented now, which is what says no value of the dial fills the middle |
 | `Q31` | The city's value range has an empty middle; the shadow fill is the last candidate | 🟡 Open — **the tone curve shipped at 1.00** (2026-08-20), lifting the shadow mass +6.1 `L*`; the mass is still flat (sd 0.92 → 0.99) and the sky-visibility bake is the remainder |
 | `Q32` | ~~`INFRASTRUCTURE` is the brightest large object in its frame~~ | 🟢 Closed as **wrong** |
 | `Q33` | Every authored colour is `material reflectance × exposure_anchor` | ✅ Closed |
@@ -2911,16 +2911,34 @@ earlier. **A verdict pending on a screenshot has an expiry date that nothing in 
 
 ## `Q30` — The shipped façade palette is not the one `ART_DESIGN.md` authorises
 
-**Status.** 🔴 Open · **Owner.** `Q26`
+**Status.** 🔴 Open, and **widened deliberately on 2026-09-08** · **Owner.** `Q26`
 
-**Claim.** The five `height_bands` sit at `C*` 1.92–13.84. At `facade_hue.strength: 2.0` the shipped
-per-building colour is `C*` mean 15.37, p90 30.39, p99 60.27, max 104.55, with **26.4% of 2,177
-buildings over `C*` 20** against 4.6% at faithful strength 1.0. The palette table describes a city
-that does not exist, and one building in four is more saturated than anything the direction sanctions.
+🔴 **Restated at `P5-28d`, and the gap this question is about got bigger on purpose.** The user chose
+`facade_hue.strength: 3.0`. The bands sit at `C*` 1.76–13.83 as rendered; the shipped per-building
+colour is mean 17.97, p50 14.86, p90 34.97, p99 64.64, max 82.32, with **35.2% over `C*` 20** — one
+façade in **three**, where this question was opened at one in four. ⚠️ **That is not a regression to
+report, it is a decision to record**: the sweep and both costs were put to the user and 2.5, which
+reproduces the pre-un-bake distribution to noise, was declined. The palette table in `ART_DESIGN.md`
+has been re-measured to describe what ships; it still does not describe what the direction
+*authorises*, which is what keeps this open.
+
+✅ **And the middle is now measured, not inferred.** `under C* 8` ships as a column beside
+`over C* 20`, so "both too grey and too candy" is two numbers rather than a reading of one: at 3.0
+the city is **24.8% under 8 and 35.2% over 20 at once**. ⚠️ **No value of this dial fills that
+middle** — over the swept range `under 8` falls 72.8 → 39.9 → 24.8 while `over 20` climbs
+2.3 → 16.6 → 35.2 — which is the claim below, now with both tails instrumented.
+
+**Claim (as opened).** The five `height_bands` sat at `C*` 1.92–13.84. At `facade_hue.strength: 2.0`
+the shipped per-building colour was `C*` mean 15.37, p90 30.39, p99 60.27, max 104.55, with
+**26.4% of 2,177 buildings over `C*` 20** against 4.6% at faithful strength 1.0. The palette table
+described a city that does not exist, and one building in four was more saturated than anything the
+direction sanctions.
 
 ⚠️ **The knob cannot fix this, which is the argument against tuning it further rather than for.**
 Amplifying chroma linearly widens the spread far faster than it moves the middle, so at 2.0 the
-distribution is *both* too grey (median 12.25) and too candy (p99 60.3).
+distribution was *both* too grey (median 12.25) and too candy (p99 60.3). ⚠️ **`P5-28d` moved it
+anyway, with that stated** — the choice was between two unsatisfactory ends and the user took the
+saturated one; it is not evidence the knob became adequate.
 
 **Measured by `tools/facade_chroma.py`, and re-run it before quoting any of this.** Every figure
 here moves when `strength` moves or the survey is re-run, and both have happened. ⚠️ **The two move
@@ -2929,7 +2947,12 @@ different ends**: `Q37`'s resurvey lifted the median 28.7% (9.52 → 12.25) and 
 widens the tail and barely moves the middle. A re-grade that read one as a proxy for the other would
 tune the city the wrong way.
 
-⚠️ **`strength: 2.0` puts 0.6% of surveyed buildings outside the sRGB gamut, worst `dE76` 67.5 —
+⚠️ **The gamut figures below are pre-`P5-28c` and the definition is what survives, not the numbers.**
+Un-baked and at 3.0 it reads **7.8% outside, worst `dE76` 133.8**, because the tint is asked for at a
+lighter `L*` where there is less gamut to give. `max` also saturates at 82.32 — the same at 2.5 and
+3.0 — which is the ceiling reporting itself rather than the palette.
+
+⚠️ **`strength: 2.0` put 0.6% of surveyed buildings outside the sRGB gamut, worst `dE76` 67.5 —
 and this does not restate the 2.2% / 61.5 recorded here before, which does not reproduce.** Six
 definitions were tried against the superseded table on which that pair was computed — linear-channel
 bounds, encoded bounds, four `dE` thresholds — over both the filtered and unfiltered populations,
@@ -3635,6 +3658,30 @@ own question. Full pipeline path, 2,163 meshes, rendered at the rig's 0.520:
 | 2.5 | 15.18 | 12.38 | 29.52 | 55.21 | 82.32 | 31.3% | 26.8% | 4.7% | 4.11% |
 | 3.0 | 17.97 | 14.86 | 34.97 | 64.64 | 82.32 | 24.8% | 35.2% | 7.8% | 5.50% |
 | 3.5 | 20.65 | 17.24 | 40.34 | 66.37 | 84.07 | 19.4% | 42.9% | 11.2% | 7.21% |
+
+🔴 **The user chose 3.0 on 2026-09-08, and it is not a restoration.** 2.5 was on the table, measured
+to reproduce the old distribution to noise, and was not taken — so the shipped city is **louder than
+anything this project has drawn**: one façade in three over `C*` 20 against one in four before the
+un-bake. The two costs were quoted with the pick and accepted: 7.8% outside sRGB and a 5.50% jitter
+clamp. ⚠️ **Do not describe 3.0 as recovering what `P5-28c` lost** — it overshoots it deliberately,
+and `hong_kong.yaml`'s `facade_hue` block carries the sentence.
+
+⚠️ **`facade_chroma.py`'s default set moved 1.5 → 2.0 with it**, so the headline table contains the
+value the game actually draws: (1.0, 2.0, 3.0) is faithful / what shipped until this change / what
+ships. 1.0 and 2.0 stay directly comparable with every table `Q30` ever published.
+
+🔴 **The frame bar was written about the albedo and read against the frame, and it fails read that
+way.** `P5-28d`'s acceptance asked for `L*` deltas under 1 unit at every percentile. Whole-frame
+passes — `street` 43.1 → 42.8, `kerb` 29.4 → 29.4 — but the **responding pixels** move `|ΔL*|` p90
+**1.61** on `street`. ⚠️ **That is not the clips**: it runs 1.00 at 2.5 and 1.61 at 3.0, linear in
+the step, where clipping would be neither. It is the tonemapper following chroma — a more saturated
+albedo does not map to the same rendered lightness — and `facade_chroma` confirms the albedo half of
+the property holds at `L*` 61.5 / 61.4 / 61.3 across the sweep. Recorded rather than retuned; the
+acceptance conflated two lightnesses.
+
+⚠️ **`Q37`'s filler guard did not move and was not re-run**: `MODAL_SHARE`, `MODAL_STRIDE`,
+`is_filler` and `filler_colours` are untouched and `facade_lab.json` is byte-identical, so the survey
+under this table is the one `Q55` published. There is nothing for a re-run to compare against.
 
 ✅ **2.5 reproduces the shipped look to within measurement noise**: p50 12.38 against the old 12.25,
 over-`C*`-20 26.8% against 26.5%, and in the frame `C*` p90 32.0 against 32.9 (`street`) and 28.0

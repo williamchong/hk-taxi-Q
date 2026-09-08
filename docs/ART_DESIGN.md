@@ -193,22 +193,43 @@ but `facade_hue.strength: 2.0` multiplies each building's *measured* chroma on t
 is not muted. Measured by `tools/facade_chroma.py` over the 2,177 surveyed buildings that pass
 `vegetation_max`, against the band each would otherwise take:
 
-| `facade_hue.strength` | shipped `C*` mean | median | p90 | p99 | max | share over `C*` 20 |
-|---|---|---|---|---|---|---|
-| 1.0 (faithful) | 6.23 | 4.91 | 12.31 | 23.88 | 54.80 | **2.3%** |
-| 1.5 | 9.29 | 7.38 | 18.40 | 34.69 | 67.21 | **8.1%** |
-| **2.0 (ships)** | **12.30** | **9.85** | **24.48** | **44.20** | **80.82** | **16.7%** |
+| `facade_hue.strength` | shipped `C*` mean | median | p90 | p99 | max | under `C*` 8 | over `C*` 20 | outside sRGB |
+|---|---|---|---|---|---|---|---|---|
+| 1.0 (faithful) | 6.24 | 4.93 | 12.33 | 24.57 | 54.07 | **72.8%** | **2.3%** | 0.5% |
+| 2.0 (shipped until 2026-09-08) | 12.29 | 9.90 | 24.37 | 44.25 | 79.14 | **39.9%** | **16.6%** | 2.6% |
+| **3.0 (ships)** | **17.97** | **14.86** | **34.97** | **64.64** | **82.32** | **24.8%** | **35.2%** | **7.8%** |
 
-🔴 **Re-measured 2026-09-08 after `P5-28c`, and the whole table fell — the look moved and no dial
-was turned.** `with_hue` assigns `(a*, b*)` in CIELAB, and it now runs on the *reflectance-level*
-colour with the rig's 0.520 applied afterwards; a scale toward black in linear light lowers chroma
-along with lightness, so the same `strength` delivers less of it. The prior column, which is what
-`Q30` argued from, was 15.41 / 12.29 / 30.39 / 60.27 / 104.55 at **26.5%**. `L*` is unmoved — 61.5
-at every strength, both sides — and the authored bands went `C*` **1.92-13.84 → 1.76-13.83**.
+🔴 **Two things happened on 2026-09-08 and the table records both.** `P5-28c` un-baked the exposure,
+which moved the look with no dial turned: `with_hue` assigns `(a*, b*)` in CIELAB and now runs on the
+*reflectance-level* colour with the rig's 0.520 applied afterwards, and a linear-light scale
+multiplies `C*` by `anchor ** (1/3)` — 0.804 — so the same `strength` delivered 15.45 / 12.25 /
+30.68 at 26.5% before and 12.29 / 9.90 / 24.37 at 16.6% after. `P5-28d` then re-judged the dial on a
+sweep and **the user chose 3.0**.
 
-⚠️ **The gamut clip went the other way**: 0.6% → **2.6%** of buildings outside sRGB at `strength` 2.0,
-because the tint is now asked for at a lighter `L*` where high chroma is harder to show. That is the
-one place the un-bake costs something, and it is `P5-28d`'s to price.
+⚠️ **3.0 is not a restoration and must not be described as one.** 2.5 was measured to reproduce the
+old distribution to noise — p50 12.38 against 12.25, over-`C*`-20 26.8% against 26.5% — and was not
+taken. 3.0 is **louder than anything this project has shipped**: one façade in three exceeds `C*` 20
+where it was one in four at the old 2.0.
+
+⚠️ **`under C* 8` is the column `Q30` never had, and it is why "too grey or too candy" was never a
+single axis.** At 3.0 the city is **24.8% under `C*` 8 and 35.2% over 20 at the same time** — the
+middle is what is missing, and no value of this dial fills it. That is `Q30`'s finding restated with
+both tails measured instead of one.
+
+⚠️ **Two costs, both new since the un-bake, both accepted with the pick.** The sRGB gamut share runs
+0.6% → 2.6% → **7.8%**, and `colour_for`'s jitter clamp — a second, downstream clip that nothing in
+the bundle counts — fires on 0.09% → 1.94% → **5.50%** of buildings. Both grow because the tint is
+asked for at a lighter `L*` where there is less gamut and less 8-bit to give. ⚠️ **`max` saturates**:
+82.32 at 2.5 and at 3.0 alike, against 102 before. That is the gamut ceiling reporting itself, so
+above about 2.5 the loudest buildings stop getting louder and only more of them clip.
+
+⚠️ **`L*` is flat across the sweep** — 61.5 / 61.4 / 61.3 — which is the property the re-judge
+required: `strength` assigns chroma and does not move albedo lightness. 🔴 **It does move *rendered*
+lightness, and the plan's bar did not distinguish the two.** On the `street` frame the responding
+pixels move `|ΔL*|` p90 **1.00** at 2.5 and **1.61** at 3.0 against `P5-28c`'s frame — linear in the
+step, so it is the tonemapper following chroma rather than the clips — where the acceptance asked for
+under 1 at every percentile. Whole-frame `L*` passes it (43.1 → 42.8 `street`, 29.4 → 29.4 `kerb`).
+The bar was written about the albedo and read against the frame.
 
 ⚠️ **`tools/facade_chroma.py` applies the rig's exposure itself now**, reading it from
 `clean_daylight.tscn`, so these numbers still describe the *rendered* palette and are still
@@ -223,13 +244,15 @@ finding rather than a formality: the placeholder panels `Q55` removed were damag
 not chroma, so the argument this table makes survives its own input being corrected. Prior figures
 were 7.75 / 6.13, 11.59 / 9.08 and 15.37 / 12.25 at 26.4%.
 
-`L*` mean is 61.5 at every strength, so this is chroma alone. **One building in six** is more
-saturated than *any* colour this document authorises — it was one in four before `P5-28c` — and the tail is what the eye picks out — the
+`L*` mean is 61.3-61.5 at every strength, so this is chroma alone. **One building in three** is more
+saturated than *any* colour this document authorises — it was one in four at the old 2.0, and one in
+six in the fortnight between `P5-28c` and `P5-28d` — and the tail is what the eye picks out — the
 mint, teal, lilac and peach blocks in a street frame are not a rendering fault, they are the palette.
 
 ⚠️ **The knob is doing two jobs and only one of them is stated.** Its config comment calls it "the
 line to move if the city reads too grey or too candy" — but at 2.0 the distribution is *both*:
-median 9.85 is still near-neutral while p99 is 44.2. Amplifying chroma linearly widens the spread
+median 14.86 is still under the `C*` 20 line while p99 is 64.6, and a quarter of the city is under
+8. Amplifying chroma linearly widens the spread
 far faster than it moves the middle, so the buildings that were already coloured become the loudest
 thing in the frame long before the grey majority stops being grey.
 

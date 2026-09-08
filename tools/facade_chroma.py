@@ -68,17 +68,25 @@ from ring_weights import heights, ramp_class  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-# The strengths the `ART_DESIGN.md` table has always carried: the faithful one,
-# the one that ships, and the midpoint that says whether the tail grows linearly.
+# The strengths the `ART_DESIGN.md` table carries: the faithful one, the one that
+# ships, and a midpoint that says whether the tail grows linearly.
 # Re-measuring on a different set would answer a different question — keeping
 # these is what makes a new row comparable with the old one.
+#
+# ⚠️ **The midpoint moved from 1.5 to 2.0 when `P5-28d` shipped 3.0**, so that
+# the shipped value is in the table at all — a headline that omits what the game
+# draws is the one row a reader needs. 2.0 is not an arbitrary midpoint either:
+# it is what shipped from `Q30` until 2026-09-08, so every table since carries a
+# row directly comparable with every table before. ⚠️ **1.0 must stay**, because
+# it is the faithful reading and the only row that is a measurement rather than a
+# setting.
 #
 # ⚠️ **`--strengths` overrides them, and the default is the point.** `P5-28d`
 # has to sweep *upward* from the shipped value, which is a different question
 # from the one this table asks, and the alternative was the scratch script
 # `Q37` and `Q55` are both open debts about. A run that names its own set is
 # answering its own question and has to say so beside the numbers.
-STRENGTHS = (1.0, 1.5, 2.0)
+STRENGTHS = (1.0, 2.0, 3.0)
 
 # The line `ART_DESIGN.md` draws for "more saturated than anything the direction
 # sanctions". It is the doc's number rather than a derived one, and it is held
