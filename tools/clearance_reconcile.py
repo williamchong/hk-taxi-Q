@@ -107,8 +107,20 @@ log = logging.getLogger(__name__)
 # unchanged — 21 and 19, exactly what stood here before** — which is what makes
 # this the population arriving rather than a bar retuned to fit it. If a future
 # move cannot say that, it is not this kind of move.
-EXPECT_PIPELINE = 21
-EXPECT_GRADER = 25
+# 🔴 **Keyed by region since `P5-7g`, because a count is per region** — the
+# first Causeway Bay run read 7 / 8 / 1 against Wan Chai's bar and failed on
+# every line for no reason of its own. ✅ **21 / 25 → 22 / 26 on 2026-09-08
+# (`P5-7e`), and the one edge is `e364`**, the level-1 ramp whose far half
+# now runs 110 m into Causeway Bay: its per-edge deck `offset_m` is the median
+# over every station, the far half's 19 dragged it -0.1 → -2.9 m, and the deck
+# clamp cut the near half's drawn half-width 3.35 → 2.05 m, which both
+# instruments read as a 2.0 m corridor. The six disagreements are untouched.
+# Causeway Bay's 7 / 8 / 1 became 6 / 7 / 1 the same day — `e96`, its own
+# crossing ramp, went grader-only when its far half joined the same survey.
+EXPECT = {
+    "wan_chai": (22, 26, 6),
+    "causeway_bay": (6, 7, 1),
+}
 # Edges the two disagree about: 3 the grader condemns and the pipeline clears
 # (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e99` left this list at
 # its own carve — it was the largest of the grader-only gaps at 1.57 m. ⚠️ **A single number
@@ -123,7 +135,6 @@ EXPECT_GRADER = 25
 # untouched. ⚠️ The gap widens off-grade for the reason it widens anywhere — the
 # grader's 1.0 m plan cell against the pipeline's 0.5 m — and a viaduct's
 # parapet is thin in plan, so it is the shape of edge that gap is largest on.
-EXPECT_DISAGREEMENT = 6
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
 # cell first, then the pipeline's plan cell and its across resolution — so the
@@ -269,20 +280,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--expect-pipeline",
         type=int,
-        default=EXPECT_PIPELINE,
-        help="Q51's starved count for the bundle",
+        default=None,
+        help="Q51's starved count for the bundle (default: the region's own, from EXPECT)",
     )
     parser.add_argument(
         "--expect-grader",
         type=int,
-        default=EXPECT_GRADER,
-        help="Q51's starved count for the grader",
+        default=None,
+        help="Q51's starved count for the grader (default: the region's own, from EXPECT)",
     )
     parser.add_argument(
         "--expect-disagreement",
         type=int,
-        default=EXPECT_DISAGREEMENT,
-        help="Q51's count of edges the two disagree about, in either direction",
+        default=None,
+        help="Q51's count of edges the two disagree about (default: the region's own)",
     )
     args = parser.parse_args(argv)
 
@@ -290,6 +301,19 @@ def main(argv: list[str] | None = None) -> int:
     bar_m = float(city.roads.lane_width_m)
     manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
+    recorded = EXPECT.get(manifest["region_id"])
+    asked = (args.expect_pipeline, args.expect_grader, args.expect_disagreement)
+    if recorded is None and None in asked:
+        raise SystemExit(
+            f"no ratchet is recorded for region {manifest['region_id']!r}; run it once, "
+            "look at the numbers, add them to EXPECT — or pass all three --expect-* flags"
+        )
+    if args.expect_pipeline is None:
+        args.expect_pipeline = recorded[0]
+    if args.expect_grader is None:
+        args.expect_grader = recorded[1]
+    if args.expect_disagreement is None:
+        args.expect_disagreement = recorded[2]
     log.info("clearance reconciliation, lod %d", args.lod)
     if tuple(args.levels) != LEVELS:
         # ⚠️ **A warning and not a refusal.** Grading a level the bundle does

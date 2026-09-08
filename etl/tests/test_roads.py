@@ -41,7 +41,11 @@ from pipeline.roads import (
     simplify_mask,
 )
 from pipeline.terrain import HeightField
-from tests.helpers import NULL_SENTINELS, soup
+from tests.helpers import (
+    NULL_SENTINELS,
+    build_pair_graphs,
+    soup,
+)
 
 
 class TestSimplify:
@@ -201,21 +205,6 @@ def _graph(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "out" / "middle" / "roadgraph.json").read_text())
 
 
-def _pair_graphs(city, tmp_path: Path) -> tuple[dict, dict]:
-    """Both regions of `testville_pair` built, and their documents read back."""
-    reports = {
-        region: build_region(
-            city, region, sources_root=tmp_path / "sources", out_root=tmp_path / "out"
-        )
-        for region in ("middle", "east")
-    }
-    docs = {
-        region: json.loads((tmp_path / "out" / region / "roadgraph.json").read_text())
-        for region in reports
-    }
-    return reports, docs
-
-
 class TestJoin:
     """The cut on the graph rather than the rectangle (`P5-7e`, `Q116`).
 
@@ -229,7 +218,7 @@ class TestJoin:
         self, testville_pair
     ) -> None:
         city, tmp_path = testville_pair
-        reports, _ = _pair_graphs(city, tmp_path)
+        reports, _ = build_pair_graphs(city, tmp_path)
         middle, east = reports["middle"], reports["east"]
 
         assert {e.source_id for e in middle.edges} == {1, 4, 6, 7}
@@ -254,7 +243,7 @@ class TestJoin:
         """The whole point of the cut: the seam is a shared node, not two
         nodes 0.6 m apart on two clip lines (`Q116`)."""
         city, tmp_path = testville_pair
-        reports, _ = _pair_graphs(city, tmp_path)
+        reports, _ = build_pair_graphs(city, tmp_path)
         frames = {r: city.game_transform(r) for r in reports}
 
         def in_source(region: str, node: int) -> tuple[float, float]:
@@ -289,7 +278,7 @@ class TestJoin:
         the fraction the origin was floored by, so that is computed here rather
         than assumed."""
         city, tmp_path = testville_pair
-        reports, _ = _pair_graphs(city, tmp_path)
+        reports, _ = build_pair_graphs(city, tmp_path)
         strip_m = (
             city.projected_bounds("middle").min_easting
             - city.game_transform("middle").origin_easting
@@ -305,7 +294,7 @@ class TestJoin:
         The resolver indexes edges by id, so this is also the test that fails
         when the id sequence handed to it has a gap in it."""
         city, tmp_path = testville_pair
-        reports, docs = _pair_graphs(city, tmp_path)
+        reports, docs = build_pair_graphs(city, tmp_path)
 
         assert reports["middle"].turn_restrictions == []
         assert reports["middle"].turns_foreign_pivot == 1
@@ -329,7 +318,7 @@ class TestJoin:
         kerb nothing was posted on, which renders as a perfectly good yellow
         line. The owner publishes it; here it is dropped."""
         city, tmp_path = testville_pair
-        reports, _ = _pair_graphs(city, tmp_path)
+        reports, _ = build_pair_graphs(city, tmp_path)
         by_source = {
             region: {e.source_id: e for e in report.edges} for region, report in reports.items()
         }
@@ -344,7 +333,7 @@ class TestJoin:
         list); the alternative, renumbering, shifts every id after the first
         crossing. The document says which list a run is in, never a flag."""
         city, tmp_path = testville_pair
-        _, docs = _pair_graphs(city, tmp_path)
+        _, docs = build_pair_graphs(city, tmp_path)
         middle = docs["middle"]
 
         owned = {e["id"] for e in middle["edges"]}

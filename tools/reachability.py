@@ -611,6 +611,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--region", required=True)
     parser.add_argument(
+        "--graph-dir",
+        type=Path,
+        default=None,
+        help=(
+            "read roadgraph.json and clearance.json from this directory instead of the "
+            "region's own — `pipeline.join` writes a merged pair under etl/out/<a>+<b>/ "
+            "(P5-7g); --region still names the city config to read"
+        ),
+    )
+    parser.add_argument(
         "--car-width-m",
         type=float,
         default=CAR_WIDTH_M,
@@ -640,8 +650,12 @@ def main(argv: list[str] | None = None) -> int:
 
     city: Config = load_config()
     region = city.region(args.region)
-    out_dir = city.out_dir(args.region)
-    rebuild = f"python -m pipeline --region {args.region}"
+    out_dir = args.graph_dir or city.out_dir(args.region)
+    rebuild = (
+        f"python -m pipeline.join --region-a {args.region} --region-b <neighbour>"
+        if args.graph_dir
+        else f"python -m pipeline --region {args.region}"
+    )
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, args.region)
     clearance = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
     check_documents(graph, clearance)

@@ -132,7 +132,7 @@ wins.
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
 | `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` built 2026-09-07.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number. The road is **chunked, not kitted**: 65 chunks whose union is the old mesh triangle for triangle, +13 to +17 draw calls on the route, the road culled for the first time |
-| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — `P5-7b`–`P5-7f` built 2026-09-08: the cut is on the graph, nine crossings whole with one owner each, the seam a shared node, and the seam junctions capped by the region holding the node; the proofs (`P5-7g`) remain; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
+| `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open — `P5-7` built 2026-09-08: the cut is on the graph, nine crossings whole with one owner each, the seam a shared node, the seam junctions capped by the region holding the node, and `pipeline/join.py` routes 126,275 ordered pairs across the pair; what remains is the runtime that holds two regions (`P5-9`), and one finding — `e364`'s per-edge deck offset; owned by `P5-7`, runtime half `P5-9`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). Measured on the `causeway_bay` fixture: **nine** features cross, the two rectangles' clip lines are **0.624 m** apart (`Q7`'s flooring plus the meridian), so the paired nodes miss by 0.3–0.7 m and `width_m` disagrees on **7 of 9**. The rule: membership on the geodetic bounds half-open, a crossing feature kept whole and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign`, boundary nodes graph nodes published by both |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -20045,8 +20045,47 @@ opposed partner across the line is unseen; the `edge ends are half of an opposed
 **93 / 6 / 5** before and after, which proves nothing moved and not that the seam pairs. Both are
 `P5-7g`'s to measure and `P5-9`'s to see.
 
-**Status.** 🟡 **Open — `P5-7b`–`P5-7f` built 2026-09-08; the proofs (`P5-7g`) remain.** Owned by
-`P5-7`, with the runtime half in `P5-9`.
+✅ **`P5-7g` built 2026-09-08 — the proofs, and the cut's one finding.** `tools/join_seam.py` on
+the finished pair: **9 shared runs, 9 with exactly one owner, 0 foreign copies with no run opposite,
+0 + 0 nodes on the internal line**. `pipeline/join.py` is the Python merge `P5-9`'s GDScript is to be
+tested against: the pair in Wan Chai's frame, the second region moved by the difference of the two
+`city_offset`s, the owner's copy of every crossing run kept and the foreign one dropped, and the seam
+nodes named by `(source_id, run)` — a foreign copy's ends *are* the owner's ends — never by a distance.
+**792 + 207 → 999 edges over 764 nodes (16 unified), 252 turns (0 dropped), 9 matched, 0 unmatched,
+999 clearance rows.** `tools/reachability.py --graph-dir` runs across it: **334,767** ordered pairs
+route where Wan Chai alone routes 194,774 of 538,022 and Causeway Bay 13,718 of 38,220, so
+**126,275 pairs cross the join**. Refusing the pair's 24 starved edges (19 + 5, exactly) loses
+**7.09%** where the regions alone lose 0.00% and 3.49%.
+
+🔴 **The difference is `e364`, and it is the cut's one finding.** `Edge.offset_m` — the deck offset
+`Q103` publishes — is ONE number per edge, the median over its stations. The level-1 ramp `e364` was
+cut at the line and read −0.1 m; whole, its far half's 19 stations over Causeway Bay's structure drag
+the median to **−2.9 m**, and `surface._clamped_rails` then cuts the *near* half's drawn half-width
+**3.35 → 2.05 m** on a deck whose rims did not move. Both instruments read the 2.0 m corridor: the
+reconcile ratchet moved **21 / 25 / 6 → 22 / 26 / 6** on that edge alone, with the six disagreements
+untouched, and refusing it severs the ramp's cross-seam routes. The fix is a per-station offset, which
+is `Q103`'s and `Q107`'s design to reopen, so it is recorded and not taken here. ✅ **The ratchet is
+region-keyed** (`clearance_reconcile.EXPECT`): Causeway Bay's own read **7 / 8 / 1 → 6 / 7 / 1**, `e96`
+its crossing ramp going grader-only the same way, and a region with no recorded triple is refused
+rather than graded on another's.
+
+⚠️ **The `Q19` battery on Causeway Bay reads worse for a reason the graders cannot see.** `deck_error`
+now measures **67.3%** of the carriageway and `overhang` reads **25.1%** against `P5-7a`'s 7.8%,
+because the far halves of `e93` (111 m) and `e96` (133 m) ride over Wan Chai's tiles, which Causeway
+Bay's bundle does not carry: the roads stage sampled their heights from the sheets read within the
+reach, so the ribbon *is* on the deck and the grader has no deck to find it on. Wan Chai's
+`ground_clearance` gained one level-0 edge (87 → 88) the same way. The rest holds: occupancy's
+starved sets are `P5-7a`'s (Wan Chai 21, Causeway Bay 5 with the building share 2.453%), touchdown
+passes on both, `deck_margin` and `narrowing` are unchanged. The evidence for the cut itself is two
+fixed cameras — GLOUCESTER ROAD looking north-east across the line, TUNG LO WAN ROAD looking
+south-east — shot at t=2.0 twice a side and `cmp`-identical, before against after differing on
+**0.39%** and **0.30%** of pixels in the middle-distance band where the ribbon runs on past the marker
+on one and withdraws to the cap on the other; the pre-cut side built in a worktree at `2de8a42` with
+its own import. ⚠️ The first after-side shots had no buildings in them at all: a `sync_generated.sh`
+with no headless `--import` behind it renders from a cache that has never seen the new tiles.
+
+**Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
+and `e364`'s per-edge offset is the finding it hands to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught

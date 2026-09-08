@@ -433,6 +433,7 @@ hk-taxi-Q/
 │   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
 │   │   ├── landmarks.py         # hero-building placement → landmarks.json
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
+│   │   ├── join.py              # two neighbours' roadgraph.json → one, in the first's frame (P5-7g)
 │   │   ├── carriageway.py       # the width/lane survey roads.py publishes (Q94/Q95)
 │   │   ├── kerbside.py          # NSR restrictions linear-referenced onto the graph
 │   │   ├── surface.py           # roadgraph.json → roads/<tile>.glb; ribbon, kerbs, junctions

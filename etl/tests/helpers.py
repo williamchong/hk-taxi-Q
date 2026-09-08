@@ -8,6 +8,7 @@ twice, and only pytest's copy of a fixture is a working fixture.
 
 from __future__ import annotations
 
+import json
 import struct
 import textwrap
 from collections.abc import Callable
@@ -476,3 +477,23 @@ def game_to_source(transform: GameTransform) -> Callable[[float, float], tuple[f
         return (easting, northing)
 
     return at
+
+
+def build_pair_graphs(city, tmp_path: Path, regions=("middle", "east")):
+    """Both regions of `testville_pair` through the roads stage, and their
+    documents read back — the same build `test_roads.py` and `test_join.py`
+    both start from, in one place."""
+    from pipeline import roads
+    from pipeline.roads import ROADGRAPH_NAME
+
+    reports = {
+        region: roads.build_region(
+            city, region, sources_root=tmp_path / "sources", out_root=tmp_path / "out"
+        )
+        for region in regions
+    }
+    docs = {
+        region: json.loads((tmp_path / "out" / region / ROADGRAPH_NAME).read_text(encoding="utf-8"))
+        for region in regions
+    }
+    return reports, docs

@@ -1206,7 +1206,16 @@ Common emoji for this project:
   `roadsurface.json`'s `join` block (`foreign_ends` / `caps_with_foreign_mouth` / `caps_in_neighbour`)
   and mutation-check it by stripping `foreign_edges`. ⚠️ **The far half rides in the LAST column's
   chunk** — `_tile_keys` clips into the grid and the streamer picks by `aabb` — so do not build an
-  out-of-grid tile id for it.
+  out-of-grid tile id for it. 🔴 **`pipeline/join.py` is the reference merge and
+  `reachability.py --graph-dir` is how the pair is graded** (`P5-7g`): paste its `foreign_matched /
+  foreign_unmatched / nodes_unified / turns_dropped` and the cross-seam routed pairs (334,767 against
+  194,774 + 13,718 alone). 🔴 **`Edge.offset_m` is ONE number per edge, and the cut found it**: a run
+  whose halves sit on two decks takes the median of both, and `e364`'s near half lost 1.3 m of drawn
+  half-width to its far half. Do not answer that by trimming the run; the fix is per station
+  (`Q103`). ⚠️ **`clearance_reconcile.EXPECT` is keyed by region** — 22 / 26 / 6 and 6 / 7 / 1 — and
+  the deck graders read a region's own tiles, so an owned far half over the neighbour's structure
+  reads as hanging in air (`overhang` 25.1% on Causeway Bay); quote that with the cause or it reads
+  as a defect.
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - 🔴 **Collider changes — `buildings.collision_cell_m`, `class_collision_cell_m`, `_collider`,
