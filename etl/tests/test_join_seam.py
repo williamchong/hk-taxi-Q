@@ -61,29 +61,18 @@ def _edge(id_: int, source: int, run: int, *, foreign: str | None = None, lanes:
 
 class TestSharedSide:
     @staticmethod
-    def _city(a: dict, b: dict):
-        regions = {
-            "a": SimpleNamespace(bounds=SimpleNamespace(**a)),
-            "b": SimpleNamespace(bounds=SimpleNamespace(**b)),
-        }
-        return SimpleNamespace(region=lambda r: regions[r])
+    def _city(neighbours: dict[str, str]):
+        return SimpleNamespace(neighbours=lambda region: neighbours if region == "a" else {})
 
-    def test_each_of_the_four_sides_is_read_from_the_bounds(self) -> None:
-        base = {"west": 0.0, "east": 1.0, "south": 0.0, "north": 1.0}
-        east = {**base, "west": 1.0, "east": 2.0}
-        west = {**base, "west": -1.0, "east": 0.0}
-        south = {**base, "south": -1.0, "north": 0.0}
-        north = {**base, "south": 1.0, "north": 2.0}
-        assert shared_side(self._city(base, east), "a", "b") == ("x", +1)
-        assert shared_side(self._city(base, west), "a", "b") == ("x", -1)
-        assert shared_side(self._city(base, south), "a", "b") == ("z", +1)
-        assert shared_side(self._city(base, north), "a", "b") == ("z", -1)
+    def test_each_of_the_four_sides_maps_to_its_game_axis(self) -> None:
+        assert shared_side(self._city({"east": "b"}), "a", "b") == ("x", +1)
+        assert shared_side(self._city({"west": "b"}), "a", "b") == ("x", -1)
+        assert shared_side(self._city({"south": "b"}), "a", "b") == ("z", +1)
+        assert shared_side(self._city({"north": "b"}), "a", "b") == ("z", -1)
 
-    def test_a_pair_sharing_no_edge_is_refused(self) -> None:
-        base = {"west": 0.0, "east": 1.0, "south": 0.0, "north": 1.0}
-        apart = {**base, "west": 5.0, "east": 6.0}
+    def test_a_pair_the_config_does_not_name_is_refused(self) -> None:
         with pytest.raises(SystemExit):
-            shared_side(self._city(base, apart), "a", "b")
+            shared_side(self._city({"east": "c"}), "a", "b")
 
 
 class TestNearLine:

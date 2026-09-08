@@ -874,20 +874,24 @@ def build_region(
 ) -> RoadReport:
     """Read the region's roads and write its `roadgraph.json`."""
     style = city.roads
-    bounds = city.projected_bounds(region_id)
     transform = city.game_transform(region_id)
 
+    # The read box, not the region's own rectangle: where a declared neighbour
+    # shares an edge the read reaches `join.reach_m` past it (`P5-7c`), so a
+    # crossing feature's far half is in hand when the cut moves to the graph.
+    # `clip` below still cuts at the rectangle, so until `P5-7e` the extra
+    # features are read and clipped away.
     source = _Source(
         path=cached_source(city, style.source, root=sources_root),
         city=city,
-        bbox=bounds.bbox,
+        bbox=city.read_box(region_id).bbox,
     )
     centrelines = source.read(style.centrelines)
     owners, parts = gdb.polylines(centrelines)
 
     region_high = city.region_high(region_id)
 
-    surfaces = _surfaces(city, region_id, sources_root, region_high)
+    surfaces = _surfaces(city, region_id, sources_root)
     report = RoadReport(read=len(parts))
     nodes = _Nodes()
 
@@ -2013,7 +2017,6 @@ def _surfaces(
     city: Config,
     region_id: str,
     sources_root: Path | None,
-    region_high: tuple[float, float],
 ) -> _Surfaces:
     """The height fields this region's roads are measured against, and how
     closely the at-grade ones follow the first of them.
@@ -2035,8 +2038,16 @@ def _surfaces(
         return _Surfaces(ground=None, deck=None, profile=None)
 
     profile = city.roads.ground_profile
-    place = Placement.resolve(city, region_id, sources_root, None)
-    ground = _field(place, region_high, city.buildings.terrain_class, city, region_id)
+    # The sheets and the height fields cover the read extent rather than the
+    # rectangle, for the same reason the source bbox does: an owned edge's far
+    # half needs a deck and a ground to be measured against (`Q90` is what a
+    # ramp with no deck to sample looks like). This is the one reader that asks
+    # for the widened sheet list; the building stages tile only what is inside.
+    place = Placement.resolve(
+        city, region_id, sources_root, None, bounds=city.read_bounds(region_id)
+    )
+    low, high = city.read_extent(region_id)
+    ground = _field(place, low, high, city.buildings.terrain_class, city, region_id)
 
     thresholds, structure_class = city.roads.deck, city.buildings.structure_class
     if thresholds is None or structure_class is None:
@@ -2045,7 +2056,7 @@ def _surfaces(
         ground=ground,
         profile=profile,
         deck=_Deck(
-            field=_field(place, region_high, structure_class, city, region_id),
+            field=_field(place, low, high, structure_class, city, region_id),
             thresholds=thresholds,
             level_zero_m=city.deck_height_m(0),
         ),
@@ -2054,6 +2065,7 @@ def _surfaces(
 
 def _field(
     place: Placement,
+    region_low: tuple[float, float],
     region_high: tuple[float, float],
     class_name: str,
     city: Config,
@@ -2079,7 +2091,7 @@ def _field(
         for _, mesh in read_sheet(path, (class_name,))
     )
     try:
-        return HeightField.from_meshes(meshes, region_high=region_high)
+        return HeightField.from_meshes(meshes, region_low=region_low, region_high=region_high)
     except ValueError as error:
         raise ValueError(
             f"city '{city.id}' asks roads to sample '{class_name}', but region '{region_id}' has "

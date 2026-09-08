@@ -65,6 +65,31 @@ class RegionConfig:
     tile_size_m: float
 
 
+# The four sides of a region, named as the compass reads them in the geodetic
+# frame. In game space east is +x, west is -x, south is +z and north is -z
+# (`GameTransform.from_bounds` anchors the origin at the north-west corner).
+SIDES = ("west", "east", "south", "north")
+
+
+@dataclass(frozen=True)
+class Join:
+    """How far past its own bounds a region reads its sources (`Q116`, `P5-7c`).
+
+    A road that crosses into a declared neighbour is owned whole by one region,
+    which then measures a far half over sources its rectangle never selected —
+    Wan Chai's sheets stop about 85 m past the shared line and the longest far
+    half runs 133 m. `reach_m` widens sheet selection and every source-read bbox
+    on the sides where a declared neighbour shares an edge, and nowhere else,
+    so a region with no neighbour reads exactly what it read before.
+
+    ⚠️ **`bounds` and the tile grid do not move** (`Q10`): this widens what is
+    *read*, never where the region *is*. Whether a feature found in the margin
+    is published at all is `roads.py`'s ownership rule, not this number.
+    """
+
+    reach_m: float
+
+
 # What kind of geometry a carriageway publisher draws (`Q94`). Named next to the
 # validation that accepts them, for the reason `MARKING_DIRECTIONS` gives: the
 # stage that acts on a vocabulary must not drift from the set that is accepted.
@@ -3016,6 +3041,10 @@ class Config:
     # Optional: absent, that stage writes its document and touches no tile,
     # so the bundle is byte-identical to a build without it.
     carve: Carve | None = None
+    # Optional because a city of one region has no seam to read across, and
+    # absent it reads as "no neighbour widens anything", which is the pre-`P5-7`
+    # state exactly.
+    join: Join | None = None
     # The bar `P3-29`'s player fence is set at (the car's own width), as opposed
     # to `roads.lane_width_m`, which is what traffic is routed on. Optional:
     # absent, nothing is fenced and the bundle is byte-identical.
@@ -3192,6 +3221,78 @@ class Config:
             city.origin_northing - region.origin_northing,
         )
 
+    def neighbours(self, region_id: str) -> dict[str, str]:
+        """The declared regions sharing a whole edge with this one, by side.
+
+        Derived from the bounds rather than declared, so two regions cannot
+        disagree about whether they are neighbours. "Whole edge" is literal for
+        the first build (`Q116`): the shared longitude or latitude is equal and
+        the extents along it are identical, so the union of the two rectangles
+        is a rectangle and `roads.clip` needs no second shape. A pair that
+        touches along part of an edge is refused at load rather than treated as
+        two strangers — see `_check_regions_are_disjoint_or_share_a_whole_edge`.
+        """
+        mine = self.region(region_id).bounds
+        found: dict[str, str] = {}
+        for other_id, other in self.regions.items():
+            if other_id == region_id:
+                continue
+            side = _shared_whole_edge(mine, other.bounds)
+            if side is not None:
+                found[side] = other_id
+        return found
+
+    def read_reach(self, region_id: str) -> dict[str, float]:
+        """Metres to read past each side of the region: `join.reach_m` where a
+        neighbour shares that side, 0.0 everywhere else."""
+        reach = 0.0 if self.join is None else self.join.reach_m
+        near = self.neighbours(region_id)
+        return {side: reach if side in near else 0.0 for side in SIDES}
+
+    def read_bounds(self, region_id: str) -> GeodeticBounds:
+        """The geodetic rectangle a region's sheets are selected on.
+
+        The reach is converted to degrees on the region's own projected extent,
+        which is exact enough for a sheet that is kilometres across and lets
+        `fetch.select_tiles` keep comparing degrees to degrees.
+        """
+        region = self.region(region_id).bounds
+        projected = self.projected_bounds(region_id)
+        reach = self.read_reach(region_id)
+        per_lon = (region.east - region.west) / projected.width_m
+        per_lat = (region.north - region.south) / projected.height_m
+        return GeodeticBounds(
+            west=region.west - reach["west"] * per_lon,
+            east=region.east + reach["east"] * per_lon,
+            south=region.south - reach["south"] * per_lat,
+            north=region.north + reach["north"] * per_lat,
+        )
+
+    def read_box(self, region_id: str) -> ProjectedBounds:
+        """The projected rectangle a region's vector sources are read with."""
+        bounds = self.projected_bounds(region_id)
+        reach = self.read_reach(region_id)
+        return ProjectedBounds(
+            min_easting=bounds.min_easting - reach["west"],
+            min_northing=bounds.min_northing - reach["south"],
+            max_easting=bounds.max_easting + reach["east"],
+            max_northing=bounds.max_northing + reach["north"],
+        )
+
+    def read_extent(self, region_id: str) -> tuple[tuple[float, float], tuple[float, float]]:
+        """`(low, high)` in game plan metres — `region_high`'s box, widened by the reach.
+
+        `low` is `(0, 0)` for a region with no western or northern neighbour and
+        negative where one exists: game x runs east from the origin and z runs
+        south, so a neighbour on the west or north lies at negative coordinates.
+        """
+        high_x, high_z = self.region_high(region_id)
+        reach = self.read_reach(region_id)
+        return (
+            (-reach["west"], -reach["north"]),
+            (high_x + reach["east"], high_z + reach["south"]),
+        )
+
     def deck_height_m(self, elevation_level: int) -> float:
         """Authored height for a road-graph ELEVATION value.
 
@@ -3258,6 +3359,7 @@ def load_config(path: Path | None = None) -> Config:
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
         carve=_carve(document.get("carve"), f"{path}:carve"),
+        join=_join(document.get("join"), f"{path}:join"),
         clearance=_clearance(document.get("clearance"), f"{path}:clearance"),
         fence=_fence(document.get("fence"), f"{path}:fence"),
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
@@ -3272,6 +3374,7 @@ def load_config(path: Path | None = None) -> Config:
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
     _check_regions_lie_within_the_city(city, path)
+    _check_regions_are_disjoint_or_share_a_whole_edge(city, path)
     # Usage before exposure, so a stray entry is reported as stray. The other
     # order exposure-checks a colour that ships nowhere and leads with whichever
     # complaint that raises, which is the less actionable of the two.
@@ -3666,6 +3769,57 @@ def _check_regions_lie_within_the_city(city: Config, path: Path) -> None:
                 f"({city_bounds.west}, {city_bounds.south})-"
                 f"({city_bounds.east}, {city_bounds.north})."
             )
+
+
+def _shared_whole_edge(mine: GeodeticBounds, other: GeodeticBounds) -> str | None:
+    """The side of `mine` along which `other` shares a whole edge, or None.
+
+    Keyed by `SIDES` so the four names have one home: `read_reach` looks a side
+    up by that name, and a literal misspelt here would make that lookup miss
+    silently on one side of one region.
+    """
+    same_lat = mine.south == other.south and mine.north == other.north
+    same_lon = mine.west == other.west and mine.east == other.east
+    shares = {
+        "west": same_lat and mine.west == other.east,
+        "east": same_lat and mine.east == other.west,
+        "south": same_lon and mine.south == other.north,
+        "north": same_lon and mine.north == other.south,
+    }
+    assert set(shares) == set(SIDES)
+    return next((side for side in SIDES if shares[side]), None)
+
+
+def _check_regions_are_disjoint_or_share_a_whole_edge(city: Config, path: Path) -> None:
+    """Every pair of declared regions is disjoint, or shares one whole edge (`Q116`).
+
+    Two regions that overlap would both own the roads in the overlap, and two
+    that touch along part of an edge make a union that is not a rectangle,
+    which `roads.clip` cannot cut to. Both are refused at load, whether or not a
+    `join:` block asks for the neighbour, because the membership rule is on
+    the bounds and the bounds are what a later `join:` would read.
+    """
+    regions = list(city.regions.values())
+    for index, mine in enumerate(regions):
+        for other in regions[index + 1 :]:
+            a, b = mine.bounds, other.bounds
+            if not a.intersects(b):
+                continue
+            overlap_lon = min(a.east, b.east) - max(a.west, b.west)
+            overlap_lat = min(a.north, b.north) - max(a.south, b.south)
+            if overlap_lon > 0 and overlap_lat > 0:
+                raise ValueError(
+                    f"{path}:regions.{mine.id} and regions.{other.id} overlap — every point "
+                    f"belongs to at most one declared region"
+                )
+            if overlap_lon == 0 and overlap_lat == 0:
+                continue  # a corner
+            if _shared_whole_edge(a, b) is None:
+                raise ValueError(
+                    f"{path}:regions.{mine.id} and regions.{other.id} touch along part of an "
+                    f"edge — neighbours must share a whole edge with identical extents along "
+                    f"it, or be disjoint"
+                )
 
 
 def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSource:
@@ -4548,6 +4702,15 @@ class Carve:
         where the graph is readable.
         """
         return self.edges.get(region_id, ())
+
+
+def _join(body: Any, where: str) -> Join | None:
+    """The optional region-join block (`P5-7c`)."""
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    return Join(**_thresholds(body, where, positive=("reach_m",), signed=()))
 
 
 def _carve(body: Any, where: str) -> Carve | None:

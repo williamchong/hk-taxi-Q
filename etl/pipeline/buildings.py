@@ -66,7 +66,7 @@ from numpy.typing import ArrayLike
 from pipeline import gdb
 from pipeline.colour import chroma_and_hue, with_hue
 from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_config
-from pipeline.crs import GameTransform
+from pipeline.crs import GameTransform, GeodeticBounds
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
 from pipeline.gltf import (
@@ -847,10 +847,18 @@ class Placement:
 
     @classmethod
     def resolve(
-        cls, city: Config, region_id: str, sources_root: Path | None, out_root: Path | None
+        cls,
+        city: Config,
+        region_id: str,
+        sources_root: Path | None,
+        out_root: Path | None,
+        *,
+        bounds: GeodeticBounds | None = None,
     ) -> Placement:
         region = city.region(region_id)
-        tiles = cached_tiles(city, region, city.tiled_sources[SOURCE_ID], root=sources_root)
+        tiles = cached_tiles(
+            city, region, city.tiled_sources[SOURCE_ID], root=sources_root, bounds=bounds
+        )
         return cls(
             region=region,
             grid=Grid.for_region(city, region),

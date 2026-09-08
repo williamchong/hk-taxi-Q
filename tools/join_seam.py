@@ -60,7 +60,7 @@ log = logging.getLogger(__name__)
 # Which edge of region A region B shares, as the sign of the axis it lies along
 # in game space: +x is east, -x is west, +z is south, -z is north.
 Side = tuple[str, int]
-COMPASS = {("x", 1): "east", ("x", -1): "west", ("z", 1): "south", ("z", -1): "north"}
+SIDE_OF = {"east": ("x", 1), "west": ("x", -1), "south": ("z", 1), "north": ("z", -1)}
 
 
 @dataclass(frozen=True)
@@ -113,22 +113,15 @@ class NodePair:
 
 
 def shared_side(city: Config, region_a: str, region_b: str) -> Side:
-    """The side of `region_a` on which `region_b` lies, from the declared bounds.
+    """The side of `region_a` on which `region_b` lies, as the config derives it.
 
-    Equality of the two longitudes (or latitudes) is deliberate: `Q116`'s first
-    build accepts only neighbours that share a whole edge, and a pair that does
-    not is not a seam this tool can read.
+    `Config.neighbours` is the one place the whole-edge rule lives (`P5-7c`);
+    a pair it does not name is not a seam this tool can read.
     """
-    a, b = city.region(region_a).bounds, city.region(region_b).bounds
-    if a.east == b.west:
-        return ("x", +1)
-    if a.west == b.east:
-        return ("x", -1)
-    if a.south == b.north:
-        return ("z", +1)
-    if a.north == b.south:
-        return ("z", -1)
-    raise SystemExit(f"{region_a} and {region_b} share no edge in their declared bounds")
+    for name, other in city.neighbours(region_a).items():
+        if other == region_b:
+            return SIDE_OF[name]
+    raise SystemExit(f"{region_a} and {region_b} share no whole edge in their declared bounds")
 
 
 def load_graph(city: Config, region: str, out_root: Path | None) -> Graph:
@@ -278,9 +271,10 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_config()
     side = shared_side(city, args.region_a, args.region_b)
+    side_name = next(name for name, value in SIDE_OF.items() if value == side)
     a = load_graph(city, args.region_a, args.out)
     b = load_graph(city, args.region_b, args.out)
-    log.info("  %s lies %s of %s", args.region_b, COMPASS[side], args.region_a)
+    log.info("  %s lies %s of %s", args.region_b, side_name, args.region_a)
 
     # Before the cut every candidate stands on the internal line; after it
     # nothing does, and the shared nodes are the crossing runs' far ends, found

@@ -422,12 +422,17 @@ def _read_publisher(
     elevation_field = spec.elevation_field
     starts: list[np.ndarray] = []
     ends: list[np.ndarray] = []
-    for path, member in source_reads(city, spec, region_id, root=None):
+    # Both frames widened together (`P5-7c`): a wide bbox over the narrow sheet
+    # list would stop a tiled publisher at the sheets' own edge, ~85 m past the
+    # shared line, and read as silence where the reach asked for 133 m.
+    bbox = city.read_box(region_id).bbox
+    reads = source_reads(city, spec, region_id, root=None, bounds=city.read_bounds(region_id))
+    for path, member in reads:
         layer = gdb.read_layer(
             path,
             spec.layer.layer,
             columns=spec.layer.columns,
-            bbox=city.projected_bounds(region_id).bbox,
+            bbox=bbox,
             zip_member=member,
             expect_crs=city.projected_crs,
         )
@@ -1203,12 +1208,17 @@ def _read_lane_rows(
     }
 
     rows: dict[int, list[_Symbol]] = defaultdict(list)
-    for path, member in source_reads(city, spec, region_id, root=None):
+    # Both frames widened together (`P5-7c`): a wide bbox over the narrow sheet
+    # list would stop a tiled publisher at the sheets' own edge, ~85 m past the
+    # shared line, and read as silence where the reach asked for 133 m.
+    bbox = city.read_box(region_id).bbox
+    reads = source_reads(city, spec, region_id, root=None, bounds=city.read_bounds(region_id))
+    for path, member in reads:
         layer = gdb.read_layer(
             path,
             spec.layer.layer,
             columns=spec.layer.columns,
-            bbox=city.projected_bounds(region_id).bbox,
+            bbox=bbox,
             zip_member=member,
             expect_crs=city.projected_crs,
         )

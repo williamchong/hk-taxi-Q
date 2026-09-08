@@ -422,6 +422,20 @@ regions:
       north: 22.320
     tile_size_m: 150.0
 
+# How far past its own bounds a region READS, on the sides where a declared
+# neighbour shares a whole edge (`Q116`, `P5-7c`). A road crossing the shared
+# line is owned whole by one region, which then measures its far half over
+# sources the region's own rectangle never selected: Wan Chai's sheets reach
+# about 85 m past the line it shares with `causeway_bay`, and the longest far
+# half to its next junction is `e496`'s 133 m — so 133 is the measured reach,
+# not a margin. It widens sheet selection, the road and survey source reads
+# and the height fields, and nothing else; `bounds` and the tile grid do not
+# move (Q10), and a region with no neighbour reads exactly what it read before.
+# Whether anything found in the margin is PUBLISHED is `roads.py`'s ownership
+# rule, which is `P5-7e`.
+join:
+  reach_m: 133.0
+
 # Direct static URLs, discovered via the data.gov.hk CKAN API. Verified to
 # resolve on 2026-07-29; sizes re-checked 2026-07-30.
 #

@@ -79,16 +79,20 @@ _NO_HITS.flags.writeable = False
 _COINCIDENT_M = 1e-6
 
 
-def _within(corners: np.ndarray, region_high: tuple[float, float] | None) -> np.ndarray:
-    """Triangles whose plan bounding box meets `(0, 0)`-`region_high`."""
+def _within(
+    corners: np.ndarray,
+    region_low: tuple[float, float],
+    region_high: tuple[float, float] | None,
+) -> np.ndarray:
+    """Triangles whose plan bounding box meets `region_low`-`region_high`."""
     if region_high is None:
         return corners
     plan = corners[:, :, [0, 2]]
     low, high = plan.min(axis=1), plan.max(axis=1)
     return corners[
-        (high[:, 0] >= 0.0)
+        (high[:, 0] >= region_low[0])
         & (low[:, 0] <= region_high[0])
-        & (high[:, 1] >= 0.0)
+        & (high[:, 1] >= region_low[1])
         & (low[:, 1] <= region_high[1])
     ]
 
@@ -122,12 +126,15 @@ class HeightField:
         *,
         cell_m: float = 8.0,
         region_high: tuple[float, float] | None = None,
+        region_low: tuple[float, float] = (0.0, 0.0),
     ) -> HeightField:
         """Index the triangles of the given meshes, already in game space.
 
         `region_high` bounds the area that will ever be queried, and triangles
-        whose plan box does not meet `(0, 0)`-`region_high` are dropped before
-        anything else happens. Published map sheets overlap a region rather than
+        whose plan box does not meet `region_low`-`region_high` are dropped before
+        anything else happens. `region_low` is `(0, 0)` for a region read on its
+        own and negative where `Config.read_extent` reaches into a neighbour on
+        the west or north (`P5-7c`). Published map sheets overlap a region rather than
         matching it: 54% of Wan Chai's six sheets of terrain lies outside it and
         can never be hit, but would otherwise be area-tested, binned, sorted and
         then held resident for the life of the object.
@@ -139,7 +146,7 @@ class HeightField:
             block
             for mesh in meshes
             if len(mesh.triangles)
-            and len(block := _within(mesh.positions[mesh.triangles], region_high))
+            and len(block := _within(mesh.positions[mesh.triangles], region_low, region_high))
         ]
         if not blocks:
             raise ValueError("cannot build a height field from meshes with no triangles")

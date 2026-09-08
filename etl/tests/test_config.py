@@ -17,6 +17,7 @@ import yaml
 
 from pipeline.config import (
     CONFIG_PATH,
+    SIDES,
     SUPPORTED_SCHEMA,
     SurfaceClass,
     _paged_source,
@@ -2501,3 +2502,100 @@ class TestClearance:
 
         with pytest.raises(ValueError, match="car_width_m"):
             load_config(rewrite(flatten))
+
+
+class TestRegionJoin:
+    """`Q116`'s neighbour rule and the widened read frames (`P5-7c`).
+
+    The silent failure this block exists to catch is a read that widens on a
+    side with no neighbour, or fails to widen on the side with one: both build,
+    both publish, and only a far half measured against nothing shows it.
+    """
+
+    def test_neighbours_are_derived_from_shared_whole_edges(self, hong_kong) -> None:
+        assert hong_kong.neighbours("wan_chai") == {"east": "causeway_bay"}
+        assert hong_kong.neighbours("causeway_bay") == {"west": "wan_chai"}
+        assert hong_kong.neighbours("mong_kok") == {}
+
+    def test_the_reach_widens_only_the_shared_side(self, hong_kong) -> None:
+        reach = hong_kong.join.reach_m
+        assert hong_kong.read_reach("wan_chai") == {
+            "west": 0.0,
+            "east": reach,
+            "south": 0.0,
+            "north": 0.0,
+        }
+        assert hong_kong.read_reach("mong_kok") == dict.fromkeys(SIDES, 0.0)
+
+        own, box = hong_kong.projected_bounds("wan_chai"), hong_kong.read_box("wan_chai")
+        assert box.max_easting == pytest.approx(own.max_easting + reach)
+        assert (box.min_easting, box.min_northing, box.max_northing) == (
+            own.min_easting,
+            own.min_northing,
+            own.max_northing,
+        )
+
+        low, high = hong_kong.read_extent("causeway_bay")
+        assert low == (-reach, 0.0)
+        assert high == hong_kong.region_high("causeway_bay")
+
+        lonlat = hong_kong.read_bounds("wan_chai")
+        region = hong_kong.region("wan_chai").bounds
+        assert lonlat.east > region.east
+        assert (lonlat.west, lonlat.south, lonlat.north) == (
+            region.west,
+            region.south,
+            region.north,
+        )
+
+    def test_a_region_with_no_neighbour_reads_its_own_frame(self, hong_kong) -> None:
+        """The inertness proof in code form: `mong_kok` reads what it always read."""
+        assert hong_kong.read_box("mong_kok") == hong_kong.projected_bounds("mong_kok")
+        assert hong_kong.read_bounds("mong_kok") == hong_kong.region("mong_kok").bounds
+        assert hong_kong.read_extent("mong_kok") == ((0.0, 0.0), hong_kong.region_high("mong_kok"))
+
+    def test_without_a_join_block_nothing_widens(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["join"]
+
+        city = load_config(rewrite(drop))
+        assert city.join is None
+        assert city.neighbours("wan_chai") == {"east": "causeway_bay"}
+        assert city.read_box("wan_chai") == city.projected_bounds("wan_chai")
+
+    def test_overlapping_regions_are_rejected(self, rewrite) -> None:
+        def overlap(doc: dict[str, Any]) -> None:
+            doc["regions"]["causeway_bay"]["bounds"]["west"] = 114.187
+
+        with pytest.raises(ValueError, match="overlap"):
+            load_config(rewrite(overlap))
+
+    def test_a_partial_shared_edge_is_rejected(self, rewrite) -> None:
+        """Touching along part of an edge is neither disjoint nor a neighbour:
+        the union of the two rectangles is not a rectangle, which is the shape
+        `roads.clip` cuts to."""
+
+        def shorten(doc: dict[str, Any]) -> None:
+            doc["regions"]["causeway_bay"]["bounds"]["north"] = 22.283
+
+        with pytest.raises(ValueError, match="part of an edge"):
+            load_config(rewrite(shorten))
+
+    def test_a_corner_contact_is_not_a_neighbour_and_is_allowed(self, rewrite) -> None:
+        def corner(doc: dict[str, Any]) -> None:
+            doc["regions"]["causeway_bay"]["bounds"] = {
+                "west": 114.188,
+                "east": 114.204,
+                "south": 22.284,
+                "north": 22.292,
+            }
+
+        city = load_config(rewrite(corner))
+        assert city.neighbours("wan_chai") == {}
+
+    def test_a_zero_reach_is_rejected(self, rewrite) -> None:
+        def zero(doc: dict[str, Any]) -> None:
+            doc["join"]["reach_m"] = 0.0
+
+        with pytest.raises(ValueError, match="reach_m"):
+            load_config(rewrite(zero))

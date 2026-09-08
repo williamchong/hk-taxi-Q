@@ -469,27 +469,31 @@ def fetch_once(city, root: Path, **kwargs):
     not (fetch.source_dir("buildings") / fetch.INDEX_NAME).exists(),
     reason="requires a fetched sheet index",
 )
-def test_real_index_selects_the_six_documented_sheets(hong_kong) -> None:
+def test_real_index_selects_the_six_documented_sheets_plus_the_reach(hong_kong) -> None:
     """Against the live index, not a fixture.
 
-    docs/DATA_SOURCES.md names these six as covering the region. They are not
+    docs/DATA_SOURCES.md names six sheets as covering the region. They are not
     configured anywhere — the point is that intersecting the bounds with the
-    published index re-derives exactly that list.
+    published index re-derives exactly that list. Since `P5-7c` the selection
+    reaches `join.reach_m` past the edge shared with `causeway_bay`, which adds
+    the two sheets on the far side of that line and nothing else — but only for
+    the reader that asks, so the default selection is still the six.
 
     Through `cached_tiles` because that is what `buildings.py` calls, so this
     exercises the real path rather than an equivalent one assembled here.
     """
-    tiles = fetch.cached_tiles(
-        hong_kong, hong_kong.region("wan_chai"), hong_kong.tiled_sources["buildings"]
+    documented = ["11-SW-10C", "11-SW-10D", "11-SW-14B", "11-SW-15A", "11-SW-15B", "11-SW-9D"]
+    region, source = hong_kong.region("wan_chai"), hong_kong.tiled_sources["buildings"]
+
+    def selected(**kwargs) -> list[str]:
+        return sorted(
+            tile.tile_id for tile in fetch.cached_tiles(hong_kong, region, source, **kwargs)
+        )
+
+    assert selected() == documented
+    assert selected(bounds=hong_kong.read_bounds("wan_chai")) == sorted(
+        [*documented, "11-SE-11A", "11-SE-6C"]
     )
-    assert sorted(tile.tile_id for tile in tiles) == [
-        "11-SW-10C",
-        "11-SW-10D",
-        "11-SW-14B",
-        "11-SW-15A",
-        "11-SW-15B",
-        "11-SW-9D",
-    ]
 
 
 class TestDownloadPaged:

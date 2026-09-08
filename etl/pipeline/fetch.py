@@ -357,6 +357,7 @@ def cached_tiles(
     source: TiledSource,
     *,
     root: Path | None = None,
+    bounds: GeodeticBounds | None = None,
 ) -> list[Artefact]:
     """The region's tiles, selected from the index an earlier fetch left on disk.
 
@@ -371,7 +372,14 @@ def cached_tiles(
             f"Run: python -m pipeline.fetch --region {region.id}"
         )
     index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
-    return select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
+    # The region's own bounds unless the caller asks for more: the building,
+    # podium and terrain stages tile what lies inside the region and read
+    # nothing past it, so the widened selection the fetch downloads
+    # (`Config.read_bounds`, `P5-7c`) is opted into by the one reader that
+    # needs it — the road stage's height fields — rather than paid by all.
+    return select_tiles(
+        index, source, region_bounds=bounds or region.bounds, region_crs=city.geodetic_crs
+    )
 
 
 class DeclaredSource(Protocol):
@@ -396,6 +404,7 @@ def source_reads(
     region_id: str,
     *,
     root: Path | None = None,
+    bounds: GeodeticBounds | None = None,
 ) -> list[tuple[Path, str | None]]:
     """Every `(path, zip member)` a block's `source:` resolves to, tiled or not.
 
@@ -415,7 +424,7 @@ def source_reads(
         return [(cached_source(city, spec.source, root=root), None)]
 
     region = city.region(region_id)
-    sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=root)
+    sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=root, bounds=bounds)
     member = spec.member or ""
     return [
         (artefact_path(sheet, root=root), member.format(tile=sheet.tile_id)) for sheet in sheets
@@ -724,7 +733,9 @@ def _tiles_for(
         index_path.unlink(missing_ok=True)
         raise
 
-    tiles = select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
+    tiles = select_tiles(
+        index, source, region_bounds=city.read_bounds(region.id), region_crs=city.geodetic_crs
+    )
     log.info(
         "  %s: %d of %d sheets overlap %s",
         source.id,

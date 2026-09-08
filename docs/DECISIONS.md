@@ -19963,8 +19963,19 @@ recorded findings of `Q19`'s and `Q24`'s classes rather than retuned; the owner'
 tiles under it, so its `clear_width_m` is refused and counted over at most 133 m on nine edges, not
 read off the neighbour's `etl/out`, which would make one region's build depend on another's.
 
-**Status.** 🟡 **Open — the rule is written and broken down as `P5-7b`–`P5-7g` (2026-09-08); nothing
-built.** Owned by `P5-7`, with the runtime half in `P5-9`.
+✅ **`P5-7b`–`P5-7d` built 2026-09-08, and the inertness prediction above was wrong in the safe
+direction.** With `join.reach_m: 133` the road stage reads 24 more centreline parts and 18 more
+kerbside features on Wan Chai, and publishes a `roadgraph.json` **byte-identical** to the one built
+without the block — the survey's 292 measured edges, 6,334 spanned stations and every width and lane
+count unchanged. The widening reaches nothing the rectangle read had not already reached through
+OGR's envelope filter, which admits any feature whose bounding box touches the box. So the "moved
+set" is empty and the 788-edge byte-identity stands as written; what the reach buys is the far
+half, which nothing publishes until `P5-7e`. The sheet fetch cost **0 bytes**: Wan Chai's two new
+sheets were cached by `Q120`'s Causeway Bay build, and Causeway Bay's own selection already reached
+133 m west.
+
+**Status.** 🟡 **Open — `P5-7b`–`P5-7d` built 2026-09-08; the cut (`P5-7e`), the caps (`P5-7f`) and
+the proofs (`P5-7g`) remain.** Owned by `P5-7`, with the runtime half in `P5-9`.
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught

@@ -1182,6 +1182,14 @@ Common emoji for this project:
   — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font
   is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` carries it, and
   the credits screen must when it exists — it does not yet, a recorded licence gap (`Q79`).
+- 🔴 **`join.reach_m`, `Config.neighbours` / `read_*`, a region's `bounds`, or anything that moves
+  where a crossing road is cut or who owns it: `tools/join_seam.py --region-a wan_chai --region-b
+  causeway_bay` before and after, both regions' sheet lists, and a byte-identical `roadgraph.json`
+  on a region with NO neighbour** (`Q116`, `P5-7`). The reach widens what a region *reads* and never
+  where it *is* — `bounds`, `region_high` and the tile grid do not move (`Q10`) — so a change that
+  moves `mong_kok`'s graph has widened the wrong thing. ⚠️ **Byte-identity on the region WITH a
+  neighbour is not the proof and is not expected** once `P5-7e` publishes the far halves; until then
+  it holds, and `P5-7c` measured it holding through 24 extra parts read.
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - 🔴 **Collider changes — `buildings.collision_cell_m`, `class_collision_cell_m`, `_collider`,
