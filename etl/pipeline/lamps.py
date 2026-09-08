@@ -93,13 +93,16 @@ directly. Surveyed, the region has 5 neighbour gaps over 40 m; drawn, it has 16.
 `gaps_over_report_m` and the two spacing distributions are the instrument, and
 they are the numbers a widening change moves without touching a lamp.
 
-⚠️ **No lit lantern, and its absence is the decision to resist changing.** `Q38`
-bakes `exposure_anchor` into `COLOR_0` at build time, `Q26` has not chosen a
-look, there is one lighting rig, and `ART_DESIGN.md` ends its Lighting section
-with *"Resist adding lights."* 897 `OmniLight3D`s is not a shippable answer on a
+⚠️ **No lit lantern, and its absence is the decision to resist changing.** `Q26`
+has not chosen a look, and `ART_DESIGN.md` ends its Lighting section with
+*"Resist adding lights."* 897 `OmniLight3D`s is not a shippable answer on a
 Mobile tier that ships no shadow maps. This stage buys night mode **nothing**,
-and that is the honest position — night's blockers are `Q38` and `Q26`, and
-neither of them is geometry.
+and that is the honest position.
+
+✅ **`Q38` was night's other blocker and `P5-28c` closed it**: the exposure is a
+global shader parameter the lighting rig sets, so the hour is a number in a scene
+and not a region rebuild. That is a precondition met, not a feature — the
+remaining blocker is `Q26`, and it is still not geometry.
 """
 
 from __future__ import annotations
@@ -424,7 +427,7 @@ def read_lamps(
 # is why `signs.colours`' exemption from `Q33` does not transfer to this stage:
 # the sign livery has to ride the vertex because a plate is four colours in one
 # draw call, and a lamp post is not. Its colour comes out of the `materials:`
-# table instead, where `_check_exposure` grades it.
+# table instead, where `_check_reflectance` grades it.
 
 
 def _strut(

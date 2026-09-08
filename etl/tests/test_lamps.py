@@ -78,14 +78,20 @@ BLOCK: dict[str, Any] = {
 # `_check_every_material_is_used` means it cannot simply be added and left
 # unreferenced, which is why it goes in beside the block rather than in
 # `helpers.py`.
-# ⚠️ **The reflectance is 14.70 and not Hong Kong's 28.0**, because `testville`'s
-# `exposure_anchor` is 1.0 where Hong Kong's is 0.520 — the same colour claims a
-# different material under a different sun, which is exactly what the anchor
-# means and why `_check_exposure` grades the pair rather than either alone.
+# ⚠️ **This entry is Hong Kong's, to the byte, and it used to differ.** It read
+# `#6b6b6b` at 14.70% while the city read `#6b6b6b` at 28.0%, because the colour
+# was `reflectance x exposure_anchor` and `testville`'s anchor was 1.0 where Hong
+# Kong's was 0.520 — the same pixel claimed a different material under a
+# different sun. `P5-28c` moved the exposure to the lighting rig, so a colour is
+# its reflectance in every city and there is nothing left for a fixture to say
+# differently. ⚠️ **Do not re-introduce a divergence here**: a second reflectance
+# for one colour would now be a lie about the material rather than a statement
+# about the sun.
 COLUMN_MATERIAL = {
-    "colour": "#6b6b6b",
-    "reflectance": 14.70,
+    "colour": "#919191",
+    "reflectance": 28.0,
     "source": "test fixture; weathered hot-dip galvanised steel is 25-35%",
+    "bounds": [25, 35],
 }
 
 
@@ -436,7 +442,7 @@ class TestTheLoaderRefusesGeometryThatCannotBeDrawn:
         """✅ **The colour goes through `Q33`, not around it.** `signs.colours`'
         exemption rests on a printed specification with no reflectance and on
         four colours in one draw call; a lamp post is neither, so the value lives
-        in `materials:` where `_check_exposure` grades it."""
+        in `materials:` where `_check_reflectance` grades it."""
         with pytest.raises(ValueError):
             mutated(tmp_path, lambda block: block.update(column_material="zinc"))
 

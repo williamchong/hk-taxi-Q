@@ -162,7 +162,11 @@ def _style_with_hue(
                 HeightBand(
                     up_to_m=float("inf"),
                     material=Material(
-                        name="high", colour=(190, 200, 200), reflectance=55.0, source="test"
+                        name="high",
+                        colour=(190, 200, 200),
+                        reflectance=55.0,
+                        source="test",
+                        bounds=(54.0, 56.0),
                     ),
                 ),
             ),

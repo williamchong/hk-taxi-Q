@@ -79,8 +79,8 @@ const SHADERS: Dictionary = {
 	# wanted a shader: both used to fall through to the last branch of `_apply`
 	# below, which is the `Q27` fix in its `BaseMaterial3D` form and is entirely
 	# correct for what it does. What it cannot do is scale an albedo by
-	# `exposure_anchor`, so once the ETL stops baking the anchor into `COLOR_0`
-	# (`P5-28c`) a prop left on that branch renders pale by a constant factor —
+	# `exposure_anchor`, and the ETL stopped baking the anchor into `COLOR_0` at
+	# `P5-28c` — so a prop left on that branch renders pale by a constant 1/0.520,
 	# which reads as a lighting choice rather than as a bug. They share
 	# `vertex_albedo.gdshader`, the smallest shader here, and differ in nothing
 	# today; ⚠️ **two rows and two `.tres` anyway**, because one shared material

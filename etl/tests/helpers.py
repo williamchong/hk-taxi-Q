@@ -153,7 +153,11 @@ def style(jitter: float = 0.0) -> BuildingStyle:
         structure_class=None,
         class_materials={
             "INFRASTRUCTURE": Material(
-                name="structure", colour=(100, 100, 100), reflectance=22.0, source="test"
+                name="structure",
+                colour=(100, 100, 100),
+                reflectance=22.0,
+                source="test",
+                bounds=(21.0, 23.0),
             )
         },
         material_assignment=MaterialAssignment(
@@ -161,13 +165,21 @@ def style(jitter: float = 0.0) -> BuildingStyle:
                 HeightBand(
                     up_to_m=12.0,
                     material=Material(
-                        name="low", colour=(200, 180, 150), reflectance=48.0, source="test"
+                        name="low",
+                        colour=(200, 180, 150),
+                        reflectance=48.0,
+                        source="test",
+                        bounds=(47.0, 49.0),
                     ),
                 ),
                 HeightBand(
                     up_to_m=float("inf"),
                     material=Material(
-                        name="high", colour=(190, 200, 200), reflectance=55.0, source="test"
+                        name="high",
+                        colour=(190, 200, 200),
+                        reflectance=55.0,
+                        source="test",
+                        bounds=(54.0, 56.0),
                     ),
                 ),
             ),
@@ -294,19 +306,25 @@ def write_layer(
 # would let the second stage pass against a city the first never built.
 CITY_YAML = textwrap.dedent(
     """
-    schema_version: 4
-    # Deliberately 1.0 where Hong Kong ships 0.520, so the fixture proves the
-    # palette rule (`Q33`) is portable rather than a Hong Kong constant. At a
-    # unit anchor a declared reflectance *is* the colour's luminance, which
-    # keeps this city hand-checkable in the way the rest of it already is.
-    exposure_anchor: 1.0
+    schema_version: 5
     # Every colour Testville ships (`Q34`). Three, because three things reference
     # one: the single height band, and the two road surfaces. Declaring a fourth
     # would fail `_check_every_material_is_used`, which is the point of it.
+    #
+    # ⚠️ **The colours are unchanged across `P5-28c` and the reflectances are
+    # unchanged with them**, because this fixture already ran at an anchor of 1.0
+    # — deliberately, so the palette rule read as portable rather than as a Hong
+    # Kong constant. Un-baking is exactly the operation that was already a no-op
+    # here. `bounds:` is the new required field, and each is the narrowest whole
+    # range around the number it grades: the fixture is hand-checkable and these
+    # are not claims about any real material.
     materials:
-      facade: {colour: "#808080", reflectance: 21.59, source: "test fixture"}
-      asphalt: {colour: "#3c3a37", reflectance: 4.26, source: "test fixture"}
-      kerb: {colour: "#9a968d", reflectance: 30.61, source: "test fixture"}
+      facade:
+        {colour: "#808080", reflectance: 21.59, source: "test fixture", bounds: [21, 22]}
+      asphalt:
+        {colour: "#3c3a37", reflectance: 4.26, source: "test fixture", bounds: [4, 5]}
+      kerb:
+        {colour: "#9a968d", reflectance: 30.61, source: "test fixture", bounds: [30, 31]}
     elevation_levels:
       -1: -8.0
       0: 0.0

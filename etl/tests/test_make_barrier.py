@@ -11,9 +11,11 @@ bytes is what catches "edited the generator, forgot to re-run".
 the glTF material name, and the `-col` node-name suffix is what buys a
 collider. None of that is visible in a render; all of it is checkable here.
 
-**The palette rule.** Every colour claims `reflectance x exposure_anchor`
-(`Q33`/`Q38`) exactly as the city's materials table does, held to the same
-tolerance by the same shared body.
+**The palette rule.** Every colour **is** a real material's diffuse albedo,
+inside the range its own source names (`Q33`, un-baked by `P5-28c`), exactly as
+the city's materials table is and held by the same shared body. ⚠️ **No anchor is
+read any more**, so these tests do not load the city config: the exposure is the
+lighting rig's (`Q38`) and a prop's colour says nothing about it.
 
 🔴 **And the one this layer does not share: the collider must be there.** Every
 other thing named "barrier" in this repo is the *generated* railing class,
@@ -41,7 +43,7 @@ from make_barrier import (
 )
 
 from pipeline.buildings import COLLISION_SUFFIX
-from pipeline.config import Material, load_config
+from pipeline.config import Material
 from pipeline.gltf import MeshData
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -189,21 +191,31 @@ class TestWidth:
 class TestPalette:
     """`Q33`'s rule, on colours the ETL never sees."""
 
-    def test_the_shipped_palette_holds_against_the_live_anchor(self) -> None:
-        check_palette(load_config().exposure_anchor)
+    def test_the_shipped_palette_holds(self) -> None:
+        check_palette()
 
-    def test_a_colour_that_lies_about_its_reflectance_is_refused(self) -> None:
-        """The check is what makes the palette a claim rather than a preference,
-        and `Q38` is why the anchor is read live: move it and this generator
-        stops, loudly, instead of shipping a prop lit for another exposure."""
-        wrong = Material("barrier_white", (255, 255, 255), 62.0, "pure white")
-        original = make_barrier.PALETTE
-        make_barrier.PALETTE = (wrong,)
-        try:
-            with pytest.raises(ValueError, match="barrier_white"):
-                check_palette(load_config().exposure_anchor)
-        finally:
-            make_barrier.PALETTE = original
+    def test_a_colour_that_lies_about_its_reflectance_is_refused(self, monkeypatch) -> None:
+        """The check is what makes the palette a claim rather than a preference.
+
+        ⚠️ **What stops a prop shipping at the wrong exposure is no longer this
+        test.** The anchor used to be read live here, so moving it broke the
+        generator loudly; the exposure is a Godot global now (`Q38`) and what
+        binds the two halves is `city.json`'s `schema_version` 5 plus
+        `test_the_committed_file_matches_the_generator` below.
+        """
+        wrong = Material("barrier_white", (255, 255, 255), 62.0, "pure white", (55.0, 70.0))
+        monkeypatch.setattr(make_barrier, "PALETTE", (wrong,))
+        with pytest.raises(ValueError, match="barrier_white"):
+            check_palette()
+
+    def test_a_reflectance_outside_its_own_bounds_is_refused(self, monkeypatch) -> None:
+        """🔴 **The half the round trip cannot see** (`P5-28c`): un-baked, a
+        colour *is* its reflectance, so moving both together passes the
+        comparison. `bounds` is the third thing, here as in the YAML."""
+        pure = Material("barrier_red", (216, 87, 75), 40.0, "the red band, 18-28%", (18.0, 28.0))
+        monkeypatch.setattr(make_barrier, "PALETTE", (pure,))
+        with pytest.raises(ValueError, match=r"outside the 18\.0-28\.0%"):
+            check_palette()
 
     def test_every_declared_colour_is_actually_used(self, barriers) -> None:
         """A palette entry nothing draws passes every check above and ships

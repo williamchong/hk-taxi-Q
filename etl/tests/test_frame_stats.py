@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from frame_stats import MIDTONE_L, SHADOW_L, Frame, band_shares
+from frame_stats import MIDTONE_L, SHADOW_L, Frame, band_shares, exposed, relative_luminance
 
 
 def frame_of(*lightness: float) -> Frame:
@@ -127,3 +127,44 @@ class TestEmptyMiddle:
         shadow, midtone = band_shares(frame)
         assert shadow == 0.5
         assert midtone == 0.25
+
+
+class TestTheRigExposure:
+    """`P5-28c` — `--albedo-l` is fed tile `COLOR_0`, which is reflectance-level
+    since the un-bake, and this tool applies the rig's multiply for the caller."""
+
+    def test_it_scales_in_linear_light_and_not_in_lightness(self) -> None:
+        """🔴 **The whole reason `exposed` exists.** `L*` is a cube root of
+        luminance, so halving the light does not halve the number: 81.36 goes to
+        62.29, not to 40.68. Scaling `L*` directly is the plausible, wrong
+        arithmetic this replaces."""
+        assert exposed(81.36, 0.520) == pytest.approx(62.29, abs=0.01)
+        assert exposed(81.36, 0.520) != pytest.approx(81.36 * 0.520, abs=1.0)
+
+    def test_the_linear_ratio_is_invariant_to_it(self) -> None:
+        """⚠️ **Which is why only `gain` moves.** `albedo_ratio` is a quotient of
+        two linear luminances and a uniform scale cancels exactly, so `linear
+        ratio` and `additive share` read the same at either level — and a pair
+        quoted at the wrong one reports a plausible gain beside a correct
+        additive share, which is the quiet way to be wrong.
+        """
+        raw = relative_luminance(64.43) / relative_luminance(81.36)
+        at_rig = relative_luminance(exposed(64.43, 0.520)) / relative_luminance(
+            exposed(81.36, 0.520)
+        )
+        assert at_rig == pytest.approx(raw, rel=1e-9)
+
+    def test_it_is_right_below_the_cielab_knee(self) -> None:
+        """🔴 **The branch the obvious one-liner drops.** Written as
+        `116 * (relative_luminance(L) * anchor) ** (1/3) - 16` this agrees to
+        float noise on every façade albedo and goes *negative* at `L*` 1, because
+        CIELAB leaves the cube root for a linear segment below `L*` ~8.
+        `--albedo-l` takes two numbers off the command line, so the domain is one
+        typo away rather than unreachable."""
+        assert exposed(4.0, 0.520) == pytest.approx(2.08, abs=0.01)
+        assert exposed(1.0, 0.520) > 0.0
+
+    def test_an_anchor_of_one_is_the_identity(self) -> None:
+        """The project default `P5-28b` shipped, so a rig that sets nothing and a
+        grader that reads it agree on the unexposed frame."""
+        assert exposed(64.43, 1.0) == pytest.approx(64.43)

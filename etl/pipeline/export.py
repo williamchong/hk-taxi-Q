@@ -220,7 +220,16 @@ CITY_NAME = "city.json"
 # tier files carry the occluder — because the policy is per tier and a far
 # tier may deliberately ship none. A v29 reader taking the tile-wide bool would
 # ask every tier for an occluder the build left out of the far one.
-CITY_SCHEMA = 30
+#
+# 31 since `P5-28c` (`Q38`): `COLOR_0` carries a material's REFLECTANCE and no
+# longer has `exposure_anchor` multiplied into it — the exposure is a Godot
+# global shader parameter set from the lighting rig, so a time of day is a number
+# in a scene instead of a full region rebuild. 🔴 **The one bump that moves no
+# position, normal or index byte in any mesh**, and a bump anyway: a v30 reader is
+# *wrong* rather than stale, drawing the city 0.520 too bright with nothing in the
+# frame to say so. ⚠️ **Both halves of `Q33`'s product move in one commit** — this
+# stage publishes the reflectance and `game/project.godot` ships the multiply.
+CITY_SCHEMA = 31
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

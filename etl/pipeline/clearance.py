@@ -529,6 +529,15 @@ def wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np.
     pipeline. This one is used for a single question, "is this the ground", and
     the tool's is used to attribute every class.
     """
+    # ⚠️ **`P5-28c` halved this guard's margin across the whole palette and left
+    # the one colour that reaches it comfortable.** Un-baking the exposure lifted
+    # every authored colour by 1/0.520, so the brightest entry in `materials:`
+    # went 157 → 211 against the 240.6 this admits at jitter 0.06 — 83 codes of
+    # headroom down to 30. The only `base` passed here is the ground
+    # (`concrete_paving`, 129, so 112 clear), which is why nothing moved. But a
+    # brighter ground material or a raised jitter now **aborts this stage** and
+    # the three graders that import it, rather than degrading — so read this as
+    # a real cost of the un-bake, not a bound with room in it.
     channels = np.asarray(base, dtype=np.float64)
     if (channels <= 0.0).any() or (channels * (1.0 + jitter) > 255.0).any():
         raise SystemExit(

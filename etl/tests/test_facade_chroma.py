@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from facade_chroma import SANCTIONED_MAX, Population, Spread, achieved, band_chroma, clipping
+from lighting_rig import DEFAULT_RIG, rig_exposure
 from ring_weights import ramp_class
 
 from pipeline.colour import chroma_and_hue, srgb_to_lab
@@ -120,7 +121,59 @@ class TestClipping:
 class TestBandChroma:
     def test_is_the_authored_ramp_and_not_the_survey(self, hong_kong) -> None:
         """The baseline the `strength` rows depart from. `ART_DESIGN.md` quotes
-        it as 1.92-13.84 and calls it "warm off-white, beige, pale grey-green" —
-        if the ramp is re-authored, this is the number that has to move with it."""
-        low, high = band_chroma(hong_kong.buildings)
+        it as 1.76-13.83 and calls it "warm off-white, beige, pale grey-green" —
+        if the ramp is re-authored, this is the number that has to move with it.
+
+        ⚠️ **Taken at the rig's exposure since `P5-28c`**, like every other figure
+        the tool prints, so that the baseline and the rows sit on one axis.
+        """
+        low, high = band_chroma(hong_kong.buildings, rig_exposure())
         assert 0.0 < low < high < SANCTIONED_MAX
+
+    def test_the_exposure_lowers_chroma_and_does_not_leave_it_alone(self, hong_kong) -> None:
+        """🔴 **The assumption `P5-28c` had to disprove to write this tool.**
+        Exposure reads as a lightness control, so the obvious expectation is that
+        it moves `L*` and leaves `a*`/`b*` where they were. It does not: a scale
+        toward black in linear light pulls chroma down with it, which is why
+        `facade_chroma` exposes every row it prints and why `Q30`'s table moved on
+        a commit that changed no look."""
+        unexposed = band_chroma(hong_kong.buildings, 1.0)
+        at_rig = band_chroma(hong_kong.buildings, rig_exposure())
+        assert at_rig[1] < unexposed[1]
+
+    def test_a_rig_that_sets_no_exposure_is_refused(self, tmp_path) -> None:
+        """⚠️ **Absent is an error and never a default.** A silent fallback would
+        grade the palette the game does not draw, and read as a clean run."""
+        rig = tmp_path / "no_anchor.tscn"
+        rig.write_text('[node name="X" type="Node3D"]\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="0 times"):
+            rig_exposure(rig)
+
+    def test_a_rig_that_sets_it_twice_is_refused(self, tmp_path) -> None:
+        """🔴 **The case where this reader and the engine disagree.**
+        `lighting_rig.gd` warns that two rigs alive at once fight over the
+        process-wide global and the *last* one readied wins; a `search` here
+        would take the first. Both answers are silent, so neither is allowed."""
+        rig = tmp_path / "two.tscn"
+        rig.write_text("exposure_anchor = 0.52\nexposure_anchor = 0.9\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="2 times"):
+            rig_exposure(rig)
+
+    def test_a_zero_exposure_is_refused(self, tmp_path) -> None:
+        """🔴 **The trap `P5-28c` moved out of the ETL and had to move the guard
+        with.** `_exposure_anchor` refused `0.0` by name, because zero makes every
+        shipped colour black and then satisfies the palette rule for any declared
+        reflectance. The bar is `lighting_rig.gd`'s `@export_range` now, and a
+        `.tscn` is plain text a hand edit reaches."""
+        rig = tmp_path / "zero.tscn"
+        rig.write_text("exposure_anchor = 0.0\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="outside the"):
+            rig_exposure(rig)
+
+    def test_the_shipped_rigs_agree(self) -> None:
+        """⚠️ **Two rigs, one number, and nothing else enforces it.** They are
+        different times of day and *may* diverge — but while they do not, a
+        grader reading one is describing both, which is what lets
+        `facade_chroma` default to `clean_daylight` without saying so."""
+        golden = DEFAULT_RIG.parent / "golden_hour.tscn"
+        assert rig_exposure(DEFAULT_RIG) == rig_exposure(golden)

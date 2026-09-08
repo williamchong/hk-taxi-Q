@@ -288,9 +288,14 @@ to — see Gotchas.
   ⚠️ Not to be confused with `free_look_camera.gd`'s `built` → `frame()` auto-framing, which
   `driver.gd` already handles by awaiting a process frame before placing the camera. That one moves
   position *and* orientation and is not the failure seen here.
-- **The preview viewpoints are static by `t=0.8`.** `t=0.8`, `t=1.5` and `t=3.0` come out
-  byte-identical once the streamer has settled, so there is nothing to be bought by a longer run —
-  and shooting early dodges the stall below.
+- **`street` and `kerb` are static by `t=0.8`; ⚠️ `skyline` is NOT.** For the two street-level
+  viewpoints `t=0.8`, `t=1.5` and `t=3.0` come out byte-identical once the streamer has settled, so
+  there is nothing to be bought by a longer run and shooting early dodges the stall below. **The
+  skyline camera sees the whole region and the streamer is still instancing at 0.8 s**: measured
+  2026-09-08 (`P5-28c`), two runs at `t=0.8` returned 172 and 174 distinct colours, while four runs
+  at `t=2.0` returned one hash. **Shoot the skyline at `--seconds=3 --shots=2.0`**, and on either
+  camera shoot until a hash repeats — a run launched immediately after another one can still come
+  back short.
 - **`FAIL no frame drawn in 600 ticks` gets more likely the longer the shot time.** macOS stops
   compositing a window it considers obscured, and the capture waits on `frame_post_draw` forever.
   Captures at `t=3.0` failed repeatedly in one session while `t=0.8` succeeded. Keep the window

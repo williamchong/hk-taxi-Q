@@ -13,11 +13,14 @@ the glTF material name, the `-col` node-name suffix is what buys a collider
 importer converts other suffixes into physics nodes silently. None of that is
 visible in a render; all of it is checkable here.
 
-**The palette rule.** Every colour a hero ships claims `reflectance x
-exposure_anchor` (`Q33`/`Q38`) exactly as the city's materials table does — but
-these colours cannot live in that table, because a committed `.glb` never
-passes through the ETL. `check_palette` is the enforcement, held here to the
-same tolerance `_check_exposure` applies to the YAML.
+**The palette rule.** Every colour a hero ships **is** a real material's diffuse
+albedo, inside the range its own source names (`Q33`, un-baked by `P5-28c`),
+exactly as the city's materials table is — but these colours cannot live in that
+table, because a committed `.glb` never passes through the ETL. `check_palette`
+is the enforcement, on the same shared body `_check_reflectance` applies to the
+YAML. ⚠️ **It reads no anchor any more**, so these tests no longer load the city
+config to run: the exposure is the lighting rig's (`Q38`) and a hero's colour
+says nothing about it.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from make_landmark import (
 )
 
 from pipeline.buildings import COLLISION_SUFFIX
-from pipeline.config import Material, load_config
+from pipeline.config import Material
 from pipeline.gltf import MeshData
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -122,14 +125,31 @@ class TestImportContract:
 class TestPalette:
     """`Q33` for the colours the ETL never sees."""
 
-    def test_the_palette_obeys_the_live_anchor(self) -> None:
-        check_palette(load_config().exposure_anchor)
+    def test_the_shipped_palette_holds(self) -> None:
+        check_palette()
 
-    def test_the_check_can_fail(self) -> None:
+    def test_the_check_can_fail(self, monkeypatch) -> None:
         """A guard written in the same round as its subject must show it can
-        refuse — `P3-11`'s lesson about filtered-set tests, applied to a check."""
-        with pytest.raises(ValueError, match="declares reflectance"):
-            check_palette(2.0)
+        refuse — `P3-11`'s lesson about filtered-set tests, applied to a check.
+
+        ⚠️ **This used to pass a wrong anchor and there is none to pass**, so it
+        mutates the palette instead — which is the stronger form: it names the
+        entry, and it exercises the body these colours actually go through.
+        """
+        wrong = Material("aluminium_roof", (255, 255, 255), 55.0, "pure white", (50.0, 60.0))
+        monkeypatch.setattr(make_landmark, "PALETTE", (wrong,))
+        with pytest.raises(ValueError, match="aluminium_roof"):
+            check_palette()
+
+    def test_a_reflectance_outside_its_own_bounds_is_refused(self, monkeypatch) -> None:
+        """🔴 **The half the round trip cannot see** (`P5-28c`). Un-baked, a
+        colour *is* its reflectance, so an honest author who moves both together
+        defeats the comparison entirely. `bounds` is what is left, and a
+        generator palette needs it for the same reason the YAML does."""
+        lighter = Material("curtain_glass", (168, 179, 190), 45.0, "glass, 8-15%", (8.0, 15.0))
+        monkeypatch.setattr(make_landmark, "PALETTE", (lighter,))
+        with pytest.raises(ValueError, match=r"outside the 8\.0-15\.0%"):
+            check_palette()
 
     def test_every_surface_names_a_source(self) -> None:
         for surface in PALETTE:

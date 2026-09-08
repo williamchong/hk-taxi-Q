@@ -33,10 +33,10 @@ from pipeline.landmarks import (
 from pipeline.mesh import merge, slice_horizontal, weld
 from tests.test_buildings import Fixture, _to_source
 
-WALL = Material("wall", (134, 128, 119), 42.0, "test")
-RIBBON = Material("ribbon", (61, 72, 83), 12.0, "test")
-ROOF = Material("roof", (90, 96, 99), 22.0, "test")
-BASE = Material("base", (114, 110, 102), 30.0, "test")
+WALL = Material("wall", (134, 128, 119), 42.0, "test", (41.0, 43.0))
+RIBBON = Material("ribbon", (61, 72, 83), 12.0, "test", (11.0, 13.0))
+ROOF = Material("roof", (90, 96, 99), 22.0, "test", (21.0, 23.0))
+BASE = Material("base", (114, 110, 102), 30.0, "test", (29.0, 31.0))
 
 PAINT = SourcePaint(
     wall=WALL,

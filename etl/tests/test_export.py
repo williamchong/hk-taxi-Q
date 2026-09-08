@@ -676,10 +676,10 @@ class TestLandmarks:
     # -- mesh-sourced heroes (`P3-6` amendment) ----------------------------
 
     PAINT: ClassVar[SourcePaint] = SourcePaint(
-        wall=Material("wall", (134, 128, 119), 42.0, "test"),
-        ribbon=Material("ribbon", (61, 72, 83), 12.0, "test"),
-        roof=Material("roof", (90, 96, 99), 22.0, "test"),
-        base=Material("base", (114, 110, 102), 30.0, "test"),
+        wall=Material("wall", (134, 128, 119), 42.0, "test", (41.0, 43.0)),
+        ribbon=Material("ribbon", (61, 72, 83), 12.0, "test", (11.0, 13.0)),
+        roof=Material("roof", (90, 96, 99), 22.0, "test", (21.0, 23.0)),
+        base=Material("base", (114, 110, 102), 30.0, "test", (29.0, 31.0)),
         ribbon_first_m=15.0,
         ribbon_pitch_m=4.8,
         ribbon_thickness_m=1.5,

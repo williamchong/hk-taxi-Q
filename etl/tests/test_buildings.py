@@ -367,9 +367,15 @@ class TestColour:
         assert (first == second).all()
 
 
-WARM = Material(name="warm", colour=(200, 180, 150), reflectance=48.0, source="test")
-PALE = Material(name="pale", colour=(190, 200, 200), reflectance=55.0, source="test")
-GREY = Material(name="grey", colour=(150, 150, 150), reflectance=30.0, source="test")
+WARM = Material(
+    name="warm", colour=(200, 180, 150), reflectance=48.0, source="test", bounds=(47.0, 49.0)
+)
+PALE = Material(
+    name="pale", colour=(190, 200, 200), reflectance=55.0, source="test", bounds=(54.0, 56.0)
+)
+GREY = Material(
+    name="grey", colour=(150, 150, 150), reflectance=30.0, source="test", bounds=(29.0, 31.0)
+)
 
 
 def _drawing_style(jitter: float = 0.0, *, warm: dict[Material, float] | None = None):
@@ -516,7 +522,13 @@ class TestWeightedDraw:
     def _draw(self, weights: dict[str, float]) -> WeightedDraw:
         return WeightedDraw.of(
             {
-                Material(name=name, colour=(10, 10, 10), reflectance=1.0, source="t"): weight
+                Material(
+                    name=name,
+                    colour=(10, 10, 10),
+                    reflectance=1.0,
+                    source="t",
+                    bounds=(0.5, 1.5),
+                ): weight
                 for name, weight in weights.items()
             },
             "test",

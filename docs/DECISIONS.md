@@ -66,7 +66,7 @@ wins.
 | `Q35` | A per-building material draw gives a salt-and-pepper skyline | 🔴 Open |
 | `Q36` | Wan Chai's ground is paving, not soil | ✅ Closed |
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
-| `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
+| `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | ✅ Closed 2026-09-08 by `P5-28c` — the exposure is a Godot global set by the lighting rig, so a time of day is one number in one scene. `bounds:` per material is what keeps `_check_reflectance` from becoming `Q72`'s tautology once a colour *is* its reflectance. Inert outside `COLOR_0`: 23 of 23 ETL intermediates byte-identical, 197 meshes differing in that field alone. ⚠️ The tint now runs at reflectance level and rendered `C*` p50 fell **7.31 → 6.00** — `P5-28d` re-judges `facade_hue.strength` and is open |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
 | `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed, then 🚫 **unshipped by `Q102`** — the verdicts rode `TEXCOORD_1` from schema 6 (+0.24 MB PCK) and the channel was removed with the reader at schema 20. The findings stand: the dip gate is dead, and rendering the verdicts at 1.0 found the consumer defect under `Q26`. ⚠️ The glazing tint survives as a measurement with **no consumer** |
 | `Q41` | A vision reader recovers the grammar the statistic could not | 🚫 **WITHDRAWN on cost by `Q102`** — not refuted: the reader passed its held-out validation and surveyed the region. The tool, its labels, the verdicts and the channel are deleted; every building falls to the hash |
@@ -110,7 +110,7 @@ wins.
 | `Q79` | **The street plate needs a typeface, and the one that fits is not the one that was proposed** | ✅ Decided 2026-08-26 — **Free HK Kai**, because a HK street plate is set in 楷書 and the real plate keeps its Latin line in a grotesque. Noto Sans HK, the first proposal, lost on that; **AR PL UKai fell on its licence, not its typeface**. 🔴 **Hard rule 7's three owners become four**: a bundled font is neither this project's code, nor its authored asset, nor government data |
 | `Q80` | **A touch zone is not a thumb, and the first rule banned the corners every shipped game uses** | ✅ Closed 2026-08-26 — a tap zone is where input is **detected**; a thumb is what **occludes**. Conflating them banned the corners 3 of 4 shipped references use. 🔴 The check now asserts the **permission** as well as the prohibition, so re-tightening it fails the suite rather than silently re-banning them |
 | `Q81` | **A wrong-way sign is an interrupt, not a readout, and the nose decides rather than the wheels** | ✅ Closed 2026-08-26 — the **nose** raises the sign and velocity may only **withhold** it, because NO ENTRY's instruction is *turn around*. Reversing while correctly aligned is therefore unsigned, and that is the accepted cost. 🔴 An icon rather than a word, which deletes a whole ungraded-lettering branch |
-| `Q82` | **A published vocabulary, a lantern that stays off, and a counter that had to be reachable** | ✅ Closed 2026-08-27 — 🔴 **the night-mode half of the premise was refused and the layer shipped anyway**: night is blocked on `Q38`, which bakes exposure into `COLOR_0` at build time, and 897 `OmniLight3D`s is not a shippable answer. Justified instead on the daylight street scene, which it earns — the region had no vertical element between kerb height and façade. ✅ First vocabulary here the publisher **defines**. 🔴 No column in the road is a **two-stage** refusal, not `max_shift_m`, and `arms_against_kerb` was refused as `Q72`'s tautology. ⚠️ Vertex compression turned off project-wide at **+2.002%** of PCK, so the upright bar grades the mesh the ETL actually built |
+| `Q82` | **A published vocabulary, a lantern that stays off, and a counter that had to be reachable** | ✅ Closed 2026-08-27 — 🔴 **the night-mode half of the premise was refused and the layer shipped anyway**: night is blocked on `Q38` — ✅ **closed 2026-09-08 by `P5-28c`**, so that half of the refusal has expired and `Q26` is what is left — and 897 `OmniLight3D`s is not a shippable answer either way. Justified instead on the daylight street scene, which it earns — the region had no vertical element between kerb height and façade. ✅ First vocabulary here the publisher **defines**. 🔴 No column in the road is a **two-stage** refusal, not `max_shift_m`, and `arms_against_kerb` was refused as `Q72`'s tautology. ⚠️ Vertex compression turned off project-wide at **+2.002%** of PCK, so the upright bar grades the mesh the ETL actually built |
 | `Q83` | **Touch drives its own throttle, and the drift is where the thumb is** | ✅ Decided 2026-08-27 on the user's instruction — two thumbs, both axes each, both **relative**, and `auto_accelerate` is no longer the touch default. 🔴 **The allocation was incomplete and nothing could have caught it**: four touch rects against five actions, with `brake_reverse`, `drift` and `look_back` homeless, while `verify_hud` grades occlusion rather than reachability by design (`Q80`). Three drift schemes were rejected first. ⚠️ Its assumed `_drift_engagement` was built by `Q84`, which found it does not do what it was built for. ⬜ `look_back` still unplaced, and the threshold numbers need `P0-3b`'s handset |
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 | `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives. ⚠️ **The constant-torque figures here are superseded by `Q86`**, which decays it and re-tunes the peak to 7000 |
@@ -3495,7 +3495,124 @@ away from a linear-light mean, and the same family as the bug `Q27` closed. **Ch
 
 ## `Q38` — `exposure_anchor` is baked into `COLOR_0` at build time
 
-**Status.** 🟡 Open — **planned 2026-09-08 as `PLAN.md` `P5-28a`–`P5-28d`, on three of the user's calls**: the survey tint is applied at reflectance level and the look re-judged (`P5-28d`), `render_cool` is moved one code under its cited range rather than the range widened (`P5-28a`), and the anchor lives in the lighting rig as a global shader parameter (`P5-28b`). ⚠️ **The claim below is corrected by that plan**: the anchor stopped being "one invertible, spatially-uniform scalar" when `Q40` shipped the CIELAB hue tint on the baked colour — measured ΔE 1.2–6.0 between tinting before and after the scale, almost all in b*. And the road is a `ShaderMaterial` since `P3-12`, so the `albedo_color` route is stale; the rig's global reaches it through `road_markings.gdshader` · **Owner.** night mode
+**Status.** ✅ **Closed 2026-09-08 by `P5-28c`** — the exposure left `hong_kong.yaml` and is a Godot global shader parameter set by the lighting rig. A time of day is one number in one scene; it was a full region rebuild. Built in four steps as `PLAN.md` `P5-28a`–`P5-28d`, on three of the user's calls: the survey tint is applied at reflectance level and the look **re-judged** (`P5-28d`, open — it needs the user's pick), `render_cool` is **moved** one code under its cited range rather than the range widened (`P5-28a`), and the anchor **lives in the lighting rig** (`P5-28b`). ⚠️ **The claim below is corrected on two points**: the anchor stopped being "one invertible, spatially-uniform scalar" when `Q40` shipped the CIELAB hue tint on the baked colour — measured, and see `P5-28c` below for the shipped figure — and the road has been a `ShaderMaterial` since `P3-12`, so the `albedo_color` route the old fix proposed was stale · **Owner.** night mode
+
+**`P5-28c` (2026-09-08) — the un-bake, both halves in one commit.** `exposure_anchor` left
+`hong_kong.yaml`; the fifteen `materials:` colours are reflectance-level (`render_warm` `#968872` →
+`#c9b79a`, and so on); `_check_exposure` became `_check_reflectance`; both rigs set **0.520**;
+`city.json` `schema_version` **30 → 31** and `city_manifest.gd` with it, because a v30 reader is
+*wrong* rather than stale — it draws the city 1/0.520 too bright with nothing in the frame to say so.
+`make_landmark.py` and `make_barrier.py` took the same rewrite and their two LFS binaries were
+regenerated; **both generators stopped importing `load_config` altogether**, which is the coupling the
+un-bake actually removed.
+
+🔴 **`bounds:` is required on every material and it is the whole reason this is still a check.** With
+the exposure gone, `luminance(colour)` *is* `reflectance` by construction, so the comparison
+`_check_exposure` made became an identity — `Q72`'s tautology, a rule that reads as enforced and
+cannot fail. `bounds` is the numeric half of the `source:` every entry already had to write in prose,
+so nothing had to be **decided** for any of the fifteen, only transcribed. ⚠️ **One entry had to be
+argued rather than transcribed**: `make_landmark.py`'s `gold_band` named no range, and is now stated
+as 15-25% — an argument, which is what `bounds` is for. ⚠️ **Correct a colour outside its bounds;
+never widen the bounds to admit it** — `P5-28a` is the worked example, and the error message says so.
+
+✅ **Inert everywhere but `COLOR_0`, and that is measured rather than argued.** All 23 ETL
+intermediates for `wan_chai` are **byte-identical** to a `HEAD` build except `city.json`, whose only
+two moved leaves are `schema_version` and the timestamp — so not one stage's counters moved. In the
+bundle, 15 of 216 files are byte-identical (`arrows.glb`, `roadmarks.glb`, `boxjunctions.glb`,
+`signs.glb`, `railings.glb`, every `*_placements.json`, `roadgraph.json`, `signs_text.png`,
+`fence.json`, `fares.json`, `landmarks.json`) and the other 201 — 132 tiles, 65 road tiles,
+`tram.glb`, `lamps.glb`, `landmarks/hkcec.glb` — differ in **`COLOR_0` and nothing else**, asserted
+field by field over all 197 meshes: `POSITION`, `NORMAL`, `INDICES`, `TEXCOORD_0` and `TEXCOORD_1`
+identical in every one. ⚠️ **`signs.glb`'s `COLOR_0` is among the identical ones**, which is the sign
+livery's `Q33` exemption showing up as a byte.
+
+**The 8-bit round trip costs almost nothing and the tint costs the chroma.** Per material, rendered
+against the old baked colour: max **|ΔL\*| 0.12** (`asphalt_aged`, `panel_pale`) and max **ΔE76
+0.38** (`tile_neutral`, `panel_pale`). Over all **653,481** lod0 tile vertices, rendered:
+
+| | p50 | p90 | p99 | max |
+|---|---|---|---|---|
+| \|ΔL\*\| | 0.099 | 0.267 | 0.465 | 13.222 |
+| \|Δa\*\| | 0.447 | 1.675 | 4.023 | 34.396 |
+| \|Δb\*\| | 1.189 | 4.943 | 10.057 | 25.096 |
+| ΔE76 | 1.520 | 5.150 | 10.756 | 40.967 |
+
+Rendered `L*` p50 **60.28 → 60.29**; rendered `C*` p50 **7.31 → 6.00**, p90 **26.14 → 21.01**.
+
+🔴 **The whole `L*` tail is the sRGB gamut clip and it moved into a lighter part of the space where
+it bites harder.** 0.88% of vertices carry a channel at 0 or 255; strip them and `|ΔL*|` is p99
+**0.457**, max **5.488**. The clipped ones have a before-`C*` p50 of 51-91 — the most saturated
+buildings in the region, the ones `facade_hue.strength` 2.0 pushes hardest — and `facade_chroma.py`
+reports the gamut share going **0.6% → 2.6%** at that strength. That is the price of tinting at
+reflectance level, it is `P5-28d`'s to judge, and it is an argument for a *lower* strength rather
+than a defect in the un-bake.
+
+**`facade_chroma.py --shipped`, before and after** (both at the rig's 0.520; the tool now applies the
+exposure itself, and `Q30`'s row is the "before" column):
+
+| strength | mean | median | p90 | p99 | max | over `C*` 20 | `L*` |
+|---|---|---|---|---|---|---|---|
+| 1.0 before | 7.80 | 6.13 | 15.36 | 30.71 | 73.43 | 4.6% | 61.5 |
+| 1.0 after | 6.24 | 4.93 | 12.33 | 24.57 | 54.07 | 2.3% | 61.5 |
+| 1.5 before | 11.64 | 9.20 | 23.00 | 46.07 | 97.51 | 14.1% | 61.5 |
+| 1.5 after | 9.30 | 7.45 | 18.61 | 34.14 | 67.14 | 8.0% | 61.4 |
+| **2.0 before** | **15.45** | **12.25** | **30.68** | **61.13** | **102.37** | **26.5%** | **61.5** |
+| **2.0 after** | **12.29** | **9.90** | **24.37** | **44.25** | **79.14** | **16.6%** | **61.4** |
+
+Authored height bands `C*` **1.92-13.84 → 1.76-13.83**.
+
+**Frames — three cameras, each side shot until a hash repeated, forced re-import per side.**
+
+| camera | whole-frame `L*` | `C*` p90 | responding share | `\|ΔL*\|` p90 |
+|---|---|---|---|---|
+| `street` | 43.2 → 43.1 | 32.9 → 25.4 | 7.1% | 0.71 |
+| `skyline` | 60.5 → 60.4 | 25.9 → 25.2 | 5.1% | 0.63 |
+| `kerb` | 29.4 → 29.4 | 28.5 → 25.1 | 6.5% | 0.71 |
+
+⚠️ **`Q31`'s pathology got slightly worse at `kerb` and that is the chroma reaching the tone curve**:
+under `L*` 10 went **29.0% → 33.2%** and the 10-30 band **24.2% → 20.0%**, on a frame whose mean `L*`
+did not move at all. The tonemapper is per-channel, so desaturating a pixel moves its mapped
+lightness even when its albedo lightness is fixed. A second reason `P5-28d` matters.
+
+✅ **Runtime inertness.** `tools/skidpad.sh` at the default run-up is byte-identical on all five
+rows either side (`corner` 2.0 deg peak slip, `drift` 69.8 / 0.87 s, `tap` 20.5 / 0.40 s, `brake`
+8.75 m/s², `coast` 65.2 m) — a colour cannot reach the drive model, and the row is the proof rather
+than the argument. On the throttle route `draws` is **30 / 105 / 105 / … / 109** at `t` 0-2 and 5 on
+every run either side, and the `t=3`/`t=4`/`t=6` cells vary **within** each side (104-108) as much as
+between them: both bundles produced both patterns across two runs each. ⚠️ **Read those three cells
+as streamer timing, not as a delta** — a telemetry line printed late (one before-run emitted a
+`t=4.65`) samples a different frame, and a vertex colour cannot change a draw call.
+
+🔴 **A second clip got 21x more likely and nothing publishes it.** `colour_for`'s jitter is applied
+*after* `with_hue` and clamped per channel to `[0, 255]`, so lifting the whole palette by 1/0.520
+cost every building half its 8-bit headroom. Measured over the region's 2,163 surveyed meshes at the
+shipped `strength` 2.0 and `colour_jitter` 0.06, with the real `_seed`: **42 clamped (1.94%)** against
+**2 (0.09%)** before, mean 6.19 codes lost and max 14. ⚠️ **This is not the gamut clip above** —
+that one is `lab_to_srgb` inside `with_hue` and `facade_chroma.clipping()` reports it; this one is
+downstream of it and no counter in the bundle can see it. A clamped channel loses its upward jitter
+*and* takes a hue shift, and it now fires on a colour that renders at mid-brightness rather than at
+white. 🚫 **Not fixed here and not fixable here** — clamping is what 8 bits do — the levers are
+`facade_hue.strength` and `colour_jitter`, so it is `P5-28d`'s to price. ⚠️ **It has no mechanism**,
+which is `Q37`'s debt in a new place; the number above came from a script and will go stale.
+
+⚠️ **`clearance.wears()`'s exactness guard lost most of its margin, and it aborts rather than
+degrades.** The brightest entry in `materials:` went 157 → 211 against the 240.6 that guard admits at
+jitter 0.06 — 83 codes of headroom down to **30**. Nothing moved, because the only `base` it is
+handed is the ground (`concrete_paving`, 129, so 112 clear). But a brighter ground material or a
+raised jitter now `SystemExit`s the clearance stage and the three graders that import it.
+
+🔴 **A claim written into four files during this task was inverted and is corrected here.** "An
+unexposed grader reports a palette a third *less* saturated than the screen" is backwards. In
+CIELAB's cubic regime a uniform luminance scale multiplies `a*`, `b*` and therefore `C*` by
+`anchor ** (1/3)` — **0.804** at 0.520, verified to four places — so an unexposed table reads
+**1.24x MORE** saturated. The shipped bands are `C*` 2.18-17.19 unexposed against 1.76-13.83
+rendered. ⚠️ **The test beside the prose asserted the right thing while the prose said the opposite**,
+which is the failure mode worth naming: a correct assertion does not audit the sentence next to it.
+
+⚠️ **The skyline camera does NOT settle by `t=0.8`, and the skill says it does.** Two runs at that
+time returned 172 and 174 distinct colours; at `t=2.0` four runs returned one hash. The tile streamer
+is still instancing at 0.8 s from that viewpoint. Shoot the skyline at `t=2.0` and keep shooting
+until a hash repeats.
 
 **`P5-28b` (2026-09-08) — the engine side, shipped inert.** `project.godot` declares
 `[shader_globals] exposure_anchor` as a `float` at **1.0**; `scripts/world/lighting_rig.gd` sets it in
@@ -3539,13 +3656,16 @@ stream — and changing the time of day is a full tile rebuild. It is also the o
 puts an illumination term in the albedo channel it otherwise guards strictly (`Q27`, `Q36`), though a
 far milder violation: one invertible, spatially-uniform scalar.
 
-**Why it is not fixed.** The fix is cheap and known — the two façade shaders already linearise
-`COLOR_0` and could take the anchor as a uniform, and the road's `BaseMaterial3D` has `albedo_color`,
-which multiplies vertex colour. What it costs is `_check_exposure` and
-`test_no_colour_escapes_the_materials_table`, both built around *authored colour = reflectance ×
-anchor* and both shipped to close a real defect.
+**Why it was not fixed sooner.** The fix looked cheap — the two façade shaders already linearise
+`COLOR_0` and could take the anchor as a uniform, and the road's `BaseMaterial3D` had `albedo_color`.
+⚠️ **Both halves of that sentence were wrong by the time it was acted on.** The road has been a
+`ShaderMaterial` since `P3-12`, and **seven** shaders read `COLOR_0` as albedo, not two. What it was
+correctly said to cost was `_check_exposure`, built around *authored colour = reflectance × anchor* —
+and that is exactly what `bounds:` replaced.
 
-**Recorded so the constraint is found before night mode rather than during it.**
+✅ **The precondition for night mode is met.** `Q26` is the remaining blocker and it is a look nobody
+has chosen, not geometry — so `P3-26`'s and `Q82`'s "buys night mode nothing" lines still stand about
+their own layers and no longer point here.
 
 **See.** `Q33` · `ART_DESIGN.md` "Lighting"
 

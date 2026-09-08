@@ -47,6 +47,16 @@ entirely plausible.
 for.** Jitter, clamping and the classes that ignore the height bands all move it.
 Measure it off the built tiles' `COLOR_0`; asking for 18.0 `L*` delivered 16.93.
 
+🔴 **And since `P5-28c`, `COLOR_0` is not the albedo the shader uses.** The tiles
+carry a material's *reflectance* and the rig multiplies by `exposure_anchor`
+(`Q38`), so this tool reads that number off the rig scene and exposes the pair
+for you — feed it the raw tile `L*` and do not pre-multiply. ⚠️ **Exactly one
+line moves when it does**: `gain` divides by an `L*` difference and `L*` is not
+linear in luminance, so its denominator shrinks; `linear ratio` and `additive
+share` are built on a *ratio* of linear luminances, where a uniform scale
+cancels exactly. A pair quoted at the wrong level therefore reports a plausible
+gain and a correct additive share, which is the quiet way to be wrong.
+
 **A single frame also reports its band shares**, which is `Q31`'s statistic
 rather than `Q27`'s: the fraction of the frame in shadow and the fraction in the
 band above it. That question is not answerable from the percentiles beside it —
@@ -80,7 +90,10 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
-from pipeline.colour import luminance, srgb_to_lab  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lighting_rig import DEFAULT_RIG, rig_exposure  # noqa: E402
+from pipeline.colour import lab_to_linear, linear_to_lab, luminance, srgb_to_lab  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -208,6 +221,26 @@ def report_absolute(frame: Frame) -> None:
     )
 
 
+def exposed(lightness: float, anchor: float) -> float:
+    """One albedo `L*` as the rig renders it — the shader's multiply, in `L*`.
+
+    Through linear light and back, because `L*` is not linear in luminance and
+    scaling it directly is the error this exists to prevent (`P5-28c`).
+
+    🔴 **On `colour.py`'s seams rather than on `relative_luminance` above, and
+    the difference is a whole branch.** Written as
+    `116 * (relative_luminance(L) * anchor) ** (1/3) - 16` it agrees with this to
+    float noise across every façade albedo — and it is *wrong* below `L*` ~8,
+    where CIELAB leaves the cube root for its linear segment. `--albedo-l` takes
+    two numbers off the command line, so that domain is one typo away rather than
+    unreachable. ⚠️ `relative_luminance` keeps the shortcut, because its own
+    caller only ever forms a **ratio** of two of them, where the branch cancels
+    for any pair on the same side of the knee.
+    """
+    lab = np.array([[lightness, 0.0, 0.0]], dtype=np.float64)
+    return float(linear_to_lab(lab_to_linear(lab) * anchor)[0, 0])
+
+
 def report_paired(before: Frame, after: Frame, albedo: tuple[float, float] | None) -> int:
     """Print what changed between two aligned renders. Returns a process status."""
     if before.size != after.size:
@@ -286,6 +319,8 @@ def report_paired(before: Frame, after: Frame, albedo: tuple[float, float] | Non
         return 1
 
     albedo_ratio = relative_luminance(dark) / relative_luminance(light)
+    # ⚠️ Order matters only for the message: the ratio above is taken at either
+    # level and is the same number, which is the property the header describes.
     usable = responded & (before.luminance > MIN_LUMINANCE)
     if not usable.any():
         log.info("")
@@ -330,8 +365,15 @@ def main(argv: list[str] | None = None) -> int:
         nargs=2,
         default=None,
         metavar=("LIGHT", "DARK"),
-        help="mean CIELAB L* of the shipped COLOR_0 in each build, lighter first. "
+        help="mean CIELAB L* of the shipped COLOR_0 in each build, lighter first, "
+        "as measured off the tiles and NOT pre-multiplied by the rig's exposure. "
         "Turns the rendered difference into a gain and an additive share",
+    )
+    parser.add_argument(
+        "--rig",
+        type=Path,
+        default=DEFAULT_RIG,
+        help="lighting rig scene to read exposure_anchor from",
     )
     args = parser.parse_args(argv)
 
@@ -355,7 +397,19 @@ def main(argv: list[str] | None = None) -> int:
         log.info("")
         return 0
 
-    albedo = tuple(args.albedo_l) if args.albedo_l else None
+    albedo = None
+    if args.albedo_l:
+        anchor = rig_exposure(args.rig)
+        light, dark = args.albedo_l
+        albedo = (exposed(light, anchor), exposed(dark, anchor))
+        log.info(
+            "  albedo L* %.2f -> %.2f at the tile, %.2f -> %.2f after %s's exposure %.3f",
+            light,
+            dark,
+            *albedo,
+            args.rig.name,
+            anchor,
+        )
     status = report_paired(frames[0], frames[1], albedo)
     log.info("")
     return status

@@ -67,14 +67,50 @@ def srgb_to_linear(rgb: np.ndarray) -> np.ndarray:
     return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
 
 
-def srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
-    """`(n, 3)` sRGB in 0-255 to CIELAB. Returns float `(n, 3)` as `L*, a*, b*`."""
-    xyz = srgb_to_linear(rgb) @ _TO_XYZ.T / _WHITE
+def linear_to_srgb(linear: np.ndarray) -> np.ndarray:
+    """`(n, 3)` linear 0-1 to sRGB in 0-255, **unclipped** — `srgb_to_linear`
+    inverted, the same IEC 61966-2-1 curve read the other way.
+
+    Public since `P5-28c` and split out for the reason the module docstring
+    gives about the forward curve: the exposure is a multiply in *linear* light
+    now (`Q38`), so a tool that wants the colour the rig renders has to leave and
+    re-enter the encoding, and it must do so on this definition rather than a
+    fourth copy of the curve.
+    """
+    v = np.where(linear <= 0.0031308, linear * 12.92, 1.055 * np.abs(linear) ** (1.0 / 2.4) - 0.055)
+    return v * 255.0
+
+
+def linear_to_lab(linear: np.ndarray) -> np.ndarray:
+    """`(n, 3)` linear 0-1 to CIELAB. Returns float `(n, 3)` as `L*, a*, b*`."""
+    xyz = np.asarray(linear, dtype=np.float64) @ _TO_XYZ.T / _WHITE
     f = np.where(xyz > _EPSILON, np.cbrt(xyz), (_KAPPA * xyz + 16.0) / 116.0)
     return np.stack(
         [116.0 * f[:, 1] - 16.0, 500.0 * (f[:, 0] - f[:, 1]), 200.0 * (f[:, 1] - f[:, 2])],
         axis=1,
     )
+
+
+def lab_to_linear(lab: np.ndarray) -> np.ndarray:
+    """CIELAB to `(n, 3)` linear 0-1, unclipped — `linear_to_lab` inverted.
+
+    ⚠️ **Leaves the gamut question alone on purpose.** Linear values outside
+    `[0, 1]` are colours sRGB cannot show and they are *evidence*; `in_gamut`
+    and `lab_to_srgb` are the two places that get to decide what to do about it.
+    """
+    lightness, a_star, b_star = lab[:, 0], lab[:, 1], lab[:, 2]
+    fy = (lightness + 16.0) / 116.0
+    fx = fy + a_star / 500.0
+    fz = fy - b_star / 200.0
+    f = np.stack([fx, fy, fz], axis=1)
+    cubed = f**3
+    xyz = np.where(cubed > _EPSILON, cubed, (116.0 * f - 16.0) / _KAPPA) * _WHITE
+    return xyz @ _FROM_XYZ.T
+
+
+def srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    """`(n, 3)` sRGB in 0-255 to CIELAB. Returns float `(n, 3)` as `L*, a*, b*`."""
+    return linear_to_lab(srgb_to_linear(rgb))
 
 
 def _lab_to_encoded(lab: np.ndarray) -> np.ndarray:
@@ -84,16 +120,7 @@ def _lab_to_encoded(lab: np.ndarray) -> np.ndarray:
     Split out so `lab_to_srgb` and `in_gamut` cannot come to disagree about where
     the boundary is: one clips this and the other measures it.
     """
-    lightness, a_star, b_star = lab[:, 0], lab[:, 1], lab[:, 2]
-    fy = (lightness + 16.0) / 116.0
-    fx = fy + a_star / 500.0
-    fz = fy - b_star / 200.0
-    f = np.stack([fx, fy, fz], axis=1)
-    cubed = f**3
-    xyz = np.where(cubed > _EPSILON, cubed, (116.0 * f - 16.0) / _KAPPA) * _WHITE
-    linear = xyz @ _FROM_XYZ.T
-    v = np.where(linear <= 0.0031308, linear * 12.92, 1.055 * np.abs(linear) ** (1.0 / 2.4) - 0.055)
-    return v * 255.0
+    return linear_to_srgb(lab_to_linear(lab))
 
 
 def lab_to_srgb(lab: np.ndarray) -> np.ndarray:
@@ -151,11 +178,18 @@ def luminance(rgb: np.ndarray) -> np.ndarray:
 def reflectance(rgb: tuple[int, int, int]) -> float:
     """One colour's luminance as a percentage — the albedo it claims to be.
 
-    The measurable half of the palette rule (`Q33`): every authored colour is
-    `material reflectance x exposure_anchor`, so dividing this by the anchor
-    recovers the real-world material the colour is asserting. That assertion is
-    checkable against published albedos, which is the whole point — it gives a
-    palette an external referent instead of only internal consistency.
+    The measurable half of the palette rule (`Q33`): every authored colour **is**
+    the real-world material's diffuse albedo, so this reads back the material the
+    colour is asserting. That assertion is checkable against published albedos,
+    which is the whole point — it gives a palette an external referent instead of
+    only internal consistency.
+
+    ⚠️ **There was a division here until `P5-28c`.** The colour used to be
+    `reflectance x exposure_anchor` and recovering the material meant dividing by
+    the anchor. The exposure is a Godot global now (`Q38`), applied in the shader
+    and never in the file, so this is a direct reading — and `config.py`'s check
+    needs `bounds` to stay a check at all, because the comparison it used to make
+    became an identity.
 
     A percentage rather than `luminance`'s 0-1 because that is the unit
     published albedo tables are quoted in, and the config is authored against

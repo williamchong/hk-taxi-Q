@@ -41,9 +41,9 @@ four colours inside one draw call so the values have to ride the vertex.
 🔴 **Neither ground holds for a lamp post, so this layer does not take that
 exemption.** Galvanised steel is a real surface with a published albedo, and a
 column is one colour. So `lamps.column_material` names `galvanised_steel` in
-the city's `materials:` table, `_check_exposure` grades it against
-`exposure_anchor` like any façade, and `_check_every_material_is_used` refuses
-the config if the block is removed and the material left behind. It is
+the city's `materials:` table, `_check_reflectance` grades it against the albedo
+range its own source names like any façade, and `_check_every_material_is_used`
+refuses the config if the block is removed and the material left behind. It is
 `tramway.rail_material`'s shape, not `signs.colours`'.
 
 ⚠️ The value still rides `COLOR_0`, because this layer shares `signs.gdshader`
@@ -52,9 +52,10 @@ signs' and the *authority* for it does not.
 
 🔴 **AND THERE IS NO LIT LANTERN, WHICH IS THE THING TO RESIST CHANGING HERE.**
 `P3-26` ships unlit geometry and buys night mode **nothing** — that is the
-honest position, not an oversight. Night is blocked on `Q38` (`exposure_anchor`
-is baked into `COLOR_0` at build time, so a time-of-day change is a full tile
-rebuild) and on `Q26` (the look is unchosen), and neither of those is geometry.
+honest position, not an oversight. Night was blocked on `Q38` and on `Q26`, and
+✅ **`P5-28c` closed the first**: the exposure is a global shader parameter this
+rig sets, so a time of day is a number in a scene and not a full tile rebuild.
+What is left is `Q26`, the look nobody has chosen, and it is not geometry either.
 Pushing `sheeting_glow` up to "make the lamps read" would light 897 lanterns in
 broad daylight, which is wrong in every frame this project currently renders,
 and `ART_DESIGN.md` ends its Lighting section with "Resist adding lights."
@@ -70,7 +71,7 @@ light, and a dark lantern that reads as lit is exactly the failure above.
 which is the whole reason the flag exists** (`P5-28b`). All three sit on
 `signs.gdshader`, and only one of them is an *exposed* material: a lamp column's
 colour comes from `hong_kong.yaml`'s `materials:` table, so it is `Q33`'s
-`reflectance x exposure_anchor` and has to scale with the rig. A sign's livery is
+reflectance and has to be scaled by the rig to become a rendered colour at all. A sign's livery is
 a printed specification — TD prints NO ENTRY red — so `signs.colours` is exempt
 from the palette rule and must not move with the time of day.
 

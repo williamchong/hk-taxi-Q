@@ -1390,8 +1390,21 @@ class TestMaterialAssignment:
                 assert expected == pytest.approx(ramp_mean, abs=3.0)
 
 
+def _darkened(hex_colour: str) -> str:
+    """One authored colour, three-quarters as bright, as `#rrggbb`.
+
+    Deliberately arithmetic on the 8-bit codes and not a linear-light rescale:
+    what the test below needs is a colour that has *moved*, and borrowing
+    `srgb_to_linear` would need its inverse written out here — a second copy of
+    the encode curve in the one file whose subject is that curve having copies
+    (`Q27`).
+    """
+    red, green, blue = (int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+    return f"#{int(red * 0.75):02x}{int(green * 0.75):02x}{int(blue * 0.75):02x}"
+
+
 class TestPaletteExposure:
-    """`Q33` — every colour is `reflectance x exposure_anchor`, checked at load.
+    """`Q33` — every colour IS its declared reflectance, checked at load.
 
     ⚠️ **What guarantees the rule changed with `Q34`, and these tests changed
     with it.** The rule used to earn its keep by being *cross-section*: the
@@ -1399,7 +1412,7 @@ class TestPaletteExposure:
     not the other, so the tests that mattered reproduced that — a change applied
     to `buildings:` while `roads:` was not in the diff.
 
-    There is now one section. `_check_exposure` is total because the **table**
+    There is now one section. `_check_reflectance` is total because the **table**
     is, which is stronger, and which moves the load-bearing test to
     `test_no_colour_escapes_the_materials_table` below: that is what now holds
     the property this class used to hold.
@@ -1421,25 +1434,30 @@ class TestPaletteExposure:
     def test_re_exposing_only_some_materials_is_rejected(self, rewrite) -> None:
         """`235aa4f` in the only miniature still available, which is the point.
 
-        Re-exposing the city means moving the anchor and moving every colour with
-        it. That commit did the first half and only part of the second, because
-        `roads:` was not in the diff. The *sections* it could be split between
-        are gone, so this splits the table instead — anchor moved, facades
-        rescaled, the two road materials left behind — and it is still caught.
+        ⚠️ **The miniature had to be rewritten for `P5-28c` and it caught the
+        commit either way.** Re-exposing the city used to mean moving
+        `exposure_anchor` and moving every colour with it; that commit did the
+        first half and only part of the second, because `roads:` was not in the
+        diff. There is no anchor in this file to move any more — the exposure is
+        the lighting rig's, and the rig multiplies the whole frame or none of it,
+        so *the defect is no longer expressible from here*. What is still
+        expressible is the half that did the damage: colours darkened in place
+        while two were left behind. That is what this writes.
 
-        ⚠️ The salvage is imperfect and worth naming: a partial edit to one table
-        is a more obviously wrong thing to write than an edit that simply stops
-        at a section boundary. The structural defence is that there is now one
-        place to change, not that this test is hard to pass.
+        ⚠️ **It is now caught on a material it moved rather than on the two it
+        missed**, which is a better error and a weaker test — the round trip
+        names the first colour whose luminance stopped matching its reflectance,
+        and it would say the same about a single mistyped hex. The structural
+        defence is that there is one place to change and no anchor beside it,
+        not that this test is hard to pass.
         """
 
         def re_expose(doc: dict[str, Any]) -> None:
-            doc["exposure_anchor"] = 0.40
             for name, entry in doc["materials"].items():
                 if name not in ("asphalt_aged", "concrete_kerb"):
-                    entry["reflectance"] = entry["reflectance"] * 0.520 / 0.40
+                    entry["colour"] = _darkened(entry["colour"])
 
-        with pytest.raises(ValueError, match=r"materials\.(asphalt_aged|concrete_kerb)"):
+        with pytest.raises(ValueError, match=r"materials\.\w+ is #"):
             load_config(rewrite(re_expose))
 
     def test_a_reference_to_an_undeclared_material_is_rejected(self, rewrite) -> None:
@@ -1459,7 +1477,7 @@ class TestPaletteExposure:
         check this replaces.
 
         An entry that colours nothing parses, loads and is silently inert — and
-        worse than merely inert, because `_check_exposure` reads the whole table:
+        worse than merely inert, because `_check_reflectance` reads the whole table:
         it would be a colour validated as though it ships.
         """
 
@@ -1468,6 +1486,7 @@ class TestPaletteExposure:
                 "colour": "#3a3a38",
                 "reflectance": 8.0,
                 "source": "test",
+                "bounds": [5, 15],
             }
 
         with pytest.raises(ValueError, match="roof_felt, which nothing references"):
@@ -1483,18 +1502,37 @@ class TestPaletteExposure:
         with pytest.raises(ValueError, match="source"):
             load_config(rewrite(drop))
 
-    def test_a_zero_anchor_is_rejected(self, rewrite) -> None:
-        """Zero would make every colour black and pass the check for any material.
+    def test_a_colour_moved_with_its_reflectance_is_rejected_by_its_bounds(self, rewrite) -> None:
+        """🔴 **The one mutation the round trip cannot see, and the reason
+        `bounds` is required** (`P5-28c`).
 
-        The trap worth a test: it turns the rule into a no-op that still reads as
-        enforced, which is worse than not having it.
+        With the exposure un-baked, `luminance(colour)` *is* `reflectance` by
+        construction, so moving a colour and its declared reflectance together
+        satisfies the round trip perfectly. That is not a hypothetical edit — it
+        is exactly what "brighten the kerb a bit" looks like when the author does
+        the arithmetic honestly. `bounds` is the third thing: the numeric half of
+        the `source` the entry already had to write in prose.
+
+        Concrete at 45% is the pre-`Q33` kerb's claim in a new place.
         """
 
-        def zero(doc: dict[str, Any]) -> None:
-            doc["exposure_anchor"] = 0.0
+        def brighten(doc: dict[str, Any]) -> None:
+            doc["materials"]["concrete_kerb"]["colour"] = "#c0bcae"
+            doc["materials"]["concrete_kerb"]["reflectance"] = 45.0
 
-        with pytest.raises(ValueError, match=r"must be in \(0, 2\.0\]"):
-            load_config(rewrite(zero))
+        with pytest.raises(ValueError, match=r"outside the 20\.0-30\.0% its own source names"):
+            load_config(rewrite(brighten))
+
+    def test_a_material_without_bounds_is_rejected(self, rewrite) -> None:
+        """Required, with no default. A default would be a range this project
+        chose for a material it has never looked up, and the entry would then
+        pass a check nobody performed."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["materials"]["asphalt_aged"]["bounds"]
+
+        with pytest.raises(ValueError, match="bounds"):
+            load_config(rewrite(drop))
 
     @pytest.mark.parametrize("value", [0.0, -1.0, 101.0])
     def test_an_impossible_reflectance_is_rejected(self, rewrite, value) -> None:
@@ -1505,7 +1543,7 @@ class TestPaletteExposure:
             load_config(rewrite(spoil))
 
     def test_no_colour_escapes_the_materials_table(self) -> None:
-        """⚠️ **The check `_check_exposure` now depends on and cannot make.**
+        """⚠️ **The check `_check_reflectance` now depends on and cannot make.**
 
         This is what carries `235aa4f`'s lesson. That commit re-exposed the
         colours in `buildings:` and missed the two in `roads:` — not by argument,
@@ -1522,7 +1560,7 @@ class TestPaletteExposure:
         the day it is written.
 
         ⚠️ **`signs.colours` is the one exemption, and it was argued rather than
-        taken** (`P3-16`). The rule's foundation is `_check_exposure`, which
+        taken** (`P3-16`). The rule's foundation is `_check_reflectance`, which
         grades authored albedo against measured reflectance for **building
         cladding under Hong Kong daylight**. A sign's livery is not cladding and
         has no reflectance to grade: it is a printed specification, and TD prints
@@ -1573,7 +1611,7 @@ class TestPaletteExposure:
         }
         assert not outside, (
             f"colour(s) authored outside materials: {outside}. Every colour the city "
-            "ships is declared in materials: — see _check_exposure."
+            "ships is declared in materials: — see _check_reflectance."
         )
         # And the table is not merely where they are written, but where they all
         # are: nine distinct colours, none of them repeated under two names.

@@ -66,7 +66,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pipeline.buildings import COLLISION_SUFFIX  # noqa: E402
-from pipeline.config import Material, check_material_exposure, load_config  # noqa: E402
+from pipeline.config import Material, check_material_reflectance  # noqa: E402
 from pipeline.gltf import MeshData, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
 from primitives import box_at  # noqa: E402
@@ -85,36 +85,50 @@ MATERIAL = "barrier_vertex"
 # `hong_kong.yaml:materials` in miniature, on the config's own `Material`
 # dataclass, for the reason `make_landmark.py` gives: that table colours what
 # the ETL draws, and a committed `.glb` never passes through the ETL. The same
-# rule still binds (`Q33`) — every colour is `reflectance x exposure_anchor`,
-# checked by `check_palette` against the anchor read live from the city config
-# (`Q38`), so moving the anchor stops this generator loudly rather than
-# shipping a prop lit for the wrong exposure. Colours are sRGB (`Q27`).
+# rule still binds (`Q33`) — every colour **is** a real material's diffuse albedo
+# and lies inside the range its own source names, checked by `check_palette` on
+# the loader's own shared body.
+#
+# 🔴 **Un-baked by `P5-28c`, which is why every value here moved.** Until then
+# each colour was `reflectance x exposure_anchor` and this generator read the
+# anchor live from the city config, so moving the anchor stopped it loudly. The
+# exposure is a Godot global now (`Q38`), so there is no anchor to read and these
+# are reflectance-level colours the rig scales — `barrier_white` ships `#d1cfc7`
+# and reaches the screen at the `#9c9a94` it used to carry. What replaces the
+# loud stop is `city.json`'s `schema_version` 5: the committed `.glb` and the
+# shipped `project.godot` are one artefact in two files. Colours are sRGB (`Q27`).
 RAIL_WHITE = Material(
     "barrier_white",
-    (156, 154, 148),
+    (209, 207, 199),
     62.0,
     "painted white steel on a works barrier, 55-70% — never pure white",
+    (55.0, 70.0),
 )
 RAIL_RED = Material(
     "barrier_red",
-    (161, 63, 54),
+    (216, 87, 75),
     22.0,
     "the red band of the same paint scheme, 18-28%",
+    (18.0, 28.0),
 )
 POST_GREY = Material(
     "barrier_post",
-    (113, 113, 116),
+    (153, 153, 157),
     32.0,
     "galvanised post, weathered, 28-38%",
+    (28.0, 38.0),
 )
 
 PALETTE = (RAIL_WHITE, RAIL_RED, POST_GREY)
 
 
-def check_palette(anchor: float) -> None:
-    """`_check_exposure` for the colours the ETL never sees — same shared body."""
+def check_palette() -> None:
+    """`_check_reflectance` for the colours the ETL never sees — same shared body.
+
+    ⚠️ **Takes no anchor since `P5-28c`** — see `make_landmark.check_palette`.
+    """
     for surface in PALETTE:
-        check_material_exposure(surface, anchor, surface.name)
+        check_material_reflectance(surface, surface.name)
 
 
 @dataclass(frozen=True)
@@ -232,8 +246,8 @@ def build_barriers() -> list[tuple[str, MeshData]]:
 
 
 def write_barriers(out_dir: Path) -> list[tuple[Path, int, MeshData]]:
-    """Check the palette against the live anchor, then write one `.glb` each."""
-    check_palette(load_config().exposure_anchor)
+    """Check the palette, then write one `.glb` each."""
+    check_palette()
     written = []
     for filename, mesh in build_barriers():
         path = out_dir / filename

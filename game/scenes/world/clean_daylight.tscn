@@ -5,7 +5,7 @@
 
 [node name="CleanDaylight" type="Node3D" unique_id=300758112]
 script = ExtResource("2_rig")
-exposure_anchor = 1.0
+exposure_anchor = 0.52
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2008482965]
 environment = ExtResource("1_env")

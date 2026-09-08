@@ -17,6 +17,23 @@ checkable rather than becoming a claim in a comment. ⚠️ Do not carry the
 shortcut across to lightness: `frame_stats.py` records asking for 18.0 `L*` and
 getting 16.93, because jitter and clamping *do* land on that axis.
 
+🔴 **Every `C*` and `L*` below is measured AFTER the rig's exposure, and since
+`P5-28c` that is a step this tool has to take for itself.** The ETL used to bake
+`exposure_anchor` into `COLOR_0`, so a colour read out of the config or off a
+tile was already the rendered one; the exposure is a Godot global now (`Q38`) and
+the bundle carries reflectance-level colour. ⚠️ **Chroma does not survive that
+multiply**: in CIELAB's cubic regime a uniform luminance scale multiplies `a*`,
+`b*` and therefore `C*` by `anchor ** (1/3)` — **0.804** at 0.520 — so a tool
+that skipped it would report a palette **1.24x more saturated** than anything on
+screen, and `Q30`'s table would appear to have moved when the look had not. The
+number is read from the lighting rig scene, which is its one home; `--rig` picks
+the other one.
+
+⚠️ **The gamut lines are the exception and are measured BEFORE it**, because the
+clip is the ETL's: `with_hue` calls `lab_to_srgb` at reflectance level and what
+sRGB refuses there is refused for good. Exposing first would report a gamut the
+pipeline never consulted.
+
 Run:  .venv/bin/python tools/facade_chroma.py
       .venv/bin/python tools/facade_chroma.py --shipped   # the full pipeline path
 """
@@ -35,12 +52,15 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lighting_rig import DEFAULT_RIG, rig_exposure  # noqa: E402
 from pipeline.buildings import Placement, colour_for, facade_hue, read_sheet, stem  # noqa: E402
 from pipeline.colour import (  # noqa: E402
     chroma,
     in_gamut,
+    lab_to_linear,
     lab_to_srgb,
     lab_with_hue,
+    linear_to_lab,
     srgb_to_lab,
 )
 from pipeline.config import BuildingStyle, Config, load_config  # noqa: E402
@@ -60,6 +80,19 @@ STRENGTHS = (1.0, 1.5, 2.0)
 # what the authored bands actually reach, which is the check that 20 is still a
 # sane place to put it.
 SANCTIONED_MAX = 20.0
+
+
+def rendered(lab: np.ndarray, anchor: float) -> np.ndarray:
+    """`(n, 3)` CIELAB as the rig draws it — the shader's multiply, in Lab.
+
+    The shaders do `vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor`, so this
+    leaves Lab for linear light, scales, and comes back. ⚠️ **Not a scale of
+    `L*`**: Lab lightness is not linear in luminance, and scaling it directly
+    would leave `a*` and `b*` untouched — which is exactly the error of assuming
+    the exposure moves lightness only. It moves chroma too, and by how much is
+    what `P5-28d` has to judge.
+    """
+    return linear_to_lab(lab_to_linear(lab) * anchor)
 
 
 @dataclass(frozen=True)
@@ -158,15 +191,17 @@ def clipping(lab: np.ndarray) -> tuple[float, float]:
     return 100.0 * float(outside.mean()), float(delta[outside].max())
 
 
-def band_chroma(style: BuildingStyle) -> tuple[float, float]:
-    """The chroma range the authored height bands themselves occupy.
+def band_chroma(style: BuildingStyle, anchor: float) -> tuple[float, float]:
+    """The chroma range the authored height bands themselves occupy, as rendered.
 
     The palette table is authorised in words — "warm off-white, beige, pale
     grey-green" — and this is the number that says whether the bands still honour
-    it. It is the baseline the `strength` rows are departing from.
+    it. It is the baseline the `strength` rows are departing from, so it takes
+    the same exposure they do: comparing a reflectance-level baseline against
+    rendered rows would put the whole departure on the wrong axis.
     """
     ramp = [band.material.colour for band in style.height_bands]
-    found = chroma(srgb_to_lab(np.array(ramp, dtype=np.float64)))
+    found = chroma(rendered(srgb_to_lab(np.array(ramp, dtype=np.float64)), anchor))
     return float(found.min()), float(found.max())
 
 
@@ -228,7 +263,10 @@ def _row(strength: float, found: Spread, suffix: str = "") -> None:
     )
 
 
-def report(city: Config, region_id: str | None, *, root: Path | None = None) -> int:
+def report(
+    city: Config, region_id: str | None, *, root: Path | None = None, rig: Path = DEFAULT_RIG
+) -> int:
+    anchor = rig_exposure(rig)
     style = city.buildings
     people = Population.of(city, root=root)
     if not len(people):
@@ -236,9 +274,10 @@ def report(city: Config, region_id: str | None, *, root: Path | None = None) -> 
         return 1
     asked = {strength: people.requested(strength) for strength in STRENGTHS}
 
-    low, high = band_chroma(style)
+    low, high = band_chroma(style, anchor)
     log.info("")
     log.info("  %d surveyed buildings after the vegetation filter", len(people))
+    log.info("  rendered at exposure_anchor %.3f, from %s", anchor, rig.name)
     log.info("  authored height bands sit at C* %.2f to %.2f", low, high)
     log.info("  ships at facade_hue.strength %.1f", style.facade_hue_strength)
     log.info("")
@@ -249,9 +288,12 @@ def report(city: Config, region_id: str | None, *, root: Path | None = None) -> 
         # The colour that survives the round trip, not the one asked for: above
         # `strength` 1.0 the two part company at the top of the range, and the
         # tail is the whole question. Asked-for peaks at C* 154 where sRGB can
-        # deliver 102.
-        _row(strength, Spread.of(achieved(lab)))
+        # deliver 102. Exposed after the round trip, in that order, because the
+        # round trip is the ETL's and the exposure is the rig's.
+        _row(strength, Spread.of(rendered(achieved(lab), anchor)))
     log.info("")
+    # ⚠️ **Unexposed, alone on this page.** The clip happens inside `with_hue` at
+    # reflectance level, so this is the gamut the pipeline actually consulted.
     for strength, lab in asked.items():
         outside, worst = clipping(lab)
         log.info(
@@ -265,7 +307,7 @@ def report(city: Config, region_id: str | None, *, root: Path | None = None) -> 
         log.info("")
         log.info("  the full pipeline path over %s, for comparison:", region_id)
         for strength, lab in shipped(city, region_id, root=root).items():
-            found = Spread.of(lab)
+            found = Spread.of(rendered(lab, anchor))
             _row(strength, found, f"  ({found.count} meshes)")
     return 0
 
@@ -283,12 +325,23 @@ def main(argv: list[str] | None = None) -> int:
         metavar="REGION",
         help="also walk the region's real meshes through the whole pipeline path",
     )
+    parser.add_argument(
+        "--rig",
+        type=Path,
+        default=DEFAULT_RIG,
+        help="lighting rig scene to read exposure_anchor from",
+    )
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     city = load_config()
     region = arguments.shipped or next(iter(city.regions), None)
-    return report(city, None if arguments.shipped is None else region, root=arguments.sources_root)
+    return report(
+        city,
+        None if arguments.shipped is None else region,
+        root=arguments.sources_root,
+        rig=arguments.rig,
+    )
 
 
 if __name__ == "__main__":

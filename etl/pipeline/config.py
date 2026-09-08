@@ -33,15 +33,12 @@ from pipeline.crs import (
     project_bounds,
 )
 
-SUPPORTED_SCHEMA = 4
-# How far a shipped colour may sit from `reflectance x exposure_anchor`, in
+SUPPORTED_SCHEMA = 5
+# How far a shipped colour may sit from the `reflectance` it declares, in
 # percentage points of luminance. One 8-bit step at the lightest end of this
 # palette is worth ~0.4, so this is a round-trip through `#rrggbb` and no more —
-# see `_check_exposure` for why it is deliberately not slack.
+# see `_check_reflectance` for why it is deliberately not slack.
 EXPOSURE_TOLERANCE_PCT = 0.5
-# Ceiling on `exposure_anchor`. See `_exposure_anchor` — a bound rather than a
-# taste limit, and deliberately above 1.0.
-EXPOSURE_ANCHOR_MAX = 2.0
 # How far a set of draw weights may sit from summing to 1.0. Float addition of
 # authored decimals, and nothing else — see `WeightedDraw.build` for why they are
 # refused rather than normalised.
@@ -189,7 +186,7 @@ class Material:
     from scratch.
 
     ⚠️ **Every colour the city ships is declared here and nowhere else.** That is
-    what makes `_check_exposure` total — see its docstring, and
+    what makes `_check_reflectance` total — see its docstring, and
     `_check_every_material_is_used` for the other direction.
     """
 
@@ -197,14 +194,29 @@ class Material:
     # raised deep in a consumer can name it without threading the key along.
     name: str
     colour: tuple[int, int, int]
-    # Real-world diffuse albedo, as a percentage. See `_check_exposure` for what
-    # it is checked against and why it is required.
+    # Real-world diffuse albedo, as a percentage. See `_check_reflectance` for
+    # what it is checked against and why it is required.
     reflectance: float
     # Where that number comes from, in free text. Required, and deliberately not
     # validated: the point is that somebody had to type an answer, including
     # "back-derived, not cited" where that is the truth. An unsourced albedo is
     # how the palette drifted before `Q33`.
     source: str
+    # The published range `source` names, as `(low, high)` percentages.
+    #
+    # 🔴 **Required, and required because of `P5-28c`.** While the anchor lived
+    # in this file the colour was `reflectance x exposure_anchor` and the check
+    # had two independent things to compare. Un-baked, the colour *is* the
+    # reflectance, so `luminance(colour) == reflectance` is true by construction
+    # and checking it alone is `Q72`'s tautology: a rule that reads as enforced
+    # and cannot fail. This is the third thing. It is the numeric half of
+    # `source`, which was already required and is prose — so nothing new had to
+    # be *decided* for any of the fifteen entries, only transcribed.
+    #
+    # ⚠️ **Not validated against `source`'s text**, deliberately: parsing a range
+    # out of free prose would make the sentence the schema and the transcription
+    # unreviewable. What is checked is that `reflectance` lies inside it.
+    bounds: tuple[float, float]
 
 
 class _MaterialTable:
@@ -1565,7 +1577,7 @@ class Lamps(LayerSpec):
     call have to ride the vertex — and **neither ground holds here**. Galvanised
     steel is a real surface with a published albedo, and a lamp post is one
     colour. So `column_material` names an entry in the city's own `materials:`
-    table and `_check_exposure` grades it, which is `Tramway.rail_material`'s
+    table and `_check_reflectance` grades it, which is `Tramway.rail_material`'s
     shape. ⚠️ The value still rides `COLOR_0`, because the layer shares
     `signs.gdshader` and a mesh not supplying it would render white.
 
@@ -1609,14 +1621,18 @@ class Lamps(LayerSpec):
     evidence is an A/B render at one camera.
 
     ⚠️ **There is no lit lantern, and its absence is the decision to resist
-    changing.** `Q38` bakes `exposure_anchor` into `COLOR_0` at build time, `Q26`
-    has not chosen a look, there is one lighting rig, and `ART_DESIGN.md` ends
-    its Lighting section with *"Resist adding lights."* A lantern that glows in
+    changing.** `Q26` has not chosen a look, and `ART_DESIGN.md` ends its
+    Lighting section with *"Resist adding lights."* A lantern that glows in
     daylight is wrong in every frame this project currently renders, and 897
     `OmniLight3D`s is not a shippable answer on a Mobile tier that ships no
-    shadow maps at all. `P3-26` draws unlit geometry and buys night **nothing** —
-    which is the honest position, because night's blockers are `Q38` and `Q26`
-    and neither is geometry.
+    shadow maps at all.
+
+    ✅ **`Q38` was the other blocker and it is gone** (`P5-28c`): the exposure is
+    a global shader parameter the lighting rig sets, so an hour is a number in a
+    scene rather than a full region rebuild. `P3-26` still draws unlit geometry
+    and still buys night **nothing** of its own — what changed is that the
+    precondition is met and the remaining blocker is `Q26` alone, which is a
+    look nobody has chosen and still not geometry.
     """
 
     # ✅ **A selection from a PUBLISHED domain**, unlike `Railings.classes` and
@@ -1627,7 +1643,7 @@ class Lamps(LayerSpec):
     kinds: tuple[str, ...]
     # 🔴 **A material out of the city's own table, NOT an authored livery** — see
     # the class docstring for why `Signs.colours`' exemption does not transfer.
-    # `_check_exposure` grades this entry like any other.
+    # `_check_reflectance` grades this entry like any other.
     column_material: Material
 
     # ---- the column, all authored ----
@@ -2195,7 +2211,7 @@ class SourcePaint:
 
     The four surfaces are **names into the city's `materials:` table**, not
     colours: every colour the city ships is declared in that table and nowhere
-    else, which is what keeps `_check_exposure` total.
+    else, which is what keeps `_check_reflectance` total.
 
     Ribbon strips are dark horizontal glazing bands at constant absolute
     elevations above the model base: `first_m + k * pitch_m` for `count`
@@ -2573,7 +2589,7 @@ class RoadSurface:
     # escaped the one exposure change every other colour took (`235aa4f`). They
     # now reference the same `materials:` table as everything else, so a section
     # can no longer be re-exposed without its neighbour — there is only one place
-    # left to change. See `_check_exposure`.
+    # left to change. See `_check_reflectance`.
     surface_material: Material
     kerb_material: Material
 
@@ -2978,19 +2994,15 @@ class Config:
     tiled_sources: dict[str, TiledSource]
     # Datasets served a page at a time and assembled at fetch (`Q94`).
     paged_sources: dict[str, PagedSource]
-    # Every colour the city ships, by name. ⚠️ **Top-level, a sibling of
-    # `exposure_anchor` rather than a member of `buildings:`** — `roads:` draws
-    # from it too, and burying it under one of its two consumers would make the
-    # other reach across for its asphalt. That asymmetry is not hypothetical: it
-    # is the shape that let `235aa4f` re-expose `buildings:` and miss `roads:`.
+    # Every colour the city ships, by name. ⚠️ **Top-level rather than a member
+    # of `buildings:`** — `roads:` draws from it too, and burying it under one of
+    # its two consumers would make the other reach across for its asphalt. That
+    # asymmetry is not hypothetical: it is the shape that let `235aa4f` re-expose
+    # `buildings:` and miss `roads:`.
     materials: dict[str, Material]
     buildings: BuildingStyle
     roads: RoadNetwork
     fares: Fares
-    # The one number that converts a material's real albedo into the albedo this
-    # city ships. Art direction — the sun, the latitude, the mood — where the
-    # reflectances it multiplies are physical and portable to the next city.
-    exposure_anchor: float
     # The surveyed building-block layer, when the city has one (`Q47`). Optional
     # with a default — a city without a topographic source builds as before.
     podiums: PodiumBlocks | None = None
@@ -3237,9 +3249,6 @@ def load_config(path: Path | None = None) -> Config:
         ),
         roads=_road_network(_require(document, "roads", path), f"{path}:roads", table),
         fares=_fares(_require(document, "fares", path), f"{path}:fares"),
-        exposure_anchor=_exposure_anchor(
-            _require(document, "exposure_anchor", path), f"{path}:exposure_anchor"
-        ),
         podiums=(
             _podium_blocks(document["podiums"], f"{path}:podiums")
             if document.get("podiums") is not None
@@ -3267,7 +3276,7 @@ def load_config(path: Path | None = None) -> Config:
     # order exposure-checks a colour that ships nowhere and leads with whichever
     # complaint that raises, which is the less actionable of the two.
     _check_every_material_is_used(table, path)
-    _check_exposure(city, path)
+    _check_reflectance(city, path)
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
     _check_touchdown_levels_are_mapped(city, path)
@@ -3365,8 +3374,9 @@ def _check_carve_regions_are_declared(city: Config, path: Path) -> None:
             )
 
 
-def _check_exposure(city: Config, path: Path) -> None:
-    """Every authored colour is `material reflectance x exposure_anchor` (`Q33`).
+def _check_reflectance(city: Config, path: Path) -> None:
+    """Every authored colour IS its declared `reflectance`, and that reflectance
+    sits inside the range its `source` names (`Q33`, `P5-28c`).
 
     The rule exists because the palette had no external referent. Colours were
     placed by eye against each other, so the only question a reviewer could ask
@@ -3375,6 +3385,20 @@ def _check_exposure(city: Config, path: Path) -> None:
     the material each colour claims to be makes it checkable against published
     albedos instead. What that caught is in `hong_kong.yaml`'s header and
     `docs/ART_DESIGN.md`; it is not repeated here.
+
+    🔴 **Two tests, and only the second one can fail on its own.** Until
+    `P5-28c` the colour was `reflectance x exposure_anchor`, and comparing the
+    two was a real comparison because the anchor stood between them. The anchor
+    lives in the lighting rig now (`Q38`), so a shipped colour *is* its
+    reflectance and `luminance(colour) == reflectance` is a round trip through
+    `#rrggbb` and nothing else — true by construction, and alone it would be
+    `Q72`'s tautology: a rule that reads as enforced and has become unfailable.
+    `bounds` is what keeps this a check. It is the numeric half of `source`,
+    which every entry already had to state in prose.
+
+    ⚠️ **The round trip is still worth running.** It is what refuses a colour
+    edited without its reflectance — the ordinary way this table goes wrong, and
+    the one an eye cannot catch at 0.4 of a percentage point.
 
     ⚠️ **The cross-section property has moved, and this loop is now the wrong
     place to look for it.** The rule was written to be whole-config because the
@@ -3395,26 +3419,32 @@ def _check_exposure(city: Config, path: Path) -> None:
     so or be corrected.
     """
     for name, material in city.materials.items():
-        check_material_exposure(material, city.exposure_anchor, f"{path}:materials.{name}")
+        check_material_reflectance(material, f"{path}:materials.{name}")
 
 
-def check_material_exposure(material: Material, anchor: float, where: str) -> None:
+def check_material_reflectance(material: Material, where: str) -> None:
     """One colour against the palette rule — the shared body of
-    `_check_exposure` and `tools/make_landmark.py`'s `check_palette`.
+    `_check_reflectance` and `tools/make_landmark.py`'s `check_palette`.
 
     Shared so the materials table and the landmark palette cannot drift onto
     different definitions of `Q33`: the generator's colours never pass through
     this loader, but they make the same claim and answer to the same tolerance.
     """
-    expected = material.reflectance * anchor
+    low, high = material.bounds
+    if not low <= material.reflectance <= high:
+        raise ValueError(
+            f"{where} declares reflectance {material.reflectance}%, outside the "
+            f"{low}-{high}% its own source names ({material.source!r}). "
+            "Correct the colour, or cite a source that covers it — do NOT widen "
+            "the bounds to admit the number they were written to grade."
+        )
     actual = reflectance(material.colour)
-    if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
+    if abs(actual - material.reflectance) > EXPOSURE_TOLERANCE_PCT:
         red, green, blue = material.colour
         raise ValueError(
             f"{where} is #{red:02x}{green:02x}{blue:02x}, whose "
             f"luminance is {actual:.2f}% — but it declares reflectance "
-            f"{material.reflectance}% at exposure_anchor {anchor}, "
-            f"which is {expected:.2f}%. "
+            f"{material.reflectance}%. "
             "Change the colour, or change the material it claims to be."
         )
 
@@ -3425,7 +3455,7 @@ def _check_every_material_is_used(table: _MaterialTable, path: Path) -> None:
     The reverse direction of the join, and it inherits its argument from the
     `class_reflectance` stray-key check this replaces: a table entry that colours
     nothing parses, loads, and is silently inert — the one way this table can be
-    wrong without saying so. Worse here than there, because `_check_exposure`
+    wrong without saying so. Worse here than there, because `_check_reflectance`
     reads the whole table: an unused entry is a colour being *validated* as
     though it ships, which is how a palette acquires members it no longer has.
 
@@ -3680,6 +3710,9 @@ def _materials(body: dict[str, Any], where: str) -> dict[str, Material]:
                 _require(entry, "reflectance", f"{where}.{name}"), f"{where}.{name}.reflectance"
             ),
             source=str(_require(entry, "source", f"{where}.{name}")),
+            bounds=_albedo_bounds(
+                _require(entry, "bounds", f"{where}.{name}"), f"{where}.{name}.bounds"
+            ),
         )
         for name, entry in body.items()
     }
@@ -4033,23 +4066,31 @@ def _jitter(value: Any, field: str) -> float:
     return number
 
 
-def _exposure_anchor(value: Any, field: str) -> float:
-    """The city's exposure scale, in `(0, EXPOSURE_ANCHOR_MAX]`.
+def _albedo_bounds(value: Any, field: str) -> tuple[float, float]:
+    """The published albedo range a `source` names, as `[low, high]` percentages.
 
-    Its own validator rather than `_scale`, which admits `0.0`. Zero is the trap
-    worth refusing by name: it makes every shipped colour black and then
-    satisfies `_check_exposure` for *any* declared reflectance, turning the rule
-    into a no-op that still reads as enforced.
+    Both ends go through `_reflectance`, so the pair inherits its `(0, 100]` and
+    its refusal of `.nan`/`.inf` rather than restating them. What is added here
+    is order: `low < high` strictly, because a zero-width range is a reflectance
+    written twice and would make `_check_reflectance`'s second test an equality
+    no 8-bit colour can satisfy.
 
-    The ceiling is above 1.0 on purpose. A city brighter than its own materials
-    is a coherent direction — an over-exposed, blown-out look is a choice, not an
-    error — and the bound is here only to keep the test two-sided against `.nan`
-    and `.inf`, per `_scale`'s reasoning.
+    🔴 **There is deliberately NO ceiling on the width, and that is not an
+    oversight to close.** `[30, 60]` is wide — `_check_reflectance` admits
+    ±15 pp there where the round trip admits ±0.5 — and it is wide because
+    *painted render really is 30-60%*. The number transcribes a published range;
+    a width cap would refuse a true citation on the grounds that it is
+    inconvenient, which is `Q54`'s invented-data rule pointing the other way. The
+    defence against a vacuous `[1, 100]` is the same one `source` has always
+    had: somebody has to write down where it came from, and a reviewer reads it.
     """
-    number = _number(value, field)
-    if not 0.0 < number <= EXPOSURE_ANCHOR_MAX:
-        raise ValueError(f"{field} must be in (0, {EXPOSURE_ANCHOR_MAX}], got {number}")
-    return number
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError(f"{field} must be a two-element [low, high], got {value!r}")
+    low = _reflectance(value[0], f"{field}[0]")
+    high = _reflectance(value[1], f"{field}[1]")
+    if not low < high:
+        raise ValueError(f"{field} must have low < high, got [{low}, {high}]")
+    return (low, high)
 
 
 def _reflectance(value: Any, field: str) -> float:
@@ -4057,7 +4098,7 @@ def _reflectance(value: Any, field: str) -> float:
 
     Zero is refused rather than clamped: a surface reflecting nothing is a
     surface no material has, and it would pair with a black colour that passes
-    `_check_exposure` while saying nothing about what it depicts. 100 is the
+    `_check_reflectance` while saying nothing about what it depicts. 100 is the
     perfect diffuser, so above it is a measurement error, not a bright material.
     """
     number = _number(value, field)
@@ -5614,7 +5655,7 @@ def _lamps(body: Any, where: str, table: _MaterialTable) -> Lamps | None:
     return Lamps(
         **_spec_header(body, where, _LAMP_ROLES),
         kinds=kinds,
-        # 🔴 Through the materials table, so `_check_exposure` grades it.
+        # 🔴 Through the materials table, so `_check_reflectance` grades it.
         column_material=table.get(
             str(_require(body, "column_material", where)), f"{where}:column_material"
         ),

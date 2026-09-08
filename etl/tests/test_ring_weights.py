@@ -22,9 +22,27 @@ from pipeline.config import Material, WeightedDraw
 # Three materials spanning the shipped facade palette's range, and the shipped
 # neutral ring's weights over them. Real numbers so the assertions below are
 # about a solve that has to work on this city, not on a convenient one.
-DARK = Material(name="panel_grey", colour=(142, 147, 147), reflectance=55.2, source="test")
-MID = Material(name="render_cool", colour=(148, 153, 149), reflectance=60.1, source="test")
-LIGHT = Material(name="tile_neutral", colour=(154, 154, 144), reflectance=61.5, source="test")
+DARK = Material(
+    name="panel_grey",
+    colour=(142, 147, 147),
+    reflectance=55.2,
+    source="test",
+    bounds=(54.0, 56.0),
+)
+MID = Material(
+    name="render_cool",
+    colour=(148, 153, 149),
+    reflectance=60.1,
+    source="test",
+    bounds=(59.0, 61.0),
+)
+LIGHT = Material(
+    name="tile_neutral",
+    colour=(154, 154, 144),
+    reflectance=61.5,
+    source="test",
+    bounds=(60.0, 62.0),
+)
 REFLECTANCE = {material.name: material.reflectance for material in (DARK, MID, LIGHT)}
 SHIPPED = {DARK.name: 0.50, MID.name: 0.30, LIGHT.name: 0.20}
 

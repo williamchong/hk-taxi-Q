@@ -181,7 +181,18 @@ const NOT_MEASURED: float = -1.0
 ## per tier file, because the occluder is a per-tier decision and a far tier
 ## may deliberately ship none. A v29 reader taking the tile-wide bool would ask
 ## every tier for an occluder the build left out of the far one.
-const SCHEMA_VERSION: int = 30
+##
+## 31 since `P5-28c` (`Q38`): `COLOR_0` is a material's REFLECTANCE and no longer
+## has `exposure_anchor` multiplied into it. The exposure is a global shader
+## parameter set by `scripts/world/lighting_rig.gd`, so a time of day is a number
+## in a scene instead of a full region rebuild. 🔴 **The one bump here that moves
+## no bytes in any mesh's position, normal or index stream** — only `COLOR_0` —
+## and it is a bump anyway, because a v30 reader is *wrong* rather than stale: it
+## applies no exposure and draws the city 0.520 too bright, which is `Q27`'s pale
+## city with nothing in the frame to say so. ⚠️ **Both halves of `Q33`'s product
+## move in this one commit** — the ETL publishes reflectance-level colour, the rig
+## multiplies — and a build with one half is wrong in a way no counter can see.
+const SCHEMA_VERSION: int = 31
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

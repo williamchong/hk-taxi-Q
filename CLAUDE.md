@@ -125,6 +125,24 @@ Common emoji for this project:
 - Façade-survey or `facade_hue.strength` changes: also `tools/facade_chroma.py`, and paste its table
   into `docs/ART_DESIGN.md`. `Q30`'s numbers are the argument that the shipped palette is not the
   authored one, and they are only an argument while they describe the survey that ships.
+- 🔴 **`materials:` colours, a material's `bounds:`, or the rigs' `exposure_anchor`: the ETL half and
+  the game half move in ONE commit and `schema_version` goes with them** (`Q38`, `P5-28c`). Since the
+  un-bake a shipped colour **is** a material's reflectance and the rig multiplies — so a bundle
+  without the multiply, or a rig without the bundle, renders a city 1/0.520 too bright or too dark
+  with nothing in a frame to say which half is missing. ⚠️ **`_check_reflectance`'s round trip is a
+  tautology on its own**: with the anchor gone `luminance(colour)` *is* `reflectance` by
+  construction, and `bounds:` — the numeric half of the `source:` each entry already wrote in prose —
+  is the only part that can fail. **Correct a colour outside its bounds; never widen the bounds to
+  admit it**, which is the one direction the rule does not work in. ⚠️ **The exposure has exactly one
+  home, the rig scene**, read by `tools/lighting_rig.py` and never restated: `facade_chroma.py`
+  applies it to every figure — chroma does **not** survive a linear-light scale: `C*` is multiplied
+  by `anchor ** (1/3)`, **0.804** at 0.520, so an unexposed table reads **1.24x MORE** saturated than
+  the screen — and `frame_stats.py` applies it to `--albedo-l`, where it moves **`gain` only** — `linear ratio` and `additive share` are quotients of
+  linear luminances and a uniform scale cancels exactly in them. ⚠️ **Do not put the number back into
+  `etl/`**: the ETL publishes reflectance and knows nothing about the hour, and that is the coupling
+  the un-bake removed. Owed: the per-material round trip, `facade_chroma.py --shipped` before and
+  after, and the `Q27`/`Q31` cameras — ⚠️ **shooting the skyline at `t=2.0` and not `t=0.8`**, where
+  the streamer has not settled and two runs disagree. Numbers in `Q38`.
 - **Filler-guard changes — `is_filler`, `filler_colours`, `MODAL_SHARE`, `MODAL_STRIDE`: also
   `tools/facade_survey.py --all --filler-report`, and paste its table.** It is the only thing that
   reproduces `Q55`, whose every number came from a scratch script — the same debt `Q37` was opened

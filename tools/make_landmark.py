@@ -49,7 +49,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pipeline.buildings import COLLISION_SUFFIX  # noqa: E402
-from pipeline.config import Material, check_material_exposure, load_config  # noqa: E402
+from pipeline.config import Material, check_material_reflectance  # noqa: E402
 from pipeline.gltf import MeshData, write_glb  # noqa: E402
 
 # The one name the engine dispatches materials on — owned by the pipeline
@@ -69,53 +69,75 @@ CENTRAL_PLAZA_FILE = "central_plaza.glb"
 # `hong_kong.yaml:materials` in miniature, on the config's own `Material`
 # dataclass — these colours cannot live in that table, because the table
 # colours what the ETL draws and a committed `.glb` never passes through the
-# ETL. The same rule still binds (`Q33`): every colour is `reflectance x
-# exposure_anchor`, held by `check_palette` on the same shared check the
-# loader applies to the YAML. The anchor is read from the city config at
-# generate time (`Q38`) — change the anchor and this generator stops until
-# the palette is re-derived, loudly. Colours are sRGB, what `COLOR_0`
-# carries (`Q27`: consumers linearise).
+# ETL. The same rule still binds (`Q33`): every colour **is** a real material's
+# diffuse albedo and lies inside the range its own source names, held by
+# `check_palette` on the same shared check the loader applies to the YAML.
+#
+# 🔴 **Un-baked by `P5-28c`, and that is why every value here moved.** Until then
+# each colour was `reflectance x exposure_anchor` and this generator read the
+# anchor out of the city config at build time. The exposure is a Godot global now
+# (`Q38`), so these are reflectance-level colours and the rig scales them —
+# `aluminium_roof` ships `#c1c4c7` and reaches the screen at the `#909294` it used
+# to carry. ⚠️ **So the committed `.glb` and the shipped `project.godot` are one
+# artefact in two files**, which is what `city.json`'s `schema_version` 5 says.
+# Colours are sRGB, what `COLOR_0` carries (`Q27`: consumers linearise).
 ALUMINIUM = Material(
     "aluminium_roof",
-    (144, 146, 148),
+    (193, 196, 199),
     55.0,
     "mill-finish standing-seam aluminium, 50-60%",
+    (50.0, 60.0),
 )
 # HKCEC's `panel_pale` and `roof_grey` moved to `hong_kong.yaml:materials`
 # with its repaint — a colour a pipeline stage ships belongs where
-# `_check_exposure` can see it. These two stay: Central Plaza's podium.
+# `_check_reflectance` can see it. These two stay: Central Plaza's podium.
 GLASS = Material(
     "curtain_glass",
-    (61, 72, 83),
+    (84, 99, 113),
     12.0,
     "curtain-wall glass, 8-15% diffuse — the trap Q34 records: never lighter",
+    (8.0, 15.0),
 )
 CONCRETE = Material(
     "concrete_pale",
-    (114, 110, 102),
+    (154, 149, 138),
     30.0,
     "clean concrete and granite podium cladding, 20-35%",
+    (20.0, 35.0),
 )
 GOLD = Material(
     "gold_glass",
-    (87, 75, 54),
+    (119, 103, 75),
     14.0,
     "gold reflective coated glass, 10-20% diffuse",
+    (10.0, 20.0),
 )
+# ⚠️ **The one entry whose `source` named no range**, so `P5-28c` had to widen the
+# sentence rather than transcribe it. Stated as 15-25%: a mechanical-floor band on
+# the same coated-glass family, lighter than the 10-20% glass beside it. That is
+# an argument rather than a citation, which is exactly what `bounds` is for —
+# a soft number stated is arguable and a soft number implied is not.
 GOLD_BAND = Material(
     "gold_band",
-    (101, 89, 70),
+    (137, 121, 96),
     20.0,
-    "the lighter mechanical-floor band on the same glass family",
+    "the lighter mechanical-floor band on the same glass family, 15-25%",
+    (15.0, 25.0),
 )
 
 PALETTE = (ALUMINIUM, GLASS, CONCRETE, GOLD, GOLD_BAND)
 
 
-def check_palette(anchor: float) -> None:
-    """`_check_exposure` for the colours the ETL never sees — same shared body."""
+def check_palette() -> None:
+    """`_check_reflectance` for the colours the ETL never sees — same shared body.
+
+    ⚠️ **Takes no anchor since `P5-28c`.** It read one out of `load_config()`
+    until the exposure left the ETL (`Q38`); the check is now colour against its
+    own declared reflectance and reflectance against its own bounds, neither of
+    which the city config knows anything about.
+    """
     for surface in PALETTE:
-        check_material_exposure(surface, anchor, surface.name)
+        check_material_reflectance(surface, surface.name)
 
 
 # How far the plinth continues below y = 0, absorbing terrain disagreement,
@@ -256,8 +278,8 @@ def build_landmarks() -> list[tuple[str, MeshData]]:
 
 
 def write_landmarks(out_dir: Path) -> list[tuple[Path, int, MeshData]]:
-    """Check the palette against the live anchor, then write one `.glb` each."""
-    check_palette(load_config().exposure_anchor)
+    """Check the palette, then write one `.glb` each."""
+    check_palette()
     written = []
     for filename, mesh in build_landmarks():
         path = out_dir / filename

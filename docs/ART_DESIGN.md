@@ -49,35 +49,51 @@ check**: `mesh_contract.gd` admits an image only where a call site names a pixel
 
 ### The rule (`Q33`)
 
-**Every authored colour is `material reflectance × exposure_anchor`, and `config.py` refuses to load
-one that is not.** A `reflectance:` is *evidence* — a published diffuse albedo for asphalt or
-concrete or soil, portable unchanged, arguable against a source rather than against taste. The
-anchor is *art direction* — one number carrying the sun, the latitude and the mood, and the only
-thing that moves when the city wants a different time of day. It is the same
-evidence/direction split `facade_hue.strength` already makes.
+**Every authored colour IS a real material's diffuse albedo, it declares the published range that
+albedo comes from, and `config.py` refuses to load one that fails either test.** A `reflectance:` is
+*evidence* — a published diffuse albedo for asphalt or concrete or soil, portable unchanged, arguable
+against a source rather than against taste. The *exposure* is art direction — one number carrying the
+sun, the latitude and the mood, and the only thing that moves when the city wants a different time of
+day. It is the same evidence/direction split `facade_hue.strength` already makes.
 
-Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it is the linear scale
-`235aa4f` applied to the bands, graded at frame `L*` 73.0 → 62.7, gain 0.85, responding share 66.4%.
+🔴 **The exposure left this file's subject at `P5-28c` and lives in the game** (`Q38`). It was
+`exposure_anchor: 0.520` in `hong_kong.yaml`, applied at load, so every colour below shipped
+pre-multiplied and a change of hour was a full region rebuild. It is a Godot global shader parameter
+now, set by `scripts/world/lighting_rig.gd` from an `@export` on `clean_daylight.tscn` and
+`golden_hour.tscn` — **0.520 in both**, still the measured number: the linear scale `235aa4f` applied
+to the bands, graded at frame `L*` 73.0 → 62.7, gain 0.85, responding share 66.4%.
 
-| material | reflectance | source | shipped |
-|---|---|---|---|
-| `render_warm` | 48.7% | ⚠️ **back-derived, not cited** | `#968872` |
-| `render_pale` | 58.4% | ⚠️ **back-derived, not cited** | `#9d9586` |
-| `tile_neutral` | 61.5% | ⚠️ **back-derived, not cited** | `#9a9a90` |
-| `render_cool` | 59.9% | ⚠️ **back-derived, not cited** | `#939995` |
-| `panel_grey` | 55.2% | ⚠️ **back-derived, not cited** | `#8e9393` |
-| `concrete_kerb` | 25.0% | weathered concrete, 20–30% | `#68655c` |
-| `concrete_sooty` | 22.0% | weathered + sooty concrete | `#615f5a` |
-| `concrete_paving` | 20.0% | weathered concrete, grubby end of 20–30% | `#5f5a51` |
-| `asphalt_aged` | 10.0% | aged urban asphalt, 7–12% | `#42403d` |
+⚠️ **So `authored` and `rendered` are two different colours below, and they were one column until
+`P5-28c`.** `hong_kong.yaml` carries the left one; the screen shows the right one, which is what the
+`shipped` column used to hold. Do not read either as the other.
 
-⚠️ **The five facade materials are the soft entries and the whole rule leans on them.** They are
-unchanged by the rule, so their reflectance is simply what the shipped colour claims once the anchor
-is divided out — the rule is calibrated *on* them and therefore cannot also check them. They read
-49–62%, at the top of what painted render and ceramic tile do. If that is wrong the anchor is wrong
-with it and every other colour moves. Recorded as a number precisely so it is arguable.
+| material | reflectance | bounds | source | authored | rendered |
+|---|---|---|---|---|---|
+| `render_warm` | 48.7% | 30–60% | ⚠️ **back-derived, not cited** | `#c9b79a` | `#968872` |
+| `render_pale` | 58.4% | 30–60% | ⚠️ **back-derived, not cited** | `#d3c8b4` | `#9d9586` |
+| `tile_neutral` | 61.5% | 45–65% | ⚠️ **back-derived, not cited** | `#cfcfc1` | `#9a9a90` |
+| `render_cool` | 59.9% | 30–60% | ⚠️ **back-derived, not cited** | `#c5cdc8` | `#939995` |
+| `panel_grey` | 55.2% | 45–60% | ⚠️ **back-derived, not cited** | `#bfc5c5` | `#8e9393` |
+| `concrete_kerb` | 25.0% | 20–30% | weathered concrete, 20–30% | `#8d897d` | `#68655c` |
+| `concrete_sooty` | 22.0% | 20–30% | weathered + sooty concrete | `#84817b` | `#615f5a` |
+| `concrete_paving` | 20.0% | 20–30% | weathered concrete, grubby end of 20–30% | `#817b6f` | `#5f5a51` |
+| `asphalt_aged` | 10.0% | 7–12% | aged urban asphalt, 7–12% | `#5b5854` | `#42403d` |
+
+⚠️ **The five facade materials are the soft entries and the whole rule leans on them.** Their
+reflectance is simply what the shipped colour claims, so the first test — colour against declared
+reflectance — is a round trip through `#rrggbb` and cannot grade them. They read 49–62%, at the top
+of what painted render and ceramic tile do. If that is wrong every other colour moves. Recorded as a
+number precisely so it is arguable.
+
+🔴 **`bounds:` is what grades them now, and it is why the rule survived the un-bake.** While the
+exposure sat in the config, colour and reflectance were separated by it and comparing them was a real
+comparison. Un-baked they are the same number, so that test became `Q72`'s tautology on its own.
+`bounds` is the numeric half of the `source` each entry already had to write in prose — nothing had
+to be *decided* for any of the fifteen, only transcribed — and it is the one part that can fail.
+⚠️ **Correct a colour that falls outside its bounds; never widen the bounds to admit it.**
 ⚠️ **`render_cool` read 60.1% until `P5-28a` and was the one entry outside the range its own source
-names.** It was moved one 8-bit code, `#949995` → `#939995`, to 59.9% — the colour was corrected and
+names.** It was moved one 8-bit code — `#949995` → `#939995` rendered, `#c7cdc8` → `#c5cdc8`
+authored — to 59.9%: the colour was corrected and
 the range was not widened, which is the direction this rule only works in.
 
 ⚠️ **Five names for what is really one material family** at five lightnesses. That is a real claim,
@@ -129,13 +145,22 @@ authored in `BuildingStyle` — which is exactly how they escaped `235aa4f`, not
 because `roads:` was not in the diff that changed `buildings:`. A per-section check would have passed
 that commit.
 
-There is now one section. `_check_exposure` loops over `materials:` and is total **because the table
-is**, not because the loop is careful — which means it depends on something it cannot itself see:
-that no colour is authored anywhere else. Two checks hold that, and neither is optional.
+There is now one section. `_check_reflectance` loops over `materials:` and is total **because the
+table is**, not because the loop is careful — which means it depends on something it cannot itself
+see: that no colour is authored anywhere else. Two checks hold that, and neither is optional.
 `_check_every_material_is_used` holds the reverse direction at load;
 `test_no_colour_escapes_the_materials_table` walks the shipped document and fails the day a
 `#rrggbb`-shaped value appears outside `materials:`. That test is what now carries `235aa4f`'s
 lesson.
+
+🔴 **And since `P5-28c` the loop checks a second thing, because its first thing became a
+tautology.** With `exposure_anchor` gone to the lighting rig (`Q38`), a shipped colour *is* its
+declared reflectance, so comparing the two is a round trip through `#rrggbb` and can only catch a
+colour edited without its number — worth keeping, and unfailable on its own. Every entry therefore
+declares **`bounds: [lo, hi]`**, the numeric half of the `source:` it already had to write in prose,
+and the check is that `reflectance` lies inside it. ⚠️ **Correct a colour that falls outside its
+bounds; never widen the bounds to admit it** — `P5-28a` is the worked example, and it is the one
+direction this rule does not work in.
 
 ### Anchor colours
 
@@ -155,35 +180,56 @@ Hong Kong-specific, not generic-city:
 
 **Time of day: golden hour by default.** Low warm sun flatters flat shading, gives long readable
 shadows, and separates building faces without any texture work. Night (neon-forward) is a strong later
-variant, and it is **blocked on `Q38`** — the exposure is baked into `COLOR_0` at build time, so a
-time-of-day change is a full tile rebuild — and `Q82` refused the lit lantern (`lit_window_share`
-ships 0.0; nothing in the city is lit). The emissive channel stays a reserved uniform, nothing more.
+variant. ✅ **`Q38` no longer blocks it**: `P5-28c` un-baked the exposure out of `COLOR_0` and into
+`exposure_anchor`, a global shader parameter `scripts/world/lighting_rig.gd` sets from an `@export` on
+each rig scene, so a time of day is one number in one scene. What still blocks it is `Q26` — the look
+is unchosen — and `Q82` refused the lit lantern (`lit_window_share` ships 0.0; nothing in the city is
+lit). The emissive channel stays a reserved uniform, nothing more.
 
 🔴 **The table above is the authored palette and it is no longer the shipped one.** The five
-`height_bands` honour it — `C*` 1.92 to 13.84, which is "warm off-white, beige, pale grey-green" —
+`height_bands` honour it — `C*` 1.76 to 13.83 as rendered, which is "warm off-white, beige, pale
+grey-green" —
 but `facade_hue.strength: 2.0` multiplies each building's *measured* chroma on top, and the result
 is not muted. Measured by `tools/facade_chroma.py` over the 2,177 surveyed buildings that pass
 `vegetation_max`, against the band each would otherwise take:
 
 | `facade_hue.strength` | shipped `C*` mean | median | p90 | p99 | max | share over `C*` 20 |
 |---|---|---|---|---|---|---|
-| 1.0 (faithful) | 7.77 | 6.15 | 15.16 | 30.23 | 75.24 | **4.6%** |
-| 1.5 | 11.62 | 9.09 | 22.83 | 45.33 | 99.61 | **14.2%** |
-| **2.0 (ships)** | **15.41** | **12.29** | **30.39** | **60.27** | **104.55** | **26.5%** |
+| 1.0 (faithful) | 6.23 | 4.91 | 12.31 | 23.88 | 54.80 | **2.3%** |
+| 1.5 | 9.29 | 7.38 | 18.40 | 34.69 | 67.21 | **8.1%** |
+| **2.0 (ships)** | **12.30** | **9.85** | **24.48** | **44.20** | **80.82** | **16.7%** |
 
-⚠️ **Re-measured 2026-08-21 on `Q55`'s corrected survey**, which moved 90 of the 2,213 rows and one
+🔴 **Re-measured 2026-09-08 after `P5-28c`, and the whole table fell — the look moved and no dial
+was turned.** `with_hue` assigns `(a*, b*)` in CIELAB, and it now runs on the *reflectance-level*
+colour with the rig's 0.520 applied afterwards; a scale toward black in linear light lowers chroma
+along with lightness, so the same `strength` delivers less of it. The prior column, which is what
+`Q30` argued from, was 15.41 / 12.29 / 30.39 / 60.27 / 104.55 at **26.5%**. `L*` is unmoved — 61.5
+at every strength, both sides — and the authored bands went `C*` **1.92-13.84 → 1.76-13.83**.
+
+⚠️ **The gamut clip went the other way**: 0.6% → **2.6%** of buildings outside sRGB at `strength` 2.0,
+because the tint is now asked for at a lighter `L*` where high chroma is harder to show. That is the
+one place the un-bake costs something, and it is `P5-28d`'s to price.
+
+⚠️ **`tools/facade_chroma.py` applies the rig's exposure itself now**, reading it from
+`clean_daylight.tscn`, so these numbers still describe the *rendered* palette and are still
+comparable with the row above. In CIELAB's cubic regime a uniform luminance scale multiplies `a*`,
+`b*` and therefore `C*` by `anchor ** (1/3)` — **0.804** at 0.520 — so a tool that skipped the step
+would report a palette **1.24x more saturated** than the screen. Unexposed, the bands read
+`C*` 2.18-17.19 against the 1.76-13.83 above.
+
+⚠️ **Re-measured 2026-08-21 on `Q55`'s corrected survey** (figures below are pre-`P5-28c`), which moved 90 of the 2,213 rows and one
 building by 54.69 `L*`. The table barely moved — **26.4% → 26.5%** over `C*` 20 — and that is a
 finding rather than a formality: the placeholder panels `Q55` removed were damaging **lightness**,
 not chroma, so the argument this table makes survives its own input being corrected. Prior figures
 were 7.75 / 6.13, 11.59 / 9.08 and 15.37 / 12.25 at 26.4%.
 
-`L*` mean is 61.5 at every strength, so this is chroma alone. **One building in four** is more
-saturated than *any* colour this document authorises, and the tail is what the eye picks out — the
+`L*` mean is 61.5 at every strength, so this is chroma alone. **One building in six** is more
+saturated than *any* colour this document authorises — it was one in four before `P5-28c` — and the tail is what the eye picks out — the
 mint, teal, lilac and peach blocks in a street frame are not a rendering fault, they are the palette.
 
 ⚠️ **The knob is doing two jobs and only one of them is stated.** Its config comment calls it "the
 line to move if the city reads too grey or too candy" — but at 2.0 the distribution is *both*:
-median 12.25 is still near-neutral while p99 is 60.3. Amplifying chroma linearly widens the spread
+median 9.85 is still near-neutral while p99 is 44.2. Amplifying chroma linearly widens the spread
 far faster than it moves the middle, so the buildings that were already coloured become the loudest
 thing in the frame long before the grey majority stops being grey.
 

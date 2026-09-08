@@ -31,7 +31,21 @@ extends Node3D
 ## `materials:` colours at reflectance level and this scales them; a build where
 ## one side moved and the other did not renders at the square of the anchor, or
 ## at none of it. `city.json`'s `schema_version` is what refuses the mismatch.
-@export var exposure_anchor: float = 1.0
+##
+## 🔴 **The range is the guard `P5-28c` would otherwise have deleted.** The ETL's
+## `_exposure_anchor` validator refused `0.0` by name, because zero makes every
+## shipped colour black and then satisfies the palette rule for *any* declared
+## reflectance — a rule that reads as enforced and has become a no-op. Moving the
+## number here moved that trap here with it, so the bound comes too. ⚠️ **The
+## ceiling is above 1.0 on purpose**: a city brighter than its own materials is a
+## coherent direction, and the bound is here to be two-sided, not to limit taste.
+##
+## ⚠️ **This scales `COLOR_0` albedo and nothing else.** `city_facade_clean`'s
+## `glass_colour` and `base_colour`, the `marking_paint` and `railings` `.tres`
+## colours, `signs_text` and `vehicle_body` are all untouched by it — so "a time
+## of day is one number" is true of the vertex-colour half of the city, and the
+## window panes, the road paint and the fences would need their own answer.
+@export_range(0.001, 2.0) var exposure_anchor: float = 1.0
 
 
 func _ready() -> void:
