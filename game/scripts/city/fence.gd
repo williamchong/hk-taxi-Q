@@ -31,13 +31,17 @@ const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 
+## Which synced region's barriers; "" is `GeneratedRegions.selected()`. Set by
+## `CityRegions` before the node enters the tree (`P5-9c`).
+@export var region: String = ""
+
 
 func _ready() -> void:
 	# The manifest is the shipping route (`P1-7`): an exported build cannot
 	# enumerate `res://`, so what it does not name does not exist. The locator
 	# supplies the schema and the hint; `verify_fence.gd` asserts the two name
 	# the same file.
-	var manifest: CityManifest = CityManifest.load_manifest()
+	var manifest: CityManifest = CityManifest.load_manifest(region)
 	if manifest == null:
 		return
 	var document: Dictionary = GeneratedFence.load_fence(manifest.fence_path)

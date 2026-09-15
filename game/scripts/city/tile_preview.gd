@@ -18,13 +18,17 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## (`lod_cell_sizes_m`); a tile with fewer tiers draws its coarsest.
 @export var lod: int = 0
 
+## Which synced region to show; "" is `GeneratedRegions.selected()`. Set by
+## `CityRegions` before the node enters the tree (`P5-9c`).
+@export var region: String = ""
+
 ## Emitted once the city is built, with the bounds of everything loaded, so a
 ## camera can frame whatever region is on disk rather than hardcoding one.
 signal built(low: Vector3, high: Vector3)
 
 
 func _ready() -> void:
-	var manifest: CityManifest = CityManifest.load_manifest()
+	var manifest: CityManifest = CityManifest.load_manifest(region)
 	if manifest == null:
 		# `load_manifest` has already pushed the reason and the command to fix it.
 		return

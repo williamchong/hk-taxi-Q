@@ -58,6 +58,10 @@ extends Node3D
 ## Distance bands, hysteresis and the per-frame budgets. Assign in the scene.
 @export var profile: StreamingProfile
 
+## Which synced region this streams; "" is `GeneratedRegions.selected()`. Set by
+## `CityRegions` before the node enters the tree (`P5-9c`).
+@export var region: String = ""
+
 ## What the streaming distance is measured from. The chase camera, not the car:
 ## the camera is what has a far plane, and a look-back swings it a car length
 ## the other way. Assign in the scene.
@@ -98,7 +102,7 @@ var _announced: bool = false
 
 
 func _ready() -> void:
-	_manifest = CityManifest.load_manifest()
+	_manifest = CityManifest.load_manifest(region)
 	if _manifest == null:
 		# `load_manifest` has already pushed the reason and the command to fix it.
 		return
@@ -141,9 +145,12 @@ func _tier_wanted(unit: CityManifest.Tile, distance: float, current: int) -> int
 ## here are ordinary residents afterwards and stream out like any other. The
 ## radius is the streamer's own, so nothing loaded here is dropped by the first
 ## `_collect`.
-func hold_ground_at(point: Vector3) -> void:
+func hold_ground_at(world_point: Vector3) -> void:
 	if _manifest == null or _residents.is_empty():
 		return
+	# The manifest's boxes are in this region's frame, and the region node may
+	# stand at an offset from the frame region (`P5-9c`).
+	var point: Vector3 = to_local(world_point)
 	var radius: float = TileStreaming.residency_radius_m(profile)
 	var loaded: int = 0
 	for index: int in _units.size():
@@ -176,7 +183,9 @@ func _process(_delta: float) -> void:
 	if camera == null:
 		return
 
-	var eye: Vector3 = camera.global_position
+	# In this region's frame: the published `aabb`s are, and the region node may
+	# stand at an offset from the frame region (`P5-9c`). Identity for the frame.
+	var eye: Vector3 = to_local(camera.global_position)
 	_collect(eye)
 	_settle(eye)
 

@@ -1700,7 +1700,8 @@ every region lies inside them.
 
 | System | Responsibility | Status |
 |---|---|---|
-| `CityStreamer` | Load/unload tile meshes **and road chunks** by camera distance; owns the LOD tier | ✅ `P2-1`, `P5-6` |
+| `CityRegions` | Place `region.tscn` once per synced region at `city_offset − city_offset(frame)`, give each its tiles, and hold the road under a point in every region that has some | ✅ `P5-9c` |
+| `CityStreamer` | Load/unload tile meshes **and road chunks** by camera distance, **one per region**, taking the camera through `to_local`; owns the LOD tier | ✅ `P2-1`, `P5-6`, `P5-9c` |
 | `Landmarks` | Place the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
 | `RoadGraph` | Runtime queries over `roadgraph.json` — nearest edge, lane centre, routing | ✅ `P2-2` |
 | `RoadSpawn` | Where a car starts, resolved from a fare node through `RoadGraph`, and what it is standing in (`Q52`) | ✅ `P2-3` |
@@ -1744,6 +1745,8 @@ the second vehicle anyone built.
 | Path | Role |
 |---|---|
 | `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, the per-edge carriageway widths and clearances, the lane-width bar, the resolved document paths |
+| `scripts/city/city_regions.gd` | `CityRegions`: one `region.tscn` per region `regions.json` lists, at the offset from the frame, with a streamer or `tile_preview.gd` added as its tiles (`P5-9c`) |
+| `scripts/city/generated_regions.gd` | The one place the generated root is spelled: which regions are synced, the frame, and each one's directory; `--region=` picks one for a single-region reader (`P5-9b`) |
 | `scripts/city/city_streamer.gd` | Loads and frees tiles by distance to their published `aabb`, off the main thread, and owns the LOD tier |
 | `scripts/core/tile_streaming.gd` | The streaming **policy**, pure — distance to an `AABB` in, tier out. No `Node`, no `load()`, so the decision table is testable headlessly and a tile cannot be rejected *after* being loaded |
 | `scripts/core/plan_lattice.gd` | An even grid of plan positions over a region's bounds. Both region-sweeping verify tools take their sample points from it — counted, not float-accumulated, so the far row and column cannot be dropped |

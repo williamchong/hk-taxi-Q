@@ -17,6 +17,9 @@
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+## Preloaded rather than named as the `Cmdline` global: verify tools reach this
+## file, and a `--script` tool must not depend on the class cache.
+const CommandLine = preload("res://scripts/core/cmdline.gd")
 
 const ROOT: String = "res://assets/generated/"
 
@@ -50,7 +53,7 @@ static func frame() -> String:
 
 ## The region a reader that holds one region opens: `--region=`, else the frame.
 static func selected() -> String:
-	var asked: String = Cmdline.value(REGION_ARG)
+	var asked: String = CommandLine.value(REGION_ARG)
 	return asked if not asked.is_empty() else frame()
 
 

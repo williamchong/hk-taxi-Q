@@ -248,6 +248,10 @@ var region_id: String
 ## The `res://` directory this manifest was read from, with no trailing slash —
 ## what every relative path in it resolves against.
 var directory: String
+## The region's origin in the city-wide frame, whole metres (`Q7`). Two regions
+## are placed relative to each other by the difference and never by either value
+## alone, which is what keeps each one near its own origin in float (`Q10`).
+var city_offset: Vector3 = Vector3.ZERO
 var tile_size_m: float
 
 ## Where game `(0, 0, 0)` sits in the source CRS — the region's north-west
@@ -515,6 +519,8 @@ static func load_manifest(region: String = "") -> CityManifest:
 
 	var manifest := CityManifest.new()
 	manifest.directory = at.get_base_dir()
+	if document.get("city_offset") is Array and (document["city_offset"] as Array).size() == 3:
+		manifest.city_offset = point(document["city_offset"])
 	manifest.city_id = str(document.get("city_id", ""))
 	manifest.region_id = str(document.get("region_id", ""))
 	manifest.tile_size_m = float(document.get("tile_size_m", 0.0))

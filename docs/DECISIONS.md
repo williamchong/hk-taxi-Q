@@ -20202,6 +20202,28 @@ other way would load nothing and `verify_landmarks` is what would say so.
 ⚠️ **The sweep now owns the top level too.** A region synced before and not listed now is deleted,
 on the 120 MB terrain precedent: nothing loads it, so nothing would complain about the bytes it adds.
 
+### ✅ `P5-9c` — one node per region, and the tiles are the one child the scenes disagree on (2026-09-16)
+
+`region.tscn` holds what both scenes held flat — eight layers, `Landmarks`, `Fence` — and `CityRegions`
+places one per listed region at `city_offset(r) − city_offset(frame)`. 🔴 **The tiles are not in it**,
+because the drive streams them and the preview loads every one, and a scene cannot parameterise a
+child's script; `CityRegions` adds a `CityStreamer` when it is handed a `StreamingProfile` and
+`tile_preview.gd` when not. Everything else is untouched, which is what keeps one region
+frame-identical in both scenes.
+
+⚠️ **`hold_ground_at` asks every region, not the one whose box holds the point.** The plan said the
+latter; the boxes overlap by ~250 m of owned far halves, so "the" region is two regions along the
+line, and each streamer loads only its own chunks within its own reach — 17 and 12 at `f_045`.
+
+🔴 **The seam drive is not frame-deterministic, and one region's is.** Two streamers load the
+neighbour's chunks off-thread, so the frame a collider arrives under the wheels varies and the car's
+line varies with it (z 420 against 416 at t 9, one run in three). Only the start line is held
+synchronously. `P5-9f` compares two runs, so it needs a repeat taken — or the chunks along the route
+held — and says which.
+
+⚠️ **Alone, Wan Chai's bundle ends under the taxi at x ≈ 1705 on CAUSEWAY ROAD** — the car leaves the
+owned far half and falls. That is the join's reason for existing, seen from the seat for the first time.
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
 broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a` and `P5-9b` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**

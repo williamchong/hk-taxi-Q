@@ -51,6 +51,10 @@ signal built(low: Vector3, high: Vector3)
 ## can store; `verify_city.gd` holds both scenes' values against `ids()`.
 @export var layer: String = ""
 
+## Which synced region's copy of the layer; "" is `GeneratedRegions.selected()`.
+## Set by `CityRegions` before the node enters the tree (`P5-9c`).
+@export var region: String = ""
+
 ## The one figure worth printing beyond the plan extent: a column has a height
 ## and a painted arrow does not. The preview's own formatting, kept out of the
 ## loader's table.
@@ -62,18 +66,18 @@ const _HEIGHT: Dictionary[String, String] = {
 
 
 func _ready() -> void:
-	var at: String = GeneratedLayer.path(layer)
+	var at: String = GeneratedLayer.path(layer, region)
 	if at.is_empty():
 		push_error("layer_preview: %s names no generated layer" % name)
 		return
 	# Presence first, then load — `Q77`'s order, recorded on `is_present`.
-	if not GeneratedLayer.is_present(layer):
+	if not GeneratedLayer.is_present(layer, region):
 		if GeneratedLayer.is_optional(layer):
 			print("%s: none shipped for this region" % layer)
 		else:
 			push_warning(GeneratedLayer.missing_hint(layer))
 		return
-	var packed: PackedScene = GeneratedLayer.load_layer(layer)
+	var packed: PackedScene = GeneratedLayer.load_layer(layer, region)
 	if packed == null:
 		push_error("%s: %s exists but did not load as a scene" % [layer, at])
 		return
@@ -124,7 +128,7 @@ func _ready() -> void:
 func _place(library: Node3D) -> Dictionary:
 	var meshes: Dictionary[String, Mesh] = _meshes_by_name(library)
 	var document: Dictionary = GeneratedPlacements.load_placements(
-		GeneratedLayer.placements_path(layer), GeneratedLayer.noun(layer)
+		GeneratedLayer.placements_path(layer, region), GeneratedLayer.noun(layer)
 	)
 	if document.is_empty():
 		return {}

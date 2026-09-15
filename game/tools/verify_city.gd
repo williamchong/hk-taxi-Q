@@ -32,11 +32,16 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## dropped offset — without ever firing on rounding.
 const TOLERANCE_M: float = 0.01
 
-## The two scenes every drawn layer must have a `layer_preview` node in.
-## `roadmarks` shipped with a node in neither and `lamps` with a node in the
-## preview only, each past a green `check.sh` (`Q73`); the table in
-## `generated_layer.gd` is what makes this checkable, in both directions.
-const LAYER_SCENES: PackedStringArray = [
+## The scene every drawn layer must have a `layer_preview` node in — one since
+## `P5-9c`, because both scenes place it once per region. `roadmarks` shipped
+## with a node in neither of the old two and `lamps` with a node in the preview
+## only, each past a green `check.sh` (`Q73`); the table in `generated_layer.gd`
+## is what makes this checkable, in both directions.
+const LAYER_SCENES: PackedStringArray = ["res://scenes/region.tscn"]
+
+## The scenes that must place `LAYER_SCENES` — the layer check above is only a
+## check on what the player sees while both of them still do.
+const REGION_HOSTS: PackedStringArray = [
 	"res://scenes/city_drive.tscn", "res://scenes/dev/city_preview.tscn"
 ]
 
@@ -255,8 +260,18 @@ func _check_layer_nodes() -> PackedStringArray:
 				problems.append(
 					"%s names a layer %s that generated_layer.gd does not" % [scene, id]
 				)
+	for host: String in REGION_HOSTS:
+		var text: String = FileAccess.get_file_as_string(host)
+		for scene: String in LAYER_SCENES:
+			if not text.contains('path="%s"' % scene):
+				problems.append("%s does not place %s" % [host, scene])
 	if problems.is_empty():
-		print("  ok    %d layer nodes in each of %d scenes" % [ids.size(), LAYER_SCENES.size()])
+		print(
+			(
+				"  ok    %d layer nodes in %s, placed by each of %d scenes"
+				% [ids.size(), ", ".join(LAYER_SCENES), REGION_HOSTS.size()]
+			)
+		)
 	return problems
 
 

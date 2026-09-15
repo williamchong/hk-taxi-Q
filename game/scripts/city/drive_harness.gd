@@ -57,10 +57,11 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Fare node the drive starts at. See `RoadSpawn.DEFAULT_FARE_ID`.
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
 
-## The `CityStreamer` asked to hold the road under the start line before the
-## first tick (`P5-6`). Assign in the scene; a scene without one — the preview
-## has no harness — simply skips the request.
-@export var streamer: CityStreamer
+## The regions asked to hold the road under the start line before the first
+## tick (`P5-6`) — every resident region's streamer, since `P5-9c`. Assign in the
+## scene; a scene without one — the preview has no harness — simply skips the
+## request.
+@export var regions: CityRegions
 
 var _spawn: Transform3D
 var _floor_m: float = 0.0
@@ -87,9 +88,9 @@ func _ready() -> void:
 ## the determinism `Q27`'s A/B frames rest on. A few small synchronous reads on
 ## the boot frame keep tick 1 what it was when the road was one mesh.
 func _hold_ground() -> void:
-	if streamer == null:
+	if regions == null:
 		return
-	streamer.hold_ground_at(_spawn.origin)
+	regions.hold_ground_at(_spawn.origin)
 
 
 ## Move the car onto the resolved start line, and report where that turned out
