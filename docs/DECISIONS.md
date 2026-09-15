@@ -20241,6 +20241,27 @@ check that every foreign copy resolves to an edge of its own `(source_id, run)` 
 keeps `check.sh`'s sixteen per-region tools reading one region each, byte-identical, while a drive
 with no flag reads the merge.
 
+### 🚫 `P5-9e` — sharing the prop libraries is built, measured and refused (2026-09-16)
+
+🔴 **"Shared, not re-instanced" was argued as a draw-call claim, and the claim assumed a per-region
+`MultiMesh` is always drawn.** It is not: a `MultiMesh` is culled by its own box, and a region's
+props sit inside that region. With two regions resident and nothing shared, the throttle route
+reads the one-region draw calls exactly, because Causeway Bay's batches are out of view. Folding
+both regions' placements into one batch per mesh name makes every batch span 1.6 km, so it is
+never culled where either region is visible: **+0 to +4 draw calls and +90,000 primitives on the
+route, +3 to +11 draw calls and up to +262,000 primitives at the seam**, the route's frames
+md5-identical — the same picture at a higher price on the 300k budget `P4-5` owns.
+
+⚠️ **The second premise is false too, and it is worth keeping.** The libraries are not identical
+files — each region ships the variants it stands (Causeway Bay alone has `TS589`) — but per mesh
+name every shared mesh is identical and the lettering atlas is byte-identical. A future sharing
+design keys by name; a `cmp` of the files refuses every pair.
+
+🚫 **Reverted, and the regions keep their own libraries.** Re-propose only with a culling argument —
+per-region batches with a shared `Mesh` would keep the culling, but Godot's resource cache is by
+path, so that needs loading one region's meshes into another's batches, and it buys memory, not
+draw calls.
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
 broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a`–`P5-9d` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**
