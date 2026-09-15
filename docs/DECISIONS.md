@@ -20215,7 +20215,7 @@ frame-identical in both scenes.
 latter; the boxes overlap by ~250 m of owned far halves, so "the" region is two regions along the
 line, and each streamer loads only its own chunks within its own reach — 17 and 12 at `f_045`.
 
-🔴 **The seam drive is not frame-deterministic, and one region's is.** Two streamers load the
+🔴 **The seam drive is not frame-deterministic** — ⚠️ *corrected at `P5-9f`: one region's drive from `f_045` is not either, so this is not two streamers' doing.* Two streamers load the
 neighbour's chunks off-thread, so the frame a collider arrives under the wheels varies and the car's
 line varies with it (z 420 against 416 at t 9, one run in three). Only the start line is held
 synchronously. `P5-9f` compares two runs, so it needs a repeat taken — or the chunks along the route
@@ -20261,6 +20261,27 @@ design keys by name; a `cmp` of the files refuses every pair.
 per-region batches with a shared `Mesh` would keep the culling, but Godot's resource cache is by
 path, so that needs loading one region's meshes into another's batches, and it buys memory, not
 draw calls.
+
+### ✅ `P5-9f` — the taxi crosses the join, and the unsteered drive is the wrong test of it (2026-09-16)
+
+The drive named in advance holds the throttle and nothing else, and CAUSEWAY ROAD bends at the seam
+node: at 061° the car leaves the eastbound carriageway and enters Causeway Bay's westbound one-way,
+where the wrong-way monitor rings exactly as it should. That siren is the merged graph **working** —
+Wan Chai alone has no road there to be wrong on. The verdict is taken on the legal line instead, one
+0.22 s left steer at the node: no step (y 5.18 → 4.93 over 80 m), no barrier, no siren, CAUSEWAY
+ROAD on the plate throughout.
+
+🔴 **No pair of frames from this drive `cmp`s, in one region or two.** Positions part by 0.01 m by t 1
+and ~1 m by t 10, so the evidence is four runs and the frames looked at, not a hash. The throttle
+route from `f_004` still reproduces; what differs at `f_045` is not found.
+
+⚠️ **The seam is under budget where `P5-9` expected it over**: 73% resident at the node, and the
+pair's worst camera stays Wan Chai's own. `P4-5` inherits the 105% it already had.
+
+**Remainder of `Q116`**: the verdict on the legal line, which is the user's; the cap's foreign mouth
+drawn as a hard edge at node 224; `_read_offside` pairing owned edges only, unlooked-at beyond this
+route; `e364`'s per-edge offset, handed to `Q103`; the `f_045` non-determinism; and `P5-9e`'s refusal,
+which leaves each region its own libraries.
 
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
 broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a`–`P5-9d` built 2026-09-16; and `P5-7`'s one finding, `e364`'s

@@ -18,6 +18,7 @@
 extends SceneTree
 
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 const PROFILE_PATH: String = "res://tuning/streaming.tres"
 
@@ -80,8 +81,36 @@ func _check(manifest: CityManifest, profile: StreamingProfile) -> PackedStringAr
 
 	problems.append_array(_check_bands(profile))
 	problems.append_array(_check_hysteresis(profile))
-	problems.append_array(_check_residency(manifest, profile))
+	var units: Array[CityManifest.Tile] = manifest.streamable_units()
+	var offsets := PackedVector3Array()
+	offsets.resize(units.size())
+	problems.append_array(_check_residency("streaming", units, offsets, manifest.bounds, profile))
+	problems.append_array(_check_pair(manifest, profile))
 	return problems
+
+
+## The same sweep over every listed region at once, each at its offset from the
+## frame, the way two `CityStreamer`s hold them (`P5-9f`). Run on the frame's
+## pass only — `check.sh` runs this tool once per region — and only where more
+## than one region is listed. A camera on the line holds units from both, and a
+## region alone cannot see that.
+func _check_pair(manifest: CityManifest, profile: StreamingProfile) -> PackedStringArray:
+	var listed: PackedStringArray = GeneratedRegions.listed()
+	if listed.size() < 2 or manifest.region_id != listed[0]:
+		return PackedStringArray()
+	var units: Array[CityManifest.Tile] = []
+	var offsets := PackedVector3Array()
+	var bounds: AABB = manifest.bounds
+	for region: String in listed:
+		var other: CityManifest = CityManifest.load_manifest(region)
+		if other == null:
+			return PackedStringArray(["listed region %s has no usable manifest" % region])
+		var offset: Vector3 = other.city_offset - manifest.city_offset
+		for unit: CityManifest.Tile in other.streamable_units():
+			units.append(unit)
+			offsets.append(offset)
+		bounds = bounds.merge(AABB(other.bounds.position + offset, other.bounds.size))
+	return _check_residency("streaming %s" % " + ".join(listed), units, offsets, bounds, profile)
 
 
 ## The decision table itself, at the edges where it is defined.
@@ -157,7 +186,16 @@ func _check_hysteresis(profile: StreamingProfile) -> PackedStringArray:
 ## Sampled on a lattice rather than at one spawn, because the budget has to hold
 ## everywhere and the worst case is not where anyone would think to look. The
 ## figure is resident triangles, which bounds drawn triangles from above.
-func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> PackedStringArray:
+##
+## `offsets` stands each unit at its region's place in the frame — zero for one
+## region — so the pair sweep is this one over a longer list (`P5-9f`).
+func _check_residency(
+	label: String,
+	units: Array[CityManifest.Tile],
+	offsets: PackedVector3Array,
+	bounds: AABB,
+	profile: StreamingProfile
+) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	# Measured once per tile per tier, not inside the sweep. Every count here is
@@ -167,7 +205,6 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 	var tiers: int = profile.tier_distances_m.size() + 1
 	# Tiles, then road chunks (`P5-6`) — what `CityStreamer` holds, in its
 	# order, so a resident count here is its draw-call count.
-	var units: Array[CityManifest.Tile] = manifest.streamable_units()
 	var counts: Array[PackedInt32Array] = []
 	for unit: CityManifest.Tile in units:
 		var per_tier := PackedInt32Array()
@@ -186,13 +223,15 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 	# its band for another `hysteresis_m`, so sweeping on the profile field alone
 	# measures a smaller city than the streamer actually holds.
 	var radius: float = TileStreaming.residency_radius_m(profile)
-	var lattice: PackedVector3Array = PlanLattice.over(manifest.bounds, SAMPLE_STEP_M)
+	var lattice: PackedVector3Array = PlanLattice.over(bounds, SAMPLE_STEP_M)
 	for eye: Vector3 in lattice:
 		var triangles: int = 0
 		var resident: int = 0
 		var roads: int = 0
 		for index: int in units.size():
-			var distance: float = TileStreaming.plan_distance_to(units[index].aabb, eye)
+			var distance: float = TileStreaming.plan_distance_to(
+				units[index].aabb, eye - offsets[index]
+			)
 			if distance > radius:
 				continue
 			resident += 1
@@ -219,8 +258,9 @@ func _check_residency(manifest: CityManifest, profile: StreamingProfile) -> Pack
 
 	print(
 		(
-			"  streaming: %d samples, worst %s triangles at (%.0f, %.0f), most %d resident (%d of them road chunks) at (%.0f, %.0f), mean %s"
+			"  %s: %d samples, worst %s triangles at (%.0f, %.0f), most %d resident (%d of them road chunks) at (%.0f, %.0f), mean %s"
 			% [
+				label,
 				samples,
 				_thousands(worst_triangles),
 				worst_at.x,
