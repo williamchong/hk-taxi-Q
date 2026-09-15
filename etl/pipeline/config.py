@@ -3294,6 +3294,21 @@ class Config:
             (high_x + reach["east"], high_z + reach["south"]),
         )
 
+    def frame_offset(self, other_id: str, *, frame: str) -> tuple[float, float, float]:
+        """`other_id`'s origin in `frame`'s game coordinates: the one translation
+        that moves anything authored in `other_id`'s frame into `frame`'s.
+
+        Exact in float for the reason `rect_of` gives — both origins are whole
+        metres — and it equals `city_offset(other) - city_offset(frame)`
+        component-wise, `[1649, 0, 0]` for Causeway Bay into Wan Chai. The graph
+        merge (`join.py`) and the resident budget's pair mode both move a region
+        by it, so they cannot disagree about where the neighbour is.
+        """
+        own = self.game_transform(frame)
+        other = self.game_transform(other_id)
+        x, y, z = own.to_game(other.origin_easting, other.origin_northing, other.origin_elevation)
+        return (float(x), float(y), float(z))
+
     def rect_of(self, other_id: str, *, frame: str) -> PlanExtent:
         """`other_id`'s own clip rectangle — `(0, 0)` to its `region_high` in its
         frame — expressed in `frame`'s game plan metres as `(low, high)`.
@@ -3304,11 +3319,11 @@ class Config:
         same numbers. That is what lets `clip_extent` be identical in both
         builds, which is what `Q116`'s cut rests on.
         """
-        own = self.game_transform(frame)
-        other = self.game_transform(other_id)
         bounds = self.projected_bounds(other_id)
-        low_x, _, low_z = own.to_game(other.origin_easting, other.origin_northing)
-        high_x, _, high_z = own.to_game(bounds.max_easting, bounds.min_northing)
+        low_x, _, low_z = self.frame_offset(other_id, frame=frame)
+        high_x, _, high_z = self.game_transform(frame).to_game(
+            bounds.max_easting, bounds.min_northing
+        )
         return ((low_x, low_z), (high_x, high_z))
 
     def clip_extent(self, region_id: str) -> PlanExtent:

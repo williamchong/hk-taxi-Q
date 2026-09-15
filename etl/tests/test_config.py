@@ -2569,6 +2569,19 @@ class TestRegionJoin:
 
         assert hong_kong.clip_extent("mong_kok") == ((0.0, 0.0), hong_kong.region_high("mong_kok"))
 
+    def test_the_frame_offset_is_the_city_offset_difference_and_antisymmetric(
+        self, hong_kong
+    ) -> None:
+        """`P5-9a`: the one delta `join.py` and the resident budget's pair mode
+        both move a region by. Whole metres, so exact, and each side's view of
+        the other is the negation of its own."""
+        there = hong_kong.frame_offset("causeway_bay", frame="wan_chai")
+        back = hong_kong.frame_offset("wan_chai", frame="causeway_bay")
+        assert there == (1649.0, 0.0, 0.0)
+        assert back == (-1649.0, 0.0, 0.0)
+        assert hong_kong.frame_offset("wan_chai", frame="wan_chai") == (0.0, 0.0, 0.0)
+        assert hong_kong.rect_of("causeway_bay", frame="wan_chai")[0] == (there[0], there[2])
+
     def test_a_region_with_no_neighbour_reads_its_own_frame(self, hong_kong) -> None:
         """The inertness proof in code form: `mong_kok` reads what it always read."""
         assert hong_kong.read_box("mong_kok") == hong_kong.projected_bounds("mong_kok")

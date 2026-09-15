@@ -11,6 +11,9 @@
 #   --shots=0.5,4,8                  sim times (s) to capture
 #   --out=dir                        default build/driver/, relative to the repo
 #   --camera=x,y,z --look=x,y,z      place the camera (preview scenes only)
+#   --spawn-fare=wan_chai/f_045      start the drive at that fare node
+#                                    (city_drive only; a scene with no drive
+#                                    harness, or an unknown fare, is refused)
 #   --hold=accelerate@0.5+5.0        press an action at 0.5 s, hold for 5 s
 #                                    (repeatable; actions are the [input] names
 #                                    in project.godot — steer_left, steer_right,

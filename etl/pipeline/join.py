@@ -248,11 +248,7 @@ def join_regions(
     (ga, ca), (gb, cb) = docs[region_a], docs[region_b]
     # `b`'s origin in `a`'s frame, through the one translation the codebase
     # keeps (`GameTransform.to_game`), so the sign on z cannot be restated.
-    own, other = city.game_transform(region_a), city.game_transform(region_b)
-    delta = np.asarray(
-        own.to_game(other.origin_easting, other.origin_northing, other.origin_elevation),
-        dtype=float,
-    )
+    delta = np.asarray(city.frame_offset(region_b, frame=region_a), dtype=float)
     pair = (ca, cb) if ca is not None and cb is not None else None
     graph, clearance, report = merge(ga, gb, delta, regions=(region_a, region_b), clearance=pair)
 

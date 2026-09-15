@@ -23,11 +23,13 @@ from resident_budget import (
     Unit,
     band_of,
     centre_distance_to,
+    composed,
     load_bundle,
     lod_ratio,
     main,
     plan_distance_to,
     resident_at,
+    shifted,
     worst_camera,
 )
 
@@ -114,8 +116,8 @@ class TestResident:
         assert lod_ratio(self.units) == pytest.approx(0.4)
 
 
-def _bundle(root: Path) -> Path:
-    region = root / "wan_chai"
+def _bundle(root: Path, name: str = "wan_chai") -> Path:
+    region = root / name
     region.mkdir(parents=True)
     (region / "buildings.json").write_text(
         json.dumps(
@@ -199,3 +201,69 @@ class TestBundle:
         root = _bundle(tmp_path)
         with pytest.raises(SystemExit):
             main(["--region", "wan_chai", "--out-root", str(root), "--lod0-m", "500"])
+
+
+class TestPair:
+    """`--pair` (`P5-9a`): the second region moved into the first's frame, so a
+    camera on the join holds both regions' resident sets at once."""
+
+    def test_shifting_moves_every_box_and_camera_in_plan_only(self) -> None:
+        bundle = Bundle(
+            units=[_tile("t_00_00", 0, 0, (1000, 400))],
+            cameras=[(75.0, 75.0)],
+            whole_road=10,
+            lod1_cell_m=4.0,
+        )
+        moved = shifted(bundle, 1649.0, -3.0)
+        assert moved.units[0].aabb == ((1649.0, 0.0, -3.0), (1799.0, 40.0, 147.0))
+        assert moved.cameras == [(1724.0, 72.0)]
+        assert (moved.whole_road, moved.lod1_cell_m) == (10, 4.0)
+
+    def test_a_camera_on_the_line_holds_both_sides(self) -> None:
+        west = Bundle([_tile("t_w", 0, 0, (1000, 400))], [(75.0, 75.0)], 0, None)
+        east = shifted(
+            Bundle([_tile("t_e", 0, 0, (700, 300))], [(75.0, 75.0)], 0, None), 150.0, 0.0
+        )
+        pair = composed(west, east)
+        on_line = resident_at(pair.units, 150.0, 75.0, ENGINE)
+        assert on_line.buildings == 1000 + 700
+        # Either region alone, from the same camera, holds only its own tile.
+        assert resident_at(west.units, 150.0, 75.0, ENGINE).buildings == 1000
+        assert resident_at(east.units, 150.0, 75.0, ENGINE).buildings == 700
+
+    def test_main_composes_the_pair_through_the_config_s_origins(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        root = _bundle(tmp_path)
+        _bundle(root, "causeway_bay")
+        argv = ["--pair", "wan_chai", "causeway_bay", "--out-root", str(root)]
+        assert main([*argv, "--at", "1649.0", "75.0"]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("wan_chai+causeway_bay:")
+        # Both whole roads. At x 1649 the neighbour's t_00_00 (moved to 1649-1799)
+        # holds the camera: LOD0. Its t_03_00 (2099-2249) is 450 m off and Wan
+        # Chai's nearest box ends at 600, so nothing else is resident.
+        assert "+ whole road 600 = " in out
+        assert "camera (1649.0, 75.0): 1,000 building triangles over 1 LOD0 + 0 LOD1 tiles" in out
+
+    def test_pair_and_region_are_exclusive(self, tmp_path: Path) -> None:
+        root = _bundle(tmp_path)
+        with pytest.raises(SystemExit):
+            main(
+                [
+                    "--region",
+                    "wan_chai",
+                    "--pair",
+                    "wan_chai",
+                    "causeway_bay",
+                    "--out-root",
+                    str(root),
+                ]
+            )
+
+    def test_a_named_camera_across_two_separate_frames_is_refused(self, tmp_path: Path) -> None:
+        root = _bundle(tmp_path)
+        _bundle(root, "causeway_bay")
+        argv = ["--region", "wan_chai", "--region", "causeway_bay", "--at", "1", "1"]
+        with pytest.raises(SystemExit):
+            main([*argv, "--out-root", str(root)])

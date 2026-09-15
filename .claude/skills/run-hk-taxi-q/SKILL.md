@@ -90,6 +90,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |
 | `--hold=action@start+duration` | press an action; repeatable |
 | `--camera=x,y,z` / `--look=x,y,z` | teleport the camera (preview scenes only) |
+| `--spawn-fare=<region>/<id>` | start `city_drive` at that fare node instead of the scene's `f_004` — the only way to start a drive anywhere else, since `--camera` does not survive the chase camera; an unknown region or fare, or a scene with no drive harness, is refused |
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
@@ -272,7 +273,7 @@ to — see Gotchas.
   Use `--debug-view=`. For the same reason the overlay is invisible to `--headless`, which parks it
   whatever the flag says: nothing draws there, so it would only cost the verify tools a tree walk.
 - **`--camera` is ignored in `city_drive.tscn`.** The chase camera rewrites the transform every
-  frame. It only bites in the preview scenes.
+  frame. It only bites in the preview scenes. To start a drive somewhere else, use `--spawn-fare=`.
 - **`--hold` cannot fly the preview camera.** `free_look_camera.gd` reads
   `Input.is_physical_key_pressed` directly rather than the action map, so `Input.action_press` —
   how everything else here is driven — moves it not at all. Use `--camera` / `--look`.

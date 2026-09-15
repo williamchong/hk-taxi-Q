@@ -4,6 +4,7 @@
     tools/resident_budget.py --region wan_chai [--region mong_kok ...]
     tools/resident_budget.py --region mong_kok --sweep
     tools/resident_budget.py --region mong_kok --lod0-m 200 --unload-m 400
+    tools/resident_budget.py --pair wan_chai causeway_bay --at 1703.2 437.9
 
 `Q120` measured that the shipped `streaming.tres` pair holds **108%** of the
 300k triangle budget resident at the worst camera in `mong_kok`, and did it
@@ -45,6 +46,18 @@ There is no LOD-cell flag, deliberately: the tool reads whatever bundle is
 under `--out-root`, so `P5-18`'s cell sweep is one build and one run per cell,
 and the L1/L0 ratio printed is the bundle's own rather than a label.
 
+🔴 **`--pair` composes two regions into the first one's frame, because a
+camera on the join holds both** (`P5-9a`). `--region` grades each region alone
+in its own frame, so no camera it tries can stand on the line; the pair mode
+shifts the second region's tiles, chunks and cameras by the same delta
+`pipeline/join.py` moves its graph by — `Config.frame_offset`, `[1649, 0, 0]`
+for the shipped pair — and grades the union, which is
+what two `CityStreamer`s side by side hold. `--at X Z` adds a named camera in
+that frame, so the seam camera is priced whether or not a tile centre sits on
+it. ⚠️ **The pair's worst camera is not the sum of the two regions' worst
+cameras**: a camera holds at most what lies within the unload radius, and the
+two worst cameras are a kilometre and more apart.
+
 Grades rather than checks: exits 0 whatever it finds.
 """
 
@@ -61,7 +74,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA  # noqa: E402
-from pipeline.config import load_config  # noqa: E402
+from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA  # noqa: E402
 
@@ -185,6 +198,34 @@ def load_bundle(out_dir: Path, region: str) -> Bundle:
     )
 
 
+def shifted(bundle: Bundle, dx: float, dz: float) -> Bundle:
+    """`bundle` moved by `(dx, dz)` in plan — every box and every camera."""
+
+    def move(box: Box) -> Box:
+        (x0, y0, z0), (x1, y1, z1) = box
+        return ((x0 + dx, y0, z0 + dz), (x1 + dx, y1, z1 + dz))
+
+    return Bundle(
+        units=[Unit(unit.id, move(unit.aabb), unit.tiers, unit.is_road) for unit in bundle.units],
+        cameras=[(x + dx, z + dz) for x, z in bundle.cameras],
+        whole_road=bundle.whole_road,
+        lod1_cell_m=bundle.lod1_cell_m,
+    )
+
+
+def composed(frame: Bundle, other: Bundle) -> Bundle:
+    """Two bundles already in one frame, as the one resident set a camera sees.
+
+    The LOD1 cell printed is the frame's; `lod_ratio` is recomputed over the
+    union, so a pair built at two cells still reads its own ratio."""
+    return Bundle(
+        units=frame.units + other.units,
+        cameras=frame.cameras + other.cameras,
+        whole_road=frame.whole_road + other.whole_road,
+        lod1_cell_m=frame.lod1_cell_m,
+    )
+
+
 def resident_at(units: list[Unit], x: float, z: float, profile: Profile) -> Camera:
     """What the streamer would hold with the camera at `(x, z)`, ignoring hysteresis."""
     buildings = 0
@@ -219,6 +260,19 @@ def lod_ratio(units: list[Unit]) -> float | None:
     tiered = [unit for unit in units if not unit.is_road and len(unit.tiers) > 1]
     finest = sum(unit.tiers[0] for unit in tiered)
     return sum(unit.tiers[-1] for unit in tiered) / finest if finest else None
+
+
+def report_camera(bundle: Bundle, x: float, z: float, profile: Profile, budget: int) -> Camera:
+    """One named camera: what `--at` prices beside the worst one."""
+    camera = resident_at(bundle.units, x, z, profile)
+    total = camera.buildings + camera.resident_road
+    print(
+        f"  camera ({x:.1f}, {z:.1f}): {camera.buildings:,} building triangles over"
+        f" {camera.tiles_by_tier[0]} LOD0 + {camera.tiles_by_tier[1]} LOD1 tiles"
+        f" + resident road {camera.resident_road:,} = {total:,}"
+        f" ({budget_share(total, budget)} of budget)"
+    )
+    return camera
 
 
 def budget_share(triangles: int, budget: int) -> str:
@@ -276,9 +330,34 @@ def sweep(bundles: dict[str, Bundle], budget: int, band_by: str) -> None:
         print(f"| {lod0_m:.0f} / {unload_m:.0f} m | " + " | ".join(cells) + " |")
 
 
+def load_pair(city: Config, frame: str, other: str, out_root: Path | None) -> Bundle:
+    """`other` composed into `frame`'s frame by `pipeline/join.py`'s delta."""
+    dx, _, dz = city.frame_offset(other, frame=frame)
+    return composed(
+        load_bundle(city.out_dir(frame, out_root), frame),
+        shifted(load_bundle(city.out_dir(other, out_root), other), dx, dz),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--region", action="append", required=True)
+    regions = parser.add_mutually_exclusive_group(required=True)
+    regions.add_argument("--region", action="append", help="graded alone, in its own frame")
+    regions.add_argument(
+        "--pair",
+        nargs=2,
+        metavar=("FRAME", "OTHER"),
+        help="two regions composed into FRAME's frame, graded as one resident set",
+    )
+    parser.add_argument(
+        "--at",
+        nargs=2,
+        type=float,
+        action="append",
+        default=[],
+        metavar=("X", "Z"),
+        help="a named camera, in the one --region's frame or the pair's FRAME",
+    )
     parser.add_argument("--out-root", type=Path, default=None, help="defaults to etl/out")
     parser.add_argument("--lod0-m", type=float, default=LOD0_M)
     parser.add_argument("--unload-m", type=float, default=UNLOAD_M)
@@ -293,13 +372,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.lod0_m > args.unload_m:
         parser.error("--lod0-m must not exceed --unload-m")
+    if args.at and args.region and len(args.region) > 1:
+        # A camera is a point in ONE frame; each `--region` is graded in its own.
+        parser.error("--at takes one frame: give one --region, or --pair")
     city = load_config()
-    bundles = {
-        region: load_bundle(city.out_dir(region, args.out_root), region) for region in args.region
-    }
+    if args.pair:
+        bundles = {"+".join(args.pair): load_pair(city, *args.pair, args.out_root)}
+    else:
+        bundles = {
+            region: load_bundle(city.out_dir(region, args.out_root), region)
+            for region in args.region
+        }
     profile = Profile(args.lod0_m, args.unload_m, DISTANCE_RULES[args.band_by])
     for region, bundle in bundles.items():
         report(region, bundle, profile, args.budget, args.band_by)
+        for x, z in args.at:
+            report_camera(bundle, x, z, profile, args.budget)
     if args.sweep:
         sweep(bundles, args.budget, args.band_by)
     return 0

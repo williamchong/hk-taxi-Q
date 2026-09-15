@@ -21,6 +21,7 @@
 extends SceneTree
 
 const Manifest = preload("res://scripts/city/city_manifest.gd")
+const Fares = preload("res://scripts/city/generated_fares.gd")
 
 const DEFAULT_SCENE: String = "res://scenes/main.tscn"
 
@@ -74,6 +75,11 @@ var _holds: Array[Array] = []
 ## second flag and cannot be confused with the origin.
 var _camera_pos: Vector3 = Vector3.INF
 var _look_at: Vector3 = Vector3.INF
+## `--spawn-fare=<region>/<id>`, split. Empty until given, which leaves the
+## scene's own authored `spawn_fare_id` alone — so a run without the flag is the
+## run it always was.
+var _spawn_region: String = ""
+var _spawn_fare_id: String = ""
 var _failures: PackedStringArray = []
 var _vehicle: Node3D = null
 var _spawn_y: float = 0.0
@@ -131,8 +137,11 @@ func _boot() -> Node:
 	# repeating one here would name the wrong fix half the time. Stronger than
 	# testing the file exists: a `city.json` left over from an older build parses
 	# and then fails much later, as something unrelated.
-	if Manifest.load_manifest() == null:
+	var manifest: Manifest = Manifest.load_manifest()
+	if manifest == null:
 		_fail("no usable city at %s — see the reason above" % Manifest.PATH)
+		return null
+	if not _spawn_fare_id.is_empty() and not _spawn_fare_resolves(manifest):
 		return null
 
 	if not ResourceLoader.exists(_scene_path):
@@ -145,6 +154,10 @@ func _boot() -> Node:
 		return null
 
 	var instance: Node = packed.instantiate()
+	# Before `add_child`: the harness places the car from its own `_ready`.
+	if not _spawn_fare_id.is_empty() and not _set_spawn_fare(instance):
+		instance.free()
+		return null
 	root.add_child(instance)
 	await process_frame
 	# free_look_camera.gd frames the region from _ready, so placing the camera
@@ -401,6 +414,42 @@ func _place_camera(instance: Node) -> void:
 ## typed reference fails to compile with `Identifier not found: InputRouter` —
 ## the same effect `tools/check.sh` documents for `--check-only`. Duck typing
 ## also lets a scene with no car report the positions it does not have.
+## Refuses a `--spawn-fare` naming a region that is not resident or a fare that
+## region does not publish. Checked here rather than left to the harness, whose
+## own fallback is a `push_warning` and the authored transform — a warning
+## `drive.sh` does not fail on, so a typo would drive from the default start
+## line and report success.
+func _spawn_fare_resolves(manifest: Manifest) -> bool:
+	if _spawn_region != manifest.region_id:
+		_fail(
+			(
+				"--spawn-fare names region %s, and the resident region is %s"
+				% [_spawn_region, manifest.region_id]
+			)
+		)
+		return false
+	if Fares.node_by_id(Fares.load_fares(), _spawn_fare_id).is_empty():
+		_fail("--spawn-fare: %s publishes no fare %s" % [_spawn_region, _spawn_fare_id])
+		return false
+	print("spawn:   ", _spawn_region, "/", _spawn_fare_id)
+	return true
+
+
+## Hands the fare id to every drive harness in the scene. Duck-typed for the
+## reason `_find_vehicle` gives. A scene with none — the preview scenes — is
+## refused, because the flag would otherwise do nothing and say nothing.
+func _set_spawn_fare(instance: Node) -> bool:
+	var set_on: int = 0
+	for node: Node in instance.find_children("*", "Node3D", true, false):
+		if "spawn_fare_id" in node:
+			node.set("spawn_fare_id", _spawn_fare_id)
+			set_on += 1
+	if set_on == 0:
+		_fail("--spawn-fare given but %s has no drive harness" % _scene_path)
+		return false
+	return true
+
+
 func _find_vehicle(instance: Node) -> Node3D:
 	for node: Node in instance.find_children("*", "Node3D", true, false):
 		if node.has_method("forward_speed_kph"):
@@ -449,6 +498,13 @@ func _parse_args() -> bool:
 			"--hold":
 				if not _parse_hold(value):
 					return false
+			"--spawn-fare":
+				var parts: PackedStringArray = value.split("/")
+				if parts.size() != 2 or parts[0].is_empty() or parts[1].is_empty():
+					_fail("bad --spawn-fare '%s' — want region/fare_id" % value)
+					return false
+				_spawn_region = parts[0]
+				_spawn_fare_id = parts[1]
 			"--debug-view":
 				# *Applied* by the `DebugHud` autoload, which reads the command
 				# line itself — it is on screen before the driver has parsed

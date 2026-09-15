@@ -20158,8 +20158,32 @@ not depend on another's, `P5-7g`'s own rule, and the join is a runtime act); anc
 city space (`Q10`, 3.9 mm float spacing at 38 km); dropping the second region's library copies from
 the bundle now (the manifest names them and `verify_city` asserts they exist — priced, not taken).
 
+### ✅ `P5-9a` — the seam is priced before the runtime exists, and it is under budget (2026-09-16)
+
+🔴 **The plan expected the seam over budget and it is not.** `tools/resident_budget.py --pair` composes
+Causeway Bay into Wan Chai's frame by `pipeline/join.py`'s own delta and grades the union: the named
+seam camera `(1703.2, 437.9)` holds **218,355** triangles resident (**73%**), and no camera on the
+line x 1649 reads more than **66%**. A camera on the join holds the edges of two regions, and each
+region is sparse at its edge; the pair's worst camera is still Wan Chai's `(1125, 525)`, where the
+neighbour contributes road chunks only (**101%** resident road, **108%** whole road, against
+**101% / 105%** alone). ⚠️ So `P4-5` inherits no new seam number from this — its **105%** is still
+Wan Chai's own — and `P5-9f` pastes the engine's own readout at the seam against these figures
+rather than an expected overrun.
+
+**The driver can start a drive anywhere now**: `--spawn-fare=<region>/<id>` sets `spawn_fare_id` on
+every drive harness between `instantiate()` and `add_child`, because the harness places the car from
+its own `_ready`. It refuses what the harness would only warn about — a region that is not resident,
+a fare the region does not publish, a scene with no harness — since a warning is not something
+`drive.sh` fails on. Inert on the default fare: frames md5-identical, twice a side.
+
+⚠️ **Found from the seat, not fixed**: the harness's first-tick road check warns *Nothing under the
+start line* at `f_045`, `f_012` and `f_030` with the car resting on road, and is quiet only at
+`f_004`. `hold_ground_at` has just loaded the chunks (17 at `f_045`), so the ray is missing geometry
+that exists a tick later; the cause is not verified. It costs nothing but a false line in the log,
+and a seam drive will print it.
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
-broken down 2026-09-09 as `P5-9a`–`P5-9f` with nothing built; and `P5-7`'s one finding, `e364`'s
+broken down 2026-09-09 as `P5-9a`–`P5-9f` `P5-9a` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
