@@ -20224,8 +20224,25 @@ held — and says which.
 ⚠️ **Alone, Wan Chai's bundle ends under the taxi at x ≈ 1705 on CAUSEWAY ROAD** — the car leaves the
 owned far half and falls. That is the join's reason for existing, seen from the seat for the first time.
 
+### ✅ `P5-9d` — the runtime merge is `join.py`'s, and the id map is what every other document needs (2026-09-16)
+
+`road_join.gd` is a port, not a redesign, and `verify_join.gd` holds it to the Python field by field —
+0.0000 m everywhere and every other field exact — so a rule changed on one side fails on the other.
+What the port adds is the map: per region, every edge id that region's own documents may name, to
+its merged id, owned edges through the renumbering and foreign copies through the alias. The
+neighbour's `carriageway[]` tables are re-keyed into a copy of the frame's manifest, a fare is
+`(region, id)` and placed at its region's offset, and nothing on disk is edited.
+
+🔴 **The aliases were unchecked by the shipped data.** No fare, fence row or turn in either region
+names a foreign copy's id, so deleting either alias left every counter and every diff green. The
+check that every foreign copy resolves to an edge of its own `(source_id, run)` is what fails now.
+
+⚠️ **`shared()` merges what `resident()` answers, and `--region=` narrows it to one.** That is what
+keeps `check.sh`'s sixteen per-region tools reading one region each, byte-identical, while a drive
+with no flag reads the merge.
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
-broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a` and `P5-9b` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
+broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a`–`P5-9d` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is

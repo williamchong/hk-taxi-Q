@@ -48,6 +48,8 @@ extends RefCounted
 ## sheets; this refusal stays regardless, because opening the network is Phase 4.
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+const RoadJoin = preload("res://scripts/city/road_join.gd")
 
 ## The fewest lanes `lane_offset` will divide a carriageway into (`Q114`).
 ##
@@ -232,18 +234,154 @@ var _origin: Vector2 = Vector2.ZERO
 # scene's own nodes keep it alive and dropping the scene drops it.
 static var _shared: WeakRef = null
 
+## Per region, its documents' edge ids to this graph's (`P5-9d`); empty for one region.
+var _edge_maps: Dictionary = {}
+var _offsets: Dictionary = {}
+var _join_report: Dictionary = {}
+## Built from a merge, where a duplicate edge id is an error rather than a warning.
+var _merged: bool = false
+
 
 ## The graph every consumer in a scene shares. Empty if it could not be read;
 ## `GeneratedRoadGraph` has already pushed the reason and the command to fix it.
+##
+## Every resident region's graph, merged (`P5-9d`): one region builds as it always
+## did, and two or more go through `RoadJoin` in `GeneratedRegions.resident()`
+## order, the frame first. A tool run with `--region=` holds that region alone.
 static func shared() -> RoadGraph:
 	var live: RoadGraph = _shared.get_ref() if _shared != null else null
 	if live == null:
-		live = RoadGraph.new()
-		var manifest: CityManifest = CityManifest.load_manifest()
-		var at: String = manifest.road_graph_path if manifest != null else ""
-		live._build(GeneratedRoadGraph.load_graph(at), manifest)
+		live = resident(GeneratedRegions.resident())
 		_shared = weakref(live)
 	return live
+
+
+## `regions` as one graph in the first one's frame. One region is read exactly
+## as `shared()` read it before `P5-9d`; an unmergeable pair pushes why and
+## returns the frame alone, so a drive still has roads under it.
+static func resident(regions: PackedStringArray) -> RoadGraph:
+	var inputs: Dictionary = merged_inputs(regions)
+	var live := RoadGraph.new()
+	live._edge_maps = inputs["edge_maps"]
+	live._offsets = inputs["offsets"]
+	live._join_report = inputs["report"]
+	live._merged = regions.size() > 1 and not inputs.has("error")
+	live._build(inputs["document"], inputs["manifest"])
+	return live
+
+
+## What `resident` builds from, exposed so `verify_join.gd` can diff the merged
+## document and tables against `pipeline/join.py`'s: `document`, `manifest` (the
+## frame's, its three per-station tables re-keyed to merged ids), `edge_maps`
+## (region to its ids' merged ids), `offsets` (region to its place in the frame)
+## and `report`, plus `error` where a pair would not merge.
+static func merged_inputs(regions: PackedStringArray) -> Dictionary:
+	var frame: String = regions[0] if not regions.is_empty() else ""
+	var manifest: CityManifest = CityManifest.load_manifest(frame)
+	var document: Dictionary = GeneratedRoadGraph.load_graph(
+		manifest.road_graph_path if manifest != null else ""
+	)
+	var inputs: Dictionary = {
+		"document": document,
+		"manifest": manifest,
+		"edge_maps": {},
+		"offsets": {frame: Vector3.ZERO},
+		"report": {},
+	}
+	if regions.size() < 2 or manifest == null or document.is_empty():
+		return inputs
+
+	# The frame's map starts as identity over every id its documents may name,
+	# owned and foreign, and each fold re-points its foreign ids at their owners.
+	var maps: Dictionary = {}
+	var frame_map: Dictionary[int, int] = {}
+	for key: String in ["edges", "foreign_edges"]:
+		for edge: Dictionary in document.get(key, []):
+			frame_map[int(edge["id"])] = int(edge["id"])
+	maps[frame] = frame_map
+	var tables: CityManifest = _copy_tables(manifest)
+	var merged: Dictionary = document
+	for index: int in range(1, regions.size()):
+		var region: String = regions[index]
+		var other: CityManifest = CityManifest.load_manifest(region)
+		var graph: Dictionary = GeneratedRoadGraph.load_graph(
+			other.road_graph_path if other != null else ""
+		)
+		if other == null or graph.is_empty():
+			inputs["error"] = "region %s has no usable graph" % region
+			break
+		var delta: Vector3 = other.city_offset - manifest.city_offset
+		var result: Dictionary = RoadJoin.merge(
+			merged, graph, delta, PackedStringArray([regions[0], region])
+		)
+		if result.has("error"):
+			inputs["error"] = result["error"]
+			break
+		var of_a: Dictionary[int, int] = result["edge_of"][0]
+		var of_b: Dictionary[int, int] = result["edge_of"][1]
+		for earlier: String in maps:
+			var map: Dictionary[int, int] = maps[earlier]
+			for local: int in map:
+				map[local] = of_a.get(map[local], map[local])
+		maps[region] = of_b
+		inputs["offsets"][region] = delta
+		# Owned rows only: `city.json` publishes no carriageway for a foreign copy.
+		for owned: Dictionary in graph.get("edges", []):
+			var local: int = int(owned["id"])
+			var id: int = of_b[local]
+			for pair: Array in [
+				[tables.carriageway_half_width_m, other.carriageway_half_width_m],
+				[tables.carriageway_offset_m, other.carriageway_offset_m],
+				[tables.carriageway_clear_width_m, other.carriageway_clear_width_m],
+			]:
+				if (pair[1] as Dictionary).has(local):
+					(pair[0] as Dictionary)[id] = (pair[1] as Dictionary)[local]
+		merged = result["graph"]
+		inputs["report"] = result["report"]
+	if inputs.has("error"):
+		push_error("Road graphs of %s did not merge: %s" % [", ".join(regions), inputs["error"]])
+		return inputs
+	inputs["document"] = merged
+	inputs["manifest"] = tables
+	inputs["edge_maps"] = maps
+	return inputs
+
+
+## The merged id of `local_id` as `region`'s own documents name it — a fare's
+## `nearest_edge`, a fence's `edge`, a `carriageway[]` row. Identity where the
+## graph holds one region; -1 for an id that region never published.
+func edge_id_in(region: String, local_id: int) -> int:
+	if not _edge_maps.has(region):
+		return local_id
+	var map: Dictionary[int, int] = _edge_maps[region]
+	return map.get(local_id, -1)
+
+
+## Where `region` stands in this graph's frame; zero for the frame and for a
+## region this graph does not hold.
+func region_offset(region: String) -> Vector3:
+	return _offsets.get(region, Vector3.ZERO)
+
+
+## `join.json`'s counters for the merge that built this graph; empty for one region.
+func join_report() -> Dictionary:
+	return _join_report
+
+
+## The frame manifest with its per-station tables copied, so re-keying the
+## neighbour's rows into them never writes through to a cached manifest.
+static func _copy_tables(manifest: CityManifest) -> CityManifest:
+	var copy := CityManifest.new()
+	copy.city_id = manifest.city_id
+	copy.region_id = manifest.region_id
+	copy.directory = manifest.directory
+	copy.city_offset = manifest.city_offset
+	copy.lane_width_m = manifest.lane_width_m
+	copy.car_width_m = manifest.car_width_m
+	copy.carriageway_half_width_m = manifest.carriageway_half_width_m.duplicate()
+	copy.carriageway_offset_m = manifest.carriageway_offset_m.duplicate()
+	copy.carriageway_clear_width_m = manifest.carriageway_clear_width_m.duplicate()
+	return copy
 
 
 ## Parse a document directly, for tools that hold their own copy.
@@ -688,8 +826,13 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		var id: int = int(edge.get("id", -1))
 		if _by_id.has(id):
 			# `nearest_edge` is defined as an id, so a collision means one of the
-			# two is unreachable through every accessor here.
-			push_warning("Road graph has two edges with id %d; the later one wins" % id)
+			# two is unreachable through every accessor here. Under a merge it is
+			# the renumbering broken, not a stale bundle, so it is an error (`P5-9d`).
+			var message: String = "Road graph has two edges with id %d; the later one wins" % id
+			if _merged:
+				push_error(message)
+			else:
+				push_warning(message)
 		_by_id[id] = _ids.size()
 		_ids.append(id)
 		_polylines.append(points)

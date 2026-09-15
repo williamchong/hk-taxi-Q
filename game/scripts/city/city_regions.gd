@@ -56,12 +56,10 @@ func _ready() -> void:
 	if region_scene == null:
 		push_error("CityRegions has no region_scene; nothing will be placed")
 		return
-	var ids: PackedStringArray = GeneratedRegions.listed()
-	if ids.is_empty():
-		# No list: a tree synced before `P5-9b`, or none at all. One region at the
-		# origin, reading whatever `selected()` answers, so a fresh clone degrades
-		# to the same missing-city hints it always printed.
-		ids = PackedStringArray([""])
+	# `[""]` with no list — a tree synced before `P5-9b`, or none at all: one
+	# region at the origin, so a fresh clone degrades to the same missing-city
+	# hints it always printed.
+	var ids: PackedStringArray = GeneratedRegions.resident()
 
 	var frame_offset: Vector3 = _offset_of(ids[0])
 	for id: String in ids:

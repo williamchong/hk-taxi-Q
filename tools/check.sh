@@ -449,6 +449,10 @@ if [[ "$VERIFY_GENERATED" != 0 ]]; then
 				${region_args[@]+"${region_args[@]}"}
 		done
 	done <<<"$regions"
+	# Once, not per region: the runtime merge of the first two listed regions
+	# against pipeline/join.py's (P5-9d). It passes with SKIP on one region.
+	echo "==> verify_join"
+	run_godot verify_join --headless --path "$ROOT/game" --script "res://tools/verify_join.gd"
 else
 	echo "==> verify tools"
 	echo "  SKIP  ${VERIFY_TOOLS[*]} — VERIFY_GENERATED=0."

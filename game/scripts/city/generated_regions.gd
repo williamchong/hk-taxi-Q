@@ -57,6 +57,18 @@ static func selected() -> String:
 	return asked if not asked.is_empty() else frame()
 
 
+## The regions a scene holds: the one `--region=` names, else every listed
+## region, else `[""]` — one region read the way a fresh clone reads it. The
+## frame is first. `CityRegions` places these and `RoadGraph.shared()` merges
+## them, so the two can never disagree about who is resident.
+static func resident() -> PackedStringArray:
+	var asked: String = CommandLine.value(REGION_ARG)
+	if not asked.is_empty():
+		return PackedStringArray([asked])
+	var regions: PackedStringArray = listed()
+	return regions if not regions.is_empty() else PackedStringArray([""])
+
+
 ## A region's bundle directory, with a trailing slash; `selected()` for "".
 static func dir(region: String = "") -> String:
 	var id: String = region if not region.is_empty() else selected()

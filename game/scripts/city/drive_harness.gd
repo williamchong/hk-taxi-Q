@@ -57,6 +57,10 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Fare node the drive starts at. See `RoadSpawn.DEFAULT_FARE_ID`.
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
 
+## The region `spawn_fare_id` belongs to — `f_001` exists in more than one
+## (`P5-9d`). "" is the frame.
+@export var spawn_region: String = ""
+
 ## The regions asked to hold the road under the start line before the first
 ## tick (`P5-6`) — every resident region's streamer, since `P5-9c`. Assign in the
 ## scene; a scene without one — the preview has no harness — simply skips the
@@ -111,7 +115,11 @@ func _place_on_start_line() -> Transform3D:
 	# and `RoadGraph.shared()` is what makes that one parse rather than two.
 	var graph: RoadGraph = RoadGraph.shared()
 	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(
-		graph, GeneratedFares.load_fares(), spawn_fare_id, vehicle.profile.ray_length_m()
+		graph,
+		GeneratedFares.load_fares(GeneratedFares.path(spawn_region)),
+		spawn_fare_id,
+		vehicle.profile.ray_length_m(),
+		spawn_region
 	)
 	if not pose.resolved():
 		push_warning(

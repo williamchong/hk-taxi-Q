@@ -160,8 +160,14 @@ static func basis_facing(forward: Vector3) -> Basis:
 ## direction of travel — the directions `Q12` confirmed against the real street.
 ## Passing a heading here would let the car's authored rotation decide which way
 ## a two-way street runs, which is backwards: the street decides.
+##
+## `region` is the region whose `fares.json` `fares` is (`P5-9d`): a fare's
+## identity is `(region, id)` — `f_001` exists in both of the shipped pair — and
+## its position and `nearest_edge` are that region's, so both go through the
+## graph's place for the region and its id map. "" is the frame, where both are
+## identity.
 static func at_fare_node(
-	graph: RoadGraph, fares: Dictionary, fare_id: String, ride_height_m: float
+	graph: RoadGraph, fares: Dictionary, fare_id: String, ride_height_m: float, region: String = ""
 ) -> Pose:
 	var pose := Pose.new()
 	pose.fare_id = fare_id
@@ -174,14 +180,14 @@ static func at_fare_node(
 	if node.is_empty():
 		pose.problem = "no fare node '%s' in %s" % [fare_id, GeneratedFares.path()]
 		return pose
-	pose.published_edge_id = int(node.get("nearest_edge", -1))
+	pose.published_edge_id = graph.edge_id_in(region, int(node.get("nearest_edge", -1)))
 
 	var at: Variant = GeneratedFares.position_of(node)
 	if at == null:
 		pose.problem = "fare node '%s' publishes no usable position" % fare_id
 		return pose
 
-	var hit: RoadGraph.Hit = graph.nearest_edge(at)
+	var hit: RoadGraph.Hit = graph.nearest_edge((at as Vector3) + graph.region_offset(region))
 	if not hit.hit():
 		pose.problem = "fare node '%s' resolved to no drivable edge" % fare_id
 		return pose

@@ -22,6 +22,7 @@ extends SceneTree
 
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Fares = preload("res://scripts/city/generated_fares.gd")
+const Regions = preload("res://scripts/city/generated_regions.gd")
 
 const DEFAULT_SCENE: String = "res://scenes/main.tscn"
 
@@ -406,29 +407,24 @@ func _place_camera(instance: Node) -> void:
 	print("camera:  ", camera.global_position, " -> ", camera.global_basis.z * -1.0)
 
 
-## The first VehicleController below `instance`, or null.
-##
-## Matched by method rather than by type because naming the type is not
-## available here: `vehicle_controller.gd` reads the `InputRouter` autoload, and
-## autoloads are not registered at script-compile time under `--script`, so a
-## typed reference fails to compile with `Identifier not found: InputRouter` —
-## the same effect `tools/check.sh` documents for `--check-only`. Duck typing
-## also lets a scene with no car report the positions it does not have.
 ## Refuses a `--spawn-fare` naming a region that is not resident or a fare that
 ## region does not publish. Checked here rather than left to the harness, whose
 ## own fallback is a `push_warning` and the authored transform — a warning
 ## `drive.sh` does not fail on, so a typo would drive from the default start
 ## line and report success.
 func _spawn_fare_resolves(manifest: Manifest) -> bool:
-	if _spawn_region != manifest.region_id:
+	var resident: PackedStringArray = Regions.resident()
+	if resident == PackedStringArray([""]):
+		resident = PackedStringArray([manifest.region_id])
+	if not resident.has(_spawn_region):
 		_fail(
 			(
-				"--spawn-fare names region %s, and the resident region is %s"
-				% [_spawn_region, manifest.region_id]
+				"--spawn-fare names region %s, and the resident regions are %s"
+				% [_spawn_region, ", ".join(resident)]
 			)
 		)
 		return false
-	if Fares.node_by_id(Fares.load_fares(), _spawn_fare_id).is_empty():
+	if Fares.node_by_id(Fares.load_fares(Fares.path(_spawn_region)), _spawn_fare_id).is_empty():
 		_fail("--spawn-fare: %s publishes no fare %s" % [_spawn_region, _spawn_fare_id])
 		return false
 	print("spawn:   ", _spawn_region, "/", _spawn_fare_id)
@@ -443,6 +439,8 @@ func _set_spawn_fare(instance: Node) -> bool:
 	for node: Node in instance.find_children("*", "Node3D", true, false):
 		if "spawn_fare_id" in node:
 			node.set("spawn_fare_id", _spawn_fare_id)
+			# The frame is "" to the harness; naming it keeps one spelling.
+			node.set("spawn_region", _spawn_region if _spawn_region != Regions.frame() else "")
 			set_on += 1
 	if set_on == 0:
 		_fail("--spawn-fare given but %s has no drive harness" % _scene_path)
@@ -450,6 +448,14 @@ func _set_spawn_fare(instance: Node) -> bool:
 	return true
 
 
+## The first VehicleController below `instance`, or null.
+##
+## Matched by method rather than by type because naming the type is not
+## available here: `vehicle_controller.gd` reads the `InputRouter` autoload, and
+## autoloads are not registered at script-compile time under `--script`, so a
+## typed reference fails to compile with `Identifier not found: InputRouter` —
+## the same effect `tools/check.sh` documents for `--check-only`. Duck typing
+## also lets a scene with no car report the positions it does not have.
 func _find_vehicle(instance: Node) -> Node3D:
 	for node: Node in instance.find_children("*", "Node3D", true, false):
 		if node.has_method("forward_speed_kph"):
