@@ -20215,7 +20215,7 @@ frame-identical in both scenes.
 latter; the boxes overlap by ~250 m of owned far halves, so "the" region is two regions along the
 line, and each streamer loads only its own chunks within its own reach — 17 and 12 at `f_045`.
 
-🔴 **The seam drive is not frame-deterministic** — ⚠️ *corrected at `P5-9f`: one region's drive from `f_045` is not either, so this is not two streamers' doing.* Two streamers load the
+🔴 **The seam drive is not frame-deterministic** — ⚠️ *corrected at `P5-9f`: one region's drive from `f_045` is not either, so this is not two streamers' doing* — ✅ *and found and fixed at `P5-9g`: the chase rig started at `f_004` and the streamer unloaded the held road on the boot frame; the paragraph below is the superseded reading.* Two streamers load the
 neighbour's chunks off-thread, so the frame a collider arrives under the wheels varies and the car's
 line varies with it (z 420 against 416 at t 9, one run in three). Only the start line is held
 synchronously. `P5-9f` compares two runs, so it needs a repeat taken — or the chunks along the route
@@ -20273,18 +20273,65 @@ ROAD on the plate throughout.
 
 🔴 **No pair of frames from this drive `cmp`s, in one region or two.** Positions part by 0.01 m by t 1
 and ~1 m by t 10, so the evidence is four runs and the frames looked at, not a hash. The throttle
-route from `f_004` still reproduces; what differs at `f_045` is not found.
+route from `f_004` still reproduces; what differs at `f_045` is not found. ✅ *Found and fixed at
+`P5-9g`, below.*
 
 ⚠️ **The seam is under budget where `P5-9` expected it over**: 73% resident at the node, and the
 pair's worst camera stays Wan Chai's own. `P4-5` inherits the 105% it already had.
 
 **Remainder of `Q116`**: the verdict on the legal line, which is the user's; the cap's foreign mouth
 drawn as a hard edge at node 224; `_read_offside` pairing owned edges only, unlooked-at beyond this
-route; `e364`'s per-edge offset, handed to `Q103`; the `f_045` non-determinism; and `P5-9e`'s refusal,
-which leaves each region its own libraries.
+route; `e364`'s per-edge offset, handed to `Q103`; and `P5-9e`'s refusal, which leaves each region
+its own libraries. The `f_045` non-determinism is closed by `P5-9g`.
+
+### ✅ `P5-9g` — the drive from `f_045` parted from itself because the camera started at `f_004` (2026-09-16)
+
+🔴 **The cause is the boot order, not physics and not two streamers.** `DriveHarness` is the scene
+root, so its `_ready` runs last: it places the car on the start line *after* `ChaseCamera._ready` has
+snapped to the Taxi's authored transform, the `f_004` start line. The harness then holds the road
+under the car synchronously — 17 Wan Chai and 12 Causeway Bay chunks at `f_045` — and on the first
+frame `CityStreamer._collect` measures from that camera, still at `(172.3, 6.6, 26.9)`, ~1.5 km off,
+past the 400 m unload distance. **All 29 held chunks were freed before the first physics tick.** They
+streamed back off-thread on ticks 3–14, exactly while the suspension settles (wheels load at tick 9),
+with the terrain tile (y 4.35) sometimes under the tyres before the road (y 4.57). Runs parted at tick
+10–11 in lateral velocity: 2 of 6 pairs identical, the rest 5 mm and 2.02 m apart at t 10.
+
+⚠️ **The same release silenced the harness.** Its first-tick ray found nothing, printed *Nothing
+under the start line* and switched off its own `_physics_process` — so every drive started away from
+`f_004` ran with **no fall recovery**. That is `P5-9a`'s "found, not fixed" at `f_045`, `f_012` and
+`f_030`, and `f_004` was quiet only because the camera already stood there.
+
+**How it was found.** `driver.gd --trace=<file>` logs, per physics tick, the car's state at six
+decimals and the collider under it, and every collision body entering or leaving the tree with its
+tick. The first divergent tick named the settle, the ray under the car read `none` for ticks 0–6,
+and `road_t_10_03` entering twice under one path gave away the free and reload. The 1 s `%.2f` report
+could see none of that. A throwaway patch that moved the camera to the start line made four runs
+identical on all 600 ticks, before anything was designed.
+
+✅ **The fix: `ChaseCamera.snap_to_target()`, called by the harness after it teleports the car** — at
+spawn, before `hold_ground_at`, and on respawn. `_ready` calls the same method, so `f_004` is a no-op
+by construction. 🔴 **Not from `VehicleController.place_at`**: auto-right teleports through it too,
+and a snap there is a camera jolt on screen for a lift of centimetres. `city_drive.tscn` assigns
+`camera_rig`; `verify_city.gd` fails when it does not, because the harness skips an unassigned rig
+silently and the defect then drives, renders and parts from itself at tick 10 — mutation-checked,
+`check.sh` exits 1 with the line removed.
+
+**Measured.** `f_045` legal line ×4: **identical on all 600 ticks**, and identical to the probe's.
+`f_004` throttle route ×2: identical on all 360 ticks **to the pre-fix traces**, draw calls per second
+unchanged (38 / 121 / 121 / 120 / 122 / 125 / 123). *Nothing under* gone at `f_045`, `f_012`, `f_030`,
+0 held chunks freed at boot, 0 ticks with nothing under the car. `skidpad.sh` ×2 byte-identical, so the
+handling instrument never shared the defect — it has no streamer. `P5-9f`'s seam drive with
+`--debug-view=off --hud=off`, twice: frames at t 6.5 and 10 **`cmp`-identical**.
+
+⚠️ **Residual, not chased: the t 3 frame of that pair differs** — 8,339 px (0.40%) by at most 4/255,
+spread across the frame, with car position, primitives (609,008) and draw calls (129) identical. No
+temporal AA or auto-exposure ships, so it is render-side and not the car; take a later frame for a
+`cmp` until it is looked at. ⚠️ **Distant bodies still arrive on different ticks** (3–11 per pair
+after the fix) — harmless on this route because none is under the car, but a drive that outruns the
+streaming radius would meet streamed road on a tick the disk chose. Nothing here holds the route.
 
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
-broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a`–`P5-9d` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
+broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a`–`P5-9d` built 2026-09-16; `P5-9g` closed the `f_045` non-determinism the same day; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is

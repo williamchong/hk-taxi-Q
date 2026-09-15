@@ -67,6 +67,11 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## request.
 @export var regions: CityRegions
 
+## The rig that follows the car, snapped wherever this moves it — see
+## `ChaseCamera.snap_to_target` for why the rig's own `_ready` cannot cover it.
+## Assign in the scene; a scene without one skips the snap.
+@export var camera_rig: ChaseCamera
+
 var _spawn: Transform3D
 var _floor_m: float = 0.0
 var _falls: int = 0
@@ -81,7 +86,16 @@ func _ready() -> void:
 
 	_spawn = _place_on_start_line()
 	_floor_m = _spawn.origin.y - fall_margin_m
+	_snap_camera()
 	_hold_ground()
+
+
+## Before the first `_process`, which is when the streamer first asks where the
+## camera is.
+func _snap_camera() -> void:
+	if camera_rig == null:
+		return
+	camera_rig.snap_to_target()
 
 
 ## Ask the streamer for the road under the start line before the first physics
@@ -203,6 +217,7 @@ func _physics_process(_delta: float) -> void:
 	_falls += 1
 	print("fell out of the world (%d); back to the start line" % _falls)
 	vehicle.place_at(_spawn)
+	_snap_camera()
 
 
 ## Stop before the car falls for ever on a clone where the ETL has not been run.

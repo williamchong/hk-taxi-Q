@@ -10,10 +10,11 @@
 [ext_resource type="Resource" uid="uid://df6j4i2or2xy3" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Resource" uid="uid://43k707iftboe" path="res://tuning/camera.tres" id="18_cameratune"]
 
-[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions")]
+[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig")]
 script = ExtResource("6_harness")
 vehicle = NodePath("Taxi")
 regions = NodePath("Regions")
+camera_rig = NodePath("CameraRig")
 
 [node name="Regions" type="Node3D" parent="." unique_id=254386670 node_paths=PackedStringArray("camera")]
 script = ExtResource("1_regions")

@@ -88,6 +88,20 @@ var _spawn_y: float = 0.0
 ## rather than simulating a wrecked physics state to the end of its clock, and
 ## keeps one cause from printing one failure a second for the whole run.
 var _aborted: bool = false
+## `--trace=<file>`: one line per physics tick of the car's full-precision state,
+## plus one line per collision body entering the tree, each stamped with the tick.
+## Built to find the first tick two runs part at, and what arrived just before —
+## the 1 s `%.2f` report cannot say either. Empty is off.
+var _trace_path: String = ""
+## Open for the whole run and written a line at a time, so a run that hangs or
+## crashes — the one most worth diffing — still leaves its trace behind.
+var _trace_file: FileAccess = null
+var _trace_lines: int = 0
+## Built once; only `from` and `to` move tick to tick.
+var _trace_query: PhysicsRayQueryParameters3D = null
+## `Engine.get_physics_frames()` when the timeline started; -1 before `_drive`.
+## A field because the trace's body handlers stamp ticks during `_boot`.
+var _first_tick: int = -1
 ## Cleared by `_shoot` once the renderer has actually drawn. A field rather than
 ## a local because the signal handler cannot write to a local — see below.
 var _capture_pending: bool = false
@@ -105,6 +119,7 @@ func _run() -> void:
 	if instance != null:
 		await _drive()
 		_release_everything()
+	_close_trace()
 
 	# The single exit. `quit()` is reached only through here, so an early return
 	# that forgets it would leave the process running for ever with no output —
@@ -154,6 +169,15 @@ func _boot() -> Node:
 		_fail("could not load %s" % _scene_path)
 		return null
 
+	if not _trace_path.is_empty():
+		_trace_file = FileAccess.open(_trace_path, FileAccess.WRITE)
+		if _trace_file == null:
+			_fail("could not write --trace %s" % _trace_path)
+			return null
+		# Before `add_child`, so the bodies held under the start line are logged too.
+		node_added.connect(_trace_node_added)
+		node_removed.connect(_trace_node_removed)
+
 	var instance: Node = packed.instantiate()
 	# Before `add_child`: the harness places the car from its own `_ready`.
 	if not _spawn_fare_id.is_empty() and not _set_spawn_fare(instance):
@@ -182,12 +206,13 @@ func _boot() -> Node:
 ## under exactly the load it was supposed to be immune to.
 func _drive() -> void:
 	var step: float = 1.0 / float(Engine.physics_ticks_per_second)
-	var first_tick: int = Engine.get_physics_frames()
+	_first_tick = Engine.get_physics_frames()
 	var shots: Array[float] = _shot_times.duplicate()
 	var next_report: float = 0.0
 	var t: float = 0.0
 
 	while t < _seconds and not _aborted:
+		_trace_tick()
 		_apply_holds(t)
 
 		if not shots.is_empty() and t >= shots[0]:
@@ -199,7 +224,7 @@ func _drive() -> void:
 				next_report += REPORT_EVERY_S
 
 		await physics_frame
-		t = float(Engine.get_physics_frames() - first_tick) * step
+		t = float(Engine.get_physics_frames() - _first_tick) * step
 
 	if _aborted:
 		return
@@ -271,6 +296,63 @@ func _apply_holds(t: float) -> void:
 			Input.action_press(action)
 		else:
 			Input.action_release(action)
+
+
+## The tick relative to the timeline's start; negative while booting.
+func _trace_tick_index() -> int:
+	if _first_tick < 0:
+		return -1
+	return Engine.get_physics_frames() - _first_tick
+
+
+func _trace_line(line: String) -> void:
+	_trace_file.store_line(line)
+	_trace_lines += 1
+
+
+func _trace_tick() -> void:
+	if _trace_file == null or _vehicle == null:
+		return
+	var tick: int = _trace_tick_index()
+	var p: Vector3 = _vehicle.global_position
+	var v: Vector3 = _vehicle.get("linear_velocity")
+	_trace_line("tick %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f" % [tick, p.x, p.y, p.z, v.x, v.y, v.z])
+	# What stands under the car, and whose it is — a streamed body and a held one
+	# are indistinguishable from the car's state alone.
+	if _trace_query == null:
+		_trace_query = PhysicsRayQueryParameters3D.new()
+		_trace_query.exclude = [(_vehicle as CollisionObject3D).get_rid()]
+	_trace_query.from = p + Vector3.UP * 2.0
+	_trace_query.to = p + Vector3.DOWN * 10.0
+	var hit: Dictionary = _vehicle.get_world_3d().direct_space_state.intersect_ray(_trace_query)
+	if hit.is_empty():
+		_trace_line("under %d none" % tick)
+	else:
+		_trace_line("under %d %.6f %s" % [tick, hit.position.y, (hit.collider as Node).get_path()])
+
+
+func _trace_node_added(node: Node) -> void:
+	if node is CollisionObject3D:
+		_trace_line("body %d %s" % [_trace_tick_index(), node.get_path()])
+
+
+func _trace_node_removed(node: Node) -> void:
+	if node is CollisionObject3D:
+		var camera: Camera3D = root.get_viewport().get_camera_3d()
+		var eye: Vector3 = camera.global_position if camera != null else Vector3.INF
+		_trace_line("gone %d %s eye %s" % [_trace_tick_index(), node.get_path(), eye])
+
+
+func _close_trace() -> void:
+	if _trace_file == null:
+		return
+	# The scene is freed at quit, after this, and every body it frees would
+	# otherwise arrive at a closed file.
+	node_added.disconnect(_trace_node_added)
+	node_removed.disconnect(_trace_node_removed)
+	_trace_file.close()
+	_trace_file = null
+	print("trace:   %s  %d lines" % [_trace_path, _trace_lines])
 
 
 func _release_everything() -> void:
@@ -546,6 +628,8 @@ func _parse_args() -> bool:
 				if not ["mouse", "off"].has(value):
 					_fail("--touch=%s is not mouse or off" % value)
 					return false
+			"--trace":
+				_trace_path = value
 			"--asset":
 				# `asset_viewer.gd` reads this one itself (`P5-22`); it is named
 				# here so the scene's one flag is not refused as unknown.
@@ -556,16 +640,23 @@ func _parse_args() -> bool:
 
 	_dedupe_shots()
 
-	# Anchored to the repo root, not the process's working directory: Godot
-	# chdirs into `--path`, so a relative `--out` resolves inside `game/`. Every
-	# path in this skill's docs is repo-root-relative; this makes the driver
-	# agree with them.
-	if not _out_dir.is_absolute_path():
-		_out_dir = ProjectSettings.globalize_path("res://../").simplify_path().path_join(_out_dir)
+	_out_dir = _from_repo_root(_out_dir)
+	if not _trace_path.is_empty():
+		_trace_path = _from_repo_root(_trace_path)
 	if DirAccess.make_dir_recursive_absolute(_out_dir) != OK:
 		_fail("could not create output directory %s" % _out_dir)
 		return false
 	return true
+
+
+## Anchors a relative path to the repo root, not the process's working directory:
+## Godot chdirs into `--path`, so a relative `--out` would resolve inside `game/`.
+## Every path in this skill's docs is repo-root-relative; this makes the driver
+## agree with them.
+func _from_repo_root(path: String) -> String:
+	if path.is_absolute_path():
+		return path
+	return ProjectSettings.globalize_path("res://../").simplify_path().path_join(path)
 
 
 ## Sorts the requested shot times and drops any that would collide.

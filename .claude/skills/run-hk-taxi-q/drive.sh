@@ -18,6 +18,10 @@
 #                                    (repeatable; actions are the [input] names
 #                                    in project.godot — steer_left, steer_right,
 #                                    accelerate, brake_reverse, drift, look_back)
+#   --trace=file                     per-tick car state, the collider under it,
+#                                    and bodies entering/leaving, each with its
+#                                    physics tick — diff two runs for the first
+#                                    tick they part at
 #   --debug-view=off|minimal|full    debug overlay; defaults to minimal here
 #
 # Exists for the same reason tools/check.sh does: Godot exits 0 when a script

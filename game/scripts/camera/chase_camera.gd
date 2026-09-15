@@ -54,6 +54,21 @@ func _ready() -> void:
 	_fov_full_kph = profile.fov_full_kph
 	if target is VehicleController:
 		_fov_full_kph = (target as VehicleController).profile.max_speed_kph
+	snap_to_target()
+
+
+## Jump to the target instead of easing toward it, for a car that was teleported.
+##
+## `_ready` alone cannot cover the start line: `DriveHarness` is the scene root,
+## so its `_ready` places the car *after* this one has read the authored
+## transform, and the rig sat 1.5 km away at `f_004` for the first frame.
+## `CityStreamer` measures from this rig's camera, so that frame unloaded every
+## road chunk the harness had just held under the car, and they streamed back on
+## whatever tick the disk allowed — the `f_045` drive parted from itself at tick
+## 10 (`P5-9g`). Called by whoever teleports, and deliberately not from
+## `VehicleController.place_at`: auto-right uses that too, and a snap there is a
+## jolt on screen for a lift of centimetres.
+func snap_to_target() -> void:
 	_yaw = target.global_rotation.y
 	global_position = target.global_position
 

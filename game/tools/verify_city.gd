@@ -39,6 +39,9 @@ const TOLERANCE_M: float = 0.01
 ## is what makes this checkable, in both directions.
 const LAYER_SCENES: PackedStringArray = ["res://scenes/region.tscn"]
 
+## The scene the player drives, and the one whose harness teleports the car.
+const DRIVE_SCENE: String = "res://scenes/city_drive.tscn"
+
 ## The scenes that must place `LAYER_SCENES` — the layer check above is only a
 ## check on what the player sees while both of them still do.
 const REGION_HOSTS: PackedStringArray = [
@@ -64,6 +67,7 @@ func _init() -> void:
 
 	var problems: PackedStringArray = _check_documents(manifest)
 	problems.append_array(_check_layer_nodes())
+	problems.append_array(_check_camera_rig())
 	for tile: Manifest.Tile in manifest.tiles:
 		var found: PackedStringArray = _check_tile(manifest, tile, tile.id)
 		if found.is_empty():
@@ -273,6 +277,21 @@ func _check_layer_nodes() -> PackedStringArray:
 			)
 		)
 	return problems
+
+
+## The drive scene hands its harness the chase rig (`P5-9g`). Unassigned, the
+## harness skips the snap without a word, the rig starts at the authored
+## transform, and the streamer unloads the road held under any start line far
+## from it — which drives, renders, and parts from itself at tick 10. Read off
+## the `.tscn` text for `_check_layer_nodes`' reason.
+func _check_camera_rig() -> PackedStringArray:
+	var text: String = FileAccess.get_file_as_string(DRIVE_SCENE)
+	if text.is_empty():
+		return ["%s could not be read" % DRIVE_SCENE]
+	if not text.contains('camera_rig = NodePath("'):
+		return ["%s does not assign the harness its camera_rig" % DRIVE_SCENE]
+	print("  ok    %s snaps its camera rig to the start line" % DRIVE_SCENE)
+	return []
 
 
 func _check_document(what: String, named: String, locator: String) -> PackedStringArray:
