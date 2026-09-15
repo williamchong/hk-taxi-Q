@@ -20084,8 +20084,83 @@ on one and withdraws to the cap on the other; the pre-cut side built in a worktr
 its own import. ⚠️ The first after-side shots had no buildings in them at all: a `sync_generated.sh`
 with no headless `--import` behind it renders from a cache that has never seen the new tiles.
 
+### ✅ The runtime half, read off the game before any code — planned 2026-09-09 (`P5-9a`–`P5-9f`)
+
+Read off `game/` and the two shipped bundles, in the order `P5-7`'s breakdown used: the graders
+before the code, and the traps the row did not say.
+
+**Six constants, one root.** Every reader of the bundle goes through one of six hard-coded paths —
+`city_manifest.gd:28`, `generated_layer.gd:80`, `generated_road_graph.gd:14`, `generated_fares.gd:16`,
+`generated_fence.gd:14`, `generated_landmarks.gd:15` — and the manifest already resolves every path it
+names against its own directory (`_resolve`), while `fence` and `landmarks` already take theirs from
+it. So the per-region tree is one constant collapsing into the manifest, not six moves. `check.sh`
+takes no argument and runs each of the sixteen `VERIFY_TOOLS` once against that one root; the sync
+sweeps whatever the one manifest does not name, so a second region synced beside the first deletes
+it. The resident list is a fact about the build — which bundles were synced — and is written by the
+sync as `regions.json`, gitignored with them; hard rule 4 is about tuning and does not reach it.
+
+**The offset is one translation and it is already exact.** `pipeline/join.py` moves the second
+region by `GameTransform.to_game` of the other origin, which equals `city_offset(b) − city_offset(a)`
+component-wise and reads **`[1649, 0, 0]`** for the pair; both origins are whole metres (`Q7`), so the
+float sum is exact. Nothing in the scene tree owns the generated content collectively — `Tiles`, the
+eight layer nodes, `Landmarks` and `Fence` sit flat at the origin, and each script says so — so a
+`region.tscn` under a `Node3D` per region is the whole of the placement, and one streamer over N
+manifests is refused because every sibling would need the offset too. ⚠️ The two `bounds_game`
+overlap by ~250 m once translated — Wan Chai reaches x 1760 and Causeway Bay starts at x −137, the
+owned far halves — and the grids sit 1,649 m apart, not a multiple of 150, so the streamer's `aabb`
+pick is load-bearing at the seam (`P5-7f`) and a region-space cull would drop the far half.
+
+🔴 **Four documents collide on the per-region integer id, and `join.py` remaps only one.** Edge ids
+and node ids start at 0 in every region; `clearance.json`, `city.json`'s `carriageway[]`,
+`fence.json`'s `barriers[].edge` / `fenced_edges` and `fares.json`'s `nearest_edge` all key on them,
+and `fares.json`'s own `f_001` exists in both. `join.py` remaps `clearance` and nothing else, because
+nothing else is the ETL's to merge. The runtime therefore carries **one** id map per region —
+`(source_id, run)` to merged id, the frame's ids kept and the second's renumbered from `max + 1`, a
+foreign copy's id an alias of the owner's — and every document goes through it at load. No document
+is edited (`Q54`); fare identity becomes `(region_id, id)`. `RoadGraph._by_id` is not injective today
+(a duplicate warns and the later wins, `road_graph.gd:690`); under the merge a duplicate is an error,
+and `0 duplicate (source_id, run)` is the counter, reachable by loading the foreign list.
+
+🔴 **"Shared, not re-instanced" is a draw-call claim, not a memory claim.** Today one `MultiMesh`
+per library mesh per scene draws a whole region's placements in one call; a second region placed
+the obvious way — its own `layer_preview` under its own node — is another `MultiMesh` per mesh,
+**+40** draw calls on the route whether or not the `Mesh` is shared, and Godot's resource cache is by
+`res://` path, so two per-region paths are two `PackedScene`s and two vertex buffers per mesh anyway.
+So the libraries do **not** go under the region node: a city-level placer batches every resident
+region's placements into one `MultiMesh` per mesh with the delta composed into each transform, loads
+the frame's `.glb` once, and the merged per-region layers stay under the region node — tramway, box
+junctions and road marks at +1 each, signals at +0 while `Q77` ships none. `Q120` measured the libraries identical in every
+region (9 / 9 / 12 / 10), which licenses loading one; the sync `cmp`s them and refuses a difference.
+
+⚠️ **The driver cannot start a drive at the seam and cannot hold a camera in `city_drive`.** The
+start is `DriveHarness.spawn_fare_id`, a fare id authored on the scene node and reachable from no
+flag; `--camera`/`--look` are applied and then rewritten every frame by the chase camera, which
+`.claude/skills/run-hk-taxi-q/driver.gd:378` says. So the seam drive needs `--spawn-fare=<region>/<id>` first, and the A/B frames
+are `city_preview.tscn`'s. Read off `fares.json`: **`f_045`** stands on CAUSEWAY ROAD at x 1639, 10 m
+west of the line, on `e356` — the crossing Wan Chai owns — so the drive is east from there; the
+seam node the camera looks at is `(1703.2, 4.5, 437.9)`, shared by `e171` and `e356`.
+
+⚠️ **The budget at the seam is unmeasured and `resident_budget.py` cannot measure it.** It takes
+several `--region`s and grades each alone in its own frame; `P5-18` reads **105%** for Wan Chai's worst
+camera on one region, and a camera on the line holds two regions' resident sets. A `--pair` mode
+composed through the offsets comes first, so the number exists before the runtime does. It is
+expected over budget and is `P4-5`'s to answer; this task pastes it.
+
+**Ordered as `P5-7` was**: `P5-9a` the graders and the driver flag; `P5-9b` the directory with one
+region resident, byte-identical; `P5-9c` the region scene at the offset, the second region as
+scenery, human-judged at the seam camera; `P5-9d` the merged graph diffed against `join.py`'s
+**999 / 764 / 16 / 252 / 0 / 999**; `P5-9e` the libraries batched across regions at **+0**; `P5-9f`
+the drive across the line, the review point that closes the task. From `P5-9c` on, every unit
+ends on a frame.
+
+🚫 **Refused here, with the reason**: a city-wide id space assigned at export (a region's build must
+not depend on another's, `P5-7g`'s own rule, and the join is a runtime act); anchoring the scene in
+city space (`Q10`, 3.9 mm float spacing at 38 km); dropping the second region's library copies from
+the bundle now (the manifest names them and `verify_city` asserts they exist — priced, not taken).
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
-and `e364`'s per-edge offset is the finding it hands to `Q103`.**
+broken down 2026-09-09 as `P5-9a`–`P5-9f` with nothing built; and `P5-7`'s one finding, `e364`'s
+per-edge offset, is handed to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is
 Central · `Q25` for the seam the ground taught
