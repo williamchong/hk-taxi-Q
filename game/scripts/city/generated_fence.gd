@@ -10,16 +10,24 @@
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
-const PATH: String = "res://assets/generated/fence.json"
+const FILE: String = "fence.json"
 
 ## Schema this understands, matching `FENCE_SCHEMA` in `etl/pipeline/fence.py`.
 const SCHEMA_VERSION: int = 2
 
 
+## Where a region's copy is; `GeneratedRegions.selected()` for "".
+static func path(region: String = "") -> String:
+	return GeneratedRegions.dir(region) + FILE
+
+
 ## The parsed fence document, or an empty dictionary with a pushed message.
-static func load_fence(path: String = PATH) -> Dictionary:
-	return GeneratedDocument.load_object(path, SCHEMA_VERSION, missing_hint())
+static func load_fence(at: String = "") -> Dictionary:
+	return GeneratedDocument.load_object(
+		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
+	)
 
 
 ## One barrier's placement as a transform, or `null` where it has none.
@@ -61,7 +69,7 @@ static func placement_of(entry: Dictionary) -> Variant:
 ## Message for the case that reads as "nothing is fenced" rather than an error.
 static func missing_hint() -> String:
 	return (
-		"No barrier placements at %s. Run the ETL and copy its output there:\n" % PATH
+		"No barrier placements at %s. Run the ETL and copy its output there:\n" % path()
 		+ "  python -m pipeline.fence --region wan_chai\n"
-		+ "  tools/sync_generated.sh hong_kong wan_chai"
+		+ "  tools/sync_generated.sh wan_chai"
 	)

@@ -98,7 +98,7 @@ func _ready() -> void:
 
 	var nodes: Array = fares.get("nodes", [])
 	if nodes.is_empty():
-		push_warning("Fare nodes at %s are empty" % GeneratedFares.PATH)
+		push_warning("Fare nodes at %s are empty" % GeneratedFares.path())
 		return
 
 	# The graph is optional here: without it the pins still draw and only the

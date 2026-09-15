@@ -189,7 +189,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedFares.PATH)
+		print("  ok    ", GeneratedFares.path())
 	quit(1 if not problems.is_empty() else 0)
 
 

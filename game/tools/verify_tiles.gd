@@ -82,7 +82,7 @@ func _init() -> void:
 					printerr("  FAIL  ", file.get_file(), ": ", problem)
 
 	if checked == 0:
-		printerr("  FAIL  %s names no tiles" % Manifest.PATH)
+		printerr("  FAIL  %s names no tiles" % Manifest.path())
 		quit(1)
 		return
 

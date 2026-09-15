@@ -74,7 +74,7 @@ func _init() -> void:
 		return
 	if manifest.road_chunks.is_empty():
 		printerr(
-			"  FAIL  %s names no road chunks. %s" % [Manifest.PATH, Manifest.road_missing_hint()]
+			"  FAIL  %s names no road chunks. %s" % [Manifest.path(), Manifest.road_missing_hint()]
 		)
 		quit(1)
 		return

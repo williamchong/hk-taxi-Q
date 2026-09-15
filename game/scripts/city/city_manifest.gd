@@ -21,11 +21,13 @@ extends RefCounted
 ##
 ## Paths inside `city.json` are relative to the manifest, so the ETL's output
 ## directory copies anywhere under `res://` without rewriting. They are resolved
-## once, here.
+## once, here — against the region's own directory since `P5-9b`, which is why
+## a second region needs no second set of constants.
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
-const PATH: String = "res://assets/generated/city.json"
+const FILE: String = "city.json"
 
 ## The `carriageway[].clear_width_m` value that means "no cross-section here
 ## to judge" — see `carriageway_clear_width_m`.
@@ -243,6 +245,9 @@ class Tile:
 
 var city_id: String
 var region_id: String
+## The `res://` directory this manifest was read from, with no trailing slash —
+## what every relative path in it resolves against.
+var directory: String
 var tile_size_m: float
 
 ## Where game `(0, 0, 0)` sits in the source CRS — the region's north-west
@@ -493,13 +498,23 @@ var lane_width_m: float = 0.0
 var car_width_m: float = 0.0
 
 
-## The manifest, or null with a pushed message.
-static func load_manifest() -> CityManifest:
-	var document: Dictionary = GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
+## Where a region's manifest is; `GeneratedRegions.selected()` for "".
+static func path(region: String = "") -> String:
+	return GeneratedRegions.dir(region) + FILE
+
+
+## The manifest, or null with a pushed message. `region` "" is the region a
+## single-region reader opens — `--region=`, else the frame.
+static func load_manifest(region: String = "") -> CityManifest:
+	var at: String = path(region)
+	var document: Dictionary = GeneratedDocument.load_object(
+		at, SCHEMA_VERSION, missing_hint(region)
+	)
 	if document.is_empty():
 		return null
 
 	var manifest := CityManifest.new()
+	manifest.directory = at.get_base_dir()
 	manifest.city_id = str(document.get("city_id", ""))
 	manifest.region_id = str(document.get("region_id", ""))
 	manifest.tile_size_m = float(document.get("tile_size_m", 0.0))
@@ -509,29 +524,33 @@ static func load_manifest() -> CityManifest:
 	manifest.origin_northing = float(anchor.get("northing", 0.0))
 	manifest.origin_elevation = float(anchor.get("elevation", 0.0))
 
-	manifest.road_graph_path = _resolve(document.get("road_graph", ""))
-	manifest.fares_path = _resolve(document.get("fares", ""))
-	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
-	manifest.fence_path = _resolve(document.get("fence", ""))
+	manifest.road_graph_path = _resolve(document.get("road_graph", ""), manifest.directory)
+	manifest.fares_path = _resolve(document.get("fares", ""), manifest.directory)
+	manifest.landmarks_path = _resolve(document.get("landmarks", ""), manifest.directory)
+	manifest.fence_path = _resolve(document.get("fence", ""), manifest.directory)
 	# A **null** `tramway` is the "this region has no tramway" state, and
 	# `_resolve` maps it to empty. Not a branch here on purpose: `str(null)` is
 	# `"<null>"`, which would resolve to a plausible-looking path that loads
 	# nothing, so the guard belongs where every caller gets it.
-	manifest.tramway_path = _resolve(document.get("tramway"))
+	manifest.tramway_path = _resolve(document.get("tramway"), manifest.directory)
 	# Null on the same terms, and `_resolve` maps it to empty for the same
 	# `str(null)` reason spelled out above.
-	manifest.arrows_path = _resolve(document.get("arrows"))
-	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"))
-	manifest.lamps_path = _resolve(document.get("lamps"))
-	manifest.railings_path = _resolve(document.get("railings"))
-	manifest.signs_path = _resolve(document.get("signs"))
-	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
-	manifest.signals_path = _resolve(document.get("signals"))
-	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"))
-	manifest.signs_placements_path = _resolve(document.get("signs_placements"))
-	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"))
-	manifest.arrows_placements_path = _resolve(document.get("arrows_placements"))
-	manifest.railings_placements_path = _resolve(document.get("railings_placements"))
+	manifest.arrows_path = _resolve(document.get("arrows"), manifest.directory)
+	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"), manifest.directory)
+	manifest.lamps_path = _resolve(document.get("lamps"), manifest.directory)
+	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
+	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
+	manifest.roadmarks_path = _resolve(document.get("roadmarks"), manifest.directory)
+	manifest.signals_path = _resolve(document.get("signals"), manifest.directory)
+	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"), manifest.directory)
+	manifest.signs_placements_path = _resolve(document.get("signs_placements"), manifest.directory)
+	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"), manifest.directory)
+	manifest.arrows_placements_path = _resolve(
+		document.get("arrows_placements"), manifest.directory
+	)
+	manifest.railings_placements_path = _resolve(
+		document.get("railings_placements"), manifest.directory
+	)
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -549,10 +568,25 @@ static func load_manifest() -> CityManifest:
 	manifest.bounds = box(point(extent.get("min")), point(extent.get("max")))
 
 	for entry: Dictionary in document.get("tiles", []):
-		manifest.tiles.append(_tile(entry))
+		manifest.tiles.append(_tile(entry, manifest.directory))
 	for entry: Dictionary in document.get("road_surface", []):
-		manifest.road_chunks.append(_road_chunk(entry))
+		manifest.road_chunks.append(_road_chunk(entry, manifest.directory))
 	return manifest
+
+
+## A `res://` asset a bundle document names, as the file this region ships.
+##
+## The ETL spells a generated asset under `GeneratedRegions.ROOT` —
+## `landmarks.json` names `res://assets/generated/landmarks/hkcec.glb` — and
+## since `P5-9b` that root holds one directory per region, so the prefix means
+## *this region's bundle*. An authored asset lives outside it and passes through.
+## Read that way rather than re-published relative, because the old spelling is
+## still right for the ETL's own `clearance.py`, which maps the same prefix onto
+## the region's out tree.
+func resolve_asset(asset: String) -> String:
+	if not asset.begins_with(GeneratedRegions.ROOT):
+		return asset
+	return directory.path_join(asset.trim_prefix(GeneratedRegions.ROOT))
 
 
 ## Everything the streamer holds: the building tiles, then the road chunks, in
@@ -597,7 +631,7 @@ static func bearing_deg(forward: Vector3) -> float:
 ## lines and the sign lettering's atlas where the region has them, then
 ## every tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
-## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
+## region wants this plus `path()`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [road_graph_path, fares_path, landmarks_path, fence_path]
 	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
@@ -639,20 +673,20 @@ func shipped() -> PackedStringArray:
 
 ## Message for the case that reads as "there is no road" rather than an error —
 ## the road chunks are the one part of the bundle whose absence strands the car.
-static func road_missing_hint() -> String:
+static func road_missing_hint(region: String = "") -> String:
 	return (
-		"No road chunks under %s. Build the region and sync it:\n" % PATH.get_base_dir()
+		"No road chunks under %s. Build the region and sync it:\n" % path(region).get_base_dir()
 		+ "  python -m pipeline.surface --region wan_chai\n"
 		+ "  tools/sync_generated.sh wan_chai"
 	)
 
 
 ## Message for the case that reads as "there is no city" rather than an error.
-static func missing_hint() -> String:
+static func missing_hint(region: String = "") -> String:
 	return (
-		"No city manifest at %s. Build the region and sync it:\n" % PATH
+		"No city manifest at %s. Build the region and sync it:\n" % path(region)
 		+ "  python -m pipeline --region wan_chai\n"
-		+ "  tools/sync_generated.sh hong_kong wan_chai"
+		+ "  tools/sync_generated.sh wan_chai"
 	)
 
 
@@ -670,11 +704,11 @@ static func _floats(entry: Dictionary, key: String) -> PackedFloat32Array:
 
 ## One entry of `road_surface` as a single-tier `Tile` (`P5-6`): `file` is its
 ## one and only tier, so `lod()` of any tier is this file.
-static func _road_chunk(entry: Dictionary) -> Tile:
+static func _road_chunk(entry: Dictionary, base: String) -> Tile:
 	var chunk := Tile.new()
 	chunk.id = str(entry.get("id", ""))
 	chunk.is_road = true
-	var file: String = _resolve(entry.get("file", ""))
+	var file: String = _resolve(entry.get("file", ""), base)
 	if file.is_empty():
 		push_error("road chunk %s names no file" % chunk.id)
 	else:
@@ -693,11 +727,11 @@ static func _aabb_of(entry: Dictionary, what: String) -> AABB:
 	return box(point(corners[0]), point(corners[1]))
 
 
-static func _tile(entry: Dictionary) -> Tile:
+static func _tile(entry: Dictionary, base: String) -> Tile:
 	var tile := Tile.new()
 	tile.id = str(entry.get("id", ""))
 	for relative: String in entry.get("lods", []):
-		tile.lods.append(_resolve(relative))
+		tile.lods.append(_resolve(relative, base))
 
 	if tile.lods.is_empty():
 		# Reported here rather than left to the caller, which would otherwise
@@ -720,17 +754,17 @@ static func _tile(entry: Dictionary) -> Tile:
 	return tile
 
 
-## A manifest-relative path as a `res://` one. Empty stays empty, so a missing
-## key reads as "not named" rather than as the generated directory itself.
-static func _resolve(relative: Variant) -> String:
+## A manifest-relative path as a `res://` one under `base`. Empty stays empty,
+## so a missing key reads as "not named" rather than as the directory itself.
+static func _resolve(relative: Variant, base: String) -> String:
 	# ⚠️ `null` is a legitimate value, not a missing one: `city.json` writes it
 	# for an optional document the region does not ship (`P3-14`'s tramway). It
 	# has to be caught before `str`, which would turn it into `"<null>"` and
 	# resolve a path that looks real and loads nothing.
 	if relative == null:
 		return ""
-	var path: String = str(relative)
-	return PATH.get_base_dir().path_join(path) if not path.is_empty() else ""
+	var named: String = str(relative)
+	return base.path_join(named) if not named.is_empty() else ""
 
 
 static func point(values: Variant) -> Vector3:

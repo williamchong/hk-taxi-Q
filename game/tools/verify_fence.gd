@@ -65,7 +65,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedFence.PATH)
+		print("  ok    ", GeneratedFence.path())
 	quit(1 if not problems.is_empty() else 0)
 
 
@@ -224,12 +224,15 @@ func _check_against_the_graph(
 	for edge_id: int in expected:
 		if not published.has(edge_id):
 			problems.append(
-				"edge %d is fenced by the graph and absent from %s" % [edge_id, GeneratedFence.PATH]
+				(
+					"edge %d is fenced by the graph and absent from %s"
+					% [edge_id, GeneratedFence.path()]
+				)
 			)
 	for edge_id: int in published:
 		if not expected.has(edge_id):
 			problems.append(
-				"edge %d is fenced in %s and open in the graph" % [edge_id, GeneratedFence.PATH]
+				"edge %d is fenced in %s and open in the graph" % [edge_id, GeneratedFence.path()]
 			)
 
 	# 🔴 **The touchdown set must be off-grade and disjoint from the fenced one.**

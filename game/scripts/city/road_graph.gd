@@ -239,7 +239,9 @@ static func shared() -> RoadGraph:
 	var live: RoadGraph = _shared.get_ref() if _shared != null else null
 	if live == null:
 		live = RoadGraph.new()
-		live._build(GeneratedRoadGraph.load_graph(), CityManifest.load_manifest())
+		var manifest: CityManifest = CityManifest.load_manifest()
+		var at: String = manifest.road_graph_path if manifest != null else ""
+		live._build(GeneratedRoadGraph.load_graph(at), manifest)
 		_shared = weakref(live)
 	return live
 
@@ -649,7 +651,7 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 					+ "street width and will sit short of the drawn lane. Rebuild the "
 					+ "region and re-run tools/sync_generated.sh."
 				)
-				% CityManifest.PATH
+				% CityManifest.path()
 			)
 		)
 	if not edges.is_empty() and clearances.is_empty():
@@ -664,7 +666,7 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 					+ "and traffic may be routed into a wall. Rebuild the region and "
 					+ "re-run tools/sync_generated.sh."
 				)
-				% CityManifest.PATH
+				% CityManifest.path()
 			)
 		)
 	if edges.is_empty():

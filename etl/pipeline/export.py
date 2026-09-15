@@ -938,8 +938,10 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict, assets: d
         asset = str(entry.get("asset", ""))
         if landmark_id in built:
             # `sync_generated.sh` mirrors the out tree under
-            # `res://assets/generated/`, which is what makes this equality the
-            # statement "the config's asset path is the built file".
+            # `res://assets/generated/<region>/`, and the game reads this prefix
+            # as that directory (`CityManifest.resolve_asset`, `P5-9b`), which is
+            # what makes this equality the statement "the config's asset path is
+            # the built file".
             expected = f"{LANDMARK_GENERATED_ROOT}{PurePosixPath(built[landmark_id]).name}"
             if asset != expected:
                 problems.append(

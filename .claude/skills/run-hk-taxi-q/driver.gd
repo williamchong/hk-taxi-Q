@@ -139,7 +139,7 @@ func _boot() -> Node:
 	# and then fails much later, as something unrelated.
 	var manifest: Manifest = Manifest.load_manifest()
 	if manifest == null:
-		_fail("no usable city at %s — see the reason above" % Manifest.PATH)
+		_fail("no usable city at %s — see the reason above" % Manifest.path())
 		return null
 	if not _spawn_fare_id.is_empty() and not _spawn_fare_resolves(manifest):
 		return null

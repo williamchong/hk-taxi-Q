@@ -32,7 +32,7 @@ func _ready() -> void:
 	var placed: int = 0
 	for entry: Dictionary in document.get("landmarks", []) as Array:
 		var landmark_id: String = str(entry.get("id", ""))
-		var asset: String = str(entry.get("asset", ""))
+		var asset: String = manifest.resolve_asset(str(entry.get("asset", "")))
 		var packed := load(asset) as PackedScene
 		if packed == null:
 			push_error("landmark %s names %s, which did not load as a scene" % [landmark_id, asset])

@@ -172,7 +172,7 @@ static func at_fare_node(
 
 	var node: Dictionary = GeneratedFares.node_by_id(fares, fare_id)
 	if node.is_empty():
-		pose.problem = "no fare node '%s' in %s" % [fare_id, GeneratedFares.PATH]
+		pose.problem = "no fare node '%s' in %s" % [fare_id, GeneratedFares.path()]
 		return pose
 	pose.published_edge_id = int(node.get("nearest_edge", -1))
 

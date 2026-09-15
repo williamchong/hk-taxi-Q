@@ -66,6 +66,24 @@ from pipeline.surface import read_surface  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+# The game's generated tree, one directory per synced region since `P5-9b`, and
+# the `res://` spelling of it a bundle document uses for a generated asset.
+GAME_DIR = ROOT / "game"
+GENERATED_DIR = GAME_DIR / "assets" / "generated"
+GENERATED_RES_ROOT = "res://assets/generated/"
+
+
+def synced_region_dir() -> Path:
+    """The frame region's synced bundle — the first `regions.json` lists — or the
+    bare generated root where no list was written, which is a tree synced before
+    `P5-9b` and reads the way it always did."""
+    try:
+        regions = json.loads((GENERATED_DIR / "regions.json").read_text())["regions"]
+    except (OSError, ValueError, KeyError):
+        return GENERATED_DIR
+    return GENERATED_DIR / regions[0] if regions else GENERATED_DIR
+
+
 # A face this far from horizontal is not a deck top. Generous on purpose: a
 # ramp climbing 10% has a normal 0.995 up, and the loosest thing this must still
 # reject is the near-vertical side of a deck slab. Anything in 0.2-0.9 gives the
@@ -239,8 +257,8 @@ def bundle_arguments() -> argparse.ArgumentParser:
     parent.add_argument(
         "--generated",
         type=Path,
-        default=ROOT / "game" / "assets" / "generated",
-        help="the shipped bundle to grade (default: the game's)",
+        default=synced_region_dir(),
+        help="the shipped bundle to grade (default: the game's frame region)",
     )
     parent.add_argument("--lod", type=int, default=0, help="tier to measure (default: the finest)")
     parent.add_argument(

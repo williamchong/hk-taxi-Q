@@ -10,8 +10,9 @@
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
-const PATH: String = "res://assets/generated/roadgraph.json"
+const FILE: String = "roadgraph.json"
 
 ## Schema this understands, matching `ROADGRAPH_SCHEMA` in
 ## `etl/pipeline/roads.py`.
@@ -116,15 +117,25 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 const SCHEMA_VERSION: int = 12
 
 
+## Where a region's copy is; `GeneratedRegions.selected()` for "".
+static func path(region: String = "") -> String:
+	return GeneratedRegions.dir(region) + FILE
+
+
 ## The parsed graph, or an empty dictionary with a pushed message.
-static func load_graph() -> Dictionary:
-	return GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
+##
+## `at` is the path a manifest resolved (`CityManifest.road_graph_path`); "" is
+## `path()`, for tools that hold no manifest.
+static func load_graph(at: String = "") -> Dictionary:
+	return GeneratedDocument.load_object(
+		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
+	)
 
 
 ## Message for the case that reads as "there are no roads" rather than an error.
 static func missing_hint() -> String:
 	return (
-		"No road graph at %s. Run the ETL and copy its output there:\n" % PATH
+		"No road graph at %s. Run the ETL and copy its output there:\n" % path()
 		+ "  python -m pipeline.roads --region wan_chai\n"
-		+ "  cp etl/out/<city>/<region>/roadgraph.json game/assets/generated/"
+		+ "  cp etl/out/<region>/roadgraph.json game/assets/generated/<region>/"
 	)

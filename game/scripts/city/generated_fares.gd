@@ -12,8 +12,9 @@
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
-const PATH: String = "res://assets/generated/fares.json"
+const FILE: String = "fares.json"
 
 ## Schema this understands, matching `FARES_SCHEMA` in `etl/pipeline/fares.py`.
 const SCHEMA_VERSION: int = 1
@@ -33,16 +34,26 @@ const POI: String = "poi"
 const CROSS_HARBOUR: String = "cross_harbour"
 
 
+## Where a region's copy is; `GeneratedRegions.selected()` for "".
+static func path(region: String = "") -> String:
+	return GeneratedRegions.dir(region) + FILE
+
+
 ## The parsed fare nodes, or an empty dictionary with a pushed message.
-static func load_fares() -> Dictionary:
-	return GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
+##
+## `at` is the path a manifest resolved (`CityManifest.fares_path`); "" is
+## `path()`, for callers that hold no manifest.
+static func load_fares(at: String = "") -> Dictionary:
+	return GeneratedDocument.load_object(
+		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
+	)
 
 
 ## The node with this id, or an empty dictionary.
 ##
 ## Here rather than in a consumer because this file is the one place that knows
 ## the fares document's shape — the `nodes` array and the `id` and `pos` keys are
-## as much its business as `PATH` and the `kind` spellings above.
+## as much its business as `FILE` and the `kind` spellings above.
 static func node_by_id(fares: Dictionary, fare_id: String) -> Dictionary:
 	for node: Dictionary in fares.get("nodes", []) as Array:
 		if String(node.get("id", "")) == fare_id:
@@ -65,7 +76,7 @@ static func position_of(node: Dictionary) -> Variant:
 ## Message for the case that reads as "there are no fares" rather than an error.
 static func missing_hint() -> String:
 	return (
-		"No fare nodes at %s. Run the ETL and copy its output there:\n" % PATH
+		"No fare nodes at %s. Run the ETL and copy its output there:\n" % path()
 		+ "  python -m pipeline.fares --region wan_chai\n"
-		+ "  cp etl/out/<city>/<region>/fares.json game/assets/generated/"
+		+ "  cp etl/out/<region>/fares.json game/assets/generated/<region>/"
 	)

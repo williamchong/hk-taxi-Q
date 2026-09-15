@@ -11,12 +11,18 @@
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
-const PATH: String = "res://assets/generated/landmarks.json"
+const FILE: String = "landmarks.json"
 
 ## Schema this understands, matching `LANDMARKS_SCHEMA` in
 ## `etl/pipeline/export.py`.
 const SCHEMA_VERSION: int = 2
+
+
+## Where a region's copy is; `GeneratedRegions.selected()` for "".
+static func path(region: String = "") -> String:
+	return GeneratedRegions.dir(region) + FILE
 
 
 ## The parsed landmark document, or an empty dictionary with a pushed message.
@@ -24,8 +30,10 @@ const SCHEMA_VERSION: int = 2
 ## Takes a path so the runtime placer can pass the one the manifest resolved
 ## (`P1-7`: the manifest is the shipping route) while the schema and the hint
 ## stay paired here — the locator remains the only loader of this document.
-static func load_landmarks(path: String = PATH) -> Dictionary:
-	return GeneratedDocument.load_object(path, SCHEMA_VERSION, missing_hint())
+static func load_landmarks(at: String = "") -> Dictionary:
+	return GeneratedDocument.load_object(
+		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
+	)
 
 
 ## A landmark's placement as a transform, or `null` where it has none.
@@ -68,7 +76,7 @@ static func excluded_bounds_of(entry: Dictionary) -> Variant:
 ## Message for the case that reads as "there are no heroes" rather than an error.
 static func missing_hint() -> String:
 	return (
-		"No landmark placements at %s. Run the ETL and copy its output there:\n" % PATH
+		"No landmark placements at %s. Run the ETL and copy its output there:\n" % path()
 		+ "  python -m pipeline.export --region wan_chai\n"
-		+ "  tools/sync_generated.sh hong_kong wan_chai"
+		+ "  tools/sync_generated.sh wan_chai"
 	)

@@ -115,6 +115,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # `Faces` and refuses any class without a `class_materials` entry — which is
 # every building.
 from deck_error import (  # noqa: E402
+    GAME_DIR,
+    GENERATED_RES_ROOT,
     Faces,
     bundle_arguments,
     class_triangles,
@@ -1817,9 +1819,14 @@ def landmark_occupiers(
     def blocks() -> Iterator[np.ndarray]:
         for landmark in catalogue.get("landmarks", []):
             asset = str(landmark["asset"])
-            # `res://` is Godot's project root, which is `game/`. The bundle path
-            # is the tools' handle on the same tree, and it is `game/assets/…`.
-            path = generated.parent.parent / asset.removeprefix("res://")
+            # A generated asset is spelled under `res://assets/generated/` and
+            # means this region's bundle, which is `generated` itself since
+            # `P5-9b` (`CityManifest.resolve_asset`); anything else is under
+            # `res://`, Godot's project root, which is `game/`.
+            if asset.startswith(GENERATED_RES_ROOT):
+                path = generated / asset.removeprefix(GENERATED_RES_ROOT)
+            else:
+                path = GAME_DIR / asset.removeprefix("res://")
             if not path.exists():
                 raise SystemExit(
                     f"landmark '{landmark['id']}' names {asset}, which is not at {path}. "

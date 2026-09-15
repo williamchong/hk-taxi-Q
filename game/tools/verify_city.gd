@@ -53,7 +53,7 @@ func _init() -> void:
 	# A manifest that parses but lists nothing would otherwise report "0 tiles,
 	# 0 problems" and exit 0 — the Phase 1 gate passing on an empty city.
 	if manifest.tiles.is_empty():
-		printerr("  FAIL  %s names no tiles" % Manifest.PATH)
+		printerr("  FAIL  %s names no tiles" % Manifest.path())
 		quit(1)
 		return
 
@@ -71,7 +71,7 @@ func _init() -> void:
 	# naming no road is the car falling through the start line, so it fails here
 	# as an empty tile list does above.
 	if manifest.road_chunks.is_empty():
-		problems.append("%s names no road chunks" % Manifest.PATH)
+		problems.append("%s names no road chunks" % Manifest.path())
 	for chunk: Manifest.Tile in manifest.road_chunks:
 		var label: String = "road %s" % chunk.id
 		var found: PackedStringArray = _check_tile(manifest, chunk, label)
@@ -107,16 +107,16 @@ func _init() -> void:
 func _check_documents(manifest: Manifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	problems.append_array(
-		_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH)
+		_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.path())
 	)
-	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.PATH))
+	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.path()))
 	problems.append_array(
-		_check_document("landmarks", manifest.landmarks_path, GeneratedLandmarks.PATH)
+		_check_document("landmarks", manifest.landmarks_path, GeneratedLandmarks.path())
 	)
 	# Unguarded, alongside the other four: `pipeline/fence.py` writes its document
 	# on every run, so a region with nothing to close names it and carries an
 	# empty `barriers` list. A missing file means the stage never ran (`P3-29`).
-	problems.append_array(_check_document("fence", manifest.fence_path, GeneratedFence.PATH))
+	problems.append_array(_check_document("fence", manifest.fence_path, GeneratedFence.path()))
 	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
 	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
 	# so an empty path is the honest answer rather than a missing file. What the

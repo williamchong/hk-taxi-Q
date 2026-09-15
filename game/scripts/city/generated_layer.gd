@@ -77,7 +77,7 @@ const SIGNS_TEXT_MESH: String = "signs_text"
 ## fails the build. That is the check working.
 const SIGNS_TEXT_ATLAS_BUDGET_PX: int = 512 * 256
 
-const _ROOT: String = "res://assets/generated/"
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## The layer ids. Code callers pass these and never the bare string, so a
 ## misspelt layer fails to parse — which `check.sh` catches — instead of
@@ -95,7 +95,7 @@ const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
 const SIGNS: String = "signs"
 
-## One row per layer. `file` is the asset under `assets/generated/`; `noun` and
+## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
 ## the sentence that makes the layer optional, and is empty for the one layer
 ## that is not; `placements` names the document that stands a PROP layer's
@@ -185,10 +185,11 @@ static func ids() -> PackedStringArray:
 
 ## The asset's `res://` path, or "" for an id the table does not know — which
 ## is pushed as an error rather than returned quietly, because a typo here is
-## exactly the silently-diverged path this file exists to prevent.
-static func path(layer: String) -> String:
+## exactly the silently-diverged path this file exists to prevent. `region` ""
+## is `GeneratedRegions.selected()`.
+static func path(layer: String, region: String = "") -> String:
 	var row: Dictionary = _row(layer)
-	return "" if row.is_empty() else _ROOT + String(row["file"])
+	return "" if row.is_empty() else GeneratedRegions.dir(region) + String(row["file"])
 
 
 ## What the layer is called in a message: "lamp posts", "traffic signs".
@@ -211,8 +212,8 @@ static func is_optional(layer: String) -> bool:
 ## the null runs after the damage is done. `Q77` dropped the signal layer and
 ## that error then shipped in the web build — into the console `P3-9a` tells
 ## testers to read, under a row claiming 0 errors.
-static func is_present(layer: String) -> bool:
-	var at: String = path(layer)
+static func is_present(layer: String, region: String = "") -> bool:
+	var at: String = path(layer, region)
 	return not at.is_empty() and ResourceLoader.exists(at)
 
 
@@ -220,18 +221,18 @@ static func is_present(layer: String) -> bool:
 ## unloadable is not the same as absent — reporting it as "none shipped" would
 ## describe a broken asset as an empty region — so callers ask `is_present`
 ## first and treat a null here as a failure.
-static func load_layer(layer: String) -> PackedScene:
-	var at: String = path(layer)
+static func load_layer(layer: String, region: String = "") -> PackedScene:
+	var at: String = path(layer, region)
 	return null if at.is_empty() else load(at) as PackedScene
 
 
 ## The document standing a prop layer's library in the world, or "" for a
 ## layer that ships merged.
-static func placements_path(layer: String) -> String:
+static func placements_path(layer: String, region: String = "") -> String:
 	var row: Dictionary = _row(layer)
 	if row.is_empty() or String(row["placements"]).is_empty():
 		return ""
-	return _ROOT + String(row["placements"])
+	return GeneratedRegions.dir(region) + String(row["placements"])
 
 
 ## Whether the layer is a library of props placed by a document, rather than
@@ -250,7 +251,7 @@ static func missing_hint(layer: String) -> String:
 	var hint: String = (
 		"No %s at %s. Run the ETL and copy its output there:\n" % [row["noun"], path(layer)]
 		+ "  python -m pipeline.%s --region wan_chai\n" % row["module"]
-		+ "  cp etl/out/<city>/<region>/%s game/assets/generated/" % row["file"]
+		+ "  cp etl/out/<region>/%s game/assets/generated/<region>/" % row["file"]
 	)
 	var absence: String = String(row["absence"])
 	return hint if absence.is_empty() else hint + "\n" + absence

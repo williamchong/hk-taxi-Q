@@ -424,11 +424,31 @@ for tool in "${ALWAYS_TOOLS[@]}"; do
 	run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
 done
 
+# Once per synced region (P5-9b), in regions.json order, each tool handed its
+# region as --region= so every locator opens that region's directory. The list
+# is written by tools/sync_generated.sh in a fixed one-line form, which is what
+# lets sed read it with no JSON tool on the path. No list means a tree synced
+# before P5-9b, or none at all: the tools then run once as they always did and
+# fail with the missing-city hint where there is no city.
 if [[ "$VERIFY_GENERATED" != 0 ]]; then
-	for tool in "${VERIFY_TOOLS[@]}"; do
-		echo "==> $tool"
-		run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
-	done
+	regions="$(sed -n 's/^ *"regions": *\[\(.*\)\].*$/\1/p' "$ROOT/game/assets/generated/regions.json" 2>/dev/null |
+		tr ',' '\n' | tr -d ' "')"
+	if [[ -z "$regions" ]]; then
+		regions="-"
+	fi
+	while IFS= read -r region; do
+		region_args=()
+		label_suffix=""
+		if [[ "$region" != "-" ]]; then
+			region_args=(-- "--region=$region")
+			label_suffix=" [$region]"
+		fi
+		for tool in "${VERIFY_TOOLS[@]}"; do
+			echo "==> $tool$label_suffix"
+			run_godot "$tool$label_suffix" --headless --path "$ROOT/game" --script "res://tools/$tool.gd" \
+				${region_args[@]+"${region_args[@]}"}
+		done
+	done <<<"$regions"
 else
 	echo "==> verify tools"
 	echo "  SKIP  ${VERIFY_TOOLS[*]} — VERIFY_GENERATED=0."

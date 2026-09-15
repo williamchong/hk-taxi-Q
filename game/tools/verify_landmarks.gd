@@ -61,7 +61,7 @@ func _init() -> void:
 	# That the manifest and the locator name the same existing file is
 	# `verify_city.gd`'s check, with the other three documents.
 	var problems: PackedStringArray = []
-	var document: Dictionary = GeneratedLandmarks.load_landmarks()
+	var document: Dictionary = GeneratedLandmarks.load_landmarks(manifest.landmarks_path)
 	if document.is_empty():
 		# `load_landmarks` pushed the reason; an empty document is not a pass.
 		quit(1)
@@ -90,7 +90,7 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 	var problems: PackedStringArray = []
 	var landmark_id: String = str(entry.get("id", ""))
 
-	var asset: String = str(entry.get("asset", ""))
+	var asset: String = manifest.resolve_asset(str(entry.get("asset", "")))
 	var packed := load(asset) as PackedScene
 	if packed == null:
 		problems.append("%s: %s did not load as a scene" % [landmark_id, asset])

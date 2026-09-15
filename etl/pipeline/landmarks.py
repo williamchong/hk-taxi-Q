@@ -55,9 +55,10 @@ LANDMARK_MATERIAL = "landmark_vertex"
 
 ASSETS_NAME = "landmark_assets.json"
 ASSETS_SCHEMA = 1
-# Under the region out dir, and mirrored under `res://assets/generated/` once
-# `sync_generated.sh` copies the bundle — which is what makes the config's
-# `LANDMARK_GENERATED_ROOT` asset paths true in the game tree.
+# Under the region out dir, and mirrored under `res://assets/generated/<region>/`
+# once `sync_generated.sh` copies the bundle — the game reads the config's
+# `LANDMARK_GENERATED_ROOT` prefix as that directory (`P5-9b`), which is what
+# keeps those asset paths true in the game tree.
 ASSET_DIR = "landmarks"
 
 # The sources-tree directory holding the individualised (`…A0`) sheet zips the

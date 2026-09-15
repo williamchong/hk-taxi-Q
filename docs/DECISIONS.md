@@ -20182,8 +20182,28 @@ start line* at `f_045`, `f_012` and `f_030` with the car resting on road, and is
 that exists a tick later; the cause is not verified. It costs nothing but a false line in the log,
 and a seam drive will print it.
 
+### ✅ `P5-9b` — a directory per region, and the one prefix the ETL still spells flat (2026-09-16)
+
+The six constants are one: `generated_regions.gd::dir(region)` spells the root, and each locator's
+`path(region)` is that directory plus its file. `""` means the region a single-region reader holds —
+`--region=`, else the frame — so no call site outside the locators had to learn a region, and
+`check.sh` runs every verify tool once per listed region by passing the flag. Proven inert on one
+region by frames, draw calls, drive telemetry, skidpad and every verify line; PCK +6,392 B.
+
+🔴 **A bundle document still names one generated asset by an absolute path.** `landmarks.json`
+publishes HKCEC as `res://assets/generated/landmarks/hkcec.glb`, and after the move nothing is
+there. Re-publishing it relative would be a `landmarks.json` schema bump for a fact about the game's
+layout, and `pipeline/clearance.py` already reads the same prefix as *this region's out tree*. So
+the game reads it the same way: `CityManifest.resolve_asset` maps the generated prefix onto the
+manifest's own directory and passes authored assets through, `carriageway_occupancy.py` does the
+same on the tool side, and the ETL writes identical bytes. ⚠️ A second generated asset spelled any
+other way would load nothing and `verify_landmarks` is what would say so.
+
+⚠️ **The sweep now owns the top level too.** A region synced before and not listed now is deleted,
+on the 120 MB terrain precedent: nothing loads it, so nothing would complain about the bytes it adds.
+
 **Status.** 🟡 **Open — `P5-7` built 2026-09-08 (`P5-7a`–`P5-7g`); the runtime half is `P5-9`,
-broken down 2026-09-09 as `P5-9a`–`P5-9f` `P5-9a` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
+broken down 2026-09-09 as `P5-9a`–`P5-9f`; `P5-9a` and `P5-9b` built 2026-09-16; and `P5-7`'s one finding, `e364`'s
 per-edge offset, is handed to `Q103`.**
 
 **See.** `Q115` · `Q10` for the offset and the frozen bounds · `Q6` for whether the next region is

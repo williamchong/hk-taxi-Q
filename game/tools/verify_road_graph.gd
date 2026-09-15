@@ -63,7 +63,7 @@ func _init() -> void:
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
-		print("  ok    ", GeneratedRoadGraph.PATH)
+		print("  ok    ", GeneratedRoadGraph.path())
 	quit(1 if not problems.is_empty() else 0)
 
 
@@ -1058,7 +1058,7 @@ func _check_clearance(graph: RoadGraph, edges: Array, manifest: CityManifest) ->
 			problems.append(
 				(
 					"edge %d reads %s from the graph and %s from %s"
-					% [edge_id, graph.is_routable(edge_id), expected, CityManifest.PATH]
+					% [edge_id, graph.is_routable(edge_id), expected, CityManifest.path()]
 				)
 			)
 	return problems
@@ -1103,7 +1103,7 @@ func _check_car_bar(graph: RoadGraph, edges: Array, manifest: CityManifest) -> P
 		problems.append(
 			(
 				"%s names a clearance table but no car_width_m, so nothing is fenced"
-				% CityManifest.PATH
+				% CityManifest.path()
 			)
 		)
 		return problems
@@ -1147,7 +1147,7 @@ func _check_car_bar(graph: RoadGraph, edges: Array, manifest: CityManifest) -> P
 			problems.append(
 				(
 					"edge %d reads fenced=%s from the graph against %s from %s"
-					% [edge_id, fenced, expected, CityManifest.PATH]
+					% [edge_id, fenced, expected, CityManifest.path()]
 				)
 			)
 		if fenced and graph.is_routable(edge_id):

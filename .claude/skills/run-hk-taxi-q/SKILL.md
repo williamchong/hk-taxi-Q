@@ -35,7 +35,9 @@ cd etl && ../.venv/bin/python -m pipeline --region wan_chai && cd ..
 tools/sync_generated.sh
 ```
 
-Ends by reporting the file count copied into `game/assets/generated/` (140 for Wan Chai today). No
+Ends by reporting the file count copied into `game/assets/generated/wan_chai/` (215 for Wan Chai
+today). `tools/sync_generated.sh wan_chai causeway_bay` syncs both, the first the frame; a region
+left off the list is deleted from the game tree. No
 Godot import step is needed first — `drive.sh` builds `game/.godot/` on its first run, which is
 slow the first time and instant afterwards.
 
