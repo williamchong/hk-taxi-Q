@@ -32,17 +32,24 @@ const SCHEMA_VERSION: int = 1
 ## `check.sh` runs each verify tool once per region. Absent, it is the frame.
 const REGION_ARG: String = "--region="
 
+## Read once per run: every locator reaches `listed()` through `dir()`, and the
+## list is build output nothing rewrites while the game runs.
+static var _listed: PackedStringArray
+static var _listed_read: bool = false
+
 
 ## The synced regions in `regions.json` order, the frame first; empty where no
 ## list was written.
 static func listed() -> PackedStringArray:
+	if _listed_read:
+		return _listed
+	_listed_read = true
 	if not FileAccess.file_exists(PATH):
-		return PackedStringArray()
+		return _listed
 	var document: Dictionary = GeneratedDocument.load_object(PATH, SCHEMA_VERSION, "")
-	var found := PackedStringArray()
 	for region: Variant in document.get("regions", []) as Array:
-		found.append(str(region))
-	return found
+		_listed.append(str(region))
+	return _listed
 
 
 ## The region every other one is placed relative to, or "" with no list.
@@ -53,7 +60,7 @@ static func frame() -> String:
 
 ## The region a reader that holds one region opens: `--region=`, else the frame.
 static func selected() -> String:
-	var asked: String = CommandLine.value(REGION_ARG)
+	var asked: String = _asked()
 	return asked if not asked.is_empty() else frame()
 
 
@@ -62,7 +69,7 @@ static func selected() -> String:
 ## frame is first. `CityRegions` places these and `RoadGraph.shared()` merges
 ## them, so the two can never disagree about who is resident.
 static func resident() -> PackedStringArray:
-	var asked: String = CommandLine.value(REGION_ARG)
+	var asked: String = _asked()
 	if not asked.is_empty():
 		return PackedStringArray([asked])
 	var regions: PackedStringArray = listed()
@@ -73,3 +80,7 @@ static func resident() -> PackedStringArray:
 static func dir(region: String = "") -> String:
 	var id: String = region if not region.is_empty() else selected()
 	return ROOT if id.is_empty() else ROOT + id + "/"
+
+
+static func _asked() -> String:
+	return CommandLine.value(REGION_ARG)

@@ -61,11 +61,14 @@ func _ready() -> void:
 	# hints it always printed.
 	var ids: PackedStringArray = GeneratedRegions.resident()
 
-	var frame_offset: Vector3 = _offset_of(ids[0])
+	var offsets: Array[Vector3] = []
 	for id: String in ids:
+		offsets.append(_offset_of(id))
+	for index: int in ids.size():
+		var id: String = ids[index]
 		var node: Node3D = region_scene.instantiate()
 		node.name = id.to_pascal_case() if not id.is_empty() else "Region"
-		node.position = _offset_of(id) - frame_offset
+		node.position = offsets[index] - offsets[0]
 		var tiles: Node3D = _tiles_for(id)
 		node.add_child(tiles)
 		node.move_child(tiles, 0)
