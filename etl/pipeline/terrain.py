@@ -53,6 +53,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -511,6 +512,53 @@ def hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
     return covered(corners, x, z)[1]
 
 
+class Prepared(NamedTuple):
+    """A pack of triangles with everything the cover test needs that does not
+    depend on the point, taken once: `prepare` is `covered`'s first half and
+    `covered_prepared` its second, for a caller that asks one pack many
+    times — `surface.DrawnSurface` asks each cell's pack ~90,000 times a build,
+    and re-deriving these per query was the top self-time entry in both
+    marking stages' profiles."""
+
+    ax: np.ndarray
+    az: np.ndarray
+    bx: np.ndarray
+    bz: np.ndarray
+    cx: np.ndarray
+    cz: np.ndarray
+    twice_area: np.ndarray
+    scale: np.ndarray
+    magnitude: np.ndarray
+    # The three corner heights as their own arrays, not a view into the
+    # corners: fancy-indexing the `(n, 3, 3)` pack per query costs most of the
+    # saving back.
+    ha: np.ndarray
+    hb: np.ndarray
+    hc: np.ndarray
+
+
+def prepare(corners: np.ndarray) -> Prepared:
+    """`covered`'s point-independent half over an `(n, 3, 3)` pack."""
+    ax, az = corners[:, 0, 0], corners[:, 0, 2]
+    bx, bz = corners[:, 1, 0] - ax, corners[:, 1, 2] - az
+    cx, cz = corners[:, 2, 0] - ax, corners[:, 2, 2] - az
+    twice_area = bx * cz - bz * cx
+    return Prepared(
+        ax=ax,
+        az=az,
+        bx=bx,
+        bz=bz,
+        cx=cx,
+        cz=cz,
+        twice_area=twice_area,
+        scale=np.where(twice_area < 0.0, -1.0, 1.0),
+        magnitude=np.abs(twice_area),
+        ha=corners[:, 0, 1].copy(),
+        hb=corners[:, 1, 1].copy(),
+        hc=corners[:, 2, 1].copy(),
+    )
+
+
 def covered(corners: np.ndarray, x: float, z: float) -> tuple[np.ndarray, np.ndarray]:
     """Which triangles cover `(x, z)`, as a mask over `corners`, and the
     interpolated height of each one that does, in mask order.
@@ -518,28 +566,27 @@ def covered(corners: np.ndarray, x: float, z: float) -> tuple[np.ndarray, np.nda
     The mask is what lets a caller holding a mixed pack of triangles — the
     drawn caps and carriageway strips `surface.DrawnSurface` bins into one plan
     cell — tell which kind answered without a second pass, and it is the one
-    barycentric test in the pipeline: `hits` is this with the mask dropped.
+    barycentric test in the pipeline: `hits` is this with the mask dropped,
+    and `covered_prepared` is this with the pack's half taken once.
     """
-    ax, az = corners[:, 0, 0], corners[:, 0, 2]
-    bx, bz = corners[:, 1, 0] - ax, corners[:, 1, 2] - az
-    cx, cz = corners[:, 2, 0] - ax, corners[:, 2, 2] - az
+    return covered_prepared(prepare(corners), x, z)
 
-    twice_area = bx * cz - bz * cx
-    px, pz = x - ax, z - az
+
+def covered_prepared(pack: Prepared, x: float, z: float) -> tuple[np.ndarray, np.ndarray]:
+    """`covered` over a `prepare`d pack: the same test, the same association of
+    every float, so the two cannot read a point differently."""
+    px, pz = x - pack.ax, z - pack.az
     # Barycentric coordinates, scaled by the (signed) area so the sign test
     # below works without dividing first.
-    beta = px * cz - pz * cx
-    gamma = pz * bx - px * bz
-    scale = np.where(twice_area < 0.0, -1.0, 1.0)
-    magnitude = np.abs(twice_area)
-
-    hit = (beta * scale >= 0.0) & (gamma * scale >= 0.0) & ((beta + gamma) * scale <= magnitude)
+    beta = px * pack.cz - pz * pack.cx
+    gamma = pz * pack.bx - px * pack.bz
+    scale = pack.scale
+    hit = (
+        (beta * scale >= 0.0) & (gamma * scale >= 0.0) & ((beta + gamma) * scale <= pack.magnitude)
+    )
     if not hit.any():
         return hit, _NO_HITS
 
-    beta, gamma = beta[hit] / twice_area[hit], gamma[hit] / twice_area[hit]
-    return hit, (
-        corners[hit, 0, 1]
-        + beta * (corners[hit, 1, 1] - corners[hit, 0, 1])
-        + gamma * (corners[hit, 2, 1] - corners[hit, 0, 1])
-    )
+    beta, gamma = beta[hit] / pack.twice_area[hit], gamma[hit] / pack.twice_area[hit]
+    ha = pack.ha[hit]
+    return hit, ha + beta * (pack.hb[hit] - ha) + gamma * (pack.hc[hit] - ha)

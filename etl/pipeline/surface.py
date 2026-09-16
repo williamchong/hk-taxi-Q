@@ -80,7 +80,7 @@ from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 # would drag GDAL into a hand-run tool — and that argument does not reach here:
 # `pipeline.terrain` imports numpy and `pipeline.gltf` alone, and `pipeline.roads`
 # above already pulls it in. `Q58`'s rule is that a third copy should force it.
-from pipeline.terrain import covered
+from pipeline.terrain import Prepared, covered_prepared, prepare
 
 log = logging.getLogger(__name__)
 
@@ -1121,7 +1121,7 @@ class DrawnSurface:
     # caps alone were re-rolled per vertex).
     triangles: np.ndarray
     is_cap: np.ndarray
-    cells: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]]
+    cells: dict[tuple[int, int], tuple[Prepared, np.ndarray]]
     # Every drawn edge as a 3D segment, `(m, 2, 3)`: cap ring edges, rail
     # segments and the two end lines of each strip. What a point over nothing
     # drawn snaps to.
@@ -1165,7 +1165,7 @@ class DrawnSurface:
         is_cap = np.zeros(len(triangles), dtype=bool)
         is_cap[: sum(len(fan) for fan in fans)] = True
         cells = {
-            key: (triangles[found], is_cap[found])
+            key: (prepare(triangles[found]), is_cap[found])
             for key, found in _bin_by_plan_box(triangles[:, :, [0, 2]]).items()
         }
 
@@ -1281,18 +1281,18 @@ class DrawnSurface:
 
     def sampled_pieces(
         self, polygon: np.ndarray, *, thin_m: float = 0.0
-    ) -> list[tuple[np.ndarray, list[DrawnHeight]]]:
+    ) -> list[tuple[np.ndarray, np.ndarray, list[DrawnHeight]]]:
         """`split`, then `sample` at every corner of every piece toward that
         piece's centroid — the one way a marking stage places a polygon, so
         `boxjunctions._place` and `roadmarks._place` cannot drift apart on it.
-        Each piece with its corners' samples, in the piece's corner order."""
+        Each piece, its centroid, and its corners' samples in corner order."""
         pieces = []
         for piece in self.split(polygon, thin_m=thin_m):
             # A cut corner lies on a crease, and a crease can be a step as
             # well as a fold: the height is the one on this piece's side.
             centre = piece.mean(axis=0)
             samples = [self.sample(float(px), float(pz), toward=centre) for px, pz in piece]
-            pieces.append((piece, samples))
+            pieces.append((piece, centre, samples))
         return pieces
 
     def split(self, polygon: np.ndarray, *, thin_m: float = 0.0) -> list[np.ndarray]:
@@ -1352,8 +1352,8 @@ class DrawnSurface:
         pack = self.cells.get(_cell_of(x, z))
         if pack is None:
             return None, None
-        corners, is_cap = pack
-        hit, heights = covered(corners, x, z)
+        prepared, is_cap = pack
+        hit, heights = covered_prepared(prepared, x, z)
         if not len(heights):
             return None, None
         of_cap = is_cap[hit]
@@ -1470,26 +1470,36 @@ def _plan_creases(triangles: np.ndarray) -> np.ndarray:
 _CREASE_GRAZE_M = 1e-4
 
 
-def _crossing_interior(polygon: np.ndarray, segments: np.ndarray) -> np.ndarray:
-    """Which plan segments have a stretch strictly inside a convex plan polygon.
+def _crossing_interior(polygon: np.ndarray, segments: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Which plan segments have a stretch strictly inside a convex plan polygon,
+    and which could have one inside any piece cut from it.
 
     Cyrus-Beck: each polygon edge is a half-plane, each segment is clipped to
     all of them at once, and what survives is the parameter interval inside the
     closed polygon. A segment lying along the boundary survives that with a
     positive length and crosses nothing, so the interval's midpoint must also
     sit `_CREASE_GRAZE_M` inside every edge.
+
+    The second mask is the first with the depth bar halved, and it is exact: a
+    piece cut from this polygon is inside it, so a segment's stretch inside the
+    piece is within its stretch here, and the depth (distance to the boundary)
+    is concave along the stretch, so the midpoint reads at least half the
+    maximum — a segment that could cross a piece reads over half the bar here.
+    `_cut_along` carries only those into the halves; the rest are dead weight
+    at every level, and they were 90% of the candidates.
     """
     if not len(segments):
-        return np.zeros(0, dtype=bool)
-    sides = np.roll(polygon, -1, axis=0) - polygon
+        return np.zeros(0, dtype=bool), np.zeros(0, dtype=bool)
+    # Closed-ring differences without `np.roll`, which on a 4-7 corner polygon
+    # was nearly all overhead — 11% of the box stage across three calls here.
+    sides = np.empty_like(polygon)
+    sides[:-1] = polygon[1:] - polygon[:-1]
+    sides[-1] = polygon[0] - polygon[-1]
     normals = np.column_stack([-sides[:, 1], sides[:, 0]])
     # The left normal of each side points inward for one winding and outward
     # for the other; the shoelace says which this polygon is, and the
     # half-planes below want them OUTWARD — inside is `dot(p, n) <= bound`.
-    winding = float(
-        np.dot(polygon[:, 0], np.roll(polygon[:, 1], -1))
-        - np.dot(np.roll(polygon[:, 0], -1), polygon[:, 1])
-    )
+    winding = float(polygon[:, 0] @ sides[:, 1] - polygon[:, 1] @ sides[:, 0])
     if winding > 0.0:
         normals = -normals
     lengths = np.hypot(normals[:, 0], normals[:, 1])
@@ -1512,7 +1522,8 @@ def _crossing_interior(polygon: np.ndarray, segments: np.ndarray) -> np.ndarray:
     inside_m = stretch * np.hypot(spans[:, 0], spans[:, 1])
     middle = starts + np.where(stretch > 0.0, enter + 0.5 * stretch, 0.0)[:, None] * spans
     depth = (bounds[None, :] - middle @ normals.T).min(axis=1)
-    return (inside_m > _CREASE_GRAZE_M) & (depth > _CREASE_GRAZE_M)
+    long_enough = inside_m > _CREASE_GRAZE_M
+    return long_enough & (depth > _CREASE_GRAZE_M), long_enough & (depth > 0.5 * _CREASE_GRAZE_M)
 
 
 def _cut_along(polygon: np.ndarray, creases: np.ndarray, thin_m: float) -> list[np.ndarray]:
@@ -1523,13 +1534,17 @@ def _cut_along(polygon: np.ndarray, creases: np.ndarray, thin_m: float) -> list[
     pending = [(polygon, creases)]
     while pending:
         piece, candidates = pending.pop()
-        crossing = _crossing_interior(piece, candidates)
+        if not len(candidates):
+            pieces.append(piece)
+            continue
+        crossing, carried = _crossing_interior(piece, candidates)
         if not crossing.any():
             pieces.append(piece)
             continue
         chosen = int(np.flatnonzero(crossing)[0])
         start, stop = candidates[chosen]
-        rest = candidates[np.arange(len(candidates)) != chosen]
+        carried[chosen] = False
+        rest = candidates[carried]
         normal = np.array([stop[1] - start[1], start[0] - stop[0]])
         normal = normal / np.hypot(*normal)
         bound = float(normal @ start)
@@ -1565,7 +1580,7 @@ def _without_repeats(polygon: np.ndarray) -> np.ndarray:
     exactly on the cut line comes out of `clip_half_plane` twice."""
     if len(polygon) < 2:
         return polygon
-    step = polygon - np.roll(polygon, 1, axis=0)
+    step = polygon - np.concatenate([polygon[-1:], polygon[:-1]])
     return polygon[np.hypot(step[:, 0], step[:, 1]) > _MIN_SEGMENT_M]
 
 

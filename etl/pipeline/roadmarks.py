@@ -998,11 +998,10 @@ def _place(
     report.polygons_placed += 1
     report.polygons_split += int(len(sampled) > 1)
     heights: list[float] = []
-    for piece, drawn_here in sampled:
+    for piece, centre, drawn_here in sampled:
         # Asked of the piece's SIDE, not of the corner: a cut corner sits on
         # the strip's end line and `sample` counts it covered, so the piece
         # past the touchdown is over nothing only from its own side of the cut.
-        centre = piece.mean(axis=0)
         if not any(drawn.covers(float(px), float(pz), toward=centre) for px, pz in piece) and (
             _under_a_deck(above, piece, centre)
         ):

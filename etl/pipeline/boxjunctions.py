@@ -676,7 +676,7 @@ def _place(
     report.polygons_placed += 1
     report.polygons_split += int(len(sampled) > 1)
     heights: list[float] = []
-    for piece, drawn_here in sampled:
+    for piece, _, drawn_here in sampled:
         report.pieces_placed += 1
         piece_heights = [here.height_m for here in drawn_here]
         for here in drawn_here:
