@@ -17613,6 +17613,86 @@ set that is either empty or not — asserted as a partition identity at runtime 
 sensitivity that is real, `--ray-m`, is swept and published. The directional prediction moves to
 `P3-31` / `P3-32`, where it means something.
 
+✅ **`P3-31` done 2026-09-16 — the void was a cluster of nodes capped one at a time.** Two of the
+user's three screenshots, drawn top-down off the shipped bundle, were the same defect: Road Network v2
+models a junction between two dual carriageways as several nodes joined by short two-way links, one
+node where each carriageway crosses the other, and `surface.py` capped each node on its own. A link
+shorter than twice its trim radius has *both* trims clamped by `junction_trim_max_fraction`, so it
+draws as a stub in the middle and the two caps it joins stop short of each other; the ground between
+them is the grey the taxi was parked on. That is a clean population — **87 of 792** edges, every one
+authored 6.4 m, 39 two-way and 48 one-way, p10/p50/p90/max **5.6 / 9.6 / 13.5 / 15.6 m** — and it is
+named with **no new knob**: `_Edge.is_stub` is the two existing trim decisions read together, which
+is what keeps `Q72`'s objection to a free radius off the table. `_stub_clusters` unions the
+`(node, level)` groups a stub joins — **54 clusters over 139 nodes**: 36 of two, 12 of three, 2 of
+four, 3 of five, 1 of eight — and `_cap_ring` hulls the cluster's *non-stub* mouths once, plus each
+node's own through-mitres. A stub lends no corner (its mouths are the clamped trims, inside the
+junction) and keeps its ribbon under the cap, where its kerbs are hidden by `_hide_buried_kerbs` like
+any kerb under a cap and its lane lines cannot show: at most 30% of its length survives the two clamps
+and `road_markings.gdshader` fades within 6 m of a ribbon end. ⚠️ **Outside a cluster the cap is
+byte for byte the old one by construction** — a group no stub touches has no stub end to skip — and
+316 of the 455 rings are bit-identical; 139 became 54.
+
+**Measured, per box, by `P3-30`'s instrument at `--ray-m` 4.0 by area:** LOCKHART ROAD **10.24 →
+0.00 m²**, HKCEC / EXPO DRIVE EAST **5.04 → 2.22**, CONVENTION AVENUE east 12.43 → 9.52 (`P3-32`'s,
+as its row predicted), HUNG HING ROAD 10.92 → 9.98, box 3 0.12 → 0.00; pooled **38.75 → 21.73 m²**
+(**6.71 → 3.76%**), the void **16.89 → 6.11 m²** and past-kerb 18.60 → 14.72 — the past-kerb *area*
+fell too, because a cluster hull reaches paint the two-ribbon test had classed against a kerb, while
+its *share* of what is left rose 48.0 → 67.7%. Both taxi points land on road. 🔴 **The per-stub hull
+was built and refused on numbers**: one hull per stub over its two end groups covers neither taxi
+point and leaves LOCKHART at 6.05 m².
+
+**Inert where claimed.** `carriageway[]`, `offset_m` and `trim_m` byte-identical on all 792 edges;
+`kerb_hidden_m` moved on **60** edges and every one has an end at a cluster node; `roadgraph.json`,
+`clearance.json`, `fence.json`, `carve.json`, `tramway.json`, `arrows.json`, `signs.json` and
+`lamps.json` byte-identical, as they must be when no rail moves. `railings.json` moved by **8 m** of
+`drawn_m` — `metres_on_buried_kerb` 1,181.58 → 1,214.13 — a fence that stood on a stub's kerb now
+under a cap, with `shift_m` untouched. `narrowing.py` identical, `carriageway_margin.py` identical,
+`clearance_reconcile` unmoved at exit 0, `deck_error` and `overhang` pass; `kerbside_error` paints 141 m
+less (a restriction on a kerb now under a cap); `ground_clearance` samples proud of the road 1.002 →
+1.140% (area 2.189 → 2.198%), still failing on `Q24`; `carriageway_occupancy` still failing on its 21
+pre-existing edges. ⚠️ **The cap's fan and the stub ribbon under it disagree in height, and that is
+the disagreement the per-node caps already had**: |cap Y − stub ribbon Y| at stub stations p50
+**0.024** / p90 0.100 / max **0.199 m** after, against 0.018 / 0.081 / **0.255** before — same
+class, slightly better tail. `boxjunctions.json` `vertices_over_cap` 12,987 → 16,002 and its
+`height_spread_m` max 0.512 → 0.423; `paint_clearance` boxes 690 → **380** triangles with no road
+under them, coverage 93.2 → 96.3%.
+
+🔴 **A stub across the seam joins nothing (`P5-7f`).** The neighbour's build never sees this region's
+stub — it reads the run as a foreign mouth at most — so it caps the far node on its own, per node.
+Clustering here would have both builds draw that junction or neither, depending on which node named
+the cluster; `_stub_clusters` takes an `owned` predicate and refuses a stub unless both its nodes are
+this region's, so the seam draws as it did. Wan Chai and Causeway Bay carry no seam stub today (87
+and 18 stubs, `caps_with_foreign_mouth` 3 → 2 in Wan Chai because two caps that each took a foreign
+mouth are now one cluster). `test_a_stub_across_the_seam_joins_nothing` is the mutation.
+
+**Priced, because a hull can only grow.** `tools/cap_pavement.py` rasterises every level-0 cap at
+0.25 m against HyD's Pavement Polygon — the carriageway as an *area*, the only publisher that can say
+whether a corner is pavement — in three states, because HKCEC's junction read 100% off-polygon before
+and after: HyD publishes no carriageway there at all. Cap area **51,683 → 53,729 m²**; past a HyD kerb
+(within 3 m of a polygon edge) **9,023 → 9,424 m²**, the share flat at **17.5%**; over HyD's silence
+4,962 → 5,288. The worst cluster past a kerb is FLEMING / JOHNSTON at 302/796, 227.9 m² of a 674.9 m²
+cap; shot from the air it shows no paved corner at that camera, and the HENNESSY camera landed
+inside a building and read nothing. Clipping the hull to the HyD polygon stays the shape to try if a
+cluster is ever refused on this; none was. ⚠️ `--near-m` is the split's one free value and the tool
+grades, never gates.
+
+**Tests.** `stubville`: two nodes 14 m apart joined by a 9.6 m stub, 12 m arms — a point between the
+south arms is uncovered today and covered after; the ring is the four arm mouths corner for corner;
+`clusters` is **reachable at zero** by loosening `junction_trim_max_fraction` to 0.49, which lifts the
+ceiling past the radius and brings the per-node caps and the void back. `testville` reports
+`stub_edges` / `clusters` / `cluster_nodes` 0 / 0 / 0 and every existing assertion stands. The manifest
+gains a `clusters` block beside `join`; `caps[]` keeps its shape and **no schema bump** — a consumer
+asking where the drawn surface is reads a cluster cap exactly as it read a per-node one.
+
+**Evidence is a frame** (`Q62`): `city_preview.tscn` at `--camera=272,22,652 --look=288,1,632`
+(Lockhart) and `--camera=230,22,222 --look=242,1,200` (HKCEC), `--debug-view=off --hud=off`, forced
+re-import each side and shot until a hash repeated — HKCEC needed three after-shots for two to
+agree. Lockhart differs on 76,156 px: the grey wedge under the box's south-west corner is road.
+HKCEC differs on 18,792 px, the north-east wedge of box 16 and the paint now over a cap; the wide grey
+band across that frame is the pavement between the two carriageways, which is not this defect.
+Shot 3 of the three — the FLEMING ROAD ramp tail drawn at deck width onto a 10.24 m street — is a
+`_half_widths` / `Q113` item, not a junction one, and is not taken here.
+
 **See.** `Q19` for the carve and its non-watertight estate · `Q23` for `floor_on_structure_m` and
 the 1.9 m jog · `Q37` for the disjoint-axes rule the classification owes · `Q54` for why the prism
 may not be widened · `Q57` for the generalisation the two arms must avoid · `Q58` for the

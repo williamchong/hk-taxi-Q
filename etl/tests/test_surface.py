@@ -23,6 +23,7 @@ import pytest
 
 from pipeline import roads
 from pipeline.buildings import Grid
+from pipeline.config import load_config
 from pipeline.gltf import read_glb, read_render
 from pipeline.polyline import Segments, plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -42,15 +43,19 @@ from pipeline.surface import (
     SURFACE_MESH_NAME,
     DrawnSurface,
     SurfaceReport,
+    _assign_trims,
     _Builder,
     _clamped_rails,
     _deck_rims,
+    _ends_by_node_and_level,
     _half_widths,
     _insert_stations,
     _kerbside,
     _Marking,
     _on_structure_length_m,
+    _prepare,
     _rail_stations,
+    _stub_clusters,
     boundary,
     build_region,
     dedupe,
@@ -565,6 +570,38 @@ def bendville(tmp_path, testville_config):
         [
             _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
             _edge(1, 0, 2, [[300.0, 0.0, 300.0], [400.0, 0.0, 473.205]]),
+        ],
+    )
+    return testville_config, tmp_path
+
+
+@pytest.fixture
+def stubville(tmp_path, testville_config):
+    """Two dual-carriageway nodes 14 m apart, joined by the link Road Network v2
+    draws between them, each with a north and a south arm (`P3-31`).
+
+    The link is the stub: 12 m arms give a 6 m trim radius at both nodes, and
+    35% of 14 m is 4.9 m, so both its trims are clamped. Each per-node cap then
+    reaches 6 m from its node and the two stop 2 m short of each other, with
+    the stub's own 9.6 m ribbon covering only the middle of that gap — so the
+    ground at (307, 305.7), between the two south arms, is the median void.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 1, "pos": [314.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 2, "pos": [300.0, 0.0, 100.0], "kind": "endpoint"},
+            {"id": 3, "pos": [300.0, 0.0, 500.0], "kind": "endpoint"},
+            {"id": 4, "pos": [314.0, 0.0, 100.0], "kind": "endpoint"},
+            {"id": 5, "pos": [314.0, 0.0, 500.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 0, 1, [[300.0, 0.0, 300.0], [314.0, 0.0, 300.0]]),
+            _edge(1, 2, 0, [[300.0, 0.0, 100.0], [300.0, 0.0, 300.0]], width_m=12.0),
+            _edge(2, 0, 3, [[300.0, 0.0, 300.0], [300.0, 0.0, 500.0]], width_m=12.0),
+            _edge(3, 4, 1, [[314.0, 0.0, 100.0], [314.0, 0.0, 300.0]], width_m=12.0),
+            _edge(4, 1, 5, [[314.0, 0.0, 300.0], [314.0, 0.0, 500.0]], width_m=12.0),
         ],
     )
     return testville_config, tmp_path
@@ -2284,3 +2321,100 @@ class TestJoinCaps:
         assert without.caps_with_foreign_mouth == 0
         assert without.caps_in_neighbour == 0
         assert without.foreign_ends == 0
+
+
+class TestStubClusters:
+    """`P3-31`: nodes joined by a link clamped at both ends are one junction and
+    get one cap, so the ground between their per-node caps is road.
+
+    Wan Chai's HKCEC and Lockhart / Fleming junctions are the sites; `Q104`'s
+    box-junction grader is what measured them, and the per-node cap left the
+    taxi parked on grey in both. Two of `stubville`'s three tests are the
+    mutation: with the ceiling loosened the same graph has no stub, no cluster
+    and the void back, which is what makes `clusters` a counter (`Q72`).
+    """
+
+    VOID = np.array([[307.0, 305.7], [307.0, 294.3]])
+
+    def test_a_stub_cluster_is_capped_once_and_the_void_is_road(self, stubville, tmp_path) -> None:
+        city, _ = stubville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        assert report.stub_edges == 1
+        assert report.clusters == 1
+        assert report.cluster_nodes == 2
+        assert report.junctions == 1
+        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
+        assert _covered(self.VOID, corners).all()
+        assert _manifest(tmp_path)["clusters"] == {
+            "stub_edges": 1,
+            "count": 1,
+            "nodes": 2,
+        }
+
+    def test_a_looser_ceiling_dissolves_the_cluster(self, stubville, tmp_path) -> None:
+        """At 49% of 14 m the ceiling is 6.86 m, past the 6 m radius, so neither
+        trim is clamped: no stub, two per-node caps, and the void is back."""
+        yaml = (tmp_path / "testville.yaml").read_text(encoding="utf-8")
+        assert yaml.count("junction_trim_max_fraction: 0.35") == 1
+        (tmp_path / "loose.yaml").write_text(
+            yaml.replace("junction_trim_max_fraction: 0.35", "junction_trim_max_fraction: 0.49"),
+            encoding="utf-8",
+        )
+        loose = load_config(tmp_path / "loose.yaml")
+
+        report = build_region(loose, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        assert report.clamped_trims == 0
+        assert report.stub_edges == 0
+        assert report.clusters == 0
+        assert report.junctions == 2
+        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
+        assert not _covered(self.VOID, corners).any()
+
+    def test_the_stub_lends_no_corner_to_the_cluster_cap(self, stubville, tmp_path) -> None:
+        """The cap is the hull of the four arm mouths: 12 m wide, from the north
+        mouths at z 294 to the south mouths at z 306, and 300 - 6 to 314 + 6
+        along. A stub corner in the hull could only shrink nothing — it lies
+        inside — so the check is the ring itself, corner for corner."""
+        city, _ = stubville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+
+        ((level, ring),) = report.cap_rings
+        assert level == 0
+        plan = {(round(float(x), 3), round(float(z), 3)) for x, _, z in ring}
+        assert plan == {(294.0, 294.0), (320.0, 294.0), (320.0, 306.0), (294.0, 306.0)}
+
+    def test_a_stub_across_the_seam_joins_nothing(self, stubville, tmp_path) -> None:
+        """`P5-7f`'s seam: the neighbour never sees this region's stub, so it caps
+        the far node alone. Clustering it here would draw that junction twice or
+        not at all, so a stub is refused unless both its nodes are owned."""
+        city, _ = stubville
+        graph = json.loads((tmp_path / "out" / "middle" / ROADGRAPH_NAME).read_text())
+        style = city.roads.surface
+        report = SurfaceReport()
+        edges = [_prepare(edge, style, report) for edge in graph["edges"]]
+        ends = _ends_by_node_and_level(graph["edges"], edges)
+        _assign_trims(ends, edges, style, report)
+        assert edges[0].is_stub
+
+        both = _stub_clusters(ends, edges, SurfaceReport(), owned=lambda node: True)
+        assert [keys for keys in both if len(keys) >= 2] == [[(0, 0), (1, 0)]]
+
+        refused = SurfaceReport()
+        one = _stub_clusters(ends, edges, refused, owned=lambda node: node != 1)
+        assert all(len(keys) == 1 for keys in one)
+        assert (refused.stub_edges, refused.clusters, refused.cluster_nodes) == (0, 0, 0)
+
+    def test_a_city_without_stubs_is_capped_as_it_always_was(self, testville, tmp_path) -> None:
+        """Every other fixture's assertions are the byte-identity check; this
+        one just says the counters agree that nothing clustered."""
+        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
+        assert (report.stub_edges, report.clusters, report.cluster_nodes) == (0, 0, 0)
+        assert _manifest(tmp_path)["clusters"] == {
+            "stub_edges": 0,
+            "count": 0,
+            "nodes": 0,
+        }

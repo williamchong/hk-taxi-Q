@@ -137,6 +137,7 @@ from overhang import (  # noqa: E402
 )
 from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
+from pipeline.polyline import Segments  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -2513,6 +2514,28 @@ def road_names(graph: dict[str, Any]) -> dict[int, str]:
         if chosen:
             names[int(edge["id"])] = str(chosen)
     return names
+
+
+def street_namer(graph: dict[str, Any]) -> Callable[[float, float], str]:
+    """A plan point to the street nearest it, for a row a reader can go and look at.
+
+    ⚠️ **`Segments.nearest`, not the nearest polyline vertex.** Hand-rolled, this
+    measured to vertices, so a long straight edge with two distant endpoints lost
+    to a denser-vertexed side street and a box took the wrong name
+    (`box_extent.py`). The shared join clamps to the segment. ⚠️ **Level 0 only,
+    as every other caller passes** (`polyline.Segments.nearest`): a deck overhead
+    is not the street a mark is painted on.
+    """
+    names = road_names(graph)
+    level_0 = [
+        edge
+        for edge in graph["edges"]
+        if int(edge["elevation_level"]) == 0 and int(edge["id"]) in names
+    ]
+    if not level_0:
+        return lambda x, z: "unnamed"
+    segments = Segments.of(level_0)
+    return lambda x, z: names.get(segments.nearest(x, z).edge, "unnamed")
 
 
 if __name__ == "__main__":

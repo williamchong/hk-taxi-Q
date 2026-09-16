@@ -95,7 +95,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import road_names  # noqa: E402
+from carriageway_occupancy import street_namer  # noqa: E402
 from deck_error import (  # noqa: E402
     Faces,
     bundle_arguments,
@@ -108,7 +108,6 @@ from pipeline import gdb  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.geometry import inside_polygon  # noqa: E402
-from pipeline.polyline import Segments  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -385,25 +384,11 @@ def name_boxes(graph: dict[str, Any], boxes: list[SourceBox]) -> list[str]:
     ⚠️ **Naming only.** Nothing here scores a box, and the nearest edge is not
     treated as its host — a box spans several arms and has none
     (`boxjunctions.py`). Two boxes on one street are separated by the centroid
-    printed beside the name, which is why the table carries both.
-
-    ⚠️ **`Segments.nearest`, not the nearest polyline vertex.** Hand-rolled, this
-    measured to vertices, so a long straight edge with two distant endpoints lost
-    to a denser-vertexed side street and the box took the wrong name. The shared
-    join clamps to the segment. ⚠️ **Level 0 only, as every other caller passes**
-    (`polyline.Segments.nearest`): a deck overhead is not the street a box is
-    painted on.
+    printed beside the name, which is why the table carries both. The join is
+    `carriageway_occupancy.street_namer`'s, level 0 only.
     """
-    named = road_names(graph)
-    level_0 = [
-        edge
-        for edge in graph["edges"]
-        if int(edge["elevation_level"]) == 0 and int(edge["id"]) in named
-    ]
-    if not level_0:
-        return ["unnamed"] * len(boxes)
-    segments = Segments.of(level_0)
-    return [named.get(segments.nearest(*box.centre).edge, "unnamed") for box in boxes]
+    name_of = street_namer(graph)
+    return [name_of(*box.centre) for box in boxes]
 
 
 @dataclass(frozen=True)

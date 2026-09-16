@@ -822,6 +822,24 @@ Common emoji for this project:
   **18 of 20** boxes and is flat from 1.5 m to 15 m, so a sweep cannot see the undercount;
   `unattributed` must stay **0**. ⚠️ It **grades rather than checks** and exits 0 whatever it finds.
   Numbers in `Q104`.
+- 🔴 **`_Edge.is_stub`, `_stub_clusters`, `_cap_ring`'s corner rule, or `junction_trim_max_fraction`:
+  paste `roadsurface.json`'s `clusters` block (87 stubs / 54 clusters / 139 nodes) and `caps` count
+  before and after, `tools/box_extent.py` PER BOX, `tools/cap_pavement.py`'s two pooled lines, and
+  the `carriageway[]` / `offset_m` / `trim_m` byte-identity** (`P3-31`, `Q104`). A junction between
+  two dual carriageways is several nodes joined by stubs — links clamped at both ends — and since
+  `P3-31` one hull caps the cluster; a stub lends **no corner** and keeps its ribbon under the cap.
+  ⚠️ **No new knob**: a stub is the two existing trim decisions read together, and the cluster count
+  is reachable at zero by loosening the fraction (`test_a_looser_ceiling_dissolves_the_cluster`), so
+  mutation-check it rather than reading 54. 🔴 **A stub across a seam joins NOTHING** — the neighbour
+  never sees it and caps the far node alone, so clustering it draws that junction twice or not at
+  all; `_stub_clusters` takes `owned` for that reason and `test_a_stub_across_the_seam_joins_nothing`
+  is the ratchet. ⚠️ **A hull can only grow, so price it**: `cap_pavement.py` reads HyD's Pavement
+  Polygon in THREE states, because HKCEC has no HyD carriageway under it at all and a two-state
+  reading prices the change against a publisher's silence; quote past-kerb and unsurveyed apart, at
+  one `--cell-m` and `--near-m`. ⚠️ **The cap's fan and the stub ribbon under it disagree in height**
+  (max 0.199 m; the per-node caps read 0.255) — the old cap-over-ribbon overlap, not a new one, so
+  quote both sides. ⚠️ **The evidence is a frame and the first after-shot may not repeat** — HKCEC
+  needed three; shoot until a hash repeats. Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter

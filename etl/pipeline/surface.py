@@ -40,7 +40,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -439,6 +439,17 @@ class SurfaceReport:
     foreign_ends: int = 0
     caps_with_foreign_mouth: int = 0
     caps_in_neighbour: int = 0
+    # `P3-31`: edges clamped at both ends (`_Edge.is_stub`), the clusters of
+    # nodes those stubs join, and the nodes in them. A cluster is capped once,
+    # so `junctions` falls by `cluster_nodes - clusters` against the per-node
+    # count. 🔴 **`clusters` is reachable at zero** — raise
+    # `junction_trim_max_fraction` until no ceiling binds and every node is
+    # capped on its own again — which is what makes it a counter rather than a
+    # tautology (`Q72`); `test_a_looser_ceiling_dissolves_the_cluster` is the
+    # mutation.
+    stub_edges: int = 0
+    clusters: int = 0
+    cluster_nodes: int = 0
     # Edge **ends** that resolved to half of an opposed one-way pair — two per
     # pair, because each half publishes its own offset. Reported because it is
     # the population two markings depend on and neither the graph nor the ribbon
@@ -1344,6 +1355,14 @@ class _Edge:
     shift_m: float = 0.0
     trim_start_m: float = 0.0
     trim_end_m: float = 0.0
+    # Whether each trim was held to `junction_trim_max_fraction`'s length
+    # ceiling rather than reaching the junction radius (`P3-31`). Filled by
+    # `_assign_trims` beside the trims themselves, because the two are one
+    # decision: an edge clamped at *both* ends is a stub — a link the source
+    # drew between two nodes of one junction, shorter than the caps it joins
+    # need — and the stub's ribbon is what is left after both clamps.
+    clamped_start: bool = False
+    clamped_end: bool = False
     # Filled by `_shape`, once the trims are known. The two carriageway
     # boundaries are stored rather than recomputed so the junction cap is built
     # from the same numbers the ribbon was — a cap derived from an unclamped
@@ -1385,6 +1404,22 @@ class _Edge:
     kerb_near: int = MARKING_KERB_ABSENT
     kerb_off: int = MARKING_KERB_ABSENT
     restrictions: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
+
+    @property
+    def is_stub(self) -> bool:
+        """A link between two nodes of one junction, clamped at both ends.
+
+        No new knob, and deliberately so (`Q72`): the definition is the two
+        existing trim decisions read together. Road Network v2 models a
+        junction between two dual carriageways as a cluster of nodes joined by
+        short links, one node where each carriageway crosses the other, and a
+        link shorter than twice its own trim radius is such a cluster's
+        interior — 87 of Wan Chai's 792 edges, p50 9.6 m. Each end of one is
+        clamped to 35% of its length, so the two per-node caps it joins stop
+        short of each other and the ground between them is the median void
+        `P3-31` names (`Q104`).
+        """
+        return self.clamped_start and self.clamped_end
 
     def corner(self, at_start: bool, *, on_left: bool) -> np.ndarray | None:
         """One of the two corners this ribbon presents to a junction."""
@@ -1510,17 +1545,33 @@ def build_region(
     owner_of = Ownership(city, region_id, city.game_transform(region_id))
     node_plan = {int(node["id"]): (node["pos"][0], node["pos"][2]) for node in graph["nodes"]}
     caps: list[_Cap] = []
-    for (node, level), group in ends.items():
-        if len(group) >= 2 and owner_of(np.asarray(node_plan[node])) != region_id:
+    # One cap per cluster of nodes joined by stubs (`P3-31`), and per node
+    # everywhere else — `_stub_clusters` returns the latter as singletons, so
+    # this loop has one shape. Every node of a cluster is owned, so its lowest
+    # passes the ownership test below and a cluster is never left to the
+    # neighbour; the test still runs so that there is one rule, not two.
+    clusters = _stub_clusters(
+        ends,
+        every_edge,
+        report,
+        owned=lambda node: owner_of(np.asarray(node_plan[node])) == region_id,
+    )
+    for keys in clusters:
+        groups = [ends[key] for key in keys]
+        (node, level) = keys[0]
+        if (
+            sum(len(group) for group in groups) >= 2
+            and owner_of(np.asarray(node_plan[node])) != region_id
+        ):
             # An upper bound on what the neighbour draws: `_cap_ring` can still
             # refuse a group of two whose corners do not make a ring.
             report.caps_in_neighbour += 1
             continue
-        ring = _cap_ring(group, every_edge, report)
+        ring = _cap_ring(groups, every_edge, report)
         if ring is None:
             continue
         caps.append(_Cap(level, ring))
-        if any(end.foreign for end in group):
+        if any(end.foreign for group in groups for end in group):
             report.caps_with_foreign_mouth += 1
     _hide_buried_kerbs(edges, caps, report)
     # Held here rather than beside the `builder.fan` loop below, because that
@@ -2112,15 +2163,82 @@ def _assign_trims(
         for end in group:
             edge = edges[end.edge]
             ceiling = edge.length_m * style.junction_trim_max_fraction
+            clamped = ceiling < radius
             if end.at_start:
                 edge.trim_start_m = min(radius, ceiling)
+                edge.clamped_start = clamped
             else:
                 edge.trim_end_m = min(radius, ceiling)
+                edge.clamped_end = clamped
             if end.foreign:
                 continue
             report.trimmed_ends += 1
-            if ceiling < radius:
+            if clamped:
                 report.clamped_trims += 1
+
+
+def _stub_clusters(
+    ends: dict[tuple[int, int], list[_End]],
+    edges: list[_Edge],
+    report: SurfaceReport,
+    *,
+    owned: Callable[[int], bool],
+) -> list[list[tuple[int, int]]]:
+    """The `(node, level)` groups that one junction cap should close together.
+
+    `P3-31`. Union-find over the stubs: each joins the two groups at its ends,
+    and a component of two or more groups is a cluster. Same level only, which
+    `_ends_by_node_and_level`'s key already enforces — a stub is one edge on one
+    level, so it can only ever join two groups of that level. Groups no stub
+    touches are returned as singletons, so the caller has one list to cap.
+
+    🔴 **A stub joins two nodes THIS region owns, or it joins nothing.** The
+    neighbour's build never sees an owned stub — it reads the run as a foreign
+    mouth at most (`P5-7f`) — so it caps the far node on its own, per node,
+    exactly as before `P3-31`. If this build clustered across the seam the two
+    would either both draw that node's junction or neither would, depending on
+    which node the cluster was named by; refusing the stub leaves the seam
+    drawn as it was, one cap per node and no hole. A foreign stub is refused
+    for the same reason from the other side. Every node of a cluster is
+    therefore owned, and `build_region`'s ownership test on its lowest node is
+    the same test every singleton gets.
+
+    Sorted by lowest key, and each cluster sorted, so the caps are emitted in
+    an order that does not depend on dictionary history.
+    """
+    keys_of_edge: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for key, group in ends.items():
+        for end in group:
+            if not end.foreign and edges[end.edge].is_stub and owned(key[0]):
+                keys_of_edge[end.edge].append(key)
+    # A stub with one end at an owned node and the other across the line has
+    # gathered one key: it joins nothing, and it is not a stub of this region.
+    keys_of_edge = {edge: keys for edge, keys in keys_of_edge.items() if len(keys) == 2}
+
+    parent: dict[tuple[int, int], tuple[int, int]] = {}
+
+    def find(key: tuple[int, int]) -> tuple[int, int]:
+        while parent.setdefault(key, key) != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    for keys in keys_of_edge.values():
+        # Both ends are in a group of two or more — a trim is only assigned
+        # there — so a stub always has exactly two keys, one per end.
+        first, second = keys
+        parent[find(first)] = find(second)
+    report.stub_edges += len(keys_of_edge)
+
+    members: dict[tuple[int, int], list[tuple[int, int]]] = defaultdict(list)
+    for key in ends:
+        members[find(key)].append(key)
+    clusters = sorted(sorted(keys) for keys in members.values())
+    for keys in clusters:
+        if len(keys) >= 2:
+            report.clusters += 1
+            report.cluster_nodes += len(keys)
+    return clusters
 
 
 def _cells(low: np.ndarray, high: np.ndarray, level: int) -> list[tuple[int, int, int]]:
@@ -2895,8 +3013,10 @@ def _out(plan: np.ndarray) -> np.ndarray:
     return np.array([plan[0], 0.0, plan[1]])
 
 
-def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> np.ndarray | None:
-    """The junction polygon closing one node at one level, or None if there is none.
+def _cap_ring(
+    groups: list[list[_End]], edges: list[_Edge], report: SurfaceReport
+) -> np.ndarray | None:
+    """The junction polygon closing one node — or one cluster of nodes — at one level.
 
     Built from the two carriageway corners each ribbon presents to the node, so
     the cap meets every arm along that arm's full width — plus, since the
@@ -2920,21 +3040,48 @@ def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> n
     A group of one is a
     ribbon with nothing to join to — a map edge, or a ramp dead-ending against a
     deck it cannot reach — and gets no cap and no trim.
+
+    🔴 **A cluster of groups is one cap (`P3-31`), and the stubs joining them
+    contribute no corners.** A stub's mouths lie *inside* the junction — each
+    is a clamped trim, short of where the cap needs to reach — and a hull
+    over them is the per-node cap that left the median void. The hull is over
+    the corners of every other arm in the cluster, and the stubs keep their
+    trimmed ribbons under it: the same colour at the same height in the same
+    material as the cap, so the coplanar pair cannot be told apart, and their
+    kerbs are hidden by `_hide_buried_kerbs` like any kerb under a cap. Their
+    lane lines cannot show through either: a stub keeps at most 30% of its
+    length as ribbon, under 5 m on this region, and `road_markings.gdshader`
+    fades every line within 6 m of a ribbon end.
+
+    ⚠️ **Outside a cluster this is byte for byte the per-node cap**, by
+    construction rather than by a branch: a stub's ends both lie in groups the
+    stub joins, so a group no stub touches has no stub ends to skip. The
+    fallback to every corner is for a cluster with fewer than three non-stub
+    corners — two nodes joined by a stub and nothing else, which no source
+    draws but a fixture might.
     """
-    if len(group) < 2:
+    if sum(len(group) for group in groups) < 2:
         return None
-    corners = [
-        corner
-        for end in group
-        for on_left in (True, False)
-        if (corner := edges[end.edge].corner(end.at_start, on_left=on_left)) is not None
-    ]
+    ends = [end for group in groups for end in group]
+    corners = _corners([end for end in ends if not edges[end.edge].is_stub], edges)
+    if len(corners) < 3:
+        corners = _corners(ends, edges)
     if len(corners) < 3:
         return None
-    through = _through_corners(group, edges)
+    through = [apex for group in groups for apex in _through_corners(group, edges)]
     report.through_movements += len(through)
     ring = hull(np.vstack(corners + through))
     return ring if len(ring) >= 3 else None
+
+
+def _corners(ends: list[_End], edges: list[_Edge]) -> list[np.ndarray]:
+    """The two carriageway corners each of these ends presents to its node."""
+    return [
+        corner
+        for end in ends
+        for on_left in (True, False)
+        if (corner := edges[end.edge].corner(end.at_start, on_left=on_left)) is not None
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -3000,6 +3147,16 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                 "caps_with_foreign_mouth": report.caps_with_foreign_mouth,
                 "caps_in_neighbour": report.caps_in_neighbour,
             },
+            # `P3-31`: the stubs and the clusters they join, so a reader can
+            # tell how many of `caps` close more than one node. Counters only
+            # and no ring is marked, because a consumer of `caps` is asking
+            # where the drawn surface is and a cluster cap answers that the
+            # same way a per-node one does.
+            "clusters": {
+                "stub_edges": report.stub_edges,
+                "count": report.clusters,
+                "nodes": report.cluster_nodes,
+            },
             "carriageway": [
                 {
                     "edge": edge_id,
@@ -3058,6 +3215,13 @@ def main(argv: list[str] | None = None) -> int:
         "  %d ends trimmed back from a junction, %d of them clamped by edge length",
         report.trimmed_ends,
         report.clamped_trims,
+    )
+    log.info(
+        "  junction clusters: %d stubs clamped at both ends join %d nodes into %d clusters, "
+        "each capped once",
+        report.stub_edges,
+        report.cluster_nodes,
+        report.clusters,
     )
     # `Q107`. ⚠️ **The refusals are named in the same line as the cuts**, because
     # they are the same population split two ways — a station the deck could
