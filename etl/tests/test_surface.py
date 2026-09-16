@@ -1073,6 +1073,36 @@ def dualville(tmp_path, testville_config):
     return testville_config, tmp_path
 
 
+def _abreast(tmp_path: Path, *offsets_m: float) -> None:
+    """Straight one-way ribbons side by side, each running back the way the last came.
+
+    `_write_graph`'s own argument one level up: the envelope is the same in
+    every opposed-pair case and the only thing they differ in is the spacing, so
+    written out per test the one interesting number is buried in forty lines of
+    nodes. Anti-parallel because that is what makes two ribbons a pair at all —
+    the search asks their chords.
+    """
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    for index, offset in enumerate(offsets_m):
+        low = [100.0, 0.0, 300.0 + offset]
+        high = [500.0, 0.0, 300.0 + offset]
+        first, second = 2 * index, 2 * index + 1
+        nodes.append({"id": first, "pos": low, "kind": "endpoint"})
+        nodes.append({"id": second, "pos": high, "kind": "endpoint"})
+        forwards = index % 2 == 0
+        edges.append(
+            _edge(
+                index,
+                first if forwards else second,
+                second if forwards else first,
+                [low, high] if forwards else [high, low],
+                direction="forward",
+            )
+        )
+    _write_graph(tmp_path, nodes, edges)
+
+
 def _manifest(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
 
@@ -2005,31 +2035,8 @@ class TestMarkingPayload:
         term from `_opposed_gaps`' `reach` and this fails, which is the whole of
         what says the term is doing something.
         """
-        _write_graph(
-            tmp_path,
-            [
-                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
-                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
-                {"id": 2, "pos": [100.0, 0.0, 309.8], "kind": "endpoint"},
-                {"id": 3, "pos": [500.0, 0.0, 309.8], "kind": "endpoint"},
-            ],
-            [
-                _edge(
-                    0,
-                    0,
-                    1,
-                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
-                    direction="forward",
-                ),
-                _edge(
-                    1,
-                    3,
-                    2,
-                    [[500.0, 0.0, 309.8], [100.0, 0.0, 309.8]],
-                    direction="forward",
-                ),
-            ],
-        )
+        # 9.6 m ribbons 9.8 m apart: a 0.2 m seam, under the 0.5 m kerb.
+        _abreast(tmp_path, 0.0, 9.8)
         report = build_region(testville_config, "middle", out_root=tmp_path / "out")
 
         [(here, there, gap)] = [tuple(row) for row in _manifest(tmp_path)["opposed_pairs"]]
@@ -2046,31 +2053,8 @@ class TestMarkingPayload:
     def test_two_ribbons_a_median_apart_are_two_roads(self, tmp_path, testville_config) -> None:
         """The other side of it: a gap a kerb could not close is a median, and
         the pair is refused rather than painted over."""
-        _write_graph(
-            tmp_path,
-            [
-                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
-                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
-                {"id": 2, "pos": [100.0, 0.0, 312.0], "kind": "endpoint"},
-                {"id": 3, "pos": [500.0, 0.0, 312.0], "kind": "endpoint"},
-            ],
-            [
-                _edge(
-                    0,
-                    0,
-                    1,
-                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
-                    direction="forward",
-                ),
-                _edge(
-                    1,
-                    3,
-                    2,
-                    [[500.0, 0.0, 312.0], [100.0, 0.0, 312.0]],
-                    direction="forward",
-                ),
-            ],
-        )
+        # 2.4 m of clear ground between the two ribbons: a median, not a seam.
+        _abreast(tmp_path, 0.0, 12.0)
         report = build_region(testville_config, "middle", out_root=tmp_path / "out")
 
         assert report.opposed_pair_ends == 0

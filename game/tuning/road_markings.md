@@ -46,7 +46,8 @@ draws that as geometry, and since `Q125` it also draws the *inferred* join, as t
 same mark, along the stretches no surveyed line covers. ⚠️ **Do not switch
 `draw_pair_join` back on**: it would be a second line beside the first, at **28 cm**
 against the survey's 15, and a shader cannot yield for part of an edge — 24 of the
-region's 95 opposed pairs are only *partly* surveyed. `centre_at` stays in the codec
+region's 95 opposed pair **ends** — the population this codec field carries — are only *partly*
+surveyed. `centre_at` stays in the codec
 for a region whose survey is thinner.
 
 ⚠️ **`draw_centre_line` still owns the TWO-WAY street's line**, which is a different

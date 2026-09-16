@@ -20819,6 +20819,15 @@ under the drawn width*, exactly. A candidate further off could never have publis
 because `Q72` rejected a divider rule built on a free radius whose count ran **8 -> 29 -> 49 -> 80**
 over 10 -> 30 m, and this rule has no radius to sweep.
 
+⚠️ **CORRECTED 2026-09-16 (`Q125`): the two bounds are no longer the same number, and this
+paragraph's "exactly" no longer holds.** The reach is the drawn width **plus one kerb**, because a
+second consumer arrived that draws the join as geometry rather than in a lane coordinate and so does
+not inherit `steps < 8 * lanes`. What survives unchanged is the *policy* — no free radius, nothing
+swept for a count — and the codec's own population: every pair the kerb term adds fails the publish
+guard, which is why `opposed_pairs_unpublishable` rose **5 → 13** while the ends carrying a
+`centre_step` stayed the **same 95 edges** and `roads.glb` did not move. Read this paragraph as the
+*codec's* bound; `Q125` holds the search's.
+
 ⚠️ **The one free value is the angle, so it is config and it is swept** —
 `roads.surface.opposed_pair_bearing_deg`, refused at 0 and at 90 or more:
 
@@ -22522,12 +22531,32 @@ shader's population is **unchanged at 95 ends** and `roads.glb` is **byte-identi
 `opposed_pairs_unpublishable` moves, 5 → 13. The pairs reach the geometry, which is drawn in no lane
 coordinate and has no such limit.
 
+`roadmarks.json`'s `join` block, **all seven numbers**, beside `surface.py`'s own pair count — which
+is a different population and must not stand in for it: 54 pairs are *published* and **47** carry a
+drawn run, the rest having no stretch where both halves run abreast.
+
 ```
-  pairs published      50 -> 54        one-sided        7 -> 8
-  join                 2,462 -> 2,559 m    drawn        1,974 -> 2,049 m
-  covered by survey      488 -> 511 m      runs            54 -> 58
-  paint_clearance      coverage 99.6%, in-carriageway 3, vertices_over_void 365 — all unmoved
+                        before      after
+  opposed_pairs             43         47      <- roadmarks.json's own, not surface.py's 50 -> 54
+  join_m               2462.453   2559.346
+  covered_m             488.388    510.625
+  drawn_m              1973.933   2048.590
+  refused_m               0.131      0.131     <- unmoved: the added pairs leave no short slot
+  runs_drawn                 54         58
+  over_refused_survey_m 102.516    105.095     <- +2.6 m, and it is a finding, not a bar
+
+  surface.py            pairs 50 -> 54, ends 100 -> 108, one-sided 7 -> 8, unpublishable 5 -> 13
+  paint_clearance       coverage 99.6%, in-carriageway 3, vertices_over_void 365 — all unmoved
 ```
+
+⚠️ **The +2.6 m of `over_refused_survey_m` was looked at rather than noted.** It is the new pairs
+running past stretches where a surveyed `RM1001` exists and this stage refused it — the same 52
+refusals the layer already publishes, not a new class — so the inferred line stands in for a reading
+that failed there. It stays a finding about the survey's placement; nothing is retuned for it.
+
+⚠️ **The `13 / 24 / 58` census above still describes the codec's 95 ends and they are the same 95
+edges** — measured, not inferred from the arithmetic: the four added pairs carry no `centre_step`, so
+`e656`/`e657` is not in that population. The join's own population is the 47 pairs in this table.
 
 ⚠️ **The new paint is on drawn road, measured rather than assumed**: `vertices_over_void` is
 byte-identical at 365 and the uncovered-triangle count at 96, because the stations where the two

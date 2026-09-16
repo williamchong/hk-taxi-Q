@@ -241,9 +241,12 @@ Common emoji for this project:
   coordinate, so an unreturned vote is two halves naming different lines — the 3.9 m double line
   `P3-12` shipped on FLEMING ROAD. `opposed_pairs_one_sided` is the counter that can fail; it is 6
   and reachable at zero, so **mutation-check it rather than reading its value**.
-  🔴 **The search distance carries NO knob and must not gain one** — it is the publish guard
-  `steps < 8 * lanes` read backwards, which is the whole answer to `Q72`'s rejection of a free
-  radius. The angle is the one free value, so it is config and it is swept; ⚠️ **its sweep is not a
+  🔴 **The search distance carries NO FREE knob and must not gain one** — `Q72`'s rejection of a free
+  radius is the whole answer, and nothing here may be swept for a count. ⚠️ **It is no longer the
+  publish guard exactly** (`Q125`): the reach is the drawn width **plus one kerb**, for a second
+  consumer that draws the join as geometry and is not written in a lane coordinate. The codec's own
+  `steps < 8 * lanes` still refuses everything that term adds, so a change here must show
+  `centre_step`'s population and `roads.glb` unmoved. The angle is the one free value, so it is config and it is swept; ⚠️ **its sweep is not a
   plateau (1.35x over 10-75 deg) and must not be quoted as one** — what it says is that it is not the
   radius rule's 10x, and that `one-sided` climbing 4 → 17 is the rule announcing its own failure.
   ⚠️ **Deliberately a SECOND value from `carriageway_survey.width_bounds.pair_bearing_tolerance_deg`,
@@ -694,7 +697,9 @@ Common emoji for this project:
   (`style.kerb_width_m`) and that is a reading, not the free radius `Q72` refused** — two ribbons a
   seam apart are one drawn surface, which is the question `_paint_flanks` already answers with that
   same 0.5 m. It is what `Q19`'s floor leaves of a paved-over median: EXPO DRIVE EAST missed by
-  0.245 m. ⚠️ **Sweep it and paste the table** (flat at +0.25 and +0.50, one-sided 7 → 18 by +4.0),
+  0.245 m. ⚠️ **`13 / 24 / 58` is the CODEC's 95 ends, not the join's population** — the join draws
+  **47** of the 54 published pairs, and the two counts must not stand in for each other.
+  ⚠️ **Sweep it and paste the table** (flat at +0.25 and +0.50, one-sided 7 → 18 by +4.0),
   and ⚠️ **check that `centre_step` did NOT widen with it** — the codec's own `steps < 8 * lanes`
   must still refuse every added pair, so the shader's end count and `roads.glb` do not move. ⚠️ A change to
   `_opposed_gaps` still owes `Q117`'s bullet above — the three-number line, the angle sweep, the A/B
