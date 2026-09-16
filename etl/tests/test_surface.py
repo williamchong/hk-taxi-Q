@@ -1993,6 +1993,89 @@ class TestMarkingPayload:
         # middle of a single carriageway (`Q125`).
         assert _manifest(tmp_path)["opposed_pairs"] == [[0, 1, pytest.approx(2.0, abs=0.5)]]
 
+    def test_two_ribbons_a_seam_apart_are_one_road(self, tmp_path, testville_config) -> None:
+        """🔴 **`Q125`: a seam thinner than a kerb is not a median.** The drawn
+        ribbons here are 9.6 m wide and their centrelines 9.8 m apart, so they
+        miss touching by 0.2 m — EXPO DRIVE EAST's own geometry, where the two
+        carriageways read as one road with opposing traffic on it and the pair
+        was refused by 0.245 m. The reach is the drawn width plus one kerb, the
+        same 0.5 m `_paint_flanks` uses to decide a flank is too thin to draw.
+
+        ⚠️ **Mutation-check it rather than reading the count**: drop the kerb
+        term from `_opposed_gaps`' `reach` and this fails, which is the whole of
+        what says the term is doing something.
+        """
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 2, "pos": [100.0, 0.0, 309.8], "kind": "endpoint"},
+                {"id": 3, "pos": [500.0, 0.0, 309.8], "kind": "endpoint"},
+            ],
+            [
+                _edge(
+                    0,
+                    0,
+                    1,
+                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                    direction="forward",
+                ),
+                _edge(
+                    1,
+                    3,
+                    2,
+                    [[500.0, 0.0, 309.8], [100.0, 0.0, 309.8]],
+                    direction="forward",
+                ),
+            ],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+        [(here, there, gap)] = [tuple(row) for row in _manifest(tmp_path)["opposed_pairs"]]
+        assert (here, there) == (0, 1)
+        assert gap == pytest.approx(9.8, abs=0.1)
+        # 🔴 **And the codec is not widened with it.** The join sits past what a
+        # lane coordinate can reach, so `centre_step` refuses it and the pair
+        # travels for the geometry alone — which is why `roads.glb` does not move.
+        assert report.opposed_pairs_unpublishable == 2
+        mesh = _mesh(tmp_path)
+        road = _carriageway(mesh)
+        assert all(_decode(code)["centre"] == 0 for code in mesh.uv2[road, 0])
+
+    def test_two_ribbons_a_median_apart_are_two_roads(self, tmp_path, testville_config) -> None:
+        """The other side of it: a gap a kerb could not close is a median, and
+        the pair is refused rather than painted over."""
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 2, "pos": [100.0, 0.0, 312.0], "kind": "endpoint"},
+                {"id": 3, "pos": [500.0, 0.0, 312.0], "kind": "endpoint"},
+            ],
+            [
+                _edge(
+                    0,
+                    0,
+                    1,
+                    [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                    direction="forward",
+                ),
+                _edge(
+                    1,
+                    3,
+                    2,
+                    [[500.0, 0.0, 312.0], [100.0, 0.0, 312.0]],
+                    direction="forward",
+                ),
+            ],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+        assert report.opposed_pair_ends == 0
+        assert _manifest(tmp_path)["opposed_pairs"] == []
+
     def test_a_pair_is_published_once_for_the_stage_that_draws_its_join(
         self, dualville, tmp_path
     ) -> None:

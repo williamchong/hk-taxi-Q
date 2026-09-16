@@ -690,7 +690,13 @@ Common emoji for this project:
   is the inertness proof. 🔴 **Do not switch `draw_pair_join` back on** — a shader yields per edge
   and 24 of the region's 95 pairs are only partly surveyed, and its line is 28 cm against the
   survey's 15. ⚠️ **No new knob**: covered is half the pair's own measured gap and the shared
-  `bearing_tolerance_deg`; the search bound is `_opposed_gaps`' own (`Q72`). ⚠️ A change to
+  `bearing_tolerance_deg`. 🔴 **The pairing's reach is the drawn width plus ONE KERB
+  (`style.kerb_width_m`) and that is a reading, not the free radius `Q72` refused** — two ribbons a
+  seam apart are one drawn surface, which is the question `_paint_flanks` already answers with that
+  same 0.5 m. It is what `Q19`'s floor leaves of a paved-over median: EXPO DRIVE EAST missed by
+  0.245 m. ⚠️ **Sweep it and paste the table** (flat at +0.25 and +0.50, one-sided 7 → 18 by +4.0),
+  and ⚠️ **check that `centre_step` did NOT widen with it** — the codec's own `steps < 8 * lanes`
+  must still refuse every added pair, so the shader's end count and `roads.glb` do not move. ⚠️ A change to
   `_opposed_gaps` still owes `Q117`'s bullet above — the three-number line, the angle sweep, the A/B
   render — and `roads.glb` must stay **byte-identical**, because publishing the pair moves no
   geometry. ⚠️ `over_refused_survey_m` grades and never gates: metres where the invention stands in

@@ -22495,6 +22495,50 @@ deliberately left out of it**: it measures with `hypot` where this measures with
 answers reach `clearance.json` and every kerbside join, so folding it in for tidiness could move a
 published number.
 
+### 🔴 The second site: the pairing missed by 0.245 m, and a kerb is what reads it
+
+The user, from the driving seat again, on **EXPO DRIVE EAST**: two opposing flows still not split.
+A different cause from HUNG HING ROAD — `e657` is in no pair at all. Its only candidate is `e656` at
+`_pair_gap_m` **10.485 m** against a reach of **10.24 m**, so the pairing refused it by **0.245 m**.
+
+🔴 **Underneath that is `Q19`'s floor paving over a real median.** The surveyed carriageways are
+6.40 m (authored) and 7.151 m (iB1000), and the centrelines run 9.85-11.03 m apart, so TD's own
+widths imply a **3.1-4.3 m median**. The playability floor draws each ribbon at **10.24 m**, which
+consumes the median and leaves a seam of `gap - 10.24` — **p50 −0.03 m**. The player sees one wide
+road with oncoming traffic on it, which is exactly the frame that was reported.
+
+✅ **So the reach gains one kerb width, and that is a reading rather than a radius.** Two ribbons
+separated by less than a kerb are one drawn surface with a seam, and `_paint_flanks` already decides
+that same question with that same 0.5 m — *a flank thinner than the kerb is not drawn*. ⚠️ **Swept,
+and flat where it matters**: pairs run 50 at +0.00, **54 at +0.25 and at +0.50**, 57 at +1.0, 65 at
++2.0, 74 at +4.0, with `opposed_pairs_one_sided` climbing 7 → 18 — `Q117`'s own reading of a rule
+announcing its failure. ⚠️ **`Q117`'s "no knob on the search distance" still stands**: what is
+refused there is a *free* radius swept for a count, and this is a published width already in the
+block, used for this question elsewhere in the same file.
+
+🔴 **It widens what is FOUND, never what the codec draws.** `centre_step`'s own guard —
+`steps < 8 * lanes`, the lane coordinate's reach — refuses every pair the term adds, so the
+shader's population is **unchanged at 95 ends** and `roads.glb` is **byte-identical**; only
+`opposed_pairs_unpublishable` moves, 5 → 13. The pairs reach the geometry, which is drawn in no lane
+coordinate and has no such limit.
+
+```
+  pairs published      50 -> 54        one-sided        7 -> 8
+  join                 2,462 -> 2,559 m    drawn        1,974 -> 2,049 m
+  covered by survey      488 -> 511 m      runs            54 -> 58
+  paint_clearance      coverage 99.6%, in-carriageway 3, vertices_over_void 365 — all unmoved
+```
+
+⚠️ **The new paint is on drawn road, measured rather than assumed**: `vertices_over_void` is
+byte-identical at 365 and the uncovered-triangle count at 96, because the stations where the two
+ribbons splay past a kerb are dropped and the line stops there — `e656`/`e657` draws **53.8 m** of a
+102 m edge. ⚠️ **Three mutations, three failures** with the kerb term dropped as the third.
+
+🔴 **And what the line stands for here is a median, not a painted rule.** At this site reality has a
+3-4 m divider; the line marks where the floor paved it over. Drawing the median instead is
+`Q19`'s narrowing, which was measured and refused — it clears no blocked edge and loses two. So the
+line is the honest option available, and this paragraph is the debit.
+
 ### 🔴 What this costs, stated at its true size
 
 A double continuous white line instructs *no overtaking*, and **1,974 m of it now rests on a pairing

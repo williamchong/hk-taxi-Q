@@ -3451,7 +3451,26 @@ def _opposed_gaps(
     votes: dict[int, _Vote] = {}
     for index, here in ribbons.items():
         edge = edges[index]
-        reach = _drawn_width_m(edge)
+        # 🔴 **The drawn width plus ONE KERB, and the kerb is what makes this a
+        # reading rather than a radius** (`Q125`). Two ribbons separated by less
+        # than a kerb are not two roads with something between them: they are one
+        # drawn surface with a seam, and `_paint_flanks` already decides exactly
+        # that question with exactly this value — *a flank thinner than the kerb
+        # is not drawn*. EXPO DRIVE EAST is the site: its two carriageways are
+        # **10.485 m** apart against a **10.24 m** floor, so they miss by
+        # **0.245 m** of seam and the player sees one wide road with opposing
+        # traffic on it. ⚠️ **Swept, and flat where it matters**: 50 pairs at
+        # +0.00, **54 at +0.25 and +0.50**, 57 at +1.0, 65 at +2.0, 74 at +4.0
+        # with `opposed_pairs_one_sided` climbing 7 → 18, which is `Q117`'s own
+        # reading of a rule announcing its own failure.
+        #
+        # ⚠️ **It widens what is FOUND and not what is drawn in the codec.**
+        # `centre_step`'s own guard — `steps < 8 * lanes`, the lane coordinate's
+        # reach — refuses every pair this term adds, so `TEXCOORD_1` and
+        # `roads.glb` are byte-identical and only `opposed_pairs_unpublishable`
+        # moves. The pairs reach the geometry, which is not drawn in any lane
+        # coordinate and does not have that limit.
+        reach = _drawn_width_m(edge) + style.kerb_width_m
         # Hoisted: the search box is this ribbon's own bounds grown by `reach`,
         # and it does not move as the candidates are walked.
         low_x, low_z = here.low_x - reach, here.low_z - reach
