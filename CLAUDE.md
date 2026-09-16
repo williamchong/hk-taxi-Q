@@ -678,6 +678,23 @@ Common emoji for this project:
   ⚠️ **`underfill_m` is transverse-only** — it is `host width - marking length`, and a longitudinal
   marking's length runs along the road, so pooling it is `Q57` in the one field that cannot survive
   it. Numbers in `Q118`.
+- 🔴 **`road_marks.opposed_join_mark`, `opposed_joins`, `_covered`, `draw_opposed_joins`, or
+  `surface.py`'s `opposed_pairs`: paste `roadmarks.json`'s `join` block — all seven numbers — before
+  and after, and mutation-check the cut by disabling it** (`Q125`). This is the one placement in the
+  bundle that is **inferred**: where two one-way carriageways run as a dual road, the line between
+  the flows is drawn from `surface.py`'s geometric pairing along every metre TD surveyed no `RM1001`
+  on. ⚠️ **`covered_m` is the counter that can fail** — with the cut off the two lines are drawn on
+  top of each other, which is exactly what `Q118` switched `Q117`'s shader join off over — so it is
+  mutation-checked, never read. ⚠️ **The join is counted APART from `drawn` and `drawn_by_id`**,
+  which are over what the publisher surveyed and must stay byte-identical across a join change; that
+  is the inertness proof. 🔴 **Do not switch `draw_pair_join` back on** — a shader yields per edge
+  and 24 of the region's 95 pairs are only partly surveyed, and its line is 28 cm against the
+  survey's 15. ⚠️ **No new knob**: covered is half the pair's own measured gap and the shared
+  `bearing_tolerance_deg`; the search bound is `_opposed_gaps`' own (`Q72`). ⚠️ A change to
+  `_opposed_gaps` still owes `Q117`'s bullet above — the three-number line, the angle sweep, the A/B
+  render — and `roads.glb` must stay **byte-identical**, because publishing the pair moves no
+  geometry. ⚠️ `over_refused_survey_m` grades and never gates: metres where the invention stands in
+  for a *refused* survey line rather than for a silence. Numbers in `Q125`.
 - **`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way line change:
   paste `roadmarks.json`'s two partitions, `host_disagreement` with `host_considered`,
   `axis_residual_deg`, `underfill_m`, `inverted`, and since 2026-09-16 `stations_on_drawn_structure`

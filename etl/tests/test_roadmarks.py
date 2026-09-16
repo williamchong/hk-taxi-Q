@@ -25,12 +25,17 @@ from pipeline.roadmarks import (
     Marking,
     Network,
     RoadMarkReport,
+    _check_join_partition,
+    _covered,
     _cuts,
+    _gaps_between,
     _host,
     _on_its_own_carriageway,
     _place,
     _runs,
     band_quads,
+    draw_opposed_joins,
+    opposed_joins,
 )
 from pipeline.surface import DrawnSurface, downward_facing
 from tests.helpers import CITY_YAML, ribbon_of
@@ -47,6 +52,7 @@ BLOCK: dict[str, Any] = {
     "proximity_weight_deg_per_m": 0.05,
     "station_m": 2.0,
     "longitudinal_legibility_scale": 1.88,
+    "opposed_join_mark": "double_white_lines",
     "lift_m": 0.016,
     "marks": [
         {
@@ -741,3 +747,212 @@ class TestTheReportPartitions:
         assert set(measured) == {"p50", "p90", "p99", "max", "n"}
         assert measured["max"] == pytest.approx(89.0)
         assert measured["n"] == 4
+
+
+# --------------------------------------------------------------------------
+# The inferred join (`Q125`)
+# --------------------------------------------------------------------------
+
+
+def pair_surface(edges: list[dict], gap_m: float, trim_m: float = 0.0) -> dict:
+    """A `roadsurface.json` carrying those edges as one opposed pair.
+
+    The shape `surface.py` publishes, cut to what `opposed_joins` reads: a
+    `carriageway` row per edge for the trims and the drawn half-width, and one
+    `opposed_pairs` row for the two of them.
+    """
+    return {
+        "carriageway": [
+            {
+                "edge": int(one["id"]),
+                "half_width_m": [5.12] * len(one["polyline"]),
+                "offset_m": [0.0] * len(one["polyline"]),
+                "trim_m": [trim_m, trim_m],
+            }
+            for one in edges
+        ],
+        "opposed_pairs": [[int(edges[0]["id"]), int(edges[1]["id"]), gap_m]],
+    }
+
+
+def opposed_edges(length_m: float = 60.0, gap_m: float = 8.0, partner_m: float | None = None):
+    """Two anti-parallel one-way carriageways `gap_m` apart, in game plan.
+
+    The second runs back the way the first came, which is what makes the two a
+    pair; `partner_m` shortens it so a test can ask what happens where one half
+    stops and the other carries on.
+    """
+    far = length_m if partner_m is None else partner_m
+    return [
+        edge(0, [[0.0, 0.0, 0.0], [length_m, 0.0, 0.0]]),
+        edge(1, [[far, 0.0, gap_m], [0.0, 0.0, gap_m]]),
+    ]
+
+
+class TestTheInferredJoin:
+    """🔴 **The one placement this stage infers** (`Q125`), and the rules that
+    keep it from overwriting what TD surveyed.
+
+    `Q117` drew this line in the shader from the same pairing and `Q118`
+    switched it off, because a shader can only yield per edge and 24 of this
+    region's 95 pairs are *partly* covered by a surveyed line. So the property
+    every test here is about is the cut: the invention yields per metre.
+    """
+
+    def test_the_join_runs_midway_between_the_two_carriageways(self, spec):
+        edges = opposed_edges(gap_m=8.0)
+        [join] = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+
+        assert (join.here, join.there) == (0, 1)
+        # Midway, in the game's `(x, z)` plan: the two centrelines are at z 0
+        # and z 8, and neither half's own lane coordinate can name this line.
+        assert join.line[:, 1] == pytest.approx(4.0)
+
+    def test_the_join_stops_where_its_partner_stops(self, spec):
+        """A station past the end of the other half is one running down a single
+        carriageway, so the join ends there rather than being clamped onto it."""
+        edges = opposed_edges(length_m=60.0, partner_m=25.0)
+        [join] = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+
+        along = join.line[:, 0]
+        assert along.min() == pytest.approx(0.0, abs=1.0)
+        assert along.max() == pytest.approx(25.0, abs=2.0)
+
+    def test_a_surveyed_line_cuts_the_join_it_runs_beside(self, spec):
+        """🔴 **The property `Q118` could not have in the shader.** A survey line
+        covering the middle of a join leaves the join drawn at both ends and
+        nowhere in between — which is a thing no per-edge switch can say."""
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        [join] = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        # Surveyed double line along the join's own middle third.
+        surveyed = [marking(spec, "RM1001", [[20.0, 4.0], [40.0, 4.0]])]
+
+        covered = _covered(join, surveyed, spec)
+        assert covered == [(pytest.approx(20.0, abs=0.5), pytest.approx(40.0, abs=0.5))]
+        free = _gaps_between(covered, 60.0)
+        assert len(free) == 2
+        assert free[0][0] == pytest.approx(0.0)
+        assert free[1][1] == pytest.approx(60.0)
+
+    def test_a_line_crossing_the_join_covers_nothing(self, spec):
+        """A stop line at a junction mouth passes through the join at right
+        angles. Proximity alone would read that as the join being surveyed and
+        would leave a hole in the centre line at every junction."""
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        [join] = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        across = [marking(spec, "RM1001", [[30.0, 1.0], [30.0, 7.0]])]
+
+        assert _covered(join, across, spec) == []
+
+    def test_a_line_on_the_other_carriageway_covers_nothing(self, spec):
+        """The bar is half the pair's own separation, so a line beyond either
+        centreline is on a carriageway rather than between the two flows."""
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        [join] = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        beside = [marking(spec, "RM1001", [[10.0, -2.0], [50.0, -2.0]])]
+
+        assert _covered(join, beside, spec) == []
+
+    def test_the_join_is_drawn_where_no_survey_covers_it(self, spec):
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        surface = pair_surface(edges, gap_m=8.0)
+        joins = opposed_joins(surface, edges, spec)
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(one) for one in edges]})
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
+        report = RoadMarkReport()
+
+        draw_opposed_joins(builder, joins, [], [], spec, drawn, (), report, 0.0)
+
+        assert report.join_pairs == 1
+        assert report.joins_drawn == 1
+        assert report.join_drawn_m == pytest.approx(report.join_m)
+        assert report.join_covered_m == 0.0
+        mesh = builder.build("roadmarks", 0.0, report)
+        assert mesh is not None
+        # Two bands, `RM1001`'s own — the shape is transcribed even though the
+        # placement is not.
+        assert downward_facing(mesh)[0] == 0
+
+    def test_a_covered_join_draws_nothing_and_books_the_survey(self, spec):
+        """🔴 **The mutation this rule exists for.** With the cut disabled the
+        inferred line is drawn on top of the surveyed one — near-coincident,
+        thickened and speckled, which is exactly what `Q118` switched `Q117`'s
+        shader join off over."""
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        joins = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(one) for one in edges]})
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
+        report = RoadMarkReport()
+        surveyed = [marking(spec, "RM1001", [[0.0, 4.0], [60.0, 4.0]])]
+
+        draw_opposed_joins(builder, joins, surveyed, [], spec, drawn, (), report, 0.0)
+
+        assert report.joins_drawn == 0
+        assert report.join_drawn_m == 0.0
+        assert report.join_covered_m == pytest.approx(report.join_m, abs=0.5)
+        assert builder.build("roadmarks", 0.0, report) is None
+
+    def test_a_refused_survey_line_leaves_the_join_drawn_and_is_booked(self, spec):
+        """A surveyed line this stage could not place paints nothing, so the
+        join is drawn over it as over any silence — and the metres are published,
+        because standing in for a refusal is not the same as standing in for a
+        survey that never existed."""
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        joins = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(one) for one in edges]})
+        report = RoadMarkReport()
+        refused = [marking(spec, "RM1001", [[20.0, 4.0], [40.0, 4.0]])]
+
+        draw_opposed_joins(
+            FlatBuilder(ROADMARKS_MATERIAL), joins, [], refused, spec, drawn, (), report, 0.0
+        )
+
+        assert report.joins_drawn == 1
+        assert report.join_covered_m == 0.0
+        assert report.join_over_refused_survey_m == pytest.approx(20.0, abs=1.0)
+
+    def test_the_join_partition_closes(self, spec):
+        edges = opposed_edges(length_m=60.0, gap_m=8.0)
+        joins = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(one) for one in edges]})
+        report = RoadMarkReport()
+        surveyed = [marking(spec, "RM1001", [[20.0, 4.0], [40.0, 4.0]])]
+
+        draw_opposed_joins(
+            FlatBuilder(ROADMARKS_MATERIAL), joins, surveyed, [], spec, drawn, (), report, 0.0
+        )
+        _check_join_partition(report)
+
+        assert report.join_covered_m > 0.0
+        assert report.join_drawn_m > 0.0
+
+    def test_a_region_naming_no_join_mark_draws_none(self, tmp_path):
+        """Omitting the key is the switch, and it returns the stage to drawing
+        only what its publisher surveyed — every region between `Q118` and
+        `Q125`."""
+        without = {key: value for key, value in BLOCK.items() if key != "opposed_join_mark"}
+        spec = city_with(tmp_path, without).road_marks
+        edges = opposed_edges()
+        joins = opposed_joins(pair_surface(edges, gap_m=8.0), edges, spec)
+        report = RoadMarkReport()
+
+        assert spec.opposed_join is None
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(one) for one in edges]})
+        draw_opposed_joins(
+            FlatBuilder(ROADMARKS_MATERIAL), joins, [], [], spec, drawn, (), report, 0.0
+        )
+        assert report.join_m == 0.0
+        assert report.joins_drawn == 0
+
+    def test_the_join_mark_must_be_one_of_the_marks(self, tmp_path):
+        block = {**BLOCK, "opposed_join_mark": "no_such_entry"}
+        with pytest.raises(ValueError, match="opposed_join_mark"):
+            city_with(tmp_path, block)
+
+    def test_a_transverse_entry_cannot_be_the_join(self, tmp_path):
+        """🔴 The join runs ALONG the two carriageways it separates. A transverse
+        entry would draw its bands across both flows, filling the carriageway
+        with paint, and every counter would still close."""
+        block = {**BLOCK, "opposed_join_mark": "stop_line"}
+        with pytest.raises(ValueError, match="transverse"):
+            city_with(tmp_path, block)

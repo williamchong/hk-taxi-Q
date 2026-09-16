@@ -39,13 +39,20 @@ LINES SPACING = 100`, and LINES SPACING is the **clear gap, not a pitch** —
 the shape stays TD's whatever legibility does to the scale. Both are 1.88x life
 size, which is `line_width`'s exaggeration and not a second decision.
 
-🔴 **This is a marking that says something, and it is drawn from an INFERRED
-join.** A double continuous white line instructs *no overtaking*; `Q117` finds
-the opposed pairs geometrically, so the instruction rests on that pairing and
-not on a survey. TD publishes the real thing — **19,308 m of RM1001 in this
-region**, second only to RM1109 — and drawing that instead is the sourced route
-and the open item. `draw_centre_line` is the switch if a recognition round
-reports the instruction as wrong rather than the line as missing.
+🔴 **The centre line between two opposed flows is no longer drawn here, and
+`draw_pair_join` stays 0.0** (`Q118`, then `Q125`). TD publishes the real thing —
+RM1001 DOUBLE LINES, **5,745 m of it at grade in this region** — so `roadmarks.py`
+draws that as geometry, and since `Q125` it also draws the *inferred* join, as the
+same mark, along the stretches no surveyed line covers. ⚠️ **Do not switch
+`draw_pair_join` back on**: it would be a second line beside the first, at **28 cm**
+against the survey's 15, and a shader cannot yield for part of an edge — 24 of the
+region's 95 opposed pairs are only *partly* surveyed. `centre_at` stays in the codec
+for a region whose survey is thinner.
+
+⚠️ **`draw_centre_line` still owns the TWO-WAY street's line**, which is a different
+population: the middle of one ribbon carrying both flows, where `lanes` is even. That
+one is geometry the shader can see, and nothing published locates it either — it is
+`P3-12`'s invention and `Q118` left it standing.
 
 ⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
 rather than chosen.** A junction cap overlaps its arms rather than abutting

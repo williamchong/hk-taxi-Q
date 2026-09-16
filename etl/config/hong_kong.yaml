@@ -2212,6 +2212,29 @@ road_marks:
   # below 1.0 is refused as a transcription error.
   longitudinal_legibility_scale: 1.0
 
+  # 🔴 **The one placement this stage INFERS, and the reason it is a config key
+  # rather than a constant** (`Q125`). Where two one-way carriageways run as one
+  # dual road, the line between the flows is the marking neither half's own
+  # geometry locates — `surface.py` pairs them geometrically and publishes
+  # `opposed_pairs`, and this stage draws that join wherever TD surveyed no
+  # RM1001 of its own.
+  #
+  # ⚠️ **Measured before it was built, on Wan Chai's 95 pairs**: 13 are already
+  # covered by a surveyed line end to end, 24 are partly covered, and **58 carry
+  # none at all** — HUNG HING ROAD among them, which is where the user found the
+  # missing line from the driving seat. So a per-edge switch could not work in
+  # either position, and the cut is per metre.
+  #
+  # ⚠️ **It names an entry above rather than declaring a width**: the shape is
+  # RM1001's transcribed 150/100, and only the placement is this project's. That
+  # is `Q54`'s debit stated at its true size, and it is why `Q117`'s shader join
+  # is not simply switched back on — that one drew a 28 cm line beside the
+  # survey's 15 cm and fought it where the two overlapped.
+  #
+  # ⚠️ **Deleting this key is the switch**, and it returns the region to drawing
+  # only what its publisher surveyed.
+  opposed_join_mark: double_white_lines
+
   marks:
     # 🔴 **The one LONGITUDINAL entry, and the axis is what makes it drawable.**
     # Every other row here is a bar across a junction mouth; this one runs along

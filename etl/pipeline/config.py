@@ -2214,6 +2214,37 @@ class RoadMarks(LayerSpec):
     # published, and the mechanism is what makes any later exaggeration a config
     # change instead of an edit to a transcribed width.
     longitudinal_legibility_scale: float
+    # 🔴 **Which `marks:` entry the INFERRED join borrows its shape from, or
+    # None to draw no inferred join at all (`Q125`).** Where two one-way
+    # carriageways run as a dual road, the line between the flows is the one
+    # marking neither half's geometry locates; `surface.py` finds the pairing
+    # geometrically and this stage draws it — but only along the stretches TD
+    # surveyed no line of its own.
+    #
+    # 🔴 **This is the one placement in this stage that is not published, and
+    # naming the mark is what keeps the SHAPE published.** The line drawn is
+    # `RM1001`'s transcribed 150/100 double white, so what is invented is where
+    # it runs and nothing about what it looks like — `Q54`'s debit stated at its
+    # true size. `Q117` drew the same line in the shader from the same pairing;
+    # `Q118` switched that off because it fought the survey, and this replaces
+    # it with a version that yields to the survey per metre.
+    #
+    # ⚠️ **Omitting the key is the switch**, and it leaves a region drawing only
+    # what its publisher surveyed — the honest default for a city whose survey
+    # is complete, and what every region did between `Q118` and `Q125`.
+    opposed_join_mark: str | None
+
+    @property
+    def opposed_join(self) -> RoadMark | None:
+        """The entry the inferred join is drawn as, or None where none is named.
+
+        Resolved here rather than held as a `RoadMark` so that `marks:` stays
+        the single table — the loader checks the name against it, and two
+        objects for one entry could drift apart the way a second copy always can.
+        """
+        if self.opposed_join_mark is None:
+            return None
+        return next(mark for mark in self.marks if mark.id == self.opposed_join_mark)
 
     def mark_of(self, code: str) -> RoadMark | None:
         """The entry admitting `code`, or None where none does.
@@ -6191,10 +6222,32 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
             f"legibility choice"
         )
 
+    join_mark = body.get("opposed_join_mark")
+    if join_mark is not None:
+        join_mark = str(join_mark)
+        entry = next((mark for mark in marks if mark.id == join_mark), None)
+        if entry is None:
+            # Named rather than declared inline so the shape stays the
+            # publisher's: the inferred join is drawn as a transcribed marking,
+            # and a block of its own here would be a place to author one.
+            raise ValueError(
+                f"{where}:opposed_join_mark is {join_mark!r}, which is not one of "
+                f"{[mark.id for mark in marks]}; it names the entry the join is drawn as"
+            )
+        if entry.transverse:
+            # ⚠️ A join runs ALONG the road it separates, so a transverse entry
+            # would draw the pair's own bands across the two flows and fill the
+            # carriageway with paint — and every counter would close.
+            raise ValueError(
+                f"{where}:opposed_join_mark is {join_mark!r}, which is transverse; the join runs "
+                f"along the carriageways it separates and must name a longitudinal entry"
+            )
+
     return RoadMarks(
         **_spec_header(body, where, _ROAD_MARK_ROLES),
         marks=marks,
         longitudinal_legibility_scale=scale,
+        opposed_join_mark=join_mark,
         **measures,
         **weights,
     )

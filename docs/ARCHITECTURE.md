@@ -1397,6 +1397,13 @@ hull ring in x/y/z, which with the ribbon heights is the whole of the drawn surf
 arriving ribbon actually ended. `surface.DrawnSurface` is the reader, and without it a marking guesses
 the road's height and sinks into it.
 
+⚠️ **And `opposed_pairs`** (`SURFACE_MANIFEST_SCHEMA` 10 → 11, `Q125`, 2026-09-16) — which two edges
+are the halves of one dual carriageway, and how far apart they run, once per mutual pair over
+published edge ids. Only `surface.py` can know it: the halves are separate edges sharing no node, so
+the pairing falls out of the ribbons rather than the graph. `roadmarks.py` is the reader, and it
+draws the centre line between the two flows wherever TD surveyed none — the one marking neither
+half's own geometry locates. An intermediate; the game reads the paint, never the pair.
+
 ⚠️ **And `ribbons` beside them** (`SURFACE_MANIFEST_SCHEMA` 9 → 10, `Q92`'s second half, 2026-09-16) —
 every drawn carriageway strip's two rails, post-trim and post-mitre with every inserted station, **in
 the order `_Builder.strip` received them** because each quad's diagonal depends on it. Until then the

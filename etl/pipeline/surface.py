@@ -145,7 +145,12 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # centreline's station height. A v9 reader keeps a ribbon that is flat across,
 # infinitely wide and owned by whichever centreline is nearest — all three
 # false, and eleven box-junction triangles under the road for it.
-SURFACE_MANIFEST_SCHEMA = 10
+# 11 since `Q125`: `opposed_pairs` publishes which two edges are the halves of
+# one dual carriageway and how far apart they run. A v10 reader has no way to
+# know where the two flows meet, so it draws the centre line only where TD
+# surveyed one — which is the defect `Q125` closes, on 58 of this region's 95
+# pairs.
+SURFACE_MANIFEST_SCHEMA = 11
 
 # The drawn road's primitive, in every chunk. ⚠️ **No `-col` since `P5-12`**:
 # the collider is its own `-colonly` primitive beside it (`SURFACE_COLLIDER_NAME`),
@@ -508,6 +513,22 @@ class SurfaceReport:
     # reachable at zero (`test_a_one_sided_vote_publishes_nothing`) and non-zero
     # on this region, which is `Q72`'s test of a counter passed both ways.
     opposed_pairs_one_sided: int = 0
+    # 🔴 **The pairs themselves, for the stage that draws the join as geometry**
+    # (`Q125`). Keyed by the unordered pair of `roadgraph.json` edge ids, so each
+    # pair is held once — against `opposed_pair_ends` above, which counts both
+    # halves.
+    #
+    # ⚠️ **Written once, by `build_region`.** `_read_offside` finds the pairs by
+    # list position and *returns* them rather than booking them here, because the
+    # published ids are in scope only in `build_region`: a field whose keyspace
+    # changed meaning partway down the stage would be one a later counter or an
+    # early return could read in the wrong frame.
+    #
+    # ⚠️ **Not the population `centre_step` publishes.** These are every mutual
+    # pair; `opposed_pairs_unpublishable` is the ones whose join the *shader*
+    # cannot reach in its own lane coordinate, which is a limit on the codec and
+    # not on a line drawn between two centrelines.
+    opposed_pairs: dict[tuple[int, int], float] = field(default_factory=dict)
     # Movements that qualified as running through a node and had their mitre fed
     # into its cap. Reported so a predicate that stopped matching would show.
     #
@@ -2099,7 +2120,14 @@ def build_region(
     # same list by construction rather than by a predicate written twice.
     report.cap_rings = [(cap.level, cap.ring) for cap in caps]
     _record_hidden_kerbs(graph["edges"], edges, report)
-    _read_offside(edges, style, report)
+    # From list positions to published ids, here because this is where the graph
+    # is in scope. Owned edges only: `_read_offside` is handed `edges`, so a
+    # foreign run can never be half of a recorded pair.
+    published_ids = [int(edge["id"]) for edge in graph["edges"]]
+    report.opposed_pairs = {
+        (published_ids[here], published_ids[there]): gap
+        for (here, there), gap in _read_offside(edges, style, report).items()
+    }
 
     builder = _Builder(Grid.for_region(city, city.region(region_id)))
     for published, edge in zip(graph["edges"], edges, strict=True):
@@ -3215,8 +3243,13 @@ class _Occluders:
         return covered
 
 
-def _read_offside(edges: list[_Edge], style: RoadSurface, report: SurfaceReport) -> None:
+def _read_offside(
+    edges: list[_Edge], style: RoadSurface, report: SurfaceReport
+) -> dict[tuple[int, int], float]:
     """What each edge's offside boundary actually is, once every ribbon exists.
+
+    Returns the mutual opposed pairs it found, by **list position**, for
+    `build_region` to publish against the graph's own ids (`Q125`).
 
     Two questions with one answer between them, and neither can be asked of an
     edge on its own — which is why this runs after `_hide_buried_kerbs` rather
@@ -3260,6 +3293,7 @@ def _read_offside(edges: list[_Edge], style: RoadSurface, report: SurfaceReport)
     identified.
     """
     gaps = _opposed_gaps(edges, style, report)
+    pairs: dict[tuple[int, int], float] = {}
 
     for index, edge in enumerate(edges):
         # `None` means the pass had nothing to say. It is unreachable for an edge
@@ -3267,10 +3301,20 @@ def _read_offside(edges: list[_Edge], style: RoadSurface, report: SurfaceReport)
         # that matches it is "no neighbour objected", so the kerb stands.
         edge.offside_kerb = edge.kerb_right is None or bool(edge.kerb_right.all())
 
-        gap = gaps.get(index)
-        if gap is None:
+        vote = gaps.get(index)
+        if vote is None:
             continue
+        gap = vote.gap_m
         report.opposed_pair_ends += 1
+        # 🔴 **Collected before the range guard below, and that is deliberate.**
+        # `centre_step` is what the *shader* can draw and `steps < 8 * lanes` is
+        # what its lane coordinate can reach; the geometry `roadmarks.py` draws
+        # between two centrelines has no such limit, because it is not expressed
+        # in either half's lane coordinate. Collecting after the guard would hide
+        # a pair from the fallback for a reason that does not apply to it.
+        # ⚠️ Once per pair, by list position, so the unordered key is what
+        # de-duplicates the two ends rather than a caller remembering to.
+        pairs[(min(index, vote.partner), max(index, vote.partner))] = gap
 
         steps = round((gap / 2.0) / _u_metres(edge) * 16.0)
         # ⚠️ **Bounded by the carriageway, not by the field.** Six bits reach 3.94
@@ -3284,6 +3328,8 @@ def _read_offside(edges: list[_Edge], style: RoadSurface, report: SurfaceReport)
             report.opposed_pairs_unpublishable += 1
             continue
         edge.centre_step = steps + 1
+
+    return pairs
 
 
 class _Ribbon(NamedTuple):
@@ -3320,8 +3366,15 @@ class _Vote(NamedTuple):
 
 def _opposed_gaps(
     edges: list[_Edge], style: RoadSurface, report: SurfaceReport
-) -> dict[int, float]:
-    """How far apart the two halves of each opposed pair run, by list position.
+) -> dict[int, _Vote]:
+    """Each opposed half's partner and how far apart the two run, by list position.
+
+    ⚠️ **The partner travels with the gap since `Q125`, and it is the same
+    vote.** `_read_offside` needs only the separation, because the shader's join
+    is an offset from the edge's own centreline; `roadmarks.py` draws the join
+    as geometry where no survey line covers it, and a line between two
+    carriageways cannot be built from a distance alone. Returning the `_Vote`
+    rather than a second search is what keeps the two consumers on one pairing.
 
     A one-way ribbon's partner is the one-way ribbon at the same elevation level
     that runs **anti-parallel** to it and lies **inside its own drawn width** —
@@ -3437,7 +3490,7 @@ def _opposed_gaps(
     report.opposed_pairs_one_sided += sum(
         1 for index, vote in votes.items() if not returned(index, vote.partner)
     )
-    return {index: vote.gap_m for index, vote in votes.items() if returned(index, vote.partner)}
+    return {index: vote for index, vote in votes.items() if returned(index, vote.partner)}
 
 
 def _pair_gap_m(here: np.ndarray, there: np.ndarray) -> float:
@@ -4149,6 +4202,12 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
     the ones the ribbon never reached. It stays an intermediate — the game reads
     the *result* of that measurement, never the trims.
 
+    `opposed_pairs` is the fourth, and a marking stage's too (`Q125`): which two
+    edges are the halves of one dual carriageway. It is this stage's alone
+    because it falls out of the ribbons rather than the graph — the halves are
+    separate edges sharing no node — and the centre line between two flows is
+    the one marking neither half's own geometry locates.
+
     `caps` is the third (`Q92`), and the one a *marking* stage needs: each
     junction cap's hull ring in x/y/z, which with the ribbon heights is the whole
     of the drawn surface. `DrawnSurface` is the reader; `SurfaceReport.cap_rings`
@@ -4185,6 +4244,18 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                 "nodes": report.cluster_nodes,
                 "corridors": report.corridors,
             },
+            # 🔴 **`Q125`: the two halves of each dual carriageway, and their
+            # separation.** The join between two opposed flows is the one line
+            # neither half's own geometry marks — `roadmarks.py` draws it where
+            # TD surveyed no `RM1001` — and this pass is the only one that knows
+            # the pairing. One row per pair, `[a, b, gap_m]` with `a < b`, over
+            # published edge ids; `centre_step` in `TEXCOORD_1` is the same
+            # finding said in the codec's terms, for a shader that draws it
+            # per edge instead.
+            "opposed_pairs": [
+                [here, there, round(gap, 3)]
+                for (here, there), gap in sorted(report.opposed_pairs.items())
+            ],
             # `P3-32`: the boxes the surface yielded to, and what it grew.
             "paint": {
                 "boxes_read": report.boxes_read,
@@ -4319,6 +4390,10 @@ def main(argv: list[str] | None = None) -> int:
         report.opposed_pairs_one_sided,
         report.opposed_pairs_unpublishable,
     )
+    # Its own line rather than a fourth number above, because it is a different
+    # population: pairs, not ends, and every mutual one rather than the ones the
+    # codec can say (`Q125`).
+    log.info("  %d opposed pairs published for the join", len(report.opposed_pairs))
     if report.on_structure_m:
         log.info(
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "

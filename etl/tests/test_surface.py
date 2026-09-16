@@ -1987,6 +1987,37 @@ class TestMarkingPayload:
         assert report.opposed_pair_ends == 2
         assert report.opposed_pairs_one_sided == 1
         assert report.opposed_pairs_unpublishable == 0
+        # 🔴 **And the one-sided vote reaches the manifest as nothing** — the
+        # pairing the join is drawn from is the mutual one, so a half that
+        # nobody chose back cannot hand `roadmarks.py` a line to draw down the
+        # middle of a single carriageway (`Q125`).
+        assert _manifest(tmp_path)["opposed_pairs"] == [[0, 1, pytest.approx(2.0, abs=0.5)]]
+
+    def test_a_pair_is_published_once_for_the_stage_that_draws_its_join(
+        self, dualville, tmp_path
+    ) -> None:
+        """`Q125`: `roadmarks.py` draws the join between two opposed flows, and
+        a join is one line rather than one per half.
+
+        ⚠️ **The counter above counts ENDS and this counts PAIRS**, which is the
+        whole reason the manifest carries the pair rather than a flag per edge:
+        published per half, the line would be drawn twice, coincident, and every
+        counter would still close.
+        """
+        city, _ = dualville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+
+        assert report.opposed_pair_ends == 2
+        pairs = _manifest(tmp_path)["opposed_pairs"]
+        # ⚠️ The gap is the pair's own measurement, not the 4 m the fixture's
+        # middles are apart: both halves run into the shared nodes at either
+        # end, so the separation the pairing agrees on is smaller than the
+        # widest part of it. What this pins is the shape — one row, both ids,
+        # a real separation — because the measurement is `_pair_gap_m`'s and
+        # has tests of its own.
+        [(here, there, gap)] = [tuple(row) for row in pairs]
+        assert (here, there) == (0, 1)
+        assert 0.0 < gap < 4.0
 
     def test_the_surface_asks_the_engine_for_its_shader(self, testville, tmp_path) -> None:
         """glTF cannot say "use this shader", so the material name is the whole

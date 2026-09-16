@@ -44,6 +44,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -55,7 +56,7 @@ from pipeline.fetch import source_reads
 from pipeline.geometry import wound_up
 from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
-from pipeline.polyline import Segments, plan_lengths_2d
+from pipeline.polyline import Segments, plan_lengths_2d, plan_projections
 
 # `AT_GRADE` rather than a fifth private copy — `railings.py` exports it
 # publicly to stop exactly that, and `signs.py` imports it for the same reason.
@@ -75,7 +76,12 @@ log = logging.getLogger(__name__)
 
 ROADMARKS_NAME = "roadmarks.glb"
 ROADMARKS_MANIFEST_NAME = "roadmarks.json"
-ROADMARKS_MANIFEST_SCHEMA = 1
+# 2 since `Q125`: the asset carries the inferred join between opposed
+# carriageways as well as the surveyed markings, and the `join` block is what
+# says how much of it. A v1 reader takes `drawn_by_id` for everything in the
+# mesh, which stops being true the moment a region names an `opposed_join_mark`
+# — not a field it can miss, but a quantity it would under-report.
+ROADMARKS_MANIFEST_SCHEMA = 2
 
 # ⚠️ **No `-col` suffix.** Paint is not a collider — `BOXJUNCTIONS_MESH_NAME`'s
 # reasoning, and sharper again: a stop line runs across every approach in the
@@ -182,6 +188,40 @@ class RoadMarkReport:
     # per feature: `drawn`, `drawn_by_id` and the partitions do not move.
     stations_on_drawn_structure: int = 0
     on_drawn_structure_m: float = 0.0
+
+    # 🔴 **The INFERRED join between two opposed carriageways (`Q125`), and it
+    # is its own partition because it is not a published marking.** Nothing
+    # here enters `drawn`, `drawn_by_id` or the two partitions above: those are
+    # over what TD surveyed, and folding an invented line into them would put
+    # the project's own placement inside the number that says what the
+    # publisher drew.
+    #
+    #     join_m == join_covered_m + join_drawn_m + join_refused_m
+    #
+    # ⚠️ **`join_covered_m` is the counter that can fail**, and it is what makes
+    # this different from `Q117`: the metres where TD's own `RM1001` runs beside
+    # the join and the inferred line yields to it. It is reachable at zero (a
+    # region with no surveyed line) and it is 3,416 m of survey against 95 pairs
+    # here, so mutation-check it rather than reading its value — with the cut
+    # disabled the two lines are drawn on top of each other and the frame is
+    # how you see it.
+    join_pairs: int = 0
+    join_m: float = 0.0
+    join_covered_m: float = 0.0
+    join_drawn_m: float = 0.0
+    # Uncovered join shorter than the mark's own line width, which is
+    # `read_markings`' bar for a clipped run said in the same terms. A run this
+    # short is a slot between two surveyed lines, not a line.
+    join_refused_m: float = 0.0
+    joins_drawn: int = 0
+    # 🔴 **Where the inferred line stands in for a survey line this stage
+    # REFUSED**, in metres — a surveyed `RM1001` whose host was off its own
+    # carriageway or off axis, with the join then drawn over that same stretch
+    # because nothing was painted there. ⚠️ **A finding to go and look at, never
+    # a bar to retune**: it is the one place the invention hides a refusal
+    # instead of a silence, and a rise in it means the survey is being refused
+    # more often rather than the join being drawn better.
+    join_over_refused_survey_m: float = 0.0
 
     # 🔴 **The counter that can see the join regress**, and the reason it is not
     # `axis_residual_deg`. The residual grades a rule that optimises the very
@@ -495,14 +535,9 @@ class Network:
         gap the height join used to record: a caller that needs every distance
         cannot use a helper that returns only the winner.
         """
-        start = self.segments.start[:, [0, 2]]
-        delta = self.segments.delta[:, [0, 2]]
-        squared = (delta**2).sum(axis=1)
-        offset = point - start
-        along = ((offset * delta).sum(axis=1) / np.where(squared > 0.0, squared, 1.0)).clip(
-            0.0, 1.0
-        )
-        return np.linalg.norm(offset - along[:, None] * delta, axis=1)
+        return plan_projections(
+            point, self.segments.start[:, [0, 2]], self.segments.delta[:, [0, 2]]
+        )[1]
 
 
 def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
@@ -841,6 +876,374 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
     return host.distance_m <= 0.5 * host.width_m
 
 
+# --------------------------------------------------------------------------
+# The inferred join between two opposed carriageways (`Q125`)
+# --------------------------------------------------------------------------
+#
+# 🔴 **The one placement in this stage that is not published, and it is drawn
+# only where the publisher is silent.** Where a dual carriageway is two one-way
+# edges, the line between the flows belongs to neither half's geometry:
+# `surface.py` pairs them and publishes `opposed_pairs`, and what follows walks
+# the line midway between the two centrelines, cuts out every stretch a
+# surveyed `RM1001` already covers, and draws the rest as that same mark.
+#
+# 🔴 **`Q117` drew this in the shader and `Q118` switched it off**, because a
+# shader line and a surveyed line fought wherever both existed — near-coincident,
+# thickened and speckled — and the shader has no way to yield for part of an
+# edge. Measured on Wan Chai before this was built: of 95 pairs, **13** are
+# covered by survey end to end, **24** are partly covered and **58** carry no
+# surveyed line at all. A per-edge switch is wrong in both positions on 24 of
+# them, which is why the cut is per metre and why it lives here rather than in
+# `TEXCOORD_1` — a flat per-strip code cannot say "from here to there".
+#
+# ⚠️ **Nothing here enters the stage's two partitions.** They are over what the
+# publisher drew; this is what the project inferred, and it is counted apart.
+
+
+@dataclass(frozen=True)
+class Join:
+    """One inferred centre line, between the two halves of a dual carriageway."""
+
+    # The paired edges, as `roadgraph.json` ids. `here` is the lower of the two
+    # and owns the line: the join is one marking, not one per half, and the
+    # shader's `centre_step` is the same finding said once per half because a
+    # lane coordinate is all it has.
+    here: int
+    there: int
+    # What `surface.py` measured between the two ribbons. The bar for a survey
+    # line to count as covering this join is half of it — the survey line lies
+    # between the two centrelines, so it cannot be further from the join than
+    # the join is from either half.
+    gap_m: float
+    # The line itself, `(n, 2)` as `(x, z)`, midway between the two centrelines.
+    line: np.ndarray
+
+
+def opposed_joins(surface: dict, edges: Sequence[dict], spec: RoadMarks) -> list[Join]:
+    """The inferred centre line of every opposed pair `surface.py` published.
+
+    Built as the **midpoint of the two centrelines, per station**, rather than
+    as an offset from one of them. The two readings agree wherever the halves
+    run parallel, which is most of a dual carriageway; where they splay into a
+    junction the midpoint stays between the flows and an offset does not.
+
+    ⚠️ **Only where each half is actually beside the other.** A station whose
+    partner projection lands on the partner's *end* is one running past where
+    the other half stopped, so the join would carry on down a single
+    carriageway — and a pair is only a pair where both halves exist. Those
+    stations end the run rather than being clamped onto it, so one pair can
+    yield several runs.
+
+    ⚠️ **The separation bar is the pairing's own and carries no knob.**
+    `surface._opposed_gaps` publishes a pair where the halves run within the
+    drawn width of each other; this asks the same question per station, against
+    the narrower of the two ribbons, so a pair that splays apart mid-block ends
+    its join there instead of drawing a line across the ground between them.
+    `Q72` refused a pairing rule with a free radius, and there is none here to
+    sweep.
+    """
+    plans = {int(edge["id"]): _plan_of(edge) for edge in edges}
+    trimmed: dict[int, np.ndarray] = {}
+    for entry in surface["carriageway"]:
+        plan = plans.get(int(entry["edge"]))
+        line = None if plan is None else _drawn_centreline(entry, plan)
+        if line is not None:
+            trimmed[int(entry["edge"])] = line
+    widths = _drawn_widths(surface)
+
+    joins: list[Join] = []
+    for here, there, gap_m in surface["opposed_pairs"]:
+        here, there = int(here), int(there)
+        own, partner = trimmed.get(here), trimmed.get(there)
+        if own is None or partner is None:
+            continue
+        reach = min(widths.get(here, 0.0), widths.get(there, 0.0))
+        for run in _join_runs(own, partner, reach, spec.station_m):
+            joins.append(Join(here=here, there=there, gap_m=float(gap_m), line=run))
+    return joins
+
+
+def _plan_of(edge: dict) -> np.ndarray | None:
+    """One graph edge's polyline as `(n, 2)` plan, or None where it has none."""
+    points = np.asarray(edge["polyline"], dtype=np.float64)
+    return points[:, [0, 2]] if len(points) >= 2 else None
+
+
+def _drawn_centreline(entry: dict, plan: np.ndarray) -> np.ndarray | None:
+    """An edge's centreline over the stretch the ribbon is actually drawn on.
+
+    ⚠️ **Trimmed, because the join must not run into a junction.** `trim_m` is
+    how far each end is held back so the cap can fill the middle, and a centre
+    line drawn across a cap is a line through the middle of a junction — which
+    is what the shader's `fade_m` keeps it out of on the layer this replaces.
+    The trims are `surface.py`'s own number and travel in the same manifest.
+    """
+    along = plan_lengths_2d(plan)
+    start, end = (float(value) for value in entry["trim_m"])
+    low, high = start, float(along[-1]) - end
+    if high - low <= _MIN_MARK_M:
+        return None
+    return _slice(plan, along, low, high)
+
+
+def _join_runs(
+    own: np.ndarray, partner: np.ndarray, reach_m: float, station_m: float
+) -> list[np.ndarray]:
+    """The midline between two drawn centrelines, in runs where both are there."""
+    along = plan_lengths_2d(own)
+    stations = _cuts(0.0, float(along[-1]), along, station_m)
+    partner_along = plan_lengths_2d(partner)
+
+    runs: list[np.ndarray] = []
+    current: list[np.ndarray] = []
+    for distance in stations:
+        point = _point_at(own, along, float(distance))
+        near = _nearest_on(partner, partner_along, point)
+        # `beyond` means the partner stopped here; `>= reach` means the two have
+        # splayed past the separation the pairing was found at.
+        if near.beyond or near.gap_m >= reach_m:
+            runs.extend(_closed(current))
+            current = []
+            continue
+        current.append(0.5 * (point + near.foot))
+    runs.extend(_closed(current))
+    return runs
+
+
+def _closed(points: list[np.ndarray]) -> list[np.ndarray]:
+    """A run of midpoints as a polyline, or nothing where it has no length.
+
+    Repeated points are dropped for `read_markings`' reason: a zero-length step
+    has no direction to take a perpendicular from, and two stations can land on
+    one midpoint where the partner doubles back.
+    """
+    if len(points) < 2:
+        return []
+    line = np.asarray(points, dtype=np.float64)
+    keep = np.concatenate([[True], np.linalg.norm(np.diff(line, axis=0), axis=1) > _MIN_MARK_M])
+    line = line[keep]
+    return [line] if len(line) >= 2 else []
+
+
+class _Nearest(NamedTuple):
+    """One polyline's nearest point to another point, and where it sits."""
+
+    at_m: float
+    foot: np.ndarray
+    gap_m: float
+    # Whether the point lies past an END of the line rather than beside it.
+    # ⚠️ **Not `at_m` being 0 or the total**, which is the reading this was
+    # written as first: a point exactly opposite the last vertex has its
+    # perpendicular foot *on* that vertex and is squarely beside the line, so
+    # that test dropped a station at each end of every join it built.
+    beyond: bool
+
+
+def _nearest_on(line: np.ndarray, along: np.ndarray, point: np.ndarray) -> _Nearest:
+    """Where `line` comes nearest to `point`, and whether that is past its end.
+
+    ⚠️ **Not `Segments.nearest`, and the difference is the whole of what this
+    is for.** That one searches the level-0 *network* for the nearest segment of
+    any edge; this asks one polyline where its own nearest point is, and answers
+    the second question with it, so a caller can tell a station beside its
+    partner from one past the end of it.
+    """
+    first, step = line[:-1], np.diff(line, axis=0)
+    raw, gaps = plan_projections(point, first, step)
+    fraction = raw.clip(0.0, 1.0)
+    index = int(np.argmin(gaps))
+    # The segment's own length is the step in `along`, so the foot's distance
+    # along the line costs no second square root.
+    at = float(along[index] + fraction[index] * (along[index + 1] - along[index]))
+    # Past the end only where the winning foot is the line's own first or last
+    # vertex and the point is on the far side of it. An interior corner is a
+    # foot at a vertex too, and it is beside the line.
+    beyond = (index == 0 and raw[0] < 0.0) or (index == len(step) - 1 and raw[-1] > 1.0)
+    foot = first[index] + fraction[index] * step[index]
+    return _Nearest(at, foot, float(gaps[index]), bool(beyond))
+
+
+def _covered(join: Join, markings: Sequence[Marking], spec: RoadMarks) -> list[tuple[float, float]]:
+    """Where a surveyed marking already runs beside this join, along the join.
+
+    🔴 **This is the counter-bearing half of `Q125`: the invention yields to the
+    survey, per metre.** A surveyed line covers the join where it runs *beside*
+    it — within half the pair's own separation — and *along* it, within the same
+    `bearing_tolerance_deg` that decides whether a longitudinal marking lies on
+    its host. Both bars are values that already exist; a line that crosses the
+    join covers nothing, which is what the angle test is for.
+
+    ⚠️ **Walked segment by segment, at the marking's own stations**, so a long
+    survey line that runs beside the join for part of its length covers that
+    part and no more. Taking a whole marking as covering or not covering was the
+    per-edge switch this stage measured itself out of.
+    """
+    along = plan_lengths_2d(join.line)
+    total = float(along[-1])
+    limit = math.cos(math.radians(spec.bearing_tolerance_deg))
+    reach = 0.5 * join.gap_m
+    low, high = join.line.min(axis=0), join.line.max(axis=0)
+    spans: list[tuple[float, float]] = []
+    for marking in markings:
+        # ⚠️ **A bounding-box reject, and it is exact rather than a heuristic.**
+        # Box separation is a lower bound on the true distance from a point to
+        # this line, so a marking whose box padded by `reach` misses the join's
+        # cannot hold a single segment inside the test below — it contributes no
+        # span, and `_merged` sorts what it is given, so dropping it changes
+        # nothing. ⚠️ **Non-strict**, because a marking exactly `reach` away is
+        # one the test keeps.
+        #
+        # A join is ~56 m of a 1.5 km region, so without this every join walks
+        # every marking: **6,292 marking visits where 43 are geometrically
+        # possible**, and the stage cost **7.6 s against the 1.2 s** `Q118`
+        # measured it at. With it, 0.06 s and the same spans to the bit.
+        if (marking.line.min(axis=0) - reach > high).any():
+            continue
+        if (marking.line.max(axis=0) + reach < low).any():
+            continue
+        line, walked = marking.line, marking.along_m
+        cuts = _cuts(0.0, marking.length_m, walked, spec.station_m)
+        # `along_m` is a property that re-walks the line, so it is taken once
+        # rather than per cut.
+        points = [_point_at(line, walked, float(cut)) for cut in cuts]
+        for head, tail in pairwise(points):
+            step = tail - head
+            length = float(np.linalg.norm(step))
+            if length <= _MIN_MARK_M:
+                continue
+            # ⚠️ **`beyond` is deliberately not consulted here**, where
+            # `_join_runs` turns on it: a survey line running past the join's
+            # end has both feet clamped onto that end, so its span collapses and
+            # the test below refuses it; one foot clamped is a line entering the
+            # join's range from outside, and clamping is exactly the reading
+            # wanted — it covers the part that overlaps and no more.
+            at_head = _nearest_on(join.line, along, head)
+            at_tail = _nearest_on(join.line, along, tail)
+            if max(at_head.gap_m, at_tail.gap_m) > 0.5 * join.gap_m:
+                continue
+            # The join's own direction where this piece lies against it, which
+            # is the span between the two feet — so a survey line crossing the
+            # join reads as perpendicular however close it passes.
+            span = abs(at_tail.at_m - at_head.at_m)
+            if span <= _MIN_MARK_M or span / length < limit:
+                continue
+            spans.append((min(at_head.at_m, at_tail.at_m), max(at_head.at_m, at_tail.at_m)))
+    return _merged(spans, total)
+
+
+def _merged(spans: list[tuple[float, float]], total: float) -> list[tuple[float, float]]:
+    """Overlapping spans unioned and clipped to `[0, total]`."""
+    united: list[tuple[float, float]] = []
+    for start, stop in sorted((max(0.0, a), min(total, b)) for a, b in spans):
+        if stop - start <= _MIN_MARK_M:
+            continue
+        if united and start <= united[-1][1]:
+            united[-1] = (united[-1][0], max(united[-1][1], stop))
+        else:
+            united.append((start, stop))
+    return united
+
+
+def _gaps_between(spans: Sequence[tuple[float, float]], total: float) -> list[tuple[float, float]]:
+    """The complement of `spans` in `[0, total]` — what no survey line covers.
+
+    ⚠️ Expects `spans` sorted and non-overlapping, which is what `_merged`
+    returns and the only thing any caller passes; handed anything else it walks
+    them in the order given and answers wrongly rather than raising.
+    """
+    free: list[tuple[float, float]] = []
+    edge = 0.0
+    for start, stop in spans:
+        if start - edge > _MIN_MARK_M:
+            free.append((edge, start))
+        edge = max(edge, stop)
+    if total - edge > _MIN_MARK_M:
+        free.append((edge, total))
+    return free
+
+
+def _overlap_m(left: Sequence[tuple[float, float]], right: Sequence[tuple[float, float]]) -> float:
+    """Metres two sets of spans have in common."""
+    return sum(
+        max(0.0, min(a_stop, b_stop) - max(a_start, b_start))
+        for a_start, a_stop in left
+        for b_start, b_stop in right
+    )
+
+
+def _slice(line: np.ndarray, along: np.ndarray, start: float, stop: float) -> np.ndarray:
+    """The piece of a polyline between two distances along it, ends included."""
+    inside = line[(along > start + _MIN_MARK_M) & (along < stop - _MIN_MARK_M)]
+    head = _point_at(line, along, start)
+    tail = _point_at(line, along, stop)
+    return np.vstack([[head], inside, [tail]])
+
+
+def draw_opposed_joins(
+    builder: FlatBuilder,
+    joins: Sequence[Join],
+    surveyed: Sequence[Marking],
+    refused: Sequence[Marking],
+    spec: RoadMarks,
+    drawn: DrawnSurface,
+    above: Sequence[DrawnSurface],
+    report: RoadMarkReport,
+    thin_m: float,
+) -> None:
+    """Draw each join's uncovered stretches, and book what the survey covered.
+
+    ⚠️ **`refused` grades rather than gates.** A surveyed line this stage could
+    not place — off its own carriageway, or off axis — paints nothing, so the
+    join is drawn over that stretch as it is over any other silence. What it is
+    not is the same silence: `join_over_refused_survey_m` is where the invented
+    line stands in for a reading that failed, and a rise in it is a finding
+    about the survey's placement rather than about the join.
+    """
+    mark = spec.opposed_join
+    if mark is None:
+        return
+    report.join_pairs = len({(join.here, join.there) for join in joins})
+    for join in joins:
+        along = plan_lengths_2d(join.line)
+        total = float(along[-1])
+        report.join_m += total
+        covered = _covered(join, surveyed, spec)
+        report.join_covered_m += sum(stop - start for start, stop in covered)
+        free = _gaps_between(covered, total)
+        painted: list[tuple[float, float]] = []
+        for start, stop in free:
+            if stop - start < mark.line_width_m:
+                # `read_markings`' bar for a clipped run, in the same terms: a
+                # slot this short between two surveyed lines is not a line.
+                report.join_refused_m += stop - start
+                continue
+            painted.append((start, stop))
+            report.join_drawn_m += stop - start
+            report.joins_drawn += 1
+            piece = Marking(code=mark.id, mark=mark, line=_slice(join.line, along, start, stop))
+            for quad in band_quads(piece, spec):
+                _place(builder, drawn, quad, spec.lift_m, report, thin_m, above)
+        report.join_over_refused_survey_m += _overlap_m(painted, _covered(join, refused, spec))
+
+
+def _check_join_partition(report: RoadMarkReport) -> None:
+    """Every metre of join is covered, drawn or refused, and none is two of them.
+
+    Asserted at runtime rather than left to the manifest, on `fence.py`'s
+    precedent — *a stage whose own partition does not close is publishing a
+    number nobody can read*. The three legs are accumulated in different
+    branches, so a leg that stops being booked leaves a published figure that
+    still looks like a distribution of something.
+    """
+    booked = report.join_covered_m + report.join_drawn_m + report.join_refused_m
+    if not math.isclose(booked, report.join_m, abs_tol=1e-6):
+        raise AssertionError(
+            f"the join partition does not close: {report.join_m:.6f} m of join against "
+            f"{report.join_covered_m:.6f} covered + {report.join_drawn_m:.6f} drawn + "
+            f"{report.join_refused_m:.6f} refused"
+        )
+
+
 def build_region(
     city: Config,
     region_id: str,
@@ -897,7 +1300,16 @@ def build_region(
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
     thinness_bar_m = 2.0 * report.import_quantum_m
     _check_marks_clear_the_lattice(spec, thinness_bar_m)
+    # The two halves of the survey the inferred join yields to (`Q125`): what
+    # was drawn, which the join is cut around, and what was refused, which it
+    # is drawn over and books a metre against. Both are gathered in the loop
+    # below rather than by a second pass, so the join can never disagree with
+    # this stage about what it drew.
+    join_mark = spec.opposed_join
+    surveyed: list[Marking] = []
+    refused: list[Marking] = []
     for marking in markings:
+        wanted = join_mark is not None and marking.mark is join_mark
         host = _host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1
@@ -918,6 +1330,8 @@ def build_region(
         # this refuses rather than places it wrong (`Q54`).
         if not _on_its_own_carriageway(marking, host):
             report.host_off_carriageway += 1
+            if wanted:
+                refused.append(marking)
             continue
         if host.residual_deg > spec.bearing_tolerance_deg:
             # Off the axis this marking is supposed to lie on. Transverse, the
@@ -927,8 +1341,12 @@ def build_region(
             # stage has no reading of, refused rather than turned onto a road,
             # which would be an invented marking in `Q54`'s sense.
             report.no_host_on_axis += 1
+            if wanted:
+                refused.append(marking)
             continue
 
+        if wanted:
+            surveyed.append(marking)
         heights: list[float] = []
         for quad in band_quads(marking, spec):
             heights.extend(_place(builder, drawn, quad, spec.lift_m, report, thinness_bar_m, above))
@@ -952,6 +1370,23 @@ def build_region(
             report.underfill_m.append(host.width_m - length)
         if heights:
             report.height_spread_m.append(max(heights) - min(heights))
+
+    # 🔴 **After the survey, because it yields to it.** The joins are built from
+    # `surface.py`'s pairing and drawn only where nothing surveyed covers them,
+    # so the surveyed set has to be complete before the first metre of invented
+    # line is cut (`Q125`).
+    draw_opposed_joins(
+        builder,
+        opposed_joins(surface, edges, spec),
+        surveyed,
+        refused,
+        spec,
+        drawn,
+        above,
+        report,
+        thinness_bar_m,
+    )
+    _check_join_partition(report)
 
     mesh = builder.build(ROADMARKS_MESH_NAME, thinness_bar_m, report)
     if mesh is not None:
@@ -993,6 +1428,12 @@ def _place(
     the ramp is placed as it was. `above` empty — a region with no level drawn
     above the street — refuses nothing, and a void piece with no deck over it
     is placed and counted in `vertices_over_void` as before.
+
+    ⚠️ **The inferred join is placed by exactly this function** (`Q125`), void
+    rule included: the measured population of join pieces over nothing drawn is
+    **zero**, so a refusal of its own would be a rule this region never
+    exercises — and a published extent over void is kept here for `Q54`'s
+    reason, which is a reason about who drew the extent.
     """
     sampled = drawn.sampled_pieces(quad, thin_m=thin_m)
     report.polygons_placed += 1
@@ -1089,6 +1530,26 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         # sitting on a deck is a different fact from a code this stage does not
         # draw, and `RM1012` is both in the same run.
         "on_structure_m": round(report.on_structure_m, 3),
+        # 🔴 **The inferred join (`Q125`), as its own block and its own
+        # partition.** Everything above is over what TD surveyed; this is where
+        # two one-way carriageways run as one dual road and the line between the
+        # flows belongs to neither half. `covered_m` is the survey this yields
+        # to, per metre, and it is the counter that separates this from `Q117`'s
+        # shader join — which could only yield per edge, and so was switched off
+        # whole (`Q118`).
+        #
+        # ⚠️ **`over_refused_survey_m` grades and never gates**: metres where the
+        # invented line stands in for a surveyed one this stage refused, rather
+        # than for a silence. A finding to go and look at.
+        "join": {
+            "opposed_pairs": report.join_pairs,
+            "join_m": round(report.join_m, 3),
+            "covered_m": round(report.join_covered_m, 3),
+            "drawn_m": round(report.join_drawn_m, 3),
+            "refused_m": round(report.join_refused_m, 3),
+            "runs_drawn": report.joins_drawn,
+            "over_refused_survey_m": round(report.join_over_refused_survey_m, 3),
+        },
         # 🔴 The bundle's word on structure beside the source's above: station
         # quads (or pieces of one) over nothing drawn at level 0 and under a
         # deck drawn above it, refused rather than placed 52-131 mm under that
@@ -1184,6 +1645,16 @@ def main(argv: list[str] | None = None) -> int:
         report.polygons_placed,
         report.polygons_split,
         report.pieces_placed,
+    )
+    log.info(
+        "  inferred join: %d pairs, %.0f m of which %.0f m covered by survey, %.0f m drawn "
+        "in %d runs (%.0f m over a refused survey line)",
+        report.join_pairs,
+        report.join_m,
+        report.join_covered_m,
+        report.join_drawn_m,
+        report.joins_drawn,
+        report.join_over_refused_survey_m,
     )
     log.info(
         "  under a drawn deck: %d stations / %.2f m refused",

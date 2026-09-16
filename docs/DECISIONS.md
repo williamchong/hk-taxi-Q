@@ -21146,6 +21146,12 @@ RM1001 against the ~93 ends the branch found, so about a quarter lose their line
 the invention, which is the trade `Q54` asks for, and `centre_at` stays in the codec for a region
 whose survey is thinner.
 
+🔴 **That quarter was taken back on 2026-09-16 (`Q125`), and the user found it from the driving
+seat**: the line is drawn as *geometry* along the pairs no surveyed line covers — 58 of 95 pair ends
+carry no `RM1001` at all — which is what `draw_pair_join` could not do, because a shader yields per
+edge and 24 of those pairs are only partly surveyed. `draw_pair_join` stays **0.0** and must not be
+switched back on; the debit this section records is now 1,974 m and is stated in `Q125`.
+
 ```
   drawn        191 -> 283        candidates   209 -> 352
   RM1001        91 parts, 3,416 m of 5,745 at grade
@@ -21218,7 +21224,8 @@ ribbon *coverage* rather than centreline distance — a change to `Q92`'s one sh
 serves the boxes and the arrows too, so it is its own decision. RM1002/RM1003 need a per-line module.
 The two-way centre line is still `P3-12`'s invention, on 6 parts' worth of survey.
 
-**See.** `Q117` for the inferred join this supersedes · `Q54` for sourced-not-invented · `Q92` for
+**See.** `Q117` for the inferred join this supersedes · `Q125` for the part of it that came back,
+as geometry that yields to this survey per metre · `Q54` for sourced-not-invented · `Q92` for
 the height accessor · `Q59` for reading a scanned sheet · `Q69` for the clear-gap trap
 
 ## `Q119` — The editor never dropped a setting, and the resources' rationale moves out of the files
@@ -22343,3 +22350,163 @@ the DCC review and the six gaps, two of which this finds still open · `Q122` fo
 step and why it stops at `generated/` · `Q82` for the compression setting the authored sidecars
 contradict · `Q38` for the baked anchor `P5-28` would lift · `Q72` for the tautology test a listener
 or a counter has to pass · `Q62` for why every step here owes a frame
+
+---
+
+## `Q125` — The centre line comes back where TD never drew one, and it yields per metre
+
+**Status.** 🟢 Closed 2026-09-16
+
+**Origin.** The user, from the driving seat on HUNG HING ROAD: *the line/split between 2 opposing
+road/lanes are somehow disappeared*. Two one-way carriageways run side by side with oncoming traffic
+a lane away and nothing between the flows.
+
+### ✅ Nothing regressed — `Q118` switched it off and the survey is silent here
+
+`Q117` drew the join in `road_markings.gdshader` from a geometric pairing; `Q118` drew TD's own
+`RM1001` as geometry instead and set `draw_pair_join` to **0.0**, because the two fought where both
+existed. It recorded the cost as "about a quarter lose their line". Measured at the user's frame:
+`DTAD_RD_MARK_LINE` publishes **no RM1001 within 70 m**, and across `e586`'s full width plus 4 m
+either side it publishes **one stop line and nothing else** — no lane lines either. The dashes in
+that frame are the shader's. `e586`/`e584` are a mutual opposed pair, so `Q117`'s join would have
+drawn there and `Q118`'s does not.
+
+### 🔴 A per-edge switch cannot work, and that is measured rather than argued
+
+Re-enabling the shader join "except where the survey covers it" is the obvious fix. Of the region's
+**95** pair ends:
+
+```
+  covered by a drawn RM1001 end to end    13
+  partly covered                          24      <- e411 8% over 232 m, e235 58%
+  no surveyed line at all                 58      <- e586 / e584 HUNG HING ROAD
+```
+
+On 24 edges both switch positions are wrong. So the cut has to be per metre, and three things say it
+cannot live in the shader: `centre_step` is a **flat per-strip code** in `TEXCOORD_1` and cannot say
+"from here to there"; `COLOR_0.a` is taken by the kerbside extents and varies *across* the road
+rather than along it; and the shader's line is **28 cm** (`centre_width` 0.055 of a 5.12 m U-lane)
+against the survey's **15 cm**, so a road would change line weight at every coverage boundary.
+⚠️ **A flat varying keyed per station was considered and refused**: the provoking-vertex convention
+differs between the Mobile renderer and the Compatibility renderer the web cut uses, so it would
+draw differently on itch.io.
+
+### ✅ So it is drawn as geometry, by the stage that knows what it drew
+
+`surface.py` publishes `opposed_pairs` (`SURFACE_MANIFEST_SCHEMA` **10 → 11**) — `[a, b, gap_m]` per
+mutual pair, once, over published edge ids. `roadmarks.py` walks the line **midway between the two
+centrelines per station**, cuts out every stretch a drawn `RM1001` covers, and draws the rest as that
+same mark. `roadmarks.json` gains a `join` block (`ROADMARKS_MANIFEST_SCHEMA` **1 → 2**):
+
+```
+  opposed_pairs 43   join 2,462 m = covered 488 + drawn 1,974 + refused 0.13
+  runs drawn    54   over a refused survey line 103 m
+  triangles  16,392 -> 24,023      bytes  886,220 -> 1,298,324
+```
+
+✅ **And the cut is doing real work on the second region, which is the better test of it.**
+`causeway_bay` is more thoroughly surveyed: **14 pairs, 1,457 m of join, 710 m of it covered — 49%,
+against Wan Chai's 20%** — so half that region's join yields to TD and half is drawn. A rule that
+had stopped cutting would show here first.
+
+⚠️ **Not folded into `drawn` or `drawn_by_id`.** Those are over what the publisher surveyed, and
+every one of them is **byte-identical** across this change — `parts` 4,162, `candidates` 352,
+`drawn` 282, 17 / 52 / 1, `axis_residual_deg`, `underfill_m`, `mark_length_m` and `height_spread_m`
+all unmoved. The invention is strictly additive and counted apart.
+
+🔴 **The rules carry no new knob.** Covered means a surveyed line lies within **half the pair's own
+measured gap** of the join and within `bearing_tolerance_deg` of parallel — both values that already
+exist — so a stop line crossing the join covers nothing. A run shorter than the mark's own
+`line_width_m` is refused, which is `read_markings`' bar for a clipped run said in the same terms.
+The join ends where its partner does, and where the two splay past the drawn width the pairing was
+found at. The search bound is `_opposed_gaps`' own; `Q72`'s free radius is still refused.
+
+⚠️ **`over_refused_survey_m` grades and never gates.** 103 m where the invented line stands in for a
+surveyed one this stage *refused* (off its own carriageway, or off axis) rather than for a silence.
+A rise in it is a finding about the survey's placement.
+
+### ✅ Inertness, and what the frames show
+
+`roads.glb`'s 65 chunks are **byte-identical** — the surface change publishes a fact and moves no
+geometry. With `opposed_join_mark` removed the marks stage reproduces the pre-change mesh exactly
+(**16,392 triangles / 886,220 bytes**), which is the before side of every A/B below.
+
+`tools/paint_clearance.py --layer roadmarks`, within bounds both sides:
+
+```
+                       before                         after
+  coverage             99.4%                          99.6%
+  under highest face   184 (1.1%)  p50 0.1339         238 (1.0%)  p50 0.1012
+  in the carriageway   0                              3, worst 0.0151 m, 1 over the 0.010 bar
+```
+
+🔴 **Those 3 triangles are the one debit and they are NOT paint over void** — a rule refusing an
+inferred piece over nothing drawn was built, measured at **0 pieces**, and removed rather than
+shipped inert. They are the stacked-ribbon chord: a join runs where two ribbons overlap, and the
+line where the higher of the two switches is not a crease of either strip, so a triangle spanning it
+dips millimetres under the surface it is drawn on. Under the bar and reported, not answered with
+`lift_m` (`Q92`).
+
+⚠️ **`opposed_pair_bearing_deg` swept, and it is still not a plateau** (`Q117`'s own reading):
+
+```
+  deg    10    20    30    45    60    75
+  ends   86    96   100   102   108   116
+  1-side  4     5     7     7     8    11
+  pairs  43    48    50    51    54    58
+```
+
+**Mutations, two, two failures.** Disabling the cut takes `covered_m` **488 → 0 m** and fails two
+tests. Dropping mutuality moves `opposed_pair_ends` 2 → 3 on the three-ribbon fixture and fails its
+test. **Frames** (`Q62`), each shot twice and hash-identical, with
+`game/.godot/imported/roadmarks.glb-*` deleted and re-imported before each side: the user's own view
+of HUNG HING ROAD gains the double line; a top-down at `e213`/`e234` shows one continuous line
+across the survey-to-inference seam, with no doubling and no gap.
+
+⚠️ **The honest residue is a small lateral step at a seam**: the surveyed line sits where TD drew it
+and the inferred line sits midway between the two centrelines, so where one hands over to the other
+they can be a few centimetres apart. Visible only from directly above at 30 m.
+
+### 🔴 Review: the stage cost 6.4x what it had, and the fix is a bounding box
+
+The first build of this ran the marks stage at **7.57 s** against the **1.2 s** `Q118` measured, and
+nothing in the counters says so — a build-time regression is invisible to every partition this stage
+publishes. The cause was a cross product: `_covered` walked **every** surveyed marking for **every**
+join, 6,292 visits of which **43** are geometrically possible, because a join is ~56 m of a 1.5 km
+region. A marking whose bounding box padded by the join's own `0.5 * gap_m` misses the join's box
+cannot hold a segment inside the test — box separation is a lower bound on the true distance — so
+dropping it is exact rather than a heuristic:
+
+```
+  marks stage        7.57 s -> 3.30 s        _nearest_on calls  274,741 -> 3,192
+  pipeline           19.5 s -> 14.9 s        roadmarks.glb      byte-identical
+```
+
+⚠️ **`Q118`'s refused optimisation is the precedent and it argues the other way.** That one was
+turned down because the win was 0.22 s of a 1.2 s stage, it needed new API in two shared modules,
+and it was **not bit-identical**. This is 4.3 s of a 7.6 s stage, six lines inside one function, and
+byte-identical output. ⚠️ **Vectorising `_nearest_on` is still refused** on `Q118`'s own grounds:
+after the box test it is 3,192 calls, so it would buy tens of milliseconds for a batched `argmin`
+that is not bit-identical.
+
+⚠️ **The projection kernel was written a third time and is now hoisted** —
+`polyline.plan_projections`, shared with `Network.distances`. ⚠️ **`Segments._plan_distances` is
+deliberately left out of it**: it measures with `hypot` where this measures with `norm`, and its
+answers reach `clearance.json` and every kerbside join, so folding it in for tidiness could move a
+published number.
+
+### 🔴 What this costs, stated at its true size
+
+A double continuous white line instructs *no overtaking*, and **1,974 m of it now rests on a pairing
+this project inferred** rather than on a survey. That is the `Q54` debit `Q118` removed, taken back
+deliberately and with the user's decision recorded: a dual carriageway with nothing between the flows
+reads as one wide road from the driving seat, and 58 of 95 pairs had nothing. What is **not**
+invented is the shape — `opposed_join_mark` names the `marks:` entry, so the line drawn is TD's
+transcribed 150/100 double white and a region draws none by leaving the key out. ⬜ The sourced route
+is unchanged and still open: TD surveying the other 1,974 m.
+
+**Status.** `check.sh` exit 0, **2,268** tests, ruff clean, pipeline end to end in **14.9 s** (19.5 s before the review's box test).
+
+**See.** `Q118` for the survey this yields to and the switch-off it reverses · `Q117` for the pairing
+and its angle sweep · `Q54` for sourced-not-invented · `Q92` for the height accessor and why a
+burial is not answered with `lift_m` · `Q62` for why the evidence is a frame

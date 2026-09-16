@@ -83,6 +83,35 @@ def plan_lengths_2d(plan: np.ndarray) -> np.ndarray:
     return np.concatenate([[0.0], np.cumsum(plan_steps_2d(plan))])
 
 
+def plan_projections(
+    point: np.ndarray, start: np.ndarray, delta: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Where `point` projects onto each `(x, z)` segment, and how far it lies from it.
+
+    The fraction is **unclamped** — negative before a segment's start, past 1
+    beyond its end — because a caller that has to tell "beside this line" from
+    "past the end of it" cannot recover that from a clamped one. The distance is
+    measured to the **clamped** foot, which is the distance to the segment
+    rather than to its infinite extension.
+
+    ⚠️ **Hoisted because it was written three times** (`Q125`): here,
+    `roadmarks.Network.distances` and `roadmarks._nearest_on`. `Q56`'s rule is
+    that two implementations disagreeing tells you one is wrong and never which,
+    and the third copy arrived in the same file as the second.
+
+    ⚠️ **`Segments._plan_distances` is deliberately NOT folded in.** It works on
+    the 3-D graph arrays column by column and measures with `hypot` where this
+    measures with `norm`; the two agree to the bit on every case either has been
+    asked, but not by construction, and that one's answers reach `clearance.json`
+    and every kerbside join. A hoist that could move a published number for
+    tidiness is the trade `Q118` refused.
+    """
+    squared = (delta**2).sum(axis=1)
+    offset = point - start
+    fraction = (offset * delta).sum(axis=1) / np.where(squared > 0.0, squared, 1.0)
+    return fraction, np.linalg.norm(offset - fraction.clip(0.0, 1.0)[:, None] * delta, axis=1)
+
+
 @dataclass(frozen=True)
 class Snap:
     """Where a point attaches to the road graph."""
