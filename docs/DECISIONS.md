@@ -14451,6 +14451,68 @@ boxes, arrows and tramway byte-for-byte the same table. `check.sh` exit 0, no sh
 was inside a slab the depth buffer already hid, which is the whole of why this class needed a counter
 and not a look; from under the ramp's edge at `--camera=779,3.85,507 --look=772,3.6,501`, **10 px** — the one-pixel slit of white the buried marking showed through the gap under the ramp, gone.
 
+**The void wedge between two flanks closed 2026-09-16 (`P3-32`, third commit) — and the transect
+did not say what the record said.** The record had `e529`'s flank stopping at the paint while `e586`'s
+ribbon began a kerb width beyond it, and a rule to carry a flank one kerb width into the neighbour it
+ends beside. Walked at 0.05 m (`DrawnSurface` over the shipped `roadsurface.json`, x 639–646, z 184–190),
+both flanks reach box 8's boundary where their rays exit it; what is uncovered is the strip between the
+**last station whose rail point is inside the paint** and the point where **the rail itself leaves the
+paint**. `_add_paint_stations` stations the *centreline's* crossings of the box edge, and where that
+edge is oblique to the road the rail crosses it somewhere else — 0.16 m further along at box 8 — so the
+quad per station pair stopped short and left a wedge 0.16 m wide at the rail tapering to the ring's
+corner 3.3 m out, inside the box; `e586`'s flank ran across it to the same boundary 8 cm lower and its
+tip poked out into the wedge, which is the 8 cm step the paint found. The neighbour rule would not have
+fired: `e586`'s outline begins 5 m along `e529`'s ray, past a 3.3 m reach. So the fix is the one the
+transect names — `_paint_flanks` closes each run at the rail's own crossing of the ring: the hull of the
+last kept station's rail point and paint corner, the crossing, its own paint corner (its ray, clipped by
+the neighbours within *its* reach exactly as a station's is), and the ring's corners between the two
+paint corners where both lie on the ring, so a piece cannot leave the box and where the ray at the
+crossing points straight out the crossing is the wedge's third corner itself. No new value: the
+crossing is the rail's, the reach rule is the stations', the kerb tolerance is the clip's.
+
+🔴 **Bounded by the stationing's own pitch, and that bound was measured in, not designed in.**
+Unbounded, the first build drew **29 closings / 83.5 m²** on Wan Chai and **5 / 36.4 m²** on Causeway
+Bay — a 14.6 m² triangle along box 8's south margin under a junction cap, 12–19 m² sweeps over another
+carriageway at 0.28 and 0.45 m from its surface — because a rail can lie inside a box for metres with
+no paint station on it at all, wherever its centreline runs outside the box (box 13's `e446`, 5.9 m
+between stations), and a closing there sweeps from the last kerb station to the exit. A run stationed
+for its box has a station within `_PAINT_STATION_M` (2 m) of where its rail leaves the paint; a run with
+no station that close was never stationed for it and the stage has never drawn its flank, so the closing
+is refused past one pitch. That is the stationing's number, not a second one. ⚠️ **The neighbour clip's
+search box must grow by the crossing ray's own reach, not the stations'** — where the box edge is
+oblique the ray from the crossing runs inside the box for longer than any station's did, and the
+first build's clip never saw the carriageway it crossed. What remains is **22 closings / 31.6 m²** on
+Wan Chai and **2 / 0.21 m²** on Causeway Bay, and their kind is the station flanks' own: 6 pieces
+mostly over nothing (the class — box 8's 0.62 m² wedge at 82% void, 0.57 at 91%, 0.19 at 100%), 10
+over a junction cap at +0.00 to +0.06 m (the existing flank-over-cap overlap, `over_cap_rise_m`), and
+6 over another ribbon where the rail itself lies inside that ribbon — one at +0.25 m at HKCEC, where
+`e543`'s *station* flank already stood 0.25 m over `e446`'s ribbon beside it (measured on the before
+side: cap 5.211 over ribbon 4.959), so the lip is extended by a piece and not created.
+
+**Before → after, Wan Chai** (`--from surface`, both regions — never `--from roads`, which re-runs
+the carve; an unchanged-code rebuild from `surface` first reproduced every file but `city.json`'s
+timestamp): `paint` **20 / 219 / 186 / 609.66 m² → 20 / 219 / 208 (22 closing) / 641.24 m²**; `clusters`
+87 / 54 / 139 / 68 unchanged, level-0 caps 596 → 618; `carriageway[]`, `ribbons`, `offset_m` and
+`trim_m` byte-identical (the ribbon does not move); `roads.glb` chunks `t_01_00`, `t_01_01`, `t_03_01`,
+`t_04_01` differ and the other 61 are byte-identical (Causeway Bay: `t_00_03`, `t_02_01`), plus
+`boxjunctions.glb`/`.json` and `roadsurface.json`; nothing else. `box_extent.py` per box: box 8 HUNG
+HING ROAD off-road **0.66 → 0.00 m²** (18 → 0 triangles), box 7 0.01 → 0.00, box 16 EXPO DRIVE EAST
+0.58 unchanged (its six void triangles are not a rail's exit); pooled void **1.17 → 0.58 m²** (24 → 6
+triangles), past kerb **0.08 → 0.00**, off-road **1.25 → 0.58 m² (0.22 → 0.10%)**, distance past the
+drawn edge max 0.30 unchanged. `cap_pavement.py` at `--cell-m 0.25 --near-m 3.0`: cap area 74,406 →
+74,437 m², so the closings are **31 m² of new cap** — **14 on HyD carriageway, 4 past a HyD kerb, 13
+unsurveyed** (11,354 → 11,358 and 8,849 → 8,862); caps with paint past a kerb 403 of 596 → 408 of 618.
+Buried kerb **32,498 m before and after** at the log's metre resolution. `paint_clearance.py`, boxes:
+`deep` 0 → 0, `in c'way` 2 → 2 (both 0.9 mm), `under hi` 1.7 → 1.8% (329 → 355), `on kerb` 0.31 →
+**0.18%**, no road face under it 89 → **60** triangles (4.31 → 2.87 m²), coverage 99.5 → **99.7%**; road
+marks, arrows and tramway byte-for-byte the same table; Causeway Bay boxes `on kerb` 0.06 → 0.00. The
+HUNG HING transect at x 642.5 reads 4.384 m flat from the flank to the box edge at z 186.42 and void
+only beyond it. `check.sh` exit 0, no shader errors. **Frames**: box 8 at the `Q92` camera
+`--camera=636,22,200 --look=651,1,176`, **395 px** differ; top-down at `--camera=648,60,176
+--look=648,4,177`, **10 px**; `roads/t_0*` and `boxjunctions.glb` import sidecars deleted before each
+side, each side shot until its hash repeated. `railing_error.py` and `signs.json`'s `shift_m` are not
+owed: the rails did not move.
+
 **The counter that sees this revert.** `vertices_over_void` with `void_reach_m` on both stages: a
 vertex over no cap and no strip, and how far the nearest drawn edge was. It reads **442 of 24,435**
 on the boxes (reach p50 0.41 / max 1.29 m) and **268 of 24,636** on the road marks (p50 0.68 / max
@@ -17928,8 +17990,12 @@ which only **22 m² is new asphalt** after the corridors (1 on HyD carriageway, 
 unsurveyed), because the boxes sit at the stub clusters the corridors had already straightened; the
 corridors did most of this arm's work and the flanks close what was left. Pooled off-road box paint
 **4.29 → 0.93 m² (0.16%)**, all of it void and none past a kerb; HKCEC 0.75, HUNG HING 0.18,
-CONVENTION AVENUE east **0.00** from 12.43 that morning. The residue is the quarter-metre station pair
-`_insert_stations` places either side of a crossing, so a flank starts 0.25 m inside the box edge.
+CONVENTION AVENUE east **0.00** from 12.43 that morning. The residue was the quarter-metre station pair
+`_insert_stations` places either side of a crossing, so a flank started 0.25 m inside the box edge —
+and, where the box edge is oblique, further: the rail leaves the paint somewhere other than the
+centreline does. ✅ **Closed the same evening** — `_paint_flanks` closes each run at the rail's own
+crossing of the ring, within one paint-station pitch of the last station; pooled off-road box paint
+**0.93 → 0.58 m² (0.10%)**, box 8 **0.00**. `Q92`'s third class has the transect and the bound.
 Placements inside a level-0 cap are unchanged by the flanks (20 / 86 / 12). ⬜ **The other arm — neck
 the ribbon to the carve wall — is not taken** and stays `P3-32`'s open item.
 

@@ -486,6 +486,9 @@ class SurfaceReport:
     paint_stations: int = 0
     paint_flanks: int = 0
     paint_flank_m2: float = 0.0
+    # Of those, the closing pieces from the last kept station to where the
+    # rail leaves the box — counted apart so a closing that stops firing shows.
+    paint_flank_ends: int = 0
     # Edge **ends** that resolved to half of an opposed one-way pair — two per
     # pair, because each half publishes its own offset. Reported because it is
     # the population two markings depend on and neither the graph nor the ribbon
@@ -2500,6 +2503,26 @@ def _paint_flanks(
     ramp across the median: at this ribbon's height the tip stood 1.5-1.7 cm
     proud of HUNG HING ROAD's other carriageway and buried four paint
     triangles under a lip `paint_clearance.py` could see and a frame could not.
+
+    🔴 **A flank runs to where the RAIL leaves the box, not to the last station
+    inside it** (`Q92`'s third class, 2026-09-16). `_add_paint_stations` puts a
+    station at each crossing of the CENTRELINE with the box edge, and where
+    that edge is oblique to the road the rail crosses it somewhere else — at
+    HUNG HING ROAD box 8, 0.16 m further along — so the quad per station pair
+    stopped at the last station whose rail point was inside the paint and left
+    the strip between that station's ray and the rail's own exit undrawn: a
+    void wedge inside the box, into which the other carriageway's flank poked
+    its tip 8 cm lower, and a paint vertex over it took the lower edge. The
+    closing piece per rail end is the hull of the last kept station's rail
+    point and paint corner, the point where the rail segment crosses the ring,
+    that point's own paint corner (its ray, clipped by the neighbours exactly
+    as a station's is), and the ring's own corners between the two paint
+    corners where both lie on the ring — so it cannot leave the box, and where
+    the ray at the crossing points out of the box it is the wedge's third
+    corner itself. Nothing new to set: the crossing is the rail's, the reach
+    rule is the stations', and the kerb tolerance is the one the clip carries.
+    Counted apart in `paint_flank_ends` so a closing that stops firing is
+    visible; `flanks` includes them.
     """
     if not boxes.rings or edge.ribbon is None or edge.left is None or edge.right is None:
         return []
@@ -2524,15 +2547,13 @@ def _paint_flanks(
         # ⚠️ The box the ray may leave, not the rail's: the flank reaches out.
         furthest = float(reach.max())
         far_heights = heights.copy()
+        clipped = np.zeros(len(rail), dtype=bool)
         met = outlines.touching(rail.min(axis=0) - furthest, rail.max(axis=0) + furthest)
-        for other in (index for index in met if index != own):
-            for index in np.flatnonzero(reach > 0.0):
-                entry = _ray_exit(rail[index], outward[index], outlines.rings[other])
-                if entry is not None and entry + style.kerb_width_m < reach[index]:
-                    reach[index] = entry + style.kerb_width_m
-                    far_heights[index] = _height_along(
-                        ribbons[other], rail[index] + outward[index] * reach[index]
-                    )
+        neighbours = [(outlines.rings[index], ribbons[index]) for index in met if index != own]
+        for index in np.flatnonzero(reach > 0.0):
+            reach[index], far_heights[index], clipped[index] = _clip_to_neighbours(
+                rail[index], outward[index], reach[index], heights[index], neighbours, style
+            )
         keep = reach >= style.kerb_width_m
         for index in np.flatnonzero(keep[:-1] & keep[1:]):
             near, far = index, index + 1
@@ -2550,8 +2571,151 @@ def _paint_flanks(
             if len(quad) >= 3:
                 quads.append(quad)
                 report.paint_flank_m2 += 0.5 * abs(_shoelace(quad))
+        # 🔴 The closing piece at each end of a run: from the last kept station
+        # to where the rail itself leaves the box. See the docstring.
+        rings_here = [boxes.rings[index] for index in painted]
+        for index in np.flatnonzero(keep[:-1] != keep[1:]):
+            kept, other = (index, index + 1) if keep[index] else (index + 1, index)
+            crossing = _rail_leaves(rail[kept], rail[other], rings_here)
+            if crossing is None:
+                continue
+            point, ring, along = crossing
+            # 🔴 Within one paint-station pitch of the last station, or not at
+            # all. A run `_add_paint_stations` stationed for this box has a
+            # station within `_PAINT_STATION_M` of where its rail leaves the
+            # paint; a rail inside a box with no station that close was never
+            # stationed for it — its centreline runs outside the box — and the
+            # stage has never drawn its flank. Closing those on the first build
+            # drew 3.3-8.7 m sweeps at box 13 and box 8's south margin, over
+            # another carriageway and under a junction cap, at up to 0.45 m
+            # from the surface already there. The pitch is the stationing's
+            # own number, not a second one.
+            if float(np.hypot(*(point - rail[kept]))) > _PAINT_STATION_M:
+                continue
+            out = outward[kept] + along * (outward[other] - outward[kept])
+            norm = float(np.hypot(*out))
+            if norm <= _MIN_SEGMENT_M:
+                continue
+            out = out / norm
+            height = float(heights[kept] + along * (heights[other] - heights[kept]))
+            # ⚠️ The neighbours within THIS ray's reach, not the stations':
+            # where the box edge is oblique the ray from the crossing runs
+            # inside the box for longer than any station's did, and a clip
+            # searched to the stations' reach let it cross the other
+            # carriageway — 12 m² at 0.28 m under it, on the first build.
+            reach_here = _reach_from_ring(point, out, ring)
+            grown = reach_here + style.kerb_width_m
+            near_here = outlines.touching(point - grown, point + grown)
+            neighbours_here = [
+                (outlines.rings[index], ribbons[index]) for index in near_here if index != own
+            ]
+            reach_here, far_height, clipped_here = _clip_to_neighbours(
+                point, out, reach_here, height, neighbours_here, style
+            )
+            paint_kept = rail[kept] + outward[kept] * reach[kept]
+            paint_here = point + out * reach_here
+            corners = [
+                (rail[kept], float(heights[kept])),
+                (paint_kept, float(far_heights[kept])),
+                (paint_here, far_height),
+                (point, height),
+            ]
+            if not clipped[kept] and not clipped_here:
+                corners.extend(
+                    (corner, float(far_heights[kept]))
+                    for corner in _ring_between(ring, paint_kept, paint_here)
+                )
+            piece = hull(np.array([[x, h, z] for (x, z), h in corners]))
+            if len(piece) >= 3:
+                quads.append(piece)
+                report.paint_flank_m2 += 0.5 * abs(_shoelace(piece))
+                report.paint_flank_ends += 1
     report.paint_flanks += len(quads)
     return quads
+
+
+def _clip_to_neighbours(
+    point: np.ndarray,
+    outward: np.ndarray,
+    reach: float,
+    height: float,
+    neighbours: list[tuple[np.ndarray, np.ndarray]],
+    style: RoadSurface,
+) -> tuple[float, float, bool]:
+    """A flank ray's reach, stopped one kerb width into the first neighbouring
+    ribbon outline it enters, with the far corner's height from that ribbon —
+    the rule `_paint_flanks` states — and whether it was stopped."""
+    far_height = height
+    clipped = False
+    for outline, ribbon in neighbours:
+        entry = _ray_exit(point, outward, outline)
+        if entry is not None and entry + style.kerb_width_m < reach:
+            reach = entry + style.kerb_width_m
+            far_height = _height_along(ribbon, point + outward * reach)
+            clipped = True
+    return reach, far_height, clipped
+
+
+def _rail_leaves(
+    start: np.ndarray, stop: np.ndarray, rings: list[np.ndarray]
+) -> tuple[np.ndarray, np.ndarray, float] | None:
+    """Where the rail segment from `start` first crosses the edge of any of
+    `rings` on its way to `stop`: the crossing point, the ring crossed and the
+    parameter along the segment. None where it crosses nothing."""
+    step = stop - start
+    length = float(np.hypot(*step))
+    if length <= _MIN_SEGMENT_M:
+        return None
+    direction = step / length
+    best: tuple[float, np.ndarray] | None = None
+    for ring in rings:
+        along, hit = _ring_hits(start, direction, ring)
+        hit &= (along > _MIN_SEGMENT_M) & (along < length - _MIN_SEGMENT_M)
+        if hit.any():
+            nearest = float(along[hit].min())
+            if best is None or nearest < best[0]:
+                best = (nearest, ring)
+    if best is None:
+        return None
+    return start + direction * best[0], best[1], best[0] / length
+
+
+def _reach_from_ring(point: np.ndarray, outward: np.ndarray, ring: np.ndarray) -> float:
+    """How far a ray from a point ON a ring's edge runs before it leaves the
+    ring: zero where it points straight out, the traverse to the far side where
+    the edge is oblique and the ray runs inside. The edge the point sits on is
+    a hit at zero, kept — a rounding survivor a hair behind must not lose it to
+    a far edge ahead."""
+    along, hit = _ring_hits(point, outward, ring)
+    hit &= along >= -_MIN_SEGMENT_M
+    return max(0.0, float(along[hit].min())) if hit.any() else 0.0
+
+
+def _edge_of(ring: np.ndarray, point: np.ndarray) -> int | None:
+    """The index of the ring edge a plan point lies on, or None if it is off
+    the ring by more than `_MIN_SEGMENT_M`."""
+    starts = ring
+    spans = np.roll(ring, -1, axis=0) - starts
+    _, distance = _project_plan(starts, spans, point)
+    nearest = int(distance.argmin())
+    return nearest if distance[nearest] <= _MIN_SEGMENT_M else None
+
+
+def _ring_between(ring: np.ndarray, start: np.ndarray, stop: np.ndarray) -> list[np.ndarray]:
+    """The ring's corners between two points on its edges, the shorter way
+    round — none where the points share an edge or either is off the ring."""
+    first, last = _edge_of(ring, start), _edge_of(ring, stop)
+    if first is None or last is None or first == last:
+        return []
+    count = len(ring)
+    forward = [ring[(first + step) % count] for step in range(1, (last - first) % count + 1)]
+    backward = [ring[(first - step) % count] for step in range(0, (first - last) % count)]
+
+    def walked(path: list[np.ndarray]) -> float:
+        points = np.array([start, *path, stop])
+        return float(np.hypot(*(np.diff(points, axis=0)).T).sum())
+
+    return forward if walked(forward) <= walked(backward) else backward
 
 
 def _kerbside(
@@ -4003,6 +4167,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                 "boxes_read": report.boxes_read,
                 "stations": report.paint_stations,
                 "flanks": report.paint_flanks,
+                "flank_ends": report.paint_flank_ends,
                 "flank_m2": round(report.paint_flank_m2, 2),
             },
             "carriageway": [
@@ -4088,10 +4253,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     log.info(
         "  paint witness: %d boxes read, %d stations inserted inside them, %d flanks drawn from a "
-        "rail out to the paint, %.1f m2",
+        "rail out to the paint (%d of them closing a run at the rail's exit), %.1f m2",
         report.boxes_read,
         report.paint_stations,
         report.paint_flanks,
+        report.paint_flank_ends,
         report.paint_flank_m2,
     )
     # `Q107`. ⚠️ **The refusals are named in the same line as the cuts**, because
