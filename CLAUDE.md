@@ -871,9 +871,9 @@ Common emoji for this project:
   no paint station on it (its centreline outside the box) closed 3–9 m sweeps over another carriageway
   at up to 0.45 m from it — 83.5 m² on Wan Chai against the 31.6 m² that ship. ⚠️ **The closing ray's
   neighbour clip searches to ITS reach, not the stations'**, or an oblique crossing's traverse crosses
-  the carriageway unseen. `flank_ends` is the counter that says the closing still fires; the first
-  frame of a run stationed for its box has a station within a pitch of its rail's exit by construction,
-  so a run with none was never this rule's. ⚠️ **Also `paint_clearance.py
+  the carriageway unseen. `flank_ends` is the counter that says the closing still fires; a run
+  stationed for its box has a station within a pitch of its rail's exit by construction, so a run
+  with none was never this rule's. ⚠️ **Also `paint_clearance.py
   --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: it reads
   **0** since paint is cut at the road's creases (`Q92`, 2026-09-16); the three it showed after the
   rail read (eleven before it) were two hatch strips chording a creased cap fan at BULLOCK LANE and

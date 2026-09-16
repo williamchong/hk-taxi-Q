@@ -994,17 +994,15 @@ def _place(
     above the street — refuses nothing, and a void piece with no deck over it
     is placed and counted in `vertices_over_void` as before.
     """
-    pieces = drawn.split(quad, thin_m=thin_m)
+    sampled = drawn.sampled_pieces(quad, thin_m=thin_m)
     report.polygons_placed += 1
-    report.polygons_split += int(len(pieces) > 1)
+    report.polygons_split += int(len(sampled) > 1)
     heights: list[float] = []
-    for piece in pieces:
-        # A cut vertex lies on a crease, and a crease can be a step as well as
-        # a fold: the height is the one on this piece's side of it.
-        centre = piece.mean(axis=0)
+    for piece, drawn_here in sampled:
         # Asked of the piece's SIDE, not of the corner: a cut corner sits on
         # the strip's end line and `sample` counts it covered, so the piece
         # past the touchdown is over nothing only from its own side of the cut.
+        centre = piece.mean(axis=0)
         if not any(drawn.covers(float(px), float(pz), toward=centre) for px, pz in piece) and (
             _under_a_deck(above, piece, centre)
         ):
@@ -1012,7 +1010,6 @@ def _place(
             report.on_drawn_structure_m += _length_along(quad, piece)
             continue
         report.pieces_placed += 1
-        drawn_here = [drawn.sample(float(px), float(pz), toward=centre) for px, pz in piece]
         piece_heights = [sample.height_m for sample in drawn_here]
         builder.polygon(piece, np.asarray(piece_heights) + lift_m)
         heights.extend(piece_heights)

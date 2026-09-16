@@ -99,17 +99,25 @@ class FlatBuilder:
             triangles=np.vstack(self._triangles).astype(np.uint32),
             material=self._material,
         )
-        cross = mesh.triangle_cross()
-        twice_area = np.linalg.norm(cross, axis=1)
-        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
-        sides = np.roll(corners, -1, axis=1) - corners
-        longest = np.linalg.norm(sides, axis=2).max(axis=1)
-        # Plan twice-area over the longest plan edge — twice the width, for a
-        # rectangle — against the lattice bar `_import_quantum_m` explains.
-        thin = np.abs(cross[:, 1]) < thin_bar_m * np.where(longest > 0.0, longest, 1.0)
+        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
+        thin = thin_in_plan(mesh.positions[mesh.triangles][:, :, [0, 2]], thin_bar_m)
         if report is not None:
             report.slivers_dropped = int(thin.sum())
         return select_triangles(mesh, (twice_area > MIN_TWICE_AREA_M2) & ~thin)
+
+
+def thin_in_plan(corners: np.ndarray, thin_m: float) -> np.ndarray:
+    """Which of `(n, 3, 2)` plan triangles are thinner than `thin_m`: plan
+    twice-area over the longest plan side — twice the width, for a rectangle —
+    against the lattice bar `boxjunctions._import_quantum_m` explains. The one
+    copy of the test, asked by `FlatBuilder.build` of what it built and by
+    `surface.DrawnSurface.split` of a fan it has not built yet, so a cut the
+    builder would then throw away is refused by the same arithmetic."""
+    first, second = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
+    twice_area = np.abs(first[:, 0] * second[:, 1] - first[:, 1] * second[:, 0])
+    sides = np.roll(corners, -1, axis=1) - corners
+    longest = np.linalg.norm(sides, axis=2).max(axis=1)
+    return twice_area < thin_m * np.where(longest > 0.0, longest, 1.0)
 
 
 class ColouredBuilder:

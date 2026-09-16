@@ -71,7 +71,7 @@ from pipeline.gltf import (
 )
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import merge, select_triangles
-from pipeline.meshbuild import MIN_TWICE_AREA_M2
+from pipeline.meshbuild import MIN_TWICE_AREA_M2, thin_in_plan
 from pipeline.polyline import plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 
@@ -1279,6 +1279,22 @@ class DrawnSurface:
         """
         return self._covering(x, z)[0]
 
+    def sampled_pieces(
+        self, polygon: np.ndarray, *, thin_m: float = 0.0
+    ) -> list[tuple[np.ndarray, list[DrawnHeight]]]:
+        """`split`, then `sample` at every corner of every piece toward that
+        piece's centroid — the one way a marking stage places a polygon, so
+        `boxjunctions._place` and `roadmarks._place` cannot drift apart on it.
+        Each piece with its corners' samples, in the piece's corner order."""
+        pieces = []
+        for piece in self.split(polygon, thin_m=thin_m):
+            # A cut corner lies on a crease, and a crease can be a step as
+            # well as a fold: the height is the one on this piece's side.
+            centre = piece.mean(axis=0)
+            samples = [self.sample(float(px), float(pz), toward=centre) for px, pz in piece]
+            pieces.append((piece, samples))
+        return pieces
+
     def split(self, polygon: np.ndarray, *, thin_m: float = 0.0) -> list[np.ndarray]:
         """A convex plan polygon, cut along every crease of the drawn surface
         that crosses its interior — convex pieces, none of which spans a fold.
@@ -1415,13 +1431,17 @@ def _stepped_into(x: float, z: float, toward: np.ndarray) -> tuple[float, float]
 
 def _cells_touching(low: np.ndarray, high: np.ndarray) -> Iterable[tuple[int, int]]:
     """The plan cells a box from `low` to `high` touches — `_bin_by_plan_box`'s
-    rule for one box, so a lookup and the binning cannot disagree."""
-    (low_column, low_row), (high_column, high_row) = (
-        _cell_of(float(low[0]), float(low[1])),
-        _cell_of(float(high[0]), float(high[1])),
+    rule for one box, through the same `_cells_between`, so a lookup and the
+    binning cannot disagree."""
+    return _cells_between(
+        _cell_of(float(low[0]), float(low[1])), _cell_of(float(high[0]), float(high[1]))
     )
-    for column in range(low_column, high_column + 1):
-        for row in range(low_row, high_row + 1):
+
+
+def _cells_between(low: tuple[int, int], high: tuple[int, int]) -> Iterable[tuple[int, int]]:
+    """Every cell from `low` to `high` inclusive, column-major."""
+    for column in range(low[0], high[0] + 1):
+        for row in range(low[1], high[1] + 1):
             yield column, row
 
 
@@ -1530,23 +1550,14 @@ def _cut_along(polygon: np.ndarray, creases: np.ndarray, thin_m: float) -> list[
 
 def _fans_thin(polygon: np.ndarray, thin_m: float) -> bool:
     """Whether `FlatBuilder.polygon`'s fan of this plan polygon has a triangle
-    `FlatBuilder.build` would drop — the same test, in plan: twice the area
-    against the longest side."""
+    `FlatBuilder.build` would drop — `thin_in_plan`, the builder's own test,
+    over the fan the builder will emit."""
     if thin_m <= 0.0 or len(polygon) < 3:
         return False
-    apex, first, second = polygon[0], polygon[1:-1], polygon[2:]
-    twice_area = np.abs(
-        (first[:, 0] - apex[0]) * (second[:, 1] - apex[1])
-        - (first[:, 1] - apex[1]) * (second[:, 0] - apex[0])
+    fan = np.stack(
+        [np.broadcast_to(polygon[0], polygon[1:-1].shape), polygon[1:-1], polygon[2:]], axis=1
     )
-    longest = np.maximum.reduce(
-        [
-            np.hypot(*(first - apex).T),
-            np.hypot(*(second - apex).T),
-            np.hypot(*(second - first).T),
-        ]
-    )
-    return bool((twice_area < thin_m * np.where(longest > 0.0, longest, 1.0)).any())
+    return bool(thin_in_plan(fan, thin_m).any())
 
 
 def _without_repeats(polygon: np.ndarray) -> np.ndarray:
@@ -1564,12 +1575,9 @@ def _bin_by_plan_box(plan: np.ndarray) -> dict[tuple[int, int], np.ndarray]:
     low = np.floor(plan.min(axis=1) / _DRAWN_CELL_M).astype(np.int64)
     high = np.floor(plan.max(axis=1) / _DRAWN_CELL_M).astype(np.int64)
     binned: dict[tuple[int, int], list[int]] = {}
-    for index, ((low_column, low_row), (high_column, high_row)) in enumerate(
-        zip(low.tolist(), high.tolist(), strict=True)
-    ):
-        for column in range(low_column, high_column + 1):
-            for row in range(low_row, high_row + 1):
-                binned.setdefault((column, row), []).append(index)
+    for index, (lowest, highest) in enumerate(zip(low.tolist(), high.tolist(), strict=True)):
+        for key in _cells_between(tuple(lowest), tuple(highest)):
+            binned.setdefault(key, []).append(index)
     return {key: np.asarray(value) for key, value in binned.items()}
 
 

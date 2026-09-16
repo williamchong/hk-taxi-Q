@@ -672,29 +672,24 @@ def _place(
     # piece that crosses no crease lies within one cap triangle and one strip
     # triangle, and the higher of two planes is convex, so it stands on or
     # above the road everywhere. `DrawnSurface.split` has the argument.
-    pieces = drawn.split(polygon, thin_m=thin_m)
+    sampled = drawn.sampled_pieces(polygon, thin_m=thin_m)
     report.polygons_placed += 1
-    report.polygons_split += int(len(pieces) > 1)
-    report.pieces_placed += len(pieces)
+    report.polygons_split += int(len(sampled) > 1)
     heights: list[float] = []
-    for piece in pieces:
-        # A cut vertex lies on a crease, and a crease can be a step as well as
-        # a fold: the height is the one on this piece's side of it.
-        centre = piece.mean(axis=0)
-        piece_heights: list[float] = []
-        for px, pz in piece:
-            drawn_here = drawn.sample(float(px), float(pz), toward=centre)
-            piece_heights.append(drawn_here.height_m)
+    for piece, drawn_here in sampled:
+        report.pieces_placed += 1
+        piece_heights = [here.height_m for here in drawn_here]
+        for here in drawn_here:
             report.vertices_drawn += 1
-            if drawn_here.cap_m is not None:
+            if here.cap_m is not None:
                 report.vertices_over_cap += 1
                 # Over the strip the cap overlaps, where there is one: a cap
                 # over the void between two arms has no ribbon to stand above.
-                if drawn_here.ribbon_m is not None:
-                    report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
-            if drawn_here.over_void:
+                if here.ribbon_m is not None:
+                    report.over_cap_rise_m.append(here.cap_m - here.ribbon_m)
+            if here.over_void:
                 report.vertices_over_void += 1
-                report.void_reach_m.append(drawn_here.reach_m)
+                report.void_reach_m.append(here.reach_m)
         builder.polygon(piece, np.asarray(piece_heights) + lift_m)
         heights.extend(piece_heights)
     return heights

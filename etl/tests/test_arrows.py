@@ -602,7 +602,7 @@ def _clip(subject: np.ndarray, window: np.ndarray) -> np.ndarray:
     `test_every_polygon_is_wound_counter_clockwise` holds it — so a half-plane
     clip per window edge is exact rather than approximate.
 
-    ⚠️ **Written out rather than folded over `boxjunctions._clip_half_plane`, and
+    ⚠️ **Written out rather than folded over `geometry.clip_half_plane`, and
     that is the point.** This is the only thing standing between a wrong
     `shoulder` and a shipped blob, and a check that shares its arithmetic with
     the geometry it checks agrees with it by construction — `deck_error.py`

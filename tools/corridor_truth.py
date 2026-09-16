@@ -204,7 +204,7 @@ Point = tuple[float, float, float]
 def _clip(polygon: list[Point], axis: int, bound: float, keep_above: bool) -> list[Point]:
     """One Sutherland-Hodgman half-space clip of a convex polygon in `(s, y, t)`.
 
-    ⚠️ **Written out rather than folded over `boxjunctions._clip_half_plane`**,
+    ⚠️ **Written out rather than folded over `geometry.clip_half_plane`**,
     on `test_arrows.py`'s stated precedent — *"twenty lines is the price of an
     independent answer"*. That one is also 2-D and discards a result under three
     points, which would delete the degenerate reading this tool pins.
