@@ -17712,6 +17712,61 @@ lamps inside a level-0 cap **12 → 20**, sign plates **55 → 86**, railing pan
 (pre-`P3-31` → corridors, out of 890 / 753 / 4,954). The fix is those three stages refusing a foot
 under a cap, read from `roadsurface.json`; it is not a cap-shape question and is not taken here.
 
+✅ **`P3-32`'s paint arm, the same day: the ribbon yields to the box, as a FLANK CAP and not as a
+width.** `Q104` named TD's box a fourth extent publisher; `P3-32` asked that where a publisher painted
+past the ribbon the ribbon yield. Widening `width_m` or the drawn half-width would move the lane
+coordinate, the arrows' slots, every kerbside run and every post registered against the rail — and
+under a box across a dual carriageway would merge two ribbons into one and double their painted
+lanes. So the surface yields without the ribbon moving: `surface.py` reads the boxes through
+`boxsource.read_boxes` (the box stage's own reader, moved out of `boxjunctions.py` because that stage
+imports this one), `_add_paint_stations` inserts a station every `_PAINT_STATION_M` (2 m) and one at
+each exact crossing of a box edge while a ribbon runs inside a box, and `_paint_flanks` draws the strip
+from each rail out to the paint edge as a convex quad in the cap class. `carriageway[]`, `offset_m`,
+`trim_m` are byte-identical to the corridor build on all 792 edges. ⚠️ **A flank thinner than the kerb
+is not drawn** — the kerb would stand through it — and 🔴 **a flank stops one kerb width into the
+next ribbon it meets**: grown to the far edge of a box across a dual carriageway it would lie over the
+other carriageway at this ribbon's height. ⚠️ **Its bounding-box prefilter is the rail's box grown by
+the reach, not the rail's box** — the first build tested the rail alone, the ray left it, and the clip
+never fired, which the two-ribbon test caught. ⚠️ **`_shoelace` is TWICE the area**, and the first
+`flank_m2` was double for it. Wan Chai: **20 boxes, 219 stations, 186 flanks, 610 m²** of quad — of
+which only **22 m² is new asphalt** after the corridors (1 on HyD carriageway, 6 past a HyD kerb, 15
+unsurveyed), because the boxes sit at the stub clusters the corridors had already straightened; the
+corridors did most of this arm's work and the flanks close what was left. Pooled off-road box paint
+**4.29 → 0.93 m² (0.16%)**, all of it void and none past a kerb; HKCEC 0.75, HUNG HING 0.18,
+CONVENTION AVENUE east **0.00** from 12.43 that morning. The residue is the quarter-metre station pair
+`_insert_stations` places either side of a crossing, so a flank starts 0.25 m inside the box edge.
+Placements inside a level-0 cap are unchanged by the flanks (20 / 86 / 12). ⬜ **The other arm — neck
+the ribbon to the carve wall — is not taken** and stays `P3-32`'s open item.
+
+**Graded, shot and corrected later the same day.** `paint_clearance.py --layer boxjunctions`,
+corridors → flanks: no road face under **171 → 70** triangles (coverage 98.3 → 99.3%); under the
+highest face 782 → 942; inside the carriageway 19 → 22, of which deeper than 0.010 m **1 → 11** (max
+0.0101 → 0.0171 m), within the accepted bounds. ⚠️ **The eleven are not the flank's height, and
+`lift_m` is not the answer** (`Q92`). At HUNG HING ROAD box 8 the flank stands at its own ribbon's
+4.384 m over ground whose *nearest* centreline is `e586` at 4.300 m, and a border triangle with one
+vertex over the void beyond the paint edge — placed at `DrawnSurface`'s nearest-centreline fallback —
+chords 1.5-1.7 cm under the flank's edge; the WAN SHING STREET and HKCEC rows are inserted stations on
+steep bends moving a mitred rail 1-7 cm off its old chord, `_off_line`'s documented mechanism and the
+kerb stations' own, under paint that keeps the graph's chord. Both are the paint reading the graph
+where there is no drawn surface, and belong to the paint stage. ✅ **A flank that stops inside another
+ribbon now meets it at THAT ribbon's height** — built flat at its own it stood as a lip on the other
+carriageway, invisible in a frame and a step in the collider — **76 of 251** flank rings moved, |Δy|
+p50 **0.029** / p90 0.131 / **max 0.270 m** at HKCEC, where the two carriageways under box 16 sit on
+different grades; plan, counters and `flank_m2` byte-identical, and
+`test_a_flank_stops_at_the_next_ribbon_at_its_height` is the mutation (fails with the height line
+removed). **Frames** (`Q62`): `city_preview.tscn` at `--camera=480,22,236 --look=495,1,212`
+(CONVENTION AVENUE east, box 7), `--camera=636,22,200 --look=651,1,176` (HUNG HING ROAD, box 8) and
+`P3-31`'s HKCEC camera, `--debug-view=off --hud=off`, the before side built from `73176f6` in a detached
+worktree with its own bundle and import, each side shot until a hash repeated (two each): **23,029 px**
+differ at box 7 — the pavement wedge east of the box is asphalt, and the building's shadow now falls on
+it rather than on the kerb, which is the dark trapezoid a first reading took for a buried flank — and
+**13,794 px** at box 8, whose south corner stands on road; the ramp against the flat flank is 138 and
+622 px. ⚠️ **The flank pass cost 3.2 s of a stage that now takes 1.1 s until its bounding boxes were
+taken once** (`_Rings`): 98% of it was `min`/`max` over 734 ribbon outlines per ribbon, for the 76
+edges that touch a box. `cap_pavement.py` with the flanks: cap area **74,406 m²** of quad (73,806 after
+the corridors), past a HyD kerb 11,354 (15.3%), unsurveyed 8,849; its street namer is
+`carriageway_occupancy.street_namer`, shared with `box_extent.py` rather than copied.
+
 **Tests.** `stubville`: two nodes 14 m apart joined by a 9.6 m stub, 12 m arms — a point between the
 south arms is uncovered today and covered after; the ring is the four arm mouths corner for corner;
 `clusters` is **reachable at zero** by loosening `junction_trim_max_fraction` to 0.49, which lifts the

@@ -846,7 +846,20 @@ Common emoji for this project:
   between two arms' far sections and is **unioned, never hulled** into the cap, or it sweeps the
   pavement corner `hull` exists to leave. ⚠️ **The kerb-line corner rule is REFUTED, do not
   re-propose it**: it found the HKCEC wedge from two far-side rails extended across the junction.
-  Numbers in `Q104`.
+  🔴 **`_paint_flanks`, `_add_paint_stations`, `_PAINT_STATION_M` or `boxsource.py`: paste the `paint`
+  block (20 / 219 / 186 / 610 m²), `box_extent.py` per box, and the flanks' NEW-asphalt price by HyD
+  class** (`P3-32`). The ribbon yields to a box as a flank CAP and never as a width — a width moves the
+  lane coordinate, the arrow slots and every post on the rail, and under a box across a dual
+  carriageway merges two ribbons. ⚠️ A flank thinner than the kerb is not drawn; a flank stops one
+  kerb width into the next ribbon **and meets it at THAT ribbon's height** — flat at its own it is a
+  lip on the other carriageway, 0.27 m at HKCEC, that no frame shows; the clip's prefilter is the
+  rail's box grown by the reach, and `_shoelace` is twice the area. ⚠️ **Also `paint_clearance.py
+  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: the eleven
+  it shows are `DrawnSurface`'s nearest-centreline fallback under a vertex over void, and inserted
+  stations moving a mitred rail off its old chord (`_off_line`), never a reason to lift the paint.
+  ⚠️ **The evidence is a frame and a shadow moves with the surface it falls on** — the dark trapezoid
+  inside box 7 after the flanks is the building's shadow on new asphalt, not a buried flank; the
+  top-down camera settles it. Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter

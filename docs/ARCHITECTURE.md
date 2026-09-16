@@ -443,6 +443,7 @@ hk-taxi-Q/
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # published turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
+│   │   ├── boxsource.py         # the box reader both boxjunctions.py and surface.py use (P3-32)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
 │   │   ├── railings.py          # published railings → railings.glb + railings_placements.json (P3-19, P5-5)
@@ -1397,7 +1398,7 @@ arriving ribbon actually ended. `surface.DrawnSurface` is the reader, and withou
 the road's height and sinks into it.
 
 ⚠️ **And a `clusters` block beside `join` (`P3-31`, no schema bump)** — `stub_edges`, `count`,
-`nodes`, `corridors` — because since `P3-31` one cap closes a whole cluster of nodes joined by stubs (edges
+`nodes`, `corridors` — and a `paint` block (`boxes_read`, `stations`, `flanks`, `flank_m2`) for `P3-32`'s flank caps because since `P3-31` one cap closes a whole cluster of nodes joined by stubs (edges
 clamped at both ends by `junction_trim_max_fraction`), and `caps[]` no longer has one ring per node.
 Counters only: a ring is not marked, because a consumer of `caps` asks where the drawn surface is and
 a cluster cap answers that the way a per-node one does.
