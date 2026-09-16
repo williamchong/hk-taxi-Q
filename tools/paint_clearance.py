@@ -46,9 +46,11 @@ an arm, the 6,051 m² overlap `Q53` measured. That is a `surface.py` question
 The split of `in c'way` at a depth is the one that took a measurement to
 justify: a marking is a **flat triangle over a road that creases** at every cap
 fan edge and every ribbon station, so its chord dips below the crown it spans by
-millimetres however right its vertices are. On the corrected bundle that residue
-is p50 **0.0027 m** and it is closed by subdividing paint at the road's creases,
-not by moving a height.
+millimetres however right its vertices are. On the rails-read bundle that residue
+was p50 **0.0027 m**; since 2026-09-16 `DrawnSurface.split` cuts every paint
+polygon along the creases it crosses before it is placed, so for a covered
+piece it is zero by construction and what this column sees under the bar is the
+nearest-edge fallback over void. It was closed that way and not by a height.
 
 ⚠️ **A triangle is judged at its centroid, so the quantum is one triangle.**
 The layers are paint: the median shipped marking triangle is a few hundredths of
@@ -190,8 +192,9 @@ class LayerVerdict:
     # 🔴 **The gated population, and the depth is why it is not just a count.**
     # Paint is a flat triangle laid over a road that creases at every cap fan
     # edge and every ribbon station, and a chord across a crown dips below the
-    # surface it spans. That residue is millimetres and geometric — it is fixed
-    # by subdividing paint at the road's creases, not by moving a height. Past
+    # surface it spans. That residue was millimetres and geometric, and it was
+    # fixed by cutting paint at the road's creases (`Q92`, 2026-09-16), not by
+    # moving a height. Past
     # `--accept-depth-m` a burial has stopped being a chord and is a wrong
     # height, which is what this tool is for.
     deep_in_carriageway: int = 0
@@ -435,11 +438,13 @@ def main(argv: list[str] | None = None) -> int:
         # pipeline constant.** A marking triangle spans creases the road has and
         # it does not — a cap's fan edges, a ribbon's stations — so its chord
         # dips below the crown it crosses by millimetres however right its
-        # vertices are. Measured on the corrected bundle: the residue is p50
-        # **0.0027 m**, and closing it means subdividing paint at the road's own
-        # creases rather than moving any height. A centimetre is where that stops
-        # being a chord. Deliberately **not** read from any `lift_m`: this tool
-        # must not take a number from the thing it grades.
+        # vertices are. Measured on the rails-read bundle: the residue was p50
+        # **0.0027 m**, and it was closed by cutting paint at the road's own
+        # creases (`Q92`, 2026-09-16) rather than by moving any height; the bar
+        # stays, as a tolerance on the fallback over void and on registration.
+        # A centimetre is where a burial stops being a chord. Deliberately
+        # **not** read from any `lift_m`: this tool must not take a number from
+        # the thing it grades.
         help="a burial shallower than this is the chord residue, not a wrong height",
     )
     parser.add_argument(

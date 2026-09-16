@@ -50,6 +50,7 @@ from pipeline.surface import (
     _clamped_rails,
     _deck_rims,
     _ends_by_node_and_level,
+    _fans_thin,
     _half_widths,
     _insert_stations,
     _kerbside,
@@ -203,6 +204,16 @@ class TestHull:
         """A cap on a slope follows it rather than flattening the junction."""
         points = np.array([[0.0, 1.0, 0.0], [4.0, 2.0, 0.0], [4.0, 3.0, 4.0], [0.0, 4.0, 4.0]])
         assert set(np.round(hull(points)[:, 1], 3)) == {1.0, 2.0, 3.0, 4.0}
+
+
+def _plan_area(ring: np.ndarray) -> float:
+    """Half the shoelace, unsigned, over `(n, 2)` plan corners."""
+    return 0.5 * abs(
+        float(
+            np.dot(ring[:, 0], np.roll(ring[:, 1], -1))
+            - np.dot(np.roll(ring[:, 0], -1), ring[:, 1])
+        )
+    )
 
 
 class TestDrawnSurface:
@@ -440,6 +451,156 @@ class TestDrawnSurface:
         assert here.over_void
         assert here.height_m == pytest.approx(1.0)
         assert here.reach_m == pytest.approx(np.hypot(290.0, 198.0))
+
+    # `Q92`'s chord residue: BULLOCK LANE's cap ring as `roadsurface.json`
+    # published it (box 1, Wan Chai), whose corners alternate 4.324 / 4.404 m
+    # about an apex at 4.323 — so every spoke to a 4.404 corner is a ridge, and
+    # a flat piece across two of them chords under the fan.
+    _CREASED_RING = np.array(
+        [
+            [386.544, 4.242, 792.174],
+            [396.698, 4.324, 791.248],
+            [397.745, 4.404, 801.352],
+            [397.672, 4.324, 801.442],
+            [387.568, 4.404, 802.489],
+            [387.43, 4.242, 802.376],
+        ]
+    )
+    # A 0.1 m hatch stripe across that fan at the heading that chords deepest —
+    # 4.3 cm — found by scanning headings through the apex.
+    _CHORDING_STRIPE = np.array(
+        [[388.278, 797.803], [395.796, 800.539], [395.761, 800.633], [388.244, 797.897]]
+    )
+
+    @staticmethod
+    def _interior_points(polygon: np.ndarray, count: int, seed: int) -> np.ndarray:
+        """Random points inside a convex plan polygon, by its fan."""
+        rng = np.random.default_rng(seed)
+        fan = np.stack(
+            [np.broadcast_to(polygon[0], polygon[1:-1].shape), polygon[1:-1], polygon[2:]], axis=1
+        )
+        picks = rng.integers(0, len(fan), count)
+        first, second = rng.random(count), rng.random(count)
+        flip = first + second > 1.0
+        first[flip], second[flip] = 1.0 - first[flip], 1.0 - second[flip]
+        base = fan[picks]
+        return (
+            base[:, 0]
+            + first[:, None] * (base[:, 1] - base[:, 0])
+            + second[:, None] * (base[:, 2] - base[:, 0])
+        )
+
+    @staticmethod
+    def _chord_gap(drawn: DrawnSurface, piece: np.ndarray, points: np.ndarray) -> np.ndarray:
+        """Flat paint with its corners on the drawn road, minus the road, at
+        each plan point of the piece: negative is paint under the asphalt."""
+        heights = np.array([drawn.height_at(float(x), float(z)) for x, z in piece])
+        # The plane through the fan's first triangle, which is the piece's plane
+        # only if the piece is planar — every piece a split returns is judged
+        # on the fan `FlatBuilder.polygon` will actually emit.
+        gaps = []
+        for x, z in points:
+            fan = np.stack(
+                [np.broadcast_to(piece[0], piece[1:-1].shape), piece[1:-1], piece[2:]], axis=1
+            )
+            fan_heights = np.stack(
+                [np.broadcast_to(heights[0], heights[1:-1].shape), heights[1:-1], heights[2:]],
+                axis=1,
+            )
+            for corners, tops in zip(fan, fan_heights, strict=True):
+                a, b, c = corners
+                det = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+                if abs(det) < 1e-12:
+                    continue
+                beta = ((x - a[0]) * (c[1] - a[1]) - (z - a[1]) * (c[0] - a[0])) / det
+                gamma = ((b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0])) / det
+                if beta >= -1e-9 and gamma >= -1e-9 and beta + gamma <= 1.0 + 1e-9:
+                    paint = tops[0] + beta * (tops[1] - tops[0]) + gamma * (tops[2] - tops[0])
+                    gaps.append(paint - drawn.height_at(float(x), float(z)))
+                    break
+        return np.asarray(gaps)
+
+    def test_a_split_piece_never_chords_under_the_fan_it_lies_on(self) -> None:
+        """🔴 `Q92`'s chord residue, closed by construction rather than by a
+        height.
+
+        A hatch piece across BULLOCK LANE's creased cap read 10-12 mm under the
+        road with every corner on it. Cut along the spokes it crosses, every
+        piece lies within one fan triangle and is coplanar with it. The
+        mutation is in the same test: the *uncut* piece must read under the
+        fan somewhere, or the fixture proves nothing.
+        """
+        drawn = DrawnSurface.of(
+            {"caps": [{"level": 0, "ring": [list(corner) for corner in self._CREASED_RING]}]}
+        )
+        stripe = self._CHORDING_STRIPE
+        whole = self._chord_gap(drawn, stripe, self._interior_points(stripe, 400, 3))
+        assert whole.min() < -0.01, "the fixture has no fold to chord under"
+
+        pieces = drawn.split(stripe)
+        assert len(pieces) > 1
+        assert sum(_plan_area(piece) for piece in pieces) == pytest.approx(_plan_area(stripe))
+        for piece in pieces:
+            gaps = self._chord_gap(drawn, piece, self._interior_points(piece, 60, 5))
+            assert gaps.min() > -1e-9
+
+    def test_a_split_piece_never_chords_under_a_strip_diagonal(self) -> None:
+        """The other fold: a strip quad on a bend and a grade is not planar, so
+        `_Builder.strip`'s diagonal is a crease too, and a band quad astride it
+        chords under one of the two triangles."""
+        bend = {
+            "id": 0,
+            "polyline": [[0.0, 0.0, 0.0], [10.0, 0.6, 0.0], [16.0, 0.6, 6.0]],
+            "elevation_level": 0,
+        }
+        drawn = DrawnSurface.of({"ribbons": [ribbon_of(bend, half_width_m=4.0)]})
+        quad = np.array([[9.0, -3.0], [11.5, -3.0], [11.5, 3.0], [9.0, 3.0]])
+        whole = self._chord_gap(drawn, quad, self._interior_points(quad, 400, 7))
+        assert whole.min() < -1e-4, "the fixture has no fold to chord under"
+        for piece in drawn.split(quad):
+            gaps = self._chord_gap(drawn, piece, self._interior_points(piece, 60, 9))
+            assert gaps.min() > -1e-9
+
+    def test_a_polygon_no_crease_crosses_comes_back_as_itself(self) -> None:
+        """The common case, and the one the counters read as 'not split'."""
+        flat = {"id": 0, "polyline": [[0.0, 1.0, 0.0], [10.0, 1.0, 0.0]], "elevation_level": 0}
+        drawn = DrawnSurface.of({"ribbons": [ribbon_of(flat, half_width_m=4.0)]})
+        # Inside one strip triangle: the diagonal runs corner to corner and
+        # this sits in the half below it.
+        small = np.array([[1.0, -3.5], [3.0, -3.5], [3.0, -3.0]])
+        pieces = drawn.split(small)
+        assert len(pieces) == 1
+        assert pieces[0] is small
+
+    def test_a_cut_that_would_leave_a_sliver_is_not_made(self) -> None:
+        """⚠️ Measured: cutting regardless lost 1.96% of the box paint's plan
+        area, because a fold within the builder's sliver bar of a stripe's edge
+        cut off a strip the builder then dropped. With the bar handed in, that
+        cut is refused and the stripe is placed whole."""
+        drawn = DrawnSurface.of(
+            {"caps": [{"level": 0, "ring": [list(corner) for corner in self._CREASED_RING]}]}
+        )
+        # A stripe whose long edge runs 2 cm from one spoke and across the
+        # others: the cut along that spoke would leave a 2 cm strip.
+        apex = self._CREASED_RING[:, [0, 2]].mean(axis=0)
+        spoke = self._CREASED_RING[2, [0, 2]] - apex
+        along = spoke / np.hypot(*spoke)
+        across = np.array([-along[1], along[0]])
+        near = apex + 0.02 * across
+        stripe = np.array(
+            [
+                near - along,
+                near + 5.0 * along,
+                near + 5.0 * along + 0.3 * across,
+                near - along + 0.3 * across,
+            ]
+        )
+        cut_regardless = drawn.split(stripe)
+        assert any(_fans_thin(piece, 0.05) for piece in cut_regardless)
+        guarded = drawn.split(stripe, thin_m=0.05)
+        assert len(guarded) < len(cut_regardless)
+        assert not any(_fans_thin(piece, 0.05) for piece in guarded)
+        assert sum(_plan_area(piece) for piece in guarded) == pytest.approx(_plan_area(stripe))
 
 
 class TestHalfWidths:

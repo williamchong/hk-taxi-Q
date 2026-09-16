@@ -217,6 +217,14 @@ class RoadMarkReport:
     # is reachable, not a tautology — a bar drawn past the kerb lands here.
     vertices_over_void: int = 0
     void_reach_m: list[float] = field(default_factory=list)
+    # 🔴 **The tripwire on the crease cut (`Q92`'s chord residue)** —
+    # `BoxJunctionReport`'s three, for its reason: every quad is cut along the
+    # creases of the drawn surface before it is placed, and both counts fall
+    # to `polygons_placed` and zero the moment the cut stops firing. Reachable:
+    # a quad inside one strip triangle cuts nothing.
+    polygons_placed: int = 0
+    polygons_split: int = 0
+    pieces_placed: int = 0
 
     # Triangles dropped for being thinner than the engine's import lattice, and
     # the lattice pitch they were judged against — `boxjunctions._import_quantum_m`
@@ -895,19 +903,9 @@ def build_region(
             report.no_host_on_axis += 1
             continue
 
-        quads = band_quads(marking, spec)
         heights: list[float] = []
-        for quad in quads:
-            drawn_here = [drawn.sample(float(px), float(pz)) for px, pz in quad]
-            vertex_heights = [sample.height_m for sample in drawn_here]
-            builder.polygon(quad, np.asarray(vertex_heights) + spec.lift_m)
-            heights.extend(vertex_heights)
-            report.vertices_drawn += len(drawn_here)
-            report.vertices_over_cap += sum(1 for s in drawn_here if s.cap_m is not None)
-            for sample in drawn_here:
-                if sample.over_void:
-                    report.vertices_over_void += 1
-                    report.void_reach_m.append(sample.reach_m)
+        for quad in band_quads(marking, spec):
+            heights.extend(_place(builder, drawn, quad, spec.lift_m, report, thinness_bar_m))
 
         report.drawn += 1
         report.drawn_by_id[marking.mark.id] = report.drawn_by_id.get(marking.mark.id, 0) + 1
@@ -940,6 +938,47 @@ def build_region(
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def _place(
+    builder: FlatBuilder,
+    drawn: DrawnSurface,
+    quad: np.ndarray,
+    lift_m: float,
+    report: RoadMarkReport,
+    thin_m: float = 0.0,
+) -> list[float]:
+    """One band quad onto the road under it, each vertex at its own drawn height.
+
+    `boxjunctions._place`, for this layer: the same `DrawnSurface.sample` per
+    vertex (`Q92`), the same counters, and 🔴 **the same cut along the road's
+    creases first** — a quad across a station line on the `e311` ramp chorded
+    10-18 mm under it on the shipped bundle with every corner right, and the
+    cut is what closes that by construction. Returns the road heights so the
+    caller can publish their spread. Kept as a function rather than inlined in
+    `build_region` so the placement half of this stage has a seam a test can
+    reach, which it did not.
+    """
+    pieces = drawn.split(quad, thin_m=thin_m)
+    report.polygons_placed += 1
+    report.polygons_split += int(len(pieces) > 1)
+    report.pieces_placed += len(pieces)
+    heights: list[float] = []
+    for piece in pieces:
+        # A cut vertex lies on a crease, and a crease can be a step as well as
+        # a fold: the height is the one on this piece's side of it.
+        centre = piece.mean(axis=0)
+        drawn_here = [drawn.sample(float(px), float(pz), toward=centre) for px, pz in piece]
+        piece_heights = [sample.height_m for sample in drawn_here]
+        builder.polygon(piece, np.asarray(piece_heights) + lift_m)
+        heights.extend(piece_heights)
+        report.vertices_drawn += len(drawn_here)
+        report.vertices_over_cap += sum(1 for sample in drawn_here if sample.cap_m is not None)
+        for sample in drawn_here:
+            if sample.over_void:
+                report.vertices_over_void += 1
+                report.void_reach_m.append(sample.reach_m)
+    return heights
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMarkReport) -> int:
@@ -1023,6 +1062,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         # vertex the moment `ribbons` stops being published.
         "vertices_over_void": report.vertices_over_void,
         "void_reach_m": report.measured(report.void_reach_m),
+        # 🔴 The tripwire on the crease cut — see `RoadMarkReport`. Both collapse
+        # onto `polygons_placed` the moment the cut stops firing.
+        "polygons_placed": report.polygons_placed,
+        "polygons_split": report.polygons_split,
+        "pieces_placed": report.pieces_placed,
         # Fragments thinner than two cells of the engine's import lattice,
         # dropped before they could come back winding-flipped. The pitch is
         # published beside the count so the bar is checkable from a shipped
@@ -1065,6 +1109,12 @@ def main(argv: list[str] | None = None) -> int:
         report.host_off_carriageway,
         report.no_edge_in_range,
         report.triangles,
+    )
+    log.info(
+        "  creases: %d quads placed, %d cut where the road folds, %d pieces",
+        report.polygons_placed,
+        report.polygons_split,
+        report.pieces_placed,
     )
     log.info(
         "  by marking: %s",

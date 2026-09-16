@@ -14335,12 +14335,79 @@ barycentric test stays the one copy in `terrain.py` (`hits` is now its mask-drop
 **The three that remain are not the reader's.** Two at BULLOCK LANE (box 1, 10.3 and 11.9 mm) are
 hatch strips chording across a creased cap fan — the ring's corners alternate 4.404 / 4.324 m about
 an apex at 4.323 — and read *clear* before only because the paint took the centreline's 4.384 and
-floated 4-5 cm above the cap; that is the chord residue the 10 mm bar exists for, and it closes by
-subdividing paint at the fan's creases, not by moving a height. The third at HUNG HING ROAD
+floated 4-5 cm above the cap; that is the chord residue the 10 mm bar exists for, and it **closed the
+same evening by cutting paint at the road's creases, not by moving a height** — the paragraph below has
+the numbers and the mesh price. The third at HUNG HING ROAD
 (12.9 mm) has a vertex in a 0.3 m gap between two flanks 8 cm apart in height — `e586`'s ends at
 4.308 short of `e529`'s at 4.384 — which is a step in the drawn surface that no paint height can
 satisfy and belongs to the flank rule. Causeway Bay's three are the same two shapes: two fan-crease
 chords and one seam where a cap sits 9 cm under the ribbon end it meets.
+
+**The chord class closed 2026-09-16 (`P3-32`, first of three commits): paint is cut along the drawn
+surface's creases before it is placed.** `DrawnSurface` now indexes every edge of every drawn triangle
+in plan — fan spokes, ring edges, rails, station lines and each strip quad's diagonal, 16 m cells, each
+crease once — and `split` cuts a convex paint polygon along every crease whose *segment* has a stretch
+strictly inside it (Cyrus-Beck against the piece; a line test would cut a 2 m by 0.1 m hatch piece by
+every spoke in the cell), by `geometry.clip_half_plane` twice — the stripe fields' own clip, moved out of
+`boxjunctions.py` so the two cannot disagree. Why this and not a height: `sample` is `max(cap, strip)`,
+the higher of two planes is convex, so a flat piece with its corners on that surface and its interior
+crossing no crease stands on or above it everywhere — the residue is zero by construction for every
+covered piece, not for the seven. What is left to a tolerance is the nearest-edge fallback over void,
+which is not a surface. Both `_place`s cut first and place per piece; `roadmarks.py`'s inlined loop
+became `_place` so that half of `build_region` has a seam a test can reach. Counters: `polygons_placed`
+/ `polygons_split` / `pieces_placed` on both manifests, reachable at zero (a flat single-triangle cap
+cuts nothing) and collapsing onto `polygons_placed` the moment the cut stops firing.
+
+⚠️ **Two things the build found that the plan did not name.** (1) A cut that would leave a piece
+thinner than the builder's sliver bar is refused: cutting regardless lost **1.96%** of the box paint's
+plan area on Wan Chai (slivers 2,032 → 11,697), because a fold within 5 cm of a stripe's edge cut off a
+strip the mesh then dropped; `split(thin_m=)` takes `FlatBuilder.build`'s own bar, the chord a refused
+cut leaves is bounded by that width, and the plan area placed is the plan area asked for. (2) 🔴 **The
+drawn road STEPS as well as folds, and a cut vertex on a step has two heights.** Where a cap's fan
+stands above the ribbon it overlaps the road drops along the cap's ring — 0.46 m at one Causeway Bay
+junction — and a vertex exactly on that ring, sampled inclusively, took the cap: the piece on the ribbon
+just outside it was drawn *down the riser*, 0.458 m of drop over 0.028 m of plan, which
+`check_faces_up` rightly refused (**2 of 1,578** Causeway Bay box triangles under `MIN_FACING_UP`, and
+53 within 60° of vertical where the merged build had 5; Wan Chai 42 against 8) while the ETL's own
+`inverted` read 0, because it grades plan winding. `sample(toward=)` — the piece's centroid — asks what
+covers the point a tenth of a millimetre *into the piece*, so a vertex on a step takes its own side's
+height and the riser is bare; across a fold the sides agree, so it moves a grade times 1e-4 m, below
+float32 at these coordinates; and where the piece's side is over nothing the vertex's own cover answers,
+so `vertices_over_cap`, `vertices_over_void` and `void_reach_m` count what stands at the vertex and the
+`[3.0]` reach fixture survives. With it: under 0.1 facing **0** on all four meshes, under 0.5 back to
+5 / 22 / 8 / 13 (CB boxes, WC boxes, CB marks, WC marks; before 5 / 8 / 4 / 6).
+
+**Before → after, Wan Chai** (`--from boxjunctions` both regions; every file other than the two paint
+`.glb`/`.json` pairs and `city.json`'s timestamp byte-identical, both regions):
+
+| layer | tris | bytes | placed / split / pieces | `under hi` | `on kerb` | `in c'way` | `deep` |
+|---|---|---|---|---|---|---|---|
+| boxjunctions | 10,165 → 19,774 | 558,588 → 1,077,856 | 6,119 / 1,903 / 10,933 | 3.7% → 1.7% (370 → 329; 5.4 → 2.0% of area) | 0.43 → 0.31% | 0.09 → 0.01% (9 → 2, both 0.9 mm) | **3 → 0** |
+| roadmarks | 12,254 → 16,402 | 662,768 → 886,760 | 6,159 / 1,520 / 8,233 | 1.4% → 1.2% (171 → 194; 1.3 → 0.9% of area) | 0.35 → 0.47% | 0.10 → 0.04% (12 → 6) | **11 → 6** |
+| arrows (control) | 3,222 | — | — | 6.2% | 0.03% | 1.46% | 0.53% |
+| tramway (control) | 5,132 | — | — | 20.3% | 6.28% | 2.47% | 1.61% |
+
+The six road-mark triangles left are the Wan Chai Interchange deck stub (52–131 mm, the third class,
+the second commit); the boxes' third at HUNG HING ROAD cleared too, because the cut along the flank's
+end line put the void piece's vertices on their own side — the void wedge is still in the surface and
+is the third commit's. Coverage 99.3 → 99.5% / 99.4 → 99.4%. Box counters: `vertices_drawn` 24,435 →
+43,664, `vertices_over_cap` 18,870 → 34,859, `vertices_over_void` 442 → 519 (reach p50 0.41 → 0.28 m,
+max 1.2871 unchanged), `over_cap_rise_m` p50 −0.0024 → 0.0010, p90 0.0938 → 0.0794 (n 6,934 →
+16,080), `slivers_dropped` 2,032 → 2,024, `inverted` 0, both partitions unchanged (20 / 20). Road-mark
+counters: `vertices_drawn` 24,636 → 32,932, `vertices_over_cap` 7,626 → 11,044, `vertices_over_void`
+268 → 354 (p50 0.68 → 0.42 m, max 3.7077 unchanged), `height_spread_m` n 282 p50 0.030 unchanged,
+`host_disagreement` / `host_considered`, `axis_residual_deg`, `underfill_m`, `inverted` and both
+partitions unchanged. **Plan-area identity**: shipped triangle plan area 577.826 → 577.953 m² on the
+boxes (+0.127 m², the eight fewer fan triangles under the sliver bar — a cut piece fans without the
+needle the whole polygon had) and 1318.759 → 1318.758 m² on the marks; the sliver share did not grow.
+Causeway Bay: boxes 681 → 1,578 tris (352 / 168 / 801), `deep` **3 → 0**, `in c'way` 6 → 0, `under hi`
+6.5 → 0.4%; marks 5,822 → 8,059 (3,086 / 850 / 4,206), `deep` **1 → 0**, `in c'way` 3 → 3, `under hi`
+2.6 → 1.5%. **Mesh price**: box triangles ×1.95 and road-mark triangles ×1.34 on Wan Chai; the web
+PCK (both regions, `tools/export.sh web`, measured never summed) **80,455,444 → 81,024,256 B, +568,812 B (+0.71%)**. `check.sh` exit 0 on both regions, no shader errors on any of the three
+`marking_paint.gdshader` layers. **Frames** (`city_preview.tscn`, `--debug-view=off --hud=off`, both
+paint meshes' import sidecars deleted before each side, each side shot until its hash repeated): the
+`e311` ramp at `--camera=1010,12,134 --look=1030,4.4,124`, **220 px** differ — the station-line chords
+under the 48.8 m `RM1001`; BULLOCK LANE box 1 at `--camera=414,20,795 --look=392,4.3,797`, **601 px** — the two hatch strips that chorded under the fan.
 
 **The counter that sees this revert.** `vertices_over_void` with `void_reach_m` on both stages: a
 vertex over no cap and no strip, and how far the nearest drawn edge was. It reads **442 of 24,435**

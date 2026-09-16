@@ -324,9 +324,15 @@ class TestTheGeometry:
         mesh = builder.build("boxjunctions")
         assert mesh is not None
         assert mesh.positions[:, 1] == pytest.approx(0.5 + spec.lift_m)
-        # And the tripwire says the cap was what answered.
-        assert report.vertices_drawn == 4
-        assert report.vertices_over_cap == 4
+        # And the tripwire says the cap was what answered — for every vertex,
+        # of every piece: the quad sits over the fan's apex, so its four spokes
+        # cross it and the crease cut fires (`polygons_split`), which is the
+        # other tripwire reading non-zero where it should.
+        assert report.polygons_placed == 1
+        assert report.polygons_split == 1
+        assert report.pieces_placed > 1
+        assert report.vertices_drawn > 4
+        assert report.vertices_over_cap == report.vertices_drawn
 
     def test_a_stage_with_no_caps_falls_back_to_the_ribbon_and_says_so(self, spec):
         """⚠️ The way this fix reverts silently, pinned.
@@ -348,7 +354,11 @@ class TestTheGeometry:
         builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 1.0]]), 0.012, report)
-        assert report.vertices_drawn == 3
+        # The strip's own diagonal crosses the triangle, so the crease cut may
+        # place it as more than one piece; every vertex of every piece is on
+        # the ribbon and none is over a cap or over nothing.
+        assert report.polygons_placed == 1
+        assert report.vertices_drawn >= 3
         assert report.vertices_over_cap == 0
         assert report.vertices_over_void == 0
 
@@ -370,10 +380,63 @@ class TestTheGeometry:
         builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 7.0]]), 0.012, report)
-        assert report.vertices_drawn == 3
-        assert report.vertices_over_cap == 2
+        # The cap's ring edge at z = 4 and its spokes cross the triangle, so it
+        # is placed as several pieces — and the cut vertices on the ring edge
+        # are *covered* (the edge is the cap's), so the one vertex over nothing
+        # is still the tip alone, 3 m past the ring.
+        assert report.polygons_placed == 1
+        assert report.polygons_split == 1
+        assert report.vertices_drawn > 3
         assert report.vertices_over_void == 1
+        assert report.vertices_over_cap == report.vertices_drawn - 1
         assert report.void_reach_m == pytest.approx([3.0])
+
+    def test_a_piece_beside_a_step_lies_on_its_own_side_and_not_down_the_face(self, spec):
+        """🔴 The drawn road STEPS as well as folds, and a cut vertex on a step
+        has two heights.
+
+        A cap 0.5 m above the ribbon it overlaps ends in a riser along its
+        ring. A stripe across that ring is cut there (`Q92`'s crease cut), and
+        the outer piece's ring vertices — asked inclusively, on the ring — took
+        the cap: a stripe painted down the riser, which `check_faces_up`
+        refused on Causeway Bay (2 of 1,578 triangles). Each piece's vertices
+        must take the height of the surface the piece lies on, so the inner
+        piece is flat on the cap, the outer flat on the ribbon, and the riser
+        is bare. The mutation is the sampler's own: asked without a side, the
+        ring point is the cap's.
+        """
+        arm = {
+            "id": 0,
+            "polyline": [[-10.0, 0.5, 0.0], [10.0, 0.5, 0.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        cap = {
+            "level": 0,
+            "ring": [[-5.0, 1.0, -4.0], [5.0, 1.0, -4.0], [5.0, 1.0, 4.0], [-5.0, 1.0, 4.0]],
+        }
+        drawn = DrawnSurface.of({"caps": [cap], "ribbons": [ribbon_of(arm, half_width_m=8.0)]})
+        assert drawn.sample(0.0, 4.0).height_m == pytest.approx(1.0)
+        assert drawn.sample(0.0, 4.0, toward=np.array([0.0, 4.2])).height_m == pytest.approx(0.5)
+        assert drawn.sample(0.0, 4.0, toward=np.array([0.0, 3.8])).height_m == pytest.approx(1.0)
+
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
+        report = BoxJunctionReport()
+        # Clockwise in `(x, z)`, as `hatch_polygons` winds a stripe to face up.
+        stripe = np.array([[-1.0, 3.9], [-1.0, 4.3], [1.0, 4.3], [1.0, 3.9]])
+        _place(builder, drawn, stripe, 0.0, report)
+        assert report.polygons_split == 1
+        mesh = builder.build("boxjunctions")
+        assert mesh is not None
+        cross = mesh.triangle_cross()
+        facing = cross[:, 1] / np.linalg.norm(cross, axis=1)
+        assert facing.min() > 0.999
+        inner = mesh.positions[mesh.positions[:, 2] < 4.0 - 1e-6]
+        outer = mesh.positions[mesh.positions[:, 2] > 4.0 + 1e-6]
+        assert inner[:, 1] == pytest.approx(1.0)
+        assert outer[:, 1] == pytest.approx(0.5)
+        assert report.vertices_over_void == 0
 
     def test_a_cap_on_another_level_is_not_the_road_under_this_paint(self, spec):
         """⚠️ Level 0 only, the restriction every snap in the pipeline makes.

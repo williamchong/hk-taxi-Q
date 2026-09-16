@@ -60,7 +60,7 @@ from pipeline.config import (
     load_config,
 )
 from pipeline.documents import round_position, write_document
-from pipeline.geometry import edge_distances, inside_polygon
+from pipeline.geometry import clip_half_plane, edge_distances, inside_polygon
 from pipeline.gltf import (
     COLLISION_ONLY_SUFFIX,
     Bounds,
@@ -1125,6 +1125,15 @@ class DrawnSurface:
     edges: np.ndarray
     # Plan cell to the edge segments whose bounding box touches it.
     edge_cells: dict[tuple[int, int], np.ndarray]
+    # 🔴 **Every edge of every drawn triangle, in plan and each once — the
+    # CREASES of the drawn surface**, `(k, 2, 2)`: fan spokes and ring edges,
+    # rails, station lines and each quad's diagonal. What `split` cuts paint
+    # along, so that no piece of paint spans a fold the road has and the paint
+    # does not. A superset of `edges`, kept apart because the two answer
+    # different questions: `edges` is where a point over nothing snaps to, and
+    # a spoke or a diagonal is not an edge of anything.
+    creases: np.ndarray
+    crease_cells: dict[tuple[int, int], np.ndarray]
 
     @classmethod
     def of(cls, surface: dict[str, Any], *, level: int = 0) -> DrawnSurface:
@@ -1164,15 +1173,18 @@ class DrawnSurface:
                 np.zeros((0, 2, 3)),
             ]
         )
+        creases = _plan_creases(triangles)
         return cls(
             triangles=triangles,
             is_cap=is_cap,
             cells=cells,
             edges=edges,
             edge_cells=_bin_by_plan_box(edges[:, :, [0, 2]]),
+            creases=creases,
+            crease_cells=_bin_by_plan_box(creases),
         )
 
-    def sample(self, x: float, z: float) -> DrawnHeight:
+    def sample(self, x: float, z: float, *, toward: np.ndarray | None = None) -> DrawnHeight:
         """The drawn road at this plan position, and what answered for it.
 
         🔴 **One accessor, because two callers hand-rolling this diverged.** The
@@ -1182,11 +1194,36 @@ class DrawnSurface:
         would have placed paint at different heights — and each was documented as
         doing what the other did. Returning every part once also spares
         `roadmarks.py` a second query per vertex it only wanted for a counter.
+
+        🔴 **`toward` is the side of a step the answer comes from, and a piece
+        `split` cut owes it.** The drawn road is not only folded, it is
+        *stepped*: where a cap's fan stands above the ribbon it overlaps, the
+        road drops from the cap's height to the ribbon's along the cap's ring —
+        0.46 m at one Causeway Bay junction — and a point exactly on that ring
+        has two heights, one per side. `split` puts a cut vertex on exactly
+        such a line, so a piece placed on the ribbon just outside the ring had
+        its ring vertices sampled *on* the ring, inclusively, and took the cap:
+        a stripe drawn down the face of the step, 3 cm of plan for 0.46 m of
+        drop, which `check_faces_up` rightly refuses as not facing the sky
+        (2 of 1,578 triangles, and 53 within 60° of vertical where the merged
+        build had 5). With `toward` — the piece's own centroid — what covers
+        the point is asked a tenth of a millimetre *into the piece*, so a
+        vertex on a step takes the height of the surface its piece lies on.
+        Across a fold the two sides agree there, so it moves nothing but a
+        grade times 1e-4 m, below float32 at this region's coordinates; and
+        where the piece's side is over nothing — a vertex on the drawn
+        surface's outer edge with the piece past it — the point's own cover
+        answers as before, so `vertices_over_cap`, `vertices_over_void` and
+        `void_reach_m` keep counting what stands at the vertex.
         """
         cap, ribbon = self._covering(x, z)
         if cap is None and ribbon is None:
             height, reach = self._nearest_edge(x, z)
             return DrawnHeight(height_m=height, ribbon_m=None, cap_m=None, reach_m=reach)
+        if toward is not None:
+            side_cap, side_ribbon = self._covering(*_stepped_into(x, z, toward))
+            if side_cap is not None or side_ribbon is not None:
+                cap, ribbon = side_cap, side_ribbon
         return DrawnHeight(
             height_m=max(value for value in (cap, ribbon) if value is not None),
             ribbon_m=ribbon,
@@ -1216,6 +1253,58 @@ class DrawnSurface:
         than take the first hit.
         """
         return self._covering(x, z)[0]
+
+    def split(self, polygon: np.ndarray, *, thin_m: float = 0.0) -> list[np.ndarray]:
+        """A convex plan polygon, cut along every crease of the drawn surface
+        that crosses its interior — convex pieces, none of which spans a fold.
+
+        🔴 **This is what closes the chord residue, and it closes it by
+        construction rather than by a height.** Paint is a flat polygon and the
+        road is piecewise linear: it folds at every fan spoke, every station
+        line and every quad diagonal. A piece placed with its corners on the
+        road still chords under a fold it spans — 10-13 mm on the shipped
+        Wan Chai bundle, at BULLOCK LANE's cap and on the `e311` ramp, with
+        every vertex right (`Q92`). A piece whose interior crosses no crease
+        lies within one cap triangle and within one strip triangle; `sample`
+        is the higher of the two, and the higher of two planes is convex, so a
+        flat piece with its corners on that surface stands **on or above it
+        everywhere**. Nothing is left to a tolerance except the nearest-edge
+        fallback over the void, which is not a surface.
+
+        A crease is taken only where its *segment* has a stretch strictly
+        inside the piece, never where its line would cross: a 2 m by 0.1 m
+        hatch piece near a cap would otherwise be cut by every spoke in the
+        cell. Each cut is `clip_half_plane` twice, the stripe fields' own clip;
+        the cut segment leaves the candidate list, so the recursion consumes
+        one crease per level and terminates. A polygon no crease crosses comes
+        back as itself, the common case — the counters `boxjunctions.py` and
+        `roadmarks.py` publish beside this say how common.
+
+        ⚠️ **A cut that would leave a piece the builder drops is not made.**
+        `thin_m` is `FlatBuilder.build`'s sliver bar — a fan triangle whose
+        plan area over its longest side is under it goes — and a crease within
+        that width of a stripe's edge would cut off a strip the mesh then
+        loses: measured, cutting regardless lost **1.96%** of the box paint's
+        plan area on Wan Chai, 2,032 → 11,697 slivers. Refused, the chord stays
+        and is bounded by the bar's own width — a fold within 5 cm of the
+        edge sags millimetres at most under the 10 mm bar — and the plan area
+        placed is the plan area asked for.
+        """
+        low, high = polygon.min(axis=0), polygon.max(axis=0)
+        found = [
+            seen
+            for seen in (self.crease_cells.get(key) for key in _cells_touching(low, high))
+            if seen is not None
+        ]
+        if not found:
+            return [polygon]
+        creases = self.creases[np.unique(np.concatenate(found))]
+        # A crease whose own box misses the polygon's cannot cross it; the
+        # cell is 16 m and the polygon is a couple, so most of the pack goes.
+        near = ((creases.min(axis=1) <= high[None, :]) & (creases.max(axis=1) >= low[None, :])).all(
+            axis=1
+        )
+        return _cut_along(polygon, creases[near], thin_m)
 
     def _covering(self, x: float, z: float) -> tuple[float | None, float | None]:
         """The highest cap and the highest strip drawn over this point."""
@@ -1285,6 +1374,163 @@ def _project_plan(
 
 def _cell_of(x: float, z: float) -> tuple[int, int]:
     return math.floor(x / _DRAWN_CELL_M), math.floor(z / _DRAWN_CELL_M)
+
+
+def _stepped_into(x: float, z: float, toward: np.ndarray) -> tuple[float, float]:
+    """The point a `_CREASE_GRAZE_M` step from `(x, z)` toward `toward`, or half
+    way there if that is nearer — inside any convex piece `toward` is the
+    centroid of, so what covers it is what covers the piece at that corner."""
+    dx, dz = float(toward[0]) - x, float(toward[1]) - z
+    distance = math.hypot(dx, dz)
+    if distance <= 0.0:
+        return x, z
+    step = min(_CREASE_GRAZE_M, 0.5 * distance) / distance
+    return x + dx * step, z + dz * step
+
+
+def _cells_touching(low: np.ndarray, high: np.ndarray) -> Iterable[tuple[int, int]]:
+    """The plan cells a box from `low` to `high` touches — `_bin_by_plan_box`'s
+    rule for one box, so a lookup and the binning cannot disagree."""
+    (low_column, low_row), (high_column, high_row) = (
+        _cell_of(float(low[0]), float(low[1])),
+        _cell_of(float(high[0]), float(high[1])),
+    )
+    for column in range(low_column, high_column + 1):
+        for row in range(low_row, high_row + 1):
+            yield column, row
+
+
+def _plan_creases(triangles: np.ndarray) -> np.ndarray:
+    """Every edge of every drawn triangle in plan, each once, as `(k, 2, 2)`.
+
+    A spoke is shared by two fan wedges and a station line by two strip
+    triangles, so each edge's ends are ordered lexicographically before the
+    duplicates go — the same crease from either side is one crease.
+    """
+    plan = triangles[:, :, [0, 2]]
+    edges = np.concatenate(
+        [np.stack([plan[:, index], plan[:, (index + 1) % 3]], axis=1) for index in range(3)]
+    )
+    start, stop = edges[:, 0], edges[:, 1]
+    swap = (start[:, 0] > stop[:, 0]) | ((start[:, 0] == stop[:, 0]) & (start[:, 1] > stop[:, 1]))
+    edges[swap] = edges[swap][:, ::-1]
+    _, first = np.unique(np.round(edges.reshape(-1, 4), 6), axis=0, return_index=True)
+    return edges[np.sort(first)]
+
+
+# A stretch of crease inside a piece shorter than this, or a piece's interior
+# shallower than this behind the crease, is the crease grazing a corner or
+# running along an edge — not a fold the piece spans. A tenth of a millimetre:
+# far below anything the 10 mm chord bar can see, far above float noise.
+_CREASE_GRAZE_M = 1e-4
+
+
+def _crossing_interior(polygon: np.ndarray, segments: np.ndarray) -> np.ndarray:
+    """Which plan segments have a stretch strictly inside a convex plan polygon.
+
+    Cyrus-Beck: each polygon edge is a half-plane, each segment is clipped to
+    all of them at once, and what survives is the parameter interval inside the
+    closed polygon. A segment lying along the boundary survives that with a
+    positive length and crosses nothing, so the interval's midpoint must also
+    sit `_CREASE_GRAZE_M` inside every edge.
+    """
+    if not len(segments):
+        return np.zeros(0, dtype=bool)
+    sides = np.roll(polygon, -1, axis=0) - polygon
+    normals = np.column_stack([-sides[:, 1], sides[:, 0]])
+    # The left normal of each side points inward for one winding and outward
+    # for the other; the shoelace says which this polygon is, and the
+    # half-planes below want them OUTWARD — inside is `dot(p, n) <= bound`.
+    winding = float(
+        np.dot(polygon[:, 0], np.roll(polygon[:, 1], -1))
+        - np.dot(np.roll(polygon[:, 0], -1), polygon[:, 1])
+    )
+    if winding > 0.0:
+        normals = -normals
+    lengths = np.hypot(normals[:, 0], normals[:, 1])
+    lengths[lengths <= _MIN_SEGMENT_M] = np.inf
+    normals = normals / lengths[:, None]
+    bounds = np.einsum("ij,ij->i", normals, polygon)
+
+    starts, stops = segments[:, 0], segments[:, 1]
+    spans = stops - starts
+    rate = spans @ normals.T  # how fast each segment leaves each half-plane
+    room = bounds[None, :] - starts @ normals.T  # how far inside each start is
+    with np.errstate(divide="ignore", invalid="ignore"):
+        at = room / rate
+    parallel_inside = np.where(room >= 0.0, np.inf, -np.inf)
+    upper = np.where(rate > 0.0, at, np.where(rate < 0.0, np.inf, parallel_inside))
+    lower = np.where(rate < 0.0, at, np.where(rate > 0.0, -np.inf, -parallel_inside))
+    enter = np.maximum(lower.max(axis=1), 0.0)
+    leave = np.minimum(upper.min(axis=1), 1.0)
+    stretch = np.where(leave > enter, leave - enter, 0.0)
+    inside_m = stretch * np.hypot(spans[:, 0], spans[:, 1])
+    middle = starts + np.where(stretch > 0.0, enter + 0.5 * stretch, 0.0)[:, None] * spans
+    depth = (bounds[None, :] - middle @ normals.T).min(axis=1)
+    return (inside_m > _CREASE_GRAZE_M) & (depth > _CREASE_GRAZE_M)
+
+
+def _cut_along(polygon: np.ndarray, creases: np.ndarray, thin_m: float) -> list[np.ndarray]:
+    """Cut a convex plan polygon by the first crease crossing it, and each half
+    by the rest, until no crease crosses any piece — skipping a cut that would
+    leave a half thinner than `thin_m`."""
+    pieces: list[np.ndarray] = []
+    pending = [(polygon, creases)]
+    while pending:
+        piece, candidates = pending.pop()
+        crossing = _crossing_interior(piece, candidates)
+        if not crossing.any():
+            pieces.append(piece)
+            continue
+        chosen = int(np.flatnonzero(crossing)[0])
+        start, stop = candidates[chosen]
+        rest = candidates[np.arange(len(candidates)) != chosen]
+        normal = np.array([stop[1] - start[1], start[0] - stop[0]])
+        normal = normal / np.hypot(*normal)
+        bound = float(normal @ start)
+        halves = [
+            _without_repeats(half)
+            for half in (
+                clip_half_plane(piece, normal, bound),
+                clip_half_plane(piece, -normal, -bound),
+            )
+        ]
+        halves = [half for half in halves if len(half) >= 3]
+        if any(_fans_thin(half, thin_m) for half in halves):
+            pending.append((piece, rest))
+            continue
+        pending.extend((half, rest) for half in halves)
+    return pieces
+
+
+def _fans_thin(polygon: np.ndarray, thin_m: float) -> bool:
+    """Whether `FlatBuilder.polygon`'s fan of this plan polygon has a triangle
+    `FlatBuilder.build` would drop — the same test, in plan: twice the area
+    against the longest side."""
+    if thin_m <= 0.0 or len(polygon) < 3:
+        return False
+    apex, first, second = polygon[0], polygon[1:-1], polygon[2:]
+    twice_area = np.abs(
+        (first[:, 0] - apex[0]) * (second[:, 1] - apex[1])
+        - (first[:, 1] - apex[1]) * (second[:, 0] - apex[0])
+    )
+    longest = np.maximum.reduce(
+        [
+            np.hypot(*(first - apex).T),
+            np.hypot(*(second - apex).T),
+            np.hypot(*(second - first).T),
+        ]
+    )
+    return bool((twice_area < thin_m * np.where(longest > 0.0, longest, 1.0)).any())
+
+
+def _without_repeats(polygon: np.ndarray) -> np.ndarray:
+    """A polygon with consecutive coincident corners folded into one — a corner
+    exactly on the cut line comes out of `clip_half_plane` twice."""
+    if len(polygon) < 2:
+        return polygon
+    step = polygon - np.roll(polygon, 1, axis=0)
+    return polygon[np.hypot(step[:, 0], step[:, 1]) > _MIN_SEGMENT_M]
 
 
 def _bin_by_plan_box(plan: np.ndarray) -> dict[tuple[int, int], np.ndarray]:

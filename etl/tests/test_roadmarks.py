@@ -28,6 +28,7 @@ from pipeline.roadmarks import (
     _cuts,
     _host,
     _on_its_own_carriageway,
+    _place,
     _runs,
     band_quads,
 )
@@ -542,6 +543,39 @@ class TestTheHeightJoin:
         drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(graded)]})
         heights = [drawn.height_at(0.0, z) for z in (-10.0, 10.0)]
         assert heights[0] < heights[1]
+
+    def test_placement_counts_what_answered_and_cuts_where_the_road_folds(self, spec):
+        """The seam the placement half of `build_region` did not have.
+
+        A quad across a cap's apex is cut along its spokes (`Q92`'s chord
+        residue) and every vertex of every piece is over the cap; a quad past
+        the ring is over nothing and says so, with its reach.
+        """
+        cap = {
+            "level": 0,
+            "ring": [[-5.0, 1.0, -4.0], [5.0, 1.0, -4.0], [5.0, 1.0, 4.0], [-5.0, 1.0, 4.0]],
+        }
+        drawn = DrawnSurface.of({"caps": [cap]})
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
+        report = RoadMarkReport()
+        # Wound to face up: clockwise in `(x, z)`, as `band_quads` winds them.
+        astride = np.array([[-2.0, 0.1], [2.0, 0.1], [2.0, -0.1], [-2.0, -0.1]])
+        heights = _place(builder, drawn, astride, spec.lift_m, report)
+        assert report.polygons_placed == 1
+        assert report.polygons_split == 1
+        assert report.pieces_placed > 1
+        assert report.vertices_over_cap == report.vertices_drawn == len(heights)
+        assert report.vertices_over_void == 0
+
+        beyond = np.array([[-1.0, 6.2], [1.0, 6.2], [1.0, 6.0], [-1.0, 6.0]])
+        _place(builder, drawn, beyond, spec.lift_m, report)
+        assert report.polygons_placed == 2
+        assert report.polygons_split == 1
+        assert report.vertices_over_void == 4
+        assert report.void_reach_m == pytest.approx([2.2, 2.2, 2.0, 2.0])
+        mesh = builder.build("roadmarks")
+        assert mesh is not None
+        assert downward_facing(mesh) == (0, 0.0)
 
 
 class TestTheBlockIsOptional:

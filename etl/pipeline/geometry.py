@@ -61,6 +61,31 @@ def orient(p: np.ndarray, q: np.ndarray, r: np.ndarray) -> np.ndarray:
     )
 
 
+def clip_half_plane(polygon: np.ndarray, normal: np.ndarray, bound: float) -> np.ndarray:
+    """Sutherland-Hodgman against `dot(p, normal) <= bound`, convex in, convex out.
+
+    Returns an empty `(0, 2)` when fewer than three corners survive. Written for
+    `boxjunctions.hatch_polygons`' stripe fields and shared by
+    `surface.DrawnSurface.split`, which cuts paint along the drawn surface's
+    creases with the same clip — one copy, so the two cannot disagree about
+    where a cut lands.
+    """
+    if len(polygon) == 0:
+        return polygon
+    distances = polygon @ normal - bound
+    kept: list[np.ndarray] = []
+    for index in range(len(polygon)):
+        following = (index + 1) % len(polygon)
+        here_in, next_in = distances[index] <= 0.0, distances[following] <= 0.0
+        if here_in:
+            kept.append(polygon[index])
+        if here_in != next_in:
+            span = distances[index] - distances[following]
+            t = distances[index] / span if span != 0.0 else 0.0
+            kept.append(polygon[index] + t * (polygon[following] - polygon[index]))
+    return np.asarray(kept) if len(kept) >= 3 else np.empty((0, 2))
+
+
 def edges_cross(a: np.ndarray, b: np.ndarray) -> bool:
     """Whether any edge of ring `a` properly crosses any edge of ring `b`.
 

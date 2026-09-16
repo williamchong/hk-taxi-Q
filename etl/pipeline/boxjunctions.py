@@ -54,7 +54,7 @@ from pipeline.arrows import ArrowReport
 from pipeline.boxsource import Box, read_boxes
 from pipeline.config import BoxJunctions, Config, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.geometry import orient, twice_area, wound_up
+from pipeline.geometry import clip_half_plane, orient, twice_area, wound_up
 from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, frame
@@ -158,6 +158,16 @@ class BoxJunctionReport:
     # `box_extent.py` reads past the kerb lands here too.
     vertices_over_void: int = 0
     void_reach_m: list[float] = field(default_factory=list)
+    # 🔴 **The tripwire on the crease cut (`Q92`'s chord residue).** Every
+    # polygon is cut along the creases of the drawn surface it crosses before
+    # it is placed — `DrawnSurface.split` — so no piece chords under a fold.
+    # `polygons_split` is how many needed a cut and `pieces_placed` what they
+    # became; both fall to `polygons_placed` and zero the moment the cut stops
+    # firing, which no partition and no height counter can see. Reachable, not
+    # a tautology: a flat single-triangle cap cuts nothing.
+    polygons_placed: int = 0
+    polygons_split: int = 0
+    pieces_placed: int = 0
 
     ring_vertices: list[float] = field(default_factory=list)
     area_m2: list[float] = field(default_factory=list)
@@ -325,24 +335,6 @@ def long_axis_deg(ring: np.ndarray) -> float:
     return math.degrees(math.atan2(axis_x, -axis_z)) % 180.0
 
 
-def _clip_half_plane(polygon: np.ndarray, normal: np.ndarray, bound: float) -> np.ndarray:
-    """Sutherland-Hodgman against `dot(p, normal) <= bound`, convex in, convex out."""
-    if len(polygon) == 0:
-        return polygon
-    distances = polygon @ normal - bound
-    kept: list[np.ndarray] = []
-    for index in range(len(polygon)):
-        following = (index + 1) % len(polygon)
-        here_in, next_in = distances[index] <= 0.0, distances[following] <= 0.0
-        if here_in:
-            kept.append(polygon[index])
-        if here_in != next_in:
-            span = distances[index] - distances[following]
-            t = distances[index] / span if span != 0.0 else 0.0
-            kept.append(polygon[index] + t * (polygon[following] - polygon[index]))
-    return np.asarray(kept) if len(kept) >= 3 else np.empty((0, 2))
-
-
 def _import_quantum_m(boxes: list[Box]) -> float:
     """The plan pitch Godot's importer will quantise this mesh to.
 
@@ -410,8 +402,8 @@ def hatch_polygons(ring: np.ndarray, axis_deg: float, spec: BoxJunctions) -> lis
             last = math.floor((float(offsets.max()) + half) / spec.hatch_spacing_m)
             for stripe in range(first, last + 1):
                 centre = anchor + stripe * spec.hatch_spacing_m
-                piece = _clip_half_plane(ear, across, centre + half)
-                piece = _clip_half_plane(piece, -across, -(centre - half))
+                piece = clip_half_plane(ear, across, centre + half)
+                piece = clip_half_plane(piece, -across, -(centre - half))
                 if len(piece):
                     pieces.extend(_stations(piece, along, spec.station_m))
     return pieces
@@ -427,10 +419,10 @@ def _stations(polygon: np.ndarray, along: np.ndarray, station_m: float) -> list[
     pieces: list[np.ndarray] = []
     rest = polygon
     for cut in range(first, last + 1):
-        piece = _clip_half_plane(rest, along, cut * station_m)
+        piece = clip_half_plane(rest, along, cut * station_m)
         if len(piece):
             pieces.append(piece)
-        rest = _clip_half_plane(rest, -along, -cut * station_m)
+        rest = clip_half_plane(rest, -along, -cut * station_m)
         if not len(rest):
             break
     if len(rest):
@@ -612,9 +604,13 @@ def build_region(
 
         heights: list[float] = []
         for piece in hatch_polygons(box.ring, axis_deg, spec):
-            heights.extend(_place(builder, drawn, piece, spec.lift_m, report))
+            heights.extend(_place(builder, drawn, piece, spec.lift_m, report, thinness_bar_m))
         for quad in border_polygons(box.ring, spec, report):
-            heights.extend(_place(builder, drawn, quad, spec.lift_m + spec.border_lift_m, report))
+            heights.extend(
+                _place(
+                    builder, drawn, quad, spec.lift_m + spec.border_lift_m, report, thinness_bar_m
+                )
+            )
 
         report.drawn += 1
         report.ring_vertices.append(float(len(box.ring)))
@@ -643,10 +639,12 @@ def _place(
     polygon: np.ndarray,
     lift_m: float,
     report: BoxJunctionReport,
+    thin_m: float = 0.0,
 ) -> list[float]:
     """One polygon onto the road under it, each vertex at its own drawn height.
 
-    Returns the road heights so the caller can publish their spread.
+    Returns the road heights so the caller can publish their spread. The
+    polygon goes down as one or more convex pieces, cut where the road folds.
     ⚠️ The join is per vertex on purpose — the opposite of `arrows._draw`'s
     host-edge interpolation, for the reason the module docstring gives: a box
     spans several arms and has no host, so the query *is* the primary join
@@ -667,21 +665,38 @@ def _place(
     reachable configuration makes it anything else, and it is `Q72`'s tautology
     exactly.
     """
+    # 🔴 **Cut along the road's creases first, so that no piece spans a fold**
+    # (`Q92`'s chord residue). A vertex on the road is not enough: a flat piece
+    # across a fan spoke or a station line chords under it however right its
+    # corners are — 10-12 mm at BULLOCK LANE's cap on the shipped bundle. A
+    # piece that crosses no crease lies within one cap triangle and one strip
+    # triangle, and the higher of two planes is convex, so it stands on or
+    # above the road everywhere. `DrawnSurface.split` has the argument.
+    pieces = drawn.split(polygon, thin_m=thin_m)
+    report.polygons_placed += 1
+    report.polygons_split += int(len(pieces) > 1)
+    report.pieces_placed += len(pieces)
     heights: list[float] = []
-    for px, pz in polygon:
-        drawn_here = drawn.sample(float(px), float(pz))
-        heights.append(drawn_here.height_m)
-        report.vertices_drawn += 1
-        if drawn_here.cap_m is not None:
-            report.vertices_over_cap += 1
-            # Over the strip the cap overlaps, where there is one: a cap over
-            # the void between two arms has no ribbon to stand above.
-            if drawn_here.ribbon_m is not None:
-                report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
-        if drawn_here.over_void:
-            report.vertices_over_void += 1
-            report.void_reach_m.append(drawn_here.reach_m)
-    builder.polygon(polygon, np.asarray(heights) + lift_m)
+    for piece in pieces:
+        # A cut vertex lies on a crease, and a crease can be a step as well as
+        # a fold: the height is the one on this piece's side of it.
+        centre = piece.mean(axis=0)
+        piece_heights: list[float] = []
+        for px, pz in piece:
+            drawn_here = drawn.sample(float(px), float(pz), toward=centre)
+            piece_heights.append(drawn_here.height_m)
+            report.vertices_drawn += 1
+            if drawn_here.cap_m is not None:
+                report.vertices_over_cap += 1
+                # Over the strip the cap overlaps, where there is one: a cap
+                # over the void between two arms has no ribbon to stand above.
+                if drawn_here.ribbon_m is not None:
+                    report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
+            if drawn_here.over_void:
+                report.vertices_over_void += 1
+                report.void_reach_m.append(drawn_here.reach_m)
+        builder.polygon(piece, np.asarray(piece_heights) + lift_m)
+        heights.extend(piece_heights)
     return heights
 
 
@@ -731,6 +746,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: BoxJunc
         # vertex the moment `ribbons` stops being published.
         "vertices_over_void": report.vertices_over_void,
         "void_reach_m": report.measured(report.void_reach_m),
+        # 🔴 The tripwire on the crease cut — see `BoxJunctionReport`. Both
+        # collapse onto `polygons_placed` the moment the cut stops firing.
+        "polygons_placed": report.polygons_placed,
+        "polygons_split": report.polygons_split,
+        "pieces_placed": report.pieces_placed,
         "ring_vertices": report.measured(report.ring_vertices),
         "area_m2": report.measured(report.area_m2),
         "total_area_m2": round(report.total_area_m2, 4),
@@ -776,6 +796,12 @@ def main(argv: list[str] | None = None) -> int:
         report.drawn,
         report.too_far,
         report.triangles,
+    )
+    log.info(
+        "  creases: %d polygons placed, %d cut where the road folds, %d pieces",
+        report.polygons_placed,
+        report.polygons_split,
+        report.pieces_placed,
     )
     return 0
 

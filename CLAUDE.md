@@ -853,10 +853,11 @@ Common emoji for this project:
   kerb width into the next ribbon **and meets it at THAT ribbon's height** — flat at its own it is a
   lip on the other carriageway, 0.27 m at HKCEC, that no frame shows; the clip's prefilter is the
   rail's box grown by the reach, and `_shoelace` is twice the area. ⚠️ **Also `paint_clearance.py
-  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: the three
-  it shows since `Q92`'s rail read (eleven before it) are two hatch strips chording a creased cap
-  fan at BULLOCK LANE and one vertex in a 0.3 m gap between two flanks 8 cm apart at HUNG HING ROAD
-  — a step in the *surface* — never a reason to lift the paint, and a rising count is a finding.
+  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: it reads
+  **0** since paint is cut at the road's creases (`Q92`, 2026-09-16); the three it showed after the
+  rail read (eleven before it) were two hatch strips chording a creased cap fan at BULLOCK LANE and
+  one vertex in a 0.3 m void wedge between two flanks 8 cm apart at HUNG HING ROAD — a step in the
+  *surface* — never a reason to lift the paint, and a rising count is a finding.
   ⚠️ **The evidence is a frame and a shadow moves with the surface it falls on** — the dark trapezoid
   inside box 7 after the flanks is the building's shadow on new asphalt, not a buried flank; the
   top-down camera settles it. Numbers in `Q104`.
@@ -872,10 +873,18 @@ Common emoji for this project:
   (the wrong height on the road it is drawn on) and `deep` (that, past `--accept-depth-m`). Pooling
   them leaves nothing to do but raise the bar. ⚠️ **`tramway` and `arrows` are reported and never
   gated**: `Q58` measured tram rails p50 3.26 m past the drawn kerb, so a third of them are over no
-  carriageway at all and gating that fails the tool on a fact. ⚠️ **The shallow residue is geometric,
-  not a defect** — paint is a flat triangle over a road that creases at every cap fan edge and every
-  ribbon station, so its chord dips below the crown it spans by millimetres however right its
-  vertices are. 🔴 **Do not answer a burial by raising `lift_m`**: clearing `Q92`'s p99 needed
+  carriageway at all and gating that fails the tool on a fact. ⚠️ **The shallow residue was geometric,
+  not a defect, and is closed by construction since 2026-09-16** — paint is a flat triangle over a road
+  that creases at every cap fan edge and every ribbon station, so its chord dipped below the crown it
+  spanned by millimetres however right its vertices were; `DrawnSurface.split` now cuts every paint
+  polygon along the creases it crosses before it is placed, and the higher of two planes is convex, so
+  a covered piece stands on or above the road everywhere. What is left under the bar is the
+  nearest-edge fallback over void, which is not a surface. 🔴 **A cut vertex takes the height of its own
+  piece's side (`sample(toward=)`), and that is not tidiness**: the drawn road *steps* along a cap's
+  ring as well as folding, and sampled inclusively the piece outside the ring was drawn down a 0.46 m
+  riser — `check_faces_up` refused 2 of 1,578 Causeway Bay box triangles while `inverted` read 0.
+  ⚠️ **`split(thin_m=)` refuses a cut that would leave a piece under the builder's sliver bar**: cutting
+  regardless lost 1.96% of the box paint's plan area. 🔴 **Do not answer a burial by raising `lift_m`**: clearing `Q92`'s p99 needed
   **0.158 m**, paint floating 16 cm over the road. ⚠️ **`vertices_over_cap` and `vertices_over_void` are the in-stage
   tripwires and there is deliberately no "placed minus drawn" counter** — that is `lift_m` by
   construction and `Q72`'s tautology. 🔴 **`DrawnSurface` reads the RAILS since 2026-09-16**
