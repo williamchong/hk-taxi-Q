@@ -608,6 +608,47 @@ def stubville(tmp_path, testville_config):
 
 
 @pytest.fixture
+def splayville(tmp_path, testville_config):
+    """One straight street crossing a junction whose two nodes it is attached
+    to on the skew, the way Road Network v2 draws a dual carriageway (`P3-31`).
+
+    The street is 12 m wide along z = 304. Its west arm reaches node 0 at
+    (300, 300) by an 8 m splay from (292, 304), and its east arm reaches node 1
+    at (314, 300) from (322, 304); the two nodes are joined by a 14 m stub,
+    clamped at both ends by the 6 m radius, so the cluster is the two nodes.
+    The notch between the splayed ribbon and the straight kerb at (296, 309.5)
+    is road on the street and pavement in a cap built from the mouths alone.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 1, "pos": [314.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 2, "pos": [200.0, 0.0, 304.0], "kind": "endpoint"},
+            {"id": 3, "pos": [414.0, 0.0, 304.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 0, 1, [[300.0, 0.0, 300.0], [314.0, 0.0, 300.0]]),
+            _edge(
+                1,
+                2,
+                0,
+                [[200.0, 0.0, 304.0], [292.0, 0.0, 304.0], [300.0, 0.0, 300.0]],
+                width_m=12.0,
+            ),
+            _edge(
+                2,
+                1,
+                3,
+                [[314.0, 0.0, 300.0], [322.0, 0.0, 304.0], [414.0, 0.0, 304.0]],
+                width_m=12.0,
+            ),
+        ],
+    )
+    return testville_config, tmp_path
+
+
+@pytest.fixture
 def testville(tmp_path, testville_config):
     """A crossroads, a flyover touching down on it, and a dead end.
 
@@ -2351,6 +2392,7 @@ class TestStubClusters:
             "stub_edges": 1,
             "count": 1,
             "nodes": 2,
+            "corridors": 0,
         }
 
     def test_a_looser_ceiling_dissolves_the_cluster(self, stubville, tmp_path) -> None:
@@ -2417,4 +2459,63 @@ class TestStubClusters:
             "stub_edges": 0,
             "count": 0,
             "nodes": 0,
+            "corridors": 0,
         }
+
+
+class TestThroughCorridors:
+    """`P3-31`'s second finding: a street attached to a cluster's nodes on the
+    skew is drawn straight across it, by a corridor quad between the two arms'
+    cross-sections beyond their splay."""
+
+    NOTCH = np.array([[296.0, 309.5], [318.0, 309.5]])
+
+    def test_the_corridor_makes_the_skewed_street_straight(self, splayville, tmp_path) -> None:
+        city, _ = splayville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        assert report.clusters == 1
+        assert report.corridors == 1
+        assert report.junctions == 2  # the cluster cap and its corridor
+        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
+        assert _covered(self.NOTCH, corners).all()
+        # The corridor is the straight street between the two splay vertices:
+        # x 292..322 at the 6 m half-width about z = 304.
+        rings = [np.asarray(cap["ring"]) for cap in _manifest(tmp_path)["caps"]]
+        corridor = next(ring for ring in rings if len(ring) == 4)
+        plan = {(round(float(x), 3), round(float(z), 3)) for x, _, z in corridor}
+        assert plan == {(292.0, 298.0), (292.0, 310.0), (322.0, 298.0), (322.0, 310.0)}
+        assert _manifest(tmp_path)["clusters"]["corridors"] == 1
+
+    def test_a_splay_longer_than_the_cluster_is_not_a_splay(self, splayville, tmp_path) -> None:
+        """The mutation: move the west arm's first vertex 40 m out — past the
+        two nodes' span plus both half-widths — and the arm has no far
+        section, so no corridor and the notch is pavement again."""
+        city, _ = splayville
+        path = tmp_path / "out" / "middle" / ROADGRAPH_NAME
+        graph = json.loads(path.read_text(encoding="utf-8"))
+        graph["edges"][1]["polyline"] = [
+            [200.0, 0.0, 304.0],
+            [260.0, 0.0, 304.0],
+            [300.0, 0.0, 300.0],
+        ]
+        graph["edges"][1]["on_structure"] = [False] * 3
+        graph["edges"][1]["structure_bounded"] = [False] * 3
+        path.write_text(json.dumps(graph), encoding="utf-8")
+
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        assert report.clusters == 1
+        assert report.corridors == 0
+        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
+        assert not _covered(self.NOTCH[1:], corners).any()
+
+    def test_straight_arms_draw_no_corridor(self, stubville, tmp_path) -> None:
+        """Two-vertex arms have no vertex beyond the mouth, so nothing to run a
+        corridor between; the cluster cap alone is byte for byte what it was."""
+        city, _ = stubville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        assert report.corridors == 0
+        assert report.junctions == 1

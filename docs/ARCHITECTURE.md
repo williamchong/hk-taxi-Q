@@ -1397,7 +1397,7 @@ arriving ribbon actually ended. `surface.DrawnSurface` is the reader, and withou
 the road's height and sinks into it.
 
 ⚠️ **And a `clusters` block beside `join` (`P3-31`, no schema bump)** — `stub_edges`, `count`,
-`nodes` — because since `P3-31` one cap closes a whole cluster of nodes joined by stubs (edges
+`nodes`, `corridors` — because since `P3-31` one cap closes a whole cluster of nodes joined by stubs (edges
 clamped at both ends by `junction_trim_max_fraction`), and `caps[]` no longer has one ring per node.
 Counters only: a ring is not marked, because a consumer of `caps` asks where the drawn surface is and
 a cluster cap answers that the way a per-node one does.

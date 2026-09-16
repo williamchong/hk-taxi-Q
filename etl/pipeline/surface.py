@@ -450,6 +450,11 @@ class SurfaceReport:
     stub_edges: int = 0
     clusters: int = 0
     cluster_nodes: int = 0
+    # Through corridors drawn across clusters (`P3-31`, second finding): one
+    # convex quad per pair of arms at different nodes whose far axes run
+    # through, drawn as a cap of its own. Reachable at zero — a cluster whose
+    # arms all turn off, or none of whose arms splays — so it is a counter.
+    corridors: int = 0
     # Edge **ends** that resolved to half of an opposed one-way pair — two per
     # pair, because each half publishes its own offset. Reported because it is
     # the population two markings depend on and neither the graph nor the ribbon
@@ -1571,6 +1576,13 @@ def build_region(
         if ring is None:
             continue
         caps.append(_Cap(level, ring))
+        if len(groups) >= 2:
+            # A corridor is a cap of its own, unioned with the cluster's by
+            # being drawn beside it; see `_through_corridors` for why it is
+            # not hulled in.
+            caps.extend(
+                _Cap(level, quad) for quad in _through_corridors(groups, every_edge, report)
+            )
         if any(end.foreign for group in groups for end in group):
             report.caps_with_foreign_mouth += 1
     _hide_buried_kerbs(edges, caps, report)
@@ -3008,6 +3020,113 @@ def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndar
     return movements
 
 
+class _Section(NamedTuple):
+    """An arm's cross-section beyond its splay: where the road runs straight."""
+
+    centre: np.ndarray  # x/y/z
+    axis: np.ndarray  # unit plan direction, away from the junction
+    half_width_m: float
+
+
+def _far_section(end: _End, edges: list[_Edge], span_m: float) -> _Section | None:
+    """One arm's cross-section at its first published vertex, if that vertex
+    is within `span_m` of the node; None for a straight two-vertex arm.
+
+    Road Network v2 attaches both carriageways of a dual carriageway to one
+    node at each crossing, so each centreline turns 15-50 degrees into the
+    node over its last vertex — 88 of the region's 228 bending cluster arms,
+    at p50 10 m. The ribbon follows the turn and so do its kerbs, which is what
+    drew Hennessy Road at Fleming Road as a bow-tie: two straight roads that
+    meet the junction on the skew. The cross-section at the first vertex, with
+    the axis of the segment *beyond* it, is where the arm is the road again.
+
+    ⚠️ **`span_m` is derived, never authored**: the caller passes the
+    distance between the two nodes plus both half-widths, so a first vertex
+    further out than the cluster is wide is not a splay and the arm has no far
+    section. Published vertices only — `_add_kerb_stations` inserts stations
+    that are not turns.
+    """
+    edge = edges[end.edge]
+    points = edge.points[edge.points[:, _INSERTED] == 0.0]
+    if len(points) < 3:
+        return None
+    if not end.at_start:
+        points = points[::-1]
+    first = points[1, [0, 2]] - points[0, [0, 2]]
+    if float(np.hypot(*first)) > span_m:
+        return None
+    beyond = points[2, [0, 2]] - points[1, [0, 2]]
+    length = float(np.hypot(*beyond))
+    if length <= _MIN_SEGMENT_M:
+        return None
+    return _Section(points[1, :3].copy(), beyond / length, float(points[1, _WIDTH]))
+
+
+def _through_corridors(
+    groups: list[list[_End]], edges: list[_Edge], report: SurfaceReport
+) -> list[np.ndarray]:
+    """The straight corridors across a cluster, one convex quad each (`P3-31`).
+
+    Two arms at different nodes whose far axes point at each other within
+    `_THROUGH_TURN_DEG`, and whose far sections overlap laterally, are one
+    street crossing the junction: the quad between their two sections is
+    carriageway however the centrelines splayed to reach their nodes. A quad
+    per pair, **unioned with the cluster cap and never hulled into it** — a
+    hull of cap and corridor would sweep the pavement corner between the
+    corridor's far end and the next arm's mouth, which is exactly what
+    `hull` was chosen to avoid.
+
+    The lateral test is the two half-widths: the far axes must run over each
+    other's section, which is what makes a carriageway and its opposed twin
+    both qualify (they overlap) and two parallel side streets 14 m apart not.
+    Both sections must lie on the junction side of each other, or two arms
+    leaving the cluster the same way would corridor across everything between.
+    """
+    arms = [(group, end) for group in groups for end in group if not edges[end.edge].is_stub]
+    nodes = {
+        id(group): np.mean(
+            [edges[end.edge].points[0 if end.at_start else -1, [0, 2]] for end in group], axis=0
+        )
+        for group in groups
+    }
+    quads: list[np.ndarray] = []
+    limit = np.cos(np.radians(_THROUGH_TURN_DEG))
+    for index, (group_a, end_a) in enumerate(arms):
+        for group_b, end_b in arms[index + 1 :]:
+            if group_a is group_b:
+                continue
+            node_a, node_b = nodes[id(group_a)], nodes[id(group_b)]
+            half_a = edges[end_a.edge].end_half_width_m(end_a.at_start)
+            half_b = edges[end_b.edge].end_half_width_m(end_b.at_start)
+            span = float(np.hypot(*(node_a - node_b))) + half_a + half_b
+            first = _far_section(end_a, edges, span)
+            second = _far_section(end_b, edges, span)
+            if first is None or second is None:
+                continue
+            # Through: arriving along `first.axis` reversed, leaving along
+            # `second.axis`; both sections on the junction side of the other.
+            if float(-first.axis @ second.axis) < limit:
+                continue
+            between = second.centre[[0, 2]] - first.centre[[0, 2]]
+            if float(between @ first.axis) > 0.0 or float(-between @ second.axis) > 0.0:
+                continue
+            reach = first.half_width_m + second.half_width_m
+            across_a = abs(float(between[0] * first.axis[1] - between[1] * first.axis[0]))
+            across_b = abs(float(between[0] * second.axis[1] - between[1] * second.axis[0]))
+            if across_a > reach or across_b > reach:
+                continue
+            corners = []
+            for section in (first, second):
+                side = np.array([-section.axis[1], 0.0, section.axis[0]]) * section.half_width_m
+                corners.append(section.centre + side)
+                corners.append(section.centre - side)
+            quad = hull(np.vstack(corners))
+            if len(quad) >= 3:
+                quads.append(quad)
+    report.corridors += len(quads)
+    return quads
+
+
 def _out(plan: np.ndarray) -> np.ndarray:
     """A plan direction as an x/y/z step, flat, for handing to a 3D routine."""
     return np.array([plan[0], 0.0, plan[1]])
@@ -3156,6 +3275,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                 "stub_edges": report.stub_edges,
                 "count": report.clusters,
                 "nodes": report.cluster_nodes,
+                "corridors": report.corridors,
             },
             "carriageway": [
                 {
@@ -3218,10 +3338,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     log.info(
         "  junction clusters: %d stubs clamped at both ends join %d nodes into %d clusters, "
-        "each capped once",
+        "each capped once; %d straight corridors drawn across them",
         report.stub_edges,
         report.cluster_nodes,
         report.clusters,
+        report.corridors,
     )
     # `Q107`. ⚠️ **The refusals are named in the same line as the cuts**, because
     # they are the same population split two ways — a station the deck could

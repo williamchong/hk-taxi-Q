@@ -839,7 +839,14 @@ Common emoji for this project:
   one `--cell-m` and `--near-m`. ⚠️ **The cap's fan and the stub ribbon under it disagree in height**
   (max 0.199 m; the per-node caps read 0.255) — the old cap-over-ribbon overlap, not a new one, so
   quote both sides. ⚠️ **The evidence is a frame and the first after-shot may not repeat** — HKCEC
-  needed three; shoot until a hash repeats. Numbers in `Q104`.
+  needed three; shoot until a hash repeats. 🔴 **And `_through_corridors` / `_far_section`: paste
+  `corridors` (68) and the NEW-asphalt price by HyD class, never `cap_pavement.py`'s quad area alone**
+  — corridors overlap the ribbons and the cluster cap they straighten, so 20,000 m² of quad is
+  745 m² of asphalt. RN2 splays each carriageway into its node; the corridor is the straight quad
+  between two arms' far sections and is **unioned, never hulled** into the cap, or it sweeps the
+  pavement corner `hull` exists to leave. ⚠️ **The kerb-line corner rule is REFUTED, do not
+  re-propose it**: it found the HKCEC wedge from two far-side rails extended across the junction.
+  Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter

@@ -17676,6 +17676,42 @@ inside a building and read nothing. Clipping the hull to the HyD polygon stays t
 cluster is ever refused on this; none was. ⚠️ `--near-m` is the split's one free value and the tool
 grades, never gates.
 
+🔴 **The second finding, same day: the cap of a cluster was a hull of SPLAYED mouths, and the user's
+"this should be straight road connecting to the next section" is exactly that.** Road Network v2
+attaches both carriageways of a dual carriageway to one node at each crossing, so each centreline
+turns into the node over its last vertex — **88 of the region's 228 bending cluster arms turn 15° or
+more at a first vertex within 12 m**, p50 10 m; at Hennessy Road / Fleming Road all eight arms turn
+16–50° within 3.6–13 m. The ribbon follows the turn and so do its kerbs, and a junction of two
+straight roads drew as a bow-tie whose pavement notches stood in the through lane (the height profile
+along the through line was flat to 4 cm; what the user saw as a block was pavement). ⚠️ **A kerb-line
+corner rule was built and REFUSED first**: intersecting the facing rails of arms at different nodes
+found the HKCEC wedge, but the point it found came from two *west-side* rails extended clear across
+the junction, and at Lockhart / Marsh it paired arms 23 m apart — a rule that happens to land on the
+defect is not a rule. ✅ **What ships is `_through_corridors`**: an arm's *far section* is its
+cross-section at its first published vertex with the axis of the segment beyond, taken only when that
+vertex lies within the two nodes' span plus both half-widths (derived, never authored); two arms at
+different nodes whose far axes point at each other within `_THROUGH_TURN_DEG` and overlap laterally
+within their half-widths are one street crossing the junction, and the quad between their sections is
+drawn as a cap of its own. 🔴 **Unioned, never hulled into the cluster cap** — a hull of cap and
+corridor sweeps the pavement corner between the corridor's far end and the next arm's mouth, the very
+corner `hull` was chosen to leave. **68 corridors over 28 of 54 clusters** in Wan Chai, 13 over 8 in
+Causeway Bay; `caps` 370 → 438. Per box: HKCEC **2.22 → 0.80 m²**, CONVENTION AVENUE east **9.52 →
+0.05**, HUNG HING ROAD 9.98 → 3.43; pooled **21.73 → 4.29 m² (0.74%)**. The price, counted as new
+asphalt outside every ribbon and cluster cap rather than as `cap_pavement.py`'s overlapping quad
+area (73,806 m² of which most is over road already drawn): **745 m²**, 392 on HyD carriageway, **325
+past a HyD kerb**, 27 unsurveyed — worst LOCKHART / TONNOCHY at 51.8 m². `carriageway[]`, `offset_m`
+and `trim_m` still byte-identical on 792 edges; `kerb_hidden_m` moved on 102 edges, all at a cluster
+node; railings lost a further **100 m** to `metres_on_buried_kerb` (fences on splayed kerbs now under
+a corridor). `splayville` is the fixture — a 12 m street reaching two nodes on an 8 m splay, whose
+notch at (296, 309.5) is pavement before and road after — and `corridors` is reachable at zero by
+moving the splay vertex past the cluster's span. Frames at the same four cameras, each shot until a
+hash repeated: Hennessy's chase view is one flat junction with the far section straight ahead, and
+HKCEC's north-east wedge is asphalt. ⚠️ **Open, and older than this change**: the layers that register
+against the kerb have never read the caps, so a post on a kerb a cap covers stands in the road —
+lamps inside a level-0 cap **12 → 20**, sign plates **55 → 86**, railing panels **5 → 12**
+(pre-`P3-31` → corridors, out of 890 / 753 / 4,954). The fix is those three stages refusing a foot
+under a cap, read from `roadsurface.json`; it is not a cap-shape question and is not taken here.
+
 **Tests.** `stubville`: two nodes 14 m apart joined by a 9.6 m stub, 12 m arms — a point between the
 south arms is uncovered today and covered after; the ring is the four arm mouths corner for corner;
 `clusters` is **reachable at zero** by loosening `junction_trim_max_fraction` to 0.49, which lifts the
