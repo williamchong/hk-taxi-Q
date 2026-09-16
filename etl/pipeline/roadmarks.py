@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
@@ -166,6 +167,21 @@ class RoadMarkReport:
     # marking" — and `RM1012` is one.
     refused_m_by_code: dict[str, float] = field(default_factory=dict)
     on_structure_m: float = 0.0
+    # 🔴 **The BUNDLE's word on structure, beside the SOURCE's.** `on_structure`
+    # is what the publisher's `level` column says of a whole feature; this is a
+    # station quad — or a piece of one, cut at the host strip's end line —
+    # every vertex of which is over nothing drawn at level 0 and under
+    # something drawn at a level above. A 7.1 m `RM1001` hosted on level-0
+    # `e168` runs 3.5 m past the touchdown onto the WAN CHAI INTERCHANGE deck,
+    # where level-0 sampling is over void and snaps to the ramp's end 52-131 mm
+    # under the deck (`Q92`'s third class). Refused and counted, never placed
+    # on the deck: this stage draws level 0 (`Q15`). Two coverage facts the
+    # reader already answers, no radius and no knob. ⚠️ **A void station with
+    # nothing drawn over it is KEPT** — that is the on-kerb population `Q54`
+    # protects, and the mutation a test of this must fail on. Stationed, not
+    # per feature: `drawn`, `drawn_by_id` and the partitions do not move.
+    stations_on_drawn_structure: int = 0
+    on_drawn_structure_m: float = 0.0
 
     # 🔴 **The counter that can see the join regress**, and the reason it is not
     # `axis_residual_deg`. The residual grades a rule that optimises the very
@@ -866,6 +882,16 @@ def build_region(
     # *at* a junction mouth, so more of this layer stands on cap tarmac than of
     # any other, and the blend it replaced was furthest wrong exactly there.
     drawn = DrawnSurface.of(surface, level=0)
+    # What is drawn OVER the street: one reader per level above 0 that draws
+    # anything, so a station past a touchdown can be told from one past a kerb
+    # (`stations_on_drawn_structure`). Levels at or below 0 are excluded — a
+    # bore under a void is not structure over it — and `of` refuses an empty
+    # level, so the list is `levels_drawn`'s and never `elevation_levels`'.
+    above = [
+        DrawnSurface.of(surface, level=level)
+        for level in DrawnSurface.levels_drawn(surface)
+        if level > 0
+    ]
 
     builder = FlatBuilder(ROADMARKS_MATERIAL)
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
@@ -905,7 +931,7 @@ def build_region(
 
         heights: list[float] = []
         for quad in band_quads(marking, spec):
-            heights.extend(_place(builder, drawn, quad, spec.lift_m, report, thinness_bar_m))
+            heights.extend(_place(builder, drawn, quad, spec.lift_m, report, thinness_bar_m, above))
 
         report.drawn += 1
         report.drawn_by_id[marking.mark.id] = report.drawn_by_id.get(marking.mark.id, 0) + 1
@@ -947,6 +973,7 @@ def _place(
     lift_m: float,
     report: RoadMarkReport,
     thin_m: float = 0.0,
+    above: Sequence[DrawnSurface] = (),
 ) -> list[float]:
     """One band quad onto the road under it, each vertex at its own drawn height.
 
@@ -958,16 +985,33 @@ def _place(
     caller can publish their spread. Kept as a function rather than inlined in
     `build_region` so the placement half of this stage has a seam a test can
     reach, which it did not.
+
+    🔴 **A piece over nothing at level 0 and under a deck drawn in `above` is
+    refused, after the cut and before the counters** (`Q92`'s deck stub). The
+    cut has already parted the quad at the host strip's end line, so the piece
+    past the touchdown is exactly what stands over the void and the piece on
+    the ramp is placed as it was. `above` empty — a region with no level drawn
+    above the street — refuses nothing, and a void piece with no deck over it
+    is placed and counted in `vertices_over_void` as before.
     """
     pieces = drawn.split(quad, thin_m=thin_m)
     report.polygons_placed += 1
     report.polygons_split += int(len(pieces) > 1)
-    report.pieces_placed += len(pieces)
     heights: list[float] = []
     for piece in pieces:
         # A cut vertex lies on a crease, and a crease can be a step as well as
         # a fold: the height is the one on this piece's side of it.
         centre = piece.mean(axis=0)
+        # Asked of the piece's SIDE, not of the corner: a cut corner sits on
+        # the strip's end line and `sample` counts it covered, so the piece
+        # past the touchdown is over nothing only from its own side of the cut.
+        if not any(drawn.covers(float(px), float(pz), toward=centre) for px, pz in piece) and (
+            _under_a_deck(above, piece, centre)
+        ):
+            report.stations_on_drawn_structure += 1
+            report.on_drawn_structure_m += _length_along(quad, piece)
+            continue
+        report.pieces_placed += 1
         drawn_here = [drawn.sample(float(px), float(pz), toward=centre) for px, pz in piece]
         piece_heights = [sample.height_m for sample in drawn_here]
         builder.polygon(piece, np.asarray(piece_heights) + lift_m)
@@ -979,6 +1023,29 @@ def _place(
                 report.vertices_over_void += 1
                 report.void_reach_m.append(sample.reach_m)
     return heights
+
+
+def _under_a_deck(above: Sequence[DrawnSurface], piece: np.ndarray, centre: np.ndarray) -> bool:
+    """Whether every corner of a plan piece has something drawn over it at a
+    level above the street — each corner by any of the readers, asked from
+    the piece's own side as the level-0 question is."""
+    return bool(above) and all(
+        any(reader.covers(float(px), float(pz), toward=centre) for reader in above)
+        for px, pz in piece
+    )
+
+
+def _length_along(quad: np.ndarray, piece: np.ndarray) -> float:
+    """A piece's extent along its band quad's longer side — the marking's own
+    direction for every station longer than the band is wide, whichever corner
+    `wound_up` put first."""
+    sides = quad[[1, 2]] - quad[[0, 1]]
+    axis = sides[int(np.argmax(np.hypot(sides[:, 0], sides[:, 1])))]
+    length = float(np.hypot(*axis))
+    if length <= 0.0:
+        return 0.0
+    along = piece @ (axis / length)
+    return float(along.max() - along.min())
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMarkReport) -> int:
@@ -1026,6 +1093,12 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         # sitting on a deck is a different fact from a code this stage does not
         # draw, and `RM1012` is both in the same run.
         "on_structure_m": round(report.on_structure_m, 3),
+        # 🔴 The bundle's word on structure beside the source's above: station
+        # quads (or pieces of one) over nothing drawn at level 0 and under a
+        # deck drawn above it, refused rather than placed 52-131 mm under that
+        # deck. See `RoadMarkReport`.
+        "stations_on_drawn_structure": report.stations_on_drawn_structure,
+        "on_drawn_structure_m": round(report.on_drawn_structure_m, 3),
         # 🔴 **The counter that can see the join regress.** How often the
         # transverse pick and the plain nearest edge disagree about the host,
         # over every marking that found an edge in range. Measured at 53 of 120
@@ -1115,6 +1188,11 @@ def main(argv: list[str] | None = None) -> int:
         report.polygons_placed,
         report.polygons_split,
         report.pieces_placed,
+    )
+    log.info(
+        "  under a drawn deck: %d stations / %.2f m refused",
+        report.stations_on_drawn_structure,
+        report.on_drawn_structure_m,
     )
     log.info(
         "  by marking: %s",

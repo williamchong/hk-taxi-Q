@@ -680,7 +680,17 @@ Common emoji for this project:
   it. Numbers in `Q118`.
 - **`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way line change:
   paste `roadmarks.json`'s two partitions, `host_disagreement` with `host_considered`,
-  `axis_residual_deg`, `underfill_m` and `inverted`, before and after.** ⚠️ **`underfill_m` is
+  `axis_residual_deg`, `underfill_m`, `inverted`, and since 2026-09-16 `stations_on_drawn_structure`
+  with `on_drawn_structure_m`, before and after.** 🔴 **Those two are the BUNDLE's word on structure
+  beside the source's `on_structure` / `on_structure_m`, and they refuse stations, never features**: a
+  station quad (or the piece of one the crease cut leaves past the host strip's end) over nothing drawn
+  at level 0 and under a deck drawn above it is refused and counted rather than placed 52–131 mm inside
+  the slab (`Q92`'s deck stub, 5 / 7.74 m on Wan Chai). ⚠️ **Two coverage facts, no radius, no knob**,
+  asked from the piece's own side (`covers(toward=)`) because a cut corner sits on the end line and
+  counts as covered. 🔴 **A void station with nothing drawn over it is KEPT** — a stop line reaching
+  past a kerb is `Q54`'s on-kerb population — so mutation-check the rule's second half rather than
+  reading its count, and do not "simplify" it to *over void → refuse*. ⚠️ **`levels_drawn` and never
+  `elevation_levels`**: `DrawnSurface.of` refuses a level with nothing drawn. ⚠️ **`underfill_m` is
   measured against `roadsurface.json`'s DRAWN half-width, never the graph's authored `width_m`** —
   shipping the latter was an 18x error (p50 0.22 m against 4.04), and it is why this stage depends
   on `surface` as well as `roads`. There is no separate grader

@@ -14409,6 +14409,48 @@ paint meshes' import sidecars deleted before each side, each side shot until its
 `e311` ramp at `--camera=1010,12,134 --look=1030,4.4,124`, **220 px** differ — the station-line chords
 under the 48.8 m `RM1001`; BULLOCK LANE box 1 at `--camera=414,20,795 --look=392,4.3,797`, **601 px** — the two hatch strips that chorded under the fan.
 
+**The deck-stub class closed 2026-09-16 (`P3-32`, second commit): a road-mark station the bundle
+draws a deck over is refused, counted, and never placed under it.** The six that were left are one
+7.1 m `RM1001` hosted on level-0 `e168` at the WAN CHAI INTERCHANGE touchdown, running 3.5 m past the
+ramp's end onto the level-1 deck: level-0 sampling there is over nothing (reach 1.3–3.3 m), snaps to the
+ramp end at 8.328 m, and the deck stands at 8.44–8.61 — 52 to 131 mm of paint inside a slab. The user
+chose *refuse, counted* over hosting the stub on the deck, because this stage draws level 0 (`Q15`: a
+bar under a flyover belongs to the street it is painted on) and a station on a deck is a station the
+source put on the wrong level. The rule is two coverage facts the reader already answers and carries
+no radius and no knob: `roadmarks.build_region` builds one `DrawnSurface` per level above 0 that
+draws anything (`levels_drawn`, because `of` refuses an empty level; levels at or below 0 are excluded —
+a bore under a void is not structure over it), and `_place` refuses a piece over nothing at level 0
+whose every corner is under one of them. ⚠️ **After the crease cut and asked from the piece's side**:
+the cut has already parted the quad at the host strip's end line, so the piece past the touchdown is
+exactly what stands over the void and the piece on the ramp is placed as it was; and a cut corner sits
+*on* that end line, which `sample` counts as covered, so the void question is `covers(toward=)` — the
+same tenth of a millimetre into the piece — or nothing is ever refused, which is how the first draft
+read. 🔴 **A void station with nothing drawn over it is kept** — a stop line reaching past a kerb is
+the on-kerb population `Q54` protects — and a rule written as "over void → refuse" fails
+`test_a_station_past_the_touchdown_under_a_drawn_deck_is_refused_and_a_kerb_one_kept` on its second
+half. Published as `stations_on_drawn_structure` / `on_drawn_structure_m` beside `on_structure` /
+`on_structure_m`: the source's word on structure and the bundle's, kept apart. Stationed, not per
+feature: `drawn` (282), `drawn_by_id`, `drawn_m_by_id` and both partitions do not move.
+
+**Before → after, Wan Chai** (`--from roadmarks`, both regions; every file but `roadmarks.glb`,
+`roadmarks.json` and `city.json`'s timestamp byte-identical, and Causeway Bay's `roadmarks.glb`
+byte-identical too — it refuses 0 / 0.00 m): **5 stations / 7.736 m refused**, not the two the class was
+priced at — four are the Interchange stub (eight triangles, the six deep and two shallower pieces of the
+same `RM1001`) and the fifth is a 1.17 m piece on MARSH ROAD under the `e248` flyover at its
+touchdown, level-0 reach 0.39–0.79 m to a 3.486 m edge with the ramp deck at **4.104 m** over it —
+0.62 m of burial the depth bar never saw because the tool takes road faces within 1.5 m of the paint
+and classed it under the highest face. Triangles 16,402 → 16,392, bytes 886,760 → 886,220,
+`vertices_drawn` 32,932 → 32,912, `vertices_over_void` 354 → 337 (reach p50 0.416 → 0.354 m, max
+3.7077 unchanged), `pieces_placed` 8,233 → 8,228, `polygons_placed` / `polygons_split` 6,159 / 1,520
+unchanged, `height_spread_m` n 282 unchanged, `host_disagreement`, `axis_residual_deg`,
+`underfill_m` and `inverted` unchanged. `paint_clearance.py`: road marks `deep` **6 → 0**, `in c'way`
+6 → **0**, `under hi` 1.2 → 1.1% (194 → 184), `on kerb` 0.47 → 0.45%, coverage 99.4% unchanged;
+boxes, arrows and tramway byte-for-byte the same table. `check.sh` exit 0, no shader errors.
+**Frames**: the touchdown at `--camera=850,30,252 --look=864,8.4,236` and MARSH ROAD from above at
+`--camera=780,20,515 --look=772,4,501`, each side twice, **0 px** differ at both — the refused paint
+was inside a slab the depth buffer already hid, which is the whole of why this class needed a counter
+and not a look; from under the ramp's edge at `--camera=779,3.85,507 --look=772,3.6,501`, **10 px** — the one-pixel slit of white the buried marking showed through the gap under the ramp, gone.
+
 **The counter that sees this revert.** `vertices_over_void` with `void_reach_m` on both stages: a
 vertex over no cap and no strip, and how far the nearest drawn edge was. It reads **442 of 24,435**
 on the boxes (reach p50 0.41 / max 1.29 m) and **268 of 24,636** on the road marks (p50 0.68 / max

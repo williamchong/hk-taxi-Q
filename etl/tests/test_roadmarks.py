@@ -577,6 +577,69 @@ class TestTheHeightJoin:
         assert mesh is not None
         assert downward_facing(mesh) == (0, 0.0)
 
+    def test_a_station_past_the_touchdown_under_a_drawn_deck_is_refused_and_a_kerb_one_kept(
+        self, spec
+    ):
+        """🔴 `Q92`'s deck stub, and the mutation it must fail on.
+
+        A level-0 street ends at x = 10 and a level-1 deck is drawn from x = 8
+        on. A band quad hosted on the street and running to x = 14 is cut at
+        the street's end line; the piece past it is over nothing at level 0 and
+        under the deck, so it is refused and counted in metres — never placed
+        52-131 mm under the deck as the Interchange stub was. The piece on the
+        street is placed as it was. ⚠️ A quad past the *kerb*, over nothing at
+        level 0 with nothing drawn above it, is placed and counted over void:
+        that is the population `Q54` protects, and a rule written as "over void
+        → refuse" fails here.
+        """
+        street = {"id": 0, "polyline": [[0.0, 8.3, 0.0], [10.0, 8.3, 0.0]], "elevation_level": 0}
+        deck = {"id": 1, "polyline": [[8.0, 8.5, 0.0], [20.0, 8.6, 0.0]], "elevation_level": 1}
+        surface = {"ribbons": [ribbon_of(street, half_width_m=4.0), ribbon_of(deck, 4.0)]}
+        assert DrawnSurface.levels_drawn(surface) == [0, 1]
+        drawn = DrawnSurface.of(surface, level=0)
+        above = [
+            DrawnSurface.of(surface, level=level)
+            for level in DrawnSurface.levels_drawn(surface)
+            if level > 0
+        ]
+        assert len(above) == 1
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
+        report = RoadMarkReport()
+        # Clockwise in `(x, z)`, as `band_quads` winds them; the second edge
+        # runs along the marking, as `_band_quad`'s does.
+        astride = np.array([[4.0, 0.1], [14.0, 0.1], [14.0, -0.1], [4.0, -0.1]])
+        _place(builder, drawn, astride, spec.lift_m, report, 0.0, above)
+        assert report.polygons_split == 1
+        assert report.stations_on_drawn_structure == 1
+        assert report.on_drawn_structure_m == pytest.approx(4.0)
+        assert report.vertices_over_void == 0
+        assert report.pieces_placed >= 1
+        mesh = builder.build("roadmarks")
+        assert mesh is not None
+        assert mesh.positions[:, 0].max() == pytest.approx(10.0)
+        assert mesh.positions[:, 1] == pytest.approx(8.3 + spec.lift_m)
+
+        # Past the kerb: z from 4.1 to 4.5 is beyond the 4.0 m half-width, and
+        # the deck does not start until x = 8.
+        past_kerb = np.array([[4.0, 4.5], [6.0, 4.5], [6.0, 4.1], [4.0, 4.1]])
+        _place(builder, drawn, past_kerb, spec.lift_m, report, 0.0, above)
+        assert report.stations_on_drawn_structure == 1
+        assert report.vertices_over_void == 4
+
+        # Under the deck but with nothing to refuse it: a region that draws no
+        # level above the street builds `above == []` and places the void piece,
+        # counted over void as before.
+        alone = RoadMarkReport()
+        street_alone = {"ribbons": [ribbon_of(street)]}
+        assert [level for level in DrawnSurface.levels_drawn(street_alone) if level > 0] == []
+        _place(FlatBuilder(ROADMARKS_MATERIAL), drawn, astride, spec.lift_m, alone, 0.0, [])
+        assert alone.stations_on_drawn_structure == 0
+        assert alone.on_drawn_structure_m == 0.0
+        # Two of the void piece's corners stand on the street's end line and
+        # count as covered (`sample`'s rule for a cut corner); the two past it
+        # are over nothing.
+        assert alone.vertices_over_void == 2
+
 
 class TestTheBlockIsOptional:
     """A city that publishes no transverse markings ships none."""

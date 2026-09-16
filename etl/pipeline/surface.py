@@ -1184,6 +1184,28 @@ class DrawnSurface:
             crease_cells=_bin_by_plan_box(creases),
         )
 
+    @staticmethod
+    def levels_drawn(surface: dict[str, Any]) -> list[int]:
+        """Every level `of` would accept for this manifest, ascending: a level
+        with at least one cap ring or one ribbon drawn. `of` refuses a level
+        with nothing drawn, so a caller reading above level 0 asks this rather
+        than guessing from `elevation_levels`."""
+        levels = {int(cap["level"]) for cap in surface.get("caps", ()) if len(cap["ring"]) >= 3}
+        levels |= {int(ribbon["level"]) for ribbon in surface.get("ribbons", ())}
+        return sorted(levels)
+
+    def covers(self, x: float, z: float, *, toward: np.ndarray | None = None) -> bool:
+        """Whether anything drawn at this level — a cap or a strip — stands over
+        the point; with `toward`, over the point a tenth of a millimetre into
+        the piece `toward` is the centroid of, so a corner *on* a drawn edge
+        answers for its piece's side of it (`sample`'s rule). `sample` says the
+        same and more, at the price of a ring search for the nearest edge when
+        the answer is no."""
+        if toward is not None:
+            x, z = _stepped_into(x, z, toward)
+        cap, ribbon = self._covering(x, z)
+        return cap is not None or ribbon is not None
+
     def sample(self, x: float, z: float, *, toward: np.ndarray | None = None) -> DrawnHeight:
         """The drawn road at this plan position, and what answered for it.
 
