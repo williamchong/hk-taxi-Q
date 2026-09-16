@@ -508,6 +508,18 @@ def undersides(hits: np.ndarray, coincident_m: float = _COINCIDENT_M) -> np.ndar
 
 def hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
     """Interpolated height of every triangle covering `(x, z)`, in no order."""
+    return covered(corners, x, z)[1]
+
+
+def covered(corners: np.ndarray, x: float, z: float) -> tuple[np.ndarray, np.ndarray]:
+    """Which triangles cover `(x, z)`, as a mask over `corners`, and the
+    interpolated height of each one that does, in mask order.
+
+    The mask is what lets a caller holding a mixed pack of triangles — the
+    drawn caps and carriageway strips `surface.DrawnSurface` bins into one plan
+    cell — tell which kind answered without a second pass, and it is the one
+    barycentric test in the pipeline: `hits` is this with the mask dropped.
+    """
     ax, az = corners[:, 0, 0], corners[:, 0, 2]
     bx, bz = corners[:, 1, 0] - ax, corners[:, 1, 2] - az
     cx, cz = corners[:, 2, 0] - ax, corners[:, 2, 2] - az
@@ -523,10 +535,10 @@ def hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
 
     hit = (beta * scale >= 0.0) & (gamma * scale >= 0.0) & ((beta + gamma) * scale <= magnitude)
     if not hit.any():
-        return _NO_HITS
+        return hit, _NO_HITS
 
     beta, gamma = beta[hit] / twice_area[hit], gamma[hit] / twice_area[hit]
-    return (
+    return hit, (
         corners[hit, 0, 1]
         + beta * (corners[hit, 1, 1] - corners[hit, 0, 1])
         + gamma * (corners[hit, 2, 1] - corners[hit, 0, 1])

@@ -142,12 +142,22 @@ class BoxJunctionReport:
     # of its paint is on cap tarmac — and it goes to **zero** the moment
     # `roadsurface.json` stops publishing `caps` or publishes them at the wrong
     # level, which is the one way this fix reverts with every partition still
-    # closing. `over_cap_rise_m` is how far the cap stands above the centreline
-    # the old model would have used, so it also says whether the caps matter
-    # here rather than merely being read.
+    # closing. `over_cap_rise_m` is how far the cap stands above the carriageway
+    # strip it overlaps, so it also says whether the caps matter here rather
+    # than merely being read.
     vertices_drawn: int = 0
     vertices_over_cap: int = 0
     over_cap_rise_m: list[float] = field(default_factory=list)
+    # 🔴 **The tripwire on the RAIL join (`P3-32`'s residue).** A vertex over
+    # nothing drawn — no cap, no carriageway strip — takes the nearest drawn
+    # edge's height, `void_reach_m` away in plan. It reads **every vertex** if
+    # `roadsurface.json` stops publishing `ribbons`, the one way that half of
+    # `DrawnSurface` reverts with every partition still closing; and it is
+    # reachable rather than a tautology — HUNG HING ROAD's box 8 has four
+    # vertices in the quarter-metre gap before a flank starts, and the paint
+    # `box_extent.py` reads past the kerb lands here too.
+    vertices_over_void: int = 0
+    void_reach_m: list[float] = field(default_factory=list)
 
     ring_vertices: list[float] = field(default_factory=list)
     area_m2: list[float] = field(default_factory=list)
@@ -556,7 +566,6 @@ def build_region(
     # the caps as well: a cap on the deck overhead is not what a street marking
     # is painted on.
     drawn = DrawnSurface.of(
-        segments,
         read_document(
             out_dir / SURFACE_MANIFEST_NAME,
             SURFACE_MANIFEST_SCHEMA,
@@ -665,7 +674,13 @@ def _place(
         report.vertices_drawn += 1
         if drawn_here.cap_m is not None:
             report.vertices_over_cap += 1
-            report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
+            # Over the strip the cap overlaps, where there is one: a cap over
+            # the void between two arms has no ribbon to stand above.
+            if drawn_here.ribbon_m is not None:
+                report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
+        if drawn_here.over_void:
+            report.vertices_over_void += 1
+            report.void_reach_m.append(drawn_here.reach_m)
     builder.polygon(polygon, np.asarray(heights) + lift_m)
     return heights
 
@@ -712,6 +727,10 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: BoxJunc
         "vertices_drawn": report.vertices_drawn,
         "vertices_over_cap": report.vertices_over_cap,
         "over_cap_rise_m": report.measured(report.over_cap_rise_m),
+        # 🔴 The tripwire on the rail join — see `BoxJunctionReport`. Reads every
+        # vertex the moment `ribbons` stops being published.
+        "vertices_over_void": report.vertices_over_void,
+        "void_reach_m": report.measured(report.void_reach_m),
         "ring_vertices": report.measured(report.ring_vertices),
         "area_m2": report.measured(report.area_m2),
         "total_area_m2": round(report.total_area_m2, 4),

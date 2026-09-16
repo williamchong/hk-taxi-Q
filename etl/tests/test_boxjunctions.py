@@ -27,9 +27,8 @@ from pipeline.boxjunctions import (
 )
 from pipeline.config import load_config
 from pipeline.meshbuild import FlatBuilder
-from pipeline.polyline import Segments
 from pipeline.surface import DrawnSurface, downward_facing
-from tests.helpers import CITY_YAML, polygon_area
+from tests.helpers import CITY_YAML, polygon_area, ribbon_of
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in
 # `helpers.py`'s `CITY_YAML` because the block is optional by contract, and the
@@ -271,11 +270,10 @@ class TestTheGeometry:
             "direction": "both",
             "elevation_level": 0,
         }
-        segments = Segments.of([sloped])
         builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         polygon = np.array([[2.0, -1.0], [18.0, -1.0], [18.0, 1.0], [2.0, 1.0]])
         # No caps: the ribbon alone, which is the case this test is about.
-        drawn = DrawnSurface.of(segments, {"caps": []})
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(sloped)]})
         _place(builder, drawn, polygon, spec.lift_m, BoxJunctionReport())
         mesh = builder.build("boxjunctions")
         assert mesh is not None
@@ -307,7 +305,6 @@ class TestTheGeometry:
             "direction": "both",
             "elevation_level": 0,
         }
-        segments = Segments.of([low, high])
         # A cap standing 0.5 m over both arms — higher than any blend of them
         # could ever reach, so the two models cannot be confused here.
         cap = {
@@ -319,7 +316,7 @@ class TestTheGeometry:
                 [-5.0, 0.5, 4.0],
             ],
         }
-        drawn = DrawnSurface.of(segments, {"caps": [cap]})
+        drawn = DrawnSurface.of({"caps": [cap], "ribbons": [ribbon_of(low), ribbon_of(high)]})
         builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         polygon = np.array([[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0], [-2.0, 2.0]])
@@ -335,7 +332,7 @@ class TestTheGeometry:
         """⚠️ The way this fix reverts silently, pinned.
 
         A `roadsurface.json` that stops publishing `caps` leaves every vertex on
-        the nearest centreline — which is what shipped before `Q92` — with both
+        the carriageway strip — which is what shipped before `Q92` — with both
         partitions still closing and `inverted` still 0. `vertices_over_cap` is
         the only thing that says so, which is why it must reach zero here rather
         than being a count that cannot.
@@ -347,12 +344,36 @@ class TestTheGeometry:
             "direction": "both",
             "elevation_level": 0,
         }
-        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": []})
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(arm)]})
         builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 1.0]]), 0.012, report)
         assert report.vertices_drawn == 3
         assert report.vertices_over_cap == 0
+        assert report.vertices_over_void == 0
+
+    def test_a_stage_with_no_ribbons_reads_every_vertex_over_void_and_says_so(self, spec):
+        """⚠️ The other silent revert (`P3-32`'s residue), pinned the same way.
+
+        A `roadsurface.json` that stops publishing `ribbons` leaves every vertex
+        off the caps snapping to the nearest cap *edge* — the paint still draws,
+        every partition still closes — and `vertices_over_void` is the counter
+        that reads the whole layer for it. Reachable, not a tautology: a vertex
+        inside the cap below reads 0 and the one outside it reads 1, with its
+        reach.
+        """
+        cap = {
+            "level": 0,
+            "ring": [[-5.0, 1.0, -4.0], [5.0, 1.0, -4.0], [5.0, 1.0, 4.0], [-5.0, 1.0, 4.0]],
+        }
+        drawn = DrawnSurface.of({"caps": [cap]})
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
+        report = BoxJunctionReport()
+        _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 7.0]]), 0.012, report)
+        assert report.vertices_drawn == 3
+        assert report.vertices_over_cap == 2
+        assert report.vertices_over_void == 1
+        assert report.void_reach_m == pytest.approx([3.0])
 
     def test_a_cap_on_another_level_is_not_the_road_under_this_paint(self, spec):
         """⚠️ Level 0 only, the restriction every snap in the pipeline makes.
@@ -371,7 +392,7 @@ class TestTheGeometry:
             "level": 1,
             "ring": [[-5.0, 9.0, -4.0], [5.0, 9.0, -4.0], [5.0, 9.0, 4.0], [-5.0, 9.0, 4.0]],
         }
-        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [overhead]}, level=0)
+        drawn = DrawnSurface.of({"caps": [overhead], "ribbons": [ribbon_of(arm)]}, level=0)
         assert drawn.cap_height_at(0.0, 0.0) is None
         assert drawn.height_at(0.0, 0.0) == pytest.approx(0.0)
 

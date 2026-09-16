@@ -32,7 +32,7 @@ from pipeline.roadmarks import (
     band_quads,
 )
 from pipeline.surface import DrawnSurface, downward_facing
-from tests.helpers import CITY_YAML
+from tests.helpers import CITY_YAML, ribbon_of
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in
 # `helpers.py`'s `CITY_YAML` because the block is optional by contract, and the
@@ -530,20 +530,16 @@ class TestTheHeightJoin:
     """Each vertex takes a blended height, because a junction mouth is a seam."""
 
     def test_a_bar_across_a_graded_street_follows_it(self, spec):
-        segments = Segments.of(
-            [
-                {
-                    "id": 1,
-                    "polyline": [[0.0, 0.0, -20.0], [0.0, 2.0, 20.0]],
-                    "width_m": 6.4,
-                    "elevation_level": 0,
-                }
-            ]
-        )
+        graded = {
+            "id": 1,
+            "polyline": [[0.0, 0.0, -20.0], [0.0, 2.0, 20.0]],
+            "width_m": 6.4,
+            "elevation_level": 0,
+        }
         # Stationing exists so a long bar samples the grade rather than chording
         # across it; on a bar drawn *across* the grade the heights agree, which
         # is what makes `height_spread_m` p50 0.021 m in region.
-        drawn = DrawnSurface.of(segments, {"caps": []})
+        drawn = DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(graded)]})
         heights = [drawn.height_at(0.0, z) for z in (-10.0, 10.0)]
         assert heights[0] < heights[1]
 

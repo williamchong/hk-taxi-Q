@@ -40,7 +40,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 
@@ -88,13 +88,6 @@ ROADMARKS_MESH_NAME = "roadmarks"
 # same white paint and one material is one draw call.
 ROADMARKS_MATERIAL = "roadmarks"
 
-
-# Slack on `_reachable`'s narrowing, in metres. ⚠️ **Arbitrary, and deliberately
-# on the generous side** — `_reachable` proves `d_min + 2r` is already exact for
-# a plain nearest, so every metre here is surplus. It is kept because the two
-# errors are not symmetric: too generous costs a few projections a marking, too
-# tight silently changes an answer. Do not read it as derived from anything.
-_REACH_MARGIN_M = 3.0
 
 # Below this, a dash module's last painted run is rounding rather than paint.
 # The same shape of bar as `meshbuild.MIN_TWICE_AREA_M2` and it exists for a measured
@@ -216,6 +209,14 @@ class RoadMarkReport:
     # read — the one way the fix reverts with every partition still closing.
     vertices_drawn: int = 0
     vertices_over_cap: int = 0
+    # 🔴 **The tripwire on the RAIL join (`P3-32`'s residue)**: a vertex over
+    # nothing drawn — no cap, no carriageway strip — takes the nearest drawn
+    # edge's height, `void_reach_m` away. It reads **every vertex** if
+    # `roadsurface.json` stops publishing `ribbons`, which is the one way that
+    # half of `DrawnSurface` reverts with every partition still closing; and it
+    # is reachable, not a tautology — a bar drawn past the kerb lands here.
+    vertices_over_void: int = 0
+    void_reach_m: list[float] = field(default_factory=list)
 
     # Triangles dropped for being thinner than the engine's import lattice, and
     # the lattice pitch they were judged against — `boxjunctions._import_quantum_m`
@@ -774,13 +775,13 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
 
     🔴 **A longitudinal marking must be ON its host, and the bar is that host's
     own drawn half-width rather than a number anyone chose.** `DrawnSurface`
-    resolves a plan point to the nearest level-0 *centreline*, which is the right
-    rule for a bar at a junction mouth and the wrong one where a level-0 ramp
+    reads the highest drawn surface covering a plan point, which is the right
+    rule for a bar at a junction mouth and no rule at all where a level-0 ramp
     climbs beside a street. ⚠️ **Two separate facts, and they are not the same
     edges**: level-0 heights climb by up to **7.87 m** along a single edge here
     (`e465` CROSS HARBOUR TUNNEL, which is *not* on structure), and **16** other
     level-0 edges do stand on structure. Either way two level-0 ribbons stack in
-    plan, and the nearest centreline is then not the surface the paint sits on.
+    plan, and nothing published says which one the paint sits on.
     Measured: refusing these took the buried share
     `tools/paint_clearance.py` gates from **1.50% to 0.21%** and the worst height
     spread across one marking from **4.51 m to 1.18 m**.
@@ -814,69 +815,6 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
     if marking.mark.transverse:
         return True
     return host.distance_m <= 0.5 * host.width_m
-
-
-def _reachable(
-    segments: Segments, marking: Marking, host: Host, quads: list[np.ndarray]
-) -> Segments:
-    """The segments that can be nearest to any vertex of this marking.
-
-    ⚠️ **A narrowing, not an approximation — the heights it produces are
-    bit-identical.** For a marking whose vertices all lie within `r` of its
-    midpoint, `|d(vertex, s) - d(midpoint, s)| <= r`, so a segment further than
-    `d_min + 2r` from the midpoint is nearest to no vertex of it and cannot be
-    chosen. Keeping the rest changes no answer.
-
-
-    🔴 **Both figures below were measured before `RM1001` and are restated
-    (`Q118`).** A marking is no longer a 10 m bar: vertices went **9,084 →
-    24,648** and the mean kept set **6.3 → 14.4** segments, with `RM1001` alone
-    at 32.6 and a worst of **306** — 10.3% of the network. The narrowing still
-    earns its keep decisively, **1.25 M projections against 72.9 M unnarrowed**.
-
-    🔴 **But per-marking work is now cubic in marking length, and that is
-    measured rather than feared.** The cutoff is `d_min + 2r` with `r ≈ L/2`, so
-    the kept set is the segments in a disc of radius ≈ L — `∝ L²` — while the
-    vertex count is `∝ L`. Projections grew **17.4x** on **2.7x** the vertices,
-    and **8 markings carry 69%** of them. ⚠️ **It is invisible today**: wall time
-    grew only 2.2x, because at 14.4 segments the loop is bound by numpy's
-    per-call dispatch and not by arithmetic.
-
-    ⚠️ **The fix is priced and NOT taken.** Narrowing again per window of ~64
-    vertices inside the already-narrowed set costs nothing and makes the work
-    linear — 1,252,308 → 181,884 projections — and batching the per-vertex
-    `sample` loop (47% of the stage's compute, 24,648 scalar numpy round-trips)
-    measured **378 → 155 ms**. Both were left: the stage is 1.2 s, the win is
-    ~0.22 s of build time no player waits on, and batching needs a new
-    `Segments.nearest_many` and `DrawnSurface.sample_many` in two modules other
-    stages share. ⚠️ **It would also not be bit-identical** — heights agree to
-    9.9e-11 m, argmin tie-breaking where two segments are equidistant — so it
-    moves the mesh, which is a bigger claim than the saving is worth. Take it
-    when a region makes the cubic term bite, and take both halves together.
-
-    ⚠️ **The reason it is worth the fifteen lines is the second city, not this
-    one.** Vertices scale with region area and so do segments, so the unnarrowed
-    join is quadratic in area: 9,084 vertices x 2,959 segments is 27 M
-    projections and 0.30 s here, but the same density over 50 km² is ~30 G and
-    minutes. Narrowed, the region's markings see a mean of **6.3** segments each.
-    `host.distance_m_all` is reused rather than recomputed, so this costs no
-    extra scan at all.
-    """
-    distance = host.distance_m_all
-    midpoint = marking.midpoint
-    corners = np.vstack(quads) if quads else marking.line
-    radius = float(np.linalg.norm(corners - midpoint, axis=1).max())
-    cutoff = float(distance.min()) + 2.0 * radius + _REACH_MARGIN_M
-    keep = distance <= cutoff
-    return replace(
-        segments,
-        start=segments.start[keep],
-        delta=segments.delta[keep],
-        length_m=segments.length_m[keep],
-        before_m=segments.before_m[keep],
-        total_m=segments.total_m[keep],
-        edge=segments.edge[keep],
-    )
 
 
 def build_region(
@@ -919,7 +857,7 @@ def build_region(
     # restriction as `edges` above, applied to the caps too. A stop line lives
     # *at* a junction mouth, so more of this layer stands on cap tarmac than of
     # any other, and the blend it replaced was furthest wrong exactly there.
-    drawn = DrawnSurface.of(segments, surface, level=0)
+    drawn = DrawnSurface.of(surface, level=0)
 
     builder = FlatBuilder(ROADMARKS_MATERIAL)
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
@@ -936,14 +874,14 @@ def build_region(
         report.axis_residual_deg.append(host.residual_deg)
         # 🔴 **A longitudinal marking must lie ON the road it is hosted to, and
         # the bar is that road's own drawn half-width rather than a number.**
-        # `DrawnSurface.sample` resolves height by nearest *centreline*, so where
-        # a level-0 ramp climbs beside a street — heights climb up to 7.87 m
-        # along one edge, and 16 others stand on structure — a line whose host
-        # centreline is further off than its true carriageway takes a height
-        # metres from the surface under it. A
-        # transverse bar is allowed its distant host on purpose (it starts on the
-        # far kerb of a four-lane mouth); a line painted *along* a carriageway has
-        # no such licence, so this refuses rather than places it wrong (`Q54`).
+        # Where a level-0 ramp climbs beside a street — heights climb up to
+        # 7.87 m along one edge, and 16 others stand on structure — two drawn
+        # ribbons stack in plan, and `DrawnSurface.sample` reads the higher
+        # (its rule for every overlap) with nothing published to say the line
+        # is on that one rather than the lower. A transverse bar is allowed its
+        # distant host on purpose (it starts on the far kerb of a four-lane
+        # mouth); a line painted *along* a carriageway has no such licence, so
+        # this refuses rather than places it wrong (`Q54`).
         if not _on_its_own_carriageway(marking, host):
             report.host_off_carriageway += 1
             continue
@@ -958,15 +896,18 @@ def build_region(
             continue
 
         quads = band_quads(marking, spec)
-        near = drawn.narrowed_to(_reachable(segments, marking, host, quads))
         heights: list[float] = []
         for quad in quads:
-            drawn_here = [near.sample(float(px), float(pz)) for px, pz in quad]
+            drawn_here = [drawn.sample(float(px), float(pz)) for px, pz in quad]
             vertex_heights = [sample.height_m for sample in drawn_here]
             builder.polygon(quad, np.asarray(vertex_heights) + spec.lift_m)
             heights.extend(vertex_heights)
             report.vertices_drawn += len(drawn_here)
             report.vertices_over_cap += sum(1 for s in drawn_here if s.cap_m is not None)
+            for sample in drawn_here:
+                if sample.over_void:
+                    report.vertices_over_void += 1
+                    report.void_reach_m.append(sample.reach_m)
 
         report.drawn += 1
         report.drawn_by_id[marking.mark.id] = report.drawn_by_id.get(marking.mark.id, 0) + 1
@@ -1078,6 +1019,10 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         # has gone back to guessing the road's height reads.
         "vertices_drawn": report.vertices_drawn,
         "vertices_over_cap": report.vertices_over_cap,
+        # 🔴 The tripwire on the rail join — see `RoadMarkReport`. Reads every
+        # vertex the moment `ribbons` stops being published.
+        "vertices_over_void": report.vertices_over_void,
+        "void_reach_m": report.measured(report.void_reach_m),
         # Fragments thinner than two cells of the engine's import lattice,
         # dropped before they could come back winding-flipped. The pitch is
         # published beside the count so the bar is checkable from a shipped

@@ -120,7 +120,7 @@ wins.
 | `Q89` | **The low end needed the opposite correction, and tracking it was unstable** | ✅ Closed — `drift_rear_grip_scale_at_low` **0.44** and `drift_low_fade_kph` **41** deepen the cut as speed falls. ✅ **The drift now works 34–86 km/h**, dwell 0.42–0.98, where 42 and 49 km/h were 3.9° and 2.9° — inert. 🔴 **The yaw assist cannot substitute**: at 42 km/h slip *falls* 4.2° → 3.6° as torque goes 0 → 20000, the top of its range. 🔴 **A tracking taper is unstable below the knee** — a drift scrubs speed, so deepening the cut as speed falls is positive feedback, and it turned the design speed into a **165.0° spin**. Fixed by latching at engagement; the branch that is stable tracks, the one that is not latches, and the asymmetry is deliberate. 🔴 **Re-publishes the design-speed table** — 63 km/h 51.1° → 69.8°, tap 16.0° → 20.5° — because 63 sits inside the new taper by construction |
 | `Q90` | **Every hole in the structure is a touchdown, and the sampler clamps where it should descend** | ✅ Closed — `INFRASTRUCTURE` stops where a ramp reaches grade, and `_deck_heights` answered an *end* hole with `np.interp`'s clamp, so the ribbon hung level in the air to the node: **1.83 m** at node 175 `FLEMING ROAD`, a flyover visibly afloat over the street, **found by the user driving to it**. ✅ **8 ends descended, 1 refused**, every one landing at +0.00; mixed-node step median 0.184 → **0.000 m**, 24 → **29 of 36** inside 0.5 m, worst non-portal **1.83 → 0.67**. 🔴 **Zero interior holes region-wide**, so the interpolation the branch was written for never fired. 🔴 **`deck_error.py` cannot see this and never could** — an absent deck reads as *uncovered*, not wrong — so it owes `tools/touchdown_error.py`, which fails the pre-fix bundle. ⚠️ The grade is ribbon-to-ribbon: reading it off the deck top drops `clearance_m` and understated every row. ⚠️ **One refusal, not the two predicted** — the negative step descends fine, and that prediction confused the two ends of the ramp. ✅ **The refusal was then looked at**: the `MARSH ROAD` deck ends in a 0.65 m vertical face 1.8 m past node 269, so the missing descent is the 10 m of level-0 `e466` beyond it, and the region has **one** real residual rather than seven — every other stepped node is (deck above the street) + `clearance_m` inside `at_grade_m`. ⬜ **Closing it needs a node-level pass and is unassigned**: `e466` has structure under 0 of its 2 stations, so the height lives on the neighbouring edge |
 | `Q91` | **The markings were disappearing into the pixel grid, and no counter could see it** | ✅ Closed — `anti_aliasing/quality/msaa_3d` **2** (4x). The 0.1 m box junction hatch is **one pixel tall at 13.6 m** on the chase rig, and with MSAA off a sub-pixel line is lit only where a pixel centre lands inside it, so it broke into dashes and then vanished — **found by the user from the driving seat, twice**. 🔴 **Every ETL counter was correct throughout**: 20 of 20 boxes drawn, `inverted` 0, `slivers_dropped` 2,032 at the declared quantum, and a top-down raster of the shipped `boxjunctions.glb` is a complete grid. The defect existed only in the raster. ⚠️ **Coverage is conserved and only continuity is lost** (0.0580 vs 0.0574 of the same world area at two resolutions), so no lift, colour or width change could have reached it. ⚠️ **Verified on both renderers including a real web export in Chrome**; 8x refused because WebGL2 caps `MAX_SAMPLES` at 4. 🔴 **0 draw calls and 0 primitives**, so `ARCHITECTURE.md`'s budget cannot see this change at all. ⬜ Mobile cost **unmeasured and unmeasurable today** — no floor handset, `P0-3b` |
-| `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ⬜ The **9.4%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
+| `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ✅ **The ribbon half read the rails too, 2026-09-16 (`P3-32`'s residue)**: the first reader took the ribbon from the nearest level-0 *centreline* — flat across, infinitely wide, owned by whichever centreline was nearest — and eleven box triangles were under the road for it (HKCEC read a 5.12 m ribbon that did not reach the point instead of the 7.34 m one that did). `roadsurface.json` **9 → 10** publishes `ribbons` (every drawn strip's two rails in `strip`'s order) and `DrawnSurface` rebuilds the strip's own quads; a point over nothing drawn takes the nearest drawn *edge*, no radius. Boxes deep **11 → 3**, under the top face **9.3 → 3.7%**; road marks **25 → 11** and **16.0 → 1.4%**; `roads.glb` and every other file byte-identical, both paint meshes plan-identical with only Y moved. ⬜ The **3.7%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
 | `Q93` | **The turn arrows were authored, not read, and the branch reused the ahead head's length** | ✅ Closed — `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and **no other dimension**, so the shape can come from nowhere but TD's own pictogram; read at 700 dpi off two cells that agree, **every authored figure was wrong**. Ahead head **0.325 → 0.390** long and **0.235 → 0.122** across (nearly twice the drawing); the stem was a uniform 0.085 where the drawing **tapers 0.076 → 0.032**. 🔴 **One of them was a defect rather than a difference**: `shoulder = reach - head_length` with a reach of 0.28 against a head of 0.325 is **negative**, so the turn head's base landed 0.18 m past the *far* side of the stem and swallowed it — a blob on **416 of 747** drawn arrows, shipped since `P3-15`. ✅ `branch_head_length_frac`/`_width_frac` split it out and `config.py` refuses `branch_reach_frac <= branch_head_length_frac`. ✅ **The ratchet is dimension-independent**: a test asserts no head overlaps the stem, mutation-checked at 0.00 m² on the fix, **0.137 m²** on the reused length and **0.620 m²** on the exact pre-fix config. Every counter unchanged — `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `inverted` 0, 3,246 triangles. 🔴 **Amended the same day, from the driving seat: the branch is now AUTHORED and the measured figures are declined.** TD's branch head is genuinely wider than it is deep — its barbs do the work — so a plain triangle at 0.150/0.100/0.233 is a mushroom on the shaft, and a faithful six-point dart (overlay agreement 0.831 → **0.874**) is a detached diamond whose 0.09 m barbs `Q91`'s sub-pixel problem eats anyway. It ships as an arrowhead longer than it is wide, sized against the frame. ✅ **The sheet itself is vindicated**: `RM1016` publishes `SIZE = 5600(H) x 2000` and its pictogram measures **2.802** against 2.800, so NOT TO SCALE means no scale bar rather than stylised, and the ahead head and stem stay measured |
 | `Q94` | **Two arrows with different instructions land in one lane, because the lane count is invented** | 🟢 **Closed 2026-08-29 — the count is sourced and the defect fell 51 → 35 → 24.** The lane registration snaps a published offset to one of `ribbon.lanes` slots, and that count is authored from the speed-limit table; where the real carriageway is wider, two symbols collapse into one slot and draw **one shaft wearing two branches**, which is an instruction the world does not contain. Found from the driving seat on STEWART ROAD. **89 pairs stacked in one lane, 51 of them disagreeing**, of 747 drawn. On HENNESSY ROAD `e239` a `right` published 4.52 m out and an `ahead` published 1.63 m out both land at −2.56 m. ✅ `arrows.json` publishes `stacked_pairs` and `stacked_disagreeing`, reachable at zero and mutation-checked; every other counter was correct throughout and `inverted` read 0. 🔴 **The finding is that the arrows are themselves a lane-count source** — a row across a carriageway is the count, written down: **31 of 306** arrow-carrying edges imply more lanes than the graph has, nine of them four against two. That narrows `Q57`'s narrowing of `Q19` again, from a layer already in the bundle. ✅ **The row was made to ASSIGN 2026-08-29**: it resolves the brackets `Q95`'s measured width leaves ambiguous, so `lanes` is measured on **210 of 737** edges (**57** from a row) and `stacked_disagreeing` reads **24**. 🔴 **A row of ONE arrow is refused, not floored** — the row is a *lower bound* on lanes, so at one abreast it states a marking. 🔴 **Ambiguous brackets only**, which keeps `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction. ⬜ Left: the 10 edges with a row and no measured width, **STEWART ROAD among them** |
 | `Q95` | **The authored carriageway width is outside the range Hong Kong permits** | 🟢 **Largely answered 2026-08-29 — instrument built, extended, and the width assigned the same day**: `width_m` is measured on **292 of 737** level-0 edges (`width_source`), the widening is a floor (`max(width_m, floor)`), and the re-baseline moved every registered layer. Before it, `width_m` was `lanes x lane_width_m` = **6.4 m** on 720 of 737 edges. TD's Transport Planning & Design Manual Vol 2 Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway — so the authored width is not merely underived, it is **below every figure TD publishes**. ✅ STEWART ROAD's measured **14.81 m** is corroborated by the same table: a 13.5 m four-lane carriageway plus a parking strip, reconcilable with no two-lane figure. ✅ **And the standard supplies the bound the width instrument lacks** — the widest urban carriageway is 13.5 m (15.8 on a tight curve), so a two-sided ray returning **36.09 m on LUNG WO ROAD** is a citable refusal rather than a suspicion. 🔴 **A standard is not a survey**: it says what a road should be, so it cannot give a per-edge width and using it to assign one would repeat the move `Q54` argues against. ✅ The instrument was rebuilt the same day — the two-sided span, the pair split and the crossing rule — and `pipeline/carriageway.py` is the deliberate second implementation the survey ships through; the full record below has the numbers |
@@ -14280,6 +14280,92 @@ where the kerb half would be answered. Unassigned.
 its two callers went to zero in the same change, and a public function with a measured finding in its
 docstring and no caller is the next reader's trap.
 
+### The ribbon half, 2026-09-16 — the reader had no rails (`P3-32`'s residue)
+
+`P3-32` left eleven box-junction triangles more than 10 mm under the carriageway and the record
+read them as two mechanisms in the paint stage. Classified vertex by vertex against the shipped
+bundle they were **three, and two of the three were misread**: at HKCEC (box 16, six triangles) the
+nearest centreline was `e660`, 6.2-7.1 m off, whose 5.12 m ribbon does not reach the point, while
+`e659`'s 7.34 m ribbon covers it 2.6 cm higher — the wrong ribbon, not the mitre; at HUNG HING ROAD
+(box 8, four) a vertex in the quarter-metre gap before a flank starts took `e586`'s height from
+7.8 m away, 8.8 cm under the flank 0.17 m from it — as recorded; on WAN SHING STREET (box 9, one) a
+vertex inside its own ribbon on a 19.6° bend at -8.8% missed the mitre's along-displacement by a
+centimetre — `_off_line`'s mechanism, as recorded. One cause: **the ribbon case of `DrawnSurface` was
+still a model.** The caps were read from their published rings and the builder's own fan; the ribbon
+was *the nearest level-0 centreline's height at the projected station* — flat across, infinitely
+wide, and owned by whichever centreline is nearest, all three false.
+
+**The fix is the cap fix applied to the other half of the surface.** `roadsurface.json` **schema
+9 → 10** publishes `ribbons`: every drawn carriageway strip's two rails — post-trim, post-mitre,
+every inserted station — **in the order `_Builder.strip` received them**, recorded on the same two
+arrays the strip was emitted from, because the diagonal of each quad depends on that order and a
+point near the diagonal reads a different plane on the other one. `DrawnSurface._strip_corners`
+rebuilds the strip from the same two index triples the builder emits, the way `_fan_corners` does for
+a cap, and `sample` is: the highest cap covering the point, the highest strip covering it, the higher
+of the two where both do — and where **nothing** covers it, the height at the nearest drawn *edge*
+(rail segment, ribbon end line or cap ring edge), found by widening rings of the 16 m plan grid until
+every unseen segment is provably further than the best found. No centreline, no radius, no knob.
+`Segments` left the reader with it, and `roadmarks._reachable` — the narrowing that made a
+per-vertex centreline scan affordable, the one with the cubic-cost note — went with it, since an
+indexed strip needs no narrowing. A manifest that draws nothing at the level is refused at `of`.
+
+**What it bought** (`tools/paint_clearance.py`, Wan Chai, before → after):
+
+```
+                       under the top face     in the carriageway     deeper than 10 mm
+boxjunctions.glb       9.3%  ->  3.7%         22 -> 9  (0.22 -> 0.09%)    11 -> 3   (max 0.0171 -> 0.0129 m)
+roadmarks.glb         16.0%  ->  1.4%         52 -> 12 (0.43 -> 0.10%)    25 -> 11  (max 0.1311 both)
+arrows / tramway       unchanged — the control
+```
+
+Causeway Bay: boxes 8.5 → 6.5% under the top face, deep 2 → 3 (a 39.7 mm burial gone, three chords
+of 14-15 mm arrived); road marks 16.7 → 2.6%, deep 0.03 → 0.02%. **Inert where claimed**: every
+`roads/*.glb` chunk, `city.json` (timestamp aside), `carriageway[]`, `caps` and every other stage
+output byte-identical; both paint meshes triangle-for-triangle and plan-identical (10,165 and
+12,254), Y moved on 18,422 of 30,495 and 30,806 of 36,762 corners, |ΔY| p50 0.003 / 0.0005 m, p90
+0.044 / 0.037, range -0.17..+0.31 / -0.22..+0.39. `vertices_over_cap` unchanged at 18,870 of 24,435
+and 7,626 of 24,636; every partition closed, `inverted` 0. `roadsurface.json` 671 KB → 1.72 MB for
+792 ribbons over 5,641 stations — an intermediate that does not ship. **Build cost**: `boxjunctions`
+2.32 → **1.22 s** and `roadmarks` 1.81 → **1.34 s** once the review binned the index per *triangle*
+rather than per piece — a piece's box is loose on a diagonal ribbon (the worst covered 260 cells), so
+39% of the barycentric passes ran on points nowhere near it and each query cost 4.3 numpy calls; one
+`terrain.covered` call on the cell's own pack is 3.7x faster for byte-identical meshes, and the
+barycentric test stays the one copy in `terrain.py` (`hits` is now its mask-dropping wrapper).
+
+**The three that remain are not the reader's.** Two at BULLOCK LANE (box 1, 10.3 and 11.9 mm) are
+hatch strips chording across a creased cap fan — the ring's corners alternate 4.404 / 4.324 m about
+an apex at 4.323 — and read *clear* before only because the paint took the centreline's 4.384 and
+floated 4-5 cm above the cap; that is the chord residue the 10 mm bar exists for, and it closes by
+subdividing paint at the fan's creases, not by moving a height. The third at HUNG HING ROAD
+(12.9 mm) has a vertex in a 0.3 m gap between two flanks 8 cm apart in height — `e586`'s ends at
+4.308 short of `e529`'s at 4.384 — which is a step in the drawn surface that no paint height can
+satisfy and belongs to the flank rule. Causeway Bay's three are the same two shapes: two fan-crease
+chords and one seam where a cap sits 9 cm under the ribbon end it meets.
+
+**The counter that sees this revert.** `vertices_over_void` with `void_reach_m` on both stages: a
+vertex over no cap and no strip, and how far the nearest drawn edge was. It reads **442 of 24,435**
+on the boxes (reach p50 0.41 / max 1.29 m) and **268 of 24,636** on the road marks (p50 0.68 / max
+3.71 m), and it reads *every* vertex off a cap the moment `ribbons` stops being published — the one
+way this half reverts with every partition still closing. Reachable, not a tautology: a vertex inside
+a cap reads 0 and one outside it reads 1, pinned in `test_boxjunctions.py`. `over_cap_rise_m` is now
+the cap over the *strip it overlaps* (n 18,870 → 6,934; a cap over the void between arms has no
+ribbon to stand above), which is what its comment always claimed it measured.
+
+**Tests.** `test_the_query_reproduces_the_strip_the_builder_emits` samples 20 random points in every
+quad of a bent, graded, unevenly stationed strip against the mesh `_Builder.strip` built and then
+asserts the *swapped* rail order reads a different plane — without which a `_strip_corners` on the
+wrong triple passes; one test per mechanism (a wider ribbon covering the point beats a nearer
+centreline; a point over nothing takes the nearest drawn edge, the rail nearer than the flank, and a
+ribbon's end line rather than its rail extended); the ring search across 290 m of empty cells; and a
+manifest with nothing drawn refused. 2,247 pass, `check.sh` exit 0.
+
+**The evidence is a frame** (`Q62`): `city_preview.tscn` at `--camera=636,22,200 --look=651,1,176`
+(HUNG HING ROAD, box 8) and `--camera=230,22,222 --look=242,1,200` (HKCEC), `--debug-view=off
+--hud=off`, the before side synced from the pre-change bundle under the pre-change code, the paint
+meshes' import sidecars deleted before each side, each side shot until its hash repeated (two each):
+**2,121 px** differ at box 8 and **25,964 px** at HKCEC — hatch strips that stopped short in the
+median run through, and the black patch beside the box 16 median is gone. No shader errors.
+
 **See.** `Q91` for the projection that could not see this and the real second cause it did fix ·
 `Q53` for the cap overlap · `Q69` for the same shape of error on `underfill_m`, and for the
 `roadsurface.json` dependency this repeats · `Q58` for recording a distribution before its own guard ·
@@ -17745,10 +17831,12 @@ highest face 782 → 942; inside the carriageway 19 → 22, of which deeper than
 `lift_m` is not the answer** (`Q92`). At HUNG HING ROAD box 8 the flank stands at its own ribbon's
 4.384 m over ground whose *nearest* centreline is `e586` at 4.300 m, and a border triangle with one
 vertex over the void beyond the paint edge — placed at `DrawnSurface`'s nearest-centreline fallback —
-chords 1.5-1.7 cm under the flank's edge; the WAN SHING STREET and HKCEC rows are inserted stations on
-steep bends moving a mitred rail 1-7 cm off its old chord, `_off_line`'s documented mechanism and the
-kerb stations' own, under paint that keeps the graph's chord. Both are the paint reading the graph
-where there is no drawn surface, and belong to the paint stage. ✅ **A flank that stops inside another
+chords 1.5-1.7 cm under the flank's edge; the WAN SHING STREET row is an inserted station on a steep
+bend moving a mitred rail off its old chord, `_off_line`'s documented mechanism. ⚠️ **The HKCEC rows
+were misread here as the same mitre mechanism and are corrected in `Q92`**: they sit over `e659`'s
+7.34 m ribbon while the nearer centreline is `e660`'s, whose 5.12 m ribbon does not reach them — the
+wrong ribbon, 2.6 cm low. All three are one cause, `DrawnSurface`'s ribbon case reading a model
+instead of the rails, ✅ **closed the same day** (`Q92`, 11 → 3). ✅ **A flank that stops inside another
 ribbon now meets it at THAT ribbon's height** — built flat at its own it stood as a lip on the other
 carriageway, invisible in a frame and a step in the collider — **76 of 251** flank rings moved, |Δy|
 p50 **0.029** / p90 0.131 / **max 0.270 m** at HKCEC, where the two carriageways under box 16 sit on

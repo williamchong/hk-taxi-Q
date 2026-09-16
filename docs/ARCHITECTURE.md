@@ -1397,6 +1397,15 @@ hull ring in x/y/z, which with the ribbon heights is the whole of the drawn surf
 arriving ribbon actually ended. `surface.DrawnSurface` is the reader, and without it a marking guesses
 the road's height and sinks into it.
 
+⚠️ **And `ribbons` beside them** (`SURFACE_MANIFEST_SCHEMA` 9 → 10, `Q92`'s second half, 2026-09-16) —
+every drawn carriageway strip's two rails, post-trim and post-mitre with every inserted station, **in
+the order `_Builder.strip` received them** because each quad's diagonal depends on it. Until then the
+reader modelled the ribbon as the nearest centreline's height, flat across and infinitely wide, and
+eleven box-junction triangles were under the road for it: the covering strip is now rebuilt from the
+rails exactly as the caps are from their rings, and a point over nothing drawn takes the nearest drawn
+edge. Same owner, same reason: only `surface.py` knows where a rail actually went. An intermediate;
+the game reads none of it.
+
 ⚠️ **And a `clusters` block beside `join` (`P3-31`, no schema bump)** — `stub_edges`, `count`,
 `nodes`, `corridors` — and a `paint` block (`boxes_read`, `stations`, `flanks`, `flank_m2`) for `P3-32`'s flank caps because since `P3-31` one cap closes a whole cluster of nodes joined by stubs (edges
 clamped at both ends by `junction_trim_max_fraction`), and `caps[]` no longer has one ring per node.

@@ -497,3 +497,20 @@ def build_pair_graphs(city, tmp_path: Path, regions=("middle", "east")):
         for region in regions
     }
     return reports, docs
+
+
+def ribbon_of(arm: dict, half_width_m: float = 5.12) -> dict:
+    """A published `ribbons` row for a straight or bent arm: its two rails
+    offset `half_width_m` either side of the polyline, flat across, at the
+    polyline's own heights — what `surface.py` publishes for a ribbon with no
+    mitre worth the name. In `_Builder.strip`'s order: right rail first."""
+    points = np.asarray(arm["polyline"], dtype=np.float64)
+    step = np.diff(points[:, [0, 2]], axis=0)
+    step = np.vstack([step, step[-1:]])
+    step /= np.hypot(step[:, 0], step[:, 1])[:, None]
+    left = np.column_stack([step[:, 1], np.zeros(len(points)), -step[:, 0]]) * half_width_m
+    return {
+        "edge": int(arm["id"]),
+        "level": int(arm.get("elevation_level", 0)),
+        "rails": [(points - left).tolist(), (points + left).tolist()],
+    }

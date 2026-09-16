@@ -26,7 +26,7 @@ from pipeline.buildings import Grid
 from pipeline.config import load_config
 from pipeline.geometry import inside_polygon
 from pipeline.gltf import read_glb, read_render
-from pipeline.polyline import Segments, plan_lengths
+from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import (
     MARKING_CLASS_CAP,
@@ -70,6 +70,7 @@ from pipeline.surface import (
     read_surface,
     trim,
 )
+from tests.helpers import ribbon_of
 
 
 def _line(*points: tuple[float, float, float]) -> np.ndarray:
@@ -245,17 +246,6 @@ class TestDrawnSurface:
         )
         triangles = self._fan_of(ring)
         drawn = DrawnSurface.of(
-            Segments.of(
-                [
-                    {
-                        "id": 0,
-                        "polyline": [[-40.0, -50.0, -40.0], [-40.0, -50.0, -30.0]],
-                        "lanes": 2,
-                        "direction": "both",
-                        "elevation_level": 0,
-                    }
-                ]
-            ),
             {"caps": [{"level": 0, "ring": [list(corner) for corner in ring]}]},
         )
         rng = np.random.default_rng(11)
@@ -299,7 +289,7 @@ class TestDrawnSurface:
             "level": 0,
             "ring": [[-5.0, 0.0, -4.0], [5.0, 0.0, -4.0], [5.0, 0.4, 4.0], [-5.0, 0.4, 4.0]],
         }
-        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [cap]})
+        drawn = DrawnSurface.of({"caps": [cap], "ribbons": [ribbon_of(arm)]})
         transect = [drawn.height_at(0.0, float(z)) for z in np.arange(-10.0, 4.01, 0.1)]
         assert transect[0] == pytest.approx(0.0)
         assert transect[-1] == pytest.approx(0.4)
@@ -319,11 +309,11 @@ class TestDrawnSurface:
             "level": 0,
             "ring": [[-5.0, 1.0, -4.0], [5.0, 1.0, -4.0], [5.0, 1.0, 4.0], [-5.0, 1.0, 4.0]],
         }
-        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [sunken]})
+        drawn = DrawnSurface.of({"caps": [sunken], "ribbons": [ribbon_of(arm)]})
         assert drawn.cap_height_at(0.0, 0.0) == pytest.approx(1.0)
         assert drawn.height_at(0.0, 0.0) == pytest.approx(3.0)
 
-    def test_a_manifest_without_caps_reads_as_no_caps(self) -> None:
+    def test_a_manifest_without_caps_reads_from_the_strips(self) -> None:
         """⚠️ The silent revert, pinned at the reader. A manifest that stops
         publishing caps must leave the query on the ribbon rather than raise —
         it is the *consumers'* counters that have to notice, and they can only do
@@ -335,10 +325,121 @@ class TestDrawnSurface:
             "direction": "both",
             "elevation_level": 0,
         }
-        drawn = DrawnSurface.of(Segments.of([arm]), {})
-        assert drawn.fans == ()
+        drawn = DrawnSurface.of({"ribbons": [ribbon_of(arm)]})
         assert drawn.cap_height_at(0.0, 0.0) is None
         assert drawn.height_at(0.0, 0.0) == pytest.approx(2.0)
+
+    def test_a_manifest_that_draws_nothing_is_refused(self) -> None:
+        """No caps and no ribbons is not a surface with no height — it is
+        `blended_height` again, and the schema bump exists so no reader sees it."""
+        with pytest.raises(ValueError, match="draws nothing"):
+            DrawnSurface.of({"caps": [], "ribbons": []})
+
+    def test_the_query_reproduces_the_strip_the_builder_emits(self) -> None:
+        """🔴 The rail half of the reader-drifts-from-writer property.
+
+        `_strip_corners` rebuilds `_Builder.strip`'s quads from the published
+        rails rather than reading the mesh. A bent, graded, unevenly stationed
+        pair of rails whose two rails are *not* parallel and *not* level with
+        each other, because on a straight flat strip either diagonal agrees and
+        the test would pass while saying nothing about the diagonal.
+        """
+        first = np.array([[0.0, 0.0, 0.0], [10.0, 0.3, 1.0], [14.0, 0.9, 6.0], [15.0, 1.4, 12.0]])
+        second = np.array([[0.0, 0.2, 8.0], [9.0, 0.7, 9.5], [12.0, 1.1, 13.0], [11.0, 1.3, 17.0]])
+        builder = _Builder()
+        builder.strip(
+            first,
+            second,
+            colour=(200, 200, 200),
+            along=plan_lengths(first),
+            across=(2.0, 0.0),
+            marking=_Marking(float(MARKING_CLASS_CARRIAGEWAY), 10.0),
+        )
+        mesh = builder.build("strip")
+        triangles = mesh.positions[mesh.triangles]
+        drawn = DrawnSurface.of(
+            {"ribbons": [{"edge": 0, "level": 0, "rails": [first.tolist(), second.tolist()]}]}
+        )
+        rng = np.random.default_rng(7)
+        checked = 0
+        for triangle in triangles:
+            for _ in range(20):
+                a, b = rng.random(2)
+                if a + b > 1.0:
+                    a, b = 1.0 - a, 1.0 - b
+                point = (
+                    triangle[0] + a * (triangle[1] - triangle[0]) + b * (triangle[2] - triangle[0])
+                )
+                assert drawn.height_at(float(point[0]), float(point[2])) == pytest.approx(
+                    float(point[1]), abs=1e-9
+                )
+                checked += 1
+        assert checked == 20 * len(triangles)
+        # ⚠️ And the other diagonal is a different surface: swapping the rails
+        # flips every quad's diagonal, and a point off the diagonal reads a
+        # different plane. Without this the test above cannot tell a
+        # `_strip_corners` written to the wrong triple from the right one.
+        swapped = DrawnSurface.of(
+            {"ribbons": [{"edge": 0, "level": 0, "rails": [second.tolist(), first.tolist()]}]}
+        )
+        assert swapped.height_at(11.5, 5.0) != pytest.approx(drawn.height_at(11.5, 5.0), abs=1e-6)
+
+    def test_the_ribbon_that_covers_the_point_answers_not_the_nearer_centreline(self) -> None:
+        """🔴 HKCEC's six buried triangles (`P3-32`'s residue).
+
+        Two parallel ribbons: a narrow one whose centreline is nearer the point
+        but whose rails stop short of it, and a wide one 0.3 m higher that
+        actually covers it. The old reader took the nearest centreline and put
+        the paint 2.6 cm under the wide ribbon.
+        """
+        narrow = {"id": 0, "polyline": [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]], "elevation_level": 0}
+        wide = {"id": 1, "polyline": [[-50.0, 0.3, 13.0], [50.0, 0.3, 13.0]], "elevation_level": 0}
+        drawn = DrawnSurface.of(
+            {"ribbons": [ribbon_of(narrow, half_width_m=5.0), ribbon_of(wide, half_width_m=7.5)]}
+        )
+        # z = 6.0: 6 m from the narrow centreline (rails stop at 5), 7 m from
+        # the wide one (rails reach 5.5).
+        here = drawn.sample(0.0, 6.0)
+        assert here.ribbon_m == pytest.approx(0.3)
+        assert here.height_m == pytest.approx(0.3)
+        assert here.reach_m == 0.0
+
+    def test_a_point_over_nothing_drawn_takes_the_nearest_drawn_edge(self) -> None:
+        """🔴 HUNG HING ROAD's four (`P3-32`'s residue).
+
+        A vertex in the gap beside a flank: 0.17 m from the flank's edge and
+        7.8 m from another carriageway's centreline. The old reader took that
+        centreline's height, 8.8 cm under the flank. Now the nearest drawn
+        edge answers — the flank's — and the reach says how far it was.
+        """
+        far = {"id": 0, "polyline": [[-50.0, 4.30, 0.0], [50.0, 4.30, 0.0]], "elevation_level": 0}
+        flank = {
+            "level": 0,
+            "ring": [[-1.0, 4.384, 8.0], [1.0, 4.384, 8.0], [1.0, 4.384, 9.0], [-1.0, 4.384, 9.0]],
+        }
+        drawn = DrawnSurface.of({"caps": [flank], "ribbons": [ribbon_of(far, half_width_m=5.0)]})
+        here = drawn.sample(0.0, 7.83)
+        assert here.over_void
+        assert here.height_m == pytest.approx(4.384)
+        assert here.reach_m == pytest.approx(0.17)
+        # A point nearer the ribbon's rail than the flank takes the rail.
+        assert drawn.sample(0.0, 5.2).height_m == pytest.approx(4.30)
+        # And a point beyond a ribbon's END snaps to its end line, not to a
+        # rail extended to infinity.
+        beyond = drawn.sample(60.0, 0.0)
+        assert beyond.over_void
+        assert beyond.height_m == pytest.approx(4.30)
+        assert beyond.reach_m == pytest.approx(10.0)
+
+    def test_the_nearest_edge_search_widens_until_nothing_unseen_can_be_nearer(self) -> None:
+        """The ring search stops on an exact bound, so a far edge is found
+        across many empty cells and the answer is the true nearest edge."""
+        arm = {"id": 0, "polyline": [[0.0, 1.0, 0.0], [10.0, 1.0, 0.0]], "elevation_level": 0}
+        drawn = DrawnSurface.of({"ribbons": [ribbon_of(arm, half_width_m=2.0)]})
+        here = drawn.sample(300.0, 200.0)
+        assert here.over_void
+        assert here.height_m == pytest.approx(1.0)
+        assert here.reach_m == pytest.approx(np.hypot(290.0, 198.0))
 
 
 class TestHalfWidths:

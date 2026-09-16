@@ -672,10 +672,9 @@ Common emoji for this project:
   ⚠️ **The parts partition gained a leg — `outside_region`** — because `clip` returning nothing left
   `parts` uncounted; it is **0 and unexercised** here (no published part lies outside the region), so
   removing the increment leaves the suite green. Do not read its 0 as proven.
-  ⚠️ **`_reachable`'s per-marking work is CUBIC in marking length** and 8 markings carry 69% of it;
-  the batching/re-narrowing fix is measured (378 → 155 ms, 6.9x fewer projections) and **refused for
-  now** because it needs new API in two shared modules and is **not bit-identical** (9.9e-11 m,
-  argmin ties). Take both halves together or neither.
+  ✅ **`_reachable` is GONE (2026-09-16, `Q92`)** — it narrowed a per-vertex centreline scan, and
+  `DrawnSurface` no longer scans centrelines: it reads the published rails through a plan index, so
+  the cubic-cost note and its refused batching fix expired with it. Do not bring a narrowing back.
   ⚠️ **`underfill_m` is transverse-only** — it is `host width - marking length`, and a longitudinal
   marking's length runs along the road, so pooling it is `Q57` in the one field that cannot survive
   it. Numbers in `Q118`.
@@ -854,9 +853,10 @@ Common emoji for this project:
   kerb width into the next ribbon **and meets it at THAT ribbon's height** — flat at its own it is a
   lip on the other carriageway, 0.27 m at HKCEC, that no frame shows; the clip's prefilter is the
   rail's box grown by the reach, and `_shoelace` is twice the area. ⚠️ **Also `paint_clearance.py
-  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: the eleven
-  it shows are `DrawnSurface`'s nearest-centreline fallback under a vertex over void, and inserted
-  stations moving a mitred rail off its old chord (`_off_line`), never a reason to lift the paint.
+  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: the three
+  it shows since `Q92`'s rail read (eleven before it) are two hatch strips chording a creased cap
+  fan at BULLOCK LANE and one vertex in a 0.3 m gap between two flanks 8 cm apart at HUNG HING ROAD
+  — a step in the *surface* — never a reason to lift the paint, and a rising count is a finding.
   ⚠️ **The evidence is a frame and a shadow moves with the surface it falls on** — the dark trapezoid
   inside box 7 after the flanks is the building's shadow on new asphalt, not a buried flank; the
   top-down camera settles it. Numbers in `Q104`.
@@ -876,9 +876,13 @@ Common emoji for this project:
   not a defect** — paint is a flat triangle over a road that creases at every cap fan edge and every
   ribbon station, so its chord dips below the crown it spans by millimetres however right its
   vertices are. 🔴 **Do not answer a burial by raising `lift_m`**: clearing `Q92`'s p99 needed
-  **0.158 m**, paint floating 16 cm over the road. ⚠️ **`vertices_over_cap` is the in-stage tripwire
-  and there is deliberately no "placed minus drawn" counter** — that is `lift_m` by construction and
-  `Q72`'s tautology. Numbers in `Q92`.
+  **0.158 m**, paint floating 16 cm over the road. ⚠️ **`vertices_over_cap` and `vertices_over_void` are the in-stage
+  tripwires and there is deliberately no "placed minus drawn" counter** — that is `lift_m` by
+  construction and `Q72`'s tautology. 🔴 **`DrawnSurface` reads the RAILS since 2026-09-16**
+  (`roadsurface.json` schema 10, `ribbons` in `_Builder.strip`'s order): the ribbon case is the
+  strip's own quads, never a centreline's station height, and a point over nothing drawn takes the
+  nearest drawn edge with no radius — `vertices_over_void` reads every vertex off a cap if `ribbons`
+  stops being published. Numbers in `Q92`.
 - **Anything that moves an OFF-GRADE ribbon — `surface.floor_by_elevation_level`,
   `floor_on_structure_m`, or an off-grade width: also `tools/deck_margin.py`, and paste its per-edge
   table, its pooled distributions and its counterfactual.** It decomposes `overhang.py`'s `Q22` figure into the deck's

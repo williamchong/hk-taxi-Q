@@ -39,11 +39,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -79,14 +80,7 @@ from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 # would drag GDAL into a hand-run tool — and that argument does not reach here:
 # `pipeline.terrain` imports numpy and `pipeline.gltf` alone, and `pipeline.roads`
 # above already pulls it in. `Q58`'s rule is that a third copy should force it.
-from pipeline.terrain import hits
-
-if TYPE_CHECKING:  # pragma: no cover - imported for the annotation alone
-    # ⚠️ **Guarded, not imported.** `pipeline.fares` reads sources, so importing
-    # it here would drag a source fetcher into every consumer of the ribbon —
-    # and `DrawnSurface` uses exactly one method of it. The annotation is still
-    # exact, which `Any` was not.
-    from pipeline.polyline import Segments
+from pipeline.terrain import covered
 
 log = logging.getLogger(__name__)
 
@@ -145,7 +139,13 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # no longer suffixed `-col`, and a `road_surface_collision-colonly` collider —
 # and each chunk row carries `collision_triangles`. A v8 reader taking the
 # file's meshes as the drawn road measures every quad twice.
-SURFACE_MANIFEST_SCHEMA = 9
+# 10 since `P3-32`'s residue: `ribbons` publishes every drawn carriageway
+# strip's two rails, in the order `_Builder.strip` received them, and
+# `DrawnSurface` reads the strip's own triangles instead of the nearest
+# centreline's station height. A v9 reader keeps a ribbon that is flat across,
+# infinitely wide and owned by whichever centreline is nearest — all three
+# false, and eleven box-junction triangles under the road for it.
+SURFACE_MANIFEST_SCHEMA = 10
 
 # The drawn road's primitive, in every chunk. ⚠️ **No `-col` since `P5-12`**:
 # the collider is its own `-colonly` primitive beside it (`SURFACE_COLLIDER_NAME`),
@@ -345,14 +345,18 @@ _KERB_STATION_M = 0.25
 
 # The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
 
-# Plan grid `DrawnSurface` bins junction caps into. A cap is a junction's worth
-# of tarmac — tens of metres across at the interchange, a few in a back lane —
-# so this is sized to the *small* end: an oversized cell puts every cap in the
+# Plan grid `DrawnSurface` bins the drawn pieces — junction caps and carriageway
+# strips — into. A cap is a junction's worth of tarmac — tens of metres across
+# at the interchange, a few in a back lane — and a strip is one edge's ribbon,
+# so this is sized to the *small* end: an oversized cell puts every piece in the
 # region's centre cell and turns the point query back into a linear scan, while
 # an undersized one only costs a few more dictionary entries. Its own constant
 # rather than `deck_error`'s 8 m, because that grid indexes triangles and this
-# one indexes whole caps.
-_CAP_CELL_M = 16.0
+# one indexes whole pieces.
+_DRAWN_CELL_M = 16.0
+# How far `DrawnSurface._nearest_edge` will widen its search, in cells, before
+# calling the query a bug: further from every drawn thing than a region is wide.
+_MAX_VOID_RINGS = 256
 
 # Column of `_Edge.points` carrying that station's half-width in metres, beside
 # the x/y/z it is measured at.
@@ -443,6 +447,13 @@ class SurfaceReport:
     # included, so a second derivation in a marking stage would disagree near
     # the caps and tell nobody which answer was right.
     cap_rings: list[tuple[int, np.ndarray]] = field(default_factory=list)
+    # Every drawn carriageway strip's two rails, as `(edge id, level, (rail,
+    # rail))` with the rails **in the order `_Builder.strip` received them**
+    # (`P3-32`'s residue). Recorded where `_draw_edge` lifts them, so the
+    # record and the drawing are one pair of arrays: a marking stage that
+    # rebuilt the rails from `carriageway[]` would lose the mitre's
+    # along-displacement, which is exactly the centimetre `_off_line` measures.
+    ribbon_rails: list[tuple[int, int, tuple[np.ndarray, np.ndarray]]] = field(default_factory=list)
     junctions: int = 0
     # The region join (`P5-7f`, `Q116`'s one exception): ends of the
     # neighbour's runs offered to the cap hull, caps that took one, and caps
@@ -1009,16 +1020,25 @@ class _Builder:
 
 
 class DrawnHeight(NamedTuple):
-    """One `DrawnSurface` query: the height drawn, and the two parts of it.
+    """One `DrawnSurface` query: the height drawn, and what answered for it.
 
-    `cap_m` is `None` where no junction cap covers the point, which is how a
-    caller tells whether the caps were read at all — the counter that would
-    notice `roadsurface.json` silently losing them (`Q92`).
+    `cap_m` is `None` where no junction cap covers the point and `ribbon_m` is
+    `None` where no carriageway strip does — which is how a caller tells whether
+    the caps, or the rails, were read at all: the counters that notice
+    `roadsurface.json` silently losing either (`Q92`). Both `None` is a point
+    over nothing drawn, and `height_m` is then the nearest drawn edge's height,
+    `reach_m` away in plan; covered, `reach_m` is 0.
     """
 
     height_m: float
-    ribbon_m: float
+    ribbon_m: float | None
     cap_m: float | None
+    reach_m: float
+
+    @property
+    def over_void(self) -> bool:
+        """Whether nothing drawn covers the point."""
+        return self.ribbon_m is None and self.cap_m is None
 
 
 @dataclass(frozen=True)
@@ -1027,99 +1047,130 @@ class DrawnSurface:
 
     🔴 **This exists because the markings were guessing, and 23.2% of the yellow
     box junctions shipped under the asphalt.** `boxjunctions.blended_height`
-    gives a vertex a distance-weighted blend of level-0 *centreline* heights;
+    gave a vertex a distance-weighted blend of level-0 *centreline* heights;
     what is drawn at a junction is a convex-hull cap fanned from the ring's own
     centroid. They are different functions and they diverge off the centreline —
-    the drawn surface stands up to **0.218 m** above the blend, against a
+    the drawn surface stood up to **0.218 m** above the blend, against a
     `lift_m` of 0.012 — so the paint sank into the road in patches, with clean
     edges, and every counter in the stage read correctly throughout.
 
-    Two cases, and there are only two because the ribbon is flat across:
+    🔴 **And the ribbon case was still a model until `P3-32`'s residue was
+    traced.** The first `Q92` reader took the caps from their published rings
+    and the ribbon from *the nearest level-0 centreline's height at the
+    projected station* — a ribbon that is flat across, infinitely wide, and
+    owned by whichever centreline is nearest. All three are false and each put
+    paint under the road: at HKCEC the nearest centreline (`e660`, 6.2 m off)
+    belonged to a 5.12 m ribbon that did not reach the point, while the 7.34 m
+    ribbon that did (`e659`) stood 2.6 cm higher; at HUNG HING ROAD a vertex
+    over the void beside a flank took `e586`'s height from 7.8 m away, 8.8 cm
+    under the flank 0.17 m from it; on WAN SHING STREET a vertex inside its
+    own ribbon on a 19.6° bend at -8.8% missed the mitre's along-displacement
+    (`_off_line`) by a centimetre. Eleven triangles, three mechanisms, one
+    cause — so this reads the rails.
 
-    - **Inside a cap ring** → the fan height. `_Builder.fan` triangulates the
-      ring from its centroid, so the height at a point is the barycentric
-      interpolation over whichever fan triangle contains it. That is the drawn
-      height by construction rather than by approximation.
-    - **Anywhere else** → the nearest level-0 centreline's own height at the
-      projected station. `_lift(edge.left, points, 0.0)` puts both carriageway
-      rails on the centreline's height, so a ribbon has no cross-fall and every
-      point across it is at its station's height.
+    Every drawn surface is read the way the caps always were — **the builder's
+    own triangles, rebuilt from what `roadsurface.json` publishes**, so the
+    height at a point is the barycentric interpolation of the triangle drawn
+    there, by construction rather than by approximation:
 
-    ⚠️ **Where both apply the cap wins**, because a cap is drawn over the arm it
-    overlaps — the 6,051 m² `Q53` measured — and the renderer shows the higher
-    surface.
+    - **A cap** → `_fan_corners`, the fan `_Builder.fan` emits from the ring's
+      centroid.
+    - **A carriageway strip** → `_strip_corners`, the quad strip `_Builder.strip`
+      emits between the two rails `_draw_edge` handed it — post-trim,
+      post-mitre, every inserted station included.
+    - **Nothing** → the height of the nearest drawn *edge*: the closest point on
+      any rail segment, ribbon end or cap ring edge, found by widening rings of
+      the plan grid until nothing unseen can be nearer. No centreline, no
+      radius, no knob: a point over the void beside a flank takes the flank's
+      edge, not a carriageway 7 m off.
+
+    ⚠️ **Where caps and strips both cover, the higher wins**, because a cap is
+    drawn over the arm it overlaps — the 6,051 m² `Q53` measured — and the
+    renderer shows the higher surface. Where two *strips* stack in plan (16
+    level-0 edges stand on structure here, and `e465` climbs 7.87 m) the higher
+    wins for the same reason; the old reader picked whichever centreline was
+    nearer, which was no rule at all. `roadmarks._on_its_own_carriageway`
+    refuses a longitudinal marking there rather than trusting either answer.
 
     🔴 **This does not re-open the cliff `blended_height` was written to close.**
-    That was a hard *nearest-edge* switch: two arms extrapolate their own grade
-    into the cap and disagree by up to 0.43 m where they meet, so a vertex taking
-    whichever arm won turned a seam into a step and produced **172 near-vertical
-    triangles**. Nothing here switches between arms. The cap ring passes through
-    every arriving ribbon's two end corners, and the carriageway is flat across,
-    so along an arm's mouth the cap boundary and the ribbon end carry the *same*
-    height and the two cases meet continuously. The blend approximated that
-    continuity; this reproduces it.
+    That was a hard *nearest-edge* switch between two arms' extrapolated grades,
+    disagreeing by up to 0.43 m where they met, and it produced **172
+    near-vertical triangles**. Nothing here switches between models: the strip
+    and the cap that meets it share their mouth corners vertex for vertex, so
+    the two read the same height along the seam.
 
-    ⚠️ **`segments` is the caller's to choose and every caller passes level 0**,
-    the restriction `Segments.nearest` documents: a marking under a flyover takes
-    its height from the street it is painted on, never from the deck above. The
-    cap rings are filtered to the same level here.
+    ⚠️ **`level` is the caller's to choose and every caller passes 0**: a
+    marking under a flyover takes its height from the street it is painted on,
+    never from the deck above. Caps and ribbons are filtered to that level here.
     """
 
-    # `Segments` over the level-0 edges — see the `TYPE_CHECKING` note above for
-    # why the import is guarded.
-    segments: Segments
-    # Each cap already triangulated as `_Builder.fan` emits it, `(k, 3, 3)`.
-    # ⚠️ **Built once in `of` and not per query, which is most of this class's
-    # cost**: the apex is the ring's own centroid and the fan pairs each corner
-    # with the next, so a query that re-derived them re-rolled the ring every
-    # time — measured at 0.712 s against 0.258 s over the region's 24,435 box
-    # junction vertices, for byte-identical output.
-    fans: tuple[np.ndarray, ...]
-    # Plan bounding box per cap as `(min_x, min_z, max_x, max_z)`. A cap is much
-    # smaller than the cell it is binned into, so rejecting on it first is what
-    # keeps the barycentric pass off the majority of queries that miss.
-    bounds: np.ndarray
-    # Plan cell to the caps whose bounding box touches it.
-    cells: dict[tuple[int, int], tuple[int, ...]]
+    # Every drawn triangle, caps and strips alike, as the builder emits it —
+    # `(n, 3, 3)`, with `is_cap` saying which kind each one is — and the plan
+    # grid over them: cell to the pack of triangles touching it, as `(corners,
+    # is_cap)` slices ready for one `covered` call. 🔴 **Binned per TRIANGLE
+    # and not per piece, and that is measured**: a piece's axis-aligned box is
+    # loose on a diagonal ribbon (the worst covered 260 cells), so binning
+    # pieces passed 39% of the barycentric passes on points nowhere near them
+    # and made 4.3 numpy round-trips a query — 1.60 s over the region's 24,435
+    # box-junction vertices against 0.44 s for one call per query on a cell's
+    # own pack, for byte-identical output. The fans and strips are triangulated
+    # once here, not per query, for the same reason (0.712 s → 0.258 s when the
+    # caps alone were re-rolled per vertex).
+    triangles: np.ndarray
+    is_cap: np.ndarray
+    cells: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]]
+    # Every drawn edge as a 3D segment, `(m, 2, 3)`: cap ring edges, rail
+    # segments and the two end lines of each strip. What a point over nothing
+    # drawn snaps to.
+    edges: np.ndarray
+    # Plan cell to the edge segments whose bounding box touches it.
+    edge_cells: dict[tuple[int, int], np.ndarray]
 
     @classmethod
-    def of(cls, segments: Segments, surface: dict[str, Any], *, level: int = 0) -> DrawnSurface:
-        """Read the caps out of a `roadsurface.json` and index them in plan."""
+    def of(cls, surface: dict[str, Any], *, level: int = 0) -> DrawnSurface:
+        """Read the caps and the rails out of a `roadsurface.json` and index them.
+
+        Refuses a manifest with nothing drawn at this level: a height read off
+        no surface is `blended_height` again, and the schema bump that
+        introduced `ribbons` is what guarantees a reader never sees a manifest
+        without them.
+        """
         rings = [
             np.asarray(cap["ring"], dtype=np.float64)
             for cap in surface.get("caps", ())
             if int(cap["level"]) == level and len(cap["ring"]) >= 3
         ]
-        fans, bounds = [], []
-        binned: dict[tuple[int, int], list[int]] = {}
-        for ring in rings:
-            plan_low, plan_high = ring[:, [0, 2]].min(axis=0), ring[:, [0, 2]].max(axis=0)
-            fans.append(_fan_corners(ring))
-            bounds.append(np.concatenate([plan_low, plan_high]))
-            index = len(fans) - 1
-            low = np.floor(plan_low / _CAP_CELL_M).astype(np.int64)
-            high = np.floor(plan_high / _CAP_CELL_M).astype(np.int64)
-            for column in range(int(low[0]), int(high[0]) + 1):
-                for row in range(int(low[1]), int(high[1]) + 1):
-                    binned.setdefault((column, row), []).append(index)
-        return cls(
-            segments=segments,
-            fans=tuple(fans),
-            bounds=(np.vstack(bounds) if bounds else np.zeros((0, 4), dtype=np.float64)),
-            cells={key: tuple(value) for key, value in binned.items()},
+        rails = [
+            tuple(np.asarray(rail, dtype=np.float64) for rail in ribbon["rails"])
+            for ribbon in surface.get("ribbons", ())
+            if int(ribbon["level"]) == level
+        ]
+        fans = [_fan_corners(ring) for ring in rings]
+        strips = [_strip_corners(first, second) for first, second in rails]
+        triangles = np.concatenate([*fans, *strips, np.zeros((0, 3, 3))])
+        if not len(triangles):
+            raise ValueError(f"roadsurface.json draws nothing at level {level}")
+        is_cap = np.zeros(len(triangles), dtype=bool)
+        is_cap[: sum(len(fan) for fan in fans)] = True
+        cells = {
+            key: (triangles[found], is_cap[found])
+            for key, found in _bin_by_plan_box(triangles[:, :, [0, 2]]).items()
+        }
+
+        edges = np.concatenate(
+            [
+                *(_ring_edges(ring) for ring in rings),
+                *(_strip_edges(first, second) for first, second in rails),
+                np.zeros((0, 2, 3)),
+            ]
         )
-
-    def narrowed_to(self, segments: Segments) -> DrawnSurface:
-        """The same caps, over a subset of the centrelines.
-
-        A method rather than `dataclasses.replace` at the call site, so which
-        fields this class has stays this class's business. ⚠️ **The caps are
-        deliberately not narrowed with them** — they are already indexed in plan
-        and there are 429 of them, so narrowing would cost more than it saves;
-        `roadmarks.py` narrows only because `Segments.nearest` scans the whole
-        network on every call.
-        """
-        return replace(self, segments=segments)
+        return cls(
+            triangles=triangles,
+            is_cap=is_cap,
+            cells=cells,
+            edges=edges,
+            edge_cells=_bin_by_plan_box(edges[:, :, [0, 2]]),
+        )
 
     def sample(self, x: float, z: float) -> DrawnHeight:
         """The drawn road at this plan position, and what answered for it.
@@ -1129,16 +1180,18 @@ class DrawnSurface:
         where one existed while `height_at` below took the higher of cap and
         ribbon, so on a region with a cap below its arm the two marking stages
         would have placed paint at different heights — and each was documented as
-        doing what the other did. Returning both parts once also spares
-        `roadmarks.py` a second `cap_height_at` per vertex it only wanted for a
-        counter.
+        doing what the other did. Returning every part once also spares
+        `roadmarks.py` a second query per vertex it only wanted for a counter.
         """
-        ribbon = float(self.segments.nearest(x, z).y)
-        cap = self.cap_height_at(x, z)
+        cap, ribbon = self._covering(x, z)
+        if cap is None and ribbon is None:
+            height, reach = self._nearest_edge(x, z)
+            return DrawnHeight(height_m=height, ribbon_m=None, cap_m=None, reach_m=reach)
         return DrawnHeight(
-            height_m=ribbon if cap is None else max(cap, ribbon),
+            height_m=max(value for value in (cap, ribbon) if value is not None),
             ribbon_m=ribbon,
             cap_m=cap,
+            reach_m=0.0,
         )
 
     def height_at(self, x: float, z: float) -> float:
@@ -1147,16 +1200,10 @@ class DrawnSurface:
         ⚠️ **The higher of the two where a cap covers a ribbon, not the cap.**
         A cap and the arm it overlaps are both drawn — the 6,051 m² `Q53`
         measured — and the depth buffer shows whichever stands higher, so a
-        marking has to clear that one.
-
-        ⚠️ **This region does exercise it, and an earlier note here claiming
-        otherwise was measuring nothing.** That note said taking the cap outright
-        ships a byte-identical `boxjunctions.glb` — true only because `_place`
-        was calling `cap_height_at` directly and never reached this method at
-        all, so the experiment changed no code path. With both callers on
-        `sample` the difference is real: `height_spread_m` p90 **0.4260 →
-        0.4215**, p99 **0.5051 → 0.4965**, which is paint rising onto the ribbon
-        where a cap sits below the arm it overlaps.
+        marking has to clear that one. Measured, not assumed: with both callers
+        on `sample` the difference is real, `height_spread_m` p90 **0.4260 →
+        0.4215**, p99 **0.5051 → 0.4965**, paint rising onto the ribbon where a
+        cap sits below the arm it overlaps.
         """
         return self.sample(x, z).height_m
 
@@ -1168,21 +1215,104 @@ class DrawnSurface:
         and the renderer shows the upper one, so this must agree with it rather
         than take the first hit.
         """
-        candidates = self.cells.get(
-            (int(np.floor(x / _CAP_CELL_M)), int(np.floor(z / _CAP_CELL_M)))
-        )
-        if candidates is None:
-            return None
+        return self._covering(x, z)[0]
 
-        best: float | None = None
-        for index in candidates:
-            low_x, low_z, high_x, high_z = self.bounds[index]
-            if not (low_x <= x <= high_x and low_z <= z <= high_z):
-                continue
-            found = hits(self.fans[index], x, z)
-            if len(found) and (best is None or float(found.max()) > best):
-                best = float(found.max())
-        return best
+    def _covering(self, x: float, z: float) -> tuple[float | None, float | None]:
+        """The highest cap and the highest strip drawn over this point."""
+        pack = self.cells.get(_cell_of(x, z))
+        if pack is None:
+            return None, None
+        corners, is_cap = pack
+        hit, heights = covered(corners, x, z)
+        if not len(heights):
+            return None, None
+        of_cap = is_cap[hit]
+        cap = float(heights[of_cap].max()) if of_cap.any() else None
+        strip = float(heights[~of_cap].max()) if not of_cap.all() else None
+        return cap, strip
+
+    def _nearest_edge(self, x: float, z: float) -> tuple[float, float]:
+        """Height at the closest point on any drawn edge, and how far that is.
+
+        Rings of the plan grid are widened until every unseen segment lies
+        wholly in cells at least `ring` cells away and so at least
+        `ring x _DRAWN_CELL_M` away — further than the best already found. The
+        stop is exact, and it costs one ring per `_DRAWN_CELL_M` of void, which
+        is why there is no radius to set.
+        """
+        column, row = _cell_of(x, z)
+        point = np.array([x, z])
+        best_distance, best_height = np.inf, 0.0
+        ring = 0
+        while True:
+            seen = [
+                found
+                for found in (self.edge_cells.get(key) for key in _ring_of_cells(column, row, ring))
+                if found is not None
+            ]
+            if seen:
+                segments = self.edges[np.unique(np.concatenate(seen))]
+                starts = segments[:, 0, [0, 2]]
+                along, distance = _project_plan(starts, segments[:, 1, [0, 2]] - starts, point)
+                nearest = int(distance.argmin())
+                if distance[nearest] < best_distance:
+                    best_distance = float(distance[nearest])
+                    rise = segments[nearest, 1, 1] - segments[nearest, 0, 1]
+                    best_height = float(segments[nearest, 0, 1] + along[nearest] * rise)
+            if best_distance <= ring * _DRAWN_CELL_M:
+                return best_height, best_distance
+            ring += 1
+            if ring > _MAX_VOID_RINGS:
+                # Unreachable on a manifest `of` accepted — it has at least one
+                # edge — unless the query is further from every drawn thing than
+                # a region is wide, which is a caller's bug, not a height.
+                raise ValueError(f"no drawn edge within {ring * _DRAWN_CELL_M:.0f} m of ({x}, {z})")
+
+
+def _project_plan(
+    starts: np.ndarray, spans: np.ndarray, point: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Project one plan point onto every segment: the clamped parameter along
+    each, and the plan distance to that foot. A segment shorter than
+    `_MIN_SEGMENT_M` has no direction, so its parameter is 0 and its distance
+    is to its start."""
+    lengths = np.einsum("ij,ij->i", spans, spans)
+    lengths[lengths <= _MIN_SEGMENT_M**2] = np.inf
+    along = np.clip(np.einsum("ij,ij->i", point - starts, spans) / lengths, 0.0, 1.0)
+    feet = starts + along[:, None] * spans
+    return along, np.hypot(*(feet - point).T)
+
+
+def _cell_of(x: float, z: float) -> tuple[int, int]:
+    return math.floor(x / _DRAWN_CELL_M), math.floor(z / _DRAWN_CELL_M)
+
+
+def _bin_by_plan_box(plan: np.ndarray) -> dict[tuple[int, int], np.ndarray]:
+    """Plan cell to the rows of `plan` — `(n, k, 2)` corners each — whose
+    bounding box touches it."""
+    low = np.floor(plan.min(axis=1) / _DRAWN_CELL_M).astype(np.int64)
+    high = np.floor(plan.max(axis=1) / _DRAWN_CELL_M).astype(np.int64)
+    binned: dict[tuple[int, int], list[int]] = {}
+    for index, ((low_column, low_row), (high_column, high_row)) in enumerate(
+        zip(low.tolist(), high.tolist(), strict=True)
+    ):
+        for column in range(low_column, high_column + 1):
+            for row in range(low_row, high_row + 1):
+                binned.setdefault((column, row), []).append(index)
+    return {key: np.asarray(value) for key, value in binned.items()}
+
+
+def _ring_of_cells(column: int, row: int, ring: int) -> Iterable[tuple[int, int]]:
+    """The cells exactly `ring` steps from `(column, row)` in Chebyshev distance."""
+    if ring == 0:
+        yield column, row
+        return
+    for step in range(-ring, ring + 1):
+        yield column + step, row - ring
+        yield column + step, row + ring
+    for step in range(-ring + 1, ring):
+        yield column - ring, row + step
+        yield column + ring, row + step
 
 
 def _fan_corners(ring: np.ndarray) -> np.ndarray:
@@ -1199,9 +1329,51 @@ def _fan_corners(ring: np.ndarray) -> np.ndarray:
     """
     apex = np.broadcast_to(ring.mean(axis=0), ring.shape)
     fan = np.stack([apex, ring, np.roll(ring, -1, axis=0)], axis=1)
-    edge_a, edge_b = fan[:, 1] - fan[:, 0], fan[:, 2] - fan[:, 0]
+    return _drop_degenerate(fan)
+
+
+def _strip_corners(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """`_Builder.strip`'s triangulation of one quad strip, as `(k, 3, 3)`.
+
+    Written from the same two index triples the builder emits — `(i, i+1,
+    i+span)` and `(i+1, i+span+1, i+span)`, with the second rail stacked after
+    the first — so a change to one is visibly a change to both. The rails are
+    taken **in the order `strip` received them**, which is how
+    `roadsurface.json` publishes them: the diagonal of each quad depends on it,
+    and a point near the diagonal reads a different plane on the other one.
+    """
+    if len(left) < 2:
+        return np.zeros((0, 3, 3))
+    first = np.stack([left[:-1], left[1:], right[:-1]], axis=1)
+    second = np.stack([left[1:], right[1:], right[:-1]], axis=1)
+    return _drop_degenerate(np.concatenate([first, second]))
+
+
+def _drop_degenerate(corners: np.ndarray) -> np.ndarray:
+    edge_a, edge_b = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
     twice_area = edge_a[:, 0] * edge_b[:, 2] - edge_a[:, 2] * edge_b[:, 0]
-    return fan[np.abs(twice_area) > MIN_TWICE_AREA_M2]
+    return corners[np.abs(twice_area) > MIN_TWICE_AREA_M2]
+
+
+def _ring_edges(ring: np.ndarray) -> np.ndarray:
+    """A closed ring's edges as `(k, 2, 3)` segments."""
+    return np.stack([ring, np.roll(ring, -1, axis=0)], axis=1)
+
+
+def _strip_edges(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """A strip's outline as segments: both rails and the two end lines.
+
+    Empty below two stations, as `_strip_corners` is: `_Builder.strip` draws
+    nothing there, so there is no edge to snap to."""
+    if len(left) < 2:
+        return np.zeros((0, 2, 3))
+    return np.concatenate(
+        [
+            np.stack([left[:-1], left[1:]], axis=1),
+            np.stack([right[:-1], right[1:]], axis=1),
+            np.stack([left[[0, -1]], right[[0, -1]]], axis=1),
+        ]
+    )
 
 
 def downward_facing(mesh: MeshData) -> tuple[int, float]:
@@ -1636,8 +1808,8 @@ def build_region(
     _read_offside(edges, style, report)
 
     builder = _Builder(Grid.for_region(city, city.region(region_id)))
-    for edge in edges:
-        if _draw_edge(builder, edge, style, city.roads.lane_width_m, report):
+    for published, edge in zip(graph["edges"], edges, strict=True):
+        if _draw_edge(builder, edge, int(published["id"]), style, city.roads.lane_width_m, report):
             report.edges += 1
     for cap in caps:
         # A cap is no length of lane, so it carries no lanes and no length —
@@ -2020,12 +2192,8 @@ def _height_along(ribbon: np.ndarray, point: np.ndarray) -> float:
     at the nearest station, which is its height there because a ribbon is flat
     across (`DrawnSurface`)."""
     plan = ribbon[:, [0, 2]]
-    starts, spans = plan[:-1], plan[1:] - plan[:-1]
-    lengths = np.einsum("ij,ij->i", spans, spans)
-    lengths[lengths <= _MIN_SEGMENT_M**2] = np.inf
-    along = np.clip(np.einsum("ij,ij->i", point - starts, spans) / lengths, 0.0, 1.0)
-    feet = starts + along[:, None] * spans
-    nearest = int(np.argmin(np.hypot(*(feet - point).T)))
+    along, distance = _project_plan(plan[:-1], plan[1:] - plan[:-1], point)
+    nearest = int(distance.argmin())
     step = ribbon[nearest + 1, 1] - ribbon[nearest, 1]
     return float(ribbon[nearest, 1] + along[nearest] * step)
 
@@ -3097,6 +3265,7 @@ def _measure_level_steps(
 def _draw_edge(
     builder: _Builder,
     edge: _Edge,
+    edge_id: int,
     style: RoadSurface,
     lane_width_m: float,
     report: SurfaceReport,
@@ -3161,6 +3330,11 @@ def _draw_edge(
         marking=carriageway,
         alpha=(_extent(edge, OFFSIDE, published), _extent(edge, NEARSIDE, published)),
     )
+    # The same two arrays, in the same order, so `DrawnSurface._strip_corners`
+    # rebuilds the triangles just emitted and not a second opinion about them —
+    # and only where `strip` drew, which below two stations it does not.
+    if len(points) >= 2:
+        report.ribbon_rails.append((edge_id, edge.level, (right, left)))
 
     # The riser has no plan width, so both its rails sit at the kerb line and
     # share its U. The lip is where U crosses the kerb — putting the ramp on the
@@ -3580,6 +3754,19 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
             "caps": [
                 {"level": level, "ring": [round_position(tuple(corner)) for corner in ring]}
                 for level, ring in report.cap_rings
+            ],
+            # The drawn strips' rails, in `strip`'s order — see
+            # `SurfaceReport.ribbon_rails`. Same rounding as the caps, so a
+            # strip and the cap meeting it publish identical mouth corners.
+            "ribbons": [
+                {
+                    "edge": edge_id,
+                    "level": level,
+                    "rails": [
+                        [round_position(tuple(station)) for station in rail] for rail in rails
+                    ],
+                }
+                for edge_id, level, rails in report.ribbon_rails
             ],
         },
     )
