@@ -2169,6 +2169,38 @@ class TestCarriagewaySurvey:
 
         assert city.carriageway_survey is None
 
+    def test_the_lane_lines_are_a_separate_list_from_the_edges(self, hong_kong) -> None:
+        """`Q127`. A lane line cast at as a carriageway edge stops a ray one lane
+        in, so the two lists must never share an entry — and `edges` must still
+        be exactly the three publishers the build reads."""
+        survey = hong_kong.carriageway_survey
+        lane_codes = {code for entry in survey.lane_lines for code in entry.codes}
+
+        assert lane_codes
+        assert not lane_codes & {code for entry in survey.edges for code in entry.codes}
+        assert [entry.name for entry in survey.edges] == [
+            "traffic_aids",
+            "ib1000",
+            "hyd_pavement",
+        ]
+
+    def test_lane_lines_refuse_an_area(self, rewrite) -> None:
+        def area(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["lane_lines"][0]["geometry"] = "area"
+
+        with pytest.raises(ValueError, match="a lane line is a line"):
+            load_config(rewrite(area))
+
+    def test_empty_lane_lines_are_refused_and_absent_ones_are_not(self, rewrite) -> None:
+        def empty(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["lane_lines"] = []
+
+        with pytest.raises(ValueError, match="leave the key out"):
+            load_config(rewrite(empty))
+
+        city = load_config(rewrite(lambda doc: doc["carriageway_survey"].pop("lane_lines")))
+        assert city.carriageway_survey.lane_lines == ()
+
     def test_the_manual_bounds_load(self, rewrite) -> None:
         """`Q95`. Hard rule 3 keeps them in the city file — the second city has
         its own design manual — and hard rule 4 keeps them out of the tool."""

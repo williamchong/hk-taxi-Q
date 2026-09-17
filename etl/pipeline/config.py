@@ -891,6 +891,12 @@ class CarriagewaySurvey:
     # fix. Anything that turns this on off-grade owes the deck as its truth side,
     # not these lines.
     levels: tuple[int, ...] = (0,)
+    # 🔴 **Lane LINES, read by `tools/width_evidence.py` and by nothing in the
+    # build** (`Q127`). Same shape as `edges` — the same publisher, read the same
+    # way — and a separate field because a lane line is not a carriageway edge:
+    # a survey that cast at one would stop a ray one lane in and publish a lane
+    # as a road. Empty means the lane-spacing reading is not taken.
+    lane_lines: tuple[CarriagewayEdge, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -5055,6 +5061,7 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
     levels = body.get("levels")
     return CarriagewaySurvey(
         edges=edges,
+        lane_lines=_lane_lines(body.get("lane_lines"), f"{where}:lane_lines"),
         width_bounds=_width_bounds(body.get("width_bounds"), f"{where}:width_bounds"),
         # ⚠️ Absent keeps `(0,)`, which is the shipped bundle. An explicit empty
         # list is refused rather than read as "walk nothing": a survey that walks
@@ -5062,6 +5069,35 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         # the same trap `edges` is refused empty for, two fields up.
         levels=(0,) if levels is None else _survey_levels(levels, f"{where}:levels"),
     )
+
+
+def _lane_lines(body: Any, where: str) -> tuple[CarriagewayEdge, ...]:
+    """The optional lane-line layers a width grader reads (`Q127`).
+
+    ⚠️ **Lines only.** An `area` entry loads as an edge-shaped spec and every
+    cast at it would stop at a polygon seam — a lane "width" that is HyD's
+    tiling — so it is refused here rather than filtered where it is read.
+    """
+    if body is None:
+        return ()
+    if not isinstance(body, list):
+        raise ValueError(f"{where} must be a list of layer entries, got {body!r}")
+    if not body:
+        # The `edges` trap: a reading over no layer reports no lane anywhere,
+        # which reads as a city with no lane lines.
+        raise ValueError(f"{where} is empty; leave the key out instead")
+    entries = tuple(
+        _carriageway_edge(entry, f"{where}[{index}]") for index, entry in enumerate(body)
+    )
+    for index, entry in enumerate(entries):
+        if entry.geometry != CARRIAGEWAY_LINE:
+            raise ValueError(
+                f"{where}[{index}]:geometry is {entry.geometry!r}; a lane line is a line"
+            )
+    names = [entry.name for entry in entries]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{where} has repeated names ({', '.join(sorted(names))})")
+    return entries
 
 
 def _survey_levels(body: Any, where: str) -> tuple[int, ...]:

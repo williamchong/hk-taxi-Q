@@ -1155,6 +1155,50 @@ carriageway_survey:
       off_grade_codes: ["1", "2", "3", "-1", "-2", "-3"]
       geometry: area
 
+  # 🔴 LANE LINES, read by `tools/width_evidence.py` ONLY (`Q127`) — the build
+  # never opens this list, so it moves no byte of any bundle. Same shape as
+  # `edges` above because it reads the same publisher the same way; a different
+  # key because a lane line is not a carriageway edge and must never be cast at
+  # as one. The spacing between two painted lines abreast IS a lane width, and
+  # it is the one width reading in the estate that owes nothing to a kerb.
+  #
+  # ⚠️ **The family is every line TD paints BETWEEN two lanes, not only the one
+  # named "lane line".** Codes and layers as `CT174/51-5(1)F` names them and as
+  # counted at grade in Wan Chai on 2026-09-18:
+  #
+  #   layer                 code     name (index plan)         at grade
+  #   DTAD_RD_MARK_LINE     RM1001   DOUBLE WHITE LINES             142
+  #   DTAD_RD_MARK_LINE_C   RM1002   double line, one broken         47
+  #   DTAD_RD_MARK_LINE_C   RM1003   double line, one broken         50
+  #   DTAD_RD_MARK_LINE_C   RM1101   LANE LINE                      200
+  #   DTAD_RD_MARK_LINE_C   RM1102   LANE LINE                        3
+  #   DTAD_RD_MARK_LINE_C   RM1103   CENTRE LINE                      4
+  #   DTAD_RD_MARK_LINE_C   RM1104   WARNING LINE                   406
+  #
+  # ⚠️ **`RM1004` is left out** — `road_marks` records its spacing as VARIABLE,
+  # so its two lines are not a fixed pair — and **`RM1108`/`RM1109` are left
+  # out** because they are the carriageway's edge, which `edges` already reads;
+  # counting one as a divider would add a lane that is a kerb strip.
+  lane_lines:
+    - name: lane_lines_c
+      source: traffic_aids_drawings_gdb
+      layer: DTAD_RD_MARK_LINE_C
+      fields:
+        edge_type: LINETYPE
+        elevation: ELEVATION
+      codes: [RM1002, RM1003, RM1101, RM1102, RM1103, RM1104]
+      # `traffic_aids` above measured A01 and A03 as off-grade on the sister
+      # layer; the same relative-level column, so the same exclusion.
+      off_grade_codes: [A01, A03]
+    - name: double_white
+      source: traffic_aids_drawings_gdb
+      layer: DTAD_RD_MARK_LINE
+      fields:
+        edge_type: LINETYPE
+        elevation: ELEVATION
+      codes: [RM1001]
+      off_grade_codes: [A01, A03]
+
 # The tramway, drawn by pipeline/tramway.py as tram.glb (P3-14, Q58).
 #
 # ⚠️ **This is a build input, not an instrument's truth side** — unlike
