@@ -123,7 +123,7 @@ import logging
 import math
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -245,6 +245,36 @@ class Station:
     # perpendicular one. Never signed: which way it leans says nothing here.
     partner_offset_deg: float = float("nan")
 
+    # ── the junction opening (`Q127`), measured and NOT judged ────────────
+    #
+    # 🔴 **`near_junction` asks "is a node close?"; these ask "is a side street
+    # open beside me?"**, which is the failure the 12 m guard stands in for — a
+    # ray escaping across a junction mouth to the far kerb of the crossing
+    # (`Q126` measured it: `e263` LEIGHTON ROAD 10.57 → 15.34 m at a 10 m guard).
+    # The corner allowance is applied where the table is printed, never here,
+    # for `partner_offset_deg`'s reason: a bar applied at record time confines
+    # the population to itself and no sweep of it could read a refusal.
+    #
+    # Plan distance to the nearer of this edge's OWN two end nodes. Other
+    # edges' nodes are deliberately not asked — a node on the opposed
+    # carriageway is not a mouth, and the crossing rule already sees that ray.
+    node_m: float = float("nan")
+    # Plan distance to the nearest node that is NOT one of this edge's ends — the
+    # opposed carriageway's junction, a cross street passing close. Recorded
+    # because the first reading refuted dropping the guard there outright: the
+    # stations it held back read `> 0.5 m` off their median on 56% against a
+    # mid-block 29%, and `e263` LEIGHTON ROAD's over-read is one of them.
+    foreign_node_m: float = float("nan")
+    # How far INSIDE the widest side-street opening at either own end this
+    # station sits, before any corner allowance: `half-width of the side street
+    # - node_m`. Positive is in the mouth; NaN is an end with no side street at
+    # all (a continuation only, or a dead end).
+    mouth_m: float = float("nan")
+
+    def in_opening(self, corner_m: float) -> bool:
+        """Whether a side street's opening, grown by `corner_m`, reaches this station."""
+        return not math.isnan(self.mouth_m) and self.mouth_m + corner_m > 0.0
+
     @property
     def width_near_m(self) -> float:
         """The shorter of the spanning publisher's two rays.
@@ -320,6 +350,9 @@ class Report:
     # graph built before schema 6.
     lanes_source: dict[int, str] = field(default_factory=dict)
     widths_authored: dict[int, float] = field(default_factory=dict)
+    # `roadgraph.json`'s own `width_source`, so the opening table can say how
+    # many of a rule's gains land on edges the pipeline left authored (`Q127`).
+    width_sources: dict[int, str] = field(default_factory=dict)
 
     @property
     def spans(self) -> list[Station]:
@@ -495,6 +528,27 @@ class _Index:
     def cast(self, origin: np.ndarray, direction: np.ndarray, max_m: float) -> float | None:
         """`cast_both`'s forward half, for a caller measuring one direction."""
         return self.cast_both(origin, direction, max_m)[0]
+
+    def cast_all(
+        self, origin: np.ndarray, direction: np.ndarray, max_m: float
+    ) -> list[tuple[float, int]]:
+        """EVERY hit within `max_m` either way, as `(signed distance, row)` in ray order.
+
+        `Q127`'s lane spacing needs every painted line across a station, not the
+        nearest, so this is the one reader of `_solve` that keeps them all. From
+        the same solve for `_solve`'s own reason. ⚠️ **De-duplicated on the row**:
+        `_solve` leaves a segment spanning two cells in twice, harmless to a
+        minimum and a double-counted line here.
+        """
+        solved = self._solve(origin, direction, max_m)
+        if solved is None:
+            return []
+        rows, along, on_segment = solved
+        keep = on_segment & (np.abs(along) <= max_m)
+        seen: dict[int, float] = {}
+        for row, distance in zip(rows[keep].tolist(), along[keep].tolist(), strict=True):
+            seen.setdefault(int(row), float(distance))
+        return sorted(((distance, row) for row, distance in seen.items()), key=lambda hit: hit[0])
 
     def cast_hit(
         self, origin: np.ndarray, direction: np.ndarray, max_m: float, *, exclude: int
@@ -706,6 +760,117 @@ def opposed_offset_deg(here: np.ndarray, there: np.ndarray) -> float:
     return 180.0 - math.degrees(math.acos(cosine))
 
 
+@dataclass(frozen=True)
+class Openings:
+    """Which side streets leave each graph node, which way, and how wide (`Q127`).
+
+    🔴 **The graph's own directions, and no new geometry.** A junction mouth is
+    where another centreline leaves the node this edge ends at, and the
+    publishers' kerb lines break across exactly that gap — so an opening is read
+    off `roadgraph.json` rather than off a kerb the ray may or may not find.
+
+    ⚠️ **A continuation is not an opening.** An edge leaving the node within the
+    bearing bar of straight on (or straight back) carries this street on past a
+    node the graph put there for its own reasons — a speed limit, a region cut —
+    and there is no gap in either kerb. The bar is `pair_bearing_tolerance_deg`,
+    the one this tool already reads centrelines against, so there is no second
+    angle.
+
+    ⚠️ **The opening's half-width is the side street's graph `width_m`**, authored
+    or measured, and never the drawn ribbon — the drawn width is the playability
+    floor, and reading it would size every mouth by the thing `Q127` asks about.
+    """
+
+    positions: np.ndarray
+    # node -> every level-0 edge ending there, as `(edge id, unit heading AWAY
+    # from the node, graph width_m)`.
+    leaving: dict[int, list[tuple[int, np.ndarray, float]]]
+    # edge -> `(from node, to node)`.
+    ends: dict[int, tuple[int, int]]
+
+    @staticmethod
+    def of(graph: dict[str, Any]) -> Openings:
+        positions = np.asarray([node["pos"] for node in graph["nodes"]], dtype=np.float64).reshape(
+            -1, 3
+        )[:, [0, 2]]
+        leaving: dict[int, list[tuple[int, np.ndarray, float]]] = defaultdict(list)
+        ends: dict[int, tuple[int, int]] = {}
+        for edge in graph["edges"]:
+            if int(edge["elevation_level"]) != 0:
+                continue
+            plan = np.asarray(edge["polyline"], dtype=np.float64).reshape(-1, 3)[:, [0, 2]]
+            head = _heading_away(plan)
+            tail = _heading_away(plan[::-1])
+            if head is None or tail is None:
+                continue
+            edge_id = int(edge["id"])
+            start, end = int(edge["from"]), int(edge["to"])
+            ends[edge_id] = (start, end)
+            width = float(edge["width_m"])
+            leaving[start].append((edge_id, head, width))
+            leaving[end].append((edge_id, tail, width))
+        return Openings(positions=positions, leaving=dict(leaving), ends=ends)
+
+    def at(
+        self, edge_id: int, point: np.ndarray, continuation_deg: float
+    ) -> tuple[float, float, float]:
+        """`(node_m, foreign_node_m, mouth_m)` for a station of `edge_id` at `point`.
+
+        NaNs for an edge the graph does not carry at level 0.
+        """
+        if edge_id not in self.ends:
+            return float("nan"), float("nan"), float("nan")
+        others = np.ones(len(self.positions), dtype=bool)
+        others[list(self.ends[edge_id])] = False
+        foreign_m = (
+            float(np.hypot(*(self.positions[others] - point).T).min())
+            if others.any()
+            else float("inf")
+        )
+        node_m = min(
+            float(np.hypot(*(self.positions[node] - point))) for node in set(self.ends[edge_id])
+        )
+        mouth_m = float("nan")
+        for position, widest in self.mouths(edge_id, continuation_deg):
+            inside = widest - float(np.hypot(*(position - point)))
+            mouth_m = inside if math.isnan(mouth_m) else max(mouth_m, inside)
+        return node_m, foreign_m, mouth_m
+
+    def mouths(self, edge_id: int, continuation_deg: float) -> list[tuple[np.ndarray, float]]:
+        """Each own end a side street leaves, as `(node position, widest half-width)`.
+
+        A property of the edge rather than of a station, so a caller walking one
+        edge reads it once; `at` is the per-station form and adds the distances.
+        """
+        cosine_bar = math.cos(math.radians(continuation_deg))
+        found: list[tuple[np.ndarray, float]] = []
+        for node in set(self.ends.get(edge_id, ())):
+            own = [heading for owner, heading, _ in self.leaving[node] if owner == edge_id]
+            widest = max(
+                (
+                    width / 2.0
+                    for owner, heading, width in self.leaving[node]
+                    if owner != edge_id
+                    # |cos| near 1 is straight on or straight back — the street
+                    # carrying on, not a side street leaving it.
+                    and all(abs(float(heading @ mine)) < cosine_bar for mine in own)
+                ),
+                default=None,
+            )
+            if widest is not None:
+                found.append((self.positions[node], widest))
+        return found
+
+
+def _heading_away(plan: np.ndarray) -> np.ndarray | None:
+    """Unit plan direction of a polyline's first non-degenerate step, or None."""
+    for step in np.diff(plan, axis=0):
+        length = float(np.hypot(*step))
+        if length > 0.0:
+            return step / length
+    return None
+
+
 def _partner_at(
     centrelines: _Index,
     origin: np.ndarray,
@@ -859,8 +1024,13 @@ def survey(
     junction_m: float,
     sources_root: Path | None,
     out_root: Path | None,
+    continuation_deg: float | None = None,
 ) -> Report:
-    """Walk every level-0 edge and measure it against each published source."""
+    """Walk every level-0 edge and measure it against each published source.
+
+    `continuation_deg` is the bar `Openings` reads a continuation by; `None`
+    leaves every station's opening unmeasured, for a city with no width bounds.
+    """
     spec = city.carriageway_survey
     if spec is None:
         raise SystemExit(
@@ -882,6 +1052,7 @@ def survey(
 
     nodes = np.asarray([node["pos"] for node in graph["nodes"]], dtype=np.float64)[:, [0, 2]]
     centrelines = graph_edges(graph)
+    openings = Openings.of(graph) if continuation_deg is not None else None
 
     for edge in graph["edges"]:
         if int(edge["elevation_level"]) != 0:
@@ -896,6 +1067,7 @@ def survey(
         report.lanes[edge_id] = int(edge["lanes"])
         report.lanes_source[edge_id] = str(edge.get("lanes_source", "authored"))
         report.widths_authored[edge_id] = float(edge["width_m"])
+        report.width_sources[edge_id] = str(edge.get("width_source", "authored"))
         drawn_half_widths = widths.get(edge_id, [])
 
         for vertex, station in walk_width(polyline, spacing_m):
@@ -918,16 +1090,21 @@ def survey(
                 report.agreement.append(max(spread) - min(spread))
 
             near_junction = bool(np.min(np.hypot(*(nodes - origin).T)) <= junction_m)
-            # ⚠️ **The skip mirrors `edge_widths`' own filter and must keep
-            # mirroring it.** `_candidate` votes over `report.spans` with junction
-            # stations dropped, so a partner found anywhere else is measured and
-            # never read — 6,604 of 12,502 stations on Wan Chai. `-1`/NaN is
-            # already the "reached no graph edge" sentinel, so no reader can tell
-            # a skipped station from an unanswered one. Widen that filter and this
-            # guard has to widen with it.
+            node_m, foreign_node_m, mouth_m = (
+                openings.at(edge_id, origin, continuation_deg)
+                if openings is not None and continuation_deg is not None
+                else (float("nan"), float("nan"), float("nan"))
+            )
+            # ⚠️ **Cast at junction stations too since `Q127`, and still inert
+            # for every table above it.** `_candidate` votes only over the
+            # stations `edge_widths`' `keep` admits, and the default `keep`
+            # drops junction stations exactly as the old skip here did — so the
+            # shipped tables cannot see these partners. The opening rule admits
+            # some of those stations, and a row it builds without their votes
+            # would be refused a decomposition the guard, not the city, denied.
             partner_edge, partner_offset = (
                 _partner_at(centrelines, origin, normal, along[[0, 2]], max_ray_m, edge=edge_id)
-                if spanner and not near_junction
+                if spanner
                 else (-1, float("nan"))
             )
 
@@ -943,6 +1120,9 @@ def survey(
                     width_backward_m=behind,
                     partner_edge=partner_edge,
                     partner_offset_deg=partner_offset,
+                    node_m=node_m,
+                    foreign_node_m=foreign_node_m,
+                    mouth_m=mouth_m,
                 )
             )
             report.edges_measured.add(edge_id)
@@ -1140,7 +1320,19 @@ class EdgeWidth:
         return self.own_m if basis == BASIS_DECOMPOSED else self.median_m
 
 
-def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> list[EdgeWidth]:
+def _away_from_junction(station: Station) -> bool:
+    """The shipped station filter: nothing within `--junction-m` of any node."""
+    return not station.near_junction
+
+
+def edge_widths(
+    report: Report,
+    bounds: WidthBounds,
+    *,
+    minimum_n: int = 3,
+    keep: Callable[[Station], bool] = _away_from_junction,
+    agree_m: float | None = None,
+) -> list[EdgeWidth]:
     """Per-edge span: the median FIRST, then the refusal.
 
     🔴 **Order matters, and the obvious order is the wrong one.** Refusing
@@ -1156,15 +1348,28 @@ def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> l
 
     Junction stations are dropped, as everywhere else in this report — a station
     in a junction mouth has no far kerb to find, and it reads as a wide road.
+
+    ⚠️ **`keep` and `agree_m` exist for `Q127`'s variants and nothing else**, and
+    their defaults are the shipped rule, which every table above the opening
+    section is printed under. `agree_m` refuses an edge resting on exactly two
+    stations that disagree by more than it: a median of two is a mean of two
+    rays, so the one thing that can stand in for the third station is that the
+    two already say the same thing.
     """
     per_edge: dict[int, list[Station]] = defaultdict(list)
     for station in report.spans:
-        if not station.near_junction:
+        if keep(station):
             per_edge[station.edge].append(station)
 
     rows: list[EdgeWidth] = []
     for edge_id, stations in per_edge.items():
         if len(stations) < minimum_n:
+            continue
+        if (
+            agree_m is not None
+            and len(stations) == 2
+            and abs(stations[0].width_m - stations[1].width_m) > agree_m
+        ):
             continue
         widths = [s.width_m for s in stations]
         median = float(np.median(widths))
@@ -1896,6 +2101,221 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
     return lines
 
 
+# Distance from a station to its nearer own end node. The last band is the
+# population the shipped guard drops for a node that is NOT one of its own ends —
+# the opposed carriageway's, a cross street passing close — which the opening
+# rule never drops at all.
+_NODE_BANDS = ((0.0, 4.0, "0-4 m"), (4.0, 8.0, "4-8 m"), (8.0, 12.0, "8-12 m"))
+
+# Edge-length bands for what a rule gains. Finer than `_BANDS` at the short end,
+# because the short end is the whole question: under 10 m an edge holds two
+# stations at the 4 m spacing and no rule about junctions can give it three.
+_GAIN_BANDS = ((0.0, 10.0, "<=10"), (10.0, 20.0, "10-20"), (20.0, 30.0, "20-30"))
+
+
+def mouth_noise(report: Report, rows: list[EdgeWidth]) -> list[float]:
+    """Mid-block station scatter: |width - median of the edge's OTHER mid-block stations|.
+
+    The floor a reinstated station has to be read against. ⚠️ Leave-one-out, not
+    the edge's own median, which contains the station and shrinks its error by
+    construction — `Q58`'s trap in the one number the rest of the section is
+    graded against.
+    """
+    readable = {row.edge for row in rows if not row.refused}
+    per_edge: dict[int, list[float]] = defaultdict(list)
+    for station in report.spans:
+        if station.edge in readable and not station.near_junction:
+            per_edge[station.edge].append(station.width_m)
+    scatter: list[float] = []
+    for widths in per_edge.values():
+        if len(widths) < 3:
+            continue
+        for i, width in enumerate(widths):
+            others = widths[:i] + widths[i + 1 :]
+            scatter.append(abs(width - float(np.median(others))))
+    return scatter
+
+
+def _render_mouths(
+    report: Report,
+    bounds: WidthBounds,
+    *,
+    junction_m: float,
+    corners: list[float],
+    shipped: list[EdgeWidth],
+) -> list[str]:
+    """`Q127`: read a junction by the side streets that leave it, not by a radius.
+
+    🔴 **Graded before it is counted, on the edges that already have an answer.**
+    Every edge with a readable median under the shipped rule is a reference: its
+    near-node stations — the ones the guard throws away — are read against its
+    own mid-block median. A rule that keeps stations whose error looks like the
+    mid-block scatter is admitting readings; one whose kept rows read wide is
+    admitting junction mouths, which is what `Q126`'s 10 m guard did to `e263`.
+
+    ⚠️ **The in-opening column is the control, not decoration.** If the stations
+    the rule drops do not read wide, the rule is not finding mouths and its
+    clean kept column proves nothing.
+
+    ⚠️ **It grades a rule for the survey; it publishes nothing.** The gains below
+    are what `carriageway.py` would license under the same rule, and only if
+    both copies of the survey moved together.
+    """
+    lines = [
+        "",
+        "junction openings (Q127): drop a station only where a side street's opening, "
+        "grown by R, reaches it",
+    ]
+    if all(math.isnan(station.node_m) for station in report.spans):
+        lines.append("  not measured: this city declares no width bounds to read a continuation by")
+        return lines
+
+    reference = {row.edge: row for row in shipped if not row.refused}
+    scatter = mouth_noise(report, shipped)
+    agree_m = _percentiles(scatter, (90,))[0] if scatter else 0.0
+    p50, p90 = _percentiles(scatter, (50, 90))
+    lines.append(
+        f"  continuation = within {bounds.pair_bearing_tolerance_deg:.0f} deg of straight on; "
+        "opening half-width = the side street's graph width_m / 2"
+    )
+    lines.append(
+        f"  noise floor, mid-block leave-one-out over {len(reference)} readable edges: "
+        f"n {len(scatter):,}  p50 {p50:.2f}  p90 {p90:.2f}  > 0.5 m {_share_over(scatter, 0.5):.1%}"
+    )
+
+    lines.append("")
+    lines.append(
+        f"  error = station span - its edge's mid-block median, over the stations the "
+        f"{junction_m:.0f} m guard drops"
+    )
+    lines.append(
+        f"  {'R m':>5} {'to own node':<12} {'kept n':>7} {'p50':>6} {'|p90|':>6} {'> 0.5':>6}"
+        f"   {'opening n':>9} {'p50':>6} {'|p90|':>6} {'> 0.5':>6}"
+    )
+    dropped = [
+        station
+        for station in report.spans
+        if station.near_junction and station.edge in reference and not math.isnan(station.node_m)
+    ]
+    for corner in corners:
+        # The own-node bands hold only stations clear of every OTHER node, so a
+        # row reads one question; the last row is the other question, whatever
+        # the station's distance to its own ends.
+        bands: list[tuple[str, Callable[[Station], bool]]] = [
+            (
+                label,
+                lambda s, low=low, high=high: (
+                    s.foreign_node_m > junction_m and low <= s.node_m < high
+                ),
+            )
+            for low, high, label in _NODE_BANDS
+        ]
+        bands.append((f"other <={junction_m:.0f}", lambda s: s.foreign_node_m <= junction_m))
+        for label, member in bands:
+            kept: list[float] = []
+            opening: list[float] = []
+            for station in dropped:
+                if not member(station):
+                    continue
+                error = station.width_m - reference[station.edge].median_m
+                (opening if station.in_opening(corner) else kept).append(error)
+            row = f"  {corner:>5.1f} {label:<12}"
+            for errors in (kept, opening):
+                if not errors:
+                    row += f" {0:>7} {'-':>6} {'-':>6} {'-':>6}  "
+                    continue
+                middle = _percentiles(errors, (50,))[0]
+                tail = _percentiles([abs(e) for e in errors], (90,))[0]
+                row += (
+                    f" {len(errors):>7,} {middle:>+6.2f} {tail:>6.2f} "
+                    f"{_share_over([abs(e) for e in errors], 0.5):>5.1%}  "
+                )
+            lines.append(row.rstrip())
+
+    lowest = min(corners)
+    worst = sorted(
+        (
+            (abs(station.width_m - reference[station.edge].median_m), station)
+            for station in dropped
+            if not station.in_opening(lowest)
+        ),
+        key=lambda item: -item[0],
+    )
+    lines.append("")
+    lines.append(
+        f"  worst {_WORST} KEPT stations at R {lowest:.1f} m — a mouth leaking through reads here"
+    )
+    lines.append(
+        f"  {'edge':>6} {'node m':>7} {'mouth m':>8} {'span':>6} {'median':>7} {'error':>7}  road"
+    )
+    for _, station in worst[:_WORST]:
+        mouth = "-" if math.isnan(station.mouth_m) else f"{station.mouth_m:+.2f}"
+        median = reference[station.edge].median_m
+        lines.append(
+            f"  {station.edge:>6} {station.node_m:>7.2f} {mouth:>8} {station.width_m:>6.2f} "
+            f"{median:>7.2f} {station.width_m - median:>+7.2f}"
+            f"  {report.names.get(station.edge, 'unnamed')}"
+        )
+
+    baseline = {row.edge: row.carriageway_m(bounds) for row in shipped if row.basis(bounds)}
+    lines.append("")
+    lines.append(
+        "  what each rule licenses; 2 agreeing = two stations within the noise p90 "
+        f"({agree_m:.2f} m)"
+    )
+    lines.append(
+        f"  {'rule':<32} {'licensed':>8} {'authored':>8} "
+        + " ".join(f"{label:>6}" for _, _, label in _GAIN_BANDS)
+        + f" {'>30':>6} {'lost':>5} {'moved p90':>9} {'max':>6} {'> 0.5':>5}"
+    )
+    # Two axes, one loop each: which stations a rule admits, and how many of
+    # them it needs. Every rule is read at both floors.
+    floors = ((3, None, "n >= 3"), (2, agree_m, "2 agreeing"))
+    rules: list[tuple[str, Callable[[Station], bool]]] = [
+        (f"{junction_m:.0f} m guard", _away_from_junction)
+    ]
+    for corner in corners:
+
+        def keep(station: Station, corner: float = corner) -> bool:
+            return not station.in_opening(corner)
+
+        def guarded(station: Station, corner: float = corner) -> bool:
+            return not station.in_opening(corner) and station.foreign_node_m > junction_m
+
+        rules.append((f"openings R {corner:.1f}", keep))
+        rules.append((f"  + other nodes {junction_m:.0f} m", guarded))
+    for rule, keep_rule in rules:
+        for minimum_n, agree, floor in floors:
+            rows = edge_widths(report, bounds, minimum_n=minimum_n, keep=keep_rule, agree_m=agree)
+            licensed = {row.edge: row.carriageway_m(bounds) for row in rows if row.basis(bounds)}
+            authored = [
+                edge
+                for edge in licensed
+                if report.width_sources.get(edge, "authored") == "authored"
+            ]
+            counts = [
+                sum(1 for edge in authored if low < report.lengths.get(edge, 0.0) <= high)
+                for low, high, _ in _GAIN_BANDS
+            ]
+            longer = sum(
+                1 for edge in authored if report.lengths.get(edge, 0.0) > _GAIN_BANDS[-1][1]
+            )
+            lost = sum(1 for edge in baseline if edge not in licensed)
+            moved = [abs(licensed[edge] - baseline[edge]) for edge in baseline if edge in licensed]
+            tail = _percentiles(moved, (90,))[0] if moved else float("nan")
+            lines.append(
+                f"  {f'{rule}, {floor}':<32} {len(licensed):>8} {len(authored):>8} "
+                + " ".join(f"{count:>6}" for count in counts)
+                + f" {longer:>6} {lost:>5} {tail:>9.2f} {max(moved, default=0.0):>6.2f} "
+                f"{sum(1 for m in moved if m > 0.5):>5}"
+            )
+    lines.append(
+        "  ⚠️ 'authored' counts edges roadgraph.json left authored; the tool and the pipeline "
+        "license slightly different sets, so read a rule against the guard row, not against 444"
+    )
+    return lines
+
+
 def write_widths(
     rows: list[EdgeWidth], report: Report, bounds: WidthBounds, destination: Path
 ) -> int:
@@ -2013,6 +2433,15 @@ def main(argv: list[str] | None = None) -> int:
         help="override the narrowest opposed carriageway; below it a span never crossed a median",
     )
     parser.add_argument(
+        "--mouth-corner-m",
+        default="0,2,4,6,8",
+        # `Q127`. How far past a side street's own half-width its opening is taken
+        # to reach, for the kerb's corner radius. A comma list because it is a
+        # sweep and never a setting: the survey is not moved by this tool, and
+        # a value quoted from one row would be `Q72`'s free radius.
+        help="comma list of corner allowances the junction-opening section is printed at",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="also write the per-edge rows to carriageway_width.json under the region's out dir",
@@ -2100,6 +2529,11 @@ def main(argv: list[str] | None = None) -> int:
             f"cannot reach the {bounds.max_m:.1f} m ceiling — every span would be kept by "
             "construction. Raise the ray or lower the ceiling."
         )
+    corners = [float(value) for value in args.mouth_corner_m.split(",") if value.strip()]
+    if not corners or any(corner < 0.0 for corner in corners):
+        # Negative shrinks an opening below the side street's own width, which
+        # admits the mouth the section exists to find.
+        raise SystemExit(f"--mouth-corner-m {args.mouth_corner_m!r} needs non-negative metres")
     report = survey(
         city,
         args.region,
@@ -2108,6 +2542,7 @@ def main(argv: list[str] | None = None) -> int:
         junction_m=args.junction_m,
         sources_root=args.sources_root,
         out_root=args.out_root,
+        continuation_deg=bounds.pair_bearing_tolerance_deg if bounds is not None else None,
     )
     if not report.stations:
         raise SystemExit(
@@ -2128,6 +2563,21 @@ def main(argv: list[str] | None = None) -> int:
             rows=rows,
         )
     )
+    if bounds is not None:
+        # Printed after `render`, never inside it, so every table above stays
+        # byte-identical to a run without this section — the inertness proof.
+        print(
+            "\n".join(
+                _render_mouths(
+                    report,
+                    bounds,
+                    junction_m=args.junction_m,
+                    corners=corners,
+                    # The rows `render` printed, not a second survey of one report.
+                    shipped=rows if rows is not None else edge_widths(report, bounds),
+                )
+            )
+        )
     if args.json and rows is not None:
         destination = city.out_dir(args.region, args.out_root) / "carriageway_width.json"
         log.info(

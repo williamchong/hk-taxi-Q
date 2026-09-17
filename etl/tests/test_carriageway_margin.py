@@ -34,6 +34,7 @@ from carriageway_margin import (
     UNCROSSED,
     UNRESOLVED,
     EdgeWidth,
+    Openings,
     Report,
     Station,
     _Index,
@@ -991,3 +992,134 @@ class TestDualMinBound:
                     "20.0",
                 ]
             )
+
+
+def _junction(*legs: tuple[int, tuple[float, float], float]) -> dict[str, Any]:
+    """A node at the origin with one straight level-0 edge per leg.
+
+    Each leg is `(edge id, far end, width_m)`; node 0 is the origin and each far
+    end its own node, so an edge's ends are `(0, its leg's node)`.
+    """
+    nodes = [{"pos": [0.0, 0.0, 0.0]}]
+    edges = []
+    for edge_id, (x, z), width in legs:
+        nodes.append({"pos": [x, 0.0, z]})
+        edges.append(
+            {
+                "id": edge_id,
+                "from": 0,
+                "to": len(nodes) - 1,
+                "elevation_level": 0,
+                "width_m": width,
+                "polyline": [[0.0, 0.0, 0.0], [x, 0.0, z]],
+            }
+        )
+    return {"nodes": nodes, "edges": edges}
+
+
+class TestOpenings:
+    """`Q127`: a junction read by the side streets that leave it.
+
+    ⚠️ The failure this guards is quiet: an opening test that reads the edge's
+    own continuation as a side street drops every station near a node exactly as
+    the 12 m guard did, and the section then reports the rule and the guard as
+    agreeing — which reads as the rule being safe."""
+
+    def test_a_station_beside_a_side_streets_mouth_is_in_it(self) -> None:
+        # Main road east from the node, an 8 m side street north.
+        openings = Openings.of(_junction((1, (100.0, 0.0), 6.4), (2, (0.0, 50.0), 8.0)))
+
+        node_m, _, mouth_m = openings.at(1, np.array([2.0, 0.0]), 30.0)
+
+        assert node_m == pytest.approx(2.0)
+        # Half the side street's 8 m, less the 2 m to the node.
+        assert mouth_m == pytest.approx(2.0)
+
+    def test_the_corner_allowance_only_ever_grows_the_mouth(self) -> None:
+        openings = Openings.of(_junction((1, (100.0, 0.0), 6.4), (2, (0.0, 50.0), 8.0)))
+        _, _, mouth_m = openings.at(1, np.array([10.0, 0.0]), 30.0)
+        station = _station(1, 3.0, 3.0)
+        station.mouth_m = mouth_m
+
+        verdicts = [station.in_opening(corner) for corner in (0.0, 2.0, 6.0, 8.0)]
+
+        # 4 m of half-width against 10 m to the node: out until R reaches 6.
+        assert verdicts == [False, False, False, True]
+
+    def test_a_continuation_is_not_an_opening(self) -> None:
+        """The street carrying on past a node the graph split for its own
+        reasons leaves no gap in either kerb."""
+        openings = Openings.of(_junction((1, (100.0, 0.0), 6.4), (3, (-100.0, 0.0), 6.4)))
+
+        _, _, mouth_m = openings.at(1, np.array([2.0, 0.0]), 30.0)
+
+        assert math.isnan(mouth_m)
+
+    def test_a_node_off_the_edge_is_foreign_and_opens_nothing(self) -> None:
+        """Another edge's node near the station is recorded apart and never
+        read as a mouth at this edge's ends. The station sits NEARER its own
+        end than the foreign node, so a foreign distance that forgot to mask the
+        own ends reads 4 m here rather than 10."""
+        graph = _junction((1, (100.0, 0.0), 6.4))
+        graph["nodes"].append({"pos": [4.0, 0.0, 10.0]})
+
+        node_m, foreign_m, mouth_m = Openings.of(graph).at(1, np.array([4.0, 0.0]), 30.0)
+
+        assert node_m == pytest.approx(4.0)
+        assert foreign_m == pytest.approx(10.0)
+        assert math.isnan(mouth_m)
+
+    def test_an_edge_off_the_graph_measures_nothing(self) -> None:
+        openings = Openings.of(_junction((1, (100.0, 0.0), 6.4)))
+
+        assert all(math.isnan(value) for value in openings.at(99, np.zeros(2), 30.0))
+
+
+class TestEdgeWidthVariants:
+    """`keep` and `agree_m` default to the shipped rule, and the variants are
+    the only readers that may widen it."""
+
+    def test_the_defaults_are_the_shipped_rule(self) -> None:
+        report = Report()
+        report.stations = [
+            _station(1, 3.0, 3.0),
+            _station(1, 3.0, 3.0),
+            _station(1, 3.0, 3.0, junction=True),
+        ]
+
+        assert edge_widths(report, _bounds()) == []
+
+    def test_two_agreeing_stations_license_and_two_disagreeing_do_not(self) -> None:
+        agreeing = Report()
+        agreeing.stations = [_station(1, 3.0, 3.0), _station(1, 3.0, 3.5)]
+        disagreeing = Report()
+        disagreeing.stations = [_station(1, 3.0, 3.0), _station(1, 3.0, 6.0)]
+
+        kept = edge_widths(agreeing, _bounds(), minimum_n=2, agree_m=1.0)
+        refused = edge_widths(disagreeing, _bounds(), minimum_n=2, agree_m=1.0)
+
+        assert [row.edge for row in kept] == [1]
+        assert refused == []
+
+    def test_keep_admits_a_junction_station(self) -> None:
+        report = Report()
+        report.stations = [_station(1, 3.0, 3.0, junction=True) for _ in range(3)]
+
+        (row,) = edge_widths(report, _bounds(), keep=lambda station: True)
+
+        assert row.n == 3
+
+
+class TestCastAll:
+    def test_every_line_across_comes_back_in_ray_order(self) -> None:
+        """`Q127`'s lane spacing needs every line, and `_solve` leaves a segment
+        spanning two cells in twice — a double-counted line is a lane."""
+        # The third crosses the 20 m cell boundary inside the ray's own column, so
+        # the index files it in two buckets the ray walks.
+        index = _index(
+            [(-50.0, 3.0), (50.0, 3.0)], [(-50.0, -6.0), (50.0, -6.0)], [(-1.0, 19.0), (1.0, 21.0)]
+        )
+
+        hits = index.cast_all(np.zeros(2), np.array([0.0, 1.0]), 25.0)
+
+        assert [round(distance, 6) for distance, _ in hits] == [-6.0, 3.0, 20.0]
