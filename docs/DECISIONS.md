@@ -22722,6 +22722,55 @@ streets, under a bar that is TD's own and cannot be chosen here — `Q113` alrea
 count alone is not the fix. **D** (2): the tram reserve inside the width. Mong Kok and Sha Tin need a
 rebuild before they can be scanned.
 
+### 🔴 Cause B measured, 2026-09-17: the junction guard may not move, and the station floor buys one pair
+
+"No measured width" is three sub-causes, read off `carriageway_width.json`'s own rows. **B1**, seven
+pairs: links of 15–37 m (`e20`, `e128`, `e137`, `e174`, `e615`, and both TUNG LO WAN ROAD edges)
+where the 12 m guard at each end leaves fewer than `MIN_STATIONS`' three 4 m stations. **B2**, three
+pairs: STEWART ROAD `e504`/`e505`, spanning 16.7–16.8 m against TD's 16.5 m `max_m`, which `Q94`
+already said may not move. **B3**, three pairs: `e194` and `e657`, opposed pairs whose `beyond`
+lands in the band that publishes nothing on purpose. ⚠️ TD's lane lines (`RM1101`/`RM1102`, 216
+features on 211 of 734 level-0 edges, unread today) touch only `e194` and `e657` of the nine.
+
+B1 is the only one a survey constant reaches, so both constants were swept on scratch copies of the
+shipped bundle — `roads` → `surface` → `clearance` → `fence` → `arrows` → `export`, `carve` left as
+shipped — with the control reproducing `roadgraph.json`, `arrows.json`, `clearance.json`,
+`fence.json` and `roadsurface.json` **byte-for-byte**:
+
+| run | measured widths | new widths p50 / p90 / max | drift on the 290 already measured: p90 / max / n over +0.5 m | lost | `stacked_disagreeing` | B edges gained |
+|---|---|---|---|---|---|---|
+| shipped (12 m, 3 stations) | 290 | — | — | — | 25 | — |
+| **12 m, 2 stations** | **306** | 7.64 / 10.39 / 11.70 | **0.000 / 0.000 / 0** | 0 | **24** | `e20` |
+| 10 m, 3 | 309 | 7.37 / 10.34 / 15.46 | 0.041 / **4.771** / 3 | `e9`, `e593` | 23 | `e20`, `e615` |
+| 8 m, 3 | 325 | 7.49 / 11.05 / 15.46 | 0.115 / 4.771 / 5 | `e9` | 23 | `e20`, `e615` |
+| 6 m, 3 | 337 | 7.36 / 11.62 / 16.47 | 0.207 / 2.105 / 6 | 5 edges | 22 | + `e128` |
+| 4 m, 3 | 358 | 7.11 / 11.52 / 16.47 | 0.297 / 2.105 / 9 | 5 edges | 22 | + `e128` |
+
+🔴 **The guard is refuted at its first step, and it is `Q57`'s over-read arriving.** At 10 m LEIGHTON
+ROAD `e263` goes **10.57 → 15.34 m** (`hyd_pavement` → `hyd_pavement+ib1000`) and loses a lane, 3 → 2:
+the two stations admitted nearest the node cast their ray across the junction mouth to the far kerb.
+Two edges measured at 12 m are *lost* at 10, five at 6 and 4. And `clearance_reconcile.py`'s ratchet
+moves at 10 m — grader-only gains `e252`, pipeline-only gains `e364`, "8 where `Q51` records 6" —
+and again at 6 (25 / 7 against 26 / 6). ⚠️ **`Q19`'s starved population itself does not move at any
+guard**: 19 level-0 edges under the lane bar, 14 under the car's, 14 fenced, the same sets in all
+seven builds, and `carriageway_occupancy.py` reads its standing 21 in every one. What moves is the
+reconciliation between the two instruments, which is the thing the ratchet exists to hold.
+
+✅ **The two-station floor is clean where the guard is not**: no already-measured width moves, by
+construction — no station is added, only the reduction admits an edge with two — the ratchet reads
+22 / 26 / 6 with the same edge sets as shipped, and 16 edges of 30–71 m gain a width (p50 7.64 m, max
+11.70, none past the ceiling), `lanes` 147 / 60 → 159 / 61 with four streets at 5.7–6.0 m published as
+the single lane they are. It gains **one** of cause B's pairs (`e20` MORRISON HILL ROAD, 11.15 m,
+three lanes); `e615` HYSAN AVENUE has one station at 12 m and needs the guard. ⚠️ **Not taken here**:
+the floor's own comment is *"what stops a 6 m stub publishing a width off one lucky ray"*, a median of
+two is a mean of two rays, the tool restates the same floor as a literal (`n >= 3`) and would have to
+move with it, and one pair is not the case for it. If `Q95`'s width coverage ever is, this is the
+lever and the guard is not.
+
+Harness: `sweep_b.py` in the session scratchpad — patch `carriageway.JUNCTION_M` /
+`MIN_STATIONS`, copy the bundle, run the six stages with `out_root` — not committed, because a
+survey constant is not a knob (`Q72`) and a tool to sweep one would say it is.
+
 **See.** `Q94` for the row as a lane-count source and `_ROW_MIN` · `Q114` for the floor that came
 off the count · `Q95`/`Q96` for the measured width the snap divides by · `Q54` for sourced-not-invented,
 which is why `null` is published rather than a guess · `Q62` for why the evidence is a frame
