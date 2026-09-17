@@ -22774,3 +22774,133 @@ survey constant is not a knob (`Q72`) and a tool to sweep one would say it is.
 **See.** `Q94` for the row as a lane-count source and `_ROW_MIN` · `Q114` for the floor that came
 off the count · `Q95`/`Q96` for the measured width the snap divides by · `Q54` for sourced-not-invented,
 which is why `null` is published rather than a guess · `Q62` for why the evidence is a frame
+
+---
+
+## `Q127` — Reading a carriageway width where the ray survey cannot
+
+**Asked 2026-09-18, by the user:** draw every road at its source width rather than the 10.24 m
+floor, to cut the junction and marking defects the widening causes. The obstacle is that **444 of
+Wan Chai's 734 level-0 edges have no source width** — they carry `lanes x lane_width_m`, 6.4 m — so
+"source width" is invented on most of the network. The user asked whether a smarter ray, a
+two-station floor, or anything else the build already downloads could read those widths. **Measured
+only; nothing ships.** No pipeline stage, bundle, schema, floor or shader moved, and `roadgraph.json`
+rebuilt byte-identical with the one config change this adds (`carriageway_survey.lane_lines`, which
+the build never opens).
+
+### Why 444 edges have no width
+
+The survey drops any station within `JUNCTION_M` 12 m of **any** node and needs `MIN_STATIONS` 3
+at 4 m, so an edge needs ~34 m. **322 were never surveyed** — 254 of them are ≤ 30 m, 176 ≤ 20 m,
+70 ≤ 10 m, p50 18.7 m — and **122 were surveyed and refused** (crossed a median, or `unresolved`).
+⚠️ **Under 10 m nothing reaches, by arithmetic and by geometry**: two stations at 4 m, and the whole
+link lies inside the openings of the side streets at both ends.
+
+### Part A — a junction read by its side streets, not a radius (`tools/carriageway_margin.py`)
+
+`Openings` reads, per node, which level-0 edges leave it and which way; a station is dropped only
+where a side street's opening (`width_m / 2 + R`) reaches it. Graded on the stations the 12 m guard
+drops, against their own edge's mid-block median. ✅ **The four shipped tables are byte-identical**
+on both regions — the new section prints after them.
+
+| Wan Chai | licensed | authored gained | lost | moved > 0.5 m |
+|---|---|---|---|---|
+| 12 m guard, n ≥ 3 (shipped) | 308 | 22 | 0 | 0 |
+| **12 m guard, 2 agreeing** | **320** | **32** | **0** | **0** |
+| openings R 0 | 395 | 110 | 10 | 25 |
+| openings R 8, other nodes kept at 12 m | 326 | 40 | 8 | 12 |
+
+Causeway Bay: 77 → **94 / 0 / 0** for two agreeing; openings R 0 reach 134 and lose 5, move 5.
+
+🔴 **The opening rule is REFUTED, on `Q126`'s own criterion** — it loses and moves widths the survey
+already has at every R from 0 to 8 and every continuation angle from 10° to 60°. ✅ **The control
+works** (stations it drops read p50 **+3.15 m** wide at 0–4 m against +0.35 kept), so the rule finds
+mouths; what fails is the premise that a station clear of a mouth reads clean. Kept near-node
+stations read > 0.5 m off their median on **47–67%** against a mid-block **29.4%**, even where no
+side street leaves the node. ⚠️ **LEIGHTON ROAD `e263`'s over-read is a FOREIGN node's**, 16.5 m
+from its own ends — so "own ends only" re-admitted `Q126`'s defect, and `foreign_node_m` is recorded
+for that reason. ✅ **Two agreeing stations is clean again** (`Q126`'s result, reproduced in the
+grader): no measured width moves, tolerance = the mid-block leave-one-out p90 (2.77 m), not a knob.
+
+### Part B — four independent readings (`tools/width_evidence.py`)
+
+Every reading graded against the **290 survey-measured edges first** (`two_way_span`,
+`one_way_uncrossed`), one-way apart from two-way, never pooled. Wan Chai, `|p90|` in metres:
+
+| reading | one-way ref n / p50 / \|p90\| | two-way | authored reach | verdict |
+|---|---|---|---|---|
+| **today, `lanes x 3.2`** | 290 pooled / **−0.83** / **4.14** | — | 444 | the bar to beat |
+| stop line length (`RM1011`–`RM1013`) | 62 / +0.07 / 6.07 | ×2: 13 / +0.88 / 8.04 | 67 | ⛔ refuted |
+| lane-line pitch × lanes seen | 89 / +2.57 / 10.88 | 8 / −0.67 / 4.64 | 180 | ⛔ refuted — sees the other carriageway's lines, 51 of 75 over-count |
+| turn-arrow pitch × abreast | 95 / −0.34 / 3.47 | — | 49 | weak, a lower bound |
+| HyD area / length | 251 / −0.23 / 3.62 | 32 / −0.31 / 1.28 | 381 | a junction flare inflates a total |
+| **HyD strip through centre, clear of openings** | 244 / −0.02 / **2.96** | 32 / +0.01 / **0.85** | 304 | best single reading |
+| street borrow (same name + direction, leave-one-out) | 214 / +0.01 / 3.74 | 20 / +0.04 / 2.90 | 298 | for scale |
+
+✅ **The arrow pitch and the lane-line pitch agree** (|diff| p50 0.29, p90 0.96 m on 101 edges), so
+the *pitch* is a reading and the *lane count* is what fails. ⚠️ **HyD's one-way tail has two named
+causes**: over-read where HyD codes an adjoining paved area as carriageway (OI KWAN ROAD +11–12 m),
+under-read under a flyover and at a tram reserve (GLOUCESTER −12.1, CANAL ROAD EAST −10.4, JOHNSTON
+−5.3). Both are testable, so both became combinations below.
+
+**Bounds** — "wrong" is the share of survey-measured widths the limit contradicts:
+
+| source | Wan Chai wrong | Causeway Bay wrong | usable to refuse? |
+|---|---|---|---|
+| building frontage (T/P blocks only) | 0.5% | 0.0% | ✅ yes, loose (+8.4 / +9.9 m margin) |
+| lamp posts | 17.1% | 9.7% | ⛔ |
+| sign poles | 27.7% | 34.1% | ⛔ |
+| railings | 49.3% | 34.5% | ⛔ — they stand AT the kerb, so half read inside |
+| stop line (as a lower bound) | **56.0%** | 33.3% | ⛔ — a stop line is often longer than the carriageway measured |
+| lane lines (outer span, lower) | 27.9% | 23.1% | ⛔ |
+
+### Synthesis — which rule, or combination, clears the width best
+
+Combinations graded exactly as a single reading. 🔴 **The ray survey may not be the "second
+reading"**: on a reference edge it IS the reference, and letting it vote certified "HyD + another"
+at 0.63 m by construction; it is excluded from every combination. `<60 m` is the survey's short
+end, because 🔴 **the reference is long by construction** — p10 41 m, minimum 34.5 m — while the
+444 run **p50 24 m**, and every reading reads worse there:
+
+| Wan Chai | \|p90\| all | \|p90\| ref < 60 m | reach of 444 |
+|---|---|---|---|
+| today, `lanes x 3.2` | 4.14 | **4.56** | 100% |
+| ray survey, 2 agreeing (graded against itself) | 0.10 | 0.11 | 3.8% |
+| **HyD clean strip (no tram, no deck) + another within 1 m** | **0.88** | **1.23** | 14.0% |
+| **HyD strip + another within 1 m** | **1.23** | **1.56** | 21.8% |
+| consensus of ≥ 2 independent within 1 m | 1.90 | 2.61 | 34.7% |
+| HyD strip, no tram, no deck | 1.69 | 3.53 | 45.7% |
+| HyD strip, clear of openings | 2.59 | **4.70** | 68.5% |
+| street borrow, no tram, no deck | 3.25 | 3.08 | 43.5% |
+
+| Causeway Bay | \|p90\| all | \|p90\| ref < 60 m | reach of 129 |
+|---|---|---|---|
+| today | 3.72 | 3.69 | 100% |
+| HyD strip + another within 1 m | 0.69 | 1.14 | 28.7% |
+| HyD strip, no tram, no deck | 1.35 | 1.66 | 76.7% |
+| HyD strip, clear of openings | 1.62 | 1.86 | 89.9% |
+
+🔴 **The finding: only a CONFIRMED reading beats today on the short end in both regions.** The
+cascade *ray survey (2 agreeing) → HyD strip confirmed by one independent reading within 1 m* reaches
+**105 of 444** Wan Chai edges (23.6%) and **51 of 129** in Causeway Bay (39.5%) at a short-end
+`|p90|` of 1.2–1.6 m against today's 4.6 / 3.7, with p50 ≈ 0 throughout. ⚠️ **An unconfirmed HyD
+strip is region-dependent**: clearly better than today in Causeway Bay (1.86 against 3.69 on short
+edges) and **no better in Wan Chai** (4.70 against 4.56), where trams, flyovers and paved forecourts
+dominate — so reach past ~25% on Wan Chai is not bought with accuracy. ⚠️ **Today's rule reads
+narrow** (p50 −0.83 / −1.01 m): the invented 6.4 m under-states the streets it stands for. Tolerance
+swept 0.5 / 1.0 / 2.0 m: "HyD strip + another" reads 0.75 / 1.23 / 1.58 at 11.3 / 21.8 / 34.9% reach
+— a trade curve, not a plateau. HyD readings are ray-cap-flat from 10 to 25 m.
+
+⚠️ **Not decided here**: removing the floor, publishing any of these as `width_m`, and borrowing by
+street. Any of them is a `roads` + `surface` change owing the whole widening battery. The two-station
+floor and a confirmed HyD strip would each be a SECOND implementation in `pipeline/carriageway.py`
+of what the graders read, per `CLAUDE.md`'s rule that the survey exists twice. ⬜ Mong Kok and Sha
+Tin are built and not yet graded.
+
+Reproduce: `.venv/bin/python tools/carriageway_margin.py --region wan_chai` (last section) and
+`.venv/bin/python tools/width_evidence.py --region wan_chai` (`--agree-m`, `--max-ray-m` for the
+sweeps); both exit 0.
+
+**See.** `Q126` for the guard and two-station sweep this reproduces · `Q95` for the survey and the
+floor · `Q94` for HyD's polygons and the lane row · `Q19` for what narrowing costs routing · `Q57`
+for why nothing is pooled · `Q58` for the leave-one-out and the refused-too recording
