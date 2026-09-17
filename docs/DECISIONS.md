@@ -22583,3 +22583,145 @@ is unchanged and still open: TD surveying the other 1,974 m.
 **See.** `Q118` for the survey this yields to and the switch-off it reverses · `Q117` for the pairing
 and its angle sweep · `Q54` for sourced-not-invented · `Q92` for the height accessor and why a
 burial is not answered with `lift_m` · `Q62` for why the evidence is a frame
+
+---
+
+## `Q126` — Two arrows share one lane on a two-way street, because the row was counted without its direction
+
+**Status.** 🟢 Closed 2026-09-17, for cause **A** of four. **B**, **C** and **D** are open and named below.
+
+**Origin.** The user, from the driving seat: turn arrows with two heads at the tip — ahead and
+right-turn together on WAN CHAI ROAD `e50`. No such marking exists in Hong Kong. TD surveyed two
+arrows side by side in neighbouring lanes and the lane snap drew them on top of each other. A scan
+that reproduces the shipped placements exactly reads **28** `stacked_disagreeing` pairs in Wan Chai and
+**2** in Causeway Bay, in four causes:
+
+| | cause | pairs | example |
+|---|---|---|---|
+| **A** | two-way road whose width allows 2 or 3 lanes; 3.4.2.7 struck the 3 out; the arrows paint 2 one way plus 1 the other | **3** | WAN CHAI ROAD `e50`, `e71`; CAROLINE HILL ROAD `e342` |
+| **B** | no measured width, so the authored two lanes stand; `Q94` does not let a row set a count on its own | 14 (+2 in Causeway Bay) | STEWART ROAD, EXPO DRIVE EAST, LEIGHTON ROAD, TUNG LO WAN ROAD |
+| **C** | lanes painted 2.7–2.9 m wide, under TPDM 4.3.9.8's 3.0 m narrow end, so the bracket excludes the painted count | 11 | MATHESON STREET, HENNESSY ROAD `e120`/`e239`, IRVING STREET |
+| **D** | the width includes the tram reserve, so one slot is 4.8 m wide and two real lanes share it | 2 | HENNESSY ROAD `e114` |
+
+### 🔴 The mechanism: the row was a count of arrows, and on a two-way road it is a count of arrows per flow
+
+`_lane_bracket` reads `e50`'s 9.34 m as `(2, 3)` and TPDM 3.4.2.7 — *a two-way single carriageway
+may not be divided into three lanes other than as a climbing lane* — narrows an ambiguous two-way
+bracket to `(2, 2)`. Two lanes, so two slots, and the two forward arrows TD painted at +0.23 m and
++3.13 m both snapped into slot 0. The row reader saw two arrows abreast, said "two", found that
+agreeing with the two the width published, and filed it as `lanes_row_agreeing`.
+
+Both arrows point *with* the edge. On a two-way street that is two forward lanes **plus the lane the
+other flow cannot be without** — three, and the clause's own exception painted on the road: a lane
+added on one side at the approach. ✅ **So a row on a two-way edge is read by direction**
+(`carriageway._row_reading`, `arrows._row_reading`): each run across the road is a lane, its arrows say
+which flow it carries, and the row states `max(forward, 1) + max(backward, 1)` with the split
+`max(forward, 1)`. A run pointing both ways at once is a mis-clustering and states no split.
+"Widest" is by the count stated, then by arrows painted. ⚠️ **Still a lower bound**, for the reason every
+row is — an unpainted lane is invisible to it — so it only puts a count *back* where the row lands
+**above** the narrowed bracket and inside the range TD's widths allow (`_lane_bracket` with
+`two_way=False`). A row of three under a narrowed `(4, 4)` is an unpainted lane exactly as before; the
+mutation that reads the override both ways fails its test.
+
+### ✅ What moved, and the one edge that moved the other way
+
+| | before | after |
+|---|---|---|
+| `stacked_disagreeing` / `stacked_pairs`, Wan Chai | 28 / 56 | **25 / 53** |
+| the same, Causeway Bay | 2 / 6 | 2 / 6 — both TUNG LO WAN ROAD, cause **B** |
+| `lanes_source` | 578 authored · 151 measured · 57 arrows · 6 deck_capped | 579 · 147 · **60** · 6 |
+| `lanes_row_odd_two_way` — 3.4.2.7 put back by a row | — | **4**: `e50`, `e71`, `e342`, and LEIGHTON ROAD `e69` (10.81 m, two *backward* arrows abreast, forward 1 — not a stacked pair) |
+| `lanes_row_over_bracket` / `edges_implying_more_lanes` | 9 / 18 | 11 / 23 — two-way rows now state more |
+| `lanes_row_disagreement` (the two clusterings, on the count) | 0 of 57 | **0 of 60** |
+| `lanes_split_disagreement` (the two clusterings, on the split) | — | **0 of 32** published, 40 rows stating one |
+| `arrows_placements.json` stands moved | — | **14 of 741**, max **2.701 m**, every mesh and heading unchanged |
+
+🔴 **LEIGHTON ROAD `e136` went `arrows` → `authored`, and that is the rule working rather than a
+loss.** It is 6.40 m two-way, bracket `(1, 2)`, with two *backward* arrows abreast; the old reader
+said "two" and resolved the bracket, the new one says "three" — two back plus one forward — which a
+6.40 m road cannot hold at any width in 3.0–3.65 m. A row whose claim the width refutes is a finding
+(`lanes_row_over_bracket`, 9 → 11) and is not used in either of its parts; the count is still the
+two it was, from the speed-limit table. Reading the painted count as a fallback was considered and
+refused: `arrows.json` grades the count against the graph, and a stage publishing the painted two
+while the row states three is a divergence the grader would have to be taught to ignore.
+
+### 🔴 `lanes_forward` — the split ships, because the centre line needs it and nothing else does
+
+`roadgraph.json` gains `lanes_forward` (`ROADGRAPH_SCHEMA` **12 → 13**): how many of `lanes` carry
+the edge's own direction. `lanes` on a one-way edge; on a two-way edge the row's split where the
+row's count is the count that stands, **half** where none does and the count is even, and **`null`**
+where it is odd and nothing split it. Wan Chai: **676** one-way, **107** half, **5** asymmetric
+(`e50`, `e71` two forward; `e69`, `e342` one; MARSH ROAD `e529`, a *measured* three split 2+1 by its
+row) and **4** `null` — all four are one-lane two-way streets, which have no centre to mark anyway.
+⚠️ **A row splits only the count that stands**: a row of three over a measured four says nothing about
+which of the four is the odd one, and `roads._reassign` reads the split against the final count after
+every other rule. ⚠️ **It bumps on hard rule 5's test**: through schema 12 every consumer put the
+meeting of a two-way road's flows at `lanes / 2`, and on the three-lane `e50` that is the middle of
+the right-turn lane — a wrong reading, not different bytes.
+
+🔴 **No geometry moves and no driving line moves, and both are proved rather than asserted.**
+`RoadGraph.lane_offset` is a function of the count alone: the nearside lane of *either* flow sits
+`width / 3` off the centreline on a three-lane road whichever side the extra lane is on, so
+`road_graph.gd` does not read the field. Across all **65** `roads/*.glb` chunks the positions,
+normals, colours and indices are byte-identical; `TEXCOORD_1` differs on 45 (every two-way strip now
+packs its split) and `TEXCOORD_0` on 5 (the four re-counted edges); all **132** tiles, `roadsurface.json`,
+`clearance.json`, `arrows.glb` (a library) and every other manifest are byte-identical, `city.json`
+differing in `generated_utc` alone.
+
+### 🔴 The codec is FULL, and the reason is not the 24 bits
+
+The shader decodes `TEXCOORD_1.x` with `floor(x + 0.5)`. Every integer to 2²⁴ is exact in float32,
+which is the promise the codec block recorded — but the *half* is exact only to 2²³, and above it an
+odd code plus 0.5 rounds to even and decodes as its neighbour, class and all. So the channel had two
+spare bits, not the three `arrows.py`'s header counted, and `lanes_forward` is those two:
+`MARKING_LANES_FORWARD = 2097152`, span 4, `MARKING_CODE_MAX` 2,097,151 → **8,388,607 = 2²³ − 1**.
+`test_the_widest_legal_code_survives_the_shaders_decode` asserts the decode itself and that the odd
+code one past the ceiling does *not* survive it; the old test asserted `float32(max) == max`, which
+would have passed at 2²⁴ − 1 while the shader misread every odd kerb as a cap. Two bits hold a split
+of 1–3, which is past anything TPDM lets a two-way single carriageway be; a wider one is written as 0
+and counted (`lanes_forward_unsaid`, **0** here and reachable), never raised over. ⚠️ **The next
+field needs another channel.** All three copies moved together and
+`test_marking_codec_copies.py` holds them; `verify_road_surface.gd` refuses a split on a one-way
+edge or at or past `lanes`, and `verify_road_graph.gd::_check_lanes_forward` refuses a missing field,
+a one-way edge not owning its lanes, a split outside `1..lanes−1`, and a `null` on an even count.
+
+### ✅ The two graders that read the count agree with the change
+
+`tools/lane_paint.py --sweep`, before → after: the 3.00 m headline is unchanged at **6 edges / 52
+vertices / 347 m** (all off-grade), p1 2.93 and p50 5.12 unchanged, p10 3.54 → 3.52; the **3.65 m** row
+runs 59 / 555 / 8,894 → **63 / 581 / 9,226 m**, which is the four re-counted edges painting
+3.4–3.6 m strips — under TD's wide end, above its narrow one, and the price of three real lanes on a
+9.3–10.8 m road. `tools/carriageway_margin.py`: *too many* **8 → 8**, *disagreeing* **0 of 206 → 0 of
+205** (`e136`), *ambiguous* 208 → 212 — its `lane_bracket` grades an `arrows` count against TD's
+widths before 3.4.2.7 (`row_resolved=`), restated rather than imported, and `lane_paint.py`'s verdict
+column takes the same rule; the mutation that narrows an `arrows` count fails three tests.
+
+### 🔴 The evidence is a frame (`Q62`)
+
+`city_preview.tscn` at `--camera=560,20,749 --look=584,6,736`, `--debug-view=off --hud=off`, the
+road chunks and `arrows.glb` deleted from `.godot/imported/` and re-imported before each side, three
+shots per side, one hash each: before `9669b27b…`, after `05cf66ab…`. Before: one shaft wearing an
+ahead head and a right-turn branch, beside a double white line down the middle of a two-lane road.
+After: an ahead arrow in the nearside lane, a dashed divider, the right-turn arrow in the second, and
+the double white line at `U = 2` with one lane beyond it.
+
+**Status.** `check.sh` exit 0, **2,300** tests, ruff clean, 0 `SHADER ERROR`, **seven mutations,
+seven failures** — the override off, the other flow's lane dropped (both readers), the split published
+whatever count stands, the split grader never comparing, a split packed on a one-way edge, and the
+tool narrowing an `arrows` count. ⚠️ **The review caught the two readers keying their tie-break
+differently** — `arrows.py` broke a tie on *has a split* where `carriageway.py` broke it on *arrows
+painted*, so an edge with a row of two forward and a row of one-plus-two would have published two
+splits and fired the grader on nothing wrong; both key on `(lanes, painted)` now and a tie test pins
+it. It also dropped a `row_resolved` parameter that collapsed to `two_way=False`, and hoisted the
+shader's centre select into `vertex()` — the bundle and the frame hash are byte-identical across all
+three.
+
+⬜ **Left, each its own decision.** **C** (11 pairs, the largest): lanes painted 2.7–2.9 m on older
+streets, under a bar that is TD's own and cannot be chosen here — `Q113` already swept an unsourced
+2.50. **B** (14 + 2): the widths TD's edge does not cover, `Q94`'s open item; letting a row set a
+count alone is not the fix. **D** (2): the tram reserve inside the width. Mong Kok and Sha Tin need a
+rebuild before they can be scanned.
+
+**See.** `Q94` for the row as a lane-count source and `_ROW_MIN` · `Q114` for the floor that came
+off the count · `Q95`/`Q96` for the measured width the snap divides by · `Q54` for sourced-not-invented,
+which is why `null` is published rather than a guess · `Q62` for why the evidence is a frame

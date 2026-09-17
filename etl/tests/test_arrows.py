@@ -27,6 +27,7 @@ from pipeline.arrows import (
     _count_rows,
     _count_stacked,
     _draw_glyph,
+    _grade_against_the_graph,
     _Laid,
     _lane_of,
     _place,
@@ -646,14 +647,23 @@ class TestArrowRows:
     """
 
     @staticmethod
-    def _laid(along_m, offset_m, *, edge=0, lane=0, movements=("ahead",), length_m=4.0):
+    def _laid(
+        along_m, offset_m, *, edge=0, lane=0, movements=("ahead",), length_m=4.0, backward=False
+    ):
         """One arrow, with its drawn position deliberately decoupled from its published one."""
         return _Laid(
-            np.array([0.0, 0.0], dtype=float), edge, lane, movements, length_m, along_m, offset_m
+            np.array([0.0, 0.0], dtype=float),
+            edge,
+            lane,
+            movements,
+            length_m,
+            along_m,
+            offset_m,
+            backward,
         )
 
     @staticmethod
-    def _ribbon(lanes, carriageway_m=13.7):
+    def _ribbon(lanes, carriageway_m=13.7, one_way=True):
         # ⚠️ **In neither frame on purpose.** `_count_rows` clusters on the
         # published offset and must not be able to read a width at all (`Q94`),
         # so this is `lanes x lane_width_m` for no `lanes` — and it is also not
@@ -663,7 +673,7 @@ class TestArrowRows:
         return Ribbon(
             lanes=lanes,
             carriageway_m=carriageway_m,
-            one_way=True,
+            one_way=one_way,
             at=np.array([0.0, 1.0]),
             half_width_m=np.array([5.12, 5.12]),
             plan=np.zeros((2, 2)),
@@ -756,6 +766,77 @@ class TestArrowRows:
         report = ArrowReport()
         _count_rows([self._laid(10.0, 3.0), self._laid(10.0, -3.0)], {}, report)
         assert (report.implied_lanes, report.edges_implying_more_lanes) == ({0: 2}, 0)
+        assert report.implied_lanes_forward == {}, "no ribbon, so read as one-way"
+
+    def test_two_forward_arrows_on_a_two_way_edge_are_three_lanes_two_forward(self):
+        """🔴 `Q126`, `carriageway._row_reading`'s rule read a second time —
+        WAN CHAI ROAD `e50`'s `right | ahead`, both with the edge."""
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(22.0, 0.23), self._laid(22.0, 3.13)],
+            {0: self._ribbon(2, one_way=False)},
+            report,
+        )
+        assert (report.implied_lanes, report.implied_lanes_forward) == ({0: 3}, {0: 2})
+        assert report.edges_implying_more_lanes == 1
+
+    def test_the_same_two_arrows_on_a_one_way_edge_are_two_and_no_split(self):
+        report = ArrowReport()
+        _count_rows([self._laid(22.0, 0.23), self._laid(22.0, 3.13)], {0: self._ribbon(2)}, report)
+        assert (report.implied_lanes, report.implied_lanes_forward) == ({0: 2}, {})
+
+    def test_two_backward_arrows_leave_the_forward_flow_one_lane(self):
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(5.0, -3.35, backward=True), self._laid(5.0, -0.1, backward=True)],
+            {0: self._ribbon(2, one_way=False)},
+            report,
+        )
+        assert (report.implied_lanes, report.implied_lanes_forward) == ({0: 3}, {0: 1})
+
+    def test_a_run_pointing_both_ways_states_no_split(self):
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(10.0, 0.0), self._laid(10.0, 0.5, backward=True), self._laid(10.0, 3.2)],
+            {0: self._ribbon(2, one_way=False)},
+            report,
+        )
+        assert (report.implied_lanes, report.implied_lanes_forward) == ({0: 2}, {})
+
+    def test_widest_is_by_the_count_stated_and_then_by_arrows_painted(self):
+        """Two rows stating two lanes: one forward arrow alone (two on a two-way
+        edge, split 1) and two lanes of which one is a run pointing both ways
+        (two, no split). The row with more arrows painted wins the tie, so the
+        edge publishes no split — the rule `carriageway._widest_rows` keys on."""
+        report = ArrowReport()
+        _count_rows(
+            [
+                self._laid(10.0, 2.0),
+                self._laid(60.0, 0.0),
+                self._laid(60.0, 0.5, backward=True),
+                self._laid(60.0, 3.2),
+            ],
+            {0: self._ribbon(2, one_way=False)},
+            report,
+        )
+        assert (report.implied_lanes, report.implied_lanes_forward) == ({0: 2}, {})
+
+    def test_the_split_is_graded_against_the_graph_where_the_count_agrees(self):
+        """`lanes_split_disagreement` is reachable in both directions, and it
+        is only asked where the two clusterings agree on the count — on any
+        other edge the graph's split is not this row's to grade."""
+        report = ArrowReport()
+        report.implied_lanes = {50: 3, 71: 3, 9: 3}
+        report.implied_lanes_forward = {50: 2, 71: 2, 9: 2}
+        graph = {
+            "edges": [
+                {"id": 50, "lanes": 3, "lanes_forward": 2, "lanes_source": "arrows"},
+                {"id": 71, "lanes": 3, "lanes_forward": 1, "lanes_source": "arrows"},
+                {"id": 9, "lanes": 4, "lanes_forward": 2, "lanes_source": "measured"},
+            ]
+        }
+        _grade_against_the_graph(graph, report)
+        assert (report.lanes_split_published, report.lanes_split_disagreement) == (2, 1)
 
 
 class TestLaneOf:

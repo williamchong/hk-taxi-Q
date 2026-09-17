@@ -41,6 +41,8 @@ SHADER_NAMES: dict[str, str | int] = {
     "MARKING_KERB_SPAN": "MARKING_KERB_SPAN",
     "MARKING_KERB_SINGLE": "MARKING_KERB_SINGLE",
     "MARKING_KERB_DOUBLE": "MARKING_KERB_DOUBLE",
+    "MARKING_LANES_FORWARD": "MARKING_LANES_FORWARD",
+    "MARKING_LANES_FORWARD_SPAN": surface.MARKING_LANES_FORWARD_MAX + 1,
     "DIRECTION_BOTH": surface.MARKING_DIRECTIONS[surface.BOTH],
 }
 VERIFY_NAMES: dict[str, str | int] = {
@@ -55,6 +57,8 @@ VERIFY_NAMES: dict[str, str | int] = {
     "MARKING_KERB_NEAR_FIELD": "MARKING_KERB_NEAR",
     "MARKING_KERB_OFF_FIELD": "MARKING_KERB_OFF",
     "MARKING_KERB_SPAN": "MARKING_KERB_SPAN",
+    "MARKING_LANES_FORWARD_FIELD": "MARKING_LANES_FORWARD",
+    "MARKING_LANES_FORWARD_SPAN": surface.MARKING_LANES_FORWARD_MAX + 1,
 }
 
 _SHADER_CONST = re.compile(r"^const float ((?:MARKING|DIRECTION)_\w+) = ([0-9.]+);", re.M)
@@ -94,6 +98,12 @@ def test_the_derived_ceiling_is_derived_on_every_side() -> None:
     """`MARKING_CODE_MAX` is computed from the top field in the pipeline and in
     the verify tool rather than written down; a literal on either side is a
     number to re-derive by hand the next time a field is added."""
-    assert surface.MARKING_CODE_MAX == surface.MARKING_KERB_OFF * surface.MARKING_KERB_SPAN - 1
+    assert (
+        surface.MARKING_CODE_MAX
+        == surface.MARKING_LANES_FORWARD * (surface.MARKING_LANES_FORWARD_MAX + 1) - 1
+    )
     text = VERIFY.read_text()
-    assert "MARKING_CODE_MAX: float = MARKING_KERB_OFF_FIELD * MARKING_KERB_SPAN - 1.0" in text
+    assert (
+        "MARKING_CODE_MAX: float = MARKING_LANES_FORWARD_FIELD * MARKING_LANES_FORWARD_SPAN - 1.0"
+        in text
+    )

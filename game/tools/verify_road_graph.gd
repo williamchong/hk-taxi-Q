@@ -883,6 +883,71 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		)
 	)
 	problems.append_array(_check_lane_source(edges))
+	problems.append_array(_check_lanes_forward(edges))
+	return problems
+
+
+## `Q126`: `lanes_forward` is total over the graph and a split is strictly
+## inside its road.
+##
+## Three claims, each reachable in the failing direction. A one-way edge's
+## lanes are all its own, so the field is `lanes` there — anything else is a
+## consumer's "which side of a one-way street is oncoming" question with a
+## wrong answer waiting. A two-way edge's split is a lane boundary between the
+## two flows, so it is at least 1 and at most `lanes - 1`; 0 puts every lane in
+## the backward flow and `lanes` puts the centre line on the kerb. And `null` is
+## the odd two-way count nothing split — the one honest gap — so a `null` on an
+## even count is the ETL having stopped filling the field.
+##
+## ⚠️ **Not a check that the split is RIGHT.** Nothing published can grade a
+## direction (`Q62`); the row of arrows that decided it is graded a second time
+## by `arrows.json`'s `lanes_split_disagreement`, and the frame is the evidence.
+func _check_lanes_forward(edges: Array) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var missing: int = 0
+	var one_way_wrong: int = 0
+	var out_of_range: int = 0
+	var null_on_even: int = 0
+	var asymmetric: int = 0
+	for edge: Dictionary in edges:
+		if not edge.has("lanes_forward"):
+			missing += 1
+			continue
+		var lanes: int = int(edge.get("lanes", 2))
+		var forward: Variant = edge.get("lanes_forward")
+		if str(edge.get("direction", "both")) != "both":
+			if forward == null or int(forward) != lanes:
+				one_way_wrong += 1
+			continue
+		if forward == null:
+			if lanes % 2 == 0:
+				null_on_even += 1
+			continue
+		if int(forward) < 1 or int(forward) >= lanes:
+			out_of_range += 1
+		elif int(forward) * 2 != lanes:
+			asymmetric += 1
+	if missing > 0:
+		problems.append("%d edges carry no `lanes_forward` at all" % missing)
+	if one_way_wrong > 0:
+		problems.append(
+			(
+				"%d one-way edges publish a `lanes_forward` other than their own `lanes`"
+				% one_way_wrong
+			)
+		)
+	if out_of_range > 0:
+		problems.append(
+			"%d two-way edges publish a `lanes_forward` outside 1..lanes-1" % out_of_range
+		)
+	if null_on_even > 0:
+		problems.append(
+			(
+				"%d two-way edges with an even count publish no split — the ETL stopped filling it"
+				% null_on_even
+			)
+		)
+	print("  lanes_forward: %d two-way edges split off the middle" % asymmetric)
 	return problems
 
 

@@ -217,8 +217,14 @@ SURFACE_MATERIAL = "road_markings"
 #
 #   code = surface_class + 4*lanes + 64*direction + 256*bus_lane + 512*tram
 #        + 1024*offside_kerb + 2048*centre + 131072*kerb_near + 524288*kerb_off
+#        + 2097152*lanes_forward
 #
-# Max legal code is 2,097,151, still far inside float32's 24 exact bits.
+# 🔴 **Max legal code is 8,388,607, and that is the channel FULL** (`Q126`).
+# The promise is not that a code is exact in float32 — integers are, up to
+# 2^24 — but that the consumer's `floor(x + 0.5)` is: halves are exact only
+# below 2^23, and above it an odd code plus a half rounds to even and decodes
+# as its neighbour, class and all. `lanes_forward` is the two bits between the
+# old ceiling and that one, so the next field needs another channel.
 #
 # `surface_class` is the field the shader cannot do without. The kerbs run off
 # *both* ends of the lane range — the nearside lip spans U in [-outside, 0] and
@@ -292,9 +298,21 @@ MARKING_KERB_DOUBLE = 3
 # `MARKING_DIRECTIONS` gives: the stage that acts on a vocabulary must not drift
 # from the set that is accepted.
 MARKING_KERB_KINDS = {KERB_SINGLE: MARKING_KERB_SINGLE, KERB_DOUBLE: MARKING_KERB_DOUBLE}
+# How many of `lanes` carry the edge's own direction (`Q126`), so the shader
+# draws a two-way road's centre line where its two flows actually part rather
+# than at `lanes / 2` — which, on the three-lane street a row of arrows
+# resolves WAN CHAI ROAD to, is the middle of the right-turn lane. 0 is "not
+# said": a one-way edge, or a two-way count nobody split, and the shader keeps
+# the middle it always drew. Two bits, because two is what the decode leaves —
+# see the block above — and 3 forward lanes on a two-way single carriageway is
+# already past anything TPDM lets one be. ⚠️ **A split past that is written
+# as 0 and counted (`lanes_forward_unsaid`), not raised over**: the road still
+# draws, at its old middle, and the count says how often the field was short.
+MARKING_LANES_FORWARD = 2097152
+MARKING_LANES_FORWARD_MAX = 3
 # Derived rather than written down: adding a field means moving one line, not
-# remembering to move two. `kerb_off` is the top field and holds two bits.
-MARKING_CODE_MAX = MARKING_KERB_OFF * MARKING_KERB_SPAN - 1
+# remembering to move two. `lanes_forward` is the top field and holds two bits.
+MARKING_CODE_MAX = MARKING_LANES_FORWARD * (MARKING_LANES_FORWARD_MAX + 1) - 1
 # The widest lane count the codec can say, from the field above it. `lanes = 16`
 # packs to 64 and collides with `direction` while leaving the *total* under the
 # ceiling — so the ceiling is not the guard, this is.
@@ -640,6 +658,10 @@ class SurfaceReport:
     # it means more of the network is drawn off its own structure.
     clamp_refused_stations: int = 0
     kerb_minority_m: float = 0.0
+    # Two-way edges whose published `lanes_forward` is past what the codec's
+    # two bits can say, drawn at their old middle instead (`Q126`). 0 here and
+    # reachable only by a two-way single carriageway with four lanes one way.
+    lanes_forward_unsaid: int = 0
 
     @property
     def level_changes(self) -> int:
@@ -1844,7 +1866,7 @@ class _Edge:
     published_offsets: np.ndarray
     lanes: int
     # Read straight off the published edge and carried only so `TEXCOORD_1` can
-    # say them. Nothing about the ribbon's shape depends on any of the three —
+    # say them. Nothing about the ribbon's shape depends on any of the four —
     # they decide which markings the shader draws on it, which is why they
     # arrive here rather than in `_shape`.
     direction: str
@@ -1852,6 +1874,11 @@ class _Edge:
     tram_tracks: bool
     level: int
     length_m: float
+    # `roadgraph.json`'s `lanes_forward` as the codec spells it: 0 where the
+    # graph published `null` or a one-way edge, else the boundary the two flows
+    # part at (`Q126`). Decided in `_prepare`, which is where the graph's
+    # vocabulary meets the codec's.
+    lanes_forward: int = 0
     # 🔴 **How far this ribbon is drawn off its own centreline, in `mitres`'
     # LEFT-of-travel frame (`Q103`).** Off-grade the published centreline is not
     # the middle of the deck the road is built on — measured p50 0.75 m out and
@@ -1961,6 +1988,20 @@ class _Edge:
                 f"{self.lanes} lanes is past what `TEXCOORD_1` can say "
                 f"(1-{MARKING_LANES_MAX}): the code would carry into `direction`"
             )
+        # The top field, so a value past it is not a carry but a code past the
+        # decode's ceiling — the same silent failure by a different route.
+        if not 0 <= self.lanes_forward <= MARKING_LANES_FORWARD_MAX:
+            raise ValueError(
+                f"lanes_forward {self.lanes_forward} is past what `TEXCOORD_1` can say "
+                f"(0-{MARKING_LANES_FORWARD_MAX}): `_prepare` should have refused it"
+            )
+        if self.lanes_forward and not (
+            self.direction == BOTH and 0 < self.lanes_forward < self.lanes
+        ):
+            raise ValueError(
+                f"lanes_forward {self.lanes_forward} on a {self.direction} edge of "
+                f"{self.lanes} lanes: a split is a boundary strictly inside a two-way road"
+            )
         return float(
             surface_class
             + MARKING_LANES * self.lanes
@@ -1971,6 +2012,7 @@ class _Edge:
             + MARKING_CENTRE * self.centre_step
             + MARKING_KERB_NEAR * self.kerb_near
             + MARKING_KERB_OFF * self.kerb_off
+            + MARKING_LANES_FORWARD * self.lanes_forward
         )
 
     def end_half_width_m(self, at_start: bool) -> float:
@@ -2265,6 +2307,7 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
         published_half_widths=0.5 * (drawn_upper - drawn_lower),
         published_offsets=0.5 * (drawn_upper + drawn_lower),
         lanes=published["lanes"],
+        lanes_forward=_lanes_forward_code(published, report),
         direction=published["direction"],
         bus_lane=bool(published["bus_lane"]),
         tram_tracks=bool(published["tram_tracks"]),
@@ -2274,6 +2317,27 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
         kerb_off=kinds[OFFSIDE],
         restrictions=restrictions,
     )
+
+
+def _lanes_forward_code(published: dict, report: SurfaceReport) -> int:
+    """The graph's `lanes_forward` in the codec's two bits (`Q126`).
+
+    `published["lanes_forward"]`, never a `.get`, for the reason `offset_m`
+    gives above: `read_graph` pins the schema, so the key is there on every
+    graph this can open. `null` and a one-way edge both pack to 0 — the shader
+    reads 0 as "draw the middle", which is what a one-way edge's `lanes` would
+    otherwise say by mistake — and a split the field cannot hold is written as
+    0 and counted rather than raised over, so a region with one such road
+    still builds.
+    """
+    forward = published["lanes_forward"]
+    if forward is None or published["direction"] != BOTH:
+        return 0
+    forward = int(forward)
+    if forward > MARKING_LANES_FORWARD_MAX:
+        report.lanes_forward_unsaid += 1
+        return 0
+    return forward
 
 
 def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray, int]:
@@ -4434,6 +4498,12 @@ def main(argv: list[str] | None = None) -> int:
             report.kerb_rail_stations,
             report.kerb_rail_offset_m,
             report.kerb_minority_m,
+        )
+    if report.lanes_forward_unsaid:
+        log.info(
+            "  %d two-way edges publish a lanes_forward past the codec's two bits and are drawn "
+            "at their old middle (Q126)",
+            report.lanes_forward_unsaid,
         )
     if report.inverted:
         log.info(

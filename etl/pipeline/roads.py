@@ -40,6 +40,7 @@ from pipeline import carriageway, gdb, kerbside
 from pipeline.buildings import Placement, read_sheet
 from pipeline.config import (
     BACKWARD,
+    BOTH,
     FORWARD,
     Config,
     DeckSampling,
@@ -157,6 +158,19 @@ ROADGRAPH_NAME = "roadgraph.json"
 # ⚠️ **`width_m` does NOT move in either half.** A lane count is not a width
 # (hard rule 4), and the drawn ribbon is `max(width_m, floor)` either way.
 #
+# 13 adds `lanes_forward` (`Q126`): how many of `lanes` carry the edge's own
+# direction, so a consumer knows where a two-way road's two flows meet. Through
+# schema 12 every consumer put that at `lanes / 2` — `road_markings.gdshader`
+# drew the centre line there — and on a two-way street the arrows resolve to
+# three lanes (two forward, one back) that line runs down the middle of the
+# right-turn lane, which is hard rule 5's test: not different bytes but a wrong
+# reading. `null` where the split is not known — a two-way edge with an odd
+# count and no row of arrows to say which side the extra lane is on — and a
+# consumer falls back to the middle it always assumed. `lanes` on a one-way
+# edge, so the field is total. ⚠️ **No geometry moves and no driving line
+# moves**: `RoadGraph.lane_offset` is a function of the count alone, and the
+# nearside lane of either flow sits the same distance off the centreline
+# whichever side the extra lane is on.
 # 12 since `P5-7e` (`Q116`): the cut moved from the rectangle to the graph. A
 # feature crossing into a declared neighbour is kept whole and owned by the
 # region holding its travel-start vertex; every edge carries `source_id` and
@@ -173,7 +187,7 @@ ROADGRAPH_NAME = "roadgraph.json"
 # region owning the pivot node publishes the turn and one arm may be the
 # neighbour's road. Bumped because a consumer merging two graphs would be
 # wrong to treat `id` as identity.
-ROADGRAPH_SCHEMA = 12
+ROADGRAPH_SCHEMA = 13
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -279,6 +293,14 @@ class Edge:
     # `lanes_source: authored` is the commonest measured edge rather than a
     # contradiction.
     lanes_source: str = "authored"
+    # 🔴 **How many of `lanes` carry THIS edge's direction, where a row of turn
+    # arrows stated it (`Q126`); `None` where none did.** Set only on a two-way
+    # edge whose widest row states the count that stands — the row is a lower
+    # bound on the count, so a split of a count it does not reach is a split of
+    # nothing. `published_lanes_forward` is what the document carries: this
+    # where it is set, `lanes` on a one-way edge, half the count on an even
+    # two-way one, and `None` on an odd two-way count nobody split.
+    lanes_forward: int | None = None
     # Which publishers supplied the stations behind `width_m`, joined on `+` and
     # empty where the width is authored (`Q94`). 🔴 **The three do not measure
     # the same quantity**: HyD's `pavement_polygon` carves traffic islands and
@@ -1276,9 +1298,40 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
         if ceiling is not None and standing > ceiling:
             changes["lanes"] = ceiling
             changes["lanes_source"] = "deck_capped"
+
+    # 🔴 **The split is read against the count that STANDS, after every rule
+    # above has had its say (`Q126`).** A row of arrows is a lower bound on the
+    # count, so its split describes the road only where its count is the
+    # published one — whether the width, the row itself or the authored table
+    # published it. A row stating three over a measured four says nothing about
+    # which of the four is the odd one.
+    row = found.lane_rows.get(edge.id)
+    standing = int(changes.get("lanes", edge.lanes))
+    if row is not None and row.forward is not None and row.lanes == standing:
+        changes["lanes_forward"] = row.forward
     if not changes:
         return edge
     return replace(edge, **changes)
+
+
+def published_lanes_forward(edge: Edge) -> int | None:
+    """`lanes_forward` as the document carries it (`Q126`).
+
+    Total over the graph rather than sparse: a one-way edge's lanes are all its
+    own, and a two-way edge with an even count nobody split is read as half and
+    half — which is what every consumer assumed before the field existed, so
+    saying it changes nothing they draw. ⚠️ **`None` is the odd two-way count
+    with no row to say which side the extra lane is on**: the honest answer is
+    that the split is not known, and the markings shader keeps its old middle
+    rather than being handed a guess (`Q54`).
+    """
+    if edge.direction != BOTH:
+        return edge.lanes
+    if edge.lanes_forward is not None:
+        return edge.lanes_forward
+    if edge.lanes % 2 == 0:
+        return edge.lanes // 2
+    return None
 
 
 def _direction(style: RoadNetwork, code: int, layer: str) -> str:
@@ -2207,6 +2260,7 @@ def _edge_document(edge: Edge) -> dict:
         "direction": edge.direction,
         "lanes": edge.lanes,
         "lanes_source": edge.lanes_source,
+        "lanes_forward": published_lanes_forward(edge),
         "width_m": edge.width_m,
         "width_source": edge.width_source,
         "width_publisher": edge.width_publisher,
@@ -2501,6 +2555,15 @@ def main(argv: list[str] | None = None) -> int:
             "more (a finding) — both reported, never used",
             len(width.lanes_row_below_bracket),
             len(width.lanes_row_over_bracket),
+        )
+        # 🔴 Derived from the field this stage wrote, for the reason the deck
+        # ceiling's line gives: the split is decided against the count that
+        # stands, and only `_reassign` knows what stood.
+        log.info(
+            "      %d two-way edges publish the split their arrows state (lanes_forward), "
+            "%d of them a count 3.4.2.7 had struck out and the row put back (Q126)",
+            sum(1 for edge in report.edges if edge.lanes_forward is not None),
+            len(width.lanes_row_odd_two_way),
         )
     log.info(
         "  largest component holds %d of %d nodes (%.1f%%), %d components in all",

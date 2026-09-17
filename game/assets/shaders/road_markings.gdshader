@@ -85,6 +85,16 @@ const float MARKING_KERB_OFF = 524288.0;
 const float MARKING_KERB_SPAN = 4.0;
 const float MARKING_KERB_SINGLE = 2.0;
 const float MARKING_KERB_DOUBLE = 3.0;
+// How many of `lanes` carry the edge's own direction (`Q126`), two bits, so
+// the centre line of a two-way road sits between its two flows rather than at
+// `lanes / 2` — which on a three-lane street with a right-turn lane is the
+// middle of that lane. 0 is "not said": a one-way edge, or a two-way count
+// nobody split, and the old middle stands. 🔴 **The last field the channel can
+// hold**: the decode below adds 0.5 and floors, and above 2^23 an odd code
+// plus 0.5 rounds to even, so the codec tops out at 8,388,607 and this field
+// is what fills it.
+const float MARKING_LANES_FORWARD = 2097152.0;
+const float MARKING_LANES_FORWARD_SPAN = 4.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
@@ -223,6 +233,13 @@ varying flat float bus_lane;
 // a dual carriageway it is the middle of the road, and a kerbside no-stopping
 // line put there is the loudest way to be wrong about a marking.
 varying flat float offside_kerb;
+// Where a two-way road's two flows part, in U: the ETL's `lanes_forward` where
+// it said — the boundary between the last forward lane and the first backward
+// one, so a three-lane street with a right-turn lane draws its line at `U = 2`
+// and not down the middle of that lane (`Q126`) — and otherwise `lanes * 0.5`,
+// the middle, which is a lane boundary only when the count is even. Chosen here
+// rather than per fragment because both inputs are per-edge constants.
+varying flat float centre;
 // Where an opposed pair's two flows meet, in sixteenths of a lane beyond the
 // centreline, `k - 1` steps; 0 for an edge that is not half of a pair. Read at
 // the `join` below, which is where the reason it must be published lives.
@@ -257,7 +274,8 @@ varying flat vec3 albedo_linear;
 
 void vertex() {
 	// `floor(x + 0.5)` before anything else, on the codec's own promise that
-	// every legal code is exact in float32 (max 131,071, against 24 bits).
+	// every legal code *plus a half* is exact in float32 — max 8,388,607, one
+	// under 2^23, which is where halves stop being representable.
 	float packed = floor(UV2.x + 0.5);
 	surface_class = floor(mod(packed, MARKING_LANES));
 	lanes = floor(mod(packed / MARKING_LANES, MARKING_DIRECTION / MARKING_LANES));
@@ -267,6 +285,8 @@ void vertex() {
 	centre_at = floor(mod(packed / MARKING_CENTRE, MARKING_CENTRE_SPAN));
 	kerb_near = floor(mod(packed / MARKING_KERB_NEAR, MARKING_KERB_SPAN));
 	kerb_off = floor(mod(packed / MARKING_KERB_OFF, MARKING_KERB_SPAN));
+	float lanes_forward = floor(mod(packed / MARKING_LANES_FORWARD, MARKING_LANES_FORWARD_SPAN));
+	centre = lanes_forward > 0.0 ? lanes_forward : lanes * 0.5;
 	drawn_m = UV2.y;
 	restricted = COLOR.a;
 	// ⚠️ Only `.rgb`. The hoist above rests on `surface.py:_rgba` broadcasting
@@ -337,10 +357,8 @@ void fragment() {
 		// junction approaches a little and cost a level of nesting everywhere.
 		float away = smoothstep(fade_m - fade_softness_m, fade_m, min(v, drawn_m - v));
 
-		// The centre of the road. A lane boundary only when the lane count is
-		// even, so it is taken from `lanes * 0.5` rather than from the divider
-		// test — and a one-lane road has no centre to mark.
-		float centre = lanes * 0.5;
+		// `centre` is where the two flows part, decided in `vertex()`. A
+		// one-lane road has no centre to mark.
 		bool two_way = direction == DIRECTION_BOTH && lanes >= 2.0;
 		// Where the road's two flows are separated, which is one of two places.
 		// On a two-way street it is the middle of the ribbon. On one half of an

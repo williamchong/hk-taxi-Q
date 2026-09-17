@@ -36,6 +36,7 @@ from pipeline.carriageway import (
     DECK_TOLERANCE_M,
     MIN_STATIONS,
     CarriagewayReport,
+    LaneRow,
     _along_at,
     _deck_lane_ceiling,
     _deck_reach,
@@ -44,6 +45,7 @@ from pipeline.carriageway import (
     _license,
     _resolve_with_rows,
     _rims_at_vertices,
+    _row_reading,
     _Segments,
     _stations,
     _Symbol,
@@ -411,19 +413,41 @@ class TestUnionBoundary:
 
 
 def _report(
-    published: dict[int, int] | None = None, **brackets: tuple[int, int]
+    published: dict[int, int] | None = None,
+    widths: dict[int, float] | None = None,
+    **brackets: tuple[int, int],
 ) -> CarriagewayReport:
     """A report carrying the brackets, and optionally what the width published.
 
     ⚠️ **`published` matters**: `_resolve_with_rows` calls a row that lands on the
     already-published count agreement, so a fixture that leaves `lanes` empty is
-    testing a state `measure` never hands it.
+    testing a state `measure` never hands it. `widths` is `assigned_m`, which
+    only the two-way override reads — it re-brackets the width without 3.4.2.7.
     """
     report = CarriagewayReport()
     for name, bracket in brackets.items():
         report.lanes_bracket[int(name.lstrip("e"))] = bracket
     report.lanes.update(published or {})
+    report.assigned_m.update(widths or {})
     return report
+
+
+def _rows(**stated: int | tuple[int, int]) -> dict[int, LaneRow]:
+    """Rows keyed `e<id>`: an int is a one-way row of that many arrows, a pair
+    `(lanes, forward)` a two-way row that states its split."""
+    rows: dict[int, LaneRow] = {}
+    for name, value in stated.items():
+        edge_id = int(name.lstrip("e"))
+        if isinstance(value, tuple):
+            lanes, forward = value
+            rows[edge_id] = LaneRow(painted=2, lanes=lanes, forward=forward)
+        else:
+            rows[edge_id] = LaneRow(painted=value, lanes=value, forward=None)
+    return rows
+
+
+def _resolve(report: CarriagewayReport, rows: dict[int, LaneRow]) -> None:
+    _resolve_with_rows(report, rows, _bounds())
 
 
 class TestLaneRow:
@@ -442,7 +466,7 @@ class TestLaneRow:
         had not chosen.
         """
         report = _report(e1=(1, 2))
-        _resolve_with_rows(report, {1: 1})
+        _resolve(report, _rows(e1=1))
         assert report.lanes == {}, "a row of one published a lane count"
         assert report.lanes_row_single == [1]
 
@@ -466,7 +490,7 @@ class TestLaneRow:
 
     def test_a_row_inside_an_ambiguous_bracket_resolves_it(self) -> None:
         report = _report(e119=(4, 5))
-        _resolve_with_rows(report, {119: 4})
+        _resolve(report, _rows(e119=4))
         assert report.lanes == {119: 4}
         assert report.lanes_basis == {119: "arrows"}
 
@@ -474,7 +498,7 @@ class TestLaneRow:
         """An unpainted lane, not a narrower road. Publishing it would let a
         marking crew's omission overrule a measured width."""
         report = _report(e1=(4, 5))
-        _resolve_with_rows(report, {1: 2})
+        _resolve(report, _rows(e1=2))
         assert report.lanes == {}
         assert report.lanes_row_below_bracket == [1]
 
@@ -482,7 +506,7 @@ class TestLaneRow:
         """A finding about one of the two readings — the width may under-read
         where HyD carves islands out — and never a licence to overrule TPDM."""
         report = _report({403: 2}, e403=(2, 2))
-        _resolve_with_rows(report, {403: 4})
+        _resolve(report, _rows(e403=4))
         assert report.lanes == {403: 2}, "the width's count stands"
         assert report.lanes_basis == {}
         assert report.lanes_row_over_bracket == [403]
@@ -492,7 +516,7 @@ class TestLaneRow:
         because it is the only free cross-check either has; not published,
         because the width already said it."""
         report = _report({1: 3}, e1=(3, 3))
-        _resolve_with_rows(report, {1: 3})
+        _resolve(report, _rows(e1=3))
         assert report.lanes_basis == {}, "the width had already published it"
         assert report.lanes_row_agreeing == [1]
 
@@ -512,7 +536,7 @@ class TestLaneRow:
         that rule is still exercised.
         """
         report = _report({1: 1}, e1=(1, 1))
-        _resolve_with_rows(report, {1: 2})
+        _resolve(report, _rows(e1=2))
         assert report.lanes == {1: 1}, "the width's count stands"
         assert report.lanes_row_over_bracket == [1]
         assert report.lanes_row_agreeing == []
@@ -525,17 +549,61 @@ class TestLaneRow:
         keeps out: it states three lanes over an *authored* 6.4 m width.
         """
         report = _report()
-        _resolve_with_rows(report, {505: 3})
+        _resolve(report, _rows(e505=3))
         assert report.lanes == {}
-        assert report.lane_rows == {505: 3}, "the row is still recorded, only not used"
+        assert report.lane_rows == {505: LaneRow(3, 3, None)}, "recorded, only not used"
 
     def test_the_row_is_recorded_for_edges_it_cannot_resolve(self) -> None:
         """⚠️ `Q58`'s trap in its dict form. `lane_rows` confined to bracketed
         edges could not see the two implementations diverge on the rest, and
         that diff is the only check either of them has."""
         report = _report(e1=(2, 3))
-        _resolve_with_rows(report, {1: 3, 2: 2, 505: 3})
+        _resolve(report, _rows(e1=3, e2=2, e505=3))
         assert set(report.lane_rows) == {1, 2, 505}
+
+    def test_a_two_way_row_puts_back_the_count_3_4_2_7_struck_out(self) -> None:
+        """🔴 **`Q126`, WAN CHAI ROAD `e50`.** 9.34 m brackets to `(2, 3)`, the
+        two-way narrowing published two, and two forward arrows abreast then
+        shared one slot. The row states three — two forward plus the lane the
+        other flow cannot be without — and three is inside the range TD's
+        widths allow, so the row is the clause's own exception painted.
+        """
+        report = _report({50: 2}, {50: 9.343}, e50=(2, 2))
+        _resolve(report, _rows(e50=(3, 2)))
+        assert report.lanes == {50: 3}
+        assert report.lanes_basis == {50: "arrows"}
+        assert report.lanes_row_odd_two_way == [50]
+        assert report.lanes_row_over_bracket == []
+
+    def test_but_never_past_the_range_TDs_widths_allow(self) -> None:
+        """8.5 m holds two lanes at any width in 3.0-3.65 m, narrowing or no
+        narrowing. A row of three there is the same finding it always was."""
+        report = _report({50: 2}, {50: 8.5}, e50=(2, 2))
+        _resolve(report, _rows(e50=(3, 2)))
+        assert report.lanes == {50: 2}
+        assert report.lanes_row_over_bracket == [50]
+        assert report.lanes_row_odd_two_way == []
+
+    def test_and_only_by_a_row_that_states_its_direction(self) -> None:
+        """🔴 The mutation this exists for: a row the reader could not split
+        (a run pointing both ways, or a one-way edge) has no claim on 3.4.2.7
+        and is graded against the narrowed bracket as before."""
+        report = _report({50: 2}, {50: 9.343}, e50=(2, 2))
+        _resolve(report, _rows(e50=3))
+        assert report.lanes == {50: 2}
+        assert report.lanes_row_over_bracket == [50]
+
+    def test_a_split_row_BELOW_the_narrowed_bracket_is_still_an_unpainted_lane(self) -> None:
+        """🔴 Above only. 12.0 m brackets to `(3, 4)` and narrows to four; a
+        row of two forward arrows states three, which is a lower bound the
+        width has already exceeded — a lane with no arrow on it, not a road
+        that lost one. Reading the override both ways would let a lower bound
+        overrule a resolved width."""
+        report = _report({1: 4}, {1: 12.0}, e1=(4, 4))
+        _resolve(report, _rows(e1=(3, 2)))
+        assert report.lanes == {1: 4}
+        assert report.lanes_row_below_bracket == [1]
+        assert report.lanes_row_odd_two_way == []
 
 
 class TestWidestRow:
@@ -550,14 +618,52 @@ class TestWidestRow:
     def _at(along: float, across: float) -> _Symbol:
         return _Symbol(along_m=along, offset_m=across, length_m=4.0)
 
+    @staticmethod
+    def _back(along: float, across: float) -> _Symbol:
+        return _Symbol(along_m=along, offset_m=across, length_m=4.0, backward=True)
+
     def test_three_arrows_abreast_are_one_row_of_three(self) -> None:
         row = [self._at(10.0, -3.2), self._at(10.0, 0.0), self._at(10.0, 3.2)]
-        assert _widest_rows({1: row}) == {1: 3}
+        assert _widest_rows({1: row}) == {1: LaneRow(3, 3, None)}
 
     def test_arrows_strung_along_the_edge_are_separate_rows_of_one(self) -> None:
         """The failure this guards is a whole street reading as one wide row."""
         strung = [self._at(0.0, 0.0), self._at(40.0, 0.0), self._at(80.0, 0.0)]
-        assert _widest_rows({1: strung}) == {1: 1}
+        assert _widest_rows({1: strung}) == {1: LaneRow(1, 1, None)}
+
+    def test_two_forward_arrows_on_a_two_way_edge_state_three_lanes(self) -> None:
+        """🔴 `Q126`, and the whole of it: the other flow cannot be without a
+        lane, so two abreast one way is three, two of them forward."""
+        row = [self._at(10.0, 0.2), self._at(10.0, 3.1)]
+        assert _widest_rows({1: row}, two_way=frozenset({1})) == {1: LaneRow(2, 3, 2)}
+        assert _widest_rows({1: row}) == {1: LaneRow(2, 2, None)}, "one-way: two is two"
+
+    def test_two_backward_arrows_hand_the_forward_flow_its_one_lane(self) -> None:
+        """CAROLINE HILL ROAD `e342`: `left | right` both against the edge."""
+        row = [self._back(5.0, -3.35), self._back(5.0, -0.1)]
+        assert _widest_rows({1: row}, two_way=frozenset({1})) == {1: LaneRow(2, 3, 1)}
+
+    def test_one_arrow_each_way_is_the_ordinary_two_lane_street(self) -> None:
+        row = [self._at(10.0, 2.0), self._back(10.0, -2.3)]
+        assert _widest_rows({1: row}, two_way=frozenset({1})) == {1: LaneRow(2, 2, 1)}
+
+    def test_a_run_pointing_both_ways_states_no_split(self) -> None:
+        """Two arrows within half a glyph across the road, pointing opposite
+        ways, are one lane carrying both flows — a mis-clustering, not a lane.
+        The row keeps its painted count and the split is refused."""
+        row = [self._at(10.0, 0.0), self._back(10.0, 0.5), self._at(10.0, 3.2)]
+        assert _row_reading(row, two_way=True) == LaneRow(2, 2, None)
+
+    def test_widest_is_by_the_count_stated_and_then_by_arrows_painted(self) -> None:
+        """A row of two forward (three lanes) outranks a row of one each way
+        (two lanes) on the same edge, though both paint two arrows."""
+        symbols = [
+            self._at(0.0, 2.0),
+            self._back(0.0, -2.3),
+            self._at(60.0, 0.2),
+            self._at(60.0, 3.1),
+        ]
+        assert _widest_rows({1: symbols}, two_way=frozenset({1})) == {1: LaneRow(2, 3, 2)}
 
     def test_an_edge_takes_its_widest_row_and_not_its_mean(self) -> None:
         """A long edge with one marked junction must not average down to two."""
@@ -567,16 +673,16 @@ class TestWidestRow:
             self._at(0.0, 3.2),
             self._at(60.0, 0.0),
         ]
-        assert _widest_rows({1: symbols}) == {1: 3}
+        assert _widest_rows({1: symbols}) == {1: LaneRow(3, 3, None)}
 
     def test_the_bar_is_half_a_glyph_so_the_two_variants_scale_together(self) -> None:
         """`ArrowGlyph` carries a length per code — 4 m and 6 m variants of the
         same marking — so the bar is derived from the glyph rather than authored.
         1.9 m apart is one row at 4 m; the same pair is still one row at 6 m."""
         near = [self._at(0.0, 0.0), self._at(0.0, 1.9)]
-        assert _widest_rows({1: near}) == {1: 1}
+        assert _widest_rows({1: near}) == {1: LaneRow(1, 1, None)}
         wide = [_Symbol(0.0, 0.0, 6.0), _Symbol(0.0, 2.9, 6.0)]
-        assert _widest_rows({1: wide}) == {1: 1}
+        assert _widest_rows({1: wide}) == {1: LaneRow(1, 1, None)}
 
 
 class _FlatDeck:
@@ -761,6 +867,56 @@ def _deck_report(edge_id: int, span_m: float, ceiling: int | None) -> Carriagewa
     if ceiling is not None:
         found.deck_lane_ceiling[edge_id] = ceiling
     return found
+
+
+class TestTheSplitFollowsTheCountThatStands:
+    """`Q126`: `lanes_forward` is a row's split of the count that is published.
+
+    A row is a lower bound on the count, so its split describes the road only
+    where its count is the one that stands — whichever rule published it.
+    """
+
+    @staticmethod
+    def _two_way(edge_id: int, lanes: int):
+        from dataclasses import replace
+
+        return replace(_road_edge(edge_id, lanes=lanes), direction=BOTH, elevation_level=0)
+
+    def test_a_row_reaching_the_authored_count_splits_it(self) -> None:
+        from pipeline.roads import _reassign
+
+        found = CarriagewayReport()
+        found.lane_rows[7] = LaneRow(painted=2, lanes=2, forward=1)
+        assert _reassign(self._two_way(7, lanes=2), found).lanes_forward == 1
+
+    def test_a_row_short_of_the_count_splits_nothing(self) -> None:
+        """A row of two forward over a measured four says nothing about which
+        of the four is the odd one."""
+        from pipeline.roads import _reassign
+
+        found = CarriagewayReport()
+        found.lane_rows[7] = LaneRow(painted=2, lanes=3, forward=2)
+        assert _reassign(self._two_way(7, lanes=4), found).lanes_forward is None
+
+    def test_the_split_is_read_against_the_count_the_row_itself_published(self) -> None:
+        from pipeline.roads import _reassign
+
+        found = CarriagewayReport()
+        found.assigned_m[7] = 9.343
+        found.basis[7] = "two_way_span"
+        found.publishers[7] = "ib1000"
+        found.lanes[7] = 3
+        found.lanes_basis[7] = "arrows"
+        found.lane_rows[7] = LaneRow(painted=2, lanes=3, forward=2)
+        out = _reassign(self._two_way(7, lanes=2), found)
+        assert (out.lanes, out.lanes_source, out.lanes_forward) == (3, "arrows", 2)
+
+    def test_a_row_with_no_split_publishes_none(self) -> None:
+        from pipeline.roads import _reassign
+
+        found = CarriagewayReport()
+        found.lane_rows[7] = LaneRow(painted=2, lanes=2, forward=None)
+        assert _reassign(self._two_way(7, lanes=2), found).lanes_forward is None
 
 
 class TestThePublishedOffsetIsTheNegationOfTheSurvey:

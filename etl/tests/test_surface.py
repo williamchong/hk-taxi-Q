@@ -742,6 +742,9 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         "structure_bounded": [False] * len(polyline),
         "direction": "both",
         "lanes": 2,
+        # Schema 13 (`Q126`). `None` is the split nobody stated; `_prepare`
+        # reads it without a default for the reason `offset_m` gives below.
+        "lanes_forward": None,
         "width_m": 6.4,
         # Schema 9. Zero is a ribbon centred on its own centreline, which is
         # every level-0 edge and so every fixture here that does not say
@@ -1136,6 +1139,7 @@ def _decode(code: float) -> dict[str, int]:
         "centre": packed // 2048 % 64,
         "kerb_near": packed // 131072 % 4,
         "kerb_off": packed // 524288 % 4,
+        "lanes_forward": packed // 2097152 % 4,
     }
 
 
@@ -1685,6 +1689,9 @@ class TestMarkingPayload:
             # same as a city with no such layer, which reports 0.
             "kerb_near": MARKING_KERB_NONE,
             "kerb_off": MARKING_KERB_NONE,
+            # Schema 13: the fixture publishes no split (`null`), which packs
+            # as 0 — "draw the middle" — and is what a one-way edge packs too.
+            "lanes_forward": 0,
         }
 
     def test_a_kerb_says_it_is_a_kerb(self, testville, tmp_path) -> None:
@@ -1793,6 +1800,7 @@ class TestMarkingPayload:
             # same as a city with no such layer, which reports 0.
             "kerb_near": MARKING_KERB_NONE,
             "kerb_off": MARKING_KERB_NONE,
+            "lanes_forward": 0,
         }
 
     def test_every_code_is_a_small_exact_integer(self, testville, tmp_path) -> None:
@@ -1829,6 +1837,89 @@ class TestMarkingPayload:
 
         with pytest.raises(ValueError, match="16 lanes"):
             build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+    def test_the_split_is_packed_where_the_graph_states_one(self, testville_config, tmp_path):
+        """`Q126`: WAN CHAI ROAD's shape — three lanes, two of them forward — so
+        the shader draws the centre line at `U = 2` and not down the middle of
+        the right-turn lane. A one-way edge packs 0 whatever the graph says its
+        `lanes_forward` is, because 0 is the codec's "draw the middle" and a
+        one-way edge has no middle to draw."""
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 2, "pos": [100.0, 0.0, 600.0], "kind": "endpoint"},
+                {"id": 3, "pos": [500.0, 0.0, 600.0], "kind": "endpoint"},
+            ],
+            [
+                _edge(
+                    0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]], lanes=3, lanes_forward=2
+                ),
+                _edge(
+                    1,
+                    2,
+                    3,
+                    [[100.0, 0.0, 600.0], [500.0, 0.0, 600.0]],
+                    lanes=3,
+                    lanes_forward=3,
+                    direction="forward",
+                ),
+            ],
+        )
+        build_region(testville_config, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+        road = _painted(mesh, testville_config.roads.surface.surface_material.colour)
+        south = road & (mesh.positions[:, 2] < 450.0)
+        north = road & (mesh.positions[:, 2] > 450.0)
+        assert {_decode(c)["lanes_forward"] for c in np.unique(mesh.uv2[south, 0])} == {2}
+        assert {_decode(c)["lanes_forward"] for c in np.unique(mesh.uv2[north, 0])} == {0}
+
+    def test_a_split_the_two_bits_cannot_hold_is_counted_and_drawn_at_the_middle(
+        self, testville_config, tmp_path
+    ):
+        """Four forward lanes on a two-way single carriageway is past anything
+        TPDM lets one be, and past the channel — so the road still draws, at
+        its old middle, and `lanes_forward_unsaid` says so."""
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+            ],
+            [_edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]], lanes=6, lanes_forward=4)],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+        assert report.lanes_forward_unsaid == 1
+        assert {_decode(c)["lanes_forward"] for c in np.unique(mesh.uv2[:, 0])} == {0}
+
+    def test_a_split_on_a_one_way_edge_or_past_its_lanes_is_refused_by_the_codec(self):
+        """`marking_code`'s own guard, below `_prepare`'s translation: the two
+        states the shader would draw a centre line across a one-way road or on a
+        kerb for. Reachable only by a caller that bypasses `_prepare`."""
+        from dataclasses import replace
+
+        from pipeline.surface import _Edge
+
+        edge = _Edge(
+            points=np.zeros((2, 5)),
+            published_half_widths=np.zeros(2),
+            published_offsets=np.zeros(2),
+            lanes=3,
+            direction="both",
+            bus_lane=False,
+            tram_tracks=False,
+            level=0,
+            length_m=10.0,
+        )
+        assert _decode(replace(edge, lanes_forward=2).marking_code(0))["lanes_forward"] == 2
+        with pytest.raises(ValueError, match="strictly inside"):
+            replace(edge, lanes_forward=3).marking_code(0)
+        with pytest.raises(ValueError, match="strictly inside"):
+            replace(edge, direction="forward", lanes_forward=2).marking_code(0)
+        with pytest.raises(ValueError, match="past what"):
+            replace(edge, lanes=6, lanes_forward=4).marking_code(0)
 
     def test_an_opposed_pair_publishes_where_its_flows_meet(self, dualville, tmp_path) -> None:
         """Two one-way carriageways widened until they read as one road have a
@@ -2255,11 +2346,18 @@ class TestKerbside:
         _, inserted = _insert_stations(points, [50.2])
         assert inserted.tolist() == [2]
 
-    def test_the_widest_legal_code_is_exact_in_float32(self) -> None:
+    def test_the_widest_legal_code_survives_the_shaders_decode(self) -> None:
         """The codec's own promise, and what `floor(x + 0.5)` in the shader
-        rests on. Two new fields since `P3-12` put the ceiling at 2,097,151."""
-        assert MARKING_CODE_MAX == 2_097_151
-        assert float(np.float32(MARKING_CODE_MAX)) == MARKING_CODE_MAX
+        rests on: not that the code is exact in float32 — every integer to 2^24
+        is — but that the code PLUS A HALF is, which stops at 2^23. `Q126`'s
+        field fills the channel to 8,388,607, one under it, and the odd
+        neighbour just past it is what the next field would silently corrupt.
+        """
+        assert MARKING_CODE_MAX == 8_388_607 == 2**23 - 1
+        half = np.float32(0.5)
+        assert np.floor(np.float32(MARKING_CODE_MAX) + half) == MARKING_CODE_MAX
+        past = 2**23 + 1
+        assert np.floor(np.float32(past) + half) != past, "the channel is full, and this is why"
 
 
 # One bend, twice: level and then climbing 6 m over the second segment. 210 m to

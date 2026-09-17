@@ -55,11 +55,16 @@ const MARKING_CENTRE_MAX: float = 63.0
 const MARKING_KERB_NEAR_FIELD: float = 131072.0
 const MARKING_KERB_OFF_FIELD: float = 524288.0
 const MARKING_KERB_SPAN: float = 4.0
+## `Q126`'s field: how many of `lanes` carry the edge's own direction, or 0
+## where the ETL did not say. Two bits, and the last the channel holds — the
+## decode adds a half and floors, which is exact only below 2^23.
+const MARKING_LANES_FORWARD_FIELD: float = 2097152.0
+const MARKING_LANES_FORWARD_SPAN: float = 4.0
 ## Derived from the top field rather than written down, the way
 ## `etl/pipeline/surface.py` derives its own — a literal here is a number that
 ## has to be re-derived by hand the next time a field is added, and getting it
 ## wrong loosens the check silently.
-const MARKING_CODE_MAX: float = MARKING_KERB_OFF_FIELD * MARKING_KERB_SPAN - 1.0
+const MARKING_CODE_MAX: float = MARKING_LANES_FORWARD_FIELD * MARKING_LANES_FORWARD_SPAN - 1.0
 
 ## The longest edge the region may publish, in metres, as a sanity ceiling on
 ## `TEXCOORD_1.y`. Not a contract value — geometry is clipped to a region 1.7 km
@@ -268,12 +273,20 @@ func _check_marking_payload(mesh: Mesh, surface: int, where: String) -> PackedSt
 		var direction: float = fmod(
 			floor(code / MARKING_DIRECTION_FIELD), MARKING_BUS_FIELD / MARKING_DIRECTION_FIELD
 		)
+		var lanes_forward: float = fmod(
+			floor(code / MARKING_LANES_FORWARD_FIELD), MARKING_LANES_FORWARD_SPAN
+		)
 		if (
 			code != floor(code)
 			or code < 0.0
 			or code > MARKING_CODE_MAX
 			or surface_class > MARKING_CLASS_CAP
 			or direction > MARKING_DIRECTION_MAX
+			# `Q126`: a split is a boundary strictly inside the lane range, and
+			# only a two-way edge (`direction` 1) has two flows to split between.
+			# A one-way edge saying one would put a centre line across its own
+			# carriageway; a split at or past `lanes` is a line on the kerb.
+			or (lanes_forward > 0.0 and (direction != 1.0 or lanes_forward >= lanes))
 			or uv2.y < 0.0
 			or uv2.y > MAX_EDGE_M
 			# A junction cap is the only thing that may carry no lanes, and it is

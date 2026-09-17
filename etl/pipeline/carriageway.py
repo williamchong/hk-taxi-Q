@@ -36,6 +36,7 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 import numpy as np
 
@@ -160,7 +161,7 @@ class CarriagewayReport:
     # out of `roadgraph.json` and so covers only the edges a row was published
     # on. Nothing serialises this dict, so widening it buys no coverage until
     # something does.
-    lane_rows: dict[int, int] = field(default_factory=dict)
+    lane_rows: dict[int, LaneRow] = field(default_factory=dict)
     # 🔴 **A row BELOW its bracket is an unpainted lane, not a narrower road.**
     # A lane carrying no turn arrow is invisible to the row, which makes the row
     # a lower bound — so this is reported and never used. **7** edges today.
@@ -180,6 +181,14 @@ class CarriagewayReport:
     # readings sharing no input, landing on the same integer. Nothing to
     # publish; counted because it is the only free cross-check either has.
     lanes_row_agreeing: list[int] = field(default_factory=list)
+    # 🔴 **Two-way edges whose row put a count back that 3.4.2.7 had struck out**
+    # (`Q126`). The manual's clause removes the odd counts from an *ambiguous*
+    # two-way bracket; a row of two arrows abreast in one direction of a two-way
+    # street is that clause's own exception painted on the road — a lane added
+    # at the approach — so the count is read against TD's width range alone.
+    # A subset of `lanes` with basis `arrows`; listed apart because it is the
+    # one place a row overrides a narrowing rather than resolving a range.
+    lanes_row_odd_two_way: list[int] = field(default_factory=list)
 
     # ── The deck a ribbon is drawn on (`Q103`) ─────────────────────────────
     #
@@ -990,11 +999,13 @@ def measure(
     rows = _read_lane_rows(
         city, region_id, transform, [edge for edge in walked if edge.elevation_level == 0]
     )
-    _resolve_with_rows(report, rows)
+    _resolve_with_rows(report, rows, bounds)
     return report
 
 
-def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
+def _resolve_with_rows(
+    report: CarriagewayReport, rows: dict[int, LaneRow], bounds: WidthBounds
+) -> None:
     """Let the arrow row resolve the brackets TD's own range leaves ambiguous.
 
     🔴 **A row of ONE arrow is not a row, and refusing it is the whole
@@ -1030,15 +1041,29 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
     ambiguous ones**, which is deliberate: a row contradicting a bracket the
     width already resolved is the stronger finding of the two, and confining
     them to the ambiguous population would hide it.
+
+    🔴 **On a two-way edge the row may also put back a count 3.4.2.7 struck
+    out (`Q126`).** `_lane_bracket` removes the odd counts from an ambiguous
+    two-way bracket, so WAN CHAI ROAD `e50` — 9.34 m, `(2, 3)` — published two
+    lanes, and its two forward arrows abreast then shared one slot and drew one
+    shaft wearing two heads. The clause's own exception is a lane added on one
+    side, and two arrows abreast in one direction of a two-way street is
+    exactly that, painted. So a row whose count falls inside the bracket TD's
+    *widths* allow — `_lane_bracket` without the narrowing — is published even
+    where the narrowed bracket refused it, and `lanes_row_odd_two_way` names
+    every edge that took this branch. ⚠️ **Only a row that states its
+    direction can do it** (`LaneRow.forward`): a row the reader could not split
+    is graded against the narrowed bracket as before.
     """
     report.lane_rows.update(rows)
     for edge_id, (low, high) in report.lanes_bracket.items():
-        stated = rows.get(edge_id)
-        if stated is None:
+        row = rows.get(edge_id)
+        if row is None:
             continue
-        if stated < _ROW_MIN:
+        if row.painted < _ROW_MIN:
             report.lanes_row_single.append(edge_id)
             continue
+        stated = row.lanes
         if stated == report.lanes.get(edge_id):
             # The width already published this count and the row lands on it —
             # two readings sharing no input agreeing on one integer, which is the
@@ -1057,20 +1082,35 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
             # name.
             report.lanes_row_agreeing.append(edge_id)
             continue
+        if low <= stated <= high:
+            if high == low:
+                # Inside a bracket the width resolved, but not on the count it
+                # published — unreachable while `_lanes` publishes `low` for
+                # every resolved bracket at or above the floor, and kept so that
+                # a change there cannot silently start overwriting a resolved
+                # count.
+                continue
+            report.lanes[edge_id] = stated
+            report.lanes_basis[edge_id] = "arrows"
+            continue
         if stated < low:
             report.lanes_row_below_bracket.append(edge_id)
             continue
-        if stated > high:
-            report.lanes_row_over_bracket.append(edge_id)
-            continue
-        if high == low:
-            # Inside a bracket the width resolved, but not on the count it
-            # published — unreachable while `_lanes` publishes `low` for every
-            # resolved bracket at or above the floor, and kept so that a change
-            # there cannot silently start overwriting a resolved count.
-            continue
-        report.lanes[edge_id] = stated
-        report.lanes_basis[edge_id] = "arrows"
+        if row.forward is not None:
+            # A two-way row that states its split, above the narrowed bracket.
+            # `two_way=False` is the bracket TD's widths allow before 3.4.2.7
+            # strikes the odd counts out of it — the clause the row is evidence
+            # against. ⚠️ **Above only, never below**: the row is a lower bound,
+            # so a row of three under a narrowed `(4, 4)` is an unpainted lane
+            # exactly as it was, while a row of three over a narrowed `(2, 2)`
+            # is a count the width allows and the row requires.
+            allowed = _lane_bracket(report.assigned_m[edge_id], bounds, two_way=False)[1]
+            if stated <= allowed:
+                report.lanes[edge_id] = stated
+                report.lanes_basis[edge_id] = "arrows"
+                report.lanes_row_odd_two_way.append(edge_id)
+                continue
+        report.lanes_row_over_bracket.append(edge_id)
 
 
 def _license(edge, span: float, own: float, bounds: WidthBounds) -> tuple[float | None, str]:
@@ -1138,13 +1178,44 @@ class _Symbol:
 
     Deliberately not `arrows.Symbol`: that carries a code and a heading because
     the arrows stage draws a glyph, and this stage only ever asks *how many
-    abreast*. Along and across the host edge, plus the glyph's own length,
-    because the run bar is a fraction of it.
+    abreast*, and since `Q126` *which way each one points*. Along and across
+    the host edge, plus the glyph's own length, because the run bar is a
+    fraction of it.
     """
 
     along_m: float
     offset_m: float
     length_m: float
+    # Pointing against the host edge's own direction. Only a two-way edge can
+    # carry one — `_read_lane_rows` refuses an arrow against a one-way street
+    # before it is counted — and it is what splits a row into the two flows.
+    backward: bool = False
+
+
+class LaneRow(NamedTuple):
+    """What one edge's widest row of turn arrows states (`Q94`, `Q126`).
+
+    `painted` is how many arrows stand abreast in it, and is what `_ROW_MIN` is
+    read against: one arrow is a marking, not a row. `lanes` is the count the
+    row states. On a one-way edge the two are equal. 🔴 **On a two-way edge
+    `lanes` is `max(forward, 1) + max(backward, 1)`**: two arrows abreast in one
+    direction of a two-way street are two lanes *plus the one the other
+    direction cannot be without* — WAN CHAI ROAD `e50` paints two forward
+    arrows and no backward one, and is a three-lane road. Still a lower bound,
+    for the reason every row is: an unpainted lane is invisible to it.
+
+    `forward` is how many of those lanes carry the edge's own direction, or
+    `None` where the row does not say — a one-way edge, whose every lane is
+    forward and which publishes no split, or a run of arrows pointing both
+    ways at once, which is a mis-clustering rather than a lane. ⚠️ **It is
+    `max(forward, 1)`, so a row of backward arrows alone still hands the
+    forward flow its one lane.** `roads.py` publishes it as `lanes_forward`
+    only where `lanes` is the count that stands.
+    """
+
+    painted: int
+    lanes: int
+    forward: int | None
 
 
 def _runs(symbols: list[_Symbol], key: Callable[[_Symbol], float]) -> Iterator[list[_Symbol]]:
@@ -1177,7 +1248,7 @@ def _read_lane_rows(
     region_id: str,
     transform: GameTransform,
     edges: list,
-) -> dict[int, int]:
+) -> dict[int, LaneRow]:
     """The lane count each edge's own turn arrows state, keyed by edge id.
 
     ⚠️ **An edge's count is the widest row it carries, not its rows averaged** —
@@ -1251,7 +1322,8 @@ def _read_lane_rows(
             if axis_residual_deg(heading, snap.heading_deg) > spec.bearing_tolerance_deg:
                 # Matched a road it is not on. Refused, never rotated onto it.
                 continue
-            if one_way[snap.edge] and directed_residual_deg(heading, snap.heading_deg) > 90.0:
+            backward = directed_residual_deg(heading, snap.heading_deg) > 90.0
+            if one_way[snap.edge] and backward:
                 # An arrow pointing against a one-way street has either matched
                 # the wrong edge or found a one-way the graph has backwards.
                 # Either way it is not evidence about this edge's lane count.
@@ -1261,19 +1333,26 @@ def _read_lane_rows(
                     along_m=snap.t * length_m[snap.edge],
                     offset_m=snap.offset_m,
                     length_m=glyph.length_m,
+                    backward=backward,
                 )
             )
 
-    return _widest_rows(rows)
+    two_way = frozenset(edge_id for edge_id, is_one_way in one_way.items() if not is_one_way)
+    return _widest_rows(rows, two_way=two_way)
 
 
-def _widest_rows(rows: dict[int, list[_Symbol]]) -> dict[int, int]:
+def _widest_rows(
+    rows: dict[int, list[_Symbol]], *, two_way: frozenset[int] = frozenset()
+) -> dict[int, LaneRow]:
     """Each edge's widest row of arrows: along the edge first, then across it.
 
     ⚠️ **An edge's count is the widest row it carries, not its rows averaged** —
     `arrows._count_rows`' rule. A carriageway holding three arrows abreast has
     three lanes at that station whatever the rest of it is painted with, and a
-    mean lets a long edge with one marked junction read as two.
+    mean lets a long edge with one marked junction read as two. Since `Q126`
+    "widest" is by the count *stated*, then by arrows painted, so on a two-way
+    edge a row of two forward arrows (three lanes) outranks a row of one each
+    way (two) at the same width.
 
     Lifted out of `_read_lane_rows` so it can be tested without a build: it and
     `_runs` are the half this module duplicates, so they are the half most able
@@ -1281,9 +1360,37 @@ def _widest_rows(rows: dict[int, list[_Symbol]]) -> dict[int, int]:
     own.
     """
     return {
-        edge_id: max(len(list(_runs(row, _across))) for row in _runs(symbols, _along))
+        edge_id: max(
+            (_row_reading(row, two_way=edge_id in two_way) for row in _runs(symbols, _along)),
+            key=lambda reading: (reading.lanes, reading.painted),
+        )
         for edge_id, symbols in rows.items()
     }
+
+
+def _row_reading(row: list[_Symbol], *, two_way: bool) -> LaneRow:
+    """What one row of arrows abreast states — see `LaneRow`.
+
+    Each run across the road is a painted lane, and a lane's direction is its
+    arrows'. ⚠️ **A run pointing both ways is refused as a split, not
+    resolved**: two symbols within half a glyph of each other across the road
+    and pointing opposite ways are one lane carrying both flows, which is not a
+    lane, so the row keeps its painted count and states no split.
+    """
+    lanes = list(_runs(row, _across))
+    painted = len(lanes)
+    if not two_way:
+        return LaneRow(painted, painted, None)
+    forward = backward = 0
+    for lane in lanes:
+        against = [symbol.backward for symbol in lane]
+        if not any(against):
+            forward += 1
+        elif all(against):
+            backward += 1
+    if forward + backward != painted:
+        return LaneRow(painted, painted, None)
+    return LaneRow(painted, max(forward, 1) + max(backward, 1), max(forward, 1))
 
 
 def _along(symbol: _Symbol) -> float:

@@ -1299,14 +1299,17 @@ def lane_verdict(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> 
     verdict = LaneVerdict()
     for row in rows:
         two_way = report.directions.get(row.edge) == BOTH
-        low, high = lane_bracket(row.median_m, bounds, two_way=two_way)
+        source = report.lanes_source.get(row.edge, "authored")
+        # A count a row of arrows resolved is graded before 3.4.2.7 (`Q126`) —
+        # `lane_bracket`'s docstring says why — and `two_way=False` is the
+        # bracket without the narrowing, as `pipeline/carriageway.py` spells it.
+        low, high = lane_bracket(row.median_m, bounds, two_way=two_way and source != "arrows")
         published = report.lanes.get(row.edge, 0)
         outside = published < low or published > high
         if published < low:
             verdict.too_few += 1
         elif published > high:
             verdict.too_many += 1
-        source = report.lanes_source.get(row.edge, "authored")
         if source == "floored":
             verdict.floored_total += 1
         elif source != "authored":
@@ -1335,6 +1338,16 @@ def lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tuple
     bracket that is unambiguously odd is left standing, because it is then a
     finding about the measurement or the direction field rather than a reading
     to be corrected into agreement.
+
+    ⚠️ **A count a row of turn arrows resolved is graded against the range
+    TD's widths allow, before 3.4.2.7 (`Q126`).** The clause's own exception is
+    a lane added on one side, and two arrows abreast in one direction of a
+    two-way street is that lane painted — so `pipeline/carriageway.py`
+    publishes the odd count and a caller grades it against the same range by
+    passing `two_way=False`, which is the bracket without the narrowing and
+    the spelling that module uses. No second parameter: it would collapse to
+    this one, and a knob that provably does invites the gaming the first
+    paragraph warns about.
     """
     low = int(width_m // bounds.lane_m[1])
     high = int(width_m // bounds.lane_m[0])

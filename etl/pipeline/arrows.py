@@ -10,9 +10,9 @@ each one is why it is a separate mesh rather than another field in
 `surface.py`'s codec:
 
 - **`TEXCOORD_1.x` has no room and the wrong shape.** It is a per-edge constant
-  with three spare bits; an arrow is a *point* feature, which is `Q54`'s V-range
-  problem, and `COLOR_0.a` — the channel that solved it for the kerbside — is
-  spent on the kerbside extent.
+  with no spare bits since `Q126` filled the last two; an arrow is a *point*
+  feature, which is `Q54`'s V-range problem, and `COLOR_0.a` — the channel that
+  solved it for the kerbside — is spent on the kerbside extent.
 - **The junction fade blanks exactly where arrows live.** `road_markings.tres`
   fades the last `fade_m` = 6 m of every edge, priced against the 4.21 m
   worst-case cap overlap, and already leaves 121 of 797 edges with no marking at
@@ -283,6 +283,17 @@ class ArrowReport:
     lanes_row_disagreement: int = 0
     lanes_row_published: int = 0
     edges_implying_more_lanes: int = 0
+    # 🔴 **How many of the row's lanes carry the edge's own direction, on a
+    # two-way edge whose row states it (`Q126`)** — `carriageway.LaneRow.forward`
+    # read a second time, in this stage's own clustering. `roadgraph.json`
+    # publishes it as `lanes_forward` wherever the row's count is the count that
+    # stands, so on every such edge the two must agree, and
+    # `lanes_split_disagreement` is that diff. Not a per-edge grader of the
+    # split — nothing published can grade a direction (`Q62`) — but the one
+    # check on a second implementation of the same reading.
+    implied_lanes_forward: dict[int, int] = field(default_factory=dict)
+    lanes_split_published: int = 0
+    lanes_split_disagreement: int = 0
 
     # `SYMBOL_SIZE` as published, which nothing here reads. Recorded so the
     # question "is it the arrow's length in metres?" can be answered from a
@@ -944,6 +955,7 @@ def build_region(
                 glyph.length_m,
                 along_m,
                 float(snap.offset_m),
+                directed > 90.0,
             )
         )
 
@@ -999,6 +1011,10 @@ class _Laid(NamedTuple):
     # are the *unregistered* figures, before the lane snap.
     along_m: float
     offset_m: float
+    # Pointing against the host edge's own direction — reachable only on a
+    # two-way edge, since `against_one_way` refuses it on a one-way one. What
+    # splits a row into the two flows (`Q126`).
+    backward: bool = False
 
 
 def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
@@ -1093,18 +1109,58 @@ def _count_rows(laid: list[_Laid], ribbons: dict[int, Ribbon], report: ArrowRepo
     A carriageway that holds three arrows abreast has three lanes at that
     station whatever the rest of it is painted with, and a mean would let a long
     edge with one marked junction read as two.
+
+    🔴 **On a two-way edge the row is read BY DIRECTION (`Q126`)** —
+    `carriageway._row_reading`'s rule, restated: each run across the road is a
+    lane and its arrows say which flow it carries, so two forward arrows
+    abreast are two forward lanes *plus the one the other flow cannot be
+    without*, three in all, and the split is `max(forward, 1)`. A run pointing
+    both ways at once states no split. "Widest" is by the count stated, then by
+    arrows painted. ⚠️ An edge no ribbon covers is read as one-way, which is the
+    reading that adds nothing.
     """
     by_edge: dict[int, list[_Laid]] = defaultdict(list)
     for arrow in laid:
         by_edge[arrow.edge].append(arrow)
 
     for edge, arrows in by_edge.items():
-        # Rows along the edge, then lanes across each row, on the same bar.
-        widest = max(len(list(_runs(row, _offset))) for row in _runs(arrows, _along))
-        report.implied_lanes[edge] = widest
         ribbon = ribbons.get(edge)
+        two_way = ribbon is not None and not ribbon.one_way
+        # Rows along the edge, then lanes across each row, on the same bar.
+        _, widest, forward = max(
+            (_row_reading(row, two_way=two_way) for row in _runs(arrows, _along)),
+            key=lambda reading: (reading[1], reading[0]),
+        )
+        report.implied_lanes[edge] = widest
+        if forward is not None:
+            report.implied_lanes_forward[edge] = forward
         if ribbon is not None and widest > ribbon.lanes:
             report.edges_implying_more_lanes += 1
+
+
+def _row_reading(row: list[_Laid], *, two_way: bool) -> tuple[int, int, int | None]:
+    """What one row of arrows abreast states: `(painted, lanes, forward)`.
+
+    `painted` is how many stand abreast, `lanes` the count that states, and
+    `forward` its forward share — `None` on a one-way edge and on a run that
+    points both ways. ⚠️ Deliberately the tuple and not `carriageway.LaneRow`:
+    this stage is the second implementation, and the one check on the pair is
+    that they agree without sharing a line.
+    """
+    lanes = list(_runs(row, _offset))
+    painted = len(lanes)
+    if not two_way:
+        return painted, painted, None
+    forward = backward = 0
+    for lane in lanes:
+        against = [arrow.backward for arrow in lane]
+        if not any(against):
+            forward += 1
+        elif all(against):
+            backward += 1
+    if forward + backward != painted:
+        return painted, painted, None
+    return painted, max(forward, 1) + max(backward, 1), max(forward, 1)
 
 
 def _grade_against_the_graph(graph: dict, report: ArrowReport) -> None:
@@ -1127,10 +1183,22 @@ def _grade_against_the_graph(graph: dict, report: ArrowReport) -> None:
     so anything but 0 here means the two clusterings diverged.
     """
     for edge in graph["edges"]:
+        edge_id = int(edge["id"])
+        # 🔴 **The split is graded wherever the count agrees (`Q126`)**, not
+        # only where the count was published from a row: `roads.py` publishes
+        # a row's split on any two-way edge whose count the row reaches,
+        # authored or measured, so on every such edge `lanes_forward` **is**
+        # the row's forward share and anything else is the two clusterings
+        # disagreeing about which way an arrow points.
+        forward = report.implied_lanes_forward.get(edge_id)
+        if forward is not None and report.implied_lanes.get(edge_id) == int(edge["lanes"]):
+            report.lanes_split_published += 1
+            if edge["lanes_forward"] != forward:
+                report.lanes_split_disagreement += 1
         if str(edge.get("lanes_source")) != "arrows":
             continue
         report.lanes_row_published += 1
-        if report.implied_lanes.get(int(edge["id"])) != int(edge["lanes"]):
+        if report.implied_lanes.get(edge_id) != int(edge["lanes"]):
             report.lanes_row_disagreement += 1
 
 
@@ -1263,6 +1331,15 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         "lanes_row_published": report.lanes_row_published,
         "lanes_row_disagreement": report.lanes_row_disagreement,
         "edges_implying_more_lanes": report.edges_implying_more_lanes,
+        # `Q126`: the two-way rows' forward share, per edge like `implied_lanes`
+        # and for the same reason, and the diff against `roadgraph.json`'s
+        # `lanes_forward` over the edges where the count agrees.
+        "implied_lanes_forward": {
+            str(edge): report.implied_lanes_forward[edge]
+            for edge in sorted(report.implied_lanes_forward)
+        },
+        "lanes_split_published": report.lanes_split_published,
+        "lanes_split_disagreement": report.lanes_split_disagreement,
         # Published, unread. `SYMBOL_SIZE` may or may not be the arrow's length
         # in metres; the glyph table takes its lengths from the index plan
         # instead. Recorded here so the question is answerable from a shipped
@@ -1325,6 +1402,12 @@ def main(argv: list[str] | None = None) -> int:
         len(report.implied_lanes),
         report.lanes_row_published,
         report.lanes_row_disagreement,
+    )
+    log.info(
+        "  two-way splits: %d rows state one, %d published as lanes_forward, %d disagreeing (Q126)",
+        len(report.implied_lanes_forward),
+        report.lanes_split_published,
+        report.lanes_split_disagreement,
     )
     return 0
 

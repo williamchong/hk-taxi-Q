@@ -67,6 +67,40 @@ def _edge(
     }
 
 
+class TestARowResolvedCountIsGradedBeforeTheNarrowing:
+    """`Q126`: `lanes_source: arrows` on a two-way edge is graded against TD's
+    widths alone, which is `carriageway_margin.lane_bracket`'s own rule."""
+
+    def test_the_verdict_reads_within_where_the_narrowing_alone_would_say_over(self, hong_kong):
+        ribbon = _manifest([{"edge": 1, "half_width_m": [5.12, 5.12]}])
+        graph = _graph(
+            [
+                _edge(
+                    1,
+                    polyline=STRAIGHT,
+                    lanes=3,
+                    lanes_source="arrows",
+                    width_m=9.343,
+                    width_source="two_way_span",
+                    direction="both",
+                ),
+                _edge(
+                    2,
+                    polyline=STRAIGHT,
+                    lanes=3,
+                    lanes_source="measured",
+                    width_m=9.343,
+                    width_source="two_way_span",
+                    direction="both",
+                ),
+            ]
+        )
+        ribbon["carriageway"].append({"edge": 2, "half_width_m": [5.12, 5.12]})
+        rows = {row.id: row for row in survey(graph, ribbon, _bounds(hong_kong))}
+        assert (rows[1].bracket, rows[1].verdict) == ((2, 3), "within")
+        assert (rows[2].bracket, rows[2].verdict) == ((2, 2), "over")
+
+
 def _manifest(carriageway: list[dict]) -> dict:
     return {"carriageway": carriageway}
 

@@ -114,7 +114,14 @@ const FILE: String = "roadgraph.json"
 ## `polyline ± width_m / 2` is now wrong about the whole elevated network, and
 ## nothing else in the document says so — `width_m` gives the size, this gives
 ## the place. Positive is left of travel, `surface.mitres`' frame.
-const SCHEMA_VERSION: int = 12
+##
+## 13 adds `lanes_forward` (`Q126`): how many of `lanes` carry the edge's own
+## direction, `null` where a two-way count is odd and nothing split it. Through
+## 12 every consumer put the meeting of a two-way road's flows at `lanes / 2`,
+## and on a three-lane street with a right-turn lane that is the middle of that
+## lane. `lane_offset` does not read it: the nearside lane of either flow is the
+## same distance off the centreline whichever side the extra lane is on.
+const SCHEMA_VERSION: int = 13
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".

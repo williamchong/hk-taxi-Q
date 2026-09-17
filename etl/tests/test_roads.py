@@ -25,6 +25,7 @@ from pipeline.roads import (
     _Counts,
     _Deck,
     _deck_heights,
+    _edge_document,
     _follow_ground,
     _levels_at_node,
     _lifted_heights,
@@ -35,6 +36,7 @@ from pipeline.roads import (
     clean_text,
     clip,
     parse_speed_limit,
+    published_lanes_forward,
     resample,
     resample_anchored,
     simplify,
@@ -345,6 +347,55 @@ class TestJoin:
         assert middle["schema_version"] == ROADGRAPH_SCHEMA
 
 
+class TestPublishedLanesForward:
+    """`Q126`: the document's `lanes_forward` is total, and `null` exactly once."""
+
+    @staticmethod
+    def _edge(direction: str, lanes: int, lanes_forward: int | None = None) -> Edge:
+        return Edge(
+            id=1,
+            source_id=1,
+            from_node=0,
+            to_node=1,
+            polyline=[(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)],
+            on_structure=[False, False],
+            structure_bounded=[False, False],
+            direction=direction,
+            lanes=lanes,
+            lanes_forward=lanes_forward,
+            width_m=6.4,
+            speed_limit_kph=50,
+            bus_lane=False,
+            tram_tracks=False,
+            elevation_level=0,
+            road_name={"en": "TEST", "zh": ""},
+        )
+
+    def test_a_one_way_edge_owns_every_lane(self) -> None:
+        assert published_lanes_forward(self._edge(FORWARD, 3)) == 3
+
+    def test_an_even_two_way_count_nobody_split_is_half_and_half(self) -> None:
+        """What every consumer assumed before the field existed, said out loud."""
+        assert published_lanes_forward(self._edge(BOTH, 4)) == 2
+
+    def test_an_odd_two_way_count_nobody_split_is_null(self) -> None:
+        """🔴 The honest gap: which side the extra lane is on is not known, and
+        the shader keeps the middle it always drew rather than a guess."""
+        assert published_lanes_forward(self._edge(BOTH, 3)) is None
+
+    def test_a_row_split_is_published_as_stated(self) -> None:
+        assert published_lanes_forward(self._edge(BOTH, 3, lanes_forward=2)) == 2
+        assert published_lanes_forward(self._edge(BOTH, 4, lanes_forward=3)) == 3
+
+    def test_the_document_carries_it_on_every_edge(self) -> None:
+        for edge, expected in (
+            (self._edge(FORWARD, 2), 2),
+            (self._edge(BOTH, 2), 1),
+            (self._edge(BOTH, 3), None),
+        ):
+            assert _edge_document(edge)["lanes_forward"] == expected
+
+
 class TestBuildRegion:
     def test_it_writes_a_graph_matching_the_contract(self, testville) -> None:
         city, tmp_path = testville
@@ -367,6 +418,7 @@ class TestBuildRegion:
             "direction",
             "lanes",
             "lanes_source",
+            "lanes_forward",
             "width_m",
             "width_source",
             "width_publisher",

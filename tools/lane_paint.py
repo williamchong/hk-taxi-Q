@@ -160,7 +160,12 @@ class Edge:
 
 
 def _bracket_or_none(
-    width_m: float, width_source: str, bounds: WidthBounds | None, *, two_way: bool
+    width_m: float,
+    width_source: str,
+    bounds: WidthBounds | None,
+    *,
+    two_way: bool,
+    lanes_source: str = "authored",
 ) -> tuple[int, int] | None:
     """TPDM's lane bracket for a width, or `None` where bracketing it says nothing.
 
@@ -180,7 +185,10 @@ def _bracket_or_none(
     """
     if bounds is None or width_source == "authored":
         return None
-    return lane_bracket(width_m, bounds, two_way=two_way)
+    # A count a row of arrows resolved is graded before 3.4.2.7's narrowing
+    # (`Q126`), which is `lane_bracket`'s own rule; `two_way=False` is the
+    # bracket without it, and the source is what says so.
+    return lane_bracket(width_m, bounds, two_way=two_way and lanes_source != "arrows")
 
 
 def narrow_points(values: np.ndarray) -> tuple[float, float, float, float]:
@@ -226,6 +234,7 @@ def survey(
         )
         width_m = float(published.get("width_m", 0.0))
         width_source = str(published.get("width_source", "authored"))
+        lanes_source = str(published.get("lanes_source", "authored"))
         two_way = str(published.get("direction", "both")) == "both"
         rows.append(
             Edge(
@@ -233,11 +242,13 @@ def survey(
                 name=names.get(edge_id, "unnamed"),
                 level=int(published.get("elevation_level", 0)),
                 lanes=lanes,
-                lanes_source=str(published.get("lanes_source", "authored")),
+                lanes_source=lanes_source,
                 width_m=width_m,
                 width_source=width_source,
                 two_way=two_way,
-                bracket=_bracket_or_none(width_m, width_source, bounds, two_way=two_way),
+                bracket=_bracket_or_none(
+                    width_m, width_source, bounds, two_way=two_way, lanes_source=lanes_source
+                ),
                 strip_m=strip,
                 station_m=station_weights(polyline),
             )

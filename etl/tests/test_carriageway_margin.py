@@ -374,6 +374,13 @@ class TestLaneBracket:
         assert lane_bracket(14.14, _bounds(), two_way=True) == (4, 4)
         assert lane_bracket(7.0, _bounds(), two_way=True) == (1, 2)
 
+    def test_a_row_resolved_count_is_graded_before_the_narrowing(self) -> None:
+        """`Q126`: the pipeline publishes the odd count a row of arrows put
+        back, and this brackets the same width against the same range — TD's
+        widths alone — rather than against the clause the row overrode."""
+        assert lane_bracket(9.343, _bounds(), two_way=True) == (2, 2)
+        assert lane_bracket(9.343, _bounds(), two_way=False) == (2, 3)
+
     def test_an_unambiguously_odd_two_way_count_is_left_standing(self) -> None:
         """⚠️ The collapse narrows an *ambiguous* bracket only. An unambiguous
         three is a finding about the measurement or the direction field, and
@@ -518,6 +525,19 @@ class TestLaneVerdict:
         verdict = lane_verdict(rows, self._report(rows, FORWARD, 3), _bounds())
 
         assert (verdict.outside, verdict.ambiguous) == (0, 1)
+
+    def test_an_arrows_count_over_the_narrowed_bracket_is_not_too_many(self) -> None:
+        """WAN CHAI ROAD `e50`: three `arrows` lanes over 9.343 m two-way. The
+        same three as `measured` would be a finding, and is."""
+        rows = self._rows(9.343)
+        report = self._report(rows, BOTH, 3)
+        report.lanes_source = {0: "arrows"}
+        verdict = lane_verdict(rows, report, _bounds())
+        assert (verdict.too_many, verdict.measured_disagreeing) == (0, 0)
+
+        report.lanes_source = {0: "measured"}
+        verdict = lane_verdict(rows, report, _bounds())
+        assert (verdict.too_many, verdict.measured_disagreeing) == (1, 1)
 
     def test_an_unambiguous_odd_two_way_count_is_a_3_4_2_7_finding(self) -> None:
         rows = self._rows(11.9)

@@ -49,6 +49,16 @@ them without explicit instruction from the user.
    `lanes_source` has lost `floored` and gained `deck_capped`, and the floor a one-lane road needs
    lives in `RoadGraph.lane_offset` because only the driving line needed it. The markings shader is
    the second consumer, and flooring the count painted it a lane that is not there.
+   🔴 **And `lanes_forward` says which of them carry the edge's own direction since `Q126`** (schema
+   13): a row of turn arrows on a two-way edge is read **by direction** — two abreast one way are two
+   lanes plus the one the other flow cannot be without — so it puts back the odd count TPDM 3.4.2.7
+   struck out of an ambiguous bracket (WAN CHAI ROAD `e50`: `(2, 3)`, two, one shaft wearing two
+   heads → three, two forward), and the shader draws the two-way centre line at `U = lanes_forward`
+   instead of `lanes / 2`. ⚠️ **Above the narrowed bracket only, never below** — the row is a lower
+   bound. ⚠️ **`null` on an odd two-way count nothing split**, and the shader keeps its old middle.
+   🔴 **The codec is FULL**: the field took the last two bits `floor(x + 0.5)` leaves exact (2²³),
+   and the next field needs another channel. Both row readers (`carriageway._row_reading`,
+   `arrows._row_reading`) restate the rule and `lanes_split_disagreement` is their diff.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.
@@ -610,7 +620,7 @@ Common emoji for this project:
   🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
   it is 25 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
   row was let resolve an ambiguous bracket (`Q94`), 24 → 25 on 2026-08-30 (`e114` HENNESSY ROAD), 25 → **29** on 2026-09-05 when the floor came off
-  the lane count (`Q114`) — on a one-lane edge there is one slot, so two differently-instructed
+  the lane count (`Q114`), 28 → **25** on 2026-09-17 when the row was read by direction (`Q126`) — on a one-lane edge there is one slot, so two differently-instructed
   arrows share it, and the count is now a finding about a *measured* lane count rather than an
   invented one. The registration snaps a published offset to one
   of `ribbon.lanes` slots; the count came from the speed-limit table, so where the painted carriageway
