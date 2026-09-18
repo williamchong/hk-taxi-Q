@@ -960,7 +960,16 @@ class TestTheRegistrationArithmetic:
         eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
         ribbons = arrows.ribbons(
             {"edges": [edge(0, eastward, lanes=2)]},
-            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+            {
+                "carriageway": [
+                    {
+                        "edge": 0,
+                        "half_width_m": [3.2, 3.2],
+                        "offset_m": [0.0, 0.0],
+                        "trim_m": [0.0, 0.0],
+                    }
+                ]
+            },
         )
         snap = Segments.of([edge(0, eastward)]).nearest(105.0, 0.0)
         assert snap.t == pytest.approx(1.0)
@@ -1001,7 +1010,16 @@ class TestTheRegistrationArithmetic:
         eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
         ribbon = arrows.ribbons(
             {"edges": [edge(0, eastward, lanes=2)]},
-            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+            {
+                "carriageway": [
+                    {
+                        "edge": 0,
+                        "half_width_m": [3.2, 3.2],
+                        "offset_m": [0.0, 0.0],
+                        "trim_m": [0.0, 0.0],
+                    }
+                ]
+            },
         )[0]
         # 6 m out, against a 3.2 m drawn half-width and a 0.6 m outset.
         published = np.array([50.0, 6.0])
@@ -1031,7 +1049,16 @@ class TestTheRegistrationArithmetic:
         eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
         ribbon = arrows.ribbons(
             {"edges": [edge(0, eastward, lanes=2)]},
-            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+            {
+                "carriageway": [
+                    {
+                        "edge": 0,
+                        "half_width_m": [3.2, 3.2],
+                        "offset_m": [0.0, 0.0],
+                        "trim_m": [0.0, 0.0],
+                    }
+                ]
+            },
         )[0]
         segments = Segments.of([edge(0, eastward)])
         published = np.array([50.0, 1.0])
@@ -1115,7 +1142,16 @@ class TestTheReportPartitions:
         eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
         ribbon = arrows.ribbons(
             {"edges": [edge(0, eastward, lanes=2)]},
-            {"carriageway": [{"edge": 0, "half_width_m": [8.0, 8.0], "trim_m": [0.0, 0.0]}]},
+            {
+                "carriageway": [
+                    {
+                        "edge": 0,
+                        "half_width_m": [8.0, 8.0],
+                        "offset_m": [0.0, 0.0],
+                        "trim_m": [0.0, 0.0],
+                    }
+                ]
+            },
         )[0]
         segments = Segments.of([edge(0, eastward)])
         report = SignReport()

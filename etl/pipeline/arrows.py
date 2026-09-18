@@ -607,6 +607,14 @@ class Ribbon:
     # widens the ribbon station by station.
     at: np.ndarray
     half_width_m: np.ndarray
+    # 🔴 **Where the drawn ribbon's middle sits, per station, positive to the
+    # nearside** — `roadsurface.json`'s `offset_m`, so the ribbon is
+    # `[offset - half, offset + half]` and never `±half` about the centreline
+    # (`Q106`). It was 0.0 on every level-0 edge when this class was written;
+    # since `P3-33c` a level-0 ribbon's rails are its territory, and 288 of 734
+    # level-0 edges are drawn more than 1 m off their centreline. `EXPO DRIVE
+    # EAST` `e657`'s arrows sat 2.2 m out of the painted lanes for want of it.
+    offset_m: np.ndarray
     # The centreline itself, `(n, 2)` as `(x, z)` per station. ⚠️ **Carried so a
     # consumer can take the foot of a snap from the polyline rather than
     # reconstruct it** — see `foot_at`.
@@ -627,6 +635,10 @@ class Ribbon:
     def half_width_at(self, t: float) -> float:
         """The drawn half-width at a normalised position along the edge."""
         return float(np.interp(t, self.at, self.half_width_m))
+
+    def offset_at(self, t: float) -> float:
+        """The drawn ribbon's middle at a normalised position, nearside positive."""
+        return float(np.interp(t, self.at, self.offset_m))
 
     def foot_at(self, t: float) -> np.ndarray:
         """The point on the centreline at `t`, in game plan space.
@@ -693,8 +705,14 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
         along = plan_lengths(points)
         total = float(along[-1])
         half = np.asarray(drawn["half_width_m"], dtype=np.float64)
+        offset = np.asarray(drawn["offset_m"], dtype=np.float64)
         carriageway_m = float(edge["width_m"])
-        if total <= 0.0 or len(half) != len(along) or not carriageway_m > 0.0:
+        if (
+            total <= 0.0
+            or len(half) != len(along)
+            or len(offset) != len(along)
+            or not carriageway_m > 0.0
+        ):
             # A width list that does not match the polyline it was measured on
             # is a contract break, not a rounding problem. Skipped rather than
             # interpolated across, and visible as a symbol that found no lane.
@@ -715,6 +733,7 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
             one_way=str(edge["direction"]) != "both",
             at=along / total,
             half_width_m=half,
+            offset_m=offset,
             plan=np.column_stack([points[:, 0], points[:, 2]]),
             height_m=points[:, 1],
             trim_start_m=float(trim[0]),
@@ -787,7 +806,11 @@ def _lane_of(offset_m: float, carriageway_m: float, lanes: int) -> tuple[int, bo
 
 
 def _offset_of(lane: int, half_width_m: float, lanes: int) -> float:
-    """Where a lane slot's centre sits on the DRAWN ribbon, in the edge's frame.
+    """Where a lane slot's centre sits on the DRAWN ribbon, from that ribbon's middle.
+
+    ⚠️ **From the ribbon's middle, not from the centreline** — the caller adds
+    `Ribbon.offset_at`, because the drawn ribbon is `[offset - half, offset +
+    half]` (`Q106`) and this knows only the half.
 
     🔴 **The exact inverse of `_lane_of`, and they must be read together.** One
     rule — `U = 0` at the nearside kerb, `offset_m` positive to the nearside — is
@@ -803,6 +826,19 @@ def _offset_of(lane: int, half_width_m: float, lanes: int) -> float:
     toward the centre on a floored street.
     """
     return half_width_m * (1.0 - 2.0 * (lane + 0.5) / lanes)
+
+
+def _slot_offset(ribbon: Ribbon, t: float, lane: int) -> float:
+    """Where a lane slot's centre is drawn, from the centreline, nearside positive.
+
+    🔴 **The slot is found in the surveyed frame and DRAWN in the drawn one, and
+    the drawn one has a middle that is not the centreline** (`Q106`). `_lane_of`
+    stays `Q96`'s; only where the slot's centre lands moves. Without the middle,
+    `EXPO DRIVE EAST` `e657`'s arrows stood 2.2 m out of the lanes the markings
+    shader paints, because the shader cuts the ribbon it is handed and this cut
+    one centred on a line the ribbon is not centred on.
+    """
+    return ribbon.offset_at(t) + _offset_of(lane, ribbon.half_width_at(t), ribbon.lanes)
 
 
 def build_region(
@@ -913,9 +949,9 @@ def build_region(
         glyph = spec.glyphs[symbol.code]
         along_m = snap.t * ribbon.length_m
         half_width_m = ribbon.half_width_at(snap.t)
-        drawn_offset_m = _offset_of(lane, half_width_m, ribbon.lanes)
+        drawn_offset_m = _slot_offset(ribbon, snap.t, lane)
         report.lane_shift_m.append(abs(drawn_offset_m - snap.offset_m))
-        if abs(snap.offset_m) > half_width_m:
+        if abs(snap.offset_m - ribbon.offset_at(snap.t)) > half_width_m:
             report.outside_drawn_ribbon += 1
 
         # The deck under the arrow's two ends, off the host edge's own polyline.

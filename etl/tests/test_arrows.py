@@ -31,6 +31,7 @@ from pipeline.arrows import (
     _Laid,
     _lane_of,
     _place,
+    _slot_offset,
     _stand,
     axis_residual_deg,
     directed_residual_deg,
@@ -676,6 +677,7 @@ class TestArrowRows:
             one_way=one_way,
             at=np.array([0.0, 1.0]),
             half_width_m=np.array([5.12, 5.12]),
+            offset_m=np.zeros(2),
             plan=np.zeros((2, 2)),
             height_m=np.zeros(2),
             trim_start_m=0.0,
@@ -882,6 +884,31 @@ class TestLaneOf:
         """
         assert _lane_of(5.0, 6.52, 3) == (0, True)
         assert _lane_of(1.0, 6.52, 3) == (1, False)
+
+    def test_a_slot_is_drawn_about_the_ribbons_middle_not_the_centreline(self):
+        """`e657` EXPO DRIVE EAST: a 12.3 m ribbon drawn 1.5 m to the nearside.
+
+        🔴 **The shader cuts the ribbon it is handed, so a slot centred on the
+        centreline is off the painted lane by the whole offset** (`Q106`). Here
+        the ribbon is `[-4.0, +8.0]`, three 4 m lanes centred on +6, +2 and -2.
+        Mutation-check it by dropping `offset_at` from `_slot_offset`: every
+        slot moves 2 m and the middle one lands on a lane line.
+        """
+        drawn = Ribbon(
+            lanes=3,
+            carriageway_m=6.4,
+            one_way=True,
+            at=np.array([0.0, 1.0]),
+            half_width_m=np.array([6.0, 6.0]),
+            offset_m=np.array([2.0, 2.0]),
+            plan=np.zeros((2, 2)),
+            height_m=np.zeros(2),
+            trim_start_m=0.0,
+            trim_end_m=0.0,
+            length_m=100.0,
+        )
+        slots = [_slot_offset(drawn, 0.5, lane) for lane in range(3)]
+        assert slots == pytest.approx([6.0, 2.0, -2.0])
 
     def test_a_width_that_is_not_a_positive_number_never_returns_a_confident_lane(self):
         """🔴 **NaN is the case the arithmetic form of this guard lets through.**
