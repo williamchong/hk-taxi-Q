@@ -22904,3 +22904,174 @@ sweeps); both exit 0.
 **See.** `Q126` for the guard and two-station sweep this reproduces · `Q95` for the survey and the
 floor · `Q94` for HyD's polygons and the lane row · `Q19` for what narrowing costs routing · `Q57`
 for why nothing is pooled · `Q58` for the leave-one-out and the refused-too recording
+
+---
+
+## `Q128` — Two agreeing stations, and a strip of HyD's paint where no ray reaches
+
+**Asked 2026-09-18, by the user:** does `Q126` and `Q127`'s work close the widths? It does not —
+`Q126` fixed a lane count and `Q127` shipped nothing — so: a plan for closing them. **Three calls
+taken by the user before any code**: coverage first and the floor *re-priced* rather than removed;
+**confirmed readings only**; Wan Chai and Causeway Bay, with Mong Kok and Sha Tin a follow-up.
+
+### ✅ What shipped, in one line
+
+Measured level-0 width coverage **39.5% → 53.5%** on Wan Chai (290 → 393 of 734) and **34.2% →
+63.3%** on Causeway Bay (67 → 124 of 196), with **0 previously measured widths moved and 0 lost** on
+either region.
+
+### 🔴 Stage 0a — the voters are chosen by the IMPORT GRAPH, and the one we cannot have is the one we should not want
+
+`Q127`'s cascade confirms a strip with one of three independent readings. Which are available is not
+a question about the data: `arrows` imports `roads` imports `carriageway`, so the survey stage can
+only be confirmed by a reading it can already reach — the arrow rows it clusters for itself, and the
+graph it holds. The stop line needs `roadmarks._host`, two imports the wrong way round.
+
+Graded before building, with `tools/width_evidence.py --voters` (Wan Chai, `|p90|` in metres):
+
+| roster | `HyD strip + another` pooled / short | reach | `consensus ≥ 2` pooled / short | reach |
+|---|---|---|---|---|
+| borrow + arrows + stop line (`Q127`) | 1.23 / 1.56 | 97 | 1.90 / 2.61 | 154 |
+| **borrow + arrows** | **0.95 / 1.32** | **90** | **1.69 / 1.90** | 146 |
+
+✅ **Dropping the stop line IMPROVES the cascade** and costs 7 edges. Its own row is the worst in the
+table — 6.07 pooled and **12.70** on short edges — so it confirms more often than it should and the
+edges it adds are the bad ones. ⚠️ The roster is a ratchet: **the ray survey may never join it**
+(`Q127` read the combinations at 0.63 m by construction that way), and a narrowed roster now writes
+itself into the row's own name, because these tables get pasted and *"+ another within 1 m"* is a
+different rule at two voters than at three.
+
+### 🔴 Stage 0b — the deck bar did NOT follow the publishers', and a percentile over two values is why
+
+`_deck_width_or_none` shared `MIN_STATIONS` on the rule that *"an edge measured on two stations is
+not measured, whichever source answered"*. That rule survives; the bar does not. The publishers
+reduce with a **median**, which two agreeing rays estimate soundly. The deck reduces with
+`DECK_WIDTH_PERCENTILE`, and a p10 over two values is the smaller of them nudged a tenth of the way
+toward the larger — `[8.0, 12.0]` publishes **8.4**. That *is* the one lucky ray `MIN_STATIONS` was
+written against, and no tolerance repairs a reduction that is not a median.
+
+⚠️ **Reachable and refused**: Wan Chai has **2** edges that would publish a deck width at two
+stations (`e729` 11.32 m, `e731` 15.53 m) and Causeway Bay none. Holding the bar is what leaves the
+whole off-grade network — and `Q107`'s rim clamp with it — inert across `Q128`.
+
+### ✅ Stage 1 — two stations that AGREE
+
+`Q126` measured plain `n >= 2` clean and declined it, because the constant's own comment says three
+*"is what stops a 6 m stub publishing a width off one lucky ray"* and a bare count does not answer
+that. Two stations that **agree** do.
+
+🔴 **The tolerance is derived, never config**: this region's own mid-block leave-one-out scatter at
+the p90 — **2.81 m** on Wan Chai and **2.91 m** on Causeway Bay, against the grader's independently
+derived **2.77** and **2.85**. ⚠️ Read over the edges whose median the **bounds** admit, not the
+edges the licence attributed a width to: those refuse different things, and an edge `_license`
+refuses was measured perfectly well. Narrowing it to the attributed set reads the bar off 290 edges
+instead of 399 and tightens it to **2.13 m**, which is the licence's opinion leaking into the
+instrument's noise — and it would put the two surveys on different bars.
+
+✅ **Strictly additive, structurally rather than by measurement.** Every edge that publishes at three
+stations is assigned before this pass runs, from the same stations and the same median, so nothing
+can move or be lost whatever the tolerance turns out to be. `_assign` takes no tolerance and a test
+pins that.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| measured widths | 290 → **305** | 67 → **99** |
+| admitted / refused | 19 / 3 | 35 / 1 |
+| `lanes_source` measured / arrows | 147 / 60 → **158 / 61** | 38 / 9 → **63 / 11** |
+| `stacked_disagreeing` | 25 → **24** | 2 → **0** |
+
+`tools/carriageway_margin.py` moved with it (`shipped_rows`), because `STATION_M` and `JUNCTION_M`
+carry the rule that two surveys walking differently cannot be compared.
+
+### ✅ Stage 2 — HyD's paint read as a strip, published only where something agrees
+
+`pipeline/carriageway_area.py` reads the survey's **own third publisher** a different way. Where
+`_union_boundary` turns HyD's Pavement Polygon into kerb segments for a ray to hit, here the polygons
+stay polygons: each edge's corridor is rastered at 1.0 × 0.25 m, every cell goes to the centreline
+**nearest** it with its foot inside that edge — which hands a cross street's asphalt to the cross
+street and a junction's to nobody, with no radius and no station count — and the width is the
+unbroken owned run **through the centre column**, zero where the centreline stands on no paint.
+⚠️ Taking the widest run in the row instead reads the service road beyond a kerb island.
+
+🔴 **The confirmation is the licence, not a refinement.** `Q127` graded the strip alone at |p90|
+**2.53 m** and **4.69 m** on the short edges it exists for — no better than the invented width it
+replaces. `confirm_within_m` is config because `Q127` swept it and found a **trade curve, not a
+plateau** (0.75 / 1.23 / 1.58 m at 11.3 / 21.8 / 34.9% reach for 0.5 / 1.0 / 2.0 m); leave the key
+out and no strip publishes at all.
+
+🔴 **The junction-opening filter comes across and it is NOT the refuted rule.** `Q127` refuted
+openings as a gate on the *ray survey*, where they move widths the survey already has. Here they only
+drop stations from a reading published nowhere the survey speaks — and `_confirmed` **asserts** that
+an edge a ray licensed is never offered a strip, so it is true by construction rather than argued.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| rings read / edges the raster measured | 558 / 588 | 224 / 174 |
+| **published confirmed** | **88** (68 street, 20 arrows) | **25** (19 street, 6 arrows) |
+| refused unconfirmed / outside TD's bounds | 203 / 8 | 53 / 3 |
+| on an edge a ray already measured | 289 | 93 |
+| measured widths | 305 → **393** | 99 → **124** |
+| `lanes_source` measured / arrows | 158 / 61 → **197 / 79** | 63 / 11 → **75 / 16** |
+
+✅ **The cross-check the stage gets for free.** On the 289 Wan Chai edges where both a ray and a strip
+read the same road, `|strip − ray|` is p50 **0.17** / p90 **2.53** / max 12.24 m — and that p90 is
+`Q127`'s independently derived 2.53 to two places, from a second implementation. ⚠️ Recorded, never
+gated: those edges publish the ray's answer whatever it says, and it is agreement about the *long*
+edges a ray could reach, not about the short ones the strip is published on.
+
+`ROADGRAPH_SCHEMA` **13 → 14**: a fifth `width_source` and `width_confirmed_by`, with the engine half
+in the same commit. `verify_road_graph.gd` refuses both directions — a strip with nothing confirming
+it, and a confirmation on any other source — and both were mutation-checked against the shipped
+bundle. The `carriageway_survey` block gains a **closed key set**, because `confirm_within_m` is the
+first key in it a build reads.
+
+### ⬜ Stage 3 — what this closed of `Q126`'s four causes
+
+**Cause B** is the one this work reaches, and it is half closed. `e20` MORRISON HILL ROAD (Stage 1,
+11.15 m, three lanes) and `e128` LEIGHTON ROAD (Stage 2, 11.25 m, three lanes) now carry measured
+widths; `e194` LEIGHTON ROAD came out of B3's publish-nothing band at 9.00 m. **Causeway Bay's
+`stacked_disagreeing` is 0** — both its pairs were TUNG LO WAN ROAD, cause B, and several of that
+street's edges are now measured. Still authored and still cause B: `e137`, `e174`, `e615`, `e657`,
+and STEWART ROAD `e504`/`e505`, which `Q94` already said may not move (16.7–16.8 m against TD's 16.5
+`max_m`). **C** (11 pairs) and **D** (2) are untouched and are not this work's.
+
+### 🔴 Stage 4 — the floor is priced, and on the MEASURED half it is FREE
+
+⚠️ **`tools/narrowing.py` sweeps the floor UNIFORMLY, and that is not the change `Q127` asked for.**
+Its verdict is byte-identical before and after this work — **0 cleared, `e207` and `e595` lost** at
+every floor down to 8.32 m, exactly `Q19`'s finding — but 🔴 **all four edges it costs (`e207`,
+`e595`, `e132`, `e499`) are still `authored`**, so they are edges a uniform sweep narrows and the
+asked-for change does not.
+
+The asked-for change is the floor off the **measured** half only. Measured directly, by pinning every
+authored edge's `width_m` at its own floor and rebuilding `surface → clearance → fence` with the
+floor at zero — so 354 of Wan Chai's 393 measured edges narrow, by a median **3.22 m** and up to
+8.64 m:
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| starved at the lane bar (3.20 m) | 22 → **22**, 0 gained, 0 cleared | 6 → **6** |
+| starved at the car bar (1.80 m) | 14 → **14** | 3 → **3** |
+| fenced edges | **the same 14** | **the same 3** |
+
+✅ **It costs nothing that routes.** ⚠️ **What this did NOT measure, and what a build owes**:
+`carriageway_occupancy`'s shares, every railing, sign and lamp position (the drawn kerb moves under
+all of them), the box-junction flanks, `paint_clearance`, the junction caps, and the arrows. And the
+question it cannot answer at all — **whether a city drawn at its true widths plays well** — is the
+user's, not a grader's.
+
+### ⬜ What is left
+
+⚠️ **Reach past ~53% on Wan Chai is not bought with accuracy.** The unconfirmed strip reaches 67.8%
+and reads 4.69 m on short edges against today's 4.56 — no better. The next rung with evidence behind
+it is **`consensus of ≥ 2` within 1 m**, which reaches 32.4% of the remaining edges at short-end
+1.90 m. ⬜ Mong Kok and Sha Tin are built and still ungraded. ⬜ `Q126`'s causes **C** and **D**.
+🚫 The floor itself is still the user's call and nothing about it moved.
+
+**Reproduce:** `.venv/bin/python tools/width_evidence.py --region wan_chai --voters borrow,arrows`;
+the roads stage's `carriageway:` block; `tools/carriageway_margin.py`, `tools/lane_paint.py --sweep`,
+`tools/clearance_reconcile.py --levels 0,1`, `tools/narrowing.py`.
+
+**See.** `Q127` for the readings and the tolerance sweep · `Q126` for the two-station sweep and the
+causes · `Q95` for the ray survey and the floor · `Q94` for HyD's polygons · `Q19` for what narrowing
+costs · `Q72` for why a counter is mutated rather than read · `Q62` for why the evidence is a frame
