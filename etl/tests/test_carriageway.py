@@ -22,6 +22,7 @@ The failures worth pinning are the quiet ones:
 
 from __future__ import annotations
 
+import inspect
 import math
 from typing import ClassVar
 
@@ -33,13 +34,19 @@ from pipeline.carriageway import (
     DECK_ACROSS_M,
     DECK_BRIDGE_M,
     DECK_MAX_LATERAL_M,
+    DECK_MIN_STATIONS,
     DECK_TOLERANCE_M,
+    DECK_WIDTH_PERCENTILE,
+    MIN_AGREEING_STATIONS,
     MIN_STATIONS,
     CarriagewayReport,
     LaneRow,
+    _agree_m,
     _along_at,
+    _assign,
     _deck_lane_ceiling,
     _deck_reach,
+    _deck_width_or_none,
     _lane_bracket,
     _lanes,
     _license,
@@ -47,7 +54,9 @@ from pipeline.carriageway import (
     _rims_at_vertices,
     _row_reading,
     _Segments,
+    _station_scatter,
     _stations,
+    _stations_agree,
     _Symbol,
     _union_boundary,
     _widest_rows,
@@ -213,10 +222,92 @@ class TestLicence:
 
 
 class TestStationFloor:
+    """What an edge may publish a width on (`Q128`).
+
+    🔴 **Two stations that AGREE, never two stations.** `MIN_STATIONS`' own
+    objection is that a median of two is a mean of two rays; the answer is that
+    the two already say the same thing, and a plain `n >= 2` leaves the objection
+    standing. The tolerance is this region's own scatter, so what these pin is
+    that it is *derived*, *leave-one-out*, and read over *licensed* edges only —
+    each of which reads plausibly wrong and publishes a clean table.
+    """
+
     def test_the_minimum_station_count_is_what_stops_a_stub_publishing(self) -> None:
         """Documented rather than asserted elsewhere: three stations is what
-        keeps a 6 m stub from carrying a width off one lucky ray."""
+        keeps a 6 m stub from carrying a width off one lucky ray — and two may
+        stand in only by agreeing."""
         assert MIN_STATIONS == 3
+        assert MIN_AGREEING_STATIONS == 2
+
+    def test_the_scatter_is_leave_one_out(self) -> None:
+        """⚠️ With the station inside its own median its error shrinks by
+        construction — `Q58`'s trap in the one number the admission rests on.
+        Stations at 6, 10 and 14: against the OTHERS' median the ends read 6 m
+        out, against the edge's own they would read 4."""
+        assert sorted(_station_scatter({1: [6.0, 10.0, 14.0]}, {1})) == pytest.approx(
+            [0.0, 6.0, 6.0]
+        )
+
+    def test_the_scatter_reads_only_the_edges_whose_median_the_bounds_admit(self) -> None:
+        """An edge whose rays escaped the road has a median outside the bounds,
+        and its scatter is that failure rather than the instrument's noise.
+
+        ⚠️ **Not the same set as the licensed edges, and the difference matters**:
+        `_license` refuses a span whose *meaning* it cannot resolve, on an edge
+        measured perfectly well. Reading the tolerance off the attributed set
+        instead tightened it 2.77 → 2.13 m on Wan Chai, which is the licence's
+        opinion leaking into the instrument's noise — and it would put the two
+        surveys on different bars."""
+        assert _station_scatter({1: [6.0, 10.0, 14.0]}, set()) == []
+
+    def test_an_edge_under_the_floor_contributes_no_scatter(self) -> None:
+        """A two-station edge's own leave-one-out is |a - b| against one value,
+        which is the quantity being tested and not evidence about it."""
+        assert _station_scatter({1: [6.0, 10.0]}, {1}) == []
+
+    def test_a_region_with_no_scatter_licenses_nothing_extra(self) -> None:
+        """Rather than falling back to a number: a region too small to say what
+        its own rays do has not said it, and a default would be the unsourced bar
+        `Q113` was caught by."""
+        assert _agree_m([]) is None
+
+    def test_the_tolerance_is_the_scatters_p90_and_not_its_median(self) -> None:
+        assert _agree_m([1.0, 2.0]) == pytest.approx(1.9)
+
+    def test_two_stations_that_agree_may_stand_for_three(self) -> None:
+        assert _stations_agree([7.0, 7.4], 2.77) is True
+
+    def test_two_stations_that_disagree_may_not(self) -> None:
+        """The pair this licence exists to refuse: one ray found the far kerb and
+        the other found a junction mouth, and their mean is neither."""
+        assert _stations_agree([7.0, 13.0], 2.77) is False
+
+    def test_no_tolerance_is_a_refusal_and_not_permission(self) -> None:
+        assert _stations_agree([7.0, 7.0], None) is False
+
+    def test_the_licence_cannot_reach_a_width_that_already_published(self) -> None:
+        """🔴 The additive property, pinned at the signature. `_assign` takes no
+        tolerance, so a three-station edge is licensed from the same stations and
+        the same median whatever the two-station rule decides — "0 lost, 0 moved"
+        is then structural rather than a measurement to repeat each build."""
+        assert "agree_m" not in inspect.signature(_assign).parameters
+
+
+class TestTheDeckBarDidNotFollow:
+    """🔴 `Q128` parted the two licences, and this is why it is not an oversight."""
+
+    def test_a_deck_width_still_needs_three_stations(self) -> None:
+        assert DECK_MIN_STATIONS == MIN_STATIONS
+        assert _deck_width_or_none([8.0, 12.0]) is None
+        assert _deck_width_or_none([8.0, 12.0, 10.0]) is not None
+
+    def test_a_percentile_over_two_values_is_the_smaller_one(self) -> None:
+        """The publishers reduce with a MEDIAN, which two agreeing rays estimate
+        soundly. This reduces with a p10, and over two values that is the smaller
+        nudged a tenth of the way toward the larger — so a two-station deck width
+        *is* the one lucky ray `MIN_STATIONS` was written against, and no
+        tolerance repairs a reduction that is not a median."""
+        assert float(np.percentile([8.0, 12.0], DECK_WIDTH_PERCENTILE)) == pytest.approx(8.4)
 
 
 class TestLaneBracket:

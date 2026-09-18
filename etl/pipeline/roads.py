@@ -2485,6 +2485,19 @@ def main(argv: list[str] | None = None) -> int:
             "    by publisher: %s — ⚠️ NOT one measurement, see `Edge.width_publisher`",
             _by_basis(width.publishers[edge_id] for edge_id in width.assigned_m),
         )
+        # ⚠️ **The refusal is the half worth reading and it is reachable at zero**
+        # (`Q72`), so this prints both sides rather than the admissions alone —
+        # a build where every two-station edge happened to agree and one where
+        # the test was deleted log the same admitted count.
+        log.info(
+            "    two-station licence: %d edges admitted, %d refused, at this region's own "
+            "leave-one-out p90 of %s",
+            width.stations_two_agreeing,
+            width.stations_two_disagreeing,
+            "nothing — no scatter, so nothing extra is licensed"
+            if width.agree_m is None
+            else f"{width.agree_m:.2f} m",
+        )
         if width.deck_span_m:
             # ⚠️ **A different truth side from every line above** — the model
             # rather than a publisher's plan line — so it is logged apart rather

@@ -1690,7 +1690,7 @@ def render(
                 report,
                 bounds,
                 max_ray_m=max_ray_m,
-                rows=edge_widths(report, bounds) if rows is None else rows,
+                rows=shipped_rows(report, bounds) if rows is None else rows,
             )
         )
     return "\n".join(lines)
@@ -2111,6 +2111,42 @@ _NODE_BANDS = ((0.0, 4.0, "0-4 m"), (4.0, 8.0, "4-8 m"), (8.0, 12.0, "8-12 m"))
 # because the short end is the whole question: under 10 m an edge holds two
 # stations at the 4 m spacing and no rule about junctions can give it three.
 _GAIN_BANDS = ((0.0, 10.0, "<=10"), (10.0, 20.0, "10-20"), (20.0, 30.0, "20-30"))
+
+
+# `pipeline/carriageway.py`'s two-station licence, RESTATED rather than
+# imported — a grader that imports the stage's own constants is graded by it,
+# which is `_Index`'s argument at a second layer. They must move together.
+_AGREEING_STATIONS = 2
+_AGREEMENT_PERCENTILE = 90
+
+
+def shipped_rows(report: Report, bounds: WidthBounds) -> list[EdgeWidth]:
+    """The rows the SHIPPED rule licenses: three stations, or two that agree.
+
+    🔴 **This tracks `pipeline/carriageway.py`, and it has to** — `STATION_M` and
+    `JUNCTION_M` carry the rule that both surveys walk the instrument's defaults
+    *"because two surveys that walk differently cannot be compared and comparison
+    is the whole point of keeping the second one"*. `Q128` moved the pipeline's
+    floor to two agreeing stations, so this moved with it.
+
+    ⚠️ **The tolerance is derived from the THREE-station rows, never from the
+    result.** Deriving it from the rows this returns would let a two-station edge
+    widen the bar that admitted it, and the scatter is over edges with three
+    stations anyway — so the circularity would be silent rather than visible.
+
+    ⚠️ **Additive by construction**: `edge_widths` reduces every edge the same
+    way at either floor, so the two-station read is the three-station one plus
+    the pairs that agree. Nothing already licensed can move or be lost, which is
+    the same property the pipeline's `_assign` holds on its side.
+    """
+    three = edge_widths(report, bounds)
+    scatter = mouth_noise(report, three)
+    if not scatter:
+        # A region whose own stations never said what their scatter is has not
+        # licensed anything extra. The pipeline's `_agree_m` refuses the same way.
+        return three
+    agree_m = _percentiles(scatter, (_AGREEMENT_PERCENTILE,))[0]
+    return edge_widths(report, bounds, minimum_n=_AGREEING_STATIONS, agree_m=agree_m)
 
 
 def mouth_noise(report: Report, rows: list[EdgeWidth]) -> list[float]:
@@ -2552,7 +2588,7 @@ def main(argv: list[str] | None = None) -> int:
     # writing another from a second call would let the two drift — `_candidate`
     # and `_dominant` both break ties on `Counter` insertion order, so agreement
     # today is a property of the input rather than of the code.
-    rows = edge_widths(report, bounds) if bounds is not None else None
+    rows = shipped_rows(report, bounds) if bounds is not None else None
     print(
         render(
             report,
@@ -2574,7 +2610,7 @@ def main(argv: list[str] | None = None) -> int:
                     junction_m=args.junction_m,
                     corners=corners,
                     # The rows `render` printed, not a second survey of one report.
-                    shipped=rows if rows is not None else edge_widths(report, bounds),
+                    shipped=rows if rows is not None else shipped_rows(report, bounds),
                 )
             )
         )

@@ -47,6 +47,7 @@ from carriageway_margin import (
     main,
     nearest_published,
     opposed_offset_deg,
+    shipped_rows,
     width_published,
 )
 
@@ -1076,10 +1077,15 @@ class TestOpenings:
 
 
 class TestEdgeWidthVariants:
-    """`keep` and `agree_m` default to the shipped rule, and the variants are
-    the only readers that may widen it."""
+    """`keep` and `agree_m` widen `edge_widths` past its three-station default.
 
-    def test_the_defaults_are_the_shipped_rule(self) -> None:
+    ⚠️ **That default stopped being the shipped rule at `Q128`** — the pipeline
+    licenses two agreeing stations now, and `shipped_rows` is what composes the
+    two. This class still pins the primitive, because the sweeps read it at both
+    floors and `Q127`'s opening tables are printed under the three-station one.
+    """
+
+    def test_the_default_is_the_three_station_rule(self) -> None:
         report = Report()
         report.stations = [
             _station(1, 3.0, 3.0),
@@ -1100,6 +1106,48 @@ class TestEdgeWidthVariants:
 
         assert [row.edge for row in kept] == [1]
         assert refused == []
+
+    def test_shipped_rows_add_an_agreeing_pair_without_moving_anything(self) -> None:
+        """🔴 The composed rule (`Q128`). Edge 1 has three stations and publishes
+        under either floor; edge 2 rests on two that agree within the scatter
+        edge 1 produced. Additive: edge 1's width may not move."""
+        report = Report()
+        report.stations = [
+            _station(1, 3.6, 3.6),
+            _station(1, 3.6, 4.0),
+            _station(1, 3.6, 3.8),
+            _station(2, 3.6, 3.7),
+            _station(2, 3.6, 3.8),
+        ]
+
+        three = {row.edge: row.median_m for row in edge_widths(report, _bounds())}
+        composed = {row.edge: row.median_m for row in shipped_rows(report, _bounds())}
+
+        assert set(three) == {1}
+        assert set(composed) == {1, 2}
+        assert composed[1] == pytest.approx(three[1])
+
+    def test_shipped_rows_refuse_a_pair_the_scatter_does_not_cover(self) -> None:
+        """The tolerance is the three-station edges' own leave-one-out, so a pair
+        disagreeing by far more than the instrument's noise is not a width."""
+        report = Report()
+        report.stations = [
+            _station(1, 3.6, 3.6),
+            _station(1, 3.6, 3.7),
+            _station(1, 3.6, 3.65),
+            _station(2, 3.0, 3.0),
+            _station(2, 3.0, 8.0),
+        ]
+
+        assert [row.edge for row in shipped_rows(report, _bounds())] == [1]
+
+    def test_a_region_with_no_three_station_edge_licenses_nothing_extra(self) -> None:
+        """No scatter, so nothing says what two stations agreeing would mean.
+        `pipeline.carriageway._agree_m` refuses the same way."""
+        report = Report()
+        report.stations = [_station(1, 3.6, 3.6), _station(1, 3.6, 3.7)]
+
+        assert shipped_rows(report, _bounds()) == []
 
     def test_keep_admits_a_junction_station(self) -> None:
         report = Report()

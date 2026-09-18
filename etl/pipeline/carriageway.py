@@ -34,9 +34,9 @@ import itertools
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Container, Iterator
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -77,6 +77,23 @@ MAX_RAY_M = 15.0
 # Stations an edge needs before its median is read. Three is the instrument's,
 # and it is what stops a 6 m stub publishing a width off one lucky ray.
 MIN_STATIONS = 3
+# What an edge resting on exactly two may do instead (`Q128`). 🔴 **The one thing
+# that can stand in for the third station is that the two already say the same
+# thing** — a median of two is a mean of two rays, so `MIN_STATIONS`' own
+# objection is answered by agreement rather than by count, and a plain `n >= 2`
+# would leave it standing. The tolerance is deliberately NOT a constant: it is
+# this region's own mid-block leave-one-out scatter (`_station_scatter`), because
+# half a metre is a different reading on a lane and on a dual carriageway, and a
+# number chosen here would be the unsourced bar `Q113` was caught by.
+MIN_AGREEING_STATIONS = 2
+# Which percentile of that scatter becomes the tolerance. The p90 is the
+# grader's own (`Q127` read 2.77 m on Wan Chai), so the two surveys admit the
+# same edges; a median would admit a pair disagreeing by more than half the
+# instrument's own stations do.
+AGREEMENT_PERCENTILE = 90.0
+# Stations a DECK width needs. Still three, and `_deck_width_or_none` records why
+# the two bars parted rather than pointing at this one.
+DECK_MIN_STATIONS = 3
 
 # Cell size of the segment index. ⚠️ **A lookup accelerator and nothing else** —
 # it changes runtime and no published number, unlike the resolution constants in
@@ -132,6 +149,18 @@ class CarriagewayReport:
     # back streets and publish a region that agrees with the standard by
     # construction.
     under_minimum: int = 0
+
+    # ── The two-station licence (`Q128`) ───────────────────────────────────
+    #
+    # The tolerance this region's own stations produced, and what it admitted and
+    # refused. ⚠️ **`stations_two_disagreeing` is reachable at zero and must be
+    # mutation-checked rather than read** (`Q72`): a build where every two-station
+    # edge happens to agree is indistinguishable from one where the test was
+    # deleted. ⚠️ `agree_m` is `None` where the region produced no scatter at all,
+    # which licenses nothing extra rather than falling back to a number.
+    agree_m: float | None = None
+    stations_two_agreeing: int = 0
+    stations_two_disagreeing: int = 0
 
     # ── The lane count, bracketed off the width above (`Q94`) ──────────────
     #
@@ -550,6 +579,98 @@ def _median_or_none(values: list[float]) -> float | None:
     return float(np.median(values)) if len(values) >= MIN_STATIONS else None
 
 
+def _station_scatter(spans: dict[int, list[float]], licensed: Container[int]) -> list[float]:
+    """Mid-block station scatter: |width - median of the edge's OTHER stations|.
+
+    The floor a two-station edge has to agree within. ⚠️ **Leave-one-out, not the
+    edge's own median**, which contains the station and shrinks its error by
+    construction — `Q58`'s trap in the one number the admission rests on.
+
+    ⚠️ **Read over the edges whose median the BOUNDS admit, not over the edges
+    the licence attributed a width to.** The two refuse different things and only
+    one of them is about the rays: `_license` decides what a span *means* — a
+    carriageway, or a kerb-to-kerb span across a median it cannot resolve — and
+    an edge refused there was measured perfectly well. The bounds decide whether
+    the rays stayed on the road at all. Narrowing this to the attributed set
+    reads the tolerance off 290 edges instead of 399 and tightens it 2.77 → 2.13
+    m, which is the licence's own opinion leaking into the instrument's noise.
+
+    This is `tools/carriageway_margin.mouth_noise` a second time, deliberately —
+    the survey exists twice and sharing a core would retire the only independent
+    check on the reading. Every station here is already clear of `JUNCTION_M`,
+    which is what that tool's `near_junction` filter does on its own side.
+    """
+    scatter: list[float] = []
+    for edge_id, widths in spans.items():
+        if edge_id not in licensed or len(widths) < MIN_STATIONS:
+            continue
+        for index, width in enumerate(widths):
+            others = widths[:index] + widths[index + 1 :]
+            scatter.append(abs(width - float(np.median(others))))
+    return scatter
+
+
+def _assign(
+    report: CarriagewayReport,
+    edge,  # `roads.Edge`, left unannotated as `_license` does: `roads` imports this
+    span: float,
+    nears: list[float],
+    answered: set[str],
+    bounds: WidthBounds,
+) -> None:
+    """Licence one edge's reduced span, and bracket a lane count off it.
+
+    Extracted at `Q128` so the three-station and two-station licences run the
+    *same* code rather than two copies that could drift — the second is meant to
+    add edges, not to read them differently.
+    """
+    own = 2.0 * float(np.median(nears))
+    report.spans_m[edge.id] = span
+    report.own_m[edge.id] = own
+    report.publishers[edge.id] = "+".join(sorted(answered))
+
+    width, basis = _license(edge, span, own, bounds)
+    if width is None:
+        report.unattributed += 1
+        return
+    report.assigned_m[edge.id] = width
+    report.basis[edge.id] = basis
+    if width < bounds.min_m:
+        report.under_minimum += 1
+
+    bracket = _lane_bracket(width, bounds, two_way=edge.direction == BOTH)
+    report.lanes_bracket[edge.id] = bracket
+    low, high = bracket
+    if low == high and low >= 3 and low % 2 and edge.direction == BOTH:
+        report.lanes_odd_two_way.append(edge.id)
+    count, lanes_basis = _lanes(bracket)
+    if count is not None:
+        report.lanes[edge.id] = count
+        report.lanes_basis[edge.id] = lanes_basis
+
+
+def _stations_agree(spans: list[float], agree_m: float | None) -> bool:
+    """Whether two stations say the same thing closely enough to stand for three.
+
+    🔴 **This is the whole of the two-station licence** — `MIN_STATIONS`'
+    objection is that a median of two is a mean of two rays, and the only answer
+    is that the two already agree. ⚠️ **A region with no tolerance refuses**,
+    rather than admitting everything: `None` means this region's own stations
+    never said what their scatter is, which is not permission.
+    """
+    return agree_m is not None and abs(spans[0] - spans[1]) <= agree_m
+
+
+def _agree_m(scatter: list[float]) -> float | None:
+    """The tolerance two stations must agree within, or `None` where nothing says.
+
+    ⚠️ **A region with no scatter licenses nothing extra**, rather than falling
+    back to a default: the whole point is that the bar is this region's own
+    reading, and a region too small to produce one has not said what its rays do.
+    """
+    return float(np.percentile(scatter, AGREEMENT_PERCENTILE)) if scatter else None
+
+
 # Which percentile of an edge's deck spans becomes its published width.
 #
 # 🔴 **Not the median, and the asymmetry is the whole reason** (`Q103`). Every
@@ -588,13 +709,25 @@ DECK_WIDTH_PERCENTILE = 10.0
 
 
 def _deck_width_or_none(values: list[float]) -> float | None:
-    """One edge's published deck width, or None below `MIN_STATIONS`.
+    """One edge's published deck width, or None below `DECK_MIN_STATIONS`.
 
-    ⚠️ **`MIN_STATIONS` is shared with the publishers' own reduction above**, so
-    the two licences stay comparable — an edge measured on two stations is not
-    measured, whichever source answered.
+    🔴 **The two licences PARTED at `Q128` and this bar did not follow.** It read
+    `MIN_STATIONS` when both reductions were a count, on the rule that an edge
+    measured on two stations is not measured whichever source answered. The
+    publishers' bar is now two stations *that agree*, and agreement cannot be
+    asked of this one: they reduce with a **median**, which two agreeing rays
+    estimate soundly, and this reduces with `DECK_WIDTH_PERCENTILE`. A p10 over
+    two values is the smaller of them nudged a tenth of the way toward the
+    larger — `[8.0, 12.0]` publishes **8.4** — so a two-station deck width *is*
+    the one lucky ray `MIN_STATIONS` was written against, and no tolerance
+    repairs a reduction that is not a median.
+
+    ⚠️ **Reachable, and refused on purpose**: Wan Chai has 2 edges that would
+    publish a deck width at two stations (`e729` 11.32 m, `e731` 15.53 m) and
+    Causeway Bay none. Keeping this bar is what leaves the whole off-grade
+    network — and `Q107`'s rim clamp with it — inert across `Q128`.
     """
-    if len(values) < MIN_STATIONS:
+    if len(values) < DECK_MIN_STATIONS:
         return None
     return float(np.percentile(values, DECK_WIDTH_PERCENTILE))
 
@@ -862,6 +995,13 @@ def measure(
         edge for edge in edges if edge.elevation_level in survey.levels and len(edge.polyline) > 1
     ]
     report.edges_walked = len(walked)
+    # Every walked edge's spanned stations, and the edges resting on exactly two
+    # of them — both only readable once the loop has finished. See the licence
+    # below the loop for why the decision cannot be taken inside it.
+    walked_spans: dict[int, list[float]] = {}
+    # `roads.Edge` is unannotated throughout this module — `roads` imports it,
+    # so no import exists — which is `_license`'s own convention.
+    pending: list[tuple[Any, list[float], list[float], set[str]]] = []
 
     for edge in walked:
         polyline = np.asarray(edge.polyline, dtype=np.float64)
@@ -955,32 +1095,37 @@ def measure(
         elif walk_deck:
             report.deck_edges_unmeasured += 1
 
+        walked_spans[edge.id] = spans
         span = _median_or_none(spans)
-        if span is None:
-            continue
-        own = 2.0 * float(np.median(nears))
-        report.spans_m[edge.id] = span
-        report.own_m[edge.id] = own
-        report.publishers[edge.id] = "+".join(sorted(answered))
+        if span is not None:
+            _assign(report, edge, span, nears, answered, bounds)
+        elif len(spans) == MIN_AGREEING_STATIONS:
+            # Held for the pass below rather than refused here. Whether two
+            # stations may stand for three is a question about *this region's*
+            # scatter, and that is not answerable until every three-station edge
+            # has been licensed — so the decision cannot be taken inside the loop
+            # that produces the evidence for it.
+            pending.append((edge, spans, nears, answered))
 
-        width, basis = _license(edge, span, own, bounds)
-        if width is None:
-            report.unattributed += 1
+    # ⚠️ **The two-station licence is STRICTLY ADDITIVE, and that is structural
+    # rather than measured (`Q128`).** Every edge that publishes under
+    # `MIN_STATIONS` has already been assigned above, from the same stations and
+    # the same median, before this pass runs — so no width can move and none can
+    # be lost, whatever the tolerance turns out to be. A rule that re-reduced the
+    # whole population at a lower bar would have to prove that each time.
+    readable = {
+        edge_id
+        for edge_id, span in report.spans_m.items()
+        if bounds.hard_min_m <= span <= bounds.max_m
+    }
+    agree_m = _agree_m(_station_scatter(walked_spans, readable))
+    report.agree_m = agree_m
+    for edge, spans, nears, answered in pending:
+        if not _stations_agree(spans, agree_m):
+            report.stations_two_disagreeing += 1
             continue
-        report.assigned_m[edge.id] = width
-        report.basis[edge.id] = basis
-        if width < bounds.min_m:
-            report.under_minimum += 1
-
-        bracket = _lane_bracket(width, bounds, two_way=edge.direction == BOTH)
-        report.lanes_bracket[edge.id] = bracket
-        low, high = bracket
-        if low == high and low >= 3 and low % 2 and edge.direction == BOTH:
-            report.lanes_odd_two_way.append(edge.id)
-        count, lanes_basis = _lanes(bracket)
-        if count is not None:
-            report.lanes[edge.id] = count
-            report.lanes_basis[edge.id] = lanes_basis
+        report.stations_two_agreeing += 1
+        _assign(report, edge, float(np.median(spans)), nears, answered, bounds)
 
     # ⚠️ **A second pass, after every bracket exists rather than inside the
     # station loop.** The width survey does not change and cannot be made to
