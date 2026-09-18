@@ -11,6 +11,7 @@ dependencies = [
     "pypdfium2>=4.30",
     "pyproj>=3.6",
     "pyyaml>=6.0",
+    "shapely>=2.1",
 ]
 
 # `pyogrio` is the GDAL/OGR dependency P1-3 said would arrive. It ships GDAL in
@@ -21,6 +22,19 @@ dependencies = [
 #
 # No glTF library: P1-2 reads and writes the format directly (`pipeline/gltf.py`
 # explains why a dependency would have saved no work).
+#
+# ---- `shapely`, approved by the user 2026-09-18 (`Q129`, `P3-33`) ----
+#
+# The build had no polygon union, overlay or Voronoi, and `Q129`'s model — the
+# level-0 carriageway as ONE region, partitioned among centrelines — is made of
+# exactly those. It is the `pyogrio` argument a third time: GEOS ships inside the
+# wheel, so it is still one `pip install` on a fresh machine and no system GEOS.
+# ⚠️ **`>=2.1` is a real floor and not protection**: `voronoi_polygons(ordered=True)`
+# is what maps a cell back to the sample that owns it, and 2.0 has no such
+# argument — it returns the cells in GEOS's order and the partition is then
+# silently someone else's. ⚠️ Today only `tools/carriageway_region.py` imports it;
+# `P3-33b` is the first stage that will, and it is declared here rather than in
+# `dev` because a grader-only dependency would have to move the day that lands.
 #
 # ---- the two P3-20 added, and what they cost ----
 #
