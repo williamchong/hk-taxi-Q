@@ -23288,7 +23288,7 @@ what kept ~15 consumers standing:
 
 | Wan Chai | before | after |
 |---|---|---|
-| road surface | 32,618 tris · 3.4 MB · 645 caps | **79,861** tris · 9.7 MB · 28 caps + 18,437 area tris |
+| road surface | 32,618 tris · 3.4 MB · 645 caps | **79,790** tris · 9.7 MB · 28 caps + 18,348 area tris |
 | throttle route, `draws` at t=1 / 3 / 6 | 105 / 104 / 107 | **108 / 107 / 108** |
 | fenced edges (car bar 1.80 m) | 14 | **13** (Causeway Bay 3 → 4) |
 | double white lines drawn | 91 · 3,416 m | **102 · 3,795 m** |
@@ -23345,6 +23345,28 @@ true widths a kerbed median separates those flows. `P3-33d` replaces the search 
 `RoadGraph.has_corridor` / `corridor_half_width_of`, and `verify_road_graph.gd` no longer asks a
 territory edge to cover `width_m` or `Q23`'s floor to stop at a bridge.
 
+🔴 **The review pass, 2026-09-18 — and the stage time recorded above was WRONG for a release of
+this work.** *"4.7 s"* and *"7.0 s"* were timed before schema 3; the kerb-to-kerb ray it added cast
+every station against the WHOLE 27,000-vertex region, and the stage was **18.6 s** with nothing
+recording it — `Q125` and `Q128`'s lesson, a build-time regression no counter can see, a third time.
+Preparing a geometry indexes its predicates and does nothing for `intersection`. Each edge now casts
+against R cut to its own window with `clip_by_rect` (~400x cheaper than an overlay, and no ray
+leaves the window): **18.6 → 9.4 s**, the region's and every territory's rings byte-identical.
+⚠️ `_union` also keeps polygons only now: a collection in `whole` makes every overlay ~45x slower
+for the same answer, and nothing would have said so.
+
+🔴 **Proving that inert found a defect in `_reach` instead.** Two builds with rings identical on
+disk read `e451` at **3.99 m** and **6.545 m**: GEOS had handed the territory back as two parts that
+touch in one and as one part in the other, and the ray — read piecewise — stopped at the seam. The
+pieces are `line_merge`d before the one from the origin is taken, in the stage and in the tool, and
+a test pins it (unmerged it reads 4.0 of 7.0). Not inert, and not meant to be: the surface is
+**79,861 → 79,790** triangles, the figure in the table above; fence, double whites and
+`|stage − tool|` unmoved. ⚠️ One station (`e223`) also moved 0.629 → 0.51 m when a hand-rolled
+normalisation became `gltf.normalise` — `linalg.norm` against `hypot`, a ray grazing a corner. A
+knife-edge either way, and recorded so the next byte-diff does not rediscover it.
+🚫 Declined from the review: `roads.simplify_mask` for `_stations_kept` (it is single-channel and
+the rails are judged jointly), and `geometry.wound_up` per triangle (undoes a vectorisation).
+
 **Cameras** (`city_preview.tscn`, `--seconds=1 --shots=0.8 --debug-view=off --hud=off`), recorded
 because `Q19`'s were lost to a transcript: `hkcec` `--camera=235,45,265 --look=235,0,195` ·
 `street` `--camera=270,5.5,691 --look=30,4.5,719` · `grid` `--camera=760,40,765 --look=740,0,695`
@@ -23360,7 +23382,8 @@ the PCK, and Causeway Bay's frames.
 🚫 **`width_m` does not move.** A territory's span is a *share* and not kerb-to-kerb, so publishing
 it as a width is `Q57`'s generalisation; lanes, the arrow snap and `e99`'s carve prism keep `Q128`'s
 five sources. 🚫 Levels ±1 keep their ribbons: every publisher here is a 2D plan that reads the
-street under a deck (`Q103`), and `Q107`'s rim clamp already cuts those. ✅ The seam was decided at `P3-33b`, above.
+street under a deck (`Q103`), and `Q107`'s rim clamp already cuts those. ✅ The seam was decided at `P3-33b` and corrected at `P3-33c`, above; ⬜ its check in
+`join_seam.py` is still owed (`P3-33e`).
 ⬜ Whether a city drawn at its true widths plays well is the user's drive (`P3-33f`), not a grader's.
 
 **Reproduce:** `.venv/bin/python tools/carriageway_region.py --region wan_chai` (7 s, of which 2.6 s

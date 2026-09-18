@@ -429,17 +429,19 @@ Common emoji for this project:
   rectangle. ⚠️ **Do not "fix" it by importing one into the other.** 🔴 **Silence is asked of the
   publisher's UNION, never of the clipped one, and with `intersects`, never `contains`**: a cut run
   ends ON the clip line and a station can stand ON HyD's own edge, and either read as silent casts a
-  rail from a road HyD drew. 🔴 **The seam is a cut in R, not in runs**: each region draws all of R
-  inside its own rectangle, a neighbour's run included, so `foreign` territories are PUBLISHED and
-  foreign runs cast rails — dropping them is a hole neither build draws. 🔴 **Extents are published
+  rail from a road HyD drew. 🔴 **The seam: `foreign` territories are PUBLISHED and
+  foreign runs cast rails**, because the asphalt beside a neighbour's run inside this rectangle is
+  this region's to draw — dropping them is a hole neither build draws. (The run's own RIBBON stays
+  its owner's; the bullet below has the rule as `P3-33c` settled it.) 🔴 **Extents are published
   at dense STATIONS (`station_m`), never at the published vertices alone**: a straight street is two
   vertices, both at nodes, where a territory pinches to a wedge, so schema 1 described a sliver the
   length of the block. `vertex_station` indexes `roadgraph.json`'s own vertices, repeats included,
   into them; ⚠️ an END station is measured half a sample in from its node, because at the node it
   reads zero on a good road. ⚠️ **The stage's `ends` block runs over EVERY station and is not
-  `Q129`'s mid-block table** — never quote one for the other. ⚠️ Inert until `P3-33c`: prove a change to it by
-  hashing `etl/out/<region>/` through `--from region`, where only `city.json`'s `generated_utc` may
-  differ.
+  `Q129`'s mid-block table** — never quote one for the other. ⚠️ **No longer inert**: `surface.py` has read it
+  since `P3-33c`, so a change here is a change to the drawn road and owes the bullet below. What
+  still holds is the region-less path — leave `carriageway_region:` out and every published file
+  must hash as it did, only `city.json`'s `generated_utc` differing.
 - 🔴 **`surface_region.py`, `_with_territory_stations`, `_stations_kept`, `_clamped_rails(exact=)`,
   `_publish_territory_table`, `_LANE_SPAN_PERCENTILE`, `carriageway_region.rail_tolerance_m`, or the
   level-0 floors (`P3-33c`, `Q129`): paste the surface stage's `region:` line and its triangle count,
@@ -463,7 +465,7 @@ Common emoji for this project:
   `min(lerp, measured)` lets the lerp between the two end WEDGES win everywhere and drew `e709`
   1.2 m wide in a 6.5 m territory with every counter closing.
   🔴 **`rail_tolerance_m` is triangles, not tidiness**: every station is two carriageway triangles
-  and four kerb strips — 226,824 unpruned against 79,861 — and ⚠️ **the areas are triangulated WHOLE,
+  and four kerb strips — 226,824 unpruned against 79,790 — and ⚠️ **the areas are triangulated WHOLE,
   never per owner**, which cost 45k more for nothing.
   🔴 **The seam: a run's RIBBON is its owner's, whole (`Q116`); every other square metre of R is
   drawn by the region whose rectangle holds it**, so the neighbour's ribbons are subtracted from the

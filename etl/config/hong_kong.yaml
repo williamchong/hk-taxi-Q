@@ -3456,7 +3456,8 @@ carve:
 # from that block, so the region and the ray survey cannot sit on two bars.
 #
 # ⚠️ Leave the block out and the stage writes nothing: the level-0 road stays a
-# ribbon. At P3-33b NOTHING READS its document, so it is inert either way.
+# ribbon at roads.surface's floors, and no consumer sees a corridor_* or a
+# lanes_painted. With it, surface.py draws level 0 from the document (P3-33c).
 carriageway_region:
   # Pitch of the Voronoi sites along each centreline. The boundary between two
   # territories is resolved to about half of it; Q129's numbers are at 1.0.

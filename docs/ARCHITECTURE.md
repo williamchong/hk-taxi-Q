@@ -446,7 +446,7 @@ hk-taxi-Q/
 │   │   ├── boxsource.py         # the box reader both boxjunctions.py and surface.py use (P3-32)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
-│   │   ├── region.py           # level-0 carriageway as a region, one territory per centreline (P3-33b, Q129) — inert until P3-33c
+│   │   ├── region.py           # level-0 carriageway as a region, one territory per centreline (P3-33b, Q129); surface.py draws level 0 from it (P3-33c)
 │   │   ├── railings.py          # published railings → railings.glb + railings_placements.json (P3-19, P5-5)
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
