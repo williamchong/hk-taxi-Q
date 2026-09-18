@@ -374,12 +374,23 @@ func _check_structure_width(graph: RoadGraph, edges: Array) -> PackedStringArray
 	# the foot of the loop for why a count is needed beside "never narrower".
 	var tapered: int = 0
 
+	# Mixed edges whose ribbon is their TERRITORY (`Q129`) and so answer to no
+	# floor at all: `Q23` is a statement about where the widening stops, and a
+	# territory edge is drawn at the carriageway a publisher surveyed, on a deck
+	# and off it alike. Counted so that "nothing examined" below can tell a bundle
+	# with no mixed edges from one where the question no longer arises.
+	var territory: int = 0
+
 	for edge: Dictionary in edges:
 		if int(edge.get("elevation_level", 0)) != 0:
 			continue
 		var flags: Array = edge.get("on_structure", [])
 		var points: Array = edge.get("polyline", [])
 		if flags.size() != points.size() or points.size() < 2:
+			continue
+		if graph.has_corridor(int(edge.get("id", -1))):
+			if flags.has(true) and flags.has(false):
+				territory += 1
 			continue
 		# The first flagged station, and the unflagged one **furthest from any**
 		# of them. Not simply the last unflagged one: `surface.py` tapers the
@@ -466,7 +477,17 @@ func _check_structure_width(graph: RoadGraph, edges: Array) -> PackedStringArray
 				% examined
 			)
 		)
-	if examined == 0:
+	if examined == 0 and territory > 0:
+		print(
+			(
+				(
+					"  Q23: not asked — all %d mixed level-0 edges draw their territory (Q129), "
+					+ "which no floor widens on a deck or off it"
+				)
+				% territory
+			)
+		)
+	elif examined == 0:
 		problems.append(
 			(
 				"no level-0 edge is on structure for part of its length, so Q23's per-station "
@@ -797,7 +818,12 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		)
 		if not on_structure and drawn_half > graph.width_of(edge_id) * 0.5 + 0.001:
 			widened += 1
-		if drawn_half < graph.width_of(edge_id) * 0.5 - 0.001:
+		# 🔴 **Not asked of a TERRITORY edge (`Q129`).** Its ribbon is its share of
+		# the carriageway, and `width_m` is the carriageway's: three centrelines
+		# in GLOUCESTER ROAD's 25 m each draw a third of it. What covers the road
+		# there is the corridor, and that it is never narrower than the ribbon is
+		# asserted in `_check_corridor`.
+		if not graph.has_corridor(edge_id) and drawn_half < graph.width_of(edge_id) * 0.5 - 0.001:
 			problems.append(
 				(
 					(
@@ -1108,7 +1134,9 @@ func _check_clearance(graph: RoadGraph, edges: Array, manifest: CityManifest) ->
 			var clear: float = graph.clear_width_of(edge_id, station)
 			if clear == CityManifest.NOT_MEASURED:
 				continue
-			var drawn: float = graph.drawn_half_width_of(edge_id, station) * 2.0
+			# The corridor the clearance was measured ACROSS (`Q129`): kerb to kerb
+			# on a level-0 territory edge, the ribbon everywhere else.
+			var drawn: float = graph.corridor_half_width_of(edge_id, station) * 2.0
 			if clear > drawn + 0.01:
 				problems.append(
 					(

@@ -229,7 +229,14 @@ CITY_NAME = "city.json"
 # *wrong* rather than stale, drawing the city 0.520 too bright with nothing in the
 # frame to say so. ⚠️ **Both halves of `Q33`'s product move in one commit** — this
 # stage publishes the reflectance and `game/project.godot` ships the multiply.
-CITY_SCHEMA = 31
+#
+# 32 since `P3-33c` (`Q129`): a level-0 `carriageway[]` row is the edge's
+# TERRITORY — its share of a carriageway it may share with other centrelines —
+# and carries `corridor_half_width_m`, kerb to kerb, beside it. 🔴 A v31 reader is
+# WRONG rather than stale on two counts: it holds `clear_width_m` to be no wider
+# than `2 x half_width_m`, and the clearance is now measured across the corridor;
+# and it holds the drawn ribbon to cover `width_m`, which a share does not.
+CITY_SCHEMA = 32
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -633,6 +640,19 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
                 # four were wrong about the whole off-grade network.
                 "offset_m": entry["offset_m"],
                 "clear_width_m": clear,
+                # Present on a level-0 territory edge only (`Q129`, `P3-33c`): the
+                # lane count the ribbon is PAINTED with, which a share narrower
+                # than its graph count cuts. Additive — `RoadGraph`'s driving line
+                # and the arrow slots read the graph's `lanes` and are not wrong to.
+                **({"lanes_painted": entry["lanes_painted"]} if "lanes_painted" in entry else {}),
+                # And the corridor `clear_width_m` was measured across — kerb to
+                # kerb, through every share. Absent off-grade and wherever no
+                # region is built, where the corridor IS the ribbon.
+                **(
+                    {"corridor_half_width_m": entry["corridor_half_width_m"]}
+                    if "corridor_half_width_m" in entry
+                    else {}
+                ),
             }
         )
     return table

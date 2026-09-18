@@ -4974,6 +4974,10 @@ class CarriagewayRegion:
     # at, between the published vertices. `surface.py` inserts a ribbon station
     # at each, so this is also the along-road resolution of the drawn kerb.
     station_m: float
+    # How far a territory's rail may sit from the straight line between two kept
+    # stations before `surface.py` keeps the station between them. The one value
+    # here that is NOT a resolution: it trades triangles for kerb fidelity.
+    rail_tolerance_m: float
 
 
 def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
@@ -4983,7 +4987,12 @@ def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
     return CarriagewayRegion(
-        **_thresholds(body, where, positive=("sample_m", "rail_m", "station_m"), signed=())
+        **_thresholds(
+            body,
+            where,
+            positive=("sample_m", "rail_m", "station_m", "rail_tolerance_m"),
+            signed=(),
+        )
     )
 
 

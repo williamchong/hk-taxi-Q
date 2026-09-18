@@ -1,0 +1,221 @@
+"""What `surface.py` takes from `carriageway_region.json` (`Q129`, `P3-33c`).
+
+Two things, and the split is the design:
+
+* **Rails.** A level-0 ribbon's two rails at every station are its territory's
+  own left and right extents, not `± width_m / 2` — `Q107`'s per-station,
+  per-side clamp, generalised from decks to the street. The ribbon keeps
+  everything it carried: the lane coordinate, the restriction alpha, the
+  markings codec, the rails `DrawnSurface` reads. `stations` is that half.
+* **Areas.** Everything else of R — the junctions, the flares, a territory
+  wider than any cross-section sees — is `R - (every ribbon)`, cut per owner,
+  triangulated, and stood at its owner's centreline height. It is drawn as
+  `MARKING_CLASS_CAP`, because it is no length of lane, and it replaces the hull
+  caps, the through corridors and the paint flanks at level 0: a union cannot
+  overlap itself, leave a gap inside a junction, or bury a kerb. `areas` is
+  that half.
+
+🔴 **The seam (`Q116`), restated from `P3-33b`'s first reading of it.** A run's
+RIBBON is its owner's, whole — territory rails inside the owner's rectangle and
+the plain `width_m` ribbon past it, where this build knows none of the
+centrelines it would compete with. Every other square metre of R is drawn by
+the region whose rectangle holds it. So the neighbour's runs reaching in are
+SUBTRACTED here as ribbons — `surface.py` already shapes them from the identical
+record, which is what makes the two builds' polygons agree — and the rest of
+their territory is this region's to draw as area. No hole, no double-draw, and
+the owner's `DrawnSurface` still covers its far half for the paint layers.
+
+⚠️ Kept out of `surface.py` so that stage does not import `shapely` for the
+levels and the cities that never build a region.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+import shapely
+from shapely.geometry import Polygon
+from shapely.geometry.base import BaseGeometry
+
+from pipeline.region import KERB, REGION_NAME, read_region
+
+# Every overlay here runs on a millimetre grid. The ribbons' rails and R's rings
+# were computed apart, so without one a rail that lies ON a kerb by construction
+# misses it by 1e-13 and the difference is a ribbon-long sliver a micron wide.
+_GRID_M = 0.001
+# An area piece under this is an overlay crumb, not asphalt.
+_MIN_PIECE_M2 = 0.01
+
+Key = tuple[bool, int]
+
+
+@dataclass
+class Stations:
+    """One territory's extents, by distance along the PUBLISHED polyline."""
+
+    along_m: np.ndarray
+    left_m: np.ndarray
+    right_m: np.ndarray
+    # 1.0 where that side ended at R's own boundary — a kerb — and 0.0 where it
+    # ended in another territory, which is asphalt and takes no kerb.
+    kerb_left: np.ndarray
+    kerb_right: np.ndarray
+    # Kerb to kerb, through every share: the corridor, where the two above are
+    # this centreline's share of it.
+    left_kerb_m: np.ndarray
+    right_kerb_m: np.ndarray
+    vertex_station: np.ndarray
+
+
+@dataclass
+class Region:
+    whole: BaseGeometry
+    shapes: dict[Key, BaseGeometry]
+    stations: dict[Key, Stations]
+
+
+def _polygonal(shape: BaseGeometry) -> BaseGeometry:
+    """The polygons of a geometry and nothing else.
+
+    `make_valid` on a ring that crosses itself — a ribbon outline on a tight
+    bend — hands back a collection with the crossing left in as a line, and GEOS
+    refuses to overlay a mixed-dimension input.
+    """
+    parts = [part for part in shapely.get_parts(shape) if part.geom_type == "Polygon"]
+    return shapely.union_all(parts) if parts else Polygon()
+
+
+def _shape(rows: list[dict]) -> BaseGeometry:
+    if not rows:
+        return Polygon()
+    # Repaired on the way in: the document rounds to a millimetre, which pinches
+    # the odd ring shut on itself, and GEOS refuses the union of an invalid one
+    # ("side location conflict"). Repaired, never dropped — it is asphalt.
+    polygons = np.asarray([Polygon(row["outer"], row["holes"]) for row in rows], dtype=object)
+    return _polygonal(shapely.union_all(shapely.make_valid(polygons)))
+
+
+def read(out_dir: Path, city_id: str, region_id: str) -> Region:
+    document = read_region(out_dir / REGION_NAME, city_id, region_id)
+    shapes: dict[Key, BaseGeometry] = {}
+    stations: dict[Key, Stations] = {}
+    for row in document["territories"]:
+        key = (bool(row["foreign"]), int(row["edge"]))
+        shapes[key] = _shape(row["rings"])
+        stations[key] = Stations(
+            along_m=np.asarray(row["along_m"], dtype=np.float64),
+            left_m=np.asarray(row["left_m"], dtype=np.float64),
+            right_m=np.asarray(row["right_m"], dtype=np.float64),
+            kerb_left=np.asarray([end == KERB for end in row["left_end"]], dtype=np.float64),
+            kerb_right=np.asarray([end == KERB for end in row["right_end"]], dtype=np.float64),
+            left_kerb_m=np.asarray(row["left_kerb_m"], dtype=np.float64),
+            right_kerb_m=np.asarray(row["right_kerb_m"], dtype=np.float64),
+            vertex_station=np.asarray(row["vertex_station"], dtype=int),
+        )
+    whole = _shape([*document["region"]["hyd"], *document["region"]["rails"]])
+    return Region(whole=whole, shapes=shapes, stations=stations)
+
+
+def _heights(centreline: np.ndarray, plan: np.ndarray) -> np.ndarray:
+    """The owner's centreline height under each plan point — flat across the road,
+    which is the cross-section every ribbon here already has."""
+    step = np.diff(centreline[:, [0, 2]], axis=0)
+    along = np.r_[0.0, np.cumsum(np.hypot(step[:, 0], step[:, 1]))]
+    line = shapely.LineString(centreline[:, [0, 2]])
+    at = shapely.line_locate_point(line, shapely.points(plan))
+    return np.interp(at, along, centreline[:, 1])
+
+
+def _key_of(plan: np.ndarray) -> np.ndarray:
+    return np.round(plan / _GRID_M).astype(np.int64)
+
+
+def areas(
+    region: Region,
+    ribbons: list[np.ndarray],
+    centrelines: dict[Key, np.ndarray],
+    rails: list[np.ndarray],
+) -> np.ndarray:
+    """`R - ribbons` as `(n, 3, 3)` triangles, each wound to face up.
+
+    `ribbons` are the plan outlines of every level-0 ribbon, the neighbour's
+    included; `centrelines` the `(N, 3)` polyline each owner's height is read
+    from; `rails` the drawn rails' `(N, 3)` positions.
+
+    🔴 **A vertex standing on a drawn rail takes THAT rail's height**, and one
+    shared by two owners' pieces takes the mean of theirs. Two owners at
+    different heights meet on a line; left alone that line is a crack the car's
+    wheel reads and `paint_clearance`'s `deeper than` row counts. The rail wins
+    outright because the ribbon is what carries paint, and a mean there would
+    move the road under it.
+    """
+    drawn = (
+        _polygonal(
+            shapely.union_all(
+                shapely.make_valid(np.asarray([Polygon(ring) for ring in ribbons], dtype=object))
+            )
+        )
+        if ribbons
+        else Polygon()
+    )
+    rest = shapely.difference(
+        shapely.set_precision(region.whole, _GRID_M),
+        shapely.set_precision(drawn, _GRID_M),
+        grid_size=_GRID_M,
+    )
+    pieces = [
+        part
+        for part in shapely.get_parts(rest)
+        if part.geom_type == "Polygon" and part.area > _MIN_PIECE_M2
+    ]
+    if not pieces:
+        return np.zeros((0, 3, 3))
+    # 🔴 **Triangulated WHOLE, not per owner.** Cut by territory first, every
+    # boundary between two owners arrives carrying a vertex per Voronoi site —
+    # 272,248 triangles on Wan Chai where the surface it replaces had 32,177 —
+    # and the cut buys nothing: a triangle spanning two owners interpolates
+    # between their heights, which is what the seam between them should do.
+    triangles = shapely.get_parts(
+        shapely.constrained_delaunay_triangles(shapely.multipolygons(pieces))
+    )
+    plan = np.asarray([np.asarray(tri.exterior.coords)[:3] for tri in triangles])
+    if not len(plan):
+        return np.zeros((0, 3, 3))
+
+    # One height per plan position: the mean of every owner whose territory
+    # reaches it, so two owners at different heights meet in a shared vertex
+    # rather than along a crack.
+    keys = _key_of(plan.reshape(-1, 2))
+    unique, group = np.unique(keys, axis=0, return_inverse=True)
+    group = group.reshape(-1)
+    at = unique * _GRID_M
+    owners = [
+        key for key, shape in region.shapes.items() if key in centrelines and not shape.is_empty
+    ]
+    tree = shapely.STRtree([region.shapes[key] for key in owners])
+    found, owner = tree.query(shapely.points(at), predicate="dwithin", distance=2.0 * _GRID_M)
+    total, count = np.zeros(len(at)), np.zeros(len(at))
+    for index in np.unique(owner):
+        rows = found[owner == index]
+        total[rows] += _heights(centrelines[owners[index]], at[rows])
+        count[rows] += 1.0
+    # A crumb of R no territory claims takes the nearest owner's height.
+    for row in np.flatnonzero(count == 0.0):
+        nearest = owners[int(tree.nearest(shapely.points(at[row])))]
+        total[row], count[row] = _heights(centrelines[nearest], at[row : row + 1])[0], 1.0
+    mean = total / count
+    flat = mean[group]
+    if rails:
+        rail = np.vstack(rails)
+        pinned = {tuple(k): y for k, y in zip(_key_of(rail[:, [0, 2]]), rail[:, 1], strict=True)}
+        for index, k in enumerate(map(tuple, keys)):
+            if k in pinned:
+                flat[index] = pinned[k]
+    out = np.stack([plan[:, :, 0], flat.reshape(-1, 3), plan[:, :, 1]], axis=2)
+    # Wound so the face points up: `surface._shoelace` negative.
+    x, z = out[:, :, 0], out[:, :, 2]
+    twice = (x * np.roll(z, -1, axis=1) - np.roll(x, -1, axis=1) * z).sum(axis=1)
+    out[twice > 0.0] = out[twice > 0.0][:, ::-1]
+    return out

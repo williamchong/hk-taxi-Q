@@ -48,6 +48,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from pipeline import surface_region
 from pipeline.boxsource import BoxReading, read_boxes
 from pipeline.buildings import Grid, tile_id
 from pipeline.config import (
@@ -150,7 +151,7 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # know where the two flows meet, so it draws the centre line only where TD
 # surveyed one — which is the defect `Q125` closes, on 58 of this region's 95
 # pairs.
-SURFACE_MANIFEST_SCHEMA = 11
+SURFACE_MANIFEST_SCHEMA = 12
 
 # The drawn road's primitive, in every chunk. ⚠️ **No `-col` since `P5-12`**:
 # the collider is its own `-colonly` primitive beside it (`SURFACE_COLLIDER_NAME`),
@@ -429,6 +430,22 @@ _INSERTED = 4
 _RIM_LEFT = 5
 _RIM_RIGHT = 6
 
+# Columns of `_Edge.points` saying whether that side of the station ends at a
+# KERB — 1.0 — or in another centreline's share of the same asphalt, which takes
+# no kerb (`Q129`, `P3-33c`). From `carriageway_region.json`'s end kinds; 1.0
+# throughout on an edge with no territory, which is the kerb every ribbon had.
+#
+# Columns for `_WIDTH`'s reason. ⚠️ Read as `>= 0.5`: `_at` lerps every column, so
+# a station inserted between a kerb and a share arrives carrying a fraction.
+_KERB_LEFT = 7
+_KERB_RIGHT = 8
+
+# The percentile of a territory's span its painted lane count has to fit in.
+# `carriageway.DECK_WIDTH_PERCENTILE`'s value restated rather than imported: that
+# one reduces a deck to a WIDTH and this one only ever refuses a count, and a
+# change to either should be a decision about that one.
+_LANE_SPAN_PERCENTILE = 10.0
+
 # How far a station may sit off the line between its neighbours and still be
 # dropped from a kerb rail, in metres. 0.1 mm: a hair over float noise on
 # coordinates of this magnitude, and it is a *crack* threshold rather than a
@@ -477,6 +494,28 @@ class SurfaceReport:
     # rebuilt the rails from `carriageway[]` would lose the mitre's
     # along-displacement, which is exactly the centimetre `_off_line` measures.
     ribbon_rails: list[tuple[int, int, tuple[np.ndarray, np.ndarray]]] = field(default_factory=list)
+    # The level-0 carriageway that is no ribbon (`Q129`, `P3-33c`): `R` less
+    # every ribbon, as `(n, 3, 3)` triangles facing up. Published for the reason
+    # `cap_rings` is — `DrawnSurface` rebuilds the drawn surface from the
+    # manifest, and these are drawn — and it is what the hull caps, the through
+    # corridors and the paint flanks were at level 0.
+    area_triangles: np.ndarray = field(default_factory=lambda: np.zeros((0, 3, 3)))
+    # Level-0 edges whose rails are their territory, and the published stations
+    # of those with NO territory, which keep the plain `width_m` ribbon — a run
+    # past its region's rectangle (`Q116`). Reachable, so a rise is a finding.
+    territory_edges: int = 0
+    territory_fallback_stations: int = 0
+    # Territory edges whose PAINTED lane count was cut to what their share can
+    # carry at TPDM's narrow lane. One-sided; reachable at zero.
+    territory_lanes_capped: int = 0
+    # Per territory edge, `(half widths, offsets)` of the kerb-to-kerb corridor at
+    # each published vertex — `carriageway`'s shape and frame, a second extent.
+    corridor: dict[int, tuple[list[float], list[float]]] = field(default_factory=dict)
+    # The lane count each territory edge is PAINTED with, keyed by edge id — the
+    # graph's `lanes` under `territory_lanes_capped`'s ceiling. Published because
+    # `tools/lane_paint.py` grades the strip the shader paints, and that strip is
+    # cut by this count and not by the graph's.
+    lanes_painted: dict[int, int] = field(default_factory=dict)
     junctions: int = 0
     # The region join (`P5-7f`, `Q116`'s one exception): ends of the
     # neighbour's runs offered to the cap hull, caps that took one, and caps
@@ -1004,6 +1043,31 @@ class _Builder:
         self._uv2.append(marking.broadcast(len(ring) + 1))
         self._count += len(ring) + 1
 
+    def triangles(
+        self, corners: np.ndarray, *, colour: tuple[int, int, int], marking: _Marking
+    ) -> None:
+        """Loose triangles, `(n, 3, 3)`, already wound to face up (`P3-33c`).
+
+        What `fan` is for a convex ring, for a surface that is not one: the
+        level-0 carriageway outside every ribbon is a polygon with holes and
+        reflex corners, triangulated upstream. No lane coordinate, for `fan`'s
+        reason — it is no length of lane. ⚠️ Keyed per TRIANGLE where a fan goes
+        whole to one chunk: an area spans a junction and the street either side
+        of it, and a chunk cut through it is a partition like any other.
+        """
+        if not len(corners):
+            return
+        count = 3 * len(corners)
+        self._triangles.append(np.arange(count).reshape(-1, 3) + self._count)
+        centre = corners.mean(axis=1)
+        self._keys.append(self._tile_keys(centre[:, 0], centre[:, 2]))
+        self._positions.append(corners.reshape(-1, 3))
+        self._normals.append(np.tile([0.0, 1.0, 0.0], (count, 1)))
+        self._colours.append(_rgba(colour, count))
+        self._uvs.append(np.zeros((count, 2), dtype=np.float32))
+        self._uv2.append(marking.broadcast(count))
+        self._count += count
+
     def build(self, name: str) -> MeshData:
         """The accumulated geometry, minus the triangles that collapsed.
 
@@ -1201,6 +1265,11 @@ class DrawnSurface:
             if int(ribbon["level"]) == level
         ]
         fans = [_fan_corners(ring) for ring in rings]
+        # The level-0 areas (`P3-33c`) are cap-class for every purpose a reader
+        # has: drawn, no lane coordinate, and what a junction is made of. They
+        # arrive as triangles already, so they join the fans as one more.
+        if level == 0 and surface.get("areas"):
+            fans.append(_drop_degenerate(np.asarray(surface["areas"], dtype=np.float64)))
         strips = [_strip_corners(first, second) for first, second in rails]
         triangles = np.concatenate([*fans, *strips, np.zeros((0, 3, 3))])
         if not len(triangles):
@@ -1215,6 +1284,17 @@ class DrawnSurface:
         edges = np.concatenate(
             [
                 *(_ring_edges(ring) for ring in rings),
+                # Every area triangle's three sides, in one array: there are tens
+                # of thousands and a `_ring_edges` call apiece is most of a second.
+                *(
+                    [
+                        np.stack(
+                            [fans[len(rings)], np.roll(fans[len(rings)], -1, axis=1)], axis=2
+                        ).reshape(-1, 2, 3)
+                    ]
+                    if len(fans) > len(rings)
+                    else []
+                ),
                 *(_strip_edges(first, second) for first, second in rails),
                 np.zeros((0, 2, 3)),
             ]
@@ -1237,6 +1317,8 @@ class DrawnSurface:
         with nothing drawn, so a caller reading above level 0 asks this rather
         than guessing from `elevation_levels`."""
         levels = {int(cap["level"]) for cap in surface.get("caps", ()) if len(cap["ring"]) >= 3}
+        if surface.get("areas"):
+            levels.add(0)
         levels |= {int(ribbon["level"]) for ribbon in surface.get("ribbons", ())}
         return sorted(levels)
 
@@ -1892,6 +1974,16 @@ class _Edge:
     # neighbouring arm — and all of those belong on the published geometry.
     # What moved is the paint.
     shift_m: float = 0.0
+    # Whether the rim columns are this edge's TERRITORY and so ARE its rails
+    # (`P3-33c`), rather than a deck the ribbon is merely cut back to (`Q107`).
+    territory: bool = False
+    # The territory's own stations, kept for `_publish_territory_table`: the
+    # corridor is read from them after the trims and never enters the matrix.
+    stations: surface_region.Stations | None = None
+    # Half the territory's median span. A territory pinches to a wedge at its
+    # node, so the end station's own width says nothing about how far back the
+    # junction reaches; this is what `end_half_width_m` reads instead.
+    mouth_half_m: float = 0.0
     trim_start_m: float = 0.0
     trim_end_m: float = 0.0
     # Whether each trim was held to `junction_trim_max_fraction`'s length
@@ -2022,7 +2114,7 @@ class _Edge:
         differ by the whole widening factor, and it is the end that decides how
         far back the junction cap has to reach to meet this arm.
         """
-        return float(self.points[0 if at_start else -1, _WIDTH])
+        return max(float(self.points[0 if at_start else -1, _WIDTH]), self.mouth_half_m)
 
 
 def build_region(
@@ -2038,7 +2130,31 @@ def build_region(
     style = city.roads.surface
 
     report = SurfaceReport()
-    edges = [_prepare(edge, style, report) for edge in graph["edges"]]
+    # The level-0 carriageway as a region (`Q129`), where the city builds one.
+    # Absent, every edge below is the ribbon it always was and `region` is None.
+    region = (
+        surface_region.read(out_dir, city.id, region_id)
+        if city.carriageway_region is not None
+        else None
+    )
+
+    def stations_of(published: dict, *, foreign: bool) -> surface_region.Stations | None:
+        if region is None or int(published["elevation_level"]) != 0:
+            return None
+        return region.stations.get((foreign, int(published["id"])))
+
+    rail_tolerance_m = city.carriageway_region.rail_tolerance_m if region is not None else 0.0
+    # TPDM 4.3.9.8's narrow end, from the survey's own bounds — the bar
+    # `tools/lane_paint.py` grades a painted lane against, so the two cannot sit
+    # on different numbers. No survey, no ceiling.
+    survey = city.carriageway_survey
+    lane_min_m = survey.width_bounds.lane_m[0] if region is not None and survey else 0.0
+    edges = [
+        _prepare(
+            edge, style, report, stations_of(edge, foreign=False), rail_tolerance_m, lane_min_m
+        )
+        for edge in graph["edges"]
+    ]
     # The neighbour's runs reaching into this region (`P5-7e`), prepared and
     # shaped the same way so a junction cap can meet their mouths — `Q116`'s
     # one exception to "the non-owner draws nothing". Prepared against a scratch
@@ -2077,6 +2193,9 @@ def build_region(
         int(published["id"]): (round(prepared.trim_start_m, 3), round(prepared.trim_end_m, 3))
         for published, prepared in zip(graph["edges"], edges, strict=True)
     }
+    for published, prepared in zip(graph["edges"], edges, strict=True):
+        if prepared.territory:
+            _publish_territory_table(published, prepared, report)
     _measure_level_steps(ends, every_edge, report)
     boxes = _box_rings(city, region_id, sources_root=sources_root, report=report)
     for index, edge in enumerate(every_edge):
@@ -2121,6 +2240,11 @@ def build_region(
     for keys in clusters:
         groups = [ends[key] for key in keys]
         (node, level) = keys[0]
+        if region is not None and level == 0:
+            # A level-0 junction is `R` less the ribbons meeting at it, drawn
+            # below as area — a union cannot overlap itself or leave a gap, which
+            # is everything the hull, the corridors and the flanks were for.
+            continue
         if (
             sum(len(group) for group in groups) >= 2
             and owner_of(np.asarray(node_plan[node])) != region_id
@@ -2144,7 +2268,7 @@ def build_region(
             report.caps_with_foreign_mouth += 1
     # The paint flanks (`P3-32`), before the kerbs are hidden so a kerb under
     # a flank is hidden like a kerb under any cap.
-    if boxes.rings:
+    if boxes.rings and region is None:
         flanked = [
             edge
             for edge in edges
@@ -2175,6 +2299,35 @@ def build_region(
     for published, edge in zip(graph["edges"], edges, strict=True):
         if _draw_edge(builder, edge, int(published["id"]), style, city.roads.lane_width_m, report):
             report.edges += 1
+    if region is not None:
+        level0 = [
+            (index, edge)
+            for index, edge in enumerate(every_edge)
+            if edge.level == 0 and edge.left is not None and edge.right is not None
+        ]
+        ids = [int(edge["id"]) for edge in [*graph["edges"], *foreign_published]]
+        report.area_triangles = surface_region.areas(
+            region,
+            # Every level-0 ribbon, the neighbour's included: its ribbon is its
+            # owner's to draw, so it is subtracted here exactly as an owned one.
+            [np.vstack([edge.left, edge.right[::-1]]) for _, edge in level0],
+            {
+                (index >= len(edges), ids[index]): edge.points[:, :3]
+                for index, edge in enumerate(every_edge)
+                if edge.level == 0 and len(edge.points) >= 2
+            },
+            [
+                _lift(rail, edge.ribbon, 0.0)
+                for index, edge in level0
+                if index < len(edges)
+                for rail in (edge.left, edge.right)
+            ],
+        )
+        builder.triangles(
+            report.area_triangles,
+            colour=style.surface_material.colour,
+            marking=_Marking(float(MARKING_CLASS_CAP), 0.0),
+        )
     for cap in caps:
         # A cap is no length of lane, so it carries no lanes and no length —
         # and that zero length is what the markings shader reads through
@@ -2259,7 +2412,14 @@ def _write_chunks(out_dir: Path, chunks: list[tuple[str, MeshData]], report: Sur
         )
 
 
-def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edge:
+def _prepare(
+    published: dict,
+    style: RoadSurface,
+    report: SurfaceReport,
+    stations: surface_region.Stations | None = None,
+    rail_tolerance_m: float = 0.0,
+    lane_min_m: float = 0.0,
+) -> _Edge:
     """One published edge as a ribbon-in-waiting, half-widths already resolved.
 
     The widths are computed against the **published** polyline, before `dedupe`
@@ -2268,6 +2428,22 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     """
     half_widths = _half_widths(published, style)
     rim_left, rim_right, adrift_rims = _deck_rims(published, len(half_widths))
+    kerb_left = kerb_right = np.ones(len(half_widths))
+    # 🔴 **A level-0 edge with a territory takes its extents AS its rails**
+    # (`Q129`, `P3-33c`) — `Q107`'s columns and `Q107`'s clamp, read exactly
+    # rather than as a ceiling. A deck rim, where a level-0 edge ever carries
+    # one, still cuts: the territory is a 2D plan and the deck is the structure.
+    territory = stations is not None and len(stations.vertex_station) == len(half_widths)
+    # The DECK rims go into the matrix and the territory is laid over them in
+    # `_with_territory_stations`, once every station exists; `published_*` below
+    # is provisional for a territory edge and `_publish_territory_table` replaces
+    # it after the trims.
+    if territory:
+        at = stations.vertex_station
+        table_left = np.minimum(rim_left, stations.left_m[at])
+        table_right = np.minimum(rim_right, stations.right_m[at])
+    else:
+        table_left, table_right = rim_left, rim_right
     # `published["offset_m"]`, never a `.get` default: `read_graph` pins the
     # schema exactly, so any graph this can open carries the field. A default
     # could not fire on valid input and would silently draw every off-grade
@@ -2275,8 +2451,20 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     # would ever meet.
     shift_m = float(published["offset_m"])
     points = dedupe(
-        np.column_stack(
-            [_polyline(published), half_widths, np.zeros(len(half_widths)), rim_left, rim_right]
+        _with_territory_stations(
+            np.column_stack(
+                [
+                    _polyline(published),
+                    half_widths,
+                    np.zeros(len(half_widths)),
+                    rim_left,
+                    rim_right,
+                    kerb_left,
+                    kerb_right,
+                ]
+            ),
+            stations if territory else None,
+            rail_tolerance_m,
         )
     )
     restrictions, kinds, minority_m = _kerbside(published)
@@ -2286,8 +2474,13 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     # and `_shape` clamps it against the rims that travel beside it. Clamping it
     # here as well would apply the cut twice, the second time about a centre
     # that is no longer `shift`.
-    drawn_upper, drawn_lower, refused = _clamped_rails(half_widths, rim_left, rim_right, shift_m)
-    if np.isfinite(rim_left).any():
+    drawn_upper, drawn_lower, refused = _clamped_rails(
+        half_widths, table_left, table_right, shift_m, exact=territory
+    )
+    if territory:
+        report.territory_edges += 1
+        report.territory_fallback_stations += refused
+    elif np.isfinite(rim_left).any():
         # ⚠️ **Inside this guard, because the log line reads "N of those
         # vertices" against the edge count above it.** An edge whose every
         # vertex is off structure keeps no finite rim, so it is not one of
@@ -2301,13 +2494,48 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
         cut = (drawn_upper - drawn_lower) < 2.0 * half_widths - _MIN_SEGMENT_M
         report.clamped_stations += int(cut.sum())
         report.clamp_refused_stations += refused
+    lanes, lanes_forward = int(published["lanes"]), _lanes_forward_code(published, report)
+    if territory and lane_min_m > 0.0:
+        # 🔴 **A territory is a CEILING on the PAINTED lane count and never a
+        # source of one** — `Q114`'s deck rule, for its reason. `lanes` is
+        # bracketed off `width_m`, the carriageway; the ribbon is this
+        # centreline's SHARE of it, and the markings shader cuts whatever it is
+        # handed into `lanes` strips. GLOUCESTER ROAD `e479` is three authored
+        # lanes on a 1.4 m share: three 0.45 m lanes. One-sided on purpose — a
+        # share wider than its count leaves the count alone — and it moves the
+        # mesh only: the graph's `lanes`, the arrow slots and `RoadGraph`'s
+        # driving line are the roads stage's and do not move here.
+        #
+        # ⚠️ **Reduced at a LOW percentile, clear of the mouths, and not at the
+        # median** — `carriageway.DECK_WIDTH_PERCENTILE`'s reduction for its
+        # reason: paint has to fit nearly everywhere, and half of every edge's
+        # stations are narrower than its median by construction. At the median,
+        # 146 mid-block vertices still painted a lane under TPDM's narrow end.
+        span = stations.left_m + stations.right_m
+        reach = 0.5 * float(np.median(span))
+        clear = (stations.along_m >= reach) & (stations.along_m <= stations.along_m[-1] - reach)
+        span = float(np.percentile(span[clear] if clear.any() else span, _LANE_SPAN_PERCENTILE))
+        ceiling = max(1, int(span // lane_min_m))
+        if ceiling < lanes:
+            report.territory_lanes_capped += 1
+            lanes = ceiling
+            # The split between the two flows is a boundary INSIDE the count.
+            if lanes_forward >= lanes:
+                lanes_forward = 0
+    if territory:
+        report.lanes_painted[int(published["id"])] = lanes
     return _Edge(
         points=points,
         shift_m=shift_m,
         published_half_widths=0.5 * (drawn_upper - drawn_lower),
         published_offsets=0.5 * (drawn_upper + drawn_lower),
-        lanes=published["lanes"],
-        lanes_forward=_lanes_forward_code(published, report),
+        territory=territory,
+        stations=stations if territory else None,
+        mouth_half_m=(
+            0.5 * float(np.median(stations.left_m + stations.right_m)) if territory else 0.0
+        ),
+        lanes=lanes,
+        lanes_forward=lanes_forward,
         direction=published["direction"],
         bus_lane=bool(published["bus_lane"]),
         tram_tracks=bool(published["tram_tracks"]),
@@ -2317,6 +2545,132 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
         kerb_off=kinds[OFFSIDE],
         restrictions=restrictions,
     )
+
+
+def _publish_territory_table(published: dict, edge: _Edge, report: SurfaceReport) -> None:
+    """`carriageway[]` for an edge whose rails are its territory (`P3-33c`).
+
+    🔴 **A published vertex inside a junction trim publishes the ribbon's width
+    at the TRIM, not its own.** A territory pinches to a wedge between its
+    neighbours as it reaches its node, and no ribbon is drawn there — the
+    junction is area. Read where it stands, every street's two end vertices
+    would publish a road a few centimetres wide, and `clearance`, the fence and
+    every registered post read this table as the carriageway. The ribbon's own
+    mouth is the nearest thing to what the table meant before: today's end
+    vertex publishes a half-width the trim has also cut away.
+
+    After `_assign_trims`, because the trims are that function's own answer. An
+    edge too short to draw reads its middle.
+    """
+    points = edge.points
+    along = plan_lengths(points)
+    low, high = edge.trim_start_m, float(along[-1]) - edge.trim_end_m
+    if high <= low:
+        low = high = 0.5 * float(along[-1])
+    at = np.clip(plan_lengths(_polyline(published)), low, high)
+    rows = np.vstack([_at(points, along, distance) for distance in at])
+    upper, lower, _ = _clamped_rails(
+        rows[:, _WIDTH], rows[:, _RIM_LEFT], rows[:, _RIM_RIGHT], edge.shift_m, exact=True
+    )
+    edge_id = int(published["id"])
+    report.carriageway[edge_id] = [round(float(half), 3) for half in 0.5 * (upper - lower)]
+    report.carriageway_offset[edge_id] = [round(float(mid), 3) for mid in 0.5 * (upper + lower)]
+    # 🔴 **And the CORRIDOR beside it, kerb to kerb through every share.** The
+    # table above is what is drawn for this centreline, which on a carriageway
+    # several centrelines share is its SHARE — and a share is not a width a car
+    # is confined to (`Q57`). `clearance` measures its corridor across this one.
+    # Never narrower than the ribbon: where no kerb answers inside the ray's cap
+    # the reach is the cap, and a run past its rectangle keeps the ribbon's own.
+    stations = edge.stations
+    if stations is not None:
+        left = np.maximum(np.interp(at, stations.along_m, stations.left_kerb_m), upper)
+        right = np.maximum(np.interp(at, stations.along_m, stations.right_kerb_m), -lower)
+        report.corridor[edge_id] = (
+            [round(float(half), 3) for half in 0.5 * (left + right)],
+            [round(float(mid), 3) for mid in 0.5 * (left - right)],
+        )
+
+
+def _stations_kept(stations: surface_region.Stations, tolerance_m: float) -> np.ndarray:
+    """The stations a straight line between their neighbours cannot stand in for.
+
+    Douglas-Peucker over `(along, left, right)`, both sides judged together, with
+    every published vertex and every station where a side changes between kerb
+    and share held fixed. HyD's kerbs are polylines, so a territory's extents
+    along a straight street are piecewise linear and this keeps the breakpoints.
+
+    🔴 **Not optional.** Every ribbon station is two carriageway triangles and
+    four kerb strips, and `_rail_stations`' pruning — what kept the kerbs cheap —
+    cannot fire on a rail that moves a centimetre a station. Unpruned, Wan Chai's
+    road surface is 226,824 triangles against the 32,177 it replaces.
+    """
+    count = len(stations.along_m)
+    keep = np.zeros(count, dtype=bool)
+    keep[stations.vertex_station] = True
+    keep[[0, count - 1]] = True
+    for kerb in (stations.kerb_left, stations.kerb_right):
+        change = np.flatnonzero(np.diff(kerb) != 0.0)
+        keep[change] = keep[change + 1] = True
+    spans = [
+        (low, high) for low, high in zip(*(np.flatnonzero(keep)[i:] for i in (0, 1)), strict=False)
+    ]
+    while spans:
+        low, high = spans.pop()
+        if high - low < 2:
+            continue
+        inner = np.arange(low + 1, high)
+        t = (stations.along_m[inner] - stations.along_m[low]) / max(
+            stations.along_m[high] - stations.along_m[low], 1e-9
+        )
+        worst = np.zeros(len(inner))
+        for side in (stations.left_m, stations.right_m):
+            worst = np.maximum(
+                worst, np.abs(side[inner] - (side[low] + t * (side[high] - side[low])))
+            )
+        if worst.max() <= tolerance_m:
+            continue
+        split = int(inner[np.argmax(worst)])
+        keep[split] = True
+        spans += [(low, split), (split, high)]
+    return np.flatnonzero(keep)
+
+
+def _with_territory_stations(
+    points: np.ndarray, stations: surface_region.Stations | None, tolerance_m: float = 0.0
+) -> np.ndarray:
+    """The published polyline with the territory's own stations added to it.
+
+    🔴 **The rim and kerb columns of an added row are the MEASURED values, never
+    the lerp `_at` would give.** A straight street is two vertices, both at
+    nodes, where a territory pinches to a wedge — interpolating between those is
+    a sliver the length of the block, which is why the region stage stations
+    every edge at all.
+
+    Every other column is `_at`'s, so an added station lies ON the published
+    polyline with the right height and half-width, and the shape, the plan
+    length and the mitres are unchanged — `_insert_stations`' own property.
+    """
+    if stations is None or len(points) < 2:
+        return points
+    along = plan_lengths(points)
+    added = np.setdiff1d(_stations_kept(stations, tolerance_m), stations.vertex_station)
+    # Which territory station each row is: the published vertices first, in their
+    # own order, then the added ones — the same order the rows are stacked in.
+    station = np.concatenate([stations.vertex_station, added])
+    if len(added):
+        rows = np.vstack([_at(points, along, stations.along_m[index]) for index in added])
+        points = np.vstack([points, rows])
+    # 🔴 **ASSIGNED, and `min` only against a deck rim.** The first build took
+    # `min(lerped rim, measured)` for an added row, and the lerp runs between the
+    # two END vertices — the wedges — so it won everywhere and drew BOWRINGTON
+    # ROAD 1.2 m wide down the middle of its own 6.5 m territory.
+    points[:, _RIM_LEFT] = np.minimum(points[:, _RIM_LEFT], stations.left_m[station])
+    points[:, _RIM_RIGHT] = np.minimum(points[:, _RIM_RIGHT], stations.right_m[station])
+    points[:, _KERB_LEFT] = stations.kerb_left[station]
+    points[:, _KERB_RIGHT] = stations.kerb_right[station]
+    # Stable, so a station landing on a published vertex keeps the vertex first.
+    order = np.argsort(np.concatenate([along, stations.along_m[added]]), kind="stable")
+    return points[order]
 
 
 def _lanes_forward_code(published: dict, report: SurfaceReport) -> int:
@@ -3024,7 +3378,12 @@ def _polyline(published: dict) -> np.ndarray:
 
 
 def _clamped_rails(
-    half: np.ndarray, rim_left: np.ndarray, rim_right: np.ndarray, shift: float
+    half: np.ndarray,
+    rim_left: np.ndarray,
+    rim_right: np.ndarray,
+    shift: float,
+    *,
+    exact: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     """The two rails, cut back to the deck's own edges where there is one.
 
@@ -3081,8 +3440,19 @@ def _clamped_rails(
       read the carriageway half-width from the manifest, which is now the
       clamped one.
     """
-    upper = np.minimum(shift + half, rim_left)
-    lower = np.maximum(shift - half, -rim_right)
+    if exact:
+        # 🔴 **`exact` is `P3-33c`'s and it is the one place this EXTENDS.** The
+        # rims are then the edge's territory — the carriageway a publisher drew,
+        # nearest this centreline — and the rails ARE those, wider than
+        # `width_m` as readily as narrower. That is not `Q54`'s invented
+        # carriageway: the invented number here is `half`, and it is what yields.
+        # A station with no territory (a run past its region's rectangle, `Q116`)
+        # has rims of zero, crosses, and keeps the plain ribbon below.
+        upper = np.where(np.isfinite(rim_left), rim_left, shift + half)
+        lower = np.where(np.isfinite(rim_right), -rim_right, shift - half)
+    else:
+        upper = np.minimum(shift + half, rim_left)
+        lower = np.maximum(shift - half, -rim_right)
     # ⚠️ **`_MIN_SEGMENT_M` and not zero.** Rails that merely touch leave a
     # zero-width quad, which `_Builder.build` collapses and which reads as a
     # gap in the collider rather than as a narrow road.
@@ -3111,7 +3481,18 @@ def _shape(edge: _Edge, style: RoadSurface) -> None:
     # counted it over the published stations, and adding the ribbon's own — a
     # different polyline, after `dedupe` and `_add_kerb_stations` — would report
     # one quantity twice under one name.
-    upper, lower, _ = _clamped_rails(half, points[:, _RIM_LEFT], points[:, _RIM_RIGHT], shift)
+    upper, lower, _ = _clamped_rails(
+        half, points[:, _RIM_LEFT], points[:, _RIM_RIGHT], shift, exact=edge.territory
+    )
+    if edge.territory:
+        # A side that ends in another territory is asphalt, not a kerb. Set here
+        # and left alone by `_hide_buried_kerbs`: territories cannot overlap, so
+        # there is nothing for a kerb to be buried under.
+        # ⚠️ One flag per QUAD, which is `_runs`' unit and not a station's: a
+        # quad keeps its kerb where both stations it spans end at one.
+        kerb_left, kerb_right = points[:, _KERB_LEFT] >= 0.5, points[:, _KERB_RIGHT] >= 0.5
+        edge.kerb_left = kerb_left[:-1] & kerb_left[1:]
+        edge.kerb_right = kerb_right[:-1] & kerb_right[1:]
     edge.left = boundary(points, edge.offsets, upper)
     edge.right = boundary(points, edge.offsets, lower)
     edge.lip_left = boundary(points, edge.offsets, upper + style.kerb_width_m)
@@ -3677,7 +4058,7 @@ def _hide_buried_kerbs(edges: list[_Edge], caps: list[_Cap], report: SurfaceRepo
         occluders.add(cap.ring[:, [0, 2]], cap.level)
 
     for position, edge in enumerate(edges):
-        if position not in own:
+        if position not in own or edge.territory:
             continue
         edge.kerb_left = _surviving_kerb(edge, edge.lip_left, occluders, own[position], report)
         edge.kerb_right = _surviving_kerb(edge, edge.lip_right, occluders, own[position], report)
@@ -4352,6 +4733,22 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                     "edge": edge_id,
                     "half_width_m": halves,
                     "offset_m": report.carriageway_offset[edge_id],
+                    # Present on a territory edge only (`P3-33c`): the corridor a
+                    # car can use, kerb to kerb, where the pair above is what
+                    # this centreline draws of it.
+                    **(
+                        {
+                            "corridor_half_width_m": report.corridor[edge_id][0],
+                            "corridor_offset_m": report.corridor[edge_id][1],
+                        }
+                        if edge_id in report.corridor
+                        else {}
+                    ),
+                    **(
+                        {"lanes_painted": report.lanes_painted[edge_id]}
+                        if edge_id in report.lanes_painted
+                        else {}
+                    ),
                     "trim_m": list(report.trims_m.get(edge_id, (0.0, 0.0))),
                     "kerb_hidden_m": report.kerb_hidden_m.get(edge_id, {}),
                 }
@@ -4364,6 +4761,12 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
             "caps": [
                 {"level": level, "ring": [round_position(tuple(corner)) for corner in ring]}
                 for level, ring in report.cap_rings
+            ],
+            # The level-0 carriageway outside every ribbon (`P3-33c`), as the
+            # triangles drawn. Empty for a city that builds no region.
+            "areas": [
+                [round_position(tuple(corner)) for corner in triangle]
+                for triangle in report.area_triangles
             ],
             # The drawn strips' rails, in `strip`'s order — see
             # `SurfaceReport.ribbon_rails`. Same rounding as the caps, so a
@@ -4408,6 +4811,16 @@ def main(argv: list[str] | None = None) -> int:
         report.vertices,
         report.bytes / 1e6,
     )
+    if report.territory_edges:
+        log.info(
+            "  region: %d level-0 ribbons take their territory as their rails, %d published "
+            "stations with none keep the plain ribbon (a run past its rectangle, Q116); %d painted "
+            "lane counts cut to what the share carries; %d area triangles outside every ribbon",
+            report.territory_edges,
+            report.territory_fallback_stations,
+            report.territory_lanes_capped,
+            len(report.area_triangles),
+        )
     log.info(
         "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "
         "%d caps left to the neighbour containing their node",

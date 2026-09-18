@@ -213,6 +213,18 @@ def survey(
 ) -> list[Edge]:
     """Every drawn edge, with the strip its lane count cuts the ribbon into."""
     halves = half_widths(manifest)
+    # 🔴 **The count the ribbon is PAINTED with, where the bundle publishes one**
+    # (`Q129`, `P3-33c`). At level 0 the ribbon is a centreline's territory — its
+    # share of a carriageway — and `surface.py` cuts the painted count to what
+    # that share carries, while the graph's `lanes` stays the carriageway's. This
+    # tool's one question is the strip the SHADER paints, so it divides by the
+    # shader's count; dividing a share by the carriageway's lanes reads 376 edges
+    # under the bar on a bundle that paints 3.
+    painted = {
+        int(entry["edge"]): int(entry["lanes_painted"])
+        for entry in manifest["carriageway"]
+        if "lanes_painted" in entry
+    }
     names = road_names(graph)
     rows: list[Edge] = []
     for published in graph["edges"]:
@@ -223,7 +235,7 @@ def survey(
             # it has no reading here — reported by `undrawn` rather than being
             # given a zero, which would be the narrowest row in the table.
             continue
-        lanes = int(published.get("lanes", 2))
+        lanes = painted.get(edge_id, int(published.get("lanes", 2)))
         if lanes < 1:
             # `surface.MarkingCode` refuses this outright, so a bundle carrying
             # it is malformed rather than thin. Louder than a divide by zero.

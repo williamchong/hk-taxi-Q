@@ -391,8 +391,19 @@ def walk(
         edge_id = int(published["id"])
         points = np.asarray(published["polyline"], dtype=np.float64)
         entry = drawn.get(edge_id)
-        halves = np.asarray((entry or {}).get("half_width_m", []), dtype=np.float64)
-        shifts = np.asarray((entry or {}).get("offset_m", []), dtype=np.float64)
+        # 🔴 **The CORRIDOR where the surface publishes one, and the drawn ribbon
+        # elsewhere** (`Q129`, `P3-33c`). At level 0 the ribbon is this
+        # centreline's territory, which on a carriageway several centrelines share
+        # is its SHARE — open asphalt either side, not a wall. Walked as the
+        # corridor, GLOUCESTER ROAD `e390`'s 1.56 m share was fenced off a 25 m
+        # carriageway. The corridor is kerb to kerb, which is what a car fits in.
+        entry = entry or {}
+        halves = np.asarray(
+            entry.get("corridor_half_width_m", entry.get("half_width_m", [])), dtype=np.float64
+        )
+        shifts = np.asarray(
+            entry.get("corridor_offset_m", entry.get("offset_m", [])), dtype=np.float64
+        )
         report.corridor_m[edge_id] = [NOT_MEASURED] * len(points)
         if int(published.get("elevation_level", 0)) not in levels or len(points) < 2:
             continue

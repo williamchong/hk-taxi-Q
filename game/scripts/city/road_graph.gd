@@ -186,6 +186,9 @@ var _drawn_half: Array[PackedFloat32Array] = []
 # An edge the manifest did not name gets an empty entry and reads as unknown
 # rather than as blocked.
 var _clear: Array[PackedFloat32Array] = []
+# Half the kerb-to-kerb corridor per station, EMPTY for an edge that publishes
+# none (`Q129`): every off-grade edge, and every edge of a bundle with no region.
+var _corridor_half: Array[PackedFloat32Array] = []
 ## 1 where `_clear` holds at least one measured station, 0 where it holds none.
 ##
 ## Derived once rather than scanned per call. ⚠️ **The saving is smaller than it
@@ -333,6 +336,10 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 				[tables.carriageway_half_width_m, other.carriageway_half_width_m],
 				[tables.carriageway_offset_m, other.carriageway_offset_m],
 				[tables.carriageway_clear_width_m, other.carriageway_clear_width_m],
+				[
+					tables.carriageway_corridor_half_width_m,
+					other.carriageway_corridor_half_width_m,
+				],
 			]:
 				if (pair[1] as Dictionary).has(local):
 					(pair[0] as Dictionary)[id] = (pair[1] as Dictionary)[local]
@@ -381,6 +388,9 @@ static func _copy_tables(manifest: CityManifest) -> CityManifest:
 	copy.carriageway_half_width_m = manifest.carriageway_half_width_m.duplicate()
 	copy.carriageway_offset_m = manifest.carriageway_offset_m.duplicate()
 	copy.carriageway_clear_width_m = manifest.carriageway_clear_width_m.duplicate()
+	copy.carriageway_corridor_half_width_m = (
+		manifest.carriageway_corridor_half_width_m.duplicate()
+	)
 	return copy
 
 
@@ -485,6 +495,23 @@ func drawn_half_width_of(edge_id: int, station: int) -> float:
 	if not _by_id.has(edge_id):
 		return 0.0
 	return _half_at(_by_id[edge_id], station, 0.0)
+
+
+## Whether this edge's ribbon is its TERRITORY (`Q129`) — a share of a
+## carriageway it may share with other centrelines — rather than the whole road.
+## Such an edge publishes a corridor, and two things stop being true of it: the
+## ribbon need not cover `width_m`, and the clearance may exceed the ribbon.
+func has_corridor(edge_id: int) -> bool:
+	return _by_id.has(edge_id) and not _corridor_half[_by_id[edge_id]].is_empty()
+
+
+## Half the corridor `clear_width_of` was measured across: kerb to kerb where the
+## bundle publishes one, and the drawn ribbon everywhere else.
+func corridor_half_width_of(edge_id: int, station: int) -> float:
+	if not has_corridor(edge_id):
+		return drawn_half_width_of(edge_id, station)
+	var halves: PackedFloat32Array = _corridor_half[_by_id[edge_id]]
+	return halves[clampi(station, 0, halves.size() - 1)]
 
 
 ## True when **every** edge has a published carriageway width behind it.
@@ -769,9 +796,11 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 	var half_widths: Dictionary[int, PackedFloat32Array] = {}
 	var clearances: Dictionary[int, PackedFloat32Array] = {}
+	var corridors: Dictionary[int, PackedFloat32Array] = {}
 	if manifest != null:
 		half_widths = manifest.carriageway_half_width_m
 		clearances = manifest.carriageway_clear_width_m
+		corridors = manifest.carriageway_corridor_half_width_m
 		_lane_width_m = manifest.lane_width_m
 		# No second table: `fits_car` reads the same `clearances` against its own
 		# bar, so there is nothing here that can fall out of step with the widths.
@@ -864,6 +893,9 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 				out_of_step += 1
 			halves = _matched(published, points.size())
 		_drawn_half.append(halves)
+		_corridor_half.append(
+			_matched(corridors[id], points.size()) if corridors.has(id) else PackedFloat32Array()
+		)
 
 		# Read the same way and counted separately: the two tables come from the
 		# same document but a short one means different things. A short width

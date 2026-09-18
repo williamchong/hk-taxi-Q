@@ -3014,12 +3014,24 @@ roads:
     # this rule is INERT and the whole re-baseline is confined to the streets the
     # survey found wider than it. That is what made the change affordable, and
     # it is the ratchet: the floor landed on its own first and moved no byte.
-    floor_default_m: 10.24
+    #
+    # 🔴 0.0 SINCE P3-33c (Q129), ON THE USER'S CALL: "we removed road widening
+    # exactly to make stuff trivial". A level-0 ribbon's rails are now its
+    # TERRITORY — the carriageway HyD drew, nearest this centreline — so the floor
+    # no longer sets the drawn width of any road a region reaches. What it still
+    # sets is `_WIDTH`: the junction trim radius, and the plain ribbon of a run
+    # past its region's rectangle. Whether a city at its true widths plays well
+    # is judged from the seat (P3-33f); 10.24 is the value to come back to.
+    floor_default_m: 0.0
     # Expressways are already drawn wide by their three lanes, and lifting them
     # to the same floor pushes the deck through the buildings beside it. 12.48 is
     # what 9.6 x 1.3 drew.
+    # 🔴 0.0 with `floor_default_m` since P3-33c: a floor on expressways alone
+    # would be the widening kept on the one class of road already drawn widest.
+    # The key stays so the precedence it carries is still a rule; 12.48 is the
+    # value to come back to.
     floor_by_min_speed_limit_kph:
-      70: 12.48
+      70: 0.0
     # Structure is drawn at its authored width, because both arguments above are
     # at-grade arguments and neither survives the trip onto a deck. The slot
     # argument: at grade a gap between opposed carriageways shows the void where
@@ -3460,6 +3472,15 @@ carriageway_region:
   # the vertices alone describe a sliver the length of the block. surface.py
   # inserts a ribbon station at each, so this is the drawn kerb's resolution too.
   station_m: 2.0
+
+  # How far a territory's rail may sit off the straight line between two KEPT
+  # stations before surface.py keeps the station between them (P3-33c).
+  # 🔴 NOT a resolution like the three above: it trades triangles for kerb
+  # fidelity. Every ribbon station is two carriageway triangles and four kerb
+  # strips; with every 2 m station kept, Wan Chai's road surface is 226,824
+  # triangles against the 32,177 it replaces. HyD's own registration error is
+  # ~0.3 m (Q129), so a rail held to 0.10 m is inside what the source knows.
+  rail_tolerance_m: 0.10
 
 
 # The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it

@@ -24,7 +24,7 @@ from pipeline.region import (
     centrelines,
 )
 
-SPEC = CarriagewayRegion(sample_m=1.0, rail_m=2.0, station_m=10.0)
+SPEC = CarriagewayRegion(sample_m=1.0, rail_m=2.0, station_m=10.0, rail_tolerance_m=0.1)
 CLIP = shapely.box(-100.0, -100.0, 200.0, 100.0)
 
 

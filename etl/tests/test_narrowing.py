@@ -16,6 +16,8 @@ so it refuses at run time rather than asserting in pytest.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from narrowing import BUILDING, LANDMARK, UNOBSTRUCTED, class_meshes, moved, owner, scaled
@@ -75,7 +77,10 @@ class TestScaled:
         `floor_by_min_speed_limit_kph` exists to hold open. Under the multiplier
         this was invisible: 1.60 was the largest factor and never bound."""
         expressway = {7: (70, 0)}
-        table = scaled(_table([6.24, 6.24]), {7: 4.8}, expressway, hong_kong.roads.surface, 10.24)
+        # The expressway floor put back: `P3-33c` shipped it at 0.0, which leaves
+        # nothing here for the default to be clamped BELOW.
+        surface = replace(hong_kong.roads.surface, floor_by_min_speed_limit_kph={70: 12.48})
+        table = scaled(_table([6.24, 6.24]), {7: 4.8}, expressway, surface, 10.24)
         assert table[7]["half_width_m"] == [6.24, 6.24]
 
     def test_the_rest_of_the_entry_survives(self, hong_kong) -> None:

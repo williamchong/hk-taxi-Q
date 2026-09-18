@@ -30,7 +30,7 @@ it changed no published number, which is evidence rather than a test.
 from __future__ import annotations
 
 import argparse
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 import numpy as np
 import pytest
@@ -598,3 +598,25 @@ class TestStarved:
         # Edge 1 was never measured, so it is not starved — reading its `-1.0`
         # as a width would condemn every edge the junction caps swallowed.
         assert report.starved(3.2) == [(2, 0.5)]
+
+
+class TestTheCorridorIsNotTheShare:
+    """`Q129`, `P3-33c`: at level 0 the drawn ribbon is a centreline's TERRITORY.
+
+    🔴 On a carriageway several centrelines share, that is its share — open
+    asphalt either side, not a wall — and walked as the corridor it fenced
+    GLOUCESTER ROAD `e390`, a 1.56 m share of a 25 m carriageway. Where the
+    surface publishes `corridor_*`, kerb to kerb, that is what is walked.
+    """
+
+    GRAPH: ClassVar[dict] = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [40.0, 0.0, 0.0]])]}
+
+    def test_the_corridor_is_walked_where_one_is_published(self) -> None:
+        drawn = _drawn(1, [0.8, 0.8], (0.0, 0.0))
+        drawn[1] |= {"corridor_half_width_m": [6.0, 6.0], "corridor_offset_m": [2.0, 2.0]}
+        corridor, _ = walk(self.GRAPH, drawn)
+        assert corridor.section_width == pytest.approx(12.0)
+
+    def test_an_edge_with_no_corridor_is_walked_across_its_ribbon(self) -> None:
+        corridor, _ = walk(self.GRAPH, _drawn(1, [0.8, 0.8], (0.0, 0.0)))
+        assert corridor.section_width == pytest.approx(1.6)

@@ -77,7 +77,9 @@ REGION_NAME = "carriageway_region.json"
 # 2: extents at dense STATIONS with the published vertices indexed into them,
 # where 1 published the vertices alone — a straight street's two vertices are
 # both at nodes, so 1 described a sliver the length of the block.
-REGION_SCHEMA = 2
+# 3: `left_kerb_m` / `right_kerb_m`, the cross-section run on through every share
+# to R's own boundary — what `clearance` measures a corridor across.
+REGION_SCHEMA = 3
 # The one level this model covers. Every publisher here is a 2D plan that reads
 # the street underneath a deck (`Q103`), and `Q107`'s rim clamp already cuts the
 # off-grade ribbons to their structure.
@@ -145,6 +147,13 @@ class Territory:
     right_m: list[float] = field(default_factory=list)
     left_end: list[str] = field(default_factory=list)
     right_end: list[str] = field(default_factory=list)
+    # The same cross-section run on THROUGH every share to R's own boundary: how
+    # far it is to a kerb. 🔴 The extents above are this centreline's SHARE of the
+    # asphalt and a share is not a corridor (`Q57`) — GLOUCESTER ROAD `e390` owns
+    # 1.56 m of a carriageway a car can use all 25 m of, and read as its corridor
+    # `clearance` fenced it. These are what a corridor is measured across.
+    left_kerb_m: list[float] = field(default_factory=list)
+    right_kerb_m: list[float] = field(default_factory=list)
     # Which station each published vertex IS, in `roadgraph.json`'s own vertex
     # numbering, repeats included — the index `carriageway[]` is read under.
     vertex_station: list[int] = field(default_factory=list)
@@ -491,10 +500,11 @@ def measure(
     territory.along_m = [float(value) for value in along]
     territory.vertex_station = vertex_station
     for point, normal in zip(points, left, strict=True):
-        for sign, reach_out, end_out in (
-            (1.0, territory.left_m, territory.left_end),
-            (-1.0, territory.right_m, territory.right_end),
+        for sign, reach_out, end_out, kerb_out in (
+            (1.0, territory.left_m, territory.left_end, territory.left_kerb_m),
+            (-1.0, territory.right_m, territory.right_end, territory.right_kerb_m),
         ):
+            kerb_out.append(_reach(point, sign * normal, whole, max_m))
             if territory.shape.is_empty:
                 reach_out.append(0.0)
                 end_out.append(NONE)
@@ -617,6 +627,8 @@ def _document(
                 "along_m": [round(value, 3) for value in territory.along_m],
                 "left_m": [round(value, 3) for value in territory.left_m],
                 "right_m": [round(value, 3) for value in territory.right_m],
+                "left_kerb_m": [round(value, 3) for value in territory.left_kerb_m],
+                "right_kerb_m": [round(value, 3) for value in territory.right_kerb_m],
                 "left_end": territory.left_end,
                 "right_end": territory.right_end,
             }

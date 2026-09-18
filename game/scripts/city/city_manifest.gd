@@ -194,7 +194,14 @@ const NOT_MEASURED: float = -1.0
 ## city with nothing in the frame to say so. ⚠️ **Both halves of `Q33`'s product
 ## move in this one commit** — the ETL publishes reflectance-level colour, the rig
 ## multiplies — and a build with one half is wrong in a way no counter can see.
-const SCHEMA_VERSION: int = 31
+##
+## 32 since `P3-33c` (`Q129`): a level-0 `carriageway[]` row is the edge's
+## TERRITORY — its share of a carriageway several centrelines may share — and
+## carries `corridor_half_width_m`, kerb to kerb, beside it. 🔴 A v31 reader is
+## *wrong*: it holds `clear_width_m` to be no wider than `2 x half_width_m`, and
+## the clearance is measured across the corridor now; and it holds the drawn
+## ribbon to cover `width_m`, which a share of a carriageway does not.
+const SCHEMA_VERSION: int = 32
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -462,6 +469,12 @@ var carriageway_half_width_m: Dictionary[int, PackedFloat32Array] = {}
 ## and is plumbed so that it will not have to be discovered again when it does.
 var carriageway_offset_m: Dictionary[int, PackedFloat32Array] = {}
 
+## Half the KERB-TO-KERB corridor at each station, for the rows that publish one
+## (`Q129`, schema 32): the level-0 edges whose ribbon is their territory. Absent
+## for every other row, where the corridor is the ribbon — so a reader asks
+## `RoadGraph.corridor_half_width_of`, which falls back, and never this table.
+var carriageway_corridor_half_width_m: Dictionary[int, PackedFloat32Array] = {}
+
 ## Width of the widest gap a car could get through, in metres, keyed by
 ## road-graph edge id — **one value per station**, like the half-width above and
 ## indexed the same way, so both come off one station.
@@ -562,6 +575,10 @@ static func load_manifest(region: String = "") -> CityManifest:
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
 		manifest.carriageway_offset_m[edge] = _floats(entry, "offset_m")
 		manifest.carriageway_clear_width_m[edge] = _floats(entry, "clear_width_m")
+		if entry.has("corridor_half_width_m"):
+			manifest.carriageway_corridor_half_width_m[edge] = _floats(
+				entry, "corridor_half_width_m"
+			)
 	manifest.lane_width_m = float(document.get("lane_width_m", 0.0))
 	# `null` where the city declares no `clearance:` block. Read through a
 	# variable rather than `float(document.get(...))` because `float(null)` is a

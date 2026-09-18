@@ -718,6 +718,20 @@ class TestRoadNetwork:
             load_config(rewrite(invert))
 
 
+def _floored(surface):
+    """The shipped surface with `Q95`'s floors put back on it.
+
+    `P3-33c` took both to 0.0 on the user's call, which leaves every test below
+    that pins the floor MECHANISM — the precedence, the fall-through, the
+    inertness on 6.4 m — comparing 0.0 with 0.0. The mechanism is still shipped
+    and still read (`_WIDTH`, the junction trim, a run past its rectangle), so it
+    is pinned on the values it was tuned at rather than dropped.
+    """
+    from dataclasses import replace
+
+    return replace(surface, floor_default_m=10.24, floor_by_min_speed_limit_kph={70: 12.48})
+
+
 class TestCarriagewayFloor:
     """Which floor an edge takes, and which rule wins when two of them match.
 
@@ -734,9 +748,28 @@ class TestCarriagewayFloor:
     """
 
     def test_an_at_grade_road_takes_the_speed_rule(self, hong_kong) -> None:
+        """🔴 **Both read 0.0 since `P3-33c` (`Q129`), on the user's call**: a
+        level-0 ribbon's rails are its territory, so the floor no longer sets a
+        drawn width and was taken off. ⚠️ That makes the two precedence tests
+        below VACUOUS against the shipped config — 0.0 beats 0.0 — so the
+        precedence itself is pinned on a synthetic surface in
+        `test_the_level_rule_beats_the_speed_rule_on_any_values`. 10.24 and 12.48
+        are the values to come back to."""
         surface = hong_kong.roads.surface
+        assert surface.floor_for(50, elevation_level=0) == 0.0
+        assert surface.floor_for(70, elevation_level=0) == 0.0
+
+    def test_the_level_rule_beats_the_speed_rule_on_any_values(self, hong_kong) -> None:
+        from dataclasses import replace
+
+        surface = replace(
+            hong_kong.roads.surface,
+            floor_default_m=10.24,
+            floor_by_min_speed_limit_kph={70: 12.48},
+        )
         assert surface.floor_for(50, elevation_level=0) == 10.24
         assert surface.floor_for(70, elevation_level=0) == 12.48
+        assert surface.floor_for(70, elevation_level=1) == 0.0
 
     def test_structure_is_drawn_at_its_authored_width(self, hong_kong) -> None:
         """0.0 means "no floor, draw it at its own width" — the ribbon has to
@@ -775,14 +808,14 @@ class TestCarriagewayFloor:
         uses it, so it is deliberately unconfigured — this file's floors are all
         measured and there is nothing to measure. A second deck arriving is what
         should add the rule, with a number behind it."""
-        surface = hong_kong.roads.surface
+        surface = _floored(hong_kong.roads.surface)
         assert 2 not in surface.floor_by_elevation_level
         assert surface.floor_for(70, elevation_level=2) == 12.48
 
     def test_a_level_zero_station_on_structure_takes_the_authored_width(self, hong_kong) -> None:
         """`Q23`. The edge is level 0 and signed at 50, so both at-grade rules
         match — and the station is still standing on a ramp deck."""
-        surface = hong_kong.roads.surface
+        surface = _floored(hong_kong.roads.surface)
         assert surface.floor_for(50, elevation_level=0, on_structure=True) == 0.0
         assert surface.floor_for(50, elevation_level=0, on_structure=False) == 10.24
 
@@ -815,9 +848,9 @@ class TestCarriagewayFloor:
         roads = hong_kong.roads
         authored = roads.lanes_default * roads.lane_width_m
         assert authored == 6.4
-        assert roads.surface.drawn_width_m(authored, 50, elevation_level=0) == 10.24
+        assert _floored(roads.surface).drawn_width_m(authored, 50, elevation_level=0) == 10.24
         # …and the expressway's own rule, against its own authored width.
-        assert roads.surface.drawn_width_m(9.6, 70, elevation_level=0) == 12.48
+        assert _floored(roads.surface).drawn_width_m(9.6, 70, elevation_level=0) == 12.48
 
     def test_a_road_wider_than_its_floor_is_drawn_at_its_own_width(self, hong_kong) -> None:
         """The point of a floor rather than a multiplier (`Q95`): a measured
@@ -889,7 +922,7 @@ class TestCarriagewayFloor:
 
         city = load_config(rewrite(drop))
         assert city.roads.surface.floor_by_elevation_level == {}
-        assert city.roads.surface.floor_for(70, elevation_level=1) == 12.48
+        assert _floored(city.roads.surface).floor_for(70, elevation_level=1) == 12.48
 
     def test_the_structure_floor_is_guarded_like_the_tables(self, rewrite) -> None:
         """It is a floor and shares their bottom. Checked separately because it

@@ -788,9 +788,20 @@ def _drawn_widths(surface: dict) -> dict[int, float]:
     stage a second thing to take from it — the junction caps `DrawnSurface`
     reads — and two reads of one manifest is two chances to read two versions.
     """
+
+    # 🔴 **The CORRIDOR where the surface publishes one** (`Q129`, `P3-33c`). At
+    # level 0 `half_width_m` is the host's TERRITORY — its share of a carriageway
+    # it may share with another centreline — and both readers of this number mean
+    # the carriageway: a stop line is painted kerb to kerb, and a double white
+    # line between two opposed flows lies exactly ON the boundary of their two
+    # territories, where a bar of one share refuses it at the margin. Measured:
+    # 91 double white lines drawn fell to 66 on the share and the refusals rose
+    # 52 -> 77. `clearance` walks the same table for the same reason.
+    def half_widths(entry: dict) -> list[float]:
+        return entry.get("corridor_half_width_m", entry["half_width_m"])
+
     return {
-        int(entry["edge"]): 2.0
-        * float(np.mean(np.asarray(entry["half_width_m"], dtype=np.float64)))
+        int(entry["edge"]): 2.0 * float(np.mean(np.asarray(half_widths(entry), dtype=np.float64)))
         for entry in surface["carriageway"]
         if len(entry["half_width_m"])
     }
