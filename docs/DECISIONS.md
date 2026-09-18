@@ -23798,11 +23798,65 @@ is the **lay-by / bus-stop / merging edge line**, not a lane line, and is out of
 ⚠️ **TD publishes whole runs, not dashes** — `RM1104` parts are p50 22.9 m — so the module is the
 sheet's and the dash PHASE is this project's; it starts at each part's first vertex and is counted.
 
-**Open, and step 2's to measure.** `RM1002`/`RM1003` name a LEFT and a RIGHT line, which means
-nothing without the part's digitised direction; whether TD digitises them consistently with travel
-is unmeasured, and a wrong guess puts the broken line on the side that may not cross — an
-instruction reversed, rendering perfectly. Until it is measured those two codes are refused and
-counted, not drawn.
+**`RM1002`/`RM1003`: LEFT and RIGHT are of the DIGITISED direction, and that is TD's frame.** The
+layer's cartographic columns are nearly all null, but `RULEID` is 2 on every `RM1002` and 3 on every
+`RM1003`: TD renders them through ArcGIS representation rules, which are applied along the digitised
+line. So a part digitised the other way is drawn the other way on TD's own drawing, and the sheet's
+LEFT/RIGHT cannot mean anything else. They are drawn on that reading. ⚠️ **What this cannot rule out
+is TD having digitised a part backwards** — an instruction reversed, rendering perfectly, invisible
+to every counter. The only outside check is a Street View site, and none has been made.
+
+### Built 2026-09-19 — `P3-34b`-`d`, one commit, schema 33
+
+`b` and `d` could not land apart: the region is 93.5% one-way and carries 9.8 km of `RM1104`, so
+most warning lines divide LANES, and drawing them while the shader still painted its own dashes
+draws every lane line twice. Lane coverage was measured first, as `P3-34d` required: on level-0
+edges with `lanes >= 2`, TD surveys a longitudinal line on **65.7% / 67.8%** of stations. The user's
+rule covers the rest — JAFFE ROAD (986 m) is the longest street with none.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| Parts read / candidates | 4,162 → 5,596 / 352 → 1,065 | 1,085 → 1,803 / 107 → 244 |
+| Drawn | 290 → **983** | 81 → **217** |
+| Longitudinal metres drawn | 3,764 → **30,828** | 1,608 → **6,910** |
+| `lane_line` (`RM1101`) | 199 / 12,319 m of 12,347 at grade | 39 / 1,971 m |
+| `warning_line` (`RM1104`) | 362 / 9,067 m | 71 / 2,246 m |
+| `double_white_left_broken` / `right_broken` | 48 / 2,124 m · 46 / 2,042 m | 3 / 42 m · 10 / 386 m |
+| `centre_line` (`RM1103`) | 4 / 531 m | 5 / 352 m |
+| `double_white_lines` (`RM1001`) | 99 / 3,764 m → **129 / 4,520 m** | 38 / 1,608 m → **46 / 1,913 m** |
+| Transverse rows, `underfill_m` | byte-identical | byte-identical |
+| `host_off_carriageway` | 44 → 59 (232 before the host fix) | 18 → 19 (50 before it) |
+| `inverted` | 0 | 0 |
+| Join: covered / drawn / over a refused survey line | 159 → 213 / 169 → 114 / 0 m | 421 → 919 / 573 → 74 / **231 → 0 m** |
+| Triangles · `roadmarks.glb` | 18,920 → 48,736 · 1.0 → 2.9 MB | 11,746 → 16,773 · 0.6 → 0.9 MB |
+| Throttle route `draws` | 107-110, unchanged — one mesh | |
+
+**The host fix is the second finding.** A longitudinal line was hosted on ANGLE alone within 20 m,
+so a line on one carriageway of a multi-carriageway road went to whichever centreline was a fraction
+of a degree more parallel and was then refused by `_on_its_own_carriageway` for standing beside it —
+**44 of 143 `RM1001`** before this work, and 55 of 201 `RM1101` with it. `_host` now prefers a
+candidate the line lies ON (within that candidate's own drawn half-width, within
+`bearing_tolerance_deg` — both existing bars, no new knob), and falls back to the old pick, which is
+still refused, where there is none. `RM1001` gains 756 m in Wan Chai it had been losing since `Q118`.
+✅ **The refusal's purpose survives**: `paint_clearance.py --layer roadmarks` passes, buried share
+**3.0% → 1.7%** over 2.6x the triangles, `deeper than 0.010 m` 26 → 42 (0.137% → 0.086%).
+
+**Proved inert first**: with the new rows and `more_layers` stripped in memory, the new code wrote a
+byte-identical `roadmarks.glb` on both regions, before the host fix went in.
+
+**Priced.** `slivers_dropped` 292 → 8,888 on Wan Chai: a 100 mm line is 2x the 0.050 m lattice bar,
+and what is dropped is the short quad `_cuts` leaves beside a source vertex — **0.41%** of the paint's
+plan area at the first build (11.2 of 2,727 m², median sliver 19 cm²). Causeway Bay's bar is 0.035 m
+and it loses 0.02%. ⚠️ `height_spread_m`'s tail (max 8.4 / 19.5 m) is now a long line climbing a
+hill, not a burial.
+
+**Seen.** Four cameras in `city_preview.tscn`, overlays off, each shot twice and `cmp`'d: LEIGHTON /
+CAROLINE HILL (the double-white stub is gone and TD's broken line and lane lines stand), the `Q27`
+HENNESSY street camera, MARSH ROAD and JARDINE'S CRESCENT. No shader errors.
+
+**Open.** (1) No `RM1002`/`RM1003` site has been checked against Street View. (2) The hatched family
+`RM1035`-`RM1037` and the zigzags, as below. (3) `lane_paint.py`'s question has moved: the shader's
+lane strips now place only the bus-lane line and the kerbside yellows.
 
 **Not decided here.** The hatched family `RM1035`-`RM1037` (≈5.8 km at grade in Wan Chai) and the
 zigzags are what actually stand in the middle at MARSH ROAD and LAI TAK TSUEN ROAD; they are a

@@ -2031,6 +2031,9 @@ class Railings(LayerSpec):
 TRANSVERSE = "transverse"
 LONGITUDINAL = "longitudinal"
 MARK_AXES = (TRANSVERSE, LONGITUDINAL)
+BROKEN_LEFT = "left"
+BROKEN_RIGHT = "right"
+BROKEN_SIDES = (BROKEN_LEFT, BROKEN_RIGHT)
 
 
 @dataclass(frozen=True)
@@ -2077,6 +2080,20 @@ class RoadMark:
     # picking one of those two.
     mark_m: float | None
     gap_m: float | None
+    # 🔴 **Which ONE line of a pair the module breaks, or None where it breaks
+    # them all** (`Q132`). `RM1002` and `RM1003` DOUBLE LINES publish `LEFT LINE =
+    # CONTINUOUS, RIGHT LINE = 1000 MARK, 5000 GAP` and its mirror — the side that
+    # may cross — so the module is one line's and the other runs unbroken.
+    # `RM1013`'s two lines are both broken and leave this None.
+    #
+    # ⚠️ **LEFT and RIGHT are of the part's DIGITISED direction, and that is the
+    # publisher's own frame rather than a guess**: TD renders these two codes
+    # through representation rules (`RULEID` 2 and 3 on every feature in region),
+    # which ArcGIS applies along the digitised line, so a part digitised the other
+    # way is drawn the other way on TD's own drawing too. ⚠️ **A wrong side here is
+    # an instruction reversed, and it renders perfectly** — nothing in a frame or
+    # a counter can see it, which is why the side is config beside the sheet's row.
+    broken_line: str | None
     # `TRANSVERSE` or `LONGITUDINAL` — which way this marking lies against its
     # host. 🔴 **It selects the host RULE, not just a counter.** `_host` scores a
     # transverse marking by `|90 - angle|` and a longitudinal one by the angle
@@ -2085,6 +2102,13 @@ class RoadMark:
     # by `bearing_tolerance_deg` — 19 km of published marking drawing nothing,
     # with both partitions closing.
     axis: str
+    # 🔴 **Whether this marking SEPARATES OPPOSING FLOWS, which is what the
+    # inferred join yields to** (`Q125`, `Q132`). The join is drawn only where no
+    # surveyed divider already runs, and "divider" was `RM1001` alone while that
+    # was the only longitudinal row. A lane line is not one: it lies half a
+    # carriageway from the join, which is `_covered`'s own reach, so admitting it
+    # would let measurement noise switch the join off a lane at a time.
+    divides_flows: bool
 
     @property
     def transverse(self) -> bool:
@@ -2114,6 +2138,20 @@ class RoadMark:
     def continuous(self) -> bool:
         """Whether the marking runs unbroken."""
         return self.mark_m is None
+
+    def broken_bands(self) -> tuple[bool, ...]:
+        """Per line, in `band_offsets_m`'s order, whether the module breaks it.
+
+        ⚠️ **`band_offsets_m` runs LEFT to RIGHT of the digitised direction** —
+        `roadmarks.band_quads` lays a positive offset to the RIGHT — so LEFT is the
+        first band and RIGHT the last. `test_the_broken_line_is_on_its_own_side`
+        pins that against `surface.mitres`' frame rather than against this comment.
+        """
+        if self.continuous:
+            return (False,) * self.lines
+        if self.broken_line is None:
+            return (True,) * self.lines
+        return (self.broken_line == BROKEN_LEFT, self.broken_line == BROKEN_RIGHT)
 
     @property
     def band_offsets_m(self) -> tuple[float, ...]:
@@ -2213,6 +2251,14 @@ class RoadMarks(LayerSpec):
     lift_m: float
     # One entry per published marking — see `RoadMark`.
     marks: tuple[RoadMark, ...]
+    # 🔴 **The publisher files ONE family of markings across sister layers, and a
+    # code absent from `layer` is not absent from the source** (`Q132`). TD keeps
+    # `RM1001` in `DTAD_RD_MARK_LINE` and the broken half of the same family —
+    # `RM1002`, `RM1003`, the lane, centre and warning lines — in
+    # `DTAD_RD_MARK_LINE_C`; `Q118` read the first alone and recorded 4,211 m of
+    # at-grade double line as *absent*. Same `source` and `member`, and the same
+    # roles, because they are one table the publisher split.
+    more_layers: tuple[SourceLayer, ...]
     # 🔴 **How much wider than life a LONGITUDINAL marking is drawn — authored,
     # and named as authored.** Every dimension in `marks:` is transcribed from
     # TD's sheet and none of them may be edited; this is a separate, explicit
@@ -2270,6 +2316,11 @@ class RoadMarks(LayerSpec):
         if self.opposed_join_mark is None:
             return None
         return next(mark for mark in self.marks if mark.id == self.opposed_join_mark)
+
+    @property
+    def layers(self) -> tuple[SourceLayer, ...]:
+        """Every layer the markings are read from, `layer` first."""
+        return (self.layer, *self.more_layers)
 
     def mark_of(self, code: str) -> RoadMark | None:
         """The entry admitting `code`, or None where none does.
@@ -4759,7 +4810,9 @@ def _spec_header(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> di
     }
 
 
-def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> SourceLayer:
+def _source_layer(body: Any, where: str, roles: tuple[str, ...]) -> SourceLayer:
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
     return SourceLayer(
         layer=str(_require(body, "layer", where)),
         fields=_fields(body, where, roles),
@@ -6381,9 +6434,23 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
                 f"along the carriageways it separates and must name a longitudinal entry"
             )
 
+    raw_layers = body.get("more_layers", [])
+    if isinstance(raw_layers, str) or not isinstance(raw_layers, (list, tuple)):
+        raise ValueError(f"{where}:more_layers must be a list, got {raw_layers!r}")
+    more_layers = tuple(
+        _source_layer(entry, f"{where}:more_layers[{index}]", _ROAD_MARK_ROLES)
+        for index, entry in enumerate(raw_layers)
+    )
+    named = [str(_require(body, "layer", where)), *(layer.layer for layer in more_layers)]
+    if len(set(named)) != len(named):
+        # Read twice, every part is a candidate twice and is drawn twice in one
+        # place — which looks exactly like one marking.
+        raise ValueError(f"{where}:more_layers repeats a layer: {named}")
+
     return RoadMarks(
         **_spec_header(body, where, _ROAD_MARK_ROLES),
         marks=marks,
+        more_layers=more_layers,
         longitudinal_legibility_scale=scale,
         opposed_join_mark=join_mark,
         **measures,
@@ -6453,6 +6520,28 @@ def _road_mark(body: Any, where: str) -> RoadMark:
     if axis not in MARK_AXES:
         raise ValueError(f"{where}:axis is {axis!r}, not one of {MARK_AXES}")
 
+    broken_line = body.get("broken_line")
+    if broken_line is not None:
+        broken_line = str(broken_line)
+        if broken_line not in BROKEN_SIDES:
+            raise ValueError(f"{where}:broken_line is {broken_line!r}, not one of {BROKEN_SIDES}")
+        if lines != 2 or mark_m is None:
+            # One line has no side, and with no module nothing is broken — either
+            # way the key would be read by nobody and look like a decision.
+            raise ValueError(
+                f"{where}:broken_line needs lines=2 and a module; got lines={lines}, "
+                f"mark_m={mark_m!r}"
+            )
+
+    divides_flows = body.get("divides_flows", False)
+    if not isinstance(divides_flows, bool):
+        raise ValueError(f"{where}:divides_flows must be a boolean, got {divides_flows!r}")
+    if divides_flows and axis != LONGITUDINAL:
+        raise ValueError(
+            f"{where}:divides_flows is set on a transverse marking; a divider runs along the "
+            f"flows it separates"
+        )
+
     return RoadMark(
         id=mark_id,
         codes=codes,
@@ -6461,7 +6550,9 @@ def _road_mark(body: Any, where: str) -> RoadMark:
         lines_spacing_m=lines_spacing_m,
         mark_m=mark_m,
         gap_m=gap_m,
+        broken_line=broken_line,
         axis=axis,
+        divides_flows=divides_flows,
     )
 
 

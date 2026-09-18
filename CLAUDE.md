@@ -827,6 +827,42 @@ Common emoji for this project:
   look at all three, not just the one you changed. ⚠️ The per-layer dispatch is still checked:
   `check_shader_material` compares the material's `resource_path`, not the shader, so a mesh handed
   the wrong `.tres` still fails — do not reach for `check_shader_source` to quiet it.
+- 🔴 **The WHITE LINES along a road are TD's survey since `P3-34` (`Q132`), and `draw_lane_lines` /
+  `draw_centre_line` are 0.0 on the user's call: where TD surveys no line, none is drawn.** Do not
+  switch either back on to fill a bare street — measured, the silent streets are surveyed streets
+  with no centre line (nothing within 1.5 m of the middle on 94% / 84% of silent stations), and
+  where the middle *is* occupied it is by hatching, zigzags or a yellow box an invented line would
+  run through. **`road_marks.more_layers`, a `marks:` row, `broken_line`, `divides_flows` or
+  `_host`'s `on` preference: paste `roadmarks.json`'s `drawn_by_id` / `drawn_m_by_id`,
+  `host_off_carriageway`, `host_disagreement`, the `join` block and `slivers_dropped` before and
+  after, both regions, and run `tools/paint_clearance.py --layer roadmarks`.**
+  🔴 **TD files ONE family across sister layers** — `RM1001` in `DTAD_RD_MARK_LINE`, the broken half
+  in `DTAD_RD_MARK_LINE_C` — and `Q118` recorded 4,211 m of at-grade double line as *absent* by
+  reading one. A code missing from a layer is not missing from the geodatabase.
+  🔴 **`broken_line` is an INSTRUCTION and a wrong side renders perfectly**: `RM1002` breaks the
+  RIGHT line and `RM1003` the LEFT, *of the part's digitised direction* — TD's own frame, because
+  it renders both through representation rules (`RULEID` 2 / 3) that ArcGIS applies along the
+  digitised line. ⚠️ `band_quads`' `across` is **RIGHT** of that direction (it read "left" while
+  every mark was symmetric), so bands run left → right; `test_the_broken_line_is_on_its_own_side`
+  pins it against `surface.mitres` — mutation-check it. ⚠️ **No frame or counter can see a wrong
+  side**; the only outside check is a Street View site.
+  🔴 **A longitudinal line is hosted by a road it lies ON where there is one, and only then by
+  angle.** Angle alone handed a line on one carriageway to a neighbour a fraction of a degree more
+  parallel, which `_on_its_own_carriageway` then refused: 44 of 143 `RM1001` and 55 of 201
+  `RM1101`. Both bars already existed (the candidate's drawn half-width, `bearing_tolerance_deg`);
+  refusals fell 232 → 59 and `paint_clearance`'s buried share 3.0% → 1.7%. ⚠️ **Transverse hosting
+  is untouched** — those rows and `underfill_m` must stay byte-identical across a change here.
+  ⚠️ **`divides_flows` is what the inferred join yields to, and a lane line must never carry it**:
+  it lies half a carriageway from the join, which is `_covered`'s own reach. `RM1104` carries it
+  although most of it divides lanes, because the invention yielding too often is the safe side.
+  ⚠️ **The publisher draws the RUN and not the dashes**, so the phase is `band_quads`' anchor at the
+  part's first vertex. ⚠️ **`slivers_dropped` jumps (292 → 8,888 on Wan Chai) and that is priced, not
+  ignored**: a 100 mm line is 2x the lattice bar, the casualties are the short quads beside source
+  vertices, and they cost **0.41%** of the paint's plan area. ⚠️ **`height_spread_m`'s tail now
+  reads a long line climbing a hill** (max 8.4 / 19.5 m) and is no longer a burial signal;
+  `paint_clearance` is. ⚠️ **`lane_paint.py` still runs but its question moved**: the shader cuts
+  the ribbon into `lanes_painted` strips for the bus lane and the kerbside yellows only. Schema 33.
+  Numbers in `Q132`.
 - 🔴 **`RoadMark.axis`, `longitudinal_legibility_scale`, or `_on_its_own_carriageway`: paste
   `roadmarks.json`'s `drawn_by_id`/`drawn_m_by_id`, `host_off_carriageway` and `no_host_on_axis`
   before and after, and run `tools/paint_clearance.py`** (`Q118`). 🔴 **The axis selects the HOST

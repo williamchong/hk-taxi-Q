@@ -2227,6 +2227,14 @@ road_marks:
     # 209 of the region's 211 parts.
     level: ELEVATION
 
+  # 🔴 **The sister layer TD files the BROKEN half of this family in** (`Q132`).
+  # `Q118` looked for RM1002/RM1003 in `layer` alone and recorded them absent.
+  more_layers:
+    - layer: DTAD_RD_MARK_LINE_C
+      fields:
+        mark_type: LINETYPE
+        level: ELEVATION
+
   # Which level-0 edges are CONSIDERED for the host — not how far the host may
   # be. At 20 m every one of the region's 209 at-grade parts finds a
   # candidate, and the chosen host then sits p50 7.23 m (p90 16.78) away for
@@ -2320,14 +2328,118 @@ road_marks:
     # config row.** RM1002 and RM1003 are the same 150/100 pair with one line
     # broken at 1000 MARK / 5000 GAP — a per-LINE module, which `lines`/`mark_m`
     # cannot say — and RM1004 publishes `LINES SPACING = VARIABLE`, which no
-    # fixed value can. In region that costs nothing: RM1002 and RM1003 are
-    # **absent** and RM1004 is **40.7 m**, against RM1001's 19,308.
+    # fixed value can. RM1004 is **40.7 m** in region, against RM1001's 19,308.
+    # 🔴 **"RM1002 and RM1003 are absent" stood here and was WRONG** (`Q132`):
+    # they are filed in `more_layers`' sister layer, and `broken_line` below is
+    # the per-line module this paragraph said could not be written.
     - id: double_white_lines
       codes: [RM1001]
       axis: longitudinal
+      divides_flows: true
       line_width_m: 0.15
       lines: 2
       lines_spacing_m: 0.1
+
+    #   1002 (TC 502)  DOUBLE LINES   LINE WIDTH = 150, LINES SPACING = 100,
+    #                  - WHITE        MODULE: LEFT LINE = CONTINUOUS,
+    #                  REGULATORY             RIGHT LINE = 1000 MARK, 5000 GAP
+    #
+    # ⚠️ LEFT and RIGHT are of the part's digitised direction — see
+    # `RoadMark.broken_line` for why that is TD's own frame and not a guess.
+    - id: double_white_right_broken
+      codes: [RM1002]
+      axis: longitudinal
+      divides_flows: true
+      line_width_m: 0.15
+      lines: 2
+      lines_spacing_m: 0.1
+      broken_line: right
+      mark_m: 1.0
+      gap_m: 5.0
+
+    #   1003 (TC 502)  DOUBLE LINES   LINE WIDTH = 150, LINES SPACING = 100,
+    #                  - WHITE        MODULE: LEFT LINE = 1000 MARK, 5000 GAP
+    #                  REGULATORY             RIGHT LINE = CONTINUOUS
+    - id: double_white_left_broken
+      codes: [RM1003]
+      axis: longitudinal
+      divides_flows: true
+      line_width_m: 0.15
+      lines: 2
+      lines_spacing_m: 0.1
+      broken_line: left
+      mark_m: 1.0
+      gap_m: 5.0
+
+    # 🔴 **From here down the rows are TD drawing `CT174/51-5(2)G`**, the second
+    # index-plan sheet, `Index Plan/(RM 1101 - 1180).pdf`, read at 600 dpi on
+    # 2026-09-19 (`Q132`). These replace `road_markings.gdshader`'s invented lane
+    # dashes and two-way centre line: where TD surveys a line it is drawn as
+    # surveyed, and where TD is silent nothing is — the user's call.
+    #
+    # ⚠️ **The publisher draws the RUN, not the dashes** — an `RM1104` part is
+    # p50 22.9 m — so the module is the sheet's and the PHASE is
+    # `band_quads`' anchor at the part's first vertex.
+    #
+    #   1101 (TC 601)  LANE LINES     LINE WIDTH = 100
+    #                  - WHITE        MODULE: 1000 MARK, 5000 GAP
+    #                  INFORMATORY
+    - id: lane_line
+      codes: [RM1101]
+      axis: longitudinal
+      line_width_m: 0.1
+      lines: 1
+      mark_m: 1.0
+      gap_m: 5.0
+
+    #   1102 (TC 601)  LANE LINES     LINE WIDTH = 100
+    #                  - WHITE        MODULE: 2000 MARK, 7000 GAP
+    - id: lane_line_long
+      codes: [RM1102]
+      axis: longitudinal
+      line_width_m: 0.1
+      lines: 1
+      mark_m: 2.0
+      gap_m: 7.0
+
+    #   1103 (TC 602)  CENTRE LINE    LINE WIDTH = 100
+    #                  - WHITE        MODULE: 3000 MARK, 5000 GAP
+    - id: centre_line
+      codes: [RM1103]
+      axis: longitudinal
+      divides_flows: true
+      line_width_m: 0.1
+      lines: 1
+      mark_m: 3.0
+      gap_m: 5.0
+
+    #   1104 (TC 603)  WARNING LINE   LINE WIDTH = 100
+    #                  - WHITE        MODULE: 4000 MARK, 2000 GAP
+    #
+    # ⚠️ **`divides_flows` is set although most of this code does NOT divide
+    # flows** — the region is 93.5% one-way and carries 9.8 km of it, so it is
+    # mostly a lane line on the approach to a hazard. It is set because where one
+    # DOES run along a join, the inferred double white would be painted on top of
+    # a surveyed broken line; the invention yielding too often is the safe side.
+    - id: warning_line
+      codes: [RM1104]
+      axis: longitudinal
+      divides_flows: true
+      line_width_m: 0.1
+      lines: 1
+      mark_m: 4.0
+      gap_m: 2.0
+
+    #   1105 (TC 603)  WARNING LINE   LINE WIDTH = 100
+    #                  - WHITE        MODULE: 6000 MARK, 3000 GAP
+    - id: warning_line_long
+      codes: [RM1105]
+      axis: longitudinal
+      divides_flows: true
+      line_width_m: 0.1
+      lines: 1
+      mark_m: 6.0
+      gap_m: 3.0
 
     # ⚠️ No `lines_spacing_m`: a single line has no gap to declare, and the
     # loader only reads one where there is a second line for it to sit between.

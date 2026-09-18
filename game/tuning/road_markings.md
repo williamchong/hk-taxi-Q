@@ -50,10 +50,22 @@ region's 95 opposed pair **ends** — the population this codec field carries �
 surveyed. `centre_at` stays in the codec
 for a region whose survey is thinner.
 
-⚠️ **`draw_centre_line` still owns the TWO-WAY street's line**, which is a different
-population: the middle of one ribbon carrying both flows, where `lanes` is even. That
-one is geometry the shader can see, and nothing published locates it either — it is
-`P3-12`'s invention and `Q118` left it standing.
+🔴 **`draw_lane_lines` and `draw_centre_line` are both 0.0 since `P3-34` (`Q132`), on
+the user's call: TD's codes are the truth, and where TD surveys no line none is
+drawn.** `roadmarks.py` draws `RM1101`/`RM1102` lane lines, `RM1103` centre lines,
+`RM1104`/`RM1105` warning lines and the `RM1002`/`RM1003` broken double whites as
+geometry, at the sheet's own widths and modules. What the two switches painted was
+`P3-12`'s invention: a double continuous line — an instruction, *no overtaking* — down
+every two-way ribbon with an even lane count, where TD surveys a **broken** line on
+80-90% of the divider it surveys at all; and lane dashes cut from `lanes_painted`,
+which followed the territory's rails and so zigzagged with them (`e124`).
+⚠️ **Do not switch either back on to fill a street with no lines**: measured, the
+silent streets are surveyed streets with no centre line — JARDINE'S CRESCENT carries
+its kerbside yellows and nothing else — and where the middle *is* occupied it is by
+hatching, zigzags or a yellow box that an invented line would run through.
+⚠️ `line_width`, `centre_width`, `centre_gap`, `dash_length_m` and `dash_gap_m` now
+reach only `draw_bus_lane`'s line and a region that switches these back on; the lane
+coordinate, `lanes_painted` and `centre_at` stay in the codec for that region.
 
 ⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
 rather than chosen.** A junction cap overlaps its arms rather than abutting

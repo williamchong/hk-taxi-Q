@@ -42,7 +42,7 @@ import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from itertools import pairwise
+from itertools import pairwise, product
 from pathlib import Path
 from typing import NamedTuple
 
@@ -361,17 +361,19 @@ def read_markings(
     reads = source_reads(city, spec, region_id, root=sources_root)
 
     markings: list[Marking] = []
-    for path, member in reads:
+    # `layer` first, so the parts of a region with no `more_layers` are read in
+    # the order they always were and its mesh is byte-identical (`Q132`).
+    for (path, member), source_layer in product(reads, spec.layers):
         layer = gdb.read_layer(
             path,
-            spec.layer.layer,
-            columns=spec.layer.columns,
+            source_layer.layer,
+            columns=source_layer.columns,
             bbox=city.projected_bounds(region_id).bbox,
             zip_member=member,
             expect_crs=city.projected_crs,
         )
-        types = layer.column(spec.layer.field("mark_type"))
-        levels = layer.column(spec.layer.field("level"))
+        types = layer.column(source_layer.field("mark_type"))
+        levels = layer.column(source_layer.field("level"))
         owners, parts = gdb.polylines(layer)
         report.features += len(layer.fids)
 
@@ -598,6 +600,20 @@ def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
     # stays one distribution over the two.
     residual = np.abs(90.0 - crossing) if marking.mark.transverse else crossing
     score = residual + spec.proximity_weight_deg_per_m * distance[in_range]
+    if not marking.mark.transverse:
+        # 🔴 **A line painted ALONG a road is hosted by a road it lies ON, where
+        # there is one** (`Q132`). Scored on angle alone, a line on one
+        # carriageway of a multi-carriageway road picks whichever centreline in
+        # 20 m is a fraction of a degree more parallel and is then refused by
+        # `_on_its_own_carriageway` for standing beside it — 44 of 143 `RM1001`
+        # and 55 of 201 `RM1101` went that way. Both bars already exist: the
+        # candidate's own drawn half-width, and `bearing_tolerance_deg`. Where no
+        # candidate passes both, the old pick stands and is refused as before.
+        on = (distance[in_range] <= 0.5 * network.width_m[in_range]) & (
+            residual <= spec.bearing_tolerance_deg
+        )
+        if on.any():
+            score = np.where(on, score, np.inf)
     winner = int(np.argmin(score))
     chosen = int(in_range[winner])
     nearest = int(np.argmin(distance))
@@ -659,20 +675,39 @@ def band_quads(marking: Marking, spec: RoadMarks) -> list[np.ndarray]:
     half = 0.5 * mark.drawn_line_width_m(scale)
     offsets = mark.drawn_band_offsets_m(scale)
 
+    # 🔴 **One pass per module, and a marking whose lines share one is a single
+    # pass in the order it always was** — so `RM1001` and the transverse bars are
+    # byte-identical. `RM1002`/`RM1003` break ONE line of the pair (`Q132`): the
+    # continuous line is a pass over the whole length and the broken one a pass
+    # over the module's runs.
+    broken = mark.broken_bands()
+    unbroken_offsets = [o for o, b in zip(offsets, broken, strict=True) if not b]
+    broken_offsets = [o for o, b in zip(offsets, broken, strict=True) if b]
+    passes = [(unbroken_offsets, [(0.0, total)])]
+    if broken_offsets:
+        passes.append((broken_offsets, _runs(mark, total)))
+
     quads: list[np.ndarray] = []
-    for start, stop in _runs(mark, total):
-        cuts = _cuts(start, stop, along, spec.station_m)
-        for head, tail in pairwise(cuts):
-            middle = np.searchsorted(along, 0.5 * (head + tail), side="right") - 1
-            index = int(np.clip(middle, 0, len(marking.line) - 2))
-            step = marking.line[index + 1] - marking.line[index]
-            direction = step / np.linalg.norm(step)
-            # Left of travel in the `(x, z)` plan, which is the frame the band
-            # offsets and the half-width are both expressed in.
-            across = np.array([-direction[1], direction[0]])
-            first, last = _point_at(marking.line, along, head), _point_at(marking.line, along, tail)
-            for offset in offsets:
-                quads.append(_band_quad(first, last, across, offset, half))
+    for bands, runs in passes:
+        if not bands:
+            continue
+        for start, stop in runs:
+            cuts = _cuts(start, stop, along, spec.station_m)
+            for head, tail in pairwise(cuts):
+                middle = np.searchsorted(along, 0.5 * (head + tail), side="right") - 1
+                index = int(np.clip(middle, 0, len(marking.line) - 2))
+                step = marking.line[index + 1] - marking.line[index]
+                direction = step / np.linalg.norm(step)
+                # 🔴 **RIGHT of the digitised direction in the `(x, z)` plan** —
+                # east is `+x` and north is `-z`, so heading east this points
+                # south. It read "left of travel" while every marking was
+                # symmetric and the sign could not matter; `RM1002`/`RM1003` are
+                # not, and `RoadMark.broken_bands` is written against this frame.
+                across = np.array([-direction[1], direction[0]])
+                first = _point_at(marking.line, along, head)
+                last = _point_at(marking.line, along, tail)
+                for offset in bands:
+                    quads.append(_band_quad(first, last, across, offset, half))
     return quads
 
 
@@ -1320,7 +1355,11 @@ def build_region(
     surveyed: list[Marking] = []
     refused: list[Marking] = []
     for marking in markings:
-        wanted = join_mark is not None and marking.mark is join_mark
+        # 🔴 **Any surveyed DIVIDER, not the join's own mark** (`Q132`): with
+        # `RM1001` the only longitudinal row the two were one test, and once a
+        # broken line can run between two flows the invented double white would
+        # be painted on top of it.
+        wanted = join_mark is not None and marking.mark.divides_flows
         host = _host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1

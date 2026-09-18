@@ -37,7 +37,7 @@ from pipeline.roadmarks import (
     draw_opposed_joins,
     opposed_joins,
 )
-from pipeline.surface import DrawnSurface, downward_facing
+from pipeline.surface import DrawnSurface, downward_facing, mitres
 from tests.helpers import CITY_YAML, ribbon_of
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in
@@ -47,6 +47,9 @@ BLOCK: dict[str, Any] = {
     "source": "stands",
     "layer": "DTAD_RD_MARK_LINE",
     "fields": {"mark_type": "LINETYPE", "level": "ELEVATION"},
+    "more_layers": [
+        {"layer": "DTAD_RD_MARK_LINE_C", "fields": {"mark_type": "LINETYPE", "level": "ELEVATION"}}
+    ],
     "host_radius_m": 20.0,
     "bearing_tolerance_deg": 30.0,
     "proximity_weight_deg_per_m": 0.05,
@@ -59,9 +62,43 @@ BLOCK: dict[str, Any] = {
             "id": "double_white_lines",
             "axis": "longitudinal",
             "codes": ["RM1001"],
+            "divides_flows": True,
             "line_width_m": 0.15,
             "lines": 2,
             "lines_spacing_m": 0.1,
+        },
+        {
+            "id": "double_white_right_broken",
+            "axis": "longitudinal",
+            "divides_flows": True,
+            "codes": ["RM1002"],
+            "line_width_m": 0.15,
+            "lines": 2,
+            "lines_spacing_m": 0.1,
+            "broken_line": "right",
+            "mark_m": 1.0,
+            "gap_m": 5.0,
+        },
+        {
+            "id": "double_white_left_broken",
+            "axis": "longitudinal",
+            "divides_flows": True,
+            "codes": ["RM1003"],
+            "line_width_m": 0.15,
+            "lines": 2,
+            "lines_spacing_m": 0.1,
+            "broken_line": "left",
+            "mark_m": 1.0,
+            "gap_m": 5.0,
+        },
+        {
+            "id": "lane_line",
+            "axis": "longitudinal",
+            "codes": ["RM1101"],
+            "line_width_m": 0.1,
+            "lines": 1,
+            "mark_m": 1.0,
+            "gap_m": 5.0,
         },
         {
             "id": "stop_line",
@@ -407,6 +444,31 @@ class TestTheHostIsPickedByTransversality:
         assert _on_its_own_carriageway(on, _host(straight, on, spec)) is True
         assert _on_its_own_carriageway(off, _host(straight, off, spec)) is False
 
+    def test_a_longitudinal_marking_is_hosted_by_the_road_it_lies_ON(self, spec):
+        """🔴 **`Q132`: angle alone handed a lane line to the carriageway next door.**
+
+        Two parallel carriageways 14 m apart, the far one a fraction of a degree
+        more parallel to the line. Scored on angle the far one wins and
+        `_on_its_own_carriageway` then refuses the line for standing beside it —
+        55 of 201 `RM1101` parts in Wan Chai. Mutation: drop the `on` preference
+        in `_host` and this picks edge 2.
+        """
+        near = edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 1.0]])
+        far = edge(2, [[-50.0, 0.0, 14.0], [50.0, 0.0, 14.0]])
+        line = marking(spec, "RM1101", [[-16.0, 2.0], [16.0, 2.0]])
+        host = _host(network([near, far]), line, spec)
+        assert host.edge_id == 1
+        assert _on_its_own_carriageway(line, host) is True
+
+    def test_a_line_on_no_road_keeps_the_old_pick_and_is_still_refused(self, spec):
+        """The preference is not a rescue: with no candidate under the line the
+        angle pick stands, so the refusal still has something to refuse."""
+        straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
+        off = marking(spec, "RM1101", [[-16.0, 9.0], [16.0, 9.0]])
+        host = _host(straight, off, spec)
+        assert host.edge_id == 1
+        assert _on_its_own_carriageway(off, host) is False
+
     def test_a_transverse_bar_is_exempt_from_the_carriageway_bar(self, spec):
         """⚠️ **Not an oversight.** A stop line at a four-lane mouth is supposed
         to sit far from the centreline it is square across — `host_distance_m`
@@ -495,6 +557,32 @@ class TestTheGeometry:
         )
         # Two bands, 0.2 m wide, two-thirds painted over 9 m.
         assert painted == pytest.approx(2 * 0.2 * 9.0 * 2.0 / 3.0, rel=0.02)
+
+    @pytest.mark.parametrize(("code", "broken_side"), [("RM1002", -1.0), ("RM1003", 1.0)])
+    def test_the_broken_line_is_on_its_own_side(self, spec, code, broken_side):
+        """🔴 **A wrong side is an instruction reversed, and it renders perfectly.**
+
+        `RM1002` breaks the RIGHT line and `RM1003` the LEFT, of the digitised
+        direction (`Q132`). Pinned against `surface.mitres` — whose frame is
+        load-bearing for the lane coordinate — rather than against a comment:
+        `broken_side` is the sign of the broken band's offset along `mitres`'
+        LEFT normal. Mutation: swap the pair in `RoadMark.broken_bands`.
+        """
+        line = [[0.0, 0.0], [24.0, 0.0]]
+        left = mitres(np.array([[0.0, 0.0, 0.0], [24.0, 0.0, 0.0]]))[0]
+        painted = {-1.0: 0.0, 1.0: 0.0}
+        for quad in band_quads(marking(spec, code, line), spec):
+            side = float(np.sign(quad.mean(axis=0) @ left))
+            painted[side] += quad[:, 0].max() - quad[:, 0].min()
+        # The continuous line runs the whole 24 m; the broken one paints a 1 m
+        # mark at the head of each of its four 6 m modules.
+        assert painted[-broken_side] == pytest.approx(24.0)
+        assert painted[broken_side] == pytest.approx(4.0)
+
+    def test_a_pair_sharing_one_module_is_still_one_pass(self, spec):
+        """`RM1013`'s two lines are both broken, and both by the same module."""
+        assert road_mark(spec, "give_way_lines").broken_bands() == (True, True)
+        assert road_mark(spec, "double_white_lines").broken_bands() == (False, False)
 
     @pytest.mark.parametrize("heading_deg", [0.0, 37.0, 90.0, 143.0, 216.0, 305.0])
     def test_every_quad_faces_up_at_every_heading(self, spec, heading_deg):
@@ -675,6 +763,40 @@ class TestTheBlockIsOptional:
         marks = [{**mark_named("give_way_lines"), "gap_m": None}]
         with pytest.raises(ValueError, match="together or not at all"):
             city_with(tmp_path, {**BLOCK, "marks": marks})
+
+    def test_the_sister_layer_is_read_after_the_first(self, spec):
+        """`layer` first, which is what keeps a one-layer region's mesh byte-identical."""
+        assert [one.layer for one in spec.layers] == ["DTAD_RD_MARK_LINE", "DTAD_RD_MARK_LINE_C"]
+
+    def test_a_layer_named_twice_is_refused(self, tmp_path):
+        """Read twice, every part is drawn twice in one place and looks like one."""
+        again = {"layer": BLOCK["layer"], "fields": BLOCK["fields"]}
+        with pytest.raises(ValueError, match="repeats a layer"):
+            city_with(tmp_path, {**BLOCK, "more_layers": [again]})
+
+    @pytest.mark.parametrize(
+        ("mark_id", "change", "message"),
+        [
+            ("double_white_right_broken", {"broken_line": "offside"}, "not one of"),
+            ("double_white_lines", {"broken_line": "left"}, "needs lines=2 and a module"),
+            ("lane_line", {"broken_line": "left"}, "needs lines=2 and a module"),
+            ("stop_line", {"divides_flows": True}, "transverse"),
+            ("lane_line", {"divides_flows": "yes"}, "boolean"),
+        ],
+    )
+    def test_a_side_or_a_divider_that_means_nothing_is_refused(
+        self, tmp_path, mark_id, change, message
+    ):
+        marks = [{**one, **change} if one["id"] == mark_id else one for one in BLOCK["marks"]]
+        with pytest.raises(ValueError, match=message):
+            city_with(tmp_path, {**BLOCK, "marks": marks})
+
+    def test_a_lane_line_is_not_a_divider(self, spec):
+        """🔴 **What the inferred join yields to is a DIVIDER, never any line.** A
+        lane line lies half a carriageway from the join — `_covered`'s own reach —
+        so admitting it lets noise switch the join off a lane at a time."""
+        assert road_mark(spec, "lane_line").divides_flows is False
+        assert road_mark(spec, "double_white_right_broken").divides_flows is True
 
     def test_a_tolerance_that_refuses_nothing_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="lying along its host"):

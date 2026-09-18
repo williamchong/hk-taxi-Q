@@ -201,7 +201,12 @@ const NOT_MEASURED: float = -1.0
 ## *wrong*: it holds `clear_width_m` to be no wider than `2 x half_width_m`, and
 ## the clearance is measured across the corridor now; and it holds the drawn
 ## ribbon to cover `width_m`, which a share of a carriageway does not.
-const SCHEMA_VERSION: int = 32
+##
+## 33 since `P3-34` (`Q132`): `roadmarks.glb` carries TD's surveyed longitudinal
+## lines and `road_markings.tres` draws neither lane dashes nor a two-way centre
+## line. 🔴 A v32 bundle under this build has NO lane lines at all, and this
+## bundle under a v32 build has every one twice.
+const SCHEMA_VERSION: int = 33
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

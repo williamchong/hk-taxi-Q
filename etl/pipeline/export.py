@@ -236,7 +236,14 @@ CITY_NAME = "city.json"
 # WRONG rather than stale on two counts: it holds `clear_width_m` to be no wider
 # than `2 x half_width_m`, and the clearance is now measured across the corridor;
 # and it holds the drawn ribbon to cover `width_m`, which a share does not.
-CITY_SCHEMA = 32
+#
+# 33 since `P3-34` (`Q132`): `roadmarks.glb` carries TD's surveyed LONGITUDINAL
+# lines — lane, centre and warning lines and the broken double whites — and the
+# markings shader no longer invents any. 🔴 A v32 reader is WRONG rather than
+# stale: `road_markings.tres` still paints its own lane dashes and two-way centre
+# line, so every surveyed line is drawn twice, a lane apart from its invention.
+# ⚠️ No mesh FORMAT moves; what moves is who owns the white lines.
+CITY_SCHEMA = 33
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

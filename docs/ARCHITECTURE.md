@@ -509,7 +509,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 32,
+  "schema_version": 33,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -554,6 +554,12 @@ The interface between ETL and game. **Versioned — change both sides together a
   "generated_utc": "2026-07-30T20:04:03Z"
 }
 ```
+
+🔴 **Since schema 33 (`Q132`, `P3-34`) the white lines ALONG a road are geometry in
+`roadmarks.glb`, read from TD's survey, and `road_markings.tres` draws neither lane dashes nor a
+two-way centre line.** No mesh format moved — what moved is who owns the lines, so the two halves
+ship together: a v32 bundle under this build has no lane lines, and this bundle under a v32 build has
+each one twice. `lanes_painted` still cuts the ribbon, for the bus-lane line and the kerbside yellows.
 
 🔴 **Since schema 32 (`Q129`, `P3-33c`) a level-0 `carriageway[]` row is the edge's TERRITORY** — its
 share of a carriageway that several Road Network centrelines may share — and not the road kerb to
