@@ -166,3 +166,19 @@ def test_a_run_past_the_rectangle_owns_only_an_orphan_and_is_counted() -> None:
     assert report.orphan_m2 == pytest.approx(45.0 * 8.0)
     assert report.orphan_pieces == 1
     assert report.owned_past_rectangle_m == pytest.approx(80.0)
+
+
+def test_a_ray_runs_through_the_seam_between_two_touching_parts() -> None:
+    # GEOS may hand a territory back as two polygons that touch. The reach is the
+    # territory's, not the first part's: `e451` read 3.99 m or 6.545 m depending
+    # on which overlay built it, from rings identical on disk.
+    from shapely.geometry import MultiPolygon
+
+    from pipeline.region import _reach
+
+    near = Polygon([(-5, -1), (5, -1), (5, 4), (-5, 4)])
+    far = Polygon([(-5, 4), (5, 4), (5, 7), (-5, 7)])
+    split = MultiPolygon([near, far])
+    start, up = np.array([0.0, 0.0]), np.array([0.0, 1.0])
+    assert _reach(start, up, split, 16.5) == pytest.approx(7.0)
+    assert _reach(start, up, near.union(far), 16.5) == pytest.approx(7.0)

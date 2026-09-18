@@ -97,8 +97,8 @@ def _shape(rows: list[dict]) -> BaseGeometry:
     return _polygonal(shapely.union_all(shapely.make_valid(polygons)))
 
 
-def read(out_dir: Path, city_id: str, region_id: str) -> Region:
-    document = read_region(out_dir / REGION_NAME, city_id, region_id)
+def read(out_dir: Path, region_id: str) -> Region:
+    document = read_region(out_dir / REGION_NAME, region_id)
     shapes: dict[Key, BaseGeometry] = {}
     stations: dict[Key, Stations] = {}
     for row in document["territories"]:

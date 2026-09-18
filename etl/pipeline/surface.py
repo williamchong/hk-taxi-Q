@@ -1268,8 +1268,10 @@ class DrawnSurface:
         # The level-0 areas (`P3-33c`) are cap-class for every purpose a reader
         # has: drawn, no lane coordinate, and what a junction is made of. They
         # arrive as triangles already, so they join the fans as one more.
+        areas = np.zeros((0, 3, 3))
         if level == 0 and surface.get("areas"):
-            fans.append(_drop_degenerate(np.asarray(surface["areas"], dtype=np.float64)))
+            areas = _drop_degenerate(np.asarray(surface["areas"], dtype=np.float64))
+            fans.append(areas)
         strips = [_strip_corners(first, second) for first, second in rails]
         triangles = np.concatenate([*fans, *strips, np.zeros((0, 3, 3))])
         if not len(triangles):
@@ -1286,15 +1288,7 @@ class DrawnSurface:
                 *(_ring_edges(ring) for ring in rings),
                 # Every area triangle's three sides, in one array: there are tens
                 # of thousands and a `_ring_edges` call apiece is most of a second.
-                *(
-                    [
-                        np.stack(
-                            [fans[len(rings)], np.roll(fans[len(rings)], -1, axis=1)], axis=2
-                        ).reshape(-1, 2, 3)
-                    ]
-                    if len(fans) > len(rings)
-                    else []
-                ),
+                np.stack([areas, np.roll(areas, -1, axis=1)], axis=2).reshape(-1, 2, 3),
                 *(_strip_edges(first, second) for first, second in rails),
                 np.zeros((0, 2, 3)),
             ]
@@ -2133,9 +2127,7 @@ def build_region(
     # The level-0 carriageway as a region (`Q129`), where the city builds one.
     # Absent, every edge below is the ribbon it always was and `region` is None.
     region = (
-        surface_region.read(out_dir, city.id, region_id)
-        if city.carriageway_region is not None
-        else None
+        surface_region.read(out_dir, region_id) if city.carriageway_region is not None else None
     )
 
     def stations_of(published: dict, *, foreign: bool) -> surface_region.Stations | None:
@@ -2495,6 +2487,7 @@ def _prepare(
         report.clamped_stations += int(cut.sum())
         report.clamp_refused_stations += refused
     lanes, lanes_forward = int(published["lanes"]), _lanes_forward_code(published, report)
+    mouth_half_m = 0.5 * float(np.median(stations.left_m + stations.right_m)) if territory else 0.0
     if territory and lane_min_m > 0.0:
         # 🔴 **A territory is a CEILING on the PAINTED lane count and never a
         # source of one** — `Q114`'s deck rule, for its reason. `lanes` is
@@ -2512,7 +2505,7 @@ def _prepare(
         # stations are narrower than its median by construction. At the median,
         # 146 mid-block vertices still painted a lane under TPDM's narrow end.
         span = stations.left_m + stations.right_m
-        reach = 0.5 * float(np.median(span))
+        reach = mouth_half_m
         clear = (stations.along_m >= reach) & (stations.along_m <= stations.along_m[-1] - reach)
         span = float(np.percentile(span[clear] if clear.any() else span, _LANE_SPAN_PERCENTILE))
         ceiling = max(1, int(span // lane_min_m))
@@ -2531,9 +2524,7 @@ def _prepare(
         published_offsets=0.5 * (drawn_upper + drawn_lower),
         territory=territory,
         stations=stations if territory else None,
-        mouth_half_m=(
-            0.5 * float(np.median(stations.left_m + stations.right_m)) if territory else 0.0
-        ),
+        mouth_half_m=mouth_half_m,
         lanes=lanes,
         lanes_forward=lanes_forward,
         direction=published["direction"],
@@ -4736,17 +4727,15 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                     # Present on a territory edge only (`P3-33c`): the corridor a
                     # car can use, kerb to kerb, where the pair above is what
                     # this centreline draws of it.
+                    # All three or none: `_prepare` and `_publish_territory_table`
+                    # fill both tables for exactly the territory edges.
                     **(
                         {
                             "corridor_half_width_m": report.corridor[edge_id][0],
                             "corridor_offset_m": report.corridor[edge_id][1],
+                            "lanes_painted": report.lanes_painted[edge_id],
                         }
                         if edge_id in report.corridor
-                        else {}
-                    ),
-                    **(
-                        {"lanes_painted": report.lanes_painted[edge_id]}
-                        if edge_id in report.lanes_painted
                         else {}
                     ),
                     "trim_m": list(report.trims_m.get(edge_id, (0.0, 0.0))),

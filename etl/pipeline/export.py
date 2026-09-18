@@ -644,12 +644,15 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
                 # lane count the ribbon is PAINTED with, which a share narrower
                 # than its graph count cuts. Additive — `RoadGraph`'s driving line
                 # and the arrow slots read the graph's `lanes` and are not wrong to.
-                **({"lanes_painted": entry["lanes_painted"]} if "lanes_painted" in entry else {}),
                 # And the corridor `clear_width_m` was measured across — kerb to
                 # kerb, through every share. Absent off-grade and wherever no
-                # region is built, where the corridor IS the ribbon.
+                # region is built, where the corridor IS the ribbon. One guard: the
+                # surface publishes the pair together or not at all.
                 **(
-                    {"corridor_half_width_m": entry["corridor_half_width_m"]}
+                    {
+                        "lanes_painted": entry["lanes_painted"],
+                        "corridor_half_width_m": entry["corridor_half_width_m"],
+                    }
                     if "corridor_half_width_m" in entry
                     else {}
                 ),

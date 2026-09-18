@@ -85,10 +85,6 @@ JUNCTION_M = 12.0
 # from `width_evidence.MEASURED`: where R is HyD's, a strip graded against a
 # territory is HyD graded against HyD.
 RAY_SOURCES = ("two_way_span", "one_way_uncrossed")
-# Snap for the kerb linework before it is noded. The two line publishers were
-# digitised apart and their ends do not meet; this is a tolerance on THEIR
-# closure and never a width.
-_SNAP_M = 0.05
 # How far past a cross-section's end the far side is sampled to name what ended
 # it. Small against any kerb and large against the snap.
 _PROBE_M = 0.10
@@ -448,6 +444,11 @@ def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m:
     hit = ray.intersection(shape)
     if hit.is_empty:
         return 0.0
+    # Merged first: a territory can come back from GEOS as two parts that touch,
+    # and the ray across their seam is then two pieces end to end. Read piecewise
+    # it stopped at the seam — `e451` read 3.99 m or 6.545 m depending on which
+    # overlay built the shape, from rings identical on disk.
+    hit = shapely.line_merge(hit) if hit.geom_type == "MultiLineString" else hit
     origin = Point(start)
     for piece in shapely.get_parts(hit):
         if piece.geom_type == "LineString" and piece.distance(origin) < 1e-6:

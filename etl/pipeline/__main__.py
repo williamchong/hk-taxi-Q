@@ -70,10 +70,11 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # samples deck heights from the source sheets (`read_sheet`), not from
     # tiles, so the chain stays acyclic and a re-run is deterministic.
     "carve": carve.main,
-    # After `roads` for the graph and before `surface`, its first reader at
-    # `P3-33c`. It reads no tile, so its place against `carve` is tidy rather
-    # than forced. ⚠️ Inert at `P3-33b`: `export`'s inputs are an explicit list
-    # and `carriageway_region.json` is not on it.
+    # After `roads` for the graph and before `surface`, which reads it
+    # (`P3-33c`). It reads no tile, so its place against `carve` is tidy rather
+    # than forced. ⚠️ `export`'s inputs are an explicit list and
+    # `carriageway_region.json` is not on it: it reaches the bundle only as what
+    # `surface` draws from it.
     "region": region.main,
     "surface": surface.main,
     # After `surface` because it measures the ribbon that stage drew, and before

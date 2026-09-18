@@ -19,20 +19,22 @@ and writes `carriageway_region.json`: R's rings, each territory's rings, and at 
 station every `station_m` along each edge — every published vertex among them —
 how far the territory reaches to the left and to the right and what ended it.
 
-🔴 **INERT at `P3-33b`.** Nothing reads the document yet — `export`'s inputs are
-an explicit list and this is not on it — so every published file must come out
-byte-identical with this stage in the chain. `P3-33c` is the first reader.
+`surface.py` is its reader (`P3-33c`, through `surface_region.py`): a level-0
+ribbon's rails are its territory's extents, and the rest of R is drawn as area.
+⚠️ `export`'s inputs are an explicit list and this document is not on it, so it
+never reaches the bundle; what does is what `surface.py` makes of it.
 
-🔴 **The seam is a cut in R, not in runs, and that is a decision** (`Q116`).
+🔴 **The seam is a cut in R by RECTANGLE, and that is a decision** (`Q116`).
 A crossing run has one owner, and its far half lies in the neighbour's rectangle
-where this build knows none of the centrelines it would compete with. So
-ownership of ASPHALT goes by rectangle: each region draws all of R inside its
-own rectangle — including the territory of a neighbour's run reaching in, which
-is why `foreign` territories are published here rather than dropped — and
-nothing outside it. Two rectangles share a line and nothing else, so there is no
-hole and no double-draw by construction, and the two builds never have to agree
-on a Voronoi. ⚠️ The price is an owned run whose far half has no territory in
-this document; `owned_past_rectangle_m` counts it.
+where this build knows none of the centrelines it would compete with. So R is
+cut to this region's own rectangle, and everything in it has an owner here — the
+neighbour's runs reaching in included, which is why `foreign` territories are
+published rather than dropped and why foreign runs cast rails. Two rectangles
+share a line and nothing else, so there is no hole and no double-draw by
+construction, and the two builds never have to agree on a Voronoi. What each
+build DRAWS of it is `surface_region.py`'s rule: a run's ribbon is its owner's,
+whole, and the rest of R is the rectangle's. ⚠️ The price is an owned run whose
+far half has no territory in this document; `owned_past_rectangle_m` counts it.
 
 ⚠️ **A second implementation of `tools/carriageway_region.py`, deliberately**, on
 `Q95`'s precedent: the tool grades the stage without being the stage, and its
@@ -69,6 +71,8 @@ from pipeline.config import (
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
+from pipeline.gltf import normalise
+from pipeline.polyline import plan_steps_2d
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 
 log = logging.getLogger(__name__)
@@ -259,7 +263,13 @@ def read_publishers(
 def _union(shapes: list[BaseGeometry]) -> BaseGeometry:
     if not shapes:
         return Polygon()
-    return shapely.union_all(shapely.make_valid(np.asarray(shapes, dtype=object)))
+    merged = shapely.union_all(shapely.make_valid(np.asarray(shapes, dtype=object)))
+    # 🔴 Polygons only. `make_valid` on a self-touching ring hands back a
+    # collection with the pinch left in as a line, the union is then a
+    # GeometryCollection, and every ray overlay against one is ~45x slower
+    # (measured 41.3 ms against 0.93 on the same geometry) with the same answer.
+    parts = [part for part in shapely.get_parts(merged) if part.geom_type == "Polygon"]
+    return shapely.multipolygons(parts) if len(parts) != 1 else parts[0]
 
 
 def _walk(plan: np.ndarray, pitch_m: float) -> tuple[np.ndarray, np.ndarray]:
@@ -271,7 +281,7 @@ def _walk(plan: np.ndarray, pitch_m: float) -> tuple[np.ndarray, np.ndarray]:
     the sign is load-bearing and `test_left_is_left_of_travel` pins it.
     """
     step = np.diff(plan, axis=0)
-    length = np.hypot(step[:, 0], step[:, 1])
+    length = plan_steps_2d(plan)
     live = length > 0.0
     step, length = step[live], length[live]
     start = plan[:-1][live]
@@ -401,7 +411,10 @@ def partition(
     cells[broken] = shapely.make_valid(cells[broken])
     out: list[Territory] = []
     for key, line in enumerate(lines):
-        shape = shapely.union_all(cells[owner == key]).intersection(whole)
+        cell = shapely.union_all(cells[owner == key])
+        # Clipped to the cell's box first: `clip_by_rect` is ~400x cheaper than an
+        # overlay, and a cell is a small window on a 27,000-vertex region.
+        shape = cell.intersection(shapely.clip_by_rect(whole, *cell.bounds))
         # Overlay leaves the odd line or point where a cell only grazes R.
         shape = _union([part for part in shapely.get_parts(shape) if part.geom_type == "Polygon"])
         out.append(Territory(line, shape))
@@ -436,7 +449,7 @@ def _station_frames(
     length = np.hypot(step[:, 0], step[:, 1])
     vertex_along = np.r_[0.0, np.cumsum(length)]
     total = float(vertex_along[-1])
-    unit = np.divide(step, length[:, None], out=np.zeros_like(step), where=length[:, None] > 0.0)
+    unit = normalise(step)
     # A repeated vertex has a zero segment; it takes its neighbour's heading.
     for index in range(len(unit)):
         if length[index] == 0.0:
@@ -480,6 +493,11 @@ def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m:
     hit = LineString([start, start + direction * max_m]).intersection(shape)
     if hit.is_empty:
         return 0.0
+    # Merged first: a territory can come back from GEOS as two parts that touch,
+    # and the ray across their seam is then two pieces end to end. Read piecewise
+    # it stopped at the seam — `e451` read 3.99 m or 6.545 m depending on which
+    # overlay built the shape, from rings identical on disk.
+    hit = shapely.line_merge(hit) if hit.geom_type == "MultiLineString" else hit
     origin = Point(start)
     for piece in shapely.get_parts(hit):
         if piece.geom_type == "LineString" and piece.distance(origin) < 1e-6:
@@ -499,12 +517,21 @@ def measure(
     along, points, left, vertex_station = _station_frames(territory.edge, station_m, inset_m)
     territory.along_m = [float(value) for value in along]
     territory.vertex_station = vertex_station
+    # 🔴 The kerb-to-kerb ray is cast against R CUT TO THIS EDGE'S WINDOW, never
+    # against R. Preparing a geometry indexes its predicates and does nothing for
+    # `intersection`, so every ray overlaid the whole 27,000-vertex region: 12 s
+    # of an 18.6 s stage, unrecorded, from the day the corridor was added. The
+    # window is the stations' box grown by the ray's cap, so no ray leaves it and
+    # the answer is the same to the byte. `whole` itself stays for `contains_xy`,
+    # which IS a predicate and IS prepared.
+    low, high = points.min(axis=0) - max_m - 1.0, points.max(axis=0) + max_m + 1.0
+    nearby = shapely.clip_by_rect(whole, low[0], low[1], high[0], high[1])
     for point, normal in zip(points, left, strict=True):
         for sign, reach_out, end_out, kerb_out in (
             (1.0, territory.left_m, territory.left_end, territory.left_kerb_m),
             (-1.0, territory.right_m, territory.right_end, territory.right_kerb_m),
         ):
-            kerb_out.append(_reach(point, sign * normal, whole, max_m))
+            kerb_out.append(_reach(point, sign * normal, nearby, max_m))
             if territory.shape.is_empty:
                 reach_out.append(0.0)
                 end_out.append(NONE)
@@ -659,7 +686,7 @@ def _document(
     }
 
 
-def read_region(path: Path, city_id: str, region_id: str) -> dict:
+def read_region(path: Path, region_id: str) -> dict:
     return read_document(path, REGION_SCHEMA, f"python -m pipeline.region --region {region_id}")
 
 
