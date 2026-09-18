@@ -23367,6 +23367,20 @@ knife-edge either way, and recorded so the next byte-diff does not rediscover it
 🚫 Declined from the review: `roads.simplify_mask` for `_stations_kept` (it is single-channel and
 the rails are judged jointly), and `geometry.wound_up` per triangle (undoes a vectorisation).
 
+🔴 **From the driving seat, 2026-09-18: a straight road broadened and shrank — and it was the MODEL,
+not the review's fix.** A territory bulges into every side-street mouth: the main road's Voronoi
+cell reaches into the opening as far as the bisector with the side street, so its extent there runs
+metres past the kerb line, and a rail that follows it drags the lane coordinate out and back.
+Measured on the published document: **123** share runs standing between two kerbed stations, **80 of
+them on 58 edges** bulging more than 0.5 m (p50 1.40 / p90 4.47 m), FLEMING ROAD `e264` by
+**11.63 m** over a 13.7 m opening. `surface_region.bridged` holds the rail to the straight line
+between the two bounding kerbs — `min` with the measured extent, so it only narrows and a road that
+really widens keeps its taper — and loses nothing, because the areas are `R − ribbons` and the mouth
+is drawn as the junction asphalt it is. ⚠️ A share run reaching an END of the edge is left alone: a
+carriageway shared with another centreline, or a junction the trim covers. ⚠️ The document is not
+rewritten; this is `surface.py`'s reading of it. Surface 79,790 → **79,981** triangles; fence,
+double whites and the roadmarks partition unmoved; `lane_paint` 148 → 151 edges.
+
 **Cameras** (`city_preview.tscn`, `--seconds=1 --shots=0.8 --debug-view=off --hud=off`), recorded
 because `Q19`'s were lost to a transcript: `hkcec` `--camera=235,45,265 --look=235,0,195` ·
 `street` `--camera=270,5.5,691 --look=30,4.5,719` · `grid` `--camera=760,40,765 --look=740,0,695`

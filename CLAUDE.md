@@ -464,6 +464,13 @@ Common emoji for this project:
   🔴 **An inserted station's rim is ASSIGNED its measured extent; `min` is for a DECK rim only.**
   `min(lerp, measured)` lets the lerp between the two end WEDGES win everywhere and drew `e709`
   1.2 m wide in a 6.5 m territory with every counter closing.
+  🔴 **A rail BRIDGES a side-street mouth along the kerb line (`surface_region.bridged`) and that is
+  not smoothing.** A territory bulges into every opening as far as the bisector with the side
+  street — 80 openings on 58 edges by over 0.5 m, FLEMING ROAD `e264` by 11.63 m — so a rail that
+  follows it makes a straight road broaden and shrink, which is how it was found: from the seat. A
+  share run between two kerbed stations is held to the line between them, `min` only; ⚠️ a share
+  run reaching an END of the edge is left alone (a shared carriageway has no second kerb), and ⚠️
+  `carriageway_region.json` is never rewritten — it is the measurement.
   🔴 **`rail_tolerance_m` is triangles, not tidiness**: every station is two carriageway triangles
   and four kerb strips — 226,824 unpruned against 79,790 — and ⚠️ **the areas are triangulated WHOLE,
   never per owner**, which cost 45k more for nothing.
