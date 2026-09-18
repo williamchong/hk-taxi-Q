@@ -174,3 +174,40 @@ def test_drawn_surface_reads_the_areas_as_cap_class() -> None:
     assert surface.height_at(2.0, 2.0) == pytest.approx(3.0)
     assert surface.cap_height_at(2.0, 2.0) == pytest.approx(3.0)
     assert not surface.covers(9.0, 9.0)
+
+
+class TestOpeningsAreBridged:
+    """A straight road must not broaden and shrink at every side street."""
+
+    def test_a_mouth_between_two_kerbs_is_held_to_the_kerb_line(self) -> None:
+        along = np.arange(0.0, 61.0, 10.0)
+        stations = _stations(
+            along,
+            [3, 3, 9, 11, 9, 3, 3],  # the territory bulges into a side street
+            [3] * 7,
+            vertices=[0, 6],
+            kerb_left=[1, 1, 0, 0, 0, 1, 1],
+        )
+        bridged = surface_region.bridged(stations)
+        assert bridged.left_m == pytest.approx([3.0] * 7)
+        assert bridged.right_m == pytest.approx([3.0] * 7)
+        assert stations.left_m[3] == 11.0  # the measurement is not rewritten
+
+    def test_it_only_ever_narrows(self) -> None:
+        stations = _stations(
+            [0, 10, 20], [4, 2, 4], [3, 3, 3], vertices=[0, 2], kerb_left=[1, 0, 1]
+        )
+        assert surface_region.bridged(stations).left_m == pytest.approx([4.0, 2.0, 4.0])
+
+    def test_the_line_follows_a_road_that_really_widens(self) -> None:
+        stations = _stations(
+            [0, 10, 20], [3, 12, 5], [3, 3, 3], vertices=[0, 2], kerb_left=[1, 0, 1]
+        )
+        assert surface_region.bridged(stations).left_m == pytest.approx([3.0, 4.0, 5.0])
+
+    def test_a_share_that_reaches_the_end_of_the_edge_is_left_alone(self) -> None:
+        # A carriageway shared with another centreline: no second kerb to bridge to.
+        stations = _stations(
+            [0, 10, 20], [3, 8, 8], [3, 3, 3], vertices=[0, 2], kerb_left=[1, 0, 0]
+        )
+        assert surface_region.bridged(stations).left_m == pytest.approx([3.0, 8.0, 8.0])

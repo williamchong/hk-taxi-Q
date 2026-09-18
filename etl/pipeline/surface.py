@@ -2426,6 +2426,9 @@ def _prepare(
     # rather than as a ceiling. A deck rim, where a level-0 edge ever carries
     # one, still cuts: the territory is a 2D plan and the deck is the structure.
     territory = stations is not None and len(stations.vertex_station) == len(half_widths)
+    if territory:
+        # The rails bridge a side-street mouth along the kerb line; see `bridged`.
+        stations = surface_region.bridged(stations)
     # The DECK rims go into the matrix and the territory is laid over them in
     # `_with_territory_stations`, once every station exists; `published_*` below
     # is provisional for a territory edge and `_publish_territory_table` replaces

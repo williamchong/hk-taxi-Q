@@ -31,7 +31,8 @@ levels and the cities that never build a region.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +68,47 @@ class Stations:
     left_kerb_m: np.ndarray
     right_kerb_m: np.ndarray
     vertex_station: np.ndarray
+
+
+def bridged(stations: Stations) -> Stations:
+    """The extents with every OPENING bridged along the kerb line either side of it.
+
+    🔴 **A territory bulges into every side-street mouth, and a rail that follows
+    it makes a straight road broaden and shrink** — found from the driving seat.
+    The main road's Voronoi cell reaches into the opening as far as the bisector
+    with the side street, so at the mouth its extent runs metres past the kerb
+    line: 80 openings on 58 Wan Chai edges by more than 0.5 m, FLEMING ROAD
+    `e264` by 11.63 m, and the lane coordinate stretches with it.
+
+    So where a run of stations ending in a SHARE stands between two that end at a
+    KERB, the rail may not pass the straight line between those two kerbs. It only
+    ever narrows — `min` with the measured extent — and nothing is lost: the
+    areas are `R - ribbons`, so the mouth is drawn as the junction asphalt it is.
+    ⚠️ A share run that reaches an END of the edge is left alone: that is a
+    carriageway shared with another centreline (GLOUCESTER ROAD), or a junction
+    the trim already covers, and there is no second kerb to draw the line to.
+    ⚠️ The published extents are untouched — `carriageway_region.json` is the
+    measurement, and this is `surface.py`'s reading of it.
+    """
+    sides = {}
+    for name, extent, kerb in (
+        ("left_m", stations.left_m, stations.kerb_left),
+        ("right_m", stations.right_m, stations.kerb_right),
+    ):
+        out = extent.copy()
+        at_kerb = np.flatnonzero(kerb >= 0.5)
+        for low, high in pairwise(at_kerb):
+            if high - low < 2:
+                continue
+            inner = np.arange(low + 1, high)
+            line = np.interp(
+                stations.along_m[inner],
+                stations.along_m[[low, high]],
+                extent[[low, high]],
+            )
+            out[inner] = np.minimum(extent[inner], line)
+        sides[name] = out
+    return replace(stations, **sides)
 
 
 @dataclass
