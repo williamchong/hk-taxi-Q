@@ -23540,3 +23540,127 @@ edges. `e657`'s arrows stood 1.5 m out of the lanes the shader paints, whatever 
 **See.** `Q94` for the row and the refusal this narrows · `Q95` for the unresolved band · `Q96` for
 the surveyed-frame lane snap · `Q106`/`Q107` for the drawn frame · `Q129` for why the level-0 ribbon
 is off-centre now.
+
+---
+
+## `Q131` — A kerb in the road is not the road's edge: seams, islands, and lines across the carriageway
+
+**Asked 2026-09-19, by the user, from the driving seat on EXPO DRIVE EAST `e659`:** *"why the road
+bends so much suddenly right before a junction?"* — with the car parked inside a kerbed wedge, and
+then a Street View frame of the same spot showing a small refuge island with a lane either side.
+
+### 🔴 What was wrong, and the first guess was not it
+
+Two things in the frame. The bending white line was the **debug overlay's centreline** — RN2 splays
+each carriageway into its node (`e659` turns 40° in its last 7.8 m), inside the junction trim, so no
+drawn geometry follows it. The wedge was real: at one station a territory extent read **2.61 m**
+between neighbours reading 7.56, the rail jumped 5 m into the carriageway and back, and the kerb
+strip was drawn along both flanks of it.
+
+⚠️ **The guess was a seam between two HyD polygons and it was refuted at this site**: HyD publishes
+nothing under HKCEC, so the stretch is the RAILS rule, and the ray had landed on `k1333` — a
+1.5 x 3 m kerb ring, a refuge, standing in the carriageway with a lane behind it. A cross-section
+stops at the first kerb. `opened` leaves inward features alone on purpose (`Q129`), so nothing
+downstream could take it back; ⚠️ and a second refuge 5 m further on was **paved over**, because no
+ray happened to land on it. One defect, both signs.
+
+Counted with a scratch heuristic over `carriageway_region.json` — an inward run of at most three
+stations reading more than 2 m under both neighbours — and each one classified by what the ray had
+stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not one.
+
+| What stopped the ray | Wan Chai | Causeway Bay |
+|---|---|---|
+| a HyD polygon boundary that is no hole (a seam, or HyD's real shape) | 18 | 4 |
+| an enclosed kerb ring | 7 | 4 |
+| a hole in a HyD polygon | 2 | 0 |
+| an open iB1000 line | 6 | 3 |
+| a TD painted line | 1 | 0 |
+| another territory, or unresolved | 3 | 3 |
+
+### ✅ What was built — three rules, one new config value
+
+- **`region._closed`, `carriageway_region.seam_m` (0.10)**: HyD tiles the carriageway and its tiles
+  do not always meet; a sliver 0.01-0.15 m across, straight over the road, is R's boundary and reads
+  as a kerb ON the centreline (LEIGHTON ROAD `e136` 0.00 m, VICTORIA PARK ROAD `e285` 1.00 m of
+  9.74). The union is closed — dilated and eroded, mitred — before anything reads it. **Swept, and
+  on a plateau**: Wan Chai adds 5.3 / 7.0 / 8.9 m² at 0.05 / 0.10 / 0.15 m in ~120 pieces none over
+  1.3 m², then 17.6 at 0.25 (one piece 8.4 m²) and 161 at 0.40; Causeway Bay 1.7 / 1.8 / 1.9, then
+  2.6 and 49.
+- **`region.islands_of`, `_through`**: a kerbed island — a HyD hole, or a closed kerb ring no other
+  kerb line touches — is read THROUGH. In the rails a ray passes it to the kerb behind (⚠️ only
+  where there is one inside `max_m`; otherwise the ring stays its answer) and the island is cut
+  back out of the strip. In `measure` an extent passes it **only where the ray comes out in its own
+  territory**: a median's nose has the other carriageway beyond it and stays a kerb.
+  🔴 **No new knob, and an area cap was built, swept and dropped.** Island areas run continuously
+  from 1 m² to a city block, and at 40 m² Causeway Bay's 24 m platform strips qualified and R grew
+  282 m². An island is what the ribbon's own two bars say: shorter than `rail_opening_m` (the
+  shortest feature a rail follows — a longer one is a median) and no wider than `lane_width_m` (a
+  wider one displaces a lane, and the ribbon is right to narrow). ⚠️ The corridor
+  (`left_kerb_m` / `right_kerb_m`) still stops at an island: a car does not drive through one.
+- **The across refusal, in `rails`**: a ray hit is refused where its line reaches this centreline
+  NEARER, along the road, than the hit stands off it — a line across a road is not that road's kerb.
+  TD's `RM1108` runs clean over GLOUCESTER ROAD `e380` (0.06 m). No angle is declared; it is per
+  station, so a kerb run that swings across the next mouth is untouched. 🔴 **Its larger effect was
+  not the pinch**: a side street with no kerb lines of its own had been reading the MAIN road's kerb
+  at long range where that line is carried across its mouth, and drew one side 8-16 m wide
+  (`e635`, `e744`, `e315`). Those are now unanswered and take the authored half-width.
+- **`surface_region`**: a ribbon now runs UNDER an island, so every island is ringed whole — riser
+  only — and topped with one slab at kerb height (`island_tops`). `carriageway_region.json` is
+  schema **4**: `region.islands`, and extents that no longer mean "the first kerb".
+- `tools/carriageway_region.py` carries its own seam closing, island finder (the tightest rectangle
+  swept by angle, where the stage walks the hull's edges) and across refusal. ⚠️ Its first closing
+  used `unary_union` over 414 slivers and GEOS **filled HyD's holes**, +9,010 m², silently;
+  `|stage - tool|` found it at 4,145 m² on one territory. A pairwise union does not.
+
+### Numbers
+
+- **Stage**: Wan Chai 122 seams / 7.02 m², **98** islands (703 m²) read through on **150** station
+  sides, **99** hits refused across; Causeway Bay 38 / 1.80 m², **45** (272 m²), **70**, **29**.
+  `|stage - tool|` max **0.025 m²** on both, as before.
+- **The heuristic**: Wan Chai 38 → **27** (over 3 m: 25 → 16); Causeway Bay 16 → **11** (11 → 6).
+  ⚠️ It is not monotone in anything — reading through one station of an island makes a new step
+  beside it — so it located the classes and does not grade the fix.
+- **R**: Wan Chai rails 48,582 → 48,176 m²; Causeway Bay 11,868 → 12,006 m², where the additions are
+  a lane behind a 16 m divider (`e75`) and a bus bay between two sawtooth platforms (`e72`) — asphalt
+  the old rays could not reach. ⚠️ **`silent_m[0]` rose 926 → 944 m and 270 → 273 m**: that is the
+  across refusal leaving sides unanswered, and it is the invented width coming back on exactly the
+  stub streets that had been reading somebody else's kerb.
+- **`tools/carriageway_region.py`** span against the ray survey, Wan Chai: |p90| 1.08 → **1.03 m**,
+  under 60 m 1.20 → **0.99**; mid-block kerb\|kerb on ray-measured 84.3 → 84.4%, on `authored`
+  19.8 → 19.8%. Causeway Bay |p90| 0.91 → 0.83, ray-measured 93.5 → 94.0%.
+- **Surface**: Wan Chai 87,343 → **92,610** triangles (+6.0%), area kerb 15,794 → 17,886 m;
+  Causeway Bay 26,742 → **31,355** (+17%), 4,064 → 4,823 m — 45 islands in a small region. The lip
+  strip is not drawn on an island (the top covers it), which saved 1,462 triangles on Wan Chai.
+- **`lane_paint.py --sweep`**, 3.00 m bar: Wan Chai **79 → 76** edges (1,120 → 1,098 m), Causeway
+  Bay 19 → 18. ⚠️ `e124`'s minimum fell 0.60 → 0.30 m — see Open.
+- **`paint_clearance.py`**: the gated `deeper than` column unchanged (boxes 0.01%, roadmarks
+  0.18 → 0.14%); `on kerb` for boxes 0.30 → 0.45% — box paint that crosses an island now has the
+  island's top over it, which is what is there.
+- **Fence**: Wan Chai 12 → **14** edges (`e315` HARBOUR ROAD, 15 m; `e744`, 12 m): dead-end stubs
+  with no kerb evidence whose corridor had been the long-range hit the across refusal removes;
+  at the authored 6.4 m a building stands in it. `reachability.py --refuse`: **0** routes lost, 0
+  detour. `clearance_reconcile` already failed its ratchet (`P3-33e`); published starved 27 → 28.
+- `roadmarks` by marking: one more double white line (98 → 99); the inferred join lost the
+  `e720`/`e774` HARBOUR ROAD pair (11 → 10, 172 → 169 m drawn) where a refused hit straightened a
+  6.45 m bump out of `e720`'s rail. Arrows, signs, lamps counters unchanged in kind.
+- **Frames**: `city_preview` `--camera=236,45,182 --look=236,0,182.5` (top-down) and
+  `--camera=228,9,160 --look=234,4,190`, each shot twice identical after a forced re-import: the
+  wedge gone, four straight lanes to the stop line, the refuge and the second island standing as
+  slabs. 2,447 tests, `check.sh` exit 0.
+
+### ⚠️ Open, and not this decision's
+
+- **`e124`**: the published centreline runs along the edge of a 9 m island ring, so one side reads
+  0.09 m. Too wide to be an island, too shallow to be a line across: it is a centreline registered
+  through a kerb, which is `Q19`'s candidate 1 and refuted there.
+- **HyD's own notches near nodes** (`e37`, `e426`, `e125`): the polygon really is that shape and the
+  centreline clips its corner. Not a seam — the gaps are metres, not centimetres.
+- The no-U-turn sign on `e659`'s refuge now registers to the median, not the island it was surveyed
+  on: `Ribbon.kerb_target` knows one kerb per side (`Q130`'s open item, same cause).
+- ⚠️ **The across refusal raises `silent_m[0]`.** A stub street with no kerb lines is drawn at its
+  authored width, which is honest and is also the invented width. `Q128`'s strip does not reach
+  them either.
+
+**See.** `Q129` for R, the rails rule and why `opened` leaves the inward classes alone · `Q57` for
+share-versus-corridor, which is why the corridor still stops at an island · `Q95` for the
+second-implementation rule · `Q19` for the centreline that cannot be moved.

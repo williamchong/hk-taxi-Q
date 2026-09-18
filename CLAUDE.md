@@ -505,6 +505,33 @@ Common emoji for this project:
   ratchet until `P3-33e` moves the grader; that is the ratchet working. ⚠️ Open and known:
   `lane_paint` 79 edges under 3.00 m since the rail filter (the mouths, and one-lane shares that paint no line),
   `paint_clearance` `deeper than` 7 on boxes. Numbers in `Q129`.
+- 🔴 **`region._closed`, `islands_of`, `_is_island`, `_through`, the across refusal in `rails`,
+  `carriageway_region.seam_m`, or `surface_region.island_tops` / `island_rings` (`Q131`): paste the
+  region stage's `R:`, `seams:` and `islands:` lines and the tool's `|stage - tool|` line, both
+  regions, before AND after — then the whole `P3-33c` battery in the bullet above, the fence line and
+  `reachability.py --refuse`.** A kerb IN the road is not the road's edge, and three rules say so.
+  🔴 **`seam_m` sits on a swept plateau (0.05-0.15 m, 5-9 m² on Wan Chai) and 0.25 is past it** — one
+  8.4 m² piece, then 161 m² at 0.40. It closes HyD's tiles, never a real gap; do not raise it to
+  clear a pinch. 🔴 **An island has NO knob of its own and an area cap is BUILT, SWEPT and DROPPED —
+  do not re-propose one**: areas run continuously from 1 m² to a city block, and 40 m² let Causeway
+  Bay's 24 m platform strips through. It is shorter than `rail_opening_m` and no wider than
+  `lane_width_m`, so ⚠️ **moving either of those moves which rings are islands**. 🔴 **An extent is
+  read through an island ONLY where the ray comes out in its own territory** — a median's nose has
+  the other carriageway beyond it — and `test_an_island_with_another_carriageway_behind_it_stays_a_kerb`
+  is the ratchet; mutation-check it. ⚠️ **`island_stations` is the counter that can fail** (150 / 70):
+  zero is every refuge a wedge across its lane again. ⚠️ **The corridor (`left_kerb_m` /
+  `right_kerb_m`) still STOPS at an island, on purpose** (`Q57`): a car does not drive through one.
+  🔴 **The across refusal is per STATION and declares no angle** — a hit is refused where its line
+  reaches this centreline nearer, along the road, than the hit stands off it — and ⚠️ its big effect
+  is not the pinch: a stub street with no kerb lines had been reading the MAIN road's kerb across
+  its own mouth. Refused, that side is unanswered, so **`silent_m[0]` rises (926 → 944 m) and that
+  IS the invented width**, and the fence gained `e315` and `e744`. 🔴 **A ribbon now runs UNDER an
+  island**, so `surface_region` rings every island whole (riser only — the top covers the lip) and
+  tops it; a reader that paints on a ribbon can now be under a slab, which is `paint_clearance`'s
+  `on kerb` column and not its gate. ⚠️ **The tool's closing must stay a PAIRWISE union**:
+  `unary_union` over the slivers filled HyD's holes, +9,010 m², with no error. ⚠️ The spike count in
+  `Q131` is a scratch heuristic and is not monotone in anything; it found the classes and grades no
+  fix. ⚠️ Open: `e124`, and HyD's own notches at nodes (`e37`, `e426`). Numbers in `Q131`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
   travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its
