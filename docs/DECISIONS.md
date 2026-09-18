@@ -23648,6 +23648,43 @@ stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not 
   wedge gone, four straight lanes to the stop line, the refuge and the second island standing as
   slabs. 2,447 tests, `check.sh` exit 0.
 
+### The width bar is waived for a ring a centreline runs through (2026-09-19)
+
+`islands_of` takes the centrelines, and a free-standing ring or HyD hole shorter than
+`rail_opening_m` is an island at ANY width where a centreline's length inside it is non-zero. No
+knob: the length bar stays and is what keeps out the four longer rings and city blocks the census
+found. `tools/carriageway_region.py::free_islands` restates it as a predicate (`crosses` /
+`within`) where the stage measures a length, so `|stage - tool|` still grades two routes. Two
+mutations, two failures (waive on width alone; never waive).
+
+- **Region**, Wan Chai: islands 98 → **101** (703 → 818 m² — `e785`'s is counted once per
+  publisher, the kerb ring and HyD's hole), `island_stations` 150 → **169**, rails 48,176 →
+  48,205 m², refused stations 20 → 18, `silent_m[0]` 944 → **940 m**; seams and across hits
+  unchanged. `|stage - tool|` p50 0.002, max **0.025 m²**, unchanged. Territories that move: `e124`,
+  `e785`, `e458` (0.4 m, the neighbour at the island), `e44` (0.02 m). **Causeway Bay: every file
+  byte-identical** but `city.json`'s `generated_utc`.
+- **`e785`** half-width 1.92 → **6.70 m**, `lanes_painted` 1 → 2, trim 8.37 → 11.66 m, clear width
+  3.84 → 12.21 m. **`e124`** the 0.30 m station → 9.39 m, clear width 10.28 → 12.97 m.
+- **Surface** 92,610 → **93,015** triangles; 98 → 101 islands ringed and topped; area kerb 17,886 →
+  17,903 m. `lane_paint` 3.00 m: **76 → 76** edges, 1,098 → 1,071 m, min strip 0.30 → **0.95 m**
+  (`e124` narrowest 0.30 → 2.92). `paint_clearance` gated `deeper than` unchanged (roadmarks 0.14%);
+  `box_extent` per box unchanged. Fence **14 → 14**, `fence.json` byte-identical, so
+  `reachability --refuse` has nothing new to refuse. Roadmarks `by marking` unchanged (−4 triangles
+  from the crease cut); arrows, signs, lamps counters unchanged; railings 9,630 → 9,626 m drawn, 4 m
+  more sliver — a fence on the island, registered to a rail that is no longer beside it
+  (`Ribbon.kerb_target`, already open). Throttle route 108–110 draws, 65 road chunks as before; no
+  before run of the route was taken.
+- **Frames**, `city_preview` top-down, each side a repeated hash after a forced re-import of the road
+  chunks: `--camera=1369,48,775 --look=1369,8,775.5` (`e785`: the strip of ribbon down the island
+  becomes a slab with asphalt both sides — and the user's Street View of 101 LEIGHTON ROAD shows that
+  splitter, the triangle beside it and the curved median, all three now standing) and
+  `--camera=1200,90,819 --look=1200,50,819.5` (`e124`: the two wedges close round an oval). 2,450
+  tests, `check.sh` exit 0.
+- ⚠️ **Left at `e785`**: one `RM1021` arrow stands 0.08 m inside the island's west edge and is now
+  half under the slab — it stood 0.24 m inside the ring before, drawn on the strip; the lane snap
+  put it there, not this rule. And with two painted lanes the markings shader draws its two-way
+  centre line on the 10 m of ribbon between the trims, beside an island that is itself the divider.
+
 ### ⚠️ Open, and not this decision's
 
 - **`e124` and `e785`: a free-standing ring WIDER than a lane that a centreline runs through.**
@@ -23669,10 +23706,7 @@ stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not 
   *building* in the corridor — 0.02–0.88 m available where 1.43–4.49 m was needed, 0 cleared — and
   says nothing about these. Nor would a shift help: since `P3-33c` the ribbon is its territory's
   rails and an off-centre centreline already draws correctly. What is open is the island rule's
-  width bar for a ring a centreline crosses. Dry-run in memory, nothing built: dropping that bar
-  for such a ring reads both sites through (`e785` 0.99 / 2.29 → 7.43 / 5.90 m, `e124`'s near-zeros
-  → 11–15 m), moves `e458` by 0.4 m, `e44` by 0.02 m and nothing else on Wan Chai, `silent_m[0]` 944 → 940 m, and
-  moves **no** Causeway Bay territory.
+  width bar for a ring a centreline crosses — **built the same day, above.**
 - **Single stations where HyD's polygon touches the centreline near a node** (`e37`, `e426`,
   `e125`): one station each reads ~0 on one side between neighbours reading metres — `e125` at
   10.0 m (0.15 m, a wedge between two HyD polygons, probably a painted gore), `e426` at 35.1 m
@@ -23682,6 +23716,16 @@ stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not 
   ribbon between two 5.5 m trims. A one-station inward-dip filter was considered and not built: it
   is a closing, which `opened` refuses on purpose (`Q129`), and from the numbers alone a
   one-station dip is what a genuinely short island looks like.
+- 🔴 **The shader's two-way centre line is an INVENTED double white line, and it follows the
+  rails** — found by the user as "broken short double white lines", then with a Street View of 103
+  LEIGHTON ROAD, a two-way road whose flows are divided by a BROKEN line. `road_markings.gdshader`
+  paints TD's `RM1001` double continuous line — *no overtaking* — at `U = lanes_forward` on every
+  two-way edge of two or more lanes, from no survey: the same `Q54` debit `Q118` switched
+  `draw_pair_join` off over, left on for `draw_centre_line`. And since `P3-33c` U runs rail to rail,
+  so where a territory's rails wobble the line wobbles with them (`e124`, a sawtooth across a turning
+  area), and it exists only on a ribbon, so between two junction trims it is a stub. TD publishes no
+  `RM1001` at `e124` or at `e785`'s island. Not this decision's and not new with it; what the
+  divider should be where no `RM1001` is surveyed is a decision to bring back.
 - The no-U-turn sign on `e659`'s refuge now registers to the median, not the island it was surveyed
   on: `Ribbon.kerb_target` knows one kerb per side (`Q130`'s open item, same cause).
 - ⚠️ **The across refusal raises `silent_m[0]`.** A stub street with no kerb lines is drawn at its

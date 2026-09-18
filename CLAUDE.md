@@ -531,11 +531,15 @@ Common emoji for this project:
   `on kerb` column and not its gate. ⚠️ **The tool's closing must stay a PAIRWISE union**:
   `unary_union` over the slivers filled HyD's holes, +9,010 m², with no error. ⚠️ The spike count in
   `Q131` is a scratch heuristic and is not monotone in anything; it found the classes and grades no
-  fix. ⚠️ Open: `e124` and `e785` — a free-standing ring WIDER than a lane with a centreline running
-  through it, which the width bar refuses although the same road runs both sides — and single
-  stations where HyD's polygon touches the centreline at a node (`e37`; `e426` and `e125` are inside
-  the junction trim and never drawn). ⚠️ **Neither is `Q19`**: that refuted one centreline shift for
-  edges with a building in the corridor and is not a rule that a centreline cannot move. Numbers in
+  fix. 🔴 **The width bar is WAIVED for a ring a centreline runs through** (`e785`, `e124`): "a wide
+  island displaces a lane" supposes the road is beside it, and with the centreline inside the same
+  road is on both sides. The LENGTH bar is not waived and is what keeps out the city blocks a
+  centreline also crosses; two tests, mutation-check both directions. The tool asks it as a
+  predicate where the stage measures a length — do not align them. ⚠️ Open: single stations where
+  HyD's polygon touches the centreline at a node (`e37`; `e426` and `e125` are inside the junction
+  trim and never drawn) — ⚠️ **not `Q19`**, which refuted one centreline shift for edges with a
+  building in the corridor and is no rule that a centreline cannot move; and 🔴 the shader's two-way
+  centre line, an invented `RM1001` that follows the rails and so zigzags and breaks. Numbers in
   `Q131`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
