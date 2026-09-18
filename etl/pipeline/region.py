@@ -371,6 +371,7 @@ def _is_island(ring: Polygon, max_length_m: float, max_width_m: float) -> bool:
 def islands_of(
     published: BaseGeometry,
     kerbs: list[LineString],
+    lines: list[Centreline],
     max_length_m: float,
     max_width_m: float,
 ) -> tuple[list[Polygon], np.ndarray]:
@@ -394,15 +395,32 @@ def islands_of(
     to narrow for it. ⚠️ And `measure` adds the geometric half: a ray is read
     through only where it comes out in ITS OWN territory. A median's nose has
     the other carriageway beyond it and stays a kerb whatever its size.
+
+    🔴 **The width bar is waived for a ring a centreline runs THROUGH.** "A wider
+    one displaces a lane" supposes the road is beside the ring. With the
+    centreline inside it the same road runs on both sides and there is nothing
+    to narrow round: CAROLINE HILL ROAD `e785` runs 13 m down the middle of a
+    3.8 m splitter, so its stations cast to the ring's INSIDE faces and the
+    ribbon drawn was a strip of the island; `e124` clips a 5.8 m oval and its
+    rail zigzagged round it. The length bar stays, so no knob is added, and it
+    is what keeps out the city blocks a centreline also crosses (`Q131`).
     """
+    crossing = STRtree([line.line for line in lines]) if lines else None
+
+    def standing(ring: Polygon) -> bool:
+        if _is_island(ring, max_length_m, max_width_m):
+            return True
+        if crossing is None or not _is_island(ring, max_length_m, np.inf):
+            return False
+        return any(
+            lines[key].line.intersection(ring).length > 0.0
+            for key in crossing.query(ring, predicate="intersects")
+        )
+
     found: list[Polygon] = []
     for part in shapely.get_parts(published):
         if part.geom_type == "Polygon":
-            found += [
-                hole
-                for ring in part.interiors
-                if _is_island(hole := Polygon(ring), max_length_m, max_width_m)
-            ]
+            found += [hole for ring in part.interiors if standing(hole := Polygon(ring))]
     is_island = np.zeros(len(kerbs), dtype=bool)
     if kerbs:
         tree = STRtree(kerbs)
@@ -410,7 +428,7 @@ def islands_of(
             if not kerb.is_ring or len(kerb.coords) < 4:
                 continue
             ring = Polygon(kerb)
-            if not _is_island(ring, max_length_m, max_width_m):
+            if not standing(ring):
                 continue
             # Free-standing: a ring another kerb line touches is a corner of the
             # pavement drawn as its own feature, and that IS the road's edge.
@@ -784,7 +802,7 @@ def build(
     # (9.4 m2 on Causeway Bay's `e79`).
     published = _closed(_union(list(polygons)), spec.seam_m, report)
     hyd = published.intersection(clip)
-    found, is_island = islands_of(published, kerbs, spec.rail_opening_m, lane_width_m)
+    found, is_island = islands_of(published, kerbs, lines, spec.rail_opening_m, lane_width_m)
     strip = rails(
         kerbs,
         published,
@@ -992,8 +1010,8 @@ def build_region(
         report.seams_closed_m2,
     )
     log.info(
-        "  islands: %d shorter than %.0f m and no wider than %.2f m (%.0f m2 in all), read "
-        "through on %d station sides",
+        "  islands: %d shorter than %.0f m and no wider than %.2f m, or any width with a "
+        "centreline through them (%.0f m2 in all), read through on %d station sides",
         report.islands,
         spec.rail_opening_m,
         city.roads.lane_width_m,

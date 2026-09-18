@@ -275,6 +275,36 @@ def test_a_long_island_is_a_median_and_the_rail_follows_it() -> None:
     assert min(owned[1].right_m) == pytest.approx(2.5)
 
 
+def test_a_wide_island_the_centreline_runs_through_is_read_through() -> None:
+    # CAROLINE HILL ROAD `e785`: a splitter wider than a lane with the centreline
+    # down its middle. The stations inside it cast to the ring's INSIDE faces and
+    # the ribbon drawn was a strip of the island.
+    kerbs = [
+        LineString([(-5, -8), (45, -8)]),
+        LineString([(-5, 8), (45, 8)]),
+        _refuge(14.0, -2.0, length=12.0, width=4.0),
+    ]
+    _, strip, owned, report = _build([], kerbs, [_line(1, [(0, 0), (40, 0)])])
+    assert report.islands == 1
+    assert owned[1].left_m == pytest.approx([8.0] * len(owned[1].left_m))
+    assert owned[1].right_m == pytest.approx([8.0] * len(owned[1].right_m))
+    assert strip.area == pytest.approx(40.0 * 16.0 - 48.0)
+
+
+def test_a_wide_island_beside_the_centreline_stays_a_kerb() -> None:
+    # The same ring with the centreline clear of it: it displaces a lane, and the
+    # ribbon is right to narrow for it. The waiver is for a ring the road is on
+    # BOTH sides of, never for width alone.
+    kerbs = [
+        LineString([(-5, -8), (45, -8)]),
+        LineString([(-5, 8), (45, 8)]),
+        _refuge(14.0, 2.0, length=12.0, width=4.0),
+    ]
+    _, _, owned, report = _build([], kerbs, [_line(1, [(0, 0), (40, 0)])])
+    assert report.islands == 0
+    assert min(owned[1].right_m) == pytest.approx(2.0)
+
+
 def test_a_line_across_the_road_is_not_its_kerb() -> None:
     # TD's edge line running clean across `e380`: the station beside it read a
     # kerb a hand's breadth off the centreline.

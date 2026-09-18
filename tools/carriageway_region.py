@@ -263,18 +263,30 @@ def _box_sides(ring: Polygon) -> tuple[float, float]:
 
 
 def free_islands(
-    published: BaseGeometry, kerbs: list[LineString], max_length_m: float, max_width_m: float
+    published: BaseGeometry,
+    kerbs: list[LineString],
+    lines: list[Centreline],
+    max_length_m: float,
+    max_width_m: float,
 ) -> tuple[list[Polygon], set[int]]:
     """Kerbed islands standing in the carriageway (`pipeline/region.islands_of`):
     HyD's holes and the line publishers' free-standing closed rings, shorter than
-    a rail follows and no wider than a lane. The second value is which kerb lines
-    a ray passes through when there is a kerb behind them."""
+    a rail follows and no wider than a lane — or any width where a centreline
+    runs through the ring, because the same road is then on both sides of it and
+    there is nothing to narrow round (`e785`, `e124`). The second value is which
+    kerb lines a ray passes through when there is a kerb behind them."""
 
     def small(ring: Polygon) -> bool:
         if not ring.is_valid or ring.is_empty:
             return False
         short, long = _box_sides(ring)
-        return long < max_length_m and short <= max_width_m
+        if long >= max_length_m:
+            return False
+        # ⚠️ Asked as a predicate where the stage measures a length: two routes
+        # to one answer, and `|stage - tool|` is what says they still agree.
+        return short <= max_width_m or any(
+            line.line.crosses(ring) or line.line.within(ring) for line in lines
+        )
 
     holes = [
         Polygon(ring)
@@ -437,7 +449,7 @@ def build_region(
             [part for part in shapely.get_parts(published) if part.geom_type == "Polygon"]
         )
     hyd = published.intersection(clip)
-    islands, through = free_islands(published, kerbs, *island_m) if island_m else ([], set())
+    islands, through = free_islands(published, kerbs, lines, *island_m) if island_m else ([], set())
     strip, silent, refused = kerb_strip(
         kerbs,
         published,

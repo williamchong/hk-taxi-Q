@@ -20,6 +20,7 @@ from carriageway_region import (
     Centreline,
     build_region,
     cross_sections,
+    free_islands,
     kerb_strip,
     territories,
 )
@@ -141,3 +142,20 @@ class TestWhereHydIsSilent:
         )
         assert strip.is_empty
         assert sum(silent.values()) == 0.0
+
+
+def test_the_width_bar_is_waived_only_for_a_ring_a_centreline_runs_through() -> None:
+    # The stage's rule restated (`pipeline/region.islands_of`): 4 m across is wider
+    # than a lane, so it is an island only with the road on both sides of it.
+    def ring(z: float) -> LineString:
+        return LineString([(14, z), (26, z), (26, z + 4), (14, z + 4), (14, z)])
+
+    empty = shapely.MultiPolygon()
+    lines = [_line(1, LINE)]
+    through = free_islands(empty, [ring(-2.0)], lines, 20.0, 3.2)
+    beside = free_islands(empty, [ring(2.0)], lines, 20.0, 3.2)
+    assert (len(through[0]), through[1]) == (1, {0})
+    assert beside == ([], set())
+    # The length bar is not waived: that is what keeps a city block out.
+    long = LineString([(5, -2), (35, -2), (35, 2), (5, 2), (5, -2)])
+    assert free_islands(empty, [long], lines, 20.0, 3.2) == ([], set())
