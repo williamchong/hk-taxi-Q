@@ -23381,6 +23381,56 @@ carriageway shared with another centreline, or a junction the trim covers. ⚠�
 rewritten; this is `surface.py`'s reading of it. Surface 79,790 → **79,981** triangles; fence,
 double whites and the roadmarks partition unmoved; `lane_paint` 148 → 151 edges.
 
+🔴 **The rest of "broadens and shrinks", measured before it was fixed — and the first fix was the
+wrong shape for most of it.** After `bridged`, inside the drawn ribbons, **626 sides / 3,030 m** of
+rail still stood more than 0.75 m OUTSIDE their own 20 m median and 499 / 2,196 m inside it. By what
+ended the cross-section: a KERB further away (lay-bys, bus bays, mouths of roads with no centreline),
+a SHARE reaching an edge end where `bridged` has no second kerb, a traffic island, and a short
+link's territory intruding. Three pieces, and the order they were found in is the record:
+
+1. **`opened` — a morphological opening of each rail over `rail_opening_m`** (running minimum, then
+   running maximum). It never widens, so a ribbon cannot be drawn over an island or a neighbour; it
+   leaves a monotone taper exactly alone; a bump of a window or longer survives as the carriageway
+   it is. 🔴 **Four guards, each from a build that was wrong**: (a) a run is where the rail stands
+   out by more than `kerb_width_m` — applied whole, the opening flattened centimetre jitter, moved
+   **33,400 m²** to area and cleared 27% of the kerb flags; and cut at a hair, jitter merges every
+   bump on an edge into one run that reaches both ends; (b) only stations clear of the two mouths
+   take part — an edge shorter than the window is, between its two wedges, one bump, and HENNESSY
+   ROAD `e0` (11 m) collapsed to its wedge with the lane centre on the centreline, which
+   `verify_road_graph` caught; (c) a bay has ROAD either side, a quarter-window of kept rail, or it
+   is the edge's own body; (d) a side let go of its kerb stops being a kerb, because the kerb strip
+   is drawn along the RAIL and would stand across the mouth of every bay.
+2. **The areas carry their own kerb** (`_kerb_lines`, `_draw_area_kerb`) — the gap `P3-33c` shipped
+   with: every junction corner was a flat edge onto the pavement, and (d) would have stripped the
+   bays too. The kerb is the boundary an area shares with R, less the region's own rectangle, 🔴
+   **less every stretch a ribbon's kerb already runs beside** — rails are simplified to 0.10 m, so a
+   sliver of area lies between almost every rail and R's true edge and the ring was **27.4 km**, most
+   of the region's kerb drawn twice — and simplified at the rails' tolerance (71 → 53 folded
+   triangles). ⚠️ Its codec value is a one-lane one-way KERB and never a bare class: "no lanes" means
+   a junction cap, and `verify_road_surface` refuses a kerb that says it. **15,794 m** on Wan Chai.
+3. **`flare_m` — the junction trim READ off the territory, where it was a radius guessed from
+   `width_m`.** The measurement said where the wobble was: of 351 bumping sides only **51** are 25 m
+   or more from a node. The rest is junction flare — bell-mouths, turning pockets — which no rail
+   filter should flatten: it is where the ribbon should not have started. Walking in from each node,
+   the first station where both sides sit within `kerb_width_m` of their median over the next
+   window; `_assign_trims` takes `max(radius, flare)` under its existing length ceiling.
+
+| Wan Chai, inside the drawn ribbons | as `P3-33c` shipped | now |
+|---|---|---|
+| outward wobble > 0.75 m | 626 sides · 3,030 m | **200 · 644 m** |
+| inward wobble > 0.75 m | 499 sides · 2,196 m | **165 · 570 m** |
+| `lane_paint` under 3.00 m | 151 edges · 2,030 m | **79 · 1,120 m** |
+| road surface | 79,981 tris | **87,343** (+ the corners' kerbs) |
+| throttle route `draws` t=1/3/6 | 108 / 107 / 108 | **108 / 108 / 110** |
+| fence · double whites | 13 · 102 | **12 · 98** |
+
+⚠️ `rail_opening_m` is AUTHORED — no publisher says how long a bay is — and its sweep is a trade
+curve that has flattened by 20 m (deep mid-block sides: 51 / 21 / **12** / 11 at 0 / 10 / 20 / 30),
+not a plateau. 🚫 The INWARD classes are deliberately left: closing a pinch is the widening the
+opening's first property refuses. ⚠️ Ends clamped by edge length rose 174 → **395**: more short
+edges are now all junction, which is what they are. ✅ 2,429 tests, `check.sh` 0, both regions, the
+`hkcec` camera shot twice and `cmp`'d (`build/driver/p333c/rails_hkcec_*`).
+
 **Cameras** (`city_preview.tscn`, `--seconds=1 --shots=0.8 --debug-view=off --hud=off`), recorded
 because `Q19`'s were lost to a transcript: `hkcec` `--camera=235,45,265 --look=235,0,195` ·
 `street` `--camera=270,5.5,691 --look=30,4.5,719` · `grid` `--camera=760,40,765 --look=740,0,695`

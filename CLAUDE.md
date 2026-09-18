@@ -471,6 +471,24 @@ Common emoji for this project:
   share run between two kerbed stations is held to the line between them, `min` only; ⚠️ a share
   run reaching an END of the edge is left alone (a shared carriageway has no second kerb), and ⚠️
   `carriageway_region.json` is never rewritten — it is the measurement.
+  🔴 **`opened`, `flare_m`, `_kerb_lines`, `_draw_area_kerb` or `rail_opening_m`: measure the wobble
+  INSIDE THE DRAWN RIBBONS before and after** (sides and metres standing > 0.75 m off their own 20 m
+  median, outward and inward apart — `Q129` has the script's shape), with `lane_paint`, the triangle
+  count, the fence and `by marking` lines. **Three pieces, and they are not interchangeable**: a BAY
+  mid-block is `opened` away (a morphological opening — it never widens, leaves a taper alone, and a
+  bump a window long is a carriageway); a FLARE near a node is never filtered, it is where the ribbon
+  should not have started, so `flare_m` reads the junction trim off the territory; and an AREA carries
+  its own kerb, or every corner is kerbless and every bay loses the kerb it had.
+  🔴 **`opened`'s four guards each come from a build that was wrong — do not "simplify" any away**:
+  a run is what stands out by more than `kerb_width_m` (whole, it moved 33,400 m² to area; cut at a
+  hair, jitter merges every bump into one run touching both ends); only stations clear of the mouths
+  take part (an 11 m edge is one bump between its wedges — `e0` collapsed and `verify_road_graph`
+  caught it); a bay needs a quarter-window of kept rail either side; and a side let go of its kerb
+  clears its kerb flag, because the strip is drawn ALONG THE RAIL. 🔴 **The area kerb excludes every
+  stretch within `kerb_width_m` of a ribbon's own kerbed rail** — rails are simplified, so a sliver
+  of area lies beside almost every one and the ring was 27.4 km of kerb drawn twice. ⚠️ Its codec
+  value is a one-lane one-way KERB, never a bare class: "no lanes" means a junction cap. 🚫 The INWARD
+  wobble (islands, an intruding link) is left on purpose — closing it is the widening `opened` refuses.
   🔴 **`rail_tolerance_m` is triangles, not tidiness**: every station is two carriageway triangles
   and four kerb strips — 226,824 unpruned against 79,790 — and ⚠️ **the areas are triangulated WHOLE,
   never per owner**, which cost 45k more for nothing.
