@@ -347,11 +347,12 @@ def _walk(plan: np.ndarray, pitch_m: float) -> tuple[np.ndarray, np.ndarray]:
     return points, np.column_stack([unit[:, 1], -unit[:, 0]])
 
 
-def _is_island(ring: Polygon, max_length_m: float, max_width_m: float) -> bool:
-    """Short enough that a rail should not follow it, narrow enough to stand
-    inside a lane pattern: the two sides of its tightest rectangle."""
+def _box_sides(ring: Polygon) -> tuple[float, float] | None:
+    """The short and long side of a ring's tightest rectangle — what `islands_of`
+    holds against a lane and against the shortest feature a rail follows. None
+    for a ring with no box to speak of."""
     if ring.is_empty or not ring.is_valid:
-        return False
+        return None
     # The tightest rectangle has a side along a hull edge, so: every hull edge's
     # frame, and the smallest box among them. ⚠️ Not `minimum_rotated_rectangle`,
     # which divides by zero on a ring that is already axis-aligned.
@@ -359,13 +360,13 @@ def _is_island(ring: Polygon, max_length_m: float, max_width_m: float) -> bool:
     step = np.diff(hull, axis=0)
     step = step[np.hypot(step[:, 0], step[:, 1]) > 0.0]
     if not len(step):
-        return False
+        return None
     unit = step / np.hypot(step[:, 0], step[:, 1])[:, None]
     along = hull @ unit.T
     across = hull @ np.column_stack([-unit[:, 1], unit[:, 0]]).T
     boxes = np.column_stack([np.ptp(along, axis=0), np.ptp(across, axis=0)])
-    sides = np.sort(boxes[np.argmin(boxes.prod(axis=1))])
-    return bool(sides[1] < max_length_m and sides[0] <= max_width_m)
+    short, long = np.sort(boxes[np.argmin(boxes.prod(axis=1))])
+    return float(short), float(long)
 
 
 def islands_of(
@@ -408,9 +409,12 @@ def islands_of(
     crossing = STRtree([line.line for line in lines]) if lines else None
 
     def standing(ring: Polygon) -> bool:
-        if _is_island(ring, max_length_m, max_width_m):
+        sides = _box_sides(ring)
+        if sides is None or sides[1] >= max_length_m:
+            return False
+        if sides[0] <= max_width_m:
             return True
-        if crossing is None or not _is_island(ring, max_length_m, np.inf):
+        if crossing is None:
             return False
         return any(
             lines[key].line.intersection(ring).length > 0.0
