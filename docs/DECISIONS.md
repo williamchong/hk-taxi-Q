@@ -21070,6 +21070,9 @@ drawable from a config row**: RM1002 and RM1003 break *one* of the two lines at 
 a per-line module the schema cannot say, and RM1004 publishes `LINES SPACING = VARIABLE`. In region
 that costs nothing — RM1002 and RM1003 are **absent** and RM1004 is **40.7 m**.
 
+🔴 **"Absent" is WRONG — corrected 2026-09-19, `Q132`.** It was read off `DTAD_RD_MARK_LINE`
+alone. TD files RM1002/RM1003 in `DTAD_RD_MARK_LINE_C`: 2,046 m + 2,165 m at grade in Wan Chai.
+
 ### 🔴 The 19,308 m headline was wrong, and `Q117` is corrected
 
 Two-thirds of it is on structure and outside this stage's reach:
@@ -23736,3 +23739,75 @@ mutations, two failures (waive on width alone; never waive).
 share-versus-corridor, which is why the corridor still stops at an island · `Q95` for the
 second-implementation rule · `Q19` for the one centreline shift that was measured — refuted for
 edges with a building in the corridor, and no rule about any other.
+
+---
+
+## `Q132` — The longitudinal lines come from TD's survey, and where TD is silent nothing is drawn
+
+**Asked 2026-09-19, by the user, looking at `e785` and `e124` after `Q131`**: the short broken
+double white lines are wrong — *"opposing flows are not always divided by a double white"*, with a
+Street View frame of 103 LEIGHTON ROAD showing a broken line. The line is `road_markings.gdshader`'s
+`draw_centre_line`: `P3-12`'s invention, RM1001's shape painted down the middle of every two-way
+ribbon with an even lane count, which `Q118` left standing when it switched off `draw_pair_join`.
+
+**Decided (the user's call): TD's codes are the source of truth, and where TD surveys no line the
+bundle draws none.** No inferred fallback. Task `P3-34`.
+
+**Measured before it was decided** (scratch scripts over the geodatabase, at grade, 2 m stations on
+two-way level-0 edges with `lanes >= 2`, clear of the 6 m fade — not yet a committed tool):
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| Edges the shader paints a centre line on | 70 | 42 |
+| Stations with a TD centre-family line in the ribbon, parallel within 30° | 739 of 1,168 (63.3%) | 736 of 996 (73.9%) |
+| … as `RM1104` WARNING LINE | 668 | 409 |
+| … as `RM1001` DOUBLE LINES | 69 | 158 |
+| … as `RM1103` CENTRE LINE | 0 | 148 |
+| … as `RM1002` / `RM1004` | 2 / 0 | 6 / 15 |
+| Edges fully / partly / not covered | 26 / 20 / 24 | 17 / 15 / 10 |
+| Offset of the TD line from the graph centreline, p50 / p90 | 0.25 / 1.63 m | 0.32 / 1.24 m |
+
+So where TD surveys the divider it is a **broken** line on 80-90% of it, and the shader's double
+continuous line — an instruction, *no overtaking* — is the wrong mark there.
+
+**What stands where TD is silent** (429 / 260 stations), which is what settled "nothing":
+
+- **No marking of any kind within 1.5 m of the middle on 94% / 84%**, and nothing in the whole ribbon
+  but kerbside yellow or edge lines on 85% / 49%. These are surveyed streets, not survey holes:
+  JARDINE'S CRESCENT ×3 carries its `RM1040`/`RM1041` and nothing else, HAVEN STREET `RM1040` on 27
+  of 27 silent stations, SUN CHUN STREET `RM1054` parking bays on 21 of 21. TD drew the kerbs and
+  drew no centre line.
+- **253 of Wan Chai's 429 are six edges with no marking at all** — `e143`, `e124`, SALVATION ARMY
+  STREET `e689`, JARDINE'S CRESCENT `e754`/`e755`/`e757`.
+- **16 of Wan Chai's 24 uncovered edges are 12-24 m junction links** (HARBOUR ROAD ×4, LOCKHART ROAD
+  ×3, FLEMING ROAD …) where no centre line is painted through a junction anyway.
+- **Where the middle IS occupied it is by something else** (24 / 42 stations): `RM1037` hatching and
+  a yellow box on MARSH ROAD `e529`, `ZIGZAGL`/`ZIGZAGR` on LAI TAK TSUEN ROAD `e47` (12 of 16),
+  `RM1127`/`RM1037` on DRAGON ROAD `e168`. An inferred line would run through all of them.
+- No edge in the uncovered list is a main two-way road missing its divider.
+
+**Corrected here.** `Q118` and `DATA_SOURCES.md` recorded RM1002/RM1003 as *absent in region*. They
+were looked for in `DTAD_RD_MARK_LINE` only; TD files the broken-line half of the family in
+`DTAD_RD_MARK_LINE_C` — 2,046 m + 2,165 m at grade in Wan Chai. A code's absence from one layer is
+not its absence from the geodatabase.
+
+**The sheets.** `RM1101`+ is a second drawing, `CT174/51-5(2)G`, in `Index Plan/(RM 1101 -
+1180).pdf`. Read at 600 dpi; the rows are quoted verbatim in `DATA_SOURCES.md`'s code table and
+live there only. `RM1104`, the line the user's frame shows, is 4000 MARK / 2000 GAP. ⚠️ `RM1107` (3,522 m at grade in Wan Chai)
+is the **lay-by / bus-stop / merging edge line**, not a lane line, and is out of the lane-line step.
+⚠️ **TD publishes whole runs, not dashes** — `RM1104` parts are p50 22.9 m — so the module is the
+sheet's and the dash PHASE is this project's; it starts at each part's first vertex and is counted.
+
+**Open, and step 2's to measure.** `RM1002`/`RM1003` name a LEFT and a RIGHT line, which means
+nothing without the part's digitised direction; whether TD digitises them consistently with travel
+is unmeasured, and a wrong guess puts the broken line on the side that may not cross — an
+instruction reversed, rendering perfectly. Until it is measured those two codes are refused and
+counted, not drawn.
+
+**Not decided here.** The hatched family `RM1035`-`RM1037` (≈5.8 km at grade in Wan Chai) and the
+zigzags are what actually stand in the middle at MARSH ROAD and LAI TAK TSUEN ROAD; they are a
+separate layer of work.
+
+**See.** `Q118` for the longitudinal host rule and the own-carriageway refusal these codes reuse ·
+`Q125` for the per-metre cut, the precedent for a shader yielding to geometry · `Q54` for why an
+inferred marking is a debit · `Q131` for `e785`/`e124`, where the stub and the sawtooth were seen.

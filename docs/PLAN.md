@@ -757,6 +757,26 @@ not kerb-to-kerb (`Q57`).
 - ⚠️ **What survives of the invented width is ~2% of the network** (926 m / 270 m): a side no kerb
   answers on, where HyD is also silent. It is drawn at `width_m` and counted, never widened.
 
+### `P3-34` The longitudinal lines from TD's survey (`Q132`)
+
+**Why.** The two-way centre line is `road_markings.gdshader`'s invention — RM1001's double
+continuous line on every two-way ribbon with an even lane count. TD surveys a centre-family line on
+63.3% / 73.9% of those stations and it is a **broken** line (`RM1104`, `RM1103`) on 80-90% of them.
+The user's call: TD's codes are the truth, and **where TD is silent nothing is drawn**.
+
+| Step | What | Evidence owed |
+|---|---|---|
+| `P3-34a` ✅ **2026-09-19** | **Record and transcribe.** `Q132`; both index-plan sheets read at 600 dpi and quoted in `DATA_SOURCES.md`; the *"RM1002/RM1003 absent"* claim corrected — they live in `DTAD_RD_MARK_LINE_C`. | The coverage and silent-station tables in `Q132`. |
+| `P3-34b` ⬜ | **`roadmarks.py` draws the broken single lines.** `road_marks` reads a LIST of layers (`carriageway_survey.lane_lines`' shape); rows for `RM1103` and `RM1104` (`RM1105` if a region carries it), `axis: longitudinal`, dashes cut ETL-side from each part's first vertex so `marking_paint.gdshader` does not move. New counter for the dash phase. `RM1002`/`RM1003` need a per-line module in `RoadMark` **and** a measurement of whether TD's digitised direction carries LEFT/RIGHT — refused and counted until it does. `RM1004` stays refused. | `roadmarks.json` partitions, `drawn_by_id`/`drawn_m_by_id` before and after — every existing row byte-identical, the new codes purely additive; `host_off_carriageway`, `no_host_on_axis`; `paint_clearance.py`; both regions; schema bump. |
+| `P3-34c` ⬜ | **The shader yields: `draw_centre_line` → 0.** Nothing inferred replaces it. Fixes the sawtooth on `e124` and the stub beside `e785`'s island. ⚠️ `lanes_forward`'s centre field stays in the codec, as `centre_at` did (`Q118`). | `roads.glb` byte-identical; frames twice a side at 103 LEIGHTON ROAD, `e124`, `e785`, MARSH ROAD `e529` (hatching) and JARDINE'S CRESCENT (nothing). |
+| `P3-34d` ⬜ | **Lane lines, the same way — its own task.** `RM1101`/`RM1102` (12,347 m at grade in Wan Chai) against the shader's dashes on every edge; retires `lanes_painted` as a PAINT input and changes what `lane_paint.py` asks. ⚠️ **Not `RM1107`** — that is the lay-by / bus-stop edge line. Decide first what a one-way street with no surveyed lane line shows; `Q132`'s rule says nothing. | Coverage of the shader's lane lines measured FIRST, as `Q132` did for the centre line; triangle and draw-call price on the throttle route. |
+
+- **Deps:** `a` → `b` → `c`; `d` after `c`.
+- ⚠️ **Not in scope, named so it is not lost**: `RM1035`-`RM1037` hatching (≈5.8 km at grade in Wan
+  Chai) and `ZIGZAGL`/`ZIGZAGR` — what actually stands in the middle where a centre line gives way.
+- ⚠️ The measurement behind `Q132` is a scratch script. If `b`'s counters do not reproduce its
+  coverage from inside the stage, it becomes a `tools/` grader before `c` ships.
+
 ### Build `B1` — "One fare" — **runs second**
 
 | ID | Deliverable | Accept |
