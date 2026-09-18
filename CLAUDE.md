@@ -405,11 +405,11 @@ Common emoji for this project:
   inside the junction guard ends in a share by geometry — and quote the ray-measured row beside it
   as the control (84.3% / 93.5% kerb|kerb against 19.8% / 25.6% on `authored`).
   🔴 **Where HyD is silent the rule is RAILS, not faces, and that is measured**: the line publishers'
-  kerbs do not close (24 faces, 0.3% of the length, against 14.0% silent — GLOUCESTER ROAD's main
+  kerbs do not close (24 faces, 0.3% of the length, against 13.5% silent — GLOUCESTER ROAD's main
   carriageway and all of HKCEC). Do not re-propose polygonising them. ⚠️ **R is cut to the region's
   own rectangle**: unclipped, asphalt the graph does not reach is handed to the nearest edge (6.8%
   orphan, one piece 228 m from its owner). ⚠️ **`silent_m[0]` is the only place R is not read from a
-  publisher** — the graph's `width_m`, 2.1% / 2.2% of the length — so a rise there is the invented
+  publisher** — the graph's `width_m`, 2.0% / 2.2% of the length — so a rise there is the invented
   width coming back. 🔴 **Its normal is RIGHT of travel like `carriageway._stations`, but here the
   sign is load-bearing**: every printed figure is a sum or a sorted pair, so the first build had the
   sides swapped with no table moved. `test_left_is_left_of_travel` is the ratchet; mutation-check it.
@@ -418,6 +418,22 @@ Common emoji for this project:
   the fix. ⚠️ `shapely>=2.1` is a real floor: `voronoi_polygons(ordered=True)` is what maps a cell
   to its owner. 🚫 **A territory span is a SHARE and never a `width_m`** (`Q57`). It grades rather
   than checks and exits 0. Numbers in `Q129`.
+  🔴 **`pipeline/region.py` is its SECOND implementation and the duplication is deliberate**
+  (`Q95`'s precedent): paste the stage's three log lines and the tool's `|stage - tool|` line, both
+  regions. They share I/O and no method, agree to **0.025 / 0.014 m²** per territory, and a
+  divergence is a finding — the first one was the stage casting a rail from every run cut at the
+  rectangle. ⚠️ **Do not "fix" it by importing one into the other.** 🔴 **Silence is asked of the
+  publisher's UNION, never of the clipped one, and with `intersects`, never `contains`**: a cut run
+  ends ON the clip line and a station can stand ON HyD's own edge, and either read as silent casts a
+  rail from a road HyD drew. 🔴 **The seam is a cut in R, not in runs**: each region draws all of R
+  inside its own rectangle, a neighbour's run included, so `foreign` territories are PUBLISHED and
+  foreign runs cast rails — dropping them is a hole neither build draws. ⚠️ **Extents are indexed by
+  `roadgraph.json`'s own vertices, repeats included**, as `carriageway[]` is; ⚠️ an END vertex is
+  measured half a sample in from its node, because at the node it reads zero on a good road.
+  ⚠️ **The stage's `ends` block is per VERTEX and is not `Q129`'s table** — vertices cluster at
+  nodes — so never quote one for the other. ⚠️ Inert until `P3-33c`: prove a change to it by
+  hashing `etl/out/<region>/` through `--from region`, where only `city.json`'s `generated_utc` may
+  differ.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
   travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its

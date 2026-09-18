@@ -23189,9 +23189,9 @@ not in this reference, for `width_evidence.MEASURED`'s reason.
 | R, by level-0 centreline length | Wan Chai (45.2 km) | Causeway Bay (12.4 km) |
 |---|---|---|
 | on HyD's polygons | 86.1% · 276,925 m² | 87.4% · 74,627 m² |
-| HyD silent, a kerb line on both sides | 9.2% | 6.1% |
-| HyD silent, on one side | 2.7% | 4.3% |
-| HyD silent, on neither — **the graph's `width_m`** | **2.1%** (934 m) | **2.2%** (275 m) |
+| HyD silent, a kerb line on both sides | 8.9% | 5.1% |
+| HyD silent, on one side | 2.5% | 4.2% |
+| HyD silent, on neither — **the graph's `width_m`** | **2.0%** (926 m) | **2.2%** (270 m) |
 | orphan territory (pieces not touching their owner) | 0.9% on 99 edges | 0.8% on 23 |
 | owned centreline past the rectangle R is cut to | 200 m | 141 m |
 
@@ -23201,7 +23201,7 @@ So **the invented width survives on about 2% of the network**, against 46.5% of 
 
 1. **The closed faces of the kerb linework as R where HyD is silent** — the plan's own first rule.
    The line publishers' kerbs do not close: polygonised at a 5 cm snap they offer **24** faces a
-   silent Wan Chai centreline runs through, **0.3%** of the length, where HyD is silent under 14.0%
+   silent Wan Chai centreline runs through, **0.3%** of the length, where HyD is silent under 13.5%
    — GLOUCESTER ROAD's main carriageway (`e382`, `e383`, which the *ray* survey measured at 13–15 m)
    and the whole of HKCEC. A ray does not need a closed face, so the rule is rails.
 2. **R unclipped.** The publishers are read past the rectangle and the graph is not, so the asphalt
@@ -23218,13 +23218,57 @@ so `coverage_union_all` raises too. 🔴 **And the first build had left and righ
 table unmoved**, because every figure here is a sum or a sorted pair. `R1` publishes the two extents
 apart; `test_left_is_left_of_travel` fails on the swap and was mutation-checked.
 
+### ✅ `P3-33b` — the stage, inert, and what its second implementation caught on the first run
+
+`pipeline/region.py` runs between `carve` and `surface` and writes `carriageway_region.json`: R's
+rings, every territory's rings, and per **published vertex** — `roadgraph.json`'s own numbering,
+repeats included, as `carriageway[]` is indexed — how far the territory reaches left and right and
+what ended it. An end vertex is measured half a sample in from its node: the node is on the boundary
+of every territory meeting there, so a cross-section *at* it reads zero on a good road. Config is
+`carriageway_region: {sample_m, rail_m}`, both **resolutions**; the rails' cap and refusal are
+`carriageway_survey.width_bounds`' `max_m` and `hard_min_m`, read from that block so the region and
+the ray survey cannot sit on two bars. **4.7 s** on Wan Chai, 3.3 s on Causeway Bay.
+
+✅ **Inert, proven by hash**: with the stage in the chain, `--from region` reproduces all 230 Wan
+Chai files and all 196 Causeway Bay files byte for byte, `city.json` differing in `generated_utc`
+alone (confirmed by re-exporting and diffing it against itself). `export`'s inputs are an explicit
+list and the new document is not on it.
+
+🔴 **The seam is a cut in R, not in runs — decided here, and it is the opposite of the plan's
+worry.** The plan expected two builds to need the *same Voronoi* near the shared line. They do not:
+ownership of **asphalt** goes by rectangle. Each region draws all of R inside its own rectangle,
+including the territory of a neighbour's run reaching in — so `foreign` territories are published
+(1,436 / 1,168 m²), and foreign runs cast rails too — and nothing outside it. Two rectangles share a
+line and nothing else, so there is no hole and no double-draw by construction. ⚠️ The price: an owned
+run's far half has no territory in its owner's document (200 / 141 m), and `P3-33c` has to fill
+`carriageway[]` for those vertices from something — the ribbon they have today is the candidate.
+⬜ What `join_seam.py` should check is therefore not an area sum but that R's two builds **agree along
+the shared line** (R ∩ line as intervals, from each side); HyD's half is one file read twice, the
+rails' half is two casts.
+
+🔴 **`|stage − tool|` found a defect in the stage on its first run, which is the argument for keeping
+two.** Territory area agreed to p50 0.002 m² and disagreed by **9.4 m²** on Causeway Bay's `e79`
+(2.3 on Wan Chai). A run cut at the rectangle ends *on* the clipped HyD boundary, where `contains` is
+false, so every such end read as HyD-silent and cast a 2 m rail out to a kerb line the polygon stops
+short of; the tool skipped those lines by an unrelated shortcut. Two fixes, both sides: **silence is
+asked of the publisher's union and never of the clipped one**, and a station on the publisher's own
+edge is covered (`intersects`, not `contains`). After: max **0.025 / 0.014 m²**, totals 324,071.3
+against 324,071.4 m². ⚠️ It moved `Q129`'s composition table — silent 14.0 → **13.5%** / 12.6 →
+**11.4%** — and the figures above are the corrected ones; the span and end-pair tables did not move.
+
+⚠️ **The stage's `ends` block is per published VERTEX and is not the finding.** Vertices cluster at
+nodes and bends, where a cross-section ends in a share by geometry: `authored` reads 15.1% kerb|kerb
+there against the tool's mid-block 19.8%. Same walk, different weights — do not quote one for the
+other (`Q57`). ⚠️ The document is **9.2 MB** on Wan Chai (2.4 on Causeway Bay): territory boundaries
+carry a vertex per Voronoi site. It is under `etl/out/` and not in the bundle, so it is a build-time
+cost only, and coarsening it is `P3-33c`'s call once there is a reader to say what it needs.
+
 ### What this does NOT decide
 
 🚫 **`width_m` does not move.** A territory's span is a *share* and not kerb-to-kerb, so publishing
 it as a width is `Q57`'s generalisation; lanes, the arrow snap and `e99`'s carve prism keep `Q128`'s
 five sources. 🚫 Levels ±1 keep their ribbons: every publisher here is a 2D plan that reads the
-street under a deck (`Q103`), and `Q107`'s rim clamp already cuts those. ⬜ The seam — 200 and 141 m
-of owned run past the rectangle — is `P3-33b`'s, with `join_seam.py` gaining an area check.
+street under a deck (`Q103`), and `Q107`'s rim clamp already cuts those. ✅ The seam was decided at `P3-33b`, above.
 ⬜ Whether a city drawn at its true widths plays well is the user's drive (`P3-33f`), not a grader's.
 
 **Reproduce:** `.venv/bin/python tools/carriageway_region.py --region wan_chai` (7 s, of which 2.6 s

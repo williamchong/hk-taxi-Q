@@ -446,6 +446,7 @@ hk-taxi-Q/
 │   │   ├── boxsource.py         # the box reader both boxjunctions.py and surface.py use (P3-32)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
+│   │   ├── region.py           # level-0 carriageway as a region, one territory per centreline (P3-33b, Q129) — inert until P3-33c
 │   │   ├── railings.py          # published railings → railings.glb + railings_placements.json (P3-19, P5-5)
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
@@ -454,7 +455,7 @@ hk-taxi-Q/
 │   │   ├── lamps.py             # published lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
 │   │   ├── placements.py        # a prop library's stands: entry shape, pitch, drawn totals, writer (P5-3, P5-4)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
-│   │   └── __main__.py          # `python -m pipeline` — 19 stages, in order
+│   │   └── __main__.py          # `python -m pipeline` — 20 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
 │   ├── out/<region>/            # pipeline output — GITIGNORED
 │   └── tests/

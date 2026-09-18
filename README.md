@@ -71,7 +71,7 @@ already made without it is repaired by `git lfs install && git lfs pull`. You al
 Python 3.11+.
 
 **Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
-whole region rebuilds in about 27 seconds across 19 stages. Output is gitignored build artefact, not
+whole region rebuilds in about 27 seconds across 20 stages. Output is gitignored build artefact, not
 source, so a fresh clone has none of it until you do this:
 
 ```bash
