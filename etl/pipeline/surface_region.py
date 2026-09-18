@@ -111,6 +111,138 @@ def bridged(stations: Stations) -> Stations:
     return replace(stations, **sides)
 
 
+# How far a rail may be let go of its kerb before that kerb stops being drawn
+# along it. Above the document's millimetre rounding, below anything a kerb is.
+_OFF_KERB_M = 0.05
+
+
+def opened(stations: Stations, window_m: float, bump_m: float) -> Stations:
+    """The extents with every outward bump SHORTER than `window_m` taken off.
+
+    🔴 **A ribbon carries the lane coordinate, so its rail has to be the road's
+    running kerb line and not everything the territory reaches.** After
+    `bridged`, 467 mid-block sides on Wan Chai still stood more than 0.75 m off
+    their own 20 m median, and two classes of it are outward: a cross-section
+    that ends at a KERB further away — a lay-by, a bus bay, the mouth of a road
+    with no centreline (164 sides, ~958 m) — and a SHARE that bulges where
+    `bridged` has no second kerb to draw a line to (141 sides, ~872 m).
+
+    A morphological OPENING of each side along the road: the running minimum
+    over `window_m`, then the running maximum of that. Three properties, and
+    they are why it is this and not a smoother:
+
+    * it **never widens** — the result is `<=` the measured extent everywhere, so
+      a ribbon cannot be drawn over an island or over a neighbour's ribbon;
+    * it **leaves a monotone taper exactly alone**, so a road that really widens
+      keeps its shape, and so does the wedge a territory pinches to at its node;
+    * a bump of `window_m` or longer survives whole — that is a carriageway, not
+      a bay.
+
+    Nothing is lost: the areas are `R - ribbons`, so what the rail lets go of is
+    drawn as the asphalt it is. ⚠️ The INWARD classes — a traffic island (90
+    sides), a short link's territory intruding (72) — are deliberately not
+    touched: closing them would be the widening the first property refuses.
+
+    🔴 **A side let go of its kerb stops being a kerb.** The flag drives the kerb
+    strip, which is drawn ALONG THE RAIL: left set, a riser would stand across
+    the mouth of every bay this straightens past.
+    """
+    if window_m <= 0.0 or len(stations.along_m) < 3:
+        return stations
+    # 🔴 **Only the stations clear of the two MOUTHS take part.** A territory
+    # pinches to a wedge at each node, so an edge shorter than the window is, end
+    # to end, one bump — and the first build collapsed HENNESSY ROAD `e0`, 11 m
+    # long, to its wedge width with the lane centre on the centreline. Inside
+    # half a median span of either node the extent is the junction's business and
+    # the trim's, and it is left exactly as measured.
+    reach = 0.5 * float(np.median(stations.left_m + stations.right_m))
+    inner = np.flatnonzero(
+        (stations.along_m >= reach) & (stations.along_m <= stations.along_m[-1] - reach)
+    )
+    if len(inner) < 3:
+        return stations
+    along = stations.along_m[inner]
+    low = np.searchsorted(along, along - window_m / 2.0, side="left")
+    high = np.searchsorted(along, along + window_m / 2.0, side="right")
+
+    def sliding(values: np.ndarray, pick) -> np.ndarray:
+        return np.array([pick(values[a:b]) for a, b in zip(low, high, strict=True)])
+
+    changed = {}
+    for extent_name, kerb_name in (("left_m", "kerb_left"), ("right_m", "kerb_right")):
+        whole = getattr(stations, extent_name)
+        extent = whole[inner]
+        lower = np.minimum(sliding(sliding(extent, np.min), np.max), extent)
+        # 🔴 **Per BUMP, and only a bump standing out by more than `bump_m` at its
+        # peak.** An opening flattens every outward feature, centimetre kerb
+        # jitter included: applied whole at 30 m it moved 33,400 m2 of Wan Chai
+        # from ribbon to area and cleared 27% of the kerb flags, for bumps that
+        # total ~3,000 m2. A run is let go WHOLE or kept whole, so a rail never
+        # flickers between the two inside one bay.
+        rail = extent.copy()
+        # ⚠️ A run is where the rail stands out by more than the BAR, not by more
+        # than a hair: kerb jitter puts almost every station a few centimetres
+        # over its opening, so runs cut at a hair merge every bump on the edge
+        # into one that reaches both ends — and the guards below then skip it.
+        over = extent - lower > bump_m
+        starts = np.flatnonzero(over & ~np.r_[False, over[:-1]])
+        stops = np.flatnonzero(over & ~np.r_[over[1:], False]) + 1
+        for start, stop in zip(starts, stops, strict=True):
+            # 🔴 A bay has ROAD either side of it. A run reaching an end of the
+            # interior is the edge's own body standing between its two wedges —
+            # which on an edge shorter than the window is the whole edge — and an
+            # opening cannot tell the two apart, so this does.
+            # ⚠️ And "road" is a quarter of a window of kept rail, not one station:
+            # what is left of a wedge inside the interior is a station or two at
+            # each end, and a body standing between two of those is still a body.
+            if start == 0 or stop == len(extent):
+                continue
+            flank = window_m / 4.0
+            if along[start] - along[0] < flank or along[-1] - along[stop - 1] < flank:
+                continue
+            rail[start:stop] = lower[start:stop]
+        out, kerb = whole.copy(), getattr(stations, kerb_name).copy()
+        out[inner] = rail
+        kerb[inner] = np.where(rail < extent - _OFF_KERB_M, 0.0, kerb[inner])
+        changed[extent_name], changed[kerb_name] = out, kerb
+    return replace(stations, **changed)
+
+
+def flare_m(stations: Stations, window_m: float, bump_m: float) -> tuple[float, float]:
+    """How far in from each node this territory is still the JUNCTION's shape.
+
+    🔴 **A carriageway widens toward a junction — a bell-mouth, a turning pocket —
+    and that is not a bump to filter, it is where the ribbon should not yet have
+    started.** Of 351 Wan Chai sides bumping > 0.75 m off their own median, 300
+    do it within 25 m of a node, where `opened` rightly refuses to flatten
+    anything. The junction trim was a radius guessed from `width_m`; this is the
+    same distance READ: walking in from the node, the first station where both
+    sides sit within `bump_m` of their own median over the next `window_m`. Past
+    it the lane lines run parallel; before it the asphalt is junction, and the
+    areas draw it.
+
+    `(from the start, from the end)`, in metres; zero where the edge is settled
+    from its first station. The caller caps it — an edge that never settles is
+    all junction, which `junction_trim_max_fraction` already has a rule for.
+    """
+    along = stations.along_m
+    total = float(along[-1])
+
+    def settled(index: int, forward: bool) -> bool:
+        if forward:
+            ahead = (along >= along[index]) & (along <= along[index] + window_m)
+        else:
+            ahead = (along <= along[index]) & (along >= along[index] - window_m)
+        return all(
+            abs(side[index] - float(np.median(side[ahead]))) <= bump_m
+            for side in (stations.left_m, stations.right_m)
+        )
+
+    start = next((i for i in range(len(along)) if settled(i, True)), len(along) - 1)
+    end = next((i for i in reversed(range(len(along))) if settled(i, False)), 0)
+    return float(along[start]), total - float(along[end])
+
+
 @dataclass
 class Region:
     whole: BaseGeometry
@@ -179,8 +311,14 @@ def areas(
     ribbons: list[np.ndarray],
     centrelines: dict[Key, np.ndarray],
     rails: list[np.ndarray],
-) -> np.ndarray:
-    """`R - ribbons` as `(n, 3, 3)` triangles, each wound to face up.
+    high: tuple[float, float] | None = None,
+    kerbed: list[np.ndarray] | None = None,
+    kerb_width_m: float = 0.0,
+    tolerance_m: float = 0.0,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """`R - ribbons` as `(n, 3, 3)` triangles, each wound to face up — and the
+    KERB LINES of it: `(N, 3)` polylines along every stretch of R's own boundary
+    that an area meets, walked with the road on the RIGHT.
 
     `ribbons` are the plan outlines of every level-0 ribbon, the neighbour's
     included; `centrelines` the `(N, 3)` polyline each owner's height is read
@@ -213,7 +351,7 @@ def areas(
         if part.geom_type == "Polygon" and part.area > _MIN_PIECE_M2
     ]
     if not pieces:
-        return np.zeros((0, 3, 3))
+        return np.zeros((0, 3, 3)), []
     # 🔴 **Triangulated WHOLE, not per owner.** Cut by territory first, every
     # boundary between two owners arrives carrying a vertex per Voronoi site —
     # 272,248 triangles on Wan Chai where the surface it replaces had 32,177 —
@@ -224,7 +362,7 @@ def areas(
     )
     plan = np.asarray([np.asarray(tri.exterior.coords)[:3] for tri in triangles])
     if not len(plan):
-        return np.zeros((0, 3, 3))
+        return np.zeros((0, 3, 3)), []
 
     # One height per plan position: the mean of every owner whose territory
     # reaches it, so two owners at different heights meet in a shared vertex
@@ -260,4 +398,80 @@ def areas(
     x, z = out[:, :, 0], out[:, :, 2]
     twice = (x * np.roll(z, -1, axis=1) - np.roll(x, -1, axis=1) * z).sum(axis=1)
     out[twice > 0.0] = out[twice > 0.0][:, ::-1]
+    clip = shapely.box(0.0, 0.0, *high) if high is not None else None
+    drawn_kerbs = (
+        shapely.union_all([shapely.LineString(run) for run in kerbed if len(run) >= 2]).buffer(
+            kerb_width_m
+        )
+        if kerbed and kerb_width_m > 0.0
+        else None
+    )
+    return out, _kerb_lines(
+        region.whole, shapely.multipolygons(pieces), clip, drawn_kerbs, keys, flat, tolerance_m
+    )
+
+
+def _kerb_lines(
+    whole: BaseGeometry,
+    rest: BaseGeometry,
+    clip: BaseGeometry | None,
+    drawn_kerbs: BaseGeometry | None,
+    keys: np.ndarray,
+    heights: np.ndarray,
+    tolerance_m: float = 0.0,
+) -> list[np.ndarray]:
+    """Where an area meets R's own boundary: a kerb no ribbon draws.
+
+    🔴 **A ribbon draws the kerb along its own rail and an area had none**, so
+    every junction corner was a flat edge onto the pavement — and every bay a
+    rail is `opened` past would lose the kerb it had. The boundary the areas
+    share with R is exactly the kerb line the ribbons do not cover: where an
+    area meets a ribbon the boundary is interior to R, and is not here.
+
+    ⚠️ The region's own rectangle is a cut and not a kerb, so its edges are
+    taken out. Each line is walked with the road on its RIGHT, so `surface.py`
+    builds it as it builds a ribbon's left kerb, outward being left of travel.
+    Heights are the areas' own, by plan position, so riser and asphalt share
+    their foot.
+    """
+    edge = shapely.intersection(rest.boundary, whole.boundary, grid_size=_GRID_M)
+    if clip is not None:
+        edge = shapely.difference(edge, clip.boundary.buffer(10.0 * _GRID_M))
+    # 🔴 Less every stretch a ribbon's own kerb already runs beside. Rails are
+    # simplified to `rail_tolerance_m`, so a sliver of area lies between almost
+    # every rail and R's true boundary; without this the ring was 27.4 km on Wan
+    # Chai — most of the kerb in the region, drawn a second time 5 cm away.
+    if drawn_kerbs is not None:
+        edge = shapely.difference(edge, drawn_kerbs)
+    # Simplified at the rails' own tolerance: a kerb strip is four triangles a
+    # vertex, HyD digitises a corner radius a vertex every few centimetres, and
+    # the mitre folds on wiggles that tight (71 inverted triangles against 15).
+    # Douglas-Peucker keeps a subset of the vertices, so every one kept still
+    # has the areas' own height under it.
+    lines = [
+        part
+        for part in shapely.get_parts(shapely.simplify(shapely.line_merge(edge), tolerance_m))
+        if part.geom_type == "LineString" and part.length > 0.0
+    ]
+    height_at = {tuple(key): y for key, y in zip(keys, heights, strict=True)}
+    shapely.prepare(whole)
+    out: list[np.ndarray] = []
+    for line in lines:
+        plan = np.asarray(line.coords)
+        # Which side the road is on, asked a hand's breadth off the longest step.
+        step = np.diff(plan, axis=0)
+        longest = int(np.argmax(np.hypot(step[:, 0], step[:, 1])))
+        unit = step[longest] / np.hypot(*step[longest])
+        probe = 0.5 * (plan[longest] + plan[longest + 1]) + 0.05 * np.array([-unit[1], unit[0]])
+        if not shapely.contains_xy(whole, *probe):
+            plan = plan[::-1]
+        y = [height_at.get(tuple(key)) for key in _key_of(plan)]
+        if any(value is None for value in y):
+            # A vertex the overlay made and the triangulation did not: between
+            # two that it did, so it takes the line's own interpolation.
+            known = np.flatnonzero([value is not None for value in y])
+            if not len(known):
+                continue
+            y = np.interp(np.arange(len(y)), known, [y[index] for index in known])
+        out.append(np.column_stack([plan[:, 0], np.asarray(y, dtype=float), plan[:, 1]]))
     return out

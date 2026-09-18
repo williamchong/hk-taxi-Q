@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from shapely.geometry import Point as shapely_point
 from shapely.geometry import Polygon
 
 from pipeline import surface_region
@@ -127,7 +128,7 @@ class TestAreas:
     def test_it_is_R_less_every_ribbon_and_faces_up(self) -> None:
         ribbon = np.array([(20.0, -5.0), (80.0, -5.0), (80.0, 5.0), (20.0, 5.0)])
         centre = np.array([(0.0, 7.0, 0.0), (100.0, 7.0, 0.0)])
-        triangles = surface_region.areas(
+        triangles, _ = surface_region.areas(
             self._region({(False, 1): self.ROAD}), [ribbon], {(False, 1): centre}, []
         )
         area = sum(abs(_shoelace(tri)) / 2.0 for tri in triangles)
@@ -142,7 +143,7 @@ class TestAreas:
             (False, 1): np.array([(0.0, 10.0, 0.0), (50.0, 10.0, 0.0)]),
             (False, 2): np.array([(50.0, 12.0, 0.0), (100.0, 12.0, 0.0)]),
         }
-        triangles = surface_region.areas(
+        triangles, _ = surface_region.areas(
             self._region({(False, 1): west, (False, 2): east}), [], centres, []
         )
         by_x = {round(x): set() for x in (0, 100)}
@@ -158,7 +159,7 @@ class TestAreas:
         ribbon = np.array([(20.0, -5.0), (100.0, -5.0), (100.0, 5.0), (20.0, 5.0)])
         rail = np.array([(20.0, 9.5, -5.0), (20.0, 9.5, 5.0)])
         centre = np.array([(0.0, 7.0, 0.0), (100.0, 7.0, 0.0)])
-        triangles = surface_region.areas(
+        triangles, _ = surface_region.areas(
             self._region({(False, 1): self.ROAD}), [ribbon], {(False, 1): centre}, [rail]
         )
         flat = triangles.reshape(-1, 3)
@@ -211,3 +212,139 @@ class TestOpeningsAreBridged:
             [0, 10, 20], [3, 8, 8], [3, 3, 3], vertices=[0, 2], kerb_left=[1, 0, 0]
         )
         assert surface_region.bridged(stations).left_m == pytest.approx([3.0, 8.0, 8.0])
+
+
+class TestTheRailIsTheRunningKerbLine:
+    """`opened`: an outward bump shorter than the window is a bay, not the road."""
+
+    ALONG = np.arange(0.0, 101.0, 2.0)
+
+    def _bay(self, start: float, stop: float, depth: float) -> np.ndarray:
+        return np.where((start <= self.ALONG) & (stop >= self.ALONG), 3.0 + depth, 3.0)
+
+    def _opened(self, left, window_m=20.0, bump_m=0.5):
+        count = len(self.ALONG)
+        stations = _stations(self.ALONG, left, np.full(count, 3.0), vertices=[0, count - 1])
+        return surface_region.opened(stations, window_m, bump_m)
+
+    def test_a_bay_shorter_than_the_window_is_let_go_of(self) -> None:
+        opened = self._opened(self._bay(40, 52, 2.5))
+        assert opened.left_m == pytest.approx(3.0)
+        assert opened.right_m == pytest.approx(3.0)
+
+    def test_and_its_kerb_stops_following_the_rail(self) -> None:
+        # The kerb strip is drawn ALONG THE RAIL: left set, a riser would stand
+        # across the mouth of the bay the rail now runs straight past.
+        opened = self._opened(self._bay(40, 52, 2.5))
+        in_bay = (self.ALONG >= 40) & (self.ALONG <= 52)
+        assert not opened.kerb_left[in_bay].any()
+        assert opened.kerb_left[~in_bay].all()
+        assert opened.kerb_right.all()
+
+    def test_a_widening_longer_than_the_window_is_a_carriageway(self) -> None:
+        wide = self._bay(30, 70, 2.5)
+        assert self._opened(wide).left_m == pytest.approx(wide)
+
+    def test_it_never_widens_so_an_island_is_never_drawn_over(self) -> None:
+        pinch = self._bay(40, 52, -2.0)
+        opened = self._opened(pinch)
+        assert (opened.left_m <= pinch + 1e-9).all()
+        assert opened.left_m[(self.ALONG >= 40) & (self.ALONG <= 52)] == pytest.approx(1.0)
+
+    def test_a_taper_is_left_exactly_alone(self) -> None:
+        taper = 3.0 + 0.05 * self.ALONG
+        assert self._opened(taper).left_m == pytest.approx(taper)
+
+    def test_kerb_jitter_under_the_bump_bar_stays_on_the_rail(self) -> None:
+        # Applied whole, the opening moved 33,400 m2 of Wan Chai to area and
+        # cleared a quarter of the kerb flags, for bumps that total a tenth of it.
+        jitter = 3.0 + 0.2 * (np.arange(len(self.ALONG)) % 2)
+        opened = self._opened(jitter)
+        assert opened.left_m == pytest.approx(jitter)
+        assert opened.kerb_left.all()
+
+
+class TestAreasCarryTheirOwnKerb:
+    ROAD = Polygon([(0, -5), (100, -5), (100, 5), (0, 5)])
+    CENTRE = np.array([(0.0, 7.0, 0.0), (100.0, 7.0, 0.0)])
+
+    def _lines(self, **kwargs):
+        region = surface_region.Region(whole=self.ROAD, shapes={(False, 1): self.ROAD}, stations={})
+        ribbon = np.array([(20.0, -5.0), (100.0, -5.0), (100.0, 5.0), (20.0, 5.0)])
+        return surface_region.areas(region, [ribbon], {(False, 1): self.CENTRE}, [], **kwargs)[1]
+
+    def test_the_kerb_is_the_boundary_an_area_shares_with_R(self) -> None:
+        lines = self._lines()
+        # The 20 m end west of the ribbon: two sides and the end, not the seam
+        # with the ribbon at x = 20, which is interior to R.
+        assert sum(np.hypot(*np.diff(line[:, [0, 2]], axis=0).T).sum() for line in lines) == (
+            pytest.approx(50.0)
+        )
+        assert all(line[:, 1] == pytest.approx(7.0) for line in lines)
+
+    def test_it_is_walked_with_the_road_on_its_right(self) -> None:
+        for line in self._lines():
+            plan = line[:, [0, 2]]
+            step = plan[1] - plan[0]
+            right = np.array([-step[1], step[0]]) / np.hypot(*step)
+            probe = 0.5 * (plan[0] + plan[1]) + 0.05 * right
+            assert self.ROAD.contains(shapely_point(probe))
+
+    def test_the_regions_own_rectangle_is_a_cut_and_not_a_kerb(self) -> None:
+        length = sum(
+            np.hypot(*np.diff(line[:, [0, 2]], axis=0).T).sum()
+            for line in self._lines(high=(100.0, 5.0))
+        )
+        # z = 5 lies on the rectangle and so does x = 0 from z = 0 up; what is left
+        # is z = -5 (20 m) and the 5 m of x = 0 below it.
+        assert length == pytest.approx(25.0, abs=0.05)
+
+    def test_a_stretch_a_ribbon_already_kerbs_is_not_kerbed_twice(self) -> None:
+        kerbed = [np.array([(0.0, -5.0), (20.0, -5.0)])]
+        length = sum(
+            np.hypot(*np.diff(line[:, [0, 2]], axis=0).T).sum()
+            for line in self._lines(kerbed=kerbed, kerb_width_m=0.5)
+        )
+        assert length == pytest.approx(30.0 - 0.5, abs=0.05)
+
+
+def test_a_short_edge_is_not_one_bump_between_its_two_wedges() -> None:
+    # A territory pinches to a wedge at each node, so an edge shorter than the
+    # window is, end to end, one bump. The first build collapsed HENNESSY ROAD
+    # `e0`, 11 m long, to its wedge width and put its lane centre on the centreline.
+    along = np.arange(0.0, 13.0, 2.0)
+    hill = np.array([0.5, 2.0, 3.0, 3.0, 3.0, 2.0, 0.5])
+    stations = _stations(along, hill, hill, vertices=[0, 6])
+    opened = surface_region.opened(stations, 20.0, 0.5)
+    assert opened.left_m == pytest.approx(hill)
+    assert opened.kerb_left.all()
+
+
+class TestTheTrimIsReadOffTheFlare:
+    """`flare_m`: a ribbon starts where its carriageway has settled."""
+
+    ALONG = np.arange(0.0, 81.0, 2.0)
+
+    def test_a_bell_mouth_is_junction_until_it_settles(self) -> None:
+        # 8 m wide at the node, down to 3 m by 12 m in; settled from there.
+        left = np.maximum(3.0, 8.0 - self.ALONG * (5.0 / 12.0))
+        count = len(self.ALONG)
+        stations = _stations(self.ALONG, left, np.full(count, 3.0), vertices=[0, count - 1])
+        start, end = surface_region.flare_m(stations, 20.0, 0.5)
+        assert 8.0 <= start <= 12.0
+        assert end == 0.0
+
+    def test_it_reads_each_end_for_itself(self) -> None:
+        count = len(self.ALONG)
+        right = np.where(self.ALONG > 70.0, 7.0, 3.0)  # a pocket at the far end only
+        stations = _stations(self.ALONG, np.full(count, 3.0), right, vertices=[0, count - 1])
+        start, end = surface_region.flare_m(stations, 20.0, 0.5)
+        assert start == 0.0
+        assert end == pytest.approx(10.0)
+
+    def test_a_settled_road_has_no_flare(self) -> None:
+        count = len(self.ALONG)
+        stations = _stations(
+            self.ALONG, np.full(count, 3.0), np.full(count, 3.2), vertices=[0, count - 1]
+        )
+        assert surface_region.flare_m(stations, 20.0, 0.5) == (0.0, 0.0)

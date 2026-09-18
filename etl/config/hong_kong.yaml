@@ -3483,6 +3483,26 @@ carriageway_region:
   # ~0.3 m (Q129), so a rail held to 0.10 m is inside what the source knows.
   rail_tolerance_m: 0.10
 
+  # The shortest OUTWARD bump a ribbon's rail still follows (P3-33c, from the
+  # driving seat: "a straight road broadens and shrinks"). Anything shorter — a
+  # lay-by, a bus bay, the mouth of a road with no centreline — is let go of and
+  # drawn as area with its own kerb, so a straight road's lane lines stay straight.
+  # The rail only ever narrows, and a bump must stand out by more than
+  # kerb_width_m at its peak to be let go of at all.
+  #
+  # ⚠️ AUTHORED — no publisher says how long a bay is — and swept on Wan Chai.
+  # Sides still bumping outward > 0.75 m off their own 20 m median, 25 m or more
+  # from either node (nearer than that it is junction flare, which the TRIM
+  # handles and no rail filter should flatten):
+  #    0 m  51 sides    10 m  21    20 m  12  <- shipped    30 m  11
+  # A trade curve that has flattened by 20, not a plateau to read a value off.
+  #
+  # The same window is how far ahead flare_m looks when it reads where a
+  # carriageway has SETTLED after a junction — the trim, read instead of guessed.
+  # Both together, inside the drawn ribbons: outward wobble 3,030 -> 644 m of
+  # rail, inward 2,196 -> 570 m, and lane_paint 151 -> 79 edges under 3.00 m.
+  rail_opening_m: 20.0
+
 
 # The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it
 # describes the taxi, and it is MIRRORED from taxi.tscn rather than read from it,

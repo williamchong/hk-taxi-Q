@@ -4978,6 +4978,11 @@ class CarriagewayRegion:
     # stations before `surface.py` keeps the station between them. The one value
     # here that is NOT a resolution: it trades triangles for kerb fidelity.
     rail_tolerance_m: float
+    # The shortest outward bump a ribbon's rail still follows. Anything shorter —
+    # a lay-by, a bus bay, the mouth of a road with no centreline — is let go of
+    # and drawn as area, so a straight road's lane lines stay straight. AUTHORED:
+    # no publisher says how long a bay is.
+    rail_opening_m: float
 
 
 def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
@@ -4990,7 +4995,7 @@ def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
         **_thresholds(
             body,
             where,
-            positive=("sample_m", "rail_m", "station_m", "rail_tolerance_m"),
+            positive=("sample_m", "rail_m", "station_m", "rail_tolerance_m", "rail_opening_m"),
             signed=(),
         )
     )

@@ -505,6 +505,9 @@ class SurfaceReport:
     # past its region's rectangle (`Q116`). Reachable, so a rise is a finding.
     territory_edges: int = 0
     territory_fallback_stations: int = 0
+    # Metres of kerb drawn along an AREA's edge — the junction corners and bays no
+    # ribbon's rail runs along. Zero with areas drawn is every corner kerbless.
+    area_kerb_m: float = 0.0
     # Territory edges whose PAINTED lane count was cut to what their share can
     # carry at TPDM's narrow lane. One-sided; reachable at zero.
     territory_lanes_capped: int = 0
@@ -1978,6 +1981,10 @@ class _Edge:
     # node, so the end station's own width says nothing about how far back the
     # junction reaches; this is what `end_half_width_m` reads instead.
     mouth_half_m: float = 0.0
+    # How far in from each node the territory is still junction-shaped — the trim
+    # READ, where `_assign_trims`' radius is the trim guessed (`flare_m`).
+    flare_start_m: float = 0.0
+    flare_end_m: float = 0.0
     trim_start_m: float = 0.0
     trim_end_m: float = 0.0
     # Whether each trim was held to `junction_trim_max_fraction`'s length
@@ -2136,6 +2143,7 @@ def build_region(
         return region.stations.get((foreign, int(published["id"])))
 
     rail_tolerance_m = city.carriageway_region.rail_tolerance_m if region is not None else 0.0
+    rail_opening_m = city.carriageway_region.rail_opening_m if region is not None else 0.0
     # TPDM 4.3.9.8's narrow end, from the survey's own bounds — the bar
     # `tools/lane_paint.py` grades a painted lane against, so the two cannot sit
     # on different numbers. No survey, no ceiling.
@@ -2143,7 +2151,13 @@ def build_region(
     lane_min_m = survey.width_bounds.lane_m[0] if region is not None and survey else 0.0
     edges = [
         _prepare(
-            edge, style, report, stations_of(edge, foreign=False), rail_tolerance_m, lane_min_m
+            edge,
+            style,
+            report,
+            stations_of(edge, foreign=False),
+            rail_tolerance_m,
+            lane_min_m,
+            rail_opening_m,
         )
         for edge in graph["edges"]
     ]
@@ -2298,7 +2312,7 @@ def build_region(
             if edge.level == 0 and edge.left is not None and edge.right is not None
         ]
         ids = [int(edge["id"]) for edge in [*graph["edges"], *foreign_published]]
-        report.area_triangles = surface_region.areas(
+        report.area_triangles, area_kerbs = surface_region.areas(
             region,
             # Every level-0 ribbon, the neighbour's included: its ribbon is its
             # owner's to draw, so it is subtracted here exactly as an owned one.
@@ -2314,7 +2328,20 @@ def build_region(
                 if index < len(edges)
                 for rail in (edge.left, edge.right)
             ],
+            city.region_high(region_id),
+            # The rails' kerbed runs, in plan: where a ribbon already draws the kerb.
+            [
+                rail[start:stop]
+                for index, edge in level0
+                if index < len(edges)
+                for rail, keep in ((edge.left, edge.kerb_left), (edge.right, edge.kerb_right))
+                for start, stop in (_runs(keep) if keep is not None else [(0, len(rail))])
+            ],
+            style.kerb_width_m,
+            rail_tolerance_m,
         )
+        for line in area_kerbs:
+            report.area_kerb_m += _draw_area_kerb(builder, line, style, city.roads.lane_width_m)
         builder.triangles(
             report.area_triangles,
             colour=style.surface_material.colour,
@@ -2411,6 +2438,7 @@ def _prepare(
     stations: surface_region.Stations | None = None,
     rail_tolerance_m: float = 0.0,
     lane_min_m: float = 0.0,
+    rail_opening_m: float = 0.0,
 ) -> _Edge:
     """One published edge as a ribbon-in-waiting, half-widths already resolved.
 
@@ -2427,8 +2455,14 @@ def _prepare(
     # one, still cuts: the territory is a 2D plan and the deck is the structure.
     territory = stations is not None and len(stations.vertex_station) == len(half_widths)
     if territory:
-        # The rails bridge a side-street mouth along the kerb line; see `bridged`.
-        stations = surface_region.bridged(stations)
+        # The rail is the road's running kerb line, not everything the territory
+        # reaches: mouths bridged, then bays and bulges opened away. Both only
+        # ever narrow, and what they let go of is drawn as area.
+        # `kerb_width_m` is the bump bar: `_paint_flanks`' own reading that two
+        # surfaces a kerb apart are one, so anything under it is kerb jitter.
+        stations = surface_region.opened(
+            surface_region.bridged(stations), rail_opening_m, style.kerb_width_m
+        )
     # The DECK rims go into the matrix and the territory is laid over them in
     # `_with_territory_stations`, once every station exists; `published_*` below
     # is provisional for a territory edge and `_publish_territory_table` replaces
@@ -2490,6 +2524,11 @@ def _prepare(
         report.clamped_stations += int(cut.sum())
         report.clamp_refused_stations += refused
     lanes, lanes_forward = int(published["lanes"]), _lanes_forward_code(published, report)
+    flare = (
+        surface_region.flare_m(stations, rail_opening_m, style.kerb_width_m)
+        if territory and rail_opening_m > 0.0
+        else (0.0, 0.0)
+    )
     mouth_half_m = 0.5 * float(np.median(stations.left_m + stations.right_m)) if territory else 0.0
     if territory and lane_min_m > 0.0:
         # 🔴 **A territory is a CEILING on the PAINTED lane count and never a
@@ -2526,6 +2565,8 @@ def _prepare(
         published_half_widths=0.5 * (drawn_upper - drawn_lower),
         published_offsets=0.5 * (drawn_upper + drawn_lower),
         territory=territory,
+        flare_start_m=flare[0],
+        flare_end_m=flare[1],
         stations=stations if territory else None,
         mouth_half_m=mouth_half_m,
         lanes=lanes,
@@ -3545,12 +3586,18 @@ def _assign_trims(
             edge = edges[end.edge]
             ceiling = edge.length_m * style.junction_trim_max_fraction
             clamped = ceiling < radius
+            # The flare is this END's own, read off its territory (`Q129`): a
+            # ribbon starts where its carriageway has settled, and the radius is
+            # what is left for an edge with no territory to read.
             if end.at_start:
-                edge.trim_start_m = min(radius, ceiling)
-                edge.clamped_start = clamped
+                reach = max(radius, edge.flare_start_m)
+                edge.trim_start_m = min(reach, ceiling)
+                edge.clamped_start = ceiling < reach
             else:
-                edge.trim_end_m = min(radius, ceiling)
-                edge.clamped_end = clamped
+                reach = max(radius, edge.flare_end_m)
+                edge.trim_end_m = min(reach, ceiling)
+                edge.clamped_end = ceiling < reach
+            clamped = ceiling < reach
             if end.foreign:
                 continue
             report.trimmed_ends += 1
@@ -4350,6 +4397,48 @@ def _draw_edge(
     return True
 
 
+def _draw_area_kerb(
+    builder: _Builder, line: np.ndarray, style: RoadSurface, lane_width_m: float
+) -> float:
+    """The riser and lip along one stretch of an area's kerb line; its length.
+
+    `_draw_edge`'s LEFT kerb, strip for strip and in the same rail order — the
+    line arrives walked with the road on its right, so outward is left of travel
+    and `mitres` points there. The same two strips so the same winding, which
+    `downward_facing` checks over the whole mesh.
+    """
+    line = dedupe(line)
+    if len(line) < 2:
+        return 0.0
+    along = plan_lengths(line)
+    plan = line[:, [0, 2]]
+    out = boundary(line, mitres(line), style.kerb_width_m)
+    foot, top = _lift(plan, line, 0.0), _lift(plan, line, style.kerb_height_m)
+    lip = _lift(out, line, style.kerb_height_m)
+    # 🔴 A KERB code, which is never a bare class: the codec holds "no lanes" and
+    # "no length" to mean a junction CAP and nothing else, and `verify_road_surface`
+    # refuses a kerb that says either. This kerb belongs to no edge, so it says the
+    # least a kerb can — one lane, one-way, no paint on it — and the markings
+    # shader excludes the class outright, so nothing reads the lane.
+    marking = _Marking(
+        float(
+            MARKING_CLASS_KERB + MARKING_LANES * 1 + MARKING_DIRECTION * MARKING_DIRECTIONS[FORWARD]
+        ),
+        float(along[-1]),
+    )
+    outside = style.kerb_width_m / lane_width_m
+    for lower, upper, across in ((foot, top, (0.0, 0.0)), (top, lip, (0.0, -outside))):
+        builder.strip(
+            lower,
+            upper,
+            colour=style.kerb_material.colour,
+            along=along,
+            across=across,
+            marking=marking,
+        )
+    return float(along[-1])
+
+
 def _extent(edge: _Edge, side: str, published: np.ndarray) -> np.ndarray:
     """`COLOR_0.a` for one rail: 255 where a restriction runs, 0 where none does.
 
@@ -4807,11 +4896,13 @@ def main(argv: list[str] | None = None) -> int:
         log.info(
             "  region: %d level-0 ribbons take their territory as their rails, %d published "
             "stations with none keep the plain ribbon (a run past its rectangle, Q116); %d painted "
-            "lane counts cut to what the share carries; %d area triangles outside every ribbon",
+            "lane counts cut to what the share carries; %d area triangles outside every ribbon, "
+            "%.0f m of kerb drawn along their edges",
             report.territory_edges,
             report.territory_fallback_stations,
             report.territory_lanes_capped,
             len(report.area_triangles),
+            report.area_kerb_m,
         )
     log.info(
         "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "
