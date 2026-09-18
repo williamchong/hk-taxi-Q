@@ -2169,6 +2169,36 @@ class TestCarriagewaySurvey:
 
         assert city.carriageway_survey is None
 
+    def test_an_unknown_key_in_the_block_is_refused(self, rewrite) -> None:
+        """🔴 Closed since `Q128` put the first key a BUILD reads in this block.
+        Before that a typo cost a report; now an unrecognised key would leave the
+        strip confirmation at its default and publish a different city with every
+        counter closing."""
+        cities = rewrite(lambda doc: doc["carriageway_survey"].update({"confirm_with_in_m": 1.0}))
+
+        with pytest.raises(ValueError, match="unknown keys"):
+            load_config(cities)
+
+    def test_the_confirmation_tolerance_is_optional(self, rewrite) -> None:
+        """Absent means the strip does not publish, rather than publishing at
+        some default: `Q127` swept it and found a trade curve, not a plateau."""
+        cities = rewrite(lambda doc: doc["carriageway_survey"].pop("confirm_within_m"))
+
+        assert load_config(cities).carriageway_survey.confirm_within_m is None
+
+    def test_a_confirmation_tolerance_of_zero_is_refused(self, rewrite) -> None:
+        """Zero confirms nothing while reading as a declared intent to."""
+        cities = rewrite(lambda doc: doc["carriageway_survey"].update({"confirm_within_m": 0.0}))
+
+        with pytest.raises(ValueError, match="must be positive"):
+            load_config(cities)
+
+    def test_the_area_publisher_is_read_off_the_declared_specs(self, hong_kong) -> None:
+        """A `hyd_strip` width publishes this name into `width_publisher`, which
+        `verify_road_graph.gd` requires non-empty — and a literal here would be a
+        second copy of a name hard rule 3 keeps in the city file."""
+        assert hong_kong.carriageway_survey.area_publisher == "hyd_pavement"
+
     def test_the_lane_lines_are_a_separate_list_from_the_edges(self, hong_kong) -> None:
         """`Q127`. A lane line cast at as a carriageway edge stops a ray one lane
         in, so the two lists must never share an entry — and `edges` must still

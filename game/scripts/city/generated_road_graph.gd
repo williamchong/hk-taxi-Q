@@ -121,7 +121,13 @@ const FILE: String = "roadgraph.json"
 ## and on a three-lane street with a right-turn lane that is the middle of that
 ## lane. `lane_offset` does not read it: the nearside lane of either flow is the
 ## same distance off the centreline whichever side the extra lane is on.
-const SCHEMA_VERSION: int = 13
+## 14 adds a FIFTH `width_source`, `hyd_strip`, and `width_confirmed_by`
+## (`Q128`). HyD's pavement polygon read as a strip through the centreline,
+## where the ray survey cannot station — an edge under about 34 m — and published
+## only where an independent reading agrees with it within the city's own
+## tolerance. A consumer treating the source set as closed is wrong about the
+## short streets, which is most of the ones a fare starts on.
+const SCHEMA_VERSION: int = 14
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".

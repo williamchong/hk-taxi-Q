@@ -878,6 +878,25 @@ class CarriagewaySurvey:
     # Optional: absent means the tool reports the near-side overhang only, which
     # is the honest answer for a city whose manual nobody has transcribed.
     width_bounds: WidthBounds | None = None
+    # How close an independent reading must land to CONFIRM a strip width
+    # (`Q128`). `None` leaves the strip unpublished — see `_carriageway_survey`.
+    confirm_within_m: float | None = None
+
+    @property
+    def area_publisher(self) -> str:
+        """The name of the AREA spec, which is what a strip width is published by.
+
+        ⚠️ **Read off the declared specs, never written as a literal.** The
+        publisher name reaches `roadgraph.json`'s `width_publisher`, which
+        `verify_road_graph.gd` requires to be non-empty for any source that is
+        not `authored` or `deck`, and a hard-coded `hyd_pavement` would be a
+        second copy of a name hard rule 3 keeps in the city file.
+        """
+        for edge in self.edges:
+            if edge.geometry == CARRIAGEWAY_AREA:
+                return edge.name
+        return ""
+
     # Elevation levels the width survey walks. 🔴 **`(0,)` and the default must
     # stay there** — `clearance.walk(levels=...)`'s rule at a second key, and for
     # the same reason: widening it re-publishes `roadgraph.json` for 60 edges, so
@@ -5058,11 +5077,31 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         # publishers' answers into one column and hide the disagreement that
         # is the entire reason for reading more than one.
         raise ValueError(f"{where}:edges has repeated names ({', '.join(sorted(names))})")
+    # 🔴 **A closed key set, added at `Q128` with the first key a BUILD reads.**
+    # Until then every key here fed a tool, so a typo cost a report; now an
+    # unrecognised key would silently leave the strip confirmation at its
+    # default and publish a different city with every counter closing. The
+    # `clearance:` block is refused the same way and for the same reason.
+    unknown = set(body) - {"edges", "lane_lines", "width_bounds", "levels", "confirm_within_m"}
+    if unknown:
+        raise ValueError(f"{where} has unknown keys: {', '.join(sorted(unknown))}")
     levels = body.get("levels")
     return CarriagewaySurvey(
         edges=edges,
         lane_lines=_lane_lines(body.get("lane_lines"), f"{where}:lane_lines"),
         width_bounds=_width_bounds(body.get("width_bounds"), f"{where}:width_bounds"),
+        # ⚠️ **Absent means the strip reading does not publish**, rather than
+        # publishing at some default tolerance: `Q127` swept it at 0.5 / 1.0 /
+        # 2.0 m and read 0.75 / 1.23 / 1.58 m at 11 / 22 / 35% reach — a trade
+        # curve and not a plateau, so it is a value a city chooses and never a
+        # constant this module picks on its behalf.
+        confirm_within_m=(
+            None
+            if body.get("confirm_within_m") is None
+            else _measures(body, f"{where}", ("confirm_within_m",), positive=True)[
+                "confirm_within_m"
+            ]
+        ),
         # ⚠️ Absent keeps `(0,)`, which is the shipped bundle. An explicit empty
         # list is refused rather than read as "walk nothing": a survey that walks
         # no edge reports total coverage of nothing, which reads as agreement —

@@ -931,6 +931,27 @@ carriageway_survey:
   # this walk to find — sampling one would read the tunnel roof or nothing.
   levels: [0, 1]
 
+  # How close an independent reading must land to a HyD strip width before that
+  # strip is published (Q128). Leave the key out and no strip is published at
+  # all: the reading is a candidate, and the agreement is the licence.
+  #
+  # 🔴 Alone the strip is NOT better than the invented lanes x lane_width_m it
+  # would replace. Q127 graded it at |p90| 2.53 m against the ray survey's own
+  # widths and 4.69 m on the short edges it exists to serve, against today's
+  # 4.14 / 4.56 — which is why nothing shipped at Q127 and why this key is an
+  # agreement tolerance rather than a switch.
+  #
+  # 🔴 A TRADE CURVE, not a plateau, which is why it is data and not a constant.
+  # Q127 swept it on Wan Chai and read |p90| 0.75 / 1.23 / 1.58 m at 11.3 /
+  # 21.8 / 34.9% reach for 0.5 / 1.0 / 2.0 m. There is no value the numbers pick
+  # out; 1.0 m buys about a fifth of the unmeasured network at roughly a
+  # quarter of today's error, and a city with denser paint could afford tighter.
+  #
+  # ⚠️ Not a bar to retune when a count disappoints. Loosening it publishes more
+  # widths that agree with less, and the counter that says so is
+  # `strip_unconfirmed` in the roads stage's own log.
+  confirm_within_m: 1.0
+
   # What TD's Transport Planning & Design Manual Vol 2 Ch 3 (March 2026) permits
   # a carriageway to be. READ, not fetched — see DATA_SOURCES.md, which carries
   # the table and the reason nothing in etl/ downloads it.

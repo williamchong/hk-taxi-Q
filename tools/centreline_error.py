@@ -760,6 +760,12 @@ class Priced:
 # end: a fourth source meaning "not measured" would slip through it silently and
 # price every such edge against a width nobody measured, which is the exact
 # failure this function's own refusal exists to prevent.
+#
+# ⚠️ **`hyd_strip` is deliberately NOT here, and it is not an oversight (`Q128`).**
+# This tool prices the published centreline against the middle of the carriageway
+# a RAY spanned, and a strip edge is by definition one no ray reached — so there
+# is no row to price it against and it would be refused a line below whatever
+# this set said. Admitting it would state a truth side that does not exist.
 _MEASURED_SOURCES = frozenset({"one_way_uncrossed", "two_way_span"})
 
 

@@ -422,6 +422,7 @@ class TestBuildRegion:
             "width_m",
             "width_source",
             "width_publisher",
+            "width_confirmed_by",
             "offset_m",
             "offset_source",
             "deck_rim_m",

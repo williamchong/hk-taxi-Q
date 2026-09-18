@@ -91,6 +91,13 @@ from pipeline.signs import _read_poles  # noqa: E402
 
 # The survey's own licensed bases — the reference population every reading is
 # graded against. `deck` is excluded: it is level 1, which no reading here walks.
+#
+# 🔴 **`hyd_strip` may NEVER be added (`Q128`).** It is one of the readings below,
+# published by the pipeline where the ray survey is silent — so admitting it to
+# the reference would grade the strip against itself and certify it at 0.00 m by
+# construction. That is `Q127`'s own finding about the ray survey as a voter,
+# arriving from the other direction, and it gets louder rather than quieter as
+# the pipeline publishes more of them.
 MEASURED = ("two_way_span", "one_way_uncrossed")
 AUTHORED = "authored"
 

@@ -973,6 +973,8 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 	var measured_lanes: int = 0
 	var unattributed: int = 0
 	var lanes_without_width: int = 0
+	var unconfirmed_strips: int = 0
+	var confirmed_non_strips: int = 0
 	for edge: Dictionary in edges:
 		var width_source: String = str(edge.get("width_source", "authored"))
 		var lanes_source: String = str(edge.get("lanes_source", "authored"))
@@ -1004,6 +1006,18 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 		# render.
 		if lanes_source != "authored" and width_source == "authored":
 			lanes_without_width += 1
+		# 🔴 **A `hyd_strip` width exists only because something agreed with it
+		# (`Q128`).** Alone the strip reads |p90| 2.53 m against the ray survey's
+		# own widths and 4.69 m on the short edges it is for — no better than the
+		# invented `lanes x lane_width_m` it replaces — so an unconfirmed one is
+		# not a weaker measurement, it is the thing the ETL refused to publish.
+		# Both directions, because a confirmation on any OTHER source would mean
+		# the field had come loose from the rule that sets it.
+		var confirmed: String = str(edge.get("width_confirmed_by", ""))
+		if width_source == "hyd_strip" and confirmed.is_empty():
+			unconfirmed_strips += 1
+		elif width_source != "hyd_strip" and not confirmed.is_empty():
+			confirmed_non_strips += 1
 	if unattributed > 0:
 		problems.append(
 			(
@@ -1023,6 +1037,26 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 					+ "read the speed-limit table and called it a measurement"
 				)
 				% lanes_without_width
+			)
+		)
+	if unconfirmed_strips > 0:
+		problems.append(
+			(
+				(
+					"%d edges publish a `hyd_strip` width with nothing confirming it — the "
+					+ "strip is a candidate and the agreement is the licence"
+				)
+				% unconfirmed_strips
+			)
+		)
+	if confirmed_non_strips > 0:
+		problems.append(
+			(
+				(
+					"%d edges name a confirming reading on a width that is not a strip — "
+					+ "`width_confirmed_by` has come loose from the rule that sets it"
+				)
+				% confirmed_non_strips
 			)
 		)
 	if measured_widths > 0 and measured_lanes == 0:

@@ -187,7 +187,13 @@ ROADGRAPH_NAME = "roadgraph.json"
 # region owning the pivot node publishes the turn and one arm may be the
 # neighbour's road. Bumped because a consumer merging two graphs would be
 # wrong to treat `id` as identity.
-ROADGRAPH_SCHEMA = 13
+#
+# 14 (`Q128`): `width_source` gains a FIFTH value, `hyd_strip`, and every
+# edge gains `width_confirmed_by`. Bumped on hard rule 5's own test — a
+# consumer treating the source set as closed is *wrong*, not merely reading
+# different bytes, and `tools/centreline_error.py` reads it as an allowlist
+# that refuses an unknown value rather than pricing it.
+ROADGRAPH_SCHEMA = 14
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -320,6 +326,16 @@ class Edge:
     # fourth source had read the edge. An authored width was read by none of
     # them, and the empty set is what says so.
     width_publisher: str = ""
+    # Which INDEPENDENT reading confirmed a `hyd_strip` width, and empty on
+    # every other source (`Q128`). 🔴 **The strip is published only because
+    # something agreed with it**: alone it reads |p90| 2.53 m against the ray
+    # survey's own widths and 4.69 m on the short edges it exists for, which
+    # is no better than the invented `lanes x lane_width_m` it replaces.
+    # Confirmed it reads 1.17 / 1.35 m. So this names the evidence rather
+    # than decorating it, and a consumer can tell the two apart.
+    # ⚠️ **Never folded into `width_publisher`** — see that field: the voter
+    # published no geometry and is not a publisher.
+    width_confirmed_by: str = ""
     # 🔴 **How far the DRAWN ribbon is shifted off this centreline, and it is
     # SIGNED (`Q103`).** Positive is left of travel — `surface.mitres`' frame,
     # which is the frame the ribbon is actually built in, because a consumer
@@ -1247,6 +1263,13 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
             "width_source": found.basis[edge.id],
             "width_publisher": found.publishers[edge.id],
         }
+        if edge.id in found.confirmed_by:
+            # ⚠️ **A separate field from `width_publisher`, never appended to
+            # it** (`Q128`). That field's `+` split means "publishers whose line
+            # a ray hit", and a consumer reading `hyd_pavement+arrows` would
+            # find a fourth source that published no geometry at all — the exact
+            # confusion `verify_road_graph.gd` says the field exists to prevent.
+            changes["width_confirmed_by"] = found.confirmed_by[edge.id]
         if edge.id in found.lanes:
             changes["lanes"] = found.lanes[edge.id]
             changes["lanes_source"] = found.lanes_basis[edge.id]
@@ -2263,6 +2286,7 @@ def _edge_document(edge: Edge) -> dict:
         "lanes_forward": published_lanes_forward(edge),
         "width_m": edge.width_m,
         "width_source": edge.width_source,
+        "width_confirmed_by": edge.width_confirmed_by,
         "width_publisher": edge.width_publisher,
         "offset_m": edge.offset_m,
         "offset_source": edge.offset_source,
@@ -2489,6 +2513,43 @@ def main(argv: list[str] | None = None) -> int:
         # (`Q72`), so this prints both sides rather than the admissions alone —
         # a build where every two-station edge happened to agree and one where
         # the test was deleted log the same admitted count.
+        if width.strip_rings:
+            # ⚠️ **`unconfirmed` is the counter the design rests on**, not
+            # `published`: the strip alone reads |p90| 2.53 m and is no better
+            # than the invented width, so a fall towards zero means the
+            # confirmation has stopped confirming rather than that the reading
+            # improved. `on measured` must stay 0 — the offer is filtered before
+            # it and `_confirmed` asserts it — and it is printed so the filter is
+            # visible rather than assumed.
+            log.info(
+                "    HyD strip: %d rings read, %d edges measured; %d published confirmed, "
+                "%d unconfirmed, %d outside TD's bounds, %d on an edge a ray already measured",
+                width.strip_rings,
+                width.strip_read,
+                len(width.confirmed_by),
+                width.strip_unconfirmed,
+                width.strip_outside_bounds,
+                width.strip_on_ray_measured,
+            )
+            if width.strip_agreement_m:
+                # ⚠️ **Graded, never gated.** These edges publish the RAY's answer
+                # whatever this says, so a widening spread is a finding to go and
+                # look at rather than a bar. And it is agreement about the long
+                # edges a ray could reach, not about the short ones the strip is
+                # published on — `Q127` is the reading that grades those.
+                gap = np.array(width.strip_agreement_m)
+                log.info(
+                    "      where BOTH read one edge (%d): |strip - ray| p50 %.2f p90 %.2f "
+                    "max %.2f m — recorded, never gated",
+                    len(gap),
+                    float(np.median(gap)),
+                    float(np.percentile(gap, 90)),
+                    float(gap.max()),
+                )
+            log.info(
+                "      confirmed by: %s — ⚠️ the ray survey is NOT among them (`Q127`)",
+                _by_basis(width.confirmed_by.values()),
+            )
         log.info(
             "    two-station licence: %d edges admitted, %d refused, at this region's own "
             "leave-one-out p90 of %s",

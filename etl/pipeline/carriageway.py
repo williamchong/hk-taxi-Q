@@ -40,7 +40,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from pipeline import gdb
+from pipeline import carriageway_area, gdb
 from pipeline.config import (
     BOTH,
     CARRIAGEWAY_AREA,
@@ -86,6 +86,12 @@ MIN_STATIONS = 3
 # half a metre is a different reading on a lane and on a dual carriageway, and a
 # number chosen here would be the unsourced bar `Q113` was caught by.
 MIN_AGREEING_STATIONS = 2
+# The `width_source` a confirmed HyD strip publishes (`Q128`). A FIFTH value
+# beside `authored`, `two_way_span`, `one_way_uncrossed` and `deck`, which is
+# why `ROADGRAPH_SCHEMA` moved: a consumer reading that set as closed — and
+# `centreline_error.py` reads it as an allowlist — is wrong, not merely
+# looking at different bytes.
+BASIS_STRIP = "hyd_strip"
 # Which percentile of that scatter becomes the tolerance. The p90 is the
 # grader's own (`Q127` read 2.77 m on Wan Chai), so the two surveys admit the
 # same edges; a median would admit a pair disagreeing by more than half the
@@ -161,6 +167,33 @@ class CarriagewayReport:
     agree_m: float | None = None
     stations_two_agreeing: int = 0
     stations_two_disagreeing: int = 0
+
+    # ── The confirmed HyD strip (`Q128`) ───────────────────────────────────
+    #
+    # What the area reading found, and where each candidate went. ⚠️ **The
+    # refusals are the half worth reading**: `strip_unconfirmed` is the count
+    # the design rests on — the strip alone reads |p90| 2.53 m and is no better
+    # than the invented width — so a fall towards zero means the confirmation
+    # has stopped confirming, not that the reading improved.
+    # 🔴 **`strip_agreement_m` is the cross-check this stage gets for free.**
+    # The area reading walks every level-0 edge, so on the ones a ray already
+    # measured there are TWO independent readings of the same width — and
+    # that is the only place in the bundle where the strip can be graded
+    # against something. It is recorded and never gated: those edges publish
+    # the ray's answer whatever it says, so a widening spread is a finding to
+    # go and look at. ⚠️ It is NOT the licence — `Q127` grades the strip
+    # against the survey on the same population and reads |p90| 2.53 m, so a
+    # tight median here is agreement about the easy edges, not about the
+    # short ones the strip is published on.
+    strip_rings: int = 0
+    strip_stations_unsurveyed: int = 0
+    strip_read: int = 0
+    strip_on_ray_measured: int = 0
+    strip_agreement_m: list[float] = field(default_factory=list)
+    strip_outside_bounds: int = 0
+    strip_unconfirmed: int = 0
+    # Which reading confirmed each published strip, by edge id.
+    confirmed_by: dict[int, str] = field(default_factory=dict)
 
     # ── The lane count, bracketed off the width above (`Q94`) ──────────────
     #
@@ -633,6 +666,24 @@ def _assign(
     if width is None:
         report.unattributed += 1
         return
+    _publish(report, edge, width, basis, bounds)
+
+
+def _publish(
+    report: CarriagewayReport,
+    edge,  # `roads.Edge`, as above
+    width: float,
+    basis: str,
+    bounds: WidthBounds,
+) -> None:
+    """Record one edge's width and bracket a lane count off it.
+
+    Split from `_assign` at `Q128` for the strip reading, which arrives as a
+    width already and never as a span: `_license`'s whole job is to decide
+    whether a kerb-to-kerb span *is* this edge's carriageway, and a run measured
+    through the centreline of HyD's own paint has not crossed anything to be
+    asked about. Everything after that decision is common, and this is it.
+    """
     report.assigned_m[edge.id] = width
     report.basis[edge.id] = basis
     if width < bounds.min_m:
@@ -647,6 +698,104 @@ def _assign(
     if count is not None:
         report.lanes[edge.id] = count
         report.lanes_basis[edge.id] = lanes_basis
+
+
+def _row_widths(rows: dict[int, list[_Symbol]]) -> dict[int, float]:
+    """`lane pitch x arrows abreast` — the one width reading here owing nothing to a kerb.
+
+    Two arrows painted abreast are one lane apart, so the gap between the lane
+    runs of a row is a lane width TD measured on the ground. ⚠️ **A lower bound
+    and nothing more**: an unpainted lane is invisible to it, exactly as it is to
+    `_row_reading`'s count. That is why this only ever CONFIRMS a strip and is
+    never published on its own — `Q127` graded it at |p90| 3.47 m alone.
+
+    ⚠️ **A row of one arrow states no pitch**, the same `_ROW_MIN` a row of one
+    states no count: there is no gap to measure. The pitch is pooled over every
+    row on the edge and multiplied by the WIDEST, on `_widest_rows`' own rule.
+    """
+    out: dict[int, float] = {}
+    for edge_id, symbols in rows.items():
+        pitches: list[float] = []
+        widest = 0
+        for row in _runs(symbols, _along):
+            lanes = list(_runs(row, _across))
+            widest = max(widest, len(lanes))
+            if len(lanes) < _ROW_MIN:
+                continue
+            centres = sorted(float(np.mean([_across(symbol) for symbol in lane])) for lane in lanes)
+            pitches.extend(float(gap) for gap in np.diff(centres))
+        if pitches and widest >= _ROW_MIN:
+            out[edge_id] = float(np.median(pitches)) * widest
+    return out
+
+
+def _street_widths(edges: list, measured: dict[int, float]) -> dict[int, float]:
+    """The median measured width of the other edges on the same street.
+
+    A street is `(published name, direction)`: a two-way street never lends to a
+    one-way carriageway, because they are not the same measurement (`Q57`).
+
+    ⚠️ **Leave-one-out, even though nothing here is being graded.** An edge in
+    its own donor pool borrows partly from itself, which on a street with one
+    measured edge means borrowing its own answer — and this reading exists to be
+    an *independent* second opinion on the strip. The grader's own borrow is
+    leave-one-out for the same reason wearing a different hat (`Q127`).
+    """
+    on_street: dict[tuple[str, bool], list[tuple[int, float]]] = defaultdict(list)
+    for edge in edges:
+        name = edge.road_name.get("en") or edge.road_name.get("zh")
+        if not name:
+            continue
+        width = measured.get(edge.id)
+        if width is not None:
+            on_street[(name, edge.direction == BOTH)].append((edge.id, width))
+    out: dict[int, float] = {}
+    for edge in edges:
+        name = edge.road_name.get("en") or edge.road_name.get("zh")
+        if not name:
+            continue
+        others = [
+            width for other, width in on_street[(name, edge.direction == BOTH)] if other != edge.id
+        ]
+        if others:
+            out[edge.id] = float(np.median(others))
+    return out
+
+
+def _confirmed(
+    strip: dict[int, float],
+    voters: dict[str, dict[int, float]],
+    within_m: float,
+    already_measured: Container[int],
+) -> dict[int, tuple[float, str]]:
+    """Each strip width an independent reading lands within `within_m` of, and which.
+
+    🔴 **The ray survey is NOT a voter and may never become one.** On an edge it
+    measured it *is* the answer, so "agrees with another reading" degenerates
+    into "agrees with the answer" — `Q127` measured the combinations at 0.63 m by
+    construction that way. It does not appear in `voters`, and the assertion
+    below is the other half of that: no edge the survey licensed is offered a
+    strip at all, so the two can never be asked about the same edge.
+
+    ⚠️ **The strip alone is not enough and that is the whole design.** `Q127`
+    graded it at |p90| 2.53 m pooled and 4.69 m on short edges — no better than
+    the invented width it replaces. Confirmed it reads 1.17 / 1.35 m.
+
+    ⚠️ **First voter in iteration order wins the attribution**, and the order is
+    the caller's. It names which reading agreed, so it must not be a `set`.
+    """
+    out: dict[int, tuple[float, str]] = {}
+    for edge_id, width in strip.items():
+        assert edge_id not in already_measured, (
+            f"e{edge_id} carries a ray-survey width and was offered a strip; "
+            "the survey would be confirming itself"
+        )
+        for name, reading in voters.items():
+            other = reading.get(edge_id)
+            if other is not None and abs(other - width) <= within_m:
+                out[edge_id] = (width, name)
+                break
+    return out
 
 
 def _stations_agree(spans: list[float], agree_m: float | None) -> bool:
@@ -1141,11 +1290,104 @@ def measure(
     # regression out of an off-grade change.
     # ⚠️ Off-grade needs nothing from it: the deck licenses a *width*, and
     # `lanes` stays authored up there.
-    rows = _read_lane_rows(
-        city, region_id, transform, [edge for edge in walked if edge.elevation_level == 0]
-    )
-    _resolve_with_rows(report, rows, bounds)
+    at_grade = [edge for edge in walked if edge.elevation_level == 0]
+    symbols, two_way = _read_lane_rows(city, region_id, transform, at_grade)
+
+    # ── the confirmed HyD strip, where no ray reached (`Q128`) ──
+    #
+    # 🔴 **Third and last, after both ray licences, and offered only what they
+    # left.** The strip is a weaker reading — |p90| 2.53 m alone against the
+    # survey's 0.10 — so it is a fallback and never a competitor, and
+    # `_confirmed` asserts the two are never asked about one edge.
+    # ⚠️ **Before `_resolve_with_rows`**, so a strip-licensed edge gets a bracket
+    # the arrows can then resolve, exactly as a ray-licensed one does.
+    _measure_strips(report, city, region_id, transform, edges, symbols, at_grade, bounds)
+
+    # ⚠️ **A second pass, after every bracket exists rather than inside the
+    # station loop.** The width survey does not change and cannot be made to
+    # depend on the arrows: keeping the two apart is what lets the row be tested
+    # on its own, and what keeps a failure to read the arrows from moving a
+    # width.
+    # 🔴 **Level 0 only, and NOT the walked set (`Q103`).** The row's hosting
+    # rule is written for the street — `_read_lane_rows` says the nearest
+    # level-0 edge to a symbol on a deck *is* the street — so offering it
+    # off-grade edges lets an arrow host to the flyover above the road it is
+    # painted on. Measured: handed `walked`, it moved `e263`'s count 3 -> 2 and
+    # `tools/ground_clearance.py` went 87 -> 89 level-0 edges, a level-0
+    # regression out of an off-grade change.
+    # ⚠️ Off-grade needs nothing from it: the deck licenses a *width*, and
+    # `lanes` stays authored up there.
+    _resolve_with_rows(report, _widest_rows(symbols, two_way=two_way), bounds)
     return report
+
+
+def _measure_strips(
+    report: CarriagewayReport,
+    city: Config,
+    region_id: str,
+    transform: GameTransform,
+    edges: list,
+    symbols: dict[int, list[_Symbol]],
+    at_grade: list,
+    bounds: WidthBounds,
+) -> None:
+    """Publish HyD's strip where an independent reading confirms it (`Q128`).
+
+    ⚠️ **Silent unless the city declares `confirm_within_m`.** `Q127` swept that
+    tolerance and found a trade curve rather than a plateau, so it is a value a
+    city chooses; a region that has not chosen one publishes no strip at all and
+    this stage is byte-identical without it.
+    """
+    survey = city.carriageway_survey
+    if survey is None or survey.confirm_within_m is None:
+        return
+    area = carriageway_area.measure(
+        city,
+        region_id,
+        transform,
+        edges,
+        max_ray_m=MAX_RAY_M,
+        continuation_deg=bounds.pair_bearing_tolerance_deg,
+    )
+    report.strip_rings = area.rings
+    report.strip_stations_unsurveyed = area.stations_unsurveyed
+    report.strip_read = len(area.run_m)
+
+    # Offered only the edges no ray licensed, and only those the bounds admit.
+    # ⚠️ **The bounds check is this reading's whole refusal** — there is no span
+    # to decompose and nothing to cross, so `_license` has no question to answer
+    # and `_publish` is called directly.
+    unlicensed = {
+        edge_id: width for edge_id, width in area.run_m.items() if edge_id not in report.assigned_m
+    }
+    offered = {
+        edge_id: width
+        for edge_id, width in unlicensed.items()
+        if bounds.hard_min_m <= width <= bounds.max_m
+    }
+    report.strip_on_ray_measured = len(area.run_m) - len(unlicensed)
+    report.strip_outside_bounds = len(unlicensed) - len(offered)
+    report.strip_agreement_m = [
+        abs(width - report.assigned_m[edge_id])
+        for edge_id, width in area.run_m.items()
+        if edge_id in report.assigned_m
+    ]
+    # ⚠️ **Order is the attribution order**, so the stronger reading is asked
+    # first and `width_confirmed_by` names the one that actually agreed.
+    voters = {
+        "arrows": _row_widths(symbols),
+        "street": _street_widths(at_grade, report.assigned_m),
+    }
+    confirmed = _confirmed(offered, voters, survey.confirm_within_m, report.assigned_m)
+    report.strip_unconfirmed = len(offered) - len(confirmed)
+    by_edge = {edge.id: edge for edge in at_grade}
+    for edge_id, (width, voter) in confirmed.items():
+        edge = by_edge.get(edge_id)
+        if edge is None:
+            continue
+        report.publishers[edge_id] = survey.area_publisher
+        report.confirmed_by[edge_id] = voter
+        _publish(report, edge, width, BASIS_STRIP, bounds)
 
 
 def _resolve_with_rows(
@@ -1393,8 +1635,8 @@ def _read_lane_rows(
     region_id: str,
     transform: GameTransform,
     edges: list,
-) -> dict[int, LaneRow]:
-    """The lane count each edge's own turn arrows state, keyed by edge id.
+) -> tuple[dict[int, list[_Symbol]], frozenset[int]]:
+    """Every edge's turn arrows, keyed by edge id, with the two-way edges beside them.
 
     ⚠️ **An edge's count is the widest row it carries, not its rows averaged** —
     `arrows._count_rows`'s rule. A carriageway holding three arrows abreast has
@@ -1483,7 +1725,11 @@ def _read_lane_rows(
             )
 
     two_way = frozenset(edge_id for edge_id, is_one_way in one_way.items() if not is_one_way)
-    return _widest_rows(rows, two_way=two_way)
+    # ⚠️ **The raw symbols, not the reduced rows** — since `Q128` the caller
+    # reduces them twice, once to a lane COUNT (`_widest_rows`) and once to a
+    # lane PITCH (`_row_widths`), and re-reading the sources for the second
+    # would double the stage's cost to save handing back a dict.
+    return rows, two_way
 
 
 def _widest_rows(

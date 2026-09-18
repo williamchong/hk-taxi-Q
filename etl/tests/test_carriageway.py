@@ -44,6 +44,7 @@ from pipeline.carriageway import (
     _agree_m,
     _along_at,
     _assign,
+    _confirmed,
     _deck_lane_ceiling,
     _deck_reach,
     _deck_width_or_none,
@@ -53,10 +54,12 @@ from pipeline.carriageway import (
     _resolve_with_rows,
     _rims_at_vertices,
     _row_reading,
+    _row_widths,
     _Segments,
     _station_scatter,
     _stations,
     _stations_agree,
+    _street_widths,
     _Symbol,
     _union_boundary,
     _widest_rows,
@@ -89,10 +92,17 @@ def _kerbs(*lines: list[tuple[float, float]]) -> _Segments:
 
 
 class _Edge:
-    """The three fields `_license` reads off a graph edge."""
+    """The fields `_license` and `_street_widths` read off a graph edge."""
 
-    def __init__(self, direction: str) -> None:
+    def __init__(self, direction: str, *, edge_id: int = 0, name: str | None = None) -> None:
         self.direction = direction
+        self.id = edge_id
+        self.road_name = {"en": name, "zh": None}
+
+
+def _symbol(along_m: float, offset_m: float, *, backward: bool = False) -> _Symbol:
+    """One arrow on a 4 m glyph, which is what the run bar is a fraction of."""
+    return _Symbol(along_m=along_m, offset_m=offset_m, length_m=4.0, backward=backward)
 
 
 class TestRay:
@@ -291,6 +301,93 @@ class TestStationFloor:
         the same median whatever the two-station rule decides — "0 lost, 0 moved"
         is then structural rather than a measurement to repeat each build."""
         assert "agree_m" not in inspect.signature(_assign).parameters
+
+
+class TestTheConfirmedStrip:
+    """`Q128`: HyD's paint read as a strip, published only where something agrees.
+
+    🔴 **The confirmation IS the licence.** `Q127` graded the strip alone at
+    |p90| 2.53 m against the ray survey's own widths and 4.69 m on the short
+    edges it exists for — no better than the invented `lanes x lane_width_m` it
+    replaces. So what these pin is that the agreement cannot quietly stop
+    happening, and that the survey can never end up confirming itself.
+    """
+
+    def test_a_strip_needs_an_independent_reading_within_tolerance(self) -> None:
+        confirmed = _confirmed({1: 8.0, 2: 8.0}, {"arrows": {1: 8.9, 2: 10.0}}, 1.0, set())
+
+        assert confirmed == {1: (8.0, "arrows")}
+
+    def test_the_confirming_reading_is_named(self) -> None:
+        """`width_confirmed_by` is the evidence, so the first voter to agree owns
+        the row — and the caller's order is what decides which is asked first."""
+        voters = {"arrows": {1: 20.0}, "street": {1: 8.2}}
+
+        assert _confirmed({1: 8.0}, voters, 1.0, set())[1][1] == "street"
+
+    def test_a_strip_is_never_offered_an_edge_a_ray_measured(self) -> None:
+        """🔴 The other half of `Q127`'s rule that the ray survey is not a voter.
+        It cannot confirm a strip, and it must never be asked to: on an edge it
+        measured it IS the answer. The offer is filtered before this, so reaching
+        here at all is the filter having come loose."""
+        with pytest.raises(AssertionError, match="confirming itself"):
+            _confirmed({1: 8.0}, {"arrows": {1: 8.0}}, 1.0, {1})
+
+
+class TestRowWidths:
+    """`pitch x abreast` — the confirming reading that owes nothing to a kerb."""
+
+    def test_two_arrows_abreast_state_a_lane_pitch(self) -> None:
+        row = [_symbol(0.0, -1.6), _symbol(0.0, 1.6)]
+
+        assert _row_widths({1: row})[1] == pytest.approx(6.4)
+
+    def test_a_single_arrow_states_no_pitch(self) -> None:
+        """`_ROW_MIN`'s rule at a second reading: one arrow is a marking, and
+        there is no gap between it and anything to measure.
+
+        ⚠️ **True by arithmetic as well as by the guard** — one lane centre has
+        no gap to difference — so this documents the behaviour and is not a
+        ratchet on `_ROW_MIN`. The row below is the one that tests a count.
+        """
+        assert _row_widths({1: [_symbol(0.0, 0.0)]}) == {}
+
+    def test_the_pitch_multiplies_the_WIDEST_row_on_the_edge(self) -> None:
+        """`_widest_rows`' rule at a second reading: a carriageway holding three
+        abreast is three lanes wide at that station whatever the rest of it is
+        painted with. The pitch is pooled over every row and the COUNT is the
+        widest, so a two-arrow row 40 m away does not halve the answer."""
+        # ⚠️ The WIDE row first, deliberately: with it last, "the widest row"
+        # and "the last row read" give the same answer and the test cannot tell
+        # a max from an assignment.
+        rows = {
+            1: [
+                _symbol(0.0, -3.2),
+                _symbol(0.0, 0.0),
+                _symbol(0.0, 3.2),
+                _symbol(40.0, -1.6),
+                _symbol(40.0, 1.6),
+            ]
+        }
+
+        assert _row_widths(rows)[1] == pytest.approx(9.6)
+
+
+class TestStreetWidths:
+    def test_an_edge_never_borrows_from_itself(self) -> None:
+        """Leave-one-out even though nothing here is graded: this reading exists
+        to be an INDEPENDENT second opinion, and a street with one measured edge
+        would otherwise hand that edge back its own answer."""
+        edges = [_Edge(FORWARD, edge_id=1, name="A"), _Edge(FORWARD, edge_id=2, name="A")]
+
+        borrowed = _street_widths(edges, {1: 8.0, 2: 12.0})
+
+        assert borrowed == {1: pytest.approx(12.0), 2: pytest.approx(8.0)}
+
+    def test_a_two_way_street_never_lends_to_a_one_way_carriageway(self) -> None:
+        edges = [_Edge(BOTH, edge_id=1, name="A"), _Edge(FORWARD, edge_id=2, name="A")]
+
+        assert _street_widths(edges, {1: 8.0}) == {}
 
 
 class TestTheDeckBarDidNotFollow:
