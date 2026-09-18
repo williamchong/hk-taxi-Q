@@ -23013,7 +23013,7 @@ an edge a ray licensed is never offered a strip, so it is true by construction r
 | measured widths | 305 → **393** | 99 → **124** |
 | `lanes_source` measured / arrows | 158 / 61 → **197 / 79** | 63 / 11 → **75 / 16** |
 
-✅ **The cross-check the stage gets for free.** On the 289 Wan Chai edges where both a ray and a strip
+✅ **The only in-bundle grading of the strip — and it is NOT free.** On the 289 Wan Chai edges where both a ray and a strip
 read the same road, `|strip − ray|` is p50 **0.17** / p90 **2.53** / max 12.24 m — and that p90 is
 `Q127`'s independently derived 2.53 to two places, from a second implementation. ⚠️ Recorded, never
 gated: those edges publish the ray's answer whatever it says, and it is agreement about the *long*
@@ -23059,6 +23059,39 @@ floor at zero — so 354 of Wan Chai's 393 measured edges narrow, by a median **
 all of them), the box-junction flanks, `paint_clearance`, the junction caps, and the arrows. And the
 question it cannot answer at all — **whether a city drawn at its true widths plays well** — is the
 user's, not a grader's.
+
+### 🔴 What it costs at build time, and the two wins measured but not taken
+
+⚠️ **The roads stage went 10.3 s → 24.1 s on Wan Chai** — 2.3×, all of it the strip raster
+(`carriageway_area.measure` 14.0 s). Recorded rather than hidden, because `Q125` is the precedent:
+a build-time regression is invisible to every counter the stage publishes.
+
+Where it goes, profiled: `inside_polygon` **9.8 s**, the HyD read **2.2 s**, the nearest-segment
+search **1.6 s**, everything else 0.2 s. ✅ **The two narrowings that look available are already
+tight, and that is measured rather than assumed** — bucketing the corridor points on the ring grid
+hands `inside_polygon` the *identical* 10,624,194 points (the ring-bbox clip is already as tight as
+an index would be), and the segment prefilter leaves a p50 of 22 candidates out of 2,961. The 9.8 s
+is intrinsic to 2.37e9 crossing-number cells.
+
+Two real wins, both **decisions rather than cleanups**, so neither is taken here:
+
+1. **Cache the layer read — 2.15 s.** `carriageway._read_publisher` and `carriageway_area.read_rings`
+   parse the same `INV_PG.geojson` with identical arguments, and `gdb.read_layer` memoises nothing.
+   ⚠️ The duplication those two docstrings defend is the **grade filters**, not the I/O — a read-level
+   cache leaves both filters where they are. It touches shared infrastructure every stage uses,
+   which is why it is a change of its own.
+2. **Skip rastering the edges a ray already measured — 7.2 s.** 59.6% of the stations belong to them,
+   and the offered set is **byte-identical** without them. ⚠️ It costs exactly `strip_agreement_m`,
+   the only in-bundle grading of the strip — so this is the instrument's price, and paying it is the
+   trade rather than an oversight.
+
+🚫 **Refuted, do not re-propose**: narrowing the corridor from ±15 m to ±8.5 m on the argument that
+`width_bounds.max_m` is 16.5. It is 14.65 → 9.16 s and **not inert** — 8 more edges publish and 10+
+widths move, because a run bounded by a gap on one side and the raster edge on the other truncates
+without ever reaching the ceiling that would refuse it.
+
+⬜ Threading the per-edge loop measures 2.31x at 4 threads and would be the first concurrency in
+`etl/`; noted, not proposed.
 
 ### ⬜ What is left
 

@@ -2522,14 +2522,19 @@ def main(argv: list[str] | None = None) -> int:
             # it and `_confirmed` asserts it — and it is printed so the filter is
             # visible rather than assumed.
             log.info(
-                "    HyD strip: %d rings read, %d edges measured; %d published confirmed, "
-                "%d unconfirmed, %d outside TD's bounds, %d on an edge a ray already measured",
+                "    HyD strip: %d rings read (%d stations they cover nothing at), %d edges "
+                "measured; %d published confirmed, %d unconfirmed, %d outside TD's bounds, "
+                "%d on an edge a ray already measured",
                 width.strip_rings,
+                # ⚠️ **Not a coverage failure.** HyD does not tile the whole region —
+                # `Q104` records HKCEC standing on no HyD carriageway at all — so this
+                # is the ceiling on what the strip can ever reach, not a defect.
+                width.strip_stations_unsurveyed,
                 width.strip_read,
                 len(width.confirmed_by),
                 width.strip_unconfirmed,
                 width.strip_outside_bounds,
-                width.strip_on_ray_measured,
+                len(width.strip_agreement_m),
             )
             if width.strip_agreement_m:
                 # ⚠️ **Graded, never gated.** These edges publish the RAY's answer

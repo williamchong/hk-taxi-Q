@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import inspect
 import math
+from types import SimpleNamespace
 from typing import ClassVar
 
 import numpy as np
@@ -51,6 +52,7 @@ from pipeline.carriageway import (
     _lane_bracket,
     _lanes,
     _license,
+    _read_lane_rows,
     _resolve_with_rows,
     _rims_at_vertices,
     _row_reading,
@@ -332,6 +334,18 @@ class TestTheConfirmedStrip:
         here at all is the filter having come loose."""
         with pytest.raises(AssertionError, match="confirming itself"):
             _confirmed({1: 8.0}, {"arrows": {1: 8.0}}, 1.0, {1})
+
+
+class TestTheLaneRowReader:
+    def test_a_city_with_no_arrows_returns_the_pair_its_caller_unpacks(self) -> None:
+        """⚠️ `Q128` made this reader return the raw symbols AND the two-way set,
+        because the caller reduces them twice. The early exit kept returning a
+        bare dict, which unpacks into two names with a `ValueError` — on a city
+        that declares no `arrows:` block, which is the one configuration no
+        region here exercises."""
+        city = SimpleNamespace(arrows=None)
+
+        assert _read_lane_rows(city, "nowhere", None, []) == ({}, frozenset())
 
 
 class TestRowWidths:

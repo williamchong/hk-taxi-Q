@@ -5098,9 +5098,7 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         confirm_within_m=(
             None
             if body.get("confirm_within_m") is None
-            else _measures(body, f"{where}", ("confirm_within_m",), positive=True)[
-                "confirm_within_m"
-            ]
+            else _measures(body, where, ("confirm_within_m",), positive=True)["confirm_within_m"]
         ),
         # ⚠️ Absent keeps `(0,)`, which is the shipped bundle. An explicit empty
         # list is refused rather than read as "walk nothing": a survey that walks

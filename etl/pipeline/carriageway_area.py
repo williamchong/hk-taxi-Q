@@ -18,7 +18,7 @@ well as a 150 m one, which is exactly the population the survey cannot serve.
 against the survey's own widths, and 4.69 m on the short edges that need it —
 no better than the invented `lanes x lane_width_m` it would replace. What ships
 is the reading CONFIRMED by an independent one within a metre (`carriageway`'s
-`_confirm`), which reads 1.17 / 1.35 m. The strip is the candidate; the
+`_confirmed`), which reads 1.17 / 1.35 m. The strip is the candidate; the
 confirmation is the licence.
 
 ⚠️ **A second implementation of `tools/width_evidence.read_area`, deliberately.**
@@ -40,6 +40,7 @@ from pipeline.config import CARRIAGEWAY_AREA, CarriagewayEdge, Config
 from pipeline.crs import GameTransform
 from pipeline.fetch import source_reads
 from pipeline.geometry import inside_polygon
+from pipeline.polyline import plan_lengths_2d, plan_steps_2d
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class Openings:
     already had — LEIGHTON ROAD `e263` 10.57 → 15.34 m — because a re-admitted
     station casts across the mouth to the far kerb. Here the mouths only *drop*
     stations from a reading that is published nowhere the survey speaks, so it
-    cannot move a measured width; `carriageway._confirm` asserts that rather than
+    cannot move a measured width; `carriageway._confirmed` asserts that rather than
     trusting it. The reading with mouths dropped is the one `Q127` ranked best of
     every single reading it graded.
 
@@ -311,13 +312,18 @@ def _stations(plan: np.ndarray, spacing_m: float) -> tuple[np.ndarray, np.ndarra
     symmetric about the centreline and the run is measured through it — and it is
     stated rather than left to be noticed, because `Q78` is what happens when a
     frame is assumed.
+
+    ⚠️ **The along-the-line arithmetic is `polyline`'s and never hand-rolled** —
+    that module exists so it is written once, and `Q100` retired the third copy
+    of it. Only the per-segment *vectors* are taken here, because the unit
+    tangent needs them and `polyline` publishes lengths rather than steps.
     """
     steps = np.diff(plan, axis=0)
-    lengths = np.hypot(steps[:, 0], steps[:, 1])
+    lengths = plan_steps_2d(plan)
     total = float(lengths.sum())
     if total <= 0.0:
         return np.empty((0, 2)), np.empty((0, 2))
-    at = np.concatenate([[0.0], np.cumsum(lengths)])
+    at = plan_lengths_2d(plan)
     points, normals = [], []
     for along in np.arange(spacing_m * 0.5, total, spacing_m):
         index = min(max(int(np.searchsorted(at, along, side="right") - 1), 0), len(steps) - 1)

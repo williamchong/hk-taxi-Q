@@ -175,11 +175,15 @@ class CarriagewayReport:
     # the design rests on — the strip alone reads |p90| 2.53 m and is no better
     # than the invented width — so a fall towards zero means the confirmation
     # has stopped confirming, not that the reading improved.
-    # 🔴 **`strip_agreement_m` is the cross-check this stage gets for free.**
-    # The area reading walks every level-0 edge, so on the ones a ray already
-    # measured there are TWO independent readings of the same width — and
-    # that is the only place in the bundle where the strip can be graded
-    # against something. It is recorded and never gated: those edges publish
+    # 🔴 **`strip_agreement_m` is the only place in the BUNDLE the strip can be
+    # graded, and it is NOT free — it costs 7.2 s of a 24 s stage.** The raster
+    # walks every level-0 edge, and 59.6% of the stations belong to edges a ray
+    # already measured, whose strip is read only to be compared and thrown away.
+    # Skipping them is byte-identical on every published width (measured) and
+    # loses exactly this line, so the cost is the instrument's price and not
+    # waste. Its LENGTH is how many edges both read — a separate count would be
+    # the same filter written twice and free to disagree.
+    # It is recorded and never gated: those edges publish
     # the ray's answer whatever it says, so a widening spread is a finding to
     # go and look at. ⚠️ It is NOT the licence — `Q127` grades the strip
     # against the survey on the same population and reads |p90| 2.53 m, so a
@@ -188,7 +192,6 @@ class CarriagewayReport:
     strip_rings: int = 0
     strip_stations_unsurveyed: int = 0
     strip_read: int = 0
-    strip_on_ray_measured: int = 0
     strip_agreement_m: list[float] = field(default_factory=list)
     strip_outside_bounds: int = 0
     strip_unconfirmed: int = 0
@@ -741,22 +744,19 @@ def _street_widths(edges: list, measured: dict[int, float]) -> dict[int, float]:
     an *independent* second opinion on the strip. The grader's own borrow is
     leave-one-out for the same reason wearing a different hat (`Q127`).
     """
+    named = [
+        (edge, (name, edge.direction == BOTH))
+        for edge in edges
+        if (name := edge.road_name.get("en") or edge.road_name.get("zh"))
+    ]
     on_street: dict[tuple[str, bool], list[tuple[int, float]]] = defaultdict(list)
-    for edge in edges:
-        name = edge.road_name.get("en") or edge.road_name.get("zh")
-        if not name:
-            continue
+    for edge, street in named:
         width = measured.get(edge.id)
         if width is not None:
-            on_street[(name, edge.direction == BOTH)].append((edge.id, width))
+            on_street[street].append((edge.id, width))
     out: dict[int, float] = {}
-    for edge in edges:
-        name = edge.road_name.get("en") or edge.road_name.get("zh")
-        if not name:
-            continue
-        others = [
-            width for other, width in on_street[(name, edge.direction == BOTH)] if other != edge.id
-        ]
+    for edge, street in named:
+        others = [width for other, width in on_street[street] if other != edge.id]
         if others:
             out[edge.id] = float(np.median(others))
     return out
@@ -1365,7 +1365,6 @@ def _measure_strips(
         for edge_id, width in unlicensed.items()
         if bounds.hard_min_m <= width <= bounds.max_m
     }
-    report.strip_on_ray_measured = len(area.run_m) - len(unlicensed)
     report.strip_outside_bounds = len(unlicensed) - len(offered)
     report.strip_agreement_m = [
         abs(width - report.assigned_m[edge_id])
@@ -1638,20 +1637,20 @@ def _read_lane_rows(
 ) -> tuple[dict[int, list[_Symbol]], frozenset[int]]:
     """Every edge's turn arrows, keyed by edge id, with the two-way edges beside them.
 
-    ⚠️ **An edge's count is the widest row it carries, not its rows averaged** —
-    `arrows._count_rows`'s rule. A carriageway holding three arrows abreast has
-    three lanes at that station whatever the rest of it is painted with, and a
-    mean lets a long edge with one marked junction read as two.
+    ⚠️ **Raw symbols, because `Q128` reduces them TWICE** — once to a lane count
+    (`_widest_rows`) and once to a lane pitch (`_row_widths`) — and re-reading
+    the sources for the second would double this stage's cost. Both reductions
+    carry their own rules; this reader's job ends at the host join.
 
-    🔴 **The count is a LOWER BOUND on lanes, never an equality**, because a lane
-    carrying no turn arrow is invisible to it. That is the whole reason
+    🔴 **The count a row states is a LOWER BOUND on lanes, never an equality**,
+    because a lane carrying no turn arrow is invisible to it. That is why
     `_resolve_with_rows` may only read a row *inside* a bracket and never below
     one: **7** edges in the region state fewer lanes than their own width
     brackets.
     """
     spec = city.arrows
     if spec is None:
-        return {}
+        return {}, frozenset()
 
     hosts = Segments.of([{"id": edge.id, "polyline": edge.polyline} for edge in edges])
     one_way = {edge.id: edge.direction != BOTH for edge in edges}
