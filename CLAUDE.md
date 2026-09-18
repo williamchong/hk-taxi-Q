@@ -12,7 +12,7 @@ them without explicit instruction from the user.
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
 | Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true, and the way it was re-measured was wrong. ⚠️ **`Q84` corrected it**: the drift window is *not* 0.01–0.02 wide and `drift_slip_threshold_deg`'s 14° *is* reachable, at `drift_rear_grip_scale` **0.6695** — the cliff was a 0.02 sweep grid read through a `%.2f` label that could not resolve its own step. What survives is the cost, restated: peak slip and *dwell* pull opposite ways against speed, so 0.6695 holds 14° for **0.05 s** where the shipped 0.66 holds it for **0.57 s**, and landing the peak on the threshold is the wrong aim. The engine model ships anyway; `docs/DECISIONS.md` `Q50` and `Q84` are the record |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
-| ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL, so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
+| ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`, `shapely`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL and `shapely` its own GEOS (`Q129`, approved 2026-09-18), so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data. ⚠️ **3D-BIT00 Level 1 was named here and never fetched** — iB1000, the map it is extruded from, took its place at `P3-7a`/`Q47` (`Q100`) |
 | Region (PoC) | **Wan Chai → Causeway Bay**, ~1.5 km² | Natural circuit, diegetic map edges, moderate Z-complexity |
 | Art direction | Low-poly flat-shaded; **accurate city, toy vehicles** | Recognisability requires accurate massing; charm comes from the cars |
@@ -396,6 +396,28 @@ Common emoji for this project:
   ⚠️ **The `e99` gate**: `carve.py` cuts its prism at `edge["width_m"]`, and it is the only carved Wan Chai edge still `authored`. `carve.json`'s per-edge rows must be byte-identical, and a strip on a carved edge is a decision to bring back, not to absorb. ⚠️ `--from roads` is refused by the carve marker — rebuild `--from buildings`.
   ⚠️ **Most new widths move NO geometry**: `floor_default_m` is 10.24 m and a measured width under it draws the same ribbon, so count the widths clearing the floor first and expect the railing/sign/lamp/box/paint battery to be inert where that count is zero. Today it is **8 of 103** on Wan Chai and **7 of 57** on Causeway Bay.
   🔴 **`strip_agreement_m` is the only in-bundle grading of the strip and it COSTS 7.2 s of a 24 s stage** — the raster walks every level-0 edge and 59.6% of the stations are on edges a ray already measured. Skipping those is byte-identical on every published width, so that time is the instrument's price; it is a trade to take deliberately, never by accident. It is — the 289 edges both a ray and a strip read — and it is recorded, never gated: those edges publish the ray's answer, and it is agreement about the long edges rather than the short ones the strip serves. ⚠️ **This stage is 2.3x slower than it was (10.3 → 24.1 s) and the raster is all of it** — profiled, with the two apparent narrowings measured already-tight and a ±8.5 m corridor measured NOT inert. Two real wins are priced and deliberately untaken; do not re-derive them. Numbers in `Q128`.
+- 🔴 **`tools/carriageway_region.py`, or anything that builds the level-0 carriageway as a REGION
+  (`Q129`, `P3-33`): paste its four tables for `wan_chai` AND `causeway_bay`** — R's composition,
+  the span against the ray survey, the end-pair table **both ways** (every station and mid-block),
+  and the orphan line. 🔴 **The finding is the END-PAIR table and the span agreement is not**: where
+  R is HyD's, the ray survey's third publisher is that same polygon's boundary, so |p50| 0.04 m says
+  the partition does not move a kerb and nothing more. ⚠️ **Quote the mid-block column** — a station
+  inside the junction guard ends in a share by geometry — and quote the ray-measured row beside it
+  as the control (84.3% / 93.5% kerb|kerb against 19.8% / 25.6% on `authored`).
+  🔴 **Where HyD is silent the rule is RAILS, not faces, and that is measured**: the line publishers'
+  kerbs do not close (24 faces, 0.3% of the length, against 14.0% silent — GLOUCESTER ROAD's main
+  carriageway and all of HKCEC). Do not re-propose polygonising them. ⚠️ **R is cut to the region's
+  own rectangle**: unclipped, asphalt the graph does not reach is handed to the nearest edge (6.8%
+  orphan, one piece 228 m from its owner). ⚠️ **`silent_m[0]` is the only place R is not read from a
+  publisher** — the graph's `width_m`, 2.1% / 2.2% of the length — so a rise there is the invented
+  width coming back. 🔴 **Its normal is RIGHT of travel like `carriageway._stations`, but here the
+  sign is load-bearing**: every printed figure is a sum or a sorted pair, so the first build had the
+  sides swapped with no table moved. `test_left_is_left_of_travel` is the ratchet; mutation-check it.
+  ⚠️ **A broken Voronoi cell is REPAIRED, never dropped** (1 of 45,086 on Wan Chai) — a dropped cell
+  is asphalt with no owner — and the cells are not a valid coverage, so `coverage_union_all` is not
+  the fix. ⚠️ `shapely>=2.1` is a real floor: `voronoi_polygons(ordered=True)` is what maps a cell
+  to its owner. 🚫 **A territory span is a SHARE and never a `width_m`** (`Q57`). It grades rather
+  than checks and exits 0. Numbers in `Q129`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
   travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its

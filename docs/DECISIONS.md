@@ -23108,3 +23108,130 @@ the roads stage's `carriageway:` block; `tools/carriageway_margin.py`, `tools/la
 **See.** `Q127` for the readings and the tolerance sweep · `Q126` for the two-station sweep and the
 causes · `Q95` for the ray survey and the floor · `Q94` for HyD's polygons · `Q19` for what narrowing
 costs · `Q72` for why a counter is mutated rather than read · `Q62` for why the evidence is a frame
+
+---
+
+## `Q129` — A width is the carriageway's, and most open edges are not a carriageway
+
+**Asked 2026-09-18, by the user, straight after `Q128`:** is the width completely fixed by recent
+work? It is not — 341 of Wan Chai's 734 level-0 edges are still `authored` — and the second half of
+the question was whether a *new* approach could finish it. **Two calls taken by the user before any
+code**: draw the carriageway region itself (option A of three), because *"we removed road widening
+exactly to make stuff trivial"*, with the drive as the judge; and `shapely` approved as a
+dependency.
+
+### 🔴 The finding, in one line
+
+On the edges no survey has closed, **about four cross-sections in five are bounded by ANOTHER
+CENTRELINE'S share of the same asphalt and not by a kerb**, so the number `Q95`'s survey asks for
+does not exist there and no tolerance, station count or extra publisher can license it.
+
+Road Network v2 draws several centrelines per carriageway — slip lanes, junction links, the lanes of
+GLOUCESTER ROAD, where `e373`, `e375` and `e174` run inside one 25 m carriageway with no kerb between
+them. A width is a property of the carriageway; a centreline is not one.
+
+### ✅ Measured twice, by two instruments that share nothing
+
+**First, a scratch flood** (2026-09-18, not committed): outward from every level-0 centreline on a
+0.25 m grid, stopping at TD's and iB1000's kerb lines and HyD's outline, each cell owned by the
+centreline that reached it first. On still-authored edges it read 28 / 43 / 22 / 8% (Wan Chai) and
+19 / 60 / 10 / 10% (Causeway Bay) for kerb both sides / kerb and a share / share both sides / open —
+the *"65–70%"* this question was opened on.
+
+**Then `tools/carriageway_region.py`**, exact rather than rastered, which is what is reproducible:
+
+| stations on `authored` edges | Wan Chai | | Causeway Bay | |
+|---|---|---|---|---|
+| | every | mid-block | every | mid-block |
+| stations | 3,293 | 1,754 | 952 | 628 |
+| kerb \| kerb — **a width exists** | 20.5% | **19.8%** | 23.8% | **25.6%** |
+| kerb \| share | 53.2% | 61.5% | 66.6% | 73.2% |
+| share \| share | 26.1% | 18.4% | 9.2% | 0.8% |
+| open | 0.2% | 0.3% | 0.3% | 0.3% |
+
+⚠️ **Quote the mid-block column, and that is a correction to the flood's table.** A station inside
+the 12 m junction guard ends in a share *by geometry* — the side street's territory is what it
+faces — so the every-station figure over-reads the finding on short edges. Mid-block it does not
+fall: it **rises** on Causeway Bay. The control is the ray-measured population over the same walk:
+**84.3%** and **93.5%** kerb | kerb mid-block, which is the survey having already taken the edges
+where a width exists. `hyd_strip` edges read like `authored` ones (33.9% / 23.5%), which is `Q128`'s
+"the strip alone is no better than the invented width" seen from the other side.
+
+⚠️ The flood's *open* 8–10% was the raster leaking through gaps in the linework; exact, it is 0.3%.
+
+### ✅ The instrument is sound where a width exists — and that agreement is partly built in
+
+Territory span against the ray survey's `width_m`, mid-block kerb | kerb stations, median per edge:
+
+| | n | p50 | \|p50\| | \|p90\| | max |
+|---|---|---|---|---|---|
+| Wan Chai | 285 | −0.00 | 0.04 | 1.08 | 10.63 |
+| Wan Chai, edges < 60 m | 101 | +0.00 | 0.03 | 1.20 | 10.63 |
+| Causeway Bay | 94 | +0.00 | 0.04 | 0.91 | 12.29 |
+| Causeway Bay, < 60 m | 53 | +0.01 | 0.03 | 0.38 | 12.29 |
+
+🔴 **Not a second source.** Where R is HyD's, the ray survey's third publisher is that same
+polygon's boundary. What 4 cm says is that the partition does not move a kerb; the finding is the
+end-pair table, on the population where no such agreement is possible. `hyd_strip` is deliberately
+not in this reference, for `width_evidence.MEASURED`'s reason.
+
+### The model the user chose — R, and a territory per edge
+
+* **R** — the at-grade carriageway as one plan region: the union of HyD's Pavement Polygons, **holes
+  kept** (a region that is going to be drawn must not pave the island `read_rings` reads through),
+  and where HyD is silent, rails cast per station to the line publishers' kerbs. Cut to the region's
+  own rectangle.
+* **T_e** — R cut by the Voronoi cell of edge *e*'s centreline sampled at 1 m, foreign edges taking
+  part and owning nothing. Every square metre of R has exactly one owner, so two ribbons can neither
+  overlap nor fail to meet, and the join between two opposed carriageways is a shared boundary
+  rather than a search.
+
+| R, by level-0 centreline length | Wan Chai (45.2 km) | Causeway Bay (12.4 km) |
+|---|---|---|
+| on HyD's polygons | 86.1% · 276,925 m² | 87.4% · 74,627 m² |
+| HyD silent, a kerb line on both sides | 9.2% | 6.1% |
+| HyD silent, on one side | 2.7% | 4.3% |
+| HyD silent, on neither — **the graph's `width_m`** | **2.1%** (934 m) | **2.2%** (275 m) |
+| orphan territory (pieces not touching their owner) | 0.9% on 99 edges | 0.8% on 23 |
+| owned centreline past the rectangle R is cut to | 200 m | 141 m |
+
+So **the invented width survives on about 2% of the network**, against 46.5% of edges today.
+
+### 🚫 Refuted on the way, do not re-propose
+
+1. **The closed faces of the kerb linework as R where HyD is silent** — the plan's own first rule.
+   The line publishers' kerbs do not close: polygonised at a 5 cm snap they offer **24** faces a
+   silent Wan Chai centreline runs through, **0.3%** of the length, where HyD is silent under 14.0%
+   — GLOUCESTER ROAD's main carriageway (`e382`, `e383`, which the *ray* survey measured at 13–15 m)
+   and the whole of HKCEC. A ray does not need a closed face, so the rule is rails.
+2. **R unclipped.** The publishers are read past the rectangle and the graph is not, so the asphalt
+   out there goes to whichever edge is nearest: 6.8% orphan, one 1,839 m² piece **228.6 m** from its
+   owner. Clipped it is 0.9%.
+3. **Borrowing the width from the through-neighbour** — leave-one-out |p90| **3.23 m** on Wan Chai
+   (2.76 under 60 m) for 108 of 341 edges, the same order as `Q127`'s street borrow (3.74). A width
+   has to be read where it is.
+
+⚠️ **GEOS, twice**: one of 45,086 Voronoi cells comes back self-touching on the hull and the union
+then fails with *"unable to assign free hole to a shell"* — repaired with `make_valid`, never
+dropped, because a dropped cell is asphalt with no owner; and the cells are **not** a valid coverage,
+so `coverage_union_all` raises too. 🔴 **And the first build had left and right swapped with every
+table unmoved**, because every figure here is a sum or a sorted pair. `R1` publishes the two extents
+apart; `test_left_is_left_of_travel` fails on the swap and was mutation-checked.
+
+### What this does NOT decide
+
+🚫 **`width_m` does not move.** A territory's span is a *share* and not kerb-to-kerb, so publishing
+it as a width is `Q57`'s generalisation; lanes, the arrow snap and `e99`'s carve prism keep `Q128`'s
+five sources. 🚫 Levels ±1 keep their ribbons: every publisher here is a 2D plan that reads the
+street under a deck (`Q103`), and `Q107`'s rim clamp already cuts those. ⬜ The seam — 200 and 141 m
+of owned run past the rectangle — is `P3-33b`'s, with `join_seam.py` gaining an area check.
+⬜ Whether a city drawn at its true widths plays well is the user's drive (`P3-33f`), not a grader's.
+
+**Reproduce:** `.venv/bin/python tools/carriageway_region.py --region wan_chai` (7 s, of which 2.6 s
+is the HyD read); `--svg out.svg --window 150 0 450 250` for HKCEC, `--window 300 250 800 550` for
+GLOUCESTER ROAD.
+
+**See.** `Q128` for where the survey stopped · `Q127` for the readings it graded and the junction
+finding · `Q95` for the ray survey · `Q94` for HyD's polygons · `Q57` for pooling two populations ·
+`Q116` for the seam · `Q104`, `Q117`, `Q125` for the caps, flanks and pairing this model retires ·
+`PLAN.md` `P3-33` for the build

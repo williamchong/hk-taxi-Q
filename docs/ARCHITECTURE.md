@@ -8,7 +8,7 @@
 | Renderer | **Mobile** (primary), Compatibility for the web demo | Forward+ only if a desktop tier ever justifies it |
 | Physics | **Jolt** — Godot's default since 4.4 | Trimesh collision, and `VehicleBody3D` for the car since `Q50` reversed `P0-5a` (2026-08-18) |
 | Engine language | **GDScript**, statically typed | See below |
-| ETL | **Python 3.11+** — numpy, pyproj, pyyaml, pyogrio | Build-time only |
+| ETL | **Python 3.11+** — numpy, pyproj, pyyaml, pyogrio, shapely (`Q129`) | Build-time only |
 | Targets | iOS, Android, Windows/macOS/Linux (Steam) | Web export reserved for the free demo slice |
 
 ### ⚠️ The importer can reinstate `VehicleWheel3D` behind your back

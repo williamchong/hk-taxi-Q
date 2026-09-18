@@ -731,6 +731,32 @@ edge is a *measured* 10.55 m that the paint still overruns. `Q104` carries both 
   one quad thick, `cull_disabled` fixes from-behind and cannot fix edge-on, and the cure roughly
   doubles a 460,940-byte mesh. It needs its own budget argument, not a rider on a width task.
 
+### `P3-33` The level-0 road drawn as the carriageway region (`Q129`)
+
+Opened 2026-09-18 on the user's call: draw the carriageway **as an area**, take the widening off at
+level 0, and judge it from the seat. **The argument and the measurement are in `DECISIONS.md`
+`Q129`**; what is here is what each step is graded on. `shapely` approved the same day.
+
+The ribbon survives only as the carrier of lane coordinates and paint. Levels ±1 keep today's
+ribbons (`Q103`, `Q107`). 🚫 **`width_m` does not move in this task** — a territory's span is a share,
+not kerb-to-kerb (`Q57`).
+
+| Step | What | Graded on |
+|---|---|---|
+| `P3-33a` ✅ **built 2026-09-18 (`Q129`)** | **Record and instrument.** `Q129`; `shapely>=2.1`; `tools/carriageway_region.py` builds R and the territories read-only and stays on as the second implementation. | Its four tables on `wan_chai` and `causeway_bay`: R's composition, span against the ray survey (\|p50\| 0.04 m), the end-pair table (mid-block kerb\|kerb **19.8% / 25.6%** on authored edges), orphan 0.9% / 0.8%. |
+| `P3-33b` ⬜ | **Stage `region`, between `carve` and `surface`** — writes `carriageway_region.json`: R's rings, each T_e's ring, per-station left/right extents. Foreign edges take part in the partition. ⬜ **Decides the seam**: 200 / 141 m of owned run lies past the rectangle R is cut to. | **Inert**: `roads.glb` and every published file byte-identical. `|stage − tool|` on the per-station extents, as `Q95`'s two surveys are compared. `join_seam.py` gains an area analogue of *one owner per run*. |
+| `P3-33c` ⬜ | **`surface.py` level-0 geometry from the territories**; `carriageway[]` filled from the extents; `floor_default_m: 0` at level 0. Junction part of a territory takes `MARKING_CLASS_CAP`, split along the trim line; kerb is `R.buffer(kerb) − R`. `DrawnSurface` reads territory triangles as it reads cap fans. Schema bump, game half in the same commit (hard rule 5). | `lane_paint.py --sweep`, `box_extent.py` per box, `paint_clearance.py`, and frames at the `q19s` cameras shot twice a side and `cmp`'d after a forced re-import. ⚠️ Shared-boundary vertices snapped to 1 mm and their two owners' heights averaged; `paint_clearance`'s `deeper than` row is the tripwire. |
+| `P3-33d` ⬜ | **Deletions**, with their `CLAUDE.md` bullets and counters: `_stub_clusters`, `_through_corridors`, `_paint_flanks`, `_add_paint_stations`, `_hide_buried_kerbs`, the hull in `_cap_ring`, `_opposed_gaps`' search (a pair is two territories that touch and run anti-parallel), and at level 0 `carriageway_area.py`'s 14 s raster. | Each deletion's own inertness proof against `P3-33c`'s bundle; the roads stage's wall time before and after. |
+| `P3-33e` ⬜ | **The battery and the routing price.** The whole `Q19` battery with `clearance_reconcile`'s ratchet rebaselined by region; railings, signs and lamps per class — `shift_m` should collapse toward zero, because those objects were surveyed against the real kerb, **and if it does not that is a registration finding**; `narrowing.py`, because `Q128` priced the floor free on the *measured* half only and `e207`, `e595`, `e132`, `e499` are all authored. | Every table pasted before and after, from a worktree of the commit before `P3-33c`. |
+| `P3-33f` ⬜ | **The user's drive.** Follow-up: drop the outward-only registration push (`Q78`) wherever a post already stands outside R. | The seat. |
+
+- **Deps:** `a` → `b` → `c`; `d` and `e` after `c`, in either order; `f` last.
+- 🔴 **Refuted at `P3-33a`, do not re-propose**: kerb-line *faces* where HyD is silent (24 faces,
+  0.3% of the length — the linework does not close, so the rule is rails), and an unclipped R (6.8%
+  orphan, one piece 228 m from its owner).
+- ⚠️ **What survives of the invented width is ~2% of the network** (934 m / 275 m): a side no kerb
+  answers on, where HyD is also silent. It is drawn at `width_m` and counted, never widened.
+
 ### Build `B1` — "One fare" — **runs second**
 
 | ID | Deliverable | Accept |
