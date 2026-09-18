@@ -23268,6 +23268,93 @@ its mid-block 19.8%. Same walk, different populations — do not quote one for t
 ⚠️ The document is **11.0 MB** on Wan Chai (2.9 on Causeway Bay): territory boundaries carry a vertex
 per Voronoi site. It is under `etl/out/` and not in the bundle, so it is a build-time cost only.
 
+### ✅ `P3-33c` — the level-0 road is drawn from the region, and the floor is off
+
+**Built 2026-09-18.** Not as the plan wrote it — *"triangulate each T_e"* — and the difference is
+what kept ~15 consumers standing:
+
+* **Rails.** A level-0 ribbon is the quad strip it always was, between the same junction trims, and
+  its two rails at every station are its territory's left and right extents. That is `Q107`'s
+  per-station, per-side clamp with `exact=True`: the rim columns ARE the rails, wider than `width_m`
+  as readily as narrower. U still runs 0 → `lanes` between them, which is the plan's *"U scaled by
+  the territory's own extent at that station"*, and the restriction alpha, the markings codec, the
+  kerb strips and the rails `DrawnSurface` reads all travel unchanged.
+* **Areas.** Everything else of R — junctions, bell-mouths, flares — is `R − (every ribbon)`,
+  triangulated as ONE surface (constrained Delaunay) and drawn `MARKING_CLASS_CAP`. At level 0 the
+  hull caps, stub clusters, through corridors and paint flanks no longer run (645 caps → 28, all
+  off-grade); `P3-33d` deletes them.
+* `floor_default_m` and the 70 kph floor are **0.0**, on the user's call. What they still set is
+  `_WIDTH`: the junction trim radius and the plain ribbon of a run past its rectangle.
+
+| Wan Chai | before | after |
+|---|---|---|
+| road surface | 32,618 tris · 3.4 MB · 645 caps | **79,861** tris · 9.7 MB · 28 caps + 18,437 area tris |
+| throttle route, `draws` at t=1 / 3 / 6 | 105 / 104 / 107 | **108 / 107 / 108** |
+| fenced edges (car bar 1.80 m) | 14 | **13** (Causeway Bay 3 → 4) |
+| double white lines drawn | 91 · 3,416 m | **102 · 3,795 m** |
+| inferred opposed join | 47 pairs · 2,078 m drawn | **15 pairs · 704 m** |
+| box paint off the drawn road | 0.58 m² of 577.83 | **2.69 m²** (box 3 EXPO DRIVE EAST 2.12, box 9 0.68) |
+| `paint_clearance` `deeper than 0.010 m` | boxes 0 | **boxes 7**, roadmarks 20 — *within the accepted bounds*, and open |
+
+✅ `check.sh` exit 0; 2,410 tests; frames at three fixed cameras shot twice a side and `cmp`'d
+identical, before from a detached worktree of `e483329` with its own bundle and import.
+
+🔴 **Four defects found on the way, each one silent, each now pinned by a test.**
+
+1. **`min(lerp, measured)`.** An inserted station's rim was `min`'d with `_at`'s lerp — which runs
+   between the two END vertices, both wedges — so the lerp won everywhere and BOWRINGTON ROAD `e709`
+   drew 1.2 m wide down the middle of its own 6.5 m territory, every counter closing. The measured
+   value is ASSIGNED; `min` is for a deck rim only.
+2. **A share is not a corridor (`Q57`), twice.** `clearance` walked the ribbon — now a share — and
+   the fence went **14 → 25**: GLOUCESTER ROAD `e390` owns 1.56 m of a 25 m carriageway. The stage
+   now also measures each station through every share to R's own boundary (`*_kerb_m`, schema 3),
+   `surface` publishes it as `corridor_*`, and `clearance` walks that: **14 → 13**. `roadmarks` had
+   the same defect on its *"off its own carriageway"* bar — a double white line between two opposed
+   flows lies exactly ON their shared boundary — and read 91 → 66 drawn on the share, **102** on the
+   corridor.
+3. **`lanes` is the carriageway's and the ribbon is a share.** The shader cuts what it is handed
+   into `lanes` strips: `e479`, three authored lanes on a 1.4 m share, painted three 0.45 m lanes,
+   and `lane_paint.py` read 6 → **375** edges under 3.00 m. The territory is now a **ceiling** on the
+   PAINTED count — `Q114`'s deck rule for its reason, one-sided, the graph's `lanes` untouched — at
+   the **p10** of the span clear of the mouths (at the median, half of every edge is narrower by
+   construction: 146 mid-block vertices still failed; at p10, **20**). 301 counts cut. The count is
+   published as `lanes_painted` and `lane_paint.py` divides by it, because its question is the strip
+   the *shader* paints. ⚠️ It still reads **148 edges / 1,990 m**: 48 are one-lane shares under 3 m,
+   which paint no line inside them, and 96 of the rest are END vertices — the mouth, where a ribbon
+   starts while its territory is still opening. Open, and the user's drive is the judge of it.
+4. **Station count IS triangle count.** Every 2 m station is two carriageway triangles and four
+   kerb strips, and `_rail_stations`' pruning cannot fire on a rail that moves a centimetre a
+   station: **226,824** triangles. Stations are kept by Douglas-Peucker over `(along, left, right)`
+   at `rail_tolerance_m` **0.10** (config — inside HyD's own ~0.3 m), vertices and kerb/share changes
+   held. Cutting the areas per owner first cost another 45k for nothing: a triangle spanning two
+   owners interpolates between their heights, which is what their seam should do.
+
+🔴 **The seam, corrected from `P3-33b`'s reading.** A run's RIBBON stays its owner's, whole, as
+`Q116` has it — territory rails inside the owner's rectangle, the plain ribbon past it (15 / 8
+published stations). Every other square metre of R is drawn by the region whose rectangle holds it,
+and the neighbour's ribbons are SUBTRACTED there like owned ones: `surface.py` already shapes them
+from the identical record. `P3-33b`'s *"each region draws all of R in its rectangle"* would have
+left the owner's `DrawnSurface` with nothing under the paint it hosts on its far half.
+
+⚠️ **`carriageway[]` at a vertex inside a junction trim publishes the ribbon's width AT THE TRIM**,
+not its own: a territory pinches to a wedge at its node, no ribbon is drawn there, and every
+consumer reads this table as the carriageway. ⚠️ **The inferred join fell 47 → 15 pairs and that is
+mostly the model being right**: the floor buried real medians and the join stood in for them; at
+true widths a kerbed median separates those flows. `P3-33d` replaces the search with adjacency.
+⚠️ **City.json 31 → 32, roadsurface 11 → 12, region 1 → 3**, game half in the same commit:
+`RoadGraph.has_corridor` / `corridor_half_width_of`, and `verify_road_graph.gd` no longer asks a
+territory edge to cover `width_m` or `Q23`'s floor to stop at a bridge.
+
+**Cameras** (`city_preview.tscn`, `--seconds=1 --shots=0.8 --debug-view=off --hud=off`), recorded
+because `Q19`'s were lost to a transcript: `hkcec` `--camera=235,45,265 --look=235,0,195` ·
+`street` `--camera=270,5.5,691 --look=30,4.5,719` · `grid` `--camera=760,40,765 --look=740,0,695`
+(⚠️ mostly façade — re-aim before reusing). Frames in `build/driver/p333c/`.
+
+⬜ **Owed by `P3-33e`, not run here**: the rest of the `Q19` battery (`carriageway_occupancy` and
+`clearance_reconcile` walk the ribbon where the pipeline now walks the corridor, so the ratchet WILL
+fail until they move together), railings / signs / lamps per class, `narrowing.py`, `cap_pavement.py`,
+the PCK, and Causeway Bay's frames.
+
 ### What this does NOT decide
 
 🚫 **`width_m` does not move.** A territory's span is a *share* and not kerb-to-kerb, so publishing

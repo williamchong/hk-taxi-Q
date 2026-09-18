@@ -34,6 +34,10 @@ them without explicit instruction from the user.
    reason — each stands on its other reason.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
    widths → Godot `.tres` resources or JSON.
+   🔴 **And since `P3-33c` (`Q129`) a LEVEL-0 ribbon is not drawn at a width at all**: its rails are
+   its territory's extents in `carriageway_region.json`, `floor_default_m` is 0.0 on the user's call,
+   and `drawn = max(width_m, floor)` below describes off-grade edges, a run past its rectangle, and
+   the junction trim radius.
    🔴 **The carriageway width is DATA in a second sense since `Q95`: it is measured, not authored.**
    `roadgraph.json`'s `width_m` comes from what TD, iB1000 and HyD drew on 292 of 737 level-0 edges, and
    the playability widening is a **floor** (`surface.floor_default_m`, 10.24 m) rather than a
@@ -436,6 +440,39 @@ Common emoji for this project:
   `Q129`'s mid-block table** — never quote one for the other. ⚠️ Inert until `P3-33c`: prove a change to it by
   hashing `etl/out/<region>/` through `--from region`, where only `city.json`'s `generated_utc` may
   differ.
+- 🔴 **`surface_region.py`, `_with_territory_stations`, `_stations_kept`, `_clamped_rails(exact=)`,
+  `_publish_territory_table`, `_LANE_SPAN_PERCENTILE`, `carriageway_region.rail_tolerance_m`, or the
+  level-0 floors (`P3-33c`, `Q129`): paste the surface stage's `region:` line and its triangle count,
+  `lane_paint.py --sweep`, `box_extent.py` per box, `paint_clearance.py`, the fence line, the
+  roadmarks `by marking` line, and the throttle route's `draws` — before AND after, the before from
+  a detached worktree — and shoot the recorded cameras twice a side** (`hkcec`
+  `--camera=235,45,265 --look=235,0,195`, `street` `--camera=270,5.5,691 --look=30,4.5,719`).
+  A level-0 ribbon's rails ARE its territory (`Q107`'s clamp, `exact`) and everything else of R is
+  `areas`; **the hull caps, stub clusters, through corridors and paint flanks do not run at level 0
+  while a region is built**, so their bullets above describe off-grade and region-less bundles only
+  until `P3-33d` deletes them.
+  🔴 **A territory is a SHARE and never a corridor or a carriageway (`Q57`), and three readers got
+  that wrong in one afternoon.** `clearance` fenced GLOUCESTER ROAD `e390` off a 25 m carriageway
+  (fence 14 → 25); `roadmarks` refused the double white lines that lie ON a shared boundary (91 →
+  66); the shader cut a 1.4 m share into three lanes. So: `clearance` and `roadmarks` read
+  `corridor_*` (kerb to kerb, through every share) where a row carries it, and the PAINTED lane
+  count is `lanes_painted` — the territory as a one-sided CEILING at the span's p10 clear of the
+  mouths, never a source, the graph's `lanes` untouched. **Any new reader of `half_width_m` at level
+  0 owes the question "do I mean the share or the road?"**
+  🔴 **An inserted station's rim is ASSIGNED its measured extent; `min` is for a DECK rim only.**
+  `min(lerp, measured)` lets the lerp between the two end WEDGES win everywhere and drew `e709`
+  1.2 m wide in a 6.5 m territory with every counter closing.
+  🔴 **`rail_tolerance_m` is triangles, not tidiness**: every station is two carriageway triangles
+  and four kerb strips — 226,824 unpruned against 79,861 — and ⚠️ **the areas are triangulated WHOLE,
+  never per owner**, which cost 45k more for nothing.
+  🔴 **The seam: a run's RIBBON is its owner's, whole (`Q116`); every other square metre of R is
+  drawn by the region whose rectangle holds it**, so the neighbour's ribbons are subtracted from the
+  areas like owned ones. ⚠️ `carriageway[]` at a vertex inside a junction trim publishes the width
+  AT THE TRIM — at the node a territory is a wedge. ⚠️ **`clearance.py` and
+  `carriageway_occupancy.py` no longer walk the same corridor**, so `clearance_reconcile` fails its
+  ratchet until `P3-33e` moves the grader; that is the ratchet working. ⚠️ Open and known:
+  `lane_paint` 148 edges under 3.00 m (the mouths, and one-lane shares that paint no line),
+  `paint_clearance` `deeper than` 7 on boxes. Numbers in `Q129`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
   travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its

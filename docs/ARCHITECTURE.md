@@ -509,7 +509,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 30,
+  "schema_version": 32,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -532,7 +532,8 @@ The interface between ETL and game. **Versioned — change both sides together a
   ],
   "carriageway": [
     { "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2],
-      "clear_width_m": [-1.0, 10.24, 8.5, 0.0] }
+      "clear_width_m": [-1.0, 10.24, 8.5, 0.0],
+      "corridor_half_width_m": [7.4, 7.4, 7.1, 6.9], "lanes_painted": 2 }
   ],
   "lane_width_m": 3.2,
   "car_width_m": 1.8,
@@ -553,6 +554,19 @@ The interface between ETL and game. **Versioned — change both sides together a
   "generated_utc": "2026-07-30T20:04:03Z"
 }
 ```
+
+🔴 **Since schema 32 (`Q129`, `P3-33c`) a level-0 `carriageway[]` row is the edge's TERRITORY** — its
+share of a carriageway that several Road Network centrelines may share — and not the road kerb to
+kerb. Two keys arrive with it, on those rows only: `corridor_half_width_m`, half the kerb-to-kerb
+corridor **`clear_width_m` is measured across**, and `lanes_painted`, the lane count the ribbon is
+painted with once a share narrower than the graph's `lanes` has cut it. A reader that holds
+`clear_width_m <= 2 x half_width_m`, or that holds the ribbon to cover `width_m`, is *wrong* on such
+a row, which is why this was a bump. `RoadGraph.corridor_half_width_of` falls back to the ribbon
+where a row publishes no corridor — every off-grade edge, and every bundle built with no
+`carriageway_region:` block. `roadsurface.json` (schema 12) publishes the same two keys plus
+`corridor_offset_m`, and an `areas` list: the level-0 carriageway outside every ribbon, as the
+triangles drawn, which `DrawnSurface` reads as cap-class.
+
 
 ⚠️ **`lane_width_m` and `car_width_m` are two bars over one measurement, and merging them is the
 one thing `Q19` forbids here.** The first is what `P3-3`'s traffic is *routed* on (`RoadGraph.is_passable`,
