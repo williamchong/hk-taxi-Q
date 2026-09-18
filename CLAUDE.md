@@ -59,6 +59,11 @@ them without explicit instruction from the user.
    `lanes_source` has lost `floored` and gained `deck_capped`, and the floor a one-lane road needs
    lives in `RoadGraph.lane_offset` because only the driving line needed it. The markings shader is
    the second consumer, and flooring the count painted it a lane that is not there.
+   🔴 **And `arrows_unmeasured` since `Q130` (schema 15) — the ONE lane reading on an authored
+   width.** Where the survey licensed no width, a row of two or more arrows abreast RAISES the
+   speed-limit table's count, never lowers it: 6 Wan Chai edges, EXPO DRIVE EAST `e657` and STEWART
+   ROAD `e505` among them. ⚠️ Kept out of `CarriagewayReport.lanes` so every bracket counter is
+   untouched, and `verify_road_graph.gd` requires the authored width beside it — both directions.
    🔴 **And `lanes_forward` says which of them carry the edge's own direction since `Q126`** (schema
    13): a row of turn arrows on a two-way edge is read **by direction** — two abreast one way are two
    lanes plus the one the other flow cannot be without — so it puts back the odd count TPDM 3.4.2.7
@@ -498,7 +503,7 @@ Common emoji for this project:
   AT THE TRIM — at the node a territory is a wedge. ⚠️ **`clearance.py` and
   `carriageway_occupancy.py` no longer walk the same corridor**, so `clearance_reconcile` fails its
   ratchet until `P3-33e` moves the grader; that is the ratchet working. ⚠️ Open and known:
-  `lane_paint` 148 edges under 3.00 m (the mouths, and one-lane shares that paint no line),
+  `lane_paint` 79 edges under 3.00 m since the rail filter (the mouths, and one-lane shares that paint no line),
   `paint_clearance` `deeper than` 7 on boxes. Numbers in `Q129`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
@@ -742,7 +747,7 @@ Common emoji for this project:
   🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
   it is 25 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
   row was let resolve an ambiguous bracket (`Q94`), 24 → 25 on 2026-08-30 (`e114` HENNESSY ROAD), 25 → **29** on 2026-09-05 when the floor came off
-  the lane count (`Q114`), 28 → **25** on 2026-09-17 when the row was read by direction (`Q126`) — on a one-lane edge there is one slot, so two differently-instructed
+  the lane count (`Q114`), 28 → **25** on 2026-09-17 when the row was read by direction (`Q126`), 24 → **18** on 2026-09-18 when a row could raise an unmeasured edge's count (`Q130`) — on a one-lane edge there is one slot, so two differently-instructed
   arrows share it, and the count is now a finding about a *measured* lane count rather than an
   invented one. The registration snaps a published offset to one
   of `ribbon.lanes` slots; the count came from the speed-limit table, so where the painted carriageway
@@ -760,8 +765,10 @@ Common emoji for this project:
   do that. ⚠️ **Refused, never floored**: flooring them published 28 edges whose `lanes_source` said
   `arrows` and whose count the arrows had not chosen, which is `Q72`'s tautology wearing the other hat.
   🔴 **Ambiguous brackets only, so the row is never a standalone publisher** — that keeps
-  `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction, and it is why
-  **STEWART ROAD `e505` is still not fixed**: it states three lanes over an authored width.
+  `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction. ✅ **STEWART
+  ROAD `e505` is fixed since `Q130`**, by a SECOND rule rather than by widening this one: where no
+  width was licensed, a row RAISES the count as `arrows_unmeasured`, which that check exempts and
+  then requires an authored width beside.
   ⚠️ **The clustering is a SECOND implementation and the duplication is forced** — `arrows` imports
   `roads` imports `carriageway`, so no import exists — and `arrows.json`'s `lanes_row_disagreement`
   grades it at 0 of 57, over the rows the roads stage *published* and never all 306. Numbers in `Q94`.
@@ -1209,8 +1216,11 @@ Common emoji for this project:
   against 10.7% and it was taken for a model difference. ⚠️ **A tool that already has an `offset_m`
   meaning a CELL's distance from the centreline must ADD the drawn offset, never replace it** —
   `carriageway_occupancy.py` and `ground_clearance.py` both do, because `Section.is_inside` and "the
-  centreline cell" are about the published centreline. ✅ **0.0 on all 737 level-0 edges**, which is
-  what makes every gated figure inert. Numbers in `Q106` and `Q107`.
+  centreline cell" are about the published centreline. ⚠️ **"0.0 on all 737 level-0 edges" EXPIRED
+  at `P3-33c`**: a level-0 ribbon's rails are its territory, and 288 of 734 are drawn more than 1 m
+  off their centreline. `arrows.py` read `±half` until `Q130` put its arrows 1.5 m out of the painted
+  lanes; 🔴 **`Ribbon.kerb_target` — signs, signals, lamps — still does, and is OPEN**. Numbers in
+  `Q106`, `Q107` and `Q130`.
 - 🔴 **`surface.py` cuts the off-grade ribbon to its deck, per station and per side (`Q107`) —
   `_clamped_rails` is the one place, and it may only CUT.** `upper = min(shift + half, left_rim)`,
   `lower = max(shift − half, −right_rim)`, with the rims from `roadgraph.json`'s `deck_rim_m`.

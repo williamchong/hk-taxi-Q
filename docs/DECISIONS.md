@@ -23458,3 +23458,85 @@ GLOUCESTER ROAD.
 finding · `Q95` for the ray survey · `Q94` for HyD's polygons · `Q57` for pooling two populations ·
 `Q116` for the seam · `Q104`, `Q117`, `Q125` for the caps, flanks and pairing this model retires ·
 `PLAN.md` `P3-33` for the build
+
+## `Q130` — A row of arrows sets the count where no width was measured, and arrows stand in the drawn lanes
+
+**Asked 2026-09-18, by the user, from the driving seat on EXPO DRIVE EAST `e657`:** the arrows are
+off-centre in their lanes, *"but it seems the issue is not about misalignment of 2 lanes, but there
+should be 3 lanes instead of 2"*, with a Street View frame showing three lanes and one arrow per
+lane. **Two calls taken by the user**: let the arrows set the count where nothing was measured
+(option 1 of 3), and fix the arrow frame in the same pass.
+
+### 🔴 Two defects, and the first was a recorded refusal
+
+**The count.** `e657` published `lanes: 2` and `width_m: 6.4`, both `authored`. The ray survey spans
+it at **13.49 m** kerb to kerb, but `own = 2 x near ray` is 9.40 m because the centreline runs ~2 m
+off the middle of its carriageway, so `beyond` is **4.09 m** — inside `[hard_min_m, dual_min_m)`,
+the band that publishes nothing (`Q95`). No width, so no bracket, so `_resolve_with_rows` (`Q94`)
+could not use the row of three it read. That is STEWART ROAD `e505`'s case, recorded as unfixed
+since `Q94`.
+⚠️ **Licensing the width would NOT have fixed it**: 13.49 m brackets to `(4, 4)` under 3.0-3.65 m,
+so a licensed width would publish four, and the row of three would be "an unpainted lane". Only the
+arrows reach three; the carriageway is three ~3.3 m lanes plus a hatched strip along the nearside
+kerb, which is what the surveyed arrow offsets (-3.16 / +0.40 / +3.45 m) say too.
+
+**The frame.** `arrows.py` drew a slot at `±half` about the centreline. Since `P3-33c` a level-0
+ribbon's rails are its territory, and the ribbon is `[offset - half, offset + half]` (`Q106`) with
+the offset up to 6.49 m — **288 of 734** level-0 edges more than 1 m off, **114 of 304** arrow-carrying
+edges. `e657`'s arrows stood 1.5 m out of the lanes the shader paints, whatever the count.
+
+### ✅ What was built
+
+- **`carriageway._raise_unmeasured_with_rows`**: on a level-0 edge with no licensed width, a row of
+  at least `_ROW_MIN` arrows abreast RAISES the authored count to what it states — never lowers it,
+  because a row is a lower bound. Published as `lanes_source: arrows_unmeasured`, kept in its own
+  `CarriagewayReport.lanes_unmeasured` so every bracket counter (`lanes`, `lanes_single`,
+  `lanes_unresolved`, …) is untouched by construction. `width_m` stays authored.
+- **Schema 14 → 15**: 14 guaranteed every non-authored count stood on a measured width.
+  `verify_road_graph.gd` now exempts `arrows_unmeasured` from that and requires the authored width
+  beside it; mutation-checked on the shipped bundle (`check.sh` exit 1, the new message).
+- **`arrows._slot_offset`**: the slot is still FOUND in the surveyed frame (`_lane_of`, `Q96`,
+  untouched) and now DRAWN about the ribbon's middle, `Ribbon.offset_at`. `outside_drawn_ribbon`
+  is asked in the drawn frame too.
+- `arrows._grade_against_the_graph` grades the new rows as it grades `arrows`, and
+  `carriageway_margin.py` brackets them before 3.4.2.7's narrowing, as it does `arrows`.
+
+### Numbers (Wan Chai; Causeway Bay moves no count)
+
+- **6 edges raised**: `e137` CANAL ROAD EAST, `e333` HENNESSY ROAD, `e504`/`e505` STEWART ROAD,
+  `e615` HYSAN AVENUE, `e657` EXPO DRIVE EAST — 2 → 3 each; **15** unmeasured rows at or under the
+  authored count, unused. `e136` LEIGHTON ROAD states three too and is NOT raised: it carries a
+  measured `two_way_span` and the bracket owns it.
+- `arrows.json`: `stacked_disagreeing` **24 → 18**, `stacked_pairs` 51 → 44,
+  `edges_implying_more_lanes` 21 → 15, `lanes_row_published` 79 → 85 at **0** disagreement,
+  `lanes_split_published` 33 → 35 at 0, `outside_drawn_ribbon` 26 → 30 (now asked in the drawn
+  frame), `drawn` / `inverted` / `triangles` unchanged. Causeway Bay: every counter unchanged.
+- **Distance from each arrow to the nearest painted-lane centre** (scratch script, both sides):
+  Wan Chai p50 **0.59 → 0.00**, p90 1.91 → 1.75, over 1 m **250 → 183** of 741; Causeway Bay p50
+  0.83 → 0.00, over 1 m 71 → 58 of 158. `e657`, `e505`, `e137`: every arrow at 0.00.
+- **Inert where it must be**: `roads.glb` positions, normals, colours and indices byte-identical
+  (4 of 65 chunks differ, in `TEXCOORD_0`/`TEXCOORD_1` only); tiles 132/132, railings, signs, lamps,
+  roadmarks, boxes, tram, fence, fares byte-identical; `roadsurface.json` moves `lanes_painted` on 4
+  edges and nothing else; `city.json`'s clearance unmoved. `lane_paint.py --sweep`: the 3.00 m
+  headline unchanged at **79** edges; the 3.65 m row 322 → 324.
+- **Frame**: `city_preview` `--camera=229,7,68 --look=230,4,98`, re-imported each side, before
+  shot twice identical, after three times identical: two lanes with the arrows off-centre, then three
+  lanes with one arrow centred in each.
+
+### ⚠️ Open, and not this decision's
+
+- **`e333` and `e504` publish three lanes and paint two**: the territory ceiling (`P3-33c`) reads
+  their span's p10 at 6.72 / 6.64 m. `e333` is 8 m kerb to kerb, where a third lane would be 2.65 m.
+  Their arrows now take three slots over two painted strips (0.76 / 2.27 m off a painted centre);
+  before, two of them shared one shaft. The slot count stays `lanes` and not `lanes_painted` on
+  purpose: **107** arrow-carrying edges paint fewer lanes than they have, and slotting into the
+  painted count would stack their arrows.
+- 🔴 **`Ribbon.kerb_target` has the same frame defect** — signs, signals and lamps register to
+  `±(half + outset)` about the centreline, not to the drawn kerb at `offset ± half`. Not touched
+  here; it moves every post and owes `Q78`'s battery.
+- 🚫 The ray survey's unresolved band is not re-opened: `e657`'s 4.09 m residual is the off-centre
+  centreline, and a width would have bracketed to four anyway.
+
+**See.** `Q94` for the row and the refusal this narrows · `Q95` for the unresolved band · `Q96` for
+the surveyed-frame lane snap · `Q106`/`Q107` for the drawn frame · `Q129` for why the level-0 ribbon
+is off-centre now.
