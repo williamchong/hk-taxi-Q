@@ -23650,11 +23650,38 @@ stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not 
 
 ### ⚠️ Open, and not this decision's
 
-- **`e124`**: the published centreline runs along the edge of a 9 m island ring, so one side reads
-  0.09 m. Too wide to be an island, too shallow to be a line across: it is a centreline registered
-  through a kerb, which is `Q19`'s candidate 1 and refuted there.
-- **HyD's own notches near nodes** (`e37`, `e426`, `e125`): the polygon really is that shape and the
-  centreline clips its corner. Not a seam — the gaps are metres, not centimetres.
+- **`e124` and `e785`: a free-standing ring WIDER than a lane that a centreline runs through.**
+  `e124`'s centreline clips 1.4 m (along 17.2–18.6 m) of a 5.8 × 8.2 m oval, 39.9 m², so the
+  stations either side read 0.83 / 0.09 / 0.52 m on alternating sides with 10–14 m on the other, R
+  has two empty wedges over real asphalt and the rail zigzags round the oval. CAROLINE HILL ROAD
+  `e785` is worse and was not listed: a two-way link whose centreline runs **13.0 m** (along
+  8.3–21.3 m) down the middle of a 3.8 × 13.2 m splitter island in a Y-junction mouth, ring centroid
+  0.12 m off the line — so the stations inside it cast to the ring's *inside* faces and the ribbon
+  drawn between the trims (11.7–25.0 m) is a 3.3 m strip **of the island**. Two publishers agree it is one: the kerb ring (37.3 m²) is
+  also a hole in HyD's polygon (37.5 m²). Both are wider than
+  `lane_width_m`, so `_is_island` refuses them on the reasoning that a wide island displaces a lane
+  and the ribbon should narrow round it — which has nothing to narrow round when the centreline is
+  *inside* the ring and the same road runs on both sides. Census, both regions: six free-standing
+  rings carry a centreline without being islands; the other four are over `rail_opening_m` long
+  (CAUSEWAY BAY `e168` 2.4 × 21.2 m, `e72` 25 × 26 m) or city blocks (`e195`, Causeway Bay `e98`).
+  ⚠️ **An earlier version of this entry called `e124` "`Q19`'s candidate 1 and refuted there", and
+  that was `Q57`'s generalisation**: `Q19` measured a centreline shift against edges with a
+  *building* in the corridor — 0.02–0.88 m available where 1.43–4.49 m was needed, 0 cleared — and
+  says nothing about these. Nor would a shift help: since `P3-33c` the ribbon is its territory's
+  rails and an off-centre centreline already draws correctly. What is open is the island rule's
+  width bar for a ring a centreline crosses. Dry-run in memory, nothing built: dropping that bar
+  for such a ring reads both sites through (`e785` 0.99 / 2.29 → 7.43 / 5.90 m, `e124`'s near-zeros
+  → 11–15 m), moves `e458` by 0.4 m, `e44` by 0.02 m and nothing else on Wan Chai, `silent_m[0]` 944 → 940 m, and
+  moves **no** Causeway Bay territory.
+- **Single stations where HyD's polygon touches the centreline near a node** (`e37`, `e426`,
+  `e125`): one station each reads ~0 on one side between neighbours reading metres — `e125` at
+  10.0 m (0.15 m, a wedge between two HyD polygons, probably a painted gore), `e426` at 35.1 m
+  (0.19 m), `e37` at 9.8 m (0.03 m on a left side that reads a steady 3.20 m kerb at every station before
+  it). Not seams — the gaps are metres, not centimetres. ⚠️ **`e125`'s and `e426`'s are inside the
+  junction trim (12.0 m and 7.8 m) and are never drawn**; `e37`'s is, on a link that draws 4.7 m of
+  ribbon between two 5.5 m trims. A one-station inward-dip filter was considered and not built: it
+  is a closing, which `opened` refuses on purpose (`Q129`), and from the numbers alone a
+  one-station dip is what a genuinely short island looks like.
 - The no-U-turn sign on `e659`'s refuge now registers to the median, not the island it was surveyed
   on: `Ribbon.kerb_target` knows one kerb per side (`Q130`'s open item, same cause).
 - ⚠️ **The across refusal raises `silent_m[0]`.** A stub street with no kerb lines is drawn at its
@@ -23663,4 +23690,5 @@ stopped at: **38** on Wan Chai, **16** on Causeway Bay, in four classes and not 
 
 **See.** `Q129` for R, the rails rule and why `opened` leaves the inward classes alone · `Q57` for
 share-versus-corridor, which is why the corridor still stops at an island · `Q95` for the
-second-implementation rule · `Q19` for the centreline that cannot be moved.
+second-implementation rule · `Q19` for the one centreline shift that was measured — refuted for
+edges with a building in the corridor, and no rule about any other.

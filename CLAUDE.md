@@ -531,7 +531,12 @@ Common emoji for this project:
   `on kerb` column and not its gate. ⚠️ **The tool's closing must stay a PAIRWISE union**:
   `unary_union` over the slivers filled HyD's holes, +9,010 m², with no error. ⚠️ The spike count in
   `Q131` is a scratch heuristic and is not monotone in anything; it found the classes and grades no
-  fix. ⚠️ Open: `e124`, and HyD's own notches at nodes (`e37`, `e426`). Numbers in `Q131`.
+  fix. ⚠️ Open: `e124` and `e785` — a free-standing ring WIDER than a lane with a centreline running
+  through it, which the width bar refuses although the same road runs both sides — and single
+  stations where HyD's polygon touches the centreline at a node (`e37`; `e426` and `e125` are inside
+  the junction trim and never drawn). ⚠️ **Neither is `Q19`**: that refuted one centreline shift for
+  edges with a building in the corridor and is not a rule that a centreline cannot move. Numbers in
+  `Q131`.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
   consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
   travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its
