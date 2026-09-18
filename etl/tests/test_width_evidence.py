@@ -13,6 +13,7 @@ import math
 import numpy as np
 import pytest
 from width_evidence import (
+    _VOTERS,
     LOWER,
     UPPER,
     Edge,
@@ -23,9 +24,11 @@ from width_evidence import (
     contiguous_run,
     dividers,
     grade,
+    main,
     outside,
     runs,
     street_borrow,
+    voter_suffix,
 )
 
 from pipeline.polyline import Segments
@@ -158,6 +161,39 @@ class TestCombinations:
 
         assert agreed[1] == pytest.approx(8.2)
         assert 2 not in agreed
+
+
+class TestVoters:
+    """Which readings may CONFIRM a strip (`Q128` stage 0a).
+
+    🔴 **The roster is a ratchet, not a preference.** `Q127` measured the
+    combinations at 0.63 m by construction when the ray survey was let vote — on
+    a reference edge it IS the reference — so what has to be pinned is that it
+    cannot come back by accident, and that a misspelt voter cannot quietly
+    narrow the roster a pasted table names.
+    """
+
+    def test_the_ray_survey_is_never_a_voter(self) -> None:
+        assert not [name for name in _VOTERS.values() if "ray survey" in name]
+
+    def test_an_unknown_voter_is_refused_before_a_source_is_read(self) -> None:
+        # Refused at parse time deliberately: the readings take minutes to build,
+        # and the region is not even resolved yet — so this exits on the voter
+        # rather than on the bogus region below it.
+        with pytest.raises(SystemExit, match="pick from"):
+            main(["--region", "nowhere", "--voters", "ray_survey"])
+
+    def test_an_empty_roster_is_refused_rather_than_confirming_nothing(self) -> None:
+        # Not the same as "no combinations": an empty list makes `agreeing`
+        # return {} and the cascade would print a clean table reaching nothing.
+        with pytest.raises(SystemExit, match="pick from"):
+            main(["--region", "nowhere", "--voters", ""])
+
+    def test_the_full_roster_prints_the_label_Q127_published(self) -> None:
+        assert voter_suffix(list(_VOTERS)) == ""
+
+    def test_a_narrowed_roster_names_itself(self) -> None:
+        assert voter_suffix(["borrow", "arrows"]) == " [borrow+arrows]"
 
 
 class TestOutside:

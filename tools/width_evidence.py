@@ -117,6 +117,16 @@ RAILING_SAMPLE_M = 1.0
 # third of what the survey can see.
 SHORT_REFERENCE_M = 60.0
 
+# The readings allowed to CONFIRM a strip, keyed by the name `--voters` takes and
+# valued by the method whose row they are. ⚠️ **The ray survey is deliberately
+# absent and may never be added** — on a reference edge it IS the reference, and
+# letting it vote read the combinations at 0.63 m by construction (`Q127`).
+_VOTERS = {
+    "borrow": "street borrow",
+    "arrows": "arrow pitch x abreast",
+    "stop_line": "stop line (one-way)",
+}
+
 
 # --------------------------------------------------------------------------
 # The graph
@@ -1019,6 +1029,19 @@ def method(
     )
 
 
+def voter_suffix(voters: list[str]) -> str:
+    """What a combination's row is called when fewer than every voter may confirm.
+
+    ⚠️ **The roster goes in the row's own NAME.** These tables are pasted into
+    `DECISIONS.md`, and "+ another within 1 m" is a different rule at two voters
+    than at three — `Q128` measured it reading 0.95 m against 1.23. The full
+    roster prints the label `Q127` published, so its tables still reproduce.
+    """
+    if len(voters) == len(_VOTERS):
+        return ""
+    return " [" + "+".join(voters) + "]"
+
+
 def agreeing(
     primary: dict[int, float], others: list[dict[int, float]], tolerance_m: float
 ) -> dict[int, float]:
@@ -1210,9 +1233,27 @@ def main(argv: list[str] | None = None) -> int:
         default=0.05,
         help="a bound wrong on more of the reference edges than this refuses nothing",
     )
+    parser.add_argument(
+        "--voters",
+        default=",".join(_VOTERS),
+        # 🔴 **Which readings may confirm is a question about the PIPELINE, not
+        # about the data.** `arrows` imports `roads` imports `carriageway`, so a
+        # width published by the survey stage can be confirmed only by a reading
+        # that stage can reach: the arrow rows it already clusters for itself,
+        # and the graph it already holds. The stop line needs `roadmarks._host`,
+        # which is two imports the other way round. Grading the cascade without
+        # it is what says whether the reachable voters are enough to build.
+        help="which independent readings may confirm, comma-separated: " + ", ".join(_VOTERS),
+    )
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument("--out-root", type=Path, help="override etl/out")
     args = parser.parse_args(argv)
+    voters = [name.strip() for name in args.voters.split(",") if name.strip()]
+    unknown = [name for name in voters if name not in _VOTERS]
+    if unknown or not voters:
+        raise SystemExit(
+            f"--voters {args.voters!r} names {unknown or 'nothing'}; pick from {', '.join(_VOTERS)}"
+        )
 
     city = load_config()
     survey_spec = city.carriageway_survey
@@ -1444,25 +1485,26 @@ def main(argv: list[str] | None = None) -> int:
     # combination's reference p90 read 0.63 m for that reason alone. It stays a
     # single reading, ranked on its own row, and the cascade still reaches for it
     # first.
-    independent = [
-        by_name["street borrow"],
-        by_name["arrow pitch x abreast"],
-        by_name["stop line (one-way)"],
-    ]
+    independent = [by_name[_VOTERS[name]] for name in voters]
+    who = voter_suffix(voters)
     clean_strip = {
         e: v for e, v in strip.items() if not edges[e].tram and edges[e].under_deck_share == 0.0
     }
     tol = args.agree_m
     methods += [
         method("HyD strip, no tram, no deck", clean_strip, edges),
-        method(f"HyD strip + another within {tol:g} m", agreeing(strip, independent, tol), edges),
         method(
-            f"HyD clean strip + another {tol:g} m",
+            f"HyD strip + another within {tol:g} m{who}",
+            agreeing(strip, independent, tol),
+            edges,
+        ),
+        method(
+            f"HyD clean strip + another {tol:g} m{who}",
             agreeing(clean_strip, independent, tol),
             edges,
         ),
         method(
-            f"consensus of >= 2 within {tol:g} m",
+            f"consensus of >= 2 within {tol:g} m{who}",
             consensus([strip, *independent], tol),
             edges,
         ),
