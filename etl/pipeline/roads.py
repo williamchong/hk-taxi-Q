@@ -193,7 +193,15 @@ ROADGRAPH_NAME = "roadgraph.json"
 # consumer treating the source set as closed is *wrong*, not merely reading
 # different bytes, and `tools/centreline_error.py` reads it as an allowlist
 # that refuses an unknown value rather than pricing it.
-ROADGRAPH_SCHEMA = 14
+#
+# 15 (`Q130`): `lanes_source` gains `arrows_unmeasured` — a row of two or more
+# turn arrows abreast RAISING the count on an edge whose width the survey did
+# not license, so the width beside it is `authored`. Bumped because schema 14
+# guaranteed the opposite: every `lanes_source` other than `authored` and
+# `deck_capped` stood on a measured width — `verify_road_graph.gd` asserted
+# exactly that — and a consumer reading a non-authored count as a reading of
+# `width_m` is now *wrong* on these edges, not merely reading different bytes.
+ROADGRAPH_SCHEMA = 15
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -294,6 +302,10 @@ class Edge:
     # under TPDM 4.3.9.8, the count is cut to the deck's ceiling and this says
     # so. ⚠️ **It never raises a count** — 8 of the region's 36 deck edges are
     # authored below their ceiling and none of them moves.
+    # 🔴 **`arrows_unmeasured` is the one reading that stands on an AUTHORED
+    # width** (`Q130`): where the survey licensed no width, a row of two or more
+    # arrows abreast raises the speed-limit table's count to what is painted.
+    # It never lowers one — the row is a lower bound.
     # ⚠️ **Not implied by `width_source`.** Many measured widths bracket
     # ambiguously with no arrow row to settle them, so `width_source: one_way_uncrossed` with
     # `lanes_source: authored` is the commonest measured edge rather than a
@@ -1273,6 +1285,12 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
         if edge.id in found.lanes:
             changes["lanes"] = found.lanes[edge.id]
             changes["lanes_source"] = found.lanes_basis[edge.id]
+    # 🔴 **Outside the width licence, and only where it did not run** (`Q130`):
+    # `lanes_unmeasured` is disjoint from `assigned_m` by construction, so this
+    # never overrides a bracket's count.
+    if edge.id in found.lanes_unmeasured:
+        changes["lanes"] = found.lanes_unmeasured[edge.id]
+        changes["lanes_source"] = "arrows_unmeasured"
 
     # ⚠️ **A separate licence from the publishers' above, not a fallback to
     # them.** The deck answers where they are silent *and* where they are
@@ -2634,6 +2652,12 @@ def main(argv: list[str] | None = None) -> int:
             "more (a finding) — both reported, never used",
             len(width.lanes_row_below_bracket),
             len(width.lanes_row_over_bracket),
+        )
+        log.info(
+            "      %d edges with NO measured width raise the authored count to their row "
+            "(arrows_unmeasured), %d rows sit at or under it — a lower bound, unused (Q130)",
+            len(width.lanes_unmeasured),
+            len(width.lanes_row_unmeasured_not_above),
         )
         # 🔴 Derived from the field this stage wrote, for the reason the deck
         # ceiling's line gives: the split is decided against the count that

@@ -27,6 +27,9 @@ const KERB_OFF: StringName = &"off"
 const KERB_SINGLE: StringName = &"single"
 const KERB_DOUBLE: StringName = &"double"
 
+## The `lanes_source` that stands on an authored width (`Q130`), spelled once.
+const ARROWS_UNMEASURED: String = "arrows_unmeasured"
+
 ## Below this and the index is not doing its job — Wan Chai has 737 level-0
 ## edges today. A floor rather than an equality: the region can grow.
 const MIN_DRIVABLE_EDGES: int = 100
@@ -999,6 +1002,7 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 	var measured_lanes: int = 0
 	var unattributed: int = 0
 	var lanes_without_width: int = 0
+	var unmeasured_on_measured: int = 0
 	var unconfirmed_strips: int = 0
 	var confirmed_non_strips: int = 0
 	for edge: Dictionary in edges:
@@ -1030,7 +1034,16 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 		# reading — the exact move `Q95` was opened about — and nothing else in
 		# the bundle can see it: every counter would close and every frame would
 		# render.
-		if lanes_source != "authored" and width_source == "authored":
+		#
+		# ⚠️ **`arrows_unmeasured` is the one exception, and it is checked the
+		# other way round** (`Q130`): a row of arrows raising the count where the
+		# survey licensed no width. It must stand on an AUTHORED width — on a
+		# measured one the bracket owns the count, and this source there would
+		# mean the raise ran over a width it was not offered.
+		if lanes_source == ARROWS_UNMEASURED:
+			if width_source != "authored":
+				unmeasured_on_measured += 1
+		elif lanes_source != "authored" and width_source == "authored":
 			lanes_without_width += 1
 		# 🔴 **A `hyd_strip` width exists only because something agreed with it
 		# (`Q128`).** Alone the strip reads |p90| 2.53 m against the ray survey's
@@ -1063,6 +1076,16 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 					+ "read the speed-limit table and called it a measurement"
 				)
 				% lanes_without_width
+			)
+		)
+	if unmeasured_on_measured > 0:
+		problems.append(
+			(
+				(
+					"%d edges carry `arrows_unmeasured` over a MEASURED width — the row may "
+					+ "only raise a count the survey left authored"
+				)
+				% unmeasured_on_measured
 			)
 		)
 	if unconfirmed_strips > 0:

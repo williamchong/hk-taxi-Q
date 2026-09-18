@@ -52,6 +52,7 @@ from pipeline.carriageway import (
     _lane_bracket,
     _lanes,
     _license,
+    _raise_unmeasured_with_rows,
     _read_lane_rows,
     _resolve_with_rows,
     _rims_at_vertices,
@@ -749,6 +750,8 @@ class TestLaneRow:
         `width_source`, so a row may only ever resolve a bracket this stage
         already licensed a width for. STEWART ROAD `e505` is the edge this
         keeps out: it states three lanes over an *authored* 6.4 m width.
+        ⚠️ Since `Q130` that edge is answered, but by
+        `_raise_unmeasured_with_rows` into `lanes_unmeasured` and never here.
         """
         report = _report()
         _resolve(report, _rows(e505=3))
@@ -806,6 +809,54 @@ class TestLaneRow:
         assert report.lanes == {1: 4}
         assert report.lanes_row_below_bracket == [1]
         assert report.lanes_row_odd_two_way == []
+
+
+class _Authored:
+    """The two fields `_raise_unmeasured_with_rows` reads off a graph edge."""
+
+    def __init__(self, edge_id: int, lanes: int) -> None:
+        self.id = edge_id
+        self.lanes = lanes
+
+
+class TestUnmeasuredRaise:
+    """`Q130`: a row of arrows raising the count where no width was licensed.
+
+    EXPO DRIVE EAST `e657` is the case: 13.5 m kerb to kerb, left in the ray
+    survey's unresolved band, three arrows abreast at every row — and it
+    painted the speed-limit table's two lanes.
+    """
+
+    def test_a_row_raises_an_authored_count_on_an_unmeasured_edge(self) -> None:
+        report = _report()
+        _raise_unmeasured_with_rows(report, _rows(e657=3), [_Authored(657, 2)])
+        assert report.lanes_unmeasured == {657: 3}
+        assert report.lanes == {}, "kept apart from the bracket's counts"
+
+    def test_a_row_never_lowers_one(self) -> None:
+        """🔴 The row is a lower bound: two arrows over an authored three is a
+        lane with no arrow on it. Mutation-check by dropping the `<=` guard."""
+        report = _report()
+        _raise_unmeasured_with_rows(report, _rows(e1=2, e2=3), [_Authored(1, 3), _Authored(2, 3)])
+        assert report.lanes_unmeasured == {}
+        assert report.lanes_row_unmeasured_not_above == [1, 2]
+
+    def test_one_arrow_is_not_a_row(self) -> None:
+        """`_ROW_MIN` holds here as in `_resolve_with_rows`: a two-way row can
+        state two lanes off a single arrow, and that is a marking."""
+        report = _report()
+        rows = {1: LaneRow(painted=1, lanes=2, forward=1)}
+        _raise_unmeasured_with_rows(report, rows, [_Authored(1, 1)])
+        assert report.lanes_unmeasured == {}
+
+    def test_a_licensed_width_keeps_the_brackets_count(self) -> None:
+        """🔴 Disjoint from `assigned_m` by construction — the raise never runs
+        over a width the survey measured, which is what lets
+        `verify_road_graph.gd` require an authored width beside it."""
+        report = _report({1: 2}, {1: 7.0}, e1=(2, 2))
+        _raise_unmeasured_with_rows(report, _rows(e1=3), [_Authored(1, 2)])
+        assert report.lanes_unmeasured == {}
+        assert report.lanes == {1: 2}
 
 
 class TestWidestRow:

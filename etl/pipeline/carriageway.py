@@ -254,6 +254,15 @@ class CarriagewayReport:
     # A subset of `lanes` with basis `arrows`; listed apart because it is the
     # one place a row overrides a narrowing rather than resolving a range.
     lanes_row_odd_two_way: list[int] = field(default_factory=list)
+    # 🔴 **Counts a row RAISED where no width was licensed at all**
+    # (`_raise_unmeasured_with_rows`), published as `lanes_source:
+    # arrows_unmeasured`. Kept OUT of `lanes` on purpose: every counter above
+    # ranges over measured widths and `lanes` is "a subset of `lanes_bracket`'s
+    # keys", which this population is by definition not.
+    lanes_unmeasured: dict[int, int] = field(default_factory=dict)
+    # Unmeasured edges whose row stated a count at or under the authored one —
+    # the row is a lower bound, so that says nothing and nothing moves.
+    lanes_row_unmeasured_not_above: list[int] = field(default_factory=list)
 
     # ── The deck a ribbon is drawn on (`Q103`) ─────────────────────────────
     #
@@ -1317,7 +1326,9 @@ def measure(
     # regression out of an off-grade change.
     # ⚠️ Off-grade needs nothing from it: the deck licenses a *width*, and
     # `lanes` stays authored up there.
-    _resolve_with_rows(report, _widest_rows(symbols, two_way=two_way), bounds)
+    rows = _widest_rows(symbols, two_way=two_way)
+    _resolve_with_rows(report, rows, bounds)
+    _raise_unmeasured_with_rows(report, rows, at_grade)
     return report
 
 
@@ -1420,8 +1431,8 @@ def _resolve_with_rows(
 
     ⚠️ **So this does NOT reach STEWART ROAD `e505`**, the edge `Q94` was opened
     from. It carries arrows stating three lanes and an *authored* 6.4 m width, so
-    there is no bracket to resolve and it keeps the authored count. Widening the
-    rule to cover it is a separate question about provenance, not a tidy-up.
+    there is no bracket to resolve here. `_raise_unmeasured_with_rows` is where
+    that edge is answered, under its own `lanes_source`, since `Q130`.
 
     ⚠️ **The two disagreement counters range over resolved brackets as well as
     ambiguous ones**, which is deliberate: a row contradicting a bracket the
@@ -1497,6 +1508,44 @@ def _resolve_with_rows(
                 report.lanes_row_odd_two_way.append(edge_id)
                 continue
         report.lanes_row_over_bracket.append(edge_id)
+
+
+def _raise_unmeasured_with_rows(
+    report: CarriagewayReport, rows: dict[int, LaneRow], at_grade: list
+) -> None:
+    """Let a row of arrows RAISE the count where no width was licensed (`Q130`).
+
+    🔴 **The one place a row publishes without a bracket, and the provenance is
+    its own `lanes_source`, `arrows_unmeasured`.** `_resolve_with_rows` keeps
+    the row a tie-breaker so that a measured count implies a measured width.
+    Where the survey licensed no width at all there is nothing to break a tie
+    between, and the authored count is the speed-limit table: EXPO DRIVE EAST
+    `e657` is a 13.5 m kerb-to-kerb carriageway the ray survey left in its
+    unresolved band, with three arrows abreast at every row, and it painted two
+    6.7 m lanes. So here the row stands alone, and the width stays authored.
+
+    🔴 **RAISE only, never lower.** A row counts painted lanes, so it is a lower
+    bound — an unpainted lane is invisible to it — and a row under the authored
+    count says nothing about the road. `lanes_row_unmeasured_not_above` names
+    those.
+    🔴 **`_ROW_MIN` still applies**, for `_resolve_with_rows`' reason: one arrow
+    is a marking, not a count.
+    ⚠️ **Level 0 only**, which `at_grade` already is: off-grade there are no
+    arrows to read, and the deck is a ceiling on a count, never a source.
+    ⚠️ **Not a width.** `width_m` stays authored and nothing drawn is sized from
+    it at level 0 — the ribbon is the territory — so this moves the painted
+    strips, the arrow slots and the driving line, and no rail.
+    """
+    for edge in at_grade:
+        if edge.id in report.assigned_m:
+            continue
+        row = rows.get(edge.id)
+        if row is None or row.painted < _ROW_MIN:
+            continue
+        if row.lanes <= edge.lanes:
+            report.lanes_row_unmeasured_not_above.append(edge.id)
+            continue
+        report.lanes_unmeasured[edge.id] = row.lanes
 
 
 def _license(edge, span: float, own: float, bounds: WidthBounds) -> tuple[float | None, str]:

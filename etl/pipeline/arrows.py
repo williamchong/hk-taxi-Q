@@ -1231,7 +1231,9 @@ def _grade_against_the_graph(graph: dict, report: ArrowReport) -> None:
             report.lanes_split_published += 1
             if edge["lanes_forward"] != forward:
                 report.lanes_split_disagreement += 1
-        if str(edge.get("lanes_source")) != "arrows":
+        # `arrows_unmeasured` is a row's count published without a bracket
+        # (`Q130`) — the same reading, so the same grade.
+        if str(edge.get("lanes_source")) not in ("arrows", "arrows_unmeasured"):
             continue
         report.lanes_row_published += 1
         if report.implied_lanes.get(edge_id) != int(edge["lanes"]):

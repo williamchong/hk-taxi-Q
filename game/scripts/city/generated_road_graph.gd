@@ -127,7 +127,12 @@ const FILE: String = "roadgraph.json"
 ## only where an independent reading agrees with it within the city's own
 ## tolerance. A consumer treating the source set as closed is wrong about the
 ## short streets, which is most of the ones a fare starts on.
-const SCHEMA_VERSION: int = 14
+## 15 adds a `lanes_source`, `arrows_unmeasured` (`Q130`): a row of two or more
+## turn arrows abreast raising the count where the survey licensed no width, so
+## the width beside it is `authored`. Through 14 every reading of a count stood
+## on a measured width; a consumer that brackets `lanes` off `width_m` on that
+## promise is wrong on these edges. This reader passes the count through.
+const SCHEMA_VERSION: int = 15
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".

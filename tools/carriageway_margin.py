@@ -1499,6 +1499,10 @@ class LaneVerdict:
         return self.too_few + self.too_many
 
 
+# The `lanes_source` values a row of turn arrows stated (`Q94`, `Q130`).
+ROW_SOURCES = ("arrows", "arrows_unmeasured")
+
+
 def lane_verdict(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> LaneVerdict:
     """Bracket every published edge and count where the graph falls outside."""
     verdict = LaneVerdict()
@@ -1508,7 +1512,11 @@ def lane_verdict(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> 
         # A count a row of arrows resolved is graded before 3.4.2.7 (`Q126`) —
         # `lane_bracket`'s docstring says why — and `two_way=False` is the
         # bracket without the narrowing, as `pipeline/carriageway.py` spells it.
-        low, high = lane_bracket(row.median_m, bounds, two_way=two_way and source != "arrows")
+        # `arrows_unmeasured` is a row's count too (`Q130`), on an edge the
+        # pipeline licensed no width for.
+        low, high = lane_bracket(
+            row.median_m, bounds, two_way=two_way and source not in ROW_SOURCES
+        )
         published = report.lanes.get(row.edge, 0)
         outside = published < low or published > high
         if published < low:
