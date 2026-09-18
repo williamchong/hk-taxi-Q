@@ -15,9 +15,9 @@ So this stage reads the carriageway itself:
   metre of R has exactly one owner, so two territories can neither overlap nor
   fail to meet.
 
-and writes `carriageway_region.json`: R's rings, each territory's rings, and per
-published vertex how far the territory reaches to the left and to the right and
-what ended it.
+and writes `carriageway_region.json`: R's rings, each territory's rings, and at a
+station every `station_m` along each edge — every published vertex among them —
+how far the territory reaches to the left and to the right and what ended it.
 
 🔴 **INERT at `P3-33b`.** Nothing reads the document yet — `export`'s inputs are
 an explicit list and this is not on it — so every published file must come out
@@ -74,7 +74,10 @@ from pipeline.roads import ROADGRAPH_NAME, read_graph
 log = logging.getLogger(__name__)
 
 REGION_NAME = "carriageway_region.json"
-REGION_SCHEMA = 1
+# 2: extents at dense STATIONS with the published vertices indexed into them,
+# where 1 published the vertices alone — a straight street's two vertices are
+# both at nodes, so 1 described a sliver the length of the block.
+REGION_SCHEMA = 2
 # The one level this model covers. Every publisher here is a 2D plan that reads
 # the street underneath a deck (`Q103`), and `Q107`'s rim clamp already cuts the
 # off-grade ribbons to their structure.
@@ -135,10 +138,16 @@ class Centreline:
 class Territory:
     edge: Centreline
     shape: BaseGeometry
+    # Stations along the PUBLISHED polyline, in metres from its first vertex, and
+    # at each how far the territory reaches either side and what ended it.
+    along_m: list[float] = field(default_factory=list)
     left_m: list[float] = field(default_factory=list)
     right_m: list[float] = field(default_factory=list)
     left_end: list[str] = field(default_factory=list)
     right_end: list[str] = field(default_factory=list)
+    # Which station each published vertex IS, in `roadgraph.json`'s own vertex
+    # numbering, repeats included — the index `carriageway[]` is read under.
+    vertex_station: list[int] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------
@@ -395,33 +404,67 @@ def partition(
 # --------------------------------------------------------------------------
 
 
-def _vertex_frames(line: Centreline, inset_m: float) -> tuple[np.ndarray, np.ndarray]:
-    """Where each published vertex is measured from, and its LEFT normal.
+def _station_frames(
+    line: Centreline, station_m: float, inset_m: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
+    """Where a territory is measured: distance along, point, LEFT normal, and
+    which station each published vertex is.
 
-    An interior vertex is measured where it stands, across the bisector of its
-    two segments. 🔴 **An END vertex is measured `inset_m` in from its node**: the
-    node is on the boundary of every territory meeting there, so a cross-section
-    *at* it has no inside to run through and reads zero on a perfectly good road.
+    🔴 **Every published vertex is a station AND there is one every `station_m`
+    between them**, and the second half is not resolution for its own sake. A
+    straight street is two vertices, both at nodes, where a territory pinches to
+    a wedge between its neighbours — so extents at the vertices alone describe a
+    sliver the length of the block. `P3-33b`'s first document did exactly that.
+
+    A vertex is measured across the bisector of its two segments; a station
+    between two across its own segment. 🔴 **An END station is measured
+    `inset_m` in from its node**: the node is on the boundary of every territory
+    meeting there, so a cross-section *at* it has no inside to run through and
+    reads zero on a perfectly good road.
     """
     plan = line.plan
     step = np.diff(plan, axis=0)
     length = np.hypot(step[:, 0], step[:, 1])
+    vertex_along = np.r_[0.0, np.cumsum(length)]
+    total = float(vertex_along[-1])
     unit = np.divide(step, length[:, None], out=np.zeros_like(step), where=length[:, None] > 0.0)
     # A repeated vertex has a zero segment; it takes its neighbour's heading.
     for index in range(len(unit)):
         if length[index] == 0.0:
             unit[index] = unit[index - 1] if index else unit[np.argmax(length > 0.0)]
-    heading = np.vstack([unit[:1], unit[:-1] + unit[1:], unit[-1:]])
-    norm = np.hypot(heading[:, 0], heading[:, 1])
-    flat = norm < 1e-9  # a hairpin: the bisector is undefined, so keep the way in
-    heading[flat] = np.vstack([unit[:1], unit[:-1], unit[-1:]])[flat]
-    heading /= np.hypot(heading[:, 0], heading[:, 1])[:, None]
-    points = plan.copy()
-    total = float(length.sum())
+    bisector = np.vstack([unit[:1], unit[:-1] + unit[1:], unit[-1:]])
+    flat = np.hypot(bisector[:, 0], bisector[:, 1]) < 1e-9  # a hairpin: keep the way in
+    bisector[flat] = np.vstack([unit[:1], unit[:-1], unit[-1:]])[flat]
+    bisector /= np.hypot(bisector[:, 0], bisector[:, 1])[:, None]
+
+    # Regular stations, dropped where a vertex already stands within half a pitch
+    # of a quarter — a quad that thin collapses in `surface._Builder.build`.
+    count = max(1, int(np.ceil(total / station_m)))
+    regular = np.linspace(0.0, total, count + 1)[1:-1]
+    regular = regular[
+        np.abs(regular[:, None] - vertex_along[None, :]).min(axis=1) > station_m / 4.0
+    ]
+    along = np.concatenate([vertex_along, regular])
+    heading = np.vstack(
+        [
+            bisector,
+            unit[
+                np.clip(np.searchsorted(vertex_along, regular, side="right") - 1, 0, len(unit) - 1)
+            ]
+            if len(regular)
+            else np.zeros((0, 2)),
+        ]
+    )
+    # Stable, so a repeated vertex keeps its published order.
+    order = np.argsort(along, kind="stable")
+    rank = np.empty(len(order), dtype=int)
+    rank[order] = np.arange(len(order))
+    along, heading = along[order], heading[order]
     inset = min(inset_m, total / 2.0)
-    points[0] = shapely.get_coordinates(line.line.interpolate(inset))[0]
-    points[-1] = shapely.get_coordinates(line.line.interpolate(total - inset))[0]
-    return points, np.column_stack([heading[:, 1], -heading[:, 0]])
+    measured = np.clip(along, inset, total - inset)
+    points = shapely.get_coordinates(shapely.line_interpolate_point(line.line, measured))
+    left = np.column_stack([heading[:, 1], -heading[:, 0]])
+    return along, points, left, [int(index) for index in rank[: len(vertex_along)]]
 
 
 def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m: float) -> float:
@@ -435,9 +478,18 @@ def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m:
     return 0.0
 
 
-def measure(territory: Territory, whole: BaseGeometry, *, inset_m: float, max_m: float) -> None:
-    """Fill one territory's per-vertex extents and what ended each."""
-    points, left = _vertex_frames(territory.edge, inset_m)
+def measure(
+    territory: Territory,
+    whole: BaseGeometry,
+    *,
+    station_m: float,
+    inset_m: float,
+    max_m: float,
+) -> None:
+    """Fill one territory's per-station extents and what ended each."""
+    along, points, left, vertex_station = _station_frames(territory.edge, station_m, inset_m)
+    territory.along_m = [float(value) for value in along]
+    territory.vertex_station = vertex_station
     for point, normal in zip(points, left, strict=True):
         for sign, reach_out, end_out in (
             (1.0, territory.left_m, territory.left_end),
@@ -502,7 +554,13 @@ def build(
     territories = partition(whole, lines, spec.sample_m, report)
     for territory in territories:
         edge = territory.edge
-        measure(territory, whole, inset_m=spec.sample_m / 2.0, max_m=max_m)
+        measure(
+            territory,
+            whole,
+            station_m=spec.station_m,
+            inset_m=spec.sample_m / 2.0,
+            max_m=max_m,
+        )
         area = float(territory.shape.area)
         if edge.foreign:
             report.foreign_m2 += area
@@ -555,6 +613,8 @@ def _document(
                 "edge": territory.edge.id,
                 "foreign": territory.edge.foreign,
                 "rings": _rings(territory.shape),
+                "vertex_station": territory.vertex_station,
+                "along_m": [round(value, 3) for value in territory.along_m],
                 "left_m": [round(value, 3) for value in territory.left_m],
                 "right_m": [round(value, 3) for value in territory.right_m],
                 "left_end": territory.left_end,
@@ -656,14 +716,14 @@ def build_region(
         report.owned_past_rectangle_m,
         report.cells_repaired,
     )
-    # ⚠️ Per published VERTEX, and vertices cluster at nodes and bends, where a
-    # cross-section ends in a share by geometry. `Q129`'s finding is the tool's
-    # mid-block STATION table; this is the same thing weighted differently and
-    # the two must not be quoted for each other (`Q57`).
+    # ⚠️ Over EVERY station, the ones inside the junction guard included — and a
+    # station near a node ends in a share by geometry. `Q129`'s finding is the
+    # tool's MID-BLOCK table; this is the same walk weighted differently, and the
+    # two must not be quoted for each other (`Q57`).
     for source, tally in sorted(report.ends.items()):
         count = sum(tally.values())
         log.info(
-            "  ends at published vertices, %-18s %5d: kerb|kerb %5.1f%%  kerb|share %5.1f%%  "
+            "  ends at every station, %-18s %5d: kerb|kerb %5.1f%%  kerb|share %5.1f%%  "
             "share|share %5.1f%%  other %5.1f%%",
             source,
             count,

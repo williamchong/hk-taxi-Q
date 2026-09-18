@@ -3454,6 +3454,13 @@ carriageway_region:
   # carriageway and all of HKCEC, 13.5% of Wan Chai's level-0 length.
   rail_m: 2.0
 
+  # Pitch of the stations each territory's left/right extents are published at,
+  # between the published vertices. NOT optional resolution: a straight street is
+  # two vertices, both at nodes, where a territory pinches to a wedge — extents at
+  # the vertices alone describe a sliver the length of the block. surface.py
+  # inserts a ribbon station at each, so this is the drawn kerb's resolution too.
+  station_m: 2.0
+
 
 # The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it
 # describes the taxi, and it is MIRRORED from taxi.tscn rather than read from it,

@@ -23256,12 +23256,17 @@ edge is covered (`intersects`, not `contains`). After: max **0.025 / 0.014 m²**
 against 324,071.4 m². ⚠️ It moved `Q129`'s composition table — silent 14.0 → **13.5%** / 12.6 →
 **11.4%** — and the figures above are the corrected ones; the span and end-pair tables did not move.
 
-⚠️ **The stage's `ends` block is per published VERTEX and is not the finding.** Vertices cluster at
-nodes and bends, where a cross-section ends in a share by geometry: `authored` reads 15.1% kerb|kerb
-there against the tool's mid-block 19.8%. Same walk, different weights — do not quote one for the
-other (`Q57`). ⚠️ The document is **9.2 MB** on Wan Chai (2.4 on Causeway Bay): territory boundaries
-carry a vertex per Voronoi site. It is under `etl/out/` and not in the bundle, so it is a build-time
-cost only, and coarsening it is `P3-33c`'s call once there is a reader to say what it needs.
+🔴 **Schema 1 published extents at the published VERTICES and that was a defect, found before any
+reader existed.** A straight street is two vertices, both at nodes, where a territory pinches to a
+wedge between its neighbours — so the table described a sliver the length of the block, and
+`surface.py` interpolating between them would have drawn one. **Schema 2** stations every edge at
+`station_m` (2.0, config) with each published vertex a station among them and `vertex_station`
+indexing `roadgraph.json`'s own numbering into the list; 24,741 owned stations on Wan Chai, 7.0 s.
+⚠️ **The stage's `ends` block runs over EVERY station, junction guard included, and is not the
+finding**: `authored` reads 20.3% kerb|kerb there, which is the tool's *every-station* 20.5% and not
+its mid-block 19.8%. Same walk, different populations — do not quote one for the other (`Q57`).
+⚠️ The document is **11.0 MB** on Wan Chai (2.9 on Causeway Bay): territory boundaries carry a vertex
+per Voronoi site. It is under `etl/out/` and not in the bundle, so it is a build-time cost only.
 
 ### What this does NOT decide
 

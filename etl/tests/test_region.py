@@ -24,7 +24,7 @@ from pipeline.region import (
     centrelines,
 )
 
-SPEC = CarriagewayRegion(sample_m=1.0, rail_m=2.0)
+SPEC = CarriagewayRegion(sample_m=1.0, rail_m=2.0, station_m=10.0)
 CLIP = shapely.box(-100.0, -100.0, 200.0, 100.0)
 
 
@@ -45,9 +45,10 @@ def test_left_is_left_of_travel() -> None:
     # Heading +x (east) in a frame whose z is SOUTH: left of travel is north, -z.
     road = Polygon([(0, -6), (100, -6), (100, 2), (0, 2)])
     _, _, owned, _ = _build([road], [], [_line(1, [(0, 0), (50, 0), (100, 0)])])
-    assert owned[1].left_m == pytest.approx([6.0, 6.0, 6.0])
-    assert owned[1].right_m == pytest.approx([2.0, 2.0, 2.0])
-    assert owned[1].left_end == owned[1].right_end == [KERB] * 3
+    assert owned[1].along_m == pytest.approx(np.arange(0.0, 101.0, 10.0))
+    assert owned[1].left_m == pytest.approx([6.0] * 11)
+    assert owned[1].right_m == pytest.approx([2.0] * 11)
+    assert owned[1].left_end == owned[1].right_end == [KERB] * 11
 
 
 def test_two_centrelines_in_one_carriageway_split_it() -> None:
@@ -60,7 +61,7 @@ def test_two_centrelines_in_one_carriageway_split_it() -> None:
     # Heading east with the other centreline to the south: the RIGHT side is shared.
     assert (owned[1].left_end[0], owned[1].right_end[0]) == (KERB, SHARE)
     assert owned[1].left_m[0] + owned[1].right_m[0] == pytest.approx(6.0, abs=1e-6)
-    assert report.ends["authored"]["kerb|share"] == 4
+    assert report.ends["authored"]["kerb|share"] == 22
 
 
 def test_a_neighbours_run_keeps_its_territory_inside_this_rectangle() -> None:
@@ -104,7 +105,20 @@ def test_a_span_under_the_hard_minimum_is_not_a_kerb() -> None:
     assert strip.bounds == pytest.approx((0.0, -3.5, 40.0, 3.5))
 
 
-def test_extents_are_indexed_by_the_published_vertices_repeats_included() -> None:
+def test_a_straight_street_is_stationed_between_its_two_vertices() -> None:
+    # Schema 1's defect: a straight street is two vertices, both at nodes, so
+    # extents at the vertices alone are a sliver the length of the block. The
+    # bulge below is 40 m from either vertex and only a station can see it.
+    road = Polygon([(0, -3), (30, -3), (30, -9), (70, -9), (70, -3), (100, -3), (100, 3), (0, 3)])
+    _, _, owned, _ = _build([road], [], [_line(1, [(0, 0), (100, 0)])])
+    territory = owned[1]
+    assert territory.vertex_station == [0, 10]
+    assert territory.left_m[0] == territory.left_m[10] == pytest.approx(3.0)
+    assert territory.left_m[5] == pytest.approx(9.0)
+    assert territory.right_m == pytest.approx([3.0] * 11)
+
+
+def test_vertices_are_indexed_into_the_stations_repeats_included() -> None:
     # `carriageway[]` is indexed by `roadgraph.json`'s own vertex numbering, and a
     # published polyline can repeat a vertex. A deduplicated plan shifts every
     # index after the repeat, and every consumer reads a plausible number.
@@ -123,8 +137,10 @@ def test_extents_are_indexed_by_the_published_vertices_repeats_included() -> Non
     assert [line.id for line in lines] == [3]  # level 0 only
     road = Polygon([(0, -6), (100, -6), (100, 2), (0, 2)])
     _, _, owned, _ = _build([road], [], lines)
-    assert owned[3].left_m == pytest.approx([6.0] * 4)
-    assert owned[3].right_m == pytest.approx([2.0] * 4)
+    territory = owned[3]
+    assert [territory.along_m[index] for index in territory.vertex_station] == [0, 50, 50, 100]
+    assert len(set(territory.vertex_station)) == 4  # the repeat keeps a station of its own
+    assert territory.left_m == pytest.approx([6.0] * len(territory.along_m))
 
 
 def test_an_end_vertex_is_measured_inside_its_territory_not_on_the_node() -> None:
@@ -145,8 +161,8 @@ def test_a_run_past_the_rectangle_owns_only_an_orphan_and_is_counted() -> None:
     lines = [_line(1, [(0, 0), (100, 0)]), _line(2, [(210, 0), (290, 0)])]
     _, _, owned, report = _build([road], [], lines)
     assert owned[2].shape.bounds == pytest.approx((155.0, -4.0, 200.0, 4.0))
-    assert owned[2].left_end == owned[2].right_end == [NONE, NONE]
-    assert owned[2].left_m == owned[2].right_m == [0.0, 0.0]
+    assert set(owned[2].left_end) == set(owned[2].right_end) == {NONE}
+    assert set(owned[2].left_m) == set(owned[2].right_m) == {0.0}
     assert report.orphan_m2 == pytest.approx(45.0 * 8.0)
     assert report.orphan_pieces == 1
     assert report.owned_past_rectangle_m == pytest.approx(80.0)

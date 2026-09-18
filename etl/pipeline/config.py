@@ -4970,6 +4970,10 @@ class CarriagewayRegion:
     sample_m: float
     # Station pitch of the rails cast to the kerb lines where HyD is silent.
     rail_m: float
+    # Pitch of the stations a territory's left and right extents are published
+    # at, between the published vertices. `surface.py` inserts a ribbon station
+    # at each, so this is also the along-road resolution of the drawn kerb.
+    station_m: float
 
 
 def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
@@ -4978,7 +4982,9 @@ def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
         return None
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
-    return CarriagewayRegion(**_thresholds(body, where, positive=("sample_m", "rail_m"), signed=()))
+    return CarriagewayRegion(
+        **_thresholds(body, where, positive=("sample_m", "rail_m", "station_m"), signed=())
+    )
 
 
 @dataclass(frozen=True)

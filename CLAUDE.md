@@ -427,11 +427,13 @@ Common emoji for this project:
   ends ON the clip line and a station can stand ON HyD's own edge, and either read as silent casts a
   rail from a road HyD drew. 🔴 **The seam is a cut in R, not in runs**: each region draws all of R
   inside its own rectangle, a neighbour's run included, so `foreign` territories are PUBLISHED and
-  foreign runs cast rails — dropping them is a hole neither build draws. ⚠️ **Extents are indexed by
-  `roadgraph.json`'s own vertices, repeats included**, as `carriageway[]` is; ⚠️ an END vertex is
-  measured half a sample in from its node, because at the node it reads zero on a good road.
-  ⚠️ **The stage's `ends` block is per VERTEX and is not `Q129`'s table** — vertices cluster at
-  nodes — so never quote one for the other. ⚠️ Inert until `P3-33c`: prove a change to it by
+  foreign runs cast rails — dropping them is a hole neither build draws. 🔴 **Extents are published
+  at dense STATIONS (`station_m`), never at the published vertices alone**: a straight street is two
+  vertices, both at nodes, where a territory pinches to a wedge, so schema 1 described a sliver the
+  length of the block. `vertex_station` indexes `roadgraph.json`'s own vertices, repeats included,
+  into them; ⚠️ an END station is measured half a sample in from its node, because at the node it
+  reads zero on a good road. ⚠️ **The stage's `ends` block runs over EVERY station and is not
+  `Q129`'s mid-block table** — never quote one for the other. ⚠️ Inert until `P3-33c`: prove a change to it by
   hashing `etl/out/<region>/` through `--from region`, where only `city.json`'s `generated_utc` may
   differ.
 - 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
