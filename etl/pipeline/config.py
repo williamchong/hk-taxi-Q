@@ -4957,9 +4957,10 @@ def _clearance(body: Any, where: str) -> Clearance | None:
 
 @dataclass(frozen=True)
 class CarriagewayRegion:
-    """The two resolutions `pipeline/region.py` builds R at (`Q129`, `P3-33b`).
+    """The resolutions `pipeline/region.py` builds R at (`Q129`, `P3-33b`), and
+    what `surface.py` makes of it.
 
-    🔴 **Both are RESOLUTIONS and neither is a bound.** What the rails refuse and
+    🔴 **The first three are RESOLUTIONS and none is a bound.** What the rails refuse and
     how far they cast are `carriageway_survey.width_bounds`' `hard_min_m` and
     `max_m`, read from that block and never restated here, so the region and the
     ray survey cannot drift onto two bars.
@@ -4983,6 +4984,10 @@ class CarriagewayRegion:
     # and drawn as area, so a straight road's lane lines stay straight. AUTHORED:
     # no publisher says how long a bay is.
     rail_opening_m: float
+    # The widest gap between two of HyD's Pavement Polygons that is still their
+    # SEAM and not a kerb. The publisher tiles the carriageway and its tiles do
+    # not always meet; the union is closed by this much before anything reads it.
+    seam_m: float
 
 
 def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
@@ -4995,7 +5000,14 @@ def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
         **_thresholds(
             body,
             where,
-            positive=("sample_m", "rail_m", "station_m", "rail_tolerance_m", "rail_opening_m"),
+            positive=(
+                "sample_m",
+                "rail_m",
+                "station_m",
+                "rail_tolerance_m",
+                "rail_opening_m",
+                "seam_m",
+            ),
             signed=(),
         )
     )

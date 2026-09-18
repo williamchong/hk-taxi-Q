@@ -3503,6 +3503,19 @@ carriageway_region:
   # rail, inward 2,196 -> 570 m, and lane_paint 151 -> 79 edges under 3.00 m.
   rail_opening_m: 20.0
 
+  # The widest gap between two HyD Pavement Polygons that is still their SEAM.
+  # HyD tiles the carriageway and its tiles do not always meet: a sliver
+  # 0.01-0.15 m across, straight over the road, is R's own boundary and reads as
+  # a kerb ON THE CENTRELINE — LEIGHTON ROAD e136 drew pinched to 0.00 m. The
+  # union is closed (dilate, then erode, mitred) by this much before anything
+  # reads it; a gap under twice it is filled.
+  #
+  # ⚠️ Swept on both regions, and it sits on a plateau. m2 added / pieces:
+  #   wan_chai      0.05 5.3/115   0.10 7.0/122   0.15 8.9/141   0.25 17.6/156   0.40 161/212
+  #   causeway_bay  0.05 1.7/33    0.10 1.8/42    0.15 1.9/46    0.25 2.6/46     0.40 49/70
+  # Past 0.25 the largest piece is 8-26 m2: that is a real gap, not a seam.
+  seam_m: 0.10
+
 
 # The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it
 # describes the taxi, and it is MIRRORED from taxi.tscn rather than read from it,

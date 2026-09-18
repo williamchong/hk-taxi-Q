@@ -25,7 +25,12 @@ from pipeline.region import (
 )
 
 SPEC = CarriagewayRegion(
-    sample_m=1.0, rail_m=2.0, station_m=10.0, rail_tolerance_m=0.1, rail_opening_m=30.0
+    sample_m=1.0,
+    rail_m=2.0,
+    station_m=10.0,
+    rail_tolerance_m=0.1,
+    rail_opening_m=30.0,
+    seam_m=0.1,
 )
 CLIP = shapely.box(-100.0, -100.0, 200.0, 100.0)
 
@@ -37,8 +42,16 @@ def _line(edge_id: int, plan, **fields) -> Centreline:
 
 def _build(polygons, kerbs, lines, clip=CLIP):
     report = RegionReport()
-    hyd, strip, territories = build(
-        polygons, kerbs, lines, clip=clip, spec=SPEC, max_m=16.5, min_span_m=3.0, report=report
+    hyd, strip, territories, _ = build(
+        polygons,
+        kerbs,
+        lines,
+        clip=clip,
+        spec=SPEC,
+        max_m=16.5,
+        min_span_m=3.0,
+        report=report,
+        lane_width_m=3.2,
     )
     return hyd, strip, {t.edge.id: t for t in territories}, report
 
@@ -184,3 +197,104 @@ def test_a_ray_runs_through_the_seam_between_two_touching_parts() -> None:
     start, up = np.array([0.0, 0.0]), np.array([0.0, 1.0])
     assert _reach(start, up, split, 16.5) == pytest.approx(7.0)
     assert _reach(start, up, near.union(far), 16.5) == pytest.approx(7.0)
+
+
+def test_a_seam_between_two_hyd_tiles_is_not_a_kerb() -> None:
+    # Two tiles of one carriageway that stop 0.1 m short of each other, straight
+    # across the road: open, the sliver is R's boundary and the station on it
+    # reads a kerb on the centreline.
+    tiles = [
+        Polygon([(0, -4), (49.95, -4), (49.95, 4), (0, 4)]),
+        Polygon([(50.05, -4), (100, -4), (100, 4), (50.05, 4)]),
+    ]
+    hyd, _, owned, report = _build(tiles, [], [_line(1, [(0, 0), (100, 0)])])
+    assert hyd.area == pytest.approx(800.0)
+    assert (report.seams_closed, report.seams_closed_m2) == (1, pytest.approx(0.8))
+    assert len(shapely.get_parts(owned[1].shape)) == 1
+
+
+def test_a_gap_wider_than_a_seam_stays_open() -> None:
+    # 1 m between two tiles is something the publisher drew, and stays a kerb.
+    tiles = [
+        Polygon([(0, -4), (49.5, -4), (49.5, 4), (0, 4)]),
+        Polygon([(50.5, -4), (100, -4), (100, 4), (50.5, 4)]),
+    ]
+    hyd, _, _, report = _build(tiles, [], [_line(1, [(0, 0), (100, 0)])])
+    assert hyd.area == pytest.approx(792.0)
+    assert report.seams_closed == 0
+
+
+def _refuge(x: float, z: float, length: float = 3.0, width: float = 1.5) -> LineString:
+    return LineString([(x, z), (x + length, z), (x + length, z + width), (x, z + width), (x, z)])
+
+
+def test_a_refuge_island_is_read_through_and_cut_out() -> None:
+    # `e659`: one station's ray lands on a refuge standing in the carriageway,
+    # with the lane behind it and the real kerb beyond. Heading east, z south:
+    # the island is on the RIGHT, 2.5 m off the centreline, kerb at 7 m.
+    kerbs = [
+        LineString([(-5, -5), (45, -5)]),
+        LineString([(-5, 7), (45, 7)]),
+        _refuge(19.0, 2.5),
+    ]
+    _, strip, owned, report = _build([], kerbs, [_line(1, [(0, 0), (40, 0)])])
+    assert report.islands == 1
+    # The rail runs to the kerb behind the island at every station...
+    assert owned[1].right_m == pytest.approx([7.0] * len(owned[1].right_m))
+    assert report.island_stations >= 1
+    # ...the corridor a car fits down still stops at it...
+    assert min(owned[1].right_kerb_m) == pytest.approx(2.5)
+    # ...and the island is a hole in R, not asphalt.
+    assert strip.area == pytest.approx(40.0 * 12.0 - 4.5)
+
+
+def test_an_island_with_another_carriageway_behind_it_stays_a_kerb() -> None:
+    # A median's nose: the same ring, but the asphalt beyond it is the OTHER
+    # centreline's. Reading through it would draw this ribbon across the median.
+    kerbs = [
+        LineString([(-5, -5), (45, -5)]),
+        LineString([(-5, 12), (45, 12)]),
+        _refuge(19.0, 2.5, length=2.0),
+    ]
+    lines = [_line(1, [(0, 0), (40, 0)]), _line(2, [(0, 7), (40, 7)])]
+    _, _, owned, _ = _build([], kerbs, lines)
+    station = owned[1].along_m.index(20.0)
+    assert owned[1].right_m[station] == pytest.approx(2.5)
+    assert owned[1].right_end[station] == KERB
+
+
+def test_a_long_island_is_a_median_and_the_rail_follows_it() -> None:
+    # Longer than `rail_opening_m` (30 here): the shortest thing a rail follows.
+    kerbs = [
+        LineString([(-5, -5), (85, -5)]),
+        LineString([(-5, 7), (85, 7)]),
+        _refuge(20.0, 2.5, length=40.0),
+    ]
+    _, _, owned, report = _build([], kerbs, [_line(1, [(0, 0), (80, 0)])])
+    assert report.islands == 0
+    assert min(owned[1].right_m) == pytest.approx(2.5)
+
+
+def test_a_line_across_the_road_is_not_its_kerb() -> None:
+    # TD's edge line running clean across `e380`: the station beside it read a
+    # kerb a hand's breadth off the centreline.
+    kerbs = [
+        LineString([(-5, -8), (45, -8)]),
+        LineString([(-5, 8), (45, 8)]),
+        LineString([(14, -20), (26, 20)]),
+    ]
+    _, strip, _, report = _build([], kerbs, [_line(1, [(0, 0), (40, 0)])])
+    # The stations at 18 and 22 m meet it 6.7 m out, inside the kerb at 8.
+    assert report.rail_hits_across >= 2
+    assert strip.area == pytest.approx(640.0)
+
+
+def test_a_kerb_that_crosses_far_away_is_still_a_kerb() -> None:
+    # One polyline that is this road's kerb for 30 m and then swings across it:
+    # the refusal is per station, so only the stations by the crossing lose it.
+    kerbs = [
+        LineString([(-5, -5), (65, -5)]),
+        LineString([(-5, 5), (50, 5), (60, -20)]),
+    ]
+    _, _, owned, _ = _build([], kerbs, [_line(1, [(0, 0), (60, 0)])])
+    assert owned[1].right_m[1] == pytest.approx(5.0)

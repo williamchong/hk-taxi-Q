@@ -9,8 +9,8 @@ is the carriageway's.
 So this stage reads the carriageway itself:
 
 * **R** — one plan region: the union of HyD's Pavement Polygons with their holes
-  kept, and where HyD is silent, rails cast per station to the two line
-  publishers' kerbs. Cut to the region's own rectangle.
+  kept and their seams closed, and where HyD is silent, rails cast per station
+  to the two line publishers' kerbs. Cut to the region's own rectangle.
 * **T_e** — R cut by the Voronoi cell of edge *e*'s centreline. Every square
   metre of R has exactly one owner, so two territories can neither overlap nor
   fail to meet.
@@ -18,6 +18,11 @@ So this stage reads the carriageway itself:
 and writes `carriageway_region.json`: R's rings, each territory's rings, and at a
 station every `station_m` along each edge — every published vertex among them —
 how far the territory reaches to the left and to the right and what ended it.
+
+🔴 **A kerb IN the road is not the road's edge** (`Q131`). A refuge island, a
+seam between two of HyD's tiles and a painted line carried across a carriageway
+all stop a cross-section short, and each drew the ribbon pinched: `_closed`,
+`islands_of` / `_through`, and the across refusal in `rails` are the three rules.
 
 `surface.py` is its reader (`P3-33c`, through `surface_region.py`): a level-0
 ribbon's rails are its territory's extents, and the rest of R is drawn as area.
@@ -83,7 +88,10 @@ REGION_NAME = "carriageway_region.json"
 # both at nodes, so 1 described a sliver the length of the block.
 # 3: `left_kerb_m` / `right_kerb_m`, the cross-section run on through every share
 # to R's own boundary — what `clearance` measures a corridor across.
-REGION_SCHEMA = 3
+# 4: `region.islands`, and extents READ THROUGH them: a reader that took an
+# extent for "the first kerb" would be wrong to keep doing so, and one that draws
+# the ribbon over an island owes the island its kerb back.
+REGION_SCHEMA = 4
 # The one level this model covers. Every publisher here is a 2D plan that reads
 # the street underneath a deck (`Q103`), and `Q107`'s rim clamp already cuts the
 # off-grade ribbons to their structure.
@@ -105,11 +113,26 @@ class RegionReport:
     kerb_lines: int = 0
     hyd_m2: float = 0.0
     rails_m2: float = 0.0
+    # What closing HyD's seams added: asphalt the publisher's tiles left between
+    # them. ⚠️ A sliver's worth — 7.0 m2 of Wan Chai's 355,378 at 0.10 m — so a
+    # jump is `seam_m` reaching past the seams and paving something real.
+    seams_closed_m2: float = 0.0
+    seams_closed: int = 0
+    # Free-standing kerbed islands a cross-section reads THROUGH: HyD's small
+    # holes, and the line publishers' closed rings. `island_stations` is the
+    # sides that did, and it is the counter that can fail — zero means the rule
+    # stopped firing and every refuge is a wedge across its lane again.
+    islands: int = 0
+    islands_m2: float = 0.0
+    island_stations: int = 0
     # Metres of centreline off HyD's paint, by how many sides a kerb answered
     # on. 🔴 `[0]` is the only place R is not read from a publisher — the
     # graph's `width_m` — so a rise there is the invented width coming back.
     silent_m: dict[int, float] = field(default_factory=lambda: {2: 0.0, 1: 0.0, 0: 0.0})
     rail_stations_refused: int = 0
+    # Ray hits refused because the line they landed on CROSSES this centreline
+    # nearer than it stands off it: a line across a road is not that road's kerb.
+    rail_hits_across: int = 0
     # Voronoi cells GEOS handed back invalid, repaired rather than dropped: a
     # dropped cell is asphalt with no owner.
     cells_repaired: int = 0
@@ -272,6 +295,36 @@ def _union(shapes: list[BaseGeometry]) -> BaseGeometry:
     return shapely.multipolygons(parts) if len(parts) != 1 else parts[0]
 
 
+def _closed(published: BaseGeometry, seam_m: float, report: RegionReport) -> BaseGeometry:
+    """HyD's union with every gap narrower than `2 * seam_m` filled.
+
+    🔴 **HyD TILES the carriageway and its tiles do not always meet.** Two
+    Pavement Polygons that should share an edge leave a sliver between them —
+    0.01-0.15 m across, running straight over the road — and a sliver is R's own
+    boundary: the cross-section at it reads a kerb on the centreline, and the
+    ribbon drew LEIGHTON ROAD `e136` pinched to 0.00 m and VICTORIA PARK ROAD
+    `e285` to 1.00 m in a 9.74 m carriageway. Found from the driving seat, as a
+    road that bends just before a junction.
+
+    A morphological CLOSING, mitred so a square corner stays square. ⚠️ **Swept,
+    and the value sits on a plateau**: 0.05 / 0.10 / 0.15 m add 5.3 / 7.0 / 8.9 m2
+    to Wan Chai in ~120 pieces none over 1.3 m2, then 0.25 adds 17.6 with one
+    piece of 8.4 m2 and 0.40 adds 161 — past the seams and into real kerb.
+    """
+    if seam_m <= 0.0 or published.is_empty:
+        return published
+    closed = _union(
+        [
+            published,
+            published.buffer(seam_m, join_style="mitre").buffer(-seam_m, join_style="mitre"),
+        ]
+    )
+    added = [part for part in shapely.get_parts(closed.difference(published)) if part.area > 1e-4]
+    report.seams_closed = len(added)
+    report.seams_closed_m2 = float(sum(part.area for part in added))
+    return closed
+
+
 def _walk(plan: np.ndarray, pitch_m: float) -> tuple[np.ndarray, np.ndarray]:
     """Evenly pitched points along a plan, both ends included, with LEFT normals.
 
@@ -294,6 +347,80 @@ def _walk(plan: np.ndarray, pitch_m: float) -> tuple[np.ndarray, np.ndarray]:
     return points, np.column_stack([unit[:, 1], -unit[:, 0]])
 
 
+def _is_island(ring: Polygon, max_length_m: float, max_width_m: float) -> bool:
+    """Short enough that a rail should not follow it, narrow enough to stand
+    inside a lane pattern: the two sides of its tightest rectangle."""
+    if ring.is_empty or not ring.is_valid:
+        return False
+    # The tightest rectangle has a side along a hull edge, so: every hull edge's
+    # frame, and the smallest box among them. ⚠️ Not `minimum_rotated_rectangle`,
+    # which divides by zero on a ring that is already axis-aligned.
+    hull = np.asarray(ring.convex_hull.exterior.coords)
+    step = np.diff(hull, axis=0)
+    step = step[np.hypot(step[:, 0], step[:, 1]) > 0.0]
+    if not len(step):
+        return False
+    unit = step / np.hypot(step[:, 0], step[:, 1])[:, None]
+    along = hull @ unit.T
+    across = hull @ np.column_stack([-unit[:, 1], unit[:, 0]]).T
+    boxes = np.column_stack([np.ptp(along, axis=0), np.ptp(across, axis=0)])
+    sides = np.sort(boxes[np.argmin(boxes.prod(axis=1))])
+    return bool(sides[1] < max_length_m and sides[0] <= max_width_m)
+
+
+def islands_of(
+    published: BaseGeometry,
+    kerbs: list[LineString],
+    max_length_m: float,
+    max_width_m: float,
+) -> tuple[list[Polygon], np.ndarray]:
+    """Free-standing kerbed islands, and which kerb lines ARE one.
+
+    A pedestrian refuge, a splitter, a column base: a kerb that closes on itself
+    inside the carriageway, with asphalt on both sides of it. HyD publishes one as
+    a HOLE in its polygon; the line publishers as a closed ring touching no other
+    kerb line. 🔴 **It is not the carriageway's edge, and read as one it was**: a
+    cross-section stops at the first kerb, so the one station crossing EXPO DRIVE
+    EAST `e659`'s refuge read 2.61 m between neighbours reading 7.56, and the
+    ribbon drew a 5 m kerbed wedge across a lane that exists (`Q131`).
+
+    🔴 **Which rings, without a new knob.** Island areas run continuously from
+    1 m2 to a city block, so an area cap has nothing to be read off — and swept,
+    40 m2 let CAUSEWAY BAY's 24 m platform strips through and widened R by
+    282 m2. What an island IS here is the two bars the ribbon already has:
+    shorter than `rail_opening_m`, the shortest feature a rail still follows — a
+    longer one is a median and the rail should run along it — and no wider than
+    a lane, because a wider one displaces a whole lane and the ribbon is right
+    to narrow for it. ⚠️ And `measure` adds the geometric half: a ray is read
+    through only where it comes out in ITS OWN territory. A median's nose has
+    the other carriageway beyond it and stays a kerb whatever its size.
+    """
+    found: list[Polygon] = []
+    for part in shapely.get_parts(published):
+        if part.geom_type == "Polygon":
+            found += [
+                hole
+                for ring in part.interiors
+                if _is_island(hole := Polygon(ring), max_length_m, max_width_m)
+            ]
+    is_island = np.zeros(len(kerbs), dtype=bool)
+    if kerbs:
+        tree = STRtree(kerbs)
+        for key, kerb in enumerate(kerbs):
+            if not kerb.is_ring or len(kerb.coords) < 4:
+                continue
+            ring = Polygon(kerb)
+            if not _is_island(ring, max_length_m, max_width_m):
+                continue
+            # Free-standing: a ring another kerb line touches is a corner of the
+            # pavement drawn as its own feature, and that IS the road's edge.
+            if len(tree.query(kerb, predicate="intersects")) > 1:
+                continue
+            is_island[key] = True
+            found.append(ring)
+    return found, is_island
+
+
 def rails(
     kerbs: list[LineString],
     hyd: BaseGeometry,
@@ -303,6 +430,7 @@ def rails(
     max_m: float,
     min_span_m: float,
     report: RegionReport,
+    is_island: np.ndarray | None = None,
 ) -> BaseGeometry:
     """The carriageway where HyD is silent: rails cast to the line publishers' kerbs.
 
@@ -318,6 +446,20 @@ def rails(
     kerb beyond, on purpose — the union is the carriageway and the partition
     says whose it is.
 
+    A ray also passes through an ISLAND (`islands_of`) to the kerb beyond it —
+    ⚠️ only where there is one: a ring with nothing behind it inside `max_m` is
+    all the ray knows of that side and stays its answer. The caller cuts the
+    islands back out of the strip.
+
+    🔴 **A line that crosses this road is not this road's kerb.** TD's `RM1108`
+    runs clean across GLOUCESTER ROAD `e380` and the station beside it read a
+    kerb 0.06 m from the centreline. A hit is refused where its line reaches the
+    centreline NEARER, along the road, than the hit stands off it — so it meets
+    the road at over 45 degrees between the two — and no angle is declared. A
+    kerb that crosses far away, a corner run carried across the next mouth, is
+    untouched: the test is per station. A side every hit is refused on is
+    unanswered, and takes the edge's median like any other.
+
     ⚠️ Foreign runs cast too: inside this rectangle their asphalt is this
     region's to draw (the module docstring's seam rule).
     """
@@ -327,12 +469,20 @@ def rails(
     quads: list[BaseGeometry] = []
     for line in lines:
         points, left = _walk(line.plan, pitch_m)
+        # Where each kerb line crosses this centreline, in metres along it.
+        crossings: dict[int, np.ndarray] = {}
+        if tree is not None:
+            for key in tree.query(line.line, predicate="intersects"):
+                at = shapely.get_coordinates(line.line.intersection(kerbs[key]))
+                if len(at):
+                    crossings[int(key)] = shapely.line_locate_point(line.line, shapely.points(at))
         # `intersects`, not `contains`: a station ON the publisher's own edge is
         # covered, and read as silent it casts a rail from a road HyD drew.
         bare = ~shapely.intersects_xy(hyd, points[:, 0], points[:, 1])
         if not bare.any():
             continue
         wanted = bare | np.r_[bare[1:], False] | np.r_[False, bare[:-1]]
+        station = shapely.line_locate_point(line.line, shapely.points(points))
         reach = np.full((len(points), 2), np.nan)
         for row in np.flatnonzero(wanted):
             origin = Point(points[row])
@@ -341,10 +491,18 @@ def rails(
                     continue
                 ray = LineString([points[row], points[row] + sign * left[row] * max_m])
                 hits = tree.query(ray, predicate="intersects")
-                if len(hits):
-                    reach[row, side] = min(
-                        ray.intersection(kerbs[key]).distance(origin) for key in hits
-                    )
+                far, solid = [], []
+                for key in hits:
+                    value = ray.intersection(kerbs[key]).distance(origin)
+                    across = crossings.get(int(key))
+                    if across is not None and np.abs(across - station[row]).min() <= value:
+                        report.rail_hits_across += 1
+                        continue
+                    far.append(value)
+                    if is_island is None or not is_island[key]:
+                        solid.append(value)
+                if far:
+                    reach[row, side] = min(solid or far)
             if not np.isnan(reach[row]).any() and reach[row].sum() < min_span_m:
                 reach[row] = np.nan
                 report.rail_stations_refused += 1
@@ -505,6 +663,35 @@ def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m:
     return 0.0
 
 
+def _through(
+    start: np.ndarray,
+    direction: np.ndarray,
+    filled: BaseGeometry,
+    islands: BaseGeometry,
+    max_m: float,
+) -> float:
+    """`_reach` over a territory with its islands filled in, cut back to where
+    the ray last stood on the territory's own asphalt.
+
+    🔴 **A ray that ends INSIDE an island has not been read through it.** With
+    another centreline's share beyond, the island is the boundary between two
+    carriageways — a median's nose — and the extent stops at its near face, as it
+    always did. Only asphalt of this territory's own on the far side carries the
+    rail past.
+    """
+    reach = _reach(start, direction, filled, max_m)
+    if reach <= 0.0:
+        return 0.0
+    over = LineString([start, start + direction * reach]).intersection(islands)
+    for piece in shapely.get_parts(over):
+        if piece.geom_type != "LineString" or piece.is_empty:
+            continue
+        far = [float(np.hypot(*(np.asarray(xy) - start))) for xy in piece.coords]
+        if max(far) >= reach - 1e-6:
+            return min(far)
+    return reach
+
+
 def measure(
     territory: Territory,
     whole: BaseGeometry,
@@ -512,8 +699,15 @@ def measure(
     station_m: float,
     inset_m: float,
     max_m: float,
+    islands: BaseGeometry | None,
+    report: RegionReport,
 ) -> None:
-    """Fill one territory's per-station extents and what ended each."""
+    """Fill one territory's per-station extents and what ended each.
+
+    `islands` are the ones this territory touches, as one geometry: an extent is
+    read through them (`_through`), and the corridor is not — a car does not
+    drive through a refuge, so `left_kerb_m` / `right_kerb_m` still stop at it.
+    """
     along, points, left, vertex_station = _station_frames(territory.edge, station_m, inset_m)
     territory.along_m = [float(value) for value in along]
     territory.vertex_station = vertex_station
@@ -526,6 +720,10 @@ def measure(
     # which IS a predicate and IS prepared.
     low, high = points.min(axis=0) - max_m - 1.0, points.max(axis=0) + max_m + 1.0
     nearby = shapely.clip_by_rect(whole, low[0], low[1], high[0], high[1])
+    filled = None
+    if islands is not None and not islands.is_empty and not territory.shape.is_empty:
+        filled = _union([territory.shape, islands])
+        shapely.prepare(islands)
     for point, normal in zip(points, left, strict=True):
         for sign, reach_out, end_out, kerb_out in (
             (1.0, territory.left_m, territory.left_end, territory.left_kerb_m),
@@ -537,6 +735,17 @@ def measure(
                 end_out.append(NONE)
                 continue
             reach = _reach(point, sign * normal, territory.shape, max_m)
+            # Only a ray that STOPPED on an island can be read through one — 2% of
+            # the sides of a territory that touches any, and `_through` is two
+            # overlays.
+            at_end = point + sign * normal * reach
+            # ⚠️ `dwithin`, not `intersects`: the end stands ON the island's edge,
+            # and asked exactly it misses by a rounding — the document moved.
+            if filled is not None and shapely.dwithin(islands, Point(at_end), 1e-6):
+                through = _through(point, sign * normal, filled, islands, max_m)
+                if through > reach + 1e-6:
+                    reach = through
+                    report.island_stations += 1
             if reach >= max_m - 1e-6:
                 kind = OPEN
             elif reach == 0.0 and not territory.shape.intersects(Point(point).buffer(_PROBE_M)):
@@ -563,16 +772,19 @@ def build(
     max_m: float,
     min_span_m: float,
     report: RegionReport,
-) -> tuple[BaseGeometry, BaseGeometry, list[Territory]]:
-    """R's two halves and every territory, measured. Pure: no file is touched."""
+    lane_width_m: float,
+) -> tuple[BaseGeometry, BaseGeometry, list[Territory], list[Polygon]]:
+    """R's two halves, every territory measured, and the islands in R. Pure: no
+    file is touched."""
     report.hyd_polygons, report.kerb_lines = len(polygons), len(kerbs)
     # 🔴 Silence is asked of the publisher and not of the clip: a run cut at the
     # rectangle ends ON the clipped boundary, where `contains` is false, and read
     # against the clipped union every such end cast a 2 m rail past HyD's own
     # kerb. The tool skipped those lines by accident and `|stage - tool|` found it
     # (9.4 m2 on Causeway Bay's `e79`).
-    published = _union(list(polygons))
+    published = _closed(_union(list(polygons)), spec.seam_m, report)
     hyd = published.intersection(clip)
+    found, is_island = islands_of(published, kerbs, spec.rail_opening_m, lane_width_m)
     strip = rails(
         kerbs,
         published,
@@ -581,22 +793,39 @@ def build(
         max_m=max_m,
         min_span_m=min_span_m,
         report=report,
+        is_island=is_island,
     )
     strip = strip.intersection(clip).difference(hyd)
+    if found:
+        # A ray read through an island leaves its quad lying over it.
+        strip = _union(list(shapely.get_parts(strip.difference(shapely.union_all(found)))))
     whole = shapely.union_all([hyd, strip])
     report.hyd_m2, report.rails_m2 = float(hyd.area), float(strip.area)
     if whole.is_empty:
-        return hyd, strip, []
+        return hyd, strip, [], []
     shapely.prepare(whole)
+    # An island is a hole in R: what no asphalt touches is a planter on a pavement.
+    found = [island for island in found if whole.intersects(island)]
+    report.islands, report.islands_m2 = len(found), float(sum(i.area for i in found))
+    island_tree = STRtree(found) if found else None
     territories = partition(whole, lines, spec.sample_m, report)
     for territory in territories:
         edge = territory.edge
+        touching = (
+            shapely.union_all(
+                [found[key] for key in island_tree.query(territory.shape, "intersects")]
+            )
+            if island_tree is not None and not territory.shape.is_empty
+            else None
+        )
         measure(
             territory,
             whole,
             station_m=spec.station_m,
             inset_m=spec.sample_m / 2.0,
             max_m=max_m,
+            islands=touching,
+            report=report,
         )
         area = float(territory.shape.area)
         if edge.foreign:
@@ -613,7 +842,7 @@ def build(
         tally = report.ends.setdefault(edge.width_source, Counter())
         for pair in zip(territory.left_end, territory.right_end, strict=True):
             tally["|".join(sorted(pair))] += 1
-    return hyd, strip, territories
+    return hyd, strip, territories, found
 
 
 def _rings(shape: BaseGeometry) -> list[dict]:
@@ -638,13 +867,18 @@ def _document(
     strip: BaseGeometry,
     territories: list[Territory],
     report: RegionReport,
+    islands: list[Polygon] = (),
 ) -> dict:
     return {
         "schema_version": REGION_SCHEMA,
         "city_id": city.id,
         "region_id": region_id,
         "level": LEVEL,
-        "region": {"hyd": _rings(hyd), "rails": _rings(strip)},
+        "region": {
+            "hyd": _rings(hyd),
+            "rails": _rings(strip),
+            "islands": [ring["outer"] for island in islands for ring in _rings(island)],
+        },
         "territories": [
             {
                 "edge": territory.edge.id,
@@ -666,12 +900,18 @@ def _document(
             "kerb_lines": report.kerb_lines,
             "hyd_m2": round(report.hyd_m2, 1),
             "rails_m2": round(report.rails_m2, 1),
+            "seams_closed": report.seams_closed,
+            "seams_closed_m2": round(report.seams_closed_m2, 2),
+            "islands": report.islands,
+            "islands_m2": round(report.islands_m2, 1),
+            "island_stations": report.island_stations,
             "silent_m": {
                 "kerb_both_sides": round(report.silent_m[2], 1),
                 "kerb_one_side": round(report.silent_m[1], 1),
                 "width_m_only": round(report.silent_m[0], 1),
             },
             "rail_stations_refused": report.rail_stations_refused,
+            "rail_hits_across": report.rail_hits_across,
             "cells_repaired": report.cells_repaired,
             "owned_m2": round(report.owned_m2, 1),
             "foreign_m2": round(report.foreign_m2, 1),
@@ -716,7 +956,7 @@ def build_region(
     )
     high_x, high_z = city.region_high(region_id)
     report = RegionReport()
-    hyd, strip, territories = build(
+    hyd, strip, territories, islands = build(
         polygons,
         kerbs,
         lines,
@@ -725,15 +965,16 @@ def build_region(
         max_m=survey.width_bounds.max_m,
         min_span_m=survey.width_bounds.hard_min_m,
         report=report,
+        lane_width_m=city.roads.lane_width_m,
     )
     size = write_document(
-        out_dir / REGION_NAME, _document(city, region_id, hyd, strip, territories, report)
+        out_dir / REGION_NAME, _document(city, region_id, hyd, strip, territories, report, islands)
     )
     silent = sum(report.silent_m.values())
     log.info(
         "  R: %.0f m2 on %d HyD polygons + %.0f m2 of rails; HyD silent under %.0f m of "
         "centreline (kerb both sides %.0f, one side %.0f, width_m only %.0f), %d rail stations "
-        "refused",
+        "refused, %d hits on a line across the road refused",
         report.hyd_m2,
         report.hyd_polygons,
         report.rails_m2,
@@ -742,6 +983,22 @@ def build_region(
         report.silent_m[1],
         report.silent_m[0],
         report.rail_stations_refused,
+        report.rail_hits_across,
+    )
+    log.info(
+        "  seams: %d gaps between HyD polygons closed at %.2f m, %.2f m2",
+        report.seams_closed,
+        spec.seam_m,
+        report.seams_closed_m2,
+    )
+    log.info(
+        "  islands: %d shorter than %.0f m and no wider than %.2f m (%.0f m2 in all), read "
+        "through on %d station sides",
+        report.islands,
+        spec.rail_opening_m,
+        city.roads.lane_width_m,
+        report.islands_m2,
+        report.island_stations,
     )
     log.info(
         "  territories: %d, %.0f m2 owned + %.0f m2 foreign; orphan %.0f m2 in %d pieces; "

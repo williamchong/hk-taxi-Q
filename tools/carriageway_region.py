@@ -247,6 +247,54 @@ def _rail_stations(plan: np.ndarray, spacing_m: float) -> tuple[np.ndarray, np.n
     return points, np.column_stack([-unit[:, 1], unit[:, 0]])
 
 
+def _box_sides(ring: Polygon) -> tuple[float, float]:
+    """(short, long) side of the tightest rectangle around a ring.
+
+    Swept by ANGLE at a tenth of a degree, where the stage walks the hull's own
+    edges: two routes to one rectangle, so neither can carry the other's slip.
+    """
+    xy = np.asarray(ring.exterior.coords) - np.asarray(ring.centroid.coords[0])
+    turn = np.deg2rad(np.arange(0.0, 90.0, 0.1))
+    along = xy @ np.vstack([np.cos(turn), np.sin(turn)])
+    across = xy @ np.vstack([-np.sin(turn), np.cos(turn)])
+    spans = np.column_stack([np.ptp(along, axis=0), np.ptp(across, axis=0)])
+    best = spans[np.argmin(spans.prod(axis=1))]
+    return float(best.min()), float(best.max())
+
+
+def free_islands(
+    published: BaseGeometry, kerbs: list[LineString], max_length_m: float, max_width_m: float
+) -> tuple[list[Polygon], set[int]]:
+    """Kerbed islands standing in the carriageway (`pipeline/region.islands_of`):
+    HyD's holes and the line publishers' free-standing closed rings, shorter than
+    a rail follows and no wider than a lane. The second value is which kerb lines
+    a ray passes through when there is a kerb behind them."""
+
+    def small(ring: Polygon) -> bool:
+        if not ring.is_valid or ring.is_empty:
+            return False
+        short, long = _box_sides(ring)
+        return long < max_length_m and short <= max_width_m
+
+    holes = [
+        Polygon(ring)
+        for part in shapely.get_parts(published)
+        if part.geom_type == "Polygon"
+        for ring in part.interiors
+    ]
+    found = [hole for hole in holes if small(hole)]
+    through: set[int] = set()
+    for key, kerb in enumerate(kerbs):
+        if not kerb.is_ring or len(kerb.coords) < 4 or not small(Polygon(kerb)):
+            continue
+        # Free-standing: no other kerb line so much as touches it.
+        if any(other is not kerb and other.intersects(kerb) for other in kerbs):
+            continue
+        through.add(key)
+        found.append(Polygon(kerb))
+    return found, through
+
+
 def kerb_strip(
     kerbs: list[LineString],
     hyd: BaseGeometry,
@@ -255,6 +303,7 @@ def kerb_strip(
     spacing_m: float,
     max_m: float,
     min_span_m: float,
+    through: set[int] | None = None,
 ) -> tuple[BaseGeometry, dict[int, float], int]:
     """The carriageway where HyD is silent: rails cast to the line publishers' kerbs.
 
@@ -285,8 +334,11 @@ def kerb_strip(
     quads: list[Polygon] = []
     silent = {2: 0.0, 1: 0.0, 0: 0.0}
     refused = 0
+    through = through or set()
+    axis_of = {line.id: LineString(line.plan) for line in lines}
     for line in lines:
         points, right = _rail_stations(line.plan, spacing_m)
+        axis = axis_of[line.id]
         # `intersects`, not `contains`: a station ON the publisher's own edge is
         # covered, and read as silent it casts a rail from a road HyD drew.
         bare = ~shapely.intersects_xy(hyd, points[:, 0], points[:, 1])
@@ -298,12 +350,27 @@ def kerb_strip(
                 ray = LineString([points[row], points[row] + sign * right[row] * max_m])
                 if tree is None:
                     continue
-                hits = [
-                    ray.intersection(kerbs[key]).distance(Point(points[row]))
-                    for key in tree.query(ray, predicate="intersects")
-                ]
-                if hits:
-                    reach[row, side] = min(hits)
+                # 🔴 A line that CROSSES this road is not its kerb: refused where it
+                # reaches the centreline nearer, along the road, than the hit
+                # stands off it. And a ray passes through an island to the kerb
+                # behind it — where there is one.
+                here = axis.project(Point(points[row]))
+                kept: dict[int, float] = {}
+                for key in tree.query(ray, predicate="intersects"):
+                    off = ray.intersection(kerbs[key]).distance(Point(points[row]))
+                    meets = axis.intersection(kerbs[key])
+                    nearest = min(
+                        (
+                            abs(axis.project(Point(xy)) - here)
+                            for xy in shapely.get_coordinates(meets)
+                        ),
+                        default=np.inf,
+                    )
+                    if nearest > off:
+                        kept[int(key)] = off
+                behind = [off for key, off in kept.items() if key not in through]
+                if kept:
+                    reach[row, side] = min(behind or kept.values())
             if np.nansum(reach[row]) < min_span_m and not np.isnan(reach[row]).any():
                 reach[row] = np.nan
                 refused += 1
@@ -339,6 +406,8 @@ def build_region(
     spacing_m: float,
     max_m: float,
     min_span_m: float,
+    seam_m: float = 0.0,
+    island_m: tuple[float, float] | None = None,
 ) -> Region:
     """R, cut to the region's own rectangle.
 
@@ -351,11 +420,36 @@ def build_region(
     """
     # Silence is the publisher's, not the clip's: see `pipeline/region.build`.
     published = _valid_union(polygons)
+    if seam_m > 0.0:
+        # HyD's tiles do not always meet, and a sliver between two of them reads
+        # as a kerb on the centreline (`pipeline/region._closed`). Filled here as
+        # the gaps themselves — what a dilation reaches and an erosion leaves —
+        # so the stage's closing and this one are two routes to one region.
+        grown = published.buffer(seam_m, join_style="mitre")
+        gaps = grown.buffer(-seam_m, join_style="mitre").difference(published)
+        # Polygons only: the difference leaves the odd line where the two touch.
+        slivers = [part for part in shapely.get_parts(gaps) if part.geom_type == "Polygon"]
+        # ⚠️ A pairwise `union`, never `unary_union` over the list: cascaded over
+        # 414 slivers GEOS filled HyD's holes (+9,010 m2 on Wan Chai) and said
+        # nothing; `|stage - tool|` found it at 4,145 m2 on one territory.
+        published = shapely.union(published, shapely.union_all(slivers))
+        published = shapely.multipolygons(
+            [part for part in shapely.get_parts(published) if part.geom_type == "Polygon"]
+        )
     hyd = published.intersection(clip)
+    islands, through = free_islands(published, kerbs, *island_m) if island_m else ([], set())
     strip, silent, refused = kerb_strip(
-        kerbs, published, lines, spacing_m=spacing_m, max_m=max_m, min_span_m=min_span_m
+        kerbs,
+        published,
+        lines,
+        spacing_m=spacing_m,
+        max_m=max_m,
+        min_span_m=min_span_m,
+        through=through,
     )
     strip = strip.intersection(clip)
+    if islands:
+        strip = strip.difference(unary_union(islands))
     whole = unary_union([hyd, strip])
     return Region(
         hyd=hyd,
@@ -752,6 +846,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--rail-m", type=float, default=2.0, help="station pitch of the rails where HyD is silent"
     )
+    parser.add_argument(
+        "--seam-m",
+        type=float,
+        help="close gaps between HyD polygons under twice this; default carriageway_region.seam_m",
+    )
     parser.add_argument("--svg", type=Path, help="write a plan here")
     parser.add_argument(
         "--window", type=float, nargs=4, metavar=("X0", "Z0", "X1", "Z1"), help="clip the plan"
@@ -778,6 +877,16 @@ def main(argv: list[str] | None = None) -> int:
         spacing_m=args.rail_m,
         max_m=args.max_ray_m,
         min_span_m=city.carriageway_survey.width_bounds.hard_min_m,
+        seam_m=(
+            args.seam_m
+            if args.seam_m is not None
+            else (city.carriageway_region.seam_m if city.carriageway_region else 0.0)
+        ),
+        island_m=(
+            (city.carriageway_region.rail_opening_m, city.roads.lane_width_m)
+            if city.carriageway_region
+            else None
+        ),
     )
     region_s = time.perf_counter() - clock - read_s
     owned = territories(region, lines, args.sample_m)
