@@ -508,6 +508,9 @@ class SurfaceReport:
     # Metres of kerb drawn along an AREA's edge — the junction corners and bays no
     # ribbon's rail runs along. Zero with areas drawn is every corner kerbless.
     area_kerb_m: float = 0.0
+    # Kerbed islands standing in the carriageway, each ringed and topped — the
+    # ones a rail was read through lie UNDER a ribbon (`Q131`).
+    islands: int = 0
     # Territory edges whose PAINTED lane count was cut to what their share can
     # carry at TPDM's narrow lane. One-sided; reachable at zero.
     territory_lanes_capped: int = 0
@@ -2312,16 +2315,19 @@ def build_region(
             if edge.level == 0 and edge.left is not None and edge.right is not None
         ]
         ids = [int(edge["id"]) for edge in [*graph["edges"], *foreign_published]]
+        centrelines = {
+            (index >= len(edges), ids[index]): edge.points[:, :3]
+            for index, edge in enumerate(every_edge)
+            if edge.level == 0 and len(edge.points) >= 2
+        }
+        # Built once: the buffer is 0.3 s, and both `areas` and the loop below want it.
+        rings = surface_region.island_rings(region)
         report.area_triangles, area_kerbs = surface_region.areas(
             region,
             # Every level-0 ribbon, the neighbour's included: its ribbon is its
             # owner's to draw, so it is subtracted here exactly as an owned one.
             [np.vstack([edge.left, edge.right[::-1]]) for _, edge in level0],
-            {
-                (index >= len(edges), ids[index]): edge.points[:, :3]
-                for index, edge in enumerate(every_edge)
-                if edge.level == 0 and len(edge.points) >= 2
-            },
+            centrelines,
             [
                 _lift(rail, edge.ribbon, 0.0)
                 for index, edge in level0
@@ -2339,9 +2345,29 @@ def build_region(
             ],
             style.kerb_width_m,
             rail_tolerance_m,
+            rings,
         )
         for line in area_kerbs:
-            report.area_kerb_m += _draw_area_kerb(builder, line, style, city.roads.lane_width_m)
+            report.area_kerb_m += _draw_area_kerb(
+                builder,
+                line,
+                style,
+                city.roads.lane_width_m,
+                lip=not surface_region.on_island(rings, line),
+            )
+        tops = surface_region.island_tops(
+            region,
+            centrelines,
+        )
+        if len(tops):
+            tops[:, :, 1] += style.kerb_height_m
+            report.islands = len(region.islands)
+            builder.triangles(
+                tops,
+                colour=style.kerb_material.colour,
+                # A kerb code says a length: "none" is a junction cap's word.
+                marking=_Marking(_AREA_KERB_CODE, 1.0),
+            )
         builder.triangles(
             report.area_triangles,
             colour=style.surface_material.colour,
@@ -4395,8 +4421,23 @@ def _draw_edge(
     return True
 
 
+# 🔴 A KERB code, which is never a bare class: the codec holds "no lanes" and
+# "no length" to mean a junction CAP and nothing else, and `verify_road_surface`
+# refuses a kerb that says either. This kerb belongs to no edge, so it says the
+# least a kerb can — one lane, one-way, no paint on it — and the markings
+# shader excludes the class outright, so nothing reads the lane.
+_AREA_KERB_CODE = float(
+    MARKING_CLASS_KERB + MARKING_LANES * 1 + MARKING_DIRECTION * MARKING_DIRECTIONS[FORWARD]
+)
+
+
 def _draw_area_kerb(
-    builder: _Builder, line: np.ndarray, style: RoadSurface, lane_width_m: float
+    builder: _Builder,
+    line: np.ndarray,
+    style: RoadSurface,
+    lane_width_m: float,
+    *,
+    lip: bool = True,
 ) -> float:
     """The riser and lip along one stretch of an area's kerb line; its length.
 
@@ -4404,6 +4445,9 @@ def _draw_area_kerb(
     line arrives walked with the road on its right, so outward is left of travel
     and `mitres` points there. The same two strips so the same winding, which
     `downward_facing` checks over the whole mesh.
+
+    `lip=False` draws the riser alone: an island's ring, whose top is one slab
+    (`surface_region.island_tops`) and would lie on the lip strip for strip.
     """
     line = dedupe(line)
     if len(line) < 2:
@@ -4412,20 +4456,11 @@ def _draw_area_kerb(
     plan = line[:, [0, 2]]
     out = boundary(line, mitres(line), style.kerb_width_m)
     foot, top = _lift(plan, line, 0.0), _lift(plan, line, style.kerb_height_m)
-    lip = _lift(out, line, style.kerb_height_m)
-    # 🔴 A KERB code, which is never a bare class: the codec holds "no lanes" and
-    # "no length" to mean a junction CAP and nothing else, and `verify_road_surface`
-    # refuses a kerb that says either. This kerb belongs to no edge, so it says the
-    # least a kerb can — one lane, one-way, no paint on it — and the markings
-    # shader excludes the class outright, so nothing reads the lane.
-    marking = _Marking(
-        float(
-            MARKING_CLASS_KERB + MARKING_LANES * 1 + MARKING_DIRECTION * MARKING_DIRECTIONS[FORWARD]
-        ),
-        float(along[-1]),
-    )
+    lip_rail = _lift(out, line, style.kerb_height_m)
+    marking = _Marking(_AREA_KERB_CODE, float(along[-1]))
     outside = style.kerb_width_m / lane_width_m
-    for lower, upper, across in ((foot, top, (0.0, 0.0)), (top, lip, (0.0, -outside))):
+    strips = ((foot, top, (0.0, 0.0)), (top, lip_rail, (0.0, -outside)))
+    for lower, upper, across in strips if lip else strips[:1]:
         builder.strip(
             lower,
             upper,
@@ -4895,12 +4930,13 @@ def main(argv: list[str] | None = None) -> int:
             "  region: %d level-0 ribbons take their territory as their rails, %d published "
             "stations with none keep the plain ribbon (a run past its rectangle, Q116); %d painted "
             "lane counts cut to what the share carries; %d area triangles outside every ribbon, "
-            "%.0f m of kerb drawn along their edges",
+            "%.0f m of kerb drawn along their edges, %d islands ringed and topped",
             report.territory_edges,
             report.territory_fallback_stations,
             report.territory_lanes_capped,
             len(report.area_triangles),
             report.area_kerb_m,
+            report.islands,
         )
     log.info(
         "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "

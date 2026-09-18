@@ -348,3 +348,52 @@ class TestTheTrimIsReadOffTheFlare:
             self.ALONG, np.full(count, 3.0), np.full(count, 3.2), vertices=[0, count - 1]
         )
         assert surface_region.flare_m(stations, 20.0, 0.5) == (0.0, 0.0)
+
+
+class TestAnIslandUnderARibbonKeepsItsKerb:
+    # `Q131`: an extent is read through a refuge, so the ribbon is drawn over it
+    # and no area meets its boundary. It is ringed and topped all the same.
+    ISLAND = Polygon([(50, 1), (53, 1), (53, 2.5), (50, 2.5)])
+    ROAD = Polygon([(0, -5), (100, -5), (100, 5), (0, 5)]).difference(ISLAND)
+    CENTRE = np.array([(0.0, 7.0, 0.0), (100.0, 7.0, 0.0)])
+    RIBBON = np.array([(20.0, -5.0), (100.0, -5.0), (100.0, 5.0), (20.0, 5.0)])
+
+    def _region(self, islands):
+        return surface_region.Region(
+            whole=self.ROAD, shapes={(False, 1): self.ROAD}, stations={}, islands=islands
+        )
+
+    def _ring_m(self, islands) -> float:
+        region = self._region(islands)
+        lines = surface_region.areas(region, [self.RIBBON], {(False, 1): self.CENTRE}, [])[1]
+        rings = surface_region.island_rings(region)
+        return sum(
+            np.hypot(*np.diff(line[:, [0, 2]], axis=0).T).sum()
+            for line in lines
+            if surface_region.on_island(rings, line)
+        )
+
+    def test_the_ring_is_drawn_whole_at_the_roads_height(self) -> None:
+        assert self._ring_m([self.ISLAND]) == pytest.approx(9.0)
+        # Unlisted, the same hole lies wholly under the ribbon and gets nothing.
+        assert self._ring_m([]) == 0.0
+
+    def test_the_ring_is_walked_with_the_road_on_its_right(self) -> None:
+        region = self._region([self.ISLAND])
+        rings = surface_region.island_rings(region)
+        lines = surface_region.areas(region, [self.RIBBON], {(False, 1): self.CENTRE}, [])[1]
+        for line in (each for each in lines if surface_region.on_island(rings, each)):
+            assert line[:, 1] == pytest.approx(7.0)
+            plan = line[:, [0, 2]]
+            step = plan[1] - plan[0]
+            right = np.array([-step[1], step[0]]) / np.hypot(*step)
+            probe = 0.5 * (plan[0] + plan[1]) + 0.05 * right
+            assert self.ROAD.contains(shapely_point(probe))
+
+    def test_the_top_covers_the_island_and_faces_up(self) -> None:
+        tops = surface_region.island_tops(self._region([self.ISLAND]), {(False, 1): self.CENTRE})
+        x, z = tops[:, :, 0], tops[:, :, 2]
+        twice = (x * np.roll(z, -1, axis=1) - np.roll(x, -1, axis=1) * z).sum(axis=1)
+        assert (twice < 0.0).all()
+        assert -0.5 * twice.sum() == pytest.approx(self.ISLAND.area)
+        assert tops[:, :, 1] == pytest.approx(7.0)

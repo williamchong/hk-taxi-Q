@@ -31,7 +31,8 @@ levels and the cities that never build a region.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from itertools import pairwise
 from pathlib import Path
 
@@ -247,6 +248,10 @@ class Region:
     whole: BaseGeometry
     shapes: dict[Key, BaseGeometry]
     stations: dict[Key, Stations]
+    # Kerbed islands standing IN the carriageway (`region.islands_of`). A
+    # territory's extent is read through one, so a ribbon is drawn over it and
+    # the island owes its kerb back: `areas` rings every one, under a ribbon or not.
+    islands: list[Polygon] = field(default_factory=list)
 
 
 def _polygonal(shape: BaseGeometry) -> BaseGeometry:
@@ -288,7 +293,8 @@ def read(out_dir: Path, region_id: str) -> Region:
             vertex_station=np.asarray(row["vertex_station"], dtype=int),
         )
     whole = _shape([*document["region"]["hyd"], *document["region"]["rails"]])
-    return Region(whole=whole, shapes=shapes, stations=stations)
+    islands = [Polygon(ring) for ring in document["region"]["islands"] if len(ring) >= 4]
+    return Region(whole=whole, shapes=shapes, stations=stations, islands=islands)
 
 
 def _heights(centreline: np.ndarray, plan: np.ndarray) -> np.ndarray:
@@ -305,6 +311,25 @@ def _key_of(plan: np.ndarray) -> np.ndarray:
     return np.round(plan / _GRID_M).astype(np.int64)
 
 
+def _face_up(triangles: np.ndarray) -> np.ndarray:
+    """`(n, 3, 3)` triangles, each wound so its face points up: `surface._shoelace`
+    negative."""
+    x, z = triangles[:, :, 0], triangles[:, :, 2]
+    twice = (x * np.roll(z, -1, axis=1) - np.roll(x, -1, axis=1) * z).sum(axis=1)
+    triangles[twice > 0.0] = triangles[twice > 0.0][:, ::-1]
+    return triangles
+
+
+def _owners(
+    region: Region, centrelines: dict[Key, np.ndarray]
+) -> tuple[list[Key], shapely.STRtree | None]:
+    """The territories a height can be read from, and the index over them."""
+    owners = [
+        key for key, shape in region.shapes.items() if key in centrelines and not shape.is_empty
+    ]
+    return owners, shapely.STRtree([region.shapes[key] for key in owners]) if owners else None
+
+
 def areas(
     region: Region,
     ribbons: list[np.ndarray],
@@ -314,6 +339,7 @@ def areas(
     kerbed: list[np.ndarray] | None = None,
     kerb_width_m: float = 0.0,
     tolerance_m: float = 0.0,
+    island_band: BaseGeometry | None = None,
 ) -> tuple[np.ndarray, list[np.ndarray]]:
     """`R - ribbons` as `(n, 3, 3)` triangles, each wound to face up — and the
     KERB LINES of it: `(N, 3)` polylines along every stretch of R's own boundary
@@ -370,10 +396,7 @@ def areas(
     unique, group = np.unique(keys, axis=0, return_inverse=True)
     group = group.reshape(-1)
     at = unique * _GRID_M
-    owners = [
-        key for key, shape in region.shapes.items() if key in centrelines and not shape.is_empty
-    ]
-    tree = shapely.STRtree([region.shapes[key] for key in owners])
+    owners, tree = _owners(region, centrelines)
     found, owner = tree.query(shapely.points(at), predicate="dwithin", distance=2.0 * _GRID_M)
     total, count = np.zeros(len(at)), np.zeros(len(at))
     for index in np.unique(owner):
@@ -392,11 +415,7 @@ def areas(
         for index, k in enumerate(map(tuple, keys)):
             if k in pinned:
                 flat[index] = pinned[k]
-    out = np.stack([plan[:, :, 0], flat.reshape(-1, 3), plan[:, :, 1]], axis=2)
-    # Wound so the face points up: `surface._shoelace` negative.
-    x, z = out[:, :, 0], out[:, :, 2]
-    twice = (x * np.roll(z, -1, axis=1) - np.roll(x, -1, axis=1) * z).sum(axis=1)
-    out[twice > 0.0] = out[twice > 0.0][:, ::-1]
+    out = _face_up(np.stack([plan[:, :, 0], flat.reshape(-1, 3), plan[:, :, 1]], axis=2))
     clip = shapely.box(0.0, 0.0, *high) if high is not None else None
     drawn_kerbs = (
         shapely.union_all([shapely.LineString(run) for run in kerbed if len(run) >= 2]).buffer(
@@ -405,9 +424,70 @@ def areas(
         if kerbed and kerb_width_m > 0.0
         else None
     )
+
+    def road_height(plan: np.ndarray) -> np.ndarray:
+        """The road under points no area reaches: an island a ribbon runs under."""
+        nearest = owners[int(tree.nearest(shapely.points(plan[0])))]
+        return _heights(centrelines[nearest], plan)
+
     return out, _kerb_lines(
-        region.whole, shapely.multipolygons(pieces), clip, drawn_kerbs, keys, flat, tolerance_m
+        region.whole,
+        shapely.multipolygons(pieces),
+        clip,
+        drawn_kerbs,
+        keys,
+        flat,
+        tolerance_m,
+        region.islands,
+        island_band if island_band is not None else island_rings(region),
+        road_height,
     )
+
+
+def island_rings(region: Region) -> BaseGeometry | None:
+    """Every island's outline, a hair wide: what a kerb line lies within when it
+    is an island's ring and not an area's edge. Such a line needs no lip —
+    `island_tops` covers the whole island at the lip's height."""
+    if not region.islands:
+        return None
+    band = shapely.union_all([island.exterior for island in region.islands]).buffer(10.0 * _GRID_M)
+    shapely.prepare(band)
+    return band
+
+
+def on_island(rings: BaseGeometry | None, line: np.ndarray) -> bool:
+    """Whether an `(N, 3)` kerb line is an island's ring (`island_rings`)."""
+    return rings is not None and bool(rings.contains(shapely.LineString(line[:, [0, 2]])))
+
+
+def island_tops(region: Region, centrelines: dict[Key, np.ndarray]) -> np.ndarray:
+    """Every island's plan as `(n, 3, 3)` triangles at ROAD height, wound to face
+    up; `surface.py` lifts them onto the kerb.
+
+    An island's kerb ring is a riser and a lip `kerb_width_m` deep, which leaves
+    the middle of anything wider than two lips open — onto nothing where an area
+    surrounds it, and onto the ribbon's asphalt, lane lines and all, where a rail
+    was read through it. The top closes both.
+    """
+    owners, tree = _owners(region, centrelines)
+    if not region.islands or tree is None:
+        return np.zeros((0, 3, 3))
+    out = []
+    for island in region.islands:
+        plan = np.asarray(
+            [
+                np.asarray(tri.exterior.coords)[:3]
+                for tri in shapely.get_parts(shapely.constrained_delaunay_triangles(island))
+            ]
+        )
+        if not len(plan):
+            continue
+        owner = owners[int(tree.nearest(island.centroid))]
+        y = _heights(centrelines[owner], plan.reshape(-1, 2)).reshape(-1, 3)
+        out.append(np.stack([plan[:, :, 0], y, plan[:, :, 1]], axis=2))
+    if not out:
+        return np.zeros((0, 3, 3))
+    return _face_up(np.vstack(out))
 
 
 def _kerb_lines(
@@ -418,6 +498,9 @@ def _kerb_lines(
     keys: np.ndarray,
     heights: np.ndarray,
     tolerance_m: float = 0.0,
+    islands: list[Polygon] | None = None,
+    island_band: BaseGeometry | None = None,
+    road_height: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> list[np.ndarray]:
     """Where an area meets R's own boundary: a kerb no ribbon draws.
 
@@ -434,6 +517,33 @@ def _kerb_lines(
     their foot.
     """
     edge = shapely.intersection(rest.boundary, whole.boundary, grid_size=_GRID_M)
+    if islands and island_band is not None:
+        # 🔴 An island is ringed WHOLE, the stretches under a ribbon included. A
+        # rail is read through an island (`region._through`), so the ribbon is
+        # drawn over it and no area meets that part of its boundary — left to the
+        # line above, a refuge in a lane has no kerb at all.
+        # Lines only: where an area touches R's boundary at a corner the overlay
+        # hands back a point, and GEOS refuses a mixed-dimension union.
+        # ⚠️ And less what the areas already met of an island: the overlay nodes
+        # that stretch on its own grid, so unioned with the ring it is the same
+        # kerb twice a millimetre apart — 80 m of it on Wan Chai, where the rings
+        # under a ribbon add 657 m of the islands' 1,235.
+        rings = shapely.union_all([island.exterior for island in islands])
+        # ⚠️ ONE difference over the whole collection: per part it was 19,701
+        # overlays against an unindexed band, 1.0 s of a 4.9 s stage against 48 ms.
+        lines = shapely.multilinestrings(
+            [
+                part
+                for part in shapely.get_parts(edge)
+                if part.geom_type in ("LineString", "LinearRing")
+            ]
+        )
+        met = [
+            piece
+            for piece in shapely.get_parts(lines.difference(island_band))
+            if piece.geom_type == "LineString"
+        ]
+        edge = shapely.union_all([*met, rings])
     if clip is not None:
         edge = shapely.difference(edge, clip.boundary.buffer(10.0 * _GRID_M))
     # 🔴 Less every stretch a ribbon's own kerb already runs beside. Rails are
@@ -469,8 +579,12 @@ def _kerb_lines(
             # A vertex the overlay made and the triangulation did not: between
             # two that it did, so it takes the line's own interpolation.
             known = np.flatnonzero([value is not None for value in y])
-            if not len(known):
+            if len(known):
+                y = np.interp(np.arange(len(y)), known, [y[index] for index in known])
+            elif road_height is not None:
+                # No area touches it: an island lying wholly under a ribbon.
+                y = road_height(plan)
+            else:
                 continue
-            y = np.interp(np.arange(len(y)), known, [y[index] for index in known])
         out.append(np.column_stack([plan[:, 0], np.asarray(y, dtype=float), plan[:, 1]]))
     return out
