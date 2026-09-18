@@ -36,6 +36,16 @@ from typing import Any
 import numpy as np
 
 
+def true_runs(flags: np.ndarray) -> list[tuple[int, int]]:
+    """Half-open `[start, stop)` index ranges of each run of `True` in `flags`.
+
+    Here rather than in `surface.py`, whose station runs it serves, because
+    `surface_region.py` needs it too and `surface` imports that module.
+    """
+    changes = np.flatnonzero(np.diff(np.concatenate([[False], flags, [False]]).astype(np.int8)))
+    return [(int(start), int(stop)) for start, stop in changes.reshape(-1, 2)]
+
+
 def plan_lengths(points: np.ndarray) -> np.ndarray:
     """Cumulative plan distance along a polyline, starting at zero.
 

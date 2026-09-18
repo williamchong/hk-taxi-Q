@@ -40,6 +40,7 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from pipeline.polyline import true_runs
 from pipeline.region import KERB, REGION_NAME, read_region
 
 # Every overlay here runs on a millimetre grid. The ribbons' rails and R's rings
@@ -185,9 +186,7 @@ def opened(stations: Stations, window_m: float, bump_m: float) -> Stations:
         # over its opening, so runs cut at a hair merge every bump on the edge
         # into one that reaches both ends — and the guards below then skip it.
         over = extent - lower > bump_m
-        starts = np.flatnonzero(over & ~np.r_[False, over[:-1]])
-        stops = np.flatnonzero(over & ~np.r_[over[1:], False]) + 1
-        for start, stop in zip(starts, stops, strict=True):
+        for start, stop in true_runs(over):
             # 🔴 A bay has ROAD either side of it. A run reaching an end of the
             # interior is the edge's own body standing between its two wedges —
             # which on an edge shorter than the window is the whole edge — and an

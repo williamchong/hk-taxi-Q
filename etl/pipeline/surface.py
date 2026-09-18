@@ -73,7 +73,7 @@ from pipeline.gltf import (
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import merge, select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2, thin_in_plan
-from pipeline.polyline import plan_lengths, plan_steps
+from pipeline.polyline import plan_lengths, plan_steps, true_runs
 from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 
 # ⚠️ **The barycentric point-in-triangle test is `terrain`'s, not a fourth copy.**
@@ -3585,7 +3585,6 @@ def _assign_trims(
         for end in group:
             edge = edges[end.edge]
             ceiling = edge.length_m * style.junction_trim_max_fraction
-            clamped = ceiling < radius
             # The flare is this END's own, read off its territory (`Q129`): a
             # ribbon starts where its carriageway has settled, and the radius is
             # what is left for an edge with no territory to read.
@@ -4180,8 +4179,7 @@ def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
     pieces is drawn as pieces: the cut ends leave the riser open, which is
     invisible and unreachable, since whatever buried the kerb still lies over it.
     """
-    changes = np.flatnonzero(np.diff(np.concatenate([[False], keep, [False]]).astype(np.int8)))
-    return [(int(start), int(stop) + 1) for start, stop in changes.reshape(-1, 2)]
+    return [(start, stop + 1) for start, stop in true_runs(keep)]
 
 
 def _rail_stations(
