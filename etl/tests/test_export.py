@@ -967,6 +967,7 @@ class TestOrchestrator:
             "landmarks",
             "roads",
             "carve",
+            "region",
             "surface",
             "clearance",
             "fence",

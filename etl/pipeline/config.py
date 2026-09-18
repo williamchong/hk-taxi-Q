@@ -3102,6 +3102,10 @@ class Config:
     # absent it reads as "no neighbour widens anything", which is the pre-`P5-7`
     # state exactly.
     join: Join | None = None
+    # How `pipeline/region.py` builds the level-0 carriageway as a region
+    # (`Q129`, `P3-33b`). Optional: absent, the stage writes nothing and the
+    # level-0 road stays a ribbon.
+    carriageway_region: CarriagewayRegion | None = None
     # The bar `P3-29`'s player fence is set at (the car's own width), as opposed
     # to `roads.lane_width_m`, which is what traffic is routed on. Optional:
     # absent, nothing is fenced and the bundle is byte-identical.
@@ -3485,6 +3489,9 @@ def load_config(path: Path | None = None) -> Config:
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
         carve=_carve(document.get("carve"), f"{path}:carve"),
+        carriageway_region=_carriageway_region(
+            document.get("carriageway_region"), f"{path}:carriageway_region"
+        ),
         join=_join(document.get("join"), f"{path}:join"),
         clearance=_clearance(document.get("clearance"), f"{path}:clearance"),
         fence=_fence(document.get("fence"), f"{path}:fence"),
@@ -4946,6 +4953,32 @@ def _clearance(body: Any, where: str) -> Clearance | None:
 
     values = _thresholds(body, where, positive=("car_width_m",), signed=())
     return Clearance(**values)
+
+
+@dataclass(frozen=True)
+class CarriagewayRegion:
+    """The two resolutions `pipeline/region.py` builds R at (`Q129`, `P3-33b`).
+
+    🔴 **Both are RESOLUTIONS and neither is a bound.** What the rails refuse and
+    how far they cast are `carriageway_survey.width_bounds`' `hard_min_m` and
+    `max_m`, read from that block and never restated here, so the region and the
+    ray survey cannot drift onto two bars.
+    """
+
+    # Pitch of the Voronoi sites along each centreline. A boundary between two
+    # territories is resolved to about half of it.
+    sample_m: float
+    # Station pitch of the rails cast to the kerb lines where HyD is silent.
+    rail_m: float
+
+
+def _carriageway_region(body: Any, where: str) -> CarriagewayRegion | None:
+    """The optional region block (`Q129`)."""
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    return CarriagewayRegion(**_thresholds(body, where, positive=("sample_m", "rail_m"), signed=()))
 
 
 @dataclass(frozen=True)

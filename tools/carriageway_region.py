@@ -51,6 +51,7 @@ printed, because that is where keeping them could be wrong.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -264,7 +265,7 @@ def kerb_strip(
     🔴 **Not the closed faces of the linework, and that is measured.** The two
     line publishers' kerbs do not close: polygonised at a 5 cm snap they offer 24
     faces a silent Wan Chai centreline runs through, 0.3% of the level-0 length,
-    while HyD is silent under 14.0% of it — GLOUCESTER ROAD's main carriageway
+    while HyD is silent under 13.5% of it — GLOUCESTER ROAD's main carriageway
     and the whole of HKCEC included. A ray does not need a closed face.
 
     Each station off HyD's paint casts to the nearest kerb line on either side,
@@ -273,6 +274,10 @@ def kerb_strip(
     place R is not read from a publisher, and `silent_m[0]` is its length.
     ⚠️ A span under `min_span_m` is refused as the survey refuses it: the ray
     landed on a bay line or a hatched island, not a kerb.
+
+    ⚠️ A FOREIGN run casts too and is counted nowhere: inside this rectangle its
+    asphalt is this region's to draw (`pipeline/region.py`'s seam rule), so leaving
+    it out would leave a hole where the neighbour's road reaches in.
 
     The rays pass THROUGH a neighbouring centreline to the kerb beyond it, on
     purpose. Where three centrelines share one carriageway the strips overlap,
@@ -285,10 +290,10 @@ def kerb_strip(
     silent = {2: 0.0, 1: 0.0, 0: 0.0}
     refused = 0
     for line in lines:
-        if line.foreign or hyd.contains(line.line):
-            continue
         points, right = _rail_stations(line.plan, spacing_m)
-        bare = ~shapely.contains_xy(hyd, points[:, 0], points[:, 1])
+        # `intersects`, not `contains`: a station ON the publisher's own edge is
+        # covered, and read as silent it casts a rail from a road HyD drew.
+        bare = ~shapely.intersects_xy(hyd, points[:, 0], points[:, 1])
         if not bare.any():
             continue
         reach = np.full((len(points), 2), np.nan)
@@ -312,7 +317,7 @@ def kerb_strip(
             # Half an interval per bare end, so the three lines sum to the length
             # off HyD's paint and not to every interval touching it.
             for end in (first, first + 1):
-                if bare[end]:
+                if bare[end] and not line.foreign:
                     silent[int(answered[end])] += 0.5 * float(pitch[first])
         typical = np.array(
             [
@@ -348,9 +353,11 @@ def build_region(
     half past a shared line (`Q116`) is cut with it, and `main` prints how many
     metres that is, because a build has to decide it and this tool does not.
     """
-    hyd = _valid_union(polygons).intersection(clip)
+    # Silence is the publisher's, not the clip's: see `pipeline/region.build`.
+    published = _valid_union(polygons)
+    hyd = published.intersection(clip)
     strip, silent, refused = kerb_strip(
-        kerbs, hyd, lines, spacing_m=spacing_m, max_m=max_m, min_span_m=min_span_m
+        kerbs, published, lines, spacing_m=spacing_m, max_m=max_m, min_span_m=min_span_m
     )
     strip = strip.intersection(clip)
     whole = unary_union([hyd, strip])
@@ -637,6 +644,38 @@ def report(
                 )
 
 
+def against_stage(path: Path, owned: dict[int, BaseGeometry]) -> None:
+    """`|stage - tool|`, per owned edge, on the one quantity both publish: area.
+
+    The stage measures at published vertices and this tool at 4 m stations, so
+    the extents are not comparable row for row; a territory's area is, and a
+    partition that handed asphalt to a different owner moves it on both edges.
+    Read as plain JSON and not through `pipeline.region`: a grader that imports
+    the stage's reader is graded by it.
+    """
+    document = json.loads(path.read_text(encoding="utf-8"))
+    areas = {}
+    for row in document["territories"]:
+        if not row["foreign"]:
+            areas[int(row["edge"])] = sum(
+                Polygon(ring["outer"], ring["holes"]).area for ring in row["rings"]
+            )
+    both = sorted(set(areas) & set(owned))
+    delta = np.abs(np.array([areas[key] - owned[key].area for key in both]))
+    log.info("")
+    log.info(
+        "  |stage - tool| territory area, %d edges both publish (%d stage-only, %d tool-only): "
+        "p50 %.3f  p90 %.3f  max %.3f m2; total %.1f against %.1f m2",
+        len(both),
+        len(set(areas) - set(owned)),
+        len(set(owned) - set(areas)),
+        *np.percentile(delta, (50, 90)),
+        delta.max(),
+        sum(areas.values()),
+        sum(shape.area for shape in owned.values()),
+    )
+
+
 def write_svg(
     path: Path,
     region: Region,
@@ -765,6 +804,9 @@ def main(argv: list[str] | None = None) -> int:
     past = sum(line.line.difference(clip).length for line in lines if not line.foreign)
     log.info("")
     log.info("  owned centreline past the region's own rectangle, which R is cut to: %.0f m", past)
+    stage = out_dir / "carriageway_region.json"
+    if stage.exists():
+        against_stage(stage, owned)
     if args.svg:
         write_svg(args.svg, region, owned, lines, kerbs, args.window)
         log.info("")

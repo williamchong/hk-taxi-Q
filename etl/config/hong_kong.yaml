@@ -3431,6 +3431,30 @@ carve:
   soffit_clearance_m: 0.3
 
 
+# ---------------------------------------------------------------------------
+# The level-0 carriageway as a REGION (Q129, P3-33b) — pipeline/region.py
+# ---------------------------------------------------------------------------
+# R is the union of HyD's Pavement Polygons, plus rails cast to the line
+# publishers' kerbs where HyD is silent; each level-0 edge owns the part of R
+# nearest its own centreline. Its publishers are carriageway_survey's three and
+# are NOT restated here.
+#
+# 🔴 BOTH VALUES ARE RESOLUTIONS, NOT BOUNDS. How far a rail casts and what span
+# it refuses are carriageway_survey.width_bounds' max_m and hard_min_m, read
+# from that block, so the region and the ray survey cannot sit on two bars.
+#
+# ⚠️ Leave the block out and the stage writes nothing: the level-0 road stays a
+# ribbon. At P3-33b NOTHING READS its document, so it is inert either way.
+carriageway_region:
+  # Pitch of the Voronoi sites along each centreline. The boundary between two
+  # territories is resolved to about half of it; Q129's numbers are at 1.0.
+  sample_m: 1.0
+
+  # Station pitch of the rails where HyD is silent — GLOUCESTER ROAD's main
+  # carriageway and all of HKCEC, 13.5% of Wan Chai's level-0 length.
+  rail_m: 2.0
+
+
 # The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it
 # describes the taxi, and it is MIRRORED from taxi.tscn rather than read from it,
 # because the ETL never imports the game. tools/ground_clearance.py documents
