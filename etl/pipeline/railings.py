@@ -1362,9 +1362,15 @@ def _folded(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray, tolerance_deg: flo
     the offset rail: at `e530` CRAIL2 the centreline turns through most of a
     right angle in 2.7 m, and two consecutive stations 0.44 m apart on the rail
     span 1.97 m of centreline **at 78.19 degrees to it**. The offset has folded,
-    and where it has, "the direction to the centreline" is not across the fence
-    at all — it runs along it, which is the state `Q112` recorded and could not
-    name.
+    and where it has, `_facing`'s direction back to the road is not across the
+    fence at all — it runs along it, which is the state `Q112` recorded and
+    could not name.
+
+    ⚠️ **The chord stays the CENTRELINE's although `_facing` aims at
+    `Ribbon.middle` since `P3-35d`, and that is not an oversight**: a fold is a
+    property of the parameter the stations were interpolated in, which is the
+    centreline's (`_station`), and the middle is itself an offset line that can
+    fold on the inside of the same bend.
 
     Measured against the centreline chord over the **same parameter span** the
     step was interpolated from, so it is a property of the two published lines
@@ -1407,7 +1413,7 @@ def _unfold(
 
     🔴 **`Q112`'s answer, and it is a rule about runs rather than about quads.**
     A fence has continuity: where the offset has folded (`_folded`) the
-    direction to the centreline says nothing about which side of that panel the
+    direction `_facing` reads says nothing about which side of that panel the
     road is on, but the stations that still have an unfolded step do, and they
     are the same fence. So a station **every** one of whose steps folds — which
     at the end of a run means its single step — takes the facing of the nearest
