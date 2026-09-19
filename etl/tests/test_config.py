@@ -1630,10 +1630,7 @@ class TestPaletteExposure:
         outside = {
             path: value
             for path, value in hex_colours(document, "")
-            if not any(
-                path.startswith(prefix)
-                for prefix in (".materials.", ".signs.colours.")
-            )
+            if not any(path.startswith(prefix) for prefix in (".materials.", ".signs.colours."))
         }
         assert not outside, (
             f"colour(s) authored outside materials: {outside}. Every colour the city "
