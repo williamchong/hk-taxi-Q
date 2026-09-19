@@ -42,6 +42,12 @@ extent, and the difference between the two axes is the argument:
   — is read, and never stretched;
 - the **lateral** offset is a rigid move onto the kerb the ETL itself drew.
 
+🔴 **"The kerb" is the ROAD's running kerb line since `P3-35d` (`Q133`)** —
+`drawnroad.Ribbon.kerb_at`, the door signs and lamps already came through — and
+not the ribbon's rail, which since `P3-33c` is a territory's edge: a share of
+the asphalt (`Q57`), a line down the middle of a road several centrelines
+divide. See `Ribbon.points`.
+
 That move is not free and is not asserted to be small. `max_shift_m` refuses a
 sample that would travel too far, and `shift_m` is published over every assigned
 sample *including the refusals*, so `n` exceeding what was drawn is how a reader
@@ -97,6 +103,8 @@ import numpy as np
 from pipeline import gdb
 from pipeline.config import Config, GameTransform, RailingClass, Railings, load_config
 from pipeline.documents import read_document, write_document
+from pipeline.drawnroad import Ribbon as Road
+from pipeline.drawnroad import kerbed_ribbons
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
@@ -407,8 +415,21 @@ class Ribbon:
     `boundary` bites.
     """
 
-    # The trimmed centreline, `(n, 4)` as `(x, y, z, half_width)`.
+    # The trimmed centreline, `(n, 5)` as `(x, y, z, near kerb, off kerb)` — the
+    # two kerbs SIGNED from the centreline, nearside positive, so the road is
+    # `[off, near]` and on a symmetric one `off == -near`.
+    # 🔴 **The ROAD's running kerb line (`drawnroad.Ribbon.kerb_at`), never
+    # `±half` about the centreline (`P3-35d`, `Q133`)**: a level-0 ribbon's rail
+    # is its territory, a SHARE (`Q57`), and against the kerb line 16.2% / 10.0%
+    # of panels stood in the road. Stationed at the published vertices AND the
+    # region's dense kerb stations — a straight street is two vertices, both in
+    # junction mouths, and its kerb is not the line between them.
     points: np.ndarray
+    # The middle of the road, `(n, 2)` in plan: what a fence FACES. The
+    # centreline is not it — on a road lying wholly to one side of its
+    # centreline both kerbs are on that side, and the fence between them and
+    # the centreline would face away from the traffic.
+    middle: np.ndarray
     # The standing line for each class and side, `(n, 2)` in plan — the drawn
     # carriageway edge pushed out by that class's `outset_m`, so the furniture
     # stands behind the kerb strip rather than on the lane. Keyed
@@ -505,51 +526,78 @@ def read_lines(
     return lines
 
 
-def _sides(shaped: np.ndarray, offsets: np.ndarray, outset_m: float) -> dict[str, np.ndarray]:
-    """One class's standing line on both sides of a ribbon.
+# `Ribbon.points`' two kerb columns.
+_NEAR, _OFF = 3, 4
 
-    The outset array is built once and negated, rather than written out per
-    side: the two sides of a ribbon are one distance measured in two directions,
-    and computing it twice is two places for a widening to be applied unevenly.
+
+def _sides(shaped: np.ndarray, offsets: np.ndarray, outset_m: float) -> dict[str, np.ndarray]:
+    """One class's standing line on both sides of a road.
+
+    Each kerb pushed OUTWARD by the class's outset: further nearside of the near
+    kerb, further offside of the off one.
     """
-    outset = shaped[:, 3] + outset_m
     return {
-        NEARSIDE: boundary(shaped, offsets, outset),
-        OFFSIDE: boundary(shaped, offsets, -outset),
+        NEARSIDE: boundary(shaped, offsets, shaped[:, _NEAR] + outset_m),
+        OFFSIDE: boundary(shaped, offsets, shaped[:, _OFF] - outset_m),
     }
 
 
-def ribbons(graph: dict, surface: dict, spec: Railings) -> dict[int, Ribbon]:
-    """The drawn ribbon of every level-0 edge, keyed by edge id.
+def _stationed(points: np.ndarray, road: Road) -> np.ndarray:
+    """A published polyline as `Ribbon.points`' five columns, densely stationed.
+
+    The published vertices, plus the stations the road's kerb line is read at
+    (`Road.kerb_at_t`) — none where no region is built, and `kerb_at` then
+    answers with the drawn ribbon, `offset ± half`.
+    """
+    along = plan_lengths(points)
+    total = float(along[-1])
+    at = along
+    if road.kerb_at_t is not None:
+        at = np.union1d(along, road.kerb_at_t * total)
+    kerbs = np.array([road.kerb_at(float(t)) for t in at / total])
+    return np.column_stack(
+        [
+            *(np.interp(at, along, column) for column in points.T),
+            kerbs[:, 0] + kerbs[:, 1],
+            kerbs[:, 0] - kerbs[:, 1],
+        ]
+    )
+
+
+def ribbons(
+    graph: dict, surface: dict, spec: Railings, roads: dict[int, Road]
+) -> dict[int, Ribbon]:
+    """The road of every level-0 edge, keyed by edge id, as a fence stands on it.
 
     Level 0 only, the restriction every snap in the pipeline makes (`Q15`).
+    `roads` is `drawnroad`'s reading of the same two documents — the one door
+    (`Q133`) — and `surface` is read here for the two things that reader does
+    not carry, the trims' ribbon frame and `kerb_hidden_m`.
     """
     drawn = {int(entry["edge"]): entry for entry in surface["carriageway"]}
     built: dict[int, Ribbon] = {}
     for edge in graph["edges"]:
-        if int(edge["elevation_level"]) != 0:
-            continue
+        road = roads.get(int(edge["id"]))
         entry = drawn.get(int(edge["id"]))
-        if entry is None:
+        if road is None or entry is None:
+            # `drawnroad.ribbons` refuses what this used to: an off-grade edge,
+            # one that drew nothing, and a width list that does not match the
+            # polyline it was measured on. It shows up as a railing that found
+            # no kerb rather than as a fence in the wrong place.
             continue
         points = np.asarray(edge["polyline"], dtype=np.float64)
-        half = np.asarray(entry["half_width_m"], dtype=np.float64)
-        if len(points) < 2 or len(half) != len(points):
-            # A width list that does not match the polyline it was measured on
-            # is a contract break, not a rounding problem — `arrows._ribbons`
-            # takes the same exit, and it shows up as a railing that found no
-            # kerb rather than as a fence in the wrong place.
-            continue
         trim_start_m, trim_end_m = (entry.get("trim_m") or [0.0, 0.0])[:2]
         # `surface._shape`'s own three lines, on `surface._prepare`'s own column
-        # layout: the half-width travels as a fourth column so `trim` gives the
-        # two cut stations the right width instead of a neighbour's.
-        shaped = dedupe(trim(np.column_stack([points, half]), trim_start_m, trim_end_m))
+        # layout: the kerbs travel as extra columns so `trim` gives the two cut
+        # stations their own instead of a neighbour's.
+        shaped = dedupe(trim(_stationed(points, road), trim_start_m, trim_end_m))
         if len(shaped) < 2:
             continue
         offsets = mitres(shaped)
         built[int(edge["id"])] = Ribbon(
             points=shaped,
+            middle=shaped[:, [0, 2]]
+            + offsets * (0.5 * (shaped[:, _NEAR] + shaped[:, _OFF]))[:, None],
             fence={klass.id: _sides(shaped, offsets, klass.outset_m) for klass in spec.classes},
             along=plan_lengths(shaped),
             hidden=entry.get("kerb_hidden_m") or {},
@@ -558,15 +606,18 @@ def ribbons(graph: dict, surface: dict, spec: Railings) -> dict[int, Ribbon]:
     return built
 
 
-def _half_width_at(ribbon: Ribbon, along_m: float) -> float:
-    """The drawn half-width at one ribbon distance.
+def _kerbs_at(ribbon: Ribbon, along_m: float) -> tuple[float, float]:
+    """The road's `(near, off)` kerbs at one ribbon distance, signed from the
+    centreline with the nearside positive.
 
-    Plus `outset_m` this is where the fence stands, measured from the same
-    centreline a sample's own offset is measured from — so the difference
-    between the two *is* the lateral move, and `shift_m` needs no second
-    geometry to find it.
+    The same centreline a sample's own offset is measured from — so the
+    difference between a kerb plus `outset_m` and that offset *is* the lateral
+    move, and `shift_m` needs no second geometry to find it.
     """
-    return float(np.interp(along_m, ribbon.along, ribbon.points[:, 3]))
+    return (
+        float(np.interp(along_m, ribbon.along, ribbon.points[:, _NEAR])),
+        float(np.interp(along_m, ribbon.along, ribbon.points[:, _OFF])),
+    )
 
 
 def _station(ribbon: Ribbon, klass_id: str, side: str, at_m: float) -> tuple[np.ndarray, float]:
@@ -836,7 +887,7 @@ def build_region(
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --region {region_id}",
     )
-    drawn = ribbons(graph, surface, spec)
+    drawn = ribbons(graph, surface, spec, kerbed_ribbons(city, out_dir, region_id, graph, surface))
 
     # ⚠️ **One panel per class, and so one library mesh and one `MultiMesh` per
     # class.** They could share one — the mask that tells a bollard from a fence
@@ -953,15 +1004,25 @@ def _assign(
             raise ValueError(f"sample of {item.kind!r} belongs to no class; read_lines admitted it")
         counters = report.klass(klass.id)
         ribbon = drawn[item.edge]
-        at_m = item.along_m - ribbon.trim_start_m
-        shift_m = abs(_half_width_at(ribbon, at_m) + klass.outset_m - item.offset_m)
+        near_m, off_m = _kerbs_at(ribbon, item.along_m - ribbon.trim_start_m)
+        # 🔴 **The side is the nearer KERB's, asked about the road's middle and
+        # never about the centreline** (`Ribbon.kerb_target`'s rule, `P3-35d`):
+        # a fence surveyed between the centreline and the middle of a road lying
+        # to one side of it belongs to the kerb behind it, and `item.side` sends
+        # it across the carriageway. The two agree wherever the road is
+        # symmetric — `SideIndex` reads an `offset_m` of exactly 0 as offside,
+        # and so does `>`.
+        across_m = item.offset_m if item.side == NEARSIDE else -item.offset_m
+        side = NEARSIDE if across_m - 0.5 * (near_m + off_m) > 0.0 else OFFSIDE
+        target_m = near_m + klass.outset_m if side == NEARSIDE else off_m - klass.outset_m
+        shift_m = abs(target_m - across_m)
         # Recorded before the refusal, so `n` past what was drawn is the proof
         # this distribution can read outside its own filter (`Q58`).
         counters.shift_m.append(shift_m)
         if shift_m > spec.max_shift_m:
             counters.samples_over_shift += 1
             continue
-        cell = cells.setdefault((item.edge, klass.id, item.side), {}).setdefault(
+        cell = cells.setdefault((item.edge, klass.id, side), {}).setdefault(
             int(item.along_m // spec.sample_m), {}
         )
         cell[item.kind] = cell.get(item.kind, 0) + 1
@@ -1398,23 +1459,25 @@ def _unfold(
 
 
 def _facing(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray) -> np.ndarray:
-    """Unit direction, per station, from the fence back toward the centreline.
+    """Unit direction, per station, from the fence back toward the road's middle.
 
-    Derived from the two published lines rather than from the fence's own
-    heading: at a mitre the fence and the centreline are not parallel, and it is
-    the centreline the road is on.
+    Derived from the two lines rather than from the fence's own heading: at a
+    mitre the fence and the road are not parallel. 🔴 **The middle of the ROAD
+    (`Ribbon.middle`), not the centreline** — they are one line on a symmetric
+    road, and on one lying wholly to one side of its centreline the centreline
+    is BEHIND the fence nearer it.
 
     ⚠️ **Right except where the offset has folded**, which is `_unfold`'s
     business and is measured rather than assumed — see `_folded` for what that
     means and why it is not this function's job to notice.
     """
-    centre = np.column_stack(
+    middle = np.column_stack(
         [
-            np.interp(at, ribbon.along, ribbon.points[:, 0]),
-            np.interp(at, ribbon.along, ribbon.points[:, 2]),
+            np.interp(at, ribbon.along, ribbon.middle[:, 0]),
+            np.interp(at, ribbon.along, ribbon.middle[:, 1]),
         ]
     )
-    across = centre - plan
+    across = middle - plan
     length = np.hypot(across[:, 0], across[:, 1])
     unit = across / np.where(length > 0.0, length, 1.0)[:, None]
     return np.column_stack([unit[:, 0], np.zeros(len(unit)), unit[:, 1]]).astype(np.float32)

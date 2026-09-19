@@ -29,6 +29,7 @@ import pytest
 import yaml
 
 from pipeline.config import RailingClass, Railings, SourceLayer, load_config
+from pipeline.drawnroad import Ribbon as Road
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.placements import Placement, expanded, stood_positions
 from pipeline.polyline import plan_lengths
@@ -48,6 +49,7 @@ from pipeline.railings import (
     _unit,
     _visible,
     facing_away,
+    ribbons,
 )
 from pipeline.surface import mitres
 from tests.helpers import CITY_YAML
@@ -165,10 +167,11 @@ def ribbon(edge: np.ndarray, classes=(), half: float = 5.0, **overrides) -> Ribb
     `classes` defaults to the one fence class; pass several and each gets its own
     standing line at its own `outset_m`, which is what `ribbons` does.
     """
-    shaped = np.column_stack([edge, np.full(len(edge), half)])
+    shaped = np.column_stack([edge, np.full(len(edge), half), np.full(len(edge), -half)])
     offsets = mitres(shaped)
     values = {
         "points": shaped,
+        "middle": shaped[:, [0, 2]],
         "fence": {
             entry.id: _sides(shaped, offsets, entry.outset_m) for entry in (classes or (klass(),))
         },
@@ -197,6 +200,94 @@ def assign(lines, edges, drawn, **overrides) -> tuple[dict, RailingReport]:
     }
     cells = _assign(lines, graph, drawn, spec(**overrides), _City(), "middle", report)
     return cells, report
+
+
+def road(edge: np.ndarray, *, offset: float = 0.0, half: float = 5.0, kerbs=None) -> Road:
+    """`drawnroad`'s reading of one edge. `kerbs` is `(at_t, left_m, right_m)`, the
+    region's running kerb line; without it the road is the ribbon, `offset ± half`."""
+    along = plan_lengths(edge)
+    at_t, left, right = kerbs or (None, None, None)
+    return Road(
+        lanes=2,
+        carriageway_m=2.0 * half,
+        one_way=False,
+        at=along / along[-1],
+        half_width_m=np.full(len(edge), half),
+        offset_m=np.full(len(edge), offset),
+        plan=edge[:, [0, 2]],
+        height_m=edge[:, 1],
+        trim_start_m=0.0,
+        trim_end_m=0.0,
+        length_m=float(along[-1]),
+        kerb_at_t=None if at_t is None else np.asarray(at_t, dtype=np.float64),
+        kerb_left_m=None if left is None else np.asarray(left, dtype=np.float64),
+        kerb_right_m=None if right is None else np.asarray(right, dtype=np.float64),
+    )
+
+
+def on_road(edge: np.ndarray, drawn_road: Road) -> Ribbon:
+    """`railings.ribbons` itself, over one level-0 edge."""
+    graph = {"edges": [{"id": 7, "polyline": edge.tolist(), "elevation_level": 0}]}
+    surface = {"carriageway": [{"edge": 7, "trim_m": [0.0, 0.0]}]}
+    return ribbons(graph, surface, spec(), {7: drawn_road})[7]
+
+
+def across(edge: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Signed distance of plan points from a straight edge, nearside positive —
+    against `surface.mitres` itself, as `TestSide` is."""
+    return (points - edge[0, [0, 2]]) @ mitres(edge)[0]
+
+
+class TestRoad:
+    """The fence stands on the ROAD's kerb line, not `±half` about the centreline
+    (`P3-35d`, `Q133`)."""
+
+    def test_the_fence_stands_an_outset_past_the_roads_own_kerbs(self) -> None:
+        edge = straight(0.0, 100.0)
+        drawn = on_road(edge, road(edge, kerbs=([0.0, 1.0], [9.0, 9.0], [7.0, 7.0])))
+        outset = klass().outset_m
+        assert across(edge, drawn.fence[CLASS_ID][NEARSIDE]) == pytest.approx(9.0 + outset)
+        assert across(edge, drawn.fence[CLASS_ID][OFFSIDE]) == pytest.approx(-7.0 - outset)
+
+    def test_the_kerb_is_read_at_the_regions_dense_stations(self) -> None:
+        """A straight street is two vertices, both in junction mouths: a walk
+        stationed on them alone draws the line between two mouths."""
+        edge = straight(0.0, 100.0)
+        drawn = on_road(edge, road(edge, kerbs=([0.0, 0.5, 1.0], [9.0, 5.0, 9.0], [7.0, 7.0, 7.0])))
+        assert len(drawn.points) == 3
+        assert across(edge, drawn.fence[CLASS_ID][NEARSIDE])[1] == pytest.approx(
+            5.0 + klass().outset_m
+        )
+
+    def test_with_no_kerb_line_the_road_is_the_drawn_ribbon(self) -> None:
+        """`offset ± half`, never `±half` (`Q106`)."""
+        edge = straight(0.0, 100.0)
+        drawn = on_road(edge, road(edge, offset=2.0))
+        outset = klass().outset_m
+        assert across(edge, drawn.fence[CLASS_ID][NEARSIDE]) == pytest.approx(7.0 + outset)
+        assert across(edge, drawn.fence[CLASS_ID][OFFSIDE]) == pytest.approx(-3.0 - outset)
+
+    def test_a_fence_between_the_centreline_and_the_middle_takes_the_kerb_behind_it(self) -> None:
+        """A road lying 4 m to 12 m nearside of its centreline: a fence surveyed
+        5 m out is on the centreline's nearside and at the road's OFF kerb."""
+        edge = straight(0.0, 100.0)
+        drawn = on_road(edge, road(edge, kerbs=([0.0, 1.0], [12.0, 12.0], [-4.0, -4.0])))
+        surveyed = edge[:, [0, 2]] + mitres(edge) * 5.0
+        line = beside(10.0, 90.0, float(surveyed[0, 1]))
+
+        cells, report = assign([(line, "CRAIL1")], [(7, edge)], {7: drawn})
+        assert {side for _, _, side in cells} == {OFFSIDE}
+        # From 5.0 to an outset inside the off kerb at 4.0.
+        assert max(drew(report).shift_m) == pytest.approx(1.0 + klass().outset_m)
+
+    def test_a_fence_faces_the_road_and_not_the_centreline(self) -> None:
+        """On that road the off fence stands between the centreline and the
+        traffic, so "toward the centreline" is away from the road."""
+        edge = straight(0.0, 100.0)
+        drawn = on_road(edge, road(edge, kerbs=([0.0, 1.0], [12.0, 12.0], [-4.0, -4.0])))
+        plan = drawn.fence[CLASS_ID][OFFSIDE]
+        facing = _facing(plan, drawn, drawn.along)
+        assert (facing[:, [0, 2]] @ mitres(edge)[0] > 0.99).all()
 
 
 class TestSide:
@@ -881,6 +972,7 @@ class TestStations:
         point = drawn.fence[CLASS_ID][NEARSIDE][0]
         collapsed = Ribbon(
             points=drawn.points,
+            middle=drawn.middle,
             fence={
                 CLASS_ID: {
                     NEARSIDE: np.vstack([point, point]),
