@@ -44,10 +44,13 @@ from pipeline.config_blocks.base import (  # noqa: F401
     _MaterialTable,
     _measures,
     _parse_hex,
+    _Read,
     _require,
     _source_layer,
     _spec_header,
     _tile_member,
+    _tracked,
+    _unread,
 )
 from pipeline.config_blocks.boxjunctions import (  # noqa: F401
     _BOXJUNCTION_ROLES,
@@ -665,6 +668,8 @@ def load_config(path: Path | None = None) -> Config:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         raise ValueError(f"{path} is not a YAML mapping")
+    reads: list[_Read] = []
+    document = _tracked(document, str(path), reads)
 
     version = document.get("schema_version")
     if version != SUPPORTED_SCHEMA:
@@ -764,6 +769,10 @@ def load_config(path: Path | None = None) -> Config:
         _check_declared_source(city, city.signs, f"{path}:signs.source")
     _check_landmarks_lie_within_a_region(city, path)
     _check_carve_regions_are_declared(city, path)
+    unread = _unread(reads)
+    if unread:
+        # A key nothing read is a setting that tunes nothing — see `_Read`.
+        raise ValueError(f"{path} declares keys nothing reads: {', '.join(unread)}")
     return city
 
 

@@ -268,3 +268,78 @@ def _require(mapping: dict[str, Any], key: str, where: Path | str) -> Any:
     if key not in mapping:
         raise ValueError(f"{where} is missing required key '{key}'")
     return mapping[key]
+
+
+class _Read(dict):
+    """A YAML mapping that remembers which of its keys a parser asked for.
+
+    🔴 **What closes EVERY block's key set at once (`P3-35f`, `Q133`).**
+    `_thresholds` refuses a spare key beside its measurements, for the reason it
+    gives: a misspelt name is caught by its absence, a spare one parses, loads
+    and tunes nothing. That check could only be written where a block is ALL
+    measurements, and 25 blocks read theirs with `_measures` beside roles,
+    layers and optional keys — so an optional key misspelt (`max_shfit_m`) was
+    silently the default. Tracking the reads asks the same question of every
+    mapping in the file without a second, hand-kept list of each block's keys
+    to drift from the parser.
+
+    ⚠️ **Iterating a mapping reads all of it** — a table keyed by the
+    publisher's codes has no closed key set to hold it to — so this is a floor
+    under the per-block checks, never a replacement for one.
+    """
+
+    def __init__(self, body: dict[str, Any], where: str) -> None:
+        super().__init__(body)
+        self.where = where
+        self.read: set[Any] = set()
+
+    def __getitem__(self, key: Any) -> Any:
+        self.read.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        self.read.add(key)
+        return super().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        self.read.add(key)
+        return super().__contains__(key)
+
+    def __iter__(self):
+        self.read.update(super().keys())
+        return super().__iter__()
+
+    def keys(self):
+        self.read.update(super().keys())
+        return super().keys()
+
+    def values(self):
+        self.read.update(super().keys())
+        return super().values()
+
+    def items(self):
+        self.read.update(super().keys())
+        return super().items()
+
+
+def _tracked(node: Any, where: str, into: list[_Read]) -> Any:
+    """`node` with every mapping in it a `_Read`, each appended to `into`."""
+    if isinstance(node, dict):
+        body = _Read(
+            {key: _tracked(value, f"{where}:{key}", into) for key, value in node.items()}, where
+        )
+        into.append(body)
+        return body
+    if isinstance(node, list):
+        return [_tracked(value, f"{where}[{index}]", into) for index, value in enumerate(node)]
+    return node
+
+
+def _unread(mappings: list[_Read]) -> list[str]:
+    """Every key no parser asked for, as `where:key`, in file order."""
+    return [
+        f"{body.where}:{key}"
+        for body in reversed(mappings)
+        for key in dict.keys(body)
+        if key not in body.read
+    ]

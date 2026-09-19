@@ -2717,3 +2717,28 @@ class TestRegionJoin:
 
         with pytest.raises(ValueError, match="reach_m"):
             load_config(rewrite(zero))
+
+
+class TestEveryKeyIsRead:
+    """A key nothing reads is a setting that tunes nothing (`P3-35f`, `Q133`)."""
+
+    def test_the_shipped_config_declares_nothing_unread(self, hong_kong) -> None:
+        """Loading IS the assertion: `load_config` refuses an unread key."""
+        assert hong_kong.lamps is not None
+
+    def test_a_spare_key_beside_a_blocks_measurements_is_refused(self, rewrite) -> None:
+        """`lamps:` reads its lengths with `_measures`, beside roles and a layer, so
+        `_thresholds`' closed-key check could never be asked of it."""
+
+        def mutate(document) -> None:
+            document["lamps"]["column_hieght_m"] = 9.0
+
+        with pytest.raises(ValueError, match=r"keys nothing reads: .*lamps:column_hieght_m"):
+            load_config(rewrite(mutate))
+
+    def test_a_misspelt_key_deep_in_a_list_is_named_where_it_is(self, rewrite) -> None:
+        def mutate(document) -> None:
+            document["railings"]["classes"][0]["outsett_m"] = 0.3
+
+        with pytest.raises(ValueError, match=r"railings:classes\[0\]:outsett_m"):
+            load_config(rewrite(mutate))

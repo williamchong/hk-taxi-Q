@@ -107,7 +107,6 @@ BLOCK: dict[str, Any] = {
             "codes": ["RM1011"],
             "line_width_m": 0.2,
             "lines": 1,
-            "lines_spacing_m": 0.0,
         },
         {
             "id": "stop_lines",
