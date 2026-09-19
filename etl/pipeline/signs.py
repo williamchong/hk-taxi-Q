@@ -128,12 +128,7 @@ from pipeline import gdb, hongkong
 # statements of conventions this stage shares with the arrows. ⚠️ The two
 # heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
 # them and cannot import `arrows` — so they arrive from there now.
-from pipeline.arrows import (
-    ArrowReport,
-    Ribbon,
-    ccw,
-    ribbons,
-)
+from pipeline.arrows import ArrowReport, ccw
 from pipeline.config import (
     SIGN_ARROW_BENT_LEFT,
     SIGN_ARROW_BENT_RIGHT,
@@ -168,6 +163,7 @@ from pipeline.config import (
     load_config,
 )
 from pipeline.documents import read_document, write_document
+from pipeline.drawnroad import Ribbon, ribbons
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import select_triangles

@@ -122,9 +122,10 @@ import numpy as np
 # *vertical* surface needs; and `disc` is the prism ring whose reversal is a
 # recorded defect in two stages already.
 from pipeline import gdb
-from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
+from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
+from pipeline.drawnroad import Ribbon, nearside, ribbons
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
