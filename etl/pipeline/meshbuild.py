@@ -4,7 +4,7 @@ Two families, which between them were six byte-identical `polygon()` methods:
 
 - `FlatBuilder` — horizontal paint (arrows, box junctions, road marks). One
   up-normal for the whole mesh, position and normal only.
-- `ColouredBuilder` — vertical furniture (signs, signals, lamps). A normal per
+- `ColouredBuilder` — vertical furniture (signs, lamps). A normal per
   polygon, because everything faces a different sideways, and a `COLOR_0` per
   polygon, because a whole layer is one draw call.
 

@@ -96,7 +96,7 @@ log = logging.getLogger(__name__)
 
 # The manifest keys this grades, in the order the report prints them. Keyed on
 # `city.json` rather than on a directory listing so a layer that stops being
-# declared stops being graded loudly — `signals` is `null` today (`Q77`) and a
+# declared stops being graded loudly — a
 # sweep of `*.glb` would silently grade a stale file (`Q70`'s deleted-image
 # hazard, arriving from the other side).
 #

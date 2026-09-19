@@ -56,14 +56,7 @@ const SHADERS: Dictionary = {
 	# signage comes out pale (`Q27`). `verify_signs.gd` checks this row for that
 	# reason.
 	"signs": "res://tuning/signs.tres",
-	# The published signal heads (`P3-17`). ⚠️ **Its absence is quiet for
-	# `signs.tres`'s exact reason** — the livery is on `COLOR_0`, so a head that
-	# kept its imported material still draws correctly and merely loses
-	# `vertex_srgb_to_linear` (`Q27`). ⚠️ It shares `signs.gdshader` and differs
-	# only in the uniforms its `.tres` sets, so this row is what tells the two
-	# apart: a head handed `signs.tres` renders as a signal lit like sheeting.
-	"signals": "res://tuning/signals.tres",
-	# `lamps.tres`: `signs.tres` and `signals.tres`'s third sibling, sharing
+	# `lamps.tres`: `signs.tres`'s sibling, sharing
 	# `signs.gdshader` for `Q61`'s and `Q71`'s reason — a layer is a
 	# parameterisation, not a shader. ⚠️ **Its fallback failure is the same quiet
 	# one**: the livery is on `COLOR_0`, so a column that kept its imported

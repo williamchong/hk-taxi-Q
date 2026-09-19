@@ -61,20 +61,6 @@ No collider, and this layer is the sharpest case for it: a stop line crosses
 every approach in the city, so a 16 mm step modelled as collision geometry is
 a kerb the player mounts at every junction while braking.
 
-## `[node name="Signals" type="Node3D" parent="."]`
-
-The published traffic signal heads (`P3-17`), one mesh for the whole region,
-standing on the kerb the ribbon actually drew rather than where they were
-surveyed — nearly three quarters of them were surveyed inside it. Static and
-**unlit**: no dataset publishes signal timing, an invented cycle instructs, and
-nothing obeys it until `P3-3`'s traffic exists. A region whose publisher spells
-its codes outside `head_prefixes` ships none and this node simply stays empty.
-No collider: a signal post is a 60 mm prism at every junction mouth, so
-modelling it as collision geometry before `P2-6` has measured a frame on the
-device floor is the wrong order — and a car catching one mid-drift is a worse
-failure than passing through it. `B3` revisits it; breakaway poles are the
-genre's answer, and that is an effect rather than a shape.
-
 ## `[node name="Railings" type="Node3D" parent="."]`
 
 The published pedestrian railings (`P3-19`), standing on the kerb the

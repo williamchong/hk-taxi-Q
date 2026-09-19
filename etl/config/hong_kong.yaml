@@ -2185,15 +2185,16 @@ boxjunctions:
 # actually see this regress. The residual ships too, recorded over refusals as
 # well as keeps, and is worth what that caveat leaves it worth.
 # ---------------------------------------------------------------------------
-# Traffic signal heads — NOT DECLARED (P3-17, dropped by Q77)
+# Traffic signal heads — REMOVED (P3-17, dropped by Q77, code removed at P3-35a)
 # ---------------------------------------------------------------------------
 #
 # 🔴 **The block was here and was removed on the user's instruction**, so this
-# city ships no signals.glb. The stage, the config loader, the material, the
-# verify tool, the preview node and the tests all remain, and all handle an
-# undeclared block as a first-class state — declaring it again is the whole of
-# the work to bring the layer back. `git show 3787db5` has the block as it
-# shipped, and etl/tests/test_signals.py's BLOCK is a live copy of its values.
+# city ships no signals.glb. 🔴 **And the stage, the config loader, the material,
+# the verify tool, the preview node and the tests went too, at P3-35a (Q133), on
+# the user's call: "we will re-add it much later".** `git show 3787db5` has the
+# block as it shipped; the code is at the commit before P3-35a. ⚠️ Bringing it
+# back is a PORT, not a re-declared block: it was the one point stage still on
+# the merged-mesh path, and P5-2 moved every sibling to a library + placements.
 #
 # ⚠️ **The layer was correct and was dropped anyway, which is the part worth
 # reading.** It drew 415 heads on the positions TD surveyed, both partitions

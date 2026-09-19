@@ -750,7 +750,7 @@ static func check_faces_up(
 ##
 ## 🔴 **`check_faces_up`'s sibling for the UPRIGHT case, and the third copy is
 ## what forced it here** — `single_primitive`'s own rule, applied as it was to
-## the horizontal case: `verify_signs.gd`, `verify_signals.gd` and
+## the horizontal case: `verify_signs.gd`, `verify_signals.gd` (removed at `P3-35a`) and
 ## `verify_lamps.gd` held byte-identical copies differing only in two nouns and
 ## the share.
 ##

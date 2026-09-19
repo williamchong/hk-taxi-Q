@@ -428,7 +428,7 @@ class SignReport:
     # moves that all happened — read it with `posts_kept_as_surveyed`.
     # 🔴 **And it is an absolute value, which is exactly what hid `Q78`**: a
     # directional correction measured with `abs()` cannot report its own
-    # direction. `railings.py` and `signals.py` compute theirs the same way.
+    # direction. `railings.py` computes its own the same way.
     shift_m: list[float] = field(default_factory=list)
     # How far inside the drawn carriageway each post was surveyed. The
     # measurement that forced the registration: 0 means it was already outside.
@@ -1103,8 +1103,9 @@ def disc(radius: float, segments: int) -> np.ndarray:
     """A closed ring of `segments` points, counter-clockwise in `(u, v)`.
 
     ⚠️ **Public since `P3-17`, on `arrows.nearside`'s terms**: a second consumer
-    is what makes a helper public here rather than copied. `pipeline/signals.py`
-    draws its lenses and its post from this, and a second generator would be a
+    is what makes a helper public here rather than copied. `pipeline/lamps.py`
+    draws its column from this (the signal stage did too, until `P3-35a`
+    removed it), and a second generator would be a
     second phase convention — see `_octagon` below for what that costs.
     """
     angles = np.linspace(0.0, 2.0 * math.pi, segments, endpoint=False)
@@ -1152,9 +1153,9 @@ def _rotate(polygons: list[np.ndarray], degrees: float) -> list[np.ndarray]:
 def plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
     """The plate's outward normal and its `+u` axis, for a facing heading.
 
-    ⚠️ **Public since `P3-17`**, on `arrows.nearside`'s terms — `pipeline/
-    signals.py` frames its heads with it. The winding guarantee below is the
-    reason it must not be written a second time.
+    ⚠️ **Public since `P3-17`**, on `arrows.nearside`'s terms — the signal stage
+    framed its heads with it until `P3-35a` removed it, and its return will. The
+    winding guarantee below is the reason it must not be written a second time.
 
     Headings are clockwise from north and north is `-Z`, so a plate facing
     `facing_deg` has outward normal `n = (sin f, 0, -cos f)`. `+u` is the right
@@ -1180,8 +1181,8 @@ def facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> flo
     """Which way a sign on this kerb faces, in game headings.
 
     🔴 **Public since `P3-17`, and this is the one that most needed it.**
-    `pipeline/signals.py` derives a signal head's facing from exactly this rule,
-    because a head addresses the traffic approaching its stop line — the traffic
+    The signal stage (`Q76`, removed at `P3-35a`) derived a head's facing from
+    exactly this rule, because a head addresses the traffic approaching its stop line — the traffic
     already legally proceeding, which is the case a regulatory plate is in. A
     second copy of this function is a second city, mirrored, and nothing in
     either would render as wrong (`Q56`).

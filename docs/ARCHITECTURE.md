@@ -227,7 +227,7 @@ note below the table. A new step goes in at its real position.
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
 | `verify_input` | The touch scheme, driven by synthetic fingers — needs no built region, which matters more here than anywhere: `P0-3b` has no handset, so this is the only thing that exercises touch at all | yes |
 | `verify_hud` | The HUD layout against `hud_layout.tres`'s rects, both directions of the thumb-rest contract (`Q80`) — needs no built region | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_signals`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names (`verify_signals` runs against the null manifest key the latent layer leaves, `Q77`) | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names (`verify_signals` runs against the null manifest key the latent layer leaves, `Q77`) | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
 variable planted in `greybox_builder.gd` went unreported, because the import step compiles only
@@ -451,7 +451,6 @@ hk-taxi-Q/
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
-│   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
 │   │   ├── lamps.py             # published lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
 │   │   ├── placements.py        # a prop library's stands: entry shape, pitch, drawn totals, writer (P5-3, P5-4)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
@@ -509,7 +508,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 33,
+  "schema_version": 34,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -546,7 +545,6 @@ The interface between ETL and game. **Versioned — change both sides together a
   "signs": "signs.glb",
   "signs_text_atlas": "signs_text.png",
   "roadmarks": "roadmarks.glb",
-  "signals": null,
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
@@ -1319,8 +1317,8 @@ from the first two; the rotation is still `gltf.placed_positions`' one statement
 | Collider | none |
 
 ✅ **The one layer here whose vocabulary the publisher DEFINES.** `UTILITYPOINTTYPE` carries a
-coded-value domain inside the geodatabase (`LPO - Lamp post`), where `railings.classes` and
-`signals.head_prefixes` are whitelists read off code strings with nothing published behind them.
+coded-value domain inside the geodatabase (`LPO - Lamp post`), where `railings.classes`
+is a whitelist read off code strings with nothing published behind it.
 `lamps.json` publishes `refused_by_kind` over the rest of the domain regardless.
 
 🔴 **The position is registered rather than read, and the guarantee that no column stands in the
@@ -1524,44 +1522,15 @@ carry no lettering.
 `text_atlas_bytes` beside it. Two numbers where there was one, on purpose — they are added up
 deliberately or not at all.
 
-### `signals.glb` — the published traffic signal heads (`P3-17`, **not shipped**)
+### `signals.glb` — removed (`P3-17`, `Q77`, `P3-35a`)
 
-🚫 **Dropped from the bundle by `Q77`.** `hong_kong.yaml` declares no `signals:` block, so the key
-is `null` and no asset ships. Everything below describes what the stage still builds if a city
-declares one — the code, the material, the verify tool and the preview node all remain. The reason
-is not a defect: an unlit head asserts a signal out of service, and a lit one cannot be derived
-honestly from what this repo knows. `Q77` has the measurements.
-
-One head on one post per signal assembly, drawn where TD surveyed it and registered onto the drawn
-kerb, and **no collider** — the same budget decision the signs record, with one extra edge: a signal
-post stands at a junction mouth, exactly where the player is braking and turning, so this is the
-layer whose colliders would be felt most. `B3` revisits it.
-
-🔴 **The code on a feature is a GATE, never a look.** `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no
-published domain — no Index Plan sheet defines it, the fgdb specification gives it eight characters
-of untyped text, and `signCatalogue.json` is `TS`-only — so all 33 admitted codes draw the same
-head, and `signals.json` publishes `drawn_by_code` and `refused_by_code` over the whole 46-code
-vocabulary because that is the only thing that can grade a spelling rule (`Q76`).
-
-🔴 **One head stands for a whole assembly, and the count of features is not the count of heads.**
-This layer publishes no `GG_NAME`; what it publishes is coincidence — 470 of 913 points within
-0.05 m of another — and those are the parts of one installation rather than heads to stack. The
-first build stacked them and drew **8.53 m** masts, with both partitions closed, `facing_away` 0 and
-`check.sh` green. `signals.json`'s `drawn` counts **features** and `posts_drawn` counts **heads**;
-`assembly_size` is the collapse between them.
-
-⚠️ **`ANGLE` is not a facing and is consumed by nothing.** Re-measured on this layer rather than
-inherited from `P3-16`: p50 44.3° off the host edge axis, 21.3% along / 19.3% across against 22.2%
-for a uniform distribution. The facing is derived from the host edge and the kerb side, and is
-**ungraded** — there is no published subset to check it against (`Q62`), so the evidence is an A/B
-render.
-
-⚠️ **It shares `signs.gdshader`**, on `Q61`/`Q71`'s rule that a layer is a parameterisation rather
-than a shader — so a change to that shader is a change to **two** layers, and `check.sh` exits 0 on
-one that fails to compile. `verify_signals.gd` checks the dispatch by `resource_path`, because
-`check_shader_source` would pass a head handed `signs.tres`. ⚠️ `sheeting_glow` is **0** here: a
-signal lens with its lamp off is dark glass, and any glow makes an unlit aspect read as a lit one —
-an instruction this game deliberately does not give.
+🚫 **Not in the bundle and not in the code.** `Q77` dropped the layer — an unlit head asserts a
+signal out of service, and a lit one cannot be derived from anything published — and `P3-35a`
+(`Q133`, 2026-09-19) removed the stage, its config block, material, verify tool, preview node and
+tests on the user's call, to be re-added much later. `city.json` lost the `signals` key at schema
+**34**. The contract as it shipped is in this file's history at the commit before `P3-35a`, and the
+record is `DECISIONS.md` `Q76`/`Q77`. ⚠️ Its return is a port to a library + placements (`P5-2`'s
+shape), not a re-declared block: it was the last point stage on the merged-mesh path.
 
 ### `landmarks.json` — hero building placement
 
@@ -1802,7 +1771,7 @@ the second vehicle anyone built.
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/generated_layer.gd` | Locator for the nine `.glb` layers — four of them libraries with a placements document since `P5-2`–`P5-5` — `road_surface`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `signals` (latent, `Q77`), `railings`, `lamps`, `signs` — one table, id constants, and the per-layer absence terms that used to be nine files (`P5-1`, `Q115`). Also owns the sign text-atlas budget (`Q63`) |
+| `scripts/city/generated_layer.gd` | Locator for the eight `.glb` layers — four of them libraries with a placements document since `P5-2`–`P5-5` — `road_surface`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `lamps`, `signs` — one table, id constants, and the per-layer absence terms that used to be nine files (`P5-1`, `Q115`). Also owns the sign text-atlas budget (`Q63`) |
 | `scripts/city/generated_*.gd` | Locators for the JSON documents — `road_graph`, `fares`, `landmarks`, `fence` — one definition each, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |

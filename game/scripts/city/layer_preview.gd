@@ -2,7 +2,7 @@
 ## (`P5-1`). `layer` names a row of `generated_layer.gd`'s table.
 ##
 ## A dev tool, not the streamer. Each of these layers is region-wide — the
-## tramway, the boxes, the stop lines and the signals as one mesh each; the
+## tramway, the boxes and the stop lines as one mesh each; the
 ## signs, the lamps, the arrows and the railings as a library of props stood by
 ## a placements document (`Q115`) — so there is nothing to stream, and
 ## deliberately nothing to LOD: `Q34`'s vertex clustering annihilates

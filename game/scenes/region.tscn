@@ -22,10 +22,6 @@ layer = "boxjunctions"
 script = ExtResource("1_layer")
 layer = "roadmarks"
 
-[node name="Signals" type="Node3D" parent="." unique_id=612260220]
-script = ExtResource("1_layer")
-layer = "signals"
-
 [node name="Railings" type="Node3D" parent="." unique_id=92449069]
 script = ExtResource("1_layer")
 layer = "railings"

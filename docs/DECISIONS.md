@@ -23935,3 +23935,25 @@ to sidecars — the user's call, not taken.
 **See.** `PLAN.md` `P3-35` for the steps · `Q106`/`Q130` for the `±half` defect class the single
 reader retires · `Q129` for the region · `Q76`/`Q77` for the signal layer, whose code is at the
 commit before `P3-35a`.
+
+### Built 2026-09-19 — `P3-35a`, the signal layer removed
+
+On the user's call: *"remove signals for now and we will re-add it much later"*. `Q76` and `Q77`
+stand as the record of what it was and why it was dropped; the code is at the commit before this one.
+
+- **−2,417 / +106 lines over 29 files.** Gone: `pipeline/signals.py`, `tests/test_signals.py`,
+  `verify_signals.gd`, `tuning/signals.tres` + sidecar, the `Signals` node, the stage slot, `export`'s
+  input and key, `config.py`'s `Signals` / `_signals` / `_is_signal_head` / `SIGNAL_BODY_COLOUR`
+  (6,941 → 6,544 lines), `GeneratedLayer.SIGNALS`, `CityManifest.signals_path`. The colour-exemption
+  test loses its `.signals.colours.` prefix, which tightens it.
+- **`city.json` 33 → 34**: the one bump that takes an asset key away. A v33 reader requires it.
+- **Inert by hash**: both regions rebuilt `--from arrows`, 232 + 196 files byte-identical, `city.json`
+  alone moving. The `Q27` street frame, shot twice, is `cmp`-identical to `P3-34`'s own.
+- **PCK 61,169,372 → 61,165,896 B (−3,476)**, web, one variable apart. ⚠️ That first figure is also
+  the PCK `Q132` left unmeasured *after* `P3-34`; its *before* is still owed.
+- ⚠️ Comments that sent a reader to `signals.py` for a rationale now cite `Q76` and say the stage was
+  removed; lists of sibling stages simply lose the name. `signs.disc`, `facing_from_side` and
+  `plate_frame` stay public with one caller fewer.
+- ⚠️ **Found on the way**: `verify_join` fails on any two-region sync against a stale
+  `etl/out/wan_chai+causeway_bay/` (2026-09-08, before `lanes_forward`). `python -m pipeline.join`
+  rewrites it. Nothing checks that reference's age — `P3-35b`'s runner is the place.

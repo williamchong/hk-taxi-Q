@@ -44,7 +44,7 @@ const SURFACES_PER_MESH: int = 1
 ##
 ## 🔴 **Checked through its `resource_path`, and that is the point rather than an
 ## implementation detail.** This layer *shares* `signs.gdshader` with the signs
-## and the signals — a layer is a parameterisation, not a shader (`Q61`, `Q71`) —
+## — a layer is a parameterisation, not a shader (`Q61`, `Q71`) —
 ## so `check_shader_source` would happily pass a lamp column handed `signs.tres`,
 ## which is a galvanised post lit as retroreflective sheeting. The path is the
 ## only thing that tells the three apart. Do not swap this for the shader check.

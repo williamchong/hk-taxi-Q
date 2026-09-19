@@ -1611,14 +1611,6 @@ class TestPaletteExposure:
         **city** fact besides — a second city prints its own signs — which hard
         rule 3 puts in config by definition.
 
-        ⚠️ **`signals.colours` is the second exemption and it is the SAME
-        argument, checked rather than assumed to transfer** (`P3-17`). A signal
-        head is not cladding either and has no reflectance to grade; it is four
-        colours — body plus three lens aspects — inside a single draw call, so
-        the livery rides `COLOR_0` exactly as a sign plate's does and the ETL
-        must know it. And it is a city fact: a second city's signals are its
-        publisher's, not this one's.
-
         So the exemption is narrow, by prefix, and deliberately not a general
         escape: any *other* new key authoring a colour still fails.
         """
@@ -1640,7 +1632,7 @@ class TestPaletteExposure:
             for path, value in hex_colours(document, "")
             if not any(
                 path.startswith(prefix)
-                for prefix in (".materials.", ".signs.colours.", ".signals.colours.")
+                for prefix in (".materials.", ".signs.colours.")
             )
         }
         assert not outside, (

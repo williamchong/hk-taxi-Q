@@ -44,7 +44,6 @@ from pipeline import (
     region,
     roadmarks,
     roads,
-    signals,
     signs,
     surface,
     tramway,
@@ -130,17 +129,7 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # that resolves its facing. Before `export`, which names the asset.
     "signs": signs.main,
     # After `surface` and `roads`, the dependency `arrows`, `railings` and
-    # `signs` all have, and for `signs`' reason exactly: a published signal head
-    # is registered onto the kerb the ribbon actually drew, because 72.7% of them
-    # are surveyed inside the 1.6x ribbon and drawn where published nearly three
-    # quarters of the city's signals stand in the road. It needs `roads` for the
-    # level-0 centrelines that give it a host edge, a height and the kerb side
-    # that resolves its facing. Before `export`, which names the asset.
-    # 🚫 Latent: the config declares no `signals:` block (`Q77`, kept by `Q100`),
-    # so this stage writes an empty manifest and draws nothing.
-    "signals": signals.main,
-    # After `surface` and `roads`, the dependency `arrows`, `railings`, `signs`
-    # and `signals` all have, and for `signs`' reason exactly: a published lamp
+    # `signs` all have, and for `signs`' reason exactly: a published lamp
     # post is registered onto the kerb the ribbon actually drew, because 64.1% of
     # them are surveyed inside the 1.6x ribbon and drawn where published four
     # fifths of a kilometre of the region's columns stand in the carriageway. It

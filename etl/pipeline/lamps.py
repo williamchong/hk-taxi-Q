@@ -10,9 +10,9 @@ findings that make it different belong at the top of the file.
 here of which that is true.** `UtilityPoint.UTILITYPOINTTYPE` carries a
 coded-value domain **inside the geodatabase** — `LPO - Lamp post`, readable out
 of every sheet's `.gdbtable` bytes, alongside `FWH`/`SWH` hydrants and `EPO`. So
-`kinds` is not `railings.classes` and not `signals.head_prefixes`: those two are
-whitelists read off code strings because nothing published defines them (`Q60`,
-`Q76`), and this one is a *selection from an answer the publisher wrote down*. It
+`kinds` is not `railings.classes`: that is a
+whitelist read off code strings because nothing published defines them (`Q60`),
+and this one is a *selection from an answer the publisher wrote down*. It
 is arguably better evidence than `arrows.py`'s glyph table, which is transcribed
 **by eye** off a drawing (`Q59`), because it is machine-readable and travels with
 the data. `refused_by_kind` publishes the rest of the domain anyway, on
@@ -42,18 +42,18 @@ thing available. It reads **177 of 1,263,
 carries the Gloucester Road flyovers.
 
 ⚠️ **The position is registered, not read** — `Q60`'s move arriving at a fourth
-layer, after the railings, the signs and the signals. **64.1%** of the region's
+layer, after the railings and the signs. **64.1%** of the region's
 lamp posts are surveyed inside the drawn 1.6x ribbon — **810 of 1,263**, a median
 1.46 m past the drawn kerb **over that subset** — so drawn where published four
 fifths of a kilometre of Wan Chai's columns stand in the carriageway. ⚠️ The
 denominator matters: `shift_m` is published over all 1,127 registered posts and
 its p50 is 1.34, which is a different question about the same layer.
 
-🔴 **The registration is `signs.py`'s and NOT `signals.py`'s, and the split is
+🔴 **The registration is `signs.py`'s and NOT `railings.py`'s, and the split is
 deliberate.** `Q78` clamped the sign move to **outward only** — the argument for
 moving a post at all is that the carriageway floor draws the ribbon past the real
 carriageway, and that argument runs outward and nowhere else. `CLAUDE.md` records
-that `railings.py` and `signals.py` are deliberately *not* aligned with it,
+that `railings.py` is deliberately *not* aligned with it,
 because **a fence is a run and the bar is per sample, so a conditional push would
 zigzag it**. A lamp post is not a run. It is a discrete object like a sign post,
 so `Q78` applies here in full and `posts_kept_as_surveyed` exists for its reason.
@@ -115,8 +115,8 @@ from pathlib import Path
 
 import numpy as np
 
-# ⚠️ **Imports from sibling stages rather than copies**, the shape `signs.py` and
-# `signals.py` both take. `nearside` is the canonical statement of a convention a
+# ⚠️ **Imports from sibling stages rather than copies**, the shape `signs.py`
+# takes. `nearside` is the canonical statement of a convention a
 # flip in which mirrors every side-keyed feature in the city; `facing_away` asks
 # whether winding agrees with the given normal, which is the question a
 # *vertical* surface needs; and `disc` is the prism ring whose reversal is a
@@ -151,7 +151,7 @@ LAMPS_PLACEMENTS_NAME = "lamps_placements.json"
 
 # The glTF material name `tools/generated_scene_import.gd` dispatches on, and the
 # one channel the format offers for it. ⚠️ **A name, not a shader**: this layer
-# shares `signs.gdshader` with the signs and the signals, and differs only in the
+# shares `signs.gdshader` with the signs, and differs only in the
 # uniforms `game/tuning/lamps.tres` sets — `Q61`'s rule for the railing classes
 # and `Q71`'s for the three paint layers, at a fifth place.
 LAMPS_MATERIAL = "lamps"
@@ -177,7 +177,7 @@ class LampReport:
     features: int = 0
     # ✅ **The selection's refusals, over a domain the publisher DEFINES** — the
     # hydrants and the one electricity pole. `refused_by_kind` is where a reader
-    # sees which, and unlike `railings.classes` and `signals.head_prefixes` this
+    # sees which, and unlike `railings.classes` this
     # one is checkable against the source rather than only reviewable.
     not_a_lamp: int = 0
     empty_geometry: int = 0
@@ -200,7 +200,7 @@ class LampReport:
     in_carriageway: int = 0
     # Columns folded together *after* registration pushed them onto one point.
     # ⚠️ **Every one of these is a coincidence this stage MADE**: the layer
-    # publishes zero coincident pairs under 0.05 m, so unlike `signals.py` there
+    # publishes zero coincident pairs under 0.05 m, so unlike the removed signal stage (`Q76`) there
     # is no surveyed clustering here and none is invented.
     merged: int = 0
     # ⚠️ **`Q78`'s branch.** A post already standing clear of the drawn kerb keeps
@@ -286,8 +286,8 @@ class LampReport:
     library_triangles: int = 0
     library_vertices: int = 0
 
-    # Reused rather than restated, the line `signs.py`, `railings.py`,
-    # `signals.py` and `boxjunctions.py` all carry: p90/p99/max beside the median
+    # Reused rather than restated, the line `signs.py`, `railings.py`
+    # and `boxjunctions.py` all carry: p90/p99/max beside the median
     # is `arrows.py`'s choice and its reason — a median near zero is also what a
     # wholly broken join looks like.
     measured = staticmethod(ArrowReport.measured)
@@ -463,7 +463,7 @@ def _strut(
     sits on it.
 
     🔴 **THE RING IS NOT REVERSED HERE, AND THAT IS THE OPPOSITE OF WHAT
-    `signs._draw_pole` AND `signals._draw_post` BOTH DO.** Both of those reverse
+    `signs._draw_pole` DOES, AND THE REMOVED `signals._draw_post` DID (`Q76`).** Both reverse
     it, both carry a paragraph saying the reversal "is the whole correctness of
     this function", and copying that paragraph across is exactly what this
     function did first: it shipped **25,116 of 35,880** triangles facing away.
@@ -572,7 +572,7 @@ def build_region(
     out_dir = city.out_dir(region_id, out_root)
     if spec is None:
         # Not an error, and the shape `tramway`, `arrows`, `boxjunctions`,
-        # `railings`, `signs`, `roadmarks` and `signals` all take: a city whose
+        # `railings`, `signs` and `roadmarks` all take: a city whose
         # estate publishes no lamp layer ships none rather than putting a column
         # every twenty metres down every kerb it drew.
         log.info("city '%s' declares no lamps block; nothing to draw", city.id)
@@ -583,8 +583,8 @@ def build_region(
     lamps = read_lamps(city, spec, region_id, transform, report, sources_root=sources_root)
 
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
-    # Level 0 only, the restriction `kerbside.py`, `tramway.py`, `arrows.py`,
-    # `signs.py` and `signals.py` all make: for 7% of the kerbside samples the
+    # Level 0 only, the restriction `kerbside.py`, `tramway.py`, `arrows.py`
+    # and `signs.py` all make: for 7% of the kerbside samples the
     # nearest edge of *any* level was elevated, and the street the feature is
     # actually on was a median 4 m away.
     at_grade = [edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0]
@@ -608,8 +608,8 @@ def build_region(
 
     # ⚠️ **Sorted, and the sort is not cosmetic.** `_merge` below is greedy and
     # first-wins, so a mesh built from an unsorted read is not reproducible
-    # between two builds of one input — `signals._assemble` records the same
-    # requirement for the same reason.
+    # between two builds of one input — the removed signal stage's `_assemble` recorded the same
+    # requirement for the same reason (`Q76`).
     lamps.sort(key=lambda lamp: (lamp.x, lamp.z))
     report.spacing_surveyed_m = _spacing_m([(lamp.x, lamp.z) for lamp in lamps])
 
@@ -757,8 +757,8 @@ def _register(
 ) -> tuple[np.ndarray, float] | None:
     """Push a column out to the kerb the ribbon actually drew, or leave it, or refuse.
 
-    ⚠️ **`Q60`'s move at a fourth layer**, after the railings, the signs and the
-    signals, and for its reason: **64.1%** of this region's lamp posts are
+    ⚠️ **`Q60`'s move at a fourth layer**, after the railings and the
+    signs, and for its reason: **64.1%** of this region's lamp posts are
     surveyed inside the drawn 1.6x ribbon, a median 1.46 m past the drawn kerb.
 
     🔴 **Clamped to one direction, `signs.py`'s shape since `Q78`.** The reason to
@@ -770,8 +770,8 @@ def _register(
     and an outward push are the same number. A column already clear keeps the
     point LandsD surveyed.
 
-    ⚠️ **`railings.py` and `signals.py` deliberately do NOT do this** and
-    `CLAUDE.md` says not to align them — a fence is a run and a conditional push
+    ⚠️ **`railings.py` deliberately does NOT do this** and
+    `CLAUDE.md` says not to align it — a fence is a run and a conditional push
     would zigzag it. A lamp post is not a run.
 
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
@@ -808,7 +808,7 @@ def _merge(placements: list[_Placed], merge_m: float, report: LampReport) -> lis
     """Columns that registration pushed onto the same point, as one column.
 
     ⚠️ **Every fold here is a coincidence this stage MADE.** Unlike
-    `signals._assemble` there is no surveyed clustering to reproduce: the layer
+    the removed signal stage (`Q76`) there is no surveyed clustering to reproduce: the layer
     publishes **zero** coincident pairs under 0.05 m, so a pre-registration
     grouping would be inventing a structure the data does not show. Two columns
     a metre apart on one edge are moved to the same offset and can land on each
@@ -873,7 +873,7 @@ def _spacing_m(points: list[tuple[float, float]]) -> list[float]:
     over 40 m going from 5 to 16.
 
     ⚠️ **O(n^2), and it is MEMORY rather than time that sets the ceiling.**
-    `signals._assemble` records the same arithmetic and the same decision, and
+    The removed signal stage (`Q76`) recorded the same arithmetic and decision, and
     quoting comparisons the way an earlier draft of this did understates it: the
     cost is three broadcast `n x n` float64 arrays. Measured — 1,263 points is
     **5.0 ms / 38 MB**, 3,000 is 28 ms / 216 MB, 10,000 is 0.31 s / **2.4 GB** and
@@ -968,7 +968,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         # they already stood clear. They append a real 0.0 to `shift_m`.
         "posts_kept_as_surveyed": report.posts_kept_as_surveyed,
         # ✅ **The whole published domain, both halves** — and unlike
-        # `railings.json`'s refused metres and `signals.json`'s refused codes,
+        # `railings.json`'s refused metres,
         # this one is checkable against the source rather than only reviewable.
         "drawn_by_kind": report.drawn_by_kind,
         "refused_by_kind": report.refused_by_kind,

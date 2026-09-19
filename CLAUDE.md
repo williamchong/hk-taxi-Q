@@ -688,7 +688,7 @@ Common emoji for this project:
   than being skipped. ⚠️ **A position on this layer cannot be graded against anything published**
   (`Q62`), so the evidence is an **A/B render at one fixed camera** — `city_preview.tscn` with an
   explicit `--camera`/`--look`, never a driven frame, and shoot each side twice and `cmp` them.
-  ⚠️ **`railings.py` and `signals.py` compute `shift_m` the same way and are deliberately NOT
+  ⚠️ **`railings.py` computes `shift_m` the same way and is deliberately NOT
   aligned**: a fence is a run and the bar is per sample, so a conditional push would zigzag it. Do
   not "restore consistency". ⚠️ **A widening change is a sign-position change** — `surface.floor_default_m`
   moves the drawn kerb and therefore moves every post, silently and plausibly. Numbers in `Q78`.
@@ -954,31 +954,17 @@ Common emoji for this project:
   shader change, and its shader is shared with the arrows and the boxes** (`Q71`) — `check.sh` exits
   0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
   layers rather than only this one. Numbers in `Q69`.
-- 🚫 **`P3-17`'s signal layer is NOT SHIPPED** (`Q77`): `hong_kong.yaml` declares no `signals:`
-  block, so nothing below applies until one is declared again. Kept because re-declaring the block
-  is the whole of the work to bring it back. **`pipeline/signals.py`, the `signals` config block, or any signal-head change: paste
-  `signals.json`'s two partitions, `drawn_by_code` **and** `refused_by_code`, `assembly_size`,
-  `axis_residual_deg`, `shift_m` (with its `n`), `host_ambiguous` and `facing_away`, before and
-  after.** There is no separate grader and there should not be: the stage grades itself, because
-  every way this breaks renders as a perfectly drawn signal head or as nothing.
-  🔴 **`refused_by_code` is load-bearing, not decoration.** `REFNAME` has **no published domain** —
-  no index-plan sheet defines it, the fgdb spec gives it 8 untyped characters, and
-  `signCatalogue.json` is `TS`-only — so what admits a code is a rule about *spelling* this project
-  wrote, and publishing both halves of the vocabulary is the only thing that can grade it. A change
-  to `head_prefixes` or `refuse_codes` is a **`DATA_SOURCES.md` change** (`railings.py`'s `classes`,
-  at a second layer). ⚠️ **`drawn` counts FEATURES and `posts_drawn` counts HEADS** — one head stands
-  for a whole assembly — so do not quote one as the other.
-  🔴 **`assembly_size` is the counter that would have caught the defect that shipped.** This layer
-  publishes no `GG_NAME`, so a post is a cluster of coincident points; the first build stacked them
-  and drew **8.53 m** five-head masts while both partitions closed, `facing_away` read 0 and
-  `check.sh` was green. It was caught by *looking*, which is why the render below is not optional.
-  ⚠️ **A facing change cannot be graded against anything published** (`Q62`), so the evidence is an
-  **A/B render at one camera** — shoot one head from the front and from the back, and the aspects
-  must appear only from the front. ⚠️ **`facing_away` must be 0** and ⚠️ **a signals change is also
-  a shader change** — but `signs.gdshader` is **shared with the signs** since `P3-17`, so render and
-  look at **both** layers, and `grep -i "shader error"` because `check.sh` exits 0 on a shader that
-  fails to compile. ⚠️ **`sheeting_glow` must stay 0**: any glow makes an unlit lens read as a lit
-  one, which is an instruction this game refuses to give. Numbers in `Q76`.
+- 🚫 **`P3-17`'s signal layer is REMOVED — code and all (`Q77`, then `P3-35a` / `Q133`, 2026-09-19, the
+  user's call: "we will re-add it much later").** No stage, config block, material, verify tool,
+  preview node or tests; `city.json` lost the `signals` key at schema **34**. The code is at the commit
+  before `P3-35a`. 🔴 **Bringing it back is a PORT, not a re-declared block** — it was the one point
+  stage still on the merged-mesh path, so it owes `P5-2`'s library + placements shape first — and the
+  reason it was dropped still stands: an unlit head asserts a signal out of service and a lit one
+  cannot be derived from anything published. ⚠️ **What a return must keep is in `Q76`**:
+  `refused_by_code` (the gate is a rule about *spelling*; `REFNAME` has no published domain),
+  `assembly_size` (the first build stacked coincident points into 8.53 m five-head masts with every
+  counter closing), `sheeting_glow` 0, and an A/B render front and back. ⚠️ `signs.disc`,
+  `facing_from_side` and `plate_frame` stay public for it.
 - **`_deck_heights`, `_descend`, `_lifted_heights`, or `deck.touchdown_max_grade_pct`: also
   `tools/touchdown_error.py`, and paste its table — plus the roads stage's `descended / refused /
   graded across` line, before and after.** 🔴 **`deck_error.py` cannot see this defect and never
@@ -1291,7 +1277,7 @@ Common emoji for this project:
   centreline cell" are about the published centreline. ⚠️ **"0.0 on all 737 level-0 edges" EXPIRED
   at `P3-33c`**: a level-0 ribbon's rails are its territory, and 288 of 734 are drawn more than 1 m
   off their centreline. `arrows.py` read `±half` until `Q130` put its arrows 1.5 m out of the painted
-  lanes; 🔴 **`Ribbon.kerb_target` — signs, signals, lamps — still does, and is OPEN**. 🔴 **So does
+  lanes; 🔴 **`Ribbon.kerb_target` — signs, lamps — still does, and is OPEN**. 🔴 **So does
   `railings.ribbons`, found 2026-09-19 (`Q133`)**: both fence lines are `boundary(…, ±(half +
   outset))` about the centreline and `offset_m` is never read; `fence._dress` tiles symmetrically
   too. One reader of the published rails is `P3-35d`'s. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
@@ -1421,14 +1407,14 @@ Common emoji for this project:
   which is the test a counter here has to pass. The facing itself **cannot** be graded against
   anything published (`Q62`) — the evidence is an A/B render at one fixed camera, shot twice and
   `cmp`'d.
-  🔴 **The prism ring is NOT reversed here, and `signs._draw_pole`/`signals._draw_post` both reverse
-  theirs.** Both of those carry a paragraph calling the reversal "the whole correctness of this
+  🔴 **The prism ring is NOT reversed here, and `signs._draw_pole` reverses its own, as the removed
+  `signals._draw_post` did.** Both carry a paragraph calling the reversal "the whole correctness of this
   function" and both are right about their own frame; `lamps._strut` builds an explicit one with
   `u x v == axis`, because a bracket arm is not vertical. Inheriting their fix inverted **25,116 of
   35,880** triangles. Do not "restore consistency".
   ⚠️ **`shift_m` is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you
   tell** (`Q58`'s trap); `Q78`'s outward-only clamp applies here and deliberately **not** in
-  `railings.py`/`signals.py` — a fence is a run, a lamp post is not.
+  `railings.py` — a fence is a run, a lamp post is not.
   ⚠️ **A widening change is a lamp-position change**: `surface.floor_default_m` moves the drawn kerb and
   therefore moves every column, silently and plausibly.
   ⚠️ **The spacing pair is this layer's own failure mode and no other layer here has it** — a lamp
@@ -1436,9 +1422,9 @@ Common emoji for this project:
   both distributions; the *difference* is the finding.
   ⚠️ **The colour is in `materials:` and answers to `Q33`** — `signs.colours`' exemption does not
   transfer, because a lamp post is not a printed specification and is one colour. ⚠️ **A lamps change
-  is also a shader change, and its shader is shared with the signs and the signals** — `check.sh`
-  exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all
-  three layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
+  is also a shader change, and its shader is shared with the signs** — `check.sh`
+  exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at
+  both layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
   not chosen a look, so a glow here is wrong in every frame the project renders.
   ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, and the two used to differ.** Godot
   quantises imported vertex positions over each mesh's **own AABB**, so the step scales with how wide

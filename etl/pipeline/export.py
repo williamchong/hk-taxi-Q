@@ -64,7 +64,6 @@ from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
-from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -243,7 +242,12 @@ CITY_NAME = "city.json"
 # stale: `road_markings.tres` still paints its own lane dashes and two-way centre
 # line, so every surveyed line is drawn twice, a lane apart from its invention.
 # ⚠️ No mesh FORMAT moves; what moves is who owns the white lines.
-CITY_SCHEMA = 33
+#
+# 34 since `P3-35a` (`Q133`): the `signals` key is GONE with the stage that wrote
+# it — always `null` since `Q77`, removed on the user's call until the layer is
+# ported to a library and placements. A v33 reader requires the key and is wrong
+# to; this is the one bump that takes an asset key away.
+CITY_SCHEMA = 34
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -292,7 +296,6 @@ OPTIONAL_ASSET_KEYS = (
     "signs_text_atlas",
     "signs_placements",
     "roadmarks",
-    "signals",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -331,7 +334,6 @@ INPUTS: tuple[Input, ...] = (
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
-    Input(SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA, "signals"),
 )
 
 
@@ -412,7 +414,6 @@ def build_region(
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
-    signals = documents[SIGNALS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -550,11 +551,6 @@ def build_region(
         # whose markings all failed the transverse join must not be contradicted
         # here by a constant.
         "roadmarks": roadmarks["asset"],
-        # `null` where the city drew no signal heads, on `tramway`'s terms. ⚠️ An
-        # ordinary answer for a region whose estate publishes no signal layer —
-        # and `P3-17` refuses everything its gate does not admit, so a region
-        # whose codes are spelled differently draws none and is correct to.
-        "signals": signals["asset"],
         "landmarks": LANDMARKS_NAME,
         # Where P3-29 stands a barrier, one placement per unit. Named
         # unconditionally rather than as an optional asset: `fence.py` writes

@@ -14,7 +14,7 @@
 ##
 ## ⚠️ **Optional is a property of the LAYER, not of the file being there.** Every
 ## row here is optional: a city whose estate publishes no tramway, marking
-## symbols, box polygons, transverse markings, signal layer, railing layer,
+## symbols, box polygons, transverse markings, railing layer,
 ## utility point layer or shape-faced signs ships none, `city.json` names `null`
 ## rather than a path, and absence is a state to report rather than a failure to
 ## warn about. Each stage also names its asset from what it *drew*, so a declared
@@ -31,10 +31,7 @@
 ## ⚠️ **Some absences are more ordinary than others, and the distinction is kept
 ## here rather than lost in the merge.** Signs: 2,364 of Wan Chai's 3,276 are
 ## text-faced and refused under the no-texture rule, so a region whose signs are
-## all time plates draws none and is correct to (`P3-16`). Signals: `REFNAME` has
-## no published domain, so what admits a head is a rule about *spelling* this
-## project wrote, and a publisher who numbers heads differently draws none
-## (`P3-17`). Lamps are the opposite: `UTILITYPOINTTYPE` **has** a published
+## all time plates draws none and is correct to (`P3-16`). Lamps are the opposite: `UTILITYPOINTTYPE` **has** a published
 ## domain, so a region drawing none has declared no block or failed to find a
 ## kerb, never misread a vocabulary (`P3-26`). `verify_city.gd` carries the same
 ## three notes at its guards.
@@ -90,7 +87,6 @@ const TRAMWAY: String = "tramway"
 const ARROWS: String = "arrows"
 const BOXJUNCTIONS: String = "boxjunctions"
 const ROADMARKS: String = "roadmarks"
-const SIGNALS: String = "signals"
 const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
 const SIGNS: String = "signs"
@@ -136,15 +132,6 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "roadmarks",
 		"absence":
 		"A city whose sources publish no transverse markings ships none, and that is not a failure.",
-		"placements": "",
-	},
-	SIGNALS:
-	{
-		"file": "signals.glb",
-		"noun": "signal heads",
-		"module": "signals",
-		"absence":
-		"A city whose sources publish no signal layer ships none, and that is not a failure.",
 		"placements": "",
 	},
 	RAILINGS:

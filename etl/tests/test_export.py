@@ -45,7 +45,6 @@ from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
-from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_DIR, SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -329,16 +328,6 @@ class _Region:
                 "placements_document": None,
             },
             # Same shape and same reason a sixth time: `testville` declares no
-            # `signals:` block, so the stage found nothing and says so.
-            SIGNALS_MANIFEST_NAME: {
-                "schema_version": SIGNALS_MANIFEST_SCHEMA,
-                "city_id": city.id,
-                "region_id": REGION,
-                "asset": None,
-                "features": 0,
-                "drawn": 0,
-            },
-            # Same shape and same reason a seventh time: `testville` declares no
             # `lamps:` block, so the stage found nothing and says so.
             LAMPS_MANIFEST_NAME: {
                 "schema_version": LAMPS_MANIFEST_SCHEMA,
@@ -978,7 +967,6 @@ class TestOrchestrator:
             "roadmarks",
             "railings",
             "signs",
-            "signals",
             "lamps",
             "export",
         ]
@@ -1017,7 +1005,6 @@ class TestOrchestrator:
             "roadmarks",
             "railings",
             "signs",
-            "signals",
             "lamps",
             "export",
         ]

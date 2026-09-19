@@ -113,14 +113,12 @@ const NOT_MEASURED: float = -1.0
 ## 19 since `P3-26`: the manifest names `lamps.glb`, the published lamp posts
 ## drawn from iB1000's `UtilityPoint` — a ninth time, unchanged.
 ##
-## ⚠️ **All nine keys are optional and may be null.** A city whose estate
+## ⚠️ **All eight keys are optional and may be null** (nine until `P3-35a`). A city whose estate
 ## publishes no tramway, no marking symbols, no box polygons, no lamp posts, no
 ## railing layer, no sign layer or no transverse markings ships none — so
 ## `tramway_path`, `arrows_path`, `boxjunctions_path`, `lamps_path`,
 ## `railings_path`, `signs_path` and `roadmarks_path` are empty for such a region and that is the honest answer
-## rather than a missing file. `signals_path` is empty on those terms *and* for
-## a region whose publisher spells its signal codes outside `head_prefixes` —
-## the gate is a rule about spelling that nothing published grades (`P3-17`).
+## rather than a missing file.
 ## `signs_text_atlas_path` is emptier still: it is null for all of those *and*
 ## for a region whose faces carry no lettering.
 ##
@@ -206,7 +204,10 @@ const NOT_MEASURED: float = -1.0
 ## lines and `road_markings.tres` draws neither lane dashes nor a two-way centre
 ## line. 🔴 A v32 bundle under this build has NO lane lines at all, and this
 ## bundle under a v32 build has every one twice.
-const SCHEMA_VERSION: int = 33
+##
+## 34 since `P3-35a` (`Q133`): the `signals` key is gone with the stage that
+## wrote it — always null since `Q77`. The one bump that takes an asset key away.
+const SCHEMA_VERSION: int = 34
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -360,9 +361,8 @@ var railings_path: String
 ## no column cleared the carriageway — the stage names its asset from what it
 ## drew — so empty means "no lamps in this bundle", never "no lamps block".
 ##
-## ⚠️ **Empty is a LESS ordinary answer here than for `signals_path`**, and the
-## difference is the point. A signal layer can vanish because `REFNAME` has no
-## published domain and the gate is a spelling rule; `UTILITYPOINTTYPE` **has** a
+## ⚠️ **Empty is a LESS ordinary answer here than for `signs_path`**, and the
+## difference is the point. `UTILITYPOINTTYPE` **has** a
 ## published domain, stored inside the geodatabase, so a region drawing no lamps
 ## has declared no block or found no kerb — it has not misread a vocabulary.
 var lamps_path: String
@@ -386,17 +386,6 @@ var signs_path: String
 ## stage names its asset from what it drew, not from a constant — so empty means
 ## "no stop lines in this bundle", never "no road_marks block".
 var roadmarks_path: String
-
-## The traffic signal heads mesh (`P3-17`), or **empty** where the region ships
-## none.
-##
-## ⚠️ **Optional on sharper terms than its siblings.** A city without a
-## `signals:` block exports a null, and so does one whose estate publishes no
-## signal layer — but so does one whose publisher numbers its heads differently,
-## because `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no published domain and the gate
-## that admits a code is a spelling rule this project wrote. Empty means "no
-## signal heads in this bundle", never "no signal heads exist".
-var signals_path: String
 
 ## 🔴 **The one image in the bundle** (`Q70`, `Q63`, `P3-20`) — the sign
 ## lettering's atlas — or **empty** where the region baked none.
@@ -565,7 +554,6 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
 	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"), manifest.directory)
-	manifest.signals_path = _resolve(document.get("signals"), manifest.directory)
 	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"), manifest.directory)
 	manifest.signs_placements_path = _resolve(document.get("signs_placements"), manifest.directory)
 	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"), manifest.directory)
@@ -685,7 +673,6 @@ func shipped() -> PackedStringArray:
 		signs_text_atlas_path,
 		signs_placements_path,
 		roadmarks_path,
-		signals_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

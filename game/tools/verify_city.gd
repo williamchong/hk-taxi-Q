@@ -172,9 +172,9 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		)
 	# Guarded on the same terms: `verify_lamps.gd` treats an absent asset as a
 	# pass, so a manifest naming `lamps.glb` with the file gone would otherwise
-	# pass every check in the repo. ⚠️ **And a null `lamps` key is a LESS
-	# ordinary answer than a null `signals` one** — `UTILITYPOINTTYPE` has a
-	# published domain where `REFNAME` has none — so a bundle that names the
+	# pass every check in the repo. ⚠️ **And a null `lamps` key is not an
+	# ordinary answer** — `UTILITYPOINTTYPE` has a
+	# published domain — so a bundle that names the
 	# asset really is expected to hold it.
 	if not manifest.lamps_path.is_empty():
 		problems.append_array(
@@ -222,18 +222,6 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"road markings",
 				manifest.roadmarks_path,
 				GeneratedLayer.path(GeneratedLayer.ROADMARKS)
-			)
-		)
-	# Guarded on the same terms a seventh time, and on the sharpest version of
-	# the argument: `verify_signals.gd` treats an absent asset as a pass, *and* a
-	# null `signals` key is an ordinary answer twice over — for a region whose
-	# estate publishes no signal layer, and for one whose publisher spells its
-	# codes outside `head_prefixes` (`P3-17`). So without this a manifest naming
-	# `signals.glb` with the file gone would pass every check in the repo.
-	if not manifest.signals_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"signals", manifest.signals_path, GeneratedLayer.path(GeneratedLayer.SIGNALS)
 			)
 		)
 	return problems

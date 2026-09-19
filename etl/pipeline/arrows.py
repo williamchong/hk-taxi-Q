@@ -590,7 +590,7 @@ class Ribbon:
 
     ⚠️ **`carriageway_m` is the exception to that first sentence**: it comes off
     `roadgraph.json`, not off anything `surface.py` drew, and only the lane snap
-    reads it. `signs`, `signals` and `lamps` import this class and inherit a
+    reads it. `signs` and `lamps` import this class and inherit a
     field they never touch.
     """
 
@@ -674,8 +674,7 @@ class Ribbon:
         component in that vector and the subtraction lands off the centreline;
         `foot_at` carries the measurement. Only the arithmetic is shared
         (`Q100`): whether to move at all, `Q78`'s outward-only clamp and every
-        counter stay with each stage, and `signals._register` deliberately does
-        not clamp.
+        counter stay with each stage.
         """
         half_width_m = self.half_width_at(snap.t)
         side = 1.0 if snap.offset_m >= 0.0 else -1.0
@@ -1067,9 +1066,9 @@ def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
     # than an approximation.** Measured 9.3 ms to 0.38 ms here and 1.47 s to
     # 41 ms at ten thousand arrows; Wan Chai is 1.5 km² and the second city is
     # the business case, so the scaling is the reason rather than today's number.
-    # ⚠️ **Unlike `signals._assemble` and `lamps._merge`, which decline the same
-    # kind of reduction**: those need a uniform cell hash over a continuous
-    # radius and are left because `read_*` pushes the region bbox into OGR. Here
+    # ⚠️ **Unlike `lamps._merge`, which declines the same
+    # kind of reduction**: that needs a uniform cell hash over a continuous
+    # radius and is left because `read_*` pushes the region bbox into OGR. Here
     # the classes are discrete and already computed, so there is nothing to
     # decline.
     lanes: dict[tuple[int, int], list[_Laid]] = defaultdict(list)

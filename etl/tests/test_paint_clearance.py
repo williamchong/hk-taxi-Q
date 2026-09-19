@@ -243,7 +243,7 @@ class TestPlanArea:
 class TestTheVerdictShares:
     def test_an_empty_layer_divides_by_nothing(self) -> None:
         """A layer a region publishes none of must report zero rather than
-        raise — `signals` is `null` today and a second region will have more."""
+        raise — a second region will have layers this one lacks."""
         verdict = LayerVerdict(key="roadmarks", name="test")
         assert verdict.share(verdict.under_highest) == 0.0
         assert verdict.share(verdict.in_carriageway) == 0.0
