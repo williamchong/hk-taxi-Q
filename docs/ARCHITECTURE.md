@@ -216,6 +216,7 @@ note below the table. A new step goes in at its real position.
 
 | Step | Covers | In CI |
 |---|---|---|
+| `instructions` | The root `CLAUDE.md` stays under 40,000 characters. It loads whole into every session and reached the harness's 150k limit at a bullet per closed question, so a change-scoped checklist lives in `.claude/rules/<name>.md` — loaded when a file in its `paths:` is read — and the root keeps the trigger table and the *measured shut* index | yes |
 | `gdformat --check` | Layout across all of `game/`. ⚠️ **The file count is asserted, not just the status** — pointed at a tree with no `.gd` it prints `0 files would be left unchanged` and exits 0 (`Q119`) | yes |
 | `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it, that no resource carries a `;` comment, and that neither an orphan sidecar nor a stale exemption stands (`Q119`) | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
@@ -305,8 +306,8 @@ stage cannot mark its own work — ask the ETL's own sampler about the ETL's own
 ⚠️ **They are not the whole grading estate, and this table is not the list.** Later stages grade
 themselves in their own `*.json` counters, and several carry a tool of their own —
 `carriageway_margin.py`, `railing_error.py`, `sign_face_survey.py`, `kerbside_source_audit.py`,
-`clearance_reconcile.py`. **`CLAUDE.md`'s "Before marking work done" is the list**, kept per change
-rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine graders behind.
+`clearance_reconcile.py`. **`CLAUDE.md`'s "Before marking work done" indexes the list**, which is kept per
+change in `.claude/rules/` rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine graders behind.
 
 | Tool | Answers |
 |---|---|

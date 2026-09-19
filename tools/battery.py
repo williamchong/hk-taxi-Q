@@ -3,7 +3,8 @@
     tools/battery.py railings --region wan_chai --before ../wt-before
     tools/battery.py --list
 
-`CLAUDE.md`'s "before marking work done" is some forty bullets of the shape
+`CLAUDE.md`'s "before marking work done" — in `.claude/rules/` since it outgrew
+the root file — is some forty bullets of the shape
 *"X changes: also `tools/y.py`, before and after, both regions, and paste its
 table"*, and until `P3-35b` (`Q133`) every one was run by hand. This is the
 table those bullets name, as data, and the loop that runs it.
@@ -25,7 +26,7 @@ tool's business: its exit code says whether every item **ran**, never whether a
 number moved. A diff is a finding to go and read.
 
 ⚠️ **The table carries commands and never reasons.** Why a trigger owes what it
-owes — and which column of the output is the finding — stays in `CLAUDE.md`,
+owes — and which column of the output is the finding — stays in the rule files,
 which each trigger cites by its bullet's opening words.
 """
 

@@ -76,8 +76,9 @@ for eight runs, and nobody running the suite locally could see it (`docs/DECISIO
 
 If you changed the ETL, the pipeline must run end to end on the Wan Chai config.
 
-**Then there are the graders, and `CLAUDE.md`'s "Before marking work done" is the list** — kept per
-change, naming which file you touched, which tool that owes and the numbers to paste. Read it there;
+**Then there are the graders, and `CLAUDE.md`'s "Before marking work done" is the index** — a table
+of triggers, each naming the `.claude/rules/<name>.md` that says which file you touched, which tool
+that owes and the numbers to paste. Read it there;
 a second copy of it here goes stale against it.
 
 What the list is *for* is not obvious from any single row: **`tools/check.sh` cannot see any of it.**

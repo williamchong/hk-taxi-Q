@@ -119,6 +119,22 @@ run_godot() {
 	echo "  ok    $label"
 }
 
+# The root CLAUDE.md loads into every session whole, and it grew 12k -> 150k
+# chars in a month at a bullet per closed question until the harness refused it.
+# A checklist belongs in .claude/rules/<name>.md, which loads with the files in
+# its `paths:`; the root keeps the trigger table. Counted in characters, as the
+# harness counts, because the file is dense with multi-byte marks.
+echo "==> instructions"
+CLAUDE_MD_MAX_CHARS=40000
+claude_md_chars="$(LC_ALL=en_US.UTF-8 wc -m <"$ROOT/CLAUDE.md" | tr -d ' ')"
+if ((claude_md_chars > CLAUDE_MD_MAX_CHARS)); then
+	echo "  FAIL  CLAUDE.md is $claude_md_chars chars, over $CLAUDE_MD_MAX_CHARS —" >&2
+	echo "        move the new checklist into .claude/rules/ and keep its trigger in the table" >&2
+	failed=1
+else
+	echo "  ok    CLAUDE.md is $claude_md_chars of $CLAUDE_MD_MAX_CHARS chars"
+fi
+
 # ⚠️ The file count is asserted, not just the status. Pointed at a directory
 # holding no .gd — a wrong $ROOT, a partial checkout — gdformat prints "0 files
 # would be left unchanged" and exits 0, so the step passed having formatted
