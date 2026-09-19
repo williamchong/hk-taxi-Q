@@ -24087,3 +24087,22 @@ did, and about 28 tests drive it. Whether the region-less path is kept is a prod
 
 ⚠️ `tools/battery.py` now rewrites `generated_utc` to `<built>`: every bundle grader prints it, and a
 before/after pair read "2 line(s) moved" where nothing had.
+
+### Built 2026-09-19 — `P3-35e`, second half: the flanks deleted
+
+`P3-33d` listed `_paint_flanks` and `_add_paint_stations` for deletion and `Q133` kept the step, so it
+is taken: those two and eleven helpers (`_Rings`, `_box_rings`, `_ring_hits`, `_ray_exit`,
+`_ring_crossings`, `_height_along`, `_clip_to_neighbours`, `_rail_leaves`, `_reach_from_ring`,
+`_edge_of`, `_ring_between`), `_PAINT_STATION_M`, five report fields, the manifest's `paint` block, the
+`paint witness` log line and `build_region`'s `sources_root`. `surface.py` **5,088 → 4,628** lines;
+`TestPaintFlanks`' four tests go with it (132 → 128, 2,472 in the suite).
+
+✅ Inert where it ships: both regions' road chunks byte-identical, `roadsurface.json` equal on every
+key but the lost `paint`. No schema bump — nothing read that block but `tools/battery.py`.
+
+🔴 **What it costs is the region-less path's promise.** Without `carriageway_region:` a box that
+overhangs its ribbon now has nothing drawn under the overhang, as before `P3-32`. No shipped region
+is built that way and the block is city-wide, so this is a path only tests take; `CLAUDE.md`'s
+"every published file must hash as it did" is amended to say so. What `P3-32` learned — a ribbon
+yields to a box as a CAP and never a width; a flank meets the next ribbon at that ribbon's height —
+is `Q104`'s and stays.

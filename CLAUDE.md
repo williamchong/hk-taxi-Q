@@ -1100,33 +1100,16 @@ Common emoji for this project:
   between two arms' far sections and is **unioned, never hulled** into the cap, or it sweeps the
   pavement corner `hull` exists to leave. ⚠️ **The kerb-line corner rule is REFUTED, do not
   re-propose it**: it found the HKCEC wedge from two far-side rails extended across the junction.
-  🔴 **`_paint_flanks`, `_add_paint_stations`, `_PAINT_STATION_M` or `boxsource.py`: paste the `paint`
-  block (20 / 219 / 208 with 22 `flank_ends` / 641 m²), `box_extent.py` per box, and the flanks'
-  NEW-asphalt price by HyD class** (`P3-32`). The ribbon yields to a box as a flank CAP and never as a
-  width — a width moves the lane coordinate, the arrow slots and every post on the rail, and under a
-  box across a dual carriageway merges two ribbons. ⚠️ A flank thinner than the kerb is not drawn; a
-  flank stops one kerb width into the next ribbon **and meets it at THAT ribbon's height** — flat at
-  its own it is a lip on the other carriageway, 0.27 m at HKCEC, that no frame shows; the clip's
-  prefilter is the rail's box grown by the reach, and `_shoelace` is twice the area.
-  🔴 **A flank run is CLOSED at the rail's own crossing of the box edge, and only within one
-  `_PAINT_STATION_M` of the last station** (`Q92`'s third class, 2026-09-16). The stations are the
-  centreline's crossings, and where the box edge is oblique the rail leaves the paint somewhere else,
-  so the quad per station pair left a void wedge at box 8 that the other carriageway's flank poked
-  into 8 cm lower. ⚠️ **The pitch bound is measured, not tidiness**: unbounded, a rail inside a box with
-  no paint station on it (its centreline outside the box) closed 3–9 m sweeps over another carriageway
-  at up to 0.45 m from it — 83.5 m² on Wan Chai against the 31.6 m² that ship. ⚠️ **The closing ray's
-  neighbour clip searches to ITS reach, not the stations'**, or an oblique crossing's traverse crosses
-  the carriageway unseen. `flank_ends` is the counter that says the closing still fires; a run
-  stationed for its box has a station within a pitch of its rail's exit by construction, so a run
-  with none was never this rule's. ⚠️ **Also `paint_clearance.py
-  --layer boxjunctions` before and after, and read its `deeper than` row as the paint's**: it reads
-  **0** since paint is cut at the road's creases (`Q92`, 2026-09-16); the three it showed after the
-  rail read (eleven before it) were two hatch strips chording a creased cap fan at BULLOCK LANE and
-  one vertex in a 0.3 m void wedge between two flanks 8 cm apart at HUNG HING ROAD — a step in the
-  *surface* — never a reason to lift the paint, and a rising count is a finding.
-  ⚠️ **The evidence is a frame and a shadow moves with the surface it falls on** — the dark trapezoid
-  inside box 7 after the flanks is the building's shadow on new asphalt, not a buried flank; the
-  top-down camera settles it. Numbers in `Q104`.
+  🚫 **`_paint_flanks`, `_add_paint_stations` and the `paint` block are DELETED (`P3-35e`, `Q133`,
+  2026-09-19).** `P3-32` grew a ribbon a flank CAP out to a box's paint; since `P3-33c` a region's
+  areas are `R - ribbons` and the paint already stands on asphalt, so no shipped region reached that
+  code. 🔴 **A region-less bundle now draws NOTHING under a box that overhangs its ribbon** — that
+  path keeps its caps, clusters and corridors and has lost its flanks, so "leave `carriageway_region:`
+  out and every file hashes as it did" is no longer true of `roadsurface.json` (it lost `paint`) or
+  of a region-less city with box junctions. What the flanks taught stays true and is in `Q104`: the
+  ribbon yields to a box as a CAP and never as a width, and a flank meets the next ribbon at THAT
+  ribbon's height. ⚠️ `paint_clearance.py --layer boxjunctions` is still the check that box paint
+  stands on the road; its `deeper than` row reads 0.01% today. Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter

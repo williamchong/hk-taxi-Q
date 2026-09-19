@@ -24,7 +24,6 @@ import pytest
 from pipeline import roads
 from pipeline.buildings import Grid
 from pipeline.config import load_config
-from pipeline.geometry import inside_polygon
 from pipeline.gltf import read_glb, read_render
 from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -44,7 +43,6 @@ from pipeline.surface import (
     SURFACE_MESH_NAME,
     DrawnSurface,
     SurfaceReport,
-    _add_paint_stations,
     _assign_trims,
     _Builder,
     _clamped_rails,
@@ -56,11 +54,8 @@ from pipeline.surface import (
     _kerbside,
     _Marking,
     _on_structure_length_m,
-    _paint_flanks,
     _prepare,
     _rail_stations,
-    _Rings,
-    _shape,
     _stub_clusters,
     boundary,
     build_region,
@@ -2120,7 +2115,8 @@ class TestMarkingPayload:
         miss touching by 0.2 m — EXPO DRIVE EAST's own geometry, where the two
         carriageways read as one road with opposing traffic on it and the pair
         was refused by 0.245 m. The reach is the drawn width plus one kerb, the
-        same 0.5 m `_paint_flanks` uses to decide a flank is too thin to draw.
+        same 0.5 m `_paint_flanks` used, until `P3-35e` deleted it, to decide a flank
+        is too thin to draw.
 
         ⚠️ **Mutation-check it rather than reading the count**: drop the kerb
         term from `_opposed_gaps`' `reach` and this fails, which is the whole of
@@ -2982,124 +2978,3 @@ class TestThroughCorridors:
         report = build_region(city, "middle", out_root=tmp_path / "out")
         assert report.corridors == 0
         assert report.junctions == 1
-
-
-class TestPaintFlanks:
-    """`P3-32`: where a box's paint runs past a ribbon's rail, the strip out to
-    the paint is drawn as a cap, and the ribbon itself does not move."""
-
-    @staticmethod
-    def _ribbon(testville_config, polyline, **overrides):
-        style = testville_config.roads.surface
-        edge = _prepare(_edge(0, 0, 1, polyline, **overrides), style, SurfaceReport())
-        _shape(edge, style)
-        return edge, style
-
-    def test_a_box_wider_than_the_ribbon_grows_a_flank_to_its_edge(self, testville_config) -> None:
-        # A 100 m straight ribbon along x at z = 300, 4.8 m half-width; a box
-        # from x 40 to 60 reaching 4 m past the left rail and 0.3 m past the
-        # right — under the 0.5 m kerb width, so a kerb would stand through it.
-        edge, style = self._ribbon(testville_config, [[0.0, 0.0, 300.0], [100.0, 0.0, 300.0]])
-        ring = np.array([[40.0, 291.2], [60.0, 291.2], [60.0, 305.1], [40.0, 305.1]])
-        report = SurfaceReport()
-        boxes = _Rings.of([ring])
-        stations = _add_paint_stations(edge, boxes)
-        _shape(edge, style)
-        quads = _paint_flanks(edge, boxes, _Rings.of([]), [], None, style, report)
-
-        assert stations > 0
-        assert report.paint_flanks == len(quads) > 0
-        plan = [q[:, [0, 2]] for q in quads]
-        # Left of travel (+x travel, left is -z): the strip z 291.2..295.2 is flank.
-        assert any(inside_polygon(np.array([[50.0, 292.0]]), q)[0] for q in plan)
-        # Right of travel, 0.3 m past the rail is under the kerb width and not drawn.
-        assert not any(inside_polygon(np.array([[50.0, 305.0]]), q)[0] for q in plan)
-        # Outside the box along the ribbon, nothing.
-        assert not any(inside_polygon(np.array([[30.0, 292.0]]), q)[0] for q in plan)
-        # The whole 20 m of box: the closing piece at each end runs from the
-        # last station inside the paint to where the rail itself leaves it.
-        assert report.paint_flank_m2 == pytest.approx(20.0 * 4.0, rel=0.01)
-        assert report.paint_flank_ends == 2
-        # The ribbon did not move: the published half-widths are what they were.
-        assert list(edge.published_half_widths) == [4.8, 4.8]
-
-    def test_a_flank_stops_at_the_next_ribbon_at_its_height(self, testville_config) -> None:
-        """A box across two parallel ribbons 12 m apart, the other one a metre
-        higher: the flank from one reaches one kerb width into the other, never
-        the far edge of the box, and meets it at its height rather than as a lip."""
-        edge, style = self._ribbon(testville_config, [[0.0, 0.0, 300.0], [100.0, 0.0, 300.0]])
-        other, _ = self._ribbon(testville_config, [[0.0, 1.0, 288.0], [100.0, 1.0, 288.0]])
-        ring = np.array([[40.0, 280.0], [60.0, 280.0], [60.0, 308.0], [40.0, 308.0]])
-        boxes = _Rings.of([ring])
-        _add_paint_stations(edge, boxes)
-        _shape(edge, style)
-        outlines = _Rings.of([np.vstack([other.left, other.right[::-1]])])
-        report = SurfaceReport()
-        quads = _paint_flanks(edge, boxes, outlines, [other.ribbon], None, style, report)
-        plan = [q[:, [0, 2]] for q in quads]
-        # Between the ribbons (z 292.8..295.2) is flank; inside the other
-        # ribbon past its kerb (z 291) is not.
-        between = [
-            q
-            for q, p in zip(quads, plan, strict=True)
-            if inside_polygon(np.array([[50.0, 294.0]]), p)[0]
-        ]
-        assert between
-        assert not any(inside_polygon(np.array([[50.0, 291.0]]), q)[0] for q in plan)
-        # The rail corners stay on this ribbon (y 0) and the corners in the other
-        # ribbon take its height (y 1): a ramp across the median, not a step.
-        for quad in between:
-            assert quad[:, 1].min() == pytest.approx(0.0)
-            assert quad[:, 1].max() == pytest.approx(1.0)
-        # And the far side of the box, past the other ribbon, is nobody's flank.
-        assert not any(inside_polygon(np.array([[50.0, 282.0]]), q)[0] for q in plan)
-
-    def test_a_flank_runs_to_where_the_rail_leaves_the_box(self, testville_config) -> None:
-        """🔴 `Q92`'s void wedge at HUNG HING ROAD box 8, at the level this
-        stage owns it.
-
-        The box's far edge is oblique to the road, so the rail leaves the paint
-        further along than the centreline does, and the station pairs alone
-        stop at the last station whose rail point is inside the paint — leaving
-        the strip between that station's ray and the rail's own exit undrawn,
-        inside the box. The closing piece covers it and cannot leave the ring:
-        it takes the ring's own corner between the two paint corners. The
-        mutation is the closing count: at 0 the point beside the rail's exit
-        is over nothing.
-        """
-        edge, style = self._ribbon(testville_config, [[0.0, 0.0, 300.0], [100.0, 0.0, 300.0]])
-        # The east edge runs from (60, 291.2) to (64, 305.1): the centreline
-        # (z 300) crosses it at x 62.53 and the left rail (z 295.2) at 61.15.
-        ring = np.array([[40.0, 291.2], [60.0, 291.2], [64.0, 305.1], [40.0, 305.1]])
-        boxes = _Rings.of([ring])
-        _add_paint_stations(edge, boxes)
-        _shape(edge, style)
-        report = SurfaceReport()
-        quads = _paint_flanks(edge, boxes, _Rings.of([]), [], None, style, report)
-        plan = [q[:, [0, 2]] for q in quads]
-        assert report.paint_flank_ends == 2
-        # Just outside the left rail, 0.1 m before the rail leaves the paint:
-        # inside the box, and flank.
-        assert any(inside_polygon(np.array([[61.05, 295.0]]), q)[0] for q in plan)
-        # Half-way out to the paint: the east edge is at x 60.52 there, so
-        # (60.4, 293) is in the wedge between the last station's ray at x 60
-        # and the rail's exit — flank too.
-        assert any(inside_polygon(np.array([[60.4, 293.0]]), q)[0] for q in plan)
-        # Past the ring, nothing — the closing piece is bounded by the box.
-        assert not any(inside_polygon(np.array([[61.5, 293.0]]), q)[0] for q in plan)
-        assert not any(inside_polygon(np.array([[59.0, 290.5]]), q)[0] for q in plan)
-        # Every closing corner lies inside or on the ring.
-        for quad in quads:
-            grown = ring + np.sign(ring - ring.mean(axis=0)) * 1e-6
-            assert inside_polygon(quad[:, [0, 2]], grown).all()
-
-    def test_a_city_without_boxes_draws_no_flank(self, testville, tmp_path) -> None:
-        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
-        assert (report.boxes_read, report.paint_stations, report.paint_flanks) == (0, 0, 0)
-        assert _manifest(tmp_path)["paint"] == {
-            "boxes_read": 0,
-            "stations": 0,
-            "flanks": 0,
-            "flank_ends": 0,
-            "flank_m2": 0.0,
-        }
