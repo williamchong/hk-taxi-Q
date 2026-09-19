@@ -262,7 +262,6 @@ TRIGGERS: dict[str, Trigger] = {
                     "len:caps",
                     "len:areas",
                     "clusters",
-                    "paint",
                 ),
             ),
             Tool("lane_paint.py", (*_GENERATED, "--sweep")),
