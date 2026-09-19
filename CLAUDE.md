@@ -10,7 +10,7 @@ them without explicit instruction from the user.
 | Decision | Value | Why |
 |---|---|---|
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
-| Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true, and the way it was re-measured was wrong. ⚠️ **`Q84` corrected it**: the drift window is *not* 0.01–0.02 wide and `drift_slip_threshold_deg`'s 14° *is* reachable, at `drift_rear_grip_scale` **0.6695** — the cliff was a 0.02 sweep grid read through a `%.2f` label that could not resolve its own step. What survives is the cost, restated: peak slip and *dwell* pull opposite ways against speed, so 0.6695 holds 14° for **0.05 s** where the shipped 0.66 holds it for **0.57 s**, and landing the peak on the threshold is the wrong aim. The engine model ships anyway; `docs/DECISIONS.md` `Q50` and `Q84` are the record |
+| Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true. ⚠️ **`Q84` corrected its measurement**: the drift window is not a 0.01–0.02 cliff, and the dial is graded on *dwell*, never on landing peak slip on the threshold — the handling bullet below has the rule. The engine model ships anyway; `docs/DECISIONS.md` `Q50` and `Q84` are the record |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`, `shapely`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL and `shapely` its own GEOS (`Q129`, approved 2026-09-18), so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data. ⚠️ **3D-BIT00 Level 1 was named here and never fetched** — iB1000, the map it is extruded from, took its place at `P3-7a`/`Q47` (`Q100`) |
@@ -591,11 +591,9 @@ Common emoji for this project:
   and diffs the two answers. It is **the only instrument that can grade the kind**: every consumer
   takes double-versus-single on trust from `NSR.TIME_ZONE`, so a wrong mapping renders perfectly
   (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **218 MB** fetch; get it with `--only` on a
-  clone that has not built. ⚠️ **It is no longer "a fetch no build reads"** — that was true when
-  this bullet was written and stopped being true at `P3-12`/`P3-14`: **seven** config blocks read it
-  (`roads`, `carriageway_survey`, `arrows`, `signs`, `boxjunctions`, `road_marks`, `railings`), so it
-  is ordinary build input. 🔴 **The audit's second-source property never rested on that** — it
-  rests on the *layer*, TD's drawn marking codes against `NSR`'s restriction register.
+  clone that has not built. ⚠️ **It is ordinary build input since `P3-12`/`P3-14`** — seven config
+  blocks read it — 🔴 **and the audit's second-source property never rested on that**: it rests on
+  the *layer*, TD's drawn marking codes against `NSR`'s restriction register.
   ⚠️ It grades rather than checks — a widening gap is a finding to go and look at, never a
   bar to retune against — and it **cannot** see the side convention flip, because that mirrors both
   sources at once.
@@ -906,9 +904,8 @@ Common emoji for this project:
   ⚠️ **The parts partition gained a leg — `outside_region`** — because `clip` returning nothing left
   `parts` uncounted; it is **0 and unexercised** here (no published part lies outside the region), so
   removing the increment leaves the suite green. Do not read its 0 as proven.
-  ✅ **`_reachable` is GONE (2026-09-16, `Q92`)** — it narrowed a per-vertex centreline scan, and
-  `DrawnSurface` no longer scans centrelines: it reads the published rails through a plan index, so
-  the cubic-cost note and its refused batching fix expired with it. Do not bring a narrowing back.
+  ✅ **`_reachable` is GONE (`Q92`)** — `DrawnSurface` reads the published rails through a plan index.
+  Do not bring a narrowing back.
   ⚠️ **`underfill_m` is transverse-only** — it is `host width - marking length`, and a longitudinal
   marking's length runs along the road, so pooling it is `Q57` in the one field that cannot survive
   it. Numbers in `Q118`.
@@ -975,16 +972,12 @@ Common emoji for this project:
   0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
   layers rather than only this one. Numbers in `Q69`.
 - 🚫 **`P3-17`'s signal layer is REMOVED — code and all (`Q77`, then `P3-35a` / `Q133`, 2026-09-19, the
-  user's call: "we will re-add it much later").** No stage, config block, material, verify tool,
-  preview node or tests; `city.json` lost the `signals` key at schema **34**. The code is at the commit
-  before `P3-35a`. 🔴 **Bringing it back is a PORT, not a re-declared block** — it was the one point
-  stage still on the merged-mesh path, so it owes `P5-2`'s library + placements shape first — and the
-  reason it was dropped still stands: an unlit head asserts a signal out of service and a lit one
-  cannot be derived from anything published. ⚠️ **What a return must keep is in `Q76`**:
-  `refused_by_code` (the gate is a rule about *spelling*; `REFNAME` has no published domain),
-  `assembly_size` (the first build stacked coincident points into 8.53 m five-head masts with every
-  counter closing), `sheeting_glow` 0, and an A/B render front and back. ⚠️ `signs.disc`,
-  `facing_from_side` and `plate_frame` stay public for it.
+  user's call: "we will re-add it much later").** `city.json` lost the `signals` key at schema **34**;
+  the code is at the commit before `P3-35a`. 🔴 **Bringing it back is a PORT, not a re-declared
+  block** — it owes `P5-2`'s library + placements shape first — and the reason it was dropped still
+  stands: an unlit head asserts a signal out of service and a lit one cannot be derived from anything
+  published. ⚠️ What a return must keep is in `Q76`. ⚠️ `signs.disc`, `facing_from_side` and
+  `plate_frame` stay public for it.
 - **`_deck_heights`, `_descend`, `_lifted_heights`, or `deck.touchdown_max_grade_pct`: also
   `tools/touchdown_error.py`, and paste its table — plus the roads stage's `descended / refused /
   graded across` line, before and after.** 🔴 **`deck_error.py` cannot see this defect and never
@@ -1100,16 +1093,12 @@ Common emoji for this project:
   between two arms' far sections and is **unioned, never hulled** into the cap, or it sweeps the
   pavement corner `hull` exists to leave. ⚠️ **The kerb-line corner rule is REFUTED, do not
   re-propose it**: it found the HKCEC wedge from two far-side rails extended across the junction.
-  🚫 **`_paint_flanks`, `_add_paint_stations` and the `paint` block are DELETED (`P3-35e`, `Q133`,
-  2026-09-19).** `P3-32` grew a ribbon a flank CAP out to a box's paint; since `P3-33c` a region's
-  areas are `R - ribbons` and the paint already stands on asphalt, so no shipped region reached that
-  code. 🔴 **A region-less bundle now draws NOTHING under a box that overhangs its ribbon** — that
-  path keeps its caps, clusters and corridors and has lost its flanks, so "leave `carriageway_region:`
-  out and every file hashes as it did" is no longer true of `roadsurface.json` (it lost `paint`) or
-  of a region-less city with box junctions. What the flanks taught stays true and is in `Q104`: the
-  ribbon yields to a box as a CAP and never as a width, and a flank meets the next ribbon at THAT
-  ribbon's height. ⚠️ `paint_clearance.py --layer boxjunctions` is still the check that box paint
-  stands on the road; its `deeper than` row reads 0.01% today. Numbers in `Q104`.
+  🚫 **`_paint_flanks`, `_add_paint_stations` and the `paint` block are DELETED (`P3-35e`, `Q133`).**
+  🔴 **A region-less bundle now draws NOTHING under a box that overhangs its ribbon**, so "leave
+  `carriageway_region:` out and every file hashes as it did" is no longer true of `roadsurface.json`
+  (it lost `paint`) or of a region-less city with box junctions. What the flanks taught is in `Q104`.
+  ⚠️ `paint_clearance.py --layer boxjunctions` is still the check that box paint stands on the road.
+  Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter
@@ -1150,10 +1139,9 @@ Common emoji for this project:
   `overhang.py`** — same faces, same class, same tiles — so a divergence is a bug in one of them,
   never a second source. They read **7.6%** against **4.3%**, and the gap is the run-versus-cell
   model (this one is an upper bound; see `--bridge-m` below).
-  🔴 **The pair recorded here was 10.4 / 10.3 and was STALE, which is how `Q106` went unseen for a
-  release** — on the shipped bundle it was 10.7 against 5.6, nearly 2×, because both tools
-  reconstructed the ribbon about the centreline while `surface._shape` draws it at
-  `±half + offset_m`. If the two numbers here ever drift apart again, that is the finding. 🔴 **`--bridge-m` is load-bearing and
+  🔴 **A stale pair here is how `Q106` went unseen for a release** — both tools rebuilt the ribbon
+  about the centreline while `surface._shape` draws it at `±half + offset_m`. If the two numbers
+  drift apart again, that is the finding. 🔴 **`--bridge-m` is load-bearing and
   its default is sourced, not chosen**: `Q19`'s estate is not watertight, so a contiguous deck run
   terminates at the first hole and 921 of 1,948 stations read two or more runs; the gap distribution
   is bimodal (p50 0.40 m, then p90 3.37 m) and 1.0 sits between the clusters. Without it the tool is
@@ -1272,9 +1260,8 @@ Common emoji for this project:
   half-width about anything**: since `Q107` the two rails are cut to the deck independently, so
   off-grade the ribbon is asymmetric and a half-width alone does not say where the road is.
   ⚠️ **Four tools got this wrong at once and failed in OPPOSITE directions** — `overhang.py` drops a
-  sample with no road under it, so it read the *intersection* and was grading 92% of the off-grade
-  road; `deck_margin.py` keeps every sample, so it counted ribbon that is not there; they read 5.6%
-  against 10.7% and it was taken for a model difference. ⚠️ **A tool that already has an `offset_m`
+  sample with no road under it, `deck_margin.py` keeps every one — and 5.6% against 10.7% was taken
+  for a model difference. ⚠️ **A tool that already has an `offset_m`
   meaning a CELL's distance from the centreline must ADD the drawn offset, never replace it** —
   `carriageway_occupancy.py` and `ground_clearance.py` both do, because `Section.is_inside` and "the
   centreline cell" are about the published centreline. ⚠️ **"0.0 on all 737 level-0 edges" EXPIRED
@@ -1440,10 +1427,9 @@ Common emoji for this project:
   both layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
   not chosen a look, so a glow here is wrong in every frame the project renders.
   ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, and the two used to differ.** Godot
-  quantises imported vertex positions over each mesh's **own AABB**, so the step scales with how wide
-  a layer is rather than how big its objects are — 0.025 m across `lamps.glb`'s 1,646 m, against a
-  0.06 m bracket arm and `signs.glb`'s 0.032 m poles. It read 18,484 upright against the ETL's exact
-  17,940 until `Q82` turned compression off project-wide, at **+958,720 B (+2.002%)** of PCK and **+3.19 MiB** of GPU buffer, with **0** extra draw calls or primitives. 🔴 **It
+  quantises imported vertex positions over each mesh's **own AABB** — 0.025 m across `lamps.glb`'s
+  1,646 m, against a 0.06 m bracket arm — until `Q82` turned compression off project-wide, at
+  **+2.002%** of PCK and **0** extra draw calls. 🔴 **It
   is `[importer_defaults]` in `project.godot` and `check.sh`'s `settings` step pins its value**,
   because `game/assets/generated/` is gitignored and a per-asset `.import` does not survive a clone.
   An editor save drops it silently and every generated mesh then imports geometry the ETL did not
