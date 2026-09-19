@@ -102,10 +102,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   running kerb line reads 13.3%. ⚠️ **The grader is a scratch script and is owed as a tool.** ✅ `fence._dress` centres its row on the ribbon's `offset_m` since `P3-35d`; 🔴 **the sign is
   load-bearing there** — nearside is `-across` at a start mouth and `+across` at an end mouth — and
   `test_the_row_stands_across_the_ribbon_at_both_mouths` is the ratchet; mutation-check both ways.
-  🔴 **Still OPEN: `railings.ribbons`, found 2026-09-19 (`Q133`)**: both fence lines are
-  `boundary(…, ±(half + outset))` about the centreline and `offset_m` is never read. Priced: 16.2% /
-  10.0% of panels stand in the road against the running kerb line, 1.8% / 0.5% more than 1 m in.
-  ⚠️ `tools/railing_error.py` reads the same `±half`, so it cannot see this and moves with the fix. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
+  ✅ **`railings.ribbons` came through the same door at `P3-35d` (4)**: an outset past `kerb_at`'s
+  two kerbs, side and facing asked about the road's MIDDLE — the `railings` rule has it. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
 - 🔴 **`surface.py` cuts the off-grade ribbon to its deck, per station and per side (`Q107`) —
   `_clamped_rails` is the one place, and it may only CUT.** `upper = min(shift + half, left_rim)`,
   `lower = max(shift − half, −right_rim)`, with the rims from `roadgraph.json`'s `deck_rim_m`.

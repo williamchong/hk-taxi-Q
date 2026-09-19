@@ -84,3 +84,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   the panel and never per stand** — a rotation turns winding and normal together, so per stand it is
   `Q72`'s tautology. ⚠️ **`railing_error.py` walks the UNIT and stands its samples** — a pitched
   panel's foot and head no longer share an `(x, z)`, so walking the expansion breaks its pairing.
+  🔴 **The kerb a fence stands on is the ROAD's (`drawnroad.Ribbon.kerb_at`) since `P3-35d` (`Q133`),
+  never `±half` about the centreline** — a level-0 rail is a SHARE (`Q57`). Three rules move
+  together: the standing line (`near + outset`, `off − outset`), the SIDE (the nearer kerb about the
+  road's middle — `SideIndex`'s is about the centreline), and the FACING (toward `Ribbon.middle`).
+  `TestRoad` holds one test per rule; mutation-check each alone. ⚠️ **Prove a change here inert by
+  forcing the road symmetric** (`offset_m = 0`, no kerb line): it must reproduce the prior bundle
+  byte-for-byte. ⚠️ **`bends` is the price** (32 → 84 / 10 → 27): the kerb is read every few metres
+  and a rigid panel does not follow it. 🚫 **Do not count "panels in the road against the kerb
+  line"** — the fence is built from that line, so it reads 0 by construction (`Q58`);
+  `railing_error.py`'s to-source table is the independent reading.

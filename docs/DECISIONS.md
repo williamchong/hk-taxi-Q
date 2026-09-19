@@ -24106,3 +24106,51 @@ is built that way and the block is city-wide, so this is a path only tests take;
 "every published file must hash as it did" is amended to say so. What `P3-32` learned — a ribbon
 yields to a box as a CAP and never a width; a flank meets the next ribbon at that ribbon's height —
 is `Q104`'s and stays.
+
+### Built 2026-09-20 — `P3-35d` (4): railings on the road's running kerb line
+
+`railings.ribbons` takes `drawnroad.kerbed_ribbons` — the door signs and lamps came through — and
+stands each class an outset past the ROAD's two kerbs (`Ribbon.kerb_at`), stationed at the published
+vertices **and** the region's dense kerb stations. Three rules move together, each with a test that
+fails alone under its own mutation:
+
+- **where** — `near + outset` and `off − outset`, signed from the centreline, never `±(half + outset)`;
+- **which side** — the nearer kerb about the road's MIDDLE (`kerb_target`'s rule). `SideIndex`'s side is
+  about the centreline and sends a fence surveyed between the two across the carriageway;
+- **which way it faces** — toward `Ribbon.middle`. On a road lying wholly one side of its centreline
+  the centreline is *behind* the fence nearer it.
+
+✅ **Inert by construction, then not**: with the road forced symmetric (`offset = 0`, no kerb line)
+both regions' `railings.glb`, `railings_placements.json` and `railings.json` are byte-identical to
+the build before. Everything below is the kerb line.
+
+| Wan Chai / Causeway Bay | before | after |
+|---|---|---|
+| `railings` `shift_m` p50 / p90 (n 13,697 / 5,117) | 0.54 / 1.96 · 0.48 / 1.61 | **0.14 / 1.63 · 0.12 / 1.30** |
+| `bollards` `shift_m` p50 / p90 (n 602) | 0.95 / 1.88 | **0.19 / 1.30** |
+| `barriers` `shift_m` p50 / p90 (n 1,506 / 886) | 0.51 / 1.87 · 0.29 / 1.14 | **0.23 / 1.68 · 0.11 / 0.59** |
+| `railings` `samples_over_shift` | 794 · 176 | 735 · 147 |
+| `railings` `drawn_m` | 9,626 · 3,780 | 9,726 · 3,826 |
+| `railings` `bends` | 32 · 10 | **84 · 27** |
+| `railings` `stations_folded` / `unfolded` | 0 / 0 · 0 / 0 | 4 / 4 · 4 / 4 |
+| `railing_error.py` `railings` to-source p50 / p90 / max | 0.46 / 1.37 / 4.09 · 0.45 / 1.10 / 3.34 | **0.22 / 0.78 / 3.54 · 0.21 / 0.64 / 5.53** |
+| `railing_error.py` `bollards` to-source p50 / p90 | 1.02 / 1.69 | **0.32 / 0.58** |
+
+`facing_away` 0, side disagreement 0, `refused_m`, `metres_bridged` and `samples_unassigned`
+unchanged on every class. `P3-33e`'s prediction — registration falls when the reader means the road —
+holds, and `railing_error.py` reads it off the shipped steel against TD's own lines, sharing nothing
+with the stage: it never read `±half`, which is what `Q133` first said of it and was wrong.
+
+⚠️ **The cost, stated.** `bends` nearly triples: a kerb line read every few metres moves, and a rigid
+panel cannot follow it (`Q115`'s wedge, never closed). Wan Chai's `bollards` fold **3 stations with no
+donor** (`stations_unfolded` 0 — a run folded end to end keeps its facings). Causeway Bay's
+to-source max rises 3.34 → 5.53 m and its `shift_m` max 8.15 → 12.57 (refused by `max_shift_m`).
+🚫 **"Panels standing in the road against the kerb line", the figure that priced this, is NOT
+re-quoted**: the fence is now built from that line, so it reads 0 by construction (`Q58`).
+
+Frames at the `Q27` street camera: before, HENNESSY ROAD's median fence stands off the far edge of
+its island, over the opposite carriageway; after, on the island behind the hosting road's kerb.
+After-pair `cmp`-identical, 0 shader errors. ⚠️ The before side was made by swapping
+`railings_placements.json` (the library `.glb` is byte-identical) and its two shots did **not**
+repeat — one is a whole-frame miss, the focus-steal failure — so it is one frame, not a pair.
+2,477 tests, ruff, `check.sh` 0.
