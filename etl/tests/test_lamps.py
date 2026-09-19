@@ -154,20 +154,23 @@ class _Snap:
 
 
 class _Ribbon:
-    """A straight ribbon of constant half-width, running north up `x = 0`."""
+    """A straight road of constant half-width, running north up `x = 0`, its
+    middle `middle_m` to the nearside of the centreline."""
 
-    def __init__(self, half_width_m: float) -> None:
+    def __init__(self, half_width_m: float, middle_m: float = 0.0) -> None:
         self._half_width_m = half_width_m
+        self._middle_m = middle_m
 
-    def half_width_at(self, t: float) -> float:
-        return self._half_width_m
+    def kerb_at(self, t: float) -> tuple[float, float]:
+        return self._middle_m, self._half_width_m
 
     def foot_at(self, t: float) -> np.ndarray:
         return np.array([0.0, 0.0])
 
-    # The real arithmetic, bound onto the stub — the method reads only
-    # `half_width_at` and `foot_at`, and copying it here would test a copy.
+    # The real arithmetic, bound onto the stub — the methods read only `kerb_at`
+    # and `foot_at`, and copying them here would test a copy.
     kerb_target = Ribbon.kerb_target
+    past_kerb_m = Ribbon.past_kerb_m
 
 
 class TestTheRegistrationRunsOutwardOnly:

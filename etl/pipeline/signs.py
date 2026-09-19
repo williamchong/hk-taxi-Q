@@ -163,7 +163,7 @@ from pipeline.config import (
     load_config,
 )
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, ribbons
+from pipeline.drawnroad import Ribbon, kerbed_ribbons
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import select_triangles
@@ -1602,10 +1602,11 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move. The caller owns the plate-level counter.
     """
-    side, half_width_m, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
-    report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
+    side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
+    past_kerb_m = ribbon.past_kerb_m(snap)
+    report.inside_ribbon_m.append(max(0.0, -past_kerb_m))
 
-    if abs(snap.offset_m) > half_width_m + spec.outset_m:
+    if past_kerb_m > spec.outset_m:
         # ⚠️ **The published point, never a reconstruction.** The trap below
         # applies here with nothing to catch it: `snap.offset_m` is the distance
         # to the *clamped* projection, so rebuilding this position from the foot
@@ -1759,7 +1760,7 @@ def build_region(
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --region {region_id}",
     )
-    drawn = ribbons(graph, surface)
+    drawn = kerbed_ribbons(city, out_dir, region_id, graph, surface)
 
     # Grouped so a pole is drawn once and its plates stack on it. Sorted by code
     # so the stack order is the source's, not the read order's — a mesh that
@@ -1866,9 +1867,7 @@ def build_region(
         # skipping the check for that branch would let one through (`Q78`).
         settled = segments.nearest(float(placed[0]), float(placed[1]))
         settled_ribbon = drawn.get(settled.edge)
-        if settled_ribbon is not None and abs(settled.offset_m) < settled_ribbon.half_width_at(
-            settled.t
-        ):
+        if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
             report.in_carriageway += len(keep)
             report.posts_in_carriageway += 1
             continue

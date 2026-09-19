@@ -125,7 +125,7 @@ from pipeline import gdb
 from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, nearside, ribbons
+from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
@@ -605,7 +605,7 @@ def build_region(
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --region {region_id}",
     )
-    ribbon_by_edge = ribbons(graph, surface)
+    ribbon_by_edge = kerbed_ribbons(city, out_dir, region_id, graph, surface)
 
     # ⚠️ **Sorted, and the sort is not cosmetic.** `_merge` below is greedy and
     # first-wins, so a mesh built from an unsorted read is not reproducible
@@ -662,9 +662,7 @@ def build_region(
         # one edit from making it reachable — what is corrected here is the claim.
         settled = segments.nearest(float(placed[0]), float(placed[1]))
         settled_ribbon = ribbon_by_edge.get(settled.edge)
-        if settled_ribbon is not None and abs(settled.offset_m) < settled_ribbon.half_width_at(
-            settled.t
-        ):
+        if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
             report.in_carriageway += 1
             continue
 
@@ -673,8 +671,12 @@ def build_region(
         # a column that settled onto an edge `surface.py` drew no carriageway for
         # is still drawn, and is graded against the kerb it was placed from.
         graded = settled_ribbon if settled_ribbon is not None else ribbon
-        graded_t = settled.t if settled_ribbon is not None else snap.t
-        graded_offset_m = abs(settled.offset_m if settled_ribbon is not None else snap.offset_m)
+        graded_snap = settled if settled_ribbon is not None else snap
+        # About the ROAD's middle (`Ribbon.kerb_at`), so `kerb_offset_m -
+        # half_width_m` below is the distance past the nearer kerb whichever side
+        # of its centreline the road lies.
+        graded_middle_m, graded_half_m = graded.kerb_at(graded_snap.t)
+        graded_offset_m = abs(graded_snap.offset_m - graded_middle_m)
         placements.append(
             _Placed(
                 kind=lamp.kind,
@@ -691,7 +693,7 @@ def build_region(
                 arm=-side * nearside(snap.heading_deg),
                 arm_reach_m=spec.arm_reach_m,
                 kerb_offset_m=graded_offset_m,
-                half_width_m=graded.half_width_at(graded_t),
+                half_width_m=graded_half_m,
             )
         )
 
@@ -778,9 +780,9 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move.
     """
-    side, half_width_m, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
+    side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
 
-    if abs(snap.offset_m) > half_width_m + spec.outset_m:
+    if ribbon.past_kerb_m(snap) > spec.outset_m:
         # ⚠️ **The published point, never a reconstruction** — see the foot note
         # below, which applies here with nothing to catch it.
         #

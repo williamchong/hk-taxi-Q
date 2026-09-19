@@ -24000,3 +24000,57 @@ and a flyover, with a 16 m east-west road lying **9 m north and 7 m south** of i
 - ✅ Surface re-run on both regions: every published file byte-identical.
 - ⚠️ `test_surface.py` is untouched and still drives the region-less path. Whether that path is kept
   is `P3-35e`'s question; what changed is that deleting from it no longer removes the only tests.
+
+### Built 2026-09-19 — `P3-35d` (1)–(2): one reader, and signs and lamps on the road's kerb
+
+`pipeline/drawnroad.py` takes `nearside`, `Ribbon` and `ribbons` out of `arrows.py` (both regions
+byte-identical), and `kerb_target` / the new `past_kerb_m` read the ROAD and not the centreline.
+
+**Which road, measured rather than argued.** iB1000's lamp posts are an independent survey of where
+the kerb is — they stand on footways — so the extent to register against is the one they stand just
+outside. Wan Chai 1,125 hosted posts / Causeway Bay 366 (scratch script; owed as a tool):
+
+| Extent | Posts reading as IN the road | Within 0–2 m past the kerb | Worst |
+|---|---|---|---|
+| `±half` about the centreline (shipped until now) | 21.8% / 14.5% | 58.9% / 62.8% | |
+| `roadsurface.json` `corridor_*`, per graph vertex | 24.2% / 8.7% | 61.7% / 74.3% | |
+| region's dense kerb stations, raw | 14.9% / 4.1% | 70.9% / 79.5% | −16.5 / −8.7 m |
+| … the share's rail, dense | 14.0% / 4.1% | 72.2% / 80.1% | |
+| **… each side only at kerb-ended stations, line between** | **13.3% / 3.6%** | **72.6% / 80.6%** | −5.9 / −6.8 m |
+
+- 🔴 **The plan named the second row, it was built first, and it made the layer worse** — signs WC
+  `shift_m` p90 1.34 → 4.24 m, over-shift 2 → 43, drawn 867 → 793. A straight street is two graph
+  vertices, both at junctions, where a kerb-to-kerb ray runs off down the side street. `P3-33e`
+  predicted `shift_m` would collapse and named a rise as a finding; it was.
+- 🔴 **Raw dense stations fix the body and grow a tail**: 74 Wan Chai posts more than 2 m inside the
+  road, 43 of them within 15 m of an end of their edge. The last row is `surface_region.bridged`'s
+  own reading — a side's extent counts where it ended at a kerb, and is the straight line between —
+  with no new knob. A side with no kerbed station takes the corridor's kerb.
+- ⚠️ The share's rail grades as well as the kerb on THIS population, because a lamp post is hosted by
+  its nearest centreline, whose outer rail is the kerb. It is refused on `Q57`: a post hosted by an
+  inner share would be registered to a line down the middle of the asphalt.
+
+**What moved** (battery, `signs` and `lamps`, both regions):
+
+| | Signs WC | Signs CB | Lamps WC | Lamps CB |
+|---|---|---|---|---|
+| Drawn | 867 → 873 | 280 → 285 | 1,070 → 1,077 | 361 → 364 |
+| Refused in carriageway | 19 → 5 | 6 → 1 | | |
+| Kept as surveyed | 345 → 358 | 108 → 90 | | |
+| Over shift | 2 → 11 | 1 → 2 | | |
+| `shift_m` p90 / p99 | 1.34 → 0.54 / 3.80 → 7.83 | 1.15 → 0.45 / 4.74 → 5.28 | 1.48 → 0.93 / 3.89 → 5.30 | 0.80 → 0.26 / 3.09 → 1.43 |
+| `min_kerb_clearance_m` | | | +0.067 → +0.170 | unchanged |
+
+⚠️ **The p99 rise is the old rule's error becoming visible, not a new one**: a post surveyed 8 m
+inside a 25 m road used to be "pushed" to its share's rail plus an outset — standing between two
+carriageways, a short move and a clean counter. It is now measured against the real kerb and refused.
+`target_m` stays in the centreline's frame, so `shift_m` still means the distance moved.
+
+**Seen.** JAFFE ROAD, `--camera=820,14,455 --look=905,3,408`, each side a full sync, shot twice and
+`cmp`-identical within the side, 1,740 px between sides around one lamp column. ⚠️ A top-down pair
+made by swapping only the placements JSON settled on one hash for BOTH sides after the first shots
+disagreed; unexplained, and not evidence. `check.sh` 0, 2,473 tests.
+
+**Owed.** `fence._dress` and `railings.ribbons` (the rest of `P3-35d`); the lamp-post grader as a
+`tools/` instrument; `tools/paint_clearance.py`'s `on kerb` column was not re-run, since no painted
+layer reads this.

@@ -18,10 +18,13 @@ anything that stands at a kerb wants the corridor.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
+from pipeline.config import Config
 from pipeline.polyline import Snap, frame, plan_lengths
+from pipeline.region import KERB, REGION_NAME, read_region
 
 
 def nearside(heading_deg: float) -> np.ndarray:
@@ -94,6 +97,21 @@ class Ribbon:
     trim_start_m: float
     trim_end_m: float
     length_m: float
+    # 🔴 **The ROAD this edge lies in, kerb to kerb** — `carriageway_region.json`'s
+    # running kerb lines (`_kerbs`), at the region's own DENSE stations
+    # (`kerb_at_t`, normalised like `at`). `None` where no region is built or the
+    # edge has no territory; `kerb_at` then answers with the ribbon.
+    # ⚠️ **Not the ribbon**: its rail is its territory's edge, a SHARE (`Q57`), and
+    # on Wan Chai that stands more than 0.5 m from the kerb on 800 of 1,468
+    # edge-sides. 🔴 **And not `roadsurface.json`'s `corridor_*` either — built
+    # first, measured, and withdrawn.** That table is per GRAPH VERTEX, and a
+    # straight street's two vertices are both at junctions, where a kerb-to-kerb
+    # ray runs off down the side street. Graded against where iB1000's surveyed
+    # lamp posts stand, it reads 24.2% of Wan Chai's as in the road against 21.8%
+    # for the `±half` it replaced, and these stations 14.9% (`Q133`).
+    kerb_at_t: np.ndarray | None = None
+    kerb_left_m: np.ndarray | None = None
+    kerb_right_m: np.ndarray | None = None
 
     def half_width_at(self, t: float) -> float:
         """The drawn half-width at a normalised position along the edge."""
@@ -102,6 +120,28 @@ class Ribbon:
     def offset_at(self, t: float) -> float:
         """The drawn ribbon's middle at a normalised position, nearside positive."""
         return float(np.interp(t, self.at, self.offset_m))
+
+    def kerb_at(self, t: float) -> tuple[float, float]:
+        """`(middle, half)` of the road at `t`: the kerbs stand at `middle ± half`,
+        nearside positive, measured from this edge's centreline."""
+        if self.kerb_at_t is None or self.kerb_left_m is None or self.kerb_right_m is None:
+            return self.offset_at(t), self.half_width_at(t)
+        # Left is the nearside (`region.py`'s `test_left_is_left_of_travel`), so
+        # the kerbs stand at `+left` and `-right`.
+        left = float(np.interp(t, self.kerb_at_t, self.kerb_left_m))
+        right = float(np.interp(t, self.kerb_at_t, self.kerb_right_m))
+        return (left - right) / 2.0, (left + right) / 2.0
+
+    def past_kerb_m(self, snap: Snap) -> float:
+        """How far `snap` stands past the nearer kerb; negative is in the road.
+
+        🔴 **About the road's middle, never the centreline.** `abs(snap.offset_m)
+        - half` is this about a road symmetric on its centreline, which was every
+        level-0 edge until `P3-33c` and is `Q106`'s defect since: signs and lamps
+        both asked it that way, and the road they cleared was not the one drawn.
+        """
+        middle_m, half_m = self.kerb_at(snap.t)
+        return abs(snap.offset_m - middle_m) - half_m
 
     def foot_at(self, t: float) -> np.ndarray:
         """The point on the centreline at `t`, in game plan space.
@@ -126,10 +166,18 @@ class Ribbon:
         """The registration target `outset_m` past the drawn kerb, and its frame.
 
         Returns `(side, half_width_m, target_m, point)`: the kerb side (`+1`
-        nearside — a point exactly on the centreline has no side to keep, and
+        nearside — a point exactly on the road's middle has no side to keep, and
         the nearside is the one a left-driving city's traffic passes closest
-        to), the drawn half-width at the snap, the signed across-edge target,
-        and the placed point.
+        to), the road's half-width at the snap, the signed across-edge target
+        FROM THE CENTRELINE, and the placed point.
+
+        🔴 **The kerb is the ROAD's (`kerb_at`), and the side is the nearer one.**
+        Until `P3-35d` this read `side * (half + outset)` about the centreline
+        with `side = sign(snap.offset_m)`: on a road lying 9 m one side of its
+        centreline and 7 m the other it aimed both kerbs a metre wrong, and a
+        post surveyed between the centreline and the middle of the road was sent
+        to the far kerb. `target_m` stays in the centreline's frame, so a
+        caller's `abs(target_m - snap.offset_m)` is still the move it made.
 
         ⚠️ **The point comes off the polyline (`foot_at`), never from
         `point - offset_m * nearside`** — `Snap.offset_m` is `±distance_m` to
@@ -139,14 +187,29 @@ class Ribbon:
         (`Q100`): whether to move at all, `Q78`'s outward-only clamp and every
         counter stay with each stage.
         """
-        half_width_m = self.half_width_at(snap.t)
-        side = 1.0 if snap.offset_m >= 0.0 else -1.0
-        target_m = side * (half_width_m + outset_m)
+        middle_m, half_width_m = self.kerb_at(snap.t)
+        # `>=`, so `-0.0` — which `Segments.nearest` really returns for a point on
+        # the line — reads as the nearside, the convention every caller pins.
+        side = 1.0 if snap.offset_m - middle_m >= 0.0 else -1.0
+        target_m = middle_m + side * (half_width_m + outset_m)
         point = self.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
         return side, half_width_m, target_m, point
 
 
-def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
+def kerbed_ribbons(
+    city: Config, out_dir: Path, region_id: str, graph: dict, surface: dict
+) -> dict[int, Ribbon]:
+    """`ribbons`, with the region's kerbs where the city builds a region.
+
+    For a stage that stands something AT a kerb. Paint in a lane wants `ribbons`
+    alone: `arrows` reads the ribbon and never the road.
+    """
+    if city.carriageway_region is None:
+        return ribbons(graph, surface)
+    return ribbons(graph, surface, read_region(out_dir / REGION_NAME, region_id))
+
+
+def ribbons(graph: dict, surface: dict, region: dict | None = None) -> dict[int, Ribbon]:
     """The drawn ribbon, keyed by edge id.
 
     ⚠️ **Read from `roadsurface.json` rather than recomputed.** The drawn
@@ -156,6 +219,11 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
     never which.
     """
     widths = {int(entry["edge"]): entry for entry in surface["carriageway"]}
+    # This region's own runs only: a neighbour's run is published under
+    # `foreign` and is drawn, and furnished, by its owner (`Q116`).
+    territories = {
+        int(row["edge"]): row for row in (region or {}).get("territories", ()) if not row["foreign"]
+    }
     drawn_ribbons: dict[int, Ribbon] = {}
     for edge in graph["edges"]:
         if int(edge["elevation_level"]) != 0:
@@ -201,5 +269,43 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
             trim_start_m=float(trim[0]),
             trim_end_m=float(trim[1]),
             length_m=total,
+            **_kerbs(territories.get(int(edge["id"])), total),
         )
     return drawn_ribbons
+
+
+def _kerbs(territory: dict | None, length_m: float) -> dict[str, np.ndarray | None]:
+    """A territory's running kerb lines as `Ribbon`'s three kerb fields.
+
+    🔴 **A side is read only at the stations where it ENDED AT A KERB, and is the
+    straight line between them** — `surface_region.bridged`'s own reading, and no
+    knob. At a side-street mouth the ray runs off down the side street, so the
+    station there reads a kerb 16 m away and a post on the corner reads as deep
+    in the road: taken raw, 74 of Wan Chai's 1,125 hosted lamp posts stood more
+    than 2 m inside it (worst -16.5 m) and 43 of them were within 15 m of an end
+    of their edge; read this way it is 47, worst -5.9 m (`Q133`).
+    ⚠️ A side with NO kerbed station — an inner share of a road several
+    centrelines divide — has no kerb line of its own and takes the corridor's.
+
+    Refused WHOLE where the lists disagree in length or the stations do not run
+    forward — a half-read kerb is a post registered against one side of a road —
+    and the edge falls back to its ribbon.
+    """
+    if territory is None:
+        return {}
+    along = np.asarray(territory["along_m"], dtype=np.float64)
+    sides: list[np.ndarray] = []
+    for side in ("left", "right"):
+        extent = np.asarray(territory[f"{side}_m"], dtype=np.float64)
+        corridor = np.asarray(territory[f"{side}_kerb_m"], dtype=np.float64)
+        ends = territory[f"{side}_end"]
+        if not len(along) == len(extent) == len(corridor) == len(ends) >= 2:
+            return {}
+        kerbed = np.flatnonzero([end == KERB for end in ends])
+        if len(kerbed) == 0:
+            sides.append(corridor)
+        else:
+            sides.append(np.interp(along, along[kerbed], extent[kerbed]))
+    if np.any(np.diff(along) < 0.0):
+        return {}
+    return {"kerb_at_t": along / length_m, "kerb_left_m": sides[0], "kerb_right_m": sides[1]}
