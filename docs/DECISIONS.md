@@ -24226,3 +24226,47 @@ table carries the rows. What the pricing changed:
 - **`P3-35h`, its own task on the user's call**: `road_graph.gd` never consumes
   `carriageway_offset_m`, and `Q107`'s excuse for that expired at `P3-33c`.
 
+### Built 2026-09-20 — `P3-35d5`: two stations at one place, and a fence line that is not a polygon
+
+Two changes to `railings.py`, each with a `TestRoad` test that fails alone under its own mutation
+(the untolerated union fails two tests, `boundary` restored fails the third), `__pycache__` cleared
+between.
+
+- **`_own_places`** — a kerb station within `min_station_gap_m` of a published vertex, or of the kerb
+  station before it, is dropped; the published vertex wins. No new knob: it is `_distinct`'s bar, for
+  `_distinct`'s reason, one stage earlier. ⚠️ Inert where no region is built — `kerb_at_t` is `None`
+  and the branch is not taken.
+- **`_sides` takes the plain offset, not `surface.boundary`'s.** 🔴 **This one was measured before it
+  was believed, because the first change alone left `e10` at 3.84 m and the hold that survived was
+  GENUINE**: an 87° corner (mitre 1.38) with 8–13 m of road inside it. After the first change the
+  remaining holds sit on real corners (237 / 81 stations) — so this is not a rounding fix and is
+  **not inert** on a symmetric road, deliberately. The argument: `boundary` pins the inside rail for
+  a kerb's width past the corner because a carriageway polygon must not cross itself; a fence is a
+  line samples are stood on **by station**, and a railing hugging the real inside kerb projects onto
+  the centreline exactly where the two offset lines meet. `surface.boundary` is untouched.
+
+| Wan Chai · Causeway Bay, `railings` | before | union only | both |
+|---|---|---|---|
+| `railing_error.py` to-source p99 / max | 2.10 / 3.54 · 1.74 / **5.53** | 2.10 / 3.54 · 1.71 / 3.84 | 2.10 / 3.54 · **1.66 / 3.07** |
+| `bends` | 84 · 27 | 83 · 24 | **81 · 24** |
+| `stations_folded` / `unfolded` | 4 / 4 · 4 / 4 | 5 / 5 · 3 / 3 | 4 / 4 · 2 / 2 |
+| `drawn_m` | 9,726 · 3,826 | 9,716 · 3,826 | 9,722 · 3,824 |
+| `joint_gap_m` p99 / max (mm) | 11.9 / 41.1 · 10.4 / 60.7 | — / 38.4 · — / 85.2 | 11.6 / **51.5** · 9.9 / **37.1** |
+| `bollards` folded / unfolded (Wan Chai) | **3 / 0** | 0 / 0 | 1 / 1 |
+
+`shift_m` (every percentile and `n`), `samples_over_shift`, `metres_bridged` (242.36 · 82.05),
+`metres_on_buried_kerb`, `refused_m`, `samples_unassigned` and `facing_away` (0) are unmoved on every
+class; side disagreement 0 of 19,148 · 7,575. `barriers` `drawn_m` 1,065 → 1,068 · 735 → 738, one
+panel each. ⚠️ **The cost**: Wan Chai's widest wedge grows 41 → 52 mm at one joint of 4,333.
+
+🚫 **Still costs, and now said why.** `bends` is the kerb's roughness, not the panel's rigidity: the
+wedge is 0 at p50, 2.3 mm at p90 (a 2.6° joint) and 51.5 mm at the worst (54.5°), against the
+61.3° joint the user drove and accepted at `P5-5`; Douglas-Peucker made it worse (91) and a moving average gave back a
+third of the registration. The mitre stays `Q115`'s open review point. `shift_m` max 12.57 is two
+refused samples at junction mouths.
+
+Frames at the `Q27` street camera: pair `cmp`-identical, 0 shader errors, the median fence on its
+island. 🔴 **A finding that is not this step's**: a pale-blue spike some 40 m tall stands on HENNESSY
+ROAD's north kerb in that frame, and it is in the before frame too (placements swapped, library
+byte-identical) — not railings, not yet attributed. 2,483 tests, ruff, `check.sh` 0, pipeline
+`--from railings` clean on both regions.

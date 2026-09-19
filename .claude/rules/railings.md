@@ -91,7 +91,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   road's middle — `SideIndex`'s is about the centreline), and the FACING (toward `Ribbon.middle`).
   `TestRoad` holds one test per rule; mutation-check each alone. ⚠️ **Prove a change here inert by
   forcing the road symmetric** (`offset_m = 0`, no kerb line): it must reproduce the prior bundle
-  byte-for-byte. ⚠️ **`bends` is the price** (32 → 84 / 10 → 27): the kerb is read every few metres
-  and a rigid panel does not follow it. 🚫 **Do not count "panels in the road against the kerb
+  byte-for-byte. ⚠️ **`bends` is the price** (32 → 81 / 10 → 24): the kerb is read every few metres
+  and a rigid panel does not follow it. 🔴 **The standing line is the PLAIN offset, never
+  `surface.boundary`'s hold** (`P3-35d5`): a fence is a line samples are stood on by station, not a
+  polygon, and the hold stood 8 m of Causeway Bay `e10` on one point. ⚠️ **A kerb station within
+  `min_station_gap_m` of a published vertex is dropped** (`_own_places`) — the same place and not
+  the same float, and a 0.2 mm step has no direction for any backward test to read. 🚫 **Do not count "panels in the road against the kerb
   line"** — the fence is built from that line, so it reads 0 by construction (`Q58`);
   `railing_error.py`'s to-source table is the independent reading.

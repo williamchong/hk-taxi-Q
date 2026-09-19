@@ -259,6 +259,37 @@ class TestRoad:
             5.0 + klass().outset_m
         )
 
+    def test_a_kerb_station_at_a_published_vertex_is_not_a_second_station(self) -> None:
+        """The same place and not the same float (`P3-35d5`): the step between
+        them is too short to have a direction, and `boundary`'s backward test
+        across one held 8.6 m of Causeway Bay `e10`'s fence on a point."""
+        edge = np.array([[0.0, 0.0, 100.0], [50.0, 0.0, 100.0], [100.0, 0.0, 100.0]])
+        beside_it = 0.5 + 0.0002 / 100.0
+        kerbs = ([0.0, 0.25, beside_it, 1.0], [9.0] * 4, [7.0] * 4)
+        drawn = on_road(edge, road(edge, kerbs=kerbs))
+        assert drawn.along.tolist() == pytest.approx([0.0, 25.0, 50.0, 100.0])
+        assert np.diff(drawn.along).min() >= spec().min_station_gap_m
+
+    def test_two_kerb_stations_at_one_place_are_one(self) -> None:
+        edge = straight(0.0, 100.0)
+        kerbs = ([0.0, 0.5, 0.5 + 0.0002 / 100.0, 1.0], [9.0] * 4, [7.0] * 4)
+        assert len(on_road(edge, road(edge, kerbs=kerbs)).points) == 3
+
+    def test_the_fence_line_is_not_held_still_inside_a_tight_corner(self) -> None:
+        """A right angle with 9 m of road inside it. `surface.boundary` pins the
+        inside rail for a kerb's width past the corner, which a polygon needs
+        and a fence does not: every station stands at its own offset."""
+        edge = np.array([[0.0, 0.0, 100.0], [50.0, 0.0, 100.0], [50.0, 0.0, 50.0]])
+        at_t = np.linspace(0.0, 1.0, 51)
+        turns_left = mitres(edge)[1] @ (edge[0, [0, 2]] - edge[1, [0, 2]]) > 0.0
+        near, off = (9.0, 1.0) if turns_left else (1.0, 9.0)
+        drawn = on_road(edge, road(edge, kerbs=(at_t, [near] * 51, [off] * 51)))
+        inside = drawn.fence[CLASS_ID][NEARSIDE if turns_left else OFFSIDE]
+        assert (np.linalg.norm(np.diff(inside, axis=0), axis=1) > 0.0).all()
+        reach = (9.0 if turns_left else -9.0) + (1 if turns_left else -1) * klass().outset_m
+        expected = drawn.points[:, [0, 2]] + mitres(drawn.points) * reach
+        assert inside == pytest.approx(expected)
+
     def test_with_no_kerb_line_the_road_is_the_drawn_ribbon(self) -> None:
         """`offset ± half`, never `±half` (`Q106`)."""
         edge = straight(0.0, 100.0)

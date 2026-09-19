@@ -123,7 +123,6 @@ from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,
-    boundary,
     dedupe,
     mitres,
     trim,
@@ -408,11 +407,10 @@ class Ribbon:
     """One edge's drawn ribbon, as this stage needs to walk its kerb.
 
     ⚠️ **Reconstructed with `surface.py`'s own functions, from `surface.py`'s
-    own published widths and trims** — `trim`, `dedupe`, `mitres` and
-    `boundary`, in the order `surface._shape` calls them. Not re-derived: a
-    second expression for the drawn kerb would be a second join in `Q56`'s
-    sense, and it would disagree exactly where the tight-corner repair in
-    `boundary` bites.
+    own published widths and trims** — `trim`, `dedupe` and `mitres`, in the
+    order `surface._shape` calls them. Not re-derived: a second expression for
+    the drawn kerb would be a second join in `Q56`'s sense. ⚠️ `boundary`, that
+    function's fourth step, is the one left out, and `_sides` says why.
     """
 
     # The trimmed centreline, `(n, 5)` as `(x, y, z, near kerb, off kerb)` — the
@@ -434,7 +432,7 @@ class Ribbon:
     # carriageway edge pushed out by that class's `outset_m`, so the furniture
     # stands behind the kerb strip rather than on the lane. Keyed
     # `[class id][side]`: the classes may stand at different outsets, and
-    # precomputing each is three cheap `boundary` calls against a per-station
+    # precomputing each is three cheap offsets against a per-station
     # recomputation in the inner loop.
     fence: dict[str, dict[str, np.ndarray]]
     # Cumulative plan distance along `points`. **Ribbon metres**: zero is the
@@ -535,25 +533,63 @@ def _sides(shaped: np.ndarray, offsets: np.ndarray, outset_m: float) -> dict[str
 
     Each kerb pushed OUTWARD by the class's outset: further nearside of the near
     kerb, further offside of the off one.
+
+    🔴 **The plain offset, and deliberately not `surface.boundary`'s**
+    (`P3-35d5`). That one holds the inside rail still through a corner tighter
+    than the road is wide, because a carriageway POLYGON must not cross itself.
+    A fence is a line that samples are stood on by station, and has nothing to
+    cross: a railing hugging the inside kerb of such a corner projects onto the
+    centreline where the two offset lines meet, and the plain offset stands it
+    there. Held, every station for a kerb's width past the corner stands on one
+    point — Causeway Bay `e10`, an 87° corner with 8 m of road inside it, read
+    3.84 m from the railing TD published and reads 3.07 plain. Where the line
+    does run backwards the fold rule (`_unfold`) answers for its facing.
     """
+    centre = shaped[:, [0, 2]]
     return {
-        NEARSIDE: boundary(shaped, offsets, shaped[:, _NEAR] + outset_m),
-        OFFSIDE: boundary(shaped, offsets, shaped[:, _OFF] - outset_m),
+        NEARSIDE: centre + offsets * (shaped[:, _NEAR] + outset_m)[:, None],
+        OFFSIDE: centre + offsets * (shaped[:, _OFF] - outset_m)[:, None],
     }
 
 
-def _stationed(points: np.ndarray, road: Road) -> np.ndarray:
+def _own_places(along: np.ndarray, kerb: np.ndarray, min_gap_m: float) -> np.ndarray:
+    """The kerb stations that are their own place on the centreline (`P3-35d5`).
+
+    🔴 **A kerb station and a published vertex are often the same place and not
+    the same float.** Causeway Bay `e10` had the two 0.000217 m apart — above
+    `dedupe`'s bar, so the step survived — and `surface.boundary`'s backward
+    test read -0.001848 across it, a sign decided by rounding. The hold it
+    triggers is sticky: 8.6 m of fence stood on one point, 5.53 m from the
+    railing TD published, and 467 of that region's 498 holds fired on a step
+    under a centimetre.
+
+    The published vertex wins, because it is the geometry; then greedy from the
+    first, as `_distinct` is. `min_station_gap_m` is that function's bar and is
+    used here for its own reason — two stations at one place — one stage earlier.
+    """
+    kerb = np.unique(kerb)
+    after = np.clip(np.searchsorted(along, kerb), 1, len(along) - 1)
+    clear = np.minimum(np.abs(kerb - along[after - 1]), np.abs(along[after] - kerb))
+    kept: list[float] = []
+    for station in kerb[clear >= min_gap_m]:
+        if not kept or station - kept[-1] >= min_gap_m:
+            kept.append(float(station))
+    return np.asarray(kept, dtype=np.float64)
+
+
+def _stationed(points: np.ndarray, road: Road, min_gap_m: float) -> np.ndarray:
     """A published polyline as `Ribbon.points`' five columns, densely stationed.
 
     The published vertices, plus the stations the road's kerb line is read at
-    (`Road.kerb_at_t`) — none where no region is built, and `kerb_at` then
-    answers with the drawn ribbon, `offset ± half`.
+    (`Road.kerb_at_t`) that are a place of their own (`_own_places`) — none
+    where no region is built, and `kerb_at` then answers with the drawn ribbon,
+    `offset ± half`.
     """
     along = plan_lengths(points)
     total = float(along[-1])
     at = along
     if road.kerb_at_t is not None:
-        at = np.union1d(along, road.kerb_at_t * total)
+        at = np.union1d(along, _own_places(along, road.kerb_at_t * total, min_gap_m))
     kerbs = np.array([road.kerb_at(float(t)) for t in at / total])
     return np.column_stack(
         [
@@ -590,7 +626,8 @@ def ribbons(
         # `surface._shape`'s own three lines, on `surface._prepare`'s own column
         # layout: the kerbs travel as extra columns so `trim` gives the two cut
         # stations their own instead of a neighbour's.
-        shaped = dedupe(trim(_stationed(points, road), trim_start_m, trim_end_m))
+        stationed = _stationed(points, road, spec.min_station_gap_m)
+        shaped = dedupe(trim(stationed, trim_start_m, trim_end_m))
         if len(shaped) < 2:
             continue
         offsets = mitres(shaped)
