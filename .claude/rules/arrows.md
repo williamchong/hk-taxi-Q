@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/arrows.py"
   - "etl/pipeline/arrows.py"
   - "etl/tests/test_arrows.py"
   - "game/tools/verify_arrows.gd"

@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/lamps.py"
   - "etl/pipeline/lamps.py"
   - "etl/tests/test_lamps.py"
   - "game/tools/verify_lamps.gd"

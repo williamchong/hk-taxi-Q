@@ -1,5 +1,7 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/roadmarks.py"
+  - "etl/pipeline/drawnsurface.py"
   - "etl/pipeline/roadmarks.py"
   - "etl/tests/test_roadmarks.py"
   - "game/assets/shaders/marking_paint.gdshader"

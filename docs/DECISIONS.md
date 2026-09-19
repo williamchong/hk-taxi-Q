@@ -24154,3 +24154,41 @@ After-pair `cmp`-identical, 0 shader errors. ⚠️ The before side was made by 
 `railings_placements.json` (the library `.glb` is byte-identical) and its two shots did **not**
 repeat — one is a whole-frame miss, the focus-steal failure — so it is one frame, not a pair.
 2,477 tests, ruff, `check.sh` 0.
+
+### Built 2026-09-20 — `P3-35f`: the three moves, and every block's key set closed
+
+Each move is verbatim — every line of the old file is found in a new one, bar the one import line
+each split — and each is its own commit, graded on bytes.
+
+- **`pipeline/drawnsurface.py`** — `DrawnSurface`, `DrawnHeight` and the crease cutting. An AST pass
+  over `surface.py` found **no** reader of that block in the rest of the file: it is the surface's
+  reader, used by the layers painted on it. `surface.py` 4,628 → **3,953**. Both regions
+  `--from arrows`: every file but `city.json` byte-identical.
+- **`tools/_lib/{bundle,ribbon,streets}.py`** — the dependency closure of what 11 / 8 / 13 tools
+  imported sideways from `deck_error`, `overhang` and `carriageway_occupancy`. Nothing new is shared
+  with `pipeline.*`. 🔴 **A battery run with both sides on this checkout's tools proves only that
+  they run**; the proof is `--tools-from side` against a worktree of the commit before — nine
+  graders, one bundle, **0 lines moved**.
+- **`pipeline/config_blocks/`** — assigned by *reach*: a name reached from one stage's roots goes
+  to that stage, from several to `base`, from none stays in the loader. It came out acyclic with a
+  270-line `base` on the first pass, which is to say `config.py` was already twelve modules.
+  `config.py` 6,544 → **1,153** and **stays a file**: its `Path(__file__)` roots, the ~25 comments
+  that say "`config.py` refuses…", and every `from pipeline.config import _private` in the tests
+  stay true because it re-exports every name. Old and new loaders `repr`-equal; both regions
+  `--from podiums`, **232 + 196 files byte-identical**.
+
+**The closed-key check was planned as routing 25 `_measures` blocks through `_thresholds`, and that
+cannot be done**: `_thresholds` refuses `set(body) − measurements`, and those blocks hold roles,
+layers and optional keys beside their measurements. What ships asks the same question of every
+mapping at once — `_Read` records which keys a parser asked for and `load_config` refuses the rest —
+with no hand-kept key list to drift from the parser. The shipped YAML: 1,033 keys, 1,033 read.
+🔴 **It caught a fixture on its first run**: `test_roadmarks.py`'s one-line `stop_line` declared
+`lines_spacing_m`, which the parser reads only when `lines > 1` — a setting that tuned nothing, in
+the file written to test the block. ⚠️ Iterating a mapping reads all of it (a code-keyed table has
+no closed set), so this is a floor under the per-block checks. Mutation-checked: the refusal
+neutralised fails both new tests. 2,480 tests.
+
+⬜ **`P3-35g` is not part of this sitting and was never one task**: hatching, pedestrian crossings,
+a lane count off TD's surveyed lane lines, per-station `offset_m` off-grade — "each its own task
+when it is reached", priced one at a time.
+

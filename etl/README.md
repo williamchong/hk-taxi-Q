@@ -171,7 +171,7 @@ and press **F6** to look at the result, or `scenes/main.tscn` to drive it.
 | Path | Contains |
 |---|---|
 | `config/hong_kong.yaml` | **Every** city specific — CRS, bounds, deck heights, palette, source URLs |
-| `pipeline/config.py` | Loads and validates city config; nothing else reads the YAML |
+| `pipeline/config.py` | Loads and validates city config; nothing else reads the YAML. Its blocks live in `pipeline/config_blocks/`, one module a stage, and are imported **through** `config.py`. 🔴 Refuses any key no parser read |
 | `pipeline/crs.py` | The only module that converts projected coordinates to game space |
 | `pipeline/fetch.py` | Downloads and caches sources; derives tile sets from published indexes |
 | `pipeline/gltf.py` | glTF reading and GLB writing — no library, see the module docstring |

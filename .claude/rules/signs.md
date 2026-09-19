@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/signs.py"
   - "etl/pipeline/signs.py"
   - "etl/pipeline/sign_text.py"
   - "etl/pipeline/sign_sheets.py"

@@ -166,7 +166,8 @@ Common emoji for this project:
 ### Scoped checklists — `.claude/rules/`
 
 🔴 **Every other checklist lives in `.claude/rules/<name>.md` and loads ITSELF when a file in its
-`paths:` is read.** A change that arrives another way — a `hong_kong.yaml` block, `config.py`, a
+`paths:` is read.** A change that arrives another way — a `hong_kong.yaml` block, `config.py` (a stage's own
+`config_blocks/<stage>.py` does load its rule; `roads.py` there serves too many to), a
 shared helper — loads nothing, so **match it against this table and read the rule by hand before
 marking work done.** `tools/battery.py --list` carries the same triggers with their commands. A new
 checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUDE.md` over 40k chars.

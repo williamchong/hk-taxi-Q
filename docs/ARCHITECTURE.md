@@ -418,7 +418,8 @@ hk-taxi-Q/
 │   ├── config/
 │   │   └── hong_kong.yaml       # bounds, source URLs, tiling, vocabularies — the tunable city facts
 │   ├── pipeline/
-│   │   ├── config.py            # loads hong_kong.yaml — the only route config facts take in
+│   │   ├── config.py            # loads hong_kong.yaml — the only route config facts take in; re-exports every block
+│   │   ├── config_blocks/       # one module a stage: the dataclasses and parsers config.py loads (P3-35f). Import via config.py
 │   │   ├── hongkong.py          # the constants that ARE the city: CRS pair, drive-on-left (Q100)
 │   │   ├── crs.py               # projected coords -> game space; codes from hongkong.py
 │   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
@@ -439,6 +440,8 @@ hk-taxi-Q/
 │   │   ├── carriageway.py       # the width/lane survey roads.py publishes (Q94/Q95)
 │   │   ├── kerbside.py          # NSR restrictions linear-referenced onto the graph
 │   │   ├── surface.py           # roadgraph.json → roads/<tile>.glb; ribbon, kerbs, junctions
+│   │   ├── drawnsurface.py      # the drawn surface read back: DrawnSurface + crease cutting, for the layers painted on it (P3-35f)
+│   │   ├── drawnroad.py         # the ONE reader of the drawn road: ribbon, and the road's running kerb line (P3-35d, Q133)
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
@@ -479,6 +482,7 @@ hk-taxi-Q/
 │   ├── tuning/                  # .tres resources: handling, streaming, fares, scoring
 │   └── tools/                   # headless scripts — import fixups, verify tools
 └── tools/                       # dev scripts: check, sync, export, grading
+    └── _lib/                    # what graders share with each other: bundle, ribbon, streets (P3-35f)
 ```
 
 ⚠️ **`scenes/dev/` is not shipped.** `run/main_scene` boots `scenes/main.tscn` — `Main` with a `World`

@@ -1,5 +1,7 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/boxjunctions.py"
+  - "etl/pipeline/drawnsurface.py"
   - "etl/pipeline/boxjunctions.py"
   - "etl/pipeline/boxsource.py"
   - "tools/box_extent.py"

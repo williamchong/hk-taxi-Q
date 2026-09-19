@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/buildings.py"
   - "tools/ring_weights.py"
   - "tools/facade_*.py"
   - "tools/lighting_rig.py"

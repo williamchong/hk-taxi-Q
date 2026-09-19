@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/tramway.py"
   - "etl/pipeline/tramway.py"
   - "etl/tests/test_tramway.py"
   - "game/assets/shaders/tramway.gdshader"

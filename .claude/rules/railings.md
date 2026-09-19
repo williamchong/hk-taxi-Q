@@ -1,5 +1,6 @@
 ---
 paths:
+  - "etl/pipeline/config_blocks/railings.py"
   - "etl/pipeline/railings.py"
   - "etl/tests/test_railings.py"
   - "etl/tests/test_railing_error.py"
