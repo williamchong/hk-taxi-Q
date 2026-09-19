@@ -66,7 +66,7 @@ def clip_half_plane(polygon: np.ndarray, normal: np.ndarray, bound: float) -> np
 
     Returns an empty `(0, 2)` when fewer than three corners survive. Written for
     `boxjunctions.hatch_polygons`' stripe fields and shared by
-    `surface.DrawnSurface.split`, which cuts paint along the drawn surface's
+    `drawnsurface.DrawnSurface.split`, which cuts paint along the drawn surface's
     creases with the same clip — one copy, so the two cannot disagree about
     where a cut lands.
     """

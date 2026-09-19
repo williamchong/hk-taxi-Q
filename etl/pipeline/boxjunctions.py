@@ -22,7 +22,7 @@ Three decisions differ from arrows, and each is recorded where it bites:
 - **Heights come from a per-vertex query of the drawn road, not a host edge's
   polyline.** The second snap arrows refused was a second opinion about one
   host; a box spans several arms and has no host, so the query *is* the primary
-  join. 🔴 **`surface.DrawnSurface` since `Q92`, where this took a
+  join. 🔴 **`drawnsurface.DrawnSurface` since `Q92`, where this took a
   distance-weighted blend of centreline heights.** The blend was a *model* of
   the junction and the junction is a published convex-hull cap fanned from its
   own centroid; off the centreline the two diverge by up to 0.218 m against a
@@ -53,18 +53,14 @@ import numpy as np
 from pipeline.boxsource import Box, read_boxes
 from pipeline.config import BoxJunctions, Config, load_config
 from pipeline.documents import read_document, write_document
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.geometry import clip_half_plane, orient, twice_area, wound_up
 from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, frame
 from pipeline.report import tail_of
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
-from pipeline.surface import (
-    SURFACE_MANIFEST_NAME,
-    SURFACE_MANIFEST_SCHEMA,
-    DrawnSurface,
-    downward_facing,
-)
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
 
 log = logging.getLogger(__name__)
 

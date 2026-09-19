@@ -516,7 +516,7 @@ class Prepared(NamedTuple):
     """A pack of triangles with everything the cover test needs that does not
     depend on the point, taken once: `prepare` is `covered`'s first half and
     `covered_prepared` its second, for a caller that asks one pack many
-    times — `surface.DrawnSurface` asks each cell's pack ~90,000 times a build,
+    times — `drawnsurface.DrawnSurface` asks each cell's pack ~90,000 times a build,
     and re-deriving these per query was the top self-time entry in both
     marking stages' profiles."""
 
@@ -564,7 +564,7 @@ def covered(corners: np.ndarray, x: float, z: float) -> tuple[np.ndarray, np.nda
     interpolated height of each one that does, in mask order.
 
     The mask is what lets a caller holding a mixed pack of triangles — the
-    drawn caps and carriageway strips `surface.DrawnSurface` bins into one plan
+    drawn caps and carriageway strips `drawnsurface.DrawnSurface` bins into one plan
     cell — tell which kind answered without a second pass, and it is the one
     barycentric test in the pipeline: `hits` is this with the mask dropped,
     and `covered_prepared` is this with the pack's half taken once.

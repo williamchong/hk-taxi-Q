@@ -18,6 +18,7 @@ import pytest
 import yaml
 
 from pipeline.config import RoadMark, load_config
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.roadmarks import (
@@ -37,7 +38,7 @@ from pipeline.roadmarks import (
     draw_opposed_joins,
     opposed_joins,
 )
-from pipeline.surface import DrawnSurface, downward_facing, mitres
+from pipeline.surface import downward_facing, mitres
 from tests.helpers import CITY_YAML, ribbon_of
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in

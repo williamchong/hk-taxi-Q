@@ -24,6 +24,7 @@ import pytest
 from pipeline import roads
 from pipeline.buildings import Grid
 from pipeline.config import load_config
+from pipeline.drawnsurface import DrawnSurface, _fans_thin
 from pipeline.gltf import read_glb, read_render
 from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -41,14 +42,12 @@ from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
-    DrawnSurface,
     SurfaceReport,
     _assign_trims,
     _Builder,
     _clamped_rails,
     _deck_rims,
     _ends_by_node_and_level,
-    _fans_thin,
     _half_widths,
     _insert_stations,
     _kerbside,

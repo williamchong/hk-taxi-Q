@@ -111,7 +111,7 @@ def thin_in_plan(corners: np.ndarray, thin_m: float) -> np.ndarray:
     twice-area over the longest plan side — twice the width, for a rectangle —
     against the lattice bar `boxjunctions._import_quantum_m` explains. The one
     copy of the test, asked by `FlatBuilder.build` of what it built and by
-    `surface.DrawnSurface.split` of a fan it has not built yet, so a cut the
+    `drawnsurface.DrawnSurface.split` of a fan it has not built yet, so a cut the
     builder would then throw away is refused by the same arithmetic."""
     first, second = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
     twice_area = np.abs(first[:, 0] * second[:, 1] - first[:, 1] * second[:, 0])

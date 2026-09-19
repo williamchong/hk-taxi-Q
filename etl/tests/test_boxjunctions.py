@@ -26,8 +26,9 @@ from pipeline.boxjunctions import (
     long_axis_deg,
 )
 from pipeline.config import load_config
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.meshbuild import FlatBuilder
-from pipeline.surface import DrawnSurface, downward_facing
+from pipeline.surface import downward_facing
 from tests.helpers import CITY_YAML, polygon_area, ribbon_of
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in

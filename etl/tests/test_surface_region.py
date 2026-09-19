@@ -15,11 +15,11 @@ from shapely.geometry import Point as shapely_point
 from shapely.geometry import Polygon
 
 from pipeline import surface_region
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.surface import (
     _KERB_LEFT,
     _RIM_LEFT,
     _RIM_RIGHT,
-    DrawnSurface,
     _clamped_rails,
     _shoelace,
     _stations_kept,

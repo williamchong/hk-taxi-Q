@@ -51,6 +51,7 @@ import numpy as np
 from pipeline import gdb
 from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.fetch import source_reads
 from pipeline.geometry import wound_up
 from pipeline.gltf import write_glb
@@ -65,12 +66,7 @@ from pipeline.polyline import Segments, plan_lengths_2d, plan_projections
 from pipeline.railings import AT_GRADE
 from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, clip, read_graph
-from pipeline.surface import (
-    SURFACE_MANIFEST_NAME,
-    SURFACE_MANIFEST_SCHEMA,
-    DrawnSurface,
-    downward_facing,
-)
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
 
 log = logging.getLogger(__name__)
 
