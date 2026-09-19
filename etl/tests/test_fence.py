@@ -48,8 +48,17 @@ def _clearance(rows: dict[int, list[float]]) -> dict:
     return {"clearance": [{"edge": edge, "clear_width_m": widths} for edge, widths in rows.items()]}
 
 
-def _drawn(edges: dict[int, list[float]]) -> dict:
-    return {edge: {"edge": edge, "half_width_m": halves} for edge, halves in edges.items()}
+def _drawn(edges: dict[int, list[float]], offsets: dict[int, list[float]] | None = None) -> dict:
+    """`roadsurface.json`'s `carriageway[]`, keyed by edge. Centred on its own
+    centreline unless a case says otherwise, which is every ribbon before `Q107`."""
+    return {
+        edge: {
+            "edge": edge,
+            "half_width_m": halves,
+            "offset_m": (offsets or {}).get(edge, [0.0] * len(halves)),
+        }
+        for edge, halves in edges.items()
+    }
 
 
 class TestFencedSet:
@@ -147,7 +156,7 @@ class TestPlaceOverAnOpenOffGradeEdge:
         }
 
     def test_an_open_off_grade_edge_can_be_placed(self) -> None:
-        drawn = {1: {"half_width_m": [2.0, 2.0]}, 2: {"half_width_m": [2.0, 2.0]}}
+        drawn = _drawn({1: [2.0, 2.0], 2: [2.0, 2.0]})
         placements, report = place(
             self._graph(), drawn, [1], inset_m=1.0, unit_width_m=2.0, touchdown_levels=(-1,)
         )
@@ -646,3 +655,60 @@ class TestClosesReportsBothPopulations:
         `touchdowns_dressed` on every failure and points at the wrong one."""
         report = FenceReport(span_m=[6.4], mouths_dressed=0, touchdowns_dressed=1, barriers=99)
         assert not report.closes(2.0)
+
+
+class TestTheRowStandsAcrossTheRibbon:
+    """🔴 `P3-35d`. The ribbon is `[offset - half, offset + half]` (`Q106`), so the
+    row is centred on `offset` — and `offset` is signed to the NEARSIDE, left of
+    the published direction, while the row is laid from a tangent that points
+    INTO the street and so reverses at the end mouth. Pinned against
+    `surface.mitres` itself and never against a comment: a flipped sign doubles
+    the error it exists to remove, and renders as a row of barriers."""
+
+    # A street running +x, its ribbon 4 m wide and drawn 3 m to the NEARSIDE.
+    POINTS = ((0.0, 0.0, 0.0), (40.0, 0.0, 0.0))
+
+    def _rails_across(self) -> tuple[float, float]:
+        """The drawn rails' `z`, from `surface.mitres` — the frame the manifest's
+        `offset_m` is written in."""
+        from pipeline.surface import mitres
+
+        plan = np.array(self.POINTS)[:, [0, 2]]
+        left = mitres(np.array(self.POINTS))[0]
+        near, far = plan[0] + left * (3.0 + 2.0), plan[0] + left * (3.0 - 2.0)
+        return tuple(sorted((float(near[1]), float(far[1]))))
+
+    def _row_across(self, *, fenced_from: int) -> tuple[float, float]:
+        """The row closing the street at node `fenced_from`, as its two ends' `z`."""
+        other = 9 if fenced_from == 1 else 8
+        graph = {
+            "edges": [
+                _edge(1, [list(p) for p in self.POINTS], 1, 2),
+                # The way in: an open street meeting the fenced one at that node.
+                _edge(2, [[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]], 1, other)
+                if fenced_from == 1
+                else _edge(2, [[40.0, 0.0, 0.0], [40.0, 0.0, 40.0]], 2, other),
+            ]
+        }
+        drawn = _drawn({1: [2.0, 2.0], 2: [2.0, 2.0]}, {1: [3.0, 3.0]})
+        placements, report = place(graph, drawn, [1], inset_m=4.0, unit_width_m=2.0)
+        assert report.mouths_dressed == 1
+        across = [item.position[2] for item in placements]
+        return min(across) - 1.0, max(across) + 1.0
+
+    def test_the_row_stands_across_the_ribbon_at_both_mouths(self) -> None:
+        rails = self._rails_across()
+        assert self._row_across(fenced_from=1) == pytest.approx(rails)
+        assert self._row_across(fenced_from=2) == pytest.approx(rails)
+
+    def test_a_centred_ribbon_is_dressed_as_it_always_was(self) -> None:
+        graph = {
+            "edges": [
+                _edge(1, [list(p) for p in self.POINTS], 1, 2),
+                _edge(2, [[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]], 1, 9),
+            ]
+        }
+        placements, _ = place(
+            graph, _drawn({1: [2.0, 2.0], 2: [2.0, 2.0]}), [1], inset_m=4.0, unit_width_m=2.0
+        )
+        assert sorted(item.position[2] for item in placements) == pytest.approx([-1.0, 1.0])

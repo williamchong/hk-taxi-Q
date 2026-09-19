@@ -371,8 +371,18 @@ class Placement:
     facing: tuple[float, float, float]
 
 
-def _half_width_at_end(drawn: dict, edge_id: int, at_start: bool) -> float | None:
-    """The drawn half-width at one END of an edge, or `None` where none was published.
+def _ribbon_at_end(drawn: dict, edge_id: int, at_start: bool) -> tuple[float, float] | None:
+    """The drawn ribbon at one END of an edge as `(half width, offset)`, or `None`
+    where none was published.
+
+    🔴 **Both, because the ribbon is `[offset - half, offset + half]` and never
+    `±half` about the centreline (`Q106`, `Q107`, `P3-33c`).** This read the
+    half-width alone until `P3-35d` and laid every row about the centreline: at
+    KA NING PATH `e45` the ribbon's mouth is 2.41 m to one side, so a 8.5 m row
+    stood with 2.4 m of open road past one end and 2.4 m of barrier on the footway
+    past the other. `offset_m` is read with `[]`, never a `.get` default: the
+    manifest's schema is pinned, and a default could only fire on a document that
+    had stopped publishing it — silently re-centring every row.
 
     Takes the end rather than a station index on purpose: the only two stations a
     mouth can sit at are the first and the last, and an integer parameter needed a
@@ -380,10 +390,12 @@ def _half_width_at_end(drawn: dict, edge_id: int, at_start: bool) -> float | Non
     `half_width_m`'s length and the polyline's, the "confined by construction"
     masking this repo refuses elsewhere (`Q58`).
     """
-    halves = (drawn.get(edge_id) or {}).get("half_width_m") or []
+    row = drawn.get(edge_id) or {}
+    halves = row.get("half_width_m") or []
     if not halves:
         return None
-    return float(halves[0] if at_start else halves[-1])
+    end = 0 if at_start else -1
+    return float(halves[end]), float(row["offset_m"][end])
 
 
 def _mouth_frame(
@@ -425,6 +437,7 @@ def _dress(
     points: np.ndarray,
     at_start: bool,
     half: float,
+    offset: float,
     inset_m: float,
     unit_width_m: float,
 ) -> tuple[list[Placement], float]:
@@ -438,18 +451,23 @@ def _dress(
     """
     span = round(2.0 * half, 3)
     at, tangent = _mouth_frame(points, at_start, inset_m)
-    # Across the carriageway rather than along it. ⚠️ **This is
-    # `carriageway._stations`' frame — RIGHT of travel — and not
-    # `surface.mitres`' left one.** The two are opposite on purpose and
-    # must not be "made consistent" (`Q78`); this may hold either because
-    # the offsets below are symmetric about zero, so the row is sign-free
-    # exactly as `carriageway.py`'s own licence says.
+    # Across the carriageway rather than along it: RIGHT of `tangent`, which
+    # runs from the node INTO the street.
     across = np.array([-tangent[2], 0.0, tangent[0]], dtype=np.float64)
+    # 🔴 **The row is centred on the RIBBON, and that makes the sign load-bearing.**
+    # While the row was symmetric about the centreline `across` could be either
+    # hand (`carriageway.py`'s own licence). `offset` is positive to the NEARSIDE
+    # — left of the PUBLISHED direction (`surface.mitres`, `drawnroad.nearside`) —
+    # and `tangent` is the published direction only at the start mouth. So the
+    # nearside is `-across` there and `+across` at the end mouth. A flip here
+    # doubles the error it exists to remove and renders as a row of barriers;
+    # `test_the_row_stands_across_the_ribbon_at_both_mouths` is the ratchet.
+    middle = at + across * (-offset if at_start else offset)
     units = max(1, math.ceil(span / unit_width_m))
     placements = []
     for index in range(units):
-        offset = (index + 0.5) * unit_width_m - 0.5 * units * unit_width_m
-        centre = at + across * offset
+        along_row = (index + 0.5) * unit_width_m - 0.5 * units * unit_width_m
+        centre = middle + across * along_row
         placements.append(
             Placement(
                 edge=edge_id,
@@ -508,16 +526,18 @@ def place(
                 report.ends_behind_another_fence += 1
                 continue
             at_start = ends[edge_id][0] == node
-            half = _half_width_at_end(drawn, edge_id, at_start)
-            if half is None or half <= 0.0:
+            ribbon = _ribbon_at_end(drawn, edge_id, at_start)
+            if ribbon is None or ribbon[0] <= 0.0:
                 report.mouths_no_width += 1
                 continue
+            half, offset = ribbon
             row, span = _dress(
                 edge_id,
                 node,
                 points=points[edge_id],
                 at_start=at_start,
                 half=half,
+                offset=offset,
                 inset_m=inset_m,
                 unit_width_m=unit_width_m,
             )
@@ -533,16 +553,18 @@ def place(
     # would stand behind a barrier. A touchdown is by construction a node where
     # the *open* network arrives, so every one of them is a way in.
     for edge_id, node, at_start in touchdown_mouths(graph, touchdown_levels):
-        half = _half_width_at_end(drawn, edge_id, at_start)
-        if half is None or half <= 0.0:
+        ribbon = _ribbon_at_end(drawn, edge_id, at_start)
+        if ribbon is None or ribbon[0] <= 0.0:
             report.touchdowns_no_width += 1
             continue
+        half, offset = ribbon
         row, span = _dress(
             edge_id,
             node,
             points=points[edge_id],
             at_start=at_start,
             half=half,
+            offset=offset,
             inset_m=inset_m,
             unit_width_m=unit_width_m,
         )
