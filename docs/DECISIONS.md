@@ -23978,3 +23978,25 @@ graders, 7 stage reports.
 - ⚠️ Not in the table: a frame, a drive, a sweep of a free value, the skidpad. ⚠️ Nothing yet checks
   the AGE of a build a side points at — the stale `wan_chai+causeway_bay` join reference found at
   `P3-35a` is that class, and is still open.
+
+### Built 2026-09-19 — `P3-35c`, the path that ships gets an end-to-end test
+
+`tests/test_surface_on_region.py`: `regionville` runs the real `region.build` over four level-0 arms
+and a flyover, with a 16 m east-west road lying **9 m north and 7 m south** of its centreline, writes
+`carriageway_region.json` through the stage's own `_document`, and builds `surface` from it.
+
+- **Truth is the polygon the test drew, read back off the mesh.** Rails at `z` 291 and 307; drawn
+  level-0 asphalt within 1% of the published area; no level-0 cap; the flyover keeps its cap.
+- 🔴 **Mutation: `_shape`'s `exact=` off fails exactly one of eight tests — the mesh read.** Both
+  `carriageway[]` assertions pass under it, because `_publish_territory_table` writes the table from
+  the territory whatever the geometry did. That is `Q106` reproduced in a fixture: a manifest that
+  agrees with itself about a ribbon that is not drawn. Areas dropped is caught by the area test.
+- 🔴 **The review named one silent fallback and there were two.** `territory_mismatched_edges` — a
+  territory whose `vertex_station` does not index the polyline, so the whole edge draws at `width_m`
+  — and `territory_missing_edges`, a level-0 edge with no territory row at all, which moved no
+  counter because `territory_fallback_stations` counts stations *inside* a territory edge. Both are
+  in the stage's `region:` line and read **0 / 0** on Wan Chai and Causeway Bay. Log-only, like the
+  counters beside them, so no schema moves.
+- ✅ Surface re-run on both regions: every published file byte-identical.
+- ⚠️ `test_surface.py` is untouched and still drives the region-less path. Whether that path is kept
+  is `P3-35e`'s question; what changed is that deleting from it no longer removes the only tests.

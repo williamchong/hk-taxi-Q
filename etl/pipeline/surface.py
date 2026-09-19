@@ -505,6 +505,17 @@ class SurfaceReport:
     # past its region's rectangle (`Q116`). Reachable, so a rise is a finding.
     territory_edges: int = 0
     territory_fallback_stations: int = 0
+    # Level-0 edges that HAVE a territory whose `vertex_station` does not index
+    # this polyline — `carriageway_region.json` built off another graph than the
+    # one being drawn. The edge keeps the plain `width_m` ribbon, whole, which is
+    # the invented width back and renders as a road; silent until `P3-35c`.
+    # Must be 0: `region` runs before `surface`, so only a stale file reaches it.
+    territory_mismatched_edges: int = 0
+    # Level-0 edges of this region's own with NO territory row at all, drawn as
+    # the plain `width_m` ribbon — `region.json`'s `edges_without_territory` seen
+    # from the side that draws it. A run wholly past the rectangle is the
+    # ordinary case (`Q116`), so this is reported and not required to be 0.
+    territory_missing_edges: int = 0
     # Metres of kerb drawn along an AREA's edge — the junction corners and bays no
     # ribbon's rail runs along. Zero with areas drawn is every corner kerbless.
     area_kerb_m: float = 0.0
@@ -2143,7 +2154,10 @@ def build_region(
     def stations_of(published: dict, *, foreign: bool) -> surface_region.Stations | None:
         if region is None or int(published["elevation_level"]) != 0:
             return None
-        return region.stations.get((foreign, int(published["id"])))
+        found = region.stations.get((foreign, int(published["id"])))
+        if found is None and not foreign:
+            report.territory_missing_edges += 1
+        return found
 
     rail_tolerance_m = city.carriageway_region.rail_tolerance_m if region is not None else 0.0
     rail_opening_m = city.carriageway_region.rail_opening_m if region is not None else 0.0
@@ -2480,6 +2494,8 @@ def _prepare(
     # rather than as a ceiling. A deck rim, where a level-0 edge ever carries
     # one, still cuts: the territory is a 2D plan and the deck is the structure.
     territory = stations is not None and len(stations.vertex_station) == len(half_widths)
+    if stations is not None and not territory:
+        report.territory_mismatched_edges += 1
     if territory:
         # The rail is the road's running kerb line, not everything the territory
         # reaches: mouths bridged, then bays and bulges opened away. Both only
@@ -4925,18 +4941,26 @@ def main(argv: list[str] | None = None) -> int:
         report.vertices,
         report.bytes / 1e6,
     )
-    if report.territory_edges:
+    if (
+        report.territory_edges
+        or report.territory_mismatched_edges
+        or report.territory_missing_edges
+    ):
         log.info(
             "  region: %d level-0 ribbons take their territory as their rails, %d published "
             "stations with none keep the plain ribbon (a run past its rectangle, Q116); %d painted "
             "lane counts cut to what the share carries; %d area triangles outside every ribbon, "
-            "%.0f m of kerb drawn along their edges, %d islands ringed and topped",
+            "%.0f m of kerb drawn along their edges, %d islands ringed and topped; %d edges whose "
+            "territory does not index their polyline drawn plain (must be 0), %d with no "
+            "territory at all drawn plain",
             report.territory_edges,
             report.territory_fallback_stations,
             report.territory_lanes_capped,
             len(report.area_triangles),
             report.area_kerb_m,
             report.islands,
+            report.territory_mismatched_edges,
+            report.territory_missing_edges,
         )
     log.info(
         "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "

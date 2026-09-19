@@ -460,6 +460,13 @@ Common emoji for this project:
   since `P3-33c`, so a change here is a change to the drawn road and owes the bullet below. What
   still holds is the region-less path — leave `carriageway_region:` out and every published file
   must hash as it did, only `city.json`'s `generated_utc` differing.
+  🔴 **`test_surface.py`'s 132 tests drive that region-less path, which NO region ships; the path that
+  ships is `tests/test_surface_on_region.py`** (`P3-35c`, `Q133`), whose `regionville` runs the real
+  `region.build` and hands its file to `surface`. ⚠️ **Assert on the MESH there, never on
+  `carriageway[]` alone**: with `_shape`'s `exact=` switched off every manifest assertion still
+  passes and only the mesh read fails. ⚠️ The surface `region:` log line ends in two fallback
+  counters — `territory_mismatched_edges` **must be 0** (a `carriageway_region.json` built off
+  another graph; the edge draws the invented width whole) and `territory_missing_edges` is reported.
 - 🔴 **`surface_region.py`, `_with_territory_stations`, `_stations_kept`, `_clamped_rails(exact=)`,
   `_publish_territory_table`, `_LANE_SPAN_PERCENTILE`, `carriageway_region.rail_tolerance_m`, or the
   level-0 floors (`P3-33c`, `Q129`): paste the surface stage's `region:` line and its triangle count,
