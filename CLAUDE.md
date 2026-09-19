@@ -1304,10 +1304,13 @@ Common emoji for this project:
   `roadsurface.json`'s per-vertex `corridor_*`, which was BUILT, MEASURED and WITHDRAWN**: a straight
   street's two vertices are both at junctions, and graded against where iB1000's surveyed lamp posts
   stand it reads 24.2% of Wan Chai's as in the road against 21.8% for the `±half` it replaced; the
-  running kerb line reads 13.3%. ⚠️ **The grader is a scratch script and is owed as a tool.** 🔴 **Still
-  OPEN: `railings.ribbons`, found 2026-09-19 (`Q133`)**: both fence lines are `boundary(…, ±(half +
-  outset))` about the centreline and `offset_m` is never read; `fence._dress` tiles symmetrically
-  too. One reader of the published rails is `P3-35d`'s. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
+  running kerb line reads 13.3%. ⚠️ **The grader is a scratch script and is owed as a tool.** ✅ `fence._dress` centres its row on the ribbon's `offset_m` since `P3-35d`; 🔴 **the sign is
+  load-bearing there** — nearside is `-across` at a start mouth and `+across` at an end mouth — and
+  `test_the_row_stands_across_the_ribbon_at_both_mouths` is the ratchet; mutation-check both ways.
+  🔴 **Still OPEN: `railings.ribbons`, found 2026-09-19 (`Q133`)**: both fence lines are
+  `boundary(…, ±(half + outset))` about the centreline and `offset_m` is never read. Priced: 16.2% /
+  10.0% of panels stand in the road against the running kerb line, 1.8% / 0.5% more than 1 m in.
+  ⚠️ `tools/railing_error.py` reads the same `±half`, so it cannot see this and moves with the fix. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
 - 🔴 **`surface.py` cuts the off-grade ribbon to its deck, per station and per side (`Q107`) —
   `_clamped_rails` is the one place, and it may only CUT.** `upper = min(shift + half, left_rim)`,
   `lower = max(shift − half, −right_rim)`, with the rims from `roadgraph.json`'s `deck_rim_m`.

@@ -24054,3 +24054,20 @@ disagreed; unexplained, and not evidence. `check.sh` 0, 2,473 tests.
 **Owed.** `fence._dress` and `railings.ribbons` (the rest of `P3-35d`); the lamp-post grader as a
 `tools/` instrument; `tools/paint_clearance.py`'s `on kerb` column was not re-run, since no painted
 layer reads this.
+
+### Built 2026-09-19 — `P3-35d` (3) fence; (4) railings priced and left
+
+**Fence.** `_ribbon_at_end` reads `(half, offset)` and `_dress` centres the row on the ribbon. 🔴 The
+sign became load-bearing the moment the row stopped being symmetric: `offset_m` is positive to the
+nearside of the PUBLISHED direction, and the row is laid from a tangent pointing INTO the street, which
+reverses at an end mouth. Pinned against `surface.mitres` at both mouths; both mutations — the sign
+flipped, and one sign used for both mouths — fail the ratchet. Every counter and the barrier count
+(77 / 24) are unchanged; `e629` moves 0.57 m and KA NING PATH `e45` **2.41 m**.
+
+**Railings — not built.** Priced on the shipped panels (5,484 / 2,136) against the road's running
+kerb line: standing in the road **16.2% / 10.0%**, more than 1 m in **1.8% / 0.5%**, more than 2 m
+past it **3.7% / 0.9%**; p50 0.61 / 0.67 m, which is `outset_m`, so the median is right and the
+defect is the spread. The fix is a re-stationing of the walk on the region's dense kerbs (a straight
+street is two published vertices), with `shift_m`, the fold and gap rules and `railing_error.py` all
+reading the new line — a change that owes the whole per-class battery and both sweeps. Left as
+`P3-35d` (4) rather than rushed behind three other changes in one day.
