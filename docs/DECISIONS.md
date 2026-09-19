@@ -23957,3 +23957,24 @@ stand as the record of what it was and why it was dropped; the code is at the co
 - ⚠️ **Found on the way**: `verify_join` fails on any two-region sync against a stale
   `etl/out/wan_chai+causeway_bay/` (2026-09-08, before `lanes_forward`). `python -m pipeline.join`
   rewrites it. Nothing checks that reference's age — `P3-35b`'s runner is the place.
+
+### Built 2026-09-19 — `P3-35b`, the battery as a table
+
+`tools/battery.py`: a trigger names the graders and stage-report keys a `CLAUDE.md` bullet owes; a
+side is a checkout root; each output is saved under `build/battery/` and diffed. 16 triggers, 16
+graders, 7 stage reports.
+
+- **The exit code is "did every item run".** A grader that gates and fails has still answered
+  (`carriageway_occupancy` and `clearance_reconcile` exit 1 today); a traceback, argparse's 2 and a
+  signal have not.
+- **Both sides are graded by this checkout's tools**, so a diff varies the bundle and holds the
+  instrument. `--tools-from side` is the exception for a schema that moved under the grader.
+- 🔴 **Found in review, and the reason the step was worth a review**: `narrowing.py` took `--region`
+  alone, so both sides read this checkout's `etl/out` and its diff was empty *by construction* —
+  `Q72`'s tautology in a tool whose whole job is to show a number moving. `open_region` already took
+  `out_root`; the flag is added and `test_every_tool_is_pointed_at_its_own_side` is the ratchet.
+- `--jobs` is safe because no grader writes unless handed `--json` or `--svg`, which the table never
+  passes; the printed table is in the work list's order at any `jobs`.
+- ⚠️ Not in the table: a frame, a drive, a sweep of a free value, the skidpad. ⚠️ Nothing yet checks
+  the AGE of a build a side points at — the stale `wan_chai+causeway_bay` join reference found at
+  `P3-35a` is that class, and is still open.

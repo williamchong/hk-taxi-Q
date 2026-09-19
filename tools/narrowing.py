@@ -512,6 +512,12 @@ def main(argv: list[str] | None = None) -> int:
         default=CAR_WIDTH_M,
         help="the player's own width, from taxi.tscn (default: %(default)s)",
     )
+    parser.add_argument(
+        "--out-root",
+        type=Path,
+        default=None,
+        help="the ETL out tree to measure (default: this checkout's etl/out)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -520,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     order = classes(city)
     log.info("%s / %s", city.name, region.name)
 
-    out_dir, graph, drawn, buildings = open_region(city, args.region)
+    out_dir, graph, drawn, buildings = open_region(city, args.region, out_root=args.out_root)
     authored_half = {int(edge["id"]): float(edge["width_m"]) / 2.0 for edge in graph["edges"]}
     tiles = tile_meshes(out_dir, buildings)
     heroes = landmark_meshes(city, args.region, out_dir)

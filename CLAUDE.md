@@ -137,6 +137,19 @@ Common emoji for this project:
 
 ## Before marking work done
 
+- 🔴 **The grader batteries below are a TABLE since `P3-35b` (`Q133`): `tools/battery.py <trigger>
+  --region <r> --before <checkout root> [--jobs 2]`, and `--list` prints it.** It runs what a bullet
+  names against two sides — this checkout and a detached worktree holding the before build
+  (a worktree per prior commit, with its own bundle and import) — saves each output under `build/battery/` and writes a
+  diff per item. The bullets keep the *why* and which column is the finding; the table keeps the
+  commands. ⚠️ **Its exit code says whether every item RAN, never whether a number moved** — a grader
+  that gates and fails (`carriageway_occupancy`, `clearance_reconcile` today) still ran. ⚠️ **Both
+  sides are graded by THIS checkout's tools**, so the instrument is held still; `--tools-from side`
+  is for a bundle whose schema moved under the grader. 🔴 **A tool handed `--region` alone reads this
+  checkout's `etl/out` on both sides and diffs empty by construction** — `narrowing.py` shipped in
+  the first table that way — so every row must carry `{generated}` or `{out_root}`, and
+  `test_every_tool_is_pointed_at_its_own_side` is the ratchet; mutation-check it. ⚠️ Not yet in the
+  table: anything that needs a frame, a drive, a sweep of a free value, or `tools/skidpad.sh`.
 - Python changes: `ruff check .` and `ruff format --check .` **from the repo root** (the root
   `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
   `pytest` from `etl/`.
