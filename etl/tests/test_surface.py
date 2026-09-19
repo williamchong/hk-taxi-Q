@@ -55,6 +55,7 @@ from pipeline.surface import (
     _on_structure_length_m,
     _prepare,
     _rail_stations,
+    _slid_onto_deck,
     _stub_clusters,
     boundary,
     build_region,
@@ -2578,6 +2579,68 @@ class TestTheRibbonIsClampedToItsDeck:
         """A zero-width quad collapses in `_Builder.build` and reads as a gap."""
         _, _, refused = _clamped_rails(np.array([2.0]), np.array([-2.0]), np.array([2.0]), 0.0)
         assert refused == 1
+
+
+class TestTheRibbonSlidesOntoItsDeckBeforeTheCut:
+    """`P3-35g1`: the shift is one number per edge and the deck is not.
+
+    `e364`'s far half drags its median to -2.9 m and the near half was cut
+    3.35 -> 2.05 m on a deck that could carry it whole.
+    """
+
+    HALF = np.array([2.0])
+
+    def drawn(self, left: float, right: float, shift: float = 0.0) -> tuple[float, float]:
+        rims = np.array([left]), np.array([right])
+        slid, _, _ = _slid_onto_deck(self.HALF, *rims, shift)
+        upper, lower, _ = _clamped_rails(self.HALF, *rims, slid)
+        return float(lower[0]), float(upper[0])
+
+    def test_no_deck_moves_nothing(self) -> None:
+        wide = np.full(3, np.inf)
+        slid, moved, refused = _slid_onto_deck(np.full(3, 2.0), wide, wide, 1.5)
+        assert slid == pytest.approx(np.full(3, 1.5))
+        assert (moved, refused) == (0, 0)
+
+    def test_a_ribbon_that_fits_where_it_stands_does_not_move(self) -> None:
+        """🔴 `Q103`: the paint is never centred on the structure."""
+        assert self.drawn(left=2.5, right=4.0) == pytest.approx((-2.0, 2.0))
+
+    def test_a_ribbon_hanging_off_one_rim_is_carried_back_whole(self) -> None:
+        assert self.drawn(left=1.0, right=4.0) == pytest.approx((-3.0, 1.0))
+        assert self.drawn(left=4.0, right=1.0) == pytest.approx((-1.0, 3.0))
+
+    def test_it_slides_no_further_than_the_room_and_the_clamp_cuts_the_rest(self) -> None:
+        lower, upper = self.drawn(left=1.0, right=2.5)
+        assert (lower, upper) == pytest.approx((-2.5, 1.0))
+        assert upper - lower < 4.0
+
+    def test_a_deck_narrower_than_the_paint_on_both_sides_is_only_cut(self) -> None:
+        slid, moved, _ = _slid_onto_deck(self.HALF, np.array([1.0]), np.array([1.5]), 0.0)
+        assert (float(slid[0]), moved) == (0.0, 0)
+
+    def test_a_ribbon_wholly_off_its_deck_is_not_chased_onto_it(self) -> None:
+        """The clamp's crossing fallback keeps its population."""
+        slid, moved, _ = _slid_onto_deck(self.HALF, np.array([-5.0]), np.array([9.0]), 0.0)
+        assert (float(slid[0]), moved) == (0.0, 0)
+
+    def test_a_deck_that_would_hold_the_ribbon_twice_is_refused_and_counted(self) -> None:
+        """`Q103`'s interchange: that slab is somebody else's as well."""
+        slid, moved, refused = _slid_onto_deck(self.HALF, np.array([1.0]), np.array([7.5]), 0.0)
+        assert (float(slid[0]), moved, refused) == (0.0, 0, 1)
+        _, moved, refused = _slid_onto_deck(self.HALF, np.array([1.0]), np.array([6.5]), 0.0)
+        assert (moved, refused) == (1, 0)
+
+    def test_a_side_with_no_rim_gives_no_room(self) -> None:
+        """`Q113`'s discard is `inf`, and room that is `inf` is not room.
+
+        ⚠️ Nor is it an interchange: the whose-deck bar would refuse it anyway,
+        and book a half-measured station as a deck somebody else shares."""
+        for rims in ((1.0, np.inf), (np.inf, 1.0)):
+            slid, moved, refused = _slid_onto_deck(
+                self.HALF, *(np.array([rim]) for rim in rims), 0.0
+            )
+            assert (float(slid[0]), moved, refused) == (0.0, 0, 0)
 
 
 class TestDeckRimsFallBackToNoConstraint:

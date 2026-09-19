@@ -24270,3 +24270,60 @@ island. 🔴 **A finding that is not this step's**: a pale-blue spike some 40 m 
 ROAD's north kerb in that frame, and it is in the before frame too (placements swapped, library
 byte-identical) — not railings, not yet attributed. 2,483 tests, ruff, `check.sh` 0, pipeline
 `--from railings` clean on both regions.
+
+### Built 2026-09-20 — `P3-35g1`: the off-grade ribbon slides onto its deck before it is cut
+
+`surface._slid_onto_deck`, ahead of `_clamped_rails` at the two off-grade call sites (the published
+vertices and `_shape`'s stations; a territory never reads the shift). Where the ribbon hangs off one
+rim and stands on its deck, the shift is carried back by the overhang and the clamp cuts what then
+hangs off the far rim. `_clamped_rails` still only cuts, and its tests did not move.
+
+🔴 **What `Q103` refused is not what this does.** That refusal is of a per-vertex offset *sourced
+from the deck's middle*. This never reads the middle: a station that fits its deck where it stands
+does not move, and the published `offset_m` stays the ribbon's intent. Three refusals, no knob —
+an `inf` rim (no deck, or `Q113`'s discard), a ribbon wholly off its deck (the clamp's crossing
+fallback keeps its population), and **a deck that would hold the ribbon twice, which is somebody
+else's as well**. That last bar is derived from the edge's own width and sits beside no cliff:
+slides kept run 238 / 258 / 274 / 302 over 1.25x / 1.5x / 2x / 3x on Wan Chai.
+
+⚠️ **The mutation checks changed the code.** "Slide by `min(overhang, room)`" and "slide by the
+overhang" are the same drawn interval, because the clamp cuts the far side either way — the `min`
+was deleted. And the `measured` guard is shadowed by the whose-deck bar (an `inf` span is wider than
+twice), so what it protects is the **count**: without it a half-measured station is booked as an
+interchange. The test asserts the count. Five guards, each failing its own test alone.
+
+| Wan Chai · Causeway Bay | before | after |
+|---|---|---|
+| stations slid / refused by the whose-deck bar | — | **274 / 28 · 69 / 5** |
+| stations cut (`clamped_stations`) | not recorded | 90 · 14 |
+| off-grade edges whose `carriageway[]` moved | — | 34 · 6 |
+| level-0 `carriageway[]` rows moved | — | **0 · 0** |
+| stations narrower than before / wider than `width_m` | — | **0 / 0 · 0 / 0** |
+| `deck_margin.py` clamped width min / p10 / p50 (Wan Chai) | 3.52 / 5.45 / 7.00 | **4.68 / 5.70 / 7.17** |
+| `deck_margin.py` stations under the 3.20 m lane bar | 5 of 1,256 | **0** |
+| `e364` median drawn width · corridor | 4.31 · 1.34 m | **6.80 · 1.94 m** |
+| `e208` FLEMING ROAD median drawn · corridor | 5.35 · 1.95 m | 5.60 · 2.33 m |
+| `overhang.py` level +1 hanging | 4.8% (3,002 m²) · 25.1% | **5.0% (3,127 m²) · 25.3%** |
+| `deck_margin.py` stations hanging past the deck | 43.1% | 46.2% |
+
+`roadgraph.json` byte-identical (the stage was run `--from surface`); what moved is
+`roadsurface.json`, `clearance.json`, `city.json` and 20 · 4 road and tile chunks.
+`touchdown_error.py` 0 lines moved, both regions; `narrowing.py` 0; `ground_clearance.py` 0 on Wan
+Chai and one cell on Causeway Bay.
+
+⚠️ **The cost, stated.** About 12% of the newly drawn square metres hang (125 of 1,008 m² on Wan
+Chai) against 4.8% for the level — the rims are per published vertex and interpolated between, and a
+deck flares and pinches between them. ⚠️ **The prediction that did not hold**: `clearance_reconcile`'s
+`EXPECT` was expected back at 21 / 25 / 6. It was already failing before this step (28 / 64 / 38
+against 22 / 26 / 6, `P3-33e`'s to move) and reads the same after: `e364` is still starved at
+1.94 m. The ramp is wider and not yet wide enough. Causeway Bay's `overhang.py` gate fails at 25.3%
+as it failed at 25.1% — the far halves with no deck in the bundle (`Q116`).
+
+Frames over `e364`'s near half (`--camera=1575,40,425 --look=1625,12,455`), imports deleted before
+each side, each pair `cmp`-identical, 0 shader errors: before, a dark strip on a wider pale deck;
+after, the carriageway fills it. ⚠️ `e337`, the rule's usual camera, moved 8.44 → 8.50 m and was
+not shot. 🔴 **The pale spike of `P3-35d5`'s frame has a sibling here**, a pink one beside the ramp
+in both frames — not this step's. ⚠️ **`etl/out/wan_chai+causeway_bay` is a third thing to
+rebuild**: `check.sh`'s `verify_join` failed on "a clearance width differs by 3.0000 m" until
+`python -m pipeline.join` was re-run, which is the check working. 2,491 tests, ruff.
+

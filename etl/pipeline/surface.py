@@ -675,6 +675,12 @@ class SurfaceReport:
     # ⚠️ **A rise here is a finding to go and look at, never a bar to retune** —
     # it means more of the network is drawn off its own structure.
     clamp_refused_stations: int = 0
+    # `P3-35g1`. Published stations whose ribbon was carried back onto its deck
+    # before the cut, and those left hanging because the deck would hold the
+    # ribbon twice. ⚠️ The second is the counter that can fail: at zero with the
+    # first in the hundreds, the whose-deck bar has stopped refusing.
+    slid_stations: int = 0
+    slide_refused_stations: int = 0
     kerb_minority_m: float = 0.0
     # Two-way edges whose published `lanes_forward` is past what the codec's
     # two bits can say, drawn at their old middle instead (`Q126`). 0 here and
@@ -1827,8 +1833,16 @@ def _prepare(
     # and `_shape` clamps it against the rims that travel beside it. Clamping it
     # here as well would apply the cut twice, the second time about a centre
     # that is no longer `shift`.
+    # ⚠️ **Slid first, off-grade only** (`P3-35g1`): a territory's rails are its
+    # extents and never read the shift at all.
+    drawn_shift: float | np.ndarray = shift_m
+    slid = slide_refused = 0
+    if not territory:
+        drawn_shift, slid, slide_refused = _slid_onto_deck(
+            half_widths, table_left, table_right, shift_m
+        )
     drawn_upper, drawn_lower, refused = _clamped_rails(
-        half_widths, table_left, table_right, shift_m, exact=territory
+        half_widths, table_left, table_right, drawn_shift, exact=territory
     )
     if territory:
         report.territory_edges += 1
@@ -1847,6 +1861,8 @@ def _prepare(
         cut = (drawn_upper - drawn_lower) < 2.0 * half_widths - _MIN_SEGMENT_M
         report.clamped_stations += int(cut.sum())
         report.clamp_refused_stations += refused
+        report.slid_stations += slid
+        report.slide_refused_stations += slide_refused
     lanes, lanes_forward = int(published["lanes"]), _lanes_forward_code(published, report)
     flare = (
         surface_region.flare_m(stations, rail_opening_m, style.kerb_width_m)
@@ -2341,11 +2357,61 @@ def _polyline(published: dict) -> np.ndarray:
     return np.asarray(published["polyline"], dtype=np.float64)
 
 
+def _slid_onto_deck(
+    half: np.ndarray, rim_left: np.ndarray, rim_right: np.ndarray, shift: float
+) -> tuple[np.ndarray, int, int]:
+    """The shift per station, slid back onto the deck where the ribbon hangs off
+    one rim and the other side has room; how many slid; how many were refused.
+
+    `P3-35g1`. `shift` is the median of the deck walk's offsets, one number for
+    a deck whose middle wanders 4 to 7 m along nearly every off-grade edge, and the
+    clamp cuts per station against it. `e364` is the case that named this
+    (`Q116`): its far half, over Causeway Bay's structure, drags the median to
+    -2.9 m and the near half was cut 3.35 → 2.05 m on a deck whose rims never
+    moved. The ribbon is carried back by its overhang and the clamp then cuts
+    whatever hangs off the far rim — so where the deck is narrower than the
+    paint this changes nothing, and nowhere does it widen anything.
+
+    🔴 **It never reads the deck's MIDDLE, and that is the line `Q103` drew.**
+    A per-vertex offset fitted to the structure centres the paint on whatever
+    contiguous slab lies at ribbon height, which at an interchange is not this
+    carriageway. Here the published offset stays the ribbon's intent and a
+    station that fits its deck where it stands does not move at all.
+
+    🔴 **Three refusals, none of them a knob.**
+
+    * A rim that is `inf` — no deck, or `Q113`'s off-structure discard — has no
+      edge to come back from and no room that means anything. Level 0 never
+      reaches here; this is what keeps a half-measured station still.
+    * A ribbon **wholly off** its deck is `_clamped_rails`' crossing fallback
+      and stays that: a slide that carries paint a ribbon's width to reach a
+      slab is chasing another structure.
+    * **A deck that would hold this ribbon twice is somebody else's as well**
+      (`Q103`'s `e208`: 7.9 m read under a 5.60 m ribbon beside 24 m of
+      interchange). Refused and counted. Swept on both regions the count of
+      slides kept runs 238 / 258 / 274 / 302 over 1.25x / 1.5x / 2x / 3x — no
+      cliff to sit beside, which is what a derived bar needs.
+    """
+    upper, lower = shift + half, shift - half
+    over_left, over_right = upper - rim_left, -rim_right - lower
+    measured = np.isfinite(rim_left) & np.isfinite(rim_right)
+    on_deck = (np.minimum(upper, rim_left) - np.maximum(lower, -rim_right)) > _MIN_SEGMENT_M
+    # The two are exclusive: hanging off one rim is having no room on that side.
+    left = measured & on_deck & (over_left > 0.0) & (over_right < 0.0)
+    right = measured & on_deck & (over_right > 0.0) & (over_left < 0.0)
+    shared = (rim_left + rim_right) > 4.0 * half
+    refused = (left | right) & shared
+    # By the overhang and no less: where the room is shorter than that, the clamp
+    # cuts what then hangs off the far rim and the drawn interval is the same.
+    slide = np.where(left & ~shared, -over_left, 0.0) + np.where(right & ~shared, over_right, 0.0)
+    return shift + slide, int((slide != 0.0).sum()), int(refused.sum())
+
+
 def _clamped_rails(
     half: np.ndarray,
     rim_left: np.ndarray,
     rim_right: np.ndarray,
-    shift: float,
+    shift: float | np.ndarray,
     *,
     exact: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, int]:
@@ -2440,7 +2506,10 @@ def _shape(edge: _Edge, style: RoadSurface) -> None:
     # bodily across without changing its width. `boundary` takes a signed
     # distance, so the right-hand side is `-half + shift` rather than
     # `-(half + shift)`; the kerb lips ride along with the sides they belong to.
-    shift = edge.shift_m
+    shift: float | np.ndarray = edge.shift_m
+    if not edge.territory:
+        # The counts are dropped for the reason the clamp's is, below.
+        shift, _, _ = _slid_onto_deck(half, points[:, _RIM_LEFT], points[:, _RIM_RIGHT], shift)
     # ⚠️ The refusal count is dropped here on purpose: `_prepare` already
     # counted it over the published stations, and adding the ribbon's own — a
     # different polyline, after `dedupe` and `_add_kerb_stations` — would report
@@ -3870,6 +3939,12 @@ def main(argv: list[str] | None = None) -> int:
         report.deck_rim_edges,
         report.clamped_stations,
         report.clamp_refused_stations,
+    )
+    log.info(
+        "  %d stations slid back onto their deck before the cut, %d left hanging "
+        "beside a deck that would hold the ribbon twice (P3-35g1)",
+        report.slid_stations,
+        report.slide_refused_stations,
     )
     if report.deck_rim_off_structure:
         log.info(

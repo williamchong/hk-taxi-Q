@@ -127,7 +127,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   vertices**, the pre-`Q107` bundle exactly. 🔴 **The evidence is a frame and the cache will lie to
   you** — delete `game/.godot/imported/roads.glb-*` and re-import before *each* shot, or the pair
   comes back identical over a 2.16 m change; and aim at `e337`, not `e208`, whose cut is under
-  0.5 m. Numbers in `Q107`.
+  0.5 m. 🔴 **Before the cut the ribbon SLIDES back onto its deck (`_slid_onto_deck`, `P3-35g1`)** —
+  by its overhang, where it hangs off one rim and stands on the deck — and it **never reads the
+  deck's middle**, which is what `Q103` refused. Three refusals and no knob: an `inf` rim, a ribbon
+  wholly off its deck, and a deck that would hold the ribbon twice (counted:
+  `slide_refused_stations`, 28 / 5 — at zero the bar has stopped refusing). ⚠️ Paste the stage's
+  `slid back onto their deck` line and `battery.py off-grade`; **0 level-0 rows may move and no
+  station may come out narrower or wider than `width_m`**. ⚠️ **Rebuild
+  `etl/out/wan_chai+causeway_bay` (`python -m pipeline.join`) after moving either region**, or
+  `verify_join` fails on the stale reference. Numbers in `Q107`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no **method** with the pipeline — `check.sh` does not require a built
