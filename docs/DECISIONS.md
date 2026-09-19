@@ -24192,3 +24192,37 @@ neutralised fails both new tests. 2,480 tests.
 a lane count off TD's surveyed lane lines, per-station `offset_m` off-grade — "each its own task
 when it is reached", priced one at a time.
 
+### Planned 2026-09-20 — `P3-35g` priced into four tasks, and two of the railings "costs" are defects
+
+Each item was priced on the shipped bundles before anything was built; `docs/PLAN.md`'s `P3-35`
+table carries the rows. What the pricing changed:
+
+- 🔴 **`P3-35d` (4) recorded three costs and two of them are one defect** (`P3-35d5`).
+  `railings._stationed` unions published vertices with kerb stations by `np.union1d`, untolerated;
+  at Causeway Bay `e10` one step is **0.000217 m** long — above `dedupe`'s `1e-6` — and
+  `surface.boundary`'s backward test reads **−0.001848** on it, a sign decided by rounding. The hold
+  is sticky: six stations pinned at `(313.9, 141.7)`, 8.6 m of fence on one point, and the 5.53 m is
+  **one stand** whose published railing lies 0.3 m from the naive offset line. **467 of 498**
+  Causeway Bay hold events fire on a step under 1 cm. Wan Chai's 3 donor-less `bollards` stations
+  are one 1.46 m piece on PERCIVAL STREET `e482` held the same way. ⚠️ No counter could see either:
+  `facing_away` is asked of the unit panel. `bends` and the 12.57 m `shift_m` stay costs — the
+  second is two refused samples, and it exposes that **259 of Wan Chai's 1,468 territory sides
+  (17.6%) have no kerbed station and register against the 16.5 m ray cap**, which is `drawnroad`'s
+  to answer and not railings'.
+- **Off-grade (`g1`) is smaller than its row said**: the drawn offset is already per station
+  (`Q107`); only the clamp's `shift` is per edge. 🚫 `Q103`'s refusal is of a per-vertex offset
+  *sourced from the deck's middle*; a slide bounded by the overhang sources nothing new.
+- **Crossings (`g2`)**: of `Q101`'s five publishers only `DTAD_CROSSING_LINE` publishes crossing
+  paint, and it publishes each stripe as a rectangle. ⚠️ Road Network v2's `TRAFFIC_FEATURES`
+  reads **one** zebra point against 121 crossings in Wan Chai — not a sixth publisher.
+- **Hatching (`g3`) is IN SCOPE on the user's call, 2026-09-20.** `P3-18` and `P3-23` held it out
+  on `Q65`'s "none tells the player where to drive", a rule written for signs; that scope refusal is
+  lifted for `RM1035`–`RM1037`. 🔴 The sheet, read for the first time: all three WHITE;
+  `RM1035`/`RM1036` differ only in chevron direction and carry **two widths under one code**
+  (`LINE WIDTH = 150`, `CHEVRON WIDTH = 900`); `RM1037` carries one.
+- 🔴 **The lane-line count (`g4`) is `Q127`'s refuted reading**, and is planned as a grader-only
+  probe of the one thing that changed since — `P3-34`'s host assignment — with refusal as the
+  expected outcome and ~15 edges as the ceiling if it passes.
+- **`P3-35h`, its own task on the user's call**: `road_graph.gd` never consumes
+  `carriageway_offset_m`, and `Q107`'s excuse for that expired at `P3-33c`.
+
