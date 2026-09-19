@@ -1291,8 +1291,10 @@ Common emoji for this project:
   centreline cell" are about the published centreline. ⚠️ **"0.0 on all 737 level-0 edges" EXPIRED
   at `P3-33c`**: a level-0 ribbon's rails are its territory, and 288 of 734 are drawn more than 1 m
   off their centreline. `arrows.py` read `±half` until `Q130` put its arrows 1.5 m out of the painted
-  lanes; 🔴 **`Ribbon.kerb_target` — signs, signals, lamps — still does, and is OPEN**. Numbers in
-  `Q106`, `Q107` and `Q130`.
+  lanes; 🔴 **`Ribbon.kerb_target` — signs, signals, lamps — still does, and is OPEN**. 🔴 **So does
+  `railings.ribbons`, found 2026-09-19 (`Q133`)**: both fence lines are `boundary(…, ±(half +
+  outset))` about the centreline and `offset_m` is never read; `fence._dress` tiles symmetrically
+  too. One reader of the published rails is `P3-35d`'s. Numbers in `Q106`, `Q107`, `Q130`, `Q133`.
 - 🔴 **`surface.py` cuts the off-grade ribbon to its deck, per station and per side (`Q107`) —
   `_clamped_rails` is the one place, and it may only CUT.** `upper = min(shift + half, left_rim)`,
   `lower = max(shift − half, −right_rim)`, with the rims from `roadgraph.json`'s `deck_rim_m`.

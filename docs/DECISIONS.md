@@ -23865,3 +23865,73 @@ separate layer of work.
 **See.** `Q118` for the longitudinal host rule and the own-carriageway refusal these codes reuse ·
 `Q125` for the per-metre cut, the precedent for a shader yielding to geometry · `Q54` for why an
 inferred marking is a debit · `Q131` for `e785`/`e124`, where the stub and the sawtooth were seen.
+
+## `Q133` — The ETL is refactored, not rewritten: the model is the limit, and the drawn road gets one door
+
+**Asked 2026-09-19, by the user**, after `Q128`–`Q132` rebuilt the widening and the lane logic in
+five layers: review the ETL to simplify it, and say whether another approach would close more of the
+gap between the real city and the render, or whether a complete rewrite would serve better — *"a
+road logic accurate city with our custom art style"*.
+
+**How it was read.** Four read-only reviews in one session — the road core, the furniture and paint
+stages, config / tools / tests, and an inventory of where the drawn road still differs from the
+city. ⚠️ **Their line counts are estimates from reading and none was measured**; two claims were
+checked by hand and are marked ✅.
+
+**Decided.** No rewrite. No new source. A refactor in the order `PLAN.md` `P3-35` gives, whose
+centre is one reader of the drawn road. The signal layer is removed on the user's call (`P3-35a`).
+
+**Why not a rewrite.**
+
+- **The bulk is prose, not plumbing.** `pipeline/` is 44,125 lines, `tests/` 37,072, `tools/` 26,892.
+  `config.py`'s 6,941 are 41% code; the furniture stages are 50–60% rationale; `hong_kong.yaml` is
+  73% comment (2,782 of 3,817). A rewrite re-owes every paragraph or loses it.
+- **The code is a record of defects that render as a plausible road** — `opened`'s four guards, the
+  mouth bridging, the wedge-lerp assignment, mutuality in `_opposed_gaps`, "a ceiling and never a
+  source", the refusal-inclusive `n > drawn` distributions. A rewrite re-ships them under a green
+  `check.sh`, which is how each was shipped the first time.
+- **611 of 2,352 tests (26%) name a private, and many of those privates are `CLAUDE.md` ratchets** —
+  a public contract with underscores, which a rewrite must reproduce name for name or re-argue.
+- What a rewrite would buy — a per-station cross-section type, a phased pipeline in place of the
+  mutable `surface._Edge`, one junction model for both levels — is reachable a step at a time.
+
+**Why not another source: the gap is the model, then scope, then code, and data last.**
+
+- Publishers are rarely silent at level 0: HyD covers all but ~2% of the length (`Q129`). No
+  lane-count attribute exists in 3,810 packages (`Q57`).
+- `roadmarks.json`'s `refused_m_by_code` and the unread Traffic Aids layers hold tens of kilometres of
+  surveyed paint refused **on scope** — hatching, `RM1007`, `RM1038`, studs, `RM1107`, crossings —
+  and five publishers of pedestrian crossings are on disk with none drawn (`Q101`).
+- The binding limit is one `width_m`, one `lanes` and one `offset_m` per edge: on authored edges
+  19.8% / 25.6% of mid-block sections end kerb-to-kerb (`Q129`); `e364` loses 1.3 m to a per-edge
+  offset (`Q116`); three readers took a share for a road in one afternoon (`P3-33c`).
+- 🚫 **OpenStreetMap is unevaluated and not proposed**: the one outside source of lane tags, and
+  ODbL's share-alike meets hard rule 7. The user's decision, never a default.
+
+**What the reviews found that the repo had not recorded.**
+
+- ✅ 🔴 **Railings has `kerb_target`'s defect and `CLAUDE.md` listed only signs, signals and lamps.**
+  `railings.ribbons` builds both fence lines as `boundary(shaped, mitres, ±(half + outset))` and never
+  reads `offset_m` (`railings.py:515-556`); `shift_m` at `:957` likewise. 288 of 734 level-0 ribbons
+  sit more than 1 m off their centreline since `P3-33c`. `fence._dress` tiles symmetrically too.
+- ✅ 🔴 **The shipped level-0 path has no end-to-end test.** No test builds `surface` with a
+  `carriageway_region:` block; all 132 in `test_surface.py` drive the region-less path, which no
+  region ships. The territory path is tested through helpers alone.
+- 🔴 **`P3-33d` as written deletes off-grade's only junction treatment**: Wan Chai's 28 caps are all
+  at level ±1. Dead today is `_paint_flanks` and its machinery (~400 lines); `_add_paint_stations` is
+  ungated and inserts 125 stations for flanks that read 0.
+- `roadsurface.json` is parsed by four separate readers, and six stages import `arrows` for a
+  percentile helper (`ArrowReport.measured`).
+- **Signals was not "a re-declared block away"**: it is the one point stage still on the merged-mesh
+  path, so its return is a port to library + placements (`P5-2`). ~1,600 lines with its tests.
+- No script runs the grader battery; CI runs ruff, pytest and `check.sh`. Every before-and-after
+  table is by hand.
+- An edge whose `vertex_station` length mismatches becomes a plain ribbon with no counter.
+
+**Refused.** A schema library for `config.py` (~10% of the file, for a dependency and the loss of the
+Q-cited refusals). Merging the four `_register`s (`Q78`, `Q115`, unchanged). Moving the YAML's prose
+to sidecars — the user's call, not taken.
+
+**See.** `PLAN.md` `P3-35` for the steps · `Q106`/`Q130` for the `±half` defect class the single
+reader retires · `Q129` for the region · `Q76`/`Q77` for the signal layer, whose code is at the
+commit before `P3-35a`.
