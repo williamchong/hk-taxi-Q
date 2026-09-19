@@ -106,8 +106,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import road_names  # noqa: E402
-from deck_error import (  # noqa: E402
+from _lib.bundle import (  # noqa: E402
     Faces,
     bundle_arguments,
     class_faces,
@@ -117,7 +116,7 @@ from deck_error import (  # noqa: E402
     nearest,
     structure_faces,
 )
-from overhang import (  # noqa: E402
+from _lib.ribbon import (  # noqa: E402
     cross_section,
     drawn_offsets,
     half_width_at,
@@ -126,6 +125,7 @@ from overhang import (  # noqa: E402
     offset_at,
     walk_width,
 )
+from _lib.streets import road_names  # noqa: E402
 
 # The band the other instrument cannot see, taken from the instrument itself
 # rather than mirrored — see the module docstring. A *bound*, not a method: no

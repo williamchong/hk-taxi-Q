@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from overhang import Tally, cross_section, half_width_at, left_of, walk_width
+from _lib.ribbon import cross_section, half_width_at, left_of, walk_width
+from overhang import Tally
 
 from pipeline.surface import mitres
 

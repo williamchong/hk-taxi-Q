@@ -17,7 +17,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from deck_error import Faces
+from _lib.bundle import Faces
 from paint_clearance import Bars, LayerVerdict, on_raised_edge, survey, twice_plan_area
 
 # The kerb the classifier has to recognise: `hong_kong.yaml`'s `kerb_height_m`.

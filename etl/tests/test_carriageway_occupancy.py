@@ -42,6 +42,7 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
+from _lib.streets import edges_argument
 from carriageway_occupancy import (
     BUMPER_HIGH_M,
     BUMPER_LOW_M,
@@ -60,7 +61,6 @@ from carriageway_occupancy import (
     _profile_runs,
     _standing_runs,
     _starved_shape,
-    edges_argument,
     split_by_level,
     survey,
 )

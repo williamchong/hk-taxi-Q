@@ -51,7 +51,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from deck_error import bundle_arguments, load_bundle, log_bundle, structure_faces  # noqa: E402
+from _lib.bundle import bundle_arguments, load_bundle, log_bundle, structure_faces  # noqa: E402
 from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)

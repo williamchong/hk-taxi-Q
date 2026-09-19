@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from deck_error import Faces, measure, nearest, stations, wears
+from _lib.bundle import Faces, nearest, stations, wears
+from deck_error import measure
 
 # `INFRASTRUCTURE`'s `class_materials` entry and `colour_jitter` from
 # `config/hong_kong.yaml`. Copied rather than read through the `hong_kong`

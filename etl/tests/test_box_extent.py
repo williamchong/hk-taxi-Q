@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from _lib.bundle import Faces
 from box_extent import (
     _RAYS,
     ISOLATED,
@@ -47,7 +48,6 @@ from box_extent import (
     outer_ring,
     survey,
 )
-from deck_error import Faces
 from paint_clearance import twice_plan_area
 
 # The tool's own defaults, so a failure says something about the shipped bars

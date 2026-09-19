@@ -81,7 +81,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from deck_error import (  # noqa: E402
+from _lib.bundle import (  # noqa: E402
     Faces,
     bundle_arguments,
     drawn_surface,

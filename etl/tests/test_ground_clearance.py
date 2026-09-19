@@ -51,7 +51,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from deck_error import Faces
+from _lib.bundle import Faces
+from _lib.ribbon import walk_width
 from ground_clearance import (
     SUSPENSION_TRAVEL_M,
     Step,
@@ -60,7 +61,6 @@ from ground_clearance import (
     ground_above,
     structure_above,
 )
-from overhang import walk_width
 
 from pipeline.clearance import BUMPER_LOW_M
 

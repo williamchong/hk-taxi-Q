@@ -149,15 +149,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import (  # noqa: E402
-    SPACING_M as OCCUPANCY_SPACING_M,
-)
-from carriageway_occupancy import (  # noqa: E402
-    edges_argument,
-    edges_label,
-    road_names,
-)
-from deck_error import (  # noqa: E402
+from _lib.bundle import (  # noqa: E402
     Faces,
     bundle_arguments,
     load_bundle,
@@ -165,13 +157,17 @@ from deck_error import (  # noqa: E402
     nearest,
     structure_faces,
 )
-from overhang import (  # noqa: E402
+from _lib.ribbon import (  # noqa: E402
     drawn_offsets,
     half_width_at,
     half_widths,
     left_of,
     offset_at,
     walk_width,
+)
+from _lib.streets import edges_argument, edges_label, road_names  # noqa: E402
+from carriageway_occupancy import (  # noqa: E402
+    SPACING_M as OCCUPANCY_SPACING_M,
 )
 from pipeline.carriageway import (  # noqa: E402
     DECK_ACROSS_M,

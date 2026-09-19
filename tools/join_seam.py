@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from carriageway_occupancy import road_names  # noqa: E402
+from _lib.streets import road_names  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.export import CITY_SCHEMA  # noqa: E402

@@ -89,7 +89,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import edge_levels, road_names  # noqa: E402
+from _lib.streets import edge_levels, road_names  # noqa: E402
 from narrowing import check_baseline, classes, moved, sweep, sweep_report  # noqa: E402
 from pipeline import gltf  # noqa: E402
 from pipeline.carriageway import (  # noqa: E402

@@ -134,8 +134,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import road_names  # noqa: E402
-from overhang import half_width_at, half_widths, left_of, walk_width  # noqa: E402
+from _lib.ribbon import half_width_at, half_widths, left_of, walk_width  # noqa: E402
+from _lib.streets import road_names  # noqa: E402
 from pipeline import gdb  # noqa: E402
 from pipeline.config import (  # noqa: E402
     BOTH,

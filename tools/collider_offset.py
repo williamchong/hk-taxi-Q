@@ -60,7 +60,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from deck_error import bundle_arguments, load_bundle, log_bundle  # noqa: E402
+from _lib.bundle import bundle_arguments, load_bundle, log_bundle  # noqa: E402
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, build_region  # noqa: E402
 from pipeline.config import SurfaceClass, load_config  # noqa: E402
 from pipeline.gltf import MeshData, read_glb, split_colliders  # noqa: E402

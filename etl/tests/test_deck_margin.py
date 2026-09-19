@@ -32,7 +32,8 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from deck_error import Faces
+from _lib.bundle import Faces
+from _lib.ribbon import walk_width
 from deck_margin import (
     Refusals,
     Station,
@@ -43,7 +44,6 @@ from deck_margin import (
     refuse_unprobeable,
     survey,
 )
-from overhang import walk_width
 
 # A deck at this height, and a road drawn on it. The value is arbitrary and only
 # has to be off zero, so a station whose height was dropped somewhere reads as a

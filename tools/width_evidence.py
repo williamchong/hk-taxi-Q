@@ -60,6 +60,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _lib.ribbon import left_of, walk_width  # noqa: E402
+from _lib.streets import road_names  # noqa: E402
 from cap_pavement import _Index as _Rings  # noqa: E402
 from cap_pavement import carriageway_polygons  # noqa: E402
 from carriageway_margin import (  # noqa: E402
@@ -75,8 +77,6 @@ from carriageway_margin import (  # noqa: E402
     published_edges,
     survey,
 )
-from carriageway_occupancy import road_names  # noqa: E402
-from overhang import left_of, walk_width  # noqa: E402
 from pipeline.arrows import ArrowReport, read_symbols  # noqa: E402
 from pipeline.config import BOTH, Config, WidthBounds, load_config  # noqa: E402
 from pipeline.crs import GameTransform  # noqa: E402
