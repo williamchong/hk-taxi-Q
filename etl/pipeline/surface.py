@@ -2229,9 +2229,13 @@ def build_region(
         stations = _add_kerb_stations(edge)
         # Owned level-0 ribbons only: a box on a structure never reaches here
         # (`boxsource.read_boxes` refuses it) and a foreign ribbon draws nothing.
-        paint_stations = (
-            _add_paint_stations(edge, boxes) if index < len(edges) and edge.level == 0 else 0
-        )
+        # 🔴 **And only where no region is built** (`P3-35e`, `Q133`): the stations
+        # exist for `_paint_flanks`, which is gated on `region is None` below —
+        # with a region the areas are `R - ribbons` and the paint already stands
+        # on asphalt. Ungated, Wan Chai carried 125 stations for flanks that read
+        # 0: two carriageway triangles and four kerb strips each, for nothing.
+        stationed = index < len(edges) and edge.level == 0 and region is None
+        paint_stations = _add_paint_stations(edge, boxes) if stationed else 0
         _shape(edge, style)
         if index < len(edges):
             report.kerb_stations += stations

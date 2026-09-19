@@ -167,6 +167,15 @@ class TestTheDiff:
         # The two roots differ and the line naming them does not: not a moved line.
         assert not [line for line in moved if "<root>" in line]
 
+    def test_the_moment_a_bundle_was_built_is_not_a_moved_line(self, tmp_path: Path) -> None:
+        """Every bundle grader prints `built <generated_utc>` in its header, so a
+        before/after pair read "2 line(s) moved" on graders where nothing had."""
+        from battery import _normalised
+
+        first = _normalised("wan_chai, LOD 0, built 2026-09-19T12:40:29Z\n", _side(tmp_path))
+        second = _normalised("wan_chai, LOD 0, built 2026-09-19T12:57:17Z\n", _side(tmp_path))
+        assert first == second
+
     def test_the_exit_code_is_whether_it_ran_and_never_whether_it_moved(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

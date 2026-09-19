@@ -24071,3 +24071,19 @@ defect is the spread. The fix is a re-stationing of the walk on the region's den
 street is two published vertices), with `shift_m`, the fold and gap rules and `railing_error.py` all
 reading the new line — a change that owes the whole per-class battery and both sweeps. Left as
 `P3-35d` (4) rather than rushed behind three other changes in one day.
+
+### Built 2026-09-19 — `P3-35e`, the ungated stations; the deletions left to the user
+
+`_add_paint_stations` ran on every level-0 ribbon although `_paint_flanks`, its only consumer, is gated
+on `region is None`. Gated the same way. Wan Chai: road **93,015 → 92,647** triangles, area triangles
+21,975 → 21,849, `paint.stations` 125 → 0. Battery `surface-region` on both regions: `lane_paint`,
+`fence.json` and `roadmarks.json` unmoved; box paint **16,619 → 14,931** triangles with every box's
+painted area unchanged, since there are fewer creases for `DrawnSurface.split` to cut along; off-road
+paint 1.28 → 1.32 m² at EXPO DRIVE EAST; roadmarks `deeper than` 42 → 40. `check.sh` 0.
+
+🚫 **Not deleted: `_paint_flanks` and its machinery (~400 lines).** No shipped region reaches it, but
+it is what a region-less bundle draws under a box, `CLAUDE.md` still promises that path hashes as it
+did, and about 28 tests drive it. Whether the region-less path is kept is a product decision.
+
+⚠️ `tools/battery.py` now rewrites `generated_utc` to `<built>`: every bundle grader prints it, and a
+before/after pair read "2 line(s) moved" where nothing had.

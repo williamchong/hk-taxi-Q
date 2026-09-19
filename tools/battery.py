@@ -35,6 +35,7 @@ import argparse
 import difflib
 import itertools
 import json
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -355,9 +356,15 @@ def run_item(item: Item, side: Side, region: str, sources_root: Path, python: st
     return Outcome(text + f"\n[exit {done.returncode}]\n", ran=not crashed, code=done.returncode)
 
 
+# `city.json`'s `generated_utc`, which every bundle grader prints in its header.
+_BUILT_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
 def _normalised(text: str, side: Side) -> list[str]:
-    """The side's own root rewritten away, so a path in a log is not a diff."""
-    return text.replace(str(side.root), "<root>").splitlines(keepends=True)
+    """What differs between two sides without being a finding, rewritten away:
+    the side's own root, and the moment its bundle was built."""
+    text = text.replace(str(side.root.resolve()), "<root>").replace(str(side.root), "<root>")
+    return _BUILT_AT.sub("<built>", text).splitlines(keepends=True)
 
 
 def run(
