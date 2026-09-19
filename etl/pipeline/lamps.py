@@ -122,7 +122,6 @@ import numpy as np
 # *vertical* surface needs; and `disc` is the prism ring whose reversal is a
 # recorded defect in two stages already.
 from pipeline import gdb
-from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside
@@ -132,6 +131,7 @@ from pipeline.meshbuild import ColouredBuilder
 from pipeline.placements import Placement, placement, stand_library
 from pipeline.polyline import Segments, Snap, bearing_deg
 from pipeline.railings import facing_away
+from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
@@ -291,7 +291,7 @@ class LampReport:
     # and `boxjunctions.py` all carry: p90/p99/max beside the median
     # is `arrows.py`'s choice and its reason — a median near zero is also what a
     # wholly broken join looks like.
-    measured = staticmethod(ArrowReport.measured)
+    measured = staticmethod(tail_of)
 
 
 @dataclass(frozen=True)

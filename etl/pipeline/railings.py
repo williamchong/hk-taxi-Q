@@ -95,7 +95,6 @@ from typing import NamedTuple
 import numpy as np
 
 from pipeline import gdb
-from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, RailingClass, Railings, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
@@ -111,6 +110,7 @@ from pipeline.placements import (
     write_placements,
 )
 from pipeline.polyline import bearing_deg, plan_lengths, plan_lengths_2d
+from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -293,8 +293,8 @@ class ClassReport:
     library_vertices: int = 0
 
     # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
-    # rather than the middle, for `ArrowReport.measured`'s stated reason.
-    measured = staticmethod(ArrowReport.measured)
+    # rather than the middle, for `report.tail_of`'s stated reason.
+    measured = staticmethod(tail_of)
 
 
 @dataclass

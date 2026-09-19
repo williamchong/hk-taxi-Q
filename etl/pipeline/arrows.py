@@ -92,6 +92,7 @@ from pipeline.polyline import (
     frame,
     game_heading_deg,
 )
+from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
 
@@ -326,25 +327,8 @@ class ArrowReport:
     # standing on its nose. Recorded over what is drawn, so its `n` is `drawn`.
     pitch_deg: list[float] = field(default_factory=list)
 
-    @staticmethod
-    def measured(values: list[float]) -> dict[str, float]:
-        """One distribution as the manifest publishes it.
-
-        p90 and p99 rather than `TramwayReport.measured`'s p10/p50/p90: every
-        distribution here is a residual whose *tail* is the finding, and a
-        median residual near zero says nothing about the arrow on the wrong
-        street.
-        """
-        if not values:
-            return {}
-        points = np.percentile(np.asarray(values), (50, 90, 99, 100))
-        return {
-            "p50": round(float(points[0]), 4),
-            "p90": round(float(points[1]), 4),
-            "p99": round(float(points[2]), 4),
-            "max": round(float(points[3]), 4),
-            "n": len(values),
-        }
+    # The tail rather than the middle — `report.tail_of` says why.
+    measured = staticmethod(tail_of)
 
 
 @dataclass(frozen=True)

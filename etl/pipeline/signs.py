@@ -124,11 +124,11 @@ from pipeline import gdb, hongkong
 # is the source's own encoding of "no structure" and is not config; `facing_away`
 # asks whether winding agrees with the given normal, which is the question a
 # *vertical* surface needs and `surface.downward_facing` cannot answer; and
-# `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
+# `ccw`, `axis_residual_deg` and `report.tail_of` are the canonical
 # statements of conventions this stage shares with the arrows. ⚠️ The two
 # heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
 # them and cannot import `arrows` — so they arrive from there now.
-from pipeline.arrows import ArrowReport, ccw
+from pipeline.arrows import ccw
 from pipeline.config import (
     SIGN_ARROW_BENT_LEFT,
     SIGN_ARROW_BENT_RIGHT,
@@ -178,6 +178,7 @@ from pipeline.polyline import (
     plan_lengths,
 )
 from pipeline.railings import AT_GRADE, facing_away
+from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.sign_text import TextAtlas, build_atlas
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
@@ -567,7 +568,7 @@ class SignReport:
     # reason — every distribution here is a residual whose **tail** is the
     # finding, and a median near zero is also what a wholly broken join looks
     # like.
-    measured = staticmethod(ArrowReport.measured)
+    measured = staticmethod(tail_of)
 
 
 @dataclass(frozen=True)

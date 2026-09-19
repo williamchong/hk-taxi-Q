@@ -50,7 +50,6 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline.arrows import ArrowReport
 from pipeline.boxsource import Box, read_boxes
 from pipeline.config import BoxJunctions, Config, load_config
 from pipeline.documents import read_document, write_document
@@ -58,6 +57,7 @@ from pipeline.geometry import clip_half_plane, orient, twice_area, wound_up
 from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, frame
+from pipeline.report import tail_of
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -206,9 +206,9 @@ class BoxJunctionReport:
     aabb: list[list[float]] = field(default_factory=list)
 
     # One distribution as the manifest publishes it: p90/p99/max, the tail
-    # rather than the middle, for `ArrowReport.measured`'s stated reason —
+    # rather than the middle, for `report.tail_of`'s stated reason —
     # every distribution here is a residual, and the tail is the finding.
-    measured = staticmethod(ArrowReport.measured)
+    measured = staticmethod(tail_of)
 
 
 # --------------------------------------------------------------------------

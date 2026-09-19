@@ -49,7 +49,6 @@ from typing import NamedTuple
 import numpy as np
 
 from pipeline import gdb
-from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
@@ -64,6 +63,7 @@ from pipeline.polyline import Segments, plan_lengths_2d, plan_projections
 # same geodatabase, not a threshold anyone may tune. 209 of the region's 211
 # parts are null.
 from pipeline.railings import AT_GRADE
+from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, clip, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -300,9 +300,9 @@ class RoadMarkReport:
     aabb: list[list[float]] = field(default_factory=list)
 
     # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
-    # rather than the middle, for `ArrowReport.measured`'s stated reason — every
+    # rather than the middle, for `report.tail_of`'s stated reason — every
     # distribution here is a residual, and the tail is the finding.
-    measured = staticmethod(ArrowReport.measured)
+    measured = staticmethod(tail_of)
 
 
 @dataclass(frozen=True)
