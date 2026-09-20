@@ -26,6 +26,14 @@ boundary candidate only on that side. A candidate with no partner is printed —
 a road that reaches the line in one region and not the other is a clip
 disagreement, and it is the finding the mutual-nearest pairing exists to expose.
 
+A third, since `P3-33e`, where both regions build a carriageway region (`Q129`):
+
+- **carriageway** — R is cut by rectangle (`Q116`), so each build draws the
+  asphalt up to the shared line and no further, and nothing makes the two agree
+  on where a road MEETS that line. Each R is sectioned just inside its own side
+  and the two sections are compared along the line: a stretch only one build
+  paves is a kerb that steps sideways at the seam, or asphalt that stops dead.
+
 Grades rather than checks and exits 0 whatever it finds: the bar is `P5-7`'s
 accept, and it is quoted in the summary rather than enforced here.
 
@@ -44,6 +52,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import shapely
+from shapely.geometry import LineString, MultiLineString, Polygon
+from shapely.geometry.base import BaseGeometry
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
@@ -53,6 +64,7 @@ from _lib.streets import road_names  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.export import CITY_SCHEMA  # noqa: E402
+from pipeline.region import REGION_NAME, read_region  # noqa: E402
 from pipeline.roads import read_graph  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -156,16 +168,20 @@ def load_graph(city: Config, region: str, out_root: Path | None) -> Graph:
     )
 
 
-def near_line(graph: Graph, side: Side, within_m: float) -> list[int]:
-    """Nodes within `within_m` of the region's edge on `side`, in its own frame."""
+def edge_of(graph: Graph, side: Side) -> float:
+    """Where the region's rectangle ends on `side`, along that side's axis, in
+    the city frame."""
     axis, sign = side
     index = 0 if axis == "x" else 2
-    limit = (graph.high[0] if axis == "x" else graph.high[1]) if sign > 0 else 0.0
-    origin = float(graph.offset[index])
+    return float(graph.offset[index]) + (graph.high[index // 2] if sign > 0 else 0.0)
+
+
+def near_line(graph: Graph, side: Side, within_m: float) -> list[int]:
+    """Nodes within `within_m` of the region's edge on `side`."""
+    index = 0 if side[0] == "x" else 2
+    line = edge_of(graph, side)
     return sorted(
-        node
-        for node, pos in graph.nodes.items()
-        if abs(float(pos[index]) - origin - limit) <= within_m
+        node for node, pos in graph.nodes.items() if abs(float(pos[index]) - line) <= within_m
     )
 
 
@@ -275,6 +291,95 @@ def report_crossings_by_identity(a: Graph, b: Graph) -> tuple[int, int, int, int
     return len(shared), one_owner, lanes_off, unmatched
 
 
+def carriageway_of(document: dict[str, Any]) -> BaseGeometry:
+    """One build's R inside its rectangle: every territory, the neighbour's
+    runs reaching in included — inside this rectangle their asphalt is this
+    region's to draw. Read off the territories rather than `region`'s three
+    sources, because what a build DRAWS is what it gave an owner."""
+    return shapely.union_all(
+        [
+            shapely.make_valid(Polygon(ring["outer"], ring["holes"]))
+            for territory in document["territories"]
+            for ring in territory["rings"]
+        ]
+    )
+
+
+def section(carriageway: BaseGeometry, graph: Graph, axis: str, at_m: float) -> BaseGeometry:
+    """One build's R cut along the line `axis = at_m`, as stretches ALONG that
+    line. Asked and answered in the city frame, so two builds' sections compare."""
+    across, along = (0, 1) if axis == "x" else (1, 0)
+    local = at_m - float(graph.offset[2 * across])
+    ends = np.zeros((2, 2))
+    ends[:, across] = local
+    ends[:, along] = (-1.0, graph.high[along] + 1.0)
+    shift = float(graph.offset[2 * along])
+    return MultiLineString(
+        [
+            [(piece.bounds[along] + shift, 0.0), (piece.bounds[along + 2] + shift, 0.0)]
+            for piece in shapely.get_parts(carriageway.intersection(LineString(ends)))
+            if piece.length > 0.0
+        ]
+    )
+
+
+def section_lines(a: Graph, b: Graph, side: Side, inset_m: float) -> tuple[float, float]:
+    """Where each build is sectioned, in the city frame: `inset_m` inside its own
+    rectangle, never on its edge — R is cut there, and a line laid on a cut reads
+    the cut's rounding.
+
+    🔴 **One line for both wherever the rectangles overlap, and they do.**
+    `city_offset` is whole metres and a rectangle is not, so Wan Chai's east edge
+    stands 0.62 m inside Causeway Bay (`Q116`). Sectioned an inset inside each, a
+    road crossing at 45 degrees is read 0.5 m apart along the line and every
+    crossing reported a disagreement that was the rounding.
+    """
+    edge_a, edge_b = edge_of(a, side), edge_of(b, (side[0], -side[1]))
+    middle = (edge_a + edge_b) / 2.0
+    if side[1] > 0:
+        return min(middle, edge_a - inset_m), max(middle, edge_b + inset_m)
+    return max(middle, edge_a + inset_m), min(middle, edge_b - inset_m)
+
+
+def report_carriageway(
+    city: Config, a: Graph, b: Graph, side: Side, out_root: Path | None, inset_m: float
+) -> str:
+    """The carriageway table, and its line for the summary."""
+    sections = []
+    lines = section_lines(a, b, side, inset_m)
+    for graph, at_m in zip((a, b), lines, strict=True):
+        path = city.out_dir(graph.region, out_root) / REGION_NAME
+        if not path.exists():
+            return "no carriageway region built on both sides, so no asphalt to compare"
+        document = read_region(path, graph.region)
+        sections.append(section(carriageway_of(document), graph, side[0], at_m))
+    ours, theirs = sections
+    only = (ours.difference(theirs), theirs.difference(ours))
+    log.info("")
+    log.info(
+        "  carriageway meeting the line, sectioned at %s = %.2f / %.2f in the city frame:",
+        side[0],
+        *lines,
+    )
+    log.info("  %-14s %8s %10s", "", "roads", "metres")
+    for graph, found in ((a, ours), (b, theirs)):
+        log.info("  %-14s %8d %10.2f", graph.region, len(shapely.get_parts(found)), found.length)
+    for graph, lone in zip((a, b), only, strict=True):
+        for piece in sorted(shapely.get_parts(lone), key=lambda part: -part.length):
+            if piece.length >= 0.005:
+                log.info(
+                    "  only %-9s %8.2f m at %.1f along the line",
+                    graph.region[:9],
+                    piece.length,
+                    piece.bounds[0],
+                )
+    pieces = [part.length for lone in only for part in shapely.get_parts(lone)]
+    return (
+        f"carriageway on the line disagrees over {sum(pieces):.2f} m "
+        f"(worst stretch {max(pieces, default=0.0):.2f} m)"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--region-a", required=True)
@@ -287,6 +392,12 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=2.0,
         help="how far apart two nodes may be and still be the same node (default 2.0)",
+    )
+    parser.add_argument(
+        "--inset-m",
+        type=float,
+        default=0.05,
+        help="how far inside each rectangle the carriageway is sectioned (default 0.05)",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -342,14 +453,16 @@ def main(argv: list[str] | None = None) -> int:
             f"width_m disagrees on {width_off}, lanes on {lanes_off} — "
             f"no source_id published, so no owner to read"
         )
+    carriageway = report_carriageway(city, a, b, side, args.out, args.inset_m)
     log.info("")
     log.info(
-        "  %d nodes paired (plan separation min %.3f / max %.3f m), %d unpaired; %s",
+        "  %d nodes paired (plan separation min %.3f / max %.3f m), %d unpaired; %s; %s",
         len(pairs),
         plan_min,
         plan_max,
         len(lone_a) + len(lone_b),
         crossings,
+        carriageway,
     )
     return 0
 

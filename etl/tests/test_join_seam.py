@@ -15,10 +15,13 @@ import pytest
 from join_seam import (
     Graph,
     NodePair,
+    carriageway_of,
     near_line,
     pair_nodes,
     report_crossings_by_identity,
     report_crossings_by_node,
+    section,
+    section_lines,
     shared_side,
 )
 
@@ -196,3 +199,49 @@ class TestOwners:
         a = _graph("a", {0: (0, 0, 0), 1: (1, 0, 0)}, [plain])
         b = _graph("b", {0: (0, 0, 0), 1: (1, 0, 0)}, [dict(plain)])
         assert a.identities == {} and b.identities == {}
+
+
+def _road(z_low: float, z_high: float, *, x_low: float = 0.0, x_high: float = 100.0) -> dict:
+    """A `carriageway_region.json` holding one straight road across the rectangle."""
+    outer = [[x_low, z_low], [x_high, z_low], [x_high, z_high], [x_low, z_high], [x_low, z_low]]
+    return {"territories": [{"rings": [{"outer": outer, "holes": []}]}]}
+
+
+class TestCarriagewaySection:
+    """`P3-33e`: R is cut by rectangle (`Q116`), so nothing but this makes the
+    two builds agree on where a road meets the line they share."""
+
+    WEST = _graph("west", {})
+    # `city_offset` is whole metres and a rectangle is not, so the pair overlap
+    # as Wan Chai and Causeway Bay do — by 0.6 m here.
+    EAST = _graph("east", {}, offset=(99.4, 0.0, 0.0))
+
+    def test_an_overlapping_pair_is_sectioned_on_one_line(self) -> None:
+        """🔴 An inset inside each instead reads a road crossing at 45 degrees
+        0.5 m apart along the line, and all eight of the shipped seam's roads
+        reported a disagreement that was the offset's rounding."""
+        ours, theirs = section_lines(self.WEST, self.EAST, ("x", 1), 0.05)
+        assert ours == theirs == pytest.approx(99.7)
+
+    def test_a_pair_sharing_an_exact_line_is_sectioned_inside_each(self) -> None:
+        flush = _graph("east", {}, offset=(100.0, 0.0, 0.0))
+        assert section_lines(self.WEST, flush, ("x", 1), 0.05) == pytest.approx((99.95, 100.05))
+
+    def test_the_section_is_along_the_line_in_the_city_frame(self) -> None:
+        south = _graph("south", {}, offset=(0.0, 0.0, 200.0))
+        found = section(carriageway_of(_road(10.0, 17.0)), south, "x", 50.0)
+        assert [part.bounds for part in found.geoms] == [(210.0, 0.0, 217.0, 0.0)]
+
+    def test_a_road_one_build_draws_wider_is_a_disagreement(self) -> None:
+        """🔴 **The mutation this exists for.** The shipped pair reads 0.00 m,
+        and a counter that reads zero is only evidence if something reachable
+        moves it (`Q72`): a kerb stepping 1.5 m sideways at the seam does."""
+        line = 99.7
+        ours = section(carriageway_of(_road(10.0, 17.0)), self.WEST, "x", line)
+        theirs = section(carriageway_of(_road(10.0, 18.5, x_high=50.0)), self.EAST, "x", line)
+        assert ours.difference(theirs).length == 0.0
+        assert theirs.difference(ours).length == pytest.approx(1.5)
+
+    def test_a_road_that_stops_short_of_the_line_is_not_on_it(self) -> None:
+        short = carriageway_of(_road(10.0, 17.0, x_high=99.0))
+        assert section(short, self.WEST, "x", 99.7).is_empty

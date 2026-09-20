@@ -39,7 +39,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   194,774 + 13,718 alone). 🔴 **`Edge.offset_m` is ONE number per edge, and the cut found it**: a run
   whose halves sit on two decks takes the median of both, and `e364`'s near half lost 1.3 m of drawn
   half-width to its far half. Do not answer that by trimming the run; the fix is per station
-  (`Q103`). ⚠️ **`clearance_reconcile.EXPECT` is keyed by region** — 22 / 26 / 6 and 6 / 7 / 1 — and
+  (`Q103`). 🔴 **`join_seam.py`'s carriageway line is
+  0.00 m over 8 roads and 64.62 m a side (`P3-33e`)**: R is cut by rectangle, so nothing else makes
+  the two builds agree where asphalt meets the line. ⚠️ It sections BOTH on one city-frame line,
+  because `city_offset` is whole metres and the rectangles overlap by 0.62 m — an inset per side
+  reads every oblique crossing as a disagreement. ⚠️ **`clearance_reconcile.EXPECT` is keyed by
+  region** — 28 / 32 / 8 and 9 / 13 / 4 — and
   the deck graders read a region's own tiles, so an owned far half over the neighbour's structure
   reads as hanging in air (`overhang` 25.1% on Causeway Bay); quote that with the cause or it reads
   as a defect.
