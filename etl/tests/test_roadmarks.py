@@ -126,6 +126,22 @@ BLOCK: dict[str, Any] = {
             "mark_m": 0.6,
             "gap_m": 0.3,
         },
+        {
+            "id": "hatched_island",
+            "axis": "oblique",
+            "codes": ["RM1037"],
+            "line_width_m": 0.15,
+            "lines": 1,
+        },
+        {
+            "id": "prohibitory_chevron",
+            "axis": "oblique",
+            "codes": ["RM1035", "RM1036"],
+            "line_width_m": 0.15,
+            "lines": 1,
+            "chevron_width_m": 0.9,
+            "chevron_turn_deg": 20.0,
+        },
     ],
 }
 
@@ -427,6 +443,51 @@ class TestTheHostIsPickedByTransversality:
         assert transverse.residual_deg == pytest.approx(90.0)
         assert transverse.residual_deg > spec.bearing_tolerance_deg
 
+    def test_an_oblique_marking_is_refused_by_both_other_axes_and_kept_by_its_own(self, spec):
+        """`P3-35g3`. A hatch stripe at 45 deg to its road is 45 deg from BOTH
+        axes — past the shared 30 deg bar either way — and has no axis of its own
+        to be off, so it carries no residual at all."""
+        straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
+        stripe = [[-1.0, -1.0], [1.0, 1.0]]
+        for code in ("RM1001", "RM1011"):
+            refused = _host(straight, marking(spec, code, stripe), spec)
+            assert refused.residual_deg == pytest.approx(45.0)
+            assert refused.residual_deg > spec.bearing_tolerance_deg
+        hatch = _host(straight, marking(spec, "RM1037", stripe), spec)
+        assert hatch.residual_deg == 0.0
+
+    def test_an_oblique_marking_is_hosted_by_the_road_it_lies_on(self, junction, spec):
+        """With no angle to score, the pick is the road under the paint — never
+        whichever road in range happens to run across the stripe."""
+        on_the_minor = marking(spec, "RM1037", [[-1.0, 20.0], [1.0, 22.0]])
+        assert _host(junction, on_the_minor, spec).edge_id == 2
+        on_the_major = marking(spec, "RM1037", [[-21.0, -1.0], [-19.0, 1.0]])
+        assert _host(junction, on_the_major, spec).edge_id == 1
+
+    def test_an_oblique_marking_prefers_the_road_wide_enough_to_hold_it(self, spec):
+        """🔴 Proximity alone picks the nearest centreline, and beside a wide road
+        that is a slip road the stripe is not on. The nearest is 3 m away and 4 m
+        wide; the road 5 m away is 16 m wide and the paint is on it."""
+        edges = [
+            edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]]),
+            edge(2, [[-50.0, 0.0, 8.0], [50.0, 0.0, 8.0]]),
+        ]
+        widths = Network.of(Segments.of(edges), {1: 16.0, 2: 4.0})
+        stripe = marking(spec, "RM1037", [[-1.0, 4.0], [1.0, 6.0]])
+        host = _host(widths, stripe, spec)
+        assert host.edge_id == 1
+        assert host.disagrees
+        assert _on_its_own_carriageway(stripe, host) is True
+
+    def test_an_oblique_marking_off_every_carriageway_is_refused(self, spec):
+        """The one bar it meets: it has no bearing guard, so a stripe beside the
+        road must not be drawn on the strength of being near it."""
+        straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
+        beside = marking(spec, "RM1037", [[-1.0, 8.0], [1.0, 10.0]])
+        assert _on_its_own_carriageway(beside, _host(straight, beside, spec)) is False
+        on = marking(spec, "RM1037", [[-1.0, 1.0], [1.0, 3.0]])
+        assert _on_its_own_carriageway(on, _host(straight, on, spec)) is True
+
     def test_a_longitudinal_marking_off_its_host_ribbon_is_refused(self, spec):
         """🔴 **The refusal that keeps paint out of the road it is not on.**
 
@@ -619,6 +680,74 @@ class TestTheGeometry:
         # a mesh that names something else keeps its imported `BaseMaterial3D`
         # and draws the right bars in the importer's grey.
         assert builder.build("roadmarks").material == ROADMARKS_MATERIAL
+
+
+class TestAChevronIsTheVAndTakesTheBroadStroke:
+    """`P3-35g3`: `RM1035` carries `LINE WIDTH = 150` and `CHEVRON WIDTH = 900`
+    under one code, and TD surveys a chevron as one 3-vertex V."""
+
+    V = ((0.0, 0.0), (1.0, 1.0), (2.0, 0.0))
+
+    @staticmethod
+    def is_wide(quad: np.ndarray, width_m: float) -> bool:
+        """Whether one of the rectangle's two side lengths is the stroke's width.
+        Not the shorter: a station cut can leave a quad shorter than it is wide."""
+        sides = np.hypot(*(np.roll(quad, -1, axis=0) - quad).T)
+        return bool(np.isclose(sides, width_m, atol=1e-9).any())
+
+    def test_a_v_is_a_chevron_and_is_drawn_at_the_chevron_width(self, spec):
+        chevron = marking(spec, "RM1035", [list(point) for point in self.V])
+        assert chevron.turn_deg == pytest.approx(90.0)
+        assert chevron.is_chevron
+        legs = [quad for quad in band_quads(chevron, spec) if len(quad) == 4]
+        assert legs and all(self.is_wide(quad, 0.9) for quad in legs)
+
+    def test_the_outline_keeps_the_line_width(self, spec):
+        """Two vertices, many vertices, and three that barely turn — the 10-30
+        deg band between them and a chevron is empty in both regions."""
+        lines = (
+            [[0.0, 0.0], [4.0, 0.0]],
+            [[0.0, 0.0], [2.0, 0.1], [4.0, 0.3], [6.0, 0.6]],
+            [[0.0, 0.0], [2.0, 0.0], [4.0, 0.3]],
+        )
+        for line in lines:
+            outline = marking(spec, "RM1036", line)
+            assert not outline.is_chevron
+            quads = band_quads(outline, spec)
+            # The fixture's legibility scale stretches a line; nothing stretches
+            # a chevron, which is the broad stroke already.
+            drawn_m = outline.mark.drawn_line_width_m(spec.longitudinal_legibility_scale)
+            assert quads and all(self.is_wide(quad, drawn_m) for quad in quads)
+            assert not any(self.is_wide(quad, 0.9) for quad in quads)
+
+    def test_a_v_under_a_code_with_no_chevron_width_is_a_line(self, spec):
+        """`RM1037`'s hatching declares none: the width is the row's, not the shape's."""
+        assert not marking(spec, "RM1037", [list(point) for point in self.V]).is_chevron
+
+    def test_the_point_is_closed_on_its_outside(self, spec):
+        """Two rectangles square to their own legs gape at the tip — 0.45 m at
+        this width — and the bevel fills it on the side away from the turn."""
+        for line in (self.V, ((0.0, 0.0), (1.0, -1.0), (2.0, 0.0))):
+            quads = band_quads(marking(spec, "RM1035", [list(point) for point in line]), spec)
+            apex = quads[-1]
+            assert len(apex) == 3
+            point = np.asarray(line[1])
+            reach = np.hypot(*(apex - point).T)
+            # The point itself and the two outer corners, half a stroke from it.
+            assert sorted(reach) == pytest.approx([0.0, 0.45, 0.45])
+            inside = np.mean([line[0], line[2]], axis=0) - point
+            assert all((corner - point) @ inside < 0.0 for corner in apex[reach > 0.1])
+
+    def test_a_width_without_the_turn_that_selects_it_is_refused(self, tmp_path):
+        entry = {**BLOCK["marks"][-1]}
+        del entry["chevron_turn_deg"]
+        with pytest.raises(ValueError, match="declared together"):
+            city_with(tmp_path, {**BLOCK, "marks": [*BLOCK["marks"][:-1], entry]})
+
+    def test_a_chevron_width_on_a_marking_with_an_axis_is_refused(self, tmp_path):
+        entry = {**BLOCK["marks"][-1], "axis": "longitudinal"}
+        with pytest.raises(ValueError, match="not oblique"):
+            city_with(tmp_path, {**BLOCK, "marks": [*BLOCK["marks"][:-1], entry]})
 
 
 class TestTheHeightJoin:

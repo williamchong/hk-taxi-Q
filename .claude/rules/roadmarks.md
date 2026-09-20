@@ -137,3 +137,23 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   shader change, and its shader is shared with the arrows and the boxes** (`Q71`) — `check.sh` exits
   0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
   layers rather than only this one. Numbers in `Q69`.
+- 🔴 **`axis: oblique`, `chevron_width_m` / `chevron_turn_deg`, `_apex`, or a hatching row
+  (`P3-35g3`): paste `drawn_by_id` / `drawn_m_by_id`, `host_off_carriageway_m_by_id`, `chevrons`,
+  `chevron_m` and `chevron_turn_gap_deg`, both regions, before and after, with
+  `paint_clearance.py --layer roadmarks`.** An oblique marking — a hatch stripe, a chevron leg —
+  has NO axis against its road, so it is hosted by proximity with the "lies ON a road" preference
+  and carries **no residual**: 🔴 **it must stay out of `axis_residual_deg`**, which has to come out
+  unchanged to the digit, `n` included, across a change here — that and the transverse and
+  longitudinal rows of `drawn_by_id` are the inertness proof. ⚠️ The one bar it meets is
+  `_on_its_own_carriageway`, so its refusals are published in metres by marking.
+  🔴 **`RM1035`/`RM1036` carry TWO widths under one code and the GEOMETRY says which part takes
+  which**: a chevron is surveyed as one 3-vertex V, and no 3-vertex part turns 10-30° at its middle
+  vertex. **`chevron_turn_gap_deg` is the counter that can fail** — sharpest outline 9.73° / 1.02°,
+  straightest chevron 56.4° / 86.2° — and the two closing on `chevron_turn_deg` is the rule
+  failing; do not move the bar to catch a chevron. ⚠️ **A known under-draw, not to be "fixed" by
+  guessing**: chevrons surveyed as two separate 2-vertex legs are indistinguishable from outline
+  segments and are drawn at 150 (`Q54`). ⚠️ **No legibility scale touches the chevron width.**
+  ⚠️ **The mutation that must fail for the hosting is the NARROW SLIP ROAD case**
+  (`test_an_oblique_marking_prefers_the_road_wide_enough_to_hold_it`): with no angle to score,
+  plain proximity passes every simpler test with the preference deleted. Numbers in `P3-35g3`'s
+  record.

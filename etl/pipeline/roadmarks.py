@@ -152,6 +152,19 @@ class RoadMarkReport:
     # because it is a different refusal from an off-axis one and wants a
     # different fix: this one is a join that landed on the wrong carriageway.
     host_off_carriageway: int = 0
+    # The same refusal in METRES by marking, because an oblique marking has no
+    # bearing guard and this is the only bar it meets (`P3-35g3`): a hatched
+    # island stands exactly where a median was paved over, which is where the
+    # drawn ribbon is least likely to reach it.
+    host_off_carriageway_m_by_id: dict[str, float] = field(default_factory=dict)
+    # 🔴 **Both sides of the empty band `chevron_turn_deg` sits in**, over every
+    # 3-vertex part of a marking that declares one, before any refusal: the
+    # straightest part called a chevron and the sharpest that was not. The two
+    # closing on the bar is the rule failing (`P3-35g3`).
+    chevrons: int = 0
+    chevron_m: float = 0.0
+    chevron_straightest_deg: float | None = None
+    outline_sharpest_deg: float | None = None
     no_edge_in_range: int = 0
 
     # Per marking id, how many were drawn and how many metres of published line
@@ -328,6 +341,24 @@ class Marking:
         """
         along = self.along_m
         return _point_at(self.line, along, 0.5 * float(along[-1]))
+
+    @property
+    def turn_deg(self) -> float | None:
+        """How far a 3-vertex part turns at its middle vertex; None for any other.
+
+        What tells a chevron from its outline (`RoadMark.chevron_width_m`): TD
+        surveys a chevron as one V.
+        """
+        if len(self.line) != 3:
+            return None
+        arrive, leave = self.line[1] - self.line[0], self.line[2] - self.line[1]
+        cosine = float(arrive @ leave) / float(np.linalg.norm(arrive) * np.linalg.norm(leave))
+        return math.degrees(math.acos(min(max(cosine, -1.0), 1.0)))
+
+    @property
+    def is_chevron(self) -> bool:
+        turn, bar = self.turn_deg, self.mark.chevron_turn_deg
+        return turn is not None and bar is not None and turn > bar
 
     @property
     def axis_deg(self) -> float:
@@ -595,6 +626,14 @@ def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
     # `bearing_tolerance_deg` needs no second value, and `axis_residual_deg`
     # stays one distribution over the two.
     residual = np.abs(90.0 - crossing) if marking.mark.transverse else crossing
+    if marking.mark.oblique:
+        # 🔴 **No axis, so no residual** (`P3-35g3`): a hatch stripe lies at
+        # whatever angle the island's taper gave it, and scoring that angle would
+        # hand it to whichever road happened to run across it. Zero for every
+        # candidate leaves the score to proximity and the pick to the `on`
+        # preference below — and ⚠️ `build_region` keeps these zeros OUT of
+        # `axis_residual_deg`, which grades a rule this marking does not take.
+        residual = np.zeros_like(crossing)
     score = residual + spec.proximity_weight_deg_per_m * distance[in_range]
     if not marking.mark.transverse:
         # 🔴 **A line painted ALONG a road is hosted by a road it lies ON, where
@@ -670,6 +709,10 @@ def band_quads(marking: Marking, spec: RoadMarks) -> list[np.ndarray]:
     scale = spec.longitudinal_legibility_scale
     half = 0.5 * mark.drawn_line_width_m(scale)
     offsets = mark.drawn_band_offsets_m(scale)
+    if marking.is_chevron:
+        # The sheet's `CHEVRON WIDTH`, which no legibility scale touches: it is a
+        # broad stroke already, and `_require`d beside the turn that selects it.
+        half = 0.5 * float(mark.chevron_width_m)
 
     # 🔴 **One pass per module, and a marking whose lines share one is a single
     # pass in the order it always was** — so `RM1001` and the transverse bars are
@@ -704,7 +747,29 @@ def band_quads(marking: Marking, spec: RoadMarks) -> list[np.ndarray]:
                 last = _point_at(marking.line, along, tail)
                 for offset in bands:
                     quads.append(_band_quad(first, last, across, offset, half))
+    if marking.is_chevron:
+        quads.append(_apex(marking.line, half))
     return quads
+
+
+def _apex(line: np.ndarray, half: float) -> np.ndarray:
+    """The outside of a chevron's point, which its two leg quads leave open.
+
+    Each leg is a rectangle square to itself, so at the V they overlap on the
+    inside and gape on the outside — a hairline at 150 mm and a 0.45 m bite out
+    of the tip at 900. A bevel between the two outer corners, not a mitre: 40 of
+    Wan Chai's chevrons turn past 120 deg, where a mitred point runs to four
+    times the half-width and further.
+    """
+    arrive, leave = line[1] - line[0], line[2] - line[1]
+    turn = float(arrive[0] * leave[1] - arrive[1] * leave[0])
+    # The outer side is away from the turn.
+    side = -1.0 if turn > 0.0 else 1.0
+    corners = [
+        side * half * np.array([-step[1], step[0]]) / np.linalg.norm(step)
+        for step in (arrive, leave)
+    ]
+    return wound_up(np.array([line[1], line[1] + corners[0], line[1] + corners[1]]))
 
 
 def _band_quad(
@@ -900,9 +965,13 @@ def _on_its_own_carriageway(marking: Marking, host: Host) -> bool:
     itself a report-only figure — this gates on it, so the gap is stated rather
     than assumed.** Two things could make it wrong and both are measured on this
     region: the ribbon is `[offset - half, offset + half]` per station and not
-    `±half` about the centreline (`Q106`), but `offset_m` is **exactly 0.0 on all
-    737 level-0 edges** and this stage is level-0 only, so that term is inert by
-    arithmetic rather than by luck; and the half-width varies per station since
+    `±half` about the centreline (`Q106`) — 🔴 **and "`offset_m` is exactly 0.0 on
+    all 737 level-0 edges", which this paragraph said, EXPIRED at `P3-33c`**: 288
+    of 734 level-0 ribbons now sit more than 1 m off their centreline, so this bar
+    is asked about the centreline where the road may not be. It errs toward
+    refusing, which is the safe side, and an oblique marking (`P3-35g3`) meets no
+    other bar — `host_off_carriageway_m_by_id` is what it costs; and the half-width
+    varies per station since
     `Q23`, but on **721 of 737** edges it does not vary at all. The **16** that do
     — up to 4.319 m — are the ramp-climbers, which is the same population this
     refusal exists to catch, so where the mean is least representative is where
@@ -1356,6 +1425,14 @@ def build_region(
         # broken line can run between two flows the invented double white would
         # be painted on top of it.
         wanted = join_mark is not None and marking.mark.divides_flows
+        turn = marking.turn_deg
+        if turn is not None and marking.mark.chevron_turn_deg is not None:
+            if marking.is_chevron:
+                low = report.chevron_straightest_deg
+                report.chevron_straightest_deg = turn if low is None else min(low, turn)
+            else:
+                high = report.outline_sharpest_deg
+                report.outline_sharpest_deg = turn if high is None else max(high, turn)
         host = _host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1
@@ -1363,7 +1440,8 @@ def build_region(
         report.host_disagreement += int(host.disagrees)
         # Recorded before the bearing guard — `n` past `drawn` is the proof the
         # distribution can read outside its own filter (`Q58`).
-        report.axis_residual_deg.append(host.residual_deg)
+        if not marking.mark.oblique:
+            report.axis_residual_deg.append(host.residual_deg)
         # 🔴 **A longitudinal marking must lie ON the road it is hosted to, and
         # the bar is that road's own drawn half-width rather than a number.**
         # Where a level-0 ramp climbs beside a street — heights climb up to
@@ -1376,6 +1454,8 @@ def build_region(
         # this refuses rather than places it wrong (`Q54`).
         if not _on_its_own_carriageway(marking, host):
             report.host_off_carriageway += 1
+            off = report.host_off_carriageway_m_by_id
+            off[marking.mark.id] = off.get(marking.mark.id, 0.0) + marking.length_m
             if wanted:
                 refused.append(marking)
             continue
@@ -1397,6 +1477,9 @@ def build_region(
         for quad in band_quads(marking, spec):
             heights.extend(_place(builder, drawn, quad, spec.lift_m, report, thinness_bar_m, above))
 
+        if marking.is_chevron:
+            report.chevrons += 1
+            report.chevron_m += marking.length_m
         report.drawn += 1
         report.drawn_by_id[marking.mark.id] = report.drawn_by_id.get(marking.mark.id, 0) + 1
         length = marking.length_m
@@ -1531,6 +1614,10 @@ def _length_along(quad: np.ndarray, piece: np.ndarray) -> float:
     return float(along.max() - along.min())
 
 
+def _rounded(value: float | None) -> float | None:
+    return None if value is None else round(value, 2)
+
+
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMarkReport) -> int:
     document = {
         "schema_version": ROADMARKS_MANIFEST_SCHEMA,
@@ -1562,6 +1649,16 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         "drawn": report.drawn,
         "no_host_on_axis": report.no_host_on_axis,
         "host_off_carriageway": report.host_off_carriageway,
+        "chevrons": report.chevrons,
+        "chevron_m": round(report.chevron_m, 2),
+        "chevron_turn_gap_deg": {
+            "chevron_straightest": _rounded(report.chevron_straightest_deg),
+            "outline_sharpest": _rounded(report.outline_sharpest_deg),
+        },
+        "host_off_carriageway_m_by_id": {
+            key: round(value, 2)
+            for key, value in sorted(report.host_off_carriageway_m_by_id.items())
+        },
         "no_edge_in_range": report.no_edge_in_range,
         # Per entry of the `marks:` table, so an entry that silently drew
         # nothing is visible. `refused_m_by_code` is what reading three codes of

@@ -24401,3 +24401,62 @@ read here as evidence and drawn by nobody. ⚠️ The two paints ride `boxjuncti
 `roadmarks.tres` rather than `.tres` of their own — one paint, one dial — and
 `verify_crossings.gd` holds the pairing per kind.
 
+### Built 2026-09-20 — `P3-35g3`: hatching, a third host axis, and a chevron told by its shape
+
+**In scope on the user's call**: `P3-18` and `P3-23` held `RM1035`–`RM1037` out on `Q65`'s "none
+tells the player where to drive", a rule written for signs. Two `marks:` rows and no new stage,
+material or draw call — all three codes are WHITE on `CT174/51-5(1)F`.
+
+- **`axis: oblique`.** TD surveys the stripes, one part each, and they lie at whatever angle the
+  island's taper gave them: both existing rules refuse most of them at the shared 30° bar. An
+  oblique marking has no axis to be off, so `_host` scores it on proximity with the existing
+  "lies ON a road" preference and it carries **no residual** — kept out of `axis_residual_deg`,
+  which on both regions is unchanged to the digit, `n` included. The one bar it meets is
+  `_on_its_own_carriageway`, now published in metres by marking. ⚠️ **The pricing said 46% would
+  be refused there; 14% is** — that estimate used the angle pick, and the on-road preference is what
+  finds the right host.
+- 🔴 **`RM1035`/`RM1036` carry two widths under one code and the pass bar set before the probe was
+  met.** No attribute separates `LINE WIDTH = 150` from `CHEVRON WIDTH = 900`. The geometry does: TD
+  surveys a chevron as one 3-vertex V. Of 3-vertex parts **none turns 10–30° at its middle vertex**
+  (19 under 10°, 215 over 30°, both regions), and neighbouring apexes stand p50 **2.00 / 1.99 m**
+  apart against the sheet's `DISTANCE BET. CHEVRONS = 2000`. `chevron_turn_deg: 20` sits in the
+  empty band and `chevron_turn_gap_deg` publishes both sides of it every build: sharpest outline
+  9.73° · 1.02°, straightest chevron 56.4° · 86.2°. ⚠️ The first probe, on chords between part
+  ends, showed a slope and would have failed it; the vertex count was what it was missing.
+- **A V at 900 mm gapes 0.45 m at its point**, because each leg is a rectangle square to itself;
+  `_apex` closes it with a bevel, not a mitre — 40 of Wan Chai's chevrons turn past 120°, where a
+  mitre runs to four half-widths.
+
+| Wan Chai · Causeway Bay | before | after |
+|---|---|---|
+| `hatched_island` drawn / refused off carriageway | refused by code, 2,696 · 736 m | **681 parts, 2,314 m** / 381 m · **259, 725 m** / 11 m |
+| `prohibitory_chevron` drawn / refused off carriageway | refused by code, 5,535 · 252 m | **533 parts, 2,973 m** / 104 m · **73, 210 m** / 41 m |
+| of which V chevrons at 900 mm | — | 176, 563 m · 23, 78 m |
+| every other row of `drawn_by_id`, `underfill_m`, `axis_residual_deg`, the `join` block | | **unchanged** |
+| `drawn` · triangles | 983 · 48,590 — 217 · 16,763 | 2,197 · 65,549 — 549 · 21,029 |
+| `slivers_dropped` | 8,888 · 410 | 9,358 · 517 |
+| `stations_on_drawn_structure` | 47 · 12 | 114 · 12 |
+| `paint_clearance.py --layer roadmarks`: below lowest face / in c'way / deep | 826 / 81 / 40 · 284 / 7 / 1 | 1,477 / 153 / **81** · 398 / 9 / **3** — within bounds |
+| `inverted` | 0 · 0 | 0 · 0 |
+
+Inert twice over: with the axis and the chevron keys in and no row using them, `roadmarks.glb` was
+byte-identical on both regions. **PCK 61,329,272 → 62,026,440 B, +697,168 B, +1.137%.** Seven rules
+each fail their own test alone under mutation. 🔴 **One mutation SURVIVED first and the test was
+wrong, not the code**: with no angle to score, proximity already picks the nearest road, so "hosted
+by the road it lies on" passed with the preference deleted. It matters only where the nearest
+centreline is a slip road too narrow to hold the stripe; that case is the test now.
+
+⚠️ **Costs and debits, stated.** (1) **A known under-draw**: chevrons surveyed as two separate
+2-vertex legs cannot be told from outline segments and are drawn at 150 rather than guessed at
+(`Q54`); Wan Chai's 667 m of 2-vertex parts is the ceiling. (2) `RM1035`/`RM1036` lose 45% / 20% of
+their metres to `ELEVATION` (on structure), as priced. (3) `deep` doubles on Wan Chai, 40 → 81 of
+65,549 triangles — most of the new burial is stripe under an island the region stage tops with a
+slab (`Q131`), the ungated column. (4) 🔴 `_on_its_own_carriageway`'s docstring still claimed
+`offset_m` is exactly 0.0 on every level-0 edge, which expired at `P3-33c`; corrected, and the bar
+itself is left asking about the centreline — it errs toward refusing.
+
+Frames, imports deleted before each side, a repeating pair each, 0 shader errors: MARSH ROAD `e529`
+before and after (bare asphalt → the hatched island running down from the refuge), DRAGON ROAD
+`e168`, and a chevron gore at `--camera=727,32,176 --look=727,4,144`. ⚠️ LAI TAK TSUEN ROAD `e47`
+was not shot: what stands there is zigzags, which nobody draws. 2,524 tests, ruff, `check.sh` 0.
+

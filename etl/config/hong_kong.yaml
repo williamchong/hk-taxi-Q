@@ -2538,6 +2538,50 @@ road_marks:
       mark_m: 0.6
       gap_m: 0.3
 
+    # 🔴 **Hatching — IN SCOPE on the user's call, 2026-09-20 (`P3-35g3`).**
+    # `P3-18` and `P3-23` held the family out on `Q65`'s "none tells the player
+    # where to drive"; a prohibitory marking says where not to. Back on sheet
+    # `CT174/51-5(1)F`, read at 400-600 dpi:
+    #
+    #   1037 (TC 513)  PROHIBITORY HATCHED   LINE WIDTH = 150
+    #                  TRAFFIC ISLAND        MODULE : CONTINUOUS
+    #                  MARKING - WHITE       DISTANCE BETWEEN HATCHING =
+    #                  REGULATORY            NOT GREATER THAN 3000
+    #
+    # TD surveys the STRIPES: one part per hatch line and per boundary leg (850
+    # at-grade parts on Wan Chai, p50 1.79 m, 2,696 m; every one at grade), so
+    # each is drawn as the line it is and no fill or spacing is authored.
+    # ⚠️ `axis: oblique` — a stripe lies at whatever angle its island's taper
+    # gave it, and both other rules refuse most of them.
+    - id: hatched_island
+      axis: oblique
+      codes: [RM1037]
+      line_width_m: 0.15
+      lines: 1
+
+    #   1035 (TC 512)  PROHIBITORY CHEVRON   LINE WIDTH = 150
+    #   1036 (TC 512)  - WHITE               MODULE : CONTINUOUS
+    #                  REGULATORY            CHEVRON WIDTH = 900
+    #                                        DISTANCE BET. CHEVRONS = 2000
+    #
+    # The two rows are identical in every dimension and differ only in which way
+    # the chevrons point, which the survey draws and this stage does not read.
+    # 🔴 **Two widths under one code, and the GEOMETRY says which part takes
+    # which**: TD surveys a chevron as one V. Of the 3-vertex parts none turns
+    # 10-30 deg at its middle vertex (19 under 10, 215 over 30, both regions), and
+    # neighbouring apexes stand p50 2.00 / 1.99 m apart — the sheet's 2000.
+    # ⚠️ **A known under-draw**: some chevrons are surveyed as two separate
+    # 2-vertex legs, which nothing tells from an outline segment; those are drawn
+    # at 150 rather than guessed at (`Q54`). 667 m of 2-vertex parts on Wan Chai
+    # is the ceiling on it.
+    - id: prohibitory_chevron
+      axis: oblique
+      codes: [RM1035, RM1036]
+      line_width_m: 0.15
+      lines: 1
+      chevron_width_m: 0.9
+      chevron_turn_deg: 20.0
+
 # Pedestrian railings, drawn as their own geometry (P3-19, Q60).
 #
 # ⚠️ THIS IS THE ONE BLOCK IN THIS FILE WHOSE VOCABULARY THE PUBLISHER DOES NOT

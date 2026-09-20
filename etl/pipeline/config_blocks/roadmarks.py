@@ -29,7 +29,16 @@ TRANSVERSE = "transverse"
 LONGITUDINAL = "longitudinal"
 
 
-MARK_AXES = (TRANSVERSE, LONGITUDINAL)
+# 🔴 **A marking with NO axis against its road** (`P3-35g3`): a hatched island's
+# stripes and a chevron's legs, which TD surveys one part each. Measured on Wan
+# Chai's 850 at-grade `RM1037` parts, 64% lie 15-75 deg to the nearest edge and
+# 31% of the hatched family is refused by BOTH rules above at the shared 30 deg
+# bar. There is no angle such a part is "supposed" to lie at, so it is hosted by
+# the road it lies ON and carries no angular residual at all.
+OBLIQUE = "oblique"
+
+
+MARK_AXES = (TRANSVERSE, LONGITUDINAL, OBLIQUE)
 
 
 BROKEN_LEFT = "left"
@@ -114,11 +123,26 @@ class RoadMark:
     # carriageway from the join, which is `_covered`'s own reach, so admitting it
     # would let measurement noise switch the join off a lane at a time.
     divides_flows: bool
+    # 🔴 **A second width under ONE code** (`P3-35g3`): `RM1035`/`RM1036` draw
+    # their outline at `LINE WIDTH = 150` and their chevrons at `CHEVRON WIDTH =
+    # 900`, and no attribute says which part is which. The GEOMETRY does: TD
+    # surveys a chevron as one V — a 3-vertex part — and of the 3-vertex parts in
+    # Wan Chai and Causeway Bay none turns between 10 and 30 deg at its middle
+    # vertex (19 under 10, 215 over 30), while neighbouring apexes stand p50
+    # 2.00 / 1.99 m apart against the sheet's `DISTANCE BET. CHEVRONS = 2000`.
+    # `chevron_turn_deg` sits in that empty band. Both or neither; oblique only.
+    chevron_width_m: float | None = None
+    chevron_turn_deg: float | None = None
 
     @property
     def transverse(self) -> bool:
         """Whether this marking is drawn across its host rather than along it."""
         return self.axis == TRANSVERSE
+
+    @property
+    def oblique(self) -> bool:
+        """Whether this marking has no axis against its host (`OBLIQUE`)."""
+        return self.axis == OBLIQUE
 
     def drawn_line_width_m(self, longitudinal_scale: float) -> float:
         """The width each line is DRAWN at, which is not the width published.
@@ -547,6 +571,25 @@ def _road_mark(body: Any, where: str) -> RoadMark:
             f"flows it separates"
         )
 
+    chevron_width_m = body.get("chevron_width_m")
+    chevron_turn_deg = body.get("chevron_turn_deg")
+    if (chevron_width_m is None) != (chevron_turn_deg is None):
+        raise ValueError(
+            f"{where}: chevron_width_m and chevron_turn_deg are declared together or not at "
+            f"all; the turn is what says which parts take the width"
+        )
+    if chevron_width_m is not None:
+        chevron_width_m, chevron_turn_deg = float(chevron_width_m), float(chevron_turn_deg)
+        if axis != OBLIQUE:
+            raise ValueError(f"{where}:chevron_width_m is set on a marking that is not oblique")
+        if chevron_width_m <= line_width_m:
+            raise ValueError(
+                f"{where}:chevron_width_m {chevron_width_m} must exceed line_width_m "
+                f"{line_width_m}; the chevron is the broad stroke"
+            )
+        if not 0.0 < chevron_turn_deg < 180.0:
+            raise ValueError(f"{where}:chevron_turn_deg is {chevron_turn_deg}, outside (0, 180)")
+
     return RoadMark(
         id=mark_id,
         codes=codes,
@@ -558,4 +601,6 @@ def _road_mark(body: Any, where: str) -> RoadMark:
         broken_line=broken_line,
         axis=axis,
         divides_flows=divides_flows,
+        chevron_width_m=chevron_width_m,
+        chevron_turn_deg=chevron_turn_deg,
     )
