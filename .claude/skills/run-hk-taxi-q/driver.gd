@@ -286,10 +286,17 @@ func _shoot(label: String) -> void:
 ## not the event queue. Pushing key events would work too and would depend on
 ## the keyboard bindings in project.godot staying put; this depends only on the
 ## action names, which are the interface the router actually documents.
+##
+## An action is wanted while ANY of its holds covers `t`. Deciding per hold let
+## a second hold of one action release what the first had pressed on the same
+## tick, so `accelerate@0.3+3 … accelerate@5.5+6` never moved until 5.5 s.
 func _apply_holds(t: float) -> void:
+	var wanted: Dictionary[StringName, bool] = {}
 	for hold: Array in _holds:
-		var action: StringName = hold[0]
-		var want: bool = t >= hold[1] and t < hold[2]
+		var covers: bool = t >= hold[1] and t < hold[2]
+		wanted[hold[0]] = covers or wanted.get(hold[0], false)
+	for action: StringName in wanted:
+		var want: bool = wanted[action]
 		if want == Input.is_action_pressed(action):
 			continue
 		if want:
