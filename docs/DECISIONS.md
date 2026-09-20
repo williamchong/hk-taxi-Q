@@ -24535,3 +24535,18 @@ regions, the default drive `DRIVER OK` to 47 kph. No schema moves — the table 
 published and already loaded. ⚠️ Not driven by hand on EXPO DRIVE EAST `e657`, which the plan
 named; that is a review for the seat.
 
+✅ **Looked at by script the same day, and the marker is in the nearside lane.** Nothing on `e657`
+reads `lane_centre` but the overlay — no fare node stands on it, so no spawn — and the road-graph
+readout is `--debug-view=full`, not `drive.sh`'s `minimal`. The drive is
+`--seconds=13 --shots=9.5,11,12.5 --hold=accelerate@0.3+2.6 --hold=steer_right@4.6+1.8
+--hold=accelerate@5.6+3 --debug-view=full` from `f_004`, round `e666` and `e669`. At `t=0.344` the
+readout says 4.72 m off the centreline and at `t=0.435` 5.30 m, which are
+`2/3 × half + offset` from `roadsurface.json`'s own row interpolated per station — 3.77 + 0.95 and
+3.98 + 1.32 — so before this task the marker sat 0.95 and 1.32 m further right. In both frames the
+green cross lies between the kerb's double yellow and the first dashed lane line, in the lane that
+wears the left-turn arrow, while the white centreline runs right of the road's middle. ⚠️ **The
+script found a driver bug on the way**: `driver.gd` decided press or release per *hold*, so a
+second `--hold` of one action released what the first pressed on the same tick and the car sat
+still until 5.5 s; an action is now wanted while any of its holds covers `t`. ⚠️ Still a script:
+the user's own drive with `F3` on `full` is what the plan's line names.
+
