@@ -54,6 +54,7 @@ from pipeline.config import (
     Config,
     load_config,
 )
+from pipeline.crossings import CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
@@ -247,7 +248,11 @@ CITY_NAME = "city.json"
 # it — always `null` since `Q77`, removed on the user's call until the layer is
 # ported to a library and placements. A v33 reader requires the key and is wrong
 # to; this is the one bump that takes an asset key away.
-CITY_SCHEMA = 34
+#
+# 35 since `P3-35g2`: the manifest names `crossings.glb`, TD's surveyed
+# pedestrian-crossing stripes — a new shipped asset, on `P3-18`'s and `P3-23`'s
+# precedent. A v34 reader does not know the key and ships a region without it.
+CITY_SCHEMA = 35
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -288,6 +293,7 @@ OPTIONAL_ASSET_KEYS = (
     "arrows",
     "arrows_placements",
     "boxjunctions",
+    "crossings",
     "lamps",
     "lamps_placements",
     "railings",
@@ -330,6 +336,7 @@ INPUTS: tuple[Input, ...] = (
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
     Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
+    Input(CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA, "crossings"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
@@ -410,6 +417,7 @@ def build_region(
     tramway = documents[TRAMWAY_MANIFEST_NAME]
     arrows = documents[ARROWS_MANIFEST_NAME]
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
+    crossings = documents[CROSSINGS_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
@@ -522,6 +530,8 @@ def build_region(
         # read from the stage's own manifest for its reason: a region whose
         # boxes all failed the join must not be contradicted here by a constant.
         "boxjunctions": boxjunctions["asset"],
+        # `null` where the city drew no crossing stripes, on the same terms.
+        "crossings": crossings["asset"],
         "lamps": lamps["asset"],
         # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
         "lamps_placements": lamps["placements_document"],

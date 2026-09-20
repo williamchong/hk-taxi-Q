@@ -86,6 +86,7 @@ const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const TRAMWAY: String = "tramway"
 const ARROWS: String = "arrows"
 const BOXJUNCTIONS: String = "boxjunctions"
+const CROSSINGS: String = "crossings"
 const ROADMARKS: String = "roadmarks"
 const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
@@ -123,6 +124,15 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "boxjunctions",
 		"absence":
 		"A city whose sources publish no box polygons ships none, and that is not a failure.",
+		"placements": "",
+	},
+	CROSSINGS:
+	{
+		"file": "crossings.glb",
+		"noun": "pedestrian crossings",
+		"module": "crossings",
+		"absence":
+		"A city whose sources publish no crossing lines ships none, and that is not a failure.",
 		"placements": "",
 	},
 	ROADMARKS:

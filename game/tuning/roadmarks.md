@@ -63,3 +63,10 @@ dimension out of the city file that owns it.
 Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, on an
 approach carrying a `TS102` GIVE WAY plate: the thing this has to survive is
 being seen from the driving seat at the moment the sign above it is read.
+
+## Shared with the pedestrian crossings (`P3-35g2`)
+
+`crossings.glb`'s zebra crossing stripes (`crossings_zebra`) take this material too, by
+`generated_scene_import.gd`'s `SHADERS` table: they are the same white road paint, and one paint has
+one dial. A change to `paint_colour` here moves them, and `verify_crossings.gd` holds the pairing
+per kind.

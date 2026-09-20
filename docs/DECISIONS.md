@@ -24327,3 +24327,77 @@ in both frames — not this step's. ⚠️ **`etl/out/wan_chai+causeway_bay` is 
 rebuild**: `check.sh`'s `verify_join` failed on "a clearance width differs by 3.0000 m" until
 `python -m pipeline.join` was re-run, which is the check working. 2,491 tests, ruff.
 
+### Built 2026-09-20 — `P3-35g2`: pedestrian crossings, one rectangle a stripe, two paints
+
+`pipeline/crossings.py`, a new stage after `boxjunctions`; `crossings.glb` and `crossings.json`;
+`CITY_SCHEMA` 34 → **35** with `city_manifest.gd` in the same commit (a new asset key, on `P3-18`'s
+precedent). Placement is `boxjunctions._place`, imported.
+
+**Three things the pricing got wrong or did not know, each measured before the stage was written.**
+
+- **A stripe is a face, not a ring.** The plan counted 754 closed rings and "328 open parts to
+  decide". Strictly closed there are 715, and the 367 loose parts are mostly **stripes surveyed as
+  four edges**: 777 m of Wan Chai's 999 m of open line polygonises into 84 more rectangles (Causeway
+  Bay 261 of 271 m, 21 faces), rectangularity p10 0.999. One rule — polygonise each feature — covers
+  both, and 223 · 10 m that encloses nothing is refused and counted. 🔴 **That is only safe because
+  the survey never draws a ladder**: no face touches another on either region and the gap between
+  neighbours is the sheet's 0.6 m. `faces_touching` is published and must be 0.
+- 🔴 **The colour is not published on the crossing.** `LINETYPE` has no domain in the data
+  dictionary, and parts typed `RM1076` are 0.6 m wide like every other — not the sheet's 250-350 —
+  so the field separates nothing. Read off `CT174/51-5(1)F` by eye: `RM1070` ZEBRA CROSSING WHITE
+  (width 500-700, spacing 500-700, length ≥ 2500); `RM1076` LIGHT SIGNAL CROSSING YELLOW STRIPED
+  MARKINGS. What regulation leaves is that a zebra is never painted without its zigzags, and TD
+  surveys those (`ZIGZAGL` / `ZIGZAGR`, `DTAD_RD_MARK_LINE_C`). **The nearest zigzag is 0.33 m from
+  one Causeway Bay crossing and 481.85 m from the next; on Wan Chai the nearest is 197.1 m from
+  anything.** `zebra.within_m` 10.0 sits on that plateau and `zigzag_gap_m` publishes both sides of
+  it every build. ⚠️ Road Network v2's zebra points (1 · 2) were not used: a point against a
+  crossing needs a radius, and the zigzags need none.
+- **The whitelist is read off four regions, not two.** Mong Kok publishes `ZEBRA4` and Sha Tin
+  `CROSS_ANNO` and `RM1077` (slow-down bars). Exact, case-folded, refusals counted by code.
+
+| Wan Chai · Causeway Bay | |
+|---|---|
+| features → candidates → drawn / too far / no face | 121 → 121 → **120** / 1 / 0 · 19 → 17 → **16** / 0 / 1 |
+| light-signal · zebra crossings | 120 · 0 — 15 · **1** |
+| stripes · paint area | 758 · 1,591 m² — 80 · 192 m² |
+| faces = stripes + too wide + not convex | 765 = 762 + 0 + 3 · 80 = 80 + 0 + 0 |
+| refused by line type | none · `CROSS_BOUNDARY` 41.2 m |
+| stripe width p50 / max | 0.600 / 0.745 · 0.600 / 0.601 |
+| `vertices_over_cap` / `over_void` of `vertices_drawn` | 6,122 / 365 of 11,443 · 761 / 80 of 1,068 |
+| `paint_clearance.py --layer crossings`: under hi / in c'way / deep | 119 / 9 / **5** of 5,711 · 16 / 1 / **1** of 534 — within bounds |
+| `inverted` · `slivers_dropped` | 0 · 0 — 0 · 0 |
+| triangles · bytes | 5,711 · 309,972 — 534 · 30,716 |
+
+Priced before building, the off-road share of stripe area read 6.6% on Wan Chai — the box
+junctions' 6.71% — and 21.1% on Causeway Bay's 61 rings; that is `vertices_over_void`, and it is
+registration (`Q54` refuses to scale a surveyed extent). **PCK, measured from two exports of one
+tree with and without the mesh: 61,106,612 → 61,329,272 B, +222,660 B, +0.364%.** Draw calls on the
+throttle route 107 → 109 (one mesh, main and shadow pass); `prims` +11,422.
+
+Inert outside itself: `boxjunctions.glb`, `roadmarks.glb` and `arrows_placements.json`
+byte-identical on both regions. Seven rules each fail their own test alone under mutation (width
+bar, convexity, the zigzag rule, the line-type rule, the millimetre snap, the winding, `too_far`).
+Frame over the JOHNSTON ROAD junction (`--camera=281,38,740 --look=281,3.7,694`): yellow stripes on
+every arm, ending at the refuge islands, beside the box that was already there; four shots
+`cmp`-identical, 0 shader errors. ⚠️ Two other shots of six died on `no frame drawn in 600 ticks`,
+the known macOS stall. 2,514 tests, ruff, `check.sh` 0 with `verify_crossings` on both regions.
+
+**Reviewed before it was committed (`/simplify`, three readers), output byte-identical on both
+regions after.** One latent bug: `unclosed_m` subtracted the SUM of face perimeters, so a ladder's
+rung — bordering two faces — was counted twice and would have hidden a stub of the same length; it
+is the union of the boundaries now, and the ladder test carries a stub. 🔴 **And one decision
+already made that the first build went against**: `_sides_m` called `minimum_rotated_rectangle`
+and silenced its divide-by-zero, where `region._box_sides` exists *because* that call divides by
+zero on an axis-aligned ring. It is `_box_sides` now. Also `plan_lengths_2d` and `twice_area` for
+two inline restatements, `is None` for two `or`s that were right only by a bound held in another
+file. 🚫 Left on purpose: `_is_convex` beside `boxjunctions._turns_one_way` — that one's docstring
+says it is sound for a quad only — and `_place` stays an import from `boxjunctions`; a shared
+module with a counters `Protocol` is the tidy form and is outside this step.
+
+🚫 **Not built, and named so they are not lost**: the look-right / look-left glyphs (`1135` /
+`1136`, bare digits, `SYMBOL_SIZE` nan on 203 of 256 — an authored glyph); the three footway-extent
+publishers (`P3-27`'s other half); the zebra's own give-way line `RM1071` and zigzags, which are
+read here as evidence and drawn by nobody. ⚠️ The two paints ride `boxjunctions.tres` and
+`roadmarks.tres` rather than `.tres` of their own — one paint, one dial — and
+`verify_crossings.gd` holds the pairing per kind.
+

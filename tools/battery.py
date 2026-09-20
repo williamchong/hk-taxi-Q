@@ -187,6 +187,38 @@ TRIGGERS: dict[str, Trigger] = {
             Tool("paint_clearance.py", (*_GENERATED, "--layer", "arrows")),
         ),
     ),
+    "crossings": Trigger(
+        "`pipeline/crossings.py`, the `crossings` config block, or any crossing stripe",
+        (
+            Report(
+                "crossings.json",
+                (
+                    "features",
+                    "candidates",
+                    "drawn",
+                    "too_far",
+                    "no_face",
+                    "drawn_by_kind",
+                    "stripes_by_kind",
+                    "area_m2_by_kind",
+                    "refused_m_by_type",
+                    "zigzag_gap_m",
+                    "faces",
+                    "too_wide",
+                    "not_convex",
+                    "faces_touching",
+                    "unclosed_m",
+                    "stripe_width_m",
+                    "vertices_drawn",
+                    "vertices_over_cap",
+                    "vertices_over_void",
+                    "slivers_dropped",
+                    "inverted",
+                ),
+            ),
+            Tool("paint_clearance.py", (*_GENERATED, "--layer", "crossings")),
+        ),
+    ),
     "roadmarks": Trigger(
         "`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way",
         (

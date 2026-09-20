@@ -195,6 +195,14 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.path(GeneratedLayer.BOXJUNCTIONS)
 			)
 		)
+	if not manifest.crossings_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"pedestrian crossings",
+				manifest.crossings_path,
+				GeneratedLayer.path(GeneratedLayer.CROSSINGS)
+			)
+		)
 	# Guarded on the same terms once more, and this is the guard that matters
 	# most: `verify_signs.gd` treats an absent asset as a pass *and* a null
 	# `signs` key is an ordinary answer for a region whose signs are all

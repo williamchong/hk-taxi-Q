@@ -207,7 +207,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 34 since `P3-35a` (`Q133`): the `signals` key is gone with the stage that
 ## wrote it — always null since `Q77`. The one bump that takes an asset key away.
-const SCHEMA_VERSION: int = 34
+##
+## 35 since `P3-35g2`: the manifest names `crossings.glb`, TD's surveyed
+## pedestrian-crossing stripes — a new shipped asset, on `P3-18`'s precedent.
+const SCHEMA_VERSION: int = 35
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -341,6 +344,13 @@ var arrows_path: String
 ## asset from what it drew, not from a constant — so empty means "no box
 ## junctions in this bundle", never "no boxjunctions block".
 var boxjunctions_path: String
+
+## The pedestrian-crossing stripes mesh (`P3-35g2`), or **empty** where the
+## region ships none.
+##
+## Optional on the same terms as `boxjunctions_path`: drawn from TD's published
+## `DTAD_CROSSING_LINE`, named from what the stage drew and never from a constant.
+var crossings_path: String
 
 ## The pedestrian railings mesh (`P3-19`), or **empty** where the region ships
 ## none.
@@ -550,6 +560,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	# `str(null)` reason spelled out above.
 	manifest.arrows_path = _resolve(document.get("arrows"), manifest.directory)
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"), manifest.directory)
+	manifest.crossings_path = _resolve(document.get("crossings"), manifest.directory)
 	manifest.lamps_path = _resolve(document.get("lamps"), manifest.directory)
 	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
 	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
@@ -665,6 +676,7 @@ func shipped() -> PackedStringArray:
 		arrows_path,
 		arrows_placements_path,
 		boxjunctions_path,
+		crossings_path,
 		lamps_path,
 		lamps_placements_path,
 		railings_path,

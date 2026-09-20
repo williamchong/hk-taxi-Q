@@ -49,6 +49,13 @@ No collider, for the arrows' reason: the hatch lies across the middle of
 every boxed junction, so a collider is a 12 mm step every vehicle crosses at
 speed.
 
+## `[node name="Crossings" type="Node3D" parent="."]`
+
+The published pedestrian-crossing stripes (`P3-35g2`), one mesh per paint —
+light-signal yellow and zebra white — drawn at their surveyed extent. A region
+whose sources publish no crossing lines ships none and this node stays empty.
+No collider, for the arrows' reason: a stripe lies across the whole carriageway.
+
 ## `[node name="RoadMarks" type="Node3D" parent="."]`
 
 The published stop and give-way lines (`P3-23`), one mesh for the whole

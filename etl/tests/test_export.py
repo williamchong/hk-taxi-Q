@@ -28,6 +28,7 @@ from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIF
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
+from pipeline.crossings import CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA
 from pipeline.export import (
     CITY_NAME,
     CITY_SCHEMA,
@@ -292,6 +293,15 @@ class _Region:
                 "boxes": 0,
                 "drawn": 0,
             },
+            # And a fifth: no `crossings:` block either (`P3-35g2`).
+            CROSSINGS_MANIFEST_NAME: {
+                "schema_version": CROSSINGS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "features": 0,
+                "drawn": 0,
+            },
             # Same shape and same reason a fourth time: `testville` declares no
             # `road_marks:` block, so the stage found nothing and says so.
             ROADMARKS_MANIFEST_NAME: {
@@ -452,6 +462,18 @@ class TestAssembly:
         region.build()
         assert region.manifest()["boxjunctions"] == "boxjunctions.glb"
         assert "boxjunctions.glb" in shipped(region.manifest())
+
+    def test_a_drawn_crossing_asset_is_shipped_and_a_null_is_not(self, region) -> None:
+        """The optional-key contract again, for `P3-35g2`'s `crossings.glb`."""
+        region.build()
+        assert region.manifest()["crossings"] is None
+        assert "crossings.glb" not in shipped(region.manifest())
+
+        region.documents[CROSSINGS_MANIFEST_NAME]["asset"] = "crossings.glb"
+        (region.out_dir / "crossings.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["crossings"] == "crossings.glb"
+        assert "crossings.glb" in shipped(region.manifest())
 
     def test_the_sign_atlas_is_shipped_independently_of_the_sign_mesh(self, region) -> None:
         """🔴 **The regression the sweep bug was** (`Q70`).
@@ -964,6 +986,7 @@ class TestOrchestrator:
             "tramway",
             "arrows",
             "boxjunctions",
+            "crossings",
             "roadmarks",
             "railings",
             "signs",
@@ -1002,6 +1025,7 @@ class TestOrchestrator:
             "tramway",
             "arrows",
             "boxjunctions",
+            "crossings",
             "roadmarks",
             "railings",
             "signs",

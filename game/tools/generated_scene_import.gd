@@ -35,6 +35,11 @@ const SHADERS: Dictionary = {
 	"tramway": "res://tuning/tramway.tres",
 	"arrows": "res://tuning/arrows.tres",
 	"boxjunctions": "res://tuning/boxjunctions.tres",
+	# `P3-35g2`. A light-signal crossing is painted in the yellow a box is and a
+	# zebra in the white a stop line is: one paint, one dial, so no `.tres` of
+	# their own. `verify_crossings.gd` holds the pair per kind.
+	"crossings_signal": "res://tuning/boxjunctions.tres",
+	"crossings_zebra": "res://tuning/roadmarks.tres",
 	# The published stop and give-way lines (`P3-23`). One entry for all three
 	# codes, because all three are the same white paint — what tells a give-way
 	# line from a stop line is the geometry `pipeline/roadmarks.py` built, not a

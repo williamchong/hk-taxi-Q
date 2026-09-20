@@ -33,6 +33,7 @@ from pipeline import (
     buildings,
     carve,
     clearance,
+    crossings,
     export,
     fares,
     fence,
@@ -104,6 +105,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # ribbon, since a surveyed polygon is drawn at its surveyed extent rather
     # than registered into a lane. Before `export`, which names the asset.
     "boxjunctions": boxjunctions.main,
+    # After `surface`, for `roadsurface.json` — each stripe vertex takes the drawn
+    # road's own height (`DrawnSurface`), as a box's does. Before `export`.
+    "crossings": crossings.main,
     # After `roads` for the level-0 centrelines — the height under each vertex
     # and the host edge each bar is drawn **across** — and after `surface` for
     # `roadsurface.json`'s drawn half-width. ⚠️ **The second one is a dependency

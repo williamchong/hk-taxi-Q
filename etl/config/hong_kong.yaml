@@ -2129,6 +2129,70 @@ boxjunctions:
   # has drifted onto no road this build drives.
   max_offset_m: 12.0
 
+# Published pedestrian-crossing stripes (P3-35g2).
+#
+# DTAD_CROSSING_LINE surveys each stripe as its own rectangle: 715 closed rings
+# in Wan Chai, and 367 loose parts of which 777 m of 999 close into 84 more faces
+# (Causeway Bay 61 rings, 21 faces from 261 of 271 m). Short side p50 0.600 m,
+# long side p50 3.500 m, 0.6 m between them; no face touches another, so the
+# lines are stripes and never a ladder whose gaps would polygonise too. ELEVATION
+# is null on every part. What does not close is refused and counted.
+#
+# CT174/51-5(1)F, read by eye off the scan (Q59):
+#   RM1070 (TC 801)  ZEBRA CROSSING - WHITE
+#                    WIDTH = 500 - 700, SPACNG = 500 - 700,
+#                    LENGTH = NOT LESS THAN 2500
+#   RM1076 (TC 806)  LIGHT SIGNAL CROSSING YELLOW STRIPED MARKINGS - YELLOW
+#                    WIDTH = 250-350, SPACE BETWEEN EDGE OF CARRIAGEWAY & 1ST
+#                    MARKING = 500 - 1300, OTHER SPACING = 600 - 800
+# ⚠️ The survey does not draw RM1076 at the sheet's 250-350: parts typed RM1076
+# are 0.6 m wide like every other. The surveyed width is what is drawn (Q54).
+crossings:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_CROSSING_LINE
+  fields:
+    line_type: LINETYPE
+    level: ELEVATION
+
+  # Matched case-folded: the layer carries SOLID and Solid for one thing, and a
+  # null reads as None. No data-dictionary domain exists for this field, so the
+  # list is read off the four built regions and everything else is refused by
+  # code: CROSS_BOUNDARY (the whole crossing's outline — it would paint it
+  # solid), CROSS_ANNO (a label), RM1077 (transverse slow-down bars).
+  line_types: [SOLID, NONE, RM1076, ZEBRA4]
+
+  # 🔴 A crossing's colour is not published on the crossing: every line type
+  # above carries the same stripe. A zebra is never painted without its zigzags
+  # (RM1072-RM1074), which TD surveys as ZIGZAGL / ZIGZAGR in the road-mark
+  # representation layer, so a crossing they reach is a zebra (white) and every
+  # other striped crossing is a light-signal one (yellow).
+  zebra:
+    layer: DTAD_RD_MARK_LINE_C
+    fields:
+      line_type: LINETYPE
+      level: ELEVATION
+    codes: [ZIGZAGL, ZIGZAGR]
+    # On a plateau: across Wan Chai and Causeway Bay's 140 crossings the nearest
+    # zigzag is 0.3 m from one and 197 m from the next.
+    within_m: 10.0
+    # Line types that say zebra outright. Mong Kok publishes one.
+    line_types: [ZEBRA4]
+
+  # The lowest rung of the paint ladder (boxes 0.012, their border 0.014,
+  # arrows 0.015, road marks 0.016). A crossing legitimately overlaps none of
+  # them; where registration puts a stop line or an arrow on a stripe, the
+  # narrow mark is the one that must stay visible over the broad one.
+  lift_m: 0.010
+
+  # The bar arrows, boxes and signs share, for their reason.
+  max_offset_m: 12.0
+
+  # Twice the sheet's 700. Over 2,321 faces in four regions the widest stripe is
+  # 0.814 m and the narrowest thing that is not one — a CROSS_BOUNDARY face — is
+  # 2.06, so nothing stands near this bar; it is what keeps a crossing outline
+  # filed under a drawn line type from being painted solid.
+  max_stripe_width_m: 1.4
+
 # Published stop lines and give-way lines (P3-23).
 #
 # The markings under the GIVE WAY plates P3-20 put 讓 on: 74 posts told the

@@ -85,6 +85,11 @@ from pipeline.config_blocks.buildings import (  # noqa: F401
     _reflectance,
     _scale,
 )
+from pipeline.config_blocks.crossings import (  # noqa: F401
+    Crossings,
+    ZebraEvidence,
+    _crossings,
+)
 from pipeline.config_blocks.fares import (  # noqa: F401
     _FARE_OPTIONAL_ROLES,
     _FARE_ROLES,
@@ -371,6 +376,10 @@ class Config:
     # against 393 junction nodes, so deriving placement from topology would be
     # wrong nineteen times in twenty.
     boxjunctions: BoxJunctions | None = None
+    # Published pedestrian-crossing stripes, drawn by `pipeline/crossings.py`
+    # (`P3-35g2`). Optional on the same terms; the fallback it does not offer is
+    # a crossing at every signalised junction, which nothing here can name.
+    crossings: Crossings | None = None
     # Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
     # Optional on the same terms as the three blocks above: a city whose estate
     # publishes no railing layer ships none rather than running a fence down
@@ -725,6 +734,7 @@ def load_config(path: Path | None = None) -> Config:
         signs=_signs(document.get("signs"), f"{path}:signs"),
         lamps=_lamps(document.get("lamps"), f"{path}:lamps", table),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
+        crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
@@ -761,6 +771,8 @@ def load_config(path: Path | None = None) -> Config:
         _check_declared_source(city, city.arrows, f"{path}:arrows.source")
     if city.boxjunctions is not None:
         _check_declared_source(city, city.boxjunctions, f"{path}:boxjunctions.source")
+    if city.crossings is not None:
+        _check_declared_source(city, city.crossings, f"{path}:crossings.source")
     if city.railings is not None:
         _check_declared_source(city, city.railings, f"{path}:railings.source")
     if city.road_marks is not None:

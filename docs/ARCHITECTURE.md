@@ -228,7 +228,7 @@ note below the table. A new step goes in at its real position.
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
 | `verify_input` | The touch scheme, driven by synthetic fingers — needs no built region, which matters more here than anywhere: `P0-3b` has no handset, so this is the only thing that exercises touch at all | yes |
 | `verify_hud` | The HUD layout against `hud_layout.tres`'s rects, both directions of the thumb-rest contract (`Q80`) — needs no built region | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names (`verify_signals` runs against the null manifest key the latent layer leaves, `Q77`) | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names (`verify_signals` runs against the null manifest key the latent layer leaves, `Q77`) | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
 variable planted in `greybox_builder.gd` went unreported, because the import step compiles only
@@ -447,6 +447,7 @@ hk-taxi-Q/
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # published turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
+│   │   ├── crossings.py         # published crossing stripes → crossings.glb, two paints (P3-35g2)
 │   │   ├── boxsource.py         # the box reader both boxjunctions.py and surface.py use (P3-32)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
@@ -513,7 +514,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 34,
+  "schema_version": 35,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -545,6 +546,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
   "boxjunctions": "boxjunctions.glb",
+  "crossings": "crossings.glb",
   "lamps": "lamps.glb",
   "railings": "railings.glb",
   "signs": "signs.glb",
@@ -1235,6 +1237,17 @@ them is a residual whose *tail* is the finding — `axis_residual_deg` is where 
 road goes — and a median near zero is also what a wholly broken join looks like. `Q58`'s
 `drawn_gauge_m` lesson, applied before rather than after.
 
+### `crossings.glb` — the published pedestrian-crossing stripes (`P3-35g2`)
+
+One rectangle per surveyed stripe of `DTAD_CROSSING_LINE` — the faces each feature's lines enclose,
+rings and loose edges alike — placed on the drawn road by `boxjunctions._place` at `lift_m` 0.010, the
+lowest rung of the paint ladder. **Two meshes, one per paint**: `crossings_signal` (yellow, on
+`tuning/boxjunctions.tres`) and `crossings_zebra` (white, on `tuning/roadmarks.tres`), a mesh present
+only where that paint was drawn, so at most two draw calls. The colour is not published on the
+crossing; a crossing TD's surveyed zigzags reach is a zebra. No `COLOR_0`, no collider.
+`crossings.json` publishes three closing partitions, `faces_touching` (must be 0) and both sides of
+the plateau the zebra bar sits on. `.claude/rules/crossings.md` has the checklist.
+
 ### `boxjunctions.glb` — the published yellow box junctions (`P3-18`)
 
 Border and cross-hatch per surveyed `DTAD_YL_BOX_POLY` polygon, the hatch laid `lift_m` above the
@@ -1733,6 +1746,7 @@ every region lies inside them.
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). **A library since `P5-4`** — one flat glyph per `RM` code, stood by `arrows_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-15`, `P5-4` |
 | `arrows_placements.json` | Where the arrow library stands: one entry per drawn arrow, in `landmarks.json`'s transform shape plus a `pitch_deg` between the deck heights under its tail and its nose. ⚠️ Nothing else — the first build wrote the host edge and lane beside it and nothing read them, 14.6% of the document (`Q54`). Written beside `arrows.glb` and null on its terms | ✅ `P5-4` |
+| `crossings.glb` | The published pedestrian-crossing stripes, one rectangle each at the extent the estate surveyed, light-signal yellow and zebra white as two meshes. Absent where the sources publish no crossing lines. |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
 | `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). **A library since `P5-2`** — one mesh per face variant plus a unit pole, stood by `signs_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-16`, `P5-2` |
