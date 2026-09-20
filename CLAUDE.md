@@ -51,8 +51,8 @@ them without explicit instruction from the user.
    names the evidence and the agreement is the licence.
    🔴 **And `lanes` is measured too since `Q94`** — bracketed off that width against TPDM 4.3.9.8's
    3.0-3.65 m through lane, **never** divided by `lane_width_m`, which would make the instrument
-   agree with the constant under test. It resolves on **210 of the 292** measured edges (153
-   `measured`, 57 `arrows`); the rest are ambiguous and keep the authored count, and
+   agree with the constant under test. It resolves on **276 of the 393** measured edges on Wan Chai (197
+   `measured`, 79 `arrows`; Causeway Bay 91 of 124); the rest are ambiguous and keep the authored count, and
    `lanes_source` says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
    changes the `TEXCOORD_0` lane coordinate and the arrow slots, and nothing else.
    🔴 **`lanes` CAN BE 1 since `Q114` and there is no floor under it here** — 60 edges publish one,

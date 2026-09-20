@@ -43,3 +43,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   *does* move, positions only (the lane snap), so its counters are owed.
   ⚠️ **The evidence is a frame and the cache lies**: force a re-import, and expect the first several
   runs after one **not to reproduce** — shoot until a hash repeats, each side. Numbers in `Q114`.
+- 🚫 **A lane count off TD's lane lines is MEASURED AND REFUSED twice — do not re-propose it
+  without a new argument** (`Q127`, then `P3-35g4`). From the centreline it sees the other
+  carriageway's lines (24% agreement). Hosted on the edge's own drawn ribbon —
+  `width_evidence.hosted_count`, which §2a prints on every run — the over-count goes and agreement
+  reaches 79% / 69% against `measured` and 85% / 88% against `arrows`: real, and short of a bar set
+  beforehand (high 80s, both regions), for ten edges. ⚠️ **Do not sweep its rail clearance to reach
+  the bar** — that is a free value tuned for a count (`Q72`). What would reopen it is reading the
+  21 · 10 disagreeing edges one by one.
+

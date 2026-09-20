@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import json
 import math
 import sys
 from collections import Counter, defaultdict
@@ -60,7 +61,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _lib.ribbon import left_of, walk_width  # noqa: E402
+from _lib.ribbon import (  # noqa: E402
+    drawn_offsets,
+    half_width_at,
+    half_widths,
+    left_of,
+    offset_at,
+    walk_width,
+)
 from _lib.streets import road_names  # noqa: E402
 from cap_pavement import _Index as _Rings  # noqa: E402
 from cap_pavement import carriageway_polygons  # noqa: E402
@@ -73,6 +81,7 @@ from carriageway_margin import (  # noqa: E402
     _segments,
     _share_over,
     edge_widths,
+    lane_bracket,
     mouth_noise,
     published_edges,
     survey,
@@ -88,6 +97,7 @@ from pipeline.railings import RailingReport, read_lines  # noqa: E402
 from pipeline.roadmarks import Network, RoadMarkReport, _host, read_markings  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 from pipeline.signs import _read_poles  # noqa: E402
+from pipeline.surface import SURFACE_MANIFEST_NAME  # noqa: E402
 
 # The survey's own licensed bases — the reference population every reading is
 # graded against. `deck` is excluded: it is level 1, which no reading here walks.
@@ -228,12 +238,21 @@ def _level_zero_list(graph: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _stations(edge: Edge, spacing_m: float) -> Iterable[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """`(origin, tangent, left normal)` in plan, down one edge."""
+    for _, origin, tangent, normal in _stations_at(edge, spacing_m):
+        yield origin, tangent, normal
+
+
+def _stations_at(
+    edge: Edge, spacing_m: float
+) -> Iterable[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
+    """`_stations`, with the published vertex each station follows — what the
+    drawn ribbon's per-vertex table is indexed by."""
     for vertex, station in walk_width(edge.polyline, spacing_m):
         along = (edge.polyline[vertex + 1] - edge.polyline[vertex])[[0, 2]]
         length = float(np.hypot(*along))
         if length <= 0.0:
             continue
-        yield station[[0, 2]], along / length, left_of(along)
+        yield vertex, station[[0, 2]], along / length, left_of(along)
 
 
 # --------------------------------------------------------------------------
@@ -419,6 +438,20 @@ class LaneLines:
     walked: int = 0
     one_divider: int = 0
     chains_broken: int = 0
+    # 🔴 **The HOSTED count (`P3-35g4`)**: dividers strictly inside this edge's
+    # own DRAWN ribbon, plus one. `Q127` refuted the count above because a ray
+    # from the centreline "sees the other carriageway's lines"; a level-0 ribbon
+    # is its territory since `P3-33c`, which is this centreline's share and
+    # nobody else's, so confining the ray to it is the hosting that reading
+    # lacked. Per station, where at least one divider is inside.
+    hosted: dict[int, list[int]] = field(default_factory=lambda: defaultdict(list))
+
+    def hosted_lanes(self, *, minimum_n: int = 2) -> dict[int, int]:
+        return {
+            e: Counter(v).most_common(1)[0][0]
+            for e, v in self.hosted.items()
+            if len(v) >= minimum_n
+        }
 
     def estimate(self, *, minimum_n: int = 2) -> dict[int, float]:
         return {
@@ -461,6 +494,21 @@ def dividers(offsets: list[float], merge_m: float) -> list[float]:
     return [float(np.mean(group)) for group in merged]
 
 
+def hosted_count(
+    painted: list[float], centre_m: float, half_m: float, clear_m: float
+) -> int | None:
+    """Lanes across one station of a DRAWN ribbon: the dividers inside it, plus
+    one. None where none is inside — silence is not a one-lane road.
+
+    ⚠️ **`clear_m` of each rail, half a narrowest lane and derived like the merge
+    bar**: a divider nearer the rail than that has no lane beyond it inside this
+    ribbon — it is the double white ON the boundary two shares meet at, and
+    counting it adds a lane that is the other carriageway's.
+    """
+    inside = [line for line in painted if abs(line - centre_m) < half_m - clear_m]
+    return len(inside) + 1 if inside else None
+
+
 def chain_at_centre(lines: list[float], gap_m: float) -> tuple[list[float], bool]:
     """The run of dividers nearest the centreline, cut where a gap is two lanes wide.
 
@@ -496,7 +544,10 @@ def read_lane_lines(
     spacing_m: float,
     max_ray_m: float,
     sources_root: Path | None,
+    drawn: tuple[dict[int, list[float]], dict[int, list[float]]] | None = None,
 ) -> LaneLines:
+    """`drawn` is `roadsurface.json`'s `(half_widths, drawn_offsets)`; without it
+    the hosted count is not taken."""
     found = LaneLines()
     survey_spec = city.carriageway_survey
     if survey_spec is None or not survey_spec.lane_lines:
@@ -514,7 +565,8 @@ def read_lane_lines(
     gap_m = 2.0 * bounds.lane_m[1]
 
     for edge in edges.values():
-        for origin, tangent, normal in _stations(edge, spacing_m):
+        halves, centres = (drawn[0].get(edge.id), drawn[1].get(edge.id)) if drawn else (None, None)
+        for vertex, origin, tangent, normal in _stations_at(edge, spacing_m):
             found.walked += 1
             offsets: list[float] = []
             for distance, row in index.cast_all(origin, normal, max_ray_m):
@@ -522,7 +574,13 @@ def read_lane_lines(
                 length = float(np.hypot(*step))
                 if length > 0.0 and abs(float(step @ tangent)) / length >= parallel:
                     offsets.append(distance)
-            chain, broken = chain_at_centre(dividers(offsets, merge_m), gap_m)
+            painted = dividers(offsets, merge_m)
+            if halves:
+                centre = offset_at(centres, vertex) if centres else 0.0
+                count = hosted_count(painted, centre, half_width_at(halves, vertex), merge_m)
+                if count is not None:
+                    found.hosted[edge.id].append(count)
+            chain, broken = chain_at_centre(painted, gap_m)
             found.chains_broken += int(broken)
             if len(chain) == 1:
                 found.one_divider += 1
@@ -1277,6 +1335,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     out_dir = city.out_dir(args.region, args.out_root)
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, args.region)
+    surface = json.loads((out_dir / SURFACE_MANIFEST_NAME).read_text())
     transform = city.game_transform(args.region)
     edges = level_zero(graph)
     measured = sum(1 for e in edges.values() if e.measured)
@@ -1319,6 +1378,7 @@ def main(argv: list[str] | None = None) -> int:
         spacing_m=args.spacing_m,
         max_ray_m=args.max_ray_m,
         sources_root=args.sources_root,
+        drawn=(half_widths(surface), drawn_offsets(surface)),
     )
     print("")
     print(
@@ -1352,6 +1412,37 @@ def main(argv: list[str] | None = None) -> int:
             if graded_lanes
             else ""
         )
+    )
+    # 🔴 **The same question of the HOSTED count (`P3-35g4`), and the agreement is
+    # the licence** — `Q114` shipped its count against an instrument that
+    # disagreed on 0 of 208. Per `lanes_source`, because `measured` and `arrows`
+    # are two instruments and a reading that agrees with one only is not theirs.
+    hosted = lanes.hosted_lanes()
+    for source in ("measured", "arrows", "arrows_unmeasured"):
+        pairs = [(hosted[e], edges[e].lanes) for e in hosted if edges[e].lanes_source == source]
+        if pairs:
+            print(
+                f"  HOSTED lanes vs `{source}`: "
+                f"{sum(1 for a, b in pairs if a == b)} of {len(pairs)} agree; "
+                f"more on {sum(1 for a, b in pairs if a > b)}, "
+                f"fewer on {sum(1 for a, b in pairs if a < b)}"
+            )
+    # What it would be FOR: a measured width whose bracket named more than one
+    # count, so the authored count stands. Inside the bracket is a candidate;
+    # outside is a refusal the bracket would make.
+    ambiguous = [e for e in edges.values() if e.measured and e.lanes_source == "authored"]
+    reached = [e for e in ambiguous if e.id in hosted]
+    inside = [
+        e
+        for e in reached
+        if (bracket := lane_bracket(e.width_m, bounds, two_way=e.two_way))[0]
+        <= hosted[e.id]
+        <= bracket[1]
+    ]
+    print(
+        f"  HOSTED reach: {len(reached)} of {len(ambiguous)} ambiguous edges carry a count, "
+        f"{len(inside)} inside their bracket, "
+        f"{sum(1 for e in inside if hosted[e.id] != e.lanes)} of those would move the count"
     )
 
     # ── 2b ──

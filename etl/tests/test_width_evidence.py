@@ -24,6 +24,7 @@ from width_evidence import (
     contiguous_run,
     dividers,
     grade,
+    hosted_count,
     main,
     outside,
     runs,
@@ -78,6 +79,29 @@ class TestChain:
 
         assert chain == [-1.6, 1.6]
         assert broken is False
+
+
+class TestHostedCount:
+    """`P3-35g4`: the count confined to the edge's own drawn ribbon, which is
+    what `Q127`'s centreline ray lacked."""
+
+    PAINTED = (-1.6, 1.6, 8.4, 11.6)
+
+    def test_the_other_carriageways_lines_are_not_counted(self) -> None:
+        # Own ribbon 0 +- 5: two lane lines. The run beyond is the neighbour's.
+        assert hosted_count(list(self.PAINTED), 0.0, 5.0, 1.5) == 3
+
+    def test_the_ribbon_is_where_it_is_drawn_not_about_the_centreline(self) -> None:
+        """`[offset - half, offset + half]` (`Q106`): the same rays, the other road."""
+        assert hosted_count(list(self.PAINTED), 10.0, 5.0, 1.5) == 3
+        assert hosted_count(list(self.PAINTED), -10.0, 5.0, 1.5) is None
+
+    def test_a_divider_on_the_rail_has_no_lane_beyond_it(self) -> None:
+        """The double white two shares meet at, on the boundary of both."""
+        assert hosted_count([-5.0, -1.6, 1.6], 0.0, 5.0, 1.5) == 3
+
+    def test_silence_is_not_one_lane(self) -> None:
+        assert hosted_count([8.4], 0.0, 5.0, 1.5) is None
 
 
 class TestContiguousRun:

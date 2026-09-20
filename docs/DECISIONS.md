@@ -24460,3 +24460,39 @@ before and after (bare asphalt → the hatched island running down from the refu
 `e168`, and a chevron gore at `--camera=727,32,176 --look=727,4,144`. ⚠️ LAI TAK TSUEN ROAD `e47`
 was not shot: what stands there is zigzags, which nobody draws. 2,524 tests, ruff, `check.sh` 0.
 
+### Measured and REFUSED 2026-09-20 — `P3-35g4`: a lane count off TD's lane lines, hosted this time
+
+`Q127` built this reading in `tools/width_evidence.py` §2a and refuted it: a ray from the centreline
+"sees the other carriageway's lines", 51 of 75 over-count. What changed since is that a level-0
+ribbon IS its territory (`P3-33c`) — this centreline's share and nobody else's — so the probe added
+one thing: `hosted_count`, the dividers strictly inside the edge's own **drawn** ribbon
+`[offset − half, offset + half]`, half a narrowest lane clear of each rail, plus one. Same rays,
+same divider merge, no new constant. **The bar was set before the run: agreement in the high 80s on
+both regions, the over-count leg near zero, or refuse.**
+
+| agrees with the shipped count | centreline ray (`Q127`) | hosted on the drawn ribbon |
+|---|---|---|
+| Wan Chai `measured` | 27 of 113 (24%), 84 over | **81 of 102 (79%)**, 15 over, 6 under |
+| Wan Chai `arrows` | | 66 of 78 (85%), 5 over, 7 under |
+| Wan Chai `arrows_unmeasured` | | 5 of 6 |
+| Causeway Bay `measured` | 6 of 20 (30%), 13 over | 22 of 32 (69%), 7 over, 3 under |
+| Causeway Bay `arrows` | | 14 of 16 (88%), 0 over, 2 under |
+| ambiguous edges reached / inside their bracket / that would move | | 41 of 86 / 39 / **7** · 9 of 25 / 9 / **3** |
+
+✅ **The hosting is what `Q127`'s reading lacked, and this is the measurement that says so**: the
+over-count falls 84 → 15 and agreement goes 24% → 79%. 🚫 **And it is still refused**: pooled it is
+82% · 75% against a bar of high 80s, where `Q114` shipped its count against an instrument that
+disagreed on 0 of 208 — a reading wrong one time in five has no business publishing a count — and
+the prize is **ten edges**. ⚠️ **The clearance from the rail was not swept to reach the bar**: that
+is a free value tuned for a count (`Q72`), on a bar set before the numbers were seen. What would
+reopen it is an argument for the 21 · 10 disagreements that is not a knob: they are not yet looked
+at edge by edge, and a row of arrows is itself a lower bound, so some "over" may be the lines being
+right.
+
+The instrument stays: §2a prints the hosted lines beside the old one on every run, four tests,
+three mutations each failing alone (no rail clearance, the ribbon read about the centreline,
+silence counted as one lane). No pipeline byte moves; `lanes_source` gains no value; the graph
+stays at schema 15. 🚫 Not an argument to switch `draw_lane_lines` on. ⚠️ Corrected in passing:
+`CLAUDE.md`'s "resolves on 210 of the 292 measured edges" predates `Q126`/`Q128`/`Q130`; the
+shipped graphs read **276 of 393** (197 `measured`, 79 `arrows`) and 91 of 124. 2,528 tests, ruff.
+
