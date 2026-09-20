@@ -94,10 +94,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
+import statistics
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -127,6 +129,7 @@ from _lib.bundle import (  # noqa: E402
     wears,
 )
 from _lib.ribbon import (  # noqa: E402
+    corridors,
     cross_section,
     drawn_offsets,
     half_width_at,
@@ -812,6 +815,13 @@ class Lattice:
     **clear**, which is the one direction this tool must never flatter. Walking
     once makes the superset property structural instead of a convention.
 
+    🔴 **Once per WINDOW since `P3-33e`, and that is not the second walk above.**
+    `main` builds two of these — the ribbon and the corridor, `walk_carriageway`'s
+    `corridor` flag — because they are two different sets of cells, where the walk
+    this refused was the same set twice. The superset property is kept the same
+    way it was won: `band_map` takes every lattice a survey will read, so there
+    is still no second copy of the walk to fall out of step with.
+
     Stored as parallel arrays rather than objects: 1.1 M cells is ~45 MB this way
     and several times that as Python tuples.
     """
@@ -845,10 +855,23 @@ def walk_carriageway(
     spacing_m: float,
     across_m: float,
     attribute_within_m: float,
+    corridor: bool = False,
 ) -> Lattice:
-    """Walk every drawn carriageway cell once, recording what both passes need."""
-    widths = half_widths(manifest)
-    drawn_offset_by_edge = drawn_offsets(manifest)
+    """Walk every drawn carriageway cell once, recording what both passes need.
+
+    🔴 **Two windows since `P3-33e`, and each half of `survey` is owed its own.**
+    The default is the drawn RIBBON, which is what the area half asks about:
+    ribbons do not overlap, so their cells sum to an area. `corridor=True` walks
+    kerb to kerb instead (`_lib.ribbon.corridors`), which is what a car fits in
+    and what `clearance.py` walks — a level-0 ribbon is its centreline's share
+    (`Q129`), and a corridor read across a share is starved by open asphalt.
+    Corridors of centrelines sharing a carriageway overlap, so that lattice's
+    cells are NOT an area and its shares are never read (`survey_both`).
+    """
+    ribbon_widths, ribbon_offset_by_edge = half_widths(manifest), drawn_offsets(manifest)
+    widths, drawn_offset_by_edge = (
+        corridors(manifest) if corridor else (ribbon_widths, ribbon_offset_by_edge)
+    )
 
     edges: list[int] = []
     levels: list[int] = []
@@ -883,6 +906,21 @@ def walk_carriageway(
             normal = left_of(along[[0, 2]])
             half = half_width_at(widths.get(edge_id, []), vertex)
             drawn_offset_m = offset_at(drawn_offset_by_edge.get(edge_id, []), vertex)
+            if corridor:
+                # 🔴 **Tapered between the two vertices, as `clearance.py` walks
+                # it.** Read at the segment's first vertex — the ribbon's rule,
+                # good to a station's worth of taper — a corridor is not: `e751`
+                # LAN FONG ROAD runs 22.5 m to 6.4 m in 9.5 m, and the wide end's
+                # window laid over the narrow end read 21.04 m clear where the
+                # pipeline reads 0.75 m. Seven edges turned pipeline-only on it.
+                run = math.hypot(along[0], along[2])
+                gone = station - polyline[vertex]
+                part = 0.0 if run <= 0.0 else math.hypot(gone[0], gone[2]) / run
+                half += part * (half_width_at(widths.get(edge_id, []), vertex + 1) - half)
+                drawn_offset_m += part * (
+                    offset_at(drawn_offset_by_edge.get(edge_id, []), vertex + 1) - drawn_offset_m
+                )
+            first_cell = len(surfaces)
             for x, z, span, cell_offset_m in cross_section(
                 station[[0, 2]], normal, half, across_m, drawn_offset_m
             ):
@@ -908,6 +946,14 @@ def walk_carriageway(
                 # trim or a stale width table, and it has to stay distinguishable
                 # from a road at y = 0 rather than quietly leave the denominator.
                 surfaces.append(float("nan") if found_y is None else found_y)
+            if corridor:
+                _stand_on_own_road(
+                    surfaces,
+                    offsets,
+                    first_cell,
+                    half_width_at(ribbon_widths.get(edge_id, []), vertex),
+                    offset_at(ribbon_offset_by_edge.get(edge_id, []), vertex),
+                )
             station_id += 1
 
     return Lattice(
@@ -924,29 +970,66 @@ def walk_carriageway(
     )
 
 
-def band_map(lattice: Lattice) -> dict[tuple[int, int], tuple[float, float]]:
+def _stand_on_own_road(
+    surfaces: list[float],
+    offsets: list[float],
+    first_cell: int,
+    ribbon_half_m: float,
+    ribbon_offset_m: float,
+) -> None:
+    """Give one corridor station's undrawn cells the height of its own ribbon.
+
+    A corridor is kerb to kerb in PLAN (`Q129`: HyD's polygons carry no level),
+    so it holds cells with no road drawn at this road's height — a ramp rising
+    alongside, the pavement a taper overshoots. Dropped, they took the station
+    with them: `e402` WAN CHAI INTERCHANGE lost 28 stations to the trimmed guard
+    exactly where the ramp's deck walls it to 2.75 m, and read 9.71 m clear. The
+    car is on THIS road, so that is the band a wall beside it has to reach — the
+    same question `clearance.py` asks at the centreline's height.
+
+    🔴 **Only where the station's own ribbon is drawn.** Inside a junction trim
+    it is not, the cells stay undrawn, and `_trimmed` refuses the station as it
+    always has — the guard is about the ribbon, and a corridor must not dilute it.
+    """
+    cells = range(first_cell, len(surfaces))
+    own = [
+        surfaces[cell] for cell in cells if abs(offsets[cell] - ribbon_offset_m) <= ribbon_half_m
+    ]
+    # `math` and `statistics`, not numpy: these are Python floats a dozen at a
+    # time, 53,656 stations over, and numpy's per-call overhead was 0.78 s of it.
+    drawn = [height for height in own if math.isfinite(height)]
+    if not drawn or _trimmed(len(drawn), len(own)):
+        return
+    stand_at = statistics.median(drawn)
+    for cell in cells:
+        if not math.isfinite(surfaces[cell]):
+            surfaces[cell] = stand_at
+
+
+def band_map(*lattices: Lattice) -> dict[tuple[int, int], tuple[float, float]]:
     """Coarse plan cell to the height band any carriageway in it could be occupied at.
 
-    The prune's whole input. Built from the same lattice `survey` consumes, so
-    nothing it covers can be missing from what the survey asks about.
+    The prune's whole input. Built from the same lattices `survey_both` consumes,
+    so nothing they cover can be missing from what the survey asks about — every
+    one of them, since a corridor cell beyond its ribbon is asked about too.
     """
-    drawn = lattice.drawn
-    if not drawn.any():
-        return {}
-    keys = np.floor(np.stack([lattice.x[drawn], lattice.z[drawn]], axis=1) / COARSE_CELL_M)
-    keys = keys.astype(np.int64)
-    low = lattice.surface_y[drawn] + BUMPER_LOW_M
-    high = lattice.surface_y[drawn] + BUMPER_HIGH_M
-
     coarse: dict[tuple[int, int], tuple[float, float]] = {}
-    for (column, row), band_low, band_high in zip(map(tuple, keys), low, high, strict=True):
-        key = (int(column), int(row))
-        seen = coarse.get(key)
-        coarse[key] = (
-            (float(band_low), float(band_high))
-            if seen is None
-            else (min(seen[0], float(band_low)), max(seen[1], float(band_high)))
-        )
+    for lattice in lattices:
+        drawn = lattice.drawn
+        if not drawn.any():
+            continue
+        keys = np.floor(np.stack([lattice.x[drawn], lattice.z[drawn]], axis=1) / COARSE_CELL_M)
+        keys = keys.astype(np.int64)
+        low = lattice.surface_y[drawn] + BUMPER_LOW_M
+        high = lattice.surface_y[drawn] + BUMPER_HIGH_M
+        for (column, row), band_low, band_high in zip(map(tuple, keys), low, high, strict=True):
+            key = (int(column), int(row))
+            seen = coarse.get(key)
+            coarse[key] = (
+                (float(band_low), float(band_high))
+                if seen is None
+                else (min(seen[0], float(band_low)), max(seen[1], float(band_high)))
+            )
     return coarse
 
 
@@ -1083,6 +1166,32 @@ def survey(
     close_station()
 
     return found
+
+
+def survey_both(
+    ribbon: Lattice,
+    across: Lattice,
+    classes: dict[str, Occupied],
+    *,
+    corridor_levels: tuple[int, ...] = CORRIDOR_LEVELS,
+) -> Survey:
+    """The area half off the ribbon walk and the corridor half off the corridor walk.
+
+    One `Survey`, because every report below reads both halves off one. The
+    ribbon pass judges no corridor and the corridor pass's areas are dropped —
+    overlapping windows count the shared asphalt once per centreline — so neither
+    half can leak the other's window. `bands` must cover both lattices.
+    """
+    found = survey(ribbon, classes, corridor_levels=())
+    judged = survey(across, classes, corridor_levels=corridor_levels)
+    return replace(
+        found,
+        **{
+            each.name: getattr(judged, each.name)
+            for each in fields(Survey)
+            if each.name.startswith("corridor_")
+        },
+    )
 
 
 def occupier_walk(
@@ -1470,20 +1579,24 @@ def main(argv: list[str] | None = None) -> int:
     # The walk sizes the question — where is carriageway, and at what height
     # could it be occupied — and *records* it, so the occupier index is pruned
     # to exactly the cells the survey will go on to ask about.
-    lattice = walk_carriageway(
-        graph,
-        manifest,
-        drawn,
-        spacing_m=args.spacing_m,
-        across_m=args.across_m,
-        attribute_within_m=args.attribute_within_m,
+    lattice, across = (
+        walk_carriageway(
+            graph,
+            manifest,
+            drawn,
+            spacing_m=args.spacing_m,
+            across_m=args.across_m,
+            attribute_within_m=args.attribute_within_m,
+            corridor=corridor,
+        )
+        for corridor in (False, True)
     )
     if not lattice.drawn.any():
         raise SystemExit(
             "no drawn carriageway could be found — is the road mesh present, and does "
             "city.json still name it?"
         )
-    bands = band_map(lattice)
+    bands = band_map(lattice, across)
     structure_class = class_predicates(city)[0]
 
     log.info("")
@@ -1507,7 +1620,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     log.info("    %-16s excluded — that is Q24, and ground_clearance.py grades it", ground_class)
 
-    found = survey(lattice, classes, corridor_levels=args.levels)
+    found = survey_both(lattice, across, classes, corridor_levels=args.levels)
 
     lane_m = float(city.roads.lane_width_m)
     corridor_bar_m = lane_m * args.accept_corridor_lanes
@@ -1688,7 +1801,7 @@ def main(argv: list[str] | None = None) -> int:
     # listing it has nothing to do with.
     occupier_report(
         found,
-        lattice,
+        across,
         classes,
         graph,
         lengths,

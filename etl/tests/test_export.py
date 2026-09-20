@@ -525,6 +525,23 @@ class TestAssembly:
         assert all("trim_m" not in entry for entry in table.values())
         assert region.manifest()["lane_width_m"] == region.city.roads.lane_width_m
 
+    def test_a_corridor_travels_with_where_it_is(self, region) -> None:
+        """`P3-33e`. The corridor is not centred on the centreline, so its
+        half-width alone is `Q106`'s defect handed to every grader of the
+        shipped bundle — and an edge that publishes no corridor gains neither key."""
+        surface = region.documents[SURFACE_MANIFEST_NAME]
+        surface["carriageway"][0] |= {
+            "lanes_painted": 2,
+            "corridor_half_width_m": [8.0, 8.0],
+            "corridor_offset_m": [1.5, -2.0],
+        }
+        region.build()
+        territory, ribbon = region.manifest()["carriageway"]
+        assert territory["corridor_half_width_m"] == [8.0, 8.0]
+        assert territory["corridor_offset_m"] == [1.5, -2.0]
+        assert "corridor_half_width_m" not in ribbon
+        assert "corridor_offset_m" not in ribbon
+
     def test_a_clearance_out_of_step_with_the_widths_is_refused(self, region) -> None:
         """Not padded. `P2-2` falls back on a short half-width array because a
         lane centre off the tarmac is survivable; the station a missing

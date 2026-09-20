@@ -116,9 +116,28 @@ log = logging.getLogger(__name__)
 # instruments read as a 2.0 m corridor. The six disagreements are untouched.
 # Causeway Bay's 7 / 8 / 1 became 6 / 7 / 1 the same day — `e96`, its own
 # crossing ramp, went grader-only when its far half joined the same survey.
+# 🔴 **22 / 26 / 6 → 28 / 32 / 8 and 6 / 7 / 1 → 9 / 13 / 4 at `P3-33e`, and this
+# one CANNOT say the at-grade halves held** — they are 25 / 27 / 6 and 8 / 11 / 3
+# against 19 / 21 / 4 and 5 / 6 / 0. Two things moved and neither is a bar
+# retuned. The CITY moved at `P3-33c` (`Q129`): the floor came off level 0, the
+# clearance is measured kerb to kerb, and the pipeline's count is the one that
+# names it — 11 arrived and 5 left on Wan Chai, five of the arrivals with nothing standing in
+# them (`e53` 2.67 m, `e412`, `e384`, `e187`, `e632`), a real corridor under one
+# lane where the floor used to draw 10.24 m. And the GRADER moved onto the same
+# window: across the share it read 64 / 17 starved and 37 of Wan Chai's were open
+# asphalt. The proof the two now walk one corridor is the sweep, not the total —
+# at the pipeline's own 0.50 m cell the grader reads **24 against 28** and **10
+# against 9**, `Q51`'s gap at `Q51`'s size. The before side reproduced
+# 22 / 26 / 6 and 6 / 7 / 1 exactly, from a worktree of the commit before
+# `P3-33c` graded by its own tools.
+# Wan Chai's eight: grader-only `e132`, `e257`, `e351`, `e450`, `e499`, `e571`;
+# pipeline-only `e187` and `e405`, both stubs whose end vertex is the binding
+# station. Causeway Bay's four are grader-only: `e96`, `e122`, `e124`, `e142`.
+# ⚠️ The per-edge notes below describe the pre-region split and are kept as the
+# record of how the gap behaves, not as today's list.
 EXPECT = {
-    "wan_chai": (22, 26, 6),
-    "causeway_bay": (6, 7, 1),
+    "wan_chai": (28, 32, 8),
+    "causeway_bay": (9, 13, 4),
 }
 # Edges the two disagree about: 3 the grader condemns and the pipeline clears
 # (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e99` left this list at
@@ -352,6 +371,11 @@ def main(argv: list[str] | None = None) -> int:
         spacing_m=args.spacing_m,
         across_m=args.across_m,
         attribute_within_m=args.attribute_within_m,
+        # 🔴 The pipeline's own window (`P3-33e`): kerb to kerb, where a level-0
+        # ribbon is a share (`Q129`). Walked across the ribbon, the grader read 64
+        # starved edges against the pipeline's 28 and 37 of them were open asphalt.
+        # This tool reads no area, so the corridor walk is the only one it takes.
+        corridor=True,
     )
     if not lattice.drawn.any():
         raise SystemExit(

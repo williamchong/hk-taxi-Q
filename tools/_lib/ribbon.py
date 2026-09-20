@@ -128,6 +128,38 @@ def drawn_offsets(manifest: dict[str, Any]) -> dict[int, list[float]]:
     }
 
 
+def corridors(
+    manifest: dict[str, Any],
+) -> tuple[dict[int, list[float]], dict[int, list[float]]]:
+    """The window a car can use, per edge: `(half_widths, offsets)` (`Q129`, `P3-33e`).
+
+    Kerb to kerb where the bundle publishes a corridor, and the drawn ribbon
+    everywhere else — `clearance.py`'s own fallback, restated rather than
+    imported so a grader of that stage does not take its answer from it. Since
+    `P3-33c` a level-0 ribbon is its centreline's SHARE of a carriageway, with
+    open asphalt either side, and a corridor walked across a share starves 37
+    edges on Wan Chai that nothing stands in.
+
+    🔴 **Returned as a pair because a corridor is one fact.** It sits off the
+    centreline — 0.91 m at p50, 7.71 m at worst — so the half-width without its
+    offset is `Q106` again. A bundle that publishes one and not the other is
+    from before `export.py` carried both, and is refused rather than centred.
+    """
+    halves, offsets = half_widths(manifest), drawn_offsets(manifest)
+    for entry in manifest["carriageway"]:
+        if "corridor_half_width_m" not in entry:
+            continue
+        edge_id = int(entry["edge"])
+        if "corridor_offset_m" not in entry:
+            raise SystemExit(
+                f"edge {edge_id} publishes a corridor half-width and no corridor offset — "
+                "rebuild the bundle: the corridor is not centred on the centreline"
+            )
+        halves[edge_id] = [float(half) for half in entry["corridor_half_width_m"]]
+        offsets[edge_id] = [float(at) for at in entry["corridor_offset_m"]]
+    return halves, offsets
+
+
 def offset_at(offsets: list[float], vertex: int) -> float:
     """The drawn ribbon's centre at one polyline vertex, in `left_of`'s frame.
 

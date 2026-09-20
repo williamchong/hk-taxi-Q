@@ -661,10 +661,16 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
                 # kerb, through every share. Absent off-grade and wherever no
                 # region is built, where the corridor IS the ribbon. One guard: the
                 # surface publishes the pair together or not at all.
+                # 🔴 **`corridor_offset_m` travels with it (`P3-33e`)**, for the
+                # reason `offset_m` does above: the corridor is not centred on the
+                # centreline — 0.91 m off at p50 on Wan Chai, 7.71 m at worst — and
+                # a grader handed the half-width alone walks the wrong window.
+                # Additive: the game compares widths and never places the corridor.
                 **(
                     {
                         "lanes_painted": entry["lanes_painted"],
                         "corridor_half_width_m": entry["corridor_half_width_m"],
+                        "corridor_offset_m": entry["corridor_offset_m"],
                     }
                     if "corridor_half_width_m" in entry
                     else {}

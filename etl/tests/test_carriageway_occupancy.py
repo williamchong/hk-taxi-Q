@@ -38,10 +38,12 @@ region run is the only thing that provides one.
 from __future__ import annotations
 
 import argparse
+from dataclasses import fields
 from typing import ClassVar
 
 import numpy as np
 import pytest
+from _lib.ribbon import corridors
 from _lib.streets import edges_argument
 from carriageway_occupancy import (
     BUMPER_HIGH_M,
@@ -63,6 +65,8 @@ from carriageway_occupancy import (
     _starved_shape,
     split_by_level,
     survey,
+    survey_both,
+    walk_carriageway,
 )
 
 from pipeline.clearance import LEVELS
@@ -532,6 +536,144 @@ class TestCorridorLevels:
         then plan against."""
         found = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
         assert set(found.corridor_m) == {0, 1}
+
+
+class _Flat:
+    """A drawn road at y = 0 everywhere, standing in for `Faces`."""
+
+    def heights_at(self, x: float, z: float) -> np.ndarray:
+        return np.zeros(1)
+
+
+class _RibbonOnly:
+    """Road drawn under the 2 m ribbon and nowhere else — a corridor whose far
+    side is a ramp at another height, or pavement a taper overshot."""
+
+    def __init__(self, half_m: float = 1.0) -> None:
+        self.half_m = half_m
+
+    def heights_at(self, x: float, z: float) -> np.ndarray:
+        return np.full(1, 5.0) if abs(z) <= self.half_m else np.zeros(0)
+
+
+class TestCorridorWindow:
+    """`P3-33e`: the corridor half walks kerb to kerb, the area half the ribbon.
+
+    Since `P3-33c` a level-0 ribbon is its centreline's share (`Q129`). Walked as
+    the corridor it read 64 starved edges on Wan Chai against the pipeline's 28,
+    and 37 of them had nothing standing in them.
+    """
+
+    # One territory edge — a 2 m share of an 8 m carriageway lying to its left —
+    # and one ribbon-only edge, as an off-grade row publishes.
+    MANIFEST: ClassVar[dict] = {
+        "carriageway": [
+            {
+                "edge": 0,
+                "half_width_m": [1.0, 1.0],
+                "offset_m": [0.0, 0.0],
+                "corridor_half_width_m": [4.0, 4.0],
+                "corridor_offset_m": [2.0, 2.0],
+            },
+            {"edge": 1, "half_width_m": [3.0, 3.0], "offset_m": [0.5, 0.5]},
+        ]
+    }
+    GRAPH: ClassVar[dict] = {
+        "edges": [
+            {
+                "id": 0,
+                "elevation_level": 0,
+                "width_m": 2.0,
+                "polyline": [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+            }
+        ]
+    }
+
+    def _walk(self, *, corridor: bool, drawn: object | None = None) -> Lattice:
+        return walk_carriageway(
+            self.GRAPH,
+            self.MANIFEST,
+            drawn or _Flat(),
+            spacing_m=1.0,
+            across_m=0.5,
+            attribute_within_m=1.0,
+            corridor=corridor,
+        )
+
+    def test_a_territory_edge_reads_its_corridor_and_the_rest_their_ribbon(self) -> None:
+        halves, offsets = corridors(self.MANIFEST)
+        assert (halves[0], offsets[0]) == ([4.0, 4.0], [2.0, 2.0])
+        assert (halves[1], offsets[1]) == ([3.0, 3.0], [0.5, 0.5])
+
+    def test_a_corridor_without_its_offset_is_refused(self) -> None:
+        """🔴 Not centred instead. The corridor sits 0.91 m off the centreline at
+        p50 and 7.71 m at worst, so a half-width alone is `Q106`: a bundle from
+        before `export.py` carried the pair walks the wrong window and says nothing."""
+        entry = {key: value for key, value in self.MANIFEST["carriageway"][0].items()}
+        del entry["corridor_offset_m"]
+        with pytest.raises(SystemExit, match="no corridor offset"):
+            corridors({"carriageway": [entry]})
+
+    def test_the_corridor_walk_spans_kerb_to_kerb_where_it_lies(self) -> None:
+        ribbon, across = self._walk(corridor=False), self._walk(corridor=True)
+        assert (ribbon.offset.min(), ribbon.offset.max()) == (-0.75, 0.75)
+        assert (across.offset.min(), across.offset.max()) == (-1.75, 5.75)
+
+    def test_each_half_is_read_off_its_own_window(self) -> None:
+        """🔴 **The mutation this exists for**: hand `survey_both` the ribbon
+        twice and the corridor reads 2.0 m — a starved edge nothing stands in.
+        Hand it the corridor twice and the area is four times the asphalt drawn,
+        since the corridors of centrelines sharing a carriageway overlap."""
+        ribbon, across = self._walk(corridor=False), self._walk(corridor=True)
+        found = survey_both(ribbon, across, {}, corridor_levels=(0,))
+        assert found.corridor_m == {0: 8.0}
+        assert found.area_m2 == survey(ribbon, {}).area_m2
+        assert found.asked == ribbon.asked
+
+    def test_every_corridor_field_comes_off_the_corridor_walk_and_no_other(self) -> None:
+        """`survey_both` picks the corridor half by the `corridor_` prefix, so
+        the prefix is a contract: a corridor fact named otherwise would be read
+        off the ribbon, and an area fact named `corridor_*` off overlapping cells."""
+        ribbon, across = self._walk(corridor=False), self._walk(corridor=True)
+        found = survey_both(ribbon, across, {}, corridor_levels=(0,))
+        area, judged = survey(ribbon, {}, corridor_levels=()), survey(across, {})
+        for each in fields(Survey):
+            source = judged if each.name.startswith("corridor_") else area
+            # `repr`, since a `Centreline` with no occupier carries a NaN offset
+            # and NaN is not equal to itself.
+            assert repr(getattr(found, each.name)) == repr(getattr(source, each.name)), each.name
+        assert {each.name for each in fields(Survey) if not each.name.startswith("corridor_")} == {
+            "asked",
+            "measured",
+            "no_road",
+            "area_m2",
+            "occupied_m2",
+        }
+
+    def test_a_corridor_cell_with_no_road_under_it_stands_on_the_ribbons_height(self) -> None:
+        """🔴 Dropped instead, 6 of every 8 cells go undrawn, `_trimmed` refuses
+        every station and the edge is never judged — `e402` WAN CHAI INTERCHANGE
+        lost the 28 stations a rising ramp walls to 2.75 m, and read 9.71 m."""
+        graph = {"edges": [self.GRAPH["edges"][0] | {"polyline": [[0, 5.0, 0], [4.0, 5.0, 0]]}]}
+        across = walk_carriageway(
+            graph,
+            self.MANIFEST,
+            _RibbonOnly(),
+            spacing_m=1.0,
+            across_m=0.5,
+            attribute_within_m=1.0,
+            corridor=True,
+        )
+        assert (across.surface_y == 5.0).all()
+        assert survey(across, {}, corridor_levels=(0,)).corridor_m == {0: 8.0}
+
+    def test_a_station_whose_own_ribbon_is_undrawn_stays_unjudged(self) -> None:
+        """A junction trim. The guard is about the ribbon, and a corridor's other
+        cells must not dilute it into judging what `clearance.py` skips."""
+        across = self._walk(corridor=True, drawn=_RibbonOnly(half_m=0.2))
+        ribbon = np.abs(across.offset) <= 1.0
+        assert np.isnan(across.surface_y[~ribbon]).all()
+        assert survey(across, {}, corridor_levels=(0,)).corridor_m == {}
 
 
 class TestSplitByLevel:

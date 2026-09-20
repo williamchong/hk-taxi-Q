@@ -371,7 +371,8 @@ The interface between ETL and game. **Versioned — change both sides together a
   "carriageway": [
     { "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2],
       "clear_width_m": [-1.0, 10.24, 8.5, 0.0],
-      "corridor_half_width_m": [7.4, 7.4, 7.1, 6.9], "lanes_painted": 2 }
+      "corridor_half_width_m": [7.4, 7.4, 7.1, 6.9],
+      "corridor_offset_m": [2.1, 2.1, 1.8, 1.6], "lanes_painted": 2 }
   ],
   "lane_width_m": 3.2,
   "car_width_m": 1.8,
@@ -429,10 +430,13 @@ polyline and the same length (schema 4: a road becomes a bridge partway along an
   assert "not narrower", never "wider". `RoadGraph` warns and falls back to the authored width
   where the table is missing; `verify_road_graph.gd` treats absence as an error.
 - 🔴 Since schema 32 (`Q129`, `P3-33c`) a level-0 row is the edge's **territory** — its share of a
-  carriageway several centrelines may share — not the road kerb to kerb. Two keys on those rows
+  carriageway several centrelines may share — not the road kerb to kerb. Three keys on those rows
   only: `corridor_half_width_m`, half the kerb-to-kerb corridor `clear_width_m` is measured
-  across, and `lanes_painted`, the lane count the ribbon is painted with once a narrow share has
-  cut it. A reader holding `clear_width_m <= 2 × half_width_m`, or the ribbon to cover `width_m`,
+  across; `corridor_offset_m`, where that corridor is centred in `offset_m`'s frame (`P3-33e`,
+  additive, no bump: the corridor sits 0.91 m off the centreline at p50 and 7.71 m at worst, so a
+  grader handed the half-width alone walks the wrong window — the game compares widths and never
+  places it); and `lanes_painted`, the lane count the ribbon is painted with once a narrow share
+  has cut it. A reader holding `clear_width_m <= 2 × half_width_m`, or the ribbon to cover `width_m`,
   is wrong there. `RoadGraph.corridor_half_width_of` falls back to the ribbon where a row
   publishes no corridor (off-grade edges; no `carriageway_region:` block).
 - `clear_width_m` (schema 9, `Q51`): the widest continuous gap a car could get through at that

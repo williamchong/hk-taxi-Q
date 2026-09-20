@@ -119,8 +119,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   drawn by the region whose rectangle holds it**, so the neighbour's ribbons are subtracted from the
   areas like owned ones. ⚠️ `carriageway[]` at a vertex inside a junction trim publishes the width
   AT THE TRIM — at the node a territory is a wedge. ⚠️ **`clearance.py` and
-  `carriageway_occupancy.py` no longer walk the same corridor**, so `clearance_reconcile` fails its
-  ratchet until `P3-33e` moves the grader; that is the ratchet working. ⚠️ Open and known:
+  `carriageway_occupancy.py` walk the same corridor again since `P3-33e`** — kerb to kerb, tapered
+  between vertices, off `city.json`'s `corridor_half_width_m` AND `corridor_offset_m` — and the
+  grader's AREA half stays on the ribbon, because corridors overlap and ribbons tile. 🔴 A new
+  reader of the corridor takes the pair (`_lib.ribbon.corridors`), never the half-width alone: it
+  sits 0.91 m off the centreline at p50. ⚠️ A change to where R meets the rectangle owes
+  `tools/join_seam.py`'s carriageway line, 0.00 m today. ⚠️ Open and known:
   `lane_paint` 79 edges under 3.00 m since the rail filter (the mouths, and one-lane shares that paint no line),
   `paint_clearance` `deeper than` 7 on boxes. Numbers in `Q129`.
 - 🔴 **`region._closed`, `islands_of`, `_is_island`, `_through`, the across refusal in `rails`,

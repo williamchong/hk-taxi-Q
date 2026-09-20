@@ -95,6 +95,14 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ **Do not import the parse from `pipeline.clearance`** — that
   module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
   in on it.
+- 🔴 **`carriageway_occupancy.py` walks TWO windows since `P3-33e` and each half is owed its own**:
+  the ribbon for the area shares, the corridor (`walk_carriageway(corridor=True)`) for the corridor
+  half and for `clearance_reconcile.py`. Two rules are the corridor's alone and both came from a
+  wrong build — it is **tapered between vertices** as `clearance.py` walks it (`e751`, 22.5 m to
+  6.4 m in 9.5 m), and **an undrawn corridor cell stands at its own ribbon's height**, only where
+  that ribbon is drawn (`e402`'s ramp; a junction trim stays refused). Prove a change to either by
+  the sweep line — the grader at the pipeline's 0.50 m cell reads 24 against 28 and 10 against 9 —
+  and an unchanged share table. `EXPECT` is 28 / 32 / 8 and 9 / 13 / 4. Numbers in `Q129`.
 - **When `clearance.py` and `carriageway_occupancy.py` disagree about one edge, the answer is
   `tools/corridor_truth.py` and never a preference between them (`Q110`).** Both bin occupiers in
   plan and both over-block at their own bin — 0.5 m against 1.0 m — so the published widths are
