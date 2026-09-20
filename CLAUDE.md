@@ -10,10 +10,10 @@ them without explicit instruction from the user.
 | Decision | Value | Why |
 |---|---|---|
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
-| Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true. ⚠️ **`Q84` corrected its measurement**: the drift window is not a 0.01–0.02 cliff, and the dial is graded on *dwell*, never on landing peak slip on the threshold — the handling bullet below has the rule. The engine model ships anyway; `docs/DECISIONS.md` `Q50` and `Q84` are the record |
+| Physics | **Jolt**, driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ `Q50` reversed `P0-5a`'s custom raycast controller on the user's instruction (2026-08-18). `VehicleWheel3D` friction is isotropic, so it cannot break lateral grip while keeping traction — still true; the engine model ships anyway. The drift dial is graded on *dwell*, never on landing peak slip on the threshold (`Q84`) |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`, `shapely`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL and `shapely` its own GEOS (`Q129`, approved 2026-09-18), so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
-| Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data. ⚠️ **3D-BIT00 Level 1 was named here and never fetched** — iB1000, the map it is extruded from, took its place at `P3-7a`/`Q47` (`Q100`) |
+| Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data (`Q47`, `Q100`) |
 | Region (PoC) | **Wan Chai → Causeway Bay**, ~1.5 km² | Natural circuit, diegetic map edges, moderate Z-complexity |
 | Art direction | Low-poly flat-shaded; **accurate city, toy vehicles** | Recognisability requires accurate massing; charm comes from the cars |
 | Monetisation | Free download + one-time unlock IAP | Deferred to launch; affects only the free-slice boundary |
@@ -26,54 +26,36 @@ them without explicit instruction from the user.
 2. **ETL is build-time only.** The game makes zero network calls at runtime. Never couple the
    game to a government API.
 3. **Hong Kong is the only city (`Q100`).** Its facts live in **one** place each:
-   `etl/config/hong_kong.yaml` for anything that is tuning or a publisher's vocabulary (that is hard
-   rule 4 — codes, `fields:` role maps, bounds, `elevation_levels`), and `etl/pipeline/hongkong.py`
-   for the handful of constants that *are* the city (the CRS pair, drive-on-the-left, the branch
-   sign codes). Never a second copy of either. Multi-**region** support stays (`Q6`, `Q10`); there
-   is no second city and no `--city` flag. ⚠️ Records before `Q100` cite "the second city" as a
-   reason — each stands on its other reason.
+   `etl/config/hong_kong.yaml` for tuning and a publisher's vocabulary (codes, `fields:` role maps,
+   bounds, `elevation_levels`), and `etl/pipeline/hongkong.py` for the constants that *are* the city
+   (the CRS pair, drive-on-the-left, the branch sign codes). Never a second copy. Multi-**region**
+   support stays (`Q6`, `Q10`); there is no second city and no `--city` flag.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
-   widths → Godot `.tres` resources or JSON.
-   🔴 **And since `P3-33c` (`Q129`) a LEVEL-0 ribbon is not drawn at a width at all**: its rails are
-   its territory's extents in `carriageway_region.json`, `floor_default_m` is 0.0 on the user's call,
-   and `drawn = max(width_m, floor)` below describes off-grade edges, a run past its rectangle, and
-   the junction trim radius.
-   🔴 **The carriageway width is DATA in a second sense since `Q95`: it is measured, not authored.**
-   `roadgraph.json`'s `width_m` comes from what TD, iB1000 and HyD drew on 292 of 737 level-0 edges, and
-   the playability widening is a **floor** (`surface.floor_default_m`, 10.24 m) rather than a
-   multiplier — `drawn = max(width_m, floor)`. A multiplier over-widens the streets that are already
-   wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries.
-   🔴 **And there are FIVE sources since `Q128`, not four**: the ray survey licenses two stations that
-   *agree* within the region's own leave-one-out scatter, and where no ray reaches at all a strip of
-   HyD's paint through the centreline publishes **where an independent reading confirms it** —
-   coverage 39.5% → **53.5%** on Wan Chai and 34.2% → **63.3%** on Causeway Bay. ⚠️ **The strip alone
-   is no better than the invented width** (|p90| 2.53 m, 4.69 on short edges); `width_confirmed_by`
-   names the evidence and the agreement is the licence.
-   🔴 **And `lanes` is measured too since `Q94`** — bracketed off that width against TPDM 4.3.9.8's
-   3.0-3.65 m through lane, **never** divided by `lane_width_m`, which would make the instrument
-   agree with the constant under test. It resolves on **276 of the 393** measured edges on Wan Chai (197
-   `measured`, 79 `arrows`; Causeway Bay 91 of 124); the rest are ambiguous and keep the authored count, and
-   `lanes_source` says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
-   changes the `TEXCOORD_0` lane coordinate and the arrow slots, and nothing else.
-   🔴 **`lanes` CAN BE 1 since `Q114` and there is no floor under it here** — 60 edges publish one,
-   `lanes_source` has lost `floored` and gained `deck_capped`, and the floor a one-lane road needs
-   lives in `RoadGraph.lane_offset` because only the driving line needed it. The markings shader is
-   the second consumer, and flooring the count painted it a lane that is not there.
-   🔴 **And `arrows_unmeasured` since `Q130` (schema 15) — the ONE lane reading on an authored
-   width.** Where the survey licensed no width, a row of two or more arrows abreast RAISES the
-   speed-limit table's count, never lowers it: 6 Wan Chai edges, EXPO DRIVE EAST `e657` and STEWART
-   ROAD `e505` among them. ⚠️ Kept out of `CarriagewayReport.lanes` so every bracket counter is
-   untouched, and `verify_road_graph.gd` requires the authored width beside it — both directions.
-   🔴 **And `lanes_forward` says which of them carry the edge's own direction since `Q126`** (schema
-   13): a row of turn arrows on a two-way edge is read **by direction** — two abreast one way are two
-   lanes plus the one the other flow cannot be without — so it puts back the odd count TPDM 3.4.2.7
-   struck out of an ambiguous bracket (WAN CHAI ROAD `e50`: `(2, 3)`, two, one shaft wearing two
-   heads → three, two forward), and the shader draws the two-way centre line at `U = lanes_forward`
-   instead of `lanes / 2`. ⚠️ **Above the narrowed bracket only, never below** — the row is a lower
-   bound. ⚠️ **`null` on an odd two-way count nothing split**, and the shader keeps its old middle.
-   🔴 **The codec is FULL**: the field took the last two bits `floor(x + 0.5)` leaves exact (2²³),
-   and the next field needs another channel. Both row readers (`carriageway._row_reading`,
-   `arrows._row_reading`) restate the rule and `lanes_split_disagreement` is their diff.
+   widths → Godot `.tres` resources or JSON. The road's own numbers are *measured* data:
+   - **Level-0 ribbon** (`Q129`): not drawn at a width at all — its rails are its territory's
+     extents in `carriageway_region.json`, and `floor_default_m` is 0.0 on the user's call.
+     `drawn = max(width_m, floor)` describes only off-grade edges, a run past its rectangle, and the
+     junction trim radius. The widening is a **floor, never a multiplier** (`Q95`).
+   - **`width_m`** (`Q95`, `Q128`): measured from TD, iB1000 and HyD, five sources; `width_source`
+     says which, `width_confirmed_by` names the evidence. Two ray stations publish when they agree
+     within the region's leave-one-out scatter; HyD's paint strip publishes only where an
+     independent reading confirms it — alone it is no better than the invented width.
+     ⚠️ `width_m != lanes x lane_width_m`.
+   - **`lanes`** (`Q94`): bracketed off the width against TPDM 4.3.9.8's 3.0–3.65 m lane, **never**
+     divided by `lane_width_m` (the instrument would agree with the constant under test).
+     Ambiguous edges keep the authored count; `lanes_source` says which. ⚠️ A lane count moves no
+     geometry — only the `TEXCOORD_0` lane coordinate and the arrow slots.
+   - **`lanes` can be 1** (`Q114`) with no floor under it here; `lanes_source` has `deck_capped`,
+     not `floored`. The floor a one-lane road needs lives in `RoadGraph.lane_offset`.
+   - **`arrows_unmeasured`** (`Q130`, schema 15): on an authored width, a row of ≥2 arrows abreast
+     RAISES the count, never lowers it. Kept out of `CarriagewayReport.lanes`;
+     `verify_road_graph.gd` requires the authored width beside it.
+   - **`lanes_forward`** (`Q126`, schema 13): a row of turn arrows on a two-way edge is read by
+     direction, and the shader draws the centre line at `U = lanes_forward`. Above the narrowed
+     bracket only — the row is a lower bound. `null` on an odd two-way count nothing split.
+     ⚠️ **The codec is full**: the next field needs another channel. Both row readers
+     (`carriageway._row_reading`, `arrows._row_reading`) restate the rule;
+     `lanes_split_disagreement` is their diff.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.
@@ -122,34 +104,27 @@ Common emoji for this project:
   `:=` counts). `gdformat` owns layout — do not hand-format around it. Untyped declarations fail
   the build, so this is enforced, not advisory.
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
-- 🔴 **Rationale for a `.tres`, `.tscn`, `project.godot` or `export_presets.cfg` goes in prose beside
-  the file, never in it** (`Q119`): a resource's argument lives in the sidecar `handling.md` next to
-  `handling.tres`, and the config files' in `docs/ARCHITECTURE.md`. Godot's writer regenerates all
-  four classes on every editor save, drops every comment, and omits any value equal to an engine or
-  script default — so they are committed in the writer's own form and a save is a no-op.
-  `check.sh` refuses a `;` line in a resource and requires the sidecar; `verify_settings.gd` reads
-  the settings back rather than grepping the file. ⚠️ **A headless `--import` rescan still re-saves
-  JSON with tab indentation**, whitespace only, and that reaches the tracked
-  `game/assets/authored/greybox_wanchai.json` (`Q115`). Run `git status` after `check.sh` and
-  `git checkout` it; never commit it as a side effect.
+- **Rationale for a `.tres`, `.tscn`, `project.godot` or `export_presets.cfg` goes in prose beside
+  the file, never in it** (`Q119`): a resource's in a sidecar (`handling.md` beside
+  `handling.tres`), the config files' in `docs/ARCHITECTURE.md`. Godot's writer drops comments and
+  default values, so the files are committed in the writer's own form and an editor save is a
+  no-op. `check.sh` refuses a `;` line in a resource and requires the sidecar.
+  ⚠️ A headless `--import` re-tabs the tracked `game/assets/authored/greybox_wanchai.json`
+  (`Q115`): `git status` after `check.sh`, and `git checkout` it.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
 - This is not a Node project. Do not run npm/npx/node commands.
 
 ## Before marking work done
 
-- 🔴 **The grader batteries below are a TABLE since `P3-35b` (`Q133`): `tools/battery.py <trigger>
-  --region <r> --before <checkout root> [--jobs 2]`, and `--list` prints it.** It runs what a bullet
-  names against two sides — this checkout and a detached worktree holding the before build
-  (a worktree per prior commit, with its own bundle and import) — saves each output under `build/battery/` and writes a
-  diff per item. The bullets keep the *why* and which column is the finding; the table keeps the
-  commands. ⚠️ **Its exit code says whether every item RAN, never whether a number moved** — a grader
-  that gates and fails (`carriageway_occupancy`, `clearance_reconcile` today) still ran. ⚠️ **Both
-  sides are graded by THIS checkout's tools**, so the instrument is held still; `--tools-from side`
-  is for a bundle whose schema moved under the grader. 🔴 **A tool handed `--region` alone reads this
-  checkout's `etl/out` on both sides and diffs empty by construction** — `narrowing.py` shipped in
-  the first table that way — so every row must carry `{generated}` or `{out_root}`, and
-  `test_every_tool_is_pointed_at_its_own_side` is the ratchet; mutation-check it. ⚠️ Not yet in the
-  table: anything that needs a frame, a drive, a sweep of a free value, or `tools/skidpad.sh`.
+- **Grader batteries are a table** (`Q133`): `tools/battery.py <trigger> --region <r> --before
+  <checkout root> [--jobs 2]`; `--list` prints it. It runs this checkout against a detached
+  worktree holding the before build, saves outputs under `build/battery/` and writes a diff per
+  item. ⚠️ Its exit code says every item RAN, never that a number held — a grader that gates and
+  fails (`carriageway_occupancy`, `clearance_reconcile`) still ran. ⚠️ Both sides are graded by
+  THIS checkout's tools; `--tools-from side` is for a bundle whose schema moved. ⚠️ A row must
+  carry `{generated}` or `{out_root}` — `--region` alone reads this checkout on both sides and
+  diffs empty; `test_every_tool_is_pointed_at_its_own_side` is the ratchet. Not in the table:
+  anything needing a frame, a drive, a sweep of a free value, or `tools/skidpad.sh`.
 - Python changes: `ruff check .` and `ruff format --check .` **from the repo root** (the root
   `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
   `pytest` from `etl/`.

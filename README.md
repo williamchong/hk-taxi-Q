@@ -7,14 +7,11 @@ Lands Department's 3D Visualisation Map and iB1000 topographic map. Wan Chai and
 reconstructed to the point where a Hong Kong driver can navigate it from memory — then widened,
 ramped, and tuned until it's fun to drive badly.
 
-> **Status:** Phases 0 and 1 complete; Phase 2 is its on-device review away from its gate, and
-> Phase 3's first build is shipped. One command turns nine government datasets from four publishers
-> into a drivable city in **19 seconds**: 66 building tiles, 797 road edges with turn
-> restrictions, a drivable road surface, 48 fare nodes, and the markings, tram rails, railings,
-> traffic signs and lamp posts the government publishes. Godot streams it, the car drives it, the
-> buildings and the flyovers are solid, and it plays in a browser. Left before the Phase 2 gate: the
-> on-device performance pass and touch input's on-device review, both of which need a handset. See
-> [`docs/PROGRESS.md`](docs/PROGRESS.md).
+> **Status:** Phases 0 and 1 complete; Phase 2 is an on-device review away from its gate (it needs a
+> handset), and Phase 3's first build is shipped and plays in a browser. One command turns the
+> government's datasets into a drivable city: building tiles, a road graph with turn restrictions,
+> a drivable road surface, fare nodes, and the markings, tram rails, railings, traffic signs and
+> lamp posts the government publishes. Live figures are in [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ---
 
@@ -40,7 +37,7 @@ The design goal is narrow and testable:
 | | |
 |---|---|
 | Engine | Godot 4.7, GDScript, Jolt physics |
-| Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `pyproj`, `numpy`, `pillow`, `pypdfium2`, `pyyaml` — see `etl/pyproject.toml` |
+| Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `shapely`, `pyproj`, `numpy` — see `etl/pyproject.toml` |
 | Targets | iOS, Android, desktop/Steam; web export for a demo slice |
 | Region | Wan Chai → Causeway Bay, ~1.5 km² |
 
@@ -70,9 +67,9 @@ without it holds pointer files that `tools/check.sh` fails on at its first asset
 already made without it is repaired by `git lfs install && git lfs pull`. You also need
 Python 3.11+.
 
-**Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
-whole region rebuilds in about 27 seconds across 20 stages. Output is gitignored build artefact, not
-source, so a fresh clone has none of it until you do this:
+**Build the city.** The first run downloads and caches the source data; after that a region
+rebuilds in well under a minute. Output is a gitignored build artefact, so a fresh clone has none
+of it until you do this:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
@@ -86,8 +83,7 @@ tools/sync_generated.sh          # copies exactly what city.json names
 **F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
 readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
 
-**Check it.** The ETL cannot assert engine-side facts about its own output, so twenty headless tools
-do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
+**Check it.** The ETL cannot assert engine-side facts about its own output, so headless `verify_*.gd` tools do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
 which the freshly synced `.glb` files have no import sidecars:
 
 ```bash
@@ -100,18 +96,16 @@ fails to parse — so the script reads its output and supplies the exit code the
 Running the steps by hand and eyeballing them is how a broken check passes.
 
 The warnings sweep is the GDScript linter: engine warnings are set to *error* in `project.godot`,
-including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list —
-and for why an editor save can silently drop them (the `settings` step is what catches it).
+including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) "Checks".
 
 GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
 **skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
-building them in CI would mean re-downloading the source data every push. The five that need no
-built region (`verify_beam_budget`, `verify_mesh_contract`, `verify_vehicle`, `verify_hud`,
-`verify_input`) run there anyway. So the asset contracts are yours to run locally after a pipeline
+building them in CI would mean re-downloading the source data every push. The verify tools that
+need no built region run there anyway. So the asset contracts are yours to run locally after a pipeline
 build; everything else CI catches for you.
 
 Grading tools sit beside the suite and are run by hand after a build, because they need a built
-region under `etl/out`. `CLAUDE.md` lists which change owes which; two of them:
+region under `etl/out`. `tools/battery.py --list` says which change owes which; two of them:
 
 ```bash
 .venv/bin/python tools/deck_error.py --generated etl/out/wan_chai
@@ -130,11 +124,6 @@ tools/serve_web.py           # then open http://127.0.0.1:8060
 
 Not `python -m http.server`: the build needs `SharedArrayBuffer`, which browsers gate behind
 COOP/COEP headers that it does not send.
-
-⚠️ **Opening the editor or running an export rewrites `game/project.godot` and
-`game/export_presets.cfg`**, stripping their comments and the web renderer setting. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how to restore and verify. Headless `--import` and
-`--script` runs do not.
 
 ---
 
@@ -200,7 +189,7 @@ exception (`Q79`):
 
 **This repository redistributes no government data** — `etl/sources/`, `etl/out/` and
 `game/assets/generated/` are all gitignored. You regenerate them from the government endpoints
-yourself, in about 19 seconds, and accept those terms directly. An exported *game* does ship them, and
+yourself and accept those terms directly. An exported *game* does ship them, and
 that is what makes the credits screen mandatory rather than nice-to-have.
 
 ⚠️ **GPLv3 conflicts with App Store distribution terms**, so store builds need a separate proprietary
