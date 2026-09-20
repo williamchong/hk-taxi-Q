@@ -21,9 +21,9 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   - `B2` ("it reads as HK") is shipped. `P3-9a` ran: three HK drivers recognised Wan Chai from
     geometry alone, and stopped because the bridges were blocked (`Q19`). `Q19` has since been
     carved and fenced (`P3-28`, `P3-29`), and level 1 is open to driving (`P4-1`, `Q111`).
-  - The level-0 road is drawn as the carriageway region (`P3-33a`–`c`, `Q129`); `P3-33e`
-    (battery, routing price, the areas' seam check in `join_seam.py`) and `P3-33f` (the user's
-    drive) are open.
+  - The level-0 road is drawn as the carriageway region (`P3-33a`–`c`, `Q129`) and graded
+    (`P3-33e`): the player is unharmed, and the one-lane bar now costs traffic 3,989 ordered pairs
+    (`P3-3`'s question). `P3-33f` (the user's drive) is open.
   - `P3-34` (TD's longitudinal lines) and `P3-35` (ETL refactor, crossings, hatching, lane
     centre) are built; `P3-35g4` was measured and refused. `P3-35h`'s user drive is outstanding.
   - `B1` ("one fare") is in progress: HUD chassis and wrong-way warning built; the fare state
@@ -113,8 +113,8 @@ Phase 3 — Build `B2`
   signs and railings do not refuse a foot standing under a level-0 cap.
 - `P3-32` 🟡 Paint arm done; carve-wall arm open (wall 1.52–4.32 m inside the carriageway on
   the eight carved edges). Never answered by widening the carve prism.
-- `P3-33` 🟡 Level-0 road as the carriageway region (`Q129`) — `a`–`c` built; `d` superseded by
-  `P3-35e`; `e` (battery, routing price, areas' seam check) and `f` (user's drive) open.
+- `P3-33` 🟡 Level-0 road as the carriageway region (`Q129`) — `a`–`c`, `e` built; `d` superseded by
+  `P3-35e`; `f` (user's drive) open.
 - `P3-34` ✅ Longitudinal lines from TD's survey (`Q132`), schema 33. Open: no `RM1002`/`RM1003`
   side checked against Street View; zigzags unbuilt.
 - `P3-35` ✅ ETL after the region (`Q133`) — `a` signals removed; `b` `tools/battery.py`; `c`
@@ -135,8 +135,8 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-25` ✅ Wrong-way warning — reviewed (`Q81`).
 - `P3-1a`, `P3-5a` ⬜ Fare state machine, minimal fare HUD — what `B1` still needs.
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`); `P3-3` still owes
-  adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, and the
-  player's `BeamBudget` slot.
+  adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, the
+  player's `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
 
@@ -217,7 +217,7 @@ and there in the same change.
   2.7–2.9 m) and D (tram reserve in the width) each need a decision.
 - `Q127` Widths where the ray survey cannot read (user). `Q128` shipped the two survivors. Left:
   the street borrow; consensus of ≥ 2 as the next rung.
-- `Q129` A width is the carriageway's (`P3-33`). `P3-33e`, `P3-33f`.
+- `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -391,19 +391,19 @@ Graders (report-only unless a target is shown)
 
 | Metric | Target | Latest |
 |---|---|---|
-| Deck error, \|error\| p90 vs shipped tiles | ≤ 0.50 m | 0.095 m |
-| Off-grade carriageway hanging past its structure (`Q22`) | — | 3.3% `overhang.py`, 6.6% `deck_margin.py` (upper bound). If the two ever agree suspiciously well, re-measure |
+| Deck error, \|error\| p90 vs shipped tiles | ≤ 0.50 m | 0.094 / 0.182 m |
+| Off-grade carriageway hanging past its structure (`Q22`) | — | 5.0% / 25.3% `overhang.py` (Causeway Bay's is `Q116`'s far halves); 6.6% `deck_margin.py` (upper bound, not re-run). If the two ever agree suspiciously well, re-measure |
 | Off-grade stations under the 3.20 m lane bar | — | 0 (`P3-35g1`) |
 | Tunnel ribbon inside its own bore (`Q21`) | none | 0 |
 | Paint below the road by > 10 mm, in carriageway | ≤ 0.5% of triangles | passes; boxes deep 0, road marks deep 0 before `Q125`'s join (3 of 24,023 since) |
 | Box paint off the drawn carriageway | — | 0.58 m² pooled before `P3-33c`; 1.32 m² at EXPO DRIVE EAST after `P3-35e`. Quote basis (count or area) and `--ray-m` |
 | `lane_paint` edges painting a lane under 3.00 m | — | 76 / 18 (`Q131`) |
-| Occupancy share at bumper height | `BUILDING` ≤ 1.72%, `INFRA` ≤ 1.60% | pre-region figures 1.302% / 1.115%; grader fails its gate until `P3-33e` moves it onto `corridor_*` |
-| `clearance_reconcile` ratchet | — | 21 / 25 / 6 (all levels), 19 / 21 / 4 at grade, pre-region; rebaseline is `P3-33e`'s |
-| Ground proud of the carriageway (`Q24`) | — | 89 of 737 level-0 edges past 0.18 m travel, 14 over a tenth of the ribbon (pre-region) |
+| Occupancy share at bumper height | `BUILDING` ≤ 1.72%, `INFRA` ≤ 1.60% | 0.214% / 0.560% · 0.309% / 0.338% (`P3-33e`); the corridor gate fails as it always has, 27 / 11 edges under one lane |
+| `clearance_reconcile` ratchet | — | 28 / 32 / 8 · 9 / 13 / 4 (all levels), 25 / 27 / 6 · 8 / 11 / 3 at grade; at the pipeline's 0.50 m cell the grader reads 24 / 10 (`P3-33e`) |
+| Ground proud of the carriageway (`Q24`) | — | 38 of 734 / 49 of 196 level-0 edges past 0.18 m travel, 10 / 4 over a tenth of the ribbon |
 | Railing to-source distance, p50 | — | 0.22 / 0.21 m (`railing_error.py`); `bends` 81 / 24 |
 | Sign / lamp `shift_m` p90 | — | signs 0.54 / 0.45 m, lamps 0.93 / 0.26 m (`P3-35d`) |
-| Reachability lost to the fence | 0 | 0 ordered pairs, worst detour 55.8 m (`tools/reachability.py`) |
+| Reachability lost to the fence | 0 | 0 / 170 ordered pairs at the car's bar, no detour (`tools/reachability.py`; Causeway Bay's 170 predate the region). At the one-lane bar: 3,989 pairs (2.17%) / 173, `e53` and `e138` carrying Wan Chai's (`P3-33e`) |
 
 Handling (skidpad, `VehicleBody3D`)
 

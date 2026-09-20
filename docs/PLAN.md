@@ -267,10 +267,10 @@ does not move — a territory's span is a share, not kerb-to-kerb (`Q57`).
 | Step | State |
 |---|---|
 | `P3-33a` | ✅ `Q129` recorded, `shapely>=2.1`, `tools/carriageway_region.py` as the second implementation |
-| `P3-33b` | ✅ Stage `region` between `carve` and `surface` → `carriageway_region.json`. The seam is a cut in R, not in runs, so `foreign` territories are published. ⬜ `join_seam.py` areas' seam check still owed (`P3-33e`) |
+| `P3-33b` | ✅ Stage `region` between `carve` and `surface` → `carriageway_region.json`. The seam is a cut in R, not in runs, so `foreign` territories are published. `join_seam.py` checks the areas' seam (`P3-33e`) |
 | `P3-33c` | ✅ Level-0 ribbons take their territory's extents as rails; `R − ribbons` drawn cap-class; floors to 0; `lanes_painted` ceiling; `clearance` and `roadmarks` read `corridor_*`. ⚠️ Open: `lane_paint` edges under 3.00 m 6 → 79, `paint_clearance` deep boxes 0 → 7 |
 | `P3-33d` | **Superseded by** `P3-35e` (`Q133`) — caps, clusters, corridors and buried kerbs still serve 58 off-grade edges, so the deletion list cannot run as written |
-| `P3-33e` | ⬜ The battery and the routing price. First move `carriageway_occupancy.py` onto `corridor_*` (else `clearance_reconcile` fails its ratchet) and add `join_seam.py`'s area check. Then the `Q19` battery rebaselined by region; railings, signs, lamps `shift_m` per class — if it does not collapse toward zero, that is a registration finding; `narrowing.py`, since `e207`, `e595`, `e132`, `e499` are authored. **Graded on:** every table before and after, from a worktree of the commit before `P3-33c` |
+| `P3-33e` | ✅ The battery and the routing price — numbers in `Q129`. The price is 3,989 ordered pairs at the one-lane bar and 0 at the car's; whether `is_routable`'s bar is a lane or a vehicle is `P3-3`'s. As written: first move `carriageway_occupancy.py` onto `corridor_*` (else `clearance_reconcile` fails its ratchet) and add `join_seam.py`'s area check. Then the `Q19` battery rebaselined by region; railings, signs, lamps `shift_m` per class — if it does not collapse toward zero, that is a registration finding; `narrowing.py`, since `e207`, `e595`, `e132`, `e499` are authored. **Graded on:** every table before and after, from a worktree of the commit before `P3-33c` |
 | `P3-33f` | ⬜ The user's drive. Follow-up: drop the outward-only registration push (`Q78`) where a post already stands outside R. **Graded on:** the seat |
 
 - **Deps:** `e` after `c`; `f` last.
@@ -347,7 +347,7 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
   the offset not turning with the asker; `verify_road_graph.gd` asserts it. Scripted; the user's
   own drive outstanding. ⚠️ Graded with the overlay's lane marker (`--debug-view=full`).
 
-- ⚠️ `P3-33e` stands as written; `P3-33d` is superseded by `P3-35e`.
+- ⚠️ `P3-33d` is superseded by `P3-35e`.
 - ⚠️ `hong_kong.yaml` is 73% comment. Moving the prose to sidecars (`Q119`'s precedent) is the
   user's call and not taken: provenance beside the value is what it buys.
 - 🚫 OpenStreetMap is unevaluated and not proposed — ODbL share-alike meets hard rule 7. A

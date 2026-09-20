@@ -183,7 +183,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q126` | A row of arrows on a two-way edge is read by direction; `lanes_forward` | Closed for cause A. B half closed by `Q128`/`Q130`; C and D open. |
 | `Q127` | Reading a carriageway width where the ray survey cannot | Closed — measurement only, nothing shipped. Its cascade shipped as `Q128`. |
 | `Q128` | Two agreeing stations, and a strip of HyD's paint where no ray reaches | Closed — shipped, `ROADGRAPH_SCHEMA` 14. Coverage 39.5% → 53.5% Wan Chai, 34.2% → 63.3% |
-| `Q129` | A width is the carriageway's, and most open edges are not a carriageway | Closed — built as `P3-33b`/`c`. `P3-33d` superseded by `P3-35e`; `P3-33e`/`f` open. |
+| `Q129` | A width is the carriageway's, and most open edges are not a carriageway | Closed — built as `P3-33b`/`c`, graded by `P3-33e`. `P3-33d` superseded by `P3-35e`; `P3-33f` open. |
 | `Q130` | A row of arrows sets the count on an unmeasured width; arrows stand in the drawn lanes | Closed — `ROADGRAPH_SCHEMA` 15. `Ribbon.kerb_target`'s frame defect closed by `P3-35d`. |
 | `Q131` | A kerb in the road is not the road's edge: seams, islands, lines across | Closed — region schema 4. Open items below. |
 | `Q132` | The longitudinal lines come from TD's survey; where TD is silent nothing is drawn | Closed — built as `P3-34b`–`d`, `CITY_SCHEMA` 33. `draw_centre_line` and |
@@ -5867,7 +5867,8 @@ Reproduce: `tools/width_evidence.py --region wan_chai --voters borrow,arrows`.
 
 ## `Q129` — A width is the carriageway's, and most open edges are not a carriageway
 
-**Status.** Closed — built as `P3-33b`/`c`. `P3-33d` superseded by `P3-35e`; `P3-33e`/`f` open.
+**Status.** Closed — built as `P3-33b`/`c`, graded by `P3-33e`. `P3-33d` superseded by `P3-35e`;
+`P3-33f` open.
 
 User's calls: draw the carriageway region itself, the drive as judge; `shapely` approved.
 
@@ -5920,7 +5921,7 @@ for HKCEC). Cameras (`city_preview.tscn --seconds=1 --shots=0.8 --debug-view=off
 - `|stage − tool|` (max 0.025 / 0.014 m²) is why the stage and `tools/carriageway_region.py` stay
   two implementations. It found: silence is asked of the publisher's union, never the clipped one,
   and a station on the publisher's edge is covered (`intersects`, not `contains`).
-- Open (`P3-33e`): `join_seam.py` should check that R's two builds agree along the shared line.
+- `join_seam.py` checks that R's two builds agree along the shared line (`P3-33e`, below).
 
 ### `P3-33c` — the level-0 road is drawn from the region, and the floor is off
 
@@ -5970,9 +5971,66 @@ Rail shaping (from the seat: "a straight road broadened and shrank"):
 - `flare_m`: the junction trim read off the territory; `_assign_trims` takes `max(radius, flare)`.
 
 Open: `lane_paint` still reads edges under 3.00 m (mouth end vertices, one-lane shares);
-`paint_clearance` `deeper than` on boxes; `P3-33e` (the `Q19` battery — `carriageway_occupancy` and
-`clearance_reconcile` walk the ribbon where the pipeline walks the corridor, so the ratchet fails
-until they move together; `narrowing.py`; `cap_pavement.py`); `P3-33f`, the user's drive.
+`paint_clearance` `deeper than` on boxes; `P3-33f`, the user's drive.
+
+### `P3-33e` — the battery, the routing price and the seam
+
+Before side: a worktree of `e483329`, the commit before `P3-33c`, built whole and graded by its own
+tools (`battery.py --tools-from side`; this checkout's tools refuse a schema-31 bundle). It
+reproduced 22 / 26 / 6 and 6 / 7 / 1 exactly. Two values are `wan_chai` / `causeway_bay`.
+
+- **The grader walks the corridor.** `carriageway_occupancy.py` walks twice: the ribbon for the
+  area half (ribbons tile, so cells sum to an area) and kerb to kerb for the corridor half
+  (`survey_both`). Corridors of centrelines sharing a carriageway overlap, so that walk's areas are
+  dropped. `clearance_reconcile.py` takes the corridor walk alone.
+- 🔴 **`city.json` shipped half a corridor.** It carried `corridor_half_width_m` without
+  `corridor_offset_m`, and the corridor sits 0.91 m off the centreline at p50, 7.71 m at worst —
+  `Q106` again, invisible to the pipeline because `clearance.py` reads `roadsurface.json`. Now
+  published as a pair; additive, no bump (the game compares widths). `_lib.ribbon.corridors` refuses
+  a bundle with one and not the other.
+- Two rules the corridor needed and the ribbon never did. **Tapered between vertices**, as
+  `clearance.py` walks it: `e751` runs 22.5 m → 6.4 m in 9.5 m and the wide end's window read
+  21.04 m clear where the pipeline reads 0.75 m. **An undrawn corridor cell stands at its own
+  ribbon's height**: R is plan-only, so a corridor holds a ramp rising alongside; dropped, those
+  cells tripped `_trimmed` and `e402` lost the 28 stations a deck walls to 2.75 m. Only where the
+  station's own ribbon is drawn, so a junction trim is still refused.
+- Ratchet: 22 / 26 / 6 → **28 / 32 / 8**, 6 / 7 / 1 → **9 / 13 / 4**; at grade 25 / 27 / 6 and
+  8 / 11 / 3. Across the share the grader had read 64 / 17. At the pipeline's 0.50 m cell it reads
+  24 against 28 and 10 against 9 — `Q51`'s gap at `Q51`'s size, which is the proof of one corridor.
+- Occupancy at grade, `BUILDING` / `INFRASTRUCTURE` share of all drawn: 1.184% / 0.986% →
+  **0.214% / 0.560%**; 2.444% / 0.480% → **0.309% / 0.338%**. Causeway Bay failed the 1.72% bar
+  before and passes. Drawn level-0 area 500,610 → 337,143 m² and 134,393 → 90,266 m²: the invented
+  floor was a third of the road. The corridor gate still fails (27 / 11 edges), as it did (21 / 5).
+- 🔴 **The routing price is at the one-lane bar, and it is 3,989 ordered pairs.** Starved at 3.20 m
+  19 → 25 at grade on Wan Chai (+11 −5): refusing them lost 0 pairs before and loses 2.17% now, with
+  7,052 surviving pairs detouring past 200 m (p90 676 m, max 1,875 m). Three edges carry it —
+  `e53` CANAL ROAD WEST 2.67 m (2,479 pairs), `e138` FLEMING ROAD 3.00 m (1,632), `e384`
+  GLOUCESTER ROAD 3.05 m (10) — and `e53`, `e384`, `e412`, `e187`, `e632` have nothing standing in
+  them: the kerb-to-kerb corridor is under `lane_width_m` where the floor used to draw 10.24 m.
+  Causeway Bay went the other way, 455 → 173. At the CAR's 1.80 m bar nothing moved: 14 → 14
+  and 3 → 3 starved, 0 and 170 pairs lost on both sides, and Wan Chai's 55.8 m detour is gone. So the player is unharmed and `P3-3`'s
+  traffic inherits the question — whether `is_routable`'s bar is a lane or a vehicle. Not decided
+  here.
+- `narrowing.py`: the floor sweep is inert at level 0 (every column identical), as it must be with
+  the floor off. `e207` 3.25 → 2.00 m and `e595` 3.50 → 1.50 m — both authored widths, both now
+  under the bar at every floor; `e132` and `e499` left the pipeline's list and are grader-only.
+- Registration collapsed toward zero, which was the test: signs `shift_m` p50 1.74 → 0.00 /
+  1.97 → 0.09 m (drawn 670 → 873 / 185 → 285), lamps 1.38 → 0.00 / 1.23 → 0.00 m (890 → 1,077 /
+  331 → 364), railings to-source p50 1.44 → 0.22 / 1.32 → 0.21 m. Not a registration finding.
+- `cap_pavement.py` has no level-0 population left ("publishes no level-0 caps"). Before: 11,400 m²
+  (15.3%) / 2,422 m² (14.6%) of cap past a HyD kerb; the areas are HyD's own polygons.
+- Seam: `join_seam.py` sections each build's R along the shared line and diffs the stretches: 8
+  roads, 64.62 m each side, **0.00 m** disagreement. Mutation-checked by a kerb stepping 1.5 m.
+  ⚠️ Both builds are sectioned on ONE city-frame line: `city_offset` is whole metres, so Wan Chai's
+  east edge stands 0.62 m inside Causeway Bay, and an inset per side read every oblique crossing
+  0.5 m apart. ⚠️ Open and unmeasured: both rectangles hold that 0.62 m strip, so wherever both
+  draw it as AREA (a ribbon has one owner) the asphalt is coplanar twice — 40 m² at most.
+- Cost: the second walk takes the grader's walking from 15.5 s to ~40 s on Wan Chai (corridor cells
+  1.47× the ribbon's). Reusing the ribbon's cells for the 58 off-grade edges would save 5% and change
+  44 results, since the taper reaches them too. ⚠️ Open: `Faces.heights_at` is 15.75 µs of numpy
+  overhead a call over 9,161 distinct grid cells; batching it per cell is what would pay for it.
+- Fence: mouths 16 → 15 on Wan Chai, Causeway Bay unchanged. Deck error p90 0.094 m; `overhang.py`
+  level 1 4.8% → 5.0% / 25.1% → 25.3% (`P3-35g1`'s slide, `Q116`'s far halves).
 
 **See.** `Q128` · `Q127` · `Q95` · `Q94` · `Q57` · `Q116` · `Q104`, `Q117`, `Q125` · `PLAN.md`
 `P3-33`
