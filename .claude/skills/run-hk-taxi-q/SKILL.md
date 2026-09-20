@@ -138,6 +138,13 @@ CRS the ETL sourced the city in, so a suspicious frame can be checked against th
 instead of against another screenshot. `hdg` is a compass bearing: `000` faces the harbour.
 `cam` replaces `taxi` in the preview scenes, which is what makes a `--camera=` shot self-documenting.
 
+⚠️ **A tall unshaded kite standing point-down on a kerb in a preview frame is a fare pin, not a
+defect.** `fare_preview.gd` draws one per `fares.json` node in `city_preview.tscn` — 14 m tall, red
+for a cross-harbour stand, amber for a stand, cyan for pick-up/drop-off, grey for drop-off only and
+violet for a point of interest, each with a green tether to its snapped edge. One 20 m from the
+camera reads as 40 m, and was recorded as an unattributed spike twice (`P3-35d5`, `P3-35g1`). They
+stand on both sides of an A/B pair, so they never move a `cmp`.
+
 ⚠️ Remember the overlay when reading `draws`: the numbers in the sample output above were taken
 with it off, and the default now adds 8.
 

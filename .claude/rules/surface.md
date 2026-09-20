@@ -127,7 +127,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   vertices**, the pre-`Q107` bundle exactly. 🔴 **The evidence is a frame and the cache will lie to
   you** — delete `game/.godot/imported/roads.glb-*` and re-import before *each* shot, or the pair
   comes back identical over a 2.16 m change; and aim at `e337`, not `e208`, whose cut is under
-  0.5 m. 🔴 **Before the cut the ribbon SLIDES back onto its deck (`_slid_onto_deck`, `P3-35g1`)** —
+  0.5 m — ⚠️ **or at whichever edge carries the step's largest drawn-width change**: `P3-35g1`
+  moved `e364` 4.31 → 6.80 m and shot that, and `e337`'s 0.06 m is under a pixel. 🔴 **Before the cut the ribbon SLIDES back onto its deck (`_slid_onto_deck`, `P3-35g1`)** —
   by its overhang, where it hangs off one rim and stands on the deck — and it **never reads the
   deck's middle**, which is what `Q103` refused. Three refusals and no knob: an `inf` rim, a ribbon
   wholly off its deck, and a deck that would hold the ribbon twice (counted:

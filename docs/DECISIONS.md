@@ -24268,8 +24268,11 @@ refused samples at junction mouths.
 Frames at the `Q27` street camera: pair `cmp`-identical, 0 shader errors, the median fence on its
 island. 🔴 **A finding that is not this step's**: a pale-blue spike some 40 m tall stands on HENNESSY
 ROAD's north kerb in that frame, and it is in the before frame too (placements swapped, library
-byte-identical) — not railings, not yet attributed. 2,483 tests, ruff, `check.sh` 0, pipeline
-`--from railings` clean on both regions.
+byte-identical) — not railings, not yet attributed. ✅ **Attributed 2026-09-20, and not a defect**:
+it is `fare_preview.gd`'s pin for `f_017`, the pick-up/drop-off node at (250, 3.6, 704) — 14 m tall
+(`pin_height_m`) and 20 m from the camera, which is what read as 40 m; the green line at its foot is
+the tether. A dev tool of `city_preview.tscn` only, never in `city_drive`. 2,483 tests, ruff,
+`check.sh` 0, pipeline `--from railings` clean on both regions.
 
 ### Built 2026-09-20 — `P3-35g1`: the off-grade ribbon slides onto its deck before it is cut
 
@@ -24322,8 +24325,12 @@ as it failed at 25.1% — the far halves with no deck in the bundle (`Q116`).
 Frames over `e364`'s near half (`--camera=1575,40,425 --look=1625,12,455`), imports deleted before
 each side, each pair `cmp`-identical, 0 shader errors: before, a dark strip on a wider pale deck;
 after, the carriageway fills it. ⚠️ `e337`, the rule's usual camera, moved 8.44 → 8.50 m and was
-not shot. 🔴 **The pale spike of `P3-35d5`'s frame has a sibling here**, a pink one beside the ramp
-in both frames — not this step's. ⚠️ **`etl/out/wan_chai+causeway_bay` is a third thing to
+not shot — and a frame could not have shown it: 0.06 m on an 8.5 m ribbon is under a pixel at any
+useful distance, and `deck_margin.py`'s 0 narrower / 0 wider is the instrument that covers it. The
+camera belongs where the step's change is, which here was `e364`. 🔴 **The pale spike of
+`P3-35d5`'s frame has a sibling here**, a pink one beside the ramp in both frames — not this
+step's. ✅ **Attributed 2026-09-20**: `fare_preview.gd`'s pin for `f_045`, a `poi` node at
+(1639, 4.6, 486) in the `POI` violet; the same dev tool as its sibling. ⚠️ **`etl/out/wan_chai+causeway_bay` is a third thing to
 rebuild**: `check.sh`'s `verify_join` failed on "a clearance width differs by 3.0000 m" until
 `python -m pipeline.join` was re-run, which is the check working. 2,491 tests, ruff.
 
