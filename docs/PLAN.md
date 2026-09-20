@@ -7,207 +7,125 @@
 3. The city reads as Hong Kong to Hong Kong drivers.
 
 **Out of scope for the slice:** monetisation, store assets, art polish, audio beyond placeholders,
-Causeway Bay and Central, all modes except Arcade and Free Roam.
+Central, all modes except Arcade and Free Roam.
 
 Task IDs are stable — reference them in commits and in `PROGRESS.md`. Live status lives in
-`PROGRESS.md`'s task board, not here.
+`PROGRESS.md`'s task board, not here. A done task is one line; its record is in `DECISIONS.md`.
 
 ---
 
 ## Review protocol
 
-**Every task ends in something a human can look at, and this plan says what.** Every reviewable unit
-from Phase 2 onward carries:
+Every reviewable unit from Phase 2 onward (the task in Phase 2, the build in Phase 3) carries:
 
 ```
 Review: <what to look at> | <the command that produces it> | <the verdict question>
 ```
 
-The unit is the **task** in Phase 2 and the **build** in Phase 3, where the individual systems are
-not separately playable. Whichever it is, the line is part of the definition of done.
-
 | Kind | Who says yes | Example |
 |---|---|---|
-| **Machine-checked** | `tools/check.sh`, `verify_*.gd`, `pytest` | every tile's mesh agrees with the `aabb` the manifest declares |
-| **Human-judged** | the user, driving or looking | `Q12` — Jaffe Road is eastbound; `Q8` — the city itself is the fun |
+| Machine-checked | `tools/check.sh`, `verify_*.gd`, `pytest` | a tile's mesh agrees with its `aabb` |
+| Human-judged | the user, driving or looking | `Q12` — Jaffe Road is eastbound |
 
-**The rule: no more than one reviewable unit may pass without a human-judged artifact.** A
-machine-checked unit may follow a human-judged one; two in a row may not.
-
-**Review points are hard gates.** Work stops until the user has driven the build and the verdict is
-recorded — the status in `PROGRESS.md`, and what the verdict decided in `DECISIONS.md`.
-
-**Name the verdict question in advance.** This is the field that does the work. `Q8`'s drive test
-asked "is this fun?", nobody had written down "is the car facing the legal direction?", and so a
-spawn with a transposed basis survived a full user drive-through — the user caught it later, from the
-driver's seat, when the harbour turned out to be on the wrong side. **A review with no stated
-question only finds what someone happens to notice.**
-
-**The default route is the web build**, exported and served per `.claude/skills/run-hk-taxi-q/`.
-Driver screenshots are the *progress* report; a build the user can drive is the *verdict* route. Two
-exceptions, named in the tasks that use them: a debug overlay is reviewed under the driver, and
-anything about feel-in-the-hand needs the handset.
-
-> **Precedent.** Phase 1 worked this way without being told to — every ETL stage grew a preview, and
-> the two verdicts that closed `Q12` and `Q8` came from the user's eye rather than from any test.
+- No more than one reviewable unit may pass without a human-judged artifact: two machine-checked
+  units in a row may not.
+- Review points are hard gates. Work stops until the user has driven the build; the status goes in
+  `PROGRESS.md`, what the verdict decided in `DECISIONS.md`.
+- ⚠️ Name the verdict question in advance. `Q8`'s drive asked "is this fun?", nobody asked "is the
+  car facing the legal direction?", and a transposed spawn basis survived a full drive. A verdict
+  is read no wider than the question asked (`P2-5`: comfort was never asked, `Q98`).
+- Default route is the web build, per `.claude/skills/run-hk-taxi-q/`. Driver screenshots are the
+  progress report, not the verdict. Exceptions: a debug overlay is reviewed under the driver;
+  feel-in-the-hand needs the handset.
+- ⚠️ A declared dependency graph does not catch a missing *capability* no task owns (`P2-5` needed
+  building collision; `B2` needed a taxi model). Check acceptance criteria for that shape.
 
 ---
 
 ## Phase 0 — Spikes and scaffolding ✅
 
-**Goal:** kill the unknowns that could invalidate the whole plan. Complete but for `P0-3b`, and left
-here as the record.
-
-| ID | Deliverable | Outcome |
-|---|---|---|
-| `P0-1` | LandsD sheet numbers covering the region; confirmation of glTF delivery granularity | ✅ 6 sheets, per sheet, ~44 MB. Building data turned out **fully scriptable** — the top data risk, retired |
-| `P0-2` | ⚠️ Whether Road Network v2 centrelines carry a Z ordinate, with evidence | ✅ No Z, but `ELEVATION` encodes the level. **Region holds** — no fallback to Tsim Sha Tsui |
-| `P0-3` | `game/` opens in Godot 4.7, Mobile renderer, export presets committed, a scene at 60fps | ✅ Imports clean; macOS, web and Android export verified |
-| `P0-4` | `etl/` package, `hong_kong.yaml`, `crs.py`, `ruff` + `pytest` | ✅ Round-trip transform tests against published HK1980 reference points |
-| `P0-5` | A hand-built grey-box "Gloucester Road" plus a tuned custom raycast vehicle | ⚠️ Passed conditionally — handling accepted, **fun not assessable from a grey box** (`Q8`) |
+| ID | Outcome |
+|---|---|
+| `P0-1` | ✅ 6 LandsD sheets, per-sheet glTF, ~44 MB; building data fully scriptable |
+| `P0-2` | ✅ Road Network v2 has no Z, but `ELEVATION` encodes the level; region holds |
+| `P0-3` | ✅ Godot 4.7 Mobile project; macOS, web and Android export verified |
+| `P0-4` | ✅ `etl/` package, `hong_kong.yaml`, `crs.py` tested against published HK1980 points |
+| `P0-5` | ⚠️ Grey-box vehicle passed conditionally — fun not assessable from a grey box (`Q8`) |
 
 ### `P0-3b` Mobile device build verification ⬜
 
-- **Deliverable:** a signed development build installed and running on the device floor, on both an
-  iOS and an Android handset. Real reverse-domain bundle identifier replacing the placeholder in
-  `export_presets.cfg`.
+- **Deliverable:** a signed development build on both an iOS and an Android floor handset; a real
+  reverse-domain bundle identifier replacing the placeholder in `export_presets.cfg`.
 - **Accept:** the current scene runs on-device with the FPS counter visible; measured FPS recorded.
-- **Deps:** `P0-3`, plus physical hardware. `Q4` is confirmed (A13 / Adreno 618).
-- **Note:** not on the critical path, but it **blocks `P2-4`'s and `P2-6`'s reviews** — how the car
-  feels under a thumb is reachable no other way. Scheduled at Phase 2's review point 2.
+- **Deps:** `P0-3`, physical hardware. `Q4` confirmed (A13 / Adreno 618).
+- Blocks `P2-4`'s and `P2-6`'s reviews.
 
 ---
 
 ## Phase 1 — ETL vertical slice ✅
 
-**Goal:** real Wan Chai data → game-ready assets, reproducibly, with one command. **Gate passed** —
-Wan Chai renders in Godot from `city.json`, georeferenced and verified in-engine.
+Gate passed: Wan Chai renders in Godot from `city.json`, georeferenced and verified in-engine.
 
-| ID | Deliverable | Outcome |
-|---|---|---|
-| `P1-1` | `fetch.py` — download and cache the region's building, road and fare datasets | ✅ Sheets derived from the published index, not listed. Re-running is a no-op |
-| `P1-2` | `buildings.py` — parse glTF, clip, colour by height band and class, merge per tile, emit LOD tiers | ✅ 65 tiles as accepted (66 today); one draw call each, vertex colours live, no textures |
-| `P1-3` | `roads.py` — parse Road Network v2 → `roadgraph.json` per the data contract | ✅ 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected. One-way directions confirmed against the real street (`Q12`) |
-| `P1-4` | Ribbon mesh with widening, kerbs and collision | ✅ One mesh, one draw call. All 393 single-level junctions covered. Opened `Q13` |
-| `P1-5` | `fares.py` — stands + PUDO → `fares.json`, snapped, bilingual | ✅ 29 nodes; every `nearest_edge` resolves, corroborated independently by the source's own prose |
-| `P1-6` | `export.py` — `city.json` plus one command for the whole pipeline | ✅ Byte-reproducible. The stage also **validates** what no single stage can see |
-| `P1-7` | Godot loads `city.json` and instantiates tiles at correct world positions | ✅ **Gate passed.** 1 cm agreement, checked headlessly. The `DirAccess` tile listing deleted — it could never have worked in an export |
+| ID | Outcome |
+|---|---|
+| `P1-1` | ✅ `fetch.py` — sheets derived from the published index; re-running is a no-op |
+| `P1-2` | ✅ `buildings.py` — one draw call per tile, vertex colours, no textures |
+| `P1-3` | ✅ `roads.py` → `roadgraph.json`; one-way directions confirmed on the street (`Q12`) |
+| `P1-4` | ✅ Ribbon mesh with kerbs and collision; opened `Q13` |
+| `P1-5` | ✅ `fares.py` — stands + PUDO → `fares.json`, snapped, bilingual |
+| `P1-6` | ✅ `export.py` — `city.json`, one command, byte-reproducible, cross-stage validation |
+| `P1-7` | ✅ Godot loads `city.json`; 1 cm agreement, checked headlessly. No `DirAccess` listing |
 
 ---
 
 ## Phase 2 — Driving the real city
 
-**Goal:** the player drives real Wan Chai at 60fps on the device floor. **Three review points**, each
-a hard gate.
+**Goal:** the player drives real Wan Chai at 60fps on the device floor. Review points 1 and 2 are
+passed; point 3 is `P2-6`.
 
-### `P2-1` `CityStreamer` ✅ — review passed
+### `P2-1` `CityStreamer` ✅
 
-- **Deliverable:** tile load/unload by camera distance and LOD tier switching. Distance bands and
-  hysteresis are tuning data (`.tres`), not constants. Decides where tile colliders come from.
-- **Accept:** no hitching on tile boundaries; draw calls within budget; a distant tile is rejected by
-  its `aabb` **before** its mesh is loaded.
-- **Review:** the streamed city driven from HKCEC, plus a matched pair showing both tiers at closest
-  range in a street canyon | web build | **Does LOD popping read as acceptable, and is the coarse
-  tier good enough at closest range?**
-- **Outcome:** yes to both, which closed `Q16` — the exact-weld tier does not ship. PCK 51.6 →
-  21.1 MB, worst-case visible triangles 249,210 → 150,374.
+Tile streaming and LOD by camera distance, bands in `.tres`; colliders are an ETL product. Review
+closed `Q16` — the exact-weld tier does not ship.
 
-### `P2-2` `RoadGraph` runtime **and debug overlay** ✅ — review passed
+### `P2-2` `RoadGraph` runtime **and debug overlay** ✅
 
-- **Deliverable:** load `roadgraph.json` once, own nearest-edge and lane-centre queries, and retire
-  the duplicate parse the previews were doing. **Plus a debug overlay** drawing the resolved edge, the
-  lane centre and the legal travel direction under the moving car.
-- **Accept:** query correctness tested; sub-millisecond nearest-edge; exactly one parse per scene;
-  **nearest-edge never returns an off-grade edge** — 60 of 797, per `Q13` — proven at the 36
-  mixed-level nodes.
-- **Review:** the overlay while driving — the named exception to the web-build route, because it
-  wants frame-by-frame inspection | driver run | **Does the graph agree with where the car actually
-  is**, at the centreline seam and at the nodes `Q13` names?
-- **Why the overlay was a deliverable, not a nicety:** without it this task is a parse and two query
-  functions, with nothing whatsoever to look at — the only task in the project in that position. It
-  is also what found the carriageway-width contract gap.
+One parse per scene, nearest-edge and lane-centre queries, overlay under the car. Nearest-edge
+never returns an off-grade edge (`Q13`).
 
-### `P2-3` `VehicleController` on real geometry ✅ — review passed
+### `P2-3` `VehicleController` on real geometry ✅
 
-- **Deliverable:** the custom raycast vehicle, arcade tuning in `handling.tres`, now placed by
-  `P2-2`'s lane-centre query rather than by a hand-written transform.
-- **Accept:** matches the feel agreed in `P0-5`; spawn orientation asserted against its edge vector.
-- **Review:** a drive along Hennessy Road | web build | **Is this still the `P0-5` car?**
-- **Outcome:** *"car seems ok"* — a pass on the question asked, read no wider than it was said.
+Placed by the lane-centre query; spawn orientation asserted against its edge vector. Drive model
+since replaced by `VehicleBody3D` (`Q50`).
 
-### `P2-5` Chase camera ✅ — review passed, reopened once by `Q98`
+### `P2-5` Chase camera ✅
 
-> ⚠️ **This task closed against code it never modified.** Its deliverable is *"speed-based
-> FOV and look-back"* and `git show 3aca85a` has both already in the `P0-5b` camera, whose
-> scope note read *"it is NOT the P2-5 deliverable"* — and survived the task that made it
-> false. `Q98` corrected the note and the camera's yaw law. ⚠️ **The review question was
-> narrow and the verdict held**: *"can you read the road at speed, and does the camera stay
-> out of the buildings?"* — comfort was never asked, and the rigid yaw came back later as a
-> user report.
+Speed-based FOV and look-back. Review asked only "can you read the road, does the camera stay out
+of buildings"; the yaw law was corrected later (`Q98`).
 
-- **Deliverable:** speed-based FOV and look-back, on real geometry.
-- **Accept:** readable at speed; no clipping through buildings.
-- **Review:** a drive through the junction east of HKCEC and a drift | web build | **Can you read the
-  road at speed, and does the camera stay out of the buildings?**
-- ⚠️ **Was blocked on building collision, which no task owned.** `P2-1` was asked to decide where
-  tile colliders come from, decided correctly that they are an ETL product, and closed; the second
-  half never got scheduled. A spring arm cannot stay out of buildings that are not there. **A
-  declared dependency graph does not catch this class of gap** — `P2-5` depends on a *capability*,
-  not on a task, and the capability's owner had already closed. Worth a glance at the other
-  acceptance criteria for the same shape.
+### `P2-7` Put the off-grade carriageway on the structure it belongs to ✅
 
-> ⚠️ **Review points 1 and 2 are passed.** `Q13` was decided ahead of `P2-2`: nearest-edge refuses
-> off-grade edges, and the elevated network is out of the slice.
-
-### `P2-7` Put the off-grade carriageway on the structure it belongs to ✅ — review passed
-
-> **Numbered after `P2-6` and sequenced before it** — the one place where ID order and running order
-> disagree. `P2-6` is the phase gate and measures frame time on the geometry that ships, so it has to
-> run last; this task changes that geometry. The ID is late because the task was found late.
-
-- **Deliverable:** deck heights **sampled from the `INFRASTRUCTURE` geometry** instead of the flat
-  `elevation_levels` offset, so a flyover ribbon lies on the flyover and a ramp edge climbs with the
-  ramp. The elevated network stays **closed to driving**.
-- **Accept:** ribbon-to-structure vertical error inside ±0.5 m at p90, measured against the **shipped
-  tiles**; no ribbon left below the deck it should sit on; `schema_version` bumped and
-  `ARCHITECTURE.md` changed in the same commit. **Plus the classification below.**
-- **Review:** the Tonnochy Road approach and the Wan Chai Interchange, before and after | web build |
-  **Does the elevated road now sit where the structure says it does?**
-- **Deps:** `P1-2`, `P1-4`.
-- **Why here and not in Phase 4:** this is a **data-contract** change, and Phase 3 builds on the
-  contract — `P3-3`'s traffic drives the graph and `P3-1`'s fares snap to it. Changing deck heights
-  after traffic exists means redoing traffic.
-- ⚠️ **First, classify the 36 mixed-level nodes, and treat the answer as the task's real finding.**
-  Either they are genuine ramp junctions — in which case sampling makes them continuous — or
-  plan-coincident crossings, in which case sampling cannot help and the connection is spurious data
-  `RoadGraph` should refuse on its own terms.
-- **Outcome:** \|error\| p90 **0.095 m** against 0.50, graded against the shipped tiles; the
-  classification found **all 36 are ramps and none is a crossing**. Three review findings were fixed
-  across as many drives — coincident surfaces, widening on structure, and widening past the point
-  where a road becomes a bridge (`Q23`) — **each found by a drive and by no internal number.**
+Deck heights sampled from `INFRASTRUCTURE`; |error| p90 0.095 m against 0.50. All 36 mixed-level
+nodes are ramps, none a crossing. Elevated network stays closed to driving. `Q23`. Numbered after
+`P2-6` but sequenced before it, because `P2-6` measures the geometry that ships.
 
 ### `P2-4` `InputRouter` 🟡 — built, review blocked on `P0-3b`
 
-- **Deliverable:** touch, gamepad and keyboard → one action set. ✅ Built (`Q83`/`Q97`): touch is two
-  relative thumbs carrying three of five actions; the review below still needs the handset.
+- **Deliverable:** touch, gamepad and keyboard → one action set. Built (`Q83`/`Q97`): touch is two
+  relative thumbs carrying three of five actions.
 - **Accept:** all three input paths drive the car; no gameplay script reads raw input.
-- **Review:** all three paths exercised | on-device build at `P0-3b` | **Machine-checked** for
-  coverage; the user says whether touch steering is usable at all.
-- **Deps:** `P2-3`, and `P0-3b` for the review.
+- **Review:** all three paths | on-device build | machine-checked for coverage; the user says
+  whether touch steering is usable at all.
+- **Deps:** `P2-3`, `P0-3b`.
 
 ### `P2-6` Performance pass to budget ⬜
 
-- **Deliverable:** measured and recorded, on the device floor.
-- **Accept:** 60fps on the device floor, measured, recorded in `PROGRESS.md`.
-- **Review:** the same drive on the handset | on-device build | **Does it feel smooth?** The frame
-  numbers are the acceptance criterion above; a held 60 that still stutters under a thumb is a
-  finding no counter reports.
+- **Accept:** 60fps on the device floor while driving real Wan Chai, measured, recorded in
+  `PROGRESS.md`. This is review point 3 and the Phase 2 gate.
+- **Review:** the same drive on the handset | on-device build | **Does it feel smooth?**
 - **Deps:** `P2-1`…`P2-5`, `P2-7`, `P0-3b`.
-- **Inherits:** re-measuring tile hitching now that instantiation also registers a trimesh with Jolt
-  on the main thread, and re-examining "vehicle blob shadow only" — shots with shadows off looked
-  markedly worse than that line implies.
-
-> ⚠️ **Review point 3 — and the Phase 2 gate:** 60fps on the device floor while driving real Wan Chai.
+- **Inherits:** re-measure tile hitching now that instantiation registers a trimesh with Jolt on
+  the main thread; re-examine "vehicle blob shadow only" — shadows-off shots looked markedly worse.
 
 ---
 
@@ -215,665 +133,255 @@ a hard gate.
 
 **Goal:** a Wan Chai that reads as Hong Kong to strangers, then a complete arcade loop around it.
 
-**Four playable builds, then the test.** Every task keeps its ID: `P3-1`, `P3-2` and `P3-5` remain
-split into `a`/`b` pairs, `P3-9` gains an earlier `P3-9a` round in front of it, and `P3-11` is added
-for the player taxi. Builds run **`B2` → `B1` → `B3` → `B4`**.
+Four playable builds run `B2` → `B1` → `B3` → `B4`. ⚠️ Build letters name content, not running
+order; renumbering would falsify records in `DECISIONS.md`.
 
-⚠️ **The build letters name content, not running order** — the convention `P2-7` already set, for the
-same reason. Renumbering would silently falsify a dozen records in `DECISIONS.md` that say things like
-"`P3-10`, build `B2`". Where letter order and running order disagree, this plan says which is which.
-`B2` runs first.
-
-Why the city comes before the loop — **user's call**:
-
-- **The scene is the bet, so the scene gets tested first.** `Q8` closed on "the city itself is the
-  fun", and the user's own word for it was *gimmick*. Fares, traffic and scoring are all built on the
-  assumption that driving this city is worth doing, and that assumption currently rests on one
-  person's drive. `B2` puts it in front of strangers while it is still cheap to change what the city
-  is made of.
-- **`B2` is a purer recognition test than `P3-9`.** `P3-9` asks HK drivers to navigate *with the
-  arrow disabled*; `B2` has no arrow to disable, because it has no HUD, because it has no fare
-  system. The thing `P3-9` must artificially suppress does not exist yet. That is an argument for
-  testing recognition now rather than later, and it is why `P3-9a` exists.
-- **The taxi is in every screenshot, and no task owned it.** `ART_DESIGN.md` specifies the roster and
-  an 800–2,000 triangle budget, but no Phase 3 task delivered even the player's own car — so the
-  thing the player looks at for hours is still two `BoxMesh` primitives. **Same shape as `P2-5`'s
-  missing building collision:** a capability the docs assumed and no task owned. Now `P3-11`.
-- **Scoring still comes last**, and `P3-2a` still moves up to `B3`, both for the reasons recorded
-  below. This reorder moves `B2` ahead of `B1`; it does not disturb `B3` or `B4`.
-
-⚠️ **What the reorder costs, recorded so it is not rediscovered as a surprise.** `B1` was scheduled
-first because *"is completing a fare worth doing twice?"* is cheap to answer and expensive to get
-wrong. It is now answered later, on a city already built. If the fare loop turns out to want
-something different of the world — other fare-node density, other block sizes, ground the player
-stops on — `B2`'s art is already spent. The user judged the scene the larger risk; that is the
-trade.
+The city comes before the loop on the user's call: `Q8` closed on "the city itself is the fun", so
+that bet is tested on strangers first. ⚠️ The cost: "is completing a fare worth doing twice?" is
+answered later, on a city already built; if the loop wants a different world, `B2`'s art is spent.
+Scoring still comes last, and `P3-2a` still moves up to `B3`.
 
 ### Build `B2` — "It reads as Hong Kong" — **runs first**
 
-| ID | Deliverable | Accept |
-|---|---|---|
-| `P3-11` | **Player taxi model** — low-poly toy taxi, generated by a committed script rather than hand-modelled | 800–2,000 triangles; 1–2 flat-shaded materials; 3–5 colours; red body, silver roof; silhouette readable from behind at speed |
-| `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
-| `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
-| `P3-6` | Hero buildings (5) — authored or mesh-sourced (`source_paint`), placed via `landmarks.json`. 🟡 **HKCEC passed review 2026-09-06**; Central Plaza shipped and not yet judged; the remaining three not built | Source geometry excluded; no z-fighting |
-| `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). 🚫 **WITHDRAWN at `Q102`** with the vision reader it consumed | `Q44` and `Q45` **ship** and are unaffected — both run off the hash. `W3`'s five `quiet_*` values are gone: they conditioned on the grammar refusing, and with no reader every building refuses. `Q42`'s riders were never delivered and are now history rather than backlog (`DECISIONS.md` `Q102`) |
-| `P3-12` | **Road markings** — lane dividers, centre lines, kerbside double yellows and a bus-lane edge, drawn procedurally over the ribbon's lane coordinate, **and the `TEXCOORD_1` payload the shader reads**. Arrows, road text and box junctions deliberately out of scope | No texture ships and `mesh_contract.gd` still passes; one primitive, one material, no triangle moved; markings survive the playability widening because U is a lane coordinate; the junction fade is sized against the **measured** cap overlap rather than by eye; `schema_version` bumped on both sides in one commit |
-| `P3-13` | ✅ **Kerbside no-stopping from `NSR`** — done 2026-08-19 — the one shipped marking that is invented, sourced. A linear-referencing stage joins the layer to the graph as `(edge, side, V-range, kind)`; the ribbon carries the extent per rail and the codec carries the kind. Parking bays, box junctions and the `ONSTREETPARK` complement deliberately out of scope | Painted length matches the restricted length to within the join's own resolution — graded by `tools/kerbside_error.py`. ✅ **4%**, from 240%; no vehicle class is asserted that the source does not name; the side convention is asserted against `surface.mitres` itself rather than reasoned about; `roadgraph.json` and the shader moved in one commit each per hard rule 5 |
-| `P3-14` | ✅ **The tramway as published geometry** — `CartoTransLine TW` read as rails, paired back into tracks, drawn as `tram.glb`; and TD's 19 tram stops shipped as the `poi` kind the contract reserved. Platforms, stop markings and `RM1034` lettering deliberately out of scope | The rails sit where the estate prints them rather than in lane space, and the refusal of lane space is a **measurement** (18.8% of cross-sections on the ribbon, 1.5% on Hennessy) rather than an art call; drawn gauge matches the published 1,067 mm within the join's own resolution; one primitive, one draw call, **no collider**; `city.json` bumped and the manifest key optional, both sides one commit |
-| `P3-15` | ✅ **Turn arrows from `DTAD_RD_MARK_SYM_PT`** — TD's published marking symbols read as an `RM` code plus a bearing, registered into the lane the ribbon actually has, and drawn as `arrows.glb`. Road text, box junctions, stop lines and give-way lines deliberately out of scope | The glyph table is transcribed from the publisher's own index plan rather than inferred from the histogram — the **61 `RM1116`-`RM1119` warning arrows** in region are the test of that, and they are refused; the bearing convention is asserted against `fares.Snap`'s heading rather than against a comment, because there is no second publisher to grade it with; the stage publishes counters that can see it fail, since every failure renders as a perfectly drawn arrow or as nothing; one primitive, one draw call, **no collider**; `city.json` bumped and the manifest key optional, both sides one commit |
-| `P3-16` | ✅ **Traffic signs from `DTAD_TS_ABV_PT` / `DTAD_TS_POLE_PT`** — done 2026-08-23, amended same day (`Q64`) — **671 plates on 497 posts** as `signs.glb` today (681 on 503 before `Q95` re-baselined the drawn kerb), having landed at 706 on 541 and passed through 746 on 572 (`P3-22`) before `Q67` refused 88 orphaned supplementary plates: NO ENTRY, GIVE WAY, the mandatory turn discs, the turn prohibitions and the supplementary arrow plates, flat-shaded, standing on the poles TD surveyed. Text faces, parking / time-plate / vehicle-class signs and pictogram textures deliberately out of scope; signal heads stay in `P3-17`, and only sign-carrying poles ship — both the user's call | The whitelist is transcribed from TD's own `TS` Index Plan sheets — **vector, with no text layer, not scanned** — with `signCatalogue.json` as cross-check only, never authority (`Q59`). 🔴 **`Q64`: it was followed for every row but one.** `TS182`/`TS183` were shifted, so 11 mislabelled plates shipped and 155 correct ones were refused; corrected 2026-08-23, **583 → 706 plates with no texture**; no lettering, on the **no-texture contract** rather than on `Q42` — `Q63` records that mis-citation and `P3-20` is the amendment. 🔴 **The task changed on two measurements**: `DTAD_TS_ABV_PT` is the *abbreviation* layer and does not say where a sign is — **zero** of 3,276 points sit on a pole, p50 2.63 m away — so position comes from the pole through `GG_NAME`, which resolves **92.6%** to exactly one; and `ANGLE` is the MicroStation label rotation, flat against the road (p50 44.2°, 19.2% along / 18.1% across against 22.2% uniform), which `~/hk-traffic-sign-map` had already proved and reverted. So the facing is **derived** from host edge + kerb side + drive-on-left, and it is **ungraded** — there is no published subset to check it against (`Q62`). 🔴 **And so is the position across the road**: 77.3% of poles are surveyed inside the 1.6x ribbon, so they are registered onto the drawn kerb (`Q60`'s move at a second layer), 121 coincident poles are merged, and 195 plates are refused where registration could not clear the carriageway. The stage publishes counters that can see it fail: two closing partitions, `facing_away` **0**, `no_entry_with_flow` **0** (it read 117 of 253 before the one-way branch), and `no_entry_on_two_way` **6** as the surviving report-only second-source diff. ✅ **The turn-restriction half of that diff landed 2026-08-23 and refuted its own premise** — 68 prohibition plates against the graph's 217 banned movements read `turn_sign_agreed` **29**, `turn_sign_disagreed` **14**, `turn_sign_unmatched` **25**, but `turn_sign_on_one_way` is **62 of 68** and a mirrored region still reads 30, so it grades the *content* and not the facing (`Q62`). Dimensions are authored because the sheets are stamped NOT TO SCALE (`Q60`'s debt); candidates snap to level 0 (`Q15`); one primitive, one draw call, **no collider**; `city.json` bumped 14 → 15 and the manifest key optional, both sides one commit |
-| `P3-20` | ✅ **DONE 2026-08-23 — 讓 ships.** `TS102` GIVE WAY carries **GIVE WAY / 讓** on **74** plates, baked from TD's own `CT174/51-1(1)C` cell. `Q65` had cut this from 193 cells to two and left the call with the user; the user made it (*"讓 still not appear"*) | ✅ **256 x 256 atlas, 28.5 KB PNG embedded in `signs.glb`, ink coverage 27.8%, +1 draw call.** `Texture memory` **0 → 65,536 px**, with `GeneratedSigns.TEXT_ATLAS_BUDGET_PX` as the ceiling `Q63` amended the contract to require. ⚠️ Built as a **second primitive in one `.glb`**, not a second file — `railings.glb`'s actual precedent — so the untextured majority stays byte-identical. ⚠️ **Opaque RGB, no alpha, no `discard`**: the glyph is baked over the plate's field colour. ⚠️ **The placement is read off the drawing**, so `size` is ignored on a `text` layer and the face schema never grew a per-layer offset. ✅ Both refusal paths mutation-checked. ✅ **`TS101` STOP / 停 ×18 SHIPPED 2026-08-24 — 10 drawn, atlas 512 x 256, `text_plates` 84.** It was estimated as one config row, one octagon draw word and a budget move, and it was short by two: TD draws `TS101` in **negative**, so the crop that finds `TS102`'s black ink reads 0.0000 on it, and `_bake` hardcoded black-on-white. Both answered **without a schema change** — the `text` layer's `colour` was already there and unread, the field is the layer beneath it, and polarity is derived from the two colours rather than named. `TS102` byte-identical throughout. Preceded by its own commit correcting `_plate_box`, which counted TD's dimension lines as plate and would have shipped the words at 0.873 size. **PCK 42,857,500 → 42,877,580 B (+20,080, +0.047%)**, two exports one variable apart. `Q68` |
-| `P3-21` | ❌ **Road lettering from `DTAD_RD_MARK_ANNO` — NO-GO under `Q65`'s scope, held rather than deleted.** `CENTRAL` / `九龍` on the carriageway is lettering by definition and carries no instruction the road graph does not already give the player; it also needs an authored typeface with its own `LICENSING.md` entry, which is real cost against no direction value | ✅ **The data findings stand and are why reopening costs nothing**: `DTAD_RD_MARK_ANNO` is **`MultiPolygon`, not a point** — all 274 features are a closed 5-point rotated rectangle, the text's own envelope, so position, angle *and* extent are read and the decal quad **is** the published geometry, the strongest form of `Q54` in the bundle. Long side p50 **2.56 m** / p90 3.49 / max 5.19. `TextString` carries embedded `<FNT …>` markup on some rows; unwrapped there are **67 distinct strings**, painted-word *fragments* (`CEN`+`TRAL`, `KOW`+`LOON`) and two-line blocks — so it would be 67 word cells, not a glyph atlas. The sizes are published on `CT174/51-5(1)F`, already in `etl/sources/`: `LETTER HEIGHT = 1600`, `CHARACTER HEIGHT = 2700`. ⚠️ `/eval`'s earlier NO-GO on texturing road *markings* generally is untouched and stands for its own reason — `TEXCOORD_0.x` is a lane coordinate and markings survive the 1.6x widening because of it. `Q65` |
-| `P3-22` | ✅ **Done 2026-08-23** — **The direction signs that were refused for a reason that never applied**, landed ahead of `P3-20` on the user's call — `TS414` PERMANENT SHARP DEVIATION, `TS735` ARROWS, `TS615` NO THROUGH ROAD and `TS589` PERMANENT SHARP DEVIATION WITH YELLOW BORDER — **105 plates, zero textures**, on three new `draw` primitives. ⚠️ **It landed at 105 and `Q67` took it to 24 the same day** (`TS414` 11, `TS615` 10, `TS735` 3, `TS589` none), by refusing the orphaned supplementary plates; `signs.json`'s `by_code` is the live count and this row is what was accepted | 🔴 **This is `Q64` at a second layer**: four codes whose meaning is their *shape*, refused with the text families they do not belong to. Every one read off TD's own sheet — `TC 210`, `TC 408`, `TC 310`, and `TS589` off (TS 506 - 600) — never off `signCatalogue.json`, whose `desc` calls `TS414` *SPEED* deviation where the sheet says **SHARP**. That is the second independent `desc` error found, after `Q64`'s own. ⚠️ **Composite glyphs bake as one `draw` word**, not a per-layer offset in the face schema: `_bent_arrow` and `_u_turn_arrow` are the precedent and a schema change would be the larger claim. ⚠️ `TS735` and `TS615` are unambiguous and land first within the task — a double-headed arrow is symmetric, and TD splits NO THROUGH ROAD into `TS615`/`TS616`/`TS617` so the **code carries the direction**. 🔴 **The chevron boards do not, and that is the task's one real risk**: TD publishes no left/right code pair for a deviation board, the sheet draws `TS414` pointing left and `TS588`/`TS589` pointing right, so the drawing is indicative and the installed board is oriented physically. Drawn in a fixed direction ~half of **71** plates point the wrong way *and render perfectly*. They ship on a **stated assumption** — chevrons point away from the kerb the board stands on, toward the carriageway, which is what an island nose or a bend outside physically does and which reuses the side the registration already computes — and the stage publishes a counter over it. It is a `Q62`-class derived-and-ungraded claim, and is recorded as one rather than presented as read. ⚠️ **Bend and narrows warnings (`TS401`–`TS418`) are deliberately NOT here**: 53 plates across 13 codes, at most 8 each, for 13 new primitives — the worst effort-per-plate in the estate, and `Q65` records the refusal. Same bar as `P3-16`: partitions close, `facing_away` **0**, one primitive, one draw call, no collider |
-| `P3-17` | 🚫 **Signal heads from `DTAD_TRAFFIC_LIGHT_PT`** — built 2026-08-26, **dropped from the bundle the same day** (`Q77`). The stage, config loader, material, verify tool, preview node and 41 tests all remain; `hong_kong.yaml` declares no `signals:` block, so `city.json` names none and `sync_generated.sh` sweeps the asset. Re-declaring the block is the whole of the work to bring it back | 🔴 **It was correct and was dropped anyway.** 415 heads on TD's own positions, both partitions closed, `facing_away` 0, `check.sh` green — and it could not **light up**. A dark head is not a neutral signal, it is one that is out of service, asserted 415 times. ⚠️ **And a lit one cannot be made honest from what this repo knows**: nearest graph node p50 **11.5 m** (16 of 132 are `endpoint` nodes); only **18 of 107** multi-head junctions have a cleanly opposable approach pair; **57 of 137 are partially populated** because the registration refuses 86 posts. A phase plan would invent the junction grouping, the phase grouping, the stage order, the timings and the clearance — atop an ungraded facing (`Q62`) and an undefined vocabulary (`Q76`) — and be wrong at four junctions in five, where lighting makes the error **visible**. `B3` is the honest route: `P3-3`'s traffic needs a phase plan, and the lights then render something real. Findings kept: `Q76` (the gate, the assembly), `Q77` (the drop) |
-| `P3-18` | ✅ **Yellow box junctions from `DTAD_YL_BOX_POLY`** — done 2026-08-22 — TD's 20 published box polygons drawn as a lifted border-and-cross-hatch mesh, `boxjunctions.glb`. Purely visual: a blocking penalty would contradict "the player may break every traffic rule", and nothing can queue in a box until `P3-3`'s traffic exists. `RM1038` companion lines, road text and `KEEP CLEAR` deliberately out of scope | The extent is **read, never derived** — 20 published boxes against 393 junction nodes is the measured argument; the polygon draws at its surveyed position and the underfill against the 1.6x-widened cap is accepted rather than scaled away (`Q54`); dimensions transcribed from index plan CT174/51-5(1)F (`Q59`'s rule); the hatch derivation for the 16 boxes with no published `ANGLE1` is graded mod 90 against the 4 that have one, on every run; the stage publishes counters that can see it fail — `inverted` 0, `nearest_node_m` as the registration finding; one primitive, one draw call, **no collider**; `city.json` bumped and the manifest key optional, both sides one commit |
-| `P3-19` | ✅ **Pedestrian railings from `DTAD_RAILING_LINE`** — done 2026-08-22 — TD's published railings joined to the graph as `(edge, side, V-range)` and drawn as a panel standing on the kerb the ribbon actually has, `railings.glb`. Purely visual and **no collider**: `GAME_DESIGN.md` puts railings under "omit or make breakable", and a solid one turns a narrow street into a corridor. Balusters and breakaway deliberately out of scope. ✅ **Amended 2026-08-23 (`Q61`)**: the balusters are in — the fence carries `TEXCOORD_0` and the shader integrates their coverage — and the bollards and vehicle barriers are in as **their own classes**, which is the form of claim the code strings support. Breakaway and collision stay out, in `B3` | The vocabulary problem is **stated, not papered over** — `LINETYPE` has no published domain and no index-plan sheet defines a railing, so `classes` is a whitelist read off the code strings and every refused code's metres are published; the position is **registered rather than read**, which is the one place in the bundle an extent is moved, and it is argued on the measurement that **67.9%** of published railing metres fall inside the drawn ribbon, bounded by `max_shift_m` and priced by a published `shift_m` recorded over its own refusals; a fence is never drawn on a kerb `surface.py` does not draw (**11.1%** of the region), which needed `roadsurface.json` to publish `kerb_hidden_m`; the side convention is asserted against `surface.mitres` itself; one primitive and one draw call **per class** (three since `Q61`), no collider; `city.json` bumped and the manifest key optional, both sides one commit |
-| `P3-23` | ✅ **Stop and give-way lines from `DTAD_RD_MARK_LINE`** — done 2026-08-24 — `RM1011` STOP LINE, `RM1012` STOP LINES and `RM1013` GIVE WAY LINES drawn as their own lifted mesh, `roadmarks.glb`: **211 parts → 191 drawn** (114 stop lines, 75 give-way, 2 double stop), 4,512 triangles, one primitive, **one draw call, no collider, no texture, no `COLOR_0`**. The markings under the 74 GIVE WAY plates `P3-20` put 讓 on, which had no line beneath them. Hatched islands (`RM1037` ×414), parking bays (×169) and bus-stop boxes (`RM1047` ×82) are deliberately out of scope — none tells the player where to drive (`Q65`) | 🔴 **The one place this stage departs from every other consumer of this geodatabase: the host is picked by *transversality*, not proximity.** A stop line sits at a junction **mouth**, drawn across the minor road while lying p50 **1.10 m** off the major road's kerb, so nearest-edge hands it the wrong host — measured at **53 of 120** `RM1011` and **36 of 83** `RM1013`, 44% and 43%, and the shipped run reads `host_disagreement` **90 of 209**. The extent is published so the paint does not move; the **height** does, across the same 0.43 m junction seam `boxjunctions` measured. ⚠️ **`axis_residual_deg` cannot grade this** — it grades a rule that optimises what it reports, `Q58`'s `drawn_gauge_m` trap a third time — so `host_disagreement` is what ships beside it, and the residual is recorded over refusals as well as keeps (`n` **209** against `drawn` **191**). Every dimension transcribed from TD's `CT174/51-5(1)F`, which ⚠️ **is a scan** — `pdffonts` returns nothing — so `Q59`'s by-eye rule bites and `Q67`'s rasterise-and-diff does **not** transfer. Two scoping errors corrected off the sheet: `RM1013` is a double **broken** line and not triangles, and `RM1012` ×8 was missing from the scope. ⚠️ **`LINES SPACING` is the clear gap, not a pitch**, which `RM1001`'s own 150/100 row proves. The double line is drawn symmetric about the published polyline — an unresolved convention, recorded as one, costing 0.2 m on a 0.6 m band. **18 refused** as transverse to nothing, counted and never rotated onto a road (`Q54`). `underfill_m` reads the **drawn** half-width out of `roadsurface.json`, not the graph's authored `width_m` — shipping the latter was an 18x error the review caught (p50 0.22 m against 4.04), and it makes this stage depend on `surface` as well as `roads`. `city.json` 15 → 16, key optional, both sides one commit. **PCK 42,596,928 → 42,868,332 B (+271,404, +0.64%)**, two exports one variable apart. `inverted` **0**. `Q69` |
-| `P3-26` | ✅ **Lamp posts from iB1000 `UtilityPoint`** — done 2026-08-27 — LandsD's published `LPO` points drawn as a 9 m column, a sloping bracket arm and a lantern box, `lamps.glb`: **1,263 published → 897 drawn**, 35,880 triangles, one primitive, **one draw call, no collider, no texture**. Hydrants (`FWH`/`SWH`), lamp-post numbers (`UtilityNumber`) and any lit lantern deliberately out of scope | ✅ **The vocabulary is READ, not guessed**: `LPO - Lamp post` is a coded-value domain **inside the geodatabase**, which is better evidence than any other street-furniture layer here has — `Q60`'s `LINETYPE` and `Q76`'s `REFNAME` have no domain at all and `Q59`'s glyph table is transcribed by eye — and `refused_by_kind` publishes the rest of it. 🔴 **No column stands in the drawn carriageway, and that takes two refusals**: the host kerb is cleared by `_register`, and the placed point is then re-snapped against *every* edge and refused where ribbons overlap; `min_kerb_clearance_m` **+0.0313 m** proves it and is not a tautology. `max_shift_m` is priced by a published sweep rather than chosen. 🔴 **The arm direction is derived and ungraded (`Q62`) and the obvious counter for it is refused as a tautology (`Q72`)** — `lantern_overhang_m` and `lanterns_past_centreline` ship instead, and the evidence is an A/B render at one camera. ✅ The colour answers to `Q33` through `materials:`, because `signs.colours`' exemption rests on two grounds that both fail here. ⚠️ **Every dimension is authored** and stated as such (`Q60`'s debt), and **no elevation is published**, so `nearest_is_elevated` reports the refusal the stage cannot make. ⚠️ It buys night mode **nothing** and says so — `Q38` and `Q26` were the blockers, and ✅ **`P5-28c` closed `Q38` on 2026-09-08**, leaving `Q26`. `city.json` 18 → 19, key optional, both sides one commit. `Q82` |
+| ID | State |
+|---|---|
+| `P3-11` | ✅ Player taxi, generated by `tools/make_vehicle.py`; see below |
+| `P3-10` | 🟡 Ground surface — terrain merged into the tile primitive, no texture, one draw call per tile, no z-fight with the carriageway. Awaiting review. Second half (land-cover classes from the aerial JPEG, adds Pillow) only if flat ground reads dead (`Q18`) |
+| `P3-7` | 🟡 Window-band shader and its `TEXCOORD_0` payload (height-above-own-base, per-building seed). No windows on roofs or podium faces. Awaiting review |
+| `P3-6` | 🟡 Hero buildings (5) via `landmarks.json`, authored or `source_paint`; source geometry excluded, no z-fighting. HKCEC passed review; Central Plaza shipped, unjudged; three not built |
+| `P3-7a` | 🚫 Withdrawn at `Q102`; `Q44` and `Q45` ship; see below |
+| `P3-12` | 🟡 Road markings, procedural over the ribbon's lane coordinate via `TEXCOORD_1`; no texture, no triangle moved. Awaiting review. `draw_lane_lines` / `draw_centre_line` are off since `Q132`, `Q125` |
+| `P3-13` | ✅ Kerbside no-stopping from `NSR`; see below |
+| `P3-14` | ✅ Tramway as published geometry — `tram.glb` from `CartoTransLine TW`, plus TD's 19 tram stops as `poi`. Lane space refused on a measurement (18.8% of cross-sections on the ribbon). No collider |
+| `P3-15` | ✅ Turn arrows from `DTAD_RD_MARK_SYM_PT` — `arrows.glb`; glyph table transcribed from TD's index plan; the 61 `RM1116`–`RM1119` warning arrows are refused. No collider |
+| `P3-16` | ✅ Traffic signs — `signs.glb`, plates on TD's surveyed poles. Position comes from the pole via `GG_NAME` (`DTAD_TS_ABV_PT` is a label layer, 0 of 3,276 on a pole); facing is derived and ungraded (`Q62`); whitelist from TD's `TS` sheets, `signCatalogue.json` cross-check only (`Q59`, `Q64`). `signs.json` `by_code` is the live count. `Q60`, `Q67` |
+| `P3-20` | ✅ Sign text — `TS102` GIVE WAY / 讓 and `TS101` STOP / 停 baked from TD's cells into an atlas embedded in `signs.glb` as a second primitive; opaque RGB, polarity derived from the layer colours; ceiling `GeneratedSigns.TEXT_ATLAS_BUDGET_PX`. `Q63`, `Q65`, `Q68` |
+| `P3-21` | ❌ Road lettering from `DTAD_RD_MARK_ANNO` — no-go under `Q65`: no direction value, needs an authored typeface. Data findings kept: 274 rotated-rectangle `MultiPolygon`s, 67 distinct strings (word fragments), sizes on `CT174/51-5(1)F` |
+| `P3-22` | ✅ Shape-only direction signs `TS414`, `TS735`, `TS615`, `TS589`, no texture; `Q67` then refused orphaned supplementary plates. ⚠️ Chevron direction is a stated assumption (away from the host kerb), `Q62`-class. Bend/narrows warnings `TS401`–`TS418` refused (`Q65`) |
+| `P3-17` | 🚫 Signal heads from `DTAD_TRAFFIC_LIGHT_PT` — built, then dropped from the bundle (`Q77`): a dark head asserts "out of service", and a phase plan cannot be made honest (18 of 107 multi-head junctions have an opposable pair). Code and tests remain; re-declaring the `signals:` block restores it. Returns with `P3-3`'s traffic in `B3`. `Q76` |
+| `P3-18` | ✅ Yellow box junctions from `DTAD_YL_BOX_POLY` — `boxjunctions.glb`, extent read never derived (`Q54`), visual only, no collider |
+| `P3-19` | ✅ Railings from `DTAD_RAILING_LINE` — `railings.glb`, registered onto the drawn kerb within `max_shift_m`; balusters, bollards and barriers as their own classes (`Q61`); never on a kerb `surface.py` hides (`kerb_hidden_m`). No collider; breakaway is `B3`. `Q60` |
+| `P3-23` | ✅ Stop and give-way lines (`RM1011`–`RM1013`) — `roadmarks.glb`. ⚠️ Host is picked by transversality, not proximity (nearest-edge is wrong on 44%); `host_disagreement` is the counter, `axis_residual_deg` cannot grade it. `underfill_m` reads the drawn half-width from `roadsurface.json`. `Q69` |
+| `P3-26` | ✅ Lamp posts from iB1000 `UtilityPoint` `LPO` — `lamps.glb`; no column in the drawn carriageway (`min_kerb_clearance_m`); arm direction derived and ungraded (`Q62`, `Q72`); dimensions authored; lantern not lit (`Q26`). `Q82` |
 
-- **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
-  substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
-- **Within the build:** `P3-11` first, because it appears in every screenshot of every later review —
-  a shot taken before it is a shot that has to be retaken. Then `P3-10`, because the remaining two
-  are judged against a city that has a floor. Then `P3-7`, then `P3-6`; `P3-7a` follows `P3-7` and
-  the region survey, and may run beside `P3-6`.
-- ⚠️ **`P3-12` was added after the build closed and after `P3-9a`'s artefact was cut** (2026-08-19).
-  It belongs to `B2` by subject — it is the road half of "does this read as Hong Kong" — and it
-  depends on nothing in the build, because `P1-4` shipped the lane coordinate it draws on. **Whether
-  it goes in front of the drivers is a separate call**: landing it means re-exporting and
-  re-verifying a 76.19 MiB web build — **and re-packing the itch zip by hand, which nothing does for
-  you**. See `Q53`, and `P3-9a` for how that zip went two cuts stale.
-- ⚠️ **`P3-16` and `P3-17` were added after `P3-9a`'s artefact was cut, and are deliberately not
-  gated on it — the user's call (2026-08-22)**, with the conservative sequencing (hold new `B2`
-  content until the driver verdict) put to the user and declined. They belong to `B2` by subject and depend on nothing in the build: both layers sit in the
-  geodatabase `P3-15` already reads, so there is no new fetch. Landing them re-exports nothing by
-  itself; whether a re-cut carries them in front of the drivers is the same separate call `P3-12`
-  records above. Scope refusals, sizing and the sign catalogue's bounded role are in `DECISIONS.md`
-  `P3-16`.
-- **Review:** drive Hennessy Road and look around; the same viewpoints before and after | web build |
-  **Does this read as Wan Chai?** No longer a dress rehearsal — `P3-9a` follows immediately and puts
-  the same build in front of people who are not the user.
-- **`P3-10` runs in two halves and may stop after the first.** Flat-coloured decimated terrain ships
-  first, because it produces the screenshot that answers `Q18` — *does flat ground read as ground?*
-  Only if it reads dead does the second half follow: sample the source aerial JPEG per triangle,
-  classify to a land-cover palette, and put the class in `mesh.collapse`'s cluster key so boundaries
-  stay crisp. That half adds **Pillow** and is not written until the first has been looked at.
-- ⚠️ **`P3-7` is one commit across two sides.** The shader cannot derive height-above-own-base or a
-  per-building seed from a vertex, so the ETL must ship them. Hard rule 5.
+- **Deps:** `P1-2`, `P1-7`. Nothing in `B2` reads a fare.
+- **Review:** drive Hennessy Road and look around, same viewpoints before and after | web build |
+  **Does this read as Wan Chai?**
+- ⚠️ `P3-7` is one commit across two sides (hard rule 5).
+- ⚠️ Content added after `P3-9a`'s artefact was cut reaches drivers only by re-exporting the web
+  build and re-packing the itch zip by hand (`Q53`).
 
 #### `P3-11` — how the taxi gets built
 
-- **Deliverable:** `tools/make_vehicle.py` emits `game/assets/authored/vehicles/taxi.glb` from named
-  proportions — wheelbase, track, greenhouse height, arch flare, roof taper, colour list. The `.glb`
-  is **committed**: it is a hand-authored asset under CC BY-SA 4.0, not build output, so it does not
-  go to `assets/generated/` and is not gitignored. See `LICENSING.md`.
-- **Why generated and not modelled:** the Choro-Q look is a proportion problem, not a detail problem.
-  `ART_DESIGN.md` asks for "shortened wheelbase, tall greenhouse, exaggerated wheel arches" — three
-  numbers. Scripting them makes the toy look **tunable in a diff** rather than guessed in a mesh, and
-  the same tool goes on to make the rest of `ART_DESIGN.md`'s roster, which `B3` needs. Hard rule 4
-  in spirit: the proportions are data.
-- ⚠️ **Accept, additionally: the wheels must still land where the arches are.** `P0-5` tuned handling
-  against the hardpoints in `taxi.tscn` — `WheelMount` markers then, `VehicleWheel3D` nodes since
-  `Q50`, at the same positions — and they are authored rather than inferred from the mesh either way.
-  Moving the visual car without moving them is how a tuned vehicle silently stops matching its own
-  tuning, and the drive would still look fine, because the mesh is not what the physics reads.
-- **Review:** the taxi from behind at speed, and parked beside a building for scale | web build |
-  **Does it read as a toy in an accurate city, rather than as a box?**
+✅ `tools/make_vehicle.py` emits `game/assets/authored/vehicles/taxi.glb` from named proportions;
+the `.glb` is committed (authored, CC BY-SA 4.0). The same tool makes the rest of the roster for
+`B3`. ⚠️ The wheels must land where the arches are: the `VehicleWheel3D` hardpoints in `taxi.tscn`
+are authored, not read from the mesh, so moving the visual car without them silently detunes it.
 
 #### `P3-7a` — how the survey becomes the look
 
-- 🚫 **WITHDRAWN at `Q102`, and nothing below resumes.** The vision reader every remaining item
-  consumes was dropped on cost, `TEXCOORD_1` went with it, and `schema_version` is 20. `W1`, `W2`
-  and `W3` had already landed, been graded against pre-fixed bars and been accepted by the user on
-  frames — ✅ **`W1` and `W2` still ship**, because `Q44`'s punched-openings-as-glass and `Q45`'s
-  per-building pane colour run off the hash and never read the survey. **`W3` is gone**: the five
-  `quiet_*` values conditioned on the grammar *refusing*, and with no reader every building refuses,
-  so keeping them would have muted the whole city instead of the small-or-occluded stock they were
-  written for.
-- ⚠️ **Kept rather than deleted, because the argument is the value.** `W4`'s override-table
-  reasoning, `Q42`'s reliability ordering and `R4`'s pre-fixed-bar failure are the record of what
-  was priced and why — read the rest of this section as **history**, not as a plan that resumes.
-  Re-proposing any of it means re-proposing the reader first, which is a cost decision and a
-  dependency decision (`etl/pyproject.toml` no longer declares an API client), not an art one.
-- **Deliverable:** the reliable half of `Q42`'s riders consumed end-to-end (merge vote →
-  `TEXCOORD_1.y` → shader), plus the two corrections the user called from `A″`'s frames: punched
-  openings behave as glass (`Q44`) and pane colour varies per building (`Q45`). Everything lands
-  dark behind `survey_apply = 0.0`, and the parked look stays byte-identical at every step — `Q43`'s
-  reducibility check, and how each commit proves it changed nothing it did not mean to. ⚠️ **A
-  resumed rider cannot use that check** — see `DECISIONS.md` `P3-7a`.
-- **Order — the look fixes run before the riders, because two of `A″`'s defects are already
-  judged.** `Q26`'s verdict is a human preference over `A″`, and grading drivers on a look the user
-  has already called wrong wastes the drivers. `W1`/`W2` are shader + tuning only — no ETL, no
-  schema. The 2026-08-09 drive test added `W3`/`W4` ahead of the riders for the same reason:
-  grading drivers on stock that is confidently wrong wastes the drivers. The riders then enrich the
-  corrected candidate in reliability order (`Q42`'s fill rates):
-  1. `W1` — punched openings as glass (`Q44`): re-scope what an unglazed opening is made of,
-     re-shoot, hold the `Q30` chroma bar recorded there. ✅ Landed and accepted 2026-08-09.
-  2. `W2` — per-building pane colour (`Q45`): seeded `L*`/`b*` jitter on the hashed fallback and/or
-     a pull toward the building's own measured hue. Never on the surveyed tint. ✅ Landed and
-     accepted 2026-08-09.
-  3. `W3` — **quiet tier for survey-refused buildings.** From the 2026-08-09 drive test of the
-     shipped default: shopfronts and confident fenestration on windowless stock — HKCEC's service
-     base and tunnel piers, plant boxes, a footbridge lift tower, sportsground walls. The fix:
-     `has_shop` runs its draw only where the grammar committed (positive evidence); refused
-     buildings fall to punched-with-heavy-piers (never a hash-drawn curtain or fin, which describe a
-     confidently glazed skin), a higher solid probability, and muted panes. Committed buildings are
-     untouched — the accepted `A‴` look stays as graded. **Why refusal is the lever:** grammar
-     committed on 65% of the 2,213 surveyed buildings, but only 12% under 4 m and 25% under 7 m
-     against 78% over 40 m — the survey's occlusion bias makes refusal itself the small/occluded-
-     structure signal — and `blank` committed **10 times region-wide**, so the one verdict that
-     denies openings (`Q43`) is inert at scale. ⚠️ **Not a height gate.** `Q34` stands (height plus
-     footprint explain 1.4% of façade signal); eligibility conditions on the survey's own refusal
-     state, never on geometry. Consumer-side tunables only, zero schema change; graded like
-     `W1`/`W2` (re-shoot, `Q30` bar on all three cameras, parked look byte-identical); its own
-     record in `DECISIONS.md`, since it deliberately rebalances the "refusal falls to the hash"
-     contract `Q40`/`Q41` wrote down. That record also carries one forward-looking sentence now:
-     refusal conservatism extends to `lit_window_share` when the night variant lands. ✅ Landed
-     2026-08-10 as five `quiet_*` tunables (`Q46`): `Q30` bar held (+1.10/+0.74/−0.04), parked
-     byte-identity held with the quiet values authored; **accepted in scope the same day** on a
-     `survey_debug`-tinted drive test — refused stock reads quiet, and the residual sightings
-     moved to committed stock (`Q47`).
-  4. `W4` — **authored override table, exceptions only.** A committed per-city data file keyed by
-     the stable building-ID stem (`DATA_SOURCES.md`'s cross-dataset key), precedence
-     **authored > survey > hash**, merged at the same site as the survey overrides. After `W3` this
-     is heroes and stragglers, not a population — the canonical entry *was* HKCEC's base: a
-     committed-glazed building that is right about its towers and wrong about its podium — and
-     `Q47`'s call shrinks this entry: its podium is its own iB1000 `P` block (3.7→56.0 mPD), so
-     the extent comes from data and any remaining override covers treatment only. ⚠️ **`P3-6`
-     (2026-08-12) then removed HKCEC from the tiles entirely — the canonical entry is moot; do
-     not author an HKCEC row.** Only the stragglers remain. ⚠️ Never a
-     route around the survey at scale: 771 grammar-refused buildings is the population that
-     disqualified overrides as the systematic fix. `Q47` re-proved that from the committed side —
-     the tinted drive test put the
-     residual wrong windows overwhelmingly on committed ground bands, a population `W4` must not
-     absorb; the systematic routes are `R4`'s podium bits or a ground-band survey.
-  5. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
-     committed value replaces the grammar-implied reading direction, a refusal keeps it. ⚠️ No hand
-     labels exist for it — author emphasis labels for the 25 readable validation faces from the
-     cached unwraps, and fix the bar **before** the grading runs (`Q41`'s shape).
-  6. `R2` — reconciled storey pitch (bits 0–6). Per-building median over readable faces, the
-     2.5–4.5 m sanity window, refusal outside — `Q42`'s own prescription; the field is *visible
-     floors on this face*, never a raw read. A committed pitch replaces `floor_height_m` for that
-     building; the city constant stays the fallback.
-  7. `R3` — `balconies` (bits 12–13), selecting a punched variant.
-  8. `R4` — podium (bits 7–11), **last, after `R2`, and data-only**: `Q43` named `podium_floors`
-     ("lowest floors forming a visibly distinct podium") against `podium_height_m` ("where the
-     tower grid starts") as the next semantic-drift casualty, and the graded run proved it —
-     floors × reconciled pitch, graded against the joined boundaries in `podiums.json`
-     (310 stems with data metres) on 2026-08-11 by `tools/podium_error.py` — deleted at
-     `Q102`, because its truth side was the reader — **failed its pre-fixed bar**
-     (\|err\| p50 10.76 m against 2.8; Spearman ρ = 0.076, no per-building signal). The
-     re-call (`Q47`, same day): pack **data boundaries only**, converting against
-     the packed pitch at pack time — after `R2`, so the round-trip bound holds; survey floors
-     never pack metres; the complement keeps the shader uniform, and the ground-band batch's
-     prompt owes the correctly-worded boundary predicate. `podium_glazed` still informs
-     `has_shop`, the only data-supported route to a shopfront sitting roughly where one is —
-     priced by Pool B's 40% blindness, bar owed at its turn.
-- ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
-  grammar and glazing only; `Q42`'s fill rates are prioritisation evidence, not validation. Each
-  rider closes its slice of `Q42` in `DECISIONS.md` as it lands. ⚠️ **The storey-pitch rider reads
-  `Q48` before its bar is fixed** — four instruments already measure pitch and the shipped constant
-  (`floor_height_m` 2.8, from `P3-7`'s 2.77) is ~16% below the other three (3.38 / 3.32 / 3.28),
-  unreconciled.
-- ⚠️ **"Three places per rider, one commit" no longer holds, and the fourth place is the point.**
-  It used to be the merge/pack (`tools/facade_grammar.py`, `etl/pipeline/buildings.py`), the shader
-  decode and `game/tools/verify_tiles.gd`, with **no** `schema_version` bump — filling a reserved
-  field a refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
-  Since `Q102` there is no reserved field: the attribute is absent, `verify_tiles.gd` asserts that
-  absence, and re-adding one is a schema bump plus a new argument for the channel.
-- 🔴 **New reader fields: not paid for, and the bar to pay is now higher than "after `P3-9a`".**
-  `Q26` closed on `C`, so a ground-band field bought today has no consumer in the shipped build and
-  is a bet on `P3-9a` reopening the look. It is also the **only irreversible item** in the
-  remainder — a shader or tuning rider is `git revert`, a paid batch is not — and the one whose wait
-  is free by design, since the cache makes waiting cost nothing. So it goes **last among the stopped
-  items and first among the resumed ones**, because it targets the player's eye level, the survey's
-  worst-covered band and the most likely thing a driver panel faults. The prompt hash is the
-  reader's identity; a new field means a
-  new graded run plus a paid full re-survey, so everything wanted ships in **one** prompt revision.
-  The batch is a **ground-band pass** — crop the bottom ~0–8 m of the existing unwrap, its own
-  schema and prompt hash, so the validated façade reader is untouched — collecting the storefront
-  fields the drive test showed the survey under-invests (the player's eye level is the survey's
-  worst-covered band, so expect heavy refusal; `W3` is the backstop): ground-floor character
-  (shop / lobby / carpark / utility / blank, 3 bits), shopfront extent (2 bits), signage density
-  (2 bits — placement only, **never rendered text**, `Q42`), exactly filling `TEXCOORD_1.y` bits
-  17–23. Opening proportion (the measured answer `glass_ratio`/`mullion_ratio` never got) rides
-  `TEXCOORD_1.x`'s free bits. ⚠️ **The `x` bit budget is contested and gets settled on paper before
-  anything writes to it**: opening proportion and the two-tone wall colour below are competing for
-  11 free bits, and allocating them piecemeal is how the layout ends up needing the bump it was
-  designed to avoid. Each field owes `Q43`'s written sentence-conversion check and its own
-  validation, bar fixed first — unchanged.
-- **Two-tone walls — option promoted to task, gated behind `W3`.** `facade_glazing`'s *light* mode
-  is a measured wall/spandrel colour beside the glass tint (`Q42` recorded the option; the
-  art-direction condition has now landed). Reuses the glass-tint codec shape in `x`'s free bits.
-  ⚠️ The measurement is `L*`/`b*` only — no `a*` is stored — so the third channel is borrowed or
-  authored, and the record must say so rather than cite the colour as fully measured. ⚠️ It
-  restyles the *committed* stock `W3` promises not to touch, so it runs after `W3`'s re-shoot with
-  its own grading (`Q30` bar), never in the same shot set.
-- **Two scouts, cheap and offline, before anything is planned around them:**
-  - **Street-facing bit (HOLD until measured).** Shopfronts currently wrap all faces of an eligible
-    building — alleys and party walls included — and the road graph could gate them per face. But
-    it is geometry→façade inference (`Q34`'s discipline applies even though the claim is adjacency,
-    not height), and `mesh.py` records that **a per-face payload does not survive vertex
-    clustering's representative pick** — the recorded reason survey verdicts are per-building. The
-    scout, against data already on disk: what fraction of shopfront-eligible wall area is
-    non-street-facing (is the win worth plumbing?); how many pedestrianised shopping streets are
-    missing from Road Network v2's carriageways (false quiet on real shopfronts); what extending
-    the cluster key by the flag costs in LOD1 vertices. No plumbing until those three numbers are
-    in a record. ✅ The blocker itself is now measured (2026-08-10): a payload keyed by the
-    survey's own quadrant rule ends with mixed-payload triangle corners on 0.88% / 0.62% of
-    LOD0 / LOD1 triangles across 22.9% of buildings — dominated by `face_of` vs `_facing` bucket
-    drift — and packed bits interpolate to garbage, so the hold stands. A `flat` varying would
-    trade the garbage for whole-triangle flips, not fix it. The three win-sizing numbers above
-    remain unmeasured.
-  - **iB1000 structure classes.** 3D-BIT Level 1 footprints are extruded *from the B1000
-    topographic map*; if the published iB1000 layers carry structure categories (shelter / tank /
-    plant), a footprint join gives "utility structure" as data — per-city via config, no vision
-    reader. The scalable long-term answer to `W3`'s whole class. Owes `DATA_SOURCES.md`-grade
-    verification (format, licence, scriptability) before it is a plan item. ✅ Scouted 2026-08-10:
-    the layers carry the categories and more — `Building` `P` podium blocks with base/roof levels
-    (`Q47`'s third route), `BuiltStructurePolygon` / `UtilityPolygon` shelter / tank / plant
-    classes; FGDB via CSDI dataset `landsd_rcd_1637223748322_25497`. ✅ **Verified to
-    `DATA_SOURCES.md` grade 2026-08-10** — dataset entry in `DATA_SOURCES.md` ("iB1000 Digital
-    Topographic Map"), numbers and method in `Q47`'s record. ✅ **The route call (2026-08-10)
-    makes it the primary podium route**: ingest the `P`-block levels (`gdb.py` polygon-Z decoding
-    — a pipeline task), boundary precedence data > survey-inferred, `R4` covering the blocks'
-    complement. The `BuiltStructurePolygon` / `UtilityPolygon` classes ride the same ingestion.
-    ✅ **Ingested 2026-08-10 (`P3-7a`)**: decoder, `topography` fetch, `podiums:` config and the
-    `podium_blocks` reader landed; `Q47`'s counts reproduced in-pipeline. ✅ **Joined 2026-08-11
-    (`P3-7a`)**: the `podiums` stage stitches the clipped pieces and writes per-stem boundary
-    metres with mechanism-won provenance to `podiums.json` (`Q47`'s record has the measured
-    counts). The utility classes now cost only a config block when `W3`'s successor wants them.
-- **Accept / Review / Deps:** 🚫 all three are moot at `Q102` and are kept for the record. The
-  acceptance rested on frames re-shot at `survey_apply = 1.0`, which no file now sets; the
-  dependency line read "the region survey ✅ (`Q41`)", which is the thing that was withdrawn.
+🚫 Withdrawn at `Q102` with the vision reader it consumed; `TEXCOORD_1` on buildings went with it
+and `verify_tiles.gd` asserts its absence. `W1` (punched openings as glass, `Q44`) and `W2`
+(per-building pane colour, `Q45`) ship, because they run off the hash. `W3`'s `quiet_*` values are
+gone: they conditioned on refusal, and with no reader every building refuses. The riders
+(`R1`–`R4`, `W4`, ground-band pass, two-tone walls) were never delivered; re-proposing any means
+re-proposing the reader first — a cost and dependency decision.
+
+Findings that outlive it:
+- `R4` failed its pre-fixed bar: surveyed podium floors × pitch against `podiums.json`, |err| p50
+  10.76 m against 2.8. Podium boundaries come from iB1000 `P` blocks only (`Q47`).
+- A per-face payload does not survive vertex clustering: mixed-payload corners on 0.88% / 0.62% of
+  LOD0 / LOD1 triangles across 22.9% of buildings, so façade data stays per-building.
+- Geometry does not predict façade (`Q34`); eligibility never conditions on height.
+- iB1000 `BuiltStructurePolygon` / `UtilityPolygon` classes are ingested-ready and cost one config
+  block. Storey pitch instruments disagree (2.8 shipped against ~3.3), unreconciled (`Q48`).
 
 #### `P3-13` — how the kerbside restriction gets sourced
 
-- **Why it exists:** `P3-12` paints a double yellow on every kerb in the region and `Q53` recorded it
-  as unsourceable. It is not — `NSR` is in the same geodatabase the road graph is built from. **This
-  is the task that closes `Q54`.**
-- ⚠️ **The scale of the error is worse than `Q54` records, and the reason is a field it never read.**
-  The data specification publishes `VEHICLE_TYPE`, and only **1 — all motor vehicles** is a yellow
-  line: a goods-vehicle or PLB restriction is a sign. That is **33,074 m** of the layer's 44,220 m in
-  region, against **131,283 m** of kerb painted today — **4.0x**, not the 3x recorded, and **297%**
-  gross over-paint. `TIME_ZONE` is published too, and it is the double-versus-single distinction
-  outright: `1` is 24 hours (**27,118 m**, double), `2`/`3`/`4`/`5` are posted hours (**5,956 m**,
-  single). `EFFECTIVE_DAY` is uniformly `1` across every `VT=1` feature in region, so it carries
-  nothing here and gets no field.
-- ✅ **The payload question is settled by measurement, and the answer is the expensive one.**
-  Quantising each restriction to a whole `(edge, side)` was the cheap route — four spare codec bits,
-  no geometry moved. Measured against the linear-referenced truth, and excluding the 6 m the junction
-  fade already blanks at each end, the best threshold leaves **33%** gross error: 3,178 m over-painted
-  and 6,227 m missed. That is a large improvement on 297% and it is still a third of the answer wrong,
-  so **exact V-ranges ship** (the user's call, 2026-08-19). The cheap route stays recorded because it
-  is what the next person will propose.
-- **How the extent is carried, without a new attribute.** `surface.py:_rgba` hardcodes `alpha = 255`
-  on every road vertex, so **`COLOR_0.a` is already shipped, unread and unchecked** — it becomes the
-  restriction extent, written **on the left rail for the nearside and the right rail for the
-  offside**. The yellow sits at `U ~ 0.09` lanes, so a fragment on the line is ~95% weighted to its
-  own rail and a 0.5 threshold is robust. The **kind** stays in `TEXCOORD_1.x` as two 2-bit fields
-  (`kerb_near`, `kerb_off`: absent / none / single / double), max code 2,097,151, still far inside
-  float32's 24 exact bits. **The codec says what kind of line; alpha says where it applies.**
-- **What that costs, measured before building it:** 83% of covered `(edge, side)` pairs carry exactly
-  one contiguous run, median 23 m, and the region has **1,636 run boundaries**. A station pair 0.25 m
-  either side of each boundary is **3,272 inserted stations** against 4,596 today — roughly **+19% on
-  the road mesh's vertices**, and a larger collision shape with it. Priced from a PCK, never summed.
-- ⚠️ **The scope refusal below was reversed by `Q56` on 2026-08-20, and is kept for the reasoning
-  rather than the conclusion.** A second dataset — TD's Traffic Aids Drawings v2 — shows a painted
-  line on 93.9% of those code-5 metres, so `painted_vehicle_types` is `[1, 5]`. `VT=2/3/4` stay
-  refused, but *not* because they are signs: the drawings paint those too, and the refusal now rests
-  on the codec being unable to say which class is restricted. Record in `DECISIONS.md` `Q56`.
-- **Scope refusal, recorded rather than silent:** `VEHICLE_TYPE = 5` "Others" is **8,323 m** of kerb,
-  mostly peak-hours and geometrically distinct from the `VT=1` lines (only 5% of its samples fall
-  within 3 m of one). The class it restricts is not named in the data, and asserting a restriction on
-  an unnamed class is the same invention this task exists to remove. Refused, with the 8,323 m
-  written down. `VT=2/3/4` (2,822 m) are refused for the plainer reason that they are signs.
-- ⚠️ **The side convention is the trap, and it renders plausibly when wrong.** `surface.py:mitres`
-  offsets **left of travel** and `U = 0` is the nearside, because Hong Kong drives on the left; a
-  `cross > 0` test in the source CRS is left-of-travel too, so they agree. Getting it backwards
-  mirrors every yellow line in the city and looks like a road. Asserted on a fixture with a known
-  side, never reasoned about in a comment.
-- ⚠️ **`albedo_linear` is a `flat` varying resting on "no triangle spans two colours".** The alpha
-  must be a **separate, non-flat** varying. The hoist survives because it reads `COLOR.rgb` — that
-  argument goes in the shader, where the next person changes it.
-- ⚠️ **Two owed checks are the non-obvious ones.** Inserting stations moves the ribbon's vertex set,
-  which moves the population `clearance.py` reports at — so this owes `tools/narrowing.py` and
-  `tools/clearance_reconcile.py --sweep`, exactly the trigger `CLAUDE.md` warns is not obvious. Plus
-  `deck_error.py`, `overhang.py`, `ground_clearance.py` and `carriageway_occupancy.py` (which fails
-  today; read the exit code against its recorded baseline).
-- **Deliverables:** `etl/pipeline/kerbside.py` (new, `clearance.py`'s shape); a
-  `roads.kerbside_restrictions:` block in the city yaml carrying both code vocabularies as data
-  (hard rule 3 — the codes are the publisher's vocabulary); `roadgraph.json` **schema 3 -> 4**;
-  `tools/kerbside_error.py` to grade painted-against-restricted metres and the fare-node table;
-  `etl/tests/test_kerbside.py`; the `surface.py`/shader/`verify_road_surface.gd` half; `Q54` closed.
-- ⚠️ **`Q54`'s harm argument needs correcting, not inheriting.** Tested against `fares.json`, roughly
-  **7 of the 14 taxi stands sit inside a genuine all-motor-vehicle 24-hour restriction** — the source
-  says the line really does run past them. The measure double-counts overlapping `NSR` parts (one
-  stand read 110%), so the build dedupes runs and re-measures; but "the game paints no-stopping over
-  its own 14 taxi stands" is looking like an overstatement, and the record should say so.
-- ✅ **Built 2026-08-19, and every superseded number is here rather than edited into the paragraphs
-  above.** **1,474 run boundaries**, not 1,636 — the estimate was taken on unclipped source parts
-  rather than on the graph's own edges — and after filtering to the drawn ribbon only **1,179
-  stations** were inserted. **26,065 m published over 650 edge sides**, not the 33,074 m of source,
-  because 1,736 m of it is overlapping features and the rest leaves the region. Gross over-paint was
-  **240%**, not 297%, measured off the shipped mesh rather than off a kerb total, and is now **4%**.
-  The vertex cost is **+26.4%**, not +19% — a station lands on the carriageway strip *and* on every
-  kerb strip beside it — which is **+477 KiB of PCK, +1.20%**. **9 of 14 taxi stands**, not ~7:
-  `Q54`'s claim was an *under*statement once the overlaps were deduped. And one obstacle the plan did
-  not see: **2,909 m of restriction lands on a kerb the 1.6x widening paved over**, where
-  `MARKING_OFFSIDE_KERB` correctly says there is none, so no shader change reaches it and the
-  reachable total is **16,726 m**. Full record in `DECISIONS.md` `Q54`.
-- **Review:** a kerb known to be unrestricted and one known to be double, before and after |
-  **Does the city stop asserting a restriction it cannot support?**
-- **Deps:** `P3-12` (the codec and the shader it extends). Independent of everything else in `B2`.
+✅ `etl/pipeline/kerbside.py` joins `NSR` to the graph as `(edge, side, V-range, kind)`; graded by
+`tools/kerbside_error.py` — gross over-paint 240% → 4%. Closed `Q54`.
+
+- Extent rides `COLOR_0.a` (left rail nearside, right rail offside); kind rides `TEXCOORD_1.x` as
+  `kerb_near` / `kerb_off`. The codec says what kind of line; alpha says where it applies.
+- Refused: whole-`(edge, side)` quantisation — 33% gross error at the best threshold.
+- `painted_vehicle_types` is `[1, 5]` (`Q56`); `VT=2/3/4` refused because the codec cannot name the
+  class. `TIME_ZONE` 1 is double, 2–5 single.
+- ⚠️ Side convention: `surface.mitres` offsets left of travel and `U = 0` is the nearside; asserted
+  on a fixture, never reasoned in a comment. Backwards mirrors every line and looks like a road.
+- ⚠️ `albedo_linear` is a `flat` varying; the alpha must be a separate non-flat varying.
+- ⚠️ Inserting stations moves the ribbon's vertex set, so it owes the `clearance` battery.
+- 2,909 m of restriction lands on a kerb the widening hid and cannot be drawn. 9 of 14 taxi stands
+  sit inside a genuine restriction.
 
 ### `P3-9a` Recognition round 0 — the city, before the game
 
-- **Deliverable:** the `B2` build put in front of HK drivers who have not seen it, as free roam —
-  no HUD, no objective, nothing to do but drive.
-- **Accept:** ≥3 HK drivers, none of them the user, each asked to get from the Convention Centre to
-  Times Square **unaided** — there is no arrow to disable — and to say aloud what they recognise on
-  the way.
-- **Review:** the drivers themselves | web build link | **Do they know where they are?**
-- ⚠️ **The write-up must name the renderer, because the artefact is not the product** (`Q76`). The web build runs **Compatibility**; every shipping target runs Forward Mobile, and no browser can run it. On a fixed camera the web frame does not dim — it **crushes**: `Q31`'s 10–30 band falls **27.0% → 0.7%** and a third of the frame lands under `L*` 10. Recognition survives that, which is why the round proceeds. **A look verdict does not** — this round may **not** reopen `Q26` or re-price `Q30`/`Q31`, whose every figure was measured on the renderer the drivers will not see.
-- **Deps:** `B2`.
-- **Why a web link and not a handset:** it costs the tester one click and the project nothing, which
-  is the only reason this round can happen early — `P0-3b` stays off the critical path. The trade is
-  real and belongs in the write-up: this is a desk test on a keyboard, and it says nothing about how
-  the car feels under a thumb. `P3-9` remains the handset test.
-- ⚠️ **Two verdict questions, and the second is the one that matters.** Recognition is the stated
-  bet, but *"did they keep driving when there was nothing to do?"* is the risk register's **"novelty
-  does not survive the first session"** asked at the earliest possible moment and in its harshest
-  form — a city with no fares, no traffic and no score. A no there is not a failure of `B2`; it is
-  `B1` and `B3` turning out to be more urgent than the schedule assumed. **Record it either way**,
-  including how long each driver lasted before stopping.
+✅ Run and closed: three HK drivers, free roam over the web link, recognised Wan Chai unaided; the
+city was not drivable far, which named `Q19`'s walls next. ⚠️ The web build runs Compatibility, not
+Forward Mobile, and crushes the dark band (`Q76`) — a web round may not reopen `Q26` or re-price
+`Q30`/`Q31`. It is a keyboard desk test; `P3-9` remains the handset test.
 
-### `Q19` implementation — the carve and the dressed fence — **named next, ahead of `B1`'s remainder**
+### `Q19` implementation — the carve and the dressed fence
 
-Called 2026-08-31 (`DECISIONS.md` `Q19`, last section): candidate 3 on the seven edges the survey
-licenses, candidate 2 on the four it cannot — dressed, never invisible. Round 0 ended on these
-walls, which is why this jumps `B1`'s queue (user, 2026-08-30/31). **The order is load-bearing**:
-the carve changes which edges remain starved, so the fence set is measured after it, not asserted
-before it.
+Candidate 3 (carve) on the edges the survey licenses, candidate 2 (dressed fence) where it cannot.
+The order is load-bearing: the fence set is measured after the carve.
 
-| ID | Deliverable | Accept |
-|---|---|---|
-| `P3-28` ✅ **built 2026-08-31, extended to `e99` 2026-09-01** | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
-| `P3-29` ✅ **built 2026-09-01** | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable` (the bar is data, `clearance.car_width_m`), consumed by the graph and the overlay; and authored barrier props (committed, CC BY-SA) **with colliders** at the mouths of the post-carve fence set | ✅ Fence set computed from the post-carve bundle, never hand-kept: **14** drivable level-0 edges, 15 mouths, 90 units, 0 ends behind another fence. ✅ `is_passable` unmoved at 3.20 m, and the mutation check proves the new predicate is not it — re-pointing `fits_car` at the lane fires both the per-edge disagreement and the merged-bars detector. ✅ Barrier legible before it is hit, A/B at a fixed camera shot twice and `cmp`'d. 🔴 **"Catches `e99`" is AMENDED, not met** — see below |
+| ID | What shipped |
+|---|---|
+| `P3-28` | ✅ The carve — cuts `INFRASTRUCTURE` back to the surveyed span; prism is centreline × surveyed `width_m`, never the drawn floor. The cut face is a constructed retaining wall, because the estate is not watertight (5.38% of edge slots open at source). `e99` is the one exception, carved at its authored 6.40 m. `Q19`, `Q104` |
+| `P3-29` | ✅ The fence — `fits_car` beside `is_passable` (`clearance.car_width_m`), and authored barrier props with colliders at the mouths of the post-carve fence set, computed never hand-kept. `e207` needs no exemption (3.25 m). `Q19` |
 
-- **Deps:** `P3-28` before `P3-29`; neither blocks on `P0-3b`.
-- ✅ **`P3-28` shipped, and it did not ship the cap this row specifies.** The estate is not
-  watertight — 5.38% of edge slots open at source, 14-26% in the tiles — so a cut face cannot be
-  derived from "edges the removal opened"; that was built and returned zero closed loops. The face
-  is a **constructed** retaining wall sized from removed geometry instead. ⚠️ Carving at source
-  rescues nothing and the stage order is unchanged: the sheets are no more watertight than the
-  tiles. `DECISIONS.md` `Q19` carries the measurement and the debit it leaves.
-- ⚠️ The stage reads spans from the **published graph** after `roads` runs (`width_m` where
-  `width_source` is measured) — never from `carriageway_width.json`, which is gitignored generated
-  data (hard rules 2 and 7, the same refusal `Q95` records for the roads stage).
-- ⚠️ The cut keeps left/right halves about the centreline, so it inherits the station-normal trap:
-  `tools/centreline_error.py`'s named-negation discipline and the two-normals test apply (`Q78`).
-- ⚠️ The core geometric risk is that the source is a **surface, not a solid**: an uncapped cut opens
-  a hollow shell whose backfaces cull to nothing — the invisible wall back again, as a hole. The cap
-  faces are the mitigation and they are load-bearing, not cosmetic.
-- ⚠️ The barrier is the physical stop; the predicate only keeps the *game* from sending anyone
-  there. A fence with no collider is the invisible refusal `Q19`'s record forbids, one layer up.
-- ✅ **`e99` was CARVED on 2026-09-01, after two further drives reported it stranding the car.**
-  It is the carve block's one exception: its `width_source` is `authored`, so its prism is cut at
-  an invented 6.40 m, which the block otherwise refuses. Taken because no width bar reaches the
-  defect — the obstruction is **interior**, with drivable road on both sides, and every rule that
-  catches it fences 59-67 edges including YEE WO STREET — while the class is certain (100%
-  `INFRASTRUCTURE`) and the containment measured (116 of 119 hits inside the authored width).
-  The carve **moves** the wall to the carriageway edge rather than deleting it, which is why the
-  corridor barely moves (4.50 → 5.00 m) while the defect goes. `DECISIONS.md` `Q19`.
-- 🔴 **The vertical term this task was given was BUILT, MEASURED and WITHDRAWN (2026-09-01).**
-  It adds 3 edges region-wide — `e411`, `e522`, `e520`, all climbing ramps whose whole
-  cross-section reads stepped because the ribbon disagrees with the deck it rests on by
-  ~0.2 m — which is exactly what `Q23`'s 0.30 m bumper floor exists to suppress. And it does
-  **not** catch `e99`: that edge keeps a **4.50 m** clear channel between two structure lines
-  and passes the car bar honestly, failing only in the **1.75 m** strip beside one of them,
-  which `_longest_clear` cannot see because it takes the widest gap rather than the one the
-  car is in. Reading the kerb-adjacent run instead fences **222** edges. `e99` is a widening
-  defect — 3.84 m of its 10.24 m ribbon is paving with a wall on it — and belongs to `Q24`.
-  ⚠️ The "31 level-0 edges" figure below came from a scratch script and is superseded; the
-  band's measurement is `tools/ground_clearance.py`'s `structure_class` extension, ✅ **shipped
-  2026-09-02** and reading **25 level-0 edges** over its own population. Numbers in
-  `DECISIONS.md` `Q19`. The original reasoning follows.
-- 🔴 **What prompted it, and it still happened — measured from the
-  driving seat, 2026-09-01.** A car stopped on `e99` FLEMING ROAD at a **0.356 m** `INFRASTRUCTURE`
-  ledge, twice `handling.tres`' 0.18 m `suspension_travel_m`: you drive onto it and lose the wheels.
-  `e99` reads **2.93 m** clear and passes every bar the bundle grades it against, because the corridor
-  metric asks *is there a gap wide enough* and this failure is a step, not a gap.
-  🔴 **Three of the four fence edges pass the 1.80 m car bar** — `e99` 2.93, `e207` 1.95, `e781` 1.95,
-  against `e125`'s 0.48 — so a set computed on the corridor is **one edge** and leaves open the one
-  that stranded the car. ⚠️ **Do not answer it with a lower corridor bar**: that fences drivable
-  edges and still misses the ledge. The bar is data, not a constant (hard rule 4).
-- ✅ **The vertical read HAS an instrument since 2026-09-02, and the blind band is measured.**
-  `carriageway_occupancy`/`clearance` read `INFRASTRUCTURE` but their bumper band starts at **0.30 m**
-  (`Q23`, so an abutment the road rests on does not read as an obstruction);
-  `tools/ground_clearance.py` used the right **0.18 m** bar and read `terrain_class` and only that.
-  It now carries `structure_class` as a **second class over the same walk**, never pooled with the
-  first (`Q57`): **330 cells / 323.4 m² / 25 level-0 edges** stand in the 0.18-0.30 m band, flat
-  across a 16x sweep of the refusal window. ⚠️ **The superseded "31 edges" is retired and this is a
-  THIRD population** — the whole drawn ribbon, in the drawn frame, against `Q19`'s corrected
-  14-of-17 edges and 45 stations measured inside the *corridor*. 🔴 **It GRADES and does not gate**,
-  which is the acceptance this was scoped as owing: `--accept-edges-over-travel` already apologises
-  for being a bar tuned to its own first reading (`Q47`), and a second one on a population nobody
-  has decided how to fix would be that mistake made knowingly. `DECISIONS.md` `Q19`.
-- ✅ **`e207`'s exemption is RETIRED (2026-09-01)** and it needed none: `fits_car` decides it like
-  every other edge, and it reads **3.25 m**, so it stays open on a measurement rather than on a
-  judgement. What that discharges, kept because the debt was real: the exemption rested on `e207`
-  clearing the car *laterally*, which is exactly the judgement this task set out to stop trusting
-  alone, and it owed a vertical read before being left open. The vertical read was built and
-  refuted (above), so the lateral one is what there is — but it is now the same rule every other
-  edge answers to rather than a carve-out for this one.
+- ⚠️ The carve reads spans from the published graph (`width_source` measured), never from
+  `carriageway_width.json`. It inherits the station-normal trap (`Q78`).
+- ⚠️ The source is a surface, not a solid: an uncapped cut is a hole. The barrier collider is the
+  physical stop; the predicate only keeps the game from routing there.
+- 🔴 Refused: a vertical term in the `clearance:` block — built and withdrawn. It adds 3 ramp
+  edges (`e411`, `e522`, `e520`) that `Q23`'s 0.30 m bumper floor exists to suppress and misses
+  `e99`; reading the kerb-adjacent run instead fences 222 edges. Do not lower the corridor bar.
+- The 0.18–0.30 m band is measured by `tools/ground_clearance.py` `structure_class` (25 level-0
+  edges), never pooled with `terrain_class` (`Q57`). It grades and does not gate.
 
 ### `Q104` follow-on — the drawn ribbon against what the publishers painted
 
-Opened 2026-09-02 from two drives. **The argument and the full measurement are in
-`DECISIONS.md` `Q104`**; what is here is the part the acceptance criteria are graded on.
+TD's yellow boxes painted past the drawn kerb are a published witness that the ground is
+carriageway. 🔴 Two defects wanting opposite fixes — void between ribbons, and ribbon narrower
+than the paint: grade per box, never pooled, and quote the basis (count or area) and `--ray-m`.
+Only 5 of 20 boxes ever carried off-road paint.
 
-`Q104` fixed the carve's cut face and left the reason it stands in the road **measured and
-unfixed**: at grade the ribbon is drawn at the 10.24/12.48 m playability floor while the carve
-prism is the surveyed width, so the wall lands **1.52-4.32 m inside the carriageway** on all eight
-carved edges. A second drive found the same disagreement with an *external witness* — TD's yellow
-boxes are painted past the drawn kerb, and a box cannot lie on a pavement, so each one is a
-published statement that the ground beneath it is carriageway.
+| ID | What shipped |
+|---|---|
+| `P3-30` | ✅ `tools/box_extent.py` — per-box off-road paint area, distance past the drawn edge, three-way classification. Shares no code with `boxjunctions.py`; grades, never gates |
+| `P3-31` | ✅ One cap per stub cluster (`_stub_clusters`, `_cap_ring`) plus `_through_corridors`; pooled off-road box paint 38.75 → 4.29 m². Priced by `tools/cap_pavement.py` |
+| `P3-32` | ✅ Flank caps out to the paint edge, not a width — `carriageway[]`, `offset_m`, `trim_m` byte-identical; pooled 4.29 → 0.93 m². The carve-wall arm (neck to the corridor) not taken. `Q92` |
 
-**Measured on the shipped bundle by `tools/box_extent.py` (`P3-30`):** **6.71%** of box paint area
-(**38.75 m² of 577.83**) has no drawn carriageway under it, overrunning the drawn edge by p50
-**1.05 m** / p90 2.98 / **max 4.80 m** over 544 triangles, measured to a 10 m reach;
-`paint_clearance.py` reads the same set independently and deliberately does not gate it.
-⚠️ **The scratch figures this task was opened on read p50 1.63 / max 4.93** — the tail agrees and
-the middle does not, because the scratch definition was never written down. `Q104`.
-
-🔴 **It is TWO defects wanting opposite fixes — do not pool them, and do not share an acceptance
-number.** Eight rays per off-road triangle, drawn road hit within 4 m:
-
-| what surrounds the off-road paint | of **triangles** | of **area** | what it is | owned by |
-|---|---|---|---|---|
-| road on **both opposed sides** | **55.7%** | **43.6%** | the **void between two ribbons that never meet** | `P3-31` |
-| road on **one side only** | **40.3%** | **48.0%** | the ribbon really is narrower than the painted carriageway | `P3-32` |
-| nothing within 4 m | 4.0% | 8.4% | — | unassigned |
-
-🔴 **Two bases, because they disagree by twelve points and the first publication mixed them** — a
-count split quoted beside an area headline (`Q104`). Quote which one. 🔴 **And quote the radius**:
-the void share runs 5.1% → 77.8% by count over `--ray-m` 1 → 8, against a constant off-road
-population. The two named sites stay on opposite sides of the split across that whole sweep, which
-is what the two-defect finding actually rests on.
-
-⚠️ **The two drives separate almost perfectly along that line** — the HKCEC junction (box 16) is
-**99.4%** void and CONVENTION AVENUE east (box 7) is **80.2%** past a kerb, measured — which is why
-one read as a kerb in the wrong place and the other as a narrowing. ⚠️ **The spill is not a junction-mouth flare and a mouth rule
-would not reach it**, and it is not the authored-width fallback failing: the worst site's nearest
-edge is a *measured* 10.55 m that the paint still overruns. `Q104` carries both figures.
-
-| ID | Deliverable | Accept |
-|---|---|---|
-| `P3-30` | ✅ **Done 2026-09-02** — `tools/box_extent.py`, per box: paint area, area with no drawn carriageway under it, distance past the drawn edge, and the **three-way classification** above. Reads the shipped bundle and shares no code with `boxjunctions.py`, on `carriageway_margin.py`'s precedent; identity comes from the source polygons, because clustering the mesh returns 18 boxes of 20 and is flat over a 10x radius sweep. **Grades, never gates** — exits 0 whatever it finds | ✅ Reproduces the area headline exactly (**38.75 m² of 577.83, 6.71%**) and the split on the axis it was quoted on (**55.7/40.3/4.0** by count); **20 rows**, 15 of them with zero off-road area (`Q58`); the HKCEC box reads **99.4%** void and CONVENTION AVENUE east **80.2%** past a kerb, against 99% / 79%. 🔴 **The mutation criterion was withdrawn as unpassable** — a widening closes voids *and* kerb overhangs, so demanding one move without the other is `Q72`'s tautology inverted. Replaced by a structural partition asserted at runtime, all **256** ray patterns checked in test, and a published `--ray-m` sweep. ⚠️ The distance middle does not reproduce (p50 1.05 against 1.63) and the tail does (p90 2.98 against 2.94) — a definition the scratch script never wrote down, which is what this task existed to fix. `DECISIONS.md` `Q104` |
-| `P3-31` | ✅ **Done 2026-09-16 (`Q104`)** — **one cap per stub cluster.** Road Network v2 draws a junction between two dual carriageways as several nodes joined by short links; `junction_trim_max_fraction` clamps both trims of such a link (a *stub*, `_Edge.is_stub`, 87 of 792 edges), so its two per-node caps stopped short of each other and the ground between was the void. `_stub_clusters` unions the nodes a stub joins (54 clusters over 139 nodes) and `_cap_ring` hulls the cluster's non-stub mouths once. Per box: LOCKHART ROAD **10.24 → 0.00 m²**, HKCEC **5.04 → 2.22**, box 7 12.43 → 9.52, box 8 10.92 → 9.98; pooled **38.75 → 21.73 m²** (6.71 → 3.76%), void **16.89 → 6.11 m²**, at `--ray-m` 4.0 by area. `carriageway[]`, `offset_m` and `trim_m` byte-identical on all 792 edges; `kerb_hidden_m` moved on 60, every one at a cluster node. Priced by `tools/cap_pavement.py`: cap past a HyD kerb **9,023 → 9,424 m²**, share flat at 17.5%. **Then `_through_corridors`, same day**: the straight quad between two arms' far sections across a cluster, unioned into the cap, because RN2 splays each carriageway into its node — 68 corridors, pooled **21.73 → 4.29 m²**, priced at 745 m² of new asphalt (325 past a HyD kerb). Was: **Close the median void** — opposed ribbons meet, or the gap between them is filled, so a box painted across a junction has road under all of it. `surface.py` | The void share falls and the past-kerb share does **not**, measured with `P3-30` at a stated `--ray-m` and on a stated basis — **55.7% / 43.6%** and **40.3% / 48.0%** today, count and area. 🔴 **Grade it per box, not pooled**: only 5 of 20 boxes carry off-road paint, and the HKCEC box (16) is the one this task is aimed at, at 99.4% void; ⚠️ **a widening change, so the whole widening battery is owed**: `narrowing.py`, `carriageway_margin.py` (all four tables), `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, plus `railings`, `lamps`, `signs` and `kerbside` counters, because every position registered against the drawn kerb moves; A/B at the HKCEC junction camera, shot twice and `cmp`'d |
-| `P3-32` | ✅ **Done 2026-09-16 (`Q104`), the paint arm — as FLANK CAPS, not a width.** `surface.py` reads the boxes through `boxsource.read_boxes` (the box stage's own reader, moved so both stages share it), inserts a station every 2 m and at each box-edge crossing while a ribbon runs inside a box, and draws the strip from each rail out to the paint edge as a cap of its own — surface material, no lane coordinate — so `carriageway[]`, `offset_m`, `trim_m` and everything registered against the rail are byte-identical. A flank thinner than the kerb is not drawn, and a flank stops one kerb width into the next ribbon it meets, at that ribbon's height. The eleven `paint_clearance` triangles it left were `DrawnSurface`'s ribbon model, closed the same day under `Q92` (schema 9 → 10 publishes the rails; deep 11 → 3). Wan Chai: 20 boxes, 219 stations, **186 flanks, 610 m²** of quad of which only **22 m² is new asphalt** after the corridors (6 past a HyD kerb); pooled off-road box paint **4.29 → 0.93 m² (0.16%)**, past-kerb **0**, HKCEC 0.75, HUNG HING 0.18, CONVENTION AVENUE east **0.00**. The carve-wall arm (neck the ribbon to the corridor) is not taken. Was: **Neck the ribbon to the corridor, or widen it to the paint** — `Q104`'s open item and the past-kerb share (**40.3%** by count, **48.0%** by area), one question with two arms: where a carve wall stands the *invented* width yields (the carve may never cut at the floor, `Q54` inverted); where a publisher painted past the ribbon the ribbon yields. `structure_taper_m` is the existing machinery and its own comment describes the identical 1.9 m jog | Carve-wall inset falls from 1.52-4.32 m toward 0 on the eight carved edges; `P3-30`'s past-kerb share falls, quoted on a stated basis and at a stated `--ray-m`, and **per box** — CONVENTION AVENUE east (box 7) at 80.2% is the site this arm is aimed at; ⚠️ **the two arms are graded separately or this is `Q57`'s generalisation** — one population's property quoted for another; same widening battery as `P3-31`; the `q19s` cameras re-shot |
-
-- **Deps:** `P3-30` before `P3-31` and `P3-32` — both are graded on shares only `P3-30` publishes,
-  and asserting them before the instrument exists is what `Q104` had to correct twice.
-  ✅ **Discharged 2026-09-02**: the instrument ships, so both are unblocked.
-  🔴 **And it changed the target.** Only **five of twenty** boxes carry any off-road paint —
-  CONVENTION AVENUE `e591` (12.43 m² off), HUNG HING ROAD (10.92), LOCKHART ROAD (10.24), the HKCEC
-  box (5.04) and one EXPO DRIVE EAST box at 0.12 — so these are two handfuls of named junctions, not
-  a region-wide property. Grade them per box; the pooled share is what hid that.
-- ⚠️ **`P3-31` and `P3-32` are independent of each other** and may run in either order; what they
-  must not do is share an acceptance number, because they move different halves of the same total.
-- 🔴 **Neither may be answered by widening the carve prism.** Cutting at the drawn floor removes
-  published structure on an invented width's authority — `Q54` inverted, and `carve.py`'s own header
-  refuses it. The invented width is the one that yields.
-- ⬜ **Still open and not scheduled here:** the `barriers` railing's edge-on collapse (`Q104`) —
-  one quad thick, `cull_disabled` fixes from-behind and cannot fix edge-on, and the cure roughly
-  doubles a 460,940-byte mesh. It needs its own budget argument, not a rider on a width task.
+- At level 0 these are replaced by the region (`P3-33c`); they still serve off-grade edges.
+- 🔴 Never answered by widening the carve prism — the invented width is the one that yields.
+- ⬜ Open, unscheduled: the `barriers` railing's edge-on collapse (`Q104`) — one quad thick, the
+  cure roughly doubles a 460,940-byte mesh; needs its own budget argument.
 
 ### `P3-33` The level-0 road drawn as the carriageway region (`Q129`)
 
-Opened 2026-09-18 on the user's call: draw the carriageway **as an area**, take the widening off at
-level 0, and judge it from the seat. **The argument and the measurement are in `DECISIONS.md`
-`Q129`**; what is here is what each step is graded on. `shapely` approved the same day.
+The carriageway is drawn as an area and the widening is off at level 0; the ribbon survives as the
+carrier of lane coordinates and paint. Levels ±1 keep their ribbons (`Q103`, `Q107`). 🚫 `width_m`
+does not move — a territory's span is a share, not kerb-to-kerb (`Q57`).
 
-The ribbon survives only as the carrier of lane coordinates and paint. Levels ±1 keep today's
-ribbons (`Q103`, `Q107`). 🚫 **`width_m` does not move in this task** — a territory's span is a share,
-not kerb-to-kerb (`Q57`).
+| Step | State |
+|---|---|
+| `P3-33a` | ✅ `Q129` recorded, `shapely>=2.1`, `tools/carriageway_region.py` as the second implementation |
+| `P3-33b` | ✅ Stage `region` between `carve` and `surface` → `carriageway_region.json`. The seam is a cut in R, not in runs, so `foreign` territories are published. ⬜ `join_seam.py` areas' seam check still owed (`P3-33e`) |
+| `P3-33c` | ✅ Level-0 ribbons take their territory's extents as rails; `R − ribbons` drawn cap-class; floors to 0; `lanes_painted` ceiling; `clearance` and `roadmarks` read `corridor_*`. ⚠️ Open: `lane_paint` edges under 3.00 m 6 → 79, `paint_clearance` deep boxes 0 → 7 |
+| `P3-33d` | **Superseded by** `P3-35e` (`Q133`) — caps, clusters, corridors and buried kerbs still serve 58 off-grade edges, so the deletion list cannot run as written |
+| `P3-33e` | ⬜ The battery and the routing price. First move `carriageway_occupancy.py` onto `corridor_*` (else `clearance_reconcile` fails its ratchet) and add `join_seam.py`'s area check. Then the `Q19` battery rebaselined by region; railings, signs, lamps `shift_m` per class — if it does not collapse toward zero, that is a registration finding; `narrowing.py`, since `e207`, `e595`, `e132`, `e499` are authored. **Graded on:** every table before and after, from a worktree of the commit before `P3-33c` |
+| `P3-33f` | ⬜ The user's drive. Follow-up: drop the outward-only registration push (`Q78`) where a post already stands outside R. **Graded on:** the seat |
 
-| Step | What | Graded on |
-|---|---|---|
-| `P3-33a` ✅ **built 2026-09-18 (`Q129`)** | **Record and instrument.** `Q129`; `shapely>=2.1`; `tools/carriageway_region.py` builds R and the territories read-only and stays on as the second implementation. | Its four tables on `wan_chai` and `causeway_bay`: R's composition, span against the ray survey (\|p50\| 0.04 m), the end-pair table (mid-block kerb\|kerb **19.8% / 25.6%** on authored edges), orphan 0.9% / 0.8%. |
-| `P3-33b` ✅ **built 2026-09-18 (`Q129`)** | **Stage `region`, between `carve` and `surface`** — `pipeline/region.py` writes `carriageway_region.json`: R's rings, each territory's rings, and per published vertex the left/right extent and what ended it. Config `carriageway_region: {sample_m, rail_m}`, resolutions only. 🔴 **The seam is a cut in R, not in runs**: each region draws all of R inside its own rectangle, a neighbour's run included, so `foreign` territories are published and the two builds need not agree on a Voronoi. | ✅ **Inert by hash**: 230 + 196 files byte-identical through `--from region`, `city.json` differing in `generated_utc` alone. ✅ `|stage − tool|` territory area p50 0.002, max **0.025 / 0.014 m²** — after it caught the stage casting a rail from every run cut at the rectangle (9.4 m² on `e79`). ⬜ `join_seam.py`: R's two builds agree along the shared line — 🔴 **still owed**: `P3-33c` shipped without it, so it is `P3-33e`'s, and until then nothing checks the seam of the AREAS. |
-| `P3-33c` ✅ **built 2026-09-18 (`Q129`)** | **Level-0 geometry from the region; floors to 0.** Not *"triangulate each T_e"*: a ribbon keeps its strip and takes its territory's extents AS its rails (`Q107`'s clamp, `exact`), so the lane coordinate, restriction alpha, codec and `DrawnSurface` rails all survive; everything else of R is `R − ribbons`, triangulated whole, drawn cap-class, and replaces the hull caps, corridors and flanks at level 0. Stations pruned at `rail_tolerance_m` 0.10. 🔴 A share is not a corridor: the stage measures kerb-to-kerb too and `clearance` + `roadmarks` read `corridor_*`. 🔴 The territory is a ceiling on the PAINTED lane count (`lanes_painted`, p10 of the span). City.json 32, roadsurface 12, region 3, game half in the same commit. | ✅ `check.sh` 0, 2,410 tests, frames `cmp`'d a side at three recorded cameras. Surface 32,618 → **79,790** tris, draws **+1 to +3** on the throttle route. Fence **14 → 13** (25 before the corridor). Double whites 91 → **102**. Box paint off-road 0.58 → **2.69 m²**. ✅ From the seat, *"a straight road broadens and shrinks"*: mouths bridged, bays `opened` away at `rail_opening_m` 20, the junction trim READ off the flare, and the areas given their own kerb — outward wobble inside the ribbons 3,030 → **644 m**, surface **87,343** tris. ⚠️ `lane_paint` 6 → **79** edges under 3.00 m (was 148 before the flare trim) and `paint_clearance` `deeper than` boxes 0 → **7**: both open, both `P3-33e`/`f`'s. |
-| `P3-33d` ⬜ → **superseded by `P3-35e` 2026-09-19 (`Q133`)**: caps, clusters, corridors and buried kerbs still serve 58 off-grade edges, so this list cannot be deleted as written | **Deletions**, with their `CLAUDE.md` bullets and counters: `_stub_clusters`, `_through_corridors`, `_paint_flanks`, `_add_paint_stations`, `_hide_buried_kerbs`, the hull in `_cap_ring`, `_opposed_gaps`' search (a pair is two territories that touch and run anti-parallel), and at level 0 `carriageway_area.py`'s 14 s raster. | Each deletion's own inertness proof against `P3-33c`'s bundle; the roads stage's wall time before and after. |
-| `P3-33e` ⬜ | **The battery and the routing price.** 🔴 First: `carriageway_occupancy.py` walks the ribbon where `clearance.py` now walks `corridor_*`, so `clearance_reconcile` fails its ratchet until the grader moves; and `join_seam.py` owes the areas' seam check (`P3-33b`). The whole `Q19` battery with `clearance_reconcile`'s ratchet rebaselined by region; railings, signs and lamps per class — `shift_m` should collapse toward zero, because those objects were surveyed against the real kerb, **and if it does not that is a registration finding**; `narrowing.py`, because `Q128` priced the floor free on the *measured* half only and `e207`, `e595`, `e132`, `e499` are all authored. | Every table pasted before and after, from a worktree of the commit before `P3-33c`. |
-| `P3-33f` ⬜ | **The user's drive.** Follow-up: drop the outward-only registration push (`Q78`) wherever a post already stands outside R. | The seat. |
-
-- **Deps:** `a` → `b` → `c`; `d` and `e` after `c`, in either order; `f` last.
-- 🔴 **Refuted at `P3-33a`, do not re-propose**: kerb-line *faces* where HyD is silent (24 faces,
-  0.3% of the length — the linework does not close, so the rule is rails), and an unclipped R (6.8%
-  orphan, one piece 228 m from its owner).
-- ⚠️ **What survives of the invented width is ~2% of the network** (926 m / 270 m): a side no kerb
-  answers on, where HyD is also silent. It is drawn at `width_m` and counted, never widened.
+- **Deps:** `e` after `c`; `f` last.
+- 🔴 Refuted, do not re-propose: kerb-line faces where HyD is silent (24 faces, 0.3% of length —
+  the linework does not close) and an unclipped R (6.8% orphan, one piece 228 m from its owner).
+- ⚠️ About 2% of the network (926 m / 270 m) still draws at an invented `width_m`: a side no kerb
+  answers on. Counted, never widened.
 
 ### `P3-34` The longitudinal lines from TD's survey (`Q132`)
 
-**Why.** The two-way centre line is `road_markings.gdshader`'s invention — RM1001's double
-continuous line on every two-way ribbon with an even lane count. TD surveys a centre-family line on
-63.3% / 73.9% of those stations and it is a **broken** line (`RM1104`, `RM1103`) on 80-90% of them.
-The user's call: TD's codes are the truth, and **where TD is silent nothing is drawn**.
+TD's codes are the truth and where TD is silent nothing is drawn (the user's call). All ✅.
 
-| Step | What | Evidence owed |
-|---|---|---|
-| `P3-34a` ✅ **2026-09-19** | **Record and transcribe.** `Q132`; both index-plan sheets read at 600 dpi and quoted in `DATA_SOURCES.md`; the *"RM1002/RM1003 absent"* claim corrected — they live in `DTAD_RD_MARK_LINE_C`. | The coverage and silent-station tables in `Q132`. |
-| `P3-34b` ✅ **2026-09-19** | **`roadmarks.py` draws the broken single lines.** ✅ Built with `d` in one commit, schema 33 — and `RM1002`/`RM1003` ARE drawn: `RULEID` 2/3 makes LEFT/RIGHT the digitised direction's (`Q132`). Also fixed: a longitudinal line is hosted by a road it lies ON (refusals 232 → 59; `RM1001` +756 m). Original brief: `road_marks` reads a LIST of layers (`carriageway_survey.lane_lines`' shape); rows for `RM1103` and `RM1104` (`RM1105` if a region carries it), `axis: longitudinal`, dashes cut ETL-side from each part's first vertex so `marking_paint.gdshader` does not move. New counter for the dash phase. `RM1002`/`RM1003` need a per-line module in `RoadMark` **and** a measurement of whether TD's digitised direction carries LEFT/RIGHT — refused and counted until it does. `RM1004` stays refused. | `roadmarks.json` partitions, `drawn_by_id`/`drawn_m_by_id` before and after — every existing row byte-identical, the new codes purely additive; `host_off_carriageway`, `no_host_on_axis`; `paint_clearance.py`; both regions; schema bump. |
-| `P3-34c` ✅ **2026-09-19** | **The shader yields: `draw_centre_line` → 0.** Nothing inferred replaces it. Fixes the sawtooth on `e124` and the stub beside `e785`'s island. ⚠️ `lanes_forward`'s centre field stays in the codec, as `centre_at` did (`Q118`). | `roads.glb` byte-identical; frames twice a side at 103 LEIGHTON ROAD, `e124`, `e785`, MARSH ROAD `e529` (hatching) and JARDINE'S CRESCENT (nothing). |
-| `P3-34d` ✅ **2026-09-19** | **Lane lines, the same way.** ✅ Landed WITH `b`, not after it: most `RM1104` divides lanes, so the two could not ship apart without every lane line drawn twice. Coverage measured first: 65.7% / 67.8% of stations; `draw_lane_lines` → 0. Original brief: `RM1101`/`RM1102` (12,347 m at grade in Wan Chai) against the shader's dashes on every edge; retires `lanes_painted` as a PAINT input and changes what `lane_paint.py` asks. ⚠️ **Not `RM1107`** — that is the lay-by / bus-stop edge line. Decide first what a one-way street with no surveyed lane line shows; `Q132`'s rule says nothing. | Coverage of the shader's lane lines measured FIRST, as `Q132` did for the centre line; triangle and draw-call price on the throttle route. |
-
-- **Deps:** `a` → `b` → `c`; `d` after `c`.
-- ⚠️ **Not in scope, named so it is not lost**: `RM1035`-`RM1037` hatching (≈5.8 km at grade in Wan
-  Chai) and `ZIGZAGL`/`ZIGZAGR` — what actually stands in the middle where a centre line gives way.
-- ⚠️ The measurement behind `Q132` is a scratch script. If `b`'s counters do not reproduce its
-  coverage from inside the stage, it becomes a `tools/` grader before `c` ships.
+- `P3-34a` ✅ — `Q132` recorded; both index-plan sheets transcribed into `DATA_SOURCES.md`;
+  `RM1002`/`RM1003` live in `DTAD_RD_MARK_LINE_C`.
+- `P3-34b` ✅ — `roadmarks.py` draws the broken single lines (`RM1103`, `RM1104`) and
+  `RM1002`/`RM1003` (`RULEID` 2/3 gives LEFT/RIGHT of the digitised direction); dashes cut
+  ETL-side; a longitudinal line is hosted by a road it lies ON. Schema 33. `RM1004` stays refused.
+- `P3-34c` ✅ — `draw_centre_line` → 0; nothing inferred replaces it. ⚠️ `lanes_forward`'s centre
+  field stays in the codec (`Q118`).
+- `P3-34d` ✅ — lane lines the same way, landed with `b`; `draw_lane_lines` → 0. ⚠️ Not `RM1107`
+  (lay-by / bus-stop edge line).
+- ⚠️ Still unowned: `ZIGZAGL`/`ZIGZAGR` as paint. (`RM1035`–`RM1037` hatching shipped at
+  `P3-35g3`.)
 
 ### `P3-35` The ETL after the region: one drawn road, fewer doors (`Q133`)
 
-Opened 2026-09-19 on the user's ask: review the ETL now that the widening and lane logic have been
-rebuilt so many times, and price a rewrite or another approach against a refactor. **The review and
-the verdict are in `DECISIONS.md` `Q133`**: no rewrite, the remaining inaccuracy is the *model* and
-not the data, and the refactor that matters is every reader of the drawn road going through one
-door. What is here is the order and what each step is graded on.
+Verdict in `Q133`: no rewrite; the remaining inaccuracy is the model, not the data; every reader
+of the drawn road goes through one door. Complete but for `g4`'s refusal.
 
-🚫 **Nothing in this task may touch a recorded deliberate duplication** — the second implementations
-(`carriageway.py` / `carriageway_margin.py`, `region.py` / `carriageway_region.py`), the four
-`_register`s (`Q78`, `Q115`), the two station normals, `_Ribbon`'s scalar fields. A step that
-"de-duplicates" one of those has left its brief.
+🚫 Nothing here may touch a recorded deliberate duplication — `carriageway.py` /
+`carriageway_margin.py`, `region.py` / `carriageway_region.py`, the four `_register`s (`Q78`,
+`Q115`), the two station normals, `_Ribbon`'s scalar fields.
 
-| Step | What | Graded on |
-|---|---|---|
-| `P3-35a` ✅ **built 2026-09-19** | **Remove the signal layer** (the user's call, 2026-09-19 — *"we will re-add it much later"*). `pipeline/signals.py`, `tests/test_signals.py`, `game/tools/verify_signals.gd`, `game/tuning/signals.tres` (+ sidecar), the `Signals` node in `region.tscn`, the stage slot, `export.py`'s input and `signals` manifest key, `config.py`'s `Signals` block and its tests, `GeneratedLayer.SIGNALS`, `CityManifest.signals_path`, the `verify_city` / `generated_scene_import` / `check.sh` rows, `paint_clearance.py`'s note. Cross-references in `lamps.py` / `signs.py` / `arrows.py` comments reworded to stand without it. ⚠️ `signs.disc`, `facing_from_side` and `plate_frame` lose their second caller and **stay public** — `lamps` still takes `disc`. 🔴 **`Q76`/`Q77` stay in `DECISIONS.md`**, with a note that the code is at the commit before this one: bringing it back is a port to library + placements (`P5-2`'s shape), not a re-declared block, and `CLAUDE.md`'s bullet saying otherwise goes with the code. `city.json` bumps: a consumer reading `signals` would be wrong to. | `check.sh` 0, `pytest`, ruff. Both regions rebuilt `--from arrows` (the stage after the last one that cannot have moved): every published file but `city.json` byte-identical. Frame `cmp`'d at the `Q27` street camera. PCK before and after. ✅ **−2,417 / +106 lines over 29 files; `config.py` 6,941 → 6,544.** 2,421 tests, ruff, `check.sh` 0. Both regions `--from arrows`: **232 + 196 files byte-identical**, `city.json` alone moving (schema **34**, key gone, `generated_utc`). `Q27` street frame shot twice, `cmp`-identical to each other **and to `P3-34`'s**. PCK **61,169,372 → 61,165,896 B (−3,476)**, two web exports one variable apart — the before side a worktree of `main` holding this bundle with the old `city.json` rebuilt to its recorded hash. ⚠️ Found on the way: `etl/out/wan_chai+causeway_bay/` was a join reference from 2026-09-08 and `verify_join` fails against it on any two-region sync until `python -m pipeline.join` is re-run — stale build output, not this change. |
-| `P3-35b` ✅ **built 2026-09-19** | **`tools/battery.py <trigger> --before <root>`** (planned as `battery.sh <trigger> <before-dir> <after-dir>`; a side is a checkout ROOT, because a grader takes `--generated` or `--out-root` and one directory cannot name both). No script runs the grader battery; every *"paste before AND after, both regions"* in `CLAUDE.md` is by hand. A table of trigger → grader commands (the `CLAUDE.md` bullets, as data), run against two bundle directories, each grader's stdout saved and diffed. 12 graders already share `deck_error.bundle_arguments()`. 🚫 **It adds no gate**: graders still grade and exit 0; the runner's exit code is "did every grader run", never "did a number move". | Reproduces `P3-34`'s pasted tables from the two bundles that produced them. `CLAUDE.md`'s bullets keep their *why* and lose their command lists to the table, one trigger at a time. ✅ **16 triggers over 16 graders and 7 stage reports; 30 tests.** `q19` on both sides, 12 grader runs, **1 min 42 s at `--jobs 2`**, 0 lines moved on one bundle against itself; `roadmarks` reproduces `Q132`'s `paint_clearance` row (buried **1.7%**, `deeper than` **42**). 🔴 Review caught the defect that matters: `narrowing.py` had no `--out-root`, so both sides read one tree and its diff was empty by construction — the flag added, and a ratchet that every row is pointed at its own side, mutation-checked. ⚠️ **Not reproduced as planned**: `P3-34`'s before bundle no longer exists, so its pasted tables are matched on the after side only. ⚠️ The `CLAUDE.md` bullets still carry their command lists; moving them is one trigger at a time, as each is next used. |
-| `P3-35c` ✅ **built 2026-09-19** | **A region-path fixture for `surface`.** All 132 tests in `test_surface.py` drive `build_region` with no `carriageway_region:` — the path no shipped region takes. The territory path is unit-tested through helpers only. A testville fixture with a region, and end-to-end tests of what ships: rails ARE the territory, areas are `R − ribbons`, a missing extent falls back and is **counted**. 🔴 Found by the review: an edge whose `vertex_station` length mismatches silently becomes a plain ribbon with no counter — add the counter here. | Mutation checks on the new tests (`exact=` off; areas dropped). No published byte moves. ✅ **`tests/test_surface_on_region.py`, 8 tests**: `regionville` runs the REAL `region.build` over a crossroads whose 16 m road lies 9 m / 7 m about its centreline and hands the file to `surface`. Rails are the road (`z` 291–307 read off the MESH), drawn asphalt equals published asphalt to 1%, no level-0 cap, the flyover keeps its own. 🔴 **`exact=` off fails exactly ONE test — the one that reads the mesh**; every `carriageway[]`-only assertion passes under it, which is `Q106` again. Areas dropped: caught. 🔴 **TWO silent fallbacks, not the one the review named**: `territory_mismatched_edges` (must be 0) and `territory_missing_edges` — a level-0 edge with no territory row drew the invented width and moved no counter, because `territory_fallback_stations` counts stations INSIDE a territory edge. Both read **0 / 0** on Wan Chai and Causeway Bay. ✅ Surface re-run on both: every published file byte-identical. |
-| `P3-35d` ✅ **reader, signs, lamps and fence built 2026-09-19; railings 2026-09-20** | **`pipeline/drawnroad.py` — one reader of the drawn road.** `roadsurface.json` is parsed four times (`arrows.ribbons`, `railings.ribbons`, `roadmarks._drawn_widths`, `fence._half_width_at_end`) and `Ribbon.kerb_target` plus every caller's "already clear" / `inside_ribbon_m` / second-pass test read `±half` about the centreline. Built on the published `ribbons[].rails` (`DrawnSurface`'s own source). 🔴 **Railings carries the same defect and `CLAUDE.md` did not list it**: `railings.ribbons` builds both fence lines as `boundary(shaped, mitres, ±(half + outset))` and never reads `offset_m`, on a network where 288 of 734 ribbons sit > 1 m off their centreline. In order: (1) the reader, proved inert by forcing `offset = 0` and reproducing every consumer byte-for-byte; (2) signs + lamps onto it; (3) `fence`; (4) railings, whose walk is re-based onto the published rails and owes its whole battery. `_register`'s four bodies are **not** merged. | Per layer, its `CLAUDE.md` battery before and after via `P3-35b`. `shift_m` should fall (this is `P3-33e`'s registration prediction, reached from the other side) — **and if it does not that is a finding**. `min_kerb_clearance_m` stays ≥ 0. A/B frames at one street with a > 1 m offset ribbon. ✅ **(1)** the move out of `arrows.py`: both regions byte-identical. ✅ **(2)** signs + lamps on the ROAD's running kerb line. 🔴 **The plan's own design was wrong and the measurement said so**: `roadsurface.json`'s per-vertex `corridor_*` made `shift_m` WORSE (signs WC p90 1.34 → 4.24 m, over-shift 2 → 43), because a straight street's two vertices stand in junction mouths. Graded against iB1000's surveyed lamp posts — *which extent do they stand just outside?* — posts reading as in the road: `±half` **21.8% / 14.5%**, per-vertex corridor 24.2% / 8.7%, the region's dense kerb 14.9% / 4.1%, **dense kerb read only at kerb-ended stations 13.3% / 3.6%** (worst −16.5 → −5.9 m). Shipped on the last. Drawn **signs 867 → 873 / 280 → 285, lamps 1,070 → 1,077 / 361 → 364**; refused as standing in the road **19 → 5 / 6 → 1**; `shift_m` p90 **1.34 → 0.54, 1.15 → 0.45, 1.48 → 0.93, 0.80 → 0.26 m**; `min_kerb_clearance_m` +0.067 → **+0.170**. ⚠️ p99 RISES (signs WC 3.80 → 7.83 m, over-shift 2 → 11): posts surveyed deep in a wide road, which the old rule moved to a share rail BETWEEN two carriageways and this one refuses. A/B at JAFFE ROAD, each side a full sync, shot twice, `cmp`-identical within a side, 1,740 px between. ⚠️ A second, top-down pair made by swapping the placements JSON settled on ONE hash for both sides and is unexplained — not evidence. 2,473 tests, `check.sh` 0. ✅ **(3) fence**: a row is centred on the ribbon's `offset_m` at its mouth, the sign pinned against `surface.mitres` at a start AND an end mouth (mutation-checked both ways — flipped, and one sign for both). Every counter and the barrier count unchanged (77 / 24); what moved is position: GREAT GEORGE STREET `e629` **0.57 m**, KA NING PATH `e45` **2.41 m**, where the row had stood 2.4 m to one side of the road it closes. ⬜ **(4) railings — priced, not built**: every panel stands exactly 0.60 m past a `±half` line by construction; against the road's running kerb line **16.2% / 10.0% of panels stand IN the road, 1.8% / 0.5% more than 1 m in, 3.7% / 0.9% more than 2 m past it** (5,484 / 2,136 panels). The walk must be stationed on the region's dense kerbs rather than the published vertices, and owes the whole railings battery plus `railing_error.py`, which reads the same `±half`. ✅ **(4) built 2026-09-20**: the fence stands an outset past `Ribbon.kerb_at`'s two kerbs, stationed on the published vertices and the dense kerb stations; its side is the nearer kerb about the road's middle and it faces that middle. Forced symmetric, both regions byte-identical. `shift_m` p50 **0.54 → 0.14 / 0.48 → 0.12 m** (railings), bollards 0.95 → 0.19; `railing_error.py` to-source p50 **0.46 → 0.22 / 0.45 → 0.21 m**, p90 1.37 → 0.78 / 1.10 → 0.64; `facing_away` 0, side disagreement 0. ⚠️ `bends` 32 → 84 / 10 → 27 — a kerb read every few metres moves and a rigid panel does not follow it. ⚠️ `railing_error.py` never read `±half`; it measures the steel against TD's lines and needed no change. |
-| `P3-35e` ✅ **built 2026-09-19** | **`P3-33d`, re-scoped.** As written it deletes off-grade's only junction treatment: the shipped Wan Chai surface has 28 caps, all at level ±1, and its 3 corridors can only be off-grade. Dead today: `_paint_flanks` and its machinery (~400 lines, gated on `region is None`), and ⚠️ `_add_paint_stations` is **not** gated — it inserts 125 stations for flanks that read 0. At level 0 `_stub_clusters` is computed and discarded. Delete the flanks; gate the rest by level; keep the region-less path only if `P3-35c` shows something other than tests needs it. `_opposed_gaps` → territory adjacency is a rewrite owing `Q117`/`Q125`'s proofs and is **not** in this step. | Inertness by hash on both regions, except the triangles the 125 stations cost. Roads + surface wall time before and after. ✅ **`_add_paint_stations` gated on `region is None`**: road **93,015 → 92,647** triangles on Wan Chai (areas 21,975 → 21,849), Causeway Bay likewise; `paint.stations` 125 → 0. Battery `surface-region`, both regions: `lane_paint`, `fence` and `roadmarks` reports **0 lines moved**; box paint **16,619 → 14,931 triangles with every box's painted area unchanged** (fewer creases to cut along), off-road 1.28 → 1.32 m² at EXPO DRIVE EAST, `deep` 0.01% unchanged; roadmarks 48,736 → 48,590 triangles, `deeper than` 42 → 40. `check.sh` 0. ✅ **Then the deletion `P3-33d` listed**: `_paint_flanks`, `_add_paint_stations` and eleven helpers, the five report fields, the manifest's `paint` block, the log line and `build_region`'s `sources_root`. `surface.py` **5,088 → 4,628** lines, `test_surface.py` loses `TestPaintFlanks` (132 → 128 tests, checked by `numstat`). Both regions: every road chunk byte-identical, `roadsurface.json` equal on every key but the lost `paint`. 🔴 The cost, stated: a REGION-LESS bundle no longer grows a flank under a box that overhangs its ribbon. ⚠️ Caps, clusters, corridors and buried kerbs stay — 58 off-grade edges draw with them. `_opposed_gaps` → territory adjacency stays out of scope. |
-| `P3-35f` ✅ **`report.py` built 2026-09-19; the three moves 2026-09-20** | **Mechanical moves, one commit each, byte-identical bundles.** `DrawnSurface` + crease cutting out of `surface.py` (~660 lines, external consumers only); `pipeline/report.py` for `measured` so six stages stop importing `arrows` for a percentile; `tools/_lib/` from the helpers 16 / 11 / 7 tools already import out of `carriageway_occupancy` / `deck_error` / `overhang` (a **move**, nothing new shared with `pipeline.*`); `config.py` split per stage behind a re-exporting loader (~6.9k → ~1.5k), with the `_measures` blocks routed through `_thresholds`' closed-key check. 🚫 No schema library — it saves ~10% of `config.py` and loses the Q-cited refusals. ⚠️ 26% of tests name a private, many of them `CLAUDE.md` ratchets: a moved name keeps its name. | `git diff --numstat` per move; both regions' bundles hashed before and after; test count unchanged. ✅ **`pipeline/report.py::tail_of`** — `ArrowReport.measured`'s body; `railings`, `boxjunctions`, `roadmarks` and `lamps` no longer import `arrows` at all, and `signs` takes only `ccw`. Both regions `--from arrows`: every file but `city.json` byte-identical, 2,476 tests. (`tail` was the first name and shadowed a loop variable in `roadmarks.py`.) ✅ **The three moves, 2026-09-20, each its own commit and each verbatim** (every line of the old file found in a new one, bar one import line). **`pipeline/drawnsurface.py`**: `DrawnSurface`, `DrawnHeight` and the crease cutting, 660 lines nothing in `surface.py` itself read — `surface.py` **4,628 → 3,953**; both regions `--from arrows` byte-identical but `city.json`. **`tools/_lib/{bundle,ribbon,streets}.py`**: what 11 / 8 / 13 tools imported sideways out of `deck_error` / `overhang` / `carriageway_occupancy`; nine graders run with the pre-move tools from a worktree against the moved ones on one bundle (`--tools-from side`), **0 lines moved**. **`pipeline/config_blocks/`**: twelve stage modules and a 270-line `base`, assigned by dependency REACH from each stage's roots (one stage → that stage, several → `base`, none → the loader) and acyclic as found; `config.py` **6,544 → 1,153**, still the one door — it re-exports every name, privates included, so no importer moved. Old and new loaders `repr`-equal; **both regions rebuilt `--from podiums`, 232 + 196 files byte-identical**, `city.json`'s timestamp alone moving. 2,477 tests throughout. ✅ **The closed-key check, as one mechanism rather than 25 lists** (`_Read`): `load_config` refuses any key no parser read. The shipped YAML reads 1,033 of 1,033; 🔴 **the first thing it caught was a test fixture** — `test_roadmarks.py`'s one-line `stop_line` declaring a `lines_spacing_m` the parser only reads when `lines > 1`. ⚠️ Iterating a mapping reads all of it, so this is a floor under the per-block checks, not a replacement. 2,480 tests. |
-| `P3-35d5` ✅ **built 2026-09-20** | **The railings step's two defects, recorded on 2026-09-20 as costs.** `railings._stationed` unions the published vertices with the region's kerb stations by `np.union1d` and no tolerance, so a kerb station lands 0.0002 m from a vertex; `surface.boundary` reads that step's rounding-width backward test as a folded corner and holds the rail still, and the hold is sticky. Causeway Bay `e10` collapses 8.6 m of fence onto one point (to-source max 3.34 → **5.53 m**, one stand, `#125`); Wan Chai's 3 donor-less `bollards` stations are one 1.46 m piece on PERCIVAL STREET `e482`. (1) drop a kerb station within `min_station_gap_m` of a published vertex — the bar that already exists for two stations at one place, no new knob; (2) `railings._sides` takes the naive offset, because a fence is a line and has nothing to self-intersect. 🚫 **`surface.boundary` is not touched** — it is the carriageway polygon's. 🚫 **`bends` (84 · 27) stays a cost**: Douglas-Peucker made it worse (91), a moving average gave back a third of the registration, and the honest fix is `Q115`'s mitre, deferred and accepted by the user at `P5-5`. 🚫 **`shift_m` max 12.57 stays**: refused by `max_shift_m`, draws nothing. | Each change fails its own test alone under mutation. The `railings` battery both regions, all three `railing_error.py` tables; the symmetric-road inertness proof still byte-identical. Priced: folded 3 → 0, to-source max 5.53 → ~3.07, bends 84 → 81 · 27 → 24; ⚠️ WC `drawn_m` 9,726 → ~9,722 and `joint_gap_m` max 41 → ~51 mm. The record quotes the joint-angle distribution, not only the count. |
-| `P3-35g1` ✅ **built 2026-09-20** | **Per-station shift off-grade — slide before cut** (`e364`, `Q116`). The drawn `offset_m` is already per station (`Q107`); what is per edge is the `shift` handed to `surface._clamped_rails`, the median of the deck walk's offsets. `e364`'s far half drags it to −2.9 m and cuts the near half 3.35 → 2.05 m on a deck whose rims did not move. Priced on the shipped bundle: **53 of 762** Wan Chai off-grade vertices (7.0%) and **5 of 135** in Causeway Bay recover more than 1 m — a class, not an edge (an upper bound on `e208`/`e727`/`e81`: the probe ignores `Q113`'s `on_structure` gate). The rule: translate the interval back onto the structure by no more than it overhangs; never widen; 🚫 never take the centre from the deck's middle (`Q103`); refuse where the deck span exceeds the edge's own `width_m` — that deck is the interchange's — and count it. `width_m`, `lanes`, `roadgraph.json` do not move (`Q105`, `Q114`). | Slide neutralised → byte-identical bundle; 0 level-0 edges move; `battery.py off-grade` + `q19` both regions; `clearance_reconcile`'s `EXPECT` expected 22/26/6 → 21/25/6 on Wan Chai; `touchdown_error.py`'s descended / lifted ends stay disjoint; frames at `e337` and `e364`'s near half, re-imported, shot twice. No schema bump: the values move, the field's meaning does not. |
-| `P3-35g2` ✅ **built 2026-09-20** | **Pedestrian crossing paint** (`P3-27`'s crossing half). `DTAD_CROSSING_LINE` surveys **each zebra stripe as a closed rectangle**: 720 of Wan Chai's 754 closed rings are 4-corner quads, short side p50 0.600 m, long side p50 3.500 m, `ELEVATION` null on all 1,082 parts. A new `crossings` stage — a trimmed `boxjunctions.py` on `DrawnSurface.sampled_pieces`, the existing `marking_paint.gdshader`, a new `.tres` + sidecar. Probes first: the **328 open parts** (draw, or refuse and count); `RM1076` read by eye off `CT174/51-5(1)F`; the off-road share under each ring; `LINETYPE` case-folded (`SOLID` / `Solid` / `CROSS_BOUNDARY`). 🚫 Out: `RM1135`/`RM1136` look-right/left glyphs (`SYMBOL_SIZE` nan on 203 of 256 — an authored glyph, a later task); the three footway publishers stay `P3-27`'s other half; 🚫 nothing depends on signals (`Q77`). | Closing partitions asserted at runtime; `inverted` 0; a `paint_clearance.py` row, a `battery.py` trigger, `.claude/rules/crossings.md`; `CITY_SCHEMA` 34 → 35 both sides in one commit; its own rung on the `lift_m` ladder, justified; `roads.glb`, `roadsurface.json`, `boxjunctions.glb`, `roadmarks.glb` byte-identical; PCK delta measured from a PCK; render + `grep -i "shader error"`. |
-| `P3-35g3` ✅ **built 2026-09-20** | **Hatching — in scope on the user's call, 2026-09-20** (`Q65`'s "tells the player where to drive" no longer holds it out: a prohibitory marking says where not to). TD surveys the stripes and chevron legs as individual parts, so `band_quads` draws them as-is; all three codes are WHITE, one material, no new draw call. **(a) `RM1037` first** — one published width (150), 100% at grade, 2,696 m / 736 m. It needs a **third host axis**: 64–73% of at-grade parts lie 15–75° to the nearest edge and 31% of 1,379 are refused by both existing axes. The honest rule has no angular residual — host by proximity, only where the part lies on its own carriageway — with its own refusal counter, and 🚫 its population is never pooled into `axis_residual_deg`. **(b) `RM1035`/`RM1036` on a probe**: one code carries `LINE WIDTH = 150` and `CHEVRON WIDTH = 900` and nothing in the data says which part is which. Pass = outline and chevron separate on a plateau of a published quantity, checked against `DISTANCE BET. CHEVRONS = 2000`; fail = draw at 150 and record the under-draw, or stop at (a). | The sheet's rows transcribed into `DATA_SOURCES.md` first. Transverse and longitudinal rows of `drawn_by_id` / `underfill_m` byte-identical; with the new rows stripped in memory `roadmarks.glb` byte-identical; `battery.py roadmarks`; `slivers_dropped` priced as plan-area share; frames at MARSH ROAD `e529`, DRAGON ROAD `e168`, LAI TAK TSUEN ROAD `e47`. No `city.json` bump. |
-| `P3-35g4` 🚫 **measured and refused 2026-09-20** | **A lane count off TD's lane lines — a grader-only probe, and probably a refusal.** 🔴 `Q127` built this reading in `tools/width_evidence.py` §2a and refuted it: it sees the other carriageway's lines (today 27 of 113 agree on Wan Chai, 6 of 20 on Causeway Bay). What is new is `P3-34`'s host assignment. One commit: a **hosted** count on the drawn ribbon beside the centreline-ray one, `RM1107`/`RM1108`/`RM1109`/`RM1004` excluded. Below roughly the high 80s percent agreement on both regions it is refused and recorded. The prize is small either way: ~15 ambiguous edges across both regions land inside their bracket. If it passes: ambiguous brackets only, never below an arrow row, never on an authored width, level 0 only, no `width_m`, a new `lanes_source` value and graph schema 15 → 16. 🚫 Not an argument to switch `draw_lane_lines` on. | The two §2a lines for both counts, both regions. If built: the `lanes` battery, `lane_paint.py --sweep`, `carriageway_margin.py`'s four tables, `roads.glb` geometry byte-identical. |
-| `P3-35h` ✅ **built 2026-09-20** | **The game reads the drawn offset for `lane_centre`.** `road_graph.gd` loads and merges `carriageway_offset_m` and never consumes it: `lane_centre` is placed about the centreline. `Q107` excused that because every level-0 value was 0.0, and the excuse expired at `P3-33c` — 288 of 734 level-0 ribbons sit more than 1 m off their centreline, up to 4.95 m off-grade. A behaviour change with `verify_road_graph.gd` moved in the same commit. Its own task on the user's call, 2026-09-20. | `verify_road_graph.gd` asserts a lane centre lies inside `[offset − half, offset + half]` on the shipped bundle, mutation-checked; the overlay's lane marker (`--debug-view=full`) in the nearside painted lane on EXPO DRIVE EAST `e657` — the overlay is the only reader there, so a drive without it grades nothing. Scripted 2026-09-20; the user's own drive outstanding. |
+- `P3-35a` ✅ — signal layer removed (the user's call; it returns as a port to library +
+  placements, `Q76`/`Q77`, code at the commit before). `city.json` schema 34. ⚠️ `signs.disc`,
+  `facing_from_side`, `plate_frame` stay public.
+- `P3-35b` ✅ — `tools/battery.py <trigger> --before <root>`: 16 triggers, 16 graders, 7 stage
+  reports. Exit code = every grader ran, never that a number moved. ⚠️ Every row must carry
+  `{generated}` or `{out_root}` (`test_every_tool_is_pointed_at_its_own_side`).
+- `P3-35c` ✅ — `tests/test_surface_on_region.py`: the shipped region path tested end to end off
+  the mesh. Two silent fallbacks given counters, `territory_mismatched_edges` and
+  `territory_missing_edges`, both 0 / 0. ⚠️ `carriageway[]`-only assertions pass with `exact=`
+  off — only a mesh read catches it (`Q106`).
+- `P3-35d` ✅ — `pipeline/drawnroad.py`, one reader of the drawn road; signs, lamps, fence and
+  railings register to the road's running kerb line (`Ribbon.kerb_at`), read at kerb-ended
+  stations. 🚫 `roadsurface.json`'s per-vertex `corridor_*` as the kerb was built and withdrawn:
+  signs `shift_m` p90 1.34 → 4.24 m. ⚠️ Costs: signs p99 rises (posts deep in a wide road are
+  refused); railings `bends` 32 → 84 / 10 → 27. `_register`'s four bodies are not merged.
+- `P3-35e` ✅ — `P3-33d` re-scoped: `_paint_flanks`, `_add_paint_stations` and helpers deleted
+  (`surface.py` 5,088 → 4,628). ⚠️ A region-less bundle no longer grows a flank under an
+  overhanging box. Caps, clusters, corridors and buried kerbs stay (58 off-grade edges use them).
+  `_opposed_gaps` → territory adjacency is out of scope and owes `Q117`/`Q125`'s proofs.
+- `P3-35f` ✅ — verbatim moves: `pipeline/report.py::tail_of`, `pipeline/drawnsurface.py`,
+  `tools/_lib/{bundle,ribbon,streets}.py`, `pipeline/config_blocks/` (`config.py` 6,544 → 1,153,
+  still the one door, re-exports every name). `load_config` refuses any key no parser read
+  (`_Read`) — a floor under the per-block checks, not a replacement. 🚫 No schema library.
+- `P3-35d5` ✅ — railings: a kerb station within `min_station_gap_m` of a published vertex is
+  dropped; `railings._sides` takes the naive offset. 🚫 `surface.boundary` untouched. 🚫 `bends`
+  (81 · 24) stays a cost: Douglas-Peucker made it worse (91); the fix is `Q115`'s mitre, deferred.
+- `P3-35g1` ✅ — off-grade ribbons slide onto their deck before the cut (`e364` 4.31 → 6.80 m);
+  never widen, never centre from the deck's middle (`Q103`), refuse where the deck span exceeds
+  the edge's `width_m`. `width_m`, `lanes`, `roadgraph.json` do not move (`Q105`, `Q114`).
+- `P3-35g2` ✅ — `crossings` stage: `DTAD_CROSSING_LINE` stripes as surveyed, `crossings.glb`,
+  `CITY_SCHEMA` 35, `.claude/rules/crossings.md`. 🚫 Out: `RM1135`/`RM1136` look-right/left
+  glyphs; the footway publishers (`P3-27`'s other half).
+- `P3-35g3` ✅ — hatching on a third host axis (`oblique`): `RM1037`, and `RM1035`/`RM1036` with
+  chevrons told from outline by shape and drawn at the sheet's 900. 🚫 Its population is never
+  pooled into `axis_residual_deg`.
+- `P3-35g4` 🚫 — a lane count off TD's lane lines hosted on the drawn ribbon: agreement 24% → 79%
+  on Wan Chai, 82% · 75% pooled against a bar in the high 80s, for ~10 edges. Refused; the
+  instrument stays in `tools/width_evidence.py` §2a (`Q127`). Not an argument to switch
+  `draw_lane_lines` on.
+- `P3-35h` ✅ — `RoadGraph.lane_centre` is placed about the drawn road (`carriageway_offset_m`),
+  the offset not turning with the asker; `verify_road_graph.gd` asserts it. Scripted; the user's
+  own drive outstanding. ⚠️ Graded with the overlay's lane marker (`--debug-view=full`).
 
-- **Deps:** `a` and `b` first, either order; `c` before `d` and `e`; `f` any time after `b`; `g` after `d`. Build order for what is left (planned 2026-09-20): `d5`, `g1`, `g2`, `g3`, `g4`; `h` after `g1`.
-- ⚠️ **`P3-33e` stands as written** and gets cheaper after `b`; `P3-33d` is superseded by `P3-35e`.
-- ⚠️ `hong_kong.yaml` is 73% comment (2,782 of 3,817 lines). Moving its prose to sidecars on `Q119`'s
-  precedent is **the user's call and not taken**: provenance beside the value is what it buys.
-- 🚫 **OpenStreetMap is unevaluated and not proposed.** It is the one outside source of lane tags, and
-  ODbL's share-alike meets hard rule 7 head-on. A decision for the user, never a default.
+- ⚠️ `P3-33e` stands as written; `P3-33d` is superseded by `P3-35e`.
+- ⚠️ `hong_kong.yaml` is 73% comment. Moving the prose to sidecars (`Q119`'s precedent) is the
+  user's call and not taken: provenance beside the value is what it buys.
+- 🚫 OpenStreetMap is unevaluated and not proposed — ODbL share-alike meets hard rule 7. A
+  decision for the user, never a default.
 
 ### Build `B1` — "One fare" — **runs second**
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-24` | **HUD chassis** — speed and current street, bilingual, plus the reserved slots and the thumb-rest contract. **Depends on nothing in `B1` or `B2`** and may be built first | Speed and street read at a glance; the plate does not flicker at a junction and does not blank on an unnamed edge; no HUD rect sits under a **thumb**, and a tool asserts both that and that overlapping a tap *zone* stays legal (`Q80`); the CJK font is a declared third-party asset with its own licence entry (`Q79`) |
-| `P3-25` | **Wrong-way warning** — a blinking NO ENTRY, top-centre, when the car is pointed against a one-way street. Depends only on `P3-24`'s chassis and `P2-2`'s graph | The sign is up when and only when the car faces against the flow; it does not fire on a turn across a one-way street, on a reverse taken while pointed the legal way, or at a junction; the proportions are the world sign's and a tool fails when they drift; the blink is under the 3 Hz photosensitivity ceiling (`Q81`) |
-| `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. **Standard and short hop only** | The loop runs end to end and can be failed |
+| `P3-24` ✅ | HUD chassis — speed, bilingual street plate, reserved slots, thumb-rest contract | Built; passed review (`Q79`, `Q80`) |
+| `P3-25` ✅ | Wrong-way warning — blinking NO ENTRY, top-centre | Built; passed review (`Q81`) |
+| `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. Standard and short hop only | The loop runs end to end and can be failed |
 | `P3-5a` | Minimal HUD — destination arrow, timer, meter. Deliberately ugly | Legible; no layout work |
 
-- **Deps:** `P1-5`, `P2-2`, and now `B2` — added by the reorder, not by substance: the fare loop
-  needs no art, but its review should be played on the city that ships.
-- **Review:** play one fare, start to finish | web build | **Is completing a fare worth doing twice?**
-- Cross-harbour and long-haul are held back to `B4` on purpose — they are the interesting fares, and
-  they are worth tuning once the plain one is known to work.
+- **Deps:** `P1-5`, `P2-2`, `B2` (by order: the review is played on the city that ships).
+- **Review:** play one fare, start to finish | web build | **Is completing a fare worth doing
+  twice?**
+- Cross-harbour and long-haul are held to `B4`.
 
 #### `P3-24` — how the HUD gets its chassis
 
-- **Deliverable:** a `Hud` node on `city_drive.tscn` — a speed readout bottom-left and a bilingual
-  street plate on the right above the minimap slot, plus three **empty, reserved** slots (minimap,
-  timer, meter) that `P3-5a` and `P3-5b` fill without moving anything that already shipped. The slots
-  are outlined under `DebugHud`'s FULL view, so the space being held can be looked at rather than
-  trusted.
-- **The arrangement follows one rule, and it is about what a readout MEANS**: left is the car, right
-  is the world, top is the fare, and the middle is the road and stays empty. Every part of that was a
-  correction on a frame — see `Q80`.
-- 🔴 **Plan the area; do not hold the space.** The reserved rects say where `P3-5a`'s and `P3-5b`'s
-  furniture goes and the check keeps them honest, but a release places what it *has*. Holding a gap
-  open for unbuilt UI makes every release before the last one look wrong, which is a cost paid many
-  times for a benefit that arrives once. Moving something when its neighbour lands is a `.tres` edit.
-- **The bar under the speed reads acceleration**, not engine revs: with no gearbox, wheel RPM is
-  proportional to road speed and would redraw the number above it. Nothing on this HUD is allowed to
-  be decoration.
-- **Why it comes out of `P3-5a` and gets its own ID:** speed and current street depend on **no fare
-  system**. `P3-5a`'s three deliverables all do. Splitting them lets the chassis, the font and the
-  touch contract land and be looked at while `B1` is still unwritten, which is the same argument
-  `P3-9a` made in front of `P3-9`.
-- ⚠️ **The touch reservation is the load-bearing half, and it is a contract, not a margin.**
-  `tuning/hud_layout.tres` names every rect — HUD slots, `P2-4`'s tap zones *and* the thumb rests —
-  and `tools/verify_hud.gd` asserts the HUD clears the **rests**. Without that, "leaving space for
-  touch" is an intention that `P2-4` discovers is false on a handset, which is the one place it is
-  expensive to find out. The layout is data because it has **three** readers: this HUD, `P2-4`'s
-  overlay, and the check.
-- 🔴 **A tap zone is not a thumb, and the first version of that rule was wrong** — it reserved half
-  the screen and thereby banned the two corners three of four shipped references put the speed and
-  the map in. `Q80` records the correction and why the check now asserts the *permission* too.
-- ⚠️ **The layout follows Midtown Madness 2**, the one reference that is about driving a real named
-  city: speed bottom-left, minimap bottom-right, and the street plate paired with the map rather than
-  with the speed. And **no destination-arrow slot** — both references that have a destination put the
-  arrow in the world, which is `P3-5a`'s to build.
-- ⚠️ **The UI is flat-shaded, like everything else.** Every panel is a polygon with cut corners, one
-  fill, one hard keyline; white is the city speaking and dark is the car speaking. `Q80`.
-- ⚠️ **It needs an off switch before it needs one for screenshots.** `GAME_DESIGN.md` says the
-  player should navigate by memory, and `P3-9`'s acceptance test is a drive with the arrow
-  **disabled**. A permanent street plate is not a direction aid — it says where you are, not where
-  to go — but it is closer to one than that test's premise assumes, so `--hud=off` exists for the
-  test first and for art frames second. `--debug-view=`'s precedent.
-- ⚠️ **This is the project's first bundled typeface**, and `LICENSING.md`'s "three licences, three
-  owners" becomes four. See `DECISIONS.md` `Q79` for the font, the licence and the one character in
-  the region it does not cover.
-- **Review:** drive Hennessy Road onto Kai Chiu Road and read the plate | web build | **Does the
-  plate name the street you are on, and does it stay still?**
-- **Deps:** `P2-2` alone. Not `B2`, not `P3-1a`.
+✅ Built. What `P3-5a`/`P3-5b` inherit (`Q80`, `.claude/rules/hud.md`):
+
+- Left is the car, right is the world, top is the fare, the middle stays empty. The destination
+  arrow goes in the world, not in a slot.
+- Plan the area, do not hold the space: reserved rects (minimap, timer, meter) say where furniture
+  goes; a release places what it has. Moving a neighbour is a `.tres` edit.
+- ⚠️ `tuning/hud_layout.tres` names HUD slots, `P2-4`'s tap zones and the thumb rests;
+  `tools/verify_hud.gd` asserts the HUD clears the rests, and that overlapping a tap zone stays
+  legal — a tap zone is not a thumb.
+- The bar under the speed reads acceleration (no gearbox, so RPM would repeat the speed).
+  Nothing on the HUD is decoration. Flat-shaded panels: white is the city, dark is the car.
+- `--hud=off` exists for `P3-9`'s arrow-disabled test first, art frames second.
+- First bundled typeface: licence entry and the one uncovered character in `Q79`.
 
 ### Build `B3` — "The streets are alive" — **runs third**
 
@@ -882,59 +390,42 @@ door. What is here is the order and what each step is graded on.
 | `P3-3` | `TrafficSystem` — AI on road-graph splines obeying direction and turn restrictions | Traffic obeys real rules; density scales by perf tier |
 | `P3-4` | Trams on Hennessy/Johnston as scripted moving blockers | Unpassable, correctly routed, tram bell audio |
 | `P3-8` | Bus-lane penalty + red taxi livery + minibus behaviour | Penalty triggers from the `bus_lane` flag |
-| `P3-2a` | **Near-miss scoring only** — detection plus a live on-screen award | Passing AI traffic inside the threshold at speed awards points, shown during the drive. No style chain, no banking |
+| `P3-2a` | Near-miss scoring only — detection plus a live on-screen award | Passing AI traffic inside the threshold at speed awards points, shown live. No style chain, no banking |
 
-- **Deps:** `P2-2`, `B1` — which now carries `B2` behind it, so this is unchanged in substance.
-  Within the build, `P3-4` and `P3-8` follow `P3-3`, and `P3-2a` follows all three — it has nothing
-  to detect until there is traffic to pass.
-- **Review:** drive the `B1` fare again, now with traffic | web build | **Harder in a good way, or
+- **Deps:** `P2-2`, `B1`. `P3-4` and `P3-8` follow `P3-3`; `P3-2a` follows all three.
+- **Review:** drive the `B1` fare again with traffic | web build | **Harder in a good way, or
   just annoying?**
-- ⚠️ **`P3-2a` is here because the review question is otherwise rigged against the build.** Dense
-  traffic converts an obstacle into an opportunity *only if threading it pays*; with scoring wholly in
-  `B4`, this review would judge traffic in the one state where traffic has no upside, and a "just
-  annoying" verdict would be an artifact of the ordering rather than a finding about the traffic.
-- **Prior art: Burnout 3.** Near-miss, oncoming-lane driving and a risk-fed boost meter are the
-  fullest working-out of *traffic as reward rather than obstacle*, and the threshold, the speed gate
-  and the pop are tuned quantities there rather than obvious ones.
-- ✅ **`Q19`'s routing half landed ahead of this build, as `Q51` (2026-08-18).** `city.json` publishes a clear corridor width per station and `RoadGraph.is_routable` is the predicate to route on, so traffic will not be sent down an edge the bundle records as blocked. ✅ **That is 24 edges against `Q19`'s grader's 26, reconciled 2026-08-19** as plan cell size — and the reconciliation found and fixed the reason it had been 21: the pipeline's 1 m along-edge spacing was stepping over walls, so `is_routable` was routing traffic onto `e636` HARBOUR ROAD. `ALONG_M` is `CELL_M` now and the published width is a lower bound at that cell (`Q51`). ⚠️ The walls are still there — `Q19`'s geometry half is open — and `nearest_edge` deliberately still resolves them, so the *player* can drive into one. ⚠️ Still owed by this task itself: the graph stores no adjacency and reads none of its 217 turn restrictions.
+- `P3-2a` is here so the review judges traffic with an upside; prior art Burnout 3 (threshold,
+  speed gate and pop are tuned quantities).
+- Route on `RoadGraph.is_routable` (`Q51`): `city.json` publishes a clear corridor width per
+  station, 24 blocked edges; `ALONG_M` is `CELL_M`. ⚠️ `nearest_edge` deliberately still resolves
+  blocked edges, so the player can drive into one (`Q19`'s geometry half is open).
+- ⚠️ Owed by `P3-3`: the graph stores no adjacency and reads none of its 217 turn restrictions.
 
 ### Build `B4` — "It's a game" — **runs fourth**
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-2b` | `ScoreSystem` — base, time bonus, drift/air/speed, **the style chain and its banking**, and the fare combo. Absorbs `P3-2a`'s near miss | Style points award live during driving, and the style chain is **losable** — a hard crash costs it unbanked |
-| `P3-1b` | Remaining fare types — **cross-harbour** and long haul | Cross-harbour fare works |
+| `P3-2b` | `ScoreSystem` — base, time bonus, drift/air/speed, the style chain and its banking, the fare combo. Absorbs `P3-2a` | Style points award live, and the chain is losable — a hard crash costs it unbanked |
+| `P3-1b` | Remaining fare types — cross-harbour and long haul | Cross-harbour fare works |
 | `P3-5b` | Full HUD — bilingual destination callouts, safe areas, one-handed layout | Readable one-handed in daylight |
 
-- **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want another
-  go?** This is the risk register's "novelty does not survive the first session", put directly.
-- ⚠️ **`P3-2b` got ONE of its two missing numbers from `Q50`, not two** (corrected by `Q85`,
-  2026-08-27). Skid smoke and tyre marks need a **traction-loss signal**, and `VehicleWheel3D`
-  publishes that: ✅ `get_skidinfo()` is real, measured moving 1.000 → 0.717 when grip breaks, and
-  costs nothing to read. 🔴 **`get_rpm()` is NOT per-wheel angular velocity — it is road speed
-  re-expressed.** This class is a Bullet raycast vehicle with no wheel inertia, so a wheel cannot
-  spin up under power (ratio to road speed is identical at grip 1.00 and 0.10) and cannot lock under
-  braking (−0.993 → −0.977 through a full stop). **Wheelspin and lockup are not available**, and
-  planning them here is planning a quantity the engine does not simulate.
-  🔴 **Worse, `P3-2b` inherits a lie the moment it draws anything.** `Q50` recorded that
-  `wheel_visual.gd`'s road-speed roll was gone "because a `VehicleWheel3D` rolls its own mesh from
-  the simulation" — but the simulation's rotation *is* road speed, so a wheel will roll smoothly
-  while smoke pours off it. No check can see that; only looking can. ⚠️ **`get_skidinfo()` is still the one
-  thing the switch bought that the raycast car could not give**, and it is worth stating next to
-  what it cost (`Q50`): the same isotropic `friction_slip` that makes the drift untunable is what
-  makes it free. **Wire it when the effects that consume it are built, not before.**
+- **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want
+  another go?**
+- ⚠️ `P3-2b` (`Q50`, `Q85`): `VehicleWheel3D.get_skidinfo()` is a real traction-loss signal
+  (1.000 → 0.717 when grip breaks) — wire it when skid smoke / tyre marks are built, not before.
+  🔴 `get_rpm()` is road speed re-expressed (no wheel inertia): wheelspin and lockup are not
+  available, and a wheel mesh rolls smoothly while smoke pours off it — only looking sees that.
 
 ### `P3-9` Authenticity test round 1
 
 - **Deliverable:** the test run with HK drivers who have not seen the game before.
 - **Accept:** ≥3 HK drivers navigate Convention Centre → Times Square with the arrow disabled.
-- **Review:** the drivers themselves | a build on a handset | **Human-judged, by people who are not
-  the user.** The only test in this plan whose verdict the team cannot give itself.
+- **Review:** the drivers themselves | a build on a handset | human-judged, by people who are
+  not the user.
 - **Deps:** all four builds, and `P0-3b` for the handset.
-- **Still needed after `P3-9a`, and not a repeat of it.** `P3-9a` tests the city on a keyboard at a
-  desk with nothing to do; this tests the *game* on a handset under a thumb, with a HUD whose arrow
-  has to be deliberately switched off. **Recruit different drivers** — the `P3-9a` cohort has already
-  learnt the map, which is the exact thing being measured.
+- Not a repeat of `P3-9a` (city, keyboard, desk); this tests the game on a handset. Recruit
+  different drivers — the `P3-9a` cohort has learnt the map.
 
 > **Phase 3 gate — go/no-go on full production.** Required: `P3-9` passes; 60fps held on the device
 > floor; the user judges the game fun.
@@ -945,363 +436,258 @@ door. What is here is the order and what each step is graded on.
 
 ### Phase 4 — The elevated network
 
-**Goal:** the 23.3% of carriageway that `Q13` excluded becomes drivable network rather than scenery.
-
-**Broken down, where the other post-slice phases are not**, for two reasons. It is the only one whose
-assumptions the slice will *not* change — the data is measured and the defects are named in `Q13`,
-`Q15`, `Q19`, `Q21` and `Q22`. And it stopped being hypothetical when shipping tile collision made
-the physical ramps climbable: the network is already half-open by accident, and a plan is cheaper
-than discovering the rest of it from a bug report.
-
-**`P2-7` is the prerequisite and does the geometry.** Everything here is about *driving*.
+**Goal:** the 23.3% of carriageway that `Q13` excluded becomes drivable network rather than
+scenery. `P2-7` does the geometry; everything here is about driving.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P4-1` ✅ **built 2026-09-04 (`Q111`)** | `RoadGraph` serves off-grade edges — nearest-edge, lane centres and travel direction across all three levels | ✅ The `P2-2` criterion is **deliberately reversed** and `verify_road_graph` asserts **both** halves — a closed level may never leak into a query, an open deck must be served by one at its own height, and it refuses to pass vacuously; **825 of 900** off-grade probes stand on an open deck. ✅ Reversal recorded against `Q13` as a **scope change**. 🔴 **Not all three levels: exactly the measured ones.** `fence.touchdown_levels` reverses to `[-1, 2]` and the rule is pinned — *open exactly where `clearance.LEVELS` measures* — so the tunnels stay shut on `Q108`'s own refusal and the ratchet rejects `[-1, 1]`, `[-1]` and `[]` alike. ✅ Touchdowns 39 → **5**, barriers 253 → **113**, indexed segments 2,959 → **3,739** = level 0 + level 1 exactly. ✅ `fenced_edges` unmoved at **14** and the at-grade impassable half unmoved at **19**, with `e208`/`e306` arriving as the two off-grade rows — open **and** graded. ✅ `reachability.py` loses **0.00%**; `check.sh` exit 0; A/B frame at node 175 shot twice a side. ✅ Review passed 2026-09-06 — the user drove onto the deck and back down |
-| `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | A query beside an elevated deck resolves to the deck when it carries height, and to the street when it does not. ⚠️ **The ETL half is already done**: a fare point under a flyover taking the deck's height was `Q15`, fixed 2026-08-21 by restricting the snap to level 0. What remains is the runtime query and the reverse case — a point that genuinely belongs *on* a deck, which no candidate filter can place. **Closes the remaining half of `Q15`** |
-| `P4-3` | Ramp traversal — the car drives grade → deck → grade without leaving the surface | No step over 0.15 m at any of the 36 nodes, measured; the kerb height is the tolerance because it is what the suspension already survives |
-| `P4-4` | Traffic across levels — extends `P3-3` onto the elevated network | AI obeys direction and turn restrictions on ramps; density scales by tier |
-| `P4-5` | Perf pass — 23.3% more drivable area, and the streamer's bands were tuned without it | 60fps on the device floor with the elevated network resident. 🔴 **And now a second operating point (`Q120`)**: the shipped `streaming.tres` pair (LOD0 <250 m, unload 400 m) is **108% of the 300k triangle budget** at the worst camera in `mong_kok` against 71% in `wan_chai`, so this task no longer tunes for one region's density. ⚠️ **The cheapest lever is not a distance** — LOD1 saves only 51–62% (L1/L0 0.38–0.49) while carrying 13.6 of 22.3 resident tiles, so a harsher LOD1 or a third tier is ETL-side and costs no draw calls. 🔴 **Refuted 2026-09-08 (`P5-18`, `Q122`)**: that count came from banding by tile centre; the engine bands by `aabb` and holds **21** LOD0 tiles at the worst camera, so LOD0 carries **84–91%** of the resident set and the LOD1 cell moves it 4–8% — `mong_kok` reads **184%**, `wan_chai` **105%**. The lever left is LOD0's cell with the LOD0 radius, both this task's. ⚠️ Pull-in distance is `Q26`'s look decision as well as a hitch budget |
+| `P4-1` ✅ | `RoadGraph` serves off-grade edges (`Q111`) | Shipped: open exactly where `clearance.LEVELS` measures — `fence.touchdown_levels: [-1, 2]`; review passed |
+| `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | Beside an elevated deck a query resolves to the deck when it carries height and to the street when not. ETL half done (`Q15`: fare snap restricted to level 0); what remains is the runtime query and a point that belongs on a deck. Closes the rest of `Q15` |
+| `P4-3` | Ramp traversal — grade → deck → grade without leaving the surface | No step over 0.15 m (kerb height) at any of the 36 nodes, measured. MARSH ROAD `e248`'s 35.8% lip is now reachable |
+| `P4-4` | Traffic across levels — extends `P3-3` | AI obeys direction and turn restrictions on ramps; density scales by tier |
+| `P4-5` | Perf pass — the streamer's bands were tuned without the elevated network | 60fps on the device floor with it resident, at two operating points (`Q120`, `Q122`): the engine bands by `aabb`, holds 21 LOD0 tiles at the worst camera, LOD0 is 84–91% of the resident set — `mong_kok` 184%, `wan_chai` 105% of the 300k budget. The lever is LOD0's cell and radius; 🚫 a harsher LOD1 moves 4–8%. ⚠️ Pull-in distance is also `Q26`'s look decision |
 
-- **Deps:** `P2-7`, `P3-3`. `P4-3` follows `P4-1`.
+- **Deps:** `P2-7`, `P3-3`. `P4-3` follows `P4-1`. ⚠️ `P3-3` is not started, so the network is
+  open with no traffic on it.
 - **Review:** drive the Wan Chai Interchange from Gloucester Road onto the deck and back down |
-  web build | **Can you get up there, and does it feel like a road rather than a ramp-shaped bug?**
-- ⚠️ **Also inherits `Q22`, now at 5.6%** — off-grade carriageway hanging past its structure was
-  10.3% and the deck-sourced width took it to **5.6%** (`Q103`, 2026-09-02). Still cosmetic only
-  while nothing off-grade is drivable; opening the network is what makes the remainder a ribbon a
-  player stands on. ⚠️ **Not closed** — one width per edge cannot fit a deck that varies along its
-  length, and the residual is recorded in `Q103`.
-- **Note:** `P4-1` reverses an acceptance criterion this project measured and proved over 505 probes.
-  That is not a mistake being corrected — `Q13`'s refusal was the right call for a slice with no
-  ramps. **Record it as a scope change, not a bug fix**, or the history stops making sense.
-- 🔴 **The premise has since expired and this is no longer only a scope change (`Q103`, 2026-09-02).**
-  `Q13`'s refusal is a *graph* refusal; `surface.py` still builds the ribbon and it still collides.
-  Once the touchdowns were ramped, **39 of the 60 off-grade edges reached street height** — a user
-  drove `e208` FLEMING ROAD into a parapet standing 1.08 m from its own centreline. So the network is
-  **already open and ungraded**: `clearance.py`, `fence.py`, `centreline_error.py`,
-  `carriageway_occupancy.py`, `street_tracker.gd` and the wrong-way monitor all gate on level 0.
-  `P4-1` now has two admissible endings — open it properly, or stop the ramps at the touchdown — and
-  the second is not a smaller version of the first.
-  ✅ **The second shipped 2026-09-02 and the first is still `P4-1`'s** — the ramps stop at the
-  touchdown (`fence.touchdown_levels`), so removing that key is now the whole of "open it properly".
-  ⚠️ **`P4-1` inherited a measured width defect and it is FIXED** (kept for the shape of the
-  argument, which `P4-1` will meet again): 11 of 35 readable level-1 edges carried a ribbon wider
-  than their deck, all ten worst at an authored `lanes = 3`. 🔴 **The obvious fix was refuted** —
-  the carriageway publishers license 5 of 45 off-grade edges and their 2D lines find the street
-  *under* the deck, so 2 of those 5 would publish a width wider than the deck.
-  🔴 **A width-only fix was refuted outright, by the edge that opened the question** (`Q103`,
-  2026-09-02): at `e208`'s station the deck is **7.6 m** and the ribbon **6.40 m**, so a deck-sourced
-  width would *widen* it. `deck_margin.py`'s pooled table puts **at least 421 of the 713** hanging
-  stations (59%) on a ribbon already narrower than its deck — registration, which no width rule can
-  reach.
-  ✅ **Both shipped 2026-09-02, `schema_version` 9**: 36 of 45 level-1 edges take a width **and a
-  signed offset** from the deck they stand on, and `surface.py` draws the ribbon there. Overhang
-  **10.3% → 5.6%**, hanging area 5,449 → **3,326 m²**, `|drawn − deck|` p50 2.50 → **0.81 m**.
-  ✅ The stage cost was lower than recorded: `roads.py` already reads `INFRASTRUCTURE` through
-  `buildings.read_sheet`, so this extended `carriageway.py` rather than adding a stage.
-  ⚠️ **Half the result went the other way and is recorded, not buried**: per-edge `over p50` worsened
-  on 22 of 35 edges, because one number per edge cannot fit a deck that varies along its length.
-  `DECISIONS.md` `Q103`.
-  ✅ **BUILT 2026-09-04 (`Q107`).** The ribbon is cut to its own deck per station and per side:
-  346 stations across 36 edges, `overhang.py` hanging **4.3% → 3.3%**, `deck_margin.py` 7.6% →
-  **6.6%**, 0 of 737 level-0 edges moved. `width_m` did not move — the rims license paint, not a
-  width — so what `P4-1` still owns is unchanged: attribute deck extent to *this edge's*
-  carriageway. ⬜ The residual 3.3% is where the two deck models differ (the estate is not
-  watertight) and is not reachable by this cut.
-  ✅ **The remaining candidate — a per-station ASYMMETRIC ribbon — was priced first and it was cheap
-  (`Q105`, 2026-09-04).** `deck_margin.py`'s counterfactual cuts each station's ribbon to its deck's
-  own two rims: **2 of 1,327 priced** stations then fall under `is_passable`'s lane bar and **1**
-  under `fits_car`'s (`Q106`-corrected), and `e208`'s rim is byte-identical over a
-  `--bridge-m` 0-4 sweep so it is real structure and not a hole. 🚫 **But it licenses PAINT and not a
-  width** — the rims are one contiguous run, the interchange's at `e208` — so the build clamps the
-  **drawn ribbon** and leaves `width_m` alone, or it meets this task's own refutation above at a
-  second elevation. ⚠️ **8 stations have a NEGATIVE half**, where the centreline lies outside its own
-  deck and the clamp is undefined; `e104` carries 5 of them in one run, so a fallback rule is part of
-  the work rather than an edge case. ⬜ **What would lift the restriction is unchanged**: attribute
-  deck extent to *this edge's* carriageway rather than to a contiguous run. `DECISIONS.md` `Q105`.
-  ✅ **The off-grade network now publishes a CLEARANCE, 2026-09-04 (`Q108`)** — `clearance.LEVELS`
-  and `carriageway_occupancy.CORRIDOR_LEVELS` are `(0, 1)`, so **782** edges carry a measured
-  corridor where 737 did and `e208` FLEMING ROAD reads **2.00 m** where it published `-1.0`. That is
-  this task's hard precondition: `is_passable` and `fits_car` read `clear_width_m`, so opening
-  `is_drivable` without it would hand the player a corridor nothing had measured. 🔴 **The stage had
-  `Q106`'s frame defect and it is the fifth tool to have it — the only one that publishes** — and
-  fixing it *moved* the answer (`e208` 1.25 → 2.00 m, three starved level-1 edges → two), so a
-  publish that skipped it would have recorded the wrong set. ✅ **`e208` lands on the right side of
-  both bars**: under the lane (3.20 m) and over the car (1.80 m), so the router refuses it and the
-  player is not fenced out — an outcome that was not knowable while the row was `-1.0`.
-  ⬜ **Still inert**: `is_drivable` is level 0 and both `impassable_edge_ids` and `fenced_edge_ids`
-  filter through it, so these widths change nothing until this task reverses that. 🚫 **Level −1 is
-  deliberately not published** — a bore has no deck for the walk to find and `e489`'s defect is
-  0.22 m of *headroom*, which a horizontal corridor cannot express; opening the tunnels to driving
-  needs a vertical instrument, not a wider `levels`. 🚫 **The fence is not extended and should not
-  be**: no off-grade edge reaches the car bar, and `fence.touchdown_levels` already closes that
-  network at its touchdowns — removing that key stays the whole of "open it properly".
-  `DECISIONS.md` `Q108`.
-  ✅ **The blocked-bridge probe was re-run in the corrected frame 2026-09-04 (`Q109`), and the
-  strategy it feeds is CONFIRMED rather than re-scoped.** `Q103`'s 2–2 split was measured before
-  `Q106`'s offset and `Q107`'s clamp; re-read on the shipped ribbon it survives at both resolutions,
-  membership unchanged — `centreline occupied` `e208` **10 of 205** and `e306` **15 of 230** against
-  `e257` and `e450` at **0**. So this task still owns two edges that neither a width nor a constant
-  offset reaches, and two that a width could.
-  🔴 **But the two migrating edges are much worse and `Q107` is why**: `e208` 2.33 → 1.87 →
-  **1.35 m** and `e306` 2.42 → 1.93 → **1.86**, starved run 17 → **32 m**, against `e257` and
-  `e450` all but flat at 2.81 and 2.98, with `deck_margin.py --probe-edges` showing the drawn ribbon collapsing **5.60 →
-  3.42 m** over exactly the stations that carry the minimum. The occupier did not move — the paint
-  did, and the corridor is measured inside the paint. ⚠️ **A paint clamp is a corridor change**, so
-  anything this task does off-grade owes the four corridor readings and the starved runs before and
-  after.
-  ✅ **SETTLED 2026-09-04 (`Q110`), and in the pipeline's favour — see below.**
-  🔴 **`e208` now crosses `fits_car`'s bar in ONE instrument only**, which is this task's next
-  question and is not answered by moving a bar: the grader reads **1.35 m** at the shipped plan bin
-  and **1.80 m** matched, against the **2.00 m** the bundle publishes and the line above calls *"the
-  right side of both bars"*. ⚠️ **`clearance_reconcile.py` cannot see it** — it grades the lane bar,
-  reads 21 / 25 / 6 unmoved, and books `e208` as `agree` at a +0.65 m gap. `DECISIONS.md` `Q109`.
-  ✅ **The corridor is measured EXACTLY 2026-09-04 (`Q110`), the disagreement is settled and the
-  fence question closes.** `tools/corridor_truth.py` clips each triangle against the station's slab
-  and the bumper band in closed form — no plan cell, no across cell, no sampling — and blocks on
-  **every** tile triangle with no colour filter, so 🔴 **it can clear an edge and can never condemn
-  one**, which is exactly the shape the question needed. The ladder is monotone in the bin and the
-  exact reading is above all of them: `e208` 1.35 / 1.90 / 2.00 / **2.37 m**, `e306` 1.86 / 2.50 /
-  2.50 / **3.06**, `e257` 2.81 / — / 3.75 / **4.21**, `e450` 2.98 / — / 4.00 / **5.04**. So *neither
-  instrument was wrong about the city* (`Q51`'s sentence at a second population), the answer is the
-  pipeline's, and **no barrier is owed on any of the four** — all clear the 1.80 m car bar by
-  0.57–3.24 m. ⚠️ The lane bar is a different verdict and is not pooled (`Q57`): `e208` and `e306`
-  stay under 3.20 m, which is the membership `clearance.py` already publishes; the grader's *four*
-  was its 1.0 m bin, and at the pipeline's own resolution its table falls **4 → 2**.
-  ✅ **`Q107`'s clamp is priced and the debt above is paid**: in the pre-clamp frame it cost **one
-  edge, 0.41 m** (`e208` 2.37 → 2.78) and **0.00 on the other three**, moving no bar.
-  🔴 **And the residual is a PAINT lead rather than an obstruction lead, which re-points what is
-  left of this task.** The whole blockage at `e208`'s binding station is a **single face 2 cm wide**,
-  and at every probed station the ribbon's outer rail sits *exactly* on `deck_rim_m` with that face
-  0.6–0.8 m inboard of it — so `Q107` cut the paint back to the **structure's** rim, which includes
-  the parapet, and the carriageway is drawn over the top of one. That is 0.77 m of paint on a wall,
-  not an obstruction in a lane, and `Q57` is the rule that the two want opposite fixes. A rim that
-  stopped at the drivable face would cost **no** corridor metre and would stop the paint lying.
-  ⚠️ **What lies beyond the paint is still not settled and that tool cannot settle it** — it asks
-  what stands *in* the bumper band and never whether deck stands *under* it, so air reads clear.
-  ⬜ Unchanged: attribute deck extent to *this edge's* carriageway rather than to a contiguous run.
-  `DECISIONS.md` `Q110`.
-  🔴 **And the ribbon shrink at the touchdown is a separate, smaller defect — `Q113`, found by
-  driving 2026-09-05.** `Q107`'s clamp fires on vertices whose `on_structure` is **False**: a
-  descending ramp still returns a deck rim of **0.100 m**, which is `DECK_ACROSS_M` exactly, and
-  `e208` FLEMING ROAD's ribbon is cut **5.60 → 3.15 m** on the strength of it. The markings shader
-  then paints that as two **1.57 m** lanes, which is what the driver reported. **15 vertices over 4
-  edges**, `e208`'s four at 2.45 m each. 🚫 Not fixed by removing the clamp, and not by moving
-  `width_m` — the fix is to stop clamping off structure, on `Q107`'s own *"absence of a deck is
-  `inf`"* rule. ✅ Street View confirms the lane **count** is right (2 on the bridge, 2+1 on landing
-  southbound; 1 splitting to 2 northbound), so it is the width that is wrong — and it records that
-  the real count varies **along** an edge, which `lanes` cannot say.
-  🔴 **AND "removing that key is the whole of it" is now WRONG AS WRITTEN — it is
-  `touchdown_levels: [-1]`, never `[]`.** That sentence was true on 2026-09-02 and `Q108` expired it
-  eight entries later by publishing a clearance for level **1** and *deliberately refusing* one for
-  level **−1**: on the shipped bundle **45 of 45** level-1 edges carry a measured `clear_width_m` and
-  **0 of 15** level-−1 edges do. So emptying the key opens 15 tunnels whose corridor nothing has
-  measured — including `e489`, whose defect is **0.22 m of headroom** that a horizontal instrument
-  cannot express at all — which is the precise thing `Q108` says opening `is_drivable` without a
-  published clearance would do. The flyovers are measured and may open; the bores need the vertical
-  instrument first (`Q103`, `Q108`), and until it exists `[-1]` is what keeps them shut.
-  ✅ **DONE 2026-09-04 (`Q111`) — the network is open, at `[-1, 2]`.** The invariant shipped with it:
-  *open exactly where `clearance.LEVELS` measures*, pinned by
-  `test_the_open_levels_are_the_measured_levels`, which refuses `[-1, 1]`, `[-1]` and `[]` alike.
-  `is_drivable` follows that measurement rather than a level literal, so the bores stay out because
-  nothing has measured them.
-  ⚠️ **The dependencies remain UNMET and the Phase 3 gate is still the user's**: `P3-3` is not
-  started, so the elevated network is open with no traffic on it; MARSH ROAD `e248`'s 35.8% lip is
-  now reachable (`P4-3`); and the streamer's bands were tuned without 23.3% more drivable area
-  resident (`P4-5`). ✅ **The human review point passed 2026-09-06** — *"can you get up
-  there, and does it feel like a road rather than a ramp-shaped bug?"* was the user's drive, and the
-  answer was yes. The unmet dependencies above are unchanged by it.
+  web build | passed for `P4-1` on the user's drive.
+- `P4-1` reverses `P2-2`'s criterion — recorded against `Q13` as a scope change, not a bug fix.
+  `verify_road_graph` asserts both halves (no closed level leaks into a query; an open deck is
+  served at its own height) and refuses to pass vacuously.
+- 🔴 `touchdown_levels` is never `[]`, `[-1]` or `[-1, 1]` —
+  `test_the_open_levels_are_the_measured_levels` pins it. Level −1 publishes no clearance
+  (`Q108`): a bore has no deck to walk and `e489`'s defect is 0.22 m of headroom, which needs a
+  vertical instrument before the tunnels open.
+- What holds off-grade, each measured shut in its record:
+  - Width and signed offset come from the deck (`Q103`, schema 9); the carriageway publishers'
+    2D lines find the street under the deck and are not a source.
+  - The drawn ribbon is clamped to the deck rims per station and side (`Q107`), never clamped
+    off structure (`Q113`), slid before cut (`P3-35g1`). The rims license paint, not a
+    `width_m` (`Q105`).
+  - `Q110`: `tools/corridor_truth.py` measures the corridor exactly and can clear an edge, never
+    condemn one; no barrier is owed on `e208`, `e306`, `e257`, `e450` (all clear the 1.80 m car
+    bar). `e208` and `e306` stay under the 3.20 m lane bar — the router refuses them, the
+    player is not fenced out. The two bars are not pooled (`Q57`).
+  - ⚠️ A paint clamp is a corridor change: off-grade work owes the four corridor readings and
+    the starved runs before and after (`Q109`).
+- ⬜ Open: attribute deck extent to this edge's carriageway rather than a contiguous run — the
+  rim includes the parapet, so ~0.77 m of paint lies on a wall at `e208` (`Q110`); residual
+  overhang 3.3% where the two deck models differ (`Q22`, `Q107`). `lanes` cannot say a count
+  that varies along an edge (`Q113`).
 
 ### Phase 5 — Content, and the modularisation that precedes it
 
-**Goal:** a second region loads beside the first, and the bundle is built from parts an artist can
-author and a second region can reuse. ⚠️ **The first half of that goal had no owner until 2026-09-07**:
-`P5-7` moves the ETL cut and `P5-9` is the runtime that loads two bundles — every loader today opens
-one, and nothing reads `city_offset`.
+**Goal:** a second region loads beside the first, and the bundle is built from parts an artist
+can author and a second region can reuse.
 
-**Broken down** because the constraint is measured rather than guessed: the thin layers scale
-linearly with the region (`Q115`), a whole-city mesh is refused on precision as well as size (`Q116`),
-and a 3D developer's review named the same thing from the outside. **The draw-call budget stays** —
-a `MultiMesh` costs the draw call the merged glb costs, measured at `P3-29` — and every step below
-pastes its delta on the driving route. 🔴 **Every step owes an A/B render at one fixed camera, shot
-twice a side and `cmp`'d** (`Q62`): no counter here can see a placement or a facing go wrong.
+The thin layers scale linearly with the region (`Q115`); a whole-city mesh is refused on
+precision and size (`Q116`). The draw-call budget stays — a `MultiMesh` costs the draw call the
+merged glb costs. 🔴 Every step owes an A/B render at one fixed camera, shot twice a side and
+`cmp`'d (`Q62`). Refused, with numbers in `Q115`: a road kit, runtime extrusion, decals, the
+conformed paint layers as props, reuse across the ETL registrations.
 
-**What is refused is in `Q115` with its numbers** — a road kit, runtime extrusion, decals, the
-conformed paint layers as props, reuse across the ETL registrations — and is not re-proposed here.
+- `P5-1` ✅ — `generated_layer.gd` (one table for the `.glb` layers) and `layer_preview.gd`
+  replace nine `generated_*.gd` and nine `*_preview.gd`; bundle byte-identical (`Q115`). ⚠️ A
+  consumer lives in `.claude/skills/…/driver.gd`, which no grep of `game/` sees.
+- `P5-2` ✅ — signs as a face library + `signs_placements.json`, one `MultiMesh` per library
+  mesh; generated per region from the config's faces. 🔴 Draw calls +35, not 22 — the shadow
+  passes (`Q115`).
+- `P5-3` ✅ — lamps as one 40-triangle prop + `lamps_placements.json`; `lamps.glb` 2,377,500 →
+  3,568 B; draw calls 1 → 1. ⚠️ The column's ring turns with the arm (≤ 46.6 mm from the merged
+  build). ⚠️ `prims` counts a `MultiMesh`'s base mesh per pass, so it no longer proxies drawn
+  triangles on a prop layer.
+- `P5-4` ✅ — arrows as a glyph library + `arrows_placements.json` (position, yaw, pitch);
+  draw calls +10. 🚫 Lane slot not shipped — an unread channel (`Q54`). ⚠️ The glyph is rigid
+  where the merged build sheared it (max 18 mm). Box junctions and stop lines stay merged (`Q92`).
+- `P5-5` ✅ — railings, bollards, barriers tiled from one unit per class; `metres_snapped`,
+  `joints`, `joint_gap_m`, `bends` published; gaps at bends counted, never closed by stretching
+  a panel; `panel_m` is the `.tres` post pitch. Draw calls 3 → 3. The user accepted the wedge at
+  a bend; no mitre.
+- `P5-6` ✅ — roads chunked by 150 m tile under `roads/<tile>.glb`, caps whole to one tile, one
+  `-col` per chunk; `city.json` `road_surface: [{id, file, aabb}]` (schema 27, `roadsurface.json`
+  8); union identical to the old mesh, seam gap 0.000 m; graders read through `read_surface`.
+  Draw calls +13 to +17 on the throttle route (`Q120`). ⚠️ The road is `CityManifest.road_chunks`,
+  not a `generated_layer.gd` row; `drive_harness.gd` holds the chunks under the start line
+  synchronously. ⚠️ The 8-light beam budget is now per chunk.
+- `P5-7` ✅ — the region join (`Q116`): an edge belongs whole to one region, owned by the region
+  holding its travel-start vertex; boundary nodes published by both; caps whole to one side.
+  ⚠️ The rectangle still selects sheets and `bounds` do not move (`Q10`).
+- `P5-7a` ✅ — the `Q19` battery on `causeway_bay` (`Q120`). No carve list, the user's call:
+  `e45` KA NING PATH is a ramp's mass through the path, `e46` a `Q90` touchdown the height model
+  did not lift. Fence `[45, 46, 122]` loses 170 of 39,402 pairs — the number a carve must beat.
+- `P5-7b` ✅ — `tools/join_seam.py`: pairs two bundles' seam nodes and runs; grades, exits 0.
+- `P5-7c` ✅ — `join.reach_m: 133.0`; `load_config` derives neighbours (shared whole edge only;
+  overlap refused); `Config.neighbours` / `read_reach` / `read_bounds` / `read_box` /
+  `read_extent`; `HeightField.from_meshes` gained `region_low`. `bounds`, `city_offset` and the
+  tile grid do not move.
+- `P5-7d` ✅ — the reach fetched: Wan Chai's sheets 6 → 8; `test_fetch` pins both lists.
+- `P5-7e` ✅ — the cut: runs kept whole across the internal line; non-owner copies ship under a
+  top-level `foreign_edges` list with `width_source: authored` and `foreign: <owner>`;
+  `source_id` and run ordinal on every edge; `ROADGRAPH_SCHEMA` 12, `CITY_SCHEMA` unmoved; ids
+  keep their read ordinal with gaps. ⚠️ The outer clip edge is floored outward up to 0.56 m
+  (`Q7`), so ownership falls back to the clip rectangle there, never on an internal line.
+  Foreign edges are offered to the kerbside join as tracks and published on nothing.
+  `foreign_unmeasured_stations` counts survey stations beyond reach.
+- `P5-7f` ✅ — a boundary node's cap admits the foreign mouth at its authored width and is built
+  only by the region `roads.Ownership` gives the node; 0 foreign ribbon drawn. An owned far half
+  rides in the last column's chunk; the streamer picks by `aabb`, never tile id. ⚠️ Open seam
+  gaps: a foreign arm's trim is this region's while its ribbon is the owner's (visible as a dark
+  edge at node 224, not a step); `_read_offside` pairs owned edges only.
+- `P5-7g` ✅ — `pipeline/join.py` merges two graphs (792 + 207 → 999 edges, 764 nodes, 16 seam
+  nodes, 252 turns); `reachability.py --graph-dir` control 0.00%. The reconcile ratchet is
+  region-keyed. 🚫 The far half's `clear_width_m` is refused and counted, never read off a
+  neighbour's tiles. ⚠️ `deck_error` / `overhang` read worse on Causeway Bay because far halves
+  ride over tiles its bundle does not carry. ⚠️ A sync without a headless `--import` renders no
+  buildings — the cache, not the bundle.
+- `P5-9` ✅ — two regions resident: a bundle per region under `game/assets/generated/<region>/`,
+  a `Node3D` per region at the `city_offset` difference, one merged `RoadGraph`. `P5-9e`
+  refused; `P5-9f`'s verdict is the user's.
+- `P5-9a` ✅ — `tools/resident_budget.py --pair <a> <b>` (and `--at X Z`) through
+  `Config.frame_offset`; `driver.gd --spawn-fare=<region>/<id>`. The seam is not over budget
+  (73%); the pair's worst camera is Wan Chai's own.
+- `P5-9b` ✅ — `sync_generated.sh <region>...` writes one directory per region and
+  `generated/regions.json` (schema 1, first listed is the frame; build output, gitignored);
+  `generated_regions.gd` is the one place the root is spelled; `check.sh` runs the verify tools
+  per region. ⚠️ `landmarks.json`'s `res://assets/generated/` prefix is read as the region's own
+  directory (`CityManifest.resolve_asset`; `carriageway_occupancy.py` likewise). ⚠️ Graders'
+  `--generated` default is the frame region's directory. ⚠️ macOS Bash 3.2: no associative arrays.
+- `P5-9c` ✅ — `region.tscn` + `CityRegions` (`city_regions.gd`), one per region at
+  `[1649, 0, 0]`; the streamer takes the eye through `to_local`; the road hold is asked of every
+  streamer because translated `bounds_game` overlap ~250 m. 🚫 One streamer over N manifests not
+  taken. ⚠️ ~150 draw calls on the line touches `verify_city_streamer`'s budget. ⚠️ A re-sync
+  needs a headless `--import` before a drive or the car falls.
+- `P5-9d` ✅ — `road_join.gd` ports `join.py` rule for rule; `RoadGraph.shared()` builds over
+  `GeneratedRegions.resident()`; `verify_join.gd` diffs against `etl/out/<frame>+<other>/`
+  (re-run `python -m pipeline.join` when a region moves). 🔴 `clearance`, `carriageway[]`,
+  `fence` and `fares` collide on per-region integer ids: a foreign copy's id aliases the owner's
+  merged id, fare identity is `(region_id, id)`, everything goes through `edge_id_in(region, id)`.
+  ⚠️ Nothing may cache a `_index` cell key across a build. ⚠️ A fold past two regions drops a
+  foreign copy owned by a third.
+- `P5-9e` 🚫 — libraries shared across regions: built, measured, reverted. The libraries are not
+  identical files (each region ships the variants it stands), and a per-region `MultiMesh` is
+  already culled (+0 draw calls with two regions); the fold made each batch span both regions:
+  +3 to +11 draw calls and up to +262,000 primitives on the seam drive. ⚠️ Re-measure if a later
+  region list gives a long sightline onto a neighbour's props — the argument is culling.
+- `P5-9f` ✅ — the drive across the join: `--spawn-fare=wan_chai/f_045 --hold=accelerate@0.5+9.5
+  --hold=steer_left@6.0+0.22` crosses seam node 224 with no step, barrier or NO ENTRY. Draw-call
+  gate holds at 150 with two streamers. ⚠️ The unsteered drive rings NO ENTRY, correctly (it
+  enters westbound one-way `911`). Verdict owed by the user.
+- `P5-9g` ✅ — drive determinism: `ChaseCamera.snap_to_target()` after each teleport (not from
+  `place_at`); the boot-frame streamer had freed the held chunks. `driver.gd --trace=<file>`.
+  `city_drive.tscn` assigns `camera_rig`, `verify_city.gd` fails without it. ⚠️ A route that
+  outruns the streaming radius is not held. `DECISIONS.md` `P5-9g`.
+- `P5-8` ⬜ — **Content**: Causeway Bay, then Central (`Q6`, deferred until after `P3-9`); full
+  vehicle roster, audio pass, night mode. Outline only. Waits on Builds `B1`–`B4`. ⚠️ `Q120`:
+  200 MB buys 5–15 km² at current fidelity, so which regions ship is a fidelity question first.
 
-| ID | Deliverable | Accept |
-|---|---|---|
-| `P5-1` ✅ **built 2026-09-06 (`Q115`)** | **Script consolidation** — `generated_layer.gd`, one table for the nine `.glb` layers, and `layer_preview.gd` keyed by a layer id, replacing nine `generated_*.gd` and nine `*_preview.gd` (the four JSON loaders and the fare, road-graph and tile previews are real code and stay) | ✅ Measured by `git diff --numstat`: **1,111 removed, 435 added**, code lines **356 → 169**; the first estimate of "about 2,000" was wrong. ✅ `check.sh` exit 0 ×3, every `verify_*` resolving its layer through the table and `verify_city.gd` still pinning each path to the manifest. ✅ Bundle **byte-identical** by `shasum` over 147 files. ✅ Draw calls on the throttle route 65/64/63/63/65/63 → **65/65/63/63/65/63**, telemetry identical; the t=2 call is the streamer's tile landing a tick earlier. ✅ `Q27` street frame **0 of 2,073,600 pixels** differing. 🔴 Two findings: a consumer in `.claude/skills/…/driver.gd` that no grep of `game/` could see, and Godot 4.7.1's `--import` re-saving JSON with tabs — `CLAUDE.md` amended. ✅ Reviewed: `Q77`'s load-order reason restored, id constants close a silent-skip hole, `Q74` closed with the prose in the scene comments, and `verify_city.gd` holds both scenes' layer nodes against the table. ⬜ Review point stands |
-| `P5-2` ✅ **built 2026-09-06 (`Q115`)** | **Signs as a face library plus placements** — `signs.glb` is one mesh per face variant plus a unit pole, `signs_placements.json` stands them, `layer_preview.gd` draws one `MultiMesh` per library mesh. ⚠️ Generated per region from the config's faces rather than authored for the city — the *shape* of a hand-authored face library, with the authoring itself left for an artist | Same **671 / 497**. Every counter `signs.json` publishes today byte-identical — both partitions, `shift_m` with its `n`, `plates_turned` = the NO ENTRY family exactly, `no_entry_against_flow` 0 by mutation, `posts_kept_as_surveyed`. `facing_away` re-derived from the placement basis and **0**; `verify_signs.gd` grades the dispatch **per face**; `sign_face_survey.py` unchanged and its two tables re-pasted. The 83 text plates a face variant carrying `signs_text.png`; `mesh_contract.gd` still passes. Draw calls **about 22**, pasted. A/B at one street that carries kept posts. `city.json` schema bumped, both sides one commit. ✅ **Done**: 671 / 497, 1,251 placements, every counter byte-identical and `triangles`/`aabb` the merged build's own numbers because the expansion was measured against it (0.13 mm); frame 2 px of 2,073,600; `city.json` 23. 🔴 Draw calls **+35**, not 22 — the shadow passes — recorded in `Q115`. ✅ Review passed 2026-09-06 |
-| `P5-3` ✅ **built 2026-09-06 (`Q115`)** | **Lamps as one prop plus placements** — `lamps.json` publishes 892 transforms; one `MultiMesh`, no collider | Every `lamps.json` counter byte-identical — `min_kerb_clearance_m`, `shift_m` with `n`, `lantern_overhang_m`, `lanterns_past_centreline`, the spacing pair, `gaps_over_report_m`. `verify_lamps.gd`'s upright bar re-stated over transforms and the prism ring **not** reversed (`P3-26`). Draw calls **1 → 1**. The prop's own AABB quoted against `Q82`'s 1,646 m; ⚠️ `[importer_defaults]` compression stays off — this removes the reason, not the setting. A/B at one street. ✅ **Done**: `lamps.glb` **2,377,500 → 3,568 B**, one `LPO` mesh of 40 triangles stood 892 times by `lamps_placements.json` (158,355 B); every counter byte-identical, `bytes`/`aabb` and the new `library_*`/`placements*` keys the only moving fields. Draw calls on the throttle route **100/99/98/100/100/99 → the same six numbers**, so 1 → 1 holds. The prop's own extent **0.320 × 9.050 × 2.078 m** against the 1,646 m the merged mesh was quantised over. 🔴 The stood library is NOT the merged mesh to the millimetre — the column's hexagonal ring now turns with the arm, so its corners sit up to **46.6 mm** from the merged build's (2 × 0.09 × sin 15°; the commit message's "12 mm on a 45 mm radius" had the radius wrong); the arm and lantern agree to 0.1 mm. Frames: `Q27` street **1,160 px** and Hennessy **5,203 px** of 2,073,600 differ, both sides pair-identical, the difference confined to the lamp columns' outlines. ⚠️ `prims` falls by **106,920 ≈ 35,680 × 3** at t=1 while nothing stops being drawn — the readout counts a `MultiMesh`'s base mesh per pass, not per instance, so it no longer proxies drawn triangles on a prop layer. Numbers in `Q115`. ✅ Review passed 2026-09-06 |
-| `P5-4` ✅ **built 2026-09-06 (`Q115`)** | **Arrows as a glyph library plus placements** — one mesh per `RM` code; `arrows_placements.json` publishes position, yaw and **pitch** between nose and tail heights, plus lane slot | Both partitions byte-identical, `stacked_disagreeing` **29** unmoved (the finding is a lane count, not a mesh), `against_one_way`, `outside_carriageway` 38 / 9 unmoved. `inverted` re-stated as the basis determinant and **0**. `paint_clearance.py` reads placements plus glyph and reproduces its buried-arrow table. Draw calls = glyph codes, pasted. ⚠️ Box junctions and stop lines stay merged (`Q92`). ✅ **Done**: `arrows.glb` **197,968 → 8,036 B**, 7 meshes / 42 triangles stood 747 times by a 156,253 B document; every counter byte-identical, `aabb` within 0.2 mm. ⚠️ **"Plus lane slot" is not shipped**: the first build wrote the host edge and lane beside each transform and nothing read them — 26,777 B, 14.6% of the document — which is the unread channel `Q54` refuses; `_Laid` carries both for the graders that do read them. `inverted` is asked of the **stood copies** rather than of a determinant — the pitch is a second rotation, and a stand pitched past vertical is what makes the counter reachable. `paint_clearance.py` reproduces its table to one triangle (in-carriageway 1.48 → 1.45%). Draw calls on the throttle route **100/99/98/100/100/99 → 110/109/108/110/110/109**, +10 for 7 meshes against 1, the shadow passes as `P5-2` found. 🔴 The glyph is rigid where the merged build sheared it: max **18 mm** at the steepest arrow (7.69°), p99 3.8 mm. Frames: `Q27` street **18 px** and Hennessy **50 px** of 2,073,600 differ, both sides pair-identical. ✅ Review passed 2026-09-06 |
-| `P5-5` ✅ **built 2026-09-06 (`Q115`)** | **The barrier family as tiled panels** — railings, bollards and barriers tiled from one unit per class along the run, on `fence.py`'s `unit_width_m` pattern | Per class, `drawn_m` within one panel of today's per run end and the residual **published** (a new `metres_snapped` counter); gaps at bends **counted and published**, never closed by stretching a panel. `railing_error.py` walks panels and its three tables re-pasted; `facing_away` **0** per panel; `cull_disabled` kept; no collider. `Q112`'s thickness is the unit's own. Draw calls **3 → 3**. A/B at a bend. ✅ **Done**: `railings.glb` **1,375,964 → 4,172 B**, three 6-triangle panels stood **5,035** times (4,425 / 304 / 306); `drawn_m` 8,827.69 → **8,850.0** / 463.06 → 456.0 / 924.59 → 918.0 with `metres_snapped` 228.89 / 21.47 / 34.08; `joints` 3,915 / 247 / 261, `joint_gap_m` max 59 / 40 / 45 mm, `bends` **79 / 2 / 12** over a 10° bar; every counter above `drawn_m` byte-identical, `facing_away` 0 asked of the panel (a stand turns winding and normal together, so per panel would be `Q72`'s tautology). `panel_m` is the `.tres` post pitch, bound by test, so every joint stands under a post. `railing_error.py` walks the unit and stands its samples: drawn 8,855 → 8,850 m, registration p50 1.42 → 1.43 m, side disagreements **0 / 0 / 0**. Draw calls **110/109/108/110/110/109 both sides**, 3 → 3. Frames: street 93,493 px and Hennessy 51,682 px differ — the baluster rhythm restarting per panel — and the 61° bend at `(1443, 139)` shows the counted wedge. PCK **49,660,324 → 49,209,752 B**. ✅ Review passed 2026-09-06; the 61.3° corner stands as a wedge, no mitre asked for |
-| `P5-6` ✅ **built 2026-09-07 (`Q115`, `Q120`)** | **Roads chunked by tile** — the measured ribbon cut at stations on the 150 m grid, caps whole to one tile, one `-col` per chunk; the streamer gains a second tile content class | The union of chunks reproduces today's `roads.glb` in positions, normals, colours, indices and both `TEXCOORD`s **up to the duplicated cut stations, counted**; seam gap **0.000 m** at every cut, measured. `verify_road_surface.gd` per chunk; `paint_clearance`, `kerbside_error`, `overhang`, `deck_margin` loop over chunks and reproduce their tables. Draw-call delta on the driving route pasted against the region-wide 1. `city.json` schema bumped. ✅ **Done 2026-09-07.** `surface.py` cuts the built mesh by triangle — a strip quad to the tile the plan centre of its two stations falls in, a cap **whole** to its centroid's tile — into **65 chunks** under `roads/<tile>.glb`, listed by `city.json` as `road_surface: [{id, file, aabb}]` (schema **27**, `roadsurface.json` **8**), each with its own `-col`. ✅ **The union is the old mesh**: every triangle row (positions, normals, colours, `TEXCOORD_0`, `TEXCOORD_1`) identical order-free to the pre-change `roads.glb`, 32,246 triangles, and `roadsurface.json`'s `carriageway`, `caps`, `triangles`, `vertices` and `aabb` byte-identical; the cut duplicated **1,836** station vertices (39,151 → 40,987, published as `cut_vertices`) and **1,679** positions are shared exactly between chunk pairs — seam gap 0.000 m by `select_triangles`' own guarantee. ✅ `paint_clearance`, `kerbside_error`, `overhang` and `deck_error` reproduce their tables **line for line** on both sides, through one reader, `read_surface`. ✅ `check.sh` exit 0: `verify_road_surface` walks 65 chunks, `verify_city` georeferences them beside the 66 tiles, `verify_city_streamer` counts them as residents. 🔴 **Draw calls on the throttle route 110/109/108/110/110/109 → 123/122/124/126/127/126 (+13 to +17)**, inside `Q120`'s bounded +20–25; telemetry **identical to the centimetre** on every line, because `drive_harness.gd` asks the streamer to hold the chunks under the start line synchronously before tick 1 (**13** on Expo Drive). `prims` **fall** 751,570 → 661,754 at t=1 — the road is culled for the first time. Residency sweep worst **289,828 → 311,317** resident triangles (the road counted for the first time) and most-resident 39 tiles → 78 units (39 chunks) against the 150 budget. `Q27` street frame **0.0% of pixels moved**, pairs `cmp`-identical each side. PCK **49,567,904 → 49,722,328 B (+154,424, +0.31%)**; raw road bytes 1,917,672 → 2,098,276. ⚠️ The road left `generated_layer.gd`'s table — it is `CityManifest.road_chunks` now, and both scenes lost their `RoadSurface` node. ⚠️ **The beam budget's premise ("`roads.glb` is one object") is now conservative**: the 8-light list is per chunk, so two cars a block apart no longer contend; the budget stays as the bound for cars on one chunk. ⬜ Review point stands |
-| `P5-7` ✅ **built 2026-09-08** | **The region join** — the ETL cut moves from the rectangle to the graph (`Q116`): an edge belongs whole to one region, boundary nodes are published by both, caps go whole to one side | ✅ **The assignment rule is written in `Q116` (2026-09-07), before code**: membership on the geodetic `bounds` half-open, a crossing feature clipped to the union of declared regions and owned by the region holding its travel-start vertex, the non-owner publishing it `foreign` with the authored width, boundary nodes graph nodes published by both. **Accept, measured on the nine crossings the fixture has**: every boundary node in both regions at a city-space position coincident to **≤ 0.001 m** (today **0.62 m in x, 0.3–0.7 m in z** — the two rectangles clip at eastings 837,414.624 and 837,414.000); `width_m` and `lanes` agree on **9 of 9** (today 7 and 3 disagree); **0** edges cut at the internal line; **0** foreign edges drawn; `source_id` published and `city.json` schema bumped, both sides one commit; every owner-measured counter **byte-identical** on Wan Chai over the 788 edges that do not cross — the inertness proof; the sheet coverage of the nine far halves measured and `foreign_unmeasured_stations` pasted; `reachability.py` across the pair loses **0.00%**; the `Q19` battery re-run on both. ⚠️ The drive across the join is `P5-9`'s, because it needs two regions resident. ✅ **The fixture exists since 2026-09-07 (`Q120`)**: `causeway_bay` shares `wan_chai`'s east edge at **114.188 exactly**. ✅ **Its config blocker is cleared (2026-09-07)** — `carve.edges` is keyed by region. ⚠️ The rectangle still selects sheets and `bounds` do not move (`Q10`) |
-| `P5-7a` ✅ **run 2026-09-07 (`Q120`)** | **The `Q19` battery on `causeway_bay`** — `carriageway_occupancy`, `clearance_reconcile`, `narrowing`, `ground_clearance`, `reachability`, and a carve list or a measured reason for none | ✅ **Done, with the carve left as the user's call.** Full pipeline **15.0 s** / 19 stages; `check.sh` **exit 0** on a `sync_generated.sh causeway_bay`. Occupancy: **5** starved level-0 edges — `e45` KA NING PATH 0.00 and `e46` TUNG LO WAN DRIVE 0.00 (`INFRASTRUCTURE`), `e122` 0.98 / `e123` 1.95 / `e206` 2.93 (`BUILDING`); `BUILDING` share **2.477%** against 1.720% — FAIL. Reconcile **7 / 8 / 1**. Fence **3** edges `[45, 46, 122]`, 34 units, 6 mouths; refusing them loses **170 of 39,402 pairs** and `e45` alone **171** — a hillside link, not a pocket. Narrowing clears 0. Ground proud **2.953% / 7.289%** against 1.5 / 3.5 — FAIL (`Q24`'s class, 183 m of vertical span). `deck_error` p90 0.182 m, `overhang` 7.8%, `touchdown_error` PASS, `deck_margin` 0 under either bar. 🔴 **No carve list**: `e45` meets `Q19`'s licence (iB1000 5.39 m) but its blocker is a ramp's mass descending *through* the path (base +0.30 → −6.58 m over 8 stations), not a flank; `e46` is unlicensed and reads as a `Q90` touchdown the height model did not lift (slab top +1.4 m across the full section, `on_structure` 8/18) that `touchdown_error` passes over. Frames at both, pairs `cmp`-identical, in `build/driver/p57a/`. Drive from `f_004` CAUSEWAY ROAD: 9 s, 150 m, 109 kph, 76–92 draws, ended on a kerb not a bridge. Numbers in `Q120` |
-| `P5-7b` ✅ **built 2026-09-08** | **The seam grader** — `tools/join_seam.py` reads two built bundles, pairs their boundary nodes in city space through each `city.json`'s `city_offset`, and prints per pair the node separation, `width_m` and `lanes` on each side, the owner and the `foreign` flag. Grades rather than checks, exits 0 | Before code, because nothing in `P5-7` has an acceptance number without it. On the shipped pair it must read what `Q116` reads by hand: 9 pairs, **0.62 m in x, 0.3–0.7 m in z**, `width_m` disagreeing on **7 of 9** and `lanes` on **3 of 9**. After `P5-7e`: 9 of 9 coincident to **0.001 m**, agreeing on both, each pair one owner and one `foreign` copy. ✅ **Done**: on the shipped pair it reads **9 paired, 0 unpaired, dx −0.624 on all nine, plan separation 0.631–0.906 m, `width_m` off on 7, `lanes` on 3** — `Q116`'s hand reading to the millimetre. Pairing is mutual-nearest in the city frame; once `source_id`/`run` exist it pairs edges by identity and counts the ones with exactly one owner, a counter reachable at 0 in both directions by test |
-| `P5-7c` ✅ **built 2026-09-08** | **`join:` config and neighbour derivation** — a city-level `join.reach_m` (133); `load_config` derives neighbours from the declared regions (a shared whole edge is a neighbour, disjoint is ignored, overlap is refused, and for the first build the shared axis must have identical extents so the union of two rectangles is a rectangle); `Config.read_box(region_id)`, the projected rectangle widened by `reach_m` on neighbour sides only | Every read by bbox moves to it — `roads._Source.bbox`, both `carriageway.py` survey reads, `fetch.select_tiles` on the geodetic side, and `HeightField.from_meshes` gains a low corner because a west neighbour's reach is negative x. `bounds`, `region_high`, `city_offset` and the tile grid do not move (`Q10`). Inertness: `mong_kok`, which has no neighbour, **byte-identical** across `roadgraph.json`, `city.json` and the sheet list; `test_config` refuses an overlap and a partial shared edge. ✅ **Done**: `join.reach_m: 133.0`; `Config.neighbours` / `read_reach` / `read_bounds` / `read_box` / `read_extent`; the two road-stage reads, both survey reads, both sheet selections and both height fields moved; `HeightField.from_meshes` gained `region_low`. `mong_kok`'s `roadgraph.json` **byte-identical**, and 🔴 **so is Wan Chai's** — the widened read pulls in 24 more centreline parts (all clipped away) and 18 more kerbside features (all refused or merged), and not one published width, lane count or vertex moves, so the "moved set" `P5-7e`'s row predicts is **empty** and the byte-identity on 788 edges stands as written |
-| `P5-7d` ✅ **run 2026-09-08** | **Fetch the reach** — the widened selection on neighbour sides | Wan Chai's sheets stop about **85 m** past the line and `e364` runs 110 m; Causeway Bay owns `e496` at 133 m and `e489` at 111 m the other way, so **both** regions gain sheets. Paste each region's sheet list before and after; Wan Chai's is expected to grow by two (~130 MB), Causeway Bay's by sheets already on disk because the sources tree is per source. ✅ **Done, and 0 bytes downloaded**: Wan Chai's buildings and topography selections go **6 → 8** (+`11-SE-11A`, +`11-SE-6C`), both already cached by `Q120`'s Causeway Bay build; Causeway Bay's stay at **8** because its own selection already reached `11-SW-10D` and `11-SW-15B`, which is why `e496`'s 133 m west was covered before this task. `test_fetch` pins both lists, with and without the block |
-| `P5-7e` ✅ **built 2026-09-08** | **The cut** — `roads.clip` takes the union box; a run is kept whole across the internal line; the owner is the region whose geodetic bounds contain the run's travel-start vertex (after the `BACKWARD` reversal; source order for `both`); the non-owner publishes `foreign: <owner>` at the authored width with `width_source: foreign`; `source_id` and the run ordinal on every edge; `ROADGRAPH_SCHEMA` 11 → 12 and `CITY_SCHEMA` 31 → 32; `roads.read` filters foreign edges **by default** with one opt-in, so nineteen consumers are inert without a change each; `road_graph.gd` treats a foreign edge as not drivable and `verify_road_graph.gd` skips its drawn-width check, in the same commit (hard rule 5) | 🔴 **One trap the written rule does not cover**: the outer clip edge is floored *outward* by up to 0.56 m (`Q7`), so a run clipped at the west or north outer edge starts outside every geodetic box. The fallback is the clip rectangle, and an assertion that the fallback never fires on an internal line. Survey stations beyond `reach_m` are refused and counted as `foreign_unmeasured_stations`. ⚠️ **The 788-edge byte-identity in `P5-7`'s accept is expected to FAIL on a listed set, correctly**: a survey ray from a station within `max_ray_m` (15 m) of the shared line now reaches kerb lines the rectangle cut off. Predict that set before the build, require every moved edge to be in it, and byte-identity on the rest. ✅ **Done, with four departures from this row, each recorded in `Q116`**: the non-owner's copies ship under a separate top-level **`foreign_edges`** list rather than behind a `roads.read` filter (a list nineteen readers never open is inert by construction); the foreign copy's `width_source` stays **`authored`** — it *is* the authored width and `foreign: <owner>` already names whose measurement a merge takes; **`CITY_SCHEMA` stays 31**, because no byte of `city.json` moved and no reader of it is wrong (hard rule 5); and ids keep their read ordinal **with gaps** — Wan Chai's 792 + 5 is the old 797 and `e207` still names what it named. Measured: Wan Chai **4** owned runs cross (`e171`, `e356`, `e364`, `e691`) and **5** foreign, Causeway Bay **5** owned (`e1`, `e11`, `e20`, `e93`, `e96`) and **4** foreign; **0** edges cut at the line; `join_seam.py` reads **9 shared runs, 9 with exactly one owner, 0 foreign copies with no run opposite, 0 + 0 nodes on the internal line**, 16 paired nodes of which **15 at 0.000 m** and one at **0.051 m** — CAROLINE HILL ROAD's end on the *south outer* edge, cut at each region's own z (886.883 against 886.841, the 4 cm the clip boxes differ by across the shared axis); turns **217 / 35**, unchanged. 🔴 **The inertness proof held on the fields and not on the node ids**: every non-crossing edge is byte-identical in every field but `from`/`to`, which renumbered on 391 of 788 because nine boundary nodes left and eight far ends arrived; no document or config cites a node id. The predicted survey-ray moved set was **empty** — and the moved set that did appear was four kerbside runs on CAUSEWAY ROAD, which found a defect: past the line the nearest road is the neighbour's, so foreign edges are now offered to the kerbside join as tracks and published on nothing. `stations_beyond_reach` **3 / 1**; owners decided by the outer strip **42 / 9**, none on the internal line. Full pipeline exit 0 on both |
-| `P5-7f` ✅ **built 2026-09-08** | **Caps and chunks** — a boundary node's cap admits the foreign mouth at its authored width (`Q116`'s one exception); caps go whole to the region containing the node; the owned far half lands in a tile column beyond the owner's grid | `_ends_by_node_and_level` already groups by node and level, so the cap is a one-line opt-in on the foreign end; **0** foreign ribbon drawn. ⚠️ `chunk_path` keys on `buildings.tile_id`, so check that `verify_city.gd` and the streamer accept a chunk in a column with no building tile before assuming it costs nothing. ✅ **Done.** The caps: the neighbour's runs are prepared and shaped beside the owned ones and their ends join the node groups, so the hull reads every mouth; a cap is built only where `roads.Ownership` puts the node in this region, or two builds would draw one junction. Wan Chai **10** foreign ends offered, **3** caps took a foreign mouth, **1** cap left to Causeway Bay, **456 → 455** caps; Causeway Bay **8 / 3 / 1**, **117 → 119**. `roadsurface.json` gains a `join` block and the mutation (strip `foreign_edges`) drops the seam cap and zeroes the counters. **0** foreign ribbon drawn — `carriageway[]` is the owned set exactly. ⚠️ **The chunk half needed no code and the prediction was wrong**: `_Builder._tile_keys` clips a station into the grid, so an owned far half rides in the **last column's** chunk with an honest `aabb` (Wan Chai `t_10_03` spans x 1489–1760 m against a 1650 m region), and the streamer picks by `aabb`, never by tile id, so nothing is asked of `verify_city.gd`. 🔴 **Two seam gaps left to `P5-7g`/`P5-9`**: a foreign arm's trim is this region's while its ribbon is the owner's, so where the owner sees fewer arms at the node the two differ and the cap overlaps a little more; and `_read_offside` still pairs owned edges only, so a crossing carriageway's opposed partner on the other side of the line is unseen — the opposed-pair line is byte-identical (93 / 6 / 5), which is the proof nothing moved, not that the seam pairs |
-| `P5-7g` ✅ **built 2026-09-08** | **Proofs** — the seam grader after; the `Q19` battery on both regions; `pipeline/join.py`, a Python merge of two graphs that `reachability.py` runs across the pair; one fixed camera on TUNG LO WAN ROAD in `city_preview.tscn`, twice a side, `cmp`'d | Seam **9 of 9** at 0.001 m; `reachability` across the pair loses **0.00%**; `P5-9` mirrors the merge in GDScript and is tested against this one. 🔴 **Causeway Bay's own calls stay the user's** and are recorded in `Q116`: no carve (`e45` is a ramp through the path, `e46` is a `Q90` height finding for `P2-7`), the fence at 170 of 39,402 pairs is the number a carve has to beat; the reconcile ratchet region-keyed and the two share bars left as findings; the far half's `clear_width_m` refused and counted rather than read off a neighbour's tiles, which would make one region's build depend on another's. ✅ **Done.** `join_seam.py` after: **9 shared runs, 9 with exactly one owner, 0 foreign copies unmatched, 0 + 0 nodes on the line**, 15 of 16 paired nodes at 0.000 m. `pipeline/join.py` merges the pair in Wan Chai's frame — **792 + 207 → 999 edges over 764 nodes, 16 seam nodes unified by identity, 252 turns with 0 dropped, 9 foreign copies matched** — and `reachability.py --graph-dir` runs across it: **334,767** ordered pairs route where the two regions alone route 194,774 and 13,718, so **126,275 pairs cross the join**; refusing the pair's 24 starved edges loses **7.09%** against 0.00% and 3.49% alone. 🔴 **The difference is `e364`, the one finding of the cut**: `Edge.offset_m` is one number per edge, the median deck offset over its stations, and the far half's 19 dragged it −0.1 → −2.9 m, so the deck clamp cut the *near* half's drawn half-width 3.35 → 2.05 m and both instruments read a 2.0 m corridor — the reconcile ratchet moved 21 / 25 / 6 → **22 / 26 / 6** on that edge alone, and it is now region-keyed (Causeway Bay 7 / 8 / 1 → **6 / 7 / 1**, `e96` the same way). A per-station offset is the fix and it is `Q103`/`Q107` territory, so it is recorded, not taken. ⚠️ **The battery on Causeway Bay reads worse for a reason the graders cannot see**: `deck_error` measures 67.3% and `overhang` 25.1% (7.8% at `P5-7a`) because the far halves of `e93` and `e96` ride 111 and 133 m over Wan Chai's tiles, which Causeway Bay's bundle does not carry; the roads stage sampled their heights from sheets read within the reach, so the ribbon is on the deck and the grader has no deck to find it on. Wan Chai's `ground_clearance` gained one edge (87 → 88) the same way. Frames at both seam cameras at t=2.0, twice a side, pairs `cmp`-identical, before against after differing on **0.39%** (GLOUCESTER ROAD, the ribbon running on past the marker) and **0.30%** (TUNG LO WAN ROAD, the near part withdrawn to the cap) of pixels, all in the middle-distance band; the pre-cut side built in a worktree at `2de8a42` with its own import. ⚠️ A sync with no headless `--import` behind it rendered the seam with no buildings at all — the cache, not the bundle |
-| `P5-9` ✅ **built 2026-09-16 — `P5-9e` refused, `P5-9f`'s verdict the user's** | **Two regions resident** — the runtime half the phase goal implies and no task owned: a bundle per region under `game/assets/generated/<region>/`, a `Node3D` per region placed at the `city_offset` difference, one merged `RoadGraph`, the 40 library meshes shared | 🔴 **Today every loader opens one `res://assets/generated/` manifest and nothing in `game/` reads `city_offset`** (`P5-1`'s `_ROOT` is the one place the path lives). Accept: `sync_generated.sh` takes two regions; `RoadGraph` merges the two graphs and dedupes `foreign` edges by `(source_id, run)` with **0** duplicate ribbons at the seam; `RoadSpawn`, `StreetTracker`, the wrong-way monitor and the fare loader region-agnostic; the second region's library meshes **shared, not re-instanced** — draw calls on the throttle route pasted, and the second region's libraries cost **+0**; a drive across the join at one fixed camera, twice a side, `cmp`'d; `reachability.py` across the pair **0.00%**; every `verify_*` per region. ⚠️ **The resident set at the join is two regions' worth** and `Q120` already reads 108% in Kowloon on one — `P4-5` owns the distances and this task pastes the worst-camera triangle count at the seam. After `P5-7` |
-| `P5-9a` ✅ **built 2026-09-16** | **The graders and the driver flag, before the code** — `tools/resident_budget.py --pair <a> <b>`: the two tile sets composed through their `city_offset`s the way `pipeline/join.py` composes the graphs, so the worst camera can stand on the line — today the tool takes several `--region`s and grades each alone; `driver.gd --spawn-fare=<region>/<id>`, plumbed to `DriveHarness.spawn_fare_id`, because the driver has no start-position argument and `--camera` is silently undone in `city_drive` by the chase camera (`.claude/skills/run-hk-taxi-q/driver.gd:378`); the seam camera named in advance: CAUSEWAY ROAD looking east at the shared node `(1703.2, 4.5, 437.9)` in Wan Chai's frame, `city_preview.tscn` with an explicit `--camera`/`--look` | Before code, because nothing below has a number without them. The pair mode on the shipped pair under `streaming.tres` as it ships (LOD0 <250 m, unload 400 m): the resident triangle count at the seam pasted beside `P5-18`'s **105%** for Wan Chai alone — a two-region resident set is the risk `P5-9`'s own row names. Inertness: `--region wan_chai` alone byte-identical to `P5-18`'s table. `--spawn-fare` naming the scene's own default on one region: the default drive's frames `cmp`-identical to a run without the flag. ✅ **Done.** `--pair FRAME OTHER` shifts the second bundle's tiles, chunks and cameras by `Config.frame_offset` — `[1649, 0, 0]`, now the one delta `join.py` moves the graph by too, its merge output byte-identical through it — and grades the union; `--at X Z` prices a named camera, refused across two separate `--region` frames. `--region wan_chai --region causeway_bay` output **byte-identical** before and after. 🔴 **The seam is not over budget and the prediction was wrong**: the named seam camera `(1703.2, 437.9)` holds **205,032** building + **13,323** resident road = **218,355 (73%)**, the worst camera anywhere on the line x 1649 reads **66%** (z 500), and the pair's worst camera is Wan Chai's own `(1125, 525)` — **282,504** building triangles unchanged, the neighbour adding road only: **101%** resident road (19,571 → 19,954), **108%** whole road (32,059 + 10,143), against `P5-18`'s 101% / 105% alone. The pair sweep reads 108 / 98 / 89 / 85 / 75%. `driver.gd --spawn-fare=<region>/<id>` sets `spawn_fare_id` on every drive harness before `add_child`, and refuses an unresident region, an unpublished fare and a scene with no harness — the harness's own fallback is a warning `drive.sh` does not fail on. `--spawn-fare=wan_chai/f_004` against no flag: both frames (t 3, 6) md5-identical twice a side, telemetry identical but for physics milliseconds. From `f_045` the car reaches x 1696 at 81 kph on CAUSEWAY ROAD and the road stops at the region edge. ⚠️ **Found, not fixed**: `DriveHarness._warn_if_there_is_no_road` prints *Nothing under the start line* at `f_045`, `f_012` and `f_030` while the car sits on road — only `f_004` is quiet — so the first-tick ray misses the chunks `hold_ground_at` has just added; cause not verified, and a seam drive will print it. ✅ *Found and fixed at `P5-9g`: the chase rig started at `f_004` and the streamer freed the held chunks on the boot frame* |
-| `P5-9b` ✅ **built 2026-09-16** | **One region under its own directory** — `sync_generated.sh <region>...` writes `game/assets/generated/<region>/` per argument, sweeps per region rather than the tree (today the sweep deletes whatever the one manifest does not name, so a second region synced beside the first would delete it), and writes `generated/regions.json` — `schema_version` 1, the resident list in argument order, the first the **frame**; the six hard-coded paths (`city_manifest.gd:28`, `generated_layer.gd:80`, `generated_road_graph.gd:14`, `generated_fares.gd:16`, `generated_fence.gd:14`, `generated_landmarks.gd:15`) collapse to one, the manifest per region, which already resolves every path against its own directory (`_resolve`); `road_graph` and `fares` read through the manifest's `DOCUMENT_KEYS` the way `fence` and `landmarks` already do; `check.sh` runs the sixteen `VERIFY_TOOLS` once per listed region; the stale two-argument hint at `city_manifest.gd:655` corrected | Machine-checked, one region resident: the frame `cmp`-identical after a forced re-import, draw calls per debug view unchanged, `skidpad.sh` byte-identical at 4 s and 6 s (`Q119`'s proof), every `verify_*` reading what it read; the PCK delta is the path strings and `regions.json`, pasted. `sync_generated.sh wan_chai causeway_bay` then leaves two directories and a list, and nothing loads the second yet. ⚠️ **The resident list is build output, not tuning** — it records which bundles were synced — so it is written by the sync and gitignored with the bundle, and hard rule 4 does not reach it. ⚠️ `GeneratedDocument.load_object` warns rather than errors on a missing file, so a listed region with no directory degrades the way a fresh clone does today; `verify_city.gd` is what fails. ✅ **Done.** `generated_regions.gd` is the one place the root is spelled — `dir(region)`, `""` meaning `--region=` else the frame — and the six constants are `path(region)` over it; `CityManifest` resolves against its own `directory`; `RoadGraph.shared()` reads the graph through the manifest. With Wan Chai alone under `wan_chai/` after a clean `--import`: the seam camera `(1600, 40, 520)` md5-identical twice and to the before side, draw calls 38 / 46 / 46 (off / minimal / full) unchanged, the throttle drive's t 3 and t 6 frames md5-identical and its telemetry identical, `skidpad.sh` identical at 4 s and 6 s, and every `verify_*` line identical but query timings. PCK **56,353,692 → 56,360,084 B (+6,392)**. `sync_generated.sh wan_chai causeway_bay` leaves two directories and the list, and `check.sh` passes all sixteen tools on **both** (`causeway_bay` 66 tiles, 32 chunks, 180 files, 0 problems). ⚠️ **Not in the row, found in the code**: `landmarks.json` names HKCEC as `res://assets/generated/landmarks/hkcec.glb`, a path that no longer exists; rather than re-publish it relative (a schema bump, and `clearance.py` maps the same prefix onto the out tree), the game reads that prefix as the region's own directory (`CityManifest.resolve_asset`) and `carriageway_occupancy.py` does the same, so the ETL writes identical bytes. ⚠️ The graders' `--generated` default is the frame region's directory, read off `regions.json`. ⚠️ Bash 3.2 on macOS: the sync script uses no associative array |
-| `P5-9c` ✅ **built 2026-09-16** | **The region scene and the offset** — `region.tscn` holds what `city_drive.tscn` and `city_preview.tscn` hold flat at the origin today (Tiles, the eight layer nodes, Landmarks, Fence); a `CityRegions` node instantiates one per listed region at `city_offset(r) − city_offset(frame)` — **`[1649, 0, 0]`** for the pair, exact in float because both origins are whole metres (`Q7`); the streamer takes the eye in its own region's frame (`to_local`) and `hold_ground_at` is asked of the region whose `bounds_game` contains the point; `verify_city.gd`'s `LAYER_SCENES` pin moves to `region.tscn` | Human-judged: the seam camera, one region against two, twice a side, `cmp`'d — the verdict question is *does CAUSEWAY ROAD run through the line with no step and no gap, and does the far half of `e356` sit on the neighbour's tiles?* Draw calls at the seam pasted: tiles and chunks resident from both, tramway, box junctions and road marks +1 each per region, signals +0 while `Q77` ships none. ⚠️ The two `bounds_game` **overlap by ~250 m** once translated (Wan Chai reaches x 1760, Causeway Bay starts at x −137 — the owned far halves), and the grids are 1,649 m apart, not a multiple of 150, so the streamer's own `aabb` pick is what keeps a chunk in a column beyond its grid visible (`P5-7f`); a region-space cull would drop it. ⚠️ `max_loads_in_flight` and `max_instantiations_per_frame` are per streamer and double on the line — paste the frame time there. ⚠️ `CityStreamer._exit_tree`'s own comment already names *"a second region"* as the per-transition leak; two streamers is where that is paid. 🚫 **One streamer over N manifests is not taken**: the layers, landmarks and fence would each need the offset too, and a `Node3D` gives it to all of them for free. ✅ **Done.** `region.tscn` holds the eight layers, `Landmarks` and `Fence`; `CityRegions` (`city_regions.gd`) places one per listed region, adds its tiles as the first child — a `CityStreamer` where it is given a `StreamingProfile`, `tile_preview.gd` where not, because the two scenes differ on exactly that — sets `region` on every child before it enters the tree, and forwards the frame's `built`. The streamer takes the eye and the hold point through `to_local`; the harness asks `CityRegions` to hold the road, which asks **every** streamer rather than the one whose box holds the point, because the boxes overlap. `verify_city.gd` pins `region.tscn` and checks both scenes place it. **One region**: preview frame, drive frames at t 3 and 6, drive telemetry and `skidpad.sh` at 4 s all identical to `P5-9b`; draw calls 38 / 46 / 46 unchanged. **Two regions**, preview at `(1610, 14, 495)` looking at `(1760, 5, 420)`: **33 → 176** draw calls and 337,338 → 859,970 primitives (every tile of both at LOD0, the preview's own rule), frames `cmp`-identical twice a side; CAUSEWAY ROAD runs on through the line and Causeway Bay's blocks stand beyond it. Streamed, `--spawn-fare=wan_chai/f_045` driven east: one region **drives off the end of the bundle at x ≈ 1705 and falls**; two regions cross at y 5.18 → 5.12 → 4.90 to x 1760 at 95 kph, **136–150** draw calls on the line against 31–52 alone. `check.sh` green on both regions. 🔴 **The seam drive is not frame-deterministic**: runs 3 and 5 repeat, run 4 takes a different line (z 416 against 420 at t 9) — two streamers' threaded loads land the neighbour's chunks under the wheels on different frames, and only the start line is held synchronously. `P5-9f`'s `cmp` needs that closed or the pair taken as the repeat. ✅ *Superseded by `P5-9g`: not two streamers — the chase rig started at `f_004`.* ⚠️ **150 draw calls touches `verify_city_streamer`'s budget** on the line; the four library layers are 35 of them per region and are `P5-9e`'s. ⚠️ A re-sync needs a headless `--import` before a drive, or the new region's meshes have no loader and the streamer warns 44 times while the car falls — the first two-region drive here did exactly that |
-| `P5-9d` ✅ **built 2026-09-16** | **The merged `RoadGraph`** — `RoadGraph.shared()` builds over the resident list and mirrors `pipeline/join.py` rule for rule: the frame's ids kept, the second region's edges renumbered from `max + 1` (797 here, the frame's gaps preserved), the owner's copy of every crossing run kept and the foreign one dropped, seam nodes unified where a foreign copy's `from`/`to` are the owner's ends — by `(source_id, run)`, never by a distance — polylines shifted by the delta, `kind` recomputed at the seam, turns remapped through alias and pivot; `city.json`'s `carriageway[]` rows remapped the way `join.py` remaps `clearance.json`; `fares.json` and `fence.json` read per region and remapped through the same id map, fare identity `(region_id, id)` because `f_001` exists in both, and **no document is edited**; `RoadSpawn`, `StreetTracker`, the wrong-way monitor and the fare loader region-agnostic. `verify_join.gd` reads the Python merge from `etl/out/<frame>+<other>/` beside the project and diffs field by field | Machine-checked against the reference: **999 edges over 764 nodes, 16 unified, 252 turns with 0 dropped, 999 clearance rows, 0 duplicate `(source_id, run)`**, every node within 0.001 m and every edge's `(source_id, run) → id` equal; `reachability.py --graph-dir` control row **0.00%**. Inertness with one region: `verify_road_graph`, `verify_spawn` and `verify_fence` output byte-identical, the spawn pose at `f_004` unchanged to the float. 🔴 **Four documents collide on the per-region integer id** — `clearance`, `carriageway[]`, `fence` and `fares` all carry an `edge: 0` in both regions and `join.py` remaps only the first — so a foreign copy's id is an *alias of the owner's merged id*, and a fare's `nearest_edge` goes through the map or `Pose.agrees_with_published` compares two id spaces. ⚠️ `_by_id` is not injective today and a duplicate warns with the later winning (`road_graph.gd:690`); under the merge a duplicate is an error. ⚠️ `_index` takes its origin from the drivable set and its columns widen with the pair — nothing may cache a cell key across a build. ✅ **Done.** `road_join.gd` ports `join.py` rule for rule and returns per-region id maps (owned renumbering plus foreign alias); `RoadGraph.shared()` builds over `GeneratedRegions.resident()` — every listed region, or the one `--region=` names, so `check.sh`'s per-region verify tools still see one region — re-keys the neighbour's three `carriageway[]` tables into a copy of the frame manifest, and answers `edge_id_in(region, id)` and `region_offset(region)`. `RoadSpawn.at_fare_node` takes a region, `DriveHarness.spawn_region` carries it and `--spawn-fare` accepts any resident region. `verify_join.gd` (once per `check.sh`, SKIP on one region): **999 edges over 764 nodes, 16 unified, 252 turns, 0 dropped, 999 clearance rows**, worst vertex, node and clearance **0.0000 m**, every other edge field exact, 0 duplicate identities, 179 + 44 fare and fence ids and 5 + 4 foreign copies resolving. Mutation-checked: skipping `_rekind` fails on 3+ nodes; dropping either alias **passed until the foreign-copy check was added** — nothing shipped names a foreign id — and now fails 5 of 5 / 4 of 4. `--dump=` of the runtime merge through `reachability.py --graph-dir`: **byte-identical** to the reference's table, 334,767 pairs at **0.00%**. Inertness: every per-region verify line in `check.sh` unchanged; with two regions resident the default drive's `f_004` pose is identical to the float and its t 3 frame md5-identical to one region. `--spawn-fare=causeway_bay/f_004` stands the car on CAUSEWAY ROAD at x 1819.85, published edge 116 agreeing with merged 910. ⚠️ A fold past two regions drops a foreign copy whose owner is a third region at the first fold, as `join.py` would; only the pair exists |
-| `P5-9e` 🚫 **built and measured 2026-09-16, not shipped** | **The libraries shared** — a city-level prop placer batches every resident region's placements into **one** `MultiMesh` per library mesh with the delta composed into each transform, and loads the frame region's `.glb` once; `sync_generated.sh` `cmp`s each library across the regions it syncs and refuses a differing one by name | Draw calls on the throttle route with two regions resident: the four library layers **+0** against one region — that is what *shared, not re-instanced* means, because a `MultiMesh` per mesh per region is **+40** draw calls whether or not the `Mesh` behind it is shared; libraries loaded **4, not 8**, asserted by `verify_city.gd`. Human-judged: the seam camera with signs and lamps standing on both sides, twice a side, `cmp`'d. ⚠️ `Q120` measured the libraries identical in every region (9 signs, 9 lamps, 12 railings, 10 arrows), which is what licenses loading one; the `cmp` is what keeps it true. ⚠️ Godot's resource cache is by `res://` path, so two paths are two `PackedScene`s, two `Mesh` sets and two vertex buffers per mesh — the sharing has to be done, not assumed. ⚠️ The second region's copies still ship in the PCK; paste the price and leave dropping them for a later row. 🚫 **Built, measured, refused — both premises are false.** (1) **The libraries are not identical files**: each region ships the variants it stands — Wan Chai's `signs.glb` has `TS109`, `TS414`, `TS414_mirrored`, `TS735` that Causeway Bay's lacks and Causeway Bay's has `TS589`; `arrows.glb` 7 vs 6, `railings.glb` 3 vs 2 — so a file `cmp` refuses every pair; per mesh name the 30 shared meshes are identical (positions, normals, colours, triangles, UVs, material) and `signs_text.png` is byte-identical, so a union keyed by name was built — the frame's library first, a neighbour's loaded only for a name the frame lacks: **5 libraries, not 8**, placements 899 / 6,833 / 1,221 / 1,611. (2) **"+40 draw calls" assumed a per-region `MultiMesh` is never culled, and it is**: with two regions resident and no fold the throttle route already reads **+0** (30 / 105 / 105 / 104 / 106 / 109 / 107, identical to one region), because Causeway Bay's batches are outside the frustum. The fold makes every batch span both regions, so it culls as one box: on the same code, fold against no fold, the throttle route reads **+0 to +4 draw calls and +90,000 primitives** (e.g. t 3 105 vs 103, 743,631 vs 752,021 … t 0 695,140 vs 592,620) and the seam drive from `f_045` reads **+3 to +11 draw calls and +44,000 to +262,000 primitives** (x 1738: 137 vs 126, 650,813 vs 389,495). Frames on the route stayed md5-identical, so it draws the same picture at a higher price. Reverted; the regions keep their own libraries, whose cost is Causeway Bay's own four `.glb`s beside Wan Chai's — 6,720 + 2,848 + 3,568 + 40,208 B on disk against 8,036 + 4,172 + 3,568 + 46,340. ⚠️ If a later region list makes the neighbour's props visible from the frame across a long sightline, re-measure before re-proposing — the argument is culling, not the number |
-| `P5-9f` ✅ **built 2026-09-16, verdict owed** | **The drive across the join, and the budget** — `--spawn-fare=wan_chai/f_045` (CAUSEWAY ROAD, **10 m** from the line, on `e356` whose far half is Wan Chai's) driven east into Causeway Bay, twice, `cmp`'d; `resident_budget.py --pair` against the engine's own readout at the seam; `verify_city_streamer`'s draw-call budget swept over both lattices with two streamers; the two `Q116` seam gaps looked at from the seat — the foreign arm's trim against the owner's ribbon at the cap, and `_read_offside` pairing owned edges only — and recorded | Human-judged, the review point that closes `P5-9`: *does the taxi cross the line without a step, a barrier or a siren, and does the plate read CAUSEWAY ROAD from the neighbour's graph with no flicker at the seam?* `reachability.py --graph-dir` on the runtime's own merged graph, dumped by `verify_join.gd`: 0.00% control and the **126,275** cross-seam pairs; worst-camera resident triangles at the seam pasted against the 300k budget — expected over, and `P4-5`'s to answer, not this row's. `PROGRESS.md`, and `Q116` closed or its remainder named. ✅ **Built; the verdict is the user's.** The legal line is `--spawn-fare=wan_chai/f_045 --hold=accelerate@0.5+9.5 --hold=steer_left@6.0+0.22` — east along `e356`, through seam node 224 at `(1703.2, 4.5, 437.9)`, onto Causeway Bay's `858 → 909` eastbound: **y 5.18 → 5.14 → 5.13 → 5.04 → 4.93**, no barrier, no NO ENTRY, and the plate reads CAUSEWAY ROAD at t 6.5, 7.5 and 10 (x 1706 → 1776). ⚠️ **The unsteered drive rings NO ENTRY from x ≈ 1727, and correctly**: CAUSEWAY ROAD bends to 054° at the node while the car holds 061–063, so it enters Causeway Bay's westbound one-way `911` (heading · edge −0.99); Wan Chai's graph alone has no road there. 🔴 **The drive is not frame-deterministic, and it was not in one region either** — `P5-9c` said otherwise and is corrected: from `f_045` positions differ by 0.01 m at t 1 in one region as in two, and by ~1 m at t 10 across four runs, so no frame pair `cmp`s; the throttle route from `f_004` still does. The cause is not verified. ✅ *Found and fixed at `P5-9g`.* **Budget**: `resident_budget.py --pair` at the seam node **218,355 (73%)**, 1714 / 435 **221,710 (74%)**, 1776 / 383 **201,487 (67%)**; the engine submits **444,977–561,589 primitives and 126–142 draw calls** on the same stretch — props, layers and the shadow passes, which the tool does not model. `verify_city_streamer`'s sweep over both regions at their offsets: worst **311,613** triangles and **78** resident units, both at Wan Chai's own worst cameras, against 311,230 / 78 alone, so the draw-call gate holds at 150 with two streamers. Runtime merge through `reachability.py`: **0.00%** control and **334,767** routed pairs, byte-identical to `join.py`'s. **The two `Q116` seam gaps, from the seat**: the cap's foreign mouth shows as a hard dark edge across the carriageway at node 224 (t 6.5), which is the trim-against-ribbon overlap `P5-7f` predicted, visible and not a step; `_read_offside`'s owned-only pairing leaves no centre line gap on this route — the double white line runs on either side of the node — and it is not looked at elsewhere |
-| `P5-9g` ✅ **built 2026-09-16** | **The `f_045` drive repeats** — find why the drive from `f_045` parts from itself in one region and in two while `f_004`'s repeats, and close it or scope it | Machine-checked: the `f_045` legal line four times with a per-tick trace, identical on every tick; `f_004` identical to its pre-change trace; `skidpad.sh` twice byte-identical; `P5-9f`'s seam frames `cmp`'d twice. ✅ **Done.** `driver.gd --trace=<file>` (car state per tick at six decimals, the collider under it, every body entering and leaving with its tick) found it in three runs: `DriveHarness` readies last and places the car after `ChaseCamera._ready` has snapped to the authored `f_004` transform, so on the boot frame the streamer measured from a camera ~1.5 km away and **freed all 29 chunks `hold_ground_at` had just held**; they streamed back on ticks 3–14 under a settling suspension and the runs parted at tick 10–11. The same release made the harness's first-tick ray miss and **switch off fall recovery** — `P5-9a`'s *Nothing under the start line* at `f_045`, `f_012`, `f_030`. Fix: `ChaseCamera.snap_to_target()`, called by the harness after each teleport (spawn, respawn) and deliberately not from `place_at`, which auto-right shares; `city_drive.tscn` assigns `camera_rig` and `verify_city.gd` fails without it, mutation-checked. `f_045` ×4 **identical on all 600 ticks**; `f_004` ×2 identical to the pre-fix traces on all 360, draw calls unchanged; warning gone at all three fares; `skidpad.sh` ×2 byte-identical; seam frames at t 6.5 and 10 `cmp`-identical twice. ⚠️ The t 3 frame of that pair differs by 0.40% of pixels at ≤ 4/255 with position, primitives and draw calls identical — render-side, not chased. ⚠️ Distant bodies still arrive on disk-chosen ticks; a route that outruns the streaming radius is not held. `DECISIONS.md` `P5-9g` |
-| `P5-8` | **Content** — Causeway Bay, then Central (`Q6`); full vehicle roster, audio pass, night mode | Outline only; refine once `P5-7` lands. ⚠️ **Not unblocked by `Q120`'s bundles**: a built region is not content until `P5-7a` measures it and `P5-9` can load it, and roster, audio and night mode are polish over a loop that Builds `B1`–`B4` have not finished — `Q6` itself is deferred until after `P3-9`. ⚠️ `Q120`'s planning number stands over this row: **200 MB buys 5–15 km²** at current fidelity, so which regions ship is a fidelity question before it is a list |
-
-**Order.** `P5-1`, then `P5-2` before `P5-3` because the sign faces are the strongest reuse case
-and the loader learns `MultiMesh` dispatch once, then `P5-4`, `P5-5`. **Then, since 2026-09-07:**
-`P5-7a` first because it is independent and cheap and measures the fixture; `P5-6` before `P5-7`
-because its acceptance is a byte-identity against today's `roads.glb` and the join moves the graph
-under it; `P5-7` with its rule already written in `Q116`, broken down 2026-09-08 as `P5-7b`–`P5-7g` in that order — the grader before the code, config and fetch together, the cut as one commit with the game-side skip; `P5-9` last, broken down 2026-09-09 as `P5-9a`–`P5-9f` — the graders and the driver flag before the code, the directory before the offset, the offset before the merge, the merge before the libraries, and the drive last — because two regions can only
-be resident once they join. `P5-8` waits on all four and on Phase 3's builds.
+**Order.** Everything but `P5-8` is built; `P5-8` waits on Phase 3's builds.
 
 ### Phase 5b — The asset seam (`Q121`)
 
-**Goal:** a hand-made asset from a DCC tool can enter the bundle, be told apart in it, and be
-collided, culled and textured by the engine's own machinery — without the generated city giving up
-its one-draw-call tiles. **Broken down** from a 3D developer's review of the mesh contract (`Q121`,
-2026-09-07): the reviewer's six gaps, priced against the code and against two facts measured on
-Godot 4.7.1 — glTF node and mesh `extras` **survive import as metadata**, and custom `_`-prefixed
-vertex attributes **do not** (`CUSTOM0` absent after import). ⚠️ **The scope is the seam, not the
-style**: every task below keeps the merged tile, the vertex-colour albedo and the procedural facade
-as the default, and adds the hook a conventional asset plugs into. 🔴 **Every step owes the
-inertness proof `Q96` and `Q117` set** — name the channels that must be byte-identical and the one
-that may move — **and an A/B frame at one fixed camera, shot twice a side and `cmp`'d** (`Q62`).
+**Goal:** a hand-made DCC asset can enter the bundle, be told apart in it, and be collided, culled
+and textured by the engine's own machinery, while the generated city keeps its one-draw-call tiles.
+Measured on Godot 4.7.1: glTF node and mesh `extras` survive import as metadata; custom
+`_`-prefixed vertex attributes do not. The scope is the seam, not the style: merged tile,
+vertex-colour albedo and procedural facade stay the default.
+
+🔴 Every step owes the inertness proof of `Q96`/`Q117` — name the channels that must be
+byte-identical and the one that may move — and an A/B frame at one fixed camera, shot twice a side
+and `cmp`'d (`Q62`).
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P5-10` ✅ **built 2026-09-07 (`Q121`)** | **The authored door, tested** — `landmarks:` generalised to `authored_assets:` (an entry names a `.glb` under `game/assets/authored/`, a placement, and optionally `replaces_source_ids`), documented in `ARCHITECTURE.md` as the artist's entry point with the material convention stated once: a recognised material name takes its `.tres`, anything else keeps the imported material with vertex colour as albedo, and a textured PBR material passes through under a declared budget. Plus **the round-trip test the repo has never run**: a committed fixture `.glb` exported from Blender (a Khronos sample asset if no Blender is to hand — fetch it, `fetch-more-data` stands), multi-node, PBR, textured | `check.sh` exit 0 with the fixture placed; its material, textures and node names **unchanged** after import, asserted by a `verify_authored.gd`; `sync_generated.sh` run twice and `git status` clean — it never touches `authored/`. Wan Chai bundle **byte-identical** (`shasum` over the manifest's files). Frame at one camera with the fixture in view, `cmp`'d. ⚠️ `verify_landmarks.gd` grades only a triangle budget today — that is the whole of the door's contract and this task writes the rest down ✅ **Done.** ⚠️ **Not renamed**: `landmarks:` stays the door's name — the rename to `authored_assets:` crossed the config, the ETL, the manifest, three loaders and four docs for no behaviour, so the block was *generalised* instead: `replaces_source_ids` is optional for an authored asset (a stem-free entry ships `excluded_bounds: null`, which `export.py --check` and `verify_landmarks.gd` both let stand) and still required for a mesh-sourced hero, which is extracted from its stems. ✅ The fixture is a **real Blender 5.2 export** (`Khronos glTF Blender I/O v5.2.39`): two nodes parent-child with an unapplied child scale, a packed 64² image, `doubleSided` PBR materials, a `-col` node — authored by `tools/make_dcc_fixture.py` and **byte-identical on regeneration** (6,812 B). ✅ On first import Godot **extracted the packed image beside the asset** as `dcc_roundtrip_kiosk_paint.png`, its default for an authored file; committed with both sidecars, and written into the door's table. ✅ `verify_authored.gd` grades names, hierarchy, the untouched `StandardMaterial3D` with its 64×64 albedo, the `-col` collider (and its sibling's absence), 22 triangles and the placement convention; **four mutations, four failures** (name, texture size, triangle count, a recognised material name). ✅ `check.sh` exit 0 with it in `ALWAYS_TOOLS`; `pytest` 2,120 passed, `ruff` clean. ✅ `sync_generated.sh wan_chai` twice, `git status` shows only the change. ✅ Wan Chai bundle: `landmarks.json` byte-identical, `city.json` differing in `generated_utc` alone. ⚠️ No frame shot: the fixture is placed by the verify tool, not by the city, so no camera in the bundle sees it — a deliberate choice, so the bundle stays byte-identical |
-| `P5-11` ✅ **built 2026-09-07 (`Q121`)** | **Identity and the channel contract, one schema bump** — (a) each tile mesh carries an `extras` table, one row per merged source object: `id`, class, AABB, storey estimate; (b) `TEXCOORD_0` on tiles becomes a **real planar UV** — metres along the face, metres up — so the facade shader reads the along coordinate it already computes from world position off the vertex instead; (c) the payload moves to `TEXCOORD_1`: height above own base, class marker, phase, and a **per-building index** into the table; (d) one `pick_building(ray)` helper — hit → face → vertex → index → row; (e) the three copies of the road codec constants generated from one Python source, or a test that diffs them | `POSITION`, `NORMAL`, `COLOR_0` and every index **byte-identical** on all 132 tiles — the inertness proof; only the two `TEXCOORD`s move, asserted field by field. `Q27` street frame **0 of 2,073,600 px** differing, because the shader reads the same numbers from a different channel. Every vertex of every tier resolves to a row; a raycast from the driver's seat at three named buildings returns their source stems. `verify_tiles.gd`'s `TEXCOORD_1` **absence** assertion becomes a range check; `light_baking = 1` stays pinned. PCK delta pasted against `Q102`'s +0.24 MB precedent for a per-building constant. `city.json` schema bumped, both sides one commit. 🚫 **Per-building nodes refused** — no static batching in Godot 4, ~50 draw calls a tile on a 150 budget. 🚫 **Custom attributes refused on measurement**, not preference ✅ **Done, schema 27 → 28.** Inertness proved against a clean build of the previous commit in a worktree (the synced bundle was checked against it first: 132 of 132 files byte-identical): **all 132 tiles byte-identical in `POSITION`, `NORMAL`, `COLOR_0`, indices, mesh name and material**; `TEXCOORD_0.y` equals the old `.x` and `TEXCOORD_1.x` the old `.y` exactly; `TEXCOORD_0.x` recomputed from each tier's own positions and normals matches to **0.000000**; `carve.json`, `clearance.json`, `roadgraph.json`, `fence.json`, `landmarks.json`, `roadsurface.json` and every non-tile `.glb` identical (⚠️ except the **unshipped** `signals.glb`, deterministic across runs and different from baseline — `Q77`'s layer, not investigated). **3,013 rows** in the tables (2,701 `BUILDING`, 130 `INFRASTRUCTURE`, 182 ground sheets). `Q27` street frame **0 of 2,073,600 px** differing, pairs `cmp`-identical each side, after deleting the tile import cache. `verify_tiles.gd`: 132 checked, 0 failed, holding every vertex to a row, a marker and its row's box within 8 m, and the picker to a vertex of a sampled row; **three mutations, three failures** (marker ceiling, channel swapped, slack zeroed). `check.sh` exit 0, `pytest` 2,125 + the new codec test (3), `ruff` clean. 🔴 **PCK 49,734,132 → 55,138,824 B (+5,404,692, +10.9%)**, and the split was measured: the identity channel and table cost **+321,588 B (+0.65%)**, `Q102`'s precedent exactly, and the per-vertex along-coordinate **+5,083,104 B (+10.2%)** — it is the one payload here that varies per vertex, so the pack cannot fold it. ⚠️ **That is the price of a real UV, taken deliberately and reversible in one line**: zero `uvs[:, 0]` in `_identify`/`_named` and let the shader derive it again, at the cost of `TEXCOORD_0.x` meaning nothing — the user's call. 🔴 **Three consumers the plan did not list read the old channel**: `carve._structure` (its soffit bound read 0 on every edge and the cut went through the deck — every counter closing), the carve wall's copied UV (754 m of along error) and cut-edge interpolation on smooth-shaded ground (124 m), so the carve re-stamps the along over the whole carved tier and takes the wall's row per vertex from the nearest removed vertex while tiling its phase. `read_glb` gained `extras`, without which the carve re-emitted nine tiles with no table. ⚠️ The picker resolves overlapping boxes by the nearest vertex's row, because an L-shaped block's box reaches into its neighbour's; custom vertex attributes were refused on measurement, and the row rides `TEXCOORD_1.y` |
-| `P5-12` ✅ **built 2026-09-07 (`Q121`)** | **Colliders separated from render meshes** — each tile ships a `<tile>_collision-colonly` node built from a dedicated collapse (cell stated, not the 4 m LOD1 grid), and the render node drops `-col`; roads likewise a `-colonly` ribbon so the two may diverge later. ⚠️ **The kerb riser stays in the collider** — kerbs are mountable by design (`GAME_DESIGN.md`, `P2-3`) | Collider triangles per tile pasted before/after. **The wall-offset distribution** between the collider and the LOD0 facade — p50/p90/max — pasted, max under a stated bar (0.25 m proposed), because a coarse collider is a wall the car drives into or through. `drive.sh` timeline on the throttle route **identical to the centimetre**; physics time per tick pasted. `verify_tiles.gd` and `verify_road_surface.gd` assert the collider on the `-colonly` node and **none** on any render node. Every `Q19` grader reads the render mesh and reproduces its tables. 🚫 Convex hulls per building refused — `-convcolonly` is one hull and an L-shaped podium's hull blocks the street. 🚫 Heightfield terrain refused — the ground is a decimated source mesh, not a grid ✅ **Done.** `buildings.json` 3 → 4 and `roadsurface.json` 8 → 9 (two primitives where every reader assumed one); `city.json` stays 28 — the game's reading of a tier file is "instantiate it", unchanged, and both verify tools refuse the old form loudly. ✅ **The cell is stated**: `buildings.collision_cell_m` 1.5 with `INFRASTRUCTURE` 0.5 / `TERRAIN(TB)` 4.0, equal to the finest tier's **by value** — so the collider is that tier's own triangles, **515,025 = 515,025** over 66 tiles (per-tile table in `tools/collider_offset.py`), and the ground at a shared cell is decimated once for both. ✅ **Wall offset 0.000 / 0.000 / 0.000 m** (p50/p90/max) in `FACADE`, `GROUND` and `STRUCTURE`, both directions, 0 vertices over the 0.25 m bar, 0 censored; road collider identical to the ribbon on **65 of 65** chunks, kerb riser included. **Sweep** (default cell moved, class overrides kept): 2 / 3 / 4 m → collider **87.8 / 72.9 / 63.5%** of the render triangles, facade collider→render p90 **0.469 / 0.624 / 0.911 m**, over the bar 89,392 / 70,223 / 88,953, render→collider p50 0.000 / 0.169 / 0.560 m with 209 / 3,323 / 3,275 vertices censored past 8 m; `GROUND` and `STRUCTURE` 0 at every cell. ⚠️ The censored tail is not the cell moving a vertex — a 2 m cell cannot move one 8 m — it is thin geometry that survives one world-anchored grid and not the other (48 of 11,375 vertices on two buildings in `t_05_04` at 2 m): a wall the car hits and cannot see, or sees and drives through, and the reason a coarser collider is priced here rather than taken. ✅ Throttle-route drive **identical to the centimetre** on all six ticks, draw calls 123/122/124/126/126/126 both sides; physics per tick (one-tick samples, ms) before 1.005 / 0.699 / 0.720 / 1.023 / 0.627 / 0.696, after 0.752 / 0.961 / 1.073 / 1.017 / 1.319 / 1.241, 1.132 / 1.206 / 2.172 / 0.884 / 1.219 / 0.952 and 1.715 / 0.711 / 0.939 / 0.815 / 0.679 / 0.808 over three idle runs — ⚠️ the run-to-run spread is as wide as the before/after gap, so the sample does not resolve a difference, and the shape is the same triangles. ✅ **The carve cuts both primitives** — its counters are the render mesh's alone, and a tile with no collider still carves — which `test_carve.py::TestCollider` pins; ✅ every `Q19` grader (`carriageway_occupancy`, `clearance_reconcile`, `corridor_truth`, `deck_error`, `deck_margin`, `ground_clearance`, `narrowing`, `overhang`, `paint_clearance`, `touchdown_error`) **line-identical** but for the build stamp, reading through `gltf.read_render`. ✅ `check.sh` exit 0, 132 tiles and 65 chunks passing the new `check_collision_only` (one body, named for the tile, mesh-less, none under a render mesh) — **five mutations, five failures** (render mesh shipped `-col`, collider misnamed, collider dropped; road ribbon in its old `-col` form, road collider misnamed), each on the assertion it targets — `pytest` 2,137, `ruff` clean. ✅ `Q27` street frame **0 px** moved, pair `cmp`-identical and identical to `P5-11`'s. 🔴 **PCK 55,138,824 → 55,141,096 B (+2,272, +0.00%)** — the pack carries the imported scene and the importer removes the collider's mesh, so the shape it stores was built from the same triangles it stored before; the `.glb` on disk grows by the collider, which is ETL output and not shipped |
-| `P5-13` ✅ **built 2026-09-07 (`Q121`)** | **Two importer wins** — an `-occonly` occluder primitive per tile in every tier, built from `BUILDING` + `INFRASTRUCTURE` at a stated cell (`occluder_cell_m` 4 m / 1 m, LOD1's by value), with `rendering/occlusion_culling/use_occlusion_culling` on and pinned by `verify_settings.gd`; `meshes/generate_lods = false` in `[importer_defaults]`. ⚠️ **The second reason as written was wrong**: the importer's LODs were drawn, so off costs 16–30% more primitives and buys −8.6% PCK — bytes against vertex work, the user's to reverse in one value ⚠️ **plus deleting the sidecars — `Q122`, `P5-16`** | **Throttle route** (overlays off): draws 107/107/106/108/111/110 → **105/105/104/106/109/107**, prims −374…−473; canyon camera 81 → 79. **Mong Kok worst camera** (694, 392), N/S/E/W draws 153/159/205/155 → **135/147/158/135**, prims 1,253k/1,167k/1,391k/1,130k → 1,110k/1,101k/1,139k/1,025k. Frames **0 px** at every shot on both regions, twice per side. **PCK** 55,482,888 (worktree, no occluder) → 61,217,720 with it (+10.3%) → **55,955,496** with importer LODs off. **Occluder cell sweep** (Mong Kok, draws E/W, PCK): 4 m 158/135, 84,960,640; 8 m 160/154, 79,811,152; 16 m 203/—, 77,146,704. Clean `--import` 7.22/7.06 s → 7.36/6.17 s; cache 56 → 51 MB. Sidecars deleted and re-imported each side. `city.json` 28 → 29 (`occluder` per tile), `buildings.json` 4 → 5. Stated cell proved inert: 132 tile files byte-identical to the tier-index build |
-| `P5-14` | **Textures as an option on tiles** — `merge` carries a texture when **every** input shares the same one (an atlas or trim sheet), tiles declare a `texture_budget_px` on `P3-20`'s mechanism, and the facade shader gains a gated `albedo_atlas` sampler. Procedural windows stay the default; the atlas is an override per material class. After `P5-11`, which gives it a real UV to sample with | With the sampler off: bundle and frame **byte-identical** to `P5-11`'s. With one 1024² atlas declared: `mesh_contract.gd` passes on the declared budget and fails one pixel over it; the mobile texture budget (128 MB) quoted with the atlas's footprint; A/B frame at the `Q27` street. `merge`'s untextured guard still refuses two different textures |
-| `P5-15` ✅ **built 2026-09-08 (`Q122`)** | **The lane-centre check samples the interior** — `verify_road_graph.gd`'s `Q114` loop samples the **midpoint of the middle segment** instead of a vertex (on a two-point edge the vertex is the end node, where three edges tie at 0.000 m and `nearest_edge` hands back the lowest-indexed one), expects `lane_offset` of the lerp of the two bounding stations' `drawn_half_width_of`, and asserts `hit.edge_id` is the sampled edge — a mismatch is a **finding**, not a skip. No ETL change, no schema change: `e30`'s 4.371 m is `e21`'s correct offset | `check.sh` exit 0 on a sync of **all four** regions (`wan_chai`, `causeway_bay`, `sha_tin`, `mong_kok`); the emulation table from `Q122` (sampled / end-node / differing-tie per region) reproduced by the verifier's own counters and pasted. **Two mutations, two failures**: the vertex sample restored fails `mong_kok` on `e30` with `Q120`'s line; the vertex sample with the id assertion fails on the id message instead. `RoadGraph.lane_offset` and `nearest_edge` untouched — the driving line does not move, and the throttle-route drive is identical ✅ **Done.** One file, `verify_road_graph.gd`; no runtime script moved, so the drive is identical by construction. `check.sh` exit 0 on `wan_chai`, `causeway_bay` and `mong_kok`; on `sha_tin` (rebuilt for the first time since `P5-12`) `verify_road_graph` passes and the run is red on **`verify_boxjunctions`** — *1 of 3,301 triangles do not face up* — a pre-existing defect of that bundle, recorded in `PROGRESS.md` and not this task's. The verifier's own report, `at end node / resolving elsewhere` of 60 samples: `wan_chai` **18 / 0**, `causeway_bay` **13 / 0**, `sha_tin` **15 / 1** (of 59), `mong_kok` **22 / 5** — the end-node counts match `Q122`'s emulation exactly, and the second column is smaller than its *differing tie* column because the verifier sees only the edge the tie resolved to. **Three mutations, three failures** on the `mong_kok` sync: the old mid-vertex sample restored without the id assertion reproduces `Q120`'s line to the digit (*edge 30's lane centre is 4.371 m off the centreline, expected 3.011 m from its drawn half-width of 6.022 m*); a far-vertex sample without it fails on `e2`; a vertex sample with it fails on *edge 1's segment midpoint resolves to edge 0*. ⚠️ Two mutation attempts first tripped the promoted unused-variable warning rather than running — a mutation here has to keep every local in use or it tests the linter |
-| `P5-16` ✅ **built 2026-09-08 (`Q122`)** | **The importer sidecars are checked, and the reversibility claim is corrected** — `check.sh`'s `settings` step reads every `game/assets/generated/**/*.import` present and fails on one whose `meshes/generate_lods` or `force_disable_compression` differs from `[importer_defaults]`, asserting nothing on an empty tree (`check.sh` needs no built region and must not start needing one). `Q121`, `P5-13` and `PROGRESS.md`'s "one value to reverse" corrected to one value plus the sidecars | One sidecar hand-edited to the old value → `check.sh` red naming the file; deleted → the next `--import` seeds it and `check.sh` green; no generated tree → the step reports it checked nothing and passes, and `verify_settings.gd` still pins the two values themselves. Draw calls and frames untouched by construction ✅ **Done, as a `sidecars` step after `settings` in `check.sh`.** The keys are read out of `project.godot`'s `[importer_defaults]` block rather than listed in the script, and their count is asserted (fewer than two is a failure, not a clean sweep). Four runs on the `causeway_bay` sync: green — **171 checked against 2 pinned keys**; `arrows.glb.import` hand-set to `generate_lods=true` — red, *`game/assets/generated/arrows.glb.import` — lacks `meshes/generate_lods=false`*; that sidecar and its import cache deleted — the next `--import` reseeds it with `false` and the run is green at 171 again; `game/assets/generated/` emptied to its `.gitkeep` under `VERIFY_GENERATED=0` — *0 checked (no generated scene sidecars present)* and exit 0. The three summaries that said "one value to reverse" were corrected at `Q122`; `ARCHITECTURE.md`'s two importer rows now point at the step |
-| `P5-17` ✅ **built 2026-09-08 (`Q122`)** | **The occluder policy is per tier and is config** — `buildings.occluder_cell_m` becomes a per-tier list, coarsest last, `null` meaning *no occluder in that tier* (class overrides unchanged); `city.json`'s `occluder` moves from the tile row to the **tier** row (29 → 30 — a consumer keeping the per-tile reading would ask a far tier for one it no longer carries); `verify_tiles.gd` checks per tier. One key then covers the finest-tier-only experiment (`[4.0, null]`), a coarser far tier (`[4.0, 8.0]`) and the web bundle (`[null, null]`), because 🔴 **stock Web export templates omit the raycast module and cannot cull** (`Q122`) — a web cut without the occluder is a second ETL build, and whether `P3-9a`'s itch.io cut is exported from one or pays the full +10.3% is the user's call, priced here | `[4.0, 4.0]` reproduces `P5-13` exactly: 132 Wan Chai tile files byte-identical, Mong Kok worst camera (694, 392) N/S/E/W draws **135 / 147 / 158 / 135**. Then `[4.0, null]` and `[4.0, 8.0]`, same four headings, occlusion on, frames `cmp`'d twice per side and **0 px** (a moved pixel is over-culling, never a win), PCK for each, Wan Chai throttle-route draws with `--hold=accelerate@0.5+5.5` passed explicitly. `[null, null]`: PCK and the **web export's** size pasted. `verify_tiles.gd` — **two mutations, two failures**: an occluder in a tier the manifest says has none, none where it says one. Import time and cache per policy. The far-tier decision is the user's on those numbers; the streamer content class stays held (`Q122`) unless the far tier culls what the near one cannot ✅ **Done, `city.json` 29 → 30, `buildings.json` 5 → 6.** `buildings.occluder_cell_m` is a list per tier (`null` = none; a scalar is refused), `class_occluder_cell_m` stays a class statement, the manifest's `occluder` moved to the tier row and `city.json`'s is a list parallel to `lods`; `verify_tiles.gd` asks per tier and refuses a flag count that is not the tier count. **Inertness**: `[4.0, 4.0]` against a worktree build of the previous commit — all **132** Wan Chai tile files byte-identical, `roadgraph`/`clearance`/`carve`/`fence`/`roadsurface` identical, every per-tier flag equal to the old tile-wide one. **Mong Kok worst camera (694, 5.5, 392), looking N/S/E/W at ±100 m, `--debug-view=off --hud=off`, occlusion on, each shot twice and `cmp`-identical**, draws / prims: `[4,4]` **135 / 146 / 158 / 132**, 1,223,733 / 1,203,852 / 1,243,067 / 1,136,570; `[4,null]` **identical on every heading**, draws and prims; `[4,8]` **identical on every heading**; `[null,null]` 153 / 159 / 205 / 155 (`P5-13`'s occlusion-off figures to the digit). Frames: every heading **0 px** moved across all four policies. macOS PCK (Mong Kok, importer LODs off): `[4,4]` **77,750,928 B**; `[4,8]` 75,298,624 (−2,452,304); `[4,null]` **73,122,800 (−4,628,128, −5.95%)**; `[null,null]` 68,490,864 (−9,260,064, −11.9%). **Wan Chai throttle route** (`--hold=accelerate@0.5+5.5`, overlays off): draws **105 / 105 / 104 / 106 / 109 / 107** and prims identical to the primitive under `[4,4]`, `[4,null]` and `[null,null]` alike — the route culls 2 calls with an occluder and this camera set cannot separate the tiers; pairs `cmp`-identical. Wan Chai PCK, the itch.io cut's: `[4,4]` **55,959,592**; `[4,null]` **52,922,440 (−3,037,152)**; `[null,null]` **49,886,664 (−6,072,928, −10.9%)** — the web export's `.pck` is the same bytes as the macOS one. `verify_tiles.gd` — **two mutations, two failures** by editing the synced manifest alone: `[true, false]` over a `[4,4]` bundle → *t_00_00 tier 1 carries 1 occluder(s) the manifest says it has none of*; `[true, true]` over a `[4,null]` bundle → *t_00_00_lod1.glb: 0 OccluderInstance3D nodes*. `check.sh` exit 0 on `mong_kok` and `wan_chai` at schema 30; `pytest` 2,148 + 2 new (a policy test and a per-tier export test), `ruff` clean. 🔴 **The far-tier occluder culls nothing this camera set can see and costs 4.63 MB on Mong Kok and 3.04 MB on Wan Chai** — so `[4.0, null]` is the setting the numbers point at, and the streamer content class `Q121` held is refuted on the same measurement (there is nothing in the far tier for it to keep). ⚠️ **`[4.0, 4.0]` still ships**, because the plan left the far-tier and web decisions to the user; both are one line in `hong_kong.yaml`, and the web cut's is a second bundle built at `[null, null]` |
-| `P5-18` ✅ **built 2026-09-08 (`Q122`)** | **The LOD1 ratio gets an owner** — `Q120`'s cheapest unowned lever. Sweep `lod_cell_sizes_m[1]` (4.0 → 6 / 8 / 12 m) and price a third tier as an option, reporting per region the L1/L0 triangle ratio, `Q120`'s worst-camera resident share, and PCK; `streaming.tres`'s distances **do not move** (`P4-5`'s, and `Q26`'s look). ⚠️ The occluder and collider cells are stated by value and stay where they are (`P5-12`, `P5-13`), and any bar tuned against LOD1's 4 m cell (the stations-poking-through comment in `hong_kong.yaml`) is re-read at the new cell. Records beside `Q120`'s table that with the importer's LODs off the **manifest count is what the engine draws** for a resident tile, so 301,647 is exact, not an upper bound | The table; `mong_kok`'s worst camera under **100%** at some cell, or the finding that it cannot be without a third tier; the `Q27` street frame A/B at one fixed camera at LOD1 distance, twice a side and `cmp`'d, with the moved-pixel count quoted rather than gated (a coarser LOD1 is *expected* to move far pixels — the question is whether it reads as the same city); `check.sh` exit 0; `tools/ring_weights.py` re-run if any façade weight is keyed to the tier. ⚠️ The cost side is provisional until `P0-3b` runs a handset ✅ **Done, as `tools/resident_budget.py` + `etl/tests/test_resident_budget.py` (13 tests), and the finding is not the one the plan expected.** 🔴 **`Q120`'s table was banded by distance to the tile CENTRE; the engine bands by plan distance to the `aabb` (`TileStreaming.band_of`).** `--band-by centre` reproduces `Q120` to the triangle (181,349 / 301,647 / 143,895; `sha_tin` 70,808 against 72,463 on its rebuilt bundle); under the engine's rule the shipped 250/400 m pair reads, worst camera, buildings + whole road: `wan_chai` **282,504 + 32,246 = 105%**, `causeway_bay` 216,836 + 9,878 = **76%**, `sha_tin` 120,898 + 19,687 = **47%**, `mong_kok` **531,092 + 22,173 = 184%** — 21 LOD0 + 13–15 LOD1 tiles, not 9 + 12, so **LOD0 carries 84 / 91 / 78 / 87%** of the resident set. Sweep, engine's rule: 200/400 → 90 / 62 / 39 / **135%**; 150/400 → 86 / 58 / 38 / 132%; 200/300 → 82 / 55 / 34 / 118%; 120/250 → 71 / 51 / 30 / **108%**. ⚠️ Resident, so an upper bound on the *visible* triangles the budget names; hysteresis makes the engine hold slightly more, never less. **LOD1 cell sweep** (all four regions rebuilt at `lod_cell_sizes_m[1]` 4 / 6 / 8 / 12 m, `INFRASTRUCTURE` and `TERRAIN(TB)` overrides and the occluder's stated 4 m untouched, LOD0 tile bytes byte-identical at every cell): L1/L0 `wan_chai` 0.49 / 0.39 / 0.33 / 0.27, `mong_kok` 0.39 / 0.26 / 0.19 / 0.13; worst camera `wan_chai` 282,504 / 274,098 / 269,288 / 264,079 and `mong_kok` 531,092 / 509,480 / 498,644 / 488,224 (**184 → 177 → 174 → 163%**). 🔴 **So `mong_kok` cannot reach 100% at any LOD1 cell, and a third tier cannot either** — both touch only the 9–16% LOD1 carries, which is the finding the plan allowed for; the lever left is LOD0's own 1.5 m cell together with the LOD0 radius, `P4-5`'s and `Q26`'s. Wan Chai PCK 55,959,656 / 53,910,488 / 52,632,056 / 51,198,712 (−3.7 / −5.9 / −8.5%). **Frames**, settled until a hash repeated, moved pixels against 4 m: with **every tile forced to tier 1** (a scratch copy of `city_preview.tscn` with `lod = 1` — `city_preview.tscn` itself shows LOD0 only, which is why its two `Q27` views came back 0 px at every cell first time) the street view moves **28.2 / 30.4 / 36.4%** and the skyline **18.1 / 23.3 / 31.2%** at 6 / 8 / 12 m; on the throttle route in the drive scene, where LOD1 sits 250–400 m off as shipped, **0.06 / 0.08 / 0.15%** (1,157 / 1,686 / 3,096 px) with draws 107 unchanged and prims 467,022 → 460,708 / 456,570 / 453,103. Quoted, not gated: the forced view is the cell's look at a range the streamer never shows it; the route is what ships. The cell stays 4.0 m — it is `P4-5`'s call and it does not move the budget. `tools/ring_weights.py` not re-run: no façade weight is keyed to the tier. `check.sh` exit 0 on the restored 4 m sync; `pytest` 2,161, `ruff` clean. ⚠️ Cost side provisional until `P0-3b` runs a handset |
-| `P5-19` ✅ **built 2026-09-08 (`Q123`)** | **The mitre's other crossing is dropped too** (`Q123`) — `boxjunctions.border_polygons`' guard tests only that the inner edge does not run **against** its outer edge (`inner_edge · units[i] > 0`, 3 firings on `sha_tin`, 7 on `wan_chai`); a mitre can instead go reflex **sideways**, leaving a quad that is simple and correctly wound but **non-convex**, which `FlatBuilder`'s fan from vertex 0 then folds across an exterior diagonal. Extend that one guard to refuse it, counted as the same `degenerate_border_segments` — the function's own stated policy is *dropped and counted, never repaired*. 🔴 **Do NOT mask inverted triangles in `FlatBuilder.build`**: `& ~inverted` makes the counter 0 by construction, which is `Q58`'s trap and `Q72`'s tautology in the one instrument that can see this class, and `railings.py` refuses it in the same words. 🔴 **Do NOT widen the sliver bar**: the needle is 0.0494 m against a 0.0446 m bar and is a winding fault, not a lattice flip. Second half is knowledge, not machinery: `FlatBuilder.polygon`'s docstring states the exact precondition — a fan from `v0` is valid iff the reflex vertex is `v0` or `v2` — and `test_meshbuild.py` pins it with a non-convex quad that produces an inverted triangle, so `arrows.py` and `roadmarks.py` inherit the statement rather than a repair. ⚠️ **Hygiene-sized, not a phase item** — no schema bump, no shader, no config key | `sha_tin`'s `boxjunctions.json` reads `inverted` **0** and `inverted_area_m2` **0.0** (from 1 / 0.0327), with `degenerate_border_segments` **3 → 4** and every other counter — `boxes` 10, `drawn` 10, `total_area_m2` 1032.6294, `slivers_dropped` 1,716, `vertices_over_cap` 1,666, `holes_refused` 0 — unmoved; `triangles` **3,301 → 3,299** — the guard drops the whole border segment and both its triangles are in the shipped mesh (823 and 824), the segment being a single station at 1.2776 m outer against `station_m` 2.0. 🔴 **`boxjunctions.glb` byte-identical on `wan_chai`, `causeway_bay` and `mong_kok`** — the inertness proof, and the one the quad-fan census (0 non-convex of 7,138) cannot give, because that census only sees quads whose *both* triangles survived the thinness filter. `check.sh` exit 0 on a sync of **all four** regions, which is `P5-15`'s own unmet criterion. `tools/box_extent.py`'s per-box table and its `--ray-m` sweep pasted before and after, on `wan_chai` (the population `Q104`'s 6.71% / 38.75 m² of 577.83 headline is quoted from) and on `sha_tin`. ⚠️ **Mutation-check the guard rather than reading its count** (`Q72`): removing it must re-fail `sha_tin` on `verify_boxjunctions` with the same one triangle, and the `test_meshbuild.py` precondition test must fail if the fan is silently repaired. `pytest` green, `ruff` clean. No render and no `shader error` grep — this moves no height, no material and no shader ✅ **Done, and every predicted number landed.** `sha_tin`: `inverted` **1 → 0**, `inverted_area_m2` **0.0327 → 0.0**, `degenerate_border_segments` **3 → 4**, `triangles` **3,301 → 3,299**, `vertices` 6,741 → 6,737, `vertices_drawn` 10,055 → 10,047, `slivers_dropped` 1,716 → 1,714, `bytes` 182,640 → 182,532; `boxes` 10, `drawn` 10, `total_area_m2` 1032.6294, `holes_refused` 0 all unmoved. ⚠️ **The predicted count was right and its stated reason was wrong**: the refused segment is **two** stations, not one — 8 vertices, 4 triangles — and 2 of those 4 were already refused as slivers, which is why `slivers_dropped` falls by 2 as well and the mesh loses only 2. 🔴 **`boxjunctions.glb` byte-identical on `wan_chai`, `causeway_bay` and `mong_kok`, every counter unchanged** — the inertness proof. ✅ **`check.sh` exit 0 on a sync of all four regions**, which is `P5-15`'s own unmet criterion; ⚠️ `causeway_bay` and `mong_kok` first came back red on **`verify_tiles`** with `boxjunctions` ok — local bundles left mid-sweep by `P5-18`'s LOD1 rebuild, green on a fresh build at the shipped config, and not a repo defect. **Two mutations, two failures**: the guard removed fails the thorn test, and on the old bundle `check.sh` exits 1 with *surface 0: 1 of 3301 triangles do not face up*; a `FlatBuilder` made to repair its own fold fails `test_a_reflex_corner_at_v3_...` and leaves the other two green. `box_extent.py` on `sha_tin`, before → after: **only on-road paint moved** — box 0 TAM KON PO STREET 887 → 885 tris / 20.15 → 19.92 m², pooled `on road` 2,425 → 2,423 / 161.88 → 161.66, `attributed` 3,296 → 3,294 / 223.63 → 223.40 — while **every off-road figure is identical**: void 113 / 10.64, past kerb 524 / 36.09, isolated 234 / 15.01, 61.74 m² with no carriageway under it, distance p50 2.30 / p90 5.90 / p99 9.75 / max 9.90 over n 829, and the whole `--ray-m` sweep (1 → 8 m: void 1.5 → 43.9% by count) unmoved, because the radius runs over a population this change did not touch. On `wan_chai` the bundle is byte-identical so before ≡ after, and it reproduces `Q104` exactly — **38.75 m² of 577.83 (6.71%)**, 55.7 / 40.3 / 4.0 by count and 43.6 / 48.0 / 8.4 by area, p50 1.05 / p90 2.98 / p99 4.45 / max 4.80 over n 544. `pytest` **2,165** (2,161 + 4), `ruff` clean. 🔴 **One finding to go and look at, not this task's**: `box_extent.py` reports **5 `sha_tin` triangles (0.053 m²) inside no published ring**, where `unattributed` must be 0 — identical before and after, so pre-existing; `PROGRESS.md`'s risk table has it. **Review pass, three agents:** ✅ the cross product is `geometry.orient`'s — the pipeline's own, already used by name in `carriageway.py` — and adopting it left all four bundles **bit-identical**; 🔴 **two claims weakened**: the convexity test **subsumes** the dot product on every ring built (720 vertices: **0** dot-only, **1** convexity-only, **11** both), so the docstrings no longer imply two reachable populations (`Q72`), and `_turns_one_way` is a **quad** rule rather than a general fan guard — a pentagram passes it and folds, pinned by a fourth test, while **0 of 92,784** self-intersecting quads pass. ⚠️ Cost quoted, not gated: `border_polygons` **8.73 → 13.30 ms** over Wan Chai's 20 boxes, **0.27%** of a 1.70 s stage. `pytest` **2,166** |
+| `P5-10` ✅ | The authored door: `landmarks:` generalised (not renamed; `replaces_source_ids` optional for an authored asset), Blender round-trip fixture from `tools/make_dcc_fixture.py`, `verify_authored.gd` in `ALWAYS_TOOLS` — `Q121` | — |
+| `P5-11` ✅ | Tile identity and channel contract, `city.json` 27 → 28: `extras` row table, `TEXCOORD_0` a real planar UV, payload and per-building row in `TEXCOORD_1`, `pick_building(ray)`, codec constants tested. ⚠️ The per-vertex along coordinate costs +10.2% PCK, reversible in one line (zero `uvs[:, 0]`), the user's call; `carve` re-stamps it. Per-building nodes and custom attributes refused — `Q121` | — |
+| `P5-12` ✅ | Colliders on `-colonly` nodes, none on a render mesh; `buildings.collision_cell_m` 1.5, the finest tier's by value, so wall offset is 0.000 m. ⚠️ A coarser cell was priced and not taken (2 m: facade p90 0.469 m, thin geometry lost). Kerb riser stays in the collider; the carve cuts both primitives; graders read `gltf.read_render` — `Q121` | — |
+| `P5-13` ✅ | `-occonly` occluder per tile, occlusion culling on and pinned by `verify_settings.gd`; `meshes/generate_lods = false` in `[importer_defaults]` (−8.6% PCK for 16–30% more primitives; reversing needs the value plus deleting the sidecars) — `Q121`, `Q122` | — |
+| `P5-14` | **Textures as an option on tiles** — `merge` carries a texture when every input shares the same one, tiles declare a `texture_budget_px` on `P3-20`'s mechanism, the facade shader gains a gated `albedo_atlas` sampler; procedural windows stay the default. Trigger: an artist | Sampler off: bundle and frame byte-identical. One 1024² atlas: `mesh_contract.gd` passes on the declared budget and fails one pixel over; atlas footprint quoted against the 128 MB mobile texture budget; A/B frame at the `Q27` street; `merge` still refuses two different textures |
+| `P5-15` ✅ | `verify_road_graph.gd`'s lane-centre check samples the middle segment's midpoint and asserts `hit.edge_id`; no runtime change. ⚠️ A GDScript mutation must keep every local in use or it tests the linter — `Q122` | — |
+| `P5-16` ✅ | `check.sh` `sidecars` step: every generated `*.import` held to `[importer_defaults]`, keys read from `project.godot`, passes on an empty tree — `Q122` | — |
+| `P5-17` ✅ | `buildings.occluder_cell_m` is a per-tier list (`null` = none), `city.json` 29 → 30 with `occluder` on the tier row. 🔴 The far-tier occluder culls nothing measured and costs 4.63 MB (Mong Kok) / 3.04 MB (Wan Chai); `[4.0, 4.0]` still ships, `[4.0, null]` and the web cut's `[null, null]` are the user's call. Stock Web templates cannot cull — `Q122` | — |
+| `P5-18` ✅ | `tools/resident_budget.py`: bands by plan distance to the tile `aabb`, as `TileStreaming.band_of` does. 🔴 `mong_kok` is 184% of budget and no LOD1 cell (163% at 12 m) or third tier reaches 100% — LOD0 carries 78–91% of the resident set; the lever left is LOD0's 1.5 m cell and radius (`P4-5`, `Q26`). LOD1 stays 4.0 m. Cost side provisional until `P0-3b` — `Q122`, `Q120` | — |
+| `P5-19` ✅ | `boxjunctions.border_polygons` drops a non-convex mitre quad, counted in `degenerate_border_segments`. 🔴 Never mask inverted triangles in `FlatBuilder.build` and never widen the sliver bar; `FlatBuilder.polygon`'s fan precondition is pinned in `test_meshbuild.py`, and `_turns_one_way` is a quad rule only — `Q123` | — |
 
-**Held, with the reason each waits on** — not refused, and not re-proposed without the trigger:
+**Held — not refused, and not re-proposed without the trigger:**
 
-- **A non-convex junction cap** (union boundary, not hull) — polygon clipping, the most expensive
-  item priced; the prerequisite for anything hand-drawn *on* a cap (`Q53`). Trigger: the first
-  authored junction piece or box junction that must sit on a cap.
-- **An `authored_roads:` seam** — a node id and a `.glb`; the ETL skips that node's cap and arm
-  trims, the game places the piece as a landmark; routing untouched because the graph does not move.
-  Cheap to build, worthless without an artist. Trigger: an artist.
-- **Markings as `Decal` nodes** — refused by `Q115` on the Mobile renderer and on cost; the lifted
-  meshes are built, graded (`paint_clearance.py`) and measured. Trigger: a measured need to edit
-  paint by hand, and a Mobile-renderer decal test first.
-- **The opposed-ribbon overlap in the road collider** — the same polygon union as the cap.
-- **A landmark LOD tier** for the 173k-vertex HKCEC — trigger: the mobile tier (`P0-3b`) to measure
-  it against.
-- **The occluder as its own streamed unit** — `Q121`'s unpriced lever, halving the occluder's bytes at
-  any cell; a `CityStreamer` content class with its own resident unit and `verify` invariant. Trigger:
-  `P5-17` showing the far-tier occluder culls something the finest-tier one does not, at a byte price
-  the per-tier policy cannot reach (`Q122`).
-- **Custom Web export templates** built with `module_raycast_enabled=yes`, the only way the web cut
-  culls at all (`Q122`). Trigger: a measured draw-call problem on the web cut — `Q120` says the problem
-  is density and the web demo is Wan Chai.
-
-**Order.** `P5-10` first because it is the cheapest and it is the test that would have caught the
-review; `P5-11` next because `P5-12`–`P5-14` are easier once identity and the channels are settled,
-and it is the one schema bump; `P5-12`, `P5-13` in either order; `P5-14` last, on `P5-11`'s UV.
-Independent of `P5-7`/`P5-9`, and can run beside them; `P5-11` and `P5-7` both bump `city.json`, so
-whichever lands second rebases its number. **Added 2026-09-08 (`Q122`)**: `P5-15` before anything
-else in the phase — a red `check.sh` on a declared region is the repository's own bar — with `P5-16`
-beside it; `P5-17` before the next itch.io cut, because it decides what that cut carries; `P5-18`
-after, and ahead of any streamer work, because it repays both budgets and moves nothing at runtime.
-`P5-11`'s +10.2% along-coordinate reversal outranks the occluder halving on the same grounds and
-stays the user's call.
+- A non-convex junction cap (union boundary, not hull; polygon clipping) — prerequisite for
+  anything hand-drawn on a cap (`Q53`). Trigger: the first authored junction piece or box junction
+  that must sit on a cap. The opposed-ribbon overlap in the road collider is the same union.
+- An `authored_roads:` seam (a node id and a `.glb`; ETL skips that node's cap and arm trims, the
+  game places it as a landmark, routing untouched). Trigger: an artist.
+- Markings as `Decal` nodes — refused by `Q115` on the Mobile renderer and on cost. Trigger: a
+  measured need to edit paint by hand, and a Mobile-renderer decal test first.
+- A landmark LOD tier for the 173k-vertex HKCEC. Trigger: the mobile tier (`P0-3b`).
+- The occluder as its own streamed unit — refuted by `P5-17`: the far tier culls nothing (`Q122`).
+- Custom Web export templates with `module_raycast_enabled=yes`, the only way the web cut culls
+  (`Q122`). Trigger: a measured draw-call problem on the web cut.
 
 ### Phase 5c — The collaborator seam (`Q124`)
 
-**Goal:** a 3D artist, a computer-graphics engineer and a Godot developer can each do their first
-day's work without running the ETL, without reading `DECISIONS.md` first, and without a diff that
-rewrites files they did not touch. **Broken down** from a re-read of Godot's "Best practices"
-pages against the tree after `Q119`–`Q123` (`Q124`, 2026-09-08): the guide's checkable rules are
-inside the tree and the exceptions are recorded, so what is left is what each of those three people
-hits first. ⚠️ **The scope is the seam, not the style** — the merged tile, the procedural facade and
-the code-built HUD stay as they are. 🔴 **Every step owes `Q119`'s inertness proof** — `skidpad.sh`
-byte-identical at 63.02 and 86.36 kph entry, the driver run's draw calls per debug view unchanged,
-and `Q81`'s wrong-way route raising its sign in a frame `cmp`'d to the before side — because none of
-these is meant to move a frame, and a step that does has done something it did not say.
+**Goal:** a 3D artist, a graphics engineer and a Godot developer can each do a first day's work
+without running the ETL, without reading `DECISIONS.md` first, and without a diff that rewrites
+files they did not touch. The scope is the seam, not the style: merged tile, procedural facade and
+code-built HUD stay.
+
+🔴 Every step owes `Q119`'s inertness proof: `skidpad.sh` byte-identical at 63.02 and 86.36 kph
+entry, the driver run's draw calls per debug view unchanged, and `Q81`'s wrong-way route raising
+its sign in a frame `cmp`'d to the before side.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P5-20` ✅ **built 2026-09-08 (`Q124`)** | **The authored sidecars are held to the pins** — `check.sh`'s `sidecars` step walks `game/assets/authored/**/*.glb.import` as well as `generated/`, and the five committed sidecars are reseeded from `[importer_defaults]`. 🔴 Today all **5** carry `generate_lods=true` and **3** (`taxi_body`, `taxi_tyre`, `central_plaza`) carry `force_disable_compression=false` — `Q82`'s setting off on the one authored mesh that carries a `UV` payload — and the step cannot see them. ⚠️ **Reseed by deleting and re-importing**, never by hand-editing the sidecar (`P5-16`'s own rule) | `check.sh` **red** on the current tree at the `sidecars` step, naming all five; green after the reseed, with the five sidecars committed in the importer's own form. `verify_vehicle.gd` green — the payload survived with compression genuinely off; quote its `circuits wide` line before and after. One fixed camera on the taxi in `city_preview.tscn`, shot twice a side and `cmp`'d; ⚠️ **expect it to differ**, because compression off can move the body's vertices by the quantum `Q82` measured, so grade the delta with `frame_stats.py` and paste it rather than requiring identity. `skidpad.sh` byte-identical — the collider is a `BoxShape3D` and the wheel a radius, so handling cannot move. Mutation: one sidecar hand-set back to `generate_lods=true` re-fails the step ✅ **Done, and every predicted number landed but one, which landed better.** `check.sh` on the old sidecars: **exit 1**, the `sidecars` step naming all **5** files over **8** missing lines (`generate_lods=false` on five, `force_disable_compression=true` on three). Reseeded by deleting the five and `--import`: **exit 0**, `210 checked against 2 pinned keys`, and the diff is the two keys plus a fresh `uid` per file — nothing in `game/` referenced the old ones, checked by grep. Mutation: one sidecar hand-set back to `generate_lods=true` re-fails the step naming that file alone, exit 1. `verify_vehicle.gd` byte-identical: `8 circuits wide`, `1184 vertices imported carrying circuits [1.0 … 7.0], lenses only`. ⚠️ **The frame did NOT move**: the stationary taxi at the chase camera under the HKCEC deck (`--seconds=1 --shots=0.5 --debug-view=off --hud=off`), shot twice a side, is byte-identical within each side **and across them** — the quantum `Q82` measured is 16 bits over the mesh's own AABB, which on a ~4.5 m body is ~0.07 mm, sub-pixel at 8 m, so `frame_stats.py` had nothing to grade and the `cmp` is the evidence. `skidpad.sh` byte-identical at both entry speeds: drift 69.8° / 0.87 s at 63.02 kph and 50.4° / 0.98 s at 86.36. ⚠️ **Each `--import` retabs `greybox_wanchai.json`** (`Q115`), restored three times and never committed |
-| `P5-21` ✅ **built 2026-09-08 (`Q124`)** | **The first editor save, committed alone** — open the project, save every scene and resource once, commit nothing else in that change. This is the save `Q119` said would add `uid=` to the eight scenes and the one after which its typed-export re-test is owed. Then re-measure `@export var target: Node3D` against the `NodePath` beside it in the same five variants `Q119` ran; if the typed export resolves, migrate the nine `NodePath` exports (`city_streamer`, `drive_harness` ×2, `road_graph_overlay`, `vehicle_controller`, `free_look_camera`, `chase_camera` ×3) to typed node exports, the guide's own "fastest" form | `git diff --numstat` reads **only** `uid=` lines and writer-form changes on the eight scenes and the `.tres`; `check.sh`'s `tuning` step green (no `;` line reappeared, no sidecar orphaned); `verify_settings` green. The five-variant table pasted into `Q119`'s row. If migrated: **0** `NodePath` exports left whose target is a `Node`, `push_warning` fallbacks kept, and the full inertness proof above. If the typed export still reads null on an editor-saved scene, the `NodePath` form stays and `Q119`'s "re-measure" closes as "measured, kept" ✅ **Done, as two commits, and the re-test closed the other way.** The save is `8fe6ecd`: 8 scenes and 25 resources through the editor's writer, reached headlessly by a temporary `EditorPlugin` because 4.7's `--script` refuses an `EditorScript` (`"doesn't inherit from SceneTree or MainLoop"`, with `-e`, from `res://` or an absolute path alike); the diff is `uid=` on every header and `ext_resource`, 4.7's `unique_id=` on every node, `taxi.tscn`'s two `shadow_enabled = false` lines dropped as default-equal (its sidecar now says so), and **one `project.godot` line** — the GUI orders `occlusion_culling` last in `[rendering]` where `Q119`'s headless `ProjectSettings.save()` put it second, so the committed file was not the editor's form and a GUI save was not a no-op; it is now, `verify_settings` reading every value unchanged. ⚠️ **One pass is not a fixed point**: `main.tscn` and `city_drive.tscn` were saved before the scenes they instance had uids, and a second full pass changed exactly those two references and nothing else. 🔴 **The typed export RESOLVES, and `Q119`'s null was an attribute, not the author**: two probe scenes built and saved by the editor (`@export var typed: Node3D` beside a `NodePath`, probe before and after its target), read from a game-context `--script` run cold after `--import` and warm again — `resolved` in all four; hand-authored copies with `uid=`/`unique_id=` stripped, `resolved` in all four; the same copies with `node_paths=PackedStringArray("typed")` stripped from the node line, **`NULL` in all four**, with the `NodePath` beside it resolving in every one of the twelve. So migrated: `city_streamer.camera`, `drive_harness.vehicle`/`streamer`, `road_graph_overlay.vehicle`, `chase_camera.target`/`camera`, `free_look_camera.frame_source` are typed exports, set in the four scenes with `node_paths=` on the node line; the two `input_path` exports stay `NodePath`, because an autoload is not in the scene being instantiated. **0** `NodePath` exports left whose target is in the scene, `push_warning`/`push_error` fallbacks kept. ✅ **The hand-edited scenes are the writer's form**: a further editor save of all eight reproduced them byte for byte bar the fixed-point line above. `check.sh` exit 0. Inertness: `drive.sh` standard route draws **114 / 122 / 151** (off / minimal / full) before and after — `Q119`'s 102 / 110 / 139 plus `P5-6`'s chunking — the 4.2 s frame byte-identical, `Q81`'s wrong-way route frame at 9 s byte-identical across sides and within each side (2 + 2), `skidpad.sh` byte-identical at 63.02 and 86.36 kph entry |
-| `P5-22` ✅ **built 2026-09-08 (`Q124`)** | **An asset viewer that needs no built region** — `scenes/dev/asset_viewer.tscn`: one `.glb` named by `--asset=res://…`, stood at the origin under `clean_daylight.tscn`, with the project's import hook applied exactly as it is to everything else, a turntable on the fly camera, and a readout of what the importer did: triangles, AABB, every material name and the `.tres` it resolved to or *kept as authored*, whether a `-col` node grew a collider, whether a `COLOR_0` was found. ⚠️ **It is the artist's daily loop and it does not exist** — today seeing a prop under the shipped rig needs Python, a 320 MB fetch and a full build | Runs on a fresh clone with `VERIFY_GENERATED=0` and shows `assets/authored/fixtures/dcc_roundtrip.glb` — the readout matches every row `verify_authored.gd` asserts about that fixture (names, the untouched PBR material, its 64² texture, the `-col` collider, 22 triangles). Shows `taxi_body.glb` with `vehicle_body` resolved to `tuning/vehicle_body.tres`. A frame at one fixed camera, shot twice and `cmp`'d. `--asset=` pointing at a missing file exits non-zero with a message — Godot exits 0 on a script error, so the exit is asserted. Not shipped: lives under `scenes/dev/` like the other three. **No `.tres` and no tuning key** — a viewer carries no taste ✅ **Done.** `scenes/dev/asset_viewer.tscn` + `scripts/city/asset_viewer.gd`: root stands the `.glb` named by `--asset=` (default the fixture), instances `clean_daylight.tscn`, the fly camera frames on the root's `built`, and the readout is printed as `asset:` lines and drawn on a `CanvasLayer` in `DebugHud`'s label style. `driver.gd` gained `--asset` as a named pass-through, because it refuses unknown flags. On the fixture the readout reproduces every `verify_authored.gd` row: **22 triangles**, `KioskBody under dcc_roundtrip: 1 surface(s), collider`, `KioskPaint kept as authored, albedo texture 64x64`, `KioskRoof under KioskBody … no collider`, `KioskRoofPaint kept as authored, no texture`; on `taxi_body.glb`: 604 triangles, `vehicle_body -> res://tuning/vehicle_body.tres, COLOR_0`. A missing file: `FAIL asset viewer: no scene at …`, driver **exit 1**. Frame at the fly camera's own framing, `--debug-view=off`, `cmp`'d: the still pair identical, the spinning pair identical, and a later run identical across batches; ⚠️ **the first run after `check.sh`'s re-import did not reproduce** (132,867 px over the kiosk, 6.4% of the frame) and the second did — the cache rule `Q114` and `Q117` record, met here on a 22-triangle prop. The turntable turns on the physics tick and was cleared as the cause by a frozen pair. `check.sh` exit 0 with the new scene through the editor's writer (`uid=`, `unique_id=`, `node_paths=`). No `.tres`, no tuning key, `VERIFY_GENERATED` untouched |
-| `P5-23` ✅ **built 2026-09-08 (`Q124`)** | **The vehicle contract as a naming convention, not a UV payload** — the surface marker in `UV.y` and the circuit id in `UV.x` that `make_vehicle.py` stamps become something an artist can author: **material names**. `generated_scene_import.gd`, which already dispatches shaders by name, stamps the two channels from a documented vocabulary (`lens_brake_left`, `glazing`, `paint`, …) onto each surface carrying one, and merges to the one `vehicle_body` material afterwards, so the shipped mesh is what it is today. ⚠️ **Feasibility first**: an `EditorScenePostImport` sees `ImporterMesh` surfaces and must rebuild them to write a channel — measure that it is lossless on the fixture before building on it; if it is not, the fallback is `tools/stamp_vehicle.py`, the artist's export committed unmodified under `authored/vehicles/src/` and the stamped `.glb` beside it, reproducible byte for byte. 🔴 **`make_vehicle.py` goes through the same door** — it emits per-surface named materials and lets the hook stamp them — so the shipped taxi and an artist's car are graded by one rule. Then the Blender-facing recipe goes in `ARCHITECTURE.md` beside the landmark door's table | `verify_vehicle.gd` green on the regenerated taxi with **every** line it prints today byte-identical — `circuits wide`, the integral payload, the lens-only channels. The taxi frame at one fixed camera **byte-identical** before and after, and `skidpad.sh` likewise. A second fixture, a car exported from Blender with the vocabulary's names and nothing else, passes `verify_vehicle.gd`; ⚠️ **mutation-check the vocabulary**: a lens whose material is misspelt fails the check by name rather than rendering dark. `verify_authored.gd` still green — the landmark door is untouched. The hook's scope note (*runs on every imported scene*) re-stated with the new rule. ⚠️ **The shipped `.glb` is still Python's** — this task builds the door, it does not commission the car ✅ **Done, on the import-hook route — feasibility measured first and lossless.** `_post_import` receives `ArrayMesh`es (not `ImporterMesh`), so a surface is rebuilt from `surface_get_arrays` with compression off (`P5-20`'s reason), and the taxi rebuilt through the door reads **every `verify_vehicle.gd` line byte-identical**: `1 surface(s) with vehicle_body.tres`, `8 circuits wide`, `1184 vertices … circuits [1.0 … 7.0], lenses only`; the stationary taxi frame at the chase camera is **byte-identical to `P5-20`'s pre-door baseline** across three runs; `skidpad.sh` byte-identical at 63.02 and 86.36 kph. The carrier: `gltf.py` gained `MeshGroup` (one node, one mesh, one primitive per part — the shape of a DCC export with material slots), `make_vehicle.py::material_parts` splits the stamped body by `(circuit, marker)` into eleven-name `MATERIAL_OF_PAYLOAD` primitives with **no UVs**, exact by construction on a flat-shaded body and refusing a mixed triangle, and `generated_scene_import.gd::vehicle_body` stamps `UV = (circuit, marker)` from the slot name, bakes `COLOR_0` from the base colour where a slot has none (sRGB-encoded, `Q27`), and merges to one `vehicle_body` surface. `test_make_vehicle.py` binds the two tables by name in both directions and the split's triangle set to the body's. The fixture: `dcc_vehicle.glb`, a Blender 5.2 export by `make_dcc_fixture.py --vehicle` — four boxes joined into one object, four slots, no vertex colours, origin at the ground centre, scale applied — imports as **1 surface, 48 triangles, `vehicle_body.tres`, `COLOR_0`**, and `verify_authored.gd` classifies all 96 vertices by box and reads the stamped payload on every one (24 per box). 🔴 **Mutation: `--vehicle <out> vehicle_lamp_break`** — the hook refuses by name (`'vehicle_lamp_break' is not a vehicle material … the names are [...]`), leaves four unmerged surfaces, and `verify_authored.gd` fails *the vehicle fixture's body is not one surface*. ⚠️ **Two things the first fixture got wrong are now in the recipe**: a joined object keeps the first cube's origin, and the exporter's `export_apply` applies modifiers and not the object scale, so an unapplied scale ships as a scaled node over unit-cube vertices — the verify tool classifies in the node's frame for that reason, and the builder applies scale. The kiosk fixture still reproduces byte for byte. `check.sh` exit 0, `pytest` 2,175. ⚠️ **The shipped `.glb` is still Python's** — the door is built, the car is not commissioned |
-| `P5-24` ✅ **built 2026-09-08 (`Q124`)** | **The ancestor mediates** — the guide's rule that siblings know only their own hierarchies and a parent wires them. `main.tscn` gains the `main.gd` entry point the guide names, and it hands the HUD its vehicle: `drive_harness.gd` exposes the taxi it already places, `hud.gd` takes a typed reference from `Main` and stops finding it by group lookup; `road_graph_overlay.gd` loses its group-lookup fallback for the same reason; `sun_glint.gd` takes its light from the scene that owns the rig instead of `find_children` over the window. ⚠️ **`DebugHud` keeps its group lookup** — it is an autoload and dev chrome, nothing above it can inject, and `Q119` already placed it | `VehicleController.first_in` has **one** caller (`debug_hud.gd`) and `find_children` **0** callers under `scripts/`; `get_tree()` count under `scripts/` quoted before and after. `verify_hud.gd` and `verify_vehicle.gd` green, plus the full inertness proof above: the wrong-way route's sign at 9 s on EXPO DRIVE EAST in a `cmp`'d frame, draw calls 102 / 110 / 139 unchanged. `--hud=off` still frees the HUD with 0 script errors — `Q119` found that path once. Mutation: `Main` handing the HUD nothing makes the HUD print a warning and draw its plate empty, never crash, and the wrong-way sign never rises ✅ **Done.** `scripts/main.gd` is the entry point: `level: DriveHarness` and `hud: Hud` are typed exports set in `main.tscn`, and `_ready` hands the HUD the level's car; `hud.gd` reads `vehicle` and never searches; `road_graph_overlay.gd` lost its group fallback; the rig's sun is `VehicleController.sun`, a typed export each owning scene points at its own `Sun` (`../Lighting/Sun` in the drive, `../Sun` on the skidpad and the grey box), and `SunGlint.rig_sun` reads it from the controller above for both the glint and the lamps — `find_sun`'s window scan is gone. `VehicleController.first_in` has **one** caller, `debug_hud.gd`, an autoload nothing above can inject; `find_children` **0** callers under `scripts/`; `get_tree()` **9 → 7** under `scripts/`, the two left being the autoload `BeamBudget`'s camera and the asset viewer's `quit`. `check.sh` exit 0, the four scenes through the editor's writer (attribute order and one uid). Inertness: draws **114 / 122 / 151** both sides; `Q81`'s wrong-way route at 9 s **byte-identical** across sides and within each (2 + 2); `--hud=off` frees the HUD with 0 script errors; **the world frame at 4.2 s byte-identical with `--hud=off`**, and ⚠️ **with the HUD on it differs in the speed label alone — 58 against 59 km/h in a 34 × 52 px box, 861 px** — the label's 10 Hz `_process` sampler landing one render frame later, the same class of variance `Q119` recorded on its 9 s telemetry sample, with the telemetry at t = 4.00 identical (56.70 kph). ✅ **Re-shot at `P5-25` with no HUD change, that frame is byte-identical to the before side again** — the shift was the run's render phase, not the change. `skidpad.sh`: every graded row byte-identical at both entry speeds; ⚠️ the `vehicle:` pose line moved **0.995644 → 0.986941 m**, exactly two ticks of free fall at the profile's 1.6 g, because `skidpad_ablation.gd` reads the pose after one `await process_frame` and the physics ticks inside that frame are wall-time, not the grade. Mutation: `hud = NodePath("")` on `Main` prints *Main has no HUD assigned*, the run exits `DRIVER OK` with 0 script errors, and the 9 s frame carries no sign |
-| `P5-25` ✅ **built 2026-09-08 (`Q124`)** | **The two globals named for what they are** — (a) the command-line parser leaves `DebugHud`: `cmdline_value`, `_cmdline` and `_parse_view`'s reader become `scripts/core/cmdline.gd`, a `class_name` with `static func`s, which is the form the guide gives for a helper that needs no node; `hud.gd`, `input_router.gd` and every tool reach it there and `DebugHud` parses only its own `--debug-view`. (b) `RoadGraph.shared()` is either **declared** — a row in `ARCHITECTURE.md`'s autoload discussion stating it is the fourth singleton and why a `WeakRef` rather than `[autoload]` — or **replaced** by the parsing scene handing the graph to its six readers; ⚠️ the choice is the user's, and declaring is the cheaper and honest one | `grep -c DebugHud` in `hud.gd` and `input_router.gd` falls to the `view_changed` connection alone; `--hud=off`, `--touch=mouse` (`verify_input.gd` covers it) and `--debug-view=` all still honoured on the driver, quoted. `check.sh` green on a fresh clone — `class_name` resolution needs the import first (`Q119`), so the new class is in the warnings sweep. Full inertness proof. If (b) declares: the row written and `road_graph.gd`'s docstring cites it. If (b) replaces: **0** callers of `shared()` and `verify_spawn.gd` still builds its own graph ✅ **Done — (a) moved, (b) declared.** `scripts/core/cmdline.gd` is `Cmdline`, a `class_name` with three statics (`arguments`, `value`, `has`) reading both halves of the command line; `DebugHud` lost `_cmdline` and `cmdline_value` and reads its own `--debug-view=` and `--fps` through it; `hud.gd`, `asset_viewer.gd` and `input_router.gd` read `--hud=`, `--asset=` and `--touch=` there, and the router's `/root/DebugHud` path lookup and its `DEBUG_HUD_PATH` are gone — a `class_name` resolves from the import's class cache in a `--script` tool where an autoload identifier does not, which was the whole reason for the path. `DebugHud` references left in `hud.gd`: **5**, all the dev overlay's own (`attach_readout`, `detach_readout`, `view_changed`, `shows_readouts` ×2); in `input_router.gd` **0** in code. A headless probe with `-- --touch=mouse --hud=off --debug-view=full --fps` reads `mouse / off / full / true`, and on the driver `--hud=off` frees the HUD (`DRIVER OK`, 0 script errors), `--debug-view=` gives **114 / 122 / 151** draws, `--touch=mouse` runs, `--asset=` stands the taxi. 🔴 **`check.sh` exit 0 from an EMPTY `game/.godot`** — the fresh-clone condition, which is where a new `class_name` fails if it is ever going to. (b) `RoadGraph.shared()` is **declared**: `ARCHITECTURE.md`'s autoload list now names it as the singleton that is not an autoload — a `static var WeakRef` parsed once per scene and dropped with it, holding no node state — with its six readers listed, and `road_graph.gd` cites the paragraph. Inertness: `Q81`'s route at 9 s byte-identical to `P5-24`'s before side and within the pair; the world frame with `--hud=off` byte-identical; `skidpad.sh` rows byte-identical at both entry speeds |
-| `P5-26` ✅ **built 2026-09-08 (`Q124`)** | **The core thresholds are `.tres`** — `WrongWayMonitor`'s `DEFAULT_ANGLE_DEG`, `DEFAULT_MIN_KPH`, `CORRECTING_ANGLE_DEG`, `DEFAULT_RAISE_S`, `DEFAULT_CLEAR_S` and `StreetTracker`'s `DEFAULT_DWELL_S` move to `tuning/wrong_way.tres` and `tuning/street_tracker.tres` with sidecars, on the `HandlingProfile` pattern of **no `@export` defaults** (`Q80`), and the `const`s are deleted. This is `ARCHITECTURE.md` Constraint 4 applied to the largest cluster of the 36 unit-suffixed constants the re-read counted. 🔴 **The two bars stay two** — `DEFAULT_ANGLE_DEG` and `CORRECTING_ANGLE_DEG` must not share a field (`Q81`) | `verify_hud.gd`'s 23 `way:` assertions read the resource and stay green; the 120° bar and the 3 Hz WCAG cap still asserted, not commented. The wrong-way drive (`--hold=accelerate@0.3+12.7 --hold=steer_right@4.6+1.3`) raises the sign at the same second in a `cmp`'d frame. Unit-suffixed constants under `scripts/` **36 → n**, quoted. Mutation: the resource missing makes the monitor refuse to construct, never fall back to a literal ✅ **Done.** `tuning/wrong_way.tres` (`WrongWayProfile`: `raise_s` 0.5, `clear_s` 0.8, `angle_deg` 120, `min_kph` 10, `correcting_angle_deg` 90) and `tuning/street_tracker.tres` (`StreetTrackerProfile`: `dwell_s` 0.6), both with sidecars carrying the constants' rationale, both through the editor's writer, no `@export` defaults. `WrongWayMonitor` and `StreetTracker` take the profile in `_init` and the six constants are gone; `hud.gd` loads both beside `hud_style.tres` and declines to build without them (*did not load; no HUD this run*). ⚠️ **"Refuse to construct" is not something `_init` can do, so an invalid profile makes the object INERT, not a literal**: a null or zeroed profile pushes an error naming the cause and the sign never rises (probed: 2 s pointed backwards at 72 kph, `wrong_way=false raises=0`) and the plate never changes (`has_street=false`) — the first cut used `assert`, which a headless run reports and walks past. `verify_hud.gd` builds every monitor and tracker from the shipped tables, mutates the nose bar by duplicating the profile, and gained the ratchet: *the nose bar is 120 and the withholding bar is 90 (120 / 90)* and *the dwells are the 0.5 s raise and 0.8 s clear the samples below are written against* — the two bars stay two (`Q81`). The 3 Hz WCAG cap is still asserted on `hud_style.tres`. Strict unit-suffixed constants under `scripts/` **19 → 13** (the re-read's 36 was a broader pattern; the five here were its largest cluster). `check.sh` exit 0. Inertness: `Q81`'s route at 9 s byte-identical to `P5-24`'s before side and within the pair, draws 122 on the standard route, `--hud=off` world frame byte-identical, `skidpad.sh` rows byte-identical at both entry speeds. Mutation: `wrong_way.tres` moved off disk — *hud: res://tuning/wrong_way.tres did not load; no HUD this run*, `DRIVER OK`, no sign in the 9 s frame |
-| `P5-27` ✅ **built 2026-09-08 (`Q124`)** | **Git LFS before the first sculpted asset** — `git lfs track` for `*.glb`, `*.png`, `*.ttf` in `.gitattributes`, `actions/checkout` with `lfs: true`, tracked forward from the commit that lands it. ⚠️ **Forward only**: the guide says enabling LFS after files are committed needs `git lfs migrate`, which rewrites every commit; the five existing `.glb` total under a megabyte and stay where they are unless the user chooses the rewrite. ⚠️ GitHub's free LFS quota is 1 GB storage and 1 GB bandwidth a month; quote the tracked total on every release | `git lfs ls-files` lists every new binary; a fresh clone with LFS installed passes `check.sh`; a fresh clone **without** LFS fails at `verify_authored.gd` with a pointer file, and that failure message is the one a collaborator will see, so it is pasted here. CI green with the checkout flag ✅ **Done, forward only.** `git-lfs` 3.8.0 installed (it was not, though a global filter config from an earlier install pointed at it — the first `git add` of a `.glb` after tracking would have failed on this machine). `.gitattributes` tracks `*.glb`, `*.ttf`, `*.png` with `filter=lfs diff=lfs merge=lfs -text` in place of the plain `binary` rows; the **8** tracked binaries (**6.2 MB**) were renormalised into LFS objects in the tracking commit with no history rewrite; `actions/checkout@v5` takes `lfs: true` in both CI jobs, because `test_make_vehicle.py` compares the committed `.glb` with the generator. `git lfs ls-files` lists the eight. **A normal clone holds the real bytes** (`cmp` against the source) and passes `check.sh` with `VERIFY_GENERATED=0`; **a clone with the smudge skipped** (`GIT_LFS_SKIP_SMUDGE=1`, the shape of a clone with no `git-lfs`) holds 130-byte pointer files, the import logs `FreeType: Error loading font: ''`, and the first `FAIL` is `verify_vehicle`'s *no node in res://scenes/vehicle/taxi.tscn runs res://scripts/vehicle/vehicle_lamps.gd* — the body is a pointer, so the mesh never instances — exit 1. `README.md` and `CONTRIBUTING.md` say to install it before cloning and how to repair a clone made without it. ⚠️ GitHub's free LFS quota is 1 GB storage and 1 GB bandwidth a month; the tracked total is 6.2 MB. ⚠️ **The history rewrite is not done and stays the user's call** — the old blobs remain in earlier commits |
-| `P5-28` | **The exposure anchor un-baked** (`Q38`) — ✅ **planned in four steps on 2026-09-08, on three of the user's calls**: the survey tint is applied at reflectance level and the look **re-judged** rather than reproduced; `render_cool` is **moved** one 8-bit code under its cited range rather than the range widened; and the anchor **lives in the lighting rig** as a Godot global shader parameter, not in a `.tres` per material and not in the ETL. ⚠️ **The evaluation that produced this corrected the row it replaces on four points**: (1) `Q38`'s "one invertible scalar" is measured **false** since `Q40` — `with_hue` assigns `(a*, b*)` in CIELAB on the baked colour at `facade_hue_strength` 2.0, and Lab chroma does not commute with a linear-light scale, so tinting at reflectance level and scaling in the shader lands **ΔE 1.2–6.0** from today, almost all of it in b* (−1.1 to −5.6) with L* inside ±0.25 — which the old row's L*-only bar could not see; (2) the 8-bit round trip alone is **≤ 0.12 L*** on all 16 materials and no un-baked channel exceeds 0.65 linear, so that half of the old caveat is right and small; (3) **seven** shaders read `COLOR_0` as albedo plus the import hook's `BaseMaterial3D` branch for `landmark_vertex` and `barrier_vertex`, not "the facade shaders and the road" — and the road has been a `ShaderMaterial` since `P3-12`, so `Q38`'s `albedo_color` remark is stale; three of the seven are **exempt** (`signs`, `signs_text`, `vehicle_body`) but the lamps share `signs.gdshader` and are under `Q33`; (4) two committed LFS binaries carry the baked value — `central_plaza.glb` and `barrier.glb` — bound to their generators by test. ⚠️ **Without the anchor, `reflectance:` is `luminance(colour)` by definition**, so `_check_exposure` becomes a `Q72` tautology unless it checks a *third* thing: authored `bounds:` per material, which today exist only as free text | The four sub-rows below; each owes the `Q119` inertness proof (`skidpad.sh` byte-identical at both entry speeds, the driver run's draw calls per debug view unchanged) and `grep -i "shader error"` on every render, because `check.sh` exits 0 on a shader that fails to compile |
-| `P5-28a` ✅ **built 2026-09-08 (`Q38`)** | **`render_cool` moved one code, alone and first** — `#949995` → `#939995`, `reflectance` 60.1 → 59.9, so it sits inside the 30-60% its own `source:` names. ⚠️ **Its own commit, before anything else here**, or the un-bake's before side is dirty: it rebuilds the tiles, and a diff that moves a colour *and* un-bakes cannot say which moved the frame — `frame_stats.py`'s "a pair must differ in exactly one thing" | `_check_exposure` green at the old anchor (claim 59.91% × 0.52, inside the 0.5 pt tolerance). Every bundle file **byte-identical except the tiles**, and in the tiles only `COLOR_0` on the buildings that draw `render_cool`. `frame_stats.py` at the `Q27` and `Q31` cameras pasted — expect **≈ 0.1 L*** on that material's pixels and nothing elsewhere; `tools/facade_chroma.py --shipped` table pasted against `Q30`'s (expect the same to 0.04 `C*`); a `cmp`'d frame pair expected to differ. Numbers into `Q33`'s row: the fifth back-derived façade is now inside its stated range and the range was not widened |
-| `P5-28b` ✅ **built 2026-09-08 (`Q38`)** | **The global at 1.0, inert** — `project.godot` `[shader_globals]` declares `exposure_anchor` (float, **1.0**), and `verify_settings.gd` pins the declaration and its default because `check.sh`'s `settings` step is the only thing that survives an editor save. `city_facade.gdshader`, `city_facade_clean.gdshader`, `road_markings.gdshader` and `tramway.gdshader` gain `global uniform float exposure_anchor` and multiply it into the albedo **after** `vertex_srgb_to_linear` (`Q27`); `signs.gdshader` reads it behind a per-`.tres` `apply_exposure` bool — `lamps.tres` **true**, `signs.tres` and `signals.tres` **false**, because a livery is a printed specification and a lamp post is `Q33`'s — so the three layers stay one shader and differ in a parameter (`Q71`'s rule); `vehicle_body.gdshader` and `signs_text.gdshader` do not read it. 🔴 **`landmark_vertex` and `barrier_vertex` leave the `BaseMaterial3D` branch**: a `BaseMaterial3D` cannot read a global, so a minimal shared `vertex_albedo.gdshader` (linearise `COLOR`, multiply the global) with `tuning/landmarks.tres` and `tuning/barrier_vertex.tres` plus sidecars, two rows in `SHADERS`, and `verify_landmarks.gd` / `verify_fence.gd` checking the dispatch by `resource_path` (`check_shader_material`, never `check_shader_source`). ⚠️ **`barrier_vertex` must stay a different name from `barriers`**, which dispatches the railing class. The rig roots `clean_daylight.tscn` and `golden_hour.tscn` take `scripts/world/lighting_rig.gd` with `@export var exposure_anchor: float` set to **1.0** in the `.tscn`, and `_ready` calls `RenderingServer.global_shader_parameter_set`; rationale in the existing `clean_daylight.md` / `golden_hour.md`. ⚠️ **`skidpad.tscn` and the grey box do not instance the rig** (`P5-24` gives each its own `Sun`) and will render at the project default — which is the honest "no exposure" state, visible rather than silent, and the skidpad has no frame to grade | **Byte-identical frames** at the `Q27` and `Q31` cameras and on the taxi in `city_preview.tscn`, each shot twice and `cmp`'d, with `game/.godot/imported/*.glb-*` deleted and re-imported before each side (the cache lies, `Q107`); draw calls unchanged per debug view (a global adds none); PCK delta quoted. 🔴 **Mutation-check that the shaders read it**: set the global to 0.5 in the rig, and the frame must darken on the four bound layers and the lamps while the signs and the taxi do not move — an unread global renders perfectly at any value (`Q72`). `check.sh` green, including the new `settings` pin and the two dispatch rows; the pin's mutation (`1.0` → `0.9` in `project.godot`) fails the step |
-| `P5-28c` ✅ **built 2026-09-08 (`Q38`)** | **The un-bake, both sides in one commit** (hard rule 5). ETL: `exposure_anchor` **leaves `hong_kong.yaml`** (`schema_version` 4 → 5, `SUPPORTED_SCHEMA` with it, the `helpers.py` fixture too); the 16 `materials:` colours are rewritten at reflectance level — each is today's colour divided by 0.520 in linear light (`render_warm` `#c9b79a`, `asphalt_aged` `#5b5854`, `concrete_kerb` `#8d897d`, …), the table from the evaluation; every material gains **`bounds: [lo, hi]`** transcribed from its `source:`; `_check_exposure` becomes `_check_reflectance` — `luminance(colour)` within `EXPOSURE_TOLERANCE_PCT` of `reflectance` (the 8-bit round trip, kept) **and** `reflectance` inside `bounds` (the third thing, which is what stops it being a tautology); `test_no_colour_escapes_the_materials_table` stays as it is, one table. `with_hue` runs on the reflectance-level colour, **unchanged in code** — that is the re-judge, and its delta is `P5-28d`'s. `make_landmark.py` and `make_barrier.py` palettes rewritten the same way with bounds, `check_palette` on the shared body, and `central_plaza.glb` and `barrier.glb` **regenerated and recommitted** (LFS; `test_export.py` binds them). `city_manifest.gd` `SCHEMA_VERSION` 30 → **31** — a consumer without the multiply is *wrong*, not merely stale: it renders the city pale, the exact failure the import hook's `Q27` comment describes. Game: `exposure_anchor` **0.520** in both rig `.tscn`s. Tools: `facade_chroma.py --shipped` and `frame_stats.py --albedo-l` read the anchor **from the rig scene** (one home) to keep describing the *rendered* palette; `kerbside_error.py` reads `COLOR_0.a` only and is untouched | `roads.glb`: positions, normals, indices, `TEXCOORD_0`, `TEXCOORD_1` byte-identical and **`COLOR_0` alone differing**, asserted field by field; `arrows.glb`, `roadmarks.glb`, `boxjunctions.glb`, `signs.glb`, `railings.glb`, every `*_placements.json`, `roadgraph.json`, `clearance.json` byte-identical; tiles, `tramway.glb`, `lamps.glb` differ in `COLOR_0` only. `frame_stats.py` at the `Q27` and `Q31` cameras: **L\* histogram deltas under 1 unit at every percentile** — expected ≤ 0.12 from the round trip plus ≤ 0.25 from the tint; `facade_chroma.py --shipped` pasted: **expect b\* to fall 1–5.5** on surveyed façades, and that number is handed to `P5-28d` rather than accepted here. `cmp` expected to differ. Mutation: a colour outside its `bounds` refuses to load, naming the material; `bounds` deleted from one entry refuses to load. `verify_lamps`, `verify_landmarks`, `verify_fence`, `verify_authored` green. `Q38` closed; `Q82`'s and `P3-26`'s "buys night mode nothing" lines updated to say the precondition is met |
-| `P5-28d` ✅ **built 2026-09-08 (`Q38`, `Q30`)** — swept, and the user chose **3.0** | **The re-judge** — `facade_hue.strength` swept (2.0, 2.5, 3.0, 3.5) with `tools/facade_chroma.py --shipped` on the un-baked bundle, the `Q40` `A‴` cameras shot at each, and the user picks; then the chosen table replaces `Q30`'s in `ART_DESIGN.md`. ⚠️ **Strength is already declared art direction, not evidence**, so retuning it is legitimate; what is *not* is calling the new chroma faithful — the survey's `(a*, b*)` were measured off photographs at rendered lightness, so option 1 (tint at the baked lightness) was the closer reading of the evidence, and this option was chosen for the cleaner un-bake, not for fidelity | The sweep table pasted (p50 and p90 `C*`, share under `C*` 8, gamut clip `C*`) with `Q30`'s row beside it; the user's sign-off recorded on `Q40`; `facade_chroma.py` under `MODAL_SHARE > 1.0` unchanged — the guard did not move, `Q37`'s own validation. Frames `cmp`'d; `L*` deltas under 1 unit at every percentile against `P5-28c`'s frames, because strength assigns chroma and must not move lightness |
+| `P5-20` ✅ | `sidecars` step also walks `game/assets/authored/**/*.glb.import`; five sidecars reseeded. ⚠️ Reseed by deleting and re-importing, never by hand-editing — `Q124` | — |
+| `P5-21` ✅ | First editor save committed alone (`uid=`, `unique_id=`); ⚠️ one pass is not a fixed point — save twice. 🔴 A typed node export resolves only with `node_paths=PackedStringArray(...)` on the node line; seven exports migrated, the two `input_path` exports stay `NodePath` (an autoload is not in the scene) — `Q124`, `Q119` | — |
+| `P5-22` ✅ | `scenes/dev/asset_viewer.tscn` + `scripts/city/asset_viewer.gd`: `--asset=res://…` under `clean_daylight.tscn` with the import hook and a readout; needs no built region; missing file exits 1. ⚠️ The first frame after a re-import may not reproduce (`Q114`, `Q117`) — `Q124` | — |
+| `P5-23` ✅ | Vehicle contract as material names: `generated_scene_import.gd::vehicle_body` stamps `UV = (circuit, marker)` from the slot name and merges to one surface; `make_vehicle.py` goes through the same door; a misspelt name is refused by name. ⚠️ Recipe: apply object scale, set the origin — a joined object keeps the first cube's. The shipped `.glb` is still Python's — `Q124` | — |
+| `P5-24` ✅ | `scripts/main.gd` wires the HUD its vehicle; `VehicleController.sun` is a typed export per scene; `find_children` has 0 callers under `scripts/`. `DebugHud` keeps its group lookup (an autoload nothing can inject). ⚠️ A HUD-on frame can differ in the speed label alone by render phase — grade with `--hud=off` — `Q124` | — |
+| `P5-25` ✅ | `scripts/core/cmdline.gd` (`Cmdline`, statics) replaces `DebugHud`'s parser; `RoadGraph.shared()` declared in `ARCHITECTURE.md` as the singleton that is not an autoload. `check.sh` passes from an empty `game/.godot` — `Q124` | — |
+| `P5-26` ✅ | `tuning/wrong_way.tres` and `tuning/street_tracker.tres` with sidecars, no `@export` defaults (`Q80`). 🔴 The two angle bars stay two (`Q81`), ratcheted in `verify_hud.gd`. ⚠️ An invalid profile makes the object inert — `_init` cannot refuse, and `assert` is walked past headless — `Q124` | — |
+| `P5-27` ✅ | Git LFS for `*.glb`, `*.png`, `*.ttf`, forward only; CI checkout takes `lfs: true`. ⚠️ A clone without LFS first fails at `verify_vehicle` (pointer files). The history rewrite is the user's call; free quota is 1 GB — quote the tracked total on release — `Q124` | — |
+| `P5-28` ✅ | The exposure anchor un-baked, in four steps. ⚠️ Lab chroma does not commute with a linear-light scale, so the look was re-judged, not reproduced (ΔE 1.2–6.0, mostly b*) — `Q38` | — |
+| `P5-28a` ✅ | `render_cool` `#949995` → `#939995`, inside its cited 30–60% range; the range was not widened — `Q38`, `Q33` | — |
+| `P5-28b` ✅ | `exposure_anchor` global shader parameter, pinned by `verify_settings.gd`, set by `scripts/world/lighting_rig.gd`; `signs.gdshader` reads it behind `apply_exposure` (`lamps.tres` true, signs and signals false); `vertex_albedo.gdshader` replaces the `BaseMaterial3D` branch. ⚠️ `barrier_vertex` must stay a different name from `barriers`; `skidpad.tscn` and the grey box run at the default 1.0 — `Q38` | — |
+| `P5-28c` ✅ | Un-bake: config `schema_version` 4 → 5, `city_manifest.gd` 30 → 31, colours at reflectance level with `bounds:` per material, `_check_reflectance` checks luminance against `reflectance` and `reflectance` inside `bounds`; rigs carry `exposure_anchor` 0.52; `facade_chroma.py --shipped` and `frame_stats.py --albedo-l` read it from the rig scene — `Q38` | — |
+| `P5-28d` ✅ | `facade_hue.strength` swept 2.0–3.5; the user chose 3.0. Strength is art direction, not survey fidelity — `Q38`, `Q30`, `Q40` | — |
 
-**Held, with the reason each waits on** — not refused, and not re-proposed without the trigger:
+**Held — not refused, and not re-proposed without the trigger:**
 
-- **The HUD as a `.tscn`** — `Q119` priced it (387 µs against 140 µs, and a second copy of two
-  `.tres`). Trigger: a Godot developer iterating the HUD in the editor.
-- **A no-Python onboarding path** — a pre-built bundle handed to a collaborator, or a CI artefact.
-  `LICENSING.md` says the generated data is regenerated rather than redistributed, so this is a
-  licensing call and belongs on that file's open-questions list. Trigger: the first collaborator who
-  will not run the ETL.
-- **A Windows path for `check.sh`** — bash, a venv and BSD/GNU `xargs` notes. Trigger: a Windows
-  contributor.
-- **`P5-14`** stays where it is; its trigger was already an artist.
+- The HUD as a `.tscn` — `Q119` priced it (387 µs against 140 µs, and a second copy of two `.tres`).
+  Trigger: a Godot developer iterating the HUD in the editor.
+- A no-Python onboarding path (a pre-built bundle or CI artefact) — a licensing call, since
+  `LICENSING.md` says generated data is regenerated, not redistributed. Trigger: the first
+  collaborator who will not run the ETL.
+- A Windows path for `check.sh`. Trigger: a Windows contributor.
 
-**Refused (`Q124`).** Feature-folder reorganisation — every script crosses the `ext_resource` paths
-of every scene for no behaviour, the ground `P5-10` refused its own rename on. Event-driven input —
-`Q119`. A listener added to the four `InputRouter` signals to give a grep something to find — `Q72`.
-
-**Order.** `P5-20` and `P5-21` first, because both change committed bytes that every later diff
-would otherwise carry, and `P5-21` alone because a save mixed with anything else is unreviewable.
-`P5-22` before `P5-23`, because the viewer is how the stamped car is looked at. `P5-24`, `P5-25`,
-`P5-26` in any order, each measured inert by `Q119`'s method. `P5-27` before the first asset that is
-not Python's. `P5-28` is `Q38`'s and the user's, decided 2026-09-08 as `P5-28a`–`P5-28d` in that order:
-the colour move alone, the inert global, the un-bake with the contract bump, then the re-judge — each a
-commit, because `frame_stats.py` can only attribute a frame delta to a diff that changes one thing.
+**Refused (`Q124`).** Feature-folder reorganisation — it crosses every scene's `ext_resource` paths
+for no behaviour. Event-driven input (`Q119`). A listener on the four `InputRouter` signals to give
+a grep something to find (`Q72`).
 
 ### Outline only — refine once Phase 3 lands
 
-- **`P3-27` (candidate, unscheduled) — Pedestrian crossings and footway extent.** Re-opened by
-  `Q101`: five already-fetched publishers cover what was never drawn — `DTAD_CROSSING_LINE` (121),
-  `RM1135`/`RM1136` (127/123), iB1000 `CartoPedLine PA` (50.9 km), HyD `FEAT_TYPE=2` footway
-  (917 polygons), `DTAD_DROP_KERB_LINE` (738). Also a lead on `carriageway_occupancy.py`'s open
-  failure. Scope it the way `P3-18` was: one primitive, one draw call, counters that publish both
-  partitions, and a `DATA_SOURCES.md` entry per layer read.
-
-- **Phase 6 — Production polish:** menus, settings, save/progression, accessibility, localisation QA.
+- **`P3-27` (candidate) — Footway extent and crossing glyphs** (`Q101`). Crossing paint shipped as
+  `P3-35g2`; still undrawn from already-fetched publishers: iB1000 `CartoPedLine PA` (50.9 km), HyD
+  `FEAT_TYPE=2` footway (917 polygons), `DTAD_DROP_KERB_LINE` (738), the look-right / look-left
+  glyphs. Also a lead on `carriageway_occupancy.py`'s open failure. Scope as `P3-18` was: one
+  primitive, one draw call, counters that publish both partitions, a `DATA_SOURCES.md` entry per
+  layer read.
+- **Phase 6 — Production polish:** menus, settings, save/progression, accessibility,
+  localisation QA.
 - **Phase 7 — Ship:** free-slice boundary, one-time unlock IAP, store assets, web demo, HK press
   outreach, legal sight-check of landmark depiction.
 
-Phases 6 and 7 are deliberately not broken down. Anything planned in detail now would be a guess,
-and the slice will change the assumptions.
+Phases 6 and 7 are deliberately not broken down; the slice will change the assumptions.
 
 ---
 
 ## Working agreements for agents
 
 - Reference the task ID in every commit.
-- Update `docs/PROGRESS.md` when a task changes status, and `docs/DECISIONS.md` when a decision or open question
-  arises.
+- Update `docs/PROGRESS.md` when a task changes status, and `docs/DECISIONS.md` when a decision or
+  open question arises.
 - If a task's acceptance criteria turn out to be wrong, say so and propose a change rather than
-  quietly redefining it.
+  quietly redefining them.
 - Do not start a task whose dependencies are unmet without flagging it.
-- **Producing the review artifact is the agent's job; answering the verdict question is not.**
-- **Stop at every review point and wait.** "Machine-checked" is never a substitute — the verify tools
-  shipped broken-and-green inside a single commit once already.
-- **Look at the screenshots before saying a build is ready to review.** A green driver run is not a
+- Producing the review artifact is the agent's job; answering the verdict question is not.
+- Stop at every review point and wait. "Machine-checked" is never a substitute — the verify tools
+  have shipped broken-and-green inside a single commit.
+- Look at the screenshots before saying a build is ready to review. A green driver run is not a
   rendered game.

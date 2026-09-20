@@ -5,41 +5,32 @@
 1. **It must feel like Hong Kong to a Hong Kong driver.** Recognition beats fidelity. A local should
    navigate by memory, not by minimap.
 2. **Arcade, not simulation.** Three-minute sessions, instant restart, forgiving collision,
-   unrealistic grip. Fun outranks accuracy every time they conflict.
-3. **Readable at a glance.** Played with two thumbs on a phone, on a bus, in daylight (`Q97`);
-   one-handed stays the deferred accessibility option (`auto_accelerate`, `P3-5b`).
+   unrealistic grip. Fun outranks accuracy whenever they conflict.
+3. **Readable at a glance.** Two thumbs on a phone, on a bus, in daylight (`Q97`); one-handed stays
+   the deferred accessibility option (`auto_accelerate`, `P3-5b`).
 
 ## The central design tension
 
-**Real geometry fights arcade fun, and fun wins.**
-
-Real Hong Kong streets are narrow, densely one-way, and lined with pedestrian railings. Faithfully
-reconstructed, that produces a traffic simulator with no room to be reckless. The genre needs wide
-roads, ramps, shortcuts, and forgiving collision.
-
-**Resolution: the open data is a skeleton, not ground truth.**
+Real geometry fights arcade fun, and fun wins. The open data is a skeleton, not ground truth.
 
 | Use the real data for | Deliberately diverge on |
 |---|---|
-| Road topology and connectivity | Road **width** — a minimum drawn width at grade (10.24 m; 12.48 m on ≥70 kph roads — a floor, not a multiplier, since `Q95`), but **authored width on structure**: a viaduct is parapet-to-parapet in the real city, and a widened ribbon there hangs over the edge of its own deck |
-| One-way directions and turn restrictions (for **AI traffic**) | Player rule-breaking — always allowed |
-| Building massing and position | Pedestrian railings — drawn, no collider (`P3-19`); breakaway and collision stay out until `B3` |
-| Landmark placement | Ramps, jumps, shortcuts — hand-added, and sparingly (see below) |
-| Street and place names | Kerb heights — flatten for mountability |
+| Road topology and connectivity | Road width — a minimum drawn width at grade (10.24 m; 12.48 m on ≥70 kph roads; a floor, not a multiplier, `Q95`), but authored width on structure: a widened ribbon overhangs its own deck |
+| One-way directions and turn restrictions (for AI traffic) | Player rule-breaking — always allowed |
+| Building massing and position | Pedestrian railings — drawn, no collider (`P3-19`); breakaway and collision wait for `B3` |
+| Landmark placement | Ramps, jumps, shortcuts — hand-added, sparingly |
+| Street and place names | Kerb heights — flattened for mountability |
 
-The player may break every traffic rule. The AI obeys them. That asymmetry is what makes the city
-read as real while staying playable.
+The player may break every traffic rule; the AI obeys them. That asymmetry makes the city read as
+real while staying playable.
 
-⚠️ **The divergences are not all equally cheap, and one of them is priced against `P3-9`.** Widened
-carriageways, flattened kerbs and omitted railings are invisible to a driver's memory of a street —
-nobody navigates by kerb height. A hand-added ramp is not. It is new geometry standing somewhere the
-player knows, and every one is a debit against the acceptance test at the bottom of this document.
-
-**So prefer the shortcut that is there over the ramp that is not.** The region already holds the
-vertical beat and the alternate lines in its own geometry — the Canal Road Flyover, the elevated
-Gloucester approach, the plaza gaps, the alley grid. The ramps are real and they are in the source
-data; `P2-7` put the carriageway on them, and `P4-1` is what opens them to driving — though `P3-9a`'s round found the blocker at grade first: `Q19`'s low structure at carriageway level is what actually stopped the drivers (2026-08-30). **Invent a ramp
-only where a specific stretch is demonstrably dead, and record it as a decision when you do.**
+⚠️ The divergences are not equally cheap. Width, kerbs and railings are invisible to a driver's
+memory of a street; a hand-added ramp is new geometry somewhere the player knows, and a debit
+against the acceptance test below. Prefer the shortcut that is there — the Canal Road Flyover, the
+elevated Gloucester approach, the plaza gaps, the alley grid. The ramps are in the source data:
+`P2-7` put the carriageway on them and `P4-1` (`Q111`) opened them to driving; `Q19`'s at-grade
+blockers were carved and fenced (`P3-28`, `P3-29`). Invent a ramp only where a specific stretch is
+demonstrably dead, and record it as a decision.
 
 ---
 
@@ -59,8 +50,7 @@ only where a specific stretch is demonstrably dead, and record it as a decision 
     ← ← ← ← ← back to idle ← ← ← ← ← ← ← ← ← ←
 ```
 
-Session ends when the **global session timer** expires. Delivering fares adds time to it. This is the
-genre's classic structure: the game ends when you stop being good.
+The session ends when the global session timer expires; delivering fares adds time to it.
 
 - **Session length:** 3–5 minutes typical; skilled play extends it.
 - **Restart:** instant, one tap. No loading screen between runs.
@@ -79,27 +69,21 @@ datasets, plus hand-added POIs.
 | Long haul | `poi`, cross-district | 90 s | 4× | Rewards route knowledge |
 | **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | 75 s | 5× | Terminates at the tunnel approach |
 
-**The cross-harbour fare is the signature mechanic.** It exists only because the source dataset
-distinguishes that stand category, it pays the most, and it ends at a map boundary that is diegetic
-rather than arbitrary. No other city's version of this game has it.
-
-The obvious objection — there is no other side of the harbour in a Wan Chai region — is already
-answered by the design: the fare *terminates at the tunnel approach* rather than crossing, and that
-approach is in the region **at street level**. Three `CROSS HARBOUR TUNNEL` edges sit at elevation
-level 0 and join ordinary streets through `WAN CHAI INTERCHANGE`; you can drive there from Hennessy
-Road today. Distance from the six cross-harbour stands to the portal runs **191 m to 1,044 m** — a
-usable spread, though 191 m is barely a trip, so `P3-1` needs either a minimum length or a different
-destination for the near ones. Whether stopping at a portal *feels* like completing a cross-harbour
-fare is a `P3-9` question, not a geometry one.
+The cross-harbour fare is the signature mechanic: the source dataset distinguishes that stand
+category, it pays the most, and it ends at a diegetic map boundary. The fare terminates at the
+tunnel approach, which is in the region at street level — three `CROSS HARBOUR TUNNEL` edges at
+elevation level 0 join ordinary streets through `WAN CHAI INTERCHANGE`. The six cross-harbour
+stands sit 191 m to 1,044 m from the portal; 191 m is barely a trip, so `P3-1` needs a minimum
+length or a different destination for the near ones. Whether stopping at a portal feels like
+completing the fare is a `P3-9` question.
 
 ### Destination presentation
 
-Destinations are announced **by name, bilingually** — `Times Square / 時代廣場`, `會展`, `灣仔碼頭` —
-never by street address. Hong Kong drivers navigate by landmark name, and this is the cheapest,
-highest-impact authenticity lever in the game. Names ship in `fares.json`.
+Destinations are announced by name, bilingually — `Times Square / 時代廣場`, `會展`, `灣仔碼頭` —
+never by street address. Hong Kong drivers navigate by landmark name. Names ship in `fares.json`.
 
-A directional arrow assists, but the **acceptance test is that a local can find the destination with
-the arrow disabled.**
+A directional arrow assists, but the acceptance test is that a local can find the destination with
+the arrow disabled.
 
 ---
 
@@ -114,25 +98,21 @@ the arrow disabled.**
 | **Air** | Points by airtime duration |
 | **Sustained speed** | Points/second above a speed floor |
 
-Style points are awarded **during** the drive and shown immediately — the feedback loop must be tight
-enough that players learn what the game rewards without being told.
+Style points are awarded during the drive and shown immediately, so players learn what the game
+rewards without being told.
 
-⚠️ **They accumulate into a *style chain* rather than popping and clearing, and that is a deliberate
-divergence from the genre's usual per-event bonus.** A bonus that pays instantly teaches the player
-what the game likes; only a multiplier that can be *lost* makes the next corner tense. It is the
-project's bet on what makes a 1.5 km² map worth re-driving.
-
-Two multipliers therefore exist — and **"chain" already means the fare sequence elsewhere in this
-document**, so the style one is always the *style chain*:
+⚠️ They accumulate into a *style chain* rather than popping and clearing — a deliberate divergence
+from the genre's per-event bonus: only a multiplier that can be lost makes the next corner tense.
+"Chain" elsewhere in this document means the fare sequence, so the style one is always the *style
+chain*.
 
 | | Scope | Climbs on | Resets on |
 |---|---|---|---|
 | **Style chain** | Seconds of driving | Style components | A hard crash, or going quiet after it banks |
 | **Fare combo** | The session | Consecutive deliveries | A bailed fare |
 
-Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy — so **which
-route pays more becomes a real choice**. Air has no source geometry today and the flyovers are not
-yet drivable; neither is scored until something can be jumped off.
+Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy, so which
+route pays more is a real choice. Air is not scored until something can be jumped off.
 
 ---
 
@@ -140,45 +120,52 @@ yet drivable; neither is scored until something can be jumped off.
 
 See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keyboard.
 
-**Handling model:** Godot's `VehicleBody3D` with arcade overrides, since `Q50` (2026-08-18). It was a
-custom raycast vehicle on `RigidBody3D` until then, and `P0-5a` measured why: `VehicleBody3D`'s wheel friction
-is **isotropic**, so a drift cannot break lateral grip without destroying traction and braking with
-it. 🔴 **That finding was never refuted — `Q50` accepted it as a cost.** `Q49`'s friction ellipse, and
-the `grip_lateral` / `grip_longitudinal` semi-axes it spent from, are gone: `VehicleWheel3D` has one
-`wheel_friction_slip`, so the budget is the circle `P0-5a` rejected and `tyre_grip` is the single
-number both axes now come out of.
+**Handling model:** Godot's `VehicleBody3D` with arcade overrides (`Q50`). ⚠️ Its wheel friction is
+isotropic (`P0-5a`, never refuted; `Q50` accepted it as a cost): one `wheel_friction_slip`, one
+`tyre_grip`, no friction ellipse (`Q49`'s is gone). All values live in `game/tuning/handling.tres`;
+grade every change on `tools/skidpad.sh` and tune against a measurement, never a number written
+here. See `.claude/rules/handling.md`.
 
 | Property | Target feel |
 |---|---|
-| Grip | High, forgiving. No spin-outs from small errors. 🔴 **`Q49`'s one-budget-per-tyre coupling is lost** — the ellipse is a circle now, so braking through a corner costs no cornering grip and a power-on corner **accelerates again**, which is the behaviour `Q49` was written to remove. Measured on the skidpad, the corner manoeuvre turns 16% less for the same speed: yaw −358.2° against the raycast car's −428.9° |
-| Drift | Button-initiated, easy to hold, scrubs little speed. 🔴 **Not met, but not for the reason published until `Q84`.** The window is *not* 0.01–0.02 wide and 14° *is* reachable: swept at 0.002 rather than 0.02, the response is smooth and monotonic at ~990°/unit and `drift_rear_grip_scale` **0.6695** peaks at exactly 14.0°. The old cliff was a coarse grid read through a `%.2f` label that printed 0.670, 0.668 and 0.665 as one row. 🔴 **What is actually unreachable is holding it**: peak slip and dwell trade against speed on this one dial, so 0.6695 spends **0.05 s** above 14° (exit 48.6 kph), the shipped **0.66 → 21.8° peak, 0.57 s, exit 45.1 kph**, and buying dwell costs speed all the way down — 0.64 → 36.4°/0.77 s/41.1 kph, 0.60 → 75.2°/0.85 s/36.4 kph. "Easy to hold" and "scrubs little speed" are opposite ends of it, which is `Q50`'s isotropic cost stated properly. 🔴 **A tap does nothing at all, and `Q84` built the fix that was supposed to change that and measured no change.** The 0.5 s `tap` returns 1.9° peak with yaw and distance identical to `corner`. The diagnosis was instant grip restoration, so a release ramp was added — `drift_release_s`, on `steer_release_s`'s idiom — and the tap still returns 1.9°. Swept, a 1.0 s release reaches 2.0°, 2.0 s reaches 2.2°, 3.0 s reaches 3.3°; nothing there is a tap any more and none of it is a drift. ⚠️ **The cause is that the slide takes seconds to build, not that it ends too soon** — held, the car is above 14° for 0.57 s of a 4.00 s run, so the bar is not crossed until the fourth second. A locked raycast tyre made yaw the instant it stopped rolling (7.1°); an isotropic wheel has to be driven into saturation, which is a rate and not an event. 🔴 **And `Q85` closed the route all three of those named**: `get_rpm()` is road speed re-expressed, this class carries no wheel inertia, so per-wheel angular velocity cannot be read here at all. ✅ **The button now applies a yaw torque instead** (`drift_yaw_torque_nm`, 1000 at the time and 7000 since `Q86`), which is the game asserting rotation the tyres did not produce — licensed by `Q49`'s own finding that this target is anti-physical. The slide arrives at once rather than in 3.4 s and the angle is a real one: **42.1° peak, 0.78 s above 14°**, against 21.8°/0.57 s. 🔴 **It makes the speed half worse** (exit 45.06 → 40.96 kph), and the tap is still dead at this value — it needs 5000, where the held drift becomes a 162.9° spin. ⚠️ **Torque and grip are multiplicative, not alternatives**: with grip restored the assist is just tighter steering (1.8° slip), so the scrub is intrinsic and no pair of these dials separates "slides a lot" from "scrubs little" (`Q85`). ✅ **The tap is fixed, and `Q86` is how**: torque × time is rotation, so a 0.5 s tap collected one-eighth of a 4 s hold's angular impulse and no constant could serve both. The torque now decays from a peak toward `drift_yaw_sustain` over `drift_yaw_decay_s` — on **time**, never on measured slip, or the angle becomes the dial and `secs>thr` stops grading anything (`Q72`). Shipped at **7000 N⋅m / 0.8 s / 0.0**: the tap goes **2.4° → 16.0°** peak and **0.00 → 0.23 s** above the bar, the hold improves to 51.1°/0.82 s, and exit speed goes **40.96 → 41.29 kph** — the first change here that did not buy angle with speed. 🔴 **But "easy to hold" is still not met and the assist cannot meet it**: `secs>thr` was flat at 0.78–0.85 across all three yaw dials while peak slip ran 40° → 130°, so they buy angle and cost speed and never buy time above the bar. Dwell is the friction mechanism's to give, and `Q85` measured that slide self-terminating at ~1.8 s. ⚠️ **Three further facts about the mechanism no dial reaches** (`Q85`): lifting the throttle cancels the drift outright and re-applying does not recover it, so the genre's *lift-then-flick* entry does not exist here; the gripping turn beats the drift round a 90° corner on speed (63.4 against 52.8 kph) so a drift buys line and time but never pace; and there is **no sustained drift equilibrium at any counter-steer timing** — the car has two stable states, a gripping circle or a spin, so a held Initial-D line round a roundabout is not reachable in this model. 🔴 **And the button was, until `Q88`, only tuned for roughly 40–70 km/h** (`Q87`): every value was picked at the skidpad's single 63 km/h entry, and the assist had no fade-out, so the tap that gives 16.0° there **spun the car at 84**. A speed fade (`drift_fade_from_kph`/`_to_kph`, 65/85) fixes the assist's share — the 105 km/h tap goes 163.3° to **17.5°**, and its distance 39.2 → **80.0 m** — but with the assist switched off entirely the held drift still reads **95.2° at 86 km/h and 165.2° at 105**, because `drift_rear_grip_scale` spins the car on its own and carries **no speed term at all**. ✅ **That half is fixed too, and `Q88` is how**: `drift_rear_grip_scale_at_top` **0.80**, interpolated from the shared knee to `max_speed_kph` because the grip value the car wants *moves* with speed. **The spin is gone at every speed** — 86 km/h now reads **50.4°/0.98 s**, which reproduces the design-speed feel (51.1°/0.82), and 105 km/h reads 2.4° with its exit speed **21.95 → 70.14 kph**. The city tap that dropped the car to 27.69 kph now holds **76.00** against a 76.60 no-drift baseline. ⚠️ **The cost, plainly: the drift is inert above about 100 km/h.** A real 75.8° drift there is reachable at 0.78 and was refused — it sits 0.01 from a cliff down to 2.8°, and `Q84` is what this project already paid for a narrow band on this dial. So "easy to hold" is now honest rather than inverted: the button works up to ~100 km/h and stops working above it, instead of spinning you. ⚠️ **But the band has a bottom nobody has tuned, and it is where the game is played**: below ~50 km/h the drift returns **2.9–3.9°** and the car *accelerates* through the manoeuvre rather than scrubbing (`decay/s` goes negative), so the usable band is really **60–100 km/h** while typical city driving sits under it. Not caused by the tapers — nothing below the knee is touched — it is `Q84`'s momentum dependence, and it means the drift is least available exactly where it would be most used. ✅ **Addressed by `Q89`** with a third envelope below the knee (`drift_rear_grip_scale_at_low` 0.44, `drift_low_fade_kph` 41), which deepens the cut as speed falls because down there the tyre never saturates. **The drift now works 34–86 km/h** with `secs>thr` 0.42–0.98 throughout: 42 km/h goes 3.9° → **17.8°** and 49 km/h 2.9° → **49.2°**. 🔴 **The yaw assist provably could not do it** — at 42 km/h slip *falls* as torque rises to the top of its range, because unbroken grip turns rotation into a tighter line rather than a slide. 🔴 **And the low branch latches at engagement where the high branch tracks**: a drift scrubs speed, so deepening the cut as speed falls is positive feedback, and built as a tracker it made the design speed a 165° spin. 🔴 **This re-publishes the design speed** — 63 km/h 51.1° → **69.8°**, tap 16.0° → **20.5°** — so `Q84`/`Q86`'s figures there describe a superseded car. ⬜ The **tap** is still dead below the design speed (3.9° at 42 km/h against 20.5° at 63): the held drift works at city speed now and the flick does not |
+| Grip | High, forgiving. No spin-outs from small errors. ⚠️ Braking through a corner costs no cornering grip and a power-on corner accelerates — `Q49`'s one-budget coupling is lost |
+| Drift | Button-initiated, easy to hold, scrubs little speed. Partly met — see below |
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |
-| Braking | Strong (~0.9 g — 8.75 m/s² since `Q50`) and **as speed-uniform as the engine allows**. ⚠️ The damp/decay figures here were measured on the pre-`Q50` raycast car; post-`Q50` the decay measured 0.100/s, exactly the engine default, and `handling_profile.gd` says to tune against a measurement, never against a number written here. Must also out-pull Wan Chai's ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests |
-| Coasting | Sheds a similar speed per second at 5 km/h as at 50, and **comes to a stop**. One pedal serves brake and reverse, so a driver arriving at walking pace has to lift off — coasting is the only thing that can park the car (`P0-5b/c/d`) |
+| Braking | Strong (~0.9 g, 8.75 m/s²; `brake_force` 40, a post-`Q50` unit that does not convert from newtons) and as speed-uniform as the engine allows. Must out-pull the ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests. The car must stop faster than it accelerates |
+| Coasting | Sheds a similar speed per second at 5 km/h as at 50, and comes to a stop. One pedal serves brake and reverse, so coasting is the only thing that can park the car (`P0-5b/c/d`) |
 
-All values live in `game/tuning/handling.tres`. **Expect to iterate on these more than any other part
-of the project** — vehicle feel is the single biggest determinant of whether this is fun.
+### The drift as shipped
 
-Two items were flagged during `P0-5d` and deliberately left for `P2-3`'s tuning pass. Sustained full
-lock spinning the car was never re-measured after `Q50` replaced the whole grip model — nothing owns
-it; re-grade on `tools/skidpad.sh` before citing it. The second — `brake_force` giving 3 m/s² of
-braking against 5.33 m/s² of acceleration, so **the car accelerated faster than it stopped** — was
-✅ **closed 2026-08-17** at 2,400 N (8.0 m/s²); ⚠️ **`Q50` then changed the unit**: the dial is
-**40** today and does not convert from the newton value it replaced, re-seeded against
-`tools/skidpad.sh` at **8.75 m/s²** (`handling_profile.gd` carries the warning). The inequality
-stays the right way round (`P0-5b/c/d`).
+- Three mechanisms: a rear grip cut (`drift_rear_grip_scale` 0.66), a yaw torque that decays on
+  **time**, never on measured slip (`drift_yaw_torque_nm` 7000, `drift_yaw_decay_s` 0.8,
+  `drift_yaw_sustain` 0.0; `Q85`, `Q86`), and speed envelopes: `drift_rear_grip_scale_at_top` 0.80
+  with the assist faded 65 → 85 km/h (`drift_fade_from_kph`, `drift_yaw_fade_to_kph`; `Q87`, `Q88`),
+  and `drift_rear_grip_scale_at_low` 0.44 below `drift_low_fade_kph` 41 (`Q89`).
+- Works 34–86 km/h with 0.42–0.98 s above the 14° bar; design speed 63 km/h reads 69.8° held, 20.5°
+  tapped. Figures in `Q84`/`Q86` describe a superseded car.
+- ⚠️ Inert above about 100 km/h by choice: a real drift there (grip 0.78) sits 0.01 from a cliff
+  and was refused (`Q88`).
+- ⚠️ The low branch latches at engagement where the high branch tracks (`Q89`): deepening the cut
+  as speed falls is positive feedback, and built as a tracker it spun the design speed to 165°.
+- ⚠️ Grade the dial on dwell (`secs>thr`), never on landing peak slip on the threshold (`Q84`): peak
+  slip and dwell trade against exit speed on the one dial, so "easy to hold" and "scrubs little
+  speed" are opposite ends of it. The yaw dials buy angle and cost speed; they never buy dwell.
+- Not reachable in this model (`Q85`): `get_rpm()` is road speed, so wheel spin cannot be read;
+  lifting the throttle cancels the drift (no lift-then-flick entry); a gripping turn beats the drift
+  round a 90° corner (63.4 against 52.8 kph), so a drift buys line, never pace; there is no
+  sustained drift equilibrium — a gripping circle or a spin.
+- ⬜ Open: the tap is dead below the design speed (3.9° at 42 km/h), and the yaw assist cannot fix
+  it — there, unbroken grip turns torque into a tighter line (`Q89`). Sustained full lock spinning
+  the car was never re-measured after `Q50`; re-grade before citing it.
 
-⚠️ **Touch carries three of five actions (`Q97`)**: steer, accelerate, brake/reverse. The drift —
-the subject of the long row above — and `look_back` have no touch home until `P0-3b`'s handset can
-price the gesture; they stay keyboard/gamepad.
+⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. Drift and
+`look_back` stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.
 
-✅ **The game now tells you when you are driving against a one-way (`Q81`, `P3-25`)**: a blinking NO
-ENTRY disc, raised by the car's **nose** (the velocity may only withhold it), a 120° bar and dwells
-against false alarms in a region 93.5% one-way by drivable length, blink under the 3 Hz WCAG
-ceiling, proportions the world sign's own. It informs; it does not penalise — the player may still
-break every traffic rule.
+Driving against a one-way raises a blinking NO ENTRY disc (`Q81`, `P3-25`): raised by the car's
+nose (velocity may only withhold it), a 120° bar and dwells against false alarms in a region 93.5%
+one-way by drivable length, blink under the 3 Hz WCAG ceiling. It informs; it does not penalise.
 
 ---
 
@@ -189,8 +176,8 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 | Mechanic | Effort | Source |
 |---|---|---|
 | **Bilingual destination callouts** | Trivial | `fares.json` |
-| **Red urban taxi livery** | Trivial | ✅ Shipped with `P3-11` — the player taxi is red with a silver roof, `C*` 86.5 in frame. HK Island = red. Green or blue reads as *wrong* |
-| **Trams as moving walls** | Low | The **rails** are published data since `P3-14` (`tram.glb`, on the surveyed positions); only the moving vehicle is outstanding (`P3-4`), and its route is no longer hand-authored |
+| **Red urban taxi livery** | Trivial | ✅ Shipped (`P3-11`): red, silver roof. HK Island = red; green or blue reads as wrong |
+| **Trams as moving walls** | Low | Rails are published data (`P3-14`, `tram.glb`); the moving vehicle is outstanding (`P3-4`), its route no longer hand-authored |
 | **Bus lanes as penalty zones** | Low | `bus_lane` in `roadgraph.json` |
 | Double-decker buses as sight blockers | Low | Traffic AI vehicle type |
 | Bamboo scaffolding on buildings | Low | Prop instancing |
@@ -198,50 +185,40 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 | Cross-harbour tunnel queue | Medium | Static congestion at the tunnel approach |
 | Neon signage overhanging streets | Medium | Instanced props + emissive shader |
 
-> **Trams are the highest-leverage single object in the game.** They constrain lane choice exactly the
-> way they do in reality, they are instantly recognisable, and they cost far less than modelling
-> another building.
+> **Trams are the highest-leverage single object in the game.** They constrain lane choice as they
+> do in reality, are instantly recognisable, and cost far less than another building.
 
-⚠️ **Little in the table above is built yet — the taxi livery shipped and the tram rails are drawn — and neon is the highest-value gap.** **Sleeping Dogs**
-is the nearest commercial precedent for a recognisable Hong Kong, and the common reading of why it
-worked is signage density and overhanging shopfront light rather than street accuracy. Untested here
-— but it names a failure mode `P3-9` should be listened to for, because *"the streets are bare"* and
-*"the streets are wrong"* have completely different fixes.
-
-Cheap-ish when it comes — but the night variant is blocked on `Q38` (baked exposure) and `Q82`
-refused lit lanterns, so neon would have to be justified in the daylight rig, a separate and
-unpriced call; the signs are instanced props rather than anything the ETL derives. Not in the
-slice; first thing to price once `P3-9` reports.
+Only the livery and the tram rails are built. Neon is the highest-value gap: the common reading of
+why Sleeping Dogs' Hong Kong worked is signage density, not street accuracy — untested here, but
+`P3-9` should listen for it, because "the streets are bare" and "the streets are wrong" have
+different fixes. The night variant is blocked on `Q38` and `Q82` refused lit lanterns, so neon
+would have to be justified in the daylight rig — unpriced. Not in the slice; first thing to price
+once `P3-9` reports.
 
 ---
 
 ## Traffic AI
 
 - Vehicles follow road-graph edges, respecting `direction`, `speed_limit_kph` and
-  `turn_restrictions`. **The AI obeys the real rules; the player does not.**
+  `turn_restrictions`. The AI obeys the real rules; the player does not.
 - Density scales with the performance tier.
-- Vehicle mix: private cars, red taxis, double-deckers, minibuses, trams (scripted, on fixed routes),
+- Vehicle mix: private cars, red taxis, double-deckers, minibuses, trams (scripted, fixed routes),
   delivery trucks.
-- AI reacts to the player only minimally — braking for imminent collision. It should feel like
-  traffic, not like opponents.
+- AI reacts to the player minimally — braking for imminent collision. Traffic, not opponents.
 
-⚠️ One turn restriction in the region **excludes taxis**, and `roadgraph.json` has no field for that,
-so the graph currently forbids a turn a real red taxi may make. Adding it is a schema change on both
-sides.
+⚠️ One turn restriction in the region excludes taxis and `roadgraph.json` has no field for that, so
+the graph forbids a turn a real red taxi may make. Adding it is a schema change on both sides.
 
 ---
 
 ## Region and free-slice boundary
 
-PoC region is **Wan Chai → Causeway Bay** (see `docs/DATA_SOURCES.md` for bounds).
+PoC region is **Wan Chai → Causeway Bay** (bounds in `docs/DATA_SOURCES.md`).
 
-**Design Wan Chai to be standalone-playable.** It becomes the free tier and the web demo; Causeway
-Bay and later Central are the unlock. Build this seam now even though monetisation is deferred — it
-costs nothing during the vertical slice and keeps the launch model open.
+Design Wan Chai to be standalone-playable: it becomes the free tier and the web demo; Causeway Bay
+and later Central are the unlock. The seam costs nothing now and keeps the launch model open.
 
 ### The circuit
-
-The region's core gameplay asset is a real, natural loop:
 
 ```
 Gloucester Road (east, fast, 4-6 lanes)
@@ -254,8 +231,8 @@ Fleming / Fenwick (cross-connectors)
       ↓  back to Gloucester
 ```
 
-Fast spine plus technical parallel is the contrast arcade driving lives on — and here it already
-exists in the real road layout. **The flyover half of that loop needs `P4-1`** before it is drivable — and the at-grade half needs `Q19`'s walls cleared, which is the named next task.
+Fast spine plus technical parallel is the contrast arcade driving lives on, and it exists in the
+real layout. The flyover half rests on `P4-1` (`Q111`); `P4-2`–`P4-5` are not started.
 
 **Map edges are diegetic:** Victoria Harbour north, the escarpment toward Kennedy Road south,
 Admiralty west, Victoria Park east. No invisible walls needed.
@@ -267,14 +244,9 @@ Admiralty west, Victoria Park east. No invisible walls needed.
 | Mode | Status | Notes |
 |---|---|---|
 | **Arcade** | Vertical slice | The main mode. Chain fares against the clock |
-| **Free roam** | Vertical slice | No timer. Essential for playtesting and for the authenticity test. The state `Q8` was judged in — no fare, no timer, no arrow. Also where `P3-9` runs |
+| **Free roam** | Vertical slice | No timer, fare or arrow — the state `Q8` was judged in (from a dev scene), made reachable by a player. Where `P3-9` runs |
 | Time trial | Later | Fixed A→B, leaderboard |
 | Daily challenge | Later | Seeded fare sequence |
-
-**`Q8` was judged in that state, though not in this mode.** The verdict that closed the project's top
-risk came from a *dev scene*, driving the city with no fare, timer or arrow. Free roam is what turns
-that state into something a player can reach, which is why it is in the slice rather than left as a
-harness.
 
 ---
 
@@ -282,17 +254,15 @@ harness.
 
 **Hand the build to a Hong Kong driver, disable the minimap and the direction arrow, and name a
 destination.** If they can drive from the Convention Centre to Times Square from memory, using the
-correct one-way streets, the city reads as Hong Kong.
-
-If they need the minimap, the geometry is decorative and the pillar has failed. This test also reveals
-*where* it fails, which side-by-side screenshot comparison never does.
+correct one-way streets, the city reads as Hong Kong. If they need the minimap, the pillar has
+failed — and the test shows where, which screenshot comparison never does.
 
 Run it at the end of every phase from Phase 3 onward, with at least three different drivers.
 
-✅ **Round 0 ran 2026-08-30 (`P3-9a`, the no-HUD free-roam variant): three HK drivers recognised
-Wan Chai from geometry alone — recognition met.** The sessions ended on `Q19`'s blocked bridges;
-which driver said what was not captured, and the build cannot be tied to a commit (`P3-9a′`).
-`P3-9` remains the handset test, with different drivers — that cohort has learnt the map.
+Round 0 (`P3-9a`, no-HUD free roam, 2026-08-30): three HK drivers recognised Wan Chai from geometry
+alone. The sessions ended on `Q19`'s blocked bridges; who said what was not captured and the build
+cannot be tied to a commit (`P3-9a′`). `P3-9` remains the handset test, with different drivers —
+that cohort has learnt the map.
 
 ---
 
@@ -305,7 +275,6 @@ Explicitly **not** building:
 - Gacha, loot boxes, or randomised rewards — including the wheelspin shape.
 - Live-service, seasons, or anything always-online (hard rule 2: zero runtime network calls).
 - Licensed-car collection as a progression spine. The art direction is 800–2,000-triangle toys.
-- Pedestrians as collision targets. Keep pavements empty, or treat pedestrians as non-collidable
-  ambience.
+- Pedestrians as collision targets. Keep pavements empty, or non-collidable ambience.
 - An open-world map of all Hong Kong. Scope is deliberately one corridor.
 - Multiplayer.
