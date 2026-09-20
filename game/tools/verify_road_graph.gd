@@ -682,6 +682,10 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		return problems
 
 	var checked: int = 0
+	# Samples whose ribbon is drawn more than a metre off its centreline — the
+	# population `P3-35h` exists for. Zero of them checked is a verifier that
+	# would pass with the offset never read.
+	var offset_checked: int = 0
 	# At-grade edges the floor actually lifted. Asserted non-zero below, because
 	# a "never narrower" test alone passes on a table that echoes the graph.
 	# ⚠️ **Counted over BOTH arms since `Q114`**, so the message below reports
@@ -770,18 +774,52 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 			0.5
 		)
 		var expected: float = RoadGraph.lane_offset(drawn_half * 2.0, lanes)
-		var actual: float = hit.lane_centre.distance_to(hit.point)
+		# 🔴 **About the MIDDLE OF THE DRAWN ROAD, never the centreline (`P3-35h`).**
+		# The ribbon is `[offset - half, offset + half]` left of the edge's own
+		# vertex order (`Q106`), and at level 0 that offset is up to 6.49 m since
+		# `P3-33c`. Built here from the segment's own direction rather than read
+		# off the hit, so the graph is not graded against its own arithmetic.
+		var edge_along := Vector3(float(b[0]) - float(a[0]), 0.0, float(b[2]) - float(a[2]))
+		var drawn_offset: float = lerpf(
+			graph.drawn_offset_of(edge_id, seg), graph.drawn_offset_of(edge_id, seg + 1), 0.5
+		)
+		var middle: Vector3 = hit.point + RoadGraph.left_of(edge_along) * drawn_offset
+		var actual: float = hit.lane_centre.distance_to(middle)
 		if absf(actual - expected) > 0.01:
 			problems.append(
 				(
 					(
-						"edge %d's lane centre is %.3f m off the centreline, expected %.3f m "
-						+ "from its drawn half-width of %.3f m at the midpoint of segment %d"
+						"edge %d's lane centre is %.3f m off the middle of its drawn road, "
+						+ "expected %.3f m from its drawn half-width of %.3f m and offset of "
+						+ "%.3f m at the midpoint of segment %d"
 					)
-					% [edge_id, actual, expected, drawn_half, seg]
+					% [edge_id, actual, expected, drawn_half, drawn_offset, seg]
 				)
 			)
 			break
+		if absf(drawn_offset) > 1.0:
+			offset_checked += 1
+		# 🔴 **The offset belongs to the ROAD and must not turn round with the
+		# asker.** Facing the other way down a two-way edge flips which side the
+		# lane is on, never where the road is: the two lane centres straddle the
+		# drawn middle. With the offset taken from the reversed direction they
+		# straddle a point `2 x offset` away and every check above still passes,
+		# because those ask with no heading at all.
+		if not hit.one_way:
+			var back: RoadGraph.Hit = graph.nearest_edge(mid, -edge_along)
+			var between: Vector3 = (hit.lane_centre + back.lane_centre) * 0.5
+			if back.edge_id == edge_id and RoadGraph.plan_distance(between, middle) > 0.01:
+				problems.append(
+					(
+						(
+							"edge %d's two travel directions straddle a point %.3f m from the "
+							+ "middle of its drawn road (offset %.3f m) — the offset turned "
+							+ "round with the asker"
+						)
+						% [edge_id, RoadGraph.plan_distance(between, middle), drawn_offset]
+					)
+				)
+				break
 		# Reported, never gated (`Q122`): what the vertex sample this replaced
 		# would have seen. `at_node` counts samples whose mid vertex is the edge's
 		# end node; `tied_elsewhere` counts those the graph resolves to ANOTHER
@@ -839,14 +877,17 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 			)
 			break
 
-		if hit.lane_centre.distance_to(hit.point) < 0.5:
+		if hit.lane_centre.distance_to(middle) < 0.5:
 			problems.append(
-				"edge %d's lane centre sits on the centreline" % int(edge.get("id", -1))
+				(
+					"edge %d's lane centre sits on the middle of its drawn road"
+					% int(edge.get("id", -1))
+				)
 			)
 			break
 		# Left of travel, because Hong Kong drives on the left. The cross product
 		# is the whole claim, so it is asserted rather than assumed.
-		var to_lane: Vector3 = (hit.lane_centre - hit.point).normalized()
+		var to_lane: Vector3 = (hit.lane_centre - middle).normalized()
 		if to_lane.dot(Vector3.UP.cross(hit.forward).normalized()) < 0.99:
 			problems.append("edge %d's lane centre is not left of travel" % int(edge.get("id", -1)))
 			break
@@ -854,6 +895,22 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 			problems.append("edge %d's travel direction is not a unit vector" % int(edge.get("id")))
 			break
 
+	var offset_available: bool = false
+	for edge: Dictionary in edges:
+		var edge_points: Array = edge.get("polyline", [])
+		for station: int in edge_points.size():
+			if absf(graph.drawn_offset_of(int(edge.get("id", -1)), station)) > 1.0:
+				offset_available = true
+				break
+		if offset_available:
+			break
+	if offset_available and offset_checked == 0:
+		problems.append(
+			(
+				"ribbons are drawn more than 1 m off their centrelines and no lane centre "
+				+ "was checked on one — the drawn offset is ungraded (P3-35h)"
+			)
+		)
 	if checked == 0:
 		problems.append("no multi-lane drivable edge was available to check lane placement")
 	# ⚠️ **Conditional on the region and not on this file** (`Q114`). A region

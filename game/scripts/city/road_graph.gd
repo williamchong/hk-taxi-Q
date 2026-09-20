@@ -180,6 +180,14 @@ var _restriction_count: int = 0
 # edge that climbs onto a bridge. An edge the manifest did not name gets an empty
 # entry, and `_build` warns rather than papering over it.
 var _drawn_half: Array[PackedFloat32Array] = []
+# Where each station's ribbon is CENTRED, left of the edge's own vertex order,
+# parallel to `_drawn_half` (`P3-35h`). 🔴 The drawn road is
+# `[offset - half, offset + half]` and not `+-half` about the centreline
+# (`Q106`): `Q107` left this table unread because every level-0 value was 0.0,
+# and that expired at `P3-33c` — 288 of Wan Chai's 734 level-0 ribbons are drawn
+# more than 1 m off their centreline, up to 6.49 m. EMPTY for an edge the
+# manifest did not name, and empty reads as zero.
+var _drawn_offset: Array[PackedFloat32Array] = []
 # Widest gap a car could get through, per station, from `city.json`. Parallel to
 # `_polylines[slot]` for the same reason as `_drawn_half`, and holding
 # `CityManifest.NOT_MEASURED` where the ribbon was held back for a junction cap.
@@ -497,6 +505,14 @@ func drawn_half_width_of(edge_id: int, station: int) -> float:
 	return _half_at(_by_id[edge_id], station, 0.0)
 
 
+## Where station `station` of this edge's ribbon is centred, left of the edge's
+## own vertex order (`P3-35h`). Zero for an edge the manifest named no offset for.
+func drawn_offset_of(edge_id: int, station: int) -> float:
+	if not _by_id.has(edge_id):
+		return 0.0
+	return _offset_at(_by_id[edge_id], station, 0.0)
+
+
 ## Whether this edge's ribbon is its TERRITORY (`Q129`) — a share of a
 ## carriageway it may share with other centrelines — rather than the whole road.
 ## Such an edge publishes a corridor, and two things stop being true of it: the
@@ -797,8 +813,10 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 	var half_widths: Dictionary[int, PackedFloat32Array] = {}
 	var clearances: Dictionary[int, PackedFloat32Array] = {}
 	var corridors: Dictionary[int, PackedFloat32Array] = {}
+	var offsets: Dictionary[int, PackedFloat32Array] = {}
 	if manifest != null:
 		half_widths = manifest.carriageway_half_width_m
+		offsets = manifest.carriageway_offset_m
 		clearances = manifest.carriageway_clear_width_m
 		corridors = manifest.carriageway_corridor_half_width_m
 		_lane_width_m = manifest.lane_width_m
@@ -893,6 +911,9 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 				out_of_step += 1
 			halves = _matched(published, points.size())
 		_drawn_half.append(halves)
+		_drawn_offset.append(
+			_matched(offsets[id], points.size()) if offsets.has(id) else PackedFloat32Array()
+		)
 		_corridor_half.append(
 			_matched(corridors[id], points.size()) if corridors.has(id) else PackedFloat32Array()
 		)
@@ -1110,6 +1131,9 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	# A two-way edge has no travel direction of its own, so it takes the asker's.
 	# Facing the wrong way down a one-way street is a fact about the car and must
 	# survive into the overlay rather than being quietly corrected here.
+	# The edge's own left, taken BEFORE the asker can turn `along` round: the
+	# ribbon is drawn `offset` to that side whichever way the car faces it.
+	var edge_left: Vector3 = left_of(along)
 	var flat_heading := Vector3(heading.x, 0.0, heading.z)
 	if not hit.one_way and flat_heading.length_squared() > 0.0 and along.dot(flat_heading) < 0.0:
 		along = -along
@@ -1125,8 +1149,11 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	# the two-point guard in `_build` rule it out — but a division by it would
 	# reach a spawn transform as a NaN rather than as an error.
 	var span_m: float = lengths[step + 1] - lengths[step]
-	var half: float = _half_at(slot, step, offset_m / span_m if span_m > 0.0 else 0.0)
-	hit.lane_centre = point + left_of(along) * lane_offset(half * 2.0, _lanes[slot])
+	var fraction: float = offset_m / span_m if span_m > 0.0 else 0.0
+	var half: float = _half_at(slot, step, fraction)
+	# 🔴 **About the MIDDLE OF THE DRAWN ROAD, not the centreline** (`P3-35h`).
+	var middle: Vector3 = point + edge_left * _offset_at(slot, step, fraction)
+	hit.lane_centre = middle + left_of(along) * lane_offset(half * 2.0, _lanes[slot])
 	hit.clear_width_m = _clear_at(slot, step)
 
 
@@ -1143,6 +1170,18 @@ func _half_at(slot: int, step: int, fraction: float) -> float:
 	var here: int = clampi(step, 0, halves.size() - 1)
 	var next: int = mini(here + 1, halves.size() - 1)
 	return lerpf(halves[here], halves[next], fraction)
+
+
+## Where the drawn ribbon is centred, left of the edge's own vertex order,
+## `fraction` of the way from station `step` to the next. Interpolated for
+## `_half_at`'s reason, and zero where the manifest named no offset.
+func _offset_at(slot: int, step: int, fraction: float) -> float:
+	var offsets: PackedFloat32Array = _drawn_offset[slot]
+	if offsets.is_empty():
+		return 0.0
+	var here: int = clampi(step, 0, offsets.size() - 1)
+	var next: int = mini(here + 1, offsets.size() - 1)
+	return lerpf(offsets[here], offsets[next], fraction)
 
 
 ## Clear width over the segment running from station `step` to the next.

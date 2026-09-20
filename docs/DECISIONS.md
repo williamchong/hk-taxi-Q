@@ -24496,3 +24496,35 @@ stays at schema 15. 🚫 Not an argument to switch `draw_lane_lines` on. ⚠️ 
 `CLAUDE.md`'s "resolves on 210 of the 292 measured edges" predates `Q126`/`Q128`/`Q130`; the
 shipped graphs read **276 of 393** (197 `measured`, 79 `arrows`) and 91 of 124. 2,528 tests, ruff.
 
+### Built 2026-09-20 — `P3-35h`: the game places a lane about the road that is drawn
+
+Its own task on the user's call. `RoadGraph` loaded and merged `carriageway_offset_m` and never
+read it: `lane_centre` was `point + left × lane_offset`, about the centreline. `Q107` excused that
+because every level-0 offset was 0.0, and the excuse expired at `P3-33c` — 288 of Wan Chai's 734
+level-0 ribbons are drawn more than 1 m off their centreline, up to 6.49 m, and up to 4.95 m
+off-grade. The lane centre is now taken about the **middle of the drawn road**,
+`point + edge_left × offset`, with `_offset_at` interpolating per station as `_half_at` does.
+
+🔴 **The offset belongs to the road and must not turn round with the asker.** On a two-way edge
+the asker's heading flips `along`, which flips which side the lane is on — never where the road is —
+so `edge_left` is taken before the reversal. ⚠️ **The verifier could not see that mistake**: every
+lane-centre check asks with no heading. It now asks both ways and requires the two lane centres to
+straddle the drawn middle. The sign was checked against the shipped geometry first, not assumed:
+the game's `UP × forward` component of (ribbon middle − centreline) has `offset_m`'s sign on 151 of
+the 152 edges offset by more than 1.5 m, the exception a nearest-midpoint mismatch at a mouth.
+
+`verify_road_graph.gd` moved in the same commit (hard rule 5's behaviour half): "off the
+centreline", "sits on the centreline" and "left of travel" are all asked about the drawn middle,
+built from the segment's own direction rather than read off the hit; and a region whose ribbons are
+offset must have had a lane centre checked on one (`offset_checked`), or the offset is ungraded.
+Three mutations, each failing on BOTH regions: the offset never read (`e0`: 2.463 m against 2.175),
+the offset to the right, and the offset turning with the asker. ⚠️ **A mutation that trips
+GDScript's unused-variable error makes headless Godot HANG rather than exit** — the first attempt
+did, for ten minutes; the mutations were rewritten to compile and each run given a hard limit.
+
+What moved: the spawn, 0.95 m across EXPO DRIVE (z 26.94 → 25.99), onto the lane of the road as
+drawn; `road_spawn.gd` and the debug overlay are the only other readers. `check.sh` 0 on both
+regions, the default drive `DRIVER OK` to 47 kph. No schema moves — the table was already
+published and already loaded. ⚠️ Not driven by hand on EXPO DRIVE EAST `e657`, which the plan
+named; that is a review for the seat.
+
