@@ -6692,7 +6692,9 @@ cell through `library_meshes`.
   plausible on a grid: east-is-right-when-heading-north is the assertion, mutation-checked. One
   compass convention — `CityManifest.bearing_deg`'s — never a second.
 - **One component with the street plate, the user's call (2026-09-22)**: the map over a name
-  strip, one keyline, 340 x 390 — 17.7% of frame width, inside `Q80`'s 18%. `Q80` had called the
+  strip, one keyline, 280 x 324 — 14.6% of frame width, inside `Q80`'s 18%. ⚠️ First built
+  340 x 390 (17.7%) to seat the longest names; the user read it as too large on the frame, and the
+  lettering shrinks instead. `Q80` had called the
   two "one question". Anchored as the plate is (bottom, with the speed); the map's own rect spans
   the middle and would float off the baseline on a tall window. `HudLayout.abutting()` refuses a
   layout where the two rects do not share a width and an edge. `draws` +5 → **+4**.

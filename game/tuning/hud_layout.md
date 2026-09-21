@@ -22,8 +22,9 @@ is an edit to this file.
 
 🔴 `minimap` AND `street_plate` ARE ONE PANEL (`P3-44`, `Q136`, the user's
 call): the map sits on the plate at the plate's width, under one keyline, and
-`HudLayout.abutting()` fails a layout that moves either alone. 340 wide is
-17.7% of the frame, inside the 18% the size rule in hud_style.md allows. The
+`HudLayout.abutting()` fails a layout that moves either alone. 280 wide is
+14.6% of the frame, inside the 18% the size rule in hud_style.md allows; 340
+was built first and read as too large (the user's call). The
 pair is anchored as the PLATE is — bottom, with the speed.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key

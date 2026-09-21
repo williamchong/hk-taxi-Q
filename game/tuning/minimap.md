@@ -17,9 +17,9 @@ slot's width — is seen on the next launch and not live.
 
 ## `span_m = 320.0`
 
-Metres of city across the slot's width: 0.75 px to the metre in a 240 px slot.
+Metres of city across the slot's width: 0.875 px to the metre in a 280 px slot.
 Wan Chai's blocks are 50-150 m, so two to four of them show either side, and a
-10 m carriageway is 7.5 px — a street and not a hairline. Not yet driven
+10 m carriageway is 8.75 px — a street and not a hairline. Not yet driven
 against a wider or tighter span; the first review's to move.
 
 ## `heading_up = true`
@@ -52,7 +52,7 @@ narrower than the head. 0 draws none. ⚠️ Baked, like the strokes.
 
 ## `arrow_spacing_px = 56.0`
 
-About 53 m at the shipped scale: one or two to a Wan Chai block, which is as
+About 64 m at the shipped scale: one or two to a Wan Chai block, which is as
 many as say the direction once. Every edge half a spacing long gets at least
 one, centred, so a short link between two junctions is not left unsigned.
 
