@@ -29,6 +29,7 @@ from pipeline.arrows import (
     _count_rows,
     _count_stacked,
     _draw_glyph,
+    _end_heights,
     _grade_against_the_graph,
     _Laid,
     _lane_of,
@@ -43,6 +44,7 @@ from pipeline.arrows import (
     stand_on_decks,
 )
 from pipeline.config import load_config
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.meshbuild import FlatBuilder
 from pipeline.placements import PLACEMENT_DP, placement, stood, stood_positions
 from pipeline.polyline import Segments
@@ -566,6 +568,42 @@ class TestTheReport:
     def test_an_empty_distribution_publishes_nothing_rather_than_a_zero(self):
         """A zero would read as "measured, and it was fine"."""
         assert ArrowReport.measured([]) == {}
+
+
+class TestAStreetArrowsHeights:
+    """`P3-39` (`Q135`): the road under the glyph's own ends, not the host's centreline."""
+
+    @staticmethod
+    def _road(until_x: float = 40.0) -> DrawnSurface:
+        """One street at 8.0 m and a neighbour beside it 0.5 m higher, climbing."""
+        host = {"id": 0, "polyline": [[0.0, 8.0, 0.0], [until_x, 8.0, 0.0]], "elevation_level": 0}
+        neighbour = {
+            "id": 1,
+            "polyline": [[0.0, 8.5, 6.0], [until_x, 9.5, 6.0]],
+            "elevation_level": 0,
+        }
+        surface = {"ribbons": [ribbon_of(host, 4.0), ribbon_of(neighbour, 4.0)]}
+        return DrawnSurface.of(surface, level=0)
+
+    def test_an_arrow_on_a_neighbours_share_takes_the_neighbours_heights(self):
+        """Mutation-check it by returning `centreline` unread: the arrow stands
+        0.5 m under the road it is drawn on."""
+        y_tail, y_nose, off_road = _end_heights(
+            self._road(), np.array([20.0, 6.0]), 90.0, 4.0, (8.0, 8.0)
+        )
+        assert (y_tail, y_nose) == pytest.approx((8.5 + 18.0 / 40.0, 8.5 + 22.0 / 40.0))
+        assert off_road == 0
+
+    def test_an_end_over_nothing_drawn_keeps_the_centrelines_height_and_is_counted(self):
+        """The nose is 1 m past the road's end. Mutation-check it by reading
+        `height_at` without asking `covers`: the nose takes the nearest edge's
+        height and the count stays 0."""
+        y_tail, y_nose, off_road = _end_heights(
+            self._road(until_x=21.0), np.array([20.0, 6.0]), 90.0, 4.0, (8.0, 7.0)
+        )
+        assert y_tail == pytest.approx(8.5 + 18.0 / 21.0)
+        assert y_nose == 7.0
+        assert off_road == 1
 
 
 class TestArrowsOnTheDecks:

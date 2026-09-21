@@ -272,6 +272,10 @@ class ArrowReport:
     # each of those MOVED. Every other arrow moved nothing.
     placed_by_slot: int = 0
     fallback_shift_m: list[float] = field(default_factory=list)
+    # Glyph ENDS — a tail or a nose, two an arrow — over no drawn level-0 road,
+    # which keep the host centreline's height (`P3-39`). Every other end reads
+    # the drawn surface under it.
+    ends_off_drawn_road: int = 0
     # Symbols whose along-edge position fell inside a junction trim, so they sit
     # over a cap rather than over a drawn arm. Drawn anyway — the cap is still
     # carriageway — but counted, because it is where the ribbon has no lane
@@ -903,6 +907,10 @@ def build_region(
         centreline = np.array([symbol.x, symbol.z]) - snap.offset_m * near
         placed = centreline + drawn_offset_m * near
         slot_at = centreline + slot_offset_m * near
+        y_tail, y_nose, off_road = _end_heights(
+            road, placed, symbol.heading_deg, glyph.length_m, (y_tail, y_nose)
+        )
+        report.ends_off_drawn_road += off_road
 
         if symbol.code not in library:
             library[symbol.code] = FlatBuilder(ARROWS_MATERIAL)
@@ -973,6 +981,38 @@ def build_region(
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def _end_heights(
+    road: DrawnSurface,
+    placed: np.ndarray,
+    heading_deg: float,
+    length_m: float,
+    centreline: tuple[float, float],
+) -> tuple[float, float, int]:
+    """A street arrow's tail and nose heights, and how many of the two ends
+    kept the host centreline's.
+
+    🔴 **The road drawn under the glyph's own two ends (`P3-39`, `Q135`), as
+    `stand_on_decks` reads a deck.** Since `P3-36` an arrow stands where TD
+    surveyed it — metres off its host's centreline, on a neighbour's share or
+    a cap — and the host's polyline is the height of neither: deeper than
+    10 mm inside the carriageway read 31 → 9 of Wan Chai's 3,284 triangles and
+    36 → 21 of Causeway Bay's 647 on `paint_clearance`. ⚠️ **An end over
+    nothing drawn keeps `centreline`'s height and is counted**, never refused:
+    the street's void rule is `Q54`'s, a footway is under it, and the rim
+    refusal is the decks' alone (`roadmarks.md`).
+    """
+    ahead = 0.5 * length_m * frame(heading_deg)[0]
+    heights, off_road = [], 0
+    for end, fallback in zip((placed - ahead, placed + ahead), centreline, strict=True):
+        x, z = float(end[0]), float(end[1])
+        if road.covers(x, z):
+            heights.append(road.height_at(x, z))
+        else:
+            heights.append(fallback)
+            off_road += 1
+    return heights[0], heights[1], off_road
 
 
 def stand_on_decks(
@@ -1364,6 +1404,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         "lane_shift_m": report.measured(report.lane_shift_m),
         "placed_by_slot": report.placed_by_slot,
         "fallback_shift_m": report.measured(report.fallback_shift_m),
+        "ends_off_drawn_road": report.ends_off_drawn_road,
         "over_a_cap": report.over_a_cap,
         # 🔴 The pairs that landed on top of each other — see `ArrowReport`.
         # `stacked_disagreeing` is the one to read: it is arrows giving
