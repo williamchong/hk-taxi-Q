@@ -231,7 +231,7 @@ and there in the same change.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
-- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Owed the user: a drive; heading-up or north-up; one-way ticks; `span_m`. Owed: the web frame.
+- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up is the user's call. Owed the user: a drive; one-way ticks; `span_m`. Owed: the web frame.
 - `Q137` A router, no route line (`P3-43`). Design call, not measured; reopens on `P3-9`. Held: arrow to the next junction.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count

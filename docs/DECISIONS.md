@@ -190,7 +190,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
-| `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Owed the user: orientation, one-way ticks, `span_m`. |
+| `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up is the user's call. Owed the user: one-way ticks, `span_m`. |
 | `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
 
 ---
@@ -6702,9 +6702,11 @@ cell through `library_meshes`.
 - 🚫 An orthographic `SubViewport` over the city: a second pass of the city on the Mobile renderer,
   and a look that fights flat shading. 🚫 An ETL-baked map texture: a schema bump and a fixed
   resolution for data already in memory. Neither was measured — refused on cost of entry.
-- **Owed the user.** Heading-up or north-up — shipped heading-up (`hud_layout.gd`: "glanced at
-  mid-corner"); north-up is the one that rewards a local's memory. A `.tres` bool either way.
-  One-way ticks — recommended off at first: 93.5% of the region is one-way, and every mark added
+- **Heading-up, the user's call (2026-09-22): "like a real world gps".** It is the convention a
+  driver already reads, and `hud_layout.gd` places the map to be "glanced at mid-corner".
+  ⚠️ North-up is the one that rewards a local's memory, and was weighed and not taken; it stays a
+  `.tres` bool, and both orientations stay asserted in `verify_hud`.
+- **Owed the user.** One-way ticks — recommended off at first: 93.5% of the region is one-way, and every mark added
   moves navigation from the street to the map.
 - **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
   all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and

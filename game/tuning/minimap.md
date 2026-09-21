@@ -26,8 +26,9 @@ against a wider or tighter span; the first review's to move.
 
 The nose is up and the map turns. `hud_layout.gd` puts the map near the road
 because it is "glanced at mid-corner", and a glance has no time to rotate a
-north-up map in the head. ⚠️ North-up is the one that rewards a local's memory,
-which is pillar 1's argument for it (`Q136`, the user's to call).
+north-up map in the head. The user's call, `Q136`: "like a real world gps" —
+the convention a driver already reads. ⚠️ North-up is the one that rewards a
+local's memory, which was pillar 1's argument for it; weighed, not taken.
 
 ## `anchor = Vector2(0.5, 0.66)`
 
