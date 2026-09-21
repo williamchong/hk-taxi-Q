@@ -147,7 +147,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`); `P3-3` still owes
   adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, the
   player's `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
-- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +14.2k `prims` (37.7k built naively); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
+- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +13.4k `prims` over `--minimap=off` (37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.

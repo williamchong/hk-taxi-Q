@@ -110,7 +110,8 @@ graph's chevrons. `F3` cycles off → minimal → full; `--debug-view=off|minima
 
 - `drive.sh` (`.claude/skills/run-hk-taxi-q/drive.sh`) appends `--debug-view=minimal` unless the
   caller names a view, so a scripted screenshot says where it was taken.
-- ⚠️ The player's HUD is separate and ON by default (+5 draw calls); `--debug-view=off` does not
+- ⚠️ The player's HUD is separate and ON by default (+15 draw calls since `P3-44`: +11 without
+  the minimap, +4 for it; it was +5 at `P3-24`); `--debug-view=off` does not
   touch it. A clean frame for art review needs `--debug-view=off` and `--hud=off`.
 - The position block reports game metres and the source-CRS grid reference
   (`CityManifest.to_grid`, inverse of `crs.py`'s `to_game`).
@@ -1088,7 +1089,7 @@ city_space = region_local + city_offset
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
-| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, one-way arrows, +4 draw calls, 14.2k primitives) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
+| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, one-way arrows, +4 draw calls and 13.4k primitives over `--minimap=off`) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
 Every library layer draws one call per library mesh through a `MultiMesh`; each placements document

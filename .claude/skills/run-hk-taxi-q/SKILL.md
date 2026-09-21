@@ -187,7 +187,7 @@ the frame and it lands in any statistic taken from the PNG.
 ⚠️ **Nor is `--hud=off`, since `P3-24`.** The player's HUD is not dev chrome and `--debug-view=off`
 does not touch it: a street plate and a speed readout sit in the frame and land in the same
 statistics. **A clean art-review frame needs both flags.** Conversely `--debug-view=full` is what
-reveals the HUD's reserved slots (timer, meter) as cyan outlines, and its raw-versus-shown
+reveals the HUD's reserved slots (timer, combo, meter, award, callout) as cyan outlines, and its raw-versus-shown
 street readout — which is how you tell a stale plate from a correct one.
 
 Runs are **deterministic**. The clock reads the engine's physics-frame counter rather than

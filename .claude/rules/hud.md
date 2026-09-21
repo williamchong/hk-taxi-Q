@@ -55,9 +55,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   and the run still says `DRIVER OK`. Numbers in `Q81`.
 - **Minimap changes — `minimap*.gd`, `tuning/minimap.tres`, the `map_*` keys in `hud_style.tres`:
   `tools/check.sh` (the `map:` assertions), an A/B drive with and without `--minimap=off` at one
-  route, and BOTH deltas pasted — `draws` and `prims`.** 🔴 **The map is a mesh drawn every frame,
+  route, and BOTH deltas pasted — `draws` and `prims`.** ⚠️ **Re-run BOTH sides together**: a "+6" was reported here off a baseline taken before the dial existed. 🔴 **The map is a mesh drawn every frame,
   so it has a triangle cost the rest of the HUD does not**: built naively it was **37.7k** prims,
-  an eighth of the mobile budget; it ships at **14.2k / +4 draws**, arrows and the merged plate included, on shared junction caps,
+  an eighth of the mobile budget; it ships at **13.4k / +4 draws** over `--minimap=off` (whole HUD +15), arrows and the merged plate included, on shared junction caps,
   one-sided bevels and sub-pixel simplification (`minimap_mesh.gd`). ⚠️ **`map_field` and `map_road`
   are opaque and asserted** — strokes overlap, a deck's casing is the field's colour, and the clip
   is the field's alpha. ⚠️ **A mirrored map looks right on a grid**; the east-is-right assertions

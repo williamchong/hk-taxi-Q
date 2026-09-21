@@ -6727,7 +6727,8 @@ cell through `library_meshes`.
   draw call, +1,080 `prims`. No third colour: the field's inside a road it fits, the road's as
   barbs where it does not. 🔴 Direction is asserted, not looked at — tip ahead along the vertex
   order, which is how the ETL guarantees a `forward` edge runs; 5 mutations, each caught.
-  The panel as it now stands: **+4 `draws`, +14.2k `prims`** against `--minimap=off`.
+  The panel with them: **+4 `draws`, +13.4k `prims`** against `--minimap=off` (`Q139` has the
+  three-state table).
 - **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
   all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and
   it is an empty setter. Listed under `B4` because `hud.gd` gave the slot to `P3-5b` — a grouping,
@@ -6820,7 +6821,12 @@ cell through `library_meshes`.
 - `verify_hud`: the segment table is asserted in LETTERS, not by count — a `4` lit as `abfg` has
   four segments and survived the count. Dial: zero, sweep clockwise, linear, pinned at both ends,
   arc over the top. 9 mutations, each caught after that fix.
-- Panel cost now, throttle route against `--minimap=off`: **+6 `draws`**, +14.2k `prims`.
+- **Cost, one route, three states** (throttle, `--debug-view=off`, t=1 s / t=2 s): `--hud=off`
+  102 / 101 `draws`; `--minimap=off` 113 / 112; full 117 / 116. So the HUD is **+15** — +11
+  without the map (it was +8 before the dial and the bezel, and `ARCHITECTURE.md` still said
+  `P3-24`'s +5) — and the map panel **+4 `draws`, +13.4k `prims`**.
+  ⚠️ A "+6" for the panel was reported first: a new frame against a `--minimap=off` baseline taken
+  before the dial existed. Both sides of an A/B are re-run together.
 - 🚫 White seven-segment for the speed: consistent, and the language of an instrument the speed
   is not on. 🚫 A dot-matrix face for the street name: a fifth licence (`Q79`).
 
