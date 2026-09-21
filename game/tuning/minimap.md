@@ -40,3 +40,19 @@ a direction on the map.
 
 An alley at its authored width is under 2 px here and flickers out as the map
 turns. A floor, never a multiplier — `Q95`'s rule for the drawn road, borrowed.
+
+## `arrow_px = 7.0`
+
+The one-way arrows (`Q136`, the user's call): an arrowhead 7 px long and 0.8
+as wide, about every `arrow_spacing_px` along a one-way road, pointing the way
+the law runs. 93.5% of Wan Chai's drivable length is one-way, so without them
+the map says where the streets are and not which can be entered. No colour of
+its own: the field's inside a road it fits, the road's where the road is
+narrower than the head. 0 draws none. ⚠️ Baked, like the strokes.
+
+## `arrow_spacing_px = 56.0`
+
+About 53 m at the shipped scale: one or two to a Wan Chai block, which is as
+many as say the direction once. Every edge half a spacing long gets at least
+one, centred, so a short link between two junctions is not left unsigned.
+

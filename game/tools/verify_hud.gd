@@ -812,6 +812,7 @@ func _check_minimap() -> void:
 		"min_stroke_px": mapping.min_stroke_px,
 		"casing_px": mapping.casing_px,
 		"marker_px": mapping.marker_px,
+		"arrow_spacing_px": mapping.arrow_spacing_px,
 	}
 	for key: String in floors:
 		if floors[key] <= 0.0:
@@ -986,6 +987,8 @@ func _check_minimap_mesh() -> void:
 		"two roads at one node share one cap, at the wider half (%d fans, %.1f m)" % [fans, reach]
 	)
 
+	_check_minimap_arrows(road, field)
+
 	var wobble := PackedVector2Array([Vector2.ZERO, Vector2(50.0, 0.2), Vector2(100.0, 0.0)])
 	_expect(
 		MinimapMeshScript.simplified(wobble, 0.5).size() == 2,
@@ -993,6 +996,71 @@ func _check_minimap_mesh() -> void:
 		"a vertex 0.2 m off its road is dropped at a 0.5 m tolerance"
 	)
 	_expect(MinimapMeshScript.simplified(wobble, 0.1).size() == 3, "map", "and kept at a 0.1 m one")
+
+
+## The one-way arrows (`Q136`). 🔴 **An arrow pointing the wrong way is the one
+## defect here that sends a driver into oncoming traffic**, and at 7 px no
+## frame shows it — so the tip is asserted AHEAD along the vertex order, which
+## is the way the ETL guarantees a `forward` edge travels.
+func _check_minimap_arrows(road: Color, field: Color) -> void:
+	var arrows := MinimapMeshScript.Arrows.new()
+	arrows.length_m = 8.0
+	arrows.spacing_m = 50.0
+	var lawful: RefCounted = _stroke(Vector2(0.0, 300.0), Vector2(100.0, 300.0), 0)
+	lawful.width_m = 16.0
+	var plain: Array[MinimapMeshScript.Stroke] = [lawful]
+	var bare: int = (
+		MinimapMeshScript
+		. build(plain, road, field, 2.0, arrows)
+		. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		. size()
+	)
+	_expect(
+		(
+			bare
+			== (
+				MinimapMeshScript
+				. build(plain, road, field, 2.0)
+				. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+				. size()
+			)
+		),
+		"map",
+		"a two-way road takes no arrows"
+	)
+
+	lawful.one_way = true
+	var arrowed: Array = (
+		MinimapMeshScript.build(plain, road, field, 2.0, arrows).surface_get_arrays(0)
+	)
+	var points: PackedVector2Array = arrowed[Mesh.ARRAY_VERTEX]
+	var inks: PackedColorArray = arrowed[Mesh.ARRAY_COLOR]
+	_expect(points.size() == bare + 6, "map", "100 m of one-way road at a 50 m spacing takes two")
+	var tip: Vector2 = points[bare]
+	var tail: Vector2 = (points[bare + 1] + points[bare + 2]) * 0.5
+	_expect(
+		is_equal_approx(tip.x - tail.x, 8.0) and is_equal_approx(tip.y, tail.y),
+		"map",
+		"each points ALONG the vertex order, tip ahead of tail"
+	)
+	_expect(
+		is_equal_approx((tip.x + tail.x) * 0.5, 25.0) and is_equal_approx(points[bare + 3].x, 79.0),
+		"map",
+		"centred on the quarter points, not bunched at a junction"
+	)
+	_expect(inks[bare] == field, "map", "inside a road it fits, the arrow is the field's colour")
+
+	lawful.width_m = 4.0
+	var narrow: PackedColorArray = (
+		MinimapMeshScript
+		. build(plain, road, field, 2.0, arrows)
+		. surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	)
+	_expect(
+		narrow[narrow.size() - 1] == road,
+		"map",
+		"on a road narrower than its head it is the road's, standing out as barbs"
+	)
 
 
 func _stroke(from: Vector2, to: Vector2, level: int) -> RefCounted:

@@ -30,5 +30,10 @@ const PATH: String = "res://tuning/minimap.tres"
 ## — what makes a flyover read as OVER the street it crosses.
 @export var casing_px: float
 
+## The one-way arrows (`Q136`): an arrowhead this long, in design pixels, about
+## every `arrow_spacing_px` along a one-way road. `arrow_px` 0 draws none.
+@export var arrow_px: float
+@export var arrow_spacing_px: float
+
 ## The car's chevron, tip to tail, in design pixels.
 @export var marker_px: float

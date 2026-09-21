@@ -9,4 +9,6 @@ heading_up = true
 anchor = Vector2(0.5, 0.66)
 min_stroke_px = 2.0
 casing_px = 1.5
+arrow_px = 7.0
+arrow_spacing_px = 56.0
 marker_px = 32.0

@@ -7,7 +7,7 @@ extends Control
 ## keyline round both — a GPS's current-road bar. `Q80` had already called the
 ## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
 ##
-## **Driving only.** Roads, and the car. No route is drawn and none will be
+## **Driving only.** Roads, which way they run, and the car. No route is drawn and none will be
 ## without `Q137` reopening; the destination pip arrives with `P3-1a`, which is
 ## the first thing that has a destination.
 ##
@@ -57,11 +57,17 @@ func setup(
 	_roads = MeshInstance2D.new()
 	_roads.name = "Roads"
 	_px_per_m = map_px.x / maxf(mapping.span_m, 0.001)
+	var arrows: MinimapMesh.Arrows = null
+	if mapping.arrow_px > 0.0:
+		arrows = MinimapMesh.Arrows.new()
+		arrows.length_m = mapping.arrow_px / _px_per_m
+		arrows.spacing_m = mapping.arrow_spacing_px / _px_per_m
 	_roads.mesh = MinimapMesh.build(
 		MinimapMesh.strokes_of(graph, mapping.min_stroke_px / _px_per_m, SUBPIXEL_PX / _px_per_m),
 		style.map_road,
 		style.map_field,
-		mapping.casing_px / _px_per_m
+		mapping.casing_px / _px_per_m,
+		arrows
 	)
 	_field.add_child(_roads)
 

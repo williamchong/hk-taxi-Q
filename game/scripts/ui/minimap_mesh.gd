@@ -45,6 +45,22 @@ class Stroke:
 	var points: PackedVector2Array = PackedVector2Array()
 	var width_m: float = 0.0
 	var level: int = 0
+	## True where the law runs one way — along `points`, always: the ETL
+	## reverses a backward edge's polyline (`road_graph.gd`).
+	var one_way: bool = false
+
+
+## The one-way arrows (`Q136`, the user's call), in plan metres: an arrowhead
+## `length_m` long every `spacing_m` along a one-way stroke.
+##
+## **No colour of its own.** Where the head fits inside its road it is drawn in
+## the FIELD's colour, a light arrow on the dark carriageway; where the road is
+## narrower than the head it is drawn in the ROAD's, and reads as barbs standing
+## out of a thin line. Both are what a printed street map does, and a third
+## colour at 5 px would be noise.
+class Arrows:
+	var length_m: float = 0.0
+	var spacing_m: float = 0.0
 
 
 ## Every drivable edge of `graph` as a stroke, no narrower than `min_width_m`,
@@ -61,6 +77,7 @@ static func strokes_of(graph: RoadGraph, min_width_m: float, tolerance_m: float)
 		stroke.points = simplified(published, tolerance_m)
 		stroke.width_m = maxf(graph.width_of(edge_id), min_width_m)
 		stroke.level = graph.level_of(edge_id)
+		stroke.one_way = graph.is_one_way(edge_id)
 		strokes.append(stroke)
 	return strokes
 
@@ -81,8 +98,10 @@ static func simplified(points: PackedVector2Array, tolerance_m: float) -> Packed
 	return kept
 
 
-## The mesh, or null where there is nothing to draw.
-static func build(strokes: Array[Stroke], road: Color, casing: Color, casing_m: float) -> ArrayMesh:
+## The mesh, or null where there is nothing to draw. `arrows` null draws none.
+static func build(
+	strokes: Array[Stroke], road: Color, casing: Color, casing_m: float, arrows: Arrows = null
+) -> ArrayMesh:
 	var by_level: Dictionary[int, Array] = {}
 	for stroke: Stroke in strokes:
 		if stroke.points.size() < 2:
@@ -103,6 +122,12 @@ static func build(strokes: Array[Stroke], road: Color, casing: Color, casing_m: 
 		if level > 0:
 			_emit_pass(vertices, colours, by_level[level], casing_m, casing)
 		_emit_pass(vertices, colours, by_level[level], 0.0, road)
+		# After this level's roads and before the next level's casing, so a deck
+		# hides the arrows of the street under it and carries its own.
+		if arrows != null:
+			for stroke: Stroke in by_level[level]:
+				if stroke.one_way:
+					_emit_arrows(vertices, colours, stroke, arrows, road, casing)
 
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -146,6 +171,45 @@ static func _emit_pass(
 	colours.resize(vertices.size())
 	for index: int in range(before, vertices.size()):
 		colours[index] = colour
+
+
+## How wide an arrowhead is, as a share of its length.
+const ARROW_ASPECT: float = 0.8
+
+
+## `stroke`'s arrowheads: evenly spaced about its middle, at least one on any
+## stroke half a spacing long, each pointing along the vertex order.
+static func _emit_arrows(
+	vertices: PackedVector2Array,
+	colours: PackedColorArray,
+	stroke: Stroke,
+	arrows: Arrows,
+	road: Color,
+	field: Color
+) -> void:
+	var length: float = 0.0
+	for index: int in stroke.points.size() - 1:
+		length += stroke.points[index].distance_to(stroke.points[index + 1])
+	if length < arrows.spacing_m * 0.5 or length < arrows.length_m:
+		return
+	var count: int = maxi(1, roundi(length / arrows.spacing_m))
+	var fits: bool = stroke.width_m >= arrows.length_m * ARROW_ASPECT * 1.25
+	var ink: Color = field if fits else road
+	var next: int = 0
+	var walked: float = 0.0
+	for index: int in stroke.points.size() - 1:
+		var a: Vector2 = stroke.points[index]
+		var b: Vector2 = stroke.points[index + 1]
+		var run: float = a.distance_to(b)
+		while next < count and (float(next) + 0.5) * length / float(count) <= walked + run:
+			var along: Vector2 = (b - a) / maxf(run, 0.001)
+			var at: Vector2 = a + along * ((float(next) + 0.5) * length / float(count) - walked)
+			var half: Vector2 = along.orthogonal() * arrows.length_m * ARROW_ASPECT * 0.5
+			var tail: Vector2 = at - along * arrows.length_m * 0.5
+			vertices.append_array([at + along * arrows.length_m * 0.5, tail + half, tail - half])
+			colours.append_array([ink, ink, ink])
+			next += 1
+		walked += run
 
 
 ## One stroke's triangles: a quad a segment, a bevel on the outside of a turn.
