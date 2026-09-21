@@ -365,6 +365,11 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
   `meshbuild.CellBuilder`, manifest schema 3) so the engine can cull it (`Q135`): 72,356 a pass →
   13–17k for +3 to +7 draws; the cells' union is the uncut mesh. `resident_budget.py` counts the
   paint (Wan Chai 144%). 🚫 One shared piece-placer — `sampled_pieces` already is the shared part.
+- `P3-42` ✅ — `boxjunctions.glb` and `crossings.glb` are a mesh per 300 m plan cell too, each on
+  its own `cell_m` (manifest schemas 2), a crossing cell named `<kind>_c<i>_r<j>` under the bare
+  kind's material (`Q135`). Start line 20,642 a pass → 9,849 (+1 draw); from `f_045` 7,469 → 496
+  (+0). ⚠️ The boxes read 9,411 against a bar of 8k set beforehand: one cell holds 7,585 of 14,931.
+  The cells' union is the uncut mesh in all four regions; every grader byte-identical.
 - `P3-41` ✅ — `mong_kok` and `sha_tin` built with deck paint (18 of 20 / 446 of 521 lines, 23 of
   25 arrows). `A01` never says which structure and the lines carry no Z: `deck.under_another_deck`
   counts paint where two deck levels cross — Sha Tin 33 markings / 324 m, 0 elsewhere. 🚫 No rule

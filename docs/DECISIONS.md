@@ -189,7 +189,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q132` | The longitudinal lines come from TD's survey; where TD is silent nothing is drawn | Closed — built as `P3-34b`–`d`, `CITY_SCHEMA` 33. `draw_centre_line` and |
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
-| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-41` built; the user's drive owed. Open: which deck, where two cross. |
+| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 
 ---
 
@@ -6465,7 +6465,7 @@ still true — and stand it on `DrawnSurface.of(level=host's)`. Every bar is the
 
 ## `Q135` — Road paint stays mesh; what it costs a frame is measured, and it casts no shadow
 
-**Status.** `P3-38`–`P3-41` built; the user's drive owed. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
+**Status.** `P3-38`–`P3-42` built; the user's drive owed. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
 the asset standard, and ask again whether road paint should be mesh or texture.
 
 ### Mesh, decal or texture
@@ -6576,7 +6576,7 @@ a mesh a cell, so the importer makes a `MeshInstance3D` and a box per cell. `roa
   writes once, so boxes, crossings and every test keep the signature.
 - 🚫 Streaming the cells (4 MB; the budget is visible triangles). 🚫 The 150 m tile (draws).
 - Mutation-checked: keyed on the first vertex, the report handed to each cell.
-- Left: boxes (14,931) and crossings (5,711) are still one box each; ~21k a pass, unculled.
+- Left: boxes (14,931) and crossings (5,711) are still one box each; ~21k a pass, unculled. `P3-42` below.
 
 ### Built — `P3-41`: the other two regions carry deck paint, and a crossing of decks is counted
 
@@ -6607,4 +6607,51 @@ a mesh a cell, so the importer makes a `MeshInstance3D` and a box per cell. `roa
 - Inert on the shipped pair: `roadmarks.glb` byte-identical, every report key but the new two
   unmoved. Mutation-checked: the `level !=` filter dropped — three tests fail.
 
-**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-41`
+### Built — `P3-42`: the boxes and the crossings are a mesh per 300 m cell
+
+`P3-40`'s "Left". `boxjunctions.py` and `crossings.py` build into `meshbuild.CellBuilder`, unchanged;
+`boxjunctions.cell_m` and `crossings.cell_m` 300, a dial a block on the user's call; both manifests
+schema 2. A crossing cell is named `<kind>_c<i>_r<j>` and its glTF material stays the bare kind, so
+the importer's `SHADERS` is untouched and `verify_crossings.gd` reads the kind back off the NAME —
+off the material, a yellow zebra checks out against itself. `verify_boxjunctions.gd` grades every
+cell through `library_meshes`.
+
+| | boxes: cells, largest | crossings: cells, largest |
+|---|---|---|
+| Wan Chai | 10, 7,585 of 14,931 | 14, 993 of 5,711 |
+| Causeway Bay | 4, 698 of 1,318 | 4 (3 signal + 1 zebra), 248 of 534 |
+| Mong Kok | 5, 2,492 of 4,082 | 19, 2,343 of 12,219 |
+| Sha Tin | 6, 1,923 of 4,776 | 3, 372 of 713 |
+
+| `drive.sh`, boxes + crossings (shown − hidden) | before | after | `draws` | peak `draws` |
+|---|---|---|---|---|
+| start line, t=1 s / t=6 s | 20,642 / 20,642 | 9,849 / 9,849 | +2 → +3 | 101 → 102 |
+| `--spawn-fare=wan_chai/f_045`, t=1 s / t=6 s | 7,469 / 1,758 | 496 / 390 | +3 → +3 / +2 → +2 | 132 → 132 |
+
+- The hidden runs are identical before and after to the triangle at every sample, both routes.
+- ⚠️ **The boxes missed their bar.** Set beforehand: boxes ≤ 8k, crossings ≤ 2k, peak `draws` under
+  the 136–150 line. At the start line the boxes read **9,411** over 2 draws — the 7,585 cell, which
+  the start line is inside, and a 1,826 neighbour — and the crossings 438 over 1. Half of Wan
+  Chai's box paint is in one 300 m cell, so from inside it no `cell_m` culls the rest; 600 is worse
+  (9,723 in one cell). 🚫 Not answered by a smaller cell on this evidence: a draw call a cell.
+- ⚠️ Two samples a run, as `P3-40`: `prims` froze from t=1 to t=5 on the start-line runs under
+  `caffeinate`. The before side is the old `.glb`s swapped into the game tree and force-reimported.
+- Inert, all four regions: the cells' triangles equal the uncut mesh's as a multiset per material;
+  every report key but `cells`, `cell_triangles_max`, `bytes`, `schema_version` unmoved.
+  `paint_clearance --layer boxjunctions` / `crossings` and `box_extent.py` byte-identical against a
+  bundle holding the old meshes, both shipped regions, so its `--ray-m` sweep was not re-run.
+  `check.sh` 0; no shader error.
+- 🐛 Latent, fixed: `crossings.build_region` handed ONE report to both kinds' `build`, which
+  ASSIGNS `slivers_dropped` — the last kind drawn overwrote the first. 0 in every region, so no
+  number moved; `cell_meshes` sums a report a kind.
+- ⚠️ `box_extent.py` reads **1.32 m² of 577.90 (0.23%)** of Wan Chai's box paint over nothing drawn,
+  both sides, where `.claude/rules/boxjunctions.md` still quotes 6.71%. Not this task's; the rule's
+  figure is stale.
+- Mutation-checked: `triangles` read off the last cell, `inverted` assigned in the loop, the
+  stage's report handed to each kind, the two `KIND_MATERIALS` swapped — each fails its own test.
+  ⚠️ Not the `-?` in `_kind_of`: no shipped region has a negative cell, so nothing reachable moves it.
+- 🚫 Signal crossings folded into the box mesh to save draws (one `.tres`, but two `lift_m` rungs and
+  two verify contracts). 🚫 A whole box routed to one cell: a piece to its centroid's cell is what
+  makes the union the uncut mesh.
+
+**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`

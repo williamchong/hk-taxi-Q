@@ -762,9 +762,10 @@ expands the library under its placements.
 ### `crossings.glb` — the published pedestrian-crossing stripes (`P3-35g2`)
 
 One rectangle per surveyed stripe of `DTAD_CROSSING_LINE`, placed on the drawn road by
-`boxjunctions._place` at `lift_m` 0.010, the lowest rung of the paint ladder. Two meshes, one per
-paint: `crossings_signal` (yellow, `tuning/boxjunctions.tres`) and `crossings_zebra` (white,
-`tuning/roadmarks.tres`), each present only where drawn. A crossing TD's surveyed zigzags reach is
+`boxjunctions._place` at `lift_m` 0.010, the lowest rung of the paint ladder. Two paints:
+`crossings_signal` (yellow, `tuning/boxjunctions.tres`) and `crossings_zebra` (white,
+`tuning/roadmarks.tres`), each a mesh per 300 m plan cell (`crossings.cell_m`, `P3-42`, `Q135`)
+named `<kind>_c<column>_r<row>` under the bare kind as its material, present only where drawn. A crossing TD's surveyed zigzags reach is
 a zebra. No `COLOR_0`, no collider. `crossings.json` publishes three closing partitions,
 `faces_touching` (must be 0) and both sides of the plateau the zebra bar sits on.
 `.claude/rules/crossings.md`.
@@ -772,8 +773,9 @@ a zebra. No `COLOR_0`, no collider. `crossings.json` publishes three closing par
 ### `boxjunctions.glb` — the published yellow box junctions (`P3-18`)
 
 Border and cross-hatch per `DTAD_YL_BOX_POLY` polygon, hatch `lift_m` above the junction and the
-border `border_lift_m` above that, both below the arrows. One primitive, one material named
-`boxjunctions`, one draw call, **no collider**. `POSITION` and `NORMAL` only.
+border `border_lift_m` above that, both below the arrows. A mesh per 300 m plan cell
+(`boxjunctions.cell_m`, `P3-42`, `Q135`; manifest schema 2), one material named `boxjunctions`, a
+draw call a visible cell, **no collider**. `POSITION` and `NORMAL` only.
 
 ⚠️ The engine re-quantises an imported mesh to a 16-bit lattice over its own AABB (~17 mm for a
 region-spanning mesh), and a triangle thinner than that can come back with its winding flipped and
@@ -1078,8 +1080,8 @@ city_space = region_local + city_offset
 | `TrafficSystem` | AI vehicles on road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
 | `tram.glb` | The published tramway where iB1000 prints it — not a marking on the ribbon (`Q58`). One primitive, no collider | ✅ `P3-14` |
 | `arrows.glb` + `arrows_placements.json` | Turn arrows in the lane the ribbon has — not ribbon paint, because the junction fade blanks the approach (`Q59`). Library of one flat glyph per `RM` code; placements carry the transform plus `pitch_deg` and nothing else (`Q54`). No collider | ✅ `P3-15`, `P5-4` |
-| `crossings.glb` | Pedestrian-crossing stripes at the surveyed extent; signal yellow and zebra white as two meshes. No collider | ✅ `P3-35g2` |
-| `boxjunctions.glb` | Yellow box junctions at the surveyed extents, lifted under the arrows that paint over them. One primitive, no collider | ✅ `P3-18` |
+| `crossings.glb` | Pedestrian-crossing stripes at the surveyed extent; signal yellow and zebra white, a mesh a paint a 300 m cell (`P3-42`). No collider | ✅ `P3-35g2` |
+| `boxjunctions.glb` | Yellow box junctions at the surveyed extents, lifted under the arrows that paint over them. A mesh a 300 m cell (`P3-42`), no collider | ✅ `P3-18` |
 | `roadmarks.glb` | Stop and give-way lines, hosted by the road each one *crosses*, not the nearest. One primitive, no collider | ✅ `P3-23` |
 | `signs.glb` + `signs_placements.json` | Traffic signs on the poles TD surveyed. Shape-faced signs only. Library of one mesh per face variant plus a unit pole; one placement per plate, lettering quad and pole (`scale` on the pole). No collider | ✅ `P3-16`, `P5-2` |
 | `lamps.glb` + `lamps_placements.json` | Lamp posts on the drawn kerb with a bracket arm over the carriageway; `rot_y_deg` is the arm's bearing. Unlit (`Q38`, `Q26`). Library of one mesh per drawn kind. No collider | ✅ `P3-26`, `P5-3` |

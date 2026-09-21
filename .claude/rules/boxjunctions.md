@@ -39,6 +39,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   point-in-polygon on the source rings, never a cluster of the shipped mesh** — clustering returns
   **18 of 20** boxes and is flat from 1.5 m to 15 m, so a sweep cannot see the undercount;
   `unattributed` must stay **0**. ⚠️ It **grades rather than checks** and exits 0 whatever it finds.
+  ⚠️ **`boxjunctions.glb` is a mesh per 300 m plan cell since `P3-42`** (`cell_m`, `Q135`): a reader
+  pools every mesh in the file, and a box across a cell line is in two of them.
   Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot

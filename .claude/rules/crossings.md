@@ -37,7 +37,10 @@ paths:
   ⚠️ **The two paints are the box junctions' and the road marks' own `.tres`**, on purpose — one
   paint, one dial — so `verify_crossings.gd` checks the material PER KIND: a kind handed the
   other's is a yellow zebra that renders perfectly. `KIND_MATERIALS` there, `SHADERS` in
-  `generated_scene_import.gd` and `KINDS` in `crossings.py` move together.
+  `generated_scene_import.gd` and `KINDS` in `crossings.py` move together. ⚠️ **A mesh a kind a
+  300 m cell since `P3-42`** (`cell_m`, `Q135`), named `<kind>_c<i>_r<j>` under the bare kind's
+  material: the verifier reads the kind off the NAME, never the material, and
+  `cell_meshes` sums `slivers_dropped` a kind because `build` assigns it.
   ⚠️ **`lift_m` 0.010 is the LOWEST rung** (boxes 0.012 / 0.014, arrows 0.015, road marks 0.016): a
   crossing legitimately overlaps none of them, and where registration puts a stop line on a stripe
   the narrow mark must stay visible. 🔴 Do not answer a burial by raising it (`boxjunctions` rule).

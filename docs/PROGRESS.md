@@ -130,6 +130,7 @@ Phase 3 — Build `B2`
 - `P3-38` ✅ Road paint casts no shadow (`Q135`) — `prims` −191,903, `draws` −10 on the throttle route.
 - `P3-39` ✅ Street arrows' heights off the drawn road (`Q135`) — deep burials 31 → 9 / 36 → 21.
 - `P3-40` ✅ `roadmarks.glb` in 300 m cells (`Q135`) — 72,356 a pass → 13–17k, +3 to +7 draws.
+- `P3-42` ✅ `boxjunctions.glb` / `crossings.glb` in 300 m cells (`Q135`) — start line 20,642 a pass → 9,849, `f_045` 7,469 → 496; +1 / +0 draws. Boxes 9,411 against an 8k bar.
 - `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
@@ -227,7 +228,7 @@ and there in the same change.
   the street borrow; consensus of ≥ 2 as the next rung.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
-- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-41` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
+- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -363,7 +364,7 @@ Budget
 | FPS, Chrome on macOS, 2880×1450 | — | 119, worst frame 9.7 ms (2026-07-31; stale) |
 | Draw calls | < 150 | 136–150 on the seam line from `f_045` (`P5-9c`); `P2-6` measures properly |
 | Resident triangles, worst camera | < 300k | `wan_chai` 112%, 144% with paint · `causeway_bay` 82%, 90% with paint (2026-09-21, `Q135`) · `sha_tin` 47% · `mong_kok` 184% (`tools/resident_budget.py`); seam camera 73% (`--pair`) |
-| Paint layers, throttle route | — | 283,044 `prims` / 18 `draws` before `Q135`; shadows off (`P3-38`) and road marks in cells (`P3-40`) leave road marks 13–17k, boxes + crossings ~21k unculled |
+| Paint layers, throttle route | — | 283,044 `prims` / 18 `draws` before `Q135`; shadows off (`P3-38`) and road marks in cells (`P3-40`) leave road marks 13–17k; boxes + crossings in cells (`P3-42`) 20,642 → 9,849 at the start line, 7,469 → 496 from `f_045`, peak `draws` 102 / 132 |
 | Texture memory | < 128 MB | 131,072 px — one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
 | Bundle size (PCK) | < 200 MB | 55,955,496 B at `P5-13`; later tasks quoted deltas only — re-export before quoting |
 | Boot to drivable (web, warm) | — | 830 ms (2026-07-31; stale) |
