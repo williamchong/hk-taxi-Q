@@ -29,8 +29,6 @@ var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
 var _marker: Polygon2D = null
-## The map's share of this control: everything above the strip.
-var _map_px: Vector2 = Vector2.ZERO
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
 ## and the map shows through until then.
@@ -44,7 +42,6 @@ func setup(
 	mapping: MinimapProfile, style: HudStyle, graph: RoadGraph, map_px: Vector2, strip_px: float
 ) -> void:
 	_mapping = mapping
-	_map_px = map_px
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# The field clips the roads to its own cut corners. ⚠️ `clip_children` masks
@@ -87,6 +84,9 @@ func setup(
 	for index: int in outer.size() + inner.size():
 		inks.append(style.map_marker_edge if index < outer.size() else style.map_marker)
 	_marker.vertex_colors = inks
+	# Placed once: the anchor never moves, and heading-up neither does the
+	# chevron — the map turns under it.
+	_marker.position = map_px * mapping.anchor
 	_field.add_child(_marker)
 
 	# A child of the field so the chamfer clips its two bottom corners too, and
@@ -115,12 +115,12 @@ func setup(
 
 ## Put `car` on the anchor, nose along `forward`.
 func follow(car: Vector3, forward: Vector3) -> void:
-	var anchor_px: Vector2 = _map_px * _mapping.anchor
+	var anchor_px: Vector2 = _marker.position
 	_roads.transform = MinimapProjection.roads_transform(
 		car, forward, _mapping.heading_up, _px_per_m, anchor_px
 	)
-	_marker.position = anchor_px
-	_marker.rotation = MinimapProjection.marker_rotation(forward, _mapping.heading_up)
+	if not _mapping.heading_up:
+		_marker.rotation = MinimapProjection.marker_rotation(forward, false)
 
 
 func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:

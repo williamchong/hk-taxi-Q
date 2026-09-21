@@ -64,6 +64,7 @@ var vehicle: VehicleController = null
 ## The car the speed filter was last seeded for, so a hand-over reseeds it once.
 var _followed: VehicleController = null
 
+## The standalone plate: null where the minimap carries the name instead.
 var _plate: ChamferPanel = null
 var _plate_en: Label = null
 var _plate_zh: Label = null
@@ -197,33 +198,14 @@ func _build() -> void:
 	# slot. Everything below anchors inside it.
 	var root: Control = HudLayout.safe_root(self)
 
-	# ---- the street plate: the CITY's voice ----
+	# ---- the minimap, and the street name's home ----
 	#
-	# A white field with a hard black keyline, which is what a Wan Chai street
-	# name plate actually is, cut to the name on it by `_fit_plate`. The chamfer
-	# is the HUD's one shared shape, so the
-	# sign and the instrument read as one family without being one colour.
-	_plate = ChamferPanel.new()
-	_plate.name = "StreetPlate"
-	_plate.chamfer_px = _style.chamfer_px
-	_plate.fill = _style.plate_field
-	_plate.edge = _style.plate_edge
-	_plate.edge_px = _style.edge_px
-	# Hidden until there is a street. On a clone with no generated city there
-	# never is one, and an empty white sign is worse than nothing.
-	_plate.visible = false
-	_layout.place(root, _plate, _layout.street_plate)
-	_plate_host = _plate
-
-	# ---- the minimap: the CITY, drawn, and the plate's home where it exists ----
-	#
-	# One component with the plate (the user's call, `Q136`): the map over the
-	# union of the two rects, the name in a strip along its bottom. Anchored as
-	# the PLATE is — to the bottom edge, with the speed — not as the map's own
-	# rect would be, which spans the middle and would float off the baseline on a
-	# tall window. Skipped where there is no city, for the plate's reason: an
-	# empty white panel is worse than nothing; and under `--minimap=off`, where
-	# the plate stands alone, cut to its lettering as it always was.
+	# One component with the street name (the user's call, `Q136`): the map over
+	# the union of the two rects, the name in a strip along its bottom. Anchored
+	# as the PLATE's rect is — to the bottom edge, with the speed — not as the
+	# map's own would be, which spans the middle and would float off the baseline
+	# on a tall window. Skipped where there is no city: an empty panel is worse
+	# than nothing.
 	var mapped: bool = Cmdline.value(MINIMAP_ARG).to_lower() != "off"
 	if mapped and _graph != null and not _graph.is_empty():
 		_minimap = Minimap.new()
@@ -231,9 +213,22 @@ func _build() -> void:
 		_minimap.setup(_mapping, _style, _graph, _layout.minimap.size, _layout.street_plate.size.y)
 		_layout.place(root, _minimap, _layout.street_plate)
 		_layout.offsets(_minimap, _layout.minimap.merge(_layout.street_plate), _layout.street_plate)
-		_plate.queue_free()
-		_plate = null
 		_plate_host = _minimap.strip
+	else:
+		# ---- the street plate, alone ----
+		#
+		# Under `--minimap=off`, and on a clone with no city: a panel in the
+		# housing's colours, cut to the name on it by `_fit_plate`.
+		_plate = ChamferPanel.new()
+		_plate.name = "StreetPlate"
+		_plate.chamfer_px = _style.chamfer_px
+		_plate.fill = _style.plate_field
+		_plate.edge = _style.plate_edge
+		_plate.edge_px = _style.edge_px
+		# Hidden until there is a street, which without a city is never.
+		_plate.visible = false
+		_layout.place(root, _plate, _layout.street_plate)
+		_plate_host = _plate
 
 	_plate_lines = _lines(_plate_host, 0)
 
@@ -382,11 +377,12 @@ static func _lines(panel: Control, separation: int) -> VBoxContainer:
 func _fit_plate() -> void:
 	# Both homes set a name too long for the box smaller; the strip's margin is
 	# the plate's vertical pad, because it has no chamfered ends to clear.
-	var pad: float = _style.plate_pad.y if _plate == null else _style.plate_pad.x
+	var in_strip: bool = _minimap != null
+	var pad: float = _style.plate_pad.y if in_strip else _style.plate_pad.x
 	var room: float = _layout.street_plate.size.x - pad * 2.0
 	StreetPlate.shrink_to(_plate_en, _style.plate_size_en, room)
 	StreetPlate.shrink_to(_plate_zh, _style.plate_size_zh, room)
-	if _plate == null:
+	if in_strip:
 		return
 	var box: Rect2 = _layout.street_plate
 	var wanted: Vector2 = _plate_lines.get_combined_minimum_size() + _style.plate_pad * 2.0
@@ -435,12 +431,16 @@ func _process(delta: float) -> void:
 	# blink is an animation: gating it at 5 Hz would quantise a 2 Hz square wave
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
-	_update_minimap()
-	# Every frame: a needle that steps at `SPEED_HZ` ticks like a clock. A
-	# rotation, so nothing is redrawn (`speed_dial.gd`).
+	# The map and the needle, every frame and off one look at the car: both are
+	# motion, and a needle stepped at the numerals' 10 Hz ticks like a clock.
+	# Each is a transform, so nothing is redrawn (`minimap.gd`, `speed_dial.gd`).
 	var car: VehicleController = _vehicle()
-	if car != null:
-		_dial.show_kph(car.speed_kph)
+	if car == null:
+		return
+	_dial.show_kph(car.speed_kph)
+	if _minimap != null:
+		var placed: Transform3D = car.global_transform
+		_minimap.follow(placed.origin, -placed.basis.z)
 
 
 ## Drive the chip's bar from how hard the car is gaining or losing speed.
@@ -630,16 +630,6 @@ func _update_warning(delta: float) -> void:
 	# second to say nothing.
 	if _warning.visible != lit:
 		_warning.visible = lit
-
-
-## Every frame, like the blink: a map that turns at 5 Hz judders, and what this
-## costs is one transform — nothing is redrawn (`minimap.gd`).
-func _update_minimap() -> void:
-	var car: VehicleController = _vehicle()
-	if _minimap == null or car == null:
-		return
-	var placed: Transform3D = car.global_transform
-	_minimap.follow(placed.origin, -placed.basis.z)
 
 
 ## `is_instance_valid` rather than a null check: on a scene change the car this

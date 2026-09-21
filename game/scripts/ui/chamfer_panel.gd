@@ -50,6 +50,9 @@ extends Control
 # moves — so rebuilding an eight-point `PackedVector2Array` inside `_draw` was a
 # heap allocation per frame for a shape that changes only on resize.
 var _points: PackedVector2Array = PackedVector2Array()
+## The same outline closed for `draw_polyline`, kept for the same reason: the
+## speed chip has a keyline since `Q139`, and it redraws on most frames.
+var _closed: PackedVector2Array = PackedVector2Array()
 var _points_for_box: Vector2 = Vector2.INF
 var _points_for_cut: float = -1.0
 
@@ -67,9 +70,7 @@ func _draw() -> void:
 	if fill.a > 0.0:
 		draw_colored_polygon(points, fill)
 	if edge.a > 0.0 and edge_px > 0.0:
-		var closed: PackedVector2Array = points.duplicate()
-		closed.append(points[0])
-		draw_polyline(closed, edge, edge_px)
+		draw_polyline(_closed, edge, edge_px)
 
 
 ## The corner cut this panel can actually take.
@@ -87,6 +88,8 @@ func outline() -> PackedVector2Array:
 	var corner: float = cut()
 	if box != _points_for_box or not is_equal_approx(corner, _points_for_cut):
 		_points = _corners(box, corner)
+		_closed = _points.duplicate()
+		_closed.append(_points[0])
 		_points_for_box = box
 		_points_for_cut = corner
 	return _points

@@ -142,13 +142,7 @@ static func build(
 				vertices.append(Vector2(left + point.x + (height - point.y) * lean, point.y))
 				colours.append(ink)
 
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_COLOR] = colours
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
+	return CanvasMesh.of(vertices, colours)
 
 
 ## One segment of an upright digit as four triangles: a bar with pointed ends,

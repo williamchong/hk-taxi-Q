@@ -23,6 +23,8 @@ const MINOR_LEN: float = 0.11
 const NEEDLE_LEN: float = 0.34
 
 ## The reading at the end of the scale, and the two tick spacings, in kph.
+## ⚠️ All six are read when the dial is built, which is on entering the tree
+## and on a resize: set them BEFORE `add_child`, as `hud.gd` does.
 @export var full_scale_kph: float
 @export var major_kph: float
 @export var minor_kph: float
@@ -99,12 +101,7 @@ func _rebuild() -> void:
 	var colours := PackedColorArray()
 	colours.resize(vertices.size())
 	colours.fill(ink)
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_COLOR] = colours
-	_ticks = ArrayMesh.new()
-	_ticks.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_ticks = CanvasMesh.of(vertices, colours)
 
 	# A wedge on the rim, pointing out along +X at rotation 0: it reaches in
 	# only as far as the ticks do, so the middle stays free for the numerals.

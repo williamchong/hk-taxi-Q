@@ -129,13 +129,7 @@ static func build(
 				if stroke.one_way:
 					_emit_arrows(vertices, colours, stroke, arrows, road, casing)
 
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_COLOR] = colours
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
+	return CanvasMesh.of(vertices, colours)
 
 
 ## One level in one colour: every stroke, then one cap a junction at the widest
