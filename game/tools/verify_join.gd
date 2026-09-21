@@ -32,6 +32,7 @@ const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Graph = preload("res://scripts/city/road_graph.gd")
 const CommandLine = preload("res://scripts/core/cmdline.gd")
+const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
 
 const TOLERANCE_M: float = 0.001
 const REPORT_KEYS: PackedStringArray = [
@@ -98,6 +99,7 @@ func _init() -> void:
 		)
 	_check_documents(graph, pair)
 	_check_foreign_aliases(graph, merged, pair)
+	_check_minimap(graph, pair)
 
 	var dump: String = CommandLine.value("--dump=")
 	if not dump.is_empty():
@@ -288,6 +290,43 @@ func _check_foreign_aliases(graph: RoadGraph, merged: Dictionary, pair: PackedSt
 				)
 			)
 		print("        %s: %d foreign copies alias their owner" % [region, copies.size()])
+
+
+## The minimap draws ONE mesh from the merged graph, built once (`P3-44`), so
+## crossing a region line is only safe while that mesh already reaches across
+## it. Asserted on the strokes the map is built from: every drivable merged
+## edge is one, and they stand on BOTH sides of the second region's offset —
+## a map built from the frame alone stops dead at the line, with no error.
+func _check_minimap(graph: RoadGraph, pair: PackedStringArray) -> void:
+	var strokes: Array = MinimapMeshScript.strokes_of(graph, 0.0, 0.0)
+	var drivable: int = 0
+	for edge_id: int in graph.edge_ids():
+		if graph.is_drivable(edge_id):
+			drivable += 1
+	if strokes.size() != drivable:
+		_fail("the minimap strokes %d edges of %d drivable" % [strokes.size(), drivable])
+	var seam: float = graph.region_offset(pair[1]).x
+	var west: int = 0
+	var east: int = 0
+	for stroke: MinimapMeshScript.Stroke in strokes:
+		var middle: Vector2 = stroke.points[stroke.points.size() >> 1]
+		if middle.x < seam:
+			west += 1
+		else:
+			east += 1
+	if west == 0 or east == 0:
+		_fail(
+			(
+				"the minimap's roads stand on one side of %s's offset (%d west, %d east of x=%.0f)"
+				% [pair[1], west, east, seam]
+			)
+		)
+	print(
+		(
+			"        minimap: %d strokes, %d west and %d east of %s's offset"
+			% [strokes.size(), west, east, pair[1]]
+		)
+	)
 
 
 func _dump(dir: String, merged: Dictionary, tables: Manifest, clearance: Dictionary) -> void:
