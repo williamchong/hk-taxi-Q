@@ -2355,6 +2355,14 @@ road_marks:
   # engine re-quantises Y on import too.
   lift_m: 0.016
 
+  # The side of the plan cells `roadmarks.glb` is cut into, one mesh a cell, so
+  # the engine can cull it (`P3-40`, `Q135`). As one mesh the layer was one box
+  # and drew whole from anywhere in the region: 72,356 triangles a pass on Wan
+  # Chai's throttle route, constant to the triangle. ⚠️ A draw call a visible
+  # cell, against a budget that reads 136-150 on the seam line — which is why
+  # this is twice the 150 m tile and not the tile. Measured in `Q135`.
+  cell_m: 300.0
+
   # See `RoadMarks.longitudinal_legibility_scale`. 🔴 **1.0 since 2026-09-06, on
   # the user's call from the driving seat: the double white line at 1.88 was too
   # thick, and the accurate size is the one to draw.** That is TD's own `LINE

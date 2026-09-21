@@ -222,6 +222,20 @@ class DrawnSurface:
         levels |= {int(ribbon["level"]) for ribbon in surface.get("ribbons", ())}
         return sorted(levels)
 
+    @classmethod
+    def decks(cls, surface: dict[str, Any]) -> dict[int, DrawnSurface]:
+        """The drawn surface of every level ABOVE the street, by level.
+
+        What paint on a structure stands on (`P3-37`) and what a street marking
+        asks whether it is under (`Q92`'s deck stub) — three callers held the
+        same comprehension. `levels_drawn` and never `elevation_levels`: `of`
+        refuses a level with nothing drawn. ⚠️ Above the street only; a bore is
+        `A03`'s and stays shut (`Q21`).
+        """
+        return {
+            level: cls.of(surface, level=level) for level in cls.levels_drawn(surface) if level > 0
+        }
+
     def covers(self, x: float, z: float, *, toward: np.ndarray | None = None) -> bool:
         """Whether anything drawn at this level — a cap or a strip — stands over
         the point; with `toward`, over the point a tenth of a millimetre into

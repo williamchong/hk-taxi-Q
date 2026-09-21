@@ -20,10 +20,15 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's markings cost one draw call — the rule
-## the road surface, the tiles, the tramway, the arrows and the boxes are all
-## held to. All three published codes are the same white paint, so they share one
-## material and there is nothing here to split.
+## One surface a mesh, so a cell costs one draw call — the rule the road
+## surface, the tiles, the tramway, the arrows and the boxes are all held to.
+## Every published code is the same white paint, so a cell shares one material
+## and there is nothing in it to split.
+##
+## ⚠️ **One mesh per plan CELL since `P3-40` (`Q135`), no longer one primitive.**
+## As one mesh the layer was one box and drew whole from anywhere in the region
+## — 72,356 triangles a pass on the throttle route, constant to the triangle.
+## `roadmarks.json` publishes `cells`; the cells' union is the uncut mesh.
 const SURFACES: int = 1
 
 ## The material the markings must end up with, mirroring `SHADERS` in
@@ -73,21 +78,22 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
-	if mesh == null:
-		return problems
-
-	for surface: int in mesh.get_surface_count():
-		var where: String = "surface %d" % surface
-		# `false`: this mesh ships no `COLOR_0` on purpose — see
-		# `ROADMARKS_MATERIAL` above and `config.RoadMarks`. Every other
-		# guarantee in `check_surface` still applies, the no-texture one
-		# especially.
-		problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
-		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, ROADMARKS_MATERIAL)
-		)
-		problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the markings"))
+	var cells: Dictionary[String, Mesh] = MeshContract.library_meshes(
+		scene_root, SURFACES, problems
+	)
+	for cell: String in cells:
+		var mesh: Mesh = cells[cell]
+		for surface: int in mesh.get_surface_count():
+			var where: String = "%s surface %d" % [cell, surface]
+			# `false`: this mesh ships no `COLOR_0` on purpose — see
+			# `ROADMARKS_MATERIAL` above and `config.RoadMarks`. Every other
+			# guarantee in `check_surface` still applies, the no-texture one
+			# especially.
+			problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
+			problems.append_array(
+				MeshContract.check_shader_material(mesh, surface, where, ROADMARKS_MATERIAL)
+			)
+			problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the markings"))
 
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems

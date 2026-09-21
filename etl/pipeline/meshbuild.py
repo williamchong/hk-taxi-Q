@@ -3,7 +3,9 @@
 Two families, which between them were six byte-identical `polygon()` methods:
 
 - `FlatBuilder` — horizontal paint (arrows, box junctions, road marks). One
-  up-normal for the whole mesh, position and normal only.
+  up-normal for the whole mesh, position and normal only. `CellBuilder` is the
+  same accumulator cut into a mesh per plan cell, for a layer big enough that
+  the engine has to be able to cull it (`P3-40`).
 - `ColouredBuilder` — vertical furniture (signs, lamps). A normal per
   polygon, because everything faces a different sideways, and a `COLOR_0` per
   polygon, because a whole layer is one draw call.
@@ -36,6 +38,13 @@ class SliverReport(Protocol):
     """Any stage report that counts the slivers `FlatBuilder.build` drops."""
 
     slivers_dropped: int
+
+
+class PolygonBuilder(Protocol):
+    """Anything a painted stage lays a flat polygon into — `FlatBuilder`, or
+    `CellBuilder` where the layer is cut into cells."""
+
+    def polygon(self, plan: np.ndarray, height: np.ndarray) -> None: ...
 
 
 class FlatBuilder:
@@ -104,6 +113,78 @@ class FlatBuilder:
         if report is not None:
             report.slivers_dropped = int(thin.sum())
         return select_triangles(mesh, (twice_area > MIN_TWICE_AREA_M2) & ~thin)
+
+
+Cell = tuple[int, int]
+
+
+class _Slivers:
+    """A `SliverReport` of one cell's own, for `CellBuilder.build` to sum."""
+
+    slivers_dropped: int = 0
+
+
+class CellBuilder:
+    """`FlatBuilder`, cut into one mesh per plan cell so the engine can cull it
+    (`P3-40`, `Q135`).
+
+    🔴 **A region-wide paint mesh is one AABB, and the engine draws all of it
+    from anywhere inside it** — measured on the throttle route, `roadmarks.glb`
+    cost 72,356 triangles a pass at every sample while the rest of the frame
+    swung by 120k. One `.glb` carrying a mesh per cell imports as a
+    `MeshInstance3D` per cell, each with its own box, so frustum and occlusion
+    culling reach it with no new file, manifest path or streamer.
+
+    ⚠️ **A polygon goes WHOLE to the cell its centroid is in and no vertex
+    moves** — `surface._Builder.chunk`'s rule (`P5-6`) — so the cells' union is
+    the uncut mesh triangle for triangle, which is the inertness proof. A cell's
+    box therefore overhangs its square by at most one placed piece.
+    ⚠️ **`slivers_dropped` is the SUM over the cells, written once**:
+    `FlatBuilder.build` assigns the count rather than adding to it, and a
+    sliver is judged per triangle, so the sum is the uncut mesh's own count.
+    `cell_m` of zero or less is one cell, which is the uncut mesh.
+    """
+
+    def __init__(self, material: str, cell_m: float) -> None:
+        self._material = material
+        self._cell_m = cell_m
+        self._cells: dict[Cell, FlatBuilder] = {}
+
+    def polygon(self, plan: np.ndarray, height: np.ndarray) -> None:
+        if len(plan) < 3:
+            return
+        cell: Cell = (0, 0)
+        if self._cell_m > 0.0:
+            centre = plan.mean(axis=0) / self._cell_m
+            cell = (int(np.floor(centre[0])), int(np.floor(centre[1])))
+        if cell not in self._cells:
+            self._cells[cell] = FlatBuilder(self._material)
+        self._cells[cell].polygon(plan, height)
+
+    def build(
+        self,
+        name: str,
+        thin_bar_m: float = 0.0,
+        report: SliverReport | None = None,
+    ) -> dict[Cell, MeshData]:
+        """Each cell's mesh by its `(column, row)`, named `cell_name(name, cell)`;
+        a cell whose every triangle was dropped is absent."""
+        meshes: dict[Cell, MeshData] = {}
+        dropped = 0
+        for cell in sorted(self._cells):
+            slivers = _Slivers()
+            mesh = self._cells[cell].build(cell_name(name, cell), thin_bar_m, slivers)
+            dropped += slivers.slivers_dropped
+            if mesh is not None:
+                meshes[cell] = mesh
+        if report is not None:
+            report.slivers_dropped = dropped
+        return meshes
+
+
+def cell_name(name: str, cell: Cell) -> str:
+    """A cell's mesh name. No `-col` or any other suffix the importer acts on."""
+    return f"{name}_c{cell[0]}_r{cell[1]}"
 
 
 def thin_in_plan(corners: np.ndarray, thin_m: float) -> np.ndarray:

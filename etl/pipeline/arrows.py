@@ -1031,14 +1031,13 @@ def stand_on_decks(
     under the glyph's two ends rather than the host centreline's, because up
     here nothing else says the arrow has a deck under all of it.
     """
-    levels = [level for level in DrawnSurface.levels_drawn(surface) if level > 0]
-    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in levels]
+    decks = DrawnSurface.decks(surface)
+    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in decks]
     if not symbols or not edges:
         report.no_deck_drawn += len(symbols)
         report.check()
         return []
     by_id = {int(edge["id"]): edge for edge in edges}
-    decks = {level: DrawnSurface.of(surface, level=level) for level in levels}
     segments = Segments.of(edges)
 
     standing = []

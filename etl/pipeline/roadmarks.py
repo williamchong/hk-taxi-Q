@@ -49,6 +49,7 @@ from typing import NamedTuple
 import numpy as np
 
 from pipeline import gdb
+from pipeline.buildings import union
 from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.drawnsurface import DrawnSurface
@@ -56,7 +57,13 @@ from pipeline.fetch import source_reads
 from pipeline.geometry import wound_up
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import merge
-from pipeline.meshbuild import FlatBuilder, import_quantum_m
+from pipeline.meshbuild import (
+    Cell,
+    CellBuilder,
+    PolygonBuilder,
+    cell_name,
+    import_quantum_m,
+)
 from pipeline.polyline import Segments, plan_lengths_2d, plan_projections
 
 # `AT_GRADE` rather than a fifth private copy — `railings.py` exports it
@@ -78,7 +85,11 @@ ROADMARKS_MANIFEST_NAME = "roadmarks.json"
 # says how much of it. A v1 reader takes `drawn_by_id` for everything in the
 # mesh, which stops being true the moment a region names an `opposed_join_mark`
 # — not a field it can miss, but a quantity it would under-report.
-ROADMARKS_MANIFEST_SCHEMA = 2
+#
+# 3 since `P3-40` (`Q135`): `roadmarks.glb` is one mesh per plan cell, no longer
+# one primitive. A v2 reader that takes the first mesh for the layer — which is
+# what `single_primitive` graded — reads one cell of it.
+ROADMARKS_MANIFEST_SCHEMA = 3
 
 # ⚠️ **No `-col` suffix.** Paint is not a collider — `BOXJUNCTIONS_MESH_NAME`'s
 # reasoning, and sharper again: a stop line runs across every approach in the
@@ -373,6 +384,10 @@ class RoadMarkReport:
     inverted_area_m2: float = 0.0
     triangles: int = 0
     vertices: int = 0
+    # The meshes `roadmarks.glb` carries, one a plan cell of `cell_m` (`P3-40`),
+    # and the largest of them — what a camera looking at one cell draws.
+    cells: int = 0
+    cell_triangles_max: int = 0
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
 
@@ -1398,7 +1413,7 @@ def _slice(line: np.ndarray, along: np.ndarray, start: float, stop: float) -> np
 
 
 def draw_opposed_joins(
-    builder: FlatBuilder,
+    builder: PolygonBuilder,
     joins: Sequence[Join],
     surveyed: Sequence[Marking],
     refused: Sequence[Marking],
@@ -1516,13 +1531,9 @@ def build_region(
     # (`stations_on_drawn_structure`). Levels at or below 0 are excluded — a
     # bore under a void is not structure over it — and `of` refuses an empty
     # level, so the list is `levels_drawn`'s and never `elevation_levels`'.
-    above = [
-        DrawnSurface.of(surface, level=level)
-        for level in DrawnSurface.levels_drawn(surface)
-        if level > 0
-    ]
+    above = list(DrawnSurface.decks(surface).values())
 
-    builder = FlatBuilder(ROADMARKS_MATERIAL)
+    builder = CellBuilder(ROADMARKS_MATERIAL, spec.cell_m)
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
     thinness_bar_m = 2.0 * report.import_quantum_m
     _check_marks_clear_the_lattice(spec, thinness_bar_m)
@@ -1632,27 +1643,40 @@ def build_region(
     )
     _check_join_partition(report)
 
-    mesh = builder.build(ROADMARKS_MESH_NAME, thinness_bar_m, report)
+    street = builder.build(ROADMARKS_MESH_NAME, thinness_bar_m, report)
     # 🔴 **The decks' paint is a second builder merged in, never more polygons
     # in the first** (`P3-37`): `build` writes `slivers_dropped` into the report
-    # it is handed, and the level-0 report must not move.
-    deck_mesh = draw_decks(graph, surface, on_deck, spec, report.deck, thinness_bar_m)
-    if mesh is not None and deck_mesh is not None:
-        mesh = replace(
-            merge([mesh, deck_mesh], name=ROADMARKS_MESH_NAME), material=ROADMARKS_MATERIAL
-        )
-    elif deck_mesh is not None:
-        mesh = replace(deck_mesh, name=ROADMARKS_MESH_NAME)
-    if mesh is not None:
-        report.inverted, report.inverted_area_m2 = downward_facing(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
+    # it is handed, and the level-0 report must not move. Merged cell by cell,
+    # the street's half first, so level-0 stays an identical prefix of each.
+    on_decks = draw_decks(graph, surface, on_deck, spec, report.deck, thinness_bar_m)
+    meshes = [
+        _cell_mesh(cell, street.get(cell), on_decks.get(cell))
+        for cell in sorted(street.keys() | on_decks.keys())
+    ]
+    if meshes:
+        for mesh in meshes:
+            inverted, inverted_m2 = downward_facing(mesh)
+            report.inverted += inverted
+            report.inverted_area_m2 += inverted_m2
+        report.triangles = sum(mesh.triangle_count for mesh in meshes)
+        report.vertices = sum(len(mesh.positions) for mesh in meshes)
+        report.cells = len(meshes)
+        report.cell_triangles_max = max(mesh.triangle_count for mesh in meshes)
+        low, high = union(mesh.aabb() for mesh in meshes)
         report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / ROADMARKS_NAME, [mesh])
+        report.bytes = write_glb(out_dir / ROADMARKS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def _cell_mesh(cell: Cell, street: MeshData | None, deck: MeshData | None) -> MeshData:
+    """One cell of `roadmarks.glb`: the street's paint, then the decks' over it."""
+    name = cell_name(ROADMARKS_MESH_NAME, cell)
+    halves = [half for half in (street, deck) if half is not None]
+    if len(halves) == 1:
+        return replace(halves[0], name=name)
+    return replace(merge(halves, name=name), material=ROADMARKS_MATERIAL)
 
 
 def draw_decks(
@@ -1662,8 +1686,9 @@ def draw_decks(
     spec: RoadMarks,
     report: DeckReport,
     thin_m: float,
-) -> MeshData | None:
-    """TD's surveyed paint on the decks, hosted and stood at the deck's own level.
+) -> dict[Cell, MeshData]:
+    """TD's surveyed paint on the decks, by `roadmarks.glb`'s cell, hosted and
+    stood at the deck's own level.
 
     🔴 **A deck marking is hosted among OFF-GRADE edges only, as a street
     marking is among level-0 ones** — the nearest level-0 edge to a line on a
@@ -1679,17 +1704,16 @@ def draw_decks(
     street only**; a bore is `A03`'s and is not in `deck_codes` (`Q21`).
     🚫 No inferred join up here (`Q125`): a deck is never a source.
     """
-    levels = [level for level in DrawnSurface.levels_drawn(surface) if level > 0]
-    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in levels]
+    decks = DrawnSurface.decks(surface)
+    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in decks]
     if not markings or not edges:
         report.no_edge_in_range += len(markings)
         report.check()
-        return None
+        return {}
     level_of = {int(edge["id"]): int(edge["elevation_level"]) for edge in edges}
-    decks = {level: DrawnSurface.of(surface, level=level) for level in levels}
     network = Network.of(Segments.of(edges), _drawn_widths(surface))
 
-    builder = FlatBuilder(ROADMARKS_MATERIAL)
+    builder = CellBuilder(ROADMARKS_MATERIAL, spec.cell_m)
     for marking in markings:
         host = _host(network, marking, spec)
         if host is None:
@@ -1716,13 +1740,13 @@ def draw_decks(
         by_id[marking.mark.id] = by_id.get(marking.mark.id, 0) + 1
         metres[marking.mark.id] = metres.get(marking.mark.id, 0.0) + marking.length_m
     report.check()
-    mesh = builder.build(ROADMARKS_MESH_NAME, thin_m, report)
-    report.triangles = 0 if mesh is None else mesh.triangle_count
-    return mesh
+    meshes = builder.build(ROADMARKS_MESH_NAME, thin_m, report)
+    report.triangles = sum(mesh.triangle_count for mesh in meshes.values())
+    return meshes
 
 
 def _place_on_deck(
-    builder: FlatBuilder,
+    builder: PolygonBuilder,
     deck: DrawnSurface,
     quad: np.ndarray,
     lift_m: float,
@@ -1747,7 +1771,7 @@ def _place_on_deck(
 
 
 def _place(
-    builder: FlatBuilder,
+    builder: PolygonBuilder,
     drawn: DrawnSurface,
     quad: np.ndarray,
     lift_m: float,
@@ -1997,6 +2021,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         "inverted_area_m2": round(report.inverted_area_m2, 4),
         "triangles": report.triangles,
         "vertices": report.vertices,
+        "cells": report.cells,
+        "cell_triangles_max": report.cell_triangles_max,
         "bytes": report.bytes,
         "aabb": report.aabb,
     }

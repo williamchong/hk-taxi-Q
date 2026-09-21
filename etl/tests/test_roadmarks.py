@@ -19,7 +19,7 @@ import yaml
 
 from pipeline.config import RoadMark, load_config
 from pipeline.drawnsurface import DrawnSurface
-from pipeline.meshbuild import FlatBuilder
+from pipeline.meshbuild import CellBuilder, FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.roadmarks import (
     ROADMARKS_MATERIAL,
@@ -62,6 +62,7 @@ BLOCK: dict[str, Any] = {
     "longitudinal_legibility_scale": 1.88,
     "opposed_join_mark": "double_white_lines",
     "lift_m": 0.016,
+    "cell_m": 300.0,
     "marks": [
         {
             "id": "double_white_lines",
@@ -868,6 +869,62 @@ class TestTheHeightJoin:
         assert alone.vertices_over_void == 2
 
 
+class TestTheCells:
+    """`P3-40` (`Q135`): `roadmarks.glb` is a mesh per plan cell, so the engine can cull it."""
+
+    @staticmethod
+    def _quad(x: float, z: float) -> np.ndarray:
+        return np.array([[x, z], [x, z + 1.0], [x + 1.0, z + 1.0], [x + 1.0, z]])
+
+    def test_the_cells_union_is_the_uncut_mesh(self):
+        """No vertex moves and no triangle is lost or made. Mutation-check it
+        by keying a polygon on its first vertex: the quad astride the line
+        changes cell and the per-cell counts below move."""
+        quads = [self._quad(10.0, 10.0), self._quad(299.6, 10.0), self._quad(310.0, 650.0)]
+        cut, whole = CellBuilder(ROADMARKS_MATERIAL, 300.0), FlatBuilder(ROADMARKS_MATERIAL)
+        for quad in quads:
+            cut.polygon(quad, np.full(4, 5.0))
+            whole.polygon(quad, np.full(4, 5.0))
+        meshes = cut.build("roadmarks")
+        uncut = whole.build("roadmarks")
+        # The second quad's centroid is at x = 300.1: it goes whole to column 1.
+        assert {cell: mesh.triangle_count for cell, mesh in meshes.items()} == {
+            (0, 0): 2,
+            (1, 0): 2,
+            (1, 2): 2,
+        }
+        assert [mesh.name for mesh in meshes.values()] == [
+            "roadmarks_c0_r0",
+            "roadmarks_c1_r0",
+            "roadmarks_c1_r2",
+        ]
+        corners = np.vstack(
+            [mesh.positions[mesh.triangles].reshape(-1, 9) for mesh in meshes.values()]
+        )
+        assert sorted(map(tuple, corners)) == sorted(
+            map(tuple, uncut.positions[uncut.triangles].reshape(-1, 9))
+        )
+
+    def test_the_slivers_are_summed_over_the_cells_and_written_once(self):
+        """`FlatBuilder.build` ASSIGNS the count. Mutation-check it by handing
+        each cell the report itself: the last cell's count is what is left."""
+        needle = np.array([[0.0, 0.0], [0.0, 0.001], [20.0, 0.001], [20.0, 0.0]])
+        cut = CellBuilder(ROADMARKS_MATERIAL, 300.0)
+        cut.polygon(needle, np.zeros(4))
+        cut.polygon(needle + np.array([600.0, 0.0]), np.zeros(4))
+        cut.polygon(self._quad(900.0, 0.0), np.zeros(4))
+        report = RoadMarkReport()
+        meshes = cut.build("roadmarks", 0.05, report)
+        assert report.slivers_dropped == 4
+        assert list(meshes) == [(3, 0)]
+
+    def test_no_cell_size_is_one_cell(self):
+        cut = CellBuilder(ROADMARKS_MATERIAL, 0.0)
+        cut.polygon(self._quad(10.0, 10.0), np.zeros(4))
+        cut.polygon(self._quad(5000.0, 10.0), np.zeros(4))
+        assert list(cut.build("roadmarks")) == [(0, 0)]
+
+
 class TestPaintOnTheDecks:
     """`P3-37` (`Q134`): TD's `A01` paint, hosted off-grade and stood on its deck."""
 
@@ -904,8 +961,7 @@ class TestPaintOnTheDecks:
         graph, surface = self._stacked()
         report = DeckReport(parts=1, candidates=1)
         line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
-        mesh = draw_decks(graph, surface, [line], spec, report, 0.0)
-        assert mesh is not None
+        [mesh] = draw_decks(graph, surface, [line], spec, report, 0.0).values()
         assert mesh.positions[:, 1] == pytest.approx(self.DECK_Y + spec.lift_m)
         assert (report.drawn, report.stations_off_deck) == (1, 0)
         assert report.drawn_m_by_id == {"double_white_lines": pytest.approx(20.0)}
@@ -918,8 +974,7 @@ class TestPaintOnTheDecks:
         graph, surface = self._stacked(deck_until_x=20.0)
         report = DeckReport(parts=1, candidates=1)
         line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
-        mesh = draw_decks(graph, surface, [line], spec, report, 0.0)
-        assert mesh is not None
+        [mesh] = draw_decks(graph, surface, [line], spec, report, 0.0).values()
         assert mesh.positions[:, 0].max() == pytest.approx(20.0)
         assert report.drawn == 1
         assert report.stations_off_deck >= 1
@@ -943,14 +998,14 @@ class TestPaintOnTheDecks:
         graph, surface = self._stacked(deck_until_x=20.0)
         report = DeckReport(parts=1, candidates=1)
         line = marking(spec, "RM1001", [[21.0, 0.5], [24.0, 0.5]])
-        assert draw_decks(graph, surface, [line], spec, report, 0.0) is None
+        assert draw_decks(graph, surface, [line], spec, report, 0.0) == {}
         assert (report.wholly_off_deck, report.drawn) == (1, 0)
 
     def test_a_line_beside_its_deck_host_meets_the_streets_own_bar(self, spec):
         graph, surface = self._stacked()
         report = DeckReport(parts=1, candidates=1)
         line = marking(spec, "RM1001", [[15.0, 6.0], [19.0, 6.0]])
-        assert draw_decks(graph, surface, [line], spec, report, 0.0) is None
+        assert draw_decks(graph, surface, [line], spec, report, 0.0) == {}
         assert report.host_off_carriageway == 1
 
     def test_a_region_that_draws_no_deck_refuses_every_candidate(self, spec):
@@ -962,8 +1017,7 @@ class TestPaintOnTheDecks:
         report = DeckReport(parts=1, candidates=1)
         line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
         assert (
-            draw_decks({"edges": graph["edges"][:1]}, street_only, [line], spec, report, 0.0)
-            is None
+            draw_decks({"edges": graph["edges"][:1]}, street_only, [line], spec, report, 0.0) == {}
         )
         assert report.no_edge_in_range == 1
 

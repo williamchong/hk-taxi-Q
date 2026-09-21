@@ -279,6 +279,11 @@ class RoadMarks(LayerSpec):
     # reach it. So where the two overlap the bar wins, on the same shape of
     # argument `boxjunctions.lift_m` uses to put arrows over box hatching.
     lift_m: float
+    # The plan side of the cells `roadmarks.glb` is cut into, one mesh each, so
+    # the engine can cull the layer (`P3-40`, `Q135`; `meshbuild.CellBuilder`).
+    # A draw call against triangles, so it is authored and coarser than the
+    # 150 m tile: the draw budget reads 136-150 on the seam line.
+    cell_m: float
     # One entry per published marking — see `RoadMark`.
     marks: tuple[RoadMark, ...]
     # 🔴 **The publisher files ONE family of markings across sister layers, and a
@@ -393,7 +398,7 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
     measures = _measures(
         body,
         where,
-        ("host_radius_m", "bearing_tolerance_deg", "station_m", "lift_m"),
+        ("host_radius_m", "bearing_tolerance_deg", "station_m", "lift_m", "cell_m"),
         positive=True,
     )
     if measures["bearing_tolerance_deg"] >= 90.0:

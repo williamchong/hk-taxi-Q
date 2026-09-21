@@ -150,7 +150,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"noun": "road markings",
 		"module": "roadmarks",
 		"absence":
-		"A city whose sources publish no transverse markings ships none, and that is not a failure.",
+		"A city whose sources publish no road markings ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
 	},
