@@ -45,25 +45,32 @@ extends Resource
 
 # ---- what P3-24 draws ----
 #
-# Placed off the Midtown Madness 2 reference, which is the closest analogue in
-# the genre: the one driving game here that is about a real, named city and
-# therefore the only one that has ever had to put a street map and a speed on
-# screen at once.
+# The racing-game arrangement (`Q138`, the user's call): map bottom-left, speed
+# bottom-right, as Forza, Need for Speed and Gran Turismo all have it. It was
+# Midtown Madness 2's mirror image until `P3-44` — the one driving game about a
+# real, named city — and what it keeps from that reference is the PAIRING of
+# the street map with the street name, not the side.
 #
 # 🔴 **The arrangement follows one rule, and the rule is what a readout is
 # ABOUT rather than where it fits.**
 #
-#   * **left is the car** — speed, and whatever `B4` adds about the drive;
-#   * **right is the world** — the street you are on and the map of it, which
-#     are the same question asked twice and therefore belong together;
-#   * **top is the fare** — timer and meter, `P3-5a`'s;
+#   * **left is the world** — the street you are on and the map of it, which
+#     are the same question asked twice and are one panel (`Q136`);
+#   * **right is the car** — speed, and whatever `B4` adds about the drive;
+#   * **top is the fare** — timer and combo left, meter and awards right, the
+#     destination in the centre;
 #   * **the middle is the road**, and nothing goes in it.
+#
+# ⚠️ On touch each readout sits over the thumb that acts on it: `steer_zone()`
+# is the left and the map is what steering answers, `drive_zone()` is the right
+# and the speed is what the throttle answers. A consequence, not the reason —
+# the reason is that it is where a player of the genre already looks.
 
-## Speed, bottom-left. Raised clear of the left thumb rather than sitting in the
-## very corner: MM2 is a keyboard game and could use it, and we cannot.
+## Speed, bottom-right. Raised clear of the right thumb rather than sitting in
+## the very corner, which a console racing game can use and we cannot.
 @export var speed: Rect2
 
-## The bilingual street name plate, bottom-right, under the minimap slot.
+## The bilingual street name plate, bottom-left, under the minimap.
 ##
 ## 🔴 **The middle of the frame is the road and nothing goes in it** — the
 ## vanishing point, the lane you are about to be in, and the car. And a street
@@ -116,8 +123,8 @@ extends Resource
 # paid many times over for a benefit that arrives once. A slot's contents
 # arriving is a `.tres` edit.
 
-## `P3-44`, built. Bottom-right, where MM2 puts it — **not** top-left, which is where
-## this layout had it before the references were looked at. A street map is
+## `P3-44`, built. Bottom-left, where the genre puts it (`Q138`) — **not** top-left, which is
+## where this layout had it before the references were looked at. A street map is
 ## glanced at mid-corner and belongs near the road, not in the far corner of
 ## the screen. The street plate sits below it, in the corner, because the two are
 ## one question.
@@ -133,6 +140,17 @@ extends Resource
 ## next task puts one back on the screen without meaning to.
 @export var meter: Rect2
 
+## `P3-5a`'s bilingual destination callout: top-centre, under the wrong-way
+## sign, which ends at y 136 and leaves it this band (see `wrong_way`). Declared
+## since `Q138` so the space is graded before the task that fills it starts.
+@export var callout: Rect2
+## `P3-2a`'s live award — "+250 NEAR MISS" — and `P3-2b`'s style chain after it.
+## Under the meter, because points are money: NOT in the middle of the frame,
+## where an arcade racer puts them and where this layout puts nothing.
+@export var award: Rect2
+## `P3-2b`'s fare combo, under the timer: both count the session.
+@export var combo: Rect2
+
 ## ⚠️ **There is deliberately NO slot for the destination ARROW**, and that is a
 ## finding rather than an omission. Both references that have a destination put
 ## the arrow **in the world** — the arcade taxi floats a green arrow above the
@@ -143,9 +161,8 @@ extends Resource
 ## ⚠️ **The destination CALLOUT is a different thing and top-centre is its slot.**
 ## `GAME_DESIGN.md` announces destinations by name and bilingually, and that is
 ## HUD text: transient, the player's current objective, and the one readout that
-## earns the most prominent band on the screen. It is left undeclared here
-## because `P3-5a` owns it — and the street plate was evaluated for it and
-## refused (`Q80`). ⚠️ **`P3-25` puts a 96 px NO ENTRY sign in the top of that
+## earns the most prominent band on the screen. It is `callout` above — and the
+## street plate was evaluated for that band and refused (`Q80`). ⚠️ **`P3-25` puts a 96 px NO ENTRY sign in the top of that
 ## band** — see `wrong_way` above for why an alarm is admitted where a standing
 ## readout is not, and note that it leaves the callout its space rather than
 ## displacing it.
@@ -214,13 +231,20 @@ extends Resource
 const PATH: String = "res://tuning/hud_layout.tres"
 
 
-## The two slots this HUD reserves and does not yet fill, by node name. The
-## minimap was the third until `P3-44` filled it.
+## The slots this HUD reserves and does not yet fill, by node name: every HUD
+## component a planned task is known to add (`Q138`). The minimap was one until
+## `P3-44` filled it.
 ## Iterated by `hud.gd` to build them, so both ends stay statically typed —
 ## an array of `[name, rect]` pairs makes each element a `Variant` and defeats
 ## the enforced typing at exactly the point a wrong rect would be silent.
 func reserved_slots() -> Dictionary[String, Rect2]:
-	return {"TimerSlot": timer, "MeterSlot": meter}
+	return {
+		"TimerSlot": timer,
+		"MeterSlot": meter,
+		"CalloutSlot": callout,
+		"AwardSlot": award,
+		"ComboSlot": combo,
+	}
 
 
 ## Everything this HUD draws, by name.

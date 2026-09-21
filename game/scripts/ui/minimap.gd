@@ -1,6 +1,6 @@
 class_name Minimap
 extends Control
-## The street map, bottom-right above the plate (`P3-44`, `Q136`).
+## The street map, bottom-left above the plate (`P3-44`, `Q136`, `Q138`).
 ##
 ## **One component with the street name** (the user's call, `Q136`): the map on
 ## top, the name of the street under the car in a strip along the bottom, one

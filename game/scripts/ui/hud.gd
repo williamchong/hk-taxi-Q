@@ -2,8 +2,8 @@ class_name Hud
 extends CanvasLayer
 ## The player's HUD: how fast, and what street (`P3-24`).
 ##
-## Two readouts and the minimap (`P3-44`) ship and two slots are reserved.
-## `P3-5a` fills the timer and the fare meter when there is a fare to run.
+## Two readouts and the minimap (`P3-44`) ship and five slots are reserved,
+## one for every component a planned task is known to add (`Q138`).
 ## The slots are laid out and checked **now**, empty, because a HUD that grows
 ## into whatever space is left is how the touch controls end up under the speed.
 ##
@@ -77,7 +77,7 @@ var _speed_value: Label = null
 var _speed_chip: AccentBar = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
-## HUD holds for `P3-5a` and `P3-5b` can be SEEN rather than taken on trust
+## HUD holds for `P3-5a` and `P3-2a`/`b` can be SEEN rather than taken on trust
 ## from a `.tres`, and invisible in every shipped frame.
 var _slots: Array[ChamferPanel] = []
 ## The wrong-way sign. Hidden in every ordinary frame.
