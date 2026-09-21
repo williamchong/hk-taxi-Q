@@ -359,10 +359,13 @@ static func _lines(panel: Control, separation: int) -> VBoxContainer:
 ## `CENTRAL-WAN CHAI BYPASS TUNNEL` is 30 characters — is set smaller, each line
 ## on its own, and every other name is set at the style's size.
 func _fit_plate() -> void:
+	# Both homes set a name too long for the box smaller; the strip's margin is
+	# the plate's vertical pad, because it has no chamfered ends to clear.
+	var pad: float = _style.plate_pad.y if _plate == null else _style.plate_pad.x
+	var room: float = _layout.street_plate.size.x - pad * 2.0
+	StreetPlate.shrink_to(_plate_en, _style.plate_size_en, room)
+	StreetPlate.shrink_to(_plate_zh, _style.plate_size_zh, room)
 	if _plate == null:
-		var room: float = _layout.street_plate.size.x - _style.plate_pad.y * 2.0
-		StreetPlate.shrink_to(_plate_en, _style.plate_size_en, room)
-		StreetPlate.shrink_to(_plate_zh, _style.plate_size_zh, room)
 		return
 	var box: Rect2 = _layout.street_plate
 	var wanted: Vector2 = _plate_lines.get_combined_minimum_size() + _style.plate_pad * 2.0
