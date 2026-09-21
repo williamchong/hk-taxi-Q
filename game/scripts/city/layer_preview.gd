@@ -99,6 +99,11 @@ func _ready() -> void:
 		add_child(instance)
 		bounds = MeshContract.bounds(instance)
 		triangles = MeshContract.triangles(instance)
+	if not GeneratedLayer.casts_shadow(layer):
+		for found: Node in find_children("*", "GeometryInstance3D", true, false):
+			(found as GeometryInstance3D).cast_shadow = (
+				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			)
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
 		% [layer, triangles, MeshContract.colliders(self), bounds.size.x, bounds.size.z]

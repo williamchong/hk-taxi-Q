@@ -97,7 +97,12 @@ const SIGNS: String = "signs"
 ## the sentence that makes the layer optional, and is empty for the one layer
 ## that is not; `placements` names the document that stands a PROP layer's
 ## library meshes in the world (`P5-2`), and is empty for a layer that ships
-## merged. Every row carries every key, and the accessors index rather than
+## merged; `casts_shadow` is whether the layer is drawn into the shadow passes —
+## `false` for everything lying ON the road, which stands 12-16 mm proud and
+## throws a shadow nobody can see: measured on the throttle route, the paint was
+## 283,044 of ~1,000,000 primitives and exactly 3x its own triangle count, the
+## main pass plus two cascades, because a `GeometryInstance3D` casts by default.
+## Every row carries every key, and the accessors index rather than
 ## `get`, so a row missing one fails loudly instead of defaulting.
 const LAYERS: Dictionary[String, Dictionary] = {
 	TRAMWAY:
@@ -107,6 +112,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "tramway",
 		"absence": "A city whose sources publish no tramway ships none, and that is not a failure.",
 		"placements": "",
+		"casts_shadow": false,
 	},
 	ARROWS:
 	{
@@ -116,6 +122,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no marking symbols ships none, and that is not a failure.",
 		"placements": "arrows_placements.json",
+		"casts_shadow": false,
 	},
 	BOXJUNCTIONS:
 	{
@@ -125,6 +132,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no box polygons ships none, and that is not a failure.",
 		"placements": "",
+		"casts_shadow": false,
 	},
 	CROSSINGS:
 	{
@@ -134,6 +142,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no crossing lines ships none, and that is not a failure.",
 		"placements": "",
+		"casts_shadow": false,
 	},
 	ROADMARKS:
 	{
@@ -143,6 +152,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no transverse markings ships none, and that is not a failure.",
 		"placements": "",
+		"casts_shadow": false,
 	},
 	RAILINGS:
 	{
@@ -152,6 +162,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no railing layer ships none, and that is not a failure.",
 		"placements": "railings_placements.json",
+		"casts_shadow": true,
 	},
 	LAMPS:
 	{
@@ -161,6 +172,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no utility point layer ships none, and that is not a failure.",
 		"placements": "lamps_placements.json",
+		"casts_shadow": true,
 	},
 	SIGNS:
 	{
@@ -170,6 +182,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no shape-faced signs ships none, and that is not a failure.",
 		"placements": "signs_placements.json",
+		"casts_shadow": true,
 	},
 }
 
@@ -237,6 +250,13 @@ static func placements_path(layer: String, region: String = "") -> String:
 ## `generated_placements.gd`'s; this table only says where it is.
 static func has_placements(layer: String) -> bool:
 	return not placements_path(layer).is_empty()
+
+
+## Whether the layer's meshes are drawn into the shadow passes. `true` for an
+## id the table does not know, which is the engine's own default.
+static func casts_shadow(layer: String) -> bool:
+	var row: Dictionary = _row(layer)
+	return row.is_empty() or bool(row["casts_shadow"])
 
 
 ## Message for the case that reads as "there is no such layer" rather than an

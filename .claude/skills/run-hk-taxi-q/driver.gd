@@ -23,6 +23,7 @@ extends SceneTree
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Fares = preload("res://scripts/city/generated_fares.gd")
 const Regions = preload("res://scripts/city/generated_regions.gd")
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 
 const DEFAULT_SCENE: String = "res://scenes/main.tscn"
 
@@ -93,6 +94,9 @@ var _aborted: bool = false
 ## Built to find the first tick two runs part at, and what arrived just before —
 ## the 1 s `%.2f` report cannot say either. Empty is off.
 var _trace_path: String = ""
+## Layer ids `--hide-layers` names, and how many nodes were hidden for them.
+var _hidden_layers: PackedStringArray = []
+var _hidden_count: int = 0
 ## Open for the whole run and written a line at a time, so a run that hangs or
 ## crashes — the one most worth diffing — still leaves its trace behind.
 var _trace_file: FileAccess = null
@@ -177,6 +181,12 @@ func _boot() -> Node:
 		# Before `add_child`, so the bodies held under the start line are logged too.
 		node_added.connect(_trace_node_added)
 		node_removed.connect(_trace_node_removed)
+
+	# Before `add_child`, and by signal: `CityRegions` adds a layer node per
+	# resident region from its own `_ready`, so there is no moment to walk for them.
+	if not _hidden_layers.is_empty():
+		node_added.connect(_hide_layer)
+		print("hidden:  ", _hidden_layers)
 
 	var instance: Node = packed.instantiate()
 	# Before `add_child`: the harness places the car from its own `_ready`.
@@ -323,7 +333,9 @@ func _trace_tick() -> void:
 	var tick: int = _trace_tick_index()
 	var p: Vector3 = _vehicle.global_position
 	var v: Vector3 = _vehicle.get("linear_velocity")
-	_trace_line("tick %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f" % [tick, p.x, p.y, p.z, v.x, v.y, v.z])
+	_trace_line(
+		"tick %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f" % [tick, p.x, p.y, p.z, v.x, v.y, v.z]
+	)
 	# What stands under the car, and whose it is — a streamed body and a held one
 	# are indistinguishable from the car's state alone.
 	if _trace_query == null:
@@ -336,6 +348,15 @@ func _trace_tick() -> void:
 		_trace_line("under %d none" % tick)
 	else:
 		_trace_line("under %d %.6f %s" % [tick, hit.position.y, (hit.collider as Node).get_path()])
+
+
+## Hides a `layer_preview.gd` node named by `--hide-layers`, children and all.
+## `_hidden_count` is printed at the end so a run that hid nothing says so.
+func _hide_layer(node: Node) -> void:
+	var spatial := node as Node3D
+	if spatial != null and "layer" in spatial and _hidden_layers.has(String(spatial.get("layer"))):
+		spatial.visible = false
+		_hidden_count += 1
 
 
 func _trace_node_added(node: Node) -> void:
@@ -637,6 +658,21 @@ func _parse_args() -> bool:
 					return false
 			"--trace":
 				_trace_path = value
+			"--hide-layers":
+				# What a layer COSTS a frame, as a run anyone can repeat: the same
+				# drive with and without it, read off `prims` and `draws`. Held
+				# against the loader's table because a misspelt layer would hide
+				# nothing and report the unhidden frame as the measurement.
+				for layer: String in value.split(","):
+					if not GeneratedLayer.ids().has(layer):
+						_fail(
+							(
+								"--hide-layers=%s is not one of %s"
+								% [layer, ", ".join(GeneratedLayer.ids())]
+							)
+						)
+						return false
+					_hidden_layers.append(layer)
 			"--asset":
 				# `asset_viewer.gd` reads this one itself (`P5-22`); it is named
 				# here so the scene's one flag is not refused as unknown.
@@ -739,6 +775,10 @@ func _abort(message: String) -> void:
 
 
 func _finish() -> void:
+	if not _hidden_layers.is_empty():
+		print("hidden:   %d layer node(s)" % _hidden_count)
+		if _hidden_count == 0:
+			_fail("--hide-layers hid nothing, so this run measured the unhidden frame")
 	if _failures.is_empty():
 		print("\nDRIVER OK")
 		quit(0)
