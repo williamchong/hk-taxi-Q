@@ -63,7 +63,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   is the field's alpha. ⚠️ **A mirrored map looks right on a grid**; the east-is-right assertions
   are the evidence, not the frame. ⚠️ A mesh keeps colours as **RGBA8**, so a test comparing them
   uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
-  build, not live. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
+  build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
+  `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
+  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

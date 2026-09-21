@@ -6691,6 +6691,15 @@ cell through `library_meshes`.
   defect to catch is a **mirrored** map (3D −Z-forward to 2D +Y-down flips handedness), which looks
   plausible on a grid: east-is-right-when-heading-north is the assertion, mutation-checked. One
   compass convention — `CityManifest.bearing_deg`'s — never a second.
+- **One component with the street plate, the user's call (2026-09-22)**: the map over a name
+  strip, one keyline, 340 x 390 — 17.7% of frame width, inside `Q80`'s 18%. `Q80` had called the
+  two "one question". Anchored as the plate is (bottom, with the speed); the map's own rect spans
+  the middle and would float off the baseline on a tall window. `HudLayout.abutting()` refuses a
+  layout where the two rects do not share a width and an edge. `draws` +5 → **+4**.
+  ⚠️ Amends `Q80`: in the strip the LETTERING is cut, not the box — `StreetPlate.fitted_size`,
+  measured off the font (a `Label` out of the tree reports no minimum size, and a fit that reads 0
+  never shrinks). `CENTRAL-WAN CHAI BYPASS TUNNEL`, the longest of four regions, sets at 16 px.
+  Under `--minimap=off` the plate stands alone and is cut to its lettering as before.
 - **Driving only**: roads and the car. No destination pip — nothing has a destination until
   `P3-1a`, which adds it (clamped to the rim along the ray from the car, not per axis, or the pip
   points the wrong way in a corner). No `route` seam was built either: it is one more child in the

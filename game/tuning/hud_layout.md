@@ -20,6 +20,12 @@ the world, top is the fare, and the middle is the road and stays empty.
 reserved slots do not exist, because they do not; a slot's contents arriving
 is an edit to this file.
 
+🔴 `minimap` AND `street_plate` ARE ONE PANEL (`P3-44`, `Q136`, the user's
+call): the map sits on the plate at the plate's width, under one keyline, and
+`HudLayout.abutting()` fails a layout that moves either alone. 340 wide is
+17.7% of the frame, inside the 18% the size rule in hud_style.md allows. The
+pair is anchored as the PLATE is — bottom, with the speed.
+
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
 missing here is a zero-size rect rather than something sensible, and
 `verify_hud.gd` refuses one.
