@@ -51,12 +51,13 @@ from pathlib import Path
 import numpy as np
 
 from pipeline.boxsource import Box, read_boxes
+from pipeline.buildings import union
 from pipeline.config import BoxJunctions, Config, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.drawnsurface import DrawnSurface
 from pipeline.geometry import clip_half_plane, orient, twice_area, wound_up
-from pipeline.gltf import write_glb
-from pipeline.meshbuild import FlatBuilder, import_quantum_m
+from pipeline.gltf import MeshData, write_glb
+from pipeline.meshbuild import CellBuilder, PolygonBuilder, import_quantum_m
 from pipeline.polyline import Segments, frame
 from pipeline.report import tail_of
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
@@ -66,7 +67,10 @@ log = logging.getLogger(__name__)
 
 BOXJUNCTIONS_NAME = "boxjunctions.glb"
 BOXJUNCTIONS_MANIFEST_NAME = "boxjunctions.json"
-BOXJUNCTIONS_MANIFEST_SCHEMA = 1
+# 2 since `P3-42` (`Q135`): `boxjunctions.glb` is one mesh per plan cell, no
+# longer one primitive — `ROADMARKS_MANIFEST_SCHEMA` 3's reasoning. A v1 reader
+# that takes the first mesh for the layer reads one cell of it.
+BOXJUNCTIONS_MANIFEST_SCHEMA = 2
 
 # ⚠️ **No `-col` suffix.** Paint is not a collider — `arrows.glyph_mesh_name`'s
 # reasoning, unchanged: a 12 mm step of paint modelled as collision geometry is
@@ -198,6 +202,10 @@ class BoxJunctionReport:
     inverted_area_m2: float = 0.0
     triangles: int = 0
     vertices: int = 0
+    # The meshes `boxjunctions.glb` carries, one a plan cell of `cell_m`
+    # (`P3-42`), and the largest of them — what a camera looking at one cell draws.
+    cells: int = 0
+    cell_triangles_max: int = 0
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
 
@@ -566,7 +574,7 @@ def build_region(
         dtype=np.float64,
     )
 
-    builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
+    builder = CellBuilder(BOXJUNCTIONS_MATERIAL, spec.cell_m)
     # The pitch the engine will re-quantise this mesh to, and the thinness bar
     # that keeps every shipped fragment at least two lattice cells wide — see
     # `_import_quantum_m` for the 217 flipped triangles that priced it.
@@ -616,21 +624,41 @@ def build_region(
         if heights:
             report.height_spread_m.append(max(heights) - min(heights))
 
-    mesh = builder.build(BOXJUNCTIONS_MESH_NAME, thinness_bar_m, report)
-    if mesh is not None:
-        report.inverted, report.inverted_area_m2 = downward_facing(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
-        report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / BOXJUNCTIONS_NAME, [mesh])
+    meshes = cell_meshes(builder, thinness_bar_m, report)
+    if meshes:
+        report.bytes = write_glb(out_dir / BOXJUNCTIONS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
 
 
+def cell_meshes(builder: CellBuilder, thin_m: float, report: BoxJunctionReport) -> list[MeshData]:
+    """What `boxjunctions.glb` carries: a mesh per plan cell, so the engine can
+    cull the layer (`P3-42`, `Q135`), with the report's mesh half summed over them.
+
+    A piece goes whole to its centroid's cell, so a box across a cell line is
+    drawn in both and the cells' union is the uncut mesh. Apart from
+    `build_region` so it can be driven without a geodatabase.
+    """
+    cells = builder.build(BOXJUNCTIONS_MESH_NAME, thin_m, report)
+    meshes = [cells[cell] for cell in sorted(cells)]
+    if not meshes:
+        return meshes
+    for mesh in meshes:
+        inverted, inverted_m2 = downward_facing(mesh)
+        report.inverted += inverted
+        report.inverted_area_m2 += inverted_m2
+    report.triangles = sum(mesh.triangle_count for mesh in meshes)
+    report.vertices = sum(len(mesh.positions) for mesh in meshes)
+    report.cells = len(meshes)
+    report.cell_triangles_max = max(mesh.triangle_count for mesh in meshes)
+    low, high = union(mesh.aabb() for mesh in meshes)
+    report.aabb = [list(low), list(high)]
+    return meshes
+
+
 def _place(
-    builder: FlatBuilder,
+    builder: PolygonBuilder,
     drawn: DrawnSurface,
     polygon: np.ndarray,
     lift_m: float,
@@ -760,6 +788,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: BoxJunc
         "inverted_area_m2": round(report.inverted_area_m2, 4),
         "triangles": report.triangles,
         "vertices": report.vertices,
+        "cells": report.cells,
+        "cell_triangles_max": report.cell_triangles_max,
         "bytes": report.bytes,
         "aabb": report.aabb,
     }

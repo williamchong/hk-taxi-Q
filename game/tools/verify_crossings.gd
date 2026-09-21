@@ -18,7 +18,12 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive per paint, so a region's crossings cost at most two draw calls.
+## One surface a mesh, so a cell of one paint costs one draw call.
+##
+## ⚠️ **One mesh a kind a plan CELL since `P3-42` (`Q135`), no longer one a
+## kind**, so the engine can cull the layer. A mesh is named
+## `<kind>_c<column>_r<row>` (`meshbuild.cell_name`); its glTF material is still
+## the bare kind, which is what the importer dispatches on.
 const SURFACES_PER_KIND: int = 1
 
 ## The material each kind must end up with, mirroring `SHADERS` in
@@ -68,8 +73,9 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	# One `MeshInstance3D` per paint, each named for its kind — `verify_railings`'
-	# shape, because `MeshContract.single_primitive` insists on exactly one.
+	# One `MeshInstance3D` a paint a plan cell, each named for its kind and its
+	# cell — `verify_railings`' shape, because `MeshContract.library_meshes` has
+	# no per-name material to check against.
 	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
 	if instances.is_empty():
 		problems.append("no MeshInstance3D in the crossings scene")
@@ -77,11 +83,13 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 	for node: Node in instances:
 		var instance := node as MeshInstance3D
-		var kind: String = String(instance.name)
+		# 🔴 The kind comes off the mesh NAME, never off its material: read from
+		# the material, a zebra handed the boxes' yellow checks out against itself.
+		var kind: String = _kind_of(String(instance.name))
 		if not KIND_MATERIALS.has(kind):
 			problems.append(
 				(
-					"mesh '%s' is not a known crossing kind. " % kind
+					"mesh '%s' is not a cell of a known crossing kind. " % instance.name
 					+ "KIND_MATERIALS here, SHADERS in generated_scene_import.gd and "
 					+ "KINDS in etl/pipeline/crossings.py move together."
 				)
@@ -90,18 +98,18 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 		var mesh := instance.mesh as ArrayMesh
 		if mesh == null:
-			problems.append("'%s' carries no ArrayMesh" % kind)
+			problems.append("'%s' carries no ArrayMesh" % instance.name)
 			continue
 		if mesh.get_surface_count() != SURFACES_PER_KIND:
 			problems.append(
 				(
 					"'%s' has %d surfaces, expected %d"
-					% [kind, mesh.get_surface_count(), SURFACES_PER_KIND]
+					% [instance.name, mesh.get_surface_count(), SURFACES_PER_KIND]
 				)
 			)
 
 		for surface: int in mesh.get_surface_count():
-			var where: String = "%s surface %d" % [kind, surface]
+			var where: String = "%s surface %d" % [instance.name, surface]
 			# `false`: no `COLOR_0`, as the boxes ship none.
 			problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
 			problems.append_array(
@@ -117,3 +125,12 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		)
 	)
 	return problems
+
+
+## The kind a cell's mesh is of — `meshbuild.cell_name`'s `<kind>_c<column>_r<row>`
+## read backwards — or `""` for a name that is not a cell's. A column or a row is
+## negative west or north of the origin.
+func _kind_of(mesh_name: String) -> String:
+	var cell := RegEx.create_from_string("^(.+)_c-?\\d+_r-?\\d+$")
+	var found: RegExMatch = cell.search(mesh_name)
+	return "" if found == null else found.get_string(1)

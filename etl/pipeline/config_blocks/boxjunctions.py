@@ -73,6 +73,11 @@ class BoxJunctions(LayerSpec):
     # drawn. Beyond it the box is dropped rather than guessed at — its vertices
     # would take their heights from a road it is not on.
     max_offset_m: float
+    # The plan side of the cells `boxjunctions.glb` is cut into, one mesh each,
+    # so the engine can cull the layer (`P3-42`, `Q135`; `meshbuild.CellBuilder`).
+    # This block's own dial and not `road_marks.cell_m`: each layer trades its
+    # own triangles against its own draw calls.
+    cell_m: float
 
 
 _BOXJUNCTION_ROLES = ("type", "level", "hatch_a", "hatch_b")
@@ -128,6 +133,9 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
             f"{where}:border_lift_m is {border_lift_m}; the boundary line coplanar with the "
             f"hatch it crosses z-fights it"
         )
+    cell_m = float(_require(body, "cell_m", where))
+    if cell_m <= 0.0:
+        raise ValueError(f"{where}:cell_m must be positive, got {cell_m}")
 
     return BoxJunctions(
         **_spec_header(body, where, _BOXJUNCTION_ROLES),
@@ -139,4 +147,5 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
         lift_m=lift_m,
         border_lift_m=border_lift_m,
         max_offset_m=max_offset_m,
+        cell_m=cell_m,
     )

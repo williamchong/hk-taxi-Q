@@ -20,8 +20,13 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's boxes cost one draw call — the rule the
-## road surface, the tiles, the tramway and the arrows are all held to.
+## One surface a mesh, so a cell costs one draw call — the rule the road
+## surface, the tiles, the tramway and the arrows are all held to.
+##
+## ⚠️ **One mesh per plan CELL since `P3-42` (`Q135`), no longer one primitive**,
+## as `verify_roadmarks.gd` says of the road marks: as one mesh the layer was one
+## box and drew whole from anywhere in the region. `boxjunctions.json` publishes
+## `cells`; the cells' union is the uncut mesh.
 const SURFACES: int = 1
 
 ## The material the boxes must end up with, mirroring `SHADERS` in
@@ -73,21 +78,22 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
-	if mesh == null:
-		return problems
-
-	for surface: int in mesh.get_surface_count():
-		var where: String = "surface %d" % surface
-		# `false`: this mesh ships no `COLOR_0` on purpose — see
-		# `BOXJUNCTIONS_MATERIAL` above and `config.BoxJunctions`. Every other
-		# guarantee in `check_surface` still applies, the no-texture one
-		# especially.
-		problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
-		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, BOXJUNCTIONS_MATERIAL)
-		)
-		problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the boxes"))
+	var cells: Dictionary[String, Mesh] = MeshContract.library_meshes(
+		scene_root, SURFACES, problems
+	)
+	for cell: String in cells:
+		var mesh: Mesh = cells[cell]
+		for surface: int in mesh.get_surface_count():
+			var where: String = "%s surface %d" % [cell, surface]
+			# `false`: this mesh ships no `COLOR_0` on purpose — see
+			# `BOXJUNCTIONS_MATERIAL` above and `config.BoxJunctions`. Every other
+			# guarantee in `check_surface` still applies, the no-texture one
+			# especially.
+			problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
+			problems.append_array(
+				MeshContract.check_shader_material(mesh, surface, where, BOXJUNCTIONS_MATERIAL)
+			)
+			problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the boxes"))
 
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems

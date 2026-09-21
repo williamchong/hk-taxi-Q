@@ -22,12 +22,14 @@ from pipeline.boxjunctions import (
     BoxJunctionReport,
     _place,
     border_polygons,
+    cell_meshes,
     hatch_polygons,
     long_axis_deg,
 )
 from pipeline.config import load_config
 from pipeline.drawnsurface import DrawnSurface
-from pipeline.meshbuild import FlatBuilder
+from pipeline.geometry import wound_up
+from pipeline.meshbuild import CellBuilder, FlatBuilder
 from pipeline.surface import downward_facing
 from tests.helpers import CITY_YAML, polygon_area, ribbon_of
 
@@ -51,6 +53,7 @@ BLOCK: dict[str, Any] = {
     "lift_m": 0.012,
     "border_lift_m": 0.002,
     "max_offset_m": 12.0,
+    "cell_m": 300.0,
 }
 
 
@@ -476,13 +479,67 @@ class TestTheMeshContract:
         assert mesh.uv2 is None
 
 
-def _built(spec):
+def _built(spec, ring=None):
     builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
-    for piece in hatch_polygons(L_SHAPE, 45.0, spec):
+    for piece in hatch_polygons(L_SHAPE if ring is None else ring, 45.0, spec):
         builder.polygon(piece, np.zeros(len(piece)))
     mesh = builder.build("boxjunctions")
     assert mesh is not None
     return mesh
+
+
+class TestTheCells:
+    """`P3-42` (`Q135`): `boxjunctions.glb` is a mesh per plan cell, so the
+    engine can cull it. The routing is `CellBuilder`'s and is tested with it
+    (`test_roadmarks.py`); what is this stage's own is the report summed over
+    the cells."""
+
+    # 20 m square astride the x = 300 cell line.
+    ASTRIDE = np.array([[290.0, 10.0], [310.0, 10.0], [310.0, 30.0], [290.0, 30.0]])
+
+    def test_a_box_astride_a_cell_line_is_drawn_whole_in_two_meshes(self, spec):
+        """Mutation-check it by reporting the last cell instead of the sum:
+        `triangles` no longer reads the uncut mesh's count."""
+        cut, whole = CellBuilder(BOXJUNCTIONS_MATERIAL, spec.cell_m), _built(spec, self.ASTRIDE)
+        for piece in hatch_polygons(self.ASTRIDE, 45.0, spec):
+            cut.polygon(piece, np.zeros(len(piece)))
+        report = BoxJunctionReport()
+        meshes = cell_meshes(cut, 0.0, report)
+
+        assert [mesh.name for mesh in meshes] == ["boxjunctions_c0_r0", "boxjunctions_c1_r0"]
+        assert {mesh.material for mesh in meshes} == {BOXJUNCTIONS_MATERIAL}
+        assert report.cells == 2
+        assert report.triangles == whole.triangle_count
+        assert report.vertices == len(whole.positions)
+        assert report.cell_triangles_max == max(mesh.triangle_count for mesh in meshes)
+        assert report.cell_triangles_max < report.triangles
+        assert report.inverted == 0
+        low, high = whole.aabb()
+        assert report.aabb == [list(low), list(high)]
+        corners = np.vstack([mesh.positions[mesh.triangles].reshape(-1, 9) for mesh in meshes])
+        assert sorted(map(tuple, corners)) == sorted(
+            map(tuple, whole.positions[whole.triangles].reshape(-1, 9))
+        )
+
+    def test_a_downward_triangle_in_any_cell_is_counted(self, spec):
+        """`inverted` is summed, never the last cell's. Mutation-check it by
+        assigning in the loop: the last cell's 2 is what is left."""
+        down = wound_up(self.ASTRIDE)[::-1]
+        cut = CellBuilder(BOXJUNCTIONS_MATERIAL, spec.cell_m)
+        cut.polygon(down - np.array([280.0, 0.0]), np.zeros(4))
+        cut.polygon(down + np.array([600.0, 0.0]), np.zeros(4))
+        report = BoxJunctionReport()
+        assert len(cell_meshes(cut, 0.0, report)) == 2
+        assert report.inverted == 4
+
+    def test_nothing_drawn_ships_no_mesh_and_no_cell(self, spec):
+        report = BoxJunctionReport()
+        assert cell_meshes(CellBuilder(BOXJUNCTIONS_MATERIAL, spec.cell_m), 0.0, report) == []
+        assert (report.cells, report.triangles, report.aabb) == (0, 0, [])
+
+    def test_a_cell_of_no_size_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="cell_m"):
+            city_with(tmp_path, {**BLOCK, "cell_m": 0.0})
 
 
 class TestTheReport:

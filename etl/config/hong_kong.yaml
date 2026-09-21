@@ -2133,6 +2133,12 @@ boxjunctions:
   # has drifted onto no road this build drives.
   max_offset_m: 12.0
 
+  # The side of the plan cells `boxjunctions.glb` is cut into, one mesh a cell,
+  # so the engine can cull it (`P3-42`, `Q135`) — `road_marks.cell_m`'s reasoning
+  # and its value, on this layer's own dial. ⚠️ 600 barely culls: one 600 m cell
+  # holds 9,723 of Wan Chai's 14,931 box triangles, against 7,585 at 300.
+  cell_m: 300.0
+
 # Published pedestrian-crossing stripes (P3-35g2).
 #
 # DTAD_CROSSING_LINE surveys each stripe as its own rectangle: 715 closed rings
@@ -2196,6 +2202,11 @@ crossings:
   # 2.06, so nothing stands near this bar; it is what keeps a crossing outline
   # filed under a drawn line type from being painted solid.
   max_stripe_width_m: 1.4
+
+  # The side of the plan cells `crossings.glb` is cut into, one mesh a kind a
+  # cell (`P3-42`, `Q135`), as `boxjunctions.cell_m` is. Wan Chai's largest
+  # cell holds 993 of 5,711 triangles.
+  cell_m: 300.0
 
 # Published stop lines and give-way lines (P3-23).
 #

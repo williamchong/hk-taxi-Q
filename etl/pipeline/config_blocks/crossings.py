@@ -70,6 +70,10 @@ class Crossings(LayerSpec):
     lift_m: float
     max_offset_m: float
     max_stripe_width_m: float
+    # The plan side of the cells `crossings.glb` is cut into, one mesh a kind a
+    # cell, so the engine can cull the layer (`P3-42`, `Q135`;
+    # `meshbuild.CellBuilder`). This block's own dial, as `BoxJunctions.cell_m` is.
+    cell_m: float
 
 
 # Both layers are read for the same two things.
@@ -135,4 +139,5 @@ def _crossings(body: Any, where: str) -> Crossings | None:
         max_stripe_width_m=_positive(
             body, "max_stripe_width_m", where, "every stripe would be refused"
         ),
+        cell_m=_positive(body, "cell_m", where, "a cell of no size holds nothing"),
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -15,10 +16,13 @@ from pipeline.crossings import (
     Crossing,
     CrossingReport,
     _is_convex,
+    cell_meshes,
     draw,
     faces_of,
 )
 from pipeline.drawnsurface import DrawnSurface
+from pipeline.mesh import merge
+from pipeline.meshbuild import CellBuilder
 from pipeline.polyline import Segments
 from pipeline.surface import downward_facing
 from tests.helpers import CITY_YAML, polygon_area, ribbon_of
@@ -40,6 +44,7 @@ BLOCK: dict[str, Any] = {
     "lift_m": 0.010,
     "max_offset_m": 12.0,
     "max_stripe_width_m": 1.4,
+    "cell_m": 300.0,
 }
 
 ROAD = {
@@ -94,8 +99,20 @@ def drawn_with(spec, crossings, zigzags=()):
         DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(ROAD)]}),
         report,
     )
-    meshes = {kind: builder.build(kind, thin_m, report) for kind, builder in builders.items()}
+    meshes = {kind: pooled(kind, builder, thin_m) for kind, builder in builders.items()}
     return meshes, report
+
+
+def pooled(kind, builder, thin_m):
+    """A kind's cells as the one mesh they were before `P3-42`, or `None`.
+
+    No report: `build` ASSIGNS `slivers_dropped`, so one report handed to both
+    kinds keeps the last's — `cell_meshes` is what sums them.
+    """
+    cells = builder.build(kind, thin_m)
+    if not cells:
+        return None
+    return replace(merge(list(cells.values()), name=kind), material=kind)
 
 
 class TestAStripeIsAFaceOfItsLines:
@@ -216,6 +233,90 @@ class TestTheColourIsTheZigzags:
         _, report = drawn_with(spec, crossings, zigzags=[self.ZIGZAG])
         assert report.zebra_reach_m == pytest.approx(3.4, abs=0.1)
         assert report.signal_reach_m == pytest.approx(22.0, abs=0.1)
+
+
+# `ROAD`, long enough to cross a cell line and laid off the z = 0 row line.
+LONG_ROAD = {**ROAD, "polyline": [[0.0, 0.0, 50.0], [600.0, 0.0, 50.0]]}
+
+
+class TestTheCells:
+    """`P3-42` (`Q135`): `crossings.glb` is a mesh a kind a plan cell, so the
+    engine can cull it. The routing is `CellBuilder`'s (`test_roadmarks.py`);
+    what is this stage's own is two kinds sharing the cells and one report."""
+
+    ZIGZAG = np.array([[312.0, 48.25], [330.0, 48.25]])
+    # `ROAD` runs along z = 0, which is a row line: a stripe across it is cut at
+    # the crown and its two pieces go to two rows.
+    OFF_THE_ROW_LINE = np.array([0.0, 50.0])
+
+    def built(self, spec):
+        report = CrossingReport()
+        crossings = [
+            Crossing("SOLID", (stripe(10.0) + self.OFF_THE_ROW_LINE,)),
+            Crossing("SOLID", (stripe(450.0) + self.OFF_THE_ROW_LINE,)),
+            Crossing("SOLID", (stripe(310.0) + self.OFF_THE_ROW_LINE,)),
+        ]
+        builders, thin_m = draw(
+            spec,
+            crossings,
+            [self.ZIGZAG],
+            Segments.of([LONG_ROAD]),
+            DrawnSurface.of({"caps": [], "ribbons": [ribbon_of(LONG_ROAD)]}),
+            report,
+        )
+        return cell_meshes(builders, thin_m, report), report
+
+    def test_a_cell_holds_a_mesh_a_kind_each_under_its_own_material(self, spec):
+        """🔴 The name carries the kind and the cell; the MATERIAL stays the
+        bare kind, which is what the importer dispatches on — a cell name
+        there is a stripe with no paint. `verify_crossings.gd` reads the kind
+        back off the name."""
+        meshes, report = self.built(spec)
+        assert [(mesh.name, mesh.material) for mesh in meshes] == [
+            ("crossings_signal_c0_r0", SIGNAL),
+            ("crossings_signal_c1_r0", SIGNAL),
+            ("crossings_zebra_c1_r0", ZEBRA),
+        ]
+        assert report.cells == 3
+        assert report.triangles == sum(mesh.triangle_count for mesh in meshes)
+        assert report.cell_triangles_max == max(mesh.triangle_count for mesh in meshes)
+        assert report.cell_triangles_max < report.triangles
+
+    def test_the_cells_union_is_the_uncut_layer(self, spec):
+        cut, _ = self.built(spec)
+        whole, report = self.built(replace(spec, cell_m=0.0))
+        assert [mesh.name for mesh in whole] == ["crossings_signal_c0_r0", "crossings_zebra_c0_r0"]
+        assert report.cells == 2
+
+        def corners(meshes, kind):
+            rows = [
+                mesh.positions[mesh.triangles].reshape(-1, 9)
+                for mesh in meshes
+                if mesh.material == kind
+            ]
+            return sorted(map(tuple, np.vstack(rows)))
+
+        for kind in (SIGNAL, ZEBRA):
+            assert corners(cut, kind) == corners(whole, kind)
+
+    def test_each_kinds_slivers_are_counted(self):
+        """🔴 `build` ASSIGNS the count, so with the stage's report handed to
+        both kinds the LAST kind's was what shipped — the first's needles read
+        0. Mutation-check it by handing `report` to `build`."""
+        needle = np.array([[0.0, 0.0], [0.0, 0.001], [20.0, 0.001], [20.0, 0.0]])
+        quad = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]])
+        builders = {kind: CellBuilder(kind, 300.0) for kind in (SIGNAL, ZEBRA)}
+        builders[SIGNAL].polygon(needle, np.zeros(4))
+        builders[SIGNAL].polygon(needle + np.array([600.0, 0.0]), np.zeros(4))
+        builders[ZEBRA].polygon(quad, np.zeros(4))
+        report = CrossingReport()
+        meshes = cell_meshes(builders, 0.05, report)
+        assert report.slivers_dropped == 4
+        assert [mesh.material for mesh in meshes] == [ZEBRA]
+
+    def test_a_cell_of_no_size_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="cell_m"):
+            city_with(tmp_path, {**BLOCK, "cell_m": 0.0})
 
 
 class TestTheBlockIsOptional:
