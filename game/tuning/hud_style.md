@@ -26,3 +26,12 @@ zero it would otherwise draw with.
 NO ENTRY (TS115), the same sign standing on 179 posts in the region. The red
 and the two proportions are quoted from the world sign and graded against it
 by verify_hud; the bar draws in plate_field. See hud_style.gd and Q81.
+
+## `map_field = Color(0.9, 0.9, 0.87, 1)`
+
+The minimap (`P3-44`, `Q136`): the city's voice again, a light ground with dark
+roads — a figure-ground plan, which is what survives 0.75 px to the metre.
+🔴 `map_field` AND `map_road` ARE OPAQUE, and verify_hud refuses otherwise:
+strokes overlap at every joint, a deck's casing is the field drawn over the
+street beneath it, and minimap.gd clips by the field's drawn alpha. The chevron
+is blue because red is the taxi's and green already means "gaining".

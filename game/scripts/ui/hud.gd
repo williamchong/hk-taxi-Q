@@ -2,8 +2,8 @@ class_name Hud
 extends CanvasLayer
 ## The player's HUD: how fast, and what street (`P3-24`).
 ##
-## Two readouts ship and three slots are reserved. `P3-5a` fills the timer and
-## the fare meter when there is a fare to run; `P3-5b` fills the minimap.
+## Two readouts and the minimap (`P3-44`) ship and two slots are reserved.
+## `P3-5a` fills the timer and the fare meter when there is a fare to run.
 ## The slots are laid out and checked **now**, empty, because a HUD that grows
 ## into whatever space is left is how the touch controls end up under the speed.
 ##
@@ -29,6 +29,11 @@ extends CanvasLayer
 ## Chooses whether the HUD draws. `--hud=off` for `P3-9` and for art frames.
 const HUD_ARG: String = "--hud="
 
+## `--minimap=off` takes the map alone (`Q136`). `GAME_DESIGN.md`'s acceptance
+## test disables the minimap and the arrow and says nothing about the speed or
+## the plate, so the map cannot share `--hud=off`'s switch.
+const MINIMAP_ARG: String = "--minimap="
+
 ## How often the road graph is asked what is under the car.
 ##
 ## Not every frame. `nearest_edge` is budgeted at 1 ms and would be affordable
@@ -48,6 +53,7 @@ var _tracker: StreetTracker = null
 var _monitor: WrongWayMonitor = null
 var _tracking: StreetTrackerProfile = null
 var _wrong_way: WrongWayProfile = null
+var _mapping: MinimapProfile = null
 var _graph: RoadGraph = null
 ## The car this HUD reads, handed in by `Main` (`P5-24`) — the ancestor that
 ## holds both `World` and `GUI` is the one that knows which car is in play.
@@ -73,6 +79,8 @@ var _readout: Label = null
 var _slots: Array[ChamferPanel] = []
 ## The wrong-way sign. Hidden in every ordinary frame.
 var _warning: NoEntryIcon = null
+## Null under `--minimap=off`, and where there is no city to map.
+var _minimap: Minimap = null
 
 var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
@@ -144,6 +152,10 @@ func _load_layout() -> bool:
 	_wrong_way = load(WrongWayProfile.PATH) as WrongWayProfile
 	if _wrong_way == null:
 		push_warning("hud: %s did not load; no HUD this run" % WrongWayProfile.PATH)
+		return false
+	_mapping = load(MinimapProfile.PATH) as MinimapProfile
+	if _mapping == null:
+		push_warning("hud: %s did not load; no HUD this run" % MinimapProfile.PATH)
 		return false
 	return true
 
@@ -252,6 +264,17 @@ func _build() -> void:
 	_warning.bar_thickness = _style.warn_bar_thickness
 	_warning.visible = false
 	_layout.place(root, _warning, _layout.wrong_way)
+
+	# ---- the minimap: the CITY, drawn ----
+	#
+	# Skipped where there is no city, like the plate's font and for the plate's
+	# reason: an empty white panel is worse than nothing.
+	var mapped: bool = Cmdline.value(MINIMAP_ARG).to_lower() != "off"
+	if mapped and _graph != null and not _graph.is_empty():
+		_minimap = Minimap.new()
+		_minimap.name = "Minimap"
+		_minimap.setup(_mapping, _style, _graph, _layout.minimap.size.x)
+		_layout.place(root, _minimap, _layout.minimap)
 
 	# ---- the reserved slots ----
 	#
@@ -365,6 +388,7 @@ func _process(delta: float) -> void:
 	# blink is an animation: gating it at 5 Hz would quantise a 2 Hz square wave
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
+	_update_minimap()
 
 
 ## Drive the chip's bar from how hard the car is gaining or losing speed.
@@ -554,6 +578,16 @@ func _update_warning(delta: float) -> void:
 	# second to say nothing.
 	if _warning.visible != lit:
 		_warning.visible = lit
+
+
+## Every frame, like the blink: a map that turns at 5 Hz judders, and what this
+## costs is one transform — nothing is redrawn (`minimap.gd`).
+func _update_minimap() -> void:
+	var car: VehicleController = _vehicle()
+	if _minimap == null or car == null:
+		return
+	var placed: Transform3D = car.global_transform
+	_minimap.follow(placed.origin, -placed.basis.z)
 
 
 ## `is_instance_valid` rather than a null check: on a scene change the car this

@@ -102,7 +102,7 @@ extends Resource
 ## starts below y 136, not at y 40.
 @export var wrong_way: Rect2
 
-# ---- planned, NOT held open, filled by P3-5a and P3-5b ----
+# ---- planned, NOT held open, filled by P3-5a (the minimap, by P3-44, is) ----
 #
 # 🔴 **Plan the area; do not hold the space.** These rects say where the timer,
 # meter and minimap will go, and the check keeps them honest — but what ships is
@@ -111,7 +111,7 @@ extends Resource
 # paid many times over for a benefit that arrives once. A slot's contents
 # arriving is a `.tres` edit.
 
-## `P3-5b`. Bottom-right, where MM2 puts it — **not** top-left, which is where
+## `P3-44`, built. Bottom-right, where MM2 puts it — **not** top-left, which is where
 ## this layout had it before the references were looked at. A street map is
 ## glanced at mid-corner and belongs near the road, not in the far corner of
 ## the screen. The street plate sits below it, in the corner, because the two are
@@ -209,12 +209,13 @@ extends Resource
 const PATH: String = "res://tuning/hud_layout.tres"
 
 
-## The three slots this HUD reserves and does not yet fill, by node name.
+## The two slots this HUD reserves and does not yet fill, by node name. The
+## minimap was the third until `P3-44` filled it.
 ## Iterated by `hud.gd` to build them, so both ends stay statically typed —
 ## an array of `[name, rect]` pairs makes each element a `Variant` and defeats
 ## the enforced typing at exactly the point a wrong rect would be silent.
 func reserved_slots() -> Dictionary[String, Rect2]:
-	return {"MinimapSlot": minimap, "TimerSlot": timer, "MeterSlot": meter}
+	return {"TimerSlot": timer, "MeterSlot": meter}
 
 
 ## Everything this HUD draws, by name.
@@ -226,7 +227,7 @@ func reserved_slots() -> Dictionary[String, Rect2]:
 ## file whose entire job is to be trusted about where things are.
 func hud_slots() -> Dictionary[String, Rect2]:
 	var slots: Dictionary[String, Rect2] = {
-		"speed": speed, "street_plate": street_plate, "wrong_way": wrong_way
+		"speed": speed, "street_plate": street_plate, "wrong_way": wrong_way, "minimap": minimap
 	}
 	slots.merge(reserved_slots())
 	return slots

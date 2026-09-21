@@ -642,6 +642,12 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--hud=%s is not off or on" % value)
 					return false
+			"--minimap":
+				# `hud.gd` reads this one too, and falls back to leaving the map
+				# ON — so a typo would hand `P3-9` the aid its test disables.
+				if not ["off", "on"].has(value):
+					_fail("--minimap=%s is not off or on" % value)
+					return false
 			"--touch":
 				# `input_router.gd` reads this one itself, so this is validation
 				# and nothing else — the same shape as the two above, for the

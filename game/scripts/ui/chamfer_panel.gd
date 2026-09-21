@@ -18,7 +18,7 @@ extends Control
 ## reason it ships almost none for the city.
 ##
 ## **Shape only.** A panel that also carries a reading is `AccentBar`, which
-## extends this. The street plate and the three reserved slots want the shape
+## extends this. The street plate and the reserved slots want the shape
 ## and nothing else, and a widget carrying five speedometer properties that are
 ## inert on four of its five instances has stopped being about one thing.
 

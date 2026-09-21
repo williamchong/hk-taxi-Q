@@ -141,6 +141,27 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## `verify_hud.gd` refuses a faster one.
 @export var warn_blink_hz: float
 
+# ---- the city's voice, again: the minimap ----
+
+## The map's ground. A sign white like the plate under it — a map of the streets
+## is the city speaking — and its own key, because the plate's field is a
+## painted sign and this is land, and the two have no reason to move together.
+##
+## 🔴 **Opaque, and `verify_hud.gd` refuses anything else**, for two reasons that
+## are both invisible until they are not: `minimap.gd` clips the roads by this
+## panel's drawn ALPHA, and a deck's casing is this colour drawn over the street
+## beneath it, which only hides the street if nothing shows through.
+@export var map_field: Color
+## The roads. Dark on light, a figure-ground plan: at 0.75 px to the metre a
+## street is a few pixels wide and wants the most contrast the palette has.
+## 🔴 **Opaque too**: strokes overlap at every joint (`minimap_mesh.gd`).
+@export var map_road: Color
+## The car's chevron and its rim. The one saturated thing on the map, and
+## deliberately not the taxi's red (see the top of this file) nor the bar's
+## green, which already means "gaining".
+@export var map_marker: Color
+@export var map_marker_edge: Color
+
 # ---- dev only ----
 
 ## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.

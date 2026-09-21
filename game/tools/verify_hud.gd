@@ -61,6 +61,9 @@ const MonitorScript = preload("res://scripts/core/wrong_way_monitor.gd")
 const WrongWayProfileScript = preload("res://scripts/core/wrong_way_profile.gd")
 const TrackerProfileScript = preload("res://scripts/core/street_tracker_profile.gd")
 const NoEntryIconScript = preload("res://scripts/ui/no_entry_icon.gd")
+const MinimapProfileScript = preload("res://scripts/ui/minimap_profile.gd")
+const MinimapProjectionScript = preload("res://scripts/ui/minimap_projection.gd")
+const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -123,6 +126,7 @@ func _init() -> void:
 	_check_plate_tuning()
 	_check_tracker()
 	_check_wrong_way()
+	_check_minimap()
 
 	if _failed > 0:
 		push_error("verify_hud: %d check(s) failed" % _failed)
@@ -746,6 +750,225 @@ static func _drive(
 ) -> void:
 	for tick: int in ticks:
 		monitor.sample(true, law, _at(law, nose_deg, 1.0), _at(law, travel_deg, speed_ms), 0.2)
+
+
+# --------------------------------------------------------------- minimap ----
+
+
+## The map's arithmetic (`P3-44`), which no frame can be trusted to show.
+##
+## 🔴 **A mirrored map of a street grid looks right.** Game `-Z` is north, `+X`
+## is east and a canvas has `+Y` down, so the one thing that can be wrong is the
+## sign of the heading rotation — and a map turned the wrong way round still
+## turns, convincingly. So east-is-right is asserted under BOTH orientations,
+## and each heading is checked against a point that is not on its own axis.
+func _check_minimap() -> void:
+	var mapping: Resource = load(MinimapProfileScript.PATH)
+	var style: Resource = load(HudStyleScript.PATH)
+	if mapping == null or style == null:
+		_fail("map", "%s did not load" % MinimapProfileScript.PATH)
+		return
+
+	# Named fields, not `get()` by string: a typo there drops a key from the check.
+	var floors: Dictionary[String, float] = {
+		"span_m": mapping.span_m,
+		"min_stroke_px": mapping.min_stroke_px,
+		"casing_px": mapping.casing_px,
+		"marker_px": mapping.marker_px,
+	}
+	for key: String in floors:
+		if floors[key] <= 0.0:
+			_fail("map", "%s is 0 — is it missing from the .tres?" % key)
+	var anchor: Vector2 = mapping.anchor
+	_expect(
+		anchor.x > 0.0 and anchor.x < 1.0 and anchor.y > 0.0 and anchor.y < 1.0,
+		"map",
+		"the car's anchor is inside the slot (%.2f, %.2f)" % [anchor.x, anchor.y]
+	)
+
+	# 🔴 Opaque, both. Strokes overlap at every joint, a deck's casing is the
+	# field drawn over the street beneath it, and the roads are clipped by the
+	# field's drawn alpha — three things a translucent colour breaks quietly.
+	_expect(
+		style.map_field.a == 1.0 and style.map_road.a == 1.0,
+		"map",
+		"the field and the roads are opaque"
+	)
+	_expect(
+		_contrast(style.map_road, style.map_field) >= MIN_CONTRAST,
+		"map",
+		"the roads are legible on the field"
+	)
+	_expect(
+		_contrast(style.map_marker, style.map_marker_edge) >= MIN_CONTRAST,
+		"map",
+		"the chevron's rim separates it from a road of any luminance"
+	)
+
+	var car := Vector3(500.0, 6.0, 300.0)
+	var at := Vector2(120.0, 140.0)
+	var north := Vector3(0.0, 0.0, -1.0)
+	var east := Vector3(1.0, 0.0, 0.0)
+	var scale: float = 0.75
+	for heading_up: bool in [true, false]:
+		var pinned: Transform2D = MinimapProjectionScript.roads_transform(
+			car, north, heading_up, scale, at
+		)
+		var mode: String = "heading-up" if heading_up else "north-up"
+		_expect(_lands(pinned, car, at), "map", "%s: the car is on its anchor" % mode)
+		_expect(
+			_lands(pinned, car + east * 100.0, at + Vector2(75.0, 0.0)),
+			"map",
+			"%s, facing north: 100 m east is 75 px RIGHT — the map is not mirrored" % mode
+		)
+		_expect(
+			_lands(pinned, car + north * 100.0, at + Vector2(0.0, -75.0)),
+			"map",
+			"%s, facing north: 100 m north is 75 px up" % mode
+		)
+
+	# Facing east, the two orientations must now DISAGREE, and in a known way.
+	var turned: Transform2D = MinimapProjectionScript.roads_transform(car, east, true, scale, at)
+	_expect(
+		_lands(turned, car + east * 100.0, at + Vector2(0.0, -75.0)),
+		"map",
+		"heading-up, facing east: the road ahead is up"
+	)
+	_expect(
+		_lands(turned, car + north * 100.0, at + Vector2(-75.0, 0.0)),
+		"map",
+		"heading-up, facing east: north is to the LEFT, which is the turn's sign"
+	)
+	var fixed: Transform2D = MinimapProjectionScript.roads_transform(car, east, false, scale, at)
+	_expect(
+		_lands(fixed, car + north * 100.0, at + Vector2(0.0, -75.0)),
+		"map",
+		"north-up, facing east: north stays up"
+	)
+	_expect(
+		is_equal_approx(MinimapProjectionScript.marker_rotation(east, false), PI * 0.5),
+		"map",
+		"and the chevron turns a quarter clockwise instead"
+	)
+	_expect(
+		MinimapProjectionScript.marker_rotation(east, true) == 0.0,
+		"map",
+		"heading-up, the chevron stays up and the map turns"
+	)
+
+	_check_minimap_mesh()
+
+
+## The draw order, which IS the grade separation: a mesh draws in index order.
+func _check_minimap_mesh() -> void:
+	# ⚠️ Black and white because a mesh keeps its colours as RGBA8: 0.1 comes
+	# back as 26/255, and the assertions below are about ORDER, not quantising.
+	var road := Color.BLACK
+	var field := Color.WHITE
+	var street: RefCounted = _stroke(Vector2(-50.0, 0.0), Vector2(50.0, 0.0), 0)
+	var deck: RefCounted = _stroke(Vector2(0.0, -50.0), Vector2(0.0, 50.0), 1)
+	_expect(MinimapMeshScript.build([], road, field, 2.0) == null, "map", "no strokes, no mesh")
+
+	# Deck handed in FIRST, so an order that merely preserved the input fails.
+	var strokes: Array[MinimapMeshScript.Stroke] = [deck, street]
+	var mesh: ArrayMesh = MinimapMeshScript.build(strokes, road, field, 2.0)
+	if mesh == null:
+		_fail("map", "two strokes built no mesh — every assertion below is inert")
+		return
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector2Array = arrays[Mesh.ARRAY_VERTEX]
+	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var per_stroke: int = floori(vertices.size() / 3.0)
+	_expect(
+		vertices.size() == per_stroke * 3 and colours.size() == vertices.size(),
+		"map",
+		"street, casing and deck are three strokes of equal size, coloured a vertex"
+	)
+	_expect(
+		absf(vertices[0].y) <= 4.0 and colours[0].is_equal_approx(road),
+		"map",
+		"the street is drawn first, whatever order it was handed in"
+	)
+	_expect(
+		(
+			colours[per_stroke].is_equal_approx(field)
+			and colours[per_stroke * 2].is_equal_approx(road)
+		),
+		"map",
+		"then the deck's casing in the field's colour, then the deck over it"
+	)
+	var casing_reach: float = 0.0
+	var deck_reach: float = 0.0
+	for index: int in range(per_stroke, per_stroke * 2):
+		casing_reach = maxf(casing_reach, absf(vertices[index].x))
+		deck_reach = maxf(deck_reach, absf(vertices[index + per_stroke].x))
+	_expect(
+		is_equal_approx(casing_reach - deck_reach, 2.0),
+		"map",
+		"and the casing stands 2.0 m proud of the deck (%.1f)" % (casing_reach - deck_reach)
+	)
+
+	# 🔴 One bevel a turn, so it has to be on the OUTSIDE — on the inside it is
+	# under the two quads and the notch stays open, at a size no frame shows.
+	# Right then down: the notch is up and to the right of the corner.
+	var bend: RefCounted = _stroke(Vector2(-50.0, 0.0), Vector2(0.0, 50.0), 0)
+	bend.points = PackedVector2Array([Vector2(-50.0, 0.0), Vector2.ZERO, Vector2(0.0, 50.0)])
+	var bent: Array[MinimapMeshScript.Stroke] = [bend]
+	var corner: PackedVector2Array = (
+		MinimapMeshScript.build(bent, road, field, 2.0).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	)
+	var bevels: int = 0
+	var outside: bool = false
+	for index: int in range(0, corner.size(), 3):
+		if corner[index] == Vector2.ZERO:
+			bevels += 1
+			# The centroid: the third vertex is the corner itself, at the origin.
+			var centre: Vector2 = (corner[index + 1] + corner[index + 2]) / 3.0
+			outside = centre.x > 0.0 and centre.y < 0.0
+	_expect(bevels == 1 and outside, "map", "a turn takes one bevel, on its outside")
+
+	# Two roads meeting at a node share ONE cap, at the wider road's half — two
+	# would be the 16k triangles this was cut from, and the narrower half would
+	# leave the wide road's corner open.
+	var lane: RefCounted = _stroke(Vector2(200.0, 0.0), Vector2(300.0, 0.0), 0)
+	var avenue: RefCounted = _stroke(Vector2(200.0, 0.0), Vector2(200.0, 100.0), 0)
+	avenue.width_m = 16.0
+	var meeting: Array[MinimapMeshScript.Stroke] = [lane, avenue]
+	var met: PackedVector2Array = (
+		MinimapMeshScript.build(meeting, road, field, 2.0).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	)
+	var fans: int = 0
+	var reach: float = 0.0
+	for index: int in range(0, met.size(), 3):
+		if met[index] == Vector2(200.0, 0.0):
+			fans += 1
+			reach = maxf(reach, met[index].distance_to(met[index + 1]))
+	_expect(
+		fans == MinimapMeshScript.CAP_SIDES and is_equal_approx(reach, 8.0),
+		"map",
+		"two roads at one node share one cap, at the wider half (%d fans, %.1f m)" % [fans, reach]
+	)
+
+	var wobble := PackedVector2Array([Vector2.ZERO, Vector2(50.0, 0.2), Vector2(100.0, 0.0)])
+	_expect(
+		MinimapMeshScript.simplified(wobble, 0.5).size() == 2,
+		"map",
+		"a vertex 0.2 m off its road is dropped at a 0.5 m tolerance"
+	)
+	_expect(MinimapMeshScript.simplified(wobble, 0.1).size() == 3, "map", "and kept at a 0.1 m one")
+
+
+func _stroke(from: Vector2, to: Vector2, level: int) -> RefCounted:
+	var stroke := MinimapMeshScript.Stroke.new()
+	stroke.points = PackedVector2Array([from, to])
+	stroke.width_m = 8.0
+	stroke.level = level
+	return stroke
+
+
+## True where `placed` carries `world` onto `wanted`, to a hundredth of a pixel.
+static func _lands(placed: Transform2D, world: Vector3, wanted: Vector2) -> bool:
+	return (placed * MinimapProjectionScript.plan(world)).distance_to(wanted) < 0.01
 
 
 # ----------------------------------------------------------------- report ----
