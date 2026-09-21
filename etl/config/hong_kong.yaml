@@ -1354,6 +1354,10 @@ arrows:
     bearing: ANGLE
     level: ELEVATION
     size: SYMBOL_SIZE
+  # `ELEVATION` codes whose arrows stand on the decks (`P3-37b`, `Q134`):
+  # `road_marks.deck_codes` below, same publisher, same column, same table. 20 of
+  # Wan Chai's 1,365 symbols carry a level; A03's are in the shut bores (`Q21`).
+  deck_codes: [A01]
 
   glyphs:
     "1017": {movements: [ahead], length_m: 4.0}
@@ -2299,6 +2303,19 @@ road_marks:
       fields:
         mark_type: LINETYPE
         level: ELEVATION
+
+  # 🔴 `ELEVATION` codes whose paint is drawn on the DECKS (`P3-37`, `Q134`). Until
+  # then every non-null level was refused on `Q13`'s closed elevated network;
+  # `Q111` opened level 1 and `Q132` switched the shader's lane lines off, so
+  # the bridges had no paint at all. Measured on Wan Chai, 2026-09-21:
+  #
+  #   code   marks   metres   vertices over a drawn deck
+  #   A01      107    3,917   733 of 847 over level 1
+  #   A03      180   14,720   0 over level 1; 934 of 1,827 over level -1
+  #
+  # A01 is the elevated network (`traffic_aids.off_grade_codes` above measured
+  # the same on the sister layer). A03 is the bores, shut by `Q21` — not listed.
+  deck_codes: [A01]
 
   # Which level-0 edges are CONSIDERED for the host — not how far the host may
   # be. At 20 m every one of the region's 209 at-grade parts finds a

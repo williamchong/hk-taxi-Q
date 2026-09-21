@@ -62,7 +62,7 @@ import itertools
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -134,13 +134,58 @@ ARROWS_MATERIAL = "arrows"
 
 # What `ELEVATION` says when a symbol is at grade. The column is a structure
 # identifier — `A01`, `A03` — and null is the ground. 1,328 of the region's 1,365
-# symbols are null; the rest are on flyovers this region does not open to
-# driving (`Q13`).
+# symbols are null; the rest are on a structure — `A01` the decks, stood by
+# `stand_on_decks` since `P3-37b`, `A03` the bores `Q21` keeps shut.
 #
 # ⚠️ Not config. It is the source's own encoding of "no structure", not a
 # threshold anyone may tune, and a city whose publisher spells it differently
 # needs a reader change rather than a number.
 _AT_GRADE = ("", "none", "null", "<na>")
+
+
+@dataclass
+class DeckArrowReport:
+    """TD's turn arrows on the decks (`P3-37b`, `Q134`), counted APART.
+
+    `roadmarks.DeckReport`'s rule and for its reason: nothing here enters
+    `ArrowReport`'s partitions, and those coming out unchanged is the proof
+    that painting the decks moved nothing on the street. A subset of
+    `on_structure` by the publisher's `arrows.deck_codes`.
+
+        symbols == empty_geometry + candidates
+        candidates == drawn + no_deck_drawn + too_far + off_bearing + against_one_way
+                      + off_deck
+
+    ⚠️ **No slot up here, so no fallback**: a deck's width is authored and
+    its `lanes` with it, which is the frame `P3-36` stopped drawing in. An
+    arrow the host level's drawn surface does not cover — centre, nose or tail
+    — is `off_deck`, refused, never floated.
+    """
+
+    symbols: int = 0
+    empty_geometry: int = 0
+    candidates: int = 0
+    drawn: int = 0
+    # The region draws no level above the street, so there was no host to be
+    # far from — not `too_far`, which is a distance to a host that exists.
+    no_deck_drawn: int = 0
+    too_far: int = 0
+    off_bearing: int = 0
+    against_one_way: int = 0
+    off_deck: int = 0
+
+    def check(self) -> None:
+        refused = (
+            self.no_deck_drawn
+            + self.too_far
+            + self.off_bearing
+            + self.against_one_way
+            + self.off_deck
+        )
+        if self.symbols != self.empty_geometry + self.candidates:
+            raise ValueError(f"the deck symbols partition does not close: {self}")
+        if self.candidates != self.drawn + refused:
+            raise ValueError(f"the deck candidates partition does not close: {self}")
 
 
 @dataclass
@@ -256,6 +301,12 @@ class ArrowReport:
     #
     # ⚠️ **Reachable at zero** — a graph with the right lane counts scores 0 —
     # so this is a finding to go and look at, never a bar to retune.
+    #
+    # 🔴 **Asked of the SLOTS since `P3-36` (`Q134`), not of the frame.** Arrows
+    # stand where TD surveyed them now, so the shaft wearing two branches is
+    # gone from the road; two instructions sharing one slot is still what this
+    # counts, because it is the finding about `lanes`. What can overlap in a
+    # frame is `overlapping_drawn`.
     stacked_pairs: int = 0
     stacked_disagreeing: int = 0
     # Pairs of arrows DRAWN within half a glyph of each other on one edge,
@@ -263,6 +314,8 @@ class ArrowReport:
     # this is reachable through the slot fallback landing on a surveyed
     # neighbour, or a duplicated source row. A finding, never a refusal.
     overlapping_drawn: int = 0
+    # What `on_structure` refuses and the decks then draw. See `DeckArrowReport`.
+    deck: DeckArrowReport = field(default_factory=DeckArrowReport)
 
     # 🔴 **The lane count the arrows themselves state, per edge (`Q94`), and
     # the only reading of one in this bundle that owes nothing to a width.**
@@ -373,6 +426,7 @@ def read_symbols(
     report: ArrowReport,
     *,
     sources_root: Path | None,
+    deck: list[Symbol] | None = None,
 ) -> list[Symbol]:
     """Every published turn-arrow symbol in the region, in game plan space.
 
@@ -409,10 +463,21 @@ def read_symbols(
                 report.not_a_turn_arrow += 1
                 continue
             if str(levels[owner]).strip().lower() not in _AT_GRADE:
-                # On a flyover. `Q13` keeps the elevated network closed to
-                # driving, so its paint is unreachable, and the nearest level-0
-                # edge to a symbol on a deck is the street underneath it.
+                # On a structure, so not the street's: the nearest level-0 edge
+                # to a symbol on a deck is the street underneath it. ⚠️ This
+                # read "`Q13` keeps the elevated network closed" until `Q111`
+                # opened level 1; the decks' own arrows are `stand_on_decks`'.
                 report.on_structure += 1
+                if deck is not None and str(levels[owner]).strip().upper() in spec.deck_codes:
+                    # 🔴 Refused above as it always was, and ALSO handed to
+                    # the decks (`P3-37b`), counted in `report.deck` only.
+                    report.deck.symbols += 1
+                    x, z, bearing = float(game_x[row]), float(game_z[row]), float(bearings[owner])
+                    if math.isfinite(x) and math.isfinite(z) and math.isfinite(bearing):
+                        report.deck.candidates += 1
+                        deck.append(Symbol(code, x, z, game_heading_deg(bearing)))
+                    else:
+                        report.deck.empty_geometry += 1
                 continue
             x, z, bearing = float(game_x[row]), float(game_z[row]), float(bearings[owner])
             if not (math.isfinite(x) and math.isfinite(z) and math.isfinite(bearing)):
@@ -714,7 +779,10 @@ def build_region(
         return report
 
     transform = city.game_transform(region_id)
-    symbols = read_symbols(city, spec, region_id, transform, report, sources_root=sources_root)
+    on_deck: list[Symbol] = []
+    symbols = read_symbols(
+        city, spec, region_id, transform, report, sources_root=sources_root, deck=on_deck
+    )
 
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     # ⚠️ **Through `read_document`, not a bare parse.** Every arrow's lane comes
@@ -859,6 +927,17 @@ def build_region(
             )
         )
 
+    # After the street and into the same library, so a region's first `RM` code
+    # is still the street's and the level-0 stands keep their order (`P3-37b`).
+    for symbol, placed, y_tail, y_nose in stand_on_decks(
+        graph, surface, on_deck, spec, report.deck
+    ):
+        glyph = spec.glyphs[symbol.code]
+        if symbol.code not in library:
+            library[symbol.code] = FlatBuilder(ARROWS_MATERIAL)
+            _draw_glyph(library[symbol.code], spec, glyph)
+        stands.append(_stand(spec, symbol, glyph, placed, y_tail, y_nose))
+
     _count_stacked(laid, report)
     _count_overlapping(laid, report)
     _count_rows(laid, drawn, report)
@@ -886,13 +965,67 @@ def build_region(
             report.inverted += count
             report.inverted_area_m2 += area
         library.publish(report)
-        library.require_every_stand(report.drawn, f"{report.drawn} arrows")
+        standing = report.drawn + report.deck.drawn
+        library.require_every_stand(standing, f"{standing} arrows")
         report.bytes = library.write(
             out_dir, ARROWS_NAME, ARROWS_PLACEMENTS_NAME, city.id, region_id
         )
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def stand_on_decks(
+    graph: dict,
+    surface: dict,
+    symbols: Sequence[Symbol],
+    spec: Arrows,
+    report: DeckArrowReport,
+) -> list[tuple[Symbol, np.ndarray, float, float]]:
+    """Each deck arrow that stands: its symbol, plan position, tail and nose heights.
+
+    🔴 **Hosted among OFF-GRADE edges only, and stood where TD surveyed it on
+    the host level's drawn surface** — `roadmarks.draw_decks`' two rules, for
+    its reasons. The street's own bars apply unchanged (`max_offset_m`,
+    `bearing_tolerance_deg`, against a one-way); the heights are the deck's
+    under the glyph's two ends rather than the host centreline's, because up
+    here nothing else says the arrow has a deck under all of it.
+    """
+    levels = [level for level in DrawnSurface.levels_drawn(surface) if level > 0]
+    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in levels]
+    if not symbols or not edges:
+        report.no_deck_drawn += len(symbols)
+        report.check()
+        return []
+    by_id = {int(edge["id"]): edge for edge in edges}
+    decks = {level: DrawnSurface.of(surface, level=level) for level in levels}
+    segments = Segments.of(edges)
+
+    standing = []
+    for symbol in symbols:
+        snap = segments.nearest(symbol.x, symbol.z)
+        if snap.distance_m > spec.max_offset_m:
+            report.too_far += 1
+            continue
+        if axis_residual_deg(symbol.heading_deg, snap.heading_deg) > spec.bearing_tolerance_deg:
+            report.off_bearing += 1
+            continue
+        host = by_id[int(snap.edge)]
+        against = directed_residual_deg(symbol.heading_deg, snap.heading_deg) > 90.0
+        if str(host["direction"]) != "both" and against:
+            report.against_one_way += 1
+            continue
+        deck = decks[int(host["elevation_level"])]
+        ahead = 0.5 * spec.glyphs[symbol.code].length_m * frame(symbol.heading_deg)[0]
+        centre = np.array([symbol.x, symbol.z])
+        tail, nose = centre - ahead, centre + ahead
+        if not all(deck.covers(float(x), float(z)) for x, z in (centre, tail, nose)):
+            report.off_deck += 1
+            continue
+        report.drawn += 1
+        standing.append((symbol, centre, deck.height_at(*tail), deck.height_at(*nose)))
+    report.check()
+    return standing
 
 
 class _Laid(NamedTuple):
@@ -1238,6 +1371,18 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         # `Q19`'s invented lane count arriving where a frame can show it.
         "stacked_pairs": report.stacked_pairs,
         "overlapping_drawn": report.overlapping_drawn,
+        # TD's arrows on the decks, counted apart (`P3-37b`). See `DeckArrowReport`.
+        "deck": {
+            "symbols": report.deck.symbols,
+            "empty_geometry": report.deck.empty_geometry,
+            "candidates": report.deck.candidates,
+            "drawn": report.deck.drawn,
+            "no_deck_drawn": report.deck.no_deck_drawn,
+            "too_far": report.deck.too_far,
+            "off_bearing": report.deck.off_bearing,
+            "against_one_way": report.deck.against_one_way,
+            "off_deck": report.deck.off_deck,
+        },
         "stacked_disagreeing": report.stacked_disagreeing,
         # 🔴 The lane count the publisher's own arrows state, per edge — see
         # `ArrowReport.implied_lanes`. Published **per edge** rather than as a

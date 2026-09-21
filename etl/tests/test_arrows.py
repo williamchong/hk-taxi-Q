@@ -22,6 +22,7 @@ import yaml
 from pipeline.arrows import (
     ARROWS_MATERIAL,
     ArrowReport,
+    DeckArrowReport,
     Ribbon,
     Symbol,
     _count_overlapping,
@@ -39,13 +40,14 @@ from pipeline.arrows import (
     directed_residual_deg,
     glyph_mesh_name,
     glyph_polygons,
+    stand_on_decks,
 )
 from pipeline.config import load_config
 from pipeline.meshbuild import FlatBuilder
 from pipeline.placements import PLACEMENT_DP, placement, stood, stood_positions
 from pipeline.polyline import Segments
 from pipeline.surface import downward_facing, mitres
-from tests.helpers import CITY_YAML, polygon_area
+from tests.helpers import CITY_YAML, polygon_area, ribbon_of
 
 # The block as `hong_kong.yaml` declares it, trimmed to the codes the tests use.
 # Held here rather than in `helpers.py`'s `CITY_YAML` because the block is
@@ -564,6 +566,81 @@ class TestTheReport:
     def test_an_empty_distribution_publishes_nothing_rather_than_a_zero(self):
         """A zero would read as "measured, and it was fine"."""
         assert ArrowReport.measured([]) == {}
+
+
+class TestArrowsOnTheDecks:
+    """`P3-37b` (`Q134`): TD's `A01` arrows, hosted off-grade and stood on their deck."""
+
+    @staticmethod
+    def _stacked(deck_until_x: float = 40.0, direction: str = "forward"):
+        """A street with a flyover over it, the street's centreline the nearer
+        of the two to an arrow at z = 0.5. Heading 90 points along +x."""
+        street = {
+            "id": 0,
+            "polyline": [[0.0, 8.3, 0.3], [40.0, 8.3, 0.3]],
+            "elevation_level": 0,
+            "direction": "forward",
+        }
+        deck = {
+            "id": 1,
+            "polyline": [[0.0, 14.0, -1.0], [deck_until_x, 15.0, -1.0]],
+            "elevation_level": 1,
+            "direction": direction,
+        }
+        surface = {"ribbons": [ribbon_of(street, 4.0), ribbon_of(deck, 4.0)]}
+        return {"edges": [street, deck]}, surface
+
+    def test_a_deck_arrow_is_hosted_off_grade_and_takes_the_decks_grade(self, spec):
+        """Mutation-check it by hosting among every edge, each at its own
+        level: the arrow lands on the street, 5.7 m under its deck."""
+        graph, surface = self._stacked()
+        report = DeckArrowReport(symbols=1, candidates=1)
+        symbol = Symbol(code="1017", x=20.0, z=0.5, heading_deg=90.0)
+        [(stood_symbol, placed, y_tail, y_nose)] = stand_on_decks(
+            graph, surface, [symbol], spec, report
+        )
+        assert stood_symbol is symbol
+        assert placed == pytest.approx([20.0, 0.5])
+        length_m = spec.glyphs["1017"].length_m
+        assert (y_tail, y_nose) == pytest.approx(
+            (14.5 - 0.0125 * length_m, 14.5 + 0.0125 * length_m)
+        )
+        assert report.drawn == 1
+
+    def test_an_arrow_whose_nose_is_past_the_rim_is_refused_and_never_floated(self, spec):
+        """Centre on the deck, nose 1 m past its end. Mutation-check it by
+        asking `covers` of the centre alone."""
+        graph, surface = self._stacked(deck_until_x=20.0)
+        report = DeckArrowReport(symbols=1, candidates=1)
+        length_m = spec.glyphs["1017"].length_m
+        symbol = Symbol(code="1017", x=21.0 - 0.5 * length_m, z=0.5, heading_deg=90.0)
+        assert stand_on_decks(graph, surface, [symbol], spec, report) == []
+        assert (report.off_deck, report.drawn) == (1, 0)
+
+    def test_the_streets_own_refusals_apply_on_a_deck(self, spec):
+        graph, surface = self._stacked()
+        report = DeckArrowReport(symbols=3, candidates=3)
+        symbols = [
+            Symbol(code="1017", x=20.0, z=0.5, heading_deg=270.0),
+            Symbol(code="1017", x=20.0, z=0.5, heading_deg=0.0),
+            Symbol(code="1017", x=20.0, z=-1.0 - spec.max_offset_m - 1.0, heading_deg=90.0),
+        ]
+        assert stand_on_decks(graph, surface, symbols, spec, report) == []
+        assert (report.against_one_way, report.off_bearing, report.too_far) == (1, 1, 1)
+
+    def test_a_region_that_draws_no_deck_refuses_every_candidate(self, spec):
+        graph, surface = self._stacked()
+        report = DeckArrowReport(symbols=1, candidates=1)
+        symbol = Symbol(code="1017", x=20.0, z=0.5, heading_deg=90.0)
+        street_only = {"ribbons": surface["ribbons"][:1]}
+        assert (
+            stand_on_decks({"edges": graph["edges"][:1]}, street_only, [symbol], spec, report) == []
+        )
+        assert (report.no_deck_drawn, report.too_far) == (1, 0)
+
+    def test_a_partition_that_does_not_close_is_refused(self):
+        with pytest.raises(ValueError, match="candidates partition"):
+            DeckArrowReport(symbols=1, candidates=1).check()
 
 
 class TestTheBlockIsOptional:

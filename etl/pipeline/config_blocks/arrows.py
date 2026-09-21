@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from pipeline.config_blocks.base import LayerSpec, _require, _spec_header
+from pipeline.config_blocks.base import LayerSpec, _deck_codes, _require, _spec_header
 
 # What an arrow may show. The vocabulary is the pipeline's, not a city's:
 # a glyph is drawn from these, so a fourth word would need geometry to draw it.
@@ -144,6 +144,11 @@ class Arrows(LayerSpec):
     # agree with the road would be an invented marking in `Q54`'s sense, and it
     # would render perfectly.
     bearing_tolerance_deg: float
+    # The publisher's `level` codes whose arrows stand on the DECKS (`P3-37b`,
+    # `Q134`) — `road_marks.deck_codes`' key, for its reason and with its
+    # measurement: `A01` is the elevated network, `A03` the shut bores. Empty
+    # stands none, which is what every build before `P3-37` did.
+    deck_codes: tuple[str, ...]
 
 
 _ARROW_ROLES = ("code", "bearing", "level", "size")
@@ -270,4 +275,5 @@ def _arrows(body: Any, where: str) -> Arrows | None:
         lift_m=lift_m,
         max_offset_m=max_offset_m,
         bearing_tolerance_deg=tolerance_deg,
+        deck_codes=_deck_codes(body, where),
     )

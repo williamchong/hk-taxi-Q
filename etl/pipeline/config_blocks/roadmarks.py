@@ -12,6 +12,7 @@ from typing import Any
 from pipeline.config_blocks.base import (
     LayerSpec,
     SourceLayer,
+    _deck_codes,
     _measures,
     _require,
     _source_layer,
@@ -288,6 +289,14 @@ class RoadMarks(LayerSpec):
     # at-grade double line as *absent*. Same `source` and `member`, and the same
     # roles, because they are one table the publisher split.
     more_layers: tuple[SourceLayer, ...]
+    # 🔴 **The publisher's `level` codes whose paint is drawn on the DECKS
+    # (`P3-37`, `Q134`); every other non-null level stays refused.** `A01` is
+    # the elevated network — `traffic_aids.off_grade_codes` measured it, and 87%
+    # of these layers' `A01` vertices stand over the drawn level-1 deck. `A03`
+    # is the bores, which are shut (`Q21`), so it is not listed. Empty draws no
+    # deck paint, which is what every build before `P3-37` did. The publisher's
+    # vocabulary, so it is config (hard rule 3); upper-cased, as TD writes it.
+    deck_codes: tuple[str, ...]
     # 🔴 **How much wider than life a LONGITUDINAL marking is drawn — authored,
     # and named as authored.** Every dimension in `marks:` is transcribed from
     # TD's sheet and none of them may be edited; this is a separate, explicit
@@ -480,6 +489,7 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
         **_spec_header(body, where, _ROAD_MARK_ROLES),
         marks=marks,
         more_layers=more_layers,
+        deck_codes=_deck_codes(body, where),
         longitudinal_legibility_scale=scale,
         opposed_join_mark=join_mark,
         **measures,

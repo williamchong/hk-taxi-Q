@@ -270,6 +270,25 @@ def _require(mapping: dict[str, Any], key: str, where: Path | str) -> Any:
     return mapping[key]
 
 
+def _deck_codes(body: dict[str, Any], where: str) -> tuple[str, ...]:
+    """The optional `deck_codes` key of a painted layer (`P3-37`, `Q134`): the
+    publisher's `level` codes whose paint is drawn on the decks, upper-cased as
+    TD writes them. Absent is none, which is every build before `P3-37`.
+
+    ⚠️ **A repeat is refused, where `crossings._codes` folds one into a set**:
+    these name populations to DRAW, and an empty code is the publisher's "at
+    grade" — the street's own paint drawn a second time on a deck host renders
+    as one marking.
+    """
+    raw = body.get("deck_codes", [])
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise ValueError(f"{where}:deck_codes must be a list, got {raw!r}")
+    codes = tuple(str(code).strip().upper() for code in raw)
+    if any(not code for code in codes) or len(set(codes)) != len(codes):
+        raise ValueError(f"{where}:deck_codes must be distinct non-empty codes, got {raw!r}")
+    return codes
+
+
 class _Read(dict):
     """A YAML mapping that remembers which of its keys a parser asked for.
 

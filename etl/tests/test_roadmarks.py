@@ -23,18 +23,22 @@ from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.roadmarks import (
     ROADMARKS_MATERIAL,
+    DeckReport,
     Marking,
     Network,
     RoadMarkReport,
     _check_join_partition,
     _covered,
     _cuts,
+    _deck_runs,
     _gaps_between,
     _host,
     _on_its_own_carriageway,
     _place,
+    _place_on_deck,
     _runs,
     band_quads,
+    draw_decks,
     draw_opposed_joins,
     opposed_joins,
 )
@@ -862,6 +866,139 @@ class TestTheHeightJoin:
         # count as covered (`sample`'s rule for a cut corner); the two past it
         # are over nothing.
         assert alone.vertices_over_void == 2
+
+
+class TestPaintOnTheDecks:
+    """`P3-37` (`Q134`): TD's `A01` paint, hosted off-grade and stood on its deck."""
+
+    STREET_Y = 8.3
+    DECK_Y = 14.0
+
+    @classmethod
+    def _stacked(cls, deck_until_x: float = 40.0) -> tuple[dict, dict]:
+        """A street with a flyover over it: the street's centreline is the
+        NEARER of the two to anything painted at z = 0.5."""
+        street = {
+            "id": 0,
+            "polyline": [[0.0, cls.STREET_Y, 0.3], [40.0, cls.STREET_Y, 0.3]],
+            "elevation_level": 0,
+        }
+        deck = {
+            "id": 1,
+            "polyline": [[0.0, cls.DECK_Y, -1.0], [deck_until_x, cls.DECK_Y, -1.0]],
+            "elevation_level": 1,
+        }
+        surface = {
+            "ribbons": [ribbon_of(street, 4.0), ribbon_of(deck, 4.0)],
+            "carriageway": [
+                {"edge": one["id"], "half_width_m": [4.0, 4.0], "offset_m": [0.0, 0.0]}
+                for one in (street, deck)
+            ],
+        }
+        return {"edges": [street, deck]}, surface
+
+    def test_a_deck_line_is_hosted_off_grade_and_stands_at_the_decks_height(self, spec):
+        """🔴 The reason the level guard gave for refusing is still true: the
+        nearest edge to a line on a flyover is the street under it. Mutation-
+        check it by letting `draw_decks` host among every edge."""
+        graph, surface = self._stacked()
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
+        mesh = draw_decks(graph, surface, [line], spec, report, 0.0)
+        assert mesh is not None
+        assert mesh.positions[:, 1] == pytest.approx(self.DECK_Y + spec.lift_m)
+        assert (report.drawn, report.stations_off_deck) == (1, 0)
+        assert report.drawn_m_by_id == {"double_white_lines": pytest.approx(20.0)}
+        assert downward_facing(mesh) == (0, 0.0)
+
+    def test_paint_past_the_decks_rim_is_refused_and_never_floated(self, spec):
+        """The void rule `_place` keeps, inverted: past a kerb there is a
+        footway, past a deck's rim there is air. Mutation-check it by dropping
+        the `covers` test — the mesh then reaches x = 25 at the rim's height."""
+        graph, surface = self._stacked(deck_until_x=20.0)
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
+        mesh = draw_decks(graph, surface, [line], spec, report, 0.0)
+        assert mesh is not None
+        assert mesh.positions[:, 0].max() == pytest.approx(20.0)
+        assert report.drawn == 1
+        assert report.stations_off_deck >= 1
+        # Both bands of the double line, 5 m each past the rim.
+        assert report.off_deck_m == pytest.approx(10.0)
+
+    def test_a_quad_wholly_past_the_rim_places_nothing(self, spec):
+        _, surface = self._stacked(deck_until_x=20.0)
+        deck = DrawnSurface.of(surface, level=1)
+        report = DeckReport()
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
+        past = np.array([[22.0, 0.6], [26.0, 0.6], [26.0, 0.4], [22.0, 0.4]])
+        assert _place_on_deck(builder, deck, past, spec.lift_m, report) == 0
+        assert (report.pieces_placed, report.stations_off_deck) == (0, 1)
+        assert builder.build("roadmarks") is None
+
+    def test_a_line_with_no_piece_on_its_deck_is_refused_whole(self, spec):
+        """Hosted — its midpoint 2.9 m from the deck's last vertex, inside the
+        4 m bar — and every piece past the rim, so it is a refusal and never a
+        `drawn` with nothing in the mesh."""
+        graph, surface = self._stacked(deck_until_x=20.0)
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[21.0, 0.5], [24.0, 0.5]])
+        assert draw_decks(graph, surface, [line], spec, report, 0.0) is None
+        assert (report.wholly_off_deck, report.drawn) == (1, 0)
+
+    def test_a_line_beside_its_deck_host_meets_the_streets_own_bar(self, spec):
+        graph, surface = self._stacked()
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[15.0, 6.0], [19.0, 6.0]])
+        assert draw_decks(graph, surface, [line], spec, report, 0.0) is None
+        assert report.host_off_carriageway == 1
+
+    def test_a_region_that_draws_no_deck_refuses_every_candidate(self, spec):
+        graph, surface = self._stacked()
+        street_only = {
+            "ribbons": surface["ribbons"][:1],
+            "carriageway": surface["carriageway"][:1],
+        }
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
+        assert (
+            draw_decks({"edges": graph["edges"][:1]}, street_only, [line], spec, report, 0.0)
+            is None
+        )
+        assert report.no_edge_in_range == 1
+
+    def test_a_partition_that_does_not_close_is_refused(self):
+        with pytest.raises(ValueError, match="candidates partition"):
+            DeckReport(parts=1, candidates=1).check()
+
+    def test_a_deck_part_is_counted_in_its_own_report_and_cut_into_runs(self, spec):
+        class Plan:
+            @staticmethod
+            def to_game(x, y):
+                return x, None, y
+
+        report = DeckReport()
+        source = np.array([[5.0, 5.0], [25.0, 5.0]])
+        runs = _deck_runs("RM1001", spec.mark_of("RM1001"), source, Plan, (100.0, 100.0), report)
+        assert [run.code for run in runs] == ["RM1001"]
+        assert (report.parts, report.candidates) == (1, 1)
+        assert (
+            _deck_runs("RM1001", spec.mark_of("RM1001"), source[:1], Plan, (100.0, 100.0), report)
+            == []
+        )
+        assert (report.parts, report.empty_geometry) == (2, 1)
+        report.drawn = 1
+        report.check()
+
+    def test_deck_codes_default_to_none_and_are_read_as_the_publisher_writes_them(self, tmp_path):
+        assert city_with(tmp_path, BLOCK).road_marks.deck_codes == ()
+        block = {**BLOCK, "deck_codes": ["a01"]}
+        assert city_with(tmp_path, block).road_marks.deck_codes == ("A01",)
+
+    @pytest.mark.parametrize("codes", [["A01", "a01"], [""], "A01"])
+    def test_deck_codes_that_repeat_or_name_the_street_are_refused(self, tmp_path, codes):
+        with pytest.raises(ValueError, match="deck_codes"):
+            city_with(tmp_path, {**BLOCK, "deck_codes": codes})
 
 
 class TestTheBlockIsOptional:

@@ -41,7 +41,7 @@ import argparse
 import logging
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import pairwise, product
 from pathlib import Path
 from typing import NamedTuple
@@ -54,7 +54,8 @@ from pipeline.documents import read_document, write_document
 from pipeline.drawnsurface import DrawnSurface
 from pipeline.fetch import source_reads
 from pipeline.geometry import wound_up
-from pipeline.gltf import write_glb
+from pipeline.gltf import MeshData, write_glb
+from pipeline.mesh import merge
 from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, plan_lengths_2d, plan_projections
 
@@ -100,6 +101,70 @@ ROADMARKS_MATERIAL = "roadmarks"
 # triangle is dropped downstream — but it was counted in `slivers_dropped`,
 # which is a published counter this stage asks readers to trust.
 _MIN_MARK_M = 1e-6
+
+
+@dataclass
+class DeckReport:
+    """TD's surveyed paint on the decks (`P3-37`, `Q134`), counted APART.
+
+    🔴 **Nothing here enters `RoadMarkReport`'s partitions, `drawn_by_id` or any
+    of its distributions** — the join's rule (`Q125`) for the opposite reason:
+    those are over the level-0 survey, and they coming out byte-identical is the
+    proof that painting the decks moved nothing on the street.
+
+    Until `P3-37` every feature with a `level` was refused on `Q13`'s closed
+    elevated network; `Q111` opened level 1, and with `draw_lane_lines` off
+    (`Q132`) nothing else paints a deck. Only `road_marks.deck_codes` are read —
+    `A01`, 87% of whose vertices stand over the drawn level-1 deck; `A03` is the
+    bores, which stay shut (`Q21`).
+
+    The partitions:
+
+        parts == empty_geometry + outside_region + candidates
+        candidates == drawn + no_edge_in_range + host_off_carriageway
+                      + no_host_on_axis + wholly_off_deck
+    """
+
+    parts: int = 0
+    empty_geometry: int = 0
+    outside_region: int = 0
+    candidates: int = 0
+
+    drawn: int = 0
+    no_edge_in_range: int = 0
+    host_off_carriageway: int = 0
+    no_host_on_axis: int = 0
+    # Hosted, and not one piece of it stood on the deck its host is drawn at.
+    wholly_off_deck: int = 0
+
+    drawn_by_id: dict[str, int] = field(default_factory=dict)
+    drawn_m_by_id: dict[str, float] = field(default_factory=dict)
+    # Over the refusals as well as the keeps, `RoadMarkReport`'s rule (`Q58`).
+    axis_residual_deg: list[float] = field(default_factory=list)
+
+    # 🔴 **A piece the host level's drawn surface does not cover is REFUSED and
+    # counted, never floated** — the user's call, and `stations_on_drawn_structure`
+    # from the other side. On the street a void piece is kept, because a stop
+    # line reaching past a kerb has a footway under it (`Q54`); past a deck's
+    # rim there is air, and the nearest-edge height would hang paint in it.
+    pieces_placed: int = 0
+    stations_off_deck: int = 0
+    off_deck_m: float = 0.0
+
+    slivers_dropped: int = 0
+    triangles: int = 0
+
+    def check(self) -> None:
+        if self.parts != self.empty_geometry + self.outside_region + self.candidates:
+            raise ValueError(f"the deck parts partition does not close: {self}")
+        refused = (
+            self.no_edge_in_range
+            + self.host_off_carriageway
+            + self.no_host_on_axis
+            + self.wholly_off_deck
+        )
+        if self.candidates != self.drawn + refused:
+            raise ValueError(f"the deck candidates partition does not close: {self}")
 
 
 @dataclass
@@ -197,6 +262,9 @@ class RoadMarkReport:
     # per feature: `drawn`, `drawn_by_id` and the partitions do not move.
     stations_on_drawn_structure: int = 0
     on_drawn_structure_m: float = 0.0
+    # What `on_structure` refuses and the decks then draw (`P3-37`) — its own
+    # partitions, so nothing above moves. See `DeckReport`.
+    deck: DeckReport = field(default_factory=DeckReport)
 
     # 🔴 **The INFERRED join between two opposed carriageways (`Q125`), and it
     # is its own partition because it is not a published marking.** Nothing
@@ -376,8 +444,14 @@ def read_markings(
     report: RoadMarkReport,
     *,
     sources_root: Path | None,
+    deck: list[Marking] | None = None,
 ) -> list[Marking]:
     """Every published stop and give-way line in the region, in game plan space.
+
+    ⚠️ **What is returned is the level-0 survey and only that.** A feature on a
+    structure is refused here as it always was; where its `level` is one of
+    `deck_codes` and the caller hands a `deck` list, its runs are ALSO appended
+    there, counted in `report.deck` and nowhere else (`P3-37`).
 
     Everything refused here is refused on what the *publisher* says — a code
     outside the `marks:` table, a feature on a structure, an empty line — and
@@ -416,11 +490,14 @@ def read_markings(
                 )
                 continue
             if str(levels[owner]).strip().lower() not in AT_GRADE:
-                # On a flyover deck. `Q13` keeps the elevated network closed to
-                # driving, and the nearest level-0 edge to a bar on a deck is
-                # the street underneath it.
+                # On a structure, so not the street's: the nearest level-0 edge
+                # to a bar on a deck is the street underneath it. ⚠️ This read
+                # "`Q13` keeps the elevated network closed" until `Q111` opened
+                # level 1; the decks' own paint is `draw_decks`' (`P3-37`).
                 report.on_structure += 1
                 report.on_structure_m += _length(source)
+                if deck is not None and str(levels[owner]).strip().upper() in spec.deck_codes:
+                    deck.extend(_deck_runs(code, mark, source, transform, region_high, report.deck))
                 continue
             if len(source) < 2 or not np.isfinite(source[:, :2]).all():
                 report.empty_geometry += 1
@@ -467,6 +544,36 @@ def read_markings(
                 report.candidates += 1
                 markings.append(Marking(code=code, mark=mark, line=run))
     return markings
+
+
+def _deck_runs(
+    code: str,
+    mark: RoadMark,
+    source: np.ndarray,
+    transform: GameTransform,
+    region_high: tuple[float, float],
+    report: DeckReport,
+) -> list[Marking]:
+    """One deck part's drawable runs — `read_markings`' own steps below the
+    level guard, step for step, against `DeckReport`'s counters. Restated
+    rather than shared so the level-0 path is not touched by the task whose
+    proof is that the level-0 numbers do not move."""
+    report.parts += 1
+    if len(source) < 2 or not np.isfinite(source[:, :2]).all():
+        report.empty_geometry += 1
+        return []
+    game_x, _, game_z = transform.to_game(source[:, 0], source[:, 1])
+    line = np.column_stack([game_x, game_z])
+    line = line[np.concatenate([[True], np.linalg.norm(np.diff(line, axis=0), axis=1) > 0])]
+    if len(line) < 2:
+        report.empty_geometry += 1
+        return []
+    runs = clip(line, region_high, min_length_m=mark.line_width_m)
+    if not runs:
+        report.outside_region += 1
+        return []
+    report.candidates += len(runs)
+    return [Marking(code=code, mark=mark, line=run) for run in runs]
 
 
 def _length(source: np.ndarray) -> float:
@@ -1376,8 +1483,16 @@ def build_region(
 
     transform = city.game_transform(region_id)
     region_high = city.region_high(region_id)
+    on_deck: list[Marking] = []
     markings = read_markings(
-        city, spec, region_id, transform, region_high, report, sources_root=sources_root
+        city,
+        spec,
+        region_id,
+        transform,
+        region_high,
+        report,
+        sources_root=sources_root,
+        deck=on_deck,
     )
 
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
@@ -1518,6 +1633,16 @@ def build_region(
     _check_join_partition(report)
 
     mesh = builder.build(ROADMARKS_MESH_NAME, thinness_bar_m, report)
+    # 🔴 **The decks' paint is a second builder merged in, never more polygons
+    # in the first** (`P3-37`): `build` writes `slivers_dropped` into the report
+    # it is handed, and the level-0 report must not move.
+    deck_mesh = draw_decks(graph, surface, on_deck, spec, report.deck, thinness_bar_m)
+    if mesh is not None and deck_mesh is not None:
+        mesh = replace(
+            merge([mesh, deck_mesh], name=ROADMARKS_MESH_NAME), material=ROADMARKS_MATERIAL
+        )
+    elif deck_mesh is not None:
+        mesh = replace(deck_mesh, name=ROADMARKS_MESH_NAME)
     if mesh is not None:
         report.inverted, report.inverted_area_m2 = downward_facing(mesh)
         report.triangles = mesh.triangle_count
@@ -1528,6 +1653,97 @@ def build_region(
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def draw_decks(
+    graph: dict,
+    surface: dict,
+    markings: Sequence[Marking],
+    spec: RoadMarks,
+    report: DeckReport,
+    thin_m: float,
+) -> MeshData | None:
+    """TD's surveyed paint on the decks, hosted and stood at the deck's own level.
+
+    🔴 **A deck marking is hosted among OFF-GRADE edges only, as a street
+    marking is among level-0 ones** — the nearest level-0 edge to a line on a
+    flyover is the street under it, which is the reason the level guard gave
+    for refusing it and is still true. The publisher's `A01` says "on a
+    structure" and not which, so the level is the HOST's, and the surface the
+    paint stands on is `DrawnSurface.of(surface, level=that)`.
+
+    ⚠️ **Every bar is the street's own** — `_host`, `bearing_tolerance_deg`,
+    `_on_its_own_carriageway` against the drawn width — so there is no deck
+    knob. The deck stays a ceiling on paint (`Q103`): `_place_on_deck` refuses
+    whatever the deck's drawn surface does not cover. ⚠️ **Levels above the
+    street only**; a bore is `A03`'s and is not in `deck_codes` (`Q21`).
+    🚫 No inferred join up here (`Q125`): a deck is never a source.
+    """
+    levels = [level for level in DrawnSurface.levels_drawn(surface) if level > 0]
+    edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) in levels]
+    if not markings or not edges:
+        report.no_edge_in_range += len(markings)
+        report.check()
+        return None
+    level_of = {int(edge["id"]): int(edge["elevation_level"]) for edge in edges}
+    decks = {level: DrawnSurface.of(surface, level=level) for level in levels}
+    network = Network.of(Segments.of(edges), _drawn_widths(surface))
+
+    builder = FlatBuilder(ROADMARKS_MATERIAL)
+    for marking in markings:
+        host = _host(network, marking, spec)
+        if host is None:
+            report.no_edge_in_range += 1
+            continue
+        if not marking.mark.oblique:
+            report.axis_residual_deg.append(host.residual_deg)
+        if not _on_its_own_carriageway(marking, host):
+            report.host_off_carriageway += 1
+            continue
+        if host.residual_deg > spec.bearing_tolerance_deg:
+            report.no_host_on_axis += 1
+            continue
+        deck = decks[level_of[host.edge_id]]
+        placed = sum(
+            _place_on_deck(builder, deck, quad, spec.lift_m, report, thin_m)
+            for quad in band_quads(marking, spec)
+        )
+        if not placed:
+            report.wholly_off_deck += 1
+            continue
+        report.drawn += 1
+        by_id, metres = report.drawn_by_id, report.drawn_m_by_id
+        by_id[marking.mark.id] = by_id.get(marking.mark.id, 0) + 1
+        metres[marking.mark.id] = metres.get(marking.mark.id, 0.0) + marking.length_m
+    report.check()
+    mesh = builder.build(ROADMARKS_MESH_NAME, thin_m, report)
+    report.triangles = 0 if mesh is None else mesh.triangle_count
+    return mesh
+
+
+def _place_on_deck(
+    builder: FlatBuilder,
+    deck: DrawnSurface,
+    quad: np.ndarray,
+    lift_m: float,
+    report: DeckReport,
+    thin_m: float = 0.0,
+) -> int:
+    """One band quad onto its deck; the pieces placed. `_place`, with the void
+    rule inverted: a piece any corner of which the deck's drawn surface does
+    not cover — asked from the piece's own side, as `_place` asks — is refused
+    and counted, because past a deck's rim there is air (`DeckReport`)."""
+    placed = 0
+    for piece, centre, drawn_here in deck.sampled_pieces(quad, thin_m=thin_m):
+        if not all(deck.covers(float(px), float(pz), toward=centre) for px, pz in piece):
+            report.stations_off_deck += 1
+            report.off_deck_m += _length_along(quad, piece)
+            continue
+        heights = np.asarray([sample.height_m for sample in drawn_here])
+        builder.polygon(piece, heights + lift_m)
+        placed += 1
+    report.pieces_placed += placed
+    return placed
 
 
 def _place(
@@ -1612,6 +1828,30 @@ def _length_along(quad: np.ndarray, piece: np.ndarray) -> float:
         return 0.0
     along = piece @ (axis / length)
     return float(along.max() - along.min())
+
+
+def _deck_document(deck: DeckReport) -> dict:
+    return {
+        "parts": deck.parts,
+        "empty_geometry": deck.empty_geometry,
+        "outside_region": deck.outside_region,
+        "candidates": deck.candidates,
+        "drawn": deck.drawn,
+        "no_edge_in_range": deck.no_edge_in_range,
+        "host_off_carriageway": deck.host_off_carriageway,
+        "no_host_on_axis": deck.no_host_on_axis,
+        "wholly_off_deck": deck.wholly_off_deck,
+        "drawn_by_id": dict(sorted(deck.drawn_by_id.items())),
+        "drawn_m_by_id": {
+            key: round(value, 3) for key, value in sorted(deck.drawn_m_by_id.items())
+        },
+        "axis_residual_deg": tail_of(deck.axis_residual_deg),
+        "pieces_placed": deck.pieces_placed,
+        "stations_off_deck": deck.stations_off_deck,
+        "off_deck_m": round(deck.off_deck_m, 3),
+        "slivers_dropped": deck.slivers_dropped,
+        "triangles": deck.triangles,
+    }
 
 
 def _rounded(value: float | None) -> float | None:
@@ -1699,6 +1939,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMar
         # deck. See `RoadMarkReport`.
         "stations_on_drawn_structure": report.stations_on_drawn_structure,
         "on_drawn_structure_m": round(report.on_drawn_structure_m, 3),
+        # 🔴 **TD's paint on the decks, counted apart** (`P3-37`, `Q134`): a
+        # subset of `on_structure` by the publisher's `deck_codes`, hosted among
+        # off-grade edges and stood on the host level's drawn surface. Nothing
+        # above or below this block moves with it. See `DeckReport`.
+        "deck": _deck_document(report.deck),
         # 🔴 **The counter that can see the join regress.** How often the
         # transverse pick and the plain nearest edge disagree about the host,
         # over every marking that found an edge in range. Measured at 53 of 120
