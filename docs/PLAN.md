@@ -431,7 +431,8 @@ infrastructure, so its own task, first in `B1` (`Q137`).
   `tools/verify_hud.gd` asserts the HUD clears the rests, and that overlapping a tap zone stays
   legal — a tap zone is not a thumb.
 - The bar under the speed reads acceleration (no gearbox, so RPM would repeat the speed).
-  Nothing on the HUD is decoration. Flat-shaded panels: white is the city, dark is the car.
+  Nothing on the HUD is decoration. Flat-shaded panels in one dark housing: a dial for the speed, the 咪錶's red LED for the fare
+  (`Q139`, superseding `Q80`'s white city / dark car).
 - `--hud=off` exists for `P3-9`'s arrow-disabled test first, art frames second.
 - First bundled typeface: licence entry and the one uncovered character in `Q79`.
 

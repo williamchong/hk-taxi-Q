@@ -5,12 +5,22 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-White is the city speaking, dark is the car speaking. See hud_style.gd.
+ONE VOICE: the cab's instruments in one black housing (`Q139`, the user's
+calls). Every panel is `plate_field` under one `plate_edge` bezel; the speed is
+the DASHBOARD's — a dial, an amber needle, printed numerals — and the 咪錶's red
+seven-segment LED is kept for the fare (`P3-5a`), because speed was never on a
+meter. It was "white is the city speaking, dark is the car speaking" (`Q80`)
+until the map made the white half the larger one and the two read as two
+designs.
 
-⚠️ The plate white is NOT the road's paint constant.
-roadmarks.tres records the marking white as its fifth authored copy and
-boxjunctions.tres the yellow as its third; a sixth and a fourth here would be
-that debt again, and a street name plate is not paint (Q53, Q79).
+🔴 THIS TABLE IS THE THEME. A Comfort Hybrid's modern cluster is a second
+`.tres` of this class that the car names; nothing selects one while there is
+one car. Keep every look here and out of `hud.gd`.
+
+⚠️ `plate_field`, `chip_field` and `map_field` ARE ONE VALUE in three keys —
+three panels read them, one housing — and `verify_hud.gd` holds them equal,
+dark and OPAQUE. The housing is NOT the road's asphalt constant, for the
+reason the plate white was not its paint (`Q53`, `Q79`).
 
 ⚠️ THE SIZE RULE, measured off the references this layout is taken from: the
 speed reads at about 7% of frame width and the plate under about 18%, which is
@@ -27,11 +37,24 @@ NO ENTRY (TS115), the same sign standing on 179 posts in the region. The red
 and the two proportions are quoted from the world sign and graded against it
 by verify_hud; the bar draws in plate_field. See hud_style.gd and Q81.
 
-## `map_field = Color(0.9, 0.9, 0.87, 1)`
+## `map_field = Color(0.07, 0.07, 0.075, 1)`
 
-The minimap (`P3-44`, `Q136`): the city's voice again, a light ground with dark
-roads — a figure-ground plan, which is what survives 0.75 px to the metre.
+The minimap (`P3-44`, `Q136`): light roads on the housing — a figure-ground
+plan, which is what survives under a pixel to the metre.
 🔴 `map_field` AND `map_road` ARE OPAQUE, and verify_hud refuses otherwise:
 strokes overlap at every joint, a deck's casing is the field drawn over the
 street beneath it, and minimap.gd clips by the field's drawn alpha. The chevron
-is blue because red is the taxi's and green already means "gaining".
+is taxi red: it is the taxi, and the one saturated thing on the map.
+
+## `dial_needle = Color(1, 0.6, 0.12, 1)`
+
+The speedometer's needle: amber, a Crown Comfort's. 🔴 NOT RED, and verify_hud
+holds it off: red is the fare's, and the acceleration bar's red two pixels
+below it already means "losing speed". `dial_full_scale_kph` is 160 against a
+car that tops out at 140 — a dial that ends where the car does never looks
+fast, and one the car can run off pins the needle when it matters.
+
+## `warn_bar = Color(0.941, 0.941, 0.918, 1)`
+
+The NO ENTRY bar's white, the world sign's `#f0f0ea`. It borrowed the plate's
+white while the plate had one (`Q139`).

@@ -191,6 +191,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
+| `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
 
@@ -3593,7 +3594,8 @@ See `Q54`, `Q63`, `Q64`, `Q65`, `P3-21`.
   palette rule; `verify_hud.gd` asserts the direction, that the hues differ and that the bed exists.
 - Style: flat-shaded like the city. `ChamferPanel` — four cut corners, one fill, one hard keyline;
   no radius, gradient or shadow. White is the city speaking, dark is the car speaking
-  (`verify_hud.gd` asserts the plate is lighter than the chip).
+  (`verify_hud.gd` asserts the plate is lighter than the chip). ⚠️ **Superseded by `Q139`**: one
+  dark housing.
 - ⚠️ The UI palette deliberately does not reuse the road's paint constants (`Q53`). Taxi red stays
   out of HUD furniture; the bar's red and `Q81`'s sign are the stated exceptions.
 - ⚠️ `HudLayout` and `HudStyle` exports carry no defaults, like `HandlingProfile`: a default is a
@@ -6789,4 +6791,37 @@ cell through `library_meshes`.
   task names one, and it is a control — `input_router`'s layer, not this `MOUSE_FILTER_IGNORE` HUD.
 
 **See.** `Q80` · `Q136` · `Q83` · `game/tuning/hud_layout.md`
+
+---
+
+## `Q139` — One voice: the cab's instruments in one dark housing
+
+**Status.** ✅ Closed — the user's calls (2026-09-22), built with `P3-44`. The user's drive owed.
+
+- **Consistent, and dark.** The user asked for one style once the map made `Q80`'s white half the
+  larger one; chosen from two rendered frames (all dark, all light) over keeping two voices.
+  `plate_field`, `chip_field` and `map_field` are one value; `verify_hud` holds them equal, dark
+  and opaque, where it used to assert the plate lighter than the chip. One bezel on every panel —
+  the speed chip had none.
+- **的士咪錶 as the language** (`ART_DESIGN.md` always named it; only the signage half was drawn).
+  🔴 Two corrections from the user, each of which a first build got wrong: **red digits are the
+  fare's**, and **speed was never on a meter**. So the cab's two instruments keep their own faces:
+  - **Speed is the dashboard's** — `SpeedDial`: ticks and an amber needle over printed numerals,
+    a Crown Comfort's cluster. Ticks one static mesh, the needle a polygon that only rotates; +2
+    `draws`. Scale 160 against the car's 140. The needle is held off red.
+  - **The fare is the meter's** — `SevenSegment`: seven-segment digits with the unlit ghost
+    showing, one mesh. ⚠️ Built for the speed, first in red and then in white; nothing draws with
+    it now. It stays, graded, for `P3-5a`'s meter, which brings its own red key.
+- **The style table is the theme.** A Comfort Hybrid's modern cluster is a second `hud_style`
+  `.tres` the car names. Nothing selects one while there is one car; the constraint it puts on
+  today's code is that every look stays in the table and out of `hud.gd`.
+- `warn_bar` is its own key: the NO ENTRY bar borrowed the plate's white while there was one.
+- `verify_hud`: the segment table is asserted in LETTERS, not by count — a `4` lit as `abfg` has
+  four segments and survived the count. Dial: zero, sweep clockwise, linear, pinned at both ends,
+  arc over the top. 9 mutations, each caught after that fix.
+- Panel cost now, throttle route against `--minimap=off`: **+6 `draws`**, +14.2k `prims`.
+- 🚫 White seven-segment for the speed: consistent, and the language of an instrument the speed
+  is not on. 🚫 A dot-matrix face for the street name: a fifth licence (`Q79`).
+
+**See.** `Q80` · `Q136` · `Q138` · `Q79` · `game/tuning/hud_style.md`
 

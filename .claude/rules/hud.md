@@ -65,7 +65,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
   build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
   `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
-  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
+  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box
