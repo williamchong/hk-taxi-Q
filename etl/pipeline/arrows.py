@@ -22,18 +22,19 @@ each one is why it is a separate mesh rather than another field in
   re-exposes it immediately." Separate geometry lifted above both cap and arm is
   immune, the same way `ART_DESIGN.md` says a world-space box junction is.
 
-⚠️ **The published position is read as a fraction across the road, never as a
-position** — `Q54`'s "use it as data, not as geometry", the pattern that let the
-kerbside join survive the same 1.6x widening. The alternative, drawing at the
-published easting and northing, was measured and is defensible: 97.2% of the
-region's symbols already fall inside the drawn ribbon, because the ribbon is
-*wider* than the real carriageway and concentric with it. It is not what ships,
-because an arrow at its true offset sits about a metre off the drawn lane's
-centre and reads as a rendering fault against the lane dividers `P3-12` draws,
-while a lane-registered arrow is wrong only about something no driver navigates
-by. `Q58`'s refusal of lane space does **not** transfer: a tram rail sits a
-measured p50 3.26 m *past* the drawn kerb, off the surface entirely, so lane
-space would have invented its position. This is the opposite case.
+🔴 **An arrow is drawn where TD surveyed it since `P3-36` (`Q134`), and the lane
+slot is the fallback and the instrument.** Until then the published position
+was read as a fraction across the road and the arrow redrawn at its slot's
+centre, because an arrow at its true offset sat about a metre off the lane
+dividers `P3-12`'s shader cut the ribbon into. `Q132` switched those dividers
+off and drew TD's surveyed lines instead, so the reason inverted: the slot
+centre became the position that reads as a rendering fault — FLEMING ROAD's row
+of three stood up to 2.07 m off the lanes painted beside it, one arrow astride
+a line. The arrows and the lines are one survey and are now drawn in one frame.
+⚠️ **The slot still carries an arrow whose surveyed offset is outside the drawn
+ribbon** (`_placed_offset`, the `outside_drawn_ribbon` population), and
+`_lane_of` still reads the offset as a fraction for every counter that grades
+`lanes` — that half of `Q96` is untouched.
 
 ⚠️ **Nothing here rotates an arrow.** A symbol whose bearing disagrees with its
 edge has matched the wrong edge and is refused; turning it to agree would be an
@@ -81,6 +82,7 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.drawnroad import Ribbon, nearside, ribbons
+from pipeline.drawnsurface import DrawnSurface
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import FlatBuilder
@@ -214,10 +216,17 @@ class ArrowReport:
     # go and look at, never a bar to retune.
     outside_carriageway: int = 0
 
-    # How far each arrow moved sideways to reach its lane's centre. The residue
-    # of the registration decision at the top of this module, published so the
-    # decision can be re-argued against a number.
+    # How far each arrow's SLOT centre sits from where TD surveyed it. Until
+    # `P3-36` this was how far the arrow moved; it is now how well `lanes` and
+    # the drawn ribbon describe the paint, measured the same way over the same
+    # population so it reads unchanged across that task — p90 1.94 m, max
+    # 11.15 m on Wan Chai is the number the decision was re-argued against.
     lane_shift_m: list[float] = field(default_factory=list)
+    # Arrows the slot still carries — surveyed over no drawn road, neither
+    # their host's share nor anyone else's (`_placed_offset`) — and how far
+    # each of those MOVED. Every other arrow moved nothing.
+    placed_by_slot: int = 0
+    fallback_shift_m: list[float] = field(default_factory=list)
     # Symbols whose along-edge position fell inside a junction trim, so they sit
     # over a cap rather than over a drawn arm. Drawn anyway — the cap is still
     # carriageway — but counted, because it is where the ribbon has no lane
@@ -249,6 +258,11 @@ class ArrowReport:
     # so this is a finding to go and look at, never a bar to retune.
     stacked_pairs: int = 0
     stacked_disagreeing: int = 0
+    # Pairs of arrows DRAWN within half a glyph of each other on one edge,
+    # whatever their slots. TD surveys no two arrows on top of each other, so
+    # this is reachable through the slot fallback landing on a surveyed
+    # neighbour, or a duplicated source row. A finding, never a refusal.
+    overlapping_drawn: int = 0
 
     # 🔴 **The lane count the arrows themselves state, per edge (`Q94`), and
     # the only reading of one in this bundle that owes nothing to a width.**
@@ -642,6 +656,45 @@ def _slot_offset(ribbon: Ribbon, t: float, lane: int) -> float:
     return ribbon.offset_at(t) + _offset_of(lane, ribbon.half_width_at(t), ribbon.lanes)
 
 
+def _inside_share(ribbon: Ribbon, t: float, offset_m: float) -> bool:
+    """Whether a surveyed offset lies inside its host's drawn ribbon — one
+    definition for `outside_drawn_ribbon` and for `_placed_offset`, which must
+    not disagree about it. `<=` and never `>`, `_lane_of`'s guard: a NaN
+    offset is inside nothing."""
+    return abs(offset_m - ribbon.offset_at(t)) <= ribbon.half_width_at(t)
+
+
+def _placed_offset(
+    ribbon: Ribbon, t: float, offset_m: float, lane: int, *, on_drawn_road: bool
+) -> tuple[float, bool]:
+    """Where an arrow is DRAWN across its host, and whether the slot had to carry it.
+
+    🔴 **At the offset TD surveyed, since `P3-36` (`Q134`)** — the frame the
+    white lines beside it have been drawn in since `Q132`. The slot centre was
+    the right answer while `road_markings.tres` cut the ribbon into equal
+    strips; with `draw_lane_lines` off the only lane a driver can see is the
+    one TD's lines enclose, and FLEMING ROAD's row of three stood 0.82, 0.08
+    and 2.07 m off it, the last one straddling a line.
+
+    ⚠️ **The slot is the fallback and not the rule**: a surveyed position over
+    no drawn road would paint a footway, so that arrow keeps the slot
+    `_lane_of` chose and is counted `placed_by_slot`. 🔴 **"Over no drawn road"
+    is two questions and the host's own ribbon is only the first.** At level 0
+    `half_width_m` is the host's TERRITORY — its share of a carriageway it may
+    split with a neighbour (`Q57`, `Q129`) — and the arrow this task was opened
+    over is outside its host's share with the neighbour's tarmac under it:
+    `e446` holds 4.18 m of FLEMING ROAD where TD's row of three spans ten. So
+    `on_drawn_road` is `DrawnSurface.covers` at the surveyed point, and 14 of
+    the two regions' 36 `outside_drawn_ribbon` arrows stand on it.
+    ⚠️ **`_lane_of` and the slot stay the lane-count INSTRUMENT** (`stacked_*`,
+    `lane_shift_m`, the row reading): they say how well `lanes` describes the
+    paint, and they must not move when this does.
+    """
+    if _inside_share(ribbon, t, offset_m) or (on_drawn_road and offset_m == offset_m):
+        return offset_m, False
+    return _slot_offset(ribbon, t, lane), True
+
+
 def build_region(
     city: Config,
     region_id: str,
@@ -676,6 +729,9 @@ def build_region(
         f"python -m pipeline.surface --region {region_id}",
     )
     drawn = ribbons(graph, surface)
+    # The road as `surface.py` drew it, caps and every edge's share together —
+    # what `_placed_offset` asks whether a surveyed arrow has tarmac under it.
+    road = DrawnSurface.of(surface, level=0)
     # Level 0 only, the same restriction `kerbside.py` and `tramway.py` both
     # make: for 7% of the kerbside samples the nearest edge of *any* level was
     # elevated, and the street the marking is actually on was a median 4 m away.
@@ -749,11 +805,16 @@ def build_region(
             report.outside_carriageway += 1
         glyph = spec.glyphs[symbol.code]
         along_m = snap.t * ribbon.length_m
-        half_width_m = ribbon.half_width_at(snap.t)
-        drawn_offset_m = _slot_offset(ribbon, snap.t, lane)
-        report.lane_shift_m.append(abs(drawn_offset_m - snap.offset_m))
-        if abs(snap.offset_m - ribbon.offset_at(snap.t)) > half_width_m:
+        slot_offset_m = _slot_offset(ribbon, snap.t, lane)
+        report.lane_shift_m.append(abs(slot_offset_m - snap.offset_m))
+        if not _inside_share(ribbon, snap.t, snap.offset_m):
             report.outside_drawn_ribbon += 1
+        drawn_offset_m, by_slot = _placed_offset(
+            ribbon, snap.t, snap.offset_m, lane, on_drawn_road=road.covers(symbol.x, symbol.z)
+        )
+        if by_slot:
+            report.placed_by_slot += 1
+            report.fallback_shift_m.append(abs(drawn_offset_m - snap.offset_m))
 
         # The deck under the arrow's two ends, off the host edge's own polyline.
         # ⚠️ **The sign is load-bearing.** `axis_residual_deg` folds modulo 180,
@@ -773,6 +834,7 @@ def build_region(
         near = nearside(snap.heading_deg)
         centreline = np.array([symbol.x, symbol.z]) - snap.offset_m * near
         placed = centreline + drawn_offset_m * near
+        slot_at = centreline + slot_offset_m * near
 
         if symbol.code not in library:
             library[symbol.code] = FlatBuilder(ARROWS_MATERIAL)
@@ -785,7 +847,7 @@ def build_region(
         report.by_glyph[key] = report.by_glyph.get(key, 0) + 1
         laid.append(
             _Laid(
-                placed,
+                slot_at,
                 int(snap.edge),
                 lane,
                 glyph.movements,
@@ -793,10 +855,12 @@ def build_region(
                 along_m,
                 float(snap.offset_m),
                 directed > 90.0,
+                placed,
             )
         )
 
     _count_stacked(laid, report)
+    _count_overlapping(laid, report)
     _count_rows(laid, drawn, report)
     _grade_against_the_graph(graph, report)
 
@@ -834,12 +898,14 @@ def build_region(
 class _Laid(NamedTuple):
     """One arrow as it was actually placed, for the stacking and row checks.
 
-    ⚠️ **`at` and `lane` are where the arrow was DRAWN; `along_m` and
+    ⚠️ **`slot_at` and `lane` are the SLOT `_lane_of` chose; `along_m` and
     `offset_m` are where the publisher put it.** The two are different
     populations and the row reading needs the second — see `_count_rows`.
+    Since `P3-36` the arrow is drawn at `placed`, which is the published
+    position unless the slot had to carry it (`_placed_offset`).
     """
 
-    at: np.ndarray
+    slot_at: np.ndarray
     edge: int
     lane: int
     movements: tuple[str, ...]
@@ -852,6 +918,19 @@ class _Laid(NamedTuple):
     # two-way edge, since `against_one_way` refuses it on a one-way one. What
     # splits a row into the two flows (`Q126`).
     backward: bool = False
+    placed: np.ndarray | None = None
+
+
+def _count_overlapping(laid: list[_Laid], report: ArrowReport) -> None:
+    """Pairs of arrows drawn on top of each other, by `_count_stacked`'s own bar."""
+    edges: dict[int, list[_Laid]] = defaultdict(list)
+    for arrow in laid:
+        if arrow.placed is not None:
+            edges[arrow.edge].append(arrow)
+    for host in edges.values():
+        for a, b in itertools.combinations(host, 2):
+            if float(np.hypot(*(a.placed - b.placed))) < 0.5 * min(a.length_m, b.length_m):
+                report.overlapping_drawn += 1
 
 
 def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
@@ -879,7 +958,7 @@ def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
 
     for slot in lanes.values():
         for a, b in itertools.combinations(slot, 2):
-            if float(np.hypot(*(a.at - b.at))) >= 0.5 * min(a.length_m, b.length_m):
+            if float(np.hypot(*(a.slot_at - b.slot_at))) >= 0.5 * min(a.length_m, b.length_m):
                 continue
             report.stacked_pairs += 1
             if a.movements != b.movements:
@@ -1150,12 +1229,15 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         # top of `arrows.py`, published so that decision can be re-argued
         # against a number rather than against the prose.
         "lane_shift_m": report.measured(report.lane_shift_m),
+        "placed_by_slot": report.placed_by_slot,
+        "fallback_shift_m": report.measured(report.fallback_shift_m),
         "over_a_cap": report.over_a_cap,
         # 🔴 The pairs that landed on top of each other — see `ArrowReport`.
         # `stacked_disagreeing` is the one to read: it is arrows giving
         # different instructions from the same square metre of lane, and it is
         # `Q19`'s invented lane count arriving where a frame can show it.
         "stacked_pairs": report.stacked_pairs,
+        "overlapping_drawn": report.overlapping_drawn,
         "stacked_disagreeing": report.stacked_disagreeing,
         # 🔴 The lane count the publisher's own arrows state, per edge — see
         # `ArrowReport.implied_lanes`. Published **per edge** rather than as a

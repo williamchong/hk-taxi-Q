@@ -24,6 +24,7 @@ from pipeline.arrows import (
     ArrowReport,
     Ribbon,
     Symbol,
+    _count_overlapping,
     _count_rows,
     _count_stacked,
     _draw_glyph,
@@ -31,6 +32,7 @@ from pipeline.arrows import (
     _Laid,
     _lane_of,
     _place,
+    _placed_offset,
     _slot_offset,
     _stand,
     axis_residual_deg,
@@ -305,6 +307,37 @@ class TestStackedArrows:
     @staticmethod
     def _laid(x, z, *, edge=0, lane=0, movements=("ahead",), length_m=4.0):
         return _Laid(np.array([x, z], dtype=float), edge, lane, movements, length_m, x, z)
+
+    def test_two_arrows_sharing_a_slot_but_drawn_apart_stack_and_do_not_overlap(self):
+        """`P3-36`: the slot frame and the drawn frame are counted apart.
+
+        STEWART ROAD's left and right arrows still share an invented slot —
+        that is the finding about `lanes` and it stays — but they stand 3.3 m
+        apart on the road, so nothing overlaps in a frame.
+        """
+        slot = np.array([0.0, 0.0])
+        laid = [
+            _Laid(slot, 0, 0, ("left",), 4.0, 0.0, 1.6, False, np.array([1.6, 0.0])),
+            _Laid(slot, 0, 0, ("right",), 4.0, 0.0, -1.7, False, np.array([-1.7, 0.0])),
+        ]
+        report = ArrowReport()
+        _count_stacked(laid, report)
+        _count_overlapping(laid, report)
+        assert (report.stacked_disagreeing, report.overlapping_drawn) == (1, 0)
+
+    def test_a_fallback_landing_on_a_surveyed_neighbour_overlaps(self):
+        laid = [
+            _Laid(
+                np.array([0.0, 0.0]), 0, 0, ("ahead",), 4.0, 0.0, 0.0, False, np.array([1.0, 0.0])
+            ),
+            _Laid(
+                np.array([9.0, 0.0]), 0, 1, ("left",), 4.0, 0.0, 0.0, False, np.array([1.5, 0.5])
+            ),
+        ]
+        report = ArrowReport()
+        _count_stacked(laid, report)
+        _count_overlapping(laid, report)
+        assert (report.stacked_pairs, report.overlapping_drawn) == (0, 1)
 
     def test_two_instructions_in_one_lane_are_counted_and_named_a_disagreement(self):
         report = ArrowReport()
@@ -909,6 +942,71 @@ class TestLaneOf:
         )
         slots = [_slot_offset(drawn, 0.5, lane) for lane in range(3)]
         assert slots == pytest.approx([6.0, 2.0, -2.0])
+
+    @staticmethod
+    def _share(half_width_m, offset_m, lanes=2, carriageway_m=7.0):
+        return Ribbon(
+            lanes=lanes,
+            carriageway_m=carriageway_m,
+            one_way=True,
+            at=np.array([0.0, 1.0]),
+            half_width_m=np.array([half_width_m, half_width_m]),
+            offset_m=np.array([offset_m, offset_m]),
+            plan=np.zeros((2, 2)),
+            height_m=np.zeros(2),
+            trim_start_m=0.0,
+            trim_end_m=0.0,
+            length_m=100.0,
+        )
+
+    def test_an_arrow_inside_the_drawn_ribbon_stands_where_td_surveyed_it(self):
+        """FLEMING ROAD's row of three, 3.3 m apart, across two converging hosts (`P3-36`).
+
+        🔴 **The white lines are TD's survey since `Q132`, so the slot centre is
+        the position that reads as a fault**: `e531`'s two arrows were drawn
+        0.82 and 0.08 m off and would have stood 2.58 m apart. Mutation-check
+        it by returning `_slot_offset` unconditionally from `_placed_offset`.
+        """
+        host = self._share(half_width_m=2.58, offset_m=0.36, carriageway_m=6.73)
+        surveyed = (2.47, -0.85)
+        placed = [
+            _placed_offset(host, 0.5, offset_m, _lane_of(offset_m, 6.73, 2)[0], on_drawn_road=False)
+            for offset_m in surveyed
+        ]
+        assert placed == [(2.47, False), (-0.85, False)]
+        assert placed[0][0] - placed[1][0] == pytest.approx(3.32)
+
+    def test_an_arrow_over_no_drawn_road_keeps_its_slot(self):
+        """A 4.18 m share of a 7.00 m width, middle 1.05 m nearside, footway beyond.
+
+        ⚠️ **The fallback**: the surveyed -2.06 m is 3.11 m from the share's
+        middle against a 2.09 m half and nothing is drawn under it, so standing
+        it there paints a footway. Mutation-check it by dropping the branch:
+        the offset comes back -2.06.
+        """
+        host = self._share(half_width_m=2.09, offset_m=1.05)
+        lane, _ = _lane_of(-2.06, 7.0, 2)
+        assert lane == 1
+        offset_m, by_slot = _placed_offset(host, 0.5, -2.06, lane, on_drawn_road=False)
+        assert by_slot
+        assert offset_m == pytest.approx(1.05 - 0.5 * 2.09)
+
+    def test_an_arrow_on_a_neighbours_share_stands_where_td_surveyed_it(self):
+        """🔴 `e446` FLEMING ROAD itself, and the arrow `P3-36` was opened over.
+
+        The same host and the same offset as the case above, but the point has
+        `e531`'s tarmac under it: a territory is a share of the carriageway,
+        never the carriageway (`Q57`), so the host's rail is not where the road
+        ends. Mutation-check it by dropping `on_drawn_road` from the rule — the
+        arrow goes back to 0.01 m, astride the lane line.
+        """
+        host = self._share(half_width_m=2.09, offset_m=1.05)
+        assert _placed_offset(host, 0.5, -2.06, 1, on_drawn_road=True) == (-2.06, False)
+
+    def test_an_offset_that_is_not_a_number_takes_the_slot(self):
+        host = self._share(half_width_m=3.0, offset_m=0.0)
+        offset_m, by_slot = _placed_offset(host, 0.5, float("nan"), 0, on_drawn_road=True)
+        assert by_slot and offset_m == pytest.approx(1.5)
 
     def test_a_width_that_is_not_a_positive_number_never_returns_a_confident_lane(self):
         """🔴 **NaN is the case the arithmetic form of this guard lets through.**
