@@ -147,7 +147,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`); `P3-3` still owes
   adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, the
   player's `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
-- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate — +4 `draws`, +12.2k `prims` (37.7k built naively); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
+- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +14.2k `prims` (37.7k built naively); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
 
@@ -231,7 +231,7 @@ and there in the same change.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
-- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up is the user's call. Owed the user: a drive; one-way ticks; `span_m`. Owed: the web frame.
+- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: a drive; `span_m`. Owed: the web frame.
 - `Q137` A router, no route line (`P3-43`). Design call, not measured; reopens on `P3-9`. Held: arrow to the next junction.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
