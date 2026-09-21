@@ -149,7 +149,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q93` | The turn-arrow glyph: head and stem measured off TD's sheet, branch authored | ✅ Closed. `pipeline/arrows.py`'s glyph, `config.Arrows`' proportions. |
 | `Q94` | Two arrows in one lane: the lane count was invented, and the arrows are a source for it | 🟢 Closed, residue carried by later records: the `floored` source was replaced by |
 | `Q95` | The authored carriageway width was outside TPDM's range; `width_m` is now measured | ✅ Closed — width assigned and the widening made a floor on the user's call, |
-| `Q96` | The arrows' lane snap divides by the measured carriageway | Closed. |
+| `Q96` | The arrows' lane snap divides by the measured carriageway | Closed. Placement half superseded by `Q134`; the snap is the instrument. |
 | `P3-9a′` | Round 0: the city is recognised, and it was not drivable far | Closed. Three HK drivers over the web link. |
 | `Q97` | Touch drives on three of five actions | Closed on the user's instruction ("basic touch control support, dont support drifting |
 | `Q98` | The chase camera's yaw is exponential, and its tuning is data | Closed. |
@@ -6376,3 +6376,87 @@ with `_offset_at` interpolating `carriageway_offset_m` per station. No schema mo
 - `driver.gd`: an action is wanted while any of its `--hold`s covers `t`.
 - Open: the user's own drive on `e657` with `F3` on `full`; a scripted drive showed the marker in
   the nearside lane.
+
+## `Q134` — Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read
+
+**Status.** `P3-36` (arrows) and `P3-37` (deck paint) built; the user's drive of both owed. Opened by the user from the driving
+seat on FLEMING ROAD, 2026-09-21: arrows off the centre of the painted lane, and no lane lines on
+the bridges.
+
+One cause under both: a placement rule outlived its reason.
+
+- **Arrows.** `Q96`/`Q106` read TD's offset as a lane slot and redrew the arrow at the slot's centre,
+  so it agreed with the equal strips `road_markings.tres` cut the ribbon into. `Q132` switched those
+  strips off and drew TD's surveyed lines, so the slot centre became the position that reads as a
+  fault: `lane_shift_m` p50 0.48 / p90 1.94 / max 11.15 m over Wan Chai's 741. FLEMING ROAD's row of
+  three, surveyed 3.3 m apart, stood 0.82, 0.08 and 2.07 m off, across two converging hosts
+  (`e531`, `e446`); `e174`'s two arrows shared one point, one moved 5.22 m.
+- **Decks.** `roadmarks.py` and `arrows.py` refuse every feature whose `level` is not null, citing
+  `Q13`'s closed elevated network; `Q111` opened level 1. With `draw_lane_lines` off nothing paints a
+  deck. Measured on Wan Chai: 287 marks / 18,637 m refused — `A01` 107 / 3,917 m, 87% of its vertices
+  over the drawn level-1 deck; `A03` 180 / 14,720 m, the bores (`Q21`). 20 arrows.
+
+### Built — `P3-36`: an arrow stands at its surveyed position
+
+`arrows._placed_offset`: the surveyed offset where the point is inside the host's share **or** on
+the drawn level-0 road (`DrawnSurface.covers`); else the slot `_lane_of` chose, counted
+`placed_by_slot` with `fallback_shift_m`.
+
+- 🔴 The host's share is not the road (`Q57`): the arrow the task was opened over is outside
+  `e446`'s 4.18 m share with `e531`'s tarmac under it. The share-only gate left it on the slot; 14 of
+  the two regions' 36 `outside_drawn_ribbon` arrows stand on a neighbour's share or a cap.
+- The slot stays the lane-count instrument. Byte-identical across the change, both regions: both
+  partitions, `axis_residual_deg`, `offset_m`, `against_one_way`, `outside_carriageway` 31 / 5,
+  `outside_drawn_ribbon` 29 / 7, `lane_shift_m`, `stacked_pairs` 44 / 7, `stacked_disagreeing`
+  18 / 0, the row counters, `inverted` 0, `arrows.glb`. Only `arrows_placements.json` positions move
+  (712 / 151 stands; heading, mesh and height none). No schema bump.
+- New: `placed_by_slot` 16 / 6 (`fallback_shift_m` p50 2.00 / 3.75 m); `overlapping_drawn` 18 / 2 —
+  pairs DRAWN within half a glyph, where `stacked_*` is now asked of the slots. Of Wan Chai's 18, 11
+  are TD's own duplicate or near-duplicate rows of one code (5 exact) and drew stacked before; 5 are
+  new, surveyed 1–2 m apart. Differing instructions drawn on top of each other: 18 → 2.
+- `paint_clearance --layer arrows`: 2.2% of paint area buried both sides; deeper than 10 mm in the
+  carriageway 38 → 31; on a raised edge 6 → 13 (arrows surveyed beside a kerb lip). Within bounds.
+  Heights still come from the host's centreline.
+- Mutation-checked: always-slot, no-fallback, `on_drawn_road` ignored, NaN guard dropped, the
+  overlap counter reading the slot — each fails its own test.
+- 🚫 Refusing the `placed_by_slot` arrows: the slot is on the host's own tarmac, and it was the
+  user's call.
+- Seen beside it, not this layer: `P3-35g3`'s chevrons heap at the island nose north of the row.
+
+### Built — `P3-37`: TD's paint on the decks
+
+`road_marks.deck_codes` / `arrows.deck_codes` `[A01]` (publisher vocabulary, so config).
+`roadmarks.draw_decks` and `arrows.stand_on_decks` host a deck feature among off-grade edges only —
+the nearest level-0 edge to a line on a flyover is the street under it, the guard's own reason and
+still true — and stand it on `DrawnSurface.of(level=host's)`. Every bar is the street's.
+
+| Wan Chai / Causeway Bay | candidates | drawn | refused |
+|---|---|---|---|
+| lines | 105 / 4 | 100 (2,497 m) / 4 (175 m) | 1 no edge, 2 off carriageway, 2 off axis / 0 |
+| arrows | 20 / 4 | 18 / 4 | 2 `off_deck` / 0 |
+
+- 🔴 The void rule is inverted on a deck, on the user's call: a piece the deck's surface does not
+  cover is refused and counted (12 stations / 13.8 m; 0 on Causeway Bay), never floated. On the
+  street a void piece is kept (`Q54`). Deck arrows have no slot fallback — a deck's width and
+  `lanes` are authored.
+- Inertness: both level-0 reports byte-identical but for mesh totals (`triangles`, `vertices`,
+  `bytes`, `aabb`, `placements`); level-0 geometry is an identical prefix of `roadmarks.glb`, level-0
+  stands an identical prefix of `arrows_placements.json`. `roadmarks.glb` +408,636 / +40,932 B
+  (glb bytes, not a PCK figure). No schema bump: both `deck` blocks are additive.
+- `paint_clearance --layer roadmarks` unchanged in code: every deck triangle finds a road face,
+  buried under the lowest face 1,477 → 1,477 / 398 → 398; "more than one face" 2.0% → 10.2% is
+  overlapping deck ribbons.
+- Mutation-checked: hosting among every edge, no rim refusal (lines and arrows), nothing-placed
+  still `drawn`, the own-carriageway bar dropped, the one-way refusal dropped.
+- 🚫 `A03` and the bores (`Q21`); the inferred join off-grade (`Q125`); deck crossings and boxes;
+  `draw_lane_lines`.
+- ⚠️ The first deck frame was bare: Godot rendered the cached mesh until `--import`.
+- Open: `sha_tin` / `mong_kok` unbuilt with it; the 5 refused lines unexamined edge by edge.
+- Cost, measured: ~0.95 s on a ~27 s build — `draw_decks` 767 ms, and arrows' new level-0
+  `DrawnSurface` 176 ms, 118 ms of it crease and edge indices that stage never reads. Recorded, not
+  taken: lazy indices would touch `Q92`'s reader for 0.4% of the build. 🚫 Reading `_place_on_deck`'s
+  coverage off `sample`'s `over_void`: it answers the POINT where the rule asks the piece's SIDE —
+  0 of 13,831 corners disagree today, which is what makes the swap dangerous.
+
+**See.** `Q96` · `Q106` · `Q132` · `Q57`/`Q129` · `Q111` · `Q103` · `.claude/rules/arrows.md`,
+`roadmarks.md` · `PLAN.md` `P3-36`, `P3-37`

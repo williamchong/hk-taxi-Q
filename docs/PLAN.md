@@ -346,6 +346,15 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 - `P3-35h` ✅ — `RoadGraph.lane_centre` is placed about the drawn road (`carriageway_offset_m`),
   the offset not turning with the asker; `verify_road_graph.gd` asserts it. Scripted; the user's
   own drive outstanding. ⚠️ Graded with the overlay's lane marker (`--debug-view=full`).
+- `P3-36` ✅ — a turn arrow stands where TD surveyed it (`Q134`), the frame its lane lines are in
+  since `Q132`; the lane slot carries only an arrow surveyed over no drawn road (`placed_by_slot`)
+  and stays the lane-count instrument. 🔴 "On the road" is the drawn surface, never the host's share.
+- `P3-37` ✅ — TD's surveyed paint on the decks (`Q134`): `deck_codes: [A01]` lines (`a`, 100 of
+  105 / 4 of 4) and arrows (`b`, 18 of 20 / 4 of 4) hosted among off-grade edges only and stood on
+  the host level's `DrawnSurface`; a piece the deck does not cover is refused and counted, never
+  floated; level-0 reports byte-identical. `c`: `paint_clearance.py` needed no change. 🚫 `A03` and
+  the bores (`Q21`), the inferred join off-grade, deck crossings and boxes, `draw_lane_lines`.
+  User's drive owed.
 
 - ⚠️ `P3-33d` is superseded by `P3-35e`.
 - ⚠️ `hong_kong.yaml` is 73% comment. Moving the prose to sidecars (`Q119`'s precedent) is the

@@ -12,6 +12,21 @@ paths:
 
 Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
 
+- 🔴 **An arrow STANDS where TD surveyed it since `P3-36` (`Q134`); the lane slot is the fallback and
+  the instrument, never the placement.** The white lines beside it are TD's survey since `Q132`, so
+  the slot centre is the position that reads as a fault (FLEMING ROAD: 2.07 m, astride a line). Do
+  not "restore" the snap to make `stacked_*` visible again. ⚠️ **`_placed_offset`'s gate is the DRAWN
+  ROAD (`DrawnSurface.covers`), never the host's share alone** — at level 0 `half_width_m` is a
+  territory (`Q57`), and the share-only gate left the very arrow the task was opened over on its slot.
+  ⚠️ **Two frames, two counters**: `stacked_pairs` / `stacked_disagreeing` / `lane_shift_m` are asked
+  of the SLOTS and must come out unchanged across a placement change; `overlapping_drawn`,
+  `placed_by_slot` and `fallback_shift_m` are asked of what is drawn. Add the last three to the paste
+  below. The inertness proof for a placement change is every other counter and `arrows.glb`
+  byte-identical, with only `arrows_placements.json` positions moving. Mutations that must fail:
+  always-slot, no-fallback, `on_drawn_road` ignored.
+- 🔴 **Deck arrows (`arrows.deck_codes`, `stand_on_decks`, `DeckArrowReport`, `P3-37b`): the checklist
+  is `roadmarks.md`'s first bullet — read it by hand.** Counted apart in `arrows.json`'s `deck` block;
+  level-0 stands must stay an identical prefix of `arrows_placements.json`; no slot fallback up there.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way`,
   `stacked_pairs`, `stacked_disagreeing`, `outside_carriageway` and `inverted`, before and after.**

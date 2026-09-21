@@ -11,6 +11,23 @@ paths:
 
 Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
 
+- 🔴 **The DECKS carry TD's paint since `P3-37` (`Q134`): `road_marks.deck_codes` / `arrows.deck_codes`
+  (`A01`), `draw_decks`, `_place_on_deck`, `arrows.stand_on_decks`. Paste `roadmarks.json`'s and
+  `arrows.json`'s `deck` blocks before and after, both regions, with
+  `paint_clearance.py --layer roadmarks`.** A deck marking is hosted among OFF-GRADE edges only and
+  stood on `DrawnSurface.of(level=host's)`; every bar is the street's own, so there is no deck knob.
+  🔴 **The void rule is INVERTED up here and that is not an inconsistency to tidy**: on the street
+  a void piece is KEPT (a footway is under it, `Q54`); past a deck's rim there is air, so a piece the
+  deck's surface does not cover is refused and counted (`stations_off_deck`, arrows' `off_deck`) —
+  the user's call. ⚠️ **The inertness proof is the level-0 report byte-identical and the level-0
+  geometry an identical PREFIX of the mesh / stands** — deck paint goes through a second builder
+  merged in, because `FlatBuilder.build` writes `slivers_dropped` into the report it is handed.
+  ⚠️ **`paint_clearance` needed no change**: it finds road faces by height, 0 deck triangles read
+  buried under the lowest face, and "more than one road face" rising (2.0% → 10.2%) is overlapping
+  deck ribbons, where `DrawnSurface` takes the higher. 🚫 `A03` and the bores (`Q21`), an inferred
+  join off-grade (`Q125`: a deck is never a source), a slot fallback for deck arrows (authored
+  widths), `draw_lane_lines`. ⚠️ **A frame after this change needs `godot --headless --path game
+  --import` first** — the first deck frame showed a bare flyover off the cached mesh.
 - 🔴 **The WHITE LINES along a road are TD's survey since `P3-34` (`Q132`), and `draw_lane_lines` /
   `draw_centre_line` are 0.0 on the user's call: where TD surveys no line, none is drawn.** Do not
   switch either back on to fill a bare street — measured, the silent streets are surveyed streets

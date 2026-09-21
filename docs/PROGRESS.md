@@ -26,6 +26,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     (`P3-3`'s question). `P3-33f` (the user's drive) is open.
   - `P3-34` (TD's longitudinal lines) and `P3-35` (ETL refactor, crossings, hatching, lane
     centre) are built; `P3-35g4` was measured and refused. `P3-35h`'s user drive is outstanding.
+  - `P3-36` stands the arrows where TD surveyed them and `P3-37` paints the decks (`Q134`); the
+    user's drive of both is owed.
   - `B1` ("one fare") is in progress: HUD chassis and wrong-way warning built; the fare state
     machine (`P3-1a`) and minimal fare HUD (`P3-5a`) remain. `B3`, `B4`, `P3-9` not started.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
@@ -123,6 +125,8 @@ Phase 3 — Build `B2`
   `drawnsurface.py`, `tools/_lib/`, `config_blocks/`; `g1` off-grade slide onto the deck; `g2`
   `crossings.glb` (schema 35); `g3` hatching (`oblique`); `h` `RoadGraph.lane_centre` about the
   drawn road — user's drive outstanding.
+- `P3-36` ✅ Arrows stand where TD surveyed them (`Q134`) — `placed_by_slot` 16 / 6; user's drive owed.
+- `P3-37` ✅ TD's paint on the decks (`Q134`) — lines 100 of 105 / 4 of 4, arrows 18 of 20 / 4 of 4; user's drive owed.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
 - `P3-27` 🟡 Crossing paint built as `P3-35g2`; footway extent and the look-right / look-left
@@ -218,6 +222,7 @@ and there in the same change.
 - `Q127` Widths where the ray survey cannot read (user). `Q128` shipped the two survivors. Left:
   the street borrow; consensus of ≥ 2 as the next rung.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
+- `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -379,8 +384,9 @@ Bundle, from `etl/out` (schemas: `city.json` 35, `roadgraph.json` 15, `roadsurfa
 | Signs drawn | 873 of 3,276 published, 634 poles, 117 text plates / 285 of 1,009 |
 | Lamps drawn | 1,077 of 1,263 candidates, `min_kerb_clearance_m` 0.1701 / 364 of 441 |
 | Railings read | 16,954 m of 20,273 m published / 6,356 of 7,169 m |
-| Arrows drawn | 741 of 1,365 symbols, `stacked_disagreeing` 18 / 158 of 367, 0 |
+| Arrows drawn | 741 of 1,365 symbols, `stacked_disagreeing` 18 (slots), `placed_by_slot` 16, `overlapping_drawn` 18 / 158 of 367, 0, 6, 2 |
 | Road marks drawn | 2,197 of 2,437 candidates, `host_off_carriageway` 217 / 549 of 594, 37 |
+| Deck paint (`P3-37`) | lines 100 of 105 (2,497 m), `stations_off_deck` 12; arrows 18 of 20 / 4 of 4 (175 m), 0; 4 of 4 |
 | Crossings drawn | 120 of 121, 762 stripes / 16 of 17, 80 |
 | Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
 | Tramway | 126 of 132 rails (7,300 m), 55 beds, `off_gauge_stations` 53 of 1,041, `inverted` 0 |
