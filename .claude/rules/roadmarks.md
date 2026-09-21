@@ -37,7 +37,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   builder merged in cell by cell, because `FlatBuilder.build` writes `slivers_dropped` into the report it is handed.
   ⚠️ **`paint_clearance` needed no change**: it finds road faces by height, 0 deck triangles read
   buried under the lowest face, and "more than one road face" rising (2.0% → 10.2%) is overlapping
-  deck ribbons, where `DrawnSurface` takes the higher. 🚫 `A03` and the bores (`Q21`), an inferred
+  deck ribbons, where `DrawnSurface` takes the higher. ⚠️ **`deck.under_another_deck` / `_m` (and the arrows' twin) is paint where TWO deck
+  levels cross (`P3-41`, `Q135`)** — `A01` never says which structure and the lines carry no Z, so
+  the plan-nearest host's level is a guess there: Sha Tin 33 / 324 m, 0 elsewhere. A finding, never
+  a refusal; 🚫 no rule picks the deck. Mutation: drop the `level !=` filter. 🚫 `A03` and the bores (`Q21`), an inferred
   join off-grade (`Q125`: a deck is never a source), a slot fallback for deck arrows (authored
   widths), `draw_lane_lines`. ⚠️ **A frame after this change needs `godot --headless --path game
   --import` first** — the first deck frame showed a bare flyover off the cached mesh.

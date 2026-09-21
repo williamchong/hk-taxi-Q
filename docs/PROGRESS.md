@@ -129,7 +129,8 @@ Phase 3 — Build `B2`
 - `P3-37` ✅ TD's paint on the decks (`Q134`) — lines 100 of 105 / 4 of 4, arrows 18 of 20 / 4 of 4; user's drive owed.
 - `P3-38` ✅ Road paint casts no shadow (`Q135`) — `prims` −191,903, `draws` −10 on the throttle route.
 - `P3-39` ✅ Street arrows' heights off the drawn road (`Q135`) — deep burials 31 → 9 / 36 → 21.
-- `P3-40` ✅ `roadmarks.glb` in 300 m cells (`Q135`) — 72,356 a pass → 13–17k, +3 to +7 draws. `P3-41` ⬜.
+- `P3-40` ✅ `roadmarks.glb` in 300 m cells (`Q135`) — 72,356 a pass → 13–17k, +3 to +7 draws.
+- `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
 - `P3-27` 🟡 Crossing paint built as `P3-35g2`; footway extent and the look-right / look-left
@@ -226,7 +227,7 @@ and there in the same change.
   the street borrow; consensus of ≥ 2 as the next rung.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
-- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-40` built; level-2 decks left.
+- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-41` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
