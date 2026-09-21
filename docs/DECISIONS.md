@@ -188,6 +188,8 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q131` | A kerb in the road is not the road's edge: seams, islands, lines across | Closed — region schema 4. Open items below. |
 | `Q132` | The longitudinal lines come from TD's survey; where TD is silent nothing is drawn | Closed — built as `P3-34b`–`d`, `CITY_SCHEMA` 33. `draw_centre_line` and |
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
+| `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
+| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | Open — `P3-38` built; `P3-39`–`P3-41` planned below. |
 
 ---
 
@@ -6460,3 +6462,76 @@ still true — and stand it on `DrawnSurface.of(level=host's)`. Every bar is the
 
 **See.** `Q96` · `Q106` · `Q132` · `Q57`/`Q129` · `Q111` · `Q103` · `.claude/rules/arrows.md`,
 `roadmarks.md` · `PLAN.md` `P3-36`, `P3-37`
+
+## `Q135` — Road paint stays mesh; what it costs a frame is measured, and it casts no shadow
+
+**Status.** Open — `P3-38` built. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
+the asset standard, and ask again whether road paint should be mesh or texture.
+
+### Mesh, decal or texture
+
+- ⚠️ `mesh_contract.gd`'s texture refusal is a DEFAULT a call site overrides with a declared budget
+  (`Q63`), not a hard rule — the user's correction. Texture cost is a price, not a bar.
+- 🚫 **Decals, with web droppable on the user's word.** The Mobile renderer keeps a per-object list
+  of 8 decals — `BeamBudget`'s limit for spots, from the engine's documentation, ⚠️ not measured on
+  4.7. Wan Chai paints ~3,100 features over 65 road chunks, ~48 a chunk before a curved line is cut
+  into boxes. The exits are Forward+ (the locked renderer) or ~10x the road meshes (the draw
+  budget). Dropping web does not move either. Arrows are the one fit and already the cheapest layer
+  (3,284 triangles, an 8 KB library). `Q115`'s held trigger stands: a Mobile-renderer test first.
+- 🚫 **A region texture**: a 100 mm line over 1.5 km² at 25 mm a texel is ~60k x 40k px.
+- 🚫 **Shader paint on the ribbon** is what `Q132` left: surveyed lines do not follow lane space, a
+  cap has no lane coordinate, and the fade blanks where stop lines and arrows sit.
+- Held: striped texture for boxes and zebras (14,931 triangles over 20 boxes). Alpha scissor
+  re-aliases (`marking_paint.gdshader`); alpha-to-coverage on `gl_compatibility` is unverified.
+  Trigger: distant hatching judged unacceptable from the driving seat.
+
+### Measured — what the paint costs a frame
+
+`drive.sh --hide-layers=` (new; refuses an unknown id, fails a run that hid nothing). Throttle route,
+overlay and HUD off, both regions resident, positions identical to the centimetre:
+
+| | `prims` t=1–6 s | `draws` |
+|---|---|---|
+| Shown | 900,927–1,022,097 | 107–109 |
+| `roadmarks` hidden | −217,068 at every sample | −2 |
+| All four paint layers hidden | −283,044 at every sample | −18 |
+
+- Constant to the triangle while the frame swings 120k: one AABB a region, never culled inside it.
+  Causeway Bay's copy costs 0 from this route, so the region AABB does cull.
+- 217,068 = 3 x 72,356, `roadmarks.json`'s `triangles`: the main pass and two shadow cascades. No
+  layer node set `cast_shadow`, and a `GeometryInstance3D` casts by default.
+- ⚠️ `tools/resident_budget.py` sums tiles and road chunks only. Wan Chai's ~93k paint triangles are
+  outside its 105%.
+
+### Built — `P3-38`: what lies on the road casts no shadow
+
+`GeneratedLayer.LAYERS` gains a required `casts_shadow` key — `false` for `tramway`, `arrows`,
+`boxjunctions`, `crossings`, `roadmarks` — and `layer_preview.gd` applies it to every
+`GeometryInstance3D` it built. In the node, not the importer: an import is cached on the `.glb`,
+not on the post-import script.
+
+- Same route, t=6 s, same position: `prims` 906,456 → 714,553 (−191,903), `draws` 108 → 98.
+- A/B at `--camera=188,11,40 --look=215,5,16`, `t=0.8`, each side shot twice and byte-identical:
+  21 of 2,073,600 px differ (max 32, one 16 x 8 px box on a kerb flank). `check.sh` 0, no shader
+  error.
+- ⚠️ A drive frame cannot A/B this: a capture waits for the next rendered frame and the car moves.
+- ⚠️ Nothing for the mobile tier, which has no cascades: ~94k unculled paint triangles remain, 31%
+  of 300k. That is `P3-40`.
+
+### Planned
+
+- `P3-39` — street arrows take tail and nose heights from `DrawnSurface`, as deck arrows do. Bar set
+  beforehand: `paint_clearance --layer arrows` deeper than 10 mm in the carriageway, 31 today. ⚠️ The
+  ribbon has no crossfall, so only arrows on a neighbour's share or a cap can move; a rigid glyph
+  beside a kerb lip or over a crest cannot. If 31 does not fall it is a consistency refactor.
+- `P3-40` — `roadmarks.glb` in coarse cells (~300 m, not the 150 m tile: the draw budget reads
+  136–150 on the seam). Boxes and crossings stay merged. 🚫 One merged paint mesh: the colours are
+  per-`.tres` and `marking_paint` ships no `COLOR_0`. Owes `resident_budget.py` counting the paint.
+  With it: `FlatBuilder.build` returns its sliver count rather than writing a report, the three
+  piece-placers (`boxjunctions._place`, `roadmarks._place`, `_place_on_deck`) become one with a
+  keep-predicate, and the deck preamble shared by `roadmarks.py` and `arrows.py` moves to one helper.
+- `P3-41` — `mong_kok` and `sha_tin` built with deck paint. ⚠️ A deck feature is hosted by the
+  plan-nearest edge over every level above the street and both have level 2 (3 and 2 edges); where
+  decks cross, a mark can stand on the wrong one and still pass `covers`. Unmeasured.
+
+**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-41`

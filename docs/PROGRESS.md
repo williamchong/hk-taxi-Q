@@ -127,6 +127,7 @@ Phase 3 — Build `B2`
   drawn road — user's drive outstanding.
 - `P3-36` ✅ Arrows stand where TD surveyed them (`Q134`) — `placed_by_slot` 16 / 6; user's drive owed.
 - `P3-37` ✅ TD's paint on the decks (`Q134`) — lines 100 of 105 / 4 of 4, arrows 18 of 20 / 4 of 4; user's drive owed.
+- `P3-38` ✅ Road paint casts no shadow (`Q135`) — `prims` −191,903, `draws` −10 on the throttle route. `P3-39`–`P3-41` ⬜.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
 - `P3-27` 🟡 Crossing paint built as `P3-35g2`; footway extent and the look-right / look-left
@@ -223,6 +224,7 @@ and there in the same change.
   the street borrow; consensus of ≥ 2 as the next rung.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
+- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38` built; arrow heights, coarse cells, level-2 decks left.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -358,6 +360,7 @@ Budget
 | FPS, Chrome on macOS, 2880×1450 | — | 119, worst frame 9.7 ms (2026-07-31; stale) |
 | Draw calls | < 150 | 136–150 on the seam line from `f_045` (`P5-9c`); `P2-6` measures properly |
 | Resident triangles, worst camera | < 300k | `wan_chai` 105% · `causeway_bay` 76% · `sha_tin` 47% · `mong_kok` 184% (`tools/resident_budget.py`); seam camera 73% (`--pair`) |
+| Paint layers, throttle route | — | 283,044 `prims` / 18 `draws` before `P3-38`, never culled in-region; ~94k main-pass triangles remain, outside `resident_budget.py` (`Q135`) |
 | Texture memory | < 128 MB | 131,072 px — one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
 | Bundle size (PCK) | < 200 MB | 55,955,496 B at `P5-13`; later tasks quoted deltas only — re-export before quoting |
 | Boot to drivable (web, warm) | — | 830 ms (2026-07-31; stale) |

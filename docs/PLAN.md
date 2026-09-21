@@ -355,6 +355,14 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
   floated; level-0 reports byte-identical. `c`: `paint_clearance.py` needed no change. 🚫 `A03` and
   the bores (`Q21`), the inferred join off-grade, deck crossings and boxes, `draw_lane_lines`.
   User's drive owed.
+- `P3-38` ✅ — what lies on the road casts no shadow (`Q135`): `GeneratedLayer`'s `casts_shadow`
+  key, applied by `layer_preview.gd`. `prims` 906,456 → 714,553 and `draws` 108 → 98 on the
+  throttle route; 21 px of an A/B frame. `drive.sh --hide-layers=` is the instrument.
+- `P3-39` ⬜ — street arrows' heights off `DrawnSurface`, as the decks' are (`Q135`). Bar: 31 deep
+  in the carriageway on `paint_clearance --layer arrows`.
+- `P3-40` ⬜ — `roadmarks.glb` in coarse cells for the mobile triangle budget, `resident_budget.py`
+  counting the paint, and the paint builders' three placers made one (`Q135`).
+- `P3-41` ⬜ — `mong_kok` / `sha_tin` with deck paint; level-2 hosting measured (`Q135`).
 
 - ⚠️ `P3-33d` is superseded by `P3-35e`.
 - ⚠️ `hong_kong.yaml` is 73% comment. Moving the prose to sidecars (`Q119`'s precedent) is the
