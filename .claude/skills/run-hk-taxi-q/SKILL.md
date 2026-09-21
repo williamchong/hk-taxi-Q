@@ -97,6 +97,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--hide-layers=a,b` | hide `layer_preview` nodes by `generated_layer.gd` id (`roadmarks`, `arrows`, …) in every resident region — what a layer costs a frame is the same drive with and without it, read off `prims` and `draws`. An unknown id is refused, and a run that hid no node fails. Inert on the car: positions match the unhidden run to the centimetre |
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
+| `--minimap=off\|on` | the minimap alone (`P3-44`); `--hud=off` takes it with everything else. `P3-9` runs with it off |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 
 One authored asset under the shipped rig, no city needed — the readout prints as `asset:` lines and
@@ -186,7 +187,7 @@ the frame and it lands in any statistic taken from the PNG.
 ⚠️ **Nor is `--hud=off`, since `P3-24`.** The player's HUD is not dev chrome and `--debug-view=off`
 does not touch it: a street plate and a speed readout sit in the frame and land in the same
 statistics. **A clean art-review frame needs both flags.** Conversely `--debug-view=full` is what
-reveals the HUD's reserved slots (minimap, timer, meter) as cyan outlines, and its raw-versus-shown
+reveals the HUD's reserved slots (timer, meter) as cyan outlines, and its raw-versus-shown
 street readout — which is how you tell a stale plate from a correct one.
 
 Runs are **deterministic**. The clock reads the engine's physics-frame counter rather than

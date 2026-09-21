@@ -252,8 +252,8 @@ Admiralty west, Victoria Park east. No invisible walls needed.
 
 ## Acceptance test
 
-**Hand the build to a Hong Kong driver, disable the minimap and the direction arrow, and name a
-destination.** If they can drive from the Convention Centre to Times Square from memory, using the
+**Hand the build to a Hong Kong driver, disable the minimap (`--minimap=off`) and the direction
+arrow, and name a destination.** If they can drive from the Convention Centre to Times Square from memory, using the
 correct one-way streets, the city reads as Hong Kong. If they need the minimap, the pillar has
 failed — and the test shows where, which screenshot comparison never does.
 

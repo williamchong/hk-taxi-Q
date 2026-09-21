@@ -3,7 +3,7 @@ paths:
   - "game/scripts/ui/*.gd"
   - "game/scripts/core/wrong_way_*.gd"
   - "game/scripts/core/street_tracker*.gd"
-  - "game/tuning/{hud_layout,hud_style,wrong_way,street_tracker}.{tres,md}"
+  - "game/tuning/{hud_layout,hud_style,wrong_way,street_tracker,minimap}.{tres,md}"
   - "game/tuning/street_plate.json"
   - "game/tools/verify_hud.gd"
   - "tools/font_coverage.py"
@@ -53,6 +53,17 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   it, which is why its exit code is the only thing that means anything. ⚠️ **Do not force the sign
   visible with `if false:`** — the promoted-warnings sweep rejects the file, the HUD never builds,
   and the run still says `DRIVER OK`. Numbers in `Q81`.
+- **Minimap changes — `minimap*.gd`, `tuning/minimap.tres`, the `map_*` keys in `hud_style.tres`:
+  `tools/check.sh` (the `map:` assertions), an A/B drive with and without `--minimap=off` at one
+  route, and BOTH deltas pasted — `draws` and `prims`.** 🔴 **The map is a mesh drawn every frame,
+  so it has a triangle cost the rest of the HUD does not**: built naively it was **37.7k** prims,
+  an eighth of the mobile budget; it ships at **12.2k / +5 draws** on shared junction caps,
+  one-sided bevels and sub-pixel simplification (`minimap_mesh.gd`). ⚠️ **`map_field` and `map_road`
+  are opaque and asserted** — strokes overlap, a deck's casing is the field's colour, and the clip
+  is the field's alpha. ⚠️ **A mirrored map looks right on a grid**; the east-is-right assertions
+  are the evidence, not the frame. ⚠️ A mesh keeps colours as **RGBA8**, so a test comparing them
+  uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
+  build, not live. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

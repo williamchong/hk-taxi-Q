@@ -190,6 +190,8 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
+| `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Owed the user: orientation, one-way ticks, `span_m`. |
+| `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
 
 ---
 
@@ -6655,3 +6657,83 @@ cell through `library_meshes`.
   makes the union the uncut mesh.
 
 **See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`
+
+---
+
+## `Q136` — The minimap is drawn from `RoadGraph`, once, and switches off on its own
+
+**Status.** 🟡 Built (`P3-44`) — the user's drive and the web build's clip frame owed
+
+- The slot exists and is graded empty: `hud_layout.tres` `minimap`, bottom-right above the plate
+  (`Q80`: "the two are one question"). `hud.gd` names `P3-5b` as its filler; `PLAN.md`'s `P3-5b`
+  never mentions a map, so it is `P3-44`, in `B4`.
+- Source: the `RoadGraph` the HUD already holds — Wan Chai is 792 edges / 4,573 vertices. No ETL
+  change, no schema bump, no new generated asset (hard rules 2, 5).
+- One static `ArrayMesh` in plan metres on a `MeshInstance2D`; per frame only its transform moves.
+  Stroked at `width_of`, levels emitted ascending with a field-coloured casing under each deck, so
+  a flyover draws over the street. Undrivable edges are not drawn.
+  🚫 The plan's one `_draw()` of a `draw_polyline` an edge: a canvas polyline is its own polygon
+  command and does not batch — up to a draw call an edge against a 136–150 frame. Not built.
+- **Cost, throttle route, `--debug-view=off`, against `--minimap=off`:** `draws` 110 → 115 at
+  t=1 s and 132 → 137 at the t=6 s peak (**+5**: field, clip, roads, chevron, frame); `prims`
+  760,295 → 772,505 (**+12,210**), both regions resident.
+  ⚠️ Built naively it was **+37,696** — an eighth of the mobile budget's 300k. Cut by one cap a
+  junction instead of one a stroke end, one bevel on the outside of a turn over `sin` 0.1 instead
+  of two on every vertex, and dropping vertices under 0.4 px off their road. Same frame by eye.
+- `clip_children` on the chamfered field works on Metal/Mobile and is one of the five draws.
+  ⚠️ **Not seen on the web build**: it exports, but headless Chrome's one-shot screenshot returns
+  the loading splash and the DevTools profile was in use. Owed before `B4`'s web review.
+- Tuning is data: `tuning/minimap.tres` + `minimap.md` (`Q119`), no defaults on the exports;
+  colours from `hud_style.tres`.
+- 🔴 **`--minimap=off`, separate from `--hud=off`.** `GAME_DESIGN.md`'s acceptance test disables the
+  minimap and the arrow; it does not disable the speed or the plate. `P3-9` runs with it off.
+- The projection is a pure static function so `verify_hud` can assert it without a frame. ⚠️ The
+  defect to catch is a **mirrored** map (3D −Z-forward to 2D +Y-down flips handedness), which looks
+  plausible on a grid: east-is-right-when-heading-north is the assertion, mutation-checked. One
+  compass convention — `CityManifest.bearing_deg`'s — never a second.
+- **Driving only**: roads and the car. No destination pip — nothing has a destination until
+  `P3-1a`, which adds it (clamped to the rim along the ray from the car, not per axis, or the pip
+  points the wrong way in a corner). No `route` seam was built either: it is one more child in the
+  same map space whenever `Q137` reopens.
+- `verify_hud`: the `map:` assertions — both orientations, mirror, anchor, chevron, draw order,
+  casing, shared caps, bevel side, simplification; 12 mutations, each caught. ⚠️ One survived
+  first (a cap at the narrower half) and bought the shared-cap assertion. ⚠️ A mesh keeps colours
+  as RGBA8, so the order test uses black and white.
+- 🚫 An orthographic `SubViewport` over the city: a second pass of the city on the Mobile renderer,
+  and a look that fights flat shading. 🚫 An ETL-baked map texture: a schema bump and a fixed
+  resolution for data already in memory. Neither was measured — refused on cost of entry.
+- **Owed the user.** Heading-up or north-up — shipped heading-up (`hud_layout.gd`: "glanced at
+  mid-corner"); north-up is the one that rewards a local's memory. A `.tres` bool either way.
+  One-way ticks — recommended off at first: 93.5% of the region is one-way, and every mark added
+  moves navigation from the street to the map.
+- **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
+  all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and
+  it is an empty setter. Listed under `B4` because `hud.gd` gave the slot to `P3-5b` — a grouping,
+  not `B4`'s `B1`/`B3` deps. Buildable now; `P3-43` goes first only because it unblocks `B1`.
+
+**See.** `Q80` · `Q137` · `Q119` · `GAME_DESIGN.md` "Acceptance test" · `.claude/rules/hud.md`
+
+---
+
+## `Q137` — A router is built; a route line on the map is not
+
+**Status.** 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement
+
+- **The router is owed whatever the map does.** `P3-3` needs a legal route; `P3-1a` needs road
+  distance for a minimum trip and for a fair allowance — in a region 93.5% one-way by drivable
+  length, two stands 200 m apart can be a far longer drive. Nothing in `game/` traverses the graph
+  today (`tools/reachability.py`'s header). Its own task, first in `B1`.
+- **No turn-by-turn line on the minimap.** Pillar 1 is "navigate by memory, not by minimap"; the
+  arrow *assists*; the long haul "rewards route knowledge", which a drawn route pays to whoever
+  follows it. `Q80`'s references put the destination in the world and neither draws a route.
+  ⚠️ **Not measured shut** — nothing was built or driven. It is the pillar applied, and it reopens
+  on evidence from `P3-9`.
+- Deferral is cheap: `Q136`'s map takes a `route` polyline in the same map space, empty until
+  something sets it.
+- **Held for after the first fare review:** the world-space arrow (`P3-5a`) pointing at the next
+  junction on the route rather than as the crow flies. In a one-way grid a straight-line arrow
+  often points down a street that cannot be entered; this helps a non-local without drawing the
+  answer.
+- Open with `P3-43`: whether guidance, if it ever ships, routes legally or as the player drives.
+
+**See.** `Q136` · `Q80` · `Q51` · `Q19` · `PLAN.md` `P3-43`

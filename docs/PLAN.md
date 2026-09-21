@@ -387,6 +387,7 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 |---|---|---|
 | `P3-24` ✅ | HUD chassis — speed, bilingual street plate, reserved slots, thumb-rest contract | Built; passed review (`Q79`, `Q80`) |
 | `P3-25` ✅ | Wrong-way warning — blinking NO ENTRY, top-centre | Built; passed review (`Q81`) |
+| `P3-43` | `RoadRouter` — directed-edge search over `RoadGraph`: one-way, the 217 turn restrictions, `is_routable`; a legal profile and a player profile | Agrees with `tools/reachability.py`'s pairwise table on both shipped regions and across the join; one query under 1 ms |
 | `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. Standard and short hop only | The loop runs end to end and can be failed |
 | `P3-5a` | Minimal HUD — destination arrow, timer, meter. Deliberately ugly | Legible; no layout work |
 
@@ -394,6 +395,28 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 - **Review:** play one fare, start to finish | web build | **Is completing a fare worth doing
   twice?**
 - Cross-harbour and long-haul are held to `B4`.
+
+#### `P3-43` — the router `B1` and `B3` both stand on
+
+`RoadGraph` is a spatial index and an attribute table: no adjacency, no traversal, and
+`turn_restrictions` is only counted (`tools/reachability.py` says so, having needed one). Shared
+infrastructure, so its own task, first in `B1` (`Q137`).
+
+- **Consumers:** `P3-1a` — a fare's length and its time allowance are road distance, and
+  `GAME_DESIGN.md` already owes a minimum trip for the cross-harbour stands 191 m from the portal;
+  `P3-3` — a legal route; `P3-44` — nothing yet (`Q137`).
+- `scripts/city/road_router.gd`, reading `RoadGraph`, never inside it. ⚠️ The search state is a
+  **directed edge**, not a node: a restriction is `from_edge → via_node → to_edge`, which a node
+  search cannot express. `RoadGraph` does not load `from`/`to` today; this task adds that.
+- Endpoints are `fares.json`'s published `nearest_edge` / `edge_t` — **no schema bump**.
+- Two profiles: traffic obeys everything; the player's may not ("the player may break every
+  traffic rule"). Which a fare's par distance uses is `P3-1a`'s call, recorded there.
+- ⚠️ A 1.5 km² clip is not strongly connected — `reachability.py`'s largest component is 331 edges
+  of 737. "No route inside the clip" is a defined answer (plan distance, flagged), never an assert.
+- 🔴 `reachability.py` stays a **second implementation** and `verify_road_graph.gd` diffs the two:
+  a divergence is a finding. Do not import one into the other (`Q95`'s arrangement).
+- Once per fare and on leaving the path, off the `Hit` `hud.gd` already fetches at 5 Hz. Never
+  per frame.
 
 #### `P3-24` — how the HUD gets its chassis
 
@@ -437,6 +460,7 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 | `P3-2b` | `ScoreSystem` — base, time bonus, drift/air/speed, the style chain and its banking, the fare combo. Absorbs `P3-2a` | Style points award live, and the chain is losable — a hard crash costs it unbanked |
 | `P3-1b` | Remaining fare types — cross-harbour and long haul | Cross-harbour fare works |
 | `P3-5b` | Full HUD — bilingual destination callouts, safe areas, one-handed layout | Readable one-handed in daylight |
+| `P3-44` ✅ | Minimap — the reserved slot filled from `RoadGraph`: drawn once, moved by a transform; player chevron, destination pip; `--minimap=off` (`Q136`). ⚠️ **Not bound by `B4`'s deps** — needs nothing unbuilt; only the pip waits on `P3-1a` | `verify_hud` projection assertions, mutation-checked; A/B frame and draw-call delta; clipped correctly on the web build; `P3-9` runs with it off. Built; the user's drive and the web frame owed |
 
 - **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want
   another go?**

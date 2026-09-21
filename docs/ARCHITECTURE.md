@@ -95,7 +95,7 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--touch=` and `--asset=` go through it.
+  `--minimap=`, `--touch=` and `--asset=` go through it.
 
 ### The debug overlay
 
@@ -1088,7 +1088,7 @@ city_space = region_local + city_offset
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
-| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) ship; minimap, timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames | 🟡 `P3-24`; meter, timer and the world-space destination marker are `P3-5a` |
+| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, +5 draw calls, 12.2k primitives) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
 Every library layer draws one call per library mesh through a `MultiMesh`; each placements document
