@@ -232,6 +232,7 @@ and there in the same change.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: a drive; `span_m`. Owed: the web frame.
+- `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, no route line (`P3-43`). Design call, not measured; reopens on `P3-9`. Held: arrow to the next junction.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count

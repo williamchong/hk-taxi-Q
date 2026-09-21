@@ -191,6 +191,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
+| `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
 
 ---
@@ -3581,6 +3582,7 @@ See `Q54`, `Q63`, `Q64`, `Q65`, `P3-21`.
   zones fails the suite. The probe uses the zone's upper half, because a zone contains its own rest.
 - Arrangement rule: left is the car, right is the world, top is the fare, the middle is the road.
   Speed bottom-left, plate bottom-right (paired with the future minimap), one baseline at y 860.
+  ⚠️ **The sides are superseded by `Q138`** (mirrored); top, middle and baseline stand.
 - User's rule: plan the area, do not hold the space — no gaps left for UI that does not exist yet.
 - HUD sized to the references (speed ~7% of frame width). `hud.gd::_fit_plate` cuts the plate to its
   lettering, clamps to the reserved width, and grows away from whichever edge the layout pins;
@@ -6754,3 +6756,37 @@ cell through `library_meshes`.
 - Open with `P3-43`: whether guidance, if it ever ships, routes legally or as the player drives.
 
 **See.** `Q136` · `Q80` · `Q51` · `Q19` · `PLAN.md` `P3-43`
+
+---
+
+## `Q138` — The HUD takes the racing-game arrangement, and every known future component has a graded slot
+
+**Status.** ✅ Closed — the user's call (2026-09-22), built with `P3-44`. The user's drive owed.
+
+- **Map bottom-left, speed bottom-right** — Forza, Need for Speed, Gran Turismo. `Q80` took
+  Midtown Madness 2's mirror of it; what survives of that reference is the pairing of the street
+  map with the street name (now one panel, `Q136`), not the side. The rule becomes: **left is the
+  world, right is the car, top is the fare, the middle is the road.** A `.tres` edit, as `Q80`
+  built it to be; `verify_hud` passed with nothing but the rects moved.
+- On touch each readout sits over the thumb that acts on it — map over `steer_zone()`, speed over
+  `drive_zone()`. A consequence, not the reason: the reason is where a player of the genre looks.
+  ⚠️ `steer_zone()` / `drive_zone()` are still where handedness lives (`Q83`); a left-handed
+  scheme swaps the thumbs and, to keep this, would swap the two bottom rects with them.
+- **Plan the area, do not hold the space** (`Q80`, the user's rule) now covers every HUD
+  component a planned task is known to add, each a reserved rect `verify_hud` grades against the
+  thumb rests and the design frame, drawn only under `--debug-view=full`:
+
+  | Slot | Task | Where |
+  |---|---|---|
+  | `timer` | `P3-5a` | top-left |
+  | `combo` | `P3-2b` | under the timer — both count the session |
+  | `meter` | `P3-5a` | top-right |
+  | `award` | `P3-2a`, `P3-2b` | under the meter — points are money |
+  | `callout` | `P3-5a` | top-centre, under the wrong-way sign's y 136 |
+
+- 🚫 The award in the middle of the frame, where an arcade racer puts it: the middle is the road.
+- 🚫 A slot for the destination arrow: it is in the world (`Q80`). 🚫 A pause button: no planned
+  task names one, and it is a control — `input_router`'s layer, not this `MOUSE_FILTER_IGNORE` HUD.
+
+**See.** `Q80` · `Q136` · `Q83` · `game/tuning/hud_layout.md`
+

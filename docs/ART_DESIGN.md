@@ -636,8 +636,8 @@ Desktop shifts these distances outward rather than adding a tier.
 ## UI
 
 **Visual language: Hong Kong road signage and the taxi meter.** `game/tuning/hud_style.tres` and
-`hud_layout.tres` are the authority (`P3-24`, `Q80`): two readouts — dark speed chip bottom-left,
-white street plate right — flat chamfered panels, one fill and one keyline each, white for the city
+`hud_layout.tres` are the authority (`P3-24`, `Q80`): the racing-game arrangement (`Q138`) — white minimap and street plate, one
+panel, bottom-left; dark speed chip bottom-right — flat chamfered panels, one fill and one keyline each, white for the city
 speaking and dark for the car. The CJK face is **Free HK Kai** (`Q79`). The wrong-way NO ENTRY disc
 carries the world sign's measured proportions (`Q81`).
 

@@ -422,7 +422,8 @@ infrastructure, so its own task, first in `B1` (`Q137`).
 
 ✅ Built. What `P3-5a`/`P3-5b` inherit (`Q80`, `.claude/rules/hud.md`):
 
-- Left is the car, right is the world, top is the fare, the middle stays empty. The destination
+- Left is the world, right is the car (`Q138`, mirrored from `Q80`), top is the fare, the middle
+  stays empty; every known future component has a graded slot. The destination
   arrow goes in the world, not in a slot.
 - Plan the area, do not hold the space: reserved rects (minimap, timer, meter) say where furniture
   goes; a release places what it has. Moving a neighbour is a `.tres` edit.
