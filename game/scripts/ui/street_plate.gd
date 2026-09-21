@@ -43,3 +43,20 @@ static func substitute(text: String, table: Dictionary) -> String:
 	for from: Variant in table:
 		out = out.replace(from as String, table[from] as String)
 	return out
+
+
+## Set `label` at `size`, or at the largest size under it that fits `room` px.
+## For the minimap's strip, which is the map's width whatever the name.
+static func shrink_to(label: Label, size: int, room: float) -> void:
+	label.add_theme_font_size_override(&"font_size", fitted_size(label, size, room))
+
+
+## The size `label`'s text is set at: `size`, or the largest under it that fits.
+##
+## ⚠️ Measured off the FONT, not off `Label.get_minimum_size()`: a label that is
+## not in the tree, or whose text changed this frame, reports a stale or empty
+## size, and a fit that reads 0 never shrinks anything.
+static func fitted_size(label: Label, size: int, room: float) -> int:
+	var font: Font = label.get_theme_font(&"font")
+	var wanted: float = font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+	return size if wanted <= room else floori(size * room / wanted)

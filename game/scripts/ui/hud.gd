@@ -67,6 +67,9 @@ var _followed: VehicleController = null
 var _plate: ChamferPanel = null
 var _plate_en: Label = null
 var _plate_zh: Label = null
+## What the lettering sits in and what is shown once there is a street: the
+## standalone plate, or the minimap's strip where there is a map.
+var _plate_host: Control = null
 ## Kept so the plate can be re-cut to each new name.
 var _plate_lines: VBoxContainer = null
 var _speed_value: Label = null
@@ -208,8 +211,29 @@ func _build() -> void:
 	# never is one, and an empty white sign is worse than nothing.
 	_plate.visible = false
 	_layout.place(root, _plate, _layout.street_plate)
+	_plate_host = _plate
 
-	_plate_lines = _lines(_plate, 0)
+	# ---- the minimap: the CITY, drawn, and the plate's home where it exists ----
+	#
+	# One component with the plate (the user's call, `Q136`): the map over the
+	# union of the two rects, the name in a strip along its bottom. Anchored as
+	# the PLATE is — to the bottom edge, with the speed — not as the map's own
+	# rect would be, which spans the middle and would float off the baseline on a
+	# tall window. Skipped where there is no city, for the plate's reason: an
+	# empty white panel is worse than nothing; and under `--minimap=off`, where
+	# the plate stands alone, cut to its lettering as it always was.
+	var mapped: bool = Cmdline.value(MINIMAP_ARG).to_lower() != "off"
+	if mapped and _graph != null and not _graph.is_empty():
+		_minimap = Minimap.new()
+		_minimap.name = "Minimap"
+		_minimap.setup(_mapping, _style, _graph, _layout.minimap.size, _layout.street_plate.size.y)
+		_layout.place(root, _minimap, _layout.street_plate)
+		_layout.offsets(_minimap, _layout.minimap.merge(_layout.street_plate), _layout.street_plate)
+		_plate.queue_free()
+		_plate = null
+		_plate_host = _minimap.strip
+
+	_plate_lines = _lines(_plate_host, 0)
 
 	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
 	_plate_lines.add_child(_plate_en)
@@ -264,17 +288,6 @@ func _build() -> void:
 	_warning.bar_thickness = _style.warn_bar_thickness
 	_warning.visible = false
 	_layout.place(root, _warning, _layout.wrong_way)
-
-	# ---- the minimap: the CITY, drawn ----
-	#
-	# Skipped where there is no city, like the plate's font and for the plate's
-	# reason: an empty white panel is worse than nothing.
-	var mapped: bool = Cmdline.value(MINIMAP_ARG).to_lower() != "off"
-	if mapped and _graph != null and not _graph.is_empty():
-		_minimap = Minimap.new()
-		_minimap.name = "Minimap"
-		_minimap.setup(_mapping, _style, _graph, _layout.minimap.size.x)
-		_layout.place(root, _minimap, _layout.minimap)
 
 	# ---- the reserved slots ----
 	#
@@ -340,7 +353,17 @@ static func _lines(panel: Control, separation: int) -> VBoxContainer:
 ## ⚠️ **The speed deliberately does NOT do this.** An instrument has a fixed
 ## bezel; a readout whose panel resized as the car passed 100 kph would twitch
 ## at exactly the moment it is being read.
+##
+## ⚠️ **In the minimap's strip it is the LETTERING that is cut, not the box**:
+## the strip is the map's width whatever the name, so a name too long for it —
+## `CENTRAL-WAN CHAI BYPASS TUNNEL` is 30 characters — is set smaller, each line
+## on its own, and every other name is set at the style's size.
 func _fit_plate() -> void:
+	if _plate == null:
+		var room: float = _layout.street_plate.size.x - _style.plate_pad.y * 2.0
+		StreetPlate.shrink_to(_plate_en, _style.plate_size_en, room)
+		StreetPlate.shrink_to(_plate_zh, _style.plate_size_zh, room)
+		return
 	var box: Rect2 = _layout.street_plate
 	var wanted: Vector2 = _plate_lines.get_combined_minimum_size() + _style.plate_pad * 2.0
 	var width: float = minf(wanted.x, box.size.x)
@@ -506,8 +529,8 @@ func _update_street(delta: float) -> void:
 
 	if not _tracker.has_street():
 		return
-	if not _plate.visible:
-		_plate.visible = true
+	if not _plate_host.visible:
+		_plate_host.visible = true
 	if _plate_en.text != _tracker.street_en:
 		_plate_en.text = _tracker.street_en
 		_plate_zh.text = StreetPlate.substitute(_tracker.street_zh, _substitutions)

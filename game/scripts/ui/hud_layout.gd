@@ -70,7 +70,12 @@ extends Resource
 ## name belongs with the street map rather than with the speed: the two are one
 ## question, which is why they share this side.
 ##
-## ⚠️ **This is the plate's MAXIMUM box and its anchor, not its drawn size.** A
+## 🔴 **One component with the minimap since `P3-44` (the user's call, `Q136`)**:
+## this rect is the strip along the map's bottom, and `abutting()` refuses a
+## layout where the two do not share a width and an edge. It is also the
+## ANCHOR of the pair — bottom, with the speed.
+##
+## ⚠️ **Under `--minimap=off` it is the plate's MAXIMUM box, not its drawn size.** A
 ## street sign is cut to its lettering, and a fixed-width one leaves
 ## `SHARP STREET` floating in a slab sized for `CROSS HARBOUR TUNNEL`.
 ## `hud.gd::_fit_plate` shrinks it against this rect's pinned edge and clamps to
@@ -260,6 +265,16 @@ func steer_zone() -> Rect2:
 ## below, on one bipolar axis (`Q83`).
 func drive_zone() -> Rect2:
 	return touch_zone_right
+
+
+## True where the minimap sits directly on the street plate at the same width —
+## what makes the two one panel under one keyline (`Q136`).
+func abutting() -> bool:
+	return (
+		is_equal_approx(minimap.position.x, street_plate.position.x)
+		and is_equal_approx(minimap.size.x, street_plate.size.x)
+		and is_equal_approx(minimap.end.y, street_plate.position.y)
+	)
 
 
 ## Every (hud, thumb) pair that overlaps, as `"hud_name/thumb_name"`.

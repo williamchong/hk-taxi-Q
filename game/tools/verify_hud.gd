@@ -168,6 +168,14 @@ func _check_layout() -> void:
 		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 			_fail("layout", "%s has no size — is it missing from the .tres?" % slot_name)
 
+	# The map and the plate are one panel (`Q136`): same width, one on the other.
+	# Nudging either alone opens a gap or a step in a shared keyline, which no
+	# other check here would see.
+	_expect(layout.abutting(), "layout", "the minimap sits on the street plate at its width")
+	var apart: Resource = layout.duplicate()
+	apart.minimap = Rect2(apart.minimap.position - Vector2(0.0, 8.0), apart.minimap.size)
+	_expect(not apart.abutting(), "layout", "and a minimap lifted 8 px off it is refused")
+
 	var outside: PackedStringArray = layout.within_design()
 	if outside.size() > 0:
 		_fail("layout", "rect(s) outside the design resolution: %s" % ", ".join(outside))
@@ -441,6 +449,35 @@ func _check_plate_tuning() -> void:
 		_fail("plate", "substitute() altered a name with nothing to substitute")
 	else:
 		print("  plate: substitute() swaps only what the table names")
+
+	# The minimap's strip cuts the LETTERING, not the box (`Q136`). The longest
+	# name in the four regions must come out inside the room, and a short one
+	# must not be touched — a fit that always shrank would pass the first alone.
+	var room: float = 300.0
+	var long_name := Label.new()
+	long_name.text = "CENTRAL-WAN CHAI BYPASS TUNNEL"
+	var fitted: int = StreetPlateScript.fitted_size(long_name, 26, room)
+	var fitted_px: float = (
+		long_name
+		. get_theme_font(&"font")
+		. get_string_size(long_name.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, fitted)
+		. x
+	)
+	_expect(
+		fitted < 26 and fitted >= 12 and fitted_px <= room,
+		"plate",
+		(
+			"a 30-character name is set smaller to fit the strip (%d px, %.0f wide)"
+			% [fitted, fitted_px]
+		)
+	)
+	long_name.text = "SHARP STREET"
+	_expect(
+		StreetPlateScript.fitted_size(long_name, 26, room) == 26,
+		"plate",
+		"and a short one keeps the style's size"
+	)
+	long_name.free()
 
 
 # --------------------------------------------------------------- tracker ----

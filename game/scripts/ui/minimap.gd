@@ -2,6 +2,11 @@ class_name Minimap
 extends Control
 ## The street map, bottom-right above the plate (`P3-44`, `Q136`).
 ##
+## **One component with the street name** (the user's call, `Q136`): the map on
+## top, the name of the street under the car in a strip along the bottom, one
+## keyline round both — a GPS's current-road bar. `Q80` had already called the
+## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
+##
 ## **Driving only.** Roads, and the car. No route is drawn and none will be
 ## without `Q137` reopening; the destination pip arrives with `P3-1a`, which is
 ## the first thing that has a destination.
@@ -25,15 +30,22 @@ var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
 var _marker: Polygon2D = null
+## The map's share of this control: everything above the strip.
+var _map_px: Vector2 = Vector2.ZERO
+
+## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
+## and the map shows through until then.
+var strip: ColorRect = null
 
 
-## `slot_width_px` is the layout's, handed in because the stroke floor and the
-## casing are pixels baked into a mesh of metres, and `size` is not known until
-## the node is placed.
+## `map_px` is the layout's `minimap` size and `strip_px` its `street_plate`
+## height, handed in because the stroke floor and the casing are pixels baked
+## into a mesh of metres, and `size` is not known until the node is placed.
 func setup(
-	mapping: MinimapProfile, style: HudStyle, graph: RoadGraph, slot_width_px: float
+	mapping: MinimapProfile, style: HudStyle, graph: RoadGraph, map_px: Vector2, strip_px: float
 ) -> void:
 	_mapping = mapping
+	_map_px = map_px
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# The field clips the roads to its own cut corners. ⚠️ `clip_children` masks
@@ -44,7 +56,7 @@ func setup(
 
 	_roads = MeshInstance2D.new()
 	_roads.name = "Roads"
-	_px_per_m = slot_width_px / maxf(mapping.span_m, 0.001)
+	_px_per_m = map_px.x / maxf(mapping.span_m, 0.001)
 	_roads.mesh = MinimapMesh.build(
 		MinimapMesh.strokes_of(graph, mapping.min_stroke_px / _px_per_m, SUBPIXEL_PX / _px_per_m),
 		style.map_road,
@@ -72,6 +84,24 @@ func setup(
 	_marker.vertex_colors = inks
 	_field.add_child(_marker)
 
+	# A child of the field so the chamfer clips its two bottom corners too, and
+	# after the roads so it covers them. The rule above it is the keyline's.
+	strip = ColorRect.new()
+	strip.name = "Strip"
+	strip.color = style.plate_field
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.visible = false
+	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	strip.offset_top = -strip_px
+	_field.add_child(strip)
+	var rule := ColorRect.new()
+	rule.name = "Rule"
+	rule.color = style.plate_edge
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	rule.offset_bottom = style.edge_px
+	strip.add_child(rule)
+
 	# The keyline is a sibling OVER the field, not the field's own edge: a
 	# clipping parent draws before its children, so its edge would sit under the
 	# roads that reach it.
@@ -80,7 +110,7 @@ func setup(
 
 ## Put `car` on the anchor, nose along `forward`.
 func follow(car: Vector3, forward: Vector3) -> void:
-	var anchor_px: Vector2 = size * _mapping.anchor
+	var anchor_px: Vector2 = _map_px * _mapping.anchor
 	_roads.transform = MinimapProjection.roads_transform(
 		car, forward, _mapping.heading_up, _px_per_m, anchor_px
 	)
