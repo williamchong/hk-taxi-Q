@@ -64,6 +64,7 @@ Grades rather than checks: exits 0 whatever it finds.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from collections.abc import Callable
@@ -73,9 +74,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
+from pipeline.arrows import ARROWS_MANIFEST_NAME  # noqa: E402
+from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME  # noqa: E402
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
+from pipeline.crossings import CROSSINGS_MANIFEST_NAME  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
+from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME  # noqa: E402
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA  # noqa: E402
 
 # The shipped `streaming.tres` pair. Restated rather than parsed out of the
@@ -114,6 +119,9 @@ class Bundle:
     cameras: list[tuple[float, float]]
     whole_road: int
     lod1_cell_m: float | None
+    # The painted layers' triangles — road marks, boxes, crossings, the stood
+    # arrows. Never streamed, so resident from every camera (`Q135`).
+    paint: int = 0
 
 
 @dataclass(frozen=True)
@@ -170,6 +178,32 @@ def _aabb(entry: dict) -> Box:
     return (tuple(low), tuple(high))
 
 
+# The layers `layer_preview.gd` instances whole for a resident region, by the
+# manifest each publishes its `triangles` in. Optional, as the layers are.
+PAINT_MANIFESTS = (
+    ROADMARKS_MANIFEST_NAME,
+    BOXJUNCTIONS_MANIFEST_NAME,
+    CROSSINGS_MANIFEST_NAME,
+    ARROWS_MANIFEST_NAME,
+)
+
+
+def paint_triangles(out_dir: Path) -> int:
+    """What the painted layers hold resident: every triangle, from anywhere.
+
+    🔴 **Outside the 105% this tool read for `wan_chai` until `Q135`** — ~93k
+    triangles, 31% of the budget, in no figure. Read bare rather than through
+    `read_document`: only `triangles` is asked, which every schema of every
+    one of these manifests has carried, and a region may ship none of them.
+    """
+    total = 0
+    for name in PAINT_MANIFESTS:
+        path = out_dir / name
+        if path.is_file():
+            total += int(json.loads(path.read_text(encoding="utf-8")).get("triangles") or 0)
+    return total
+
+
 def load_bundle(out_dir: Path, region: str) -> Bundle:
     """The region's tiles and road chunks, its cameras, and the whole road's triangles."""
     rebuild = f"cd etl && python -m pipeline --region {region}"
@@ -195,6 +229,7 @@ def load_bundle(out_dir: Path, region: str) -> Bundle:
         cameras=[((t["ix"] + 0.5) * size, (t["iz"] + 0.5) * size) for t in buildings["tiles"]],
         whole_road=int(surface["triangles"]),
         lod1_cell_m=float(cells[-1]) if cells else None,
+        paint=paint_triangles(out_dir),
     )
 
 
@@ -210,6 +245,7 @@ def shifted(bundle: Bundle, dx: float, dz: float) -> Bundle:
         cameras=[(x + dx, z + dz) for x, z in bundle.cameras],
         whole_road=bundle.whole_road,
         lod1_cell_m=bundle.lod1_cell_m,
+        paint=bundle.paint,
     )
 
 
@@ -223,6 +259,7 @@ def composed(frame: Bundle, other: Bundle) -> Bundle:
         cameras=frame.cameras + other.cameras,
         whole_road=frame.whole_road + other.whole_road,
         lod1_cell_m=frame.lod1_cell_m,
+        paint=frame.paint + other.paint,
     )
 
 
@@ -309,6 +346,11 @@ def report(region: str, bundle: Bundle, profile: Profile, budget: int, band_by: 
     print(
         f"  + resident road {camera.resident_road:,} = {with_resident:,}"
         f" ({budget_share(with_resident, budget)} of budget) — P5-6's chunks"
+    )
+    with_paint = with_resident + bundle.paint
+    print(
+        f"  + paint, never streamed {bundle.paint:,} = {with_paint:,}"
+        f" ({budget_share(with_paint, budget)} of budget) — resident; its cells cull at draw (Q135)"
     )
     ratio = lod_ratio(bundle.units)
     if ratio is not None:

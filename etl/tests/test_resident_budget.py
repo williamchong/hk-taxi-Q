@@ -27,6 +27,7 @@ from resident_budget import (
     load_bundle,
     lod_ratio,
     main,
+    paint_triangles,
     plan_distance_to,
     resident_at,
     shifted,
@@ -267,3 +268,21 @@ class TestPair:
         argv = ["--region", "wan_chai", "--region", "causeway_bay", "--at", "1", "1"]
         with pytest.raises(SystemExit):
             main([*argv, "--out-root", str(root)])
+
+
+class TestThePaint:
+    """`Q135`: the painted layers are never streamed, so every triangle is resident."""
+
+    def test_the_layers_that_shipped_are_summed_and_an_absent_one_is_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "roadmarks.json").write_text('{"triangles": 700}', encoding="utf-8")
+        (tmp_path / "arrows.json").write_text('{"triangles": 30}', encoding="utf-8")
+        # A layer that drew nothing publishes a null asset and no count.
+        (tmp_path / "crossings.json").write_text('{"triangles": null}', encoding="utf-8")
+        assert paint_triangles(tmp_path) == 730
+
+    def test_a_pair_holds_both_regions_paint(self) -> None:
+        west = Bundle([], [], 0, None, paint=700)
+        east = shifted(Bundle([], [], 0, None, paint=30), 150.0, 0.0)
+        assert composed(west, east).paint == 730
