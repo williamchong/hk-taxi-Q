@@ -24,6 +24,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   below. The inertness proof for a placement change is every other counter and `arrows.glb`
   byte-identical, with only `arrows_placements.json` positions moving. Mutations that must fail:
   always-slot, no-fallback, `on_drawn_road` ignored.
+- 🔴 **A street arrow's HEIGHTS are the drawn road's under its own tail and nose since `P3-39`
+  (`Q135`) — `_end_heights`, `DrawnSurface.height_at` — and the host centreline's only for an end
+  over nothing drawn (`ends_off_drawn_road`, 14 / 4 ends).** Paste that counter, `pitch_deg` and
+  `paint_clearance.py --layer arrows`'s "deeper than 0.010 m" line, both regions, before and after:
+  it read 31 → 9 / 36 → 21 when the heights moved. ⚠️ **The inertness proof for a height change is
+  every other counter and `arrows.glb` byte-identical, and no stand's plan position, heading or mesh
+  moving** — 493 / 99 heights moved, p90 5 / 10 mm, max 0.18 / 0.23 m. 🚫 Refusing an end over void:
+  the street's void rule is `Q54`'s, and the rim refusal is the decks' alone. Mutations that must
+  fail: `centreline` returned unread, `covers` not asked.
 - 🔴 **Deck arrows (`arrows.deck_codes`, `stand_on_decks`, `DeckArrowReport`, `P3-37b`): the checklist
   is `roadmarks.md`'s first bullet — read it by hand.** Counted apart in `arrows.json`'s `deck` block;
   level-0 stands must stay an identical prefix of `arrows_placements.json`; no slot fallback up there.

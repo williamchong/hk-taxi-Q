@@ -189,7 +189,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q132` | The longitudinal lines come from TD's survey; where TD is silent nothing is drawn | Closed — built as `P3-34b`–`d`, `CITY_SCHEMA` 33. `draw_centre_line` and |
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
-| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | Open — `P3-38` built; `P3-39`–`P3-41` planned below. |
+| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | Open — `P3-38`, `P3-39` built; `P3-40`, `P3-41` planned below. |
 
 ---
 
@@ -6465,7 +6465,7 @@ still true — and stand it on `DrawnSurface.of(level=host's)`. Every bar is the
 
 ## `Q135` — Road paint stays mesh; what it costs a frame is measured, and it casts no shadow
 
-**Status.** Open — `P3-38` built. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
+**Status.** Open — `P3-38`, `P3-39` built. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
 the asset standard, and ask again whether road paint should be mesh or texture.
 
 ### Mesh, decal or texture
@@ -6518,12 +6518,30 @@ not on the post-import script.
 - ⚠️ Nothing for the mobile tier, which has no cascades: ~94k unculled paint triangles remain, 31%
   of 300k. That is `P3-40`.
 
+### Built — `P3-39`: a street arrow's heights are the road's under its own ends
+
+`arrows._end_heights`: `DrawnSurface.height_at` under the glyph's tail and nose, as
+`stand_on_decks` reads a deck; an end over nothing drawn keeps the host centreline's height and is
+counted (`ends_off_drawn_road` 14 / 4), never refused — the street's void rule is `Q54`'s.
+
+| `paint_clearance --layer arrows` | Wan Chai | Causeway Bay |
+|---|---|---|
+| under the highest face | 84 → 56 | 53 → 34 |
+| inside the carriageway | 54 → 28 | 47 → 27 |
+| deeper than 10 mm — the bar, set beforehand | **31 → 9** | **36 → 21** |
+| on a raised edge | 13 → 11 | 6 → 7 |
+
+- ⚠️ The evaluation predicted less — "no crossfall, so only arrows on a neighbour's share or a cap
+  can move". Wrong: 493 / 99 of 759 / 162 heights moved (p90 5 / 10 mm, max 0.18 / 0.23 m). A
+  centreline interpolated along `t` is not the surface under a point metres off it.
+- Inert: every other counter and `arrows.glb` byte-identical, both regions; no stand's plan
+  position, heading or mesh moved; `pitch_deg` p99 4.06 → 4.45 / 8.77 → 8.77. No schema bump —
+  the counter is additive.
+- Mutation-checked: `centreline` returned unread, `covers` not asked — each fails its own test.
+- Left: 9 / 21 deep. A rigid glyph over a crest or beside a kerb lip; unexamined.
+
 ### Planned
 
-- `P3-39` — street arrows take tail and nose heights from `DrawnSurface`, as deck arrows do. Bar set
-  beforehand: `paint_clearance --layer arrows` deeper than 10 mm in the carriageway, 31 today. ⚠️ The
-  ribbon has no crossfall, so only arrows on a neighbour's share or a cap can move; a rigid glyph
-  beside a kerb lip or over a crest cannot. If 31 does not fall it is a consistency refactor.
 - `P3-40` — `roadmarks.glb` in coarse cells (~300 m, not the 150 m tile: the draw budget reads
   136–150 on the seam). Boxes and crossings stay merged. 🚫 One merged paint mesh: the colours are
   per-`.tres` and `marking_paint` ships no `COLOR_0`. Owes `resident_budget.py` counting the paint.
