@@ -61,6 +61,8 @@ const MonitorScript = preload("res://scripts/core/wrong_way_monitor.gd")
 const WrongWayProfileScript = preload("res://scripts/core/wrong_way_profile.gd")
 const TrackerProfileScript = preload("res://scripts/core/street_tracker_profile.gd")
 const NoEntryIconScript = preload("res://scripts/ui/no_entry_icon.gd")
+const SevenSegmentScript = preload("res://scripts/ui/seven_segment.gd")
+const SpeedDialScript = preload("res://scripts/ui/speed_dial.gd")
 const MinimapProfileScript = preload("res://scripts/ui/minimap_profile.gd")
 const MinimapProjectionScript = preload("res://scripts/ui/minimap_projection.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
@@ -123,6 +125,8 @@ func _init() -> void:
 	_check_layout()
 	_check_style()
 	_check_bar()
+	_check_digits()
+	_check_dial()
 	_check_plate_tuning()
 	_check_tracker()
 	_check_wrong_way()
@@ -233,31 +237,55 @@ func _check_style() -> void:
 		_fail("style", "%s did not load" % HudStyleScript.PATH)
 		return
 
-	# 🔴 **The plate must be light and the chip dark, or the whole scheme is
-	# noise.** "White is the city speaking, dark is the car speaking" is the one
-	# rule that makes two readouts feel like one design, and it is a rule a
-	# colour tweak can silently invert — a HUD with two dark panels reads as
-	# consistent and says nothing.
-	var plate_lum: float = style.plate_field.get_luminance()
-	var chip_lum: float = style.chip_field.get_luminance()
-	if plate_lum <= chip_lum:
-		_fail(
-			"style",
-			(
-				(
-					"the plate (%.2f) is not lighter than the instrument chip (%.2f) — "
-					+ "the city/car distinction has inverted"
-				)
-				% [plate_lum, chip_lum]
-			)
-		)
+	# 🔴 **One housing (`Q139`).** Every panel is the meter's black box, so the
+	# three fields are one value held in three keys — and a tweak to one of them
+	# is how the HUD goes back to being two designs, which is what the user saw
+	# in the white map beside the dark speed and asked to have fixed.
+	var housing: Color = style.plate_field
+	if not (housing.is_equal_approx(style.chip_field) and housing.is_equal_approx(style.map_field)):
+		_fail("style", "plate_field, chip_field and map_field are not one housing colour")
+	elif housing.get_luminance() > 0.2 or housing.a < 1.0:
+		_fail("style", "the housing is not dark and opaque (%.2f)" % housing.get_luminance())
 	else:
-		print(
-			(
-				"  style: plate %.2f over chip %.2f — the two voices are distinct"
-				% [plate_lum, chip_lum]
-			)
-		)
+		print("  style: one housing, dark and opaque, under every panel")
+
+	# 🔴 **The speed is the DASHBOARD's and red is the FARE's** (the user's
+	# calls): speed was never on a 咪錶, so it is a dial with an amber needle, and
+	# the meter's red LED waits for `P3-5a`. An amber that drifts to red spends
+	# the one colour the fare has to itself — and the bar's red already means
+	# "losing speed", two pixels below the needle.
+	var needle: Color = style.dial_needle
+	_expect(
+		needle.g > needle.r * 0.4 and needle.g < needle.r * 0.85 and needle.b < needle.g,
+		"style",
+		"the dial's needle is amber, not the fare's red"
+	)
+	_expect(
+		(
+			_contrast(needle, housing) >= MIN_CONTRAST
+			and _contrast(style.chip_muted, housing) >= MIN_CONTRAST
+		),
+		"style",
+		"and the needle and the ticks both read on the housing"
+	)
+	# A scale the car can run off the end of pins the needle at the moment it is
+	# most worth reading. 140 is `handling.tres`'s `max_speed_kph`, restated
+	# because a tuning table is not this check's to load.
+	_expect(
+		style.dial_full_scale_kph >= 140.0,
+		"style",
+		"the dial's scale reaches past the car's top speed (%.0f)" % style.dial_full_scale_kph
+	)
+	_expect(
+		(
+			style.dial_minor_kph > 0.0
+			and is_zero_approx(fmod(style.dial_major_kph, style.dial_minor_kph))
+		),
+		"style",
+		"and every major tick is also a minor one"
+	)
+	if style.dial_tick_px <= 0.0 or style.speed_size <= 0:
+		_fail("style", "the dial has no tick weight, or the numerals no size")
 
 	# Ink must be readable on its own field. Two numbers, and either can be
 	# nudged past the other by someone tuning a colour they liked.
@@ -308,7 +336,7 @@ func _check_style() -> void:
 	var disc_red: bool = (
 		style.warn_disc.r > style.warn_disc.g and style.warn_disc.r > style.warn_disc.b
 	)
-	var bar_legible: bool = _contrast(style.plate_field, style.warn_disc) >= MIN_CONTRAST
+	var bar_legible: bool = _contrast(style.warn_bar, style.warn_disc) >= MIN_CONTRAST
 	if not disc_red:
 		_fail("style", "the wrong-way sign is not red — it is a NO ENTRY, not a decoration")
 	if not bar_legible:
@@ -397,6 +425,129 @@ func _check_bar() -> void:
 		AccentBarScript.bar_span(0.0, 100.0, 0.5).y == 75.0,
 		"bar",
 		"and a half reading reaches half way, so the scale is linear"
+	)
+
+
+# ------------------------------------------------------------------- dial ----
+
+
+## The needle's arithmetic (`Q139`). A needle swept the wrong way, or off a
+## wrong zero, moves exactly as convincingly as a right one — `_check_bar`'s
+## lesson, on a gauge the driver trusts more than the bar.
+func _check_dial() -> void:
+	var zero: float = SpeedDialScript.angle_deg(0.0, 160.0)
+	var full: float = SpeedDialScript.angle_deg(160.0, 160.0)
+	_expect(is_equal_approx(zero, SpeedDialScript.START_DEG), "dial", "zero is the scale's start")
+	_expect(
+		is_equal_approx(full - zero, SpeedDialScript.SWEEP_DEG) and full > zero,
+		"dial",
+		"full scale is one sweep CLOCKWISE of it, as a speedometer turns"
+	)
+	_expect(
+		is_equal_approx(SpeedDialScript.angle_deg(80.0, 160.0), (zero + full) * 0.5),
+		"dial",
+		"half the scale is half the sweep, so the scale is linear"
+	)
+	_expect(
+		(
+			SpeedDialScript.angle_deg(400.0, 160.0) == full
+			and SpeedDialScript.angle_deg(-5.0, 160.0) == zero
+		),
+		"dial",
+		"and a reading off either end pins, it does not wrap"
+	)
+	# The arc must be over the TOP: its midpoint points up, which on a canvas
+	# is -Y. A dial opening upwards puts the needle under the numerals.
+	var mid := Vector2.from_angle(deg_to_rad((zero + full) * 0.5))
+	_expect(mid.y < -0.99, "dial", "the arc's middle is straight up")
+	var placed: Vector3 = SpeedDialScript.frame(Vector2(166.0, 120.0))
+	_expect(
+		placed.z <= 83.0 and placed.y - placed.z >= 0.0,
+		"dial",
+		"and the dial fits its box with its top inside it"
+	)
+
+
+# ----------------------------------------------------------------- digits ----
+
+
+## The meter's numerals (`Q139`). A wrong segment table draws a perfectly
+## convincing wrong number, which is the worst thing a speedometer can do.
+func _check_digits() -> void:
+	# 🔴 The whole table, restated in segment LETTERS rather than checked by
+	# count: a 4 lit as `abfg` has the right number of segments and is not a 4,
+	# and that mutation survived the count. Two copies that must agree, which is
+	# this file's `SIGN_BAR_LENGTH` arrangement and for its reason.
+	var lights: Dictionary[String, String] = {
+		"0": "abcdef",
+		"1": "bc",
+		"2": "abdeg",
+		"3": "abcdg",
+		"4": "bcfg",
+		"5": "acdfg",
+		"6": "acdefg",
+		"7": "abc",
+		"8": "abcdefg",
+		"9": "abcdfg",
+		"r": "eg",
+		"-": "g",
+		" ": "",
+	}
+	var wrong := PackedStringArray()
+	for glyph: String in lights:
+		var wanted: int = 0
+		for letter: String in lights[glyph]:
+			wanted |= 1 << "abcdefg".find(letter)
+		if SevenSegmentScript.segments_of(glyph) != wanted:
+			wrong.append(glyph)
+	_expect(
+		wrong.is_empty(), "digits", "every numeral lights its own segments (%s)" % ", ".join(wrong)
+	)
+	_expect(
+		(
+			SevenSegmentScript.segments_of("0") & 0b1000000 == 0
+			and SevenSegmentScript.segments_of("1") == 0b0000110
+		),
+		"digits",
+		"0 leaves the middle dark and 1 is the two on the right"
+	)
+	_expect(
+		SevenSegmentScript.segments_of("X") == 0,
+		"digits",
+		"a character no meter has lights nothing"
+	)
+
+	# Every segment of every cell is drawn, lit or ghost, and the value is
+	# right-aligned: "48" in three cells is ghost, 4, 8.
+	var mesh: ArrayMesh = SevenSegmentScript.build(
+		"48", 3, 60.0, 8.0, 0.0, Color.WHITE, Color.BLACK
+	)
+	if mesh == null:
+		_fail("digits", "a three-cell display built no mesh — every assertion below is inert")
+		return
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var points: PackedVector2Array = arrays[Mesh.ARRAY_VERTEX]
+	var inks: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var per_cell: int = 7 * 4 * 3
+	_expect(points.size() == per_cell * 3, "digits", "three cells draw all 21 segments")
+	var lit_by_cell: Array[int] = [0, 0, 0]
+	for index: int in range(0, points.size(), 12):
+		if inks[index] == Color.WHITE:
+			lit_by_cell[floori(index / float(per_cell))] += 1
+	_expect(
+		lit_by_cell == [0, 4, 7],
+		"digits",
+		'"48" is a ghost, then a 4, then an 8 — right-aligned (%s)' % str(lit_by_cell)
+	)
+	var box: Vector2 = SevenSegmentScript.display_size(3, 60.0, 0.0)
+	var inside: bool = true
+	for point: Vector2 in points:
+		inside = inside and Rect2(Vector2.ZERO, box).grow(0.01).has_point(point)
+	_expect(inside, "digits", "and nothing is drawn outside the display's own box")
+	_expect(
+		SevenSegmentScript.build("1", 0, 60.0, 8.0, 0.0, Color.WHITE, Color.BLACK) == null,
+		"digits",
+		"no cells, no mesh"
 	)
 
 

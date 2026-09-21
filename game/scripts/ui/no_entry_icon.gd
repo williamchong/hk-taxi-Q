@@ -16,8 +16,8 @@ extends Control
 ## being broken.** `Q80` settled that the HUD is flat-shaded too: one fill, one
 ## hard keyline, corners cut, no radius. That rule governs *furniture*. This is
 ## not furniture, it is **signage**, and the distinction is already load-bearing
-## in this palette — `hud_style.gd`'s rule is *white is the city speaking, dark
-## is the car speaking*, and the street plate is the city's other voice. A sign
+## in this palette — the panels are the meter's housing (`Q139`) and this is
+## the one thing on the HUD that is the city's. A sign
 ## keeps the shape its publisher draws it in; a HUD panel keeps ours. There is
 ## deliberately no panel behind this, so nothing here is furniture at all.
 ##

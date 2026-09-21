@@ -11,9 +11,8 @@ extends Control
 ## without `Q137` reopening; the destination pip arrives with `P3-1a`, which is
 ## the first thing that has a destination.
 ##
-## **The city's voice**, by `hud_style.gd`'s rule: a light field like the plate
-## under it, because a map of the streets is the city speaking. The chevron is
-## the one thing on it that is the car.
+## The meter's housing, like every panel (`Q139`): light roads on black, and
+## the chevron in the LED's red — the one thing on the map that is the car.
 ##
 ## Built once, moved by a transform: the roads are one static mesh in plan
 ## metres (`minimap_mesh.gd`) and `follow` only re-places it, so a turning map

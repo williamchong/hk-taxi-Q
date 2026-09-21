@@ -73,6 +73,8 @@ var _plate_host: Control = null
 ## Kept so the plate can be re-cut to each new name.
 var _plate_lines: VBoxContainer = null
 var _speed_value: Label = null
+## The dial round the numerals. Its needle is driven every frame.
+var _dial: SpeedDial = null
 ## The chip itself, kept so its bar can be driven every frame.
 var _speed_chip: AccentBar = null
 var _readout: Label = null
@@ -247,25 +249,45 @@ func _build() -> void:
 		_plate_zh.add_theme_font_override(&"font", font_zh)
 	_plate_lines.add_child(_plate_zh)
 
-	# ---- speed: the CAR's voice ----
+	# ---- speed: the dashboard ----
 	#
-	# Dark chip, light numerals, one saturated bar along the bottom. The
-	# opposite treatment to the plate on purpose, so a glance tells the two
-	# apart before it has read either.
+	# The cab's other instrument (`Q139`): a dial's ticks and an amber needle
+	# over printed numerals, with the acceleration bar along the bottom. NOT the
+	# 咪錶's LED — a meter shows the fare, and `P3-5a`'s will.
 	_speed_chip = AccentBar.new()
 	_speed_chip.name = "Speed"
 	_speed_chip.chamfer_px = _style.chamfer_px
 	_speed_chip.fill = _style.chip_field
-	_speed_chip.edge = Color.TRANSPARENT
+	# The same bezel as the map's: one housing, every panel (`Q139`).
+	_speed_chip.edge = _style.plate_edge
+	_speed_chip.edge_px = _style.edge_px
 	_speed_chip.accent = _style.accent
 	_speed_chip.accent_negative = _style.accent_negative
 	_speed_chip.accent_track = _style.accent_track
 	_speed_chip.accent_px = _style.accent_px
 	_layout.place(root, _speed_chip, _layout.speed)
 
+	_dial = SpeedDial.new()
+	_dial.name = "Dial"
+	_dial.full_scale_kph = _style.dial_full_scale_kph
+	_dial.major_kph = _style.dial_major_kph
+	_dial.minor_kph = _style.dial_minor_kph
+	_dial.tick_px = _style.dial_tick_px
+	_dial.ink = _style.chip_muted
+	_dial.needle = _style.dial_needle
+	_dial.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dial.offset_left = _style.dial_inset_px
+	_dial.offset_top = _style.dial_inset_px
+	_dial.offset_right = -_style.dial_inset_px
+	_speed_chip.add_child(_dial)
+
+	# The numerals sit low in the chip, inside the arc's open side.
 	var speed_lines: VBoxContainer = _lines(_speed_chip, _style.speed_line_tighten)
+	speed_lines.alignment = BoxContainer.ALIGNMENT_END
+	speed_lines.offset_bottom = -_style.accent_px * 2.0
 
 	_speed_value = _label("Value", _style.speed_size, _style.chip_ink)
+	_speed_value.text = "0"
 	speed_lines.add_child(_speed_value)
 
 	var unit: Label = _label("Unit", _style.speed_unit_size, _style.chip_muted)
@@ -282,8 +304,7 @@ func _build() -> void:
 	_warning = NoEntryIcon.new()
 	_warning.name = "WrongWay"
 	_warning.disc = _style.warn_disc
-	# The city's white, already declared once for the plate. See `hud_style.gd`.
-	_warning.bar = _style.plate_field
+	_warning.bar = _style.warn_bar
 	_warning.bar_length = _style.warn_bar_length
 	_warning.bar_thickness = _style.warn_bar_thickness
 	_warning.visible = false
@@ -415,6 +436,11 @@ func _process(delta: float) -> void:
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
 	_update_minimap()
+	# Every frame: a needle that steps at `SPEED_HZ` ticks like a clock. A
+	# rotation, so nothing is redrawn (`speed_dial.gd`).
+	var car: VehicleController = _vehicle()
+	if car != null:
+		_dial.show_kph(car.speed_kph)
 
 
 ## Drive the chip's bar from how hard the car is gaining or losing speed.

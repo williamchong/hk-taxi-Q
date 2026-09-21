@@ -2,12 +2,20 @@ class_name HudStyle
 extends Resource
 ## What the HUD is made of (`P3-24`) — one palette, one shape, one type scale.
 ##
-## **The rule that makes this feel like one thing: white is the city speaking,
-## dark is the car speaking.** The street plate is a *sign* — it quotes the
-## white-field, black-ink street name plates bolted to Wan Chai's buildings, and
-## it tells you where you are. The speed is an *instrument* — dark chip, light
-## numerals, one saturated accent — and it tells you what the car is doing.
-## Two readouts, two voices, and the palette is what says which is which.
+## **One voice: the 的士咪錶 (`Q139`, the user's call).** Every panel is the
+## meter's black housing under one bezel keyline, lettering is light, and the
+## cab's two instruments keep their own faces: the dashboard's dial for the
+## speed, the meter's red seven-segment LED for the fare (`P3-5a`).
+## `ART_DESIGN.md` always named the taxi meter as half this HUD's language;
+## until `Q139` only the signage half was drawn, as `Q80`'s "white is the city
+## speaking, dark is the car speaking" — two voices, which read as two designs
+## once the map made the white half the larger one.
+##
+## 🔴 **This table IS the theme, and a car may name its own.** A Crown Comfort
+## gets this meter; a Comfort Hybrid would get a modern cluster as a second
+## `.tres` of this class. Nothing selects one yet because there is one car —
+## `Hud` loads `PATH` — and the seam is here: keep every look in this table and
+## out of `hud.gd`, or the second theme becomes a code fork.
 ##
 
 ## ⚠️ **These are NOT the road's paint colours, deliberately.**
@@ -41,13 +49,15 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## The reserved slots' outline, thinner than a live panel's.
 @export var slot_edge_px: float
 
-# ---- the city's voice: the street name plate ----
+# ---- the housing, and the street name on it ----
 
-## A sign white. Near the carriageway's marking white and independent of it.
+## The housing: the field of every panel. `chip_field` and `map_field` must
+## equal it — three keys because three panels read them, one value because it
+## is one housing, and `verify_hud.gd` holds them together. 🔴 Opaque: the map
+## is clipped by this colour's drawn alpha (`minimap.gd`).
 @export var plate_field: Color
 @export var plate_ink: Color
-## A hard black keyline, not a soft grey border. Real plates have a printed
-## rule around them and a 1 px neutral stroke is what made this read as a dialog.
+## The bezel: one keyline round every panel, and the rule over the name strip.
 @export var plate_edge: Color
 @export var plate_size_en: int
 @export var plate_size_zh: int
@@ -55,11 +65,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## drawn at a fixed width. See `hud.gd::_fit_plate`.
 @export var plate_pad: Vector2
 
-# ---- the car's voice: instruments ----
+# ---- instruments ----
 
-## Darker than `asphalt_aged` (`#42403d`) on purpose. The chip sits *on* the
-## road, and matching the road exactly would make it disappear into it at
-## exactly the moment the player glances down.
+## The housing again — see `plate_field`.
 @export var chip_field: Color
 @export var chip_ink: Color
 @export var chip_muted: Color
@@ -98,6 +106,21 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var accel_smoothing_s: float
 
 @export var speed_size: int
+
+## The dashboard's dial round the numerals (`speed_dial.gd`): where the scale
+## ends, the two tick spacings, the ticks' weight, the needle, and how far the
+## dial stands in from the chip's edge. Ticks draw in `chip_muted`.
+##
+## ⚠️ `dial_full_scale_kph` is a DIAL's, not the car's: `handling.tres` tops
+## out at 140 and a speedometer that ends where the car does never looks fast.
+## 🔴 The needle is amber and `verify_hud.gd` holds it off red — red is the
+## fare's (the user's call), and the bar's red already means "losing speed".
+@export var dial_full_scale_kph: float
+@export var dial_major_kph: float
+@export var dial_minor_kph: float
+@export var dial_tick_px: float
+@export var dial_inset_px: float
+@export var dial_needle: Color
 @export var speed_unit_size: int
 ## Pulls `km/h` up under the numerals, which carry far more leading than
 ## they need at this size.
@@ -128,10 +151,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var warn_bar_length: float
 @export var warn_bar_thickness: float
 
-# ⚠️ **The bar has no colour of its own: it draws in `plate_field`.** The city's
-# white is already declared once in this table, the sign's `#f0f0ea` and the
-# plate's are imperceptibly apart, and a fourth transcribed constant to say so
-# would be the debt above with nothing bought for it.
+## The sign's white — the world sign's `#f0f0ea`. Its own key since `Q139`: it
+## borrowed the plate's white while the plate had one.
+@export var warn_bar: Color
 
 ## Flashes per second while the sign is up.
 ##
@@ -141,24 +163,20 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## `verify_hud.gd` refuses a faster one.
 @export var warn_blink_hz: float
 
-# ---- the city's voice, again: the minimap ----
+# ---- the minimap ----
 
-## The map's ground. A sign white like the plate under it — a map of the streets
-## is the city speaking — and its own key, because the plate's field is a
-## painted sign and this is land, and the two have no reason to move together.
+## The map's ground: the housing (see `plate_field`).
 ##
 ## 🔴 **Opaque, and `verify_hud.gd` refuses anything else**, for two reasons that
 ## are both invisible until they are not: `minimap.gd` clips the roads by this
 ## panel's drawn ALPHA, and a deck's casing is this colour drawn over the street
 ## beneath it, which only hides the street if nothing shows through.
 @export var map_field: Color
-## The roads. Dark on light, a figure-ground plan: at 0.75 px to the metre a
-## street is a few pixels wide and wants the most contrast the palette has.
+## The roads. Light on the housing, a figure-ground plan: a street is a few
+## pixels wide and wants the most contrast the palette has.
 ## 🔴 **Opaque too**: strokes overlap at every joint (`minimap_mesh.gd`).
 @export var map_road: Color
-## The car's chevron and its rim. The one saturated thing on the map, and
-## deliberately not the taxi's red (see the top of this file) nor the bar's
-## green, which already means "gaining".
+## The car's chevron and its rim: taxi red, the one saturated thing on the map. Not the bar's green, which already means "gaining".
 @export var map_marker: Color
 @export var map_marker_edge: Color
 
