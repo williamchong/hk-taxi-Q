@@ -787,8 +787,9 @@ Winding and p90/p99/max reporting follow `arrows.glb`.
 
 `RM1011` STOP LINE, `RM1012` STOP LINES and `RM1013` GIVE WAY LINES from `DTAD_RD_MARK_LINE`, at
 their surveyed extents, `lift_m` above the carriageway — and since schema 33 the longitudinal
-white lines too (`Q132`, `P3-34`; `.claude/rules/roadmarks.md`). One primitive, one material
-named `roadmarks`, one draw call, **no
+white lines too (`Q132`, `P3-34`; `.claude/rules/roadmarks.md`), and `A01`'s paint on the decks
+(`P3-37`, `Q134`). **One mesh per plan cell of `road_marks.cell_m`** since `P3-40` (`Q135`,
+manifest schema 3) — one primitive and one draw call a cell, one material named `roadmarks`, **no
 collider** (a stop line would be a step at every junction). `POSITION` and `NORMAL` only.
 
 - Its own mesh because a stop line sits on the cap, inside the ribbon's junction fade.
@@ -1267,7 +1268,9 @@ Techniques, in order of what they buy:
 3. One draw call per generated layer mesh. Repeated objects — signs, lamps, arrows, the barrier
    family — ship as a library stood by a `MultiMesh` (`Q115`; `P3-29`: +1 draw call against +36 for
    per-scene instancing), multiplied by the shadow passes per library mesh. The road, boxes and
-   stop lines stay merged because nothing in them repeats.
+   road marks stay merged because nothing in them repeats — the road by tile, the road marks by
+   300 m cell, so the engine can cull them. What lies on the road casts no shadow
+   (`GeneratedLayer`'s `casts_shadow`, `Q135`).
 4. Occlusion is largely free in dense street canyons.
 
 ---

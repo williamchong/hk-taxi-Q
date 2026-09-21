@@ -189,7 +189,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q132` | The longitudinal lines come from TD's survey; where TD is silent nothing is drawn | Closed — built as `P3-34b`–`d`, `CITY_SCHEMA` 33. `draw_centre_line` and |
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
-| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | Open — `P3-38`, `P3-39` built; `P3-40`, `P3-41` planned below. |
+| `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | Open — `P3-38`–`P3-40` built; `P3-41` planned below. |
 
 ---
 
@@ -6465,7 +6465,7 @@ still true — and stand it on `DrawnSurface.of(level=host's)`. Every bar is the
 
 ## `Q135` — Road paint stays mesh; what it costs a frame is measured, and it casts no shadow
 
-**Status.** Open — `P3-38`, `P3-39` built. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
+**Status.** Open — `P3-38`–`P3-40` built. Opened by the user, 2026-09-21: review `P3-36`/`P3-37` against
 the asset standard, and ask again whether road paint should be mesh or texture.
 
 ### Mesh, decal or texture
@@ -6515,8 +6515,8 @@ not on the post-import script.
   21 of 2,073,600 px differ (max 32, one 16 x 8 px box on a kerb flank). `check.sh` 0, no shader
   error.
 - ⚠️ A drive frame cannot A/B this: a capture waits for the next rendered frame and the car moves.
-- ⚠️ Nothing for the mobile tier, which has no cascades: ~94k unculled paint triangles remain, 31%
-  of 300k. That is `P3-40`.
+- ⚠️ Nothing for the mobile tier, which has no cascades: ~94k unculled paint triangles remained,
+  31% of 300k. `P3-40` below.
 
 ### Built — `P3-39`: a street arrow's heights are the road's under its own ends
 
@@ -6540,14 +6540,46 @@ counted (`ends_off_drawn_road` 14 / 4), never refused — the street's void rule
 - Mutation-checked: `centreline` returned unread, `covers` not asked — each fails its own test.
 - Left: 9 / 21 deep. A rigid glyph over a crest or beside a kerb lip; unexamined.
 
+### Built — `P3-40`: `roadmarks.glb` is a mesh per 300 m cell
+
+`meshbuild.CellBuilder` routes each placed piece whole to the cell its centroid is in; one `.glb`,
+a mesh a cell, so the importer makes a `MeshInstance3D` and a box per cell. `road_marks.cell_m`
+300; manifest schema 3 (a v2 reader grading "the one primitive" reads one cell);
+`verify_roadmarks.gd` grades every cell through `library_meshes`.
+
+| | cells | largest | `bytes` |
+|---|---|---|---|
+| Wan Chai | 21 | 8,346 of 72,356 | 4,348,808 → 3,931,716 |
+| Causeway Bay | 10 | 4,553 of 21,787 | 1,179,544 → 1,187,172 |
+
+| `drive.sh`, road marks' cost (shown − hidden) | before | after | `draws` |
+|---|---|---|---|
+| start line, first frame / t=6 s | 72,356 a pass | 13,184 / 17,155 | +3 / +4 |
+| `--spawn-fare=wan_chai/f_045`, first / t=6 s | 72,356 a pass | 16,299 / 13,459 | +7 / +5; 132 peak |
+
+- ⚠️ Two samples a run: unattended, macOS stopped presenting and `prims` froze between them.
+- Inert: the cells' triangles equal the uncut mesh's as a multiset, both regions; every report key
+  but `cells`, `cell_triangles_max`, `bytes`, `schema_version` unmoved; `paint_clearance --layer
+  roadmarks` buried under the lowest face 1,477 / 398, `Q134`'s figures. Level-0 stays an identical
+  prefix of each cell.
+- `tools/resident_budget.py` prints the paint: never streamed, so resident from every camera.
+  Wan Chai's worst camera 112% → **144%** with it, Causeway Bay 82% → 90%. ⚠️ `PROGRESS.md`'s 105%
+  was stale. The budget is stated in VISIBLE triangles; resident is its upper bound.
+- `DrawnSurface.decks(surface)` replaces three copies of the levels-above-the-street
+  comprehension (`roadmarks.py` twice, `arrows.py`); outputs byte-identical.
+- 🚫 **One shared piece-placer**, which the review proposed: the arithmetic the three placers share
+  — cut along the creases, sample each corner from the piece's own side — is already
+  `DrawnSurface.sampled_pieces`, written so they cannot drift. What is left in each is its own
+  report's counters and its own void rule; a keep-predicate plus counter callbacks adds
+  indirection and removes nothing.
+- 🚫 **`FlatBuilder.build` returning its sliver count**: `CellBuilder` sums over private reports and
+  writes once, so boxes, crossings and every test keep the signature.
+- 🚫 Streaming the cells (4 MB; the budget is visible triangles). 🚫 The 150 m tile (draws).
+- Mutation-checked: keyed on the first vertex, the report handed to each cell.
+- Left: boxes (14,931) and crossings (5,711) are still one box each; ~21k a pass, unculled.
+
 ### Planned
 
-- `P3-40` — `roadmarks.glb` in coarse cells (~300 m, not the 150 m tile: the draw budget reads
-  136–150 on the seam). Boxes and crossings stay merged. 🚫 One merged paint mesh: the colours are
-  per-`.tres` and `marking_paint` ships no `COLOR_0`. Owes `resident_budget.py` counting the paint.
-  With it: `FlatBuilder.build` returns its sliver count rather than writing a report, the three
-  piece-placers (`boxjunctions._place`, `roadmarks._place`, `_place_on_deck`) become one with a
-  keep-predicate, and the deck preamble shared by `roadmarks.py` and `arrows.py` moves to one helper.
 - `P3-41` — `mong_kok` and `sha_tin` built with deck paint. ⚠️ A deck feature is hosted by the
   plan-nearest edge over every level above the street and both have level 2 (3 and 2 edges); where
   decks cross, a mark can stand on the wrong one and still pass `covers`. Unmeasured.

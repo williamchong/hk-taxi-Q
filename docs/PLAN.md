@@ -361,8 +361,10 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 - `P3-39` ✅ — a street arrow's heights are the drawn road's under its own tail and nose, as the
   decks' are (`Q135`); an end over nothing drawn keeps the centreline's. Deeper than 10 mm in the
   carriageway 31 → 9 / 36 → 21 on `paint_clearance --layer arrows`; every other counter inert.
-- `P3-40` ⬜ — `roadmarks.glb` in coarse cells for the mobile triangle budget, `resident_budget.py`
-  counting the paint, and the paint builders' three placers made one (`Q135`).
+- `P3-40` ✅ — `roadmarks.glb` is a mesh per 300 m plan cell (`road_marks.cell_m`,
+  `meshbuild.CellBuilder`, manifest schema 3) so the engine can cull it (`Q135`): 72,356 a pass →
+  13–17k for +3 to +7 draws; the cells' union is the uncut mesh. `resident_budget.py` counts the
+  paint (Wan Chai 144%). 🚫 One shared piece-placer — `sampled_pieces` already is the shared part.
 - `P3-41` ⬜ — `mong_kok` / `sha_tin` with deck paint; level-2 hosting measured (`Q135`).
 
 - ⚠️ `P3-33d` is superseded by `P3-35e`.

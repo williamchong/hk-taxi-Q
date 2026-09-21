@@ -11,6 +11,19 @@ paths:
 
 Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
 
+- 🔴 **`roadmarks.glb` is a mesh per plan CELL since `P3-40` (`Q135`): `road_marks.cell_m` (300),
+  `meshbuild.CellBuilder`, manifest schema 3, `cells` / `cell_triangles_max`.** As one mesh the layer
+  was one box and drew whole from anywhere in the region — 72,356 triangles a pass on the throttle
+  route, constant to the triangle; in cells it reads 13–17k for +3 to +7 draws. **A change to
+  `cell_m` or the keying: paste `cells`, `cell_triangles_max`, `bytes` and `drive.sh`'s `prims` /
+  `draws` with and without `--hide-layers=roadmarks`, start line and `--spawn-fare=wan_chai/f_045`.**
+  ⚠️ **The inertness proof is the cells' triangles equal to the uncut mesh's as a MULTISET, and every
+  report key but those three unmoved** — a piece goes whole to its centroid's cell and no vertex
+  moves (`P5-6`'s rule). ⚠️ **`slivers_dropped` is summed over the cells and written once**:
+  `FlatBuilder.build` ASSIGNS it. ⚠️ **A draw call a visible cell** against 136–150 on the seam, which
+  is why the cell is twice the tile. 🚫 Streaming the cells (the file is 4 MB; the budget is visible
+  triangles), one merged paint mesh (per-`.tres` colours, no `COLOR_0`). Mutations that must fail:
+  keyed on the first vertex, the report handed to each cell. `verify_roadmarks.gd` grades every cell.
 - 🔴 **The DECKS carry TD's paint since `P3-37` (`Q134`): `road_marks.deck_codes` / `arrows.deck_codes`
   (`A01`), `draw_decks`, `_place_on_deck`, `arrows.stand_on_decks`. Paste `roadmarks.json`'s and
   `arrows.json`'s `deck` blocks before and after, both regions, with
@@ -20,8 +33,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   a void piece is KEPT (a footway is under it, `Q54`); past a deck's rim there is air, so a piece the
   deck's surface does not cover is refused and counted (`stations_off_deck`, arrows' `off_deck`) —
   the user's call. ⚠️ **The inertness proof is the level-0 report byte-identical and the level-0
-  geometry an identical PREFIX of the mesh / stands** — deck paint goes through a second builder
-  merged in, because `FlatBuilder.build` writes `slivers_dropped` into the report it is handed.
+  geometry an identical PREFIX of each cell's mesh / the stands** — deck paint goes through a second
+  builder merged in cell by cell, because `FlatBuilder.build` writes `slivers_dropped` into the report it is handed.
   ⚠️ **`paint_clearance` needed no change**: it finds road faces by height, 0 deck triangles read
   buried under the lowest face, and "more than one road face" rising (2.0% → 10.2%) is overlapping
   deck ribbons, where `DrawnSurface` takes the higher. 🚫 `A03` and the bores (`Q21`), an inferred
