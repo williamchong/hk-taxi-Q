@@ -645,6 +645,28 @@ class TestArrowsOnTheDecks:
         )
         assert report.drawn == 1
 
+    def test_an_arrow_where_two_decks_cross_stands_and_is_counted(self, spec):
+        """`P3-41`: `A01` never says which structure, so the level is the
+        plan-nearest host's and the crossing is published. Mutation-check it
+        by dropping the `level !=` filter: the host's own deck covers it.
+        ⚠️ The crossing deck's centreline is 3 m off, the arrow's own 1.5 m: an
+        arrow nearer the CROSSING centreline is hosted by it and refused
+        `off_bearing` — the same ambiguity's other face, 0 in any built region."""
+        graph, surface = self._stacked()
+        upper = {
+            "id": 2,
+            "polyline": [[23.0, 22.0, -30.0], [23.0, 22.0, 30.0]],
+            "elevation_level": 2,
+            "direction": "forward",
+        }
+        graph["edges"].append(upper)
+        surface["ribbons"].append(ribbon_of(upper, 4.0))
+        report = DeckArrowReport(symbols=2, candidates=2)
+        crossed = Symbol(code="1017", x=20.0, z=0.5, heading_deg=90.0)
+        clear = Symbol(code="1017", x=32.0, z=0.5, heading_deg=90.0)
+        assert len(stand_on_decks(graph, surface, [crossed, clear], spec, report)) == 2
+        assert (report.drawn, report.under_another_deck) == (2, 1)
+
     def test_an_arrow_whose_nose_is_past_the_rim_is_refused_and_never_floated(self, spec):
         """Centre on the deck, nose 1 m past its end. Mutation-check it by
         asking `covers` of the centre alone."""

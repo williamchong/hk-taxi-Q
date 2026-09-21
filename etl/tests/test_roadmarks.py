@@ -967,6 +967,37 @@ class TestPaintOnTheDecks:
         assert report.drawn_m_by_id == {"double_white_lines": pytest.approx(20.0)}
         assert downward_facing(mesh) == (0, 0.0)
 
+    def test_a_line_where_two_decks_cross_is_drawn_and_counted(self, spec):
+        """`P3-41`: `A01` never says which structure. A second deck crosses the
+        first over x = 10..18; the line is hosted by the deck it runs along,
+        drawn whole, and the 8 m under the other deck are published.
+        Mutation-check it by dropping the `level !=` filter: the host's own
+        deck covers all 20 m."""
+        graph, surface = self._stacked()
+        upper = {
+            "id": 2,
+            "polyline": [[14.0, 22.0, -30.0], [14.0, 22.0, 30.0]],
+            "elevation_level": 2,
+        }
+        graph["edges"].append(upper)
+        surface["ribbons"].append(ribbon_of(upper, 4.0))
+        surface["carriageway"].append(
+            {"edge": 2, "half_width_m": [4.0, 4.0], "offset_m": [0.0, 0.0]}
+        )
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[5.0, 0.5], [10.0, 0.5], [18.0, 0.5], [25.0, 0.5]])
+        [mesh] = draw_decks(graph, surface, [line], spec, report, 0.0).values()
+        assert mesh.positions[:, 1] == pytest.approx(self.DECK_Y + spec.lift_m)
+        assert (report.drawn, report.under_another_deck) == (1, 1)
+        assert report.under_another_deck_m == pytest.approx(8.0)
+
+    def test_one_deck_level_counts_nothing_under_another(self, spec):
+        graph, surface = self._stacked()
+        report = DeckReport(parts=1, candidates=1)
+        line = marking(spec, "RM1001", [[5.0, 0.5], [25.0, 0.5]])
+        draw_decks(graph, surface, [line], spec, report, 0.0)
+        assert (report.under_another_deck, report.under_another_deck_m) == (0, 0.0)
+
     def test_paint_past_the_decks_rim_is_refused_and_never_floated(self, spec):
         """The void rule `_place` keeps, inverted: past a kerb there is a
         footway, past a deck's rim there is air. Mutation-check it by dropping

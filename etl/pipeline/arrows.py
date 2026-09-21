@@ -173,6 +173,11 @@ class DeckArrowReport:
     off_bearing: int = 0
     against_one_way: int = 0
     off_deck: int = 0
+    # Drawn arrows with another deck level drawn over or under their centre —
+    # `roadmarks.DeckReport.under_another_deck`, for its reason: `A01` never
+    # says which structure, so where two decks cross the level is a guess.
+    # A finding, never a refusal (`P3-41`).
+    under_another_deck: int = 0
 
     def check(self) -> None:
         refused = (
@@ -1062,6 +1067,13 @@ def stand_on_decks(
             report.off_deck += 1
             continue
         report.drawn += 1
+        report.under_another_deck += int(
+            any(
+                other.covers(symbol.x, symbol.z)
+                for level, other in decks.items()
+                if level != int(host["elevation_level"])
+            )
+        )
         standing.append((symbol, centre, deck.height_at(*tail), deck.height_at(*nose)))
     report.check()
     return standing
@@ -1422,6 +1434,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
             "off_bearing": report.deck.off_bearing,
             "against_one_way": report.deck.against_one_way,
             "off_deck": report.deck.off_deck,
+            "under_another_deck": report.deck.under_another_deck,
         },
         "stacked_disagreeing": report.stacked_disagreeing,
         # 🔴 The lane count the publisher's own arrows state, per edge — see

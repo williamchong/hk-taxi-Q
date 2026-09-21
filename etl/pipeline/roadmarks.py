@@ -162,6 +162,17 @@ class DeckReport:
     stations_off_deck: int = 0
     off_deck_m: float = 0.0
 
+    # 🔴 **Drawn markings with ANOTHER deck level drawn over or under them, and
+    # the metres of them that lie there (`P3-41`, `Q135`).** `A01` says "on a
+    # structure" and never which, the lines carry no Z, and the host is the
+    # plan-nearest edge over every level above the street — so where two decks
+    # cross, the level is a guess. 0 where a region draws one level; Sha Tin
+    # reads 33 / 324 m, one hatched island's stripes split 11 and 20 between
+    # decks 9 m apart. A finding, never a refusal: nothing here says which
+    # deck is right, so nothing is moved on its authority (`Q54`).
+    under_another_deck: int = 0
+    under_another_deck_m: float = 0.0
+
     slivers_dropped: int = 0
     triangles: int = 0
 
@@ -1739,10 +1750,30 @@ def draw_decks(
         by_id, metres = report.drawn_by_id, report.drawn_m_by_id
         by_id[marking.mark.id] = by_id.get(marking.mark.id, 0) + 1
         metres[marking.mark.id] = metres.get(marking.mark.id, 0.0) + marking.length_m
+        others = [other for level, other in decks.items() if level != level_of[host.edge_id]]
+        crossed_m = _metres_under(others, marking.line)
+        report.under_another_deck += int(crossed_m > 0.0)
+        report.under_another_deck_m += crossed_m
     report.check()
     meshes = builder.build(ROADMARKS_MESH_NAME, thin_m, report)
     report.triangles = sum(mesh.triangle_count for mesh in meshes.values())
     return meshes
+
+
+def _metres_under(decks: Sequence[DrawnSurface], line: np.ndarray) -> float:
+    """The length of `line` whose segments have their middle covered by any of
+    `decks` — what `DeckReport.under_another_deck_m` sums."""
+    if not decks:
+        return 0.0
+    middles = 0.5 * (line[1:] + line[:-1])
+    lengths = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    return float(
+        sum(
+            length
+            for (x, z), length in zip(middles, lengths, strict=True)
+            if any(deck.covers(float(x), float(z)) for deck in decks)
+        )
+    )
 
 
 def _place_on_deck(
@@ -1873,6 +1904,8 @@ def _deck_document(deck: DeckReport) -> dict:
         "pieces_placed": deck.pieces_placed,
         "stations_off_deck": deck.stations_off_deck,
         "off_deck_m": round(deck.off_deck_m, 3),
+        "under_another_deck": deck.under_another_deck,
+        "under_another_deck_m": round(deck.under_another_deck_m, 3),
         "slivers_dropped": deck.slivers_dropped,
         "triangles": deck.triangles,
     }
