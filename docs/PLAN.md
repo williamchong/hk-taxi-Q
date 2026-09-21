@@ -462,6 +462,7 @@ infrastructure, so its own task, first in `B1` (`Q137`).
 | `P3-2b` | `ScoreSystem` — base, time bonus, drift/air/speed, the style chain and its banking, the fare combo. Absorbs `P3-2a` | Style points award live, and the chain is losable — a hard crash costs it unbanked |
 | `P3-1b` | Remaining fare types — cross-harbour and long haul | Cross-harbour fare works |
 | `P3-5b` | Full HUD — bilingual destination callouts, safe areas, one-handed layout | Readable one-handed in daylight |
+| `P3-45` | Harbour and channels on the minimap — a `water` ETL stage over iB1000's `Shoreline` and polygon layers, read a margin north of the region; `water.json`; drawn first in the minimap mesh (`Q140`) | The harbour is blue north of Wan Chai and the Shing Mun channel through Sha Tin; no inland gap is drawn as water; no draw call added; pipeline end to end on all four regions |
 | `P3-44` ✅ | Minimap — the reserved slot filled from `RoadGraph`: drawn once, moved by a transform; player chevron, destination pip; `--minimap=off` (`Q136`). ⚠️ **Not bound by `B4`'s deps** — needs nothing unbuilt; only the pip waits on `P3-1a` | `verify_hud` projection assertions, mutation-checked; A/B frame and draw-call delta; clipped correctly on the web build; `P3-9` runs with it off. Built; the user's drive and the web frame owed |
 
 - **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want

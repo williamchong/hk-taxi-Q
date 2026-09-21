@@ -191,6 +191,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
+| `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
@@ -6824,4 +6825,37 @@ cell through `library_meshes`.
   is not on. 🚫 A dot-matrix face for the street name: a fifth licence (`Q79`).
 
 **See.** `Q80` · `Q136` · `Q138` · `Q79` · `game/tuning/hud_style.md`
+
+---
+
+## `Q140` — The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold
+
+**Status.** 🟡 Open — asked for by the user (2026-09-22), surveyed, not built · `P3-45`
+
+- **Why it is wanted.** On a heading-up map the harbour is the one fixed cue — north is always the
+  water (`000` faces it). The only borrowed map convention judged to pay at this scale (`Q136`).
+- **The source is one we hold.** iB1000 (`topography`), already fetched and licensed. 🚫 Not
+  OpenStreetMap (`Q133`, hard rule 7). 🚫 Not the 3D map's `WATERBODY` — hillside features at
+  24.6–113.6 m, not the harbour (`DATA_SOURCES.md`).
+- **There is no sea polygon.** `HydroPolygon` is inland water only: over the 26 sheets held, `CHA`
+  199,590 m² (Sha Tin's Shing Mun channel — worth drawing), `RIV` 22,864, `PON` 6,414, and nothing
+  off Wan Chai larger than 887 m². The sea is what `Shoreline` bounds: `SWA` seawall 3,324 m and
+  `HWM` 269 m over Wan Chai's three northern sheets.
+- 🔴 **Most of that shoreline is the sheet edge.** Wan Chai's north bound (northing 816,198) sits on
+  the 1:1000 sheet line at 816,200, and the waterfront — the HKCEC peninsula, the ferry piers — is
+  in `11-SW-10A`, `10B` and `9B`, which the region's rectangle never selected. Inside the bounds
+  the sea is three inlets. A harbour worth drawing reads a margin north of the region
+  (~400 m: the map shows 180 m past the car), as `join.reach_m` does sideways.
+- **Shape of the build.** Sea = a frame (bounds + margin, clipped to the sheets actually held —
+  no data is not water) minus the land; the land is the union of iB1000's polygon layers, closed
+  over ~2 m; a candidate is kept only where its boundary runs along a `Shoreline` for some length,
+  which is what separates the harbour from an inland gap between polygons. 34 shoreline lines in
+  Wan Chai's frame merge to 26 parts; ends mostly meet exactly, the rest gap 2.5–40 m (structures),
+  so 🚫 polygonising the shoreline alone does not close.
+- A new stage and document (`water.json`, triangulated at build), a `city.json` key, the game's
+  loader, `map_water` in `hud_style.tres`, drawn first in the minimap mesh — no draw call.
+  Hard rule 5: both sides together.
+- Not decided: whether the 3D city should get the same water plane. Out of scope here.
+
+**See.** `Q136` · `Q133` · `DATA_SOURCES.md` iB1000 · `PLAN.md` `P3-45`
 

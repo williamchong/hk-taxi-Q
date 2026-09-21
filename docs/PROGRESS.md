@@ -148,6 +148,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, the
   player's `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +14.2k `prims` (37.7k built naively); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
+- `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
 
@@ -232,6 +233,7 @@ and there in the same change.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: a drive; `span_m`. Owed: the web frame.
+- `Q140` Harbour on the minimap (user; `P3-45`). Surveyed, not built: no sea polygon in iB1000, and the waterfront is in three sheets north of the ones held.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, no route line (`P3-43`). Design call, not measured; reopens on `P3-9`. Held: arrow to the next junction.
