@@ -171,6 +171,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `lamps` | `pipeline/lamps.py`, the `lamps` block |
 | `fence` | `pipeline/fence.py`, the `clearance` or `fence` blocks, `RoadGraph`'s car bar |
 | `join` | `join.reach_m`, `Config.neighbours` / `read_*`, a region's `bounds`, who owns a crossing road |
+| `router` | `road_router.gd`, `RoadGraph`'s `from` / `to` / turn bans / `plan_length_of`, `tools/reachability.py`, a profile's rules or bar, anything that consumes a route |
 | `tiles` | Colliders (`collision_cell_m`, `_collider`, `_road_collider`) and occluders (`occluder_cell_m`, `use_occlusion_culling`), any tile reader |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any

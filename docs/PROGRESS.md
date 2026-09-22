@@ -28,8 +28,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     centre) are built; `P3-35g4` was measured and refused. `P3-35h`'s user drive is outstanding.
   - `P3-36` stands the arrows where TD surveyed them and `P3-37` paints the decks (`Q134`); the
     user's drive of both is owed.
-  - `B1` ("one fare") is in progress: HUD chassis and wrong-way warning built; the fare state
-    machine (`P3-1a`) and minimal fare HUD (`P3-5a`) remain. `B3`, `B4`, `P3-9` not started.
+  - `B1` ("one fare") is in progress: HUD chassis, wrong-way warning and the router (`P3-43`)
+    built; the fare state machine (`P3-1a`) and minimal fare HUD (`P3-5a`) remain. `B3`, `B4`, `P3-9` not started.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
@@ -142,11 +142,14 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-24` ✅ HUD chassis — reviewed (`Q79`, `Q80`). A clean art frame needs both
   `--debug-view=off` and `--hud=off`.
 - `P3-25` ✅ Wrong-way warning — reviewed (`Q81`).
-- `P3-43` ⬜ `RoadRouter` (`Q137`) — first in `B1`; `P3-1a` and `P3-3` both stand on it.
+- `P3-43` ✅ `RoadRouter` (`Q137`) — agrees with `reachability.py` on every pair, worst 0.000000 m
+  (194,774 / 13,718 control pairs, 334,767 across the join); `prepare` max 0.70 / 0.13 ms
+  legal, 1.86 / 0.59 ms player; prepared `route()` p99 8 / 7 µs; 8 mutations caught. No
+  consumer yet — `P3-1a` is the first.
 - `P3-1a`, `P3-5a` ⬜ Fare state machine, minimal fare HUD — what `B1` still needs.
-- `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`); `P3-3` still owes
-  adjacency (no `from`/`to` in the graph), the 217 turn restrictions nothing reads, the
-  player's `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
+- `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
+  `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
+  `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +13.4k `prims` over `--minimap=off` (37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
@@ -236,7 +239,8 @@ and there in the same change.
 - `Q140` Harbour on the minimap (user; `P3-45`). Surveyed, not built: no sea polygon in iB1000, and the waterfront is in three sheets north of the ones held.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
-- `Q137` A router, no route line (`P3-43`). Design call, not measured; reopens on `P3-9`. Held: arrow to the next junction.
+- `Q137` A router, no route line. The router half is built (`P3-43`); the line stays a design
+  call, not measured, and reopens on `P3-9`. Held: arrow to the next junction.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -425,6 +429,9 @@ Graders (report-only unless a target is shown)
 | Railing to-source distance, p50 | — | 0.22 / 0.21 m (`railing_error.py`); `bends` 81 / 24 |
 | Sign / lamp `shift_m` p90 | — | signs 0.54 / 0.45 m, lamps 0.93 / 0.26 m (`P3-35d`) |
 | Reachability lost to the fence | 0 | 0 / 170 ordered pairs at the car's bar, no detour (`tools/reachability.py`; Causeway Bay's 170 predate the region). At the one-lane bar: 3,989 pairs (2.17%) / 173, `e53` and `e138` carrying Wan Chai's (`P3-33e`) |
+| `RoadRouter` against `reachability.py` (`P3-43`) | every pair within 0.001 m | 194,774 / 13,718 control and 179,601 / 12,716 one-lane pairs, worst 0.000000 m; 334,767 / 288,626 across the join at 0.000000 m (`verify_road_graph.gd`, `verify_join.gd`) |
+| `RoadRouter.prepare` a destination, max | ≤ 16 ms | legal 0.70 / 0.13 ms, player 1.86 / 0.59 ms |
+| `RoadRouter.route`, prepared, p99 | ≤ 1 ms | legal 8 / 7 µs, player 7 / 10 µs (every admitted edge to every fare node) |
 
 Handling (skidpad, `VehicleBody3D`)
 

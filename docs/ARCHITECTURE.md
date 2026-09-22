@@ -143,6 +143,11 @@ name globals whatever the tool does (`Q119`).
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |
 
+⚠️ `verify_road_graph` and `verify_join` also need `reachability.json` beside each graph they read
+(`etl/out/<region>/` and `etl/out/<a>+<b>/`), written by `tools/reachability.py --region <r>
+[--graph-dir <dir>] --json` (`P3-43`). A missing or stale one FAILs naming the command — a router
+check that skipped when its truth was missing would be a check nobody reads.
+
 Traps:
 
 - The sweep is separate because `--import` compiles only autoloads and what they reach. It must
@@ -1071,7 +1076,8 @@ city_space = region_local + city_offset
 | `CityRegions` | One `region.tscn` per synced region at `city_offset − city_offset(frame)`, each with its tiles; holds the road under a point in every region that has some | ✅ `P5-9c` |
 | `CityStreamer` | Loads/unloads tile meshes and road chunks by camera distance, one per region, camera through `to_local`; owns the LOD tier | ✅ `P2-1`, `P5-6`, `P5-9c` |
 | `Landmarks` | Places the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
-| `RoadGraph` | Queries over `roadgraph.json` — nearest edge, lane centre, routing | ✅ `P2-2` |
+| `RoadGraph` | Queries over `roadgraph.json` — nearest edge, lane centre; loads the topology (`from` / `to`, turn bans, 64-bit plan length) and traverses none of it | ✅ `P2-2`, `P3-43` |
+| `RoadRouter` | Directed-edge search over `RoadGraph`: one-way, turn restrictions, U-turn ban, a bar. `Profile.legal()` (traffic, lane bar) and `Profile.player()` (rules free, car bar). One reverse search per destination (`prepare`), then `route()` is a lookup; "no route" is an answer. Diffed pair for pair against `tools/reachability.py` (`Q137`) | ✅ `P3-43`; no consumer until `P3-1a` |
 | `RoadSpawn` | Where a car starts, resolved from a fare node, and what it stands in (`Q52`) | ✅ `P2-3` |
 | `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, drift, collision response, auto-right | ✅ `P0-5`/`P2-3`/`Q50` |
 | `InputRouter` | Touch / gamepad / keyboard into one action set (autoload) | 🟡 touch ships 3 of 5 actions; `P2-4` |
@@ -1121,7 +1127,8 @@ All paths under `game/`.
 | `scripts/core/tile_streaming.gd` | The streaming policy, pure — distance to an `AABB` in, tier out |
 | `scripts/core/plan_lattice.gd` | An even, counted grid of plan positions over a region's bounds, used by the region-sweeping verify tools |
 | `scripts/city/streaming_profile.gd` | Schema for bands, hysteresis and per-frame budgets; numbers in `tuning/streaming.tres` |
-| `scripts/city/road_graph.gd` | One parse per scene; nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`); expresses, never enforces, passability (`Q51`) |
+| `scripts/city/road_graph.gd` | One parse per scene; nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`); expresses, never enforces, passability (`Q51`). Loads `from` / `to`, the turn bans and a 64-bit plan length for the router (`P3-43`) |
+| `scripts/city/road_router.gd` | `RoadRouter`: directed-edge states over the graph's accessors, CSR arcs both ways, a packed-array heap; `prepare` a destination, `route` from anywhere, `distances_to` for the verify diff (`P3-43`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction; `Pose.blocked` fails a start line in a wall (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check an ETL JSON document; the stale-copy message exists once |
 | `scripts/city/generated_layer.gd` | Locator table for the eight drawn `.glb` layers — `tramway`, `arrows`, `boxjunctions`, `crossings`, `roadmarks`, `railings`, `lamps`, `signs` — with id constants, absence terms and each library's placements document (`P5-1`, `Q115`). Owns the sign text-atlas budget (`Q63`) |
@@ -1164,8 +1171,9 @@ Verify tools (`game/tools/`, run by `tools/check.sh`):
 | `verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |
 | `verify_city.gd` | `city.json` — georeferencing, per-tier AABB containment, `bounds_game`, named documents exist, layer nodes in `region.tscn` |
 | `verify_road_surface.gd` | Every `roads/<tile>.glb` chunk: one draw call, UVs, trimesh collision, the marking codec, kerbside extent over the union |
-| `verify_road_graph.gd` | `RoadGraph` queries — off-grade refusal, edge resolution, lane placement against published width, per-station width, `Q51` passability (`nearest_edge` still answers on a blocked edge), and a 1 ms query budget over a region-wide lattice |
-| `verify_join.gd` | The runtime merge against `etl/out/<frame>+<other>/`, field by field; SKIP on one region; `--dump=` for `reachability.py --graph-dir` (`P5-9d`) |
+| `verify_road_graph.gd` | `RoadGraph` queries — off-grade refusal, edge resolution, lane placement against published width, per-station width, `Q51` passability (`nearest_edge` still answers on a blocked edge), and a 1 ms query budget over a region-wide lattice. `P3-43`: the topology against the document, `RoadRouter` against `etl/out/<region>/reachability.json` pair for pair (FAILs naming `reachability.py --json` when it is missing), the profiles against the predicates, and `prepare` / `route` budgets |
+| `verify_join.gd` | The runtime merge against `etl/out/<frame>+<other>/`, field by field; SKIP on one region; `--dump=` for `reachability.py --graph-dir` (`P5-9d`); `RoadRouter` over the merge against that directory's `reachability.json` (`P3-43`) |
+| `router_diff.gd` | Shared by the two above: reads a `reachability.json`, refuses a stale one, and diffs a router's columns against the tool's rows |
 | `verify_city_streamer.gd` | Band edges, hysteresis both ways, and a residency sweep against the draw-call budget |
 | `verify_spawn.gd` | Orientation against the edge vector, nearside-lane placement, drop height, resolved edge against the fare node, and that a car fits (`Q52`). Builds the transposed basis and five known-clearance start lines and requires each to fail or answer — nothing in the shipped city fires the guard |
 | `verify_landmarks.gd` | Assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, no tier-0 tile triangle inside an excluded footprint's core |

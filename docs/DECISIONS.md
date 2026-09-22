@@ -194,7 +194,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
-| `Q137` | A router is built; a route line on the map is not | 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement. |
+| `Q137` | A router is built; a route line on the map is not | 🟡 Router half ✅ built (`P3-43`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. The route line stays a design call, not a measurement; reopens on `P3-9`. |
 
 ---
 
@@ -6740,12 +6740,62 @@ cell through `library_meshes`.
 
 ## `Q137` — A router is built; a route line on the map is not
 
-**Status.** 🟡 Open — the router is `P3-43`; the guidance stance is a design call, not a measurement
+**Status.** 🟡 The router half is ✅ built (`P3-43`); the guidance stance stays a design call,
+not a measurement, and reopens on `P3-9`
 
 - **The router is owed whatever the map does.** `P3-3` needs a legal route; `P3-1a` needs road
   distance for a minimum trip and for a fair allowance — in a region 93.5% one-way by drivable
-  length, two stands 200 m apart can be a far longer drive. Nothing in `game/` traverses the graph
-  today (`tools/reachability.py`'s header). Its own task, first in `B1`.
+  length, two stands 200 m apart can be a far longer drive. Nothing in `game/` traversed the graph
+  before `P3-43` (`tools/reachability.py`'s header). Its own task, first in `B1`.
+
+### The router — `P3-43`, built
+
+- **The search state is a directed edge.** A restriction is `from_edge → via_node → to_edge`; one
+  state per one-way edge, two per two-way. `scripts/city/road_router.gd` builds them from
+  `RoadGraph`'s accessors — `from_node_of`, `to_node_of`, `is_turn_banned`, `plan_length_of`, all
+  new — and never inside it. U-turns are refused with the source (`reachability.py` bans them).
+- **One search per destination, not per query.** `prepare(edge, t)` runs a reverse Dijkstra from
+  the goal and keeps the tree; `route()` from any source is a lookup and a path walk. Measured on
+  the shipped graphs: `prepare` p50 0.59 ms, max 0.70 ms on Wan Chai's legal network (857 states)
+  and 1.86 ms on the player's (1,528); prepared `route()` p50 5 µs, p99 8 µs over every admitted
+  edge to every fare node (36,000 routes). ⚠️ **`PLAN.md`'s "one query under 1 ms" is read as the
+  prepared query**, and `prepare` is priced against a frame (16 ms). A per-query search would in
+  fact also fit — a full exhaustive search IS the 0.6 ms `prepare` — so the tree is not what
+  makes the budget; it is what makes a route at 5 Hz cost nothing, which is `PLAN.md`'s own usage
+  ("once per fare and on leaving the path, never per frame"). 🚫 A* was not built: 40% of ordered
+  fare pairs have no route (893 of 2,244; the clip is not strongly connected), and an unreachable
+  query exhausts its component whatever the heuristic.
+- **The cost convention is `reachability.py`'s, exactly.** Entering an edge costs its whole plan
+  length, the source's own length is excluded, the target's included; the tree holds that reversed
+  (`to_goal[state]` from the state's entry node). A fare route seeds the source's remainder
+  `(1 - t)·len` along, `t·len` against, and the goal's part likewise. 🔴 **Lengths are 64-bit**:
+  `RoadGraph._lengths` is summed from the document's doubles before the `Vector3` cast, because a
+  float32 sum drifts 4.7e-4 m over the longest route — inside a millimetre, and not by enough to
+  call a 0.001 m agreement a check. `_check_topology` pins the loader to that at 1e-6 m.
+- **Diffed pair for pair, not sampled.** `reachability.py --json` publishes its `control` and
+  `starved at one lane` tables as `reachability.json` beside the graph; `verify_road_graph.gd`
+  routes every pair under `Profile.survey(NONE | LANE)` — level 0, every rule, no U-turn, the
+  tool's own population — and `verify_join.gd` does the same over the runtime merge against the
+  reference merge's table, **with no id map**: both renumber the second region from the frame's
+  maximum in document order and `_check_edges` asserts `from` / `to` already. Every pair agrees at
+  0.000000 m: 194,774 / 13,718 control pairs, 179,601 / 12,716 one-lane, 334,767 / 288,626 across
+  the join. `TREE` and the table are not the same search direction, so an agreement is two
+  implementations agreeing, not one reading itself.
+- **Two profiles, two bars, never merged (`Q19`).** `Profile.legal()` obeys direction, turns and
+  the U-turn ban at the lane bar — `admits` is pinned to `is_routable` edge by edge. `Profile.player()`
+  frees direction, turns and U-turns at the car bar — `admits` is `is_drivable and fits_car`, the
+  fence's complement. ⚠️ The shipped profiles are NOT the survey population: `is_drivable` admits
+  the 41 / 9 measured level-1 edges the tool never routes, so they are pinned by monotonicity
+  instead — every one-lane pair is still routed by `legal` no longer than before, every legal pair
+  by `player` no longer, and 332,054 of 352,803 strictly shorter (rules broken buy something) —
+  and by state count (the player holds exactly two states per edge). Which par a fare uses stays
+  `P3-1a`'s call; recommend legal.
+- **"No route" is an answer.** `Route.found` false, `edges` empty, `distance_m` the plan distance.
+  `verify_road_graph.gd` checks it on 20 severed pairs per region, and ties `route(1.0 → 1.0)` on
+  20 one-way pairs to the table's own cell.
+- Mutation-checked, eight ways (`.claude/rules/router.md` lists them); each fails by name.
+- 🚫 Not built here: a consumer. `hud.gd`, `fare_preview.gd` and the minimap are untouched; the
+  world-space arrow to the next junction is still held for after the first fare review.
 - **No turn-by-turn line on the minimap.** Pillar 1 is "navigate by memory, not by minimap"; the
   arrow *assists*; the long haul "rewards route knowledge", which a drawn route pays to whoever
   follows it. `Q80`'s references put the destination in the world and neither draws a route.
@@ -6757,9 +6807,10 @@ cell through `library_meshes`.
   junction on the route rather than as the crow flies. In a one-way grid a straight-line arrow
   often points down a street that cannot be entered; this helps a non-local without drawing the
   answer.
-- Open with `P3-43`: whether guidance, if it ever ships, routes legally or as the player drives.
+- Still open: whether guidance, if it ever ships, routes legally or as the player drives. Both
+  profiles exist now, so it is one line to switch when the answer arrives.
 
-**See.** `Q136` · `Q80` · `Q51` · `Q19` · `PLAN.md` `P3-43`
+**See.** `Q136` · `Q80` · `Q51` · `Q19` · `Q95` · `PLAN.md` `P3-43` · `.claude/rules/router.md`
 
 ---
 
