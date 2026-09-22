@@ -8,16 +8,22 @@ walls **disconnect** anything: `P3-9a′` says so in its own words — *"no rout
 analysis here shows the region is disconnected by these edges, and `RoadGraph`
 would be the thing to ask"*. This asks it.
 
-⚠️ **`RoadGraph` could not in fact be asked.** `game/scripts/city/road_graph.gd`
-is a spatial index and an attribute table — `is_routable`, `is_passable`,
+⚠️ **`RoadGraph` could not be asked when this was written.** `road_graph.gd`
+was a spatial index and an attribute table — `is_routable`, `is_passable`,
 `impassable_edge_ids` — with no adjacency, no traversal and no router;
-`turn_restrictions` is only counted. So the traversal is built here, over the
-documents the ETL already publishes, and `is_routable` is reimplemented rather
-than called.
+`turn_restrictions` was only counted. So the traversal was built here, over the
+documents the ETL already publishes, and `is_routable` reimplemented rather
+than called. Since `P3-43` the game has `road_router.gd`, and this tool is what
+it is diffed against: `--json` publishes the control and one-lane tables as
+`reachability.json` beside the graph, and `verify_road_graph.gd` /
+`verify_join.gd` route every pair with `RoadRouter` and compare.
 
 🔴 **A second implementation of a shipped predicate, deliberately** — the same
 arrangement `pipeline/carriageway.py` has with `tools/carriageway_margin.py`.
 They are expected to agree and a divergence is a finding, never a bar to retune.
+🔴 Neither side imports the other: this stays pure Python over the documents,
+and the router reads `RoadGraph`'s accessors. Making one call the other would
+leave one implementation grading itself.
 
 ⚠️ **This grades rather than checks and exits 0 whatever it finds.** There is no
 bar, deliberately: a region that loses routes is a fact about Wan Chai's
@@ -60,6 +66,7 @@ from __future__ import annotations
 
 import argparse
 import heapq
+import json
 import logging
 import math
 import sys
@@ -108,6 +115,12 @@ DRIVABLE_LEVEL = 0
 # How many named losses to print. The list is evidence to go and drive, so it
 # has to fit on a screen; the count above it is the complete figure.
 NAMED_LIMIT = 12
+
+# What `--json` writes beside the graph it read, for the runtime's router to be
+# diffed against (`P3-43`). Not an ETL document: it is a grader's reading of
+# one, so it lives under `tools/` and no stage reads it back.
+REACHABILITY_NAME = "reachability.json"
+REACHABILITY_SCHEMA = 1
 
 
 @dataclass(frozen=True)
@@ -274,6 +287,64 @@ def distances(net: Network) -> dict[int, dict[int, float]]:
                 per_edge[target] = cost
         out[edge_id] = per_edge
     return out
+
+
+def cost_table(graph: dict, keep: set[int]) -> dict[int, dict[int, float]]:
+    """`distances` over the network with everything outside `keep` refused."""
+    return distances(build(graph, keep))
+
+
+def _population(edges: set[int], refused: set[int], cost: dict[int, dict[int, float]]) -> dict:
+    # One row per source edge in the network, targets sorted, so the file is
+    # byte-stable across runs and a diff of two of them reads as a diff of the
+    # network rather than of dictionary order.
+    rows = {}
+    for source in sorted(edges):
+        targets = sorted(cost.get(source, {}).items())
+        rows[str(source)] = {
+            "to": [target for target, _ in targets],
+            "m": [metres for _, metres in targets],
+        }
+    return {"refused": sorted(refused), "edges": sorted(edges), "distances": rows}
+
+
+def table(
+    graph: dict,
+    city_id: str,
+    region_id: str,
+    level0: set[int],
+    lane_blocked: set[int],
+    lane_m: float,
+    world: Open,
+) -> dict:
+    """Every pairwise distance this tool routes, in the two populations the
+    runtime can reproduce: `control` (nothing refused) and `lane` (the edges
+    starved at one lane refused, which is `is_routable`'s complement at grade).
+
+    The header carries what the reader needs to refuse a stale file: the edge
+    and turn counts of the graph this was routed over, and the bar. The metres
+    are the full `float` repr, because the reader diffs at a millimetre and a
+    rounded file would round the check with it.
+    """
+    return {
+        "schema_version": REACHABILITY_SCHEMA,
+        "city_id": city_id,
+        "region_id": region_id,
+        "edges": len(graph["edges"]),
+        "turn_restrictions": len(graph.get("turn_restrictions", [])),
+        "drivable_level": DRIVABLE_LEVEL,
+        "lane_width_m": lane_m,
+        "populations": {
+            "control": _population(level0, set(), world.cost),
+            "lane": _population(
+                level0 - lane_blocked, lane_blocked, cost_table(graph, level0 - lane_blocked)
+            ),
+        },
+    }
+
+
+def write_table(path: Path, document: dict) -> None:
+    path.write_text(json.dumps(document, separators=(",", ":")) + "\n")
 
 
 def pairs(onward: dict[int, set[int]], counted: set[int]) -> int:
@@ -645,6 +716,14 @@ def main(argv: list[str] | None = None) -> int:
         default=DETOUR_REPORT_M,
         help="call out detours past this many metres (default: %(default)s)",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            f"also write {REACHABILITY_NAME} beside the graph — the control and one-lane "
+            "pairwise tables verify_road_graph.gd / verify_join.gd diff RoadRouter against (P3-43)"
+        ),
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -717,6 +796,15 @@ def main(argv: list[str] | None = None) -> int:
     _report_per_edge(graph, level0, watched, names, world)
     _report_standing(watched, names, world)
     _report_named(verdicts[lane_label], names, lane_label)
+    if args.json:
+        document = table(graph, city.id, args.region, level0, lane_blocked, lane_m, world)
+        write_table(out_dir / REACHABILITY_NAME, document)
+        log.info(
+            "\n  wrote %s: %d control rows, %d lane rows",
+            out_dir / REACHABILITY_NAME,
+            len(document["populations"]["control"]["distances"]),
+            len(document["populations"]["lane"]["distances"]),
+        )
     return 0
 
 

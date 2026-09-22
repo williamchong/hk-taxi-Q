@@ -16,9 +16,13 @@ rather than asserting in pytest.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from reachability import (
     NOT_MEASURED,
+    REACHABILITY_SCHEMA,
+    Open,
     build,
     check_documents,
     distances,
@@ -28,6 +32,8 @@ from reachability import (
     plan_length,
     reachable,
     starved,
+    table,
+    write_table,
 )
 
 
@@ -187,6 +193,47 @@ class TestStarved:
         # clearance is not this tool's to spend.
         clearance = {"clearance": [self._entry(7, [0.0])]}
         assert starved(clearance, {7: 1}, 3.2) == set()
+
+
+class TestTable:
+    """What `--json` publishes for the runtime's router to be diffed against (`P3-43`)."""
+
+    def _table(self, diamond, lane_blocked: set[int]) -> dict:
+        level0 = {0, 1, 2, 3, 4}
+        return table(
+            diamond, "hong_kong", "diamond", level0, lane_blocked, 3.2, Open.of(diamond, level0)
+        )
+
+    def test_the_control_column_is_the_distance_table(self, diamond) -> None:
+        # `e0`'s row: the short way across is 10 + 10 to reach `e4`'s start, and
+        # entering `e4` costs its own 5 m — reachability's convention, which the
+        # router reproduces.
+        row = self._table(diamond, set())["populations"]["control"]["distances"]["0"]
+        assert dict(zip(row["to"], row["m"], strict=True)) == pytest.approx(
+            {1: 10.0, 2: 20.0, 3: 50.0, 4: 15.0}
+        )
+
+    def test_the_lane_population_routes_round_its_refusal(self, diamond) -> None:
+        lane = self._table(diamond, {1})["populations"]["lane"]
+        assert lane["refused"] == [1]
+        assert 1 not in lane["edges"]
+        row = lane["distances"]["0"]
+        assert dict(zip(row["to"], row["m"], strict=True))[4] == pytest.approx(55.0)
+
+    def test_the_header_names_the_graph_it_was_routed_over(self, diamond) -> None:
+        document = self._table(diamond, set())
+        assert document["schema_version"] == REACHABILITY_SCHEMA
+        assert (document["edges"], document["turn_restrictions"]) == (5, 0)
+        assert document["lane_width_m"] == pytest.approx(3.2)
+
+    def test_the_file_round_trips(self, diamond, tmp_path) -> None:
+        # Keys are strings on disk because JSON has no integer keys; the reader
+        # parses them back, so the id must survive the trip as text.
+        document = self._table(diamond, set())
+        write_table(tmp_path / "reachability.json", document)
+        back = json.loads((tmp_path / "reachability.json").read_text())
+        assert back == document
+        assert list(back["populations"]["control"]["distances"]) == ["0", "1", "2", "3", "4"]
 
 
 class TestCheckDocuments:
