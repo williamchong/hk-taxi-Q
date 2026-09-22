@@ -140,7 +140,6 @@ var _profile: Profile = null
 # along the vertex order (entry `from`, exit `to`) and 0 against it.
 var _state_edge: PackedInt32Array = PackedInt32Array()
 var _state_forward: PackedByteArray = PackedByteArray()
-var _state_exit: PackedInt32Array = PackedInt32Array()
 var _length: PackedFloat64Array = PackedFloat64Array()
 var _states_of: Dictionary[int, PackedInt32Array] = {}
 # Every admitted edge id, in document order, deduplicated.
@@ -195,14 +194,14 @@ func is_admitted(edge_id: int) -> bool:
 func prepare(edge_id: int, t: float) -> bool:
 	if not _states_of.has(edge_id):
 		return false
-	if _trees.has(edge_id) and _trees[edge_id].t == t:
+	var clamped: float = clampf(t, 0.0, 1.0)
+	if _trees.has(edge_id) and _trees[edge_id].t == clamped:
 		return true
 	if not _trees.has(edge_id) and _trees.size() >= TREE_CACHE:
 		_trees.erase(_trees.keys()[0])
-	var clamped: float = clampf(t, 0.0, 1.0)
 	var length_m: float = _graph.plan_length_of(edge_id)
 	var tree: GoalTree = _search(edge_id, clamped * length_m, (1.0 - clamped) * length_m)
-	tree.t = t
+	tree.t = clamped
 	_trees[edge_id] = tree
 	return true
 
@@ -290,8 +289,10 @@ func distances_to(edge_id: int) -> Dictionary:
 func _build() -> void:
 	var seen: Dictionary[int, bool] = {}
 	# States entering at each node, for the arcs: a transition is a lookup at
-	# the exit node rather than a scan of every state per junction.
+	# the exit node rather than a scan of every state per junction. Each
+	# state's own exit node is needed only here, to wire those arcs.
 	var leaving: Dictionary[int, PackedInt32Array] = {}
+	var exits := PackedInt32Array()
 	for edge_id: int in _graph.edge_ids():
 		# `_by_id` is not injective; the graph's accessors answer for the last
 		# of two edges sharing an id, so the second sighting would repeat it.
@@ -307,9 +308,9 @@ func _build() -> void:
 		_admitted.append(edge_id)
 		var length_m: float = _graph.plan_length_of(edge_id)
 		var states := PackedInt32Array()
-		states.append(_add_state(edge_id, 1, from_node, to_node, length_m, leaving))
+		states.append(_add_state(edge_id, 1, from_node, to_node, length_m, leaving, exits))
 		if not _graph.is_one_way(edge_id) or not _profile.obey_direction:
-			states.append(_add_state(edge_id, 0, to_node, from_node, length_m, leaving))
+			states.append(_add_state(edge_id, 0, to_node, from_node, length_m, leaving, exits))
 		_states_of[edge_id] = states
 
 	var count: int = _state_edge.size()
@@ -319,7 +320,7 @@ func _build() -> void:
 	for state: int in count:
 		_succ_start[state] = arcs.size()
 		var edge_id: int = _state_edge[state]
-		var exit_node: int = _state_exit[state]
+		var exit_node: int = exits[state]
 		for onward: int in leaving.get(exit_node, PackedInt32Array()):
 			if onward == state:
 				continue
@@ -365,12 +366,13 @@ func _add_state(
 	entry: int,
 	exit_node: int,
 	length_m: float,
-	leaving: Dictionary[int, PackedInt32Array]
+	leaving: Dictionary[int, PackedInt32Array],
+	exits: PackedInt32Array
 ) -> int:
 	var state: int = _state_edge.size()
 	_state_edge.append(edge_id)
 	_state_forward.append(along)
-	_state_exit.append(exit_node)
+	exits.append(exit_node)
 	_length.append(length_m)
 	if not leaving.has(entry):
 		leaving[entry] = PackedInt32Array()

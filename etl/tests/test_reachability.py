@@ -201,7 +201,13 @@ class TestTable:
     def _table(self, diamond, lane_blocked: set[int]) -> dict:
         level0 = {0, 1, 2, 3, 4}
         return table(
-            diamond, "hong_kong", "diamond", level0, lane_blocked, 3.2, Open.of(diamond, level0)
+            diamond,
+            city_id="hong_kong",
+            region_id="diamond",
+            level0=level0,
+            lane_blocked=lane_blocked,
+            lane_m=3.2,
+            world=Open.of(diamond, level0),
         )
 
     def test_the_control_column_is_the_distance_table(self, diamond) -> None:

@@ -29,7 +29,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   - `P3-36` stands the arrows where TD surveyed them and `P3-37` paints the decks (`Q134`); the
     user's drive of both is owed.
   - `B1` ("one fare") is in progress: HUD chassis, wrong-way warning and the router (`P3-43`)
-    built; the fare state machine (`P3-1a`) and minimal fare HUD (`P3-5a`) remain. `B3`, `B4`, `P3-9` not started.
+    built; the fare state machine (`P3-1a`) and minimal fare HUD (`P3-5a`) remain. `B3`, `B4`,
+    `P3-9` not started.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for

@@ -6779,8 +6779,8 @@ not a measurement, and reopens on `P3-9`
   reference merge's table, **with no id map**: both renumber the second region from the frame's
   maximum in document order and `_check_edges` asserts `from` / `to` already. Every pair agrees at
   0.000000 m: 194,774 / 13,718 control pairs, 179,601 / 12,716 one-lane, 334,767 / 288,626 across
-  the join. `TREE` and the table are not the same search direction, so an agreement is two
-  implementations agreeing, not one reading itself.
+  the join. The tree and the table are not even the same search direction, so an agreement is
+  two implementations agreeing, not one reading itself.
 - **Two profiles, two bars, never merged (`Q19`).** `Profile.legal()` obeys direction, turns and
   the U-turn ban at the lane bar — `admits` is pinned to `is_routable` edge by edge. `Profile.player()`
   frees direction, turns and U-turns at the car bar — `admits` is `is_drivable and fits_car`, the

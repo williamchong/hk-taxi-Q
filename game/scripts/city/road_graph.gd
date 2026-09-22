@@ -931,7 +931,8 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 	if edges.is_empty():
 		return
 	_node_count = (document.get("nodes", []) as Array).size()
-	_restriction_count = (document.get("turn_restrictions", []) as Array).size()
+	var rules: Array = document.get("turn_restrictions", [])
+	_restriction_count = rules.size()
 	var out_of_step: int = 0
 	var clear_out_of_step: int = 0
 
@@ -1028,7 +1029,7 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 
 	# Keyed, not listed: a router asks "is THIS turn banned" once per arc it
 	# builds, and 217 rules against ~1,000 arcs is a hash each, not a scan each.
-	for rule: Dictionary in document.get("turn_restrictions", []):
+	for rule: Dictionary in rules:
 		var key := Vector3i(
 			int(rule.get("from_edge", -1)),
 			int(rule.get("via_node", -1)),

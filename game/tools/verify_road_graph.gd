@@ -21,12 +21,6 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const RouterScript = preload("res://scripts/city/road_router.gd")
 const RouterDiff = preload("res://tools/router_diff.gd")
 
-## `P3-43`: how far a routed pair may differ from `tools/reachability.py`'s.
-## Both sides sum the same 64-bit lengths in some order, so the honest figure is
-## ~1e-9; a millimetre leaves room for the order and none for a float32 sum
-## (measured 4.7e-4 m over the longest route — `_check_topology` pins that).
-const ROUTE_TOLERANCE_M: float = 0.001
-
 ## `P3-43`: what preparing one destination may cost — a frame at 60 fps. Paid
 ## once per fare at the hail, never per query.
 const PREPARE_BUDGET_USEC: float = 16000.0
@@ -37,6 +31,167 @@ const PREPARE_BUDGET_USEC: float = 16000.0
 ## partial written the wrong way round would pass.
 const ROUTE_FROM_T: float = 0.25
 const ROUTE_TO_T: float = 0.6
+
+## How many routes `RoutePins` re-sums, ties to the table, and checks the
+## defined answer on — enough to spread over dozens of destinations, few enough
+## that the pins are not the tool's runtime.
+const RESUM_PINS: int = 200
+const RESUM_PER_TARGET: int = 5
+const TABLE_PINS: int = 20
+const UNREACHABLE_PINS: int = 20
+
+
+## Every pair one router routes is routed by another no longer; what is not.
+class Monotone:
+	extends RefCounted
+
+	var pairs: int = 0
+	var lost: int = 0
+	var longer: int = 0
+	var shorter: int = 0
+
+	## One destination's columns: `from_column` by the narrower router,
+	## `to_column` by the wider one.
+	func add(from_column: Dictionary, to_column: Dictionary, tolerance_m: float) -> void:
+		for source: Variant in from_column:
+			pairs += 1
+			if not to_column.has(source):
+				lost += 1
+			elif float(to_column[source]) > float(from_column[source]) + tolerance_m:
+				longer += 1
+			elif float(to_column[source]) < float(from_column[source]) - tolerance_m:
+				shorter += 1
+
+
+## `route()` pinned against a destination's column: the defined answer for no
+## route, `route(1.0 -> 1.0)` against the table's own cell on one-way pairs, and
+## the point-to-point distance re-summed here from the returned path.
+class RoutePins:
+	extends RefCounted
+
+	var problems: PackedStringArray = []
+	var unreachable: int = 0
+	var resummed: int = 0
+	var started_against: int = 0
+	var tied: int = 0
+
+	func done() -> bool:
+		return (
+			unreachable >= UNREACHABLE_PINS
+			and tied >= TABLE_PINS
+			and resummed >= RESUM_PINS
+			and started_against > 0
+		)
+
+	## `column` is `router.distances_to(target)`. The table pins come first, all
+	## at `t = 1.0`, then the re-sums at `ROUTE_FROM_T` / `ROUTE_TO_T`, so the
+	## destination's tree is searched twice and not once per alternation.
+	func visit(graph: RoadGraph, router: RoadRouter, target: int, column: Dictionary) -> void:
+		if done() or column.is_empty():
+			return
+		var sources: PackedInt32Array = router.admitted_edge_ids()
+		for source: int in sources:
+			if tied >= TABLE_PINS:
+				break
+			if source == target or not column.has(source):
+				continue
+			if not graph.is_one_way(source) or not graph.is_one_way(target):
+				continue
+			# From the END of a one-way source to the end of a one-way target
+			# is the table's own convention — the source's length excluded, the
+			# target's whole length included.
+			tied += 1
+			var whole: RoadRouter.Route = router.route(source, 1.0, target, 1.0)
+			if absf(whole.distance_m - float(column[source])) > 1e-6:
+				problems.append(
+					(
+						"e%d -> e%d: route(1.0 -> 1.0) is %.6f m, the table cell %.6f m"
+						% [source, target, whole.distance_m, float(column[source])]
+					)
+				)
+		var resummed_here: int = 0
+		for source: int in sources:
+			if source == target:
+				continue
+			if not column.has(source):
+				if unreachable < UNREACHABLE_PINS:
+					unreachable += 1
+					_check_unreachable(router, source, target)
+				continue
+			if resummed_here >= RESUM_PER_TARGET:
+				break
+			if resummed >= RESUM_PINS and started_against > 0:
+				break
+			resummed += 1
+			resummed_here += 1
+			_check_resum(graph, router, source, target)
+
+	func _check_unreachable(router: RoadRouter, source: int, target: int) -> void:
+		var none: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
+		if none.found or not none.edges.is_empty() or none.distance_m != none.plan_m:
+			problems.append(
+				"e%d -> e%d: no route, and the answer is not the defined one" % [source, target]
+			)
+		if none.plan_m <= 0.0:
+			problems.append("e%d -> e%d: plan_m is not filled without a route" % [source, target])
+
+	func _check_resum(graph: RoadGraph, router: RoadRouter, source: int, target: int) -> void:
+		var route: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
+		if not route.found or route.edges.is_empty():
+			problems.append(
+				"e%d -> e%d: reachable in the table and route() found nothing" % [source, target]
+			)
+			return
+		if route.edges[0] != source or route.edges[route.edges.size() - 1] != target:
+			problems.append("e%d -> e%d: the route starts or ends elsewhere" % [source, target])
+		if route.forward.size() != route.edges.size():
+			problems.append("e%d -> e%d: forward is not parallel to edges" % [source, target])
+			return
+		if route.forward[0] == 0:
+			started_against += 1
+		var expected_m: float = resum(graph, route, ROUTE_FROM_T, ROUTE_TO_T)
+		if absf(expected_m - route.distance_m) > 1e-6:
+			problems.append(
+				(
+					"e%d -> e%d: distance_m %.6f, the path re-sums to %.6f"
+					% [source, target, route.distance_m, expected_m]
+				)
+			)
+		for index: int in route.edges.size() - 1:
+			var leave: int = (
+				graph.to_node_of(route.edges[index])
+				if route.forward[index] == 1
+				else graph.from_node_of(route.edges[index])
+			)
+			var enter: int = (
+				graph.from_node_of(route.edges[index + 1])
+				if route.forward[index + 1] == 1
+				else graph.to_node_of(route.edges[index + 1])
+			)
+			if leave != enter:
+				problems.append("e%d -> e%d: the route breaks between its edges" % [source, target])
+				return
+
+	## What a route's path costs, summed here from the graph: the source's
+	## remainder, every edge between whole, and the target's part.
+	static func resum(
+		graph: RoadGraph, route: RoadRouter.Route, from_t: float, to_t: float
+	) -> float:
+		var last: int = route.edges.size() - 1
+		if last == 0:
+			return absf(to_t - from_t) * graph.plan_length_of(route.edges[0])
+		var total: float = 0.0
+		for index: int in route.edges.size():
+			var length_m: float = graph.plan_length_of(route.edges[index])
+			var along: bool = route.forward[index] == 1
+			if index == 0:
+				total += ((1.0 - from_t) if along else from_t) * length_m
+			elif index == last:
+				total += (to_t if along else (1.0 - to_t)) * length_m
+			else:
+				total += length_m
+		return total
+
 
 ## The `kerbside` vocabulary schema 4 publishes. Spelled out rather than
 ## compared as literals because `P3-3`'s traffic and `P3-9a`'s fares are the
@@ -746,8 +901,13 @@ func _check_topology(graph: RoadGraph, edges: Array, rules: Array) -> PackedStri
 ## instead: `admits` equals the predicate it claims, edge by edge; every lane
 ## pair is still routed by `legal` no longer than before (edges were added,
 ## none taken); every legal pair is routed by `player` no longer, and at least
-## one strictly shorter — rules broken buy something, and a player profile
-## that quietly still obeyed direction would read 0 there.
+## one strictly shorter — rules broken buy something. Direction is pinned by
+## the state count and not by a route: a player profile that quietly obeyed
+## one-way would still shorten routes through the turns and U-turns it frees.
+##
+## One pass per legal destination: its column is searched once and read by
+## both monotonicity checks and the route pins alike, which is what keeps this
+## at a few seconds a region rather than a search per check per target.
 func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var out: String = (
@@ -763,22 +923,7 @@ func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArra
 	if not stale.is_empty():
 		problems.append("%s is stale: %s. Re-run: %s" % [path, stale, command])
 		return problems
-
-	var populations: Dictionary = table.get("populations", {})
-	var control: RoadRouter = RouterScript.new(
-		graph, RoadRouter.Profile.survey(RoadRouter.Profile.Bar.NONE)
-	)
-	problems.append_array(
-		RouterDiff.check_population(
-			control, populations.get("control", {}), ROUTE_TOLERANCE_M, "control"
-		)
-	)
-	var lane: RoadRouter = RouterScript.new(
-		graph, RoadRouter.Profile.survey(RoadRouter.Profile.Bar.LANE)
-	)
-	problems.append_array(
-		RouterDiff.check_population(lane, populations.get("lane", {}), ROUTE_TOLERANCE_M, "lane")
-	)
+	problems.append_array(RouterDiff.check_surveys(graph, table.get("populations", {})))
 
 	var legal_profile: RoadRouter.Profile = RoadRouter.Profile.legal()
 	var player_profile: RoadRouter.Profile = RoadRouter.Profile.player()
@@ -803,20 +948,21 @@ func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArra
 	if between_bars == 0:
 		problems.append("no edge is admitted by the player and refused to traffic (Q19)")
 
+	var lane: RoadRouter = RouterScript.new(
+		graph, RoadRouter.Profile.survey(RoadRouter.Profile.Bar.LANE)
+	)
 	var legal: RoadRouter = RouterScript.new(graph, legal_profile)
 	var player: RoadRouter = RouterScript.new(graph, player_profile)
-	# Direction, pinned by the state count and not by a route: a player profile
-	# that quietly obeyed one-way would still shorten routes through the turns
-	# and U-turns it frees, so "shorter somewhere" cannot tell the two apart.
+	var legal_edges: PackedInt32Array = legal.admitted_edge_ids()
 	var two_way: int = 0
-	for edge_id: int in legal.admitted_edge_ids():
+	for edge_id: int in legal_edges:
 		if not graph.is_one_way(edge_id):
 			two_way += 1
-	if legal.state_count() != legal.admitted_edge_ids().size() + two_way:
+	if legal.state_count() != legal_edges.size() + two_way:
 		problems.append(
 			(
 				"legal holds %d states over %d edges of which %d two-way; one-way is not obeyed"
-				% [legal.state_count(), legal.admitted_edge_ids().size(), two_way]
+				% [legal.state_count(), legal_edges.size(), two_way]
 			)
 		)
 	if player.state_count() != 2 * player.admitted_edge_ids().size():
@@ -826,177 +972,72 @@ func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArra
 				% [player.state_count(), player.admitted_edge_ids().size()]
 			)
 		)
-	var lane_pairs: int = 0
-	var legal_lost: int = 0
-	var legal_longer: int = 0
-	for target: int in lane.admitted_edge_ids():
-		var by_lane: Dictionary = lane.distances_to(target)
+
+	var lane_to_legal := Monotone.new()
+	var legal_to_player := Monotone.new()
+	var pins := RoutePins.new()
+	for target: int in legal_edges:
 		var by_legal: Dictionary = legal.distances_to(target)
-		for source: Variant in by_lane:
-			lane_pairs += 1
-			if not by_legal.has(source):
-				legal_lost += 1
-			elif float(by_legal[source]) > float(by_lane[source]) + ROUTE_TOLERANCE_M:
-				legal_longer += 1
-	var legal_pairs: int = 0
-	var player_lost: int = 0
-	var player_longer: int = 0
-	var player_shorter: int = 0
-	for target: int in legal.admitted_edge_ids():
-		var by_legal: Dictionary = legal.distances_to(target)
-		var by_player: Dictionary = player.distances_to(target)
-		for source: Variant in by_legal:
-			legal_pairs += 1
-			if not by_player.has(source):
-				player_lost += 1
-			elif float(by_player[source]) > float(by_legal[source]) + ROUTE_TOLERANCE_M:
-				player_longer += 1
-			elif float(by_player[source]) < float(by_legal[source]) - ROUTE_TOLERANCE_M:
-				player_shorter += 1
-	if legal_lost > 0 or legal_longer > 0:
+		if lane.is_admitted(target):
+			lane_to_legal.add(lane.distances_to(target), by_legal, RouterDiff.TOLERANCE_M)
+		legal_to_player.add(by_legal, player.distances_to(target), RouterDiff.TOLERANCE_M)
+		pins.visit(graph, legal, target, by_legal)
+	if lane_to_legal.lost > 0 or lane_to_legal.longer > 0:
 		problems.append(
 			(
 				"legal loses %d of the lane population's %d pairs and lengthens %d"
-				% [legal_lost, lane_pairs, legal_longer]
+				% [lane_to_legal.lost, lane_to_legal.pairs, lane_to_legal.longer]
 			)
 		)
-	if player_lost > 0 or player_longer > 0:
+	if legal_to_player.lost > 0 or legal_to_player.longer > 0:
 		problems.append(
 			(
 				"player loses %d of legal's %d pairs and lengthens %d"
-				% [player_lost, legal_pairs, player_longer]
+				% [legal_to_player.lost, legal_to_player.pairs, legal_to_player.longer]
 			)
 		)
-	if player_shorter == 0:
+	if legal_to_player.shorter == 0:
 		problems.append("the player profile shortens no legal route; it is obeying the rules")
+	problems.append_array(pins.problems)
+	if pins.unreachable == 0:
+		problems.append("no unreachable pair found to check the defined answer on")
+	if pins.started_against == 0:
+		problems.append("no re-summed route set off against its source's vertex order")
+	if pins.tied == 0:
+		problems.append("no one-way pair to tie route() to the table")
+	problems.append_array(_check_same_edge(graph, legal))
 	print(
 		(
 			"  router[legal]: %d states, %d off-grade edges, %d pairs; %d pairs no longer than at the lane"
-			% [legal.state_count(), off_grade_admitted, legal_pairs, lane_pairs]
+			% [legal.state_count(), off_grade_admitted, legal_to_player.pairs, lane_to_legal.pairs]
 		)
 	)
 	print(
 		(
 			"  router[player]: %d states, %d edges between the bars, %d of %d legal pairs shorter"
-			% [player.state_count(), between_bars, player_shorter, legal_pairs]
+			% [
+				player.state_count(),
+				between_bars,
+				legal_to_player.shorter,
+				legal_to_player.pairs,
+			]
 		)
 	)
-
-	problems.append_array(_check_routes(graph, legal))
+	print(
+		(
+			"  routes: %d re-summed (%d set off against), %d tied to the table, %d without a route"
+			% [pins.resummed, pins.started_against, pins.tied, pins.unreachable]
+		)
+	)
 	return problems
 
 
-## `route()` on the legal network: the defined answer for no route, the path
-## for one, and the point-to-point distance re-summed here from the path.
-func _check_routes(graph: RoadGraph, router: RoadRouter) -> PackedStringArray:
+## Staying on one edge: forward on a one-way edge, and backward on a two-way one.
+func _check_same_edge(graph: RoadGraph, router: RoadRouter) -> PackedStringArray:
 	var problems: PackedStringArray = []
-	var admitted: PackedInt32Array = router.admitted_edge_ids()
-
-	var unreachable_checked: int = 0
-	var resummed: int = 0
-	var started_against: int = 0
-	var pinned_to_table: int = 0
-	for target: int in admitted:
-		var column: Dictionary = router.distances_to(target)
-		if column.is_empty():
-			continue
-		# A few sources per target, so the re-sums and the table pins spread
-		# over many destinations rather than exhausting the first column.
-		var resummed_here: int = 0
-		for source: int in admitted:
-			if source == target:
-				continue
-			if not column.has(source):
-				if unreachable_checked >= 20:
-					continue
-				unreachable_checked += 1
-				var none: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
-				if none.found or not none.edges.is_empty() or none.distance_m != none.plan_m:
-					problems.append(
-						(
-							"e%d -> e%d: no route, and the answer is not the defined one"
-							% [source, target]
-						)
-					)
-				if none.plan_m <= 0.0:
-					problems.append(
-						"e%d -> e%d: plan_m is not filled without a route" % [source, target]
-					)
-				continue
-			var want_resum: bool = (resummed_here < 5 and resummed < 200) or started_against == 0
-			var want_pin: bool = (
-				pinned_to_table < 20 and graph.is_one_way(source) and graph.is_one_way(target)
-			)
-			if not want_resum and not want_pin:
-				continue
-			if want_pin:
-				# Tied to the diffed table: from the END of a one-way source to
-				# the end of a one-way target is the table's own convention — the
-				# source's length excluded, the target's whole length included.
-				pinned_to_table += 1
-				var whole: RoadRouter.Route = router.route(source, 1.0, target, 1.0)
-				if absf(whole.distance_m - float(column[source])) > 1e-6:
-					problems.append(
-						(
-							"e%d -> e%d: route(1.0 -> 1.0) is %.6f m, the table cell %.6f m"
-							% [source, target, whole.distance_m, float(column[source])]
-						)
-					)
-			if not want_resum:
-				continue
-			var route: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
-			resummed += 1
-			resummed_here += 1
-			if not route.found or route.edges.is_empty():
-				problems.append(
-					(
-						"e%d -> e%d: reachable in the table and route() found nothing"
-						% [source, target]
-					)
-				)
-				continue
-			if route.edges[0] != source or route.edges[route.edges.size() - 1] != target:
-				problems.append("e%d -> e%d: the route starts or ends elsewhere" % [source, target])
-			if route.forward.size() != route.edges.size():
-				problems.append("e%d -> e%d: forward is not parallel to edges" % [source, target])
-				continue
-			if route.forward[0] == 0:
-				started_against += 1
-			var expected_m: float = _resum(graph, route, ROUTE_FROM_T, ROUTE_TO_T)
-			if absf(expected_m - route.distance_m) > 1e-6:
-				problems.append(
-					(
-						"e%d -> e%d: distance_m %.6f, the path re-sums to %.6f"
-						% [source, target, route.distance_m, expected_m]
-					)
-				)
-			for index: int in route.edges.size() - 1:
-				var leave: int = (
-					graph.to_node_of(route.edges[index])
-					if route.forward[index] == 1
-					else graph.from_node_of(route.edges[index])
-				)
-				var enter: int = (
-					graph.from_node_of(route.edges[index + 1])
-					if route.forward[index + 1] == 1
-					else graph.to_node_of(route.edges[index + 1])
-				)
-				if leave != enter:
-					problems.append(
-						"e%d -> e%d: the route breaks between its edges" % [source, target]
-					)
-					break
-	if unreachable_checked == 0:
-		problems.append("no unreachable pair found to check the defined answer on")
-	if started_against == 0:
-		problems.append("no re-summed route set off against its source's vertex order")
-	if pinned_to_table == 0:
-		problems.append("no one-way pair to tie route() to the table")
-
-	# Staying on one edge: forward on a one-way edge, and backward on a two-way one.
 	var one_way_checked: bool = false
 	var two_way_checked: bool = false
-	for edge_id: int in admitted:
+	for edge_id: int in router.admitted_edge_ids():
 		var length_m: float = graph.plan_length_of(edge_id)
 		if graph.is_one_way(edge_id) and not one_way_checked:
 			one_way_checked = true
@@ -1021,34 +1062,11 @@ func _check_routes(graph: RoadGraph, router: RoadRouter) -> PackedStringArray:
 				problems.append(
 					"e%d: 0.75 -> 0.25 on a two-way edge is not half its length, against" % edge_id
 				)
+		if one_way_checked and two_way_checked:
+			break
 	if not one_way_checked or not two_way_checked:
 		problems.append("no one-way and two-way edge pair to check the same-edge routes on")
-	print(
-		(
-			"  routes: %d re-summed (%d set off against), %d tied to the table, %d without a route"
-			% [resummed, started_against, pinned_to_table, unreachable_checked]
-		)
-	)
 	return problems
-
-
-## What a route's path costs, summed here from the graph: the source's
-## remainder, every edge between whole, and the target's part.
-static func _resum(graph: RoadGraph, route: RoadRouter.Route, from_t: float, to_t: float) -> float:
-	var last: int = route.edges.size() - 1
-	if last == 0:
-		return absf(to_t - from_t) * graph.plan_length_of(route.edges[0])
-	var total: float = 0.0
-	for index: int in route.edges.size():
-		var length_m: float = graph.plan_length_of(route.edges[index])
-		var along: bool = route.forward[index] == 1
-		if index == 0:
-			total += ((1.0 - from_t) if along else from_t) * length_m
-		elif index == last:
-			total += (to_t if along else (1.0 - to_t)) * length_m
-		else:
-			total += length_m
-	return total
 
 
 ## `P3-43`: `prepare` inside a frame and `route` inside the query budget, for

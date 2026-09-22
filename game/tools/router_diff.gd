@@ -15,11 +15,28 @@ extends RefCounted
 
 const RouterScript = preload("res://scripts/city/road_router.gd")
 
+## How far a routed pair may differ from the tool's, one region or the merge.
+## Both sides sum the same 64-bit lengths in some order, so the honest figure is
+## ~1e-9; a millimetre leaves room for the order and none for a float32 sum
+## (measured 4.7e-4 m over the longest route — `verify_road_graph.gd`'s
+## `_check_topology` pins the loader to 64-bit at 1e-6). Across the merge the
+## second region's polylines are translated, and a translation moves no length.
+const TOLERANCE_M: float = 0.001
+
+## The tool's two populations by their key in the table, and the bar that
+## reproduces each under `Profile.survey`: `control` is its `nothing (control)`
+## row, `lane` its `starved at one lane`.
+const SURVEY_BARS: Dictionary = {
+	"control": RoadRouter.Profile.Bar.NONE,
+	"lane": RoadRouter.Profile.Bar.LANE,
+}
+
 ## How many offending pairs to name before counting the rest.
 const NAMED: int = 5
 
 
-## The parsed table, or `{}` for a missing or unreadable file.
+## A reference document under `etl/out/`, or `{}` for a missing or unreadable
+## file — `verify_join.gd` reads its merge references through this too.
 static func read(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
@@ -56,11 +73,23 @@ static func staleness(table: Dictionary, graph: RoadGraph, lane_width_m: float) 
 	return ""
 
 
+## Both survey populations of a table, each routed by a fresh router under the
+## profile that reproduces it and diffed pair for pair.
+static func check_surveys(graph: RoadGraph, populations: Dictionary) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	for label: String in SURVEY_BARS:
+		var router: RoadRouter = RouterScript.new(
+			graph, RoadRouter.Profile.survey(SURVEY_BARS[label])
+		)
+		problems.append_array(check_population(router, populations.get(label, {}), label))
+	return problems
+
+
 ## Every pair of one population, routed here and compared: the admitted edges
-## as a set, then each cell within `tolerance_m`, and the cells either side
+## as a set, then each cell within `TOLERANCE_M`, and the cells either side
 ## lacks. `label` names the population in the problems and the summary line.
 static func check_population(
-	router: RoadRouter, population: Dictionary, tolerance_m: float, label: String
+	router: RoadRouter, population: Dictionary, label: String
 ) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
@@ -70,14 +99,8 @@ static func check_population(
 	var ours: Dictionary[int, bool] = {}
 	for edge_id: int in router.admitted_edge_ids():
 		ours[edge_id] = true
-	var only_theirs: PackedInt32Array = []
-	for edge_id: int in theirs:
-		if not ours.has(edge_id):
-			only_theirs.append(edge_id)
-	var only_ours: PackedInt32Array = []
-	for edge_id: int in ours:
-		if not theirs.has(edge_id):
-			only_ours.append(edge_id)
+	var only_theirs: PackedInt32Array = _only_in(theirs, ours)
+	var only_ours: PackedInt32Array = _only_in(ours, theirs)
 	if not only_theirs.is_empty() or not only_ours.is_empty():
 		(
 			problems
@@ -134,7 +157,7 @@ static func check_population(
 			if delta_m > worst_m:
 				worst_m = delta_m
 				worst_pair = "e%d -> e%d" % [source_id, target]
-			if delta_m > tolerance_m:
+			if delta_m > TOLERANCE_M:
 				mismatched += 1
 				if named.size() < NAMED:
 					named.append(
@@ -148,7 +171,7 @@ static func check_population(
 		problems.append(
 			(
 				"%s: %d pairs matched, %d only the tool's, %d only ours, %d over %.3f m"
-				% [label, matched, missing, extra, mismatched, tolerance_m]
+				% [label, matched, missing, extra, mismatched, TOLERANCE_M]
 			)
 		)
 		for line: String in named:
@@ -162,6 +185,17 @@ static func check_population(
 		)
 	)
 	return problems
+
+
+## The keys of `these` that `those` lacks, as a list.
+static func _only_in(
+	these: Dictionary[int, bool], those: Dictionary[int, bool]
+) -> PackedInt32Array:
+	var only: PackedInt32Array = []
+	for edge_id: int in these:
+		if not those.has(edge_id):
+			only.append(edge_id)
+	return only
 
 
 static func _named(ids: PackedInt32Array) -> String:

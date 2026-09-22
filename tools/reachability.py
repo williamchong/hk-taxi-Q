@@ -310,6 +310,7 @@ def _population(edges: set[int], refused: set[int], cost: dict[int, dict[int, fl
 
 def table(
     graph: dict,
+    *,
     city_id: str,
     region_id: str,
     level0: set[int],
@@ -797,7 +798,15 @@ def main(argv: list[str] | None = None) -> int:
     _report_standing(watched, names, world)
     _report_named(verdicts[lane_label], names, lane_label)
     if args.json:
-        document = table(graph, city.id, args.region, level0, lane_blocked, lane_m, world)
+        document = table(
+            graph,
+            city_id=city.id,
+            region_id=args.region,
+            level0=level0,
+            lane_blocked=lane_blocked,
+            lane_m=lane_m,
+            world=world,
+        )
         write_table(out_dir / REACHABILITY_NAME, document)
         log.info(
             "\n  wrote %s: %d control rows, %d lane rows",

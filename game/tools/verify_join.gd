@@ -33,15 +33,9 @@ const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Graph = preload("res://scripts/city/road_graph.gd")
 const CommandLine = preload("res://scripts/core/cmdline.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
-const RouterScript = preload("res://scripts/city/road_router.gd")
 const RouterDiff = preload("res://tools/router_diff.gd")
 
 const TOLERANCE_M: float = 0.001
-## `P3-43`: a routed pair across the merge against `reachability.py --graph-dir`.
-## The same millimetre as one region: the second region's polylines are
-## translated by its offset, and a translation moves no length, so the 64-bit
-## sums agree as they do at home (measured 0.000000 m over 334,767 pairs).
-const ROUTE_TOLERANCE_M: float = 0.001
 const REPORT_KEYS: PackedStringArray = [
 	"owned_a",
 	"owned_b",
@@ -69,9 +63,9 @@ func _init() -> void:
 		. globalize_path("res://../etl/out/%s+%s" % [pair[0], pair[1]])
 		. simplify_path()
 	)
-	var reference: Dictionary = _read(out.path_join("roadgraph.json"))
-	var clearance: Dictionary = _read(out.path_join("clearance.json"))
-	var report: Dictionary = _read(out.path_join("join.json"))
+	var reference: Dictionary = RouterDiff.read(out.path_join("roadgraph.json"))
+	var clearance: Dictionary = RouterDiff.read(out.path_join("clearance.json"))
+	var report: Dictionary = RouterDiff.read(out.path_join("join.json"))
 	if reference.is_empty() or clearance.is_empty() or report.is_empty():
 		printerr(
 			(
@@ -356,16 +350,8 @@ func _check_router(
 	if not stale.is_empty():
 		_fail("%s is stale: %s. Re-run: %s" % [path, stale, command])
 		return
-	var populations: Dictionary = table.get("populations", {})
-	for label: String in ["control", "lane"]:
-		var bar: RoadRouter.Profile.Bar = (
-			RoadRouter.Profile.Bar.NONE if label == "control" else RoadRouter.Profile.Bar.LANE
-		)
-		var router: RoadRouter = RouterScript.new(graph, RoadRouter.Profile.survey(bar))
-		for problem: String in RouterDiff.check_population(
-			router, populations.get(label, {}), ROUTE_TOLERANCE_M, label
-		):
-			_fail(problem)
+	for problem: String in RouterDiff.check_surveys(graph, table.get("populations", {})):
+		_fail(problem)
 
 
 func _dump(dir: String, merged: Dictionary, tables: Manifest, clearance: Dictionary) -> void:
@@ -396,13 +382,6 @@ static func _gap(a: Variant, b: Variant) -> float:
 		absf(float(pa[0]) - float(pb[0])),
 		maxf(absf(float(pa[1]) - float(pb[1])), absf(float(pa[2]) - float(pb[2])))
 	)
-
-
-static func _read(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	return parsed if parsed is Dictionary else {}
 
 
 func _fail(message: String) -> void:
