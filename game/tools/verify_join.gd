@@ -33,8 +33,15 @@ const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Graph = preload("res://scripts/city/road_graph.gd")
 const CommandLine = preload("res://scripts/core/cmdline.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
+const RouterScript = preload("res://scripts/city/road_router.gd")
+const RouterDiff = preload("res://tools/router_diff.gd")
 
 const TOLERANCE_M: float = 0.001
+## `P3-43`: a routed pair across the merge against `reachability.py --graph-dir`.
+## The same millimetre as one region: the second region's polylines are
+## translated by its offset, and a translation moves no length, so the 64-bit
+## sums agree as they do at home (measured 0.000000 m over 334,767 pairs).
+const ROUTE_TOLERANCE_M: float = 0.001
 const REPORT_KEYS: PackedStringArray = [
 	"owned_a",
 	"owned_b",
@@ -100,6 +107,7 @@ func _init() -> void:
 	_check_documents(graph, pair)
 	_check_foreign_aliases(graph, merged, pair)
 	_check_minimap(graph, pair)
+	_check_router(graph, inputs["manifest"], out, pair)
 
 	var dump: String = CommandLine.value("--dump=")
 	if not dump.is_empty():
@@ -327,6 +335,37 @@ func _check_minimap(graph: RoadGraph, pair: PackedStringArray) -> void:
 			% [strokes.size(), west, east, pair[1]]
 		)
 	)
+
+
+## `P3-43`: `RoadRouter` over the runtime merge against `reachability.py`'s
+## tables over the reference merge. No id map: both renumber the second region
+## from the frame's maximum in document order, and `_check_edges` has already
+## asserted `id`, `from` and `to` on every edge.
+func _check_router(
+	graph: RoadGraph, tables: Manifest, out: String, pair: PackedStringArray
+) -> void:
+	var path: String = out.path_join("reachability.json")
+	var command: String = RouterDiff.reference_command(
+		pair[0], "etl/out/%s+%s" % [pair[0], pair[1]]
+	)
+	var table: Dictionary = RouterDiff.read(path)
+	if table.is_empty():
+		_fail("no reachability table at %s. Write it: %s" % [path, command])
+		return
+	var stale: String = RouterDiff.staleness(table, graph, tables.lane_width_m)
+	if not stale.is_empty():
+		_fail("%s is stale: %s. Re-run: %s" % [path, stale, command])
+		return
+	var populations: Dictionary = table.get("populations", {})
+	for label: String in ["control", "lane"]:
+		var bar: RoadRouter.Profile.Bar = (
+			RoadRouter.Profile.Bar.NONE if label == "control" else RoadRouter.Profile.Bar.LANE
+		)
+		var router: RoadRouter = RouterScript.new(graph, RoadRouter.Profile.survey(bar))
+		for problem: String in RouterDiff.check_population(
+			router, populations.get(label, {}), ROUTE_TOLERANCE_M, label
+		):
+			_fail(problem)
 
 
 func _dump(dir: String, merged: Dictionary, tables: Manifest, clearance: Dictionary) -> void:

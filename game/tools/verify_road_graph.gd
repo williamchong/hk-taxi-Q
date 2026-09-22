@@ -17,6 +17,26 @@
 extends SceneTree
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
+const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const RouterScript = preload("res://scripts/city/road_router.gd")
+const RouterDiff = preload("res://tools/router_diff.gd")
+
+## `P3-43`: how far a routed pair may differ from `tools/reachability.py`'s.
+## Both sides sum the same 64-bit lengths in some order, so the honest figure is
+## ~1e-9; a millimetre leaves room for the order and none for a float32 sum
+## (measured 4.7e-4 m over the longest route — `_check_topology` pins that).
+const ROUTE_TOLERANCE_M: float = 0.001
+
+## `P3-43`: what preparing one destination may cost — a frame at 60 fps. Paid
+## once per fare at the hail, never per query.
+const PREPARE_BUDGET_USEC: float = 16000.0
+
+## Where a route's points are put for the timing sweep and the re-sum pins:
+## off the middle, so a source state driven against the vertex order pays a
+## different partial from one driven along it — at 0.5 the two are equal and a
+## partial written the wrong way round would pass.
+const ROUTE_FROM_T: float = 0.25
+const ROUTE_TO_T: float = 0.6
 
 ## The `kerbside` vocabulary schema 4 publishes. Spelled out rather than
 ## compared as literals because `P3-3`'s traffic and `P3-9a`'s fares are the
@@ -248,6 +268,12 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 
 	# --- P3-43: the topology a router reads is the document's ---------------
 	problems.append_array(_check_topology(graph, edges, document.get("turn_restrictions", [])))
+
+	# --- P3-43: the router agrees with reachability.py, pair for pair -------
+	problems.append_array(_check_router(graph, manifest))
+
+	# --- P3-43: a prepared route reads inside the query budget -------------
+	problems.append_array(_check_route_time(graph, manifest))
 
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
@@ -707,6 +733,399 @@ func _check_topology(graph: RoadGraph, edges: Array, rules: Array) -> PackedStri
 			% [checked, keys.size(), reversals_checked, worst_length_m]
 		)
 	)
+	return problems
+
+
+## `P3-43`: `RoadRouter` against `tools/reachability.py --json`, and the shipped
+## profiles against the graph's own predicates.
+##
+## The survey profiles reproduce the tool's two populations exactly (level 0,
+## every rule, no U-turn) and are diffed pair for pair. The shipped `legal` and
+## `player` profiles are a different population — `is_drivable` admits the
+## measured level-1 edges the tool never routes — so they are pinned three ways
+## instead: `admits` equals the predicate it claims, edge by edge; every lane
+## pair is still routed by `legal` no longer than before (edges were added,
+## none taken); every legal pair is routed by `player` no longer, and at least
+## one strictly shorter — rules broken buy something, and a player profile
+## that quietly still obeyed direction would read 0 there.
+func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var out: String = (
+		ProjectSettings.globalize_path("res://../etl/out/%s" % manifest.region_id).simplify_path()
+	)
+	var path: String = out.path_join("reachability.json")
+	var command: String = RouterDiff.reference_command(manifest.region_id, "")
+	var table: Dictionary = RouterDiff.read(path)
+	if table.is_empty():
+		problems.append("no reachability table at %s. Write it: %s" % [path, command])
+		return problems
+	var stale: String = RouterDiff.staleness(table, graph, manifest.lane_width_m)
+	if not stale.is_empty():
+		problems.append("%s is stale: %s. Re-run: %s" % [path, stale, command])
+		return problems
+
+	var populations: Dictionary = table.get("populations", {})
+	var control: RoadRouter = RouterScript.new(
+		graph, RoadRouter.Profile.survey(RoadRouter.Profile.Bar.NONE)
+	)
+	problems.append_array(
+		RouterDiff.check_population(
+			control, populations.get("control", {}), ROUTE_TOLERANCE_M, "control"
+		)
+	)
+	var lane: RoadRouter = RouterScript.new(
+		graph, RoadRouter.Profile.survey(RoadRouter.Profile.Bar.LANE)
+	)
+	problems.append_array(
+		RouterDiff.check_population(lane, populations.get("lane", {}), ROUTE_TOLERANCE_M, "lane")
+	)
+
+	var legal_profile: RoadRouter.Profile = RoadRouter.Profile.legal()
+	var player_profile: RoadRouter.Profile = RoadRouter.Profile.player()
+	var off_grade_admitted: int = 0
+	var between_bars: int = 0
+	for edge_id: int in graph.edge_ids():
+		var legal_admits: bool = legal_profile.admits(graph, edge_id)
+		var player_admits: bool = player_profile.admits(graph, edge_id)
+		if legal_admits != graph.is_routable(edge_id):
+			problems.append("e%d: legal.admits disagrees with is_routable" % edge_id)
+		if player_admits != (graph.is_drivable(edge_id) and graph.fits_car(edge_id)):
+			problems.append("e%d: player.admits disagrees with is_drivable and fits_car" % edge_id)
+		if legal_admits and graph.level_of(edge_id) != 0:
+			off_grade_admitted += 1
+		if player_admits and not legal_admits:
+			between_bars += 1
+	# Refused vacuity: with no edge between the two bars the two profiles admit
+	# one network, and with no off-grade edge admitted the survey diff above
+	# already was the whole of this check.
+	if off_grade_admitted == 0:
+		problems.append("the legal profile admits no off-grade edge; nothing beyond the survey")
+	if between_bars == 0:
+		problems.append("no edge is admitted by the player and refused to traffic (Q19)")
+
+	var legal: RoadRouter = RouterScript.new(graph, legal_profile)
+	var player: RoadRouter = RouterScript.new(graph, player_profile)
+	# Direction, pinned by the state count and not by a route: a player profile
+	# that quietly obeyed one-way would still shorten routes through the turns
+	# and U-turns it frees, so "shorter somewhere" cannot tell the two apart.
+	var two_way: int = 0
+	for edge_id: int in legal.admitted_edge_ids():
+		if not graph.is_one_way(edge_id):
+			two_way += 1
+	if legal.state_count() != legal.admitted_edge_ids().size() + two_way:
+		problems.append(
+			(
+				"legal holds %d states over %d edges of which %d two-way; one-way is not obeyed"
+				% [legal.state_count(), legal.admitted_edge_ids().size(), two_way]
+			)
+		)
+	if player.state_count() != 2 * player.admitted_edge_ids().size():
+		problems.append(
+			(
+				"player holds %d states over %d edges; it is obeying one-way"
+				% [player.state_count(), player.admitted_edge_ids().size()]
+			)
+		)
+	var lane_pairs: int = 0
+	var legal_lost: int = 0
+	var legal_longer: int = 0
+	for target: int in lane.admitted_edge_ids():
+		var by_lane: Dictionary = lane.distances_to(target)
+		var by_legal: Dictionary = legal.distances_to(target)
+		for source: Variant in by_lane:
+			lane_pairs += 1
+			if not by_legal.has(source):
+				legal_lost += 1
+			elif float(by_legal[source]) > float(by_lane[source]) + ROUTE_TOLERANCE_M:
+				legal_longer += 1
+	var legal_pairs: int = 0
+	var player_lost: int = 0
+	var player_longer: int = 0
+	var player_shorter: int = 0
+	for target: int in legal.admitted_edge_ids():
+		var by_legal: Dictionary = legal.distances_to(target)
+		var by_player: Dictionary = player.distances_to(target)
+		for source: Variant in by_legal:
+			legal_pairs += 1
+			if not by_player.has(source):
+				player_lost += 1
+			elif float(by_player[source]) > float(by_legal[source]) + ROUTE_TOLERANCE_M:
+				player_longer += 1
+			elif float(by_player[source]) < float(by_legal[source]) - ROUTE_TOLERANCE_M:
+				player_shorter += 1
+	if legal_lost > 0 or legal_longer > 0:
+		problems.append(
+			(
+				"legal loses %d of the lane population's %d pairs and lengthens %d"
+				% [legal_lost, lane_pairs, legal_longer]
+			)
+		)
+	if player_lost > 0 or player_longer > 0:
+		problems.append(
+			(
+				"player loses %d of legal's %d pairs and lengthens %d"
+				% [player_lost, legal_pairs, player_longer]
+			)
+		)
+	if player_shorter == 0:
+		problems.append("the player profile shortens no legal route; it is obeying the rules")
+	print(
+		(
+			"  router[legal]: %d states, %d off-grade edges, %d pairs; %d pairs no longer than at the lane"
+			% [legal.state_count(), off_grade_admitted, legal_pairs, lane_pairs]
+		)
+	)
+	print(
+		(
+			"  router[player]: %d states, %d edges between the bars, %d of %d legal pairs shorter"
+			% [player.state_count(), between_bars, player_shorter, legal_pairs]
+		)
+	)
+
+	problems.append_array(_check_routes(graph, legal))
+	return problems
+
+
+## `route()` on the legal network: the defined answer for no route, the path
+## for one, and the point-to-point distance re-summed here from the path.
+func _check_routes(graph: RoadGraph, router: RoadRouter) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var admitted: PackedInt32Array = router.admitted_edge_ids()
+
+	var unreachable_checked: int = 0
+	var resummed: int = 0
+	var started_against: int = 0
+	var pinned_to_table: int = 0
+	for target: int in admitted:
+		var column: Dictionary = router.distances_to(target)
+		if column.is_empty():
+			continue
+		# A few sources per target, so the re-sums and the table pins spread
+		# over many destinations rather than exhausting the first column.
+		var resummed_here: int = 0
+		for source: int in admitted:
+			if source == target:
+				continue
+			if not column.has(source):
+				if unreachable_checked >= 20:
+					continue
+				unreachable_checked += 1
+				var none: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
+				if none.found or not none.edges.is_empty() or none.distance_m != none.plan_m:
+					problems.append(
+						(
+							"e%d -> e%d: no route, and the answer is not the defined one"
+							% [source, target]
+						)
+					)
+				if none.plan_m <= 0.0:
+					problems.append(
+						"e%d -> e%d: plan_m is not filled without a route" % [source, target]
+					)
+				continue
+			var want_resum: bool = (resummed_here < 5 and resummed < 200) or started_against == 0
+			var want_pin: bool = (
+				pinned_to_table < 20 and graph.is_one_way(source) and graph.is_one_way(target)
+			)
+			if not want_resum and not want_pin:
+				continue
+			if want_pin:
+				# Tied to the diffed table: from the END of a one-way source to
+				# the end of a one-way target is the table's own convention — the
+				# source's length excluded, the target's whole length included.
+				pinned_to_table += 1
+				var whole: RoadRouter.Route = router.route(source, 1.0, target, 1.0)
+				if absf(whole.distance_m - float(column[source])) > 1e-6:
+					problems.append(
+						(
+							"e%d -> e%d: route(1.0 -> 1.0) is %.6f m, the table cell %.6f m"
+							% [source, target, whole.distance_m, float(column[source])]
+						)
+					)
+			if not want_resum:
+				continue
+			var route: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, ROUTE_TO_T)
+			resummed += 1
+			resummed_here += 1
+			if not route.found or route.edges.is_empty():
+				problems.append(
+					(
+						"e%d -> e%d: reachable in the table and route() found nothing"
+						% [source, target]
+					)
+				)
+				continue
+			if route.edges[0] != source or route.edges[route.edges.size() - 1] != target:
+				problems.append("e%d -> e%d: the route starts or ends elsewhere" % [source, target])
+			if route.forward.size() != route.edges.size():
+				problems.append("e%d -> e%d: forward is not parallel to edges" % [source, target])
+				continue
+			if route.forward[0] == 0:
+				started_against += 1
+			var expected_m: float = _resum(graph, route, ROUTE_FROM_T, ROUTE_TO_T)
+			if absf(expected_m - route.distance_m) > 1e-6:
+				problems.append(
+					(
+						"e%d -> e%d: distance_m %.6f, the path re-sums to %.6f"
+						% [source, target, route.distance_m, expected_m]
+					)
+				)
+			for index: int in route.edges.size() - 1:
+				var leave: int = (
+					graph.to_node_of(route.edges[index])
+					if route.forward[index] == 1
+					else graph.from_node_of(route.edges[index])
+				)
+				var enter: int = (
+					graph.from_node_of(route.edges[index + 1])
+					if route.forward[index + 1] == 1
+					else graph.to_node_of(route.edges[index + 1])
+				)
+				if leave != enter:
+					problems.append(
+						"e%d -> e%d: the route breaks between its edges" % [source, target]
+					)
+					break
+	if unreachable_checked == 0:
+		problems.append("no unreachable pair found to check the defined answer on")
+	if started_against == 0:
+		problems.append("no re-summed route set off against its source's vertex order")
+	if pinned_to_table == 0:
+		problems.append("no one-way pair to tie route() to the table")
+
+	# Staying on one edge: forward on a one-way edge, and backward on a two-way one.
+	var one_way_checked: bool = false
+	var two_way_checked: bool = false
+	for edge_id: int in admitted:
+		var length_m: float = graph.plan_length_of(edge_id)
+		if graph.is_one_way(edge_id) and not one_way_checked:
+			one_way_checked = true
+			var along: RoadRouter.Route = router.route(edge_id, 0.25, edge_id, 0.75)
+			if (
+				not along.found
+				or along.edges != PackedInt32Array([edge_id])
+				or absf(along.distance_m - 0.5 * length_m) > 1e-6
+			):
+				problems.append(
+					"e%d: 0.25 -> 0.75 along a one-way edge is not half its length" % edge_id
+				)
+		if not graph.is_one_way(edge_id) and not two_way_checked:
+			two_way_checked = true
+			var back: RoadRouter.Route = router.route(edge_id, 0.75, edge_id, 0.25)
+			if (
+				not back.found
+				or back.edges != PackedInt32Array([edge_id])
+				or back.forward[0] != 0
+				or absf(back.distance_m - 0.5 * length_m) > 1e-6
+			):
+				problems.append(
+					"e%d: 0.75 -> 0.25 on a two-way edge is not half its length, against" % edge_id
+				)
+	if not one_way_checked or not two_way_checked:
+		problems.append("no one-way and two-way edge pair to check the same-edge routes on")
+	print(
+		(
+			"  routes: %d re-summed (%d set off against), %d tied to the table, %d without a route"
+			% [resummed, started_against, pinned_to_table, unreachable_checked]
+		)
+	)
+	return problems
+
+
+## What a route's path costs, summed here from the graph: the source's
+## remainder, every edge between whole, and the target's part.
+static func _resum(graph: RoadGraph, route: RoadRouter.Route, from_t: float, to_t: float) -> float:
+	var last: int = route.edges.size() - 1
+	if last == 0:
+		return absf(to_t - from_t) * graph.plan_length_of(route.edges[0])
+	var total: float = 0.0
+	for index: int in route.edges.size():
+		var length_m: float = graph.plan_length_of(route.edges[index])
+		var along: bool = route.forward[index] == 1
+		if index == 0:
+			total += ((1.0 - from_t) if along else from_t) * length_m
+		elif index == last:
+			total += (to_t if along else (1.0 - to_t)) * length_m
+		else:
+			total += length_m
+	return total
+
+
+## `P3-43`: `prepare` inside a frame and `route` inside the query budget, for
+## both shipped profiles, from every admitted edge to every fare node.
+##
+## Every edge as a source rather than the fare pairs alone: Causeway Bay has
+## seven fares, and 42 pairs is not a distribution a p99 can be read off.
+func _check_route_time(graph: RoadGraph, manifest: CityManifest) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var fares: Dictionary = GeneratedFares.load_fares(manifest.fares_path)
+	var nodes: Array = fares.get("nodes", [])
+	if nodes.is_empty():
+		problems.append("no fare nodes to time routes to")
+		return problems
+	for label: String in ["legal", "player"]:
+		var profile: RoadRouter.Profile = (
+			RoadRouter.Profile.legal() if label == "legal" else RoadRouter.Profile.player()
+		)
+		var router: RoadRouter = RouterScript.new(graph, profile)
+		var sources: PackedInt32Array = router.admitted_edge_ids()
+		var prepares := PackedFloat32Array()
+		var samples := PackedFloat32Array()
+		var found: int = 0
+		for node: Dictionary in nodes:
+			var target: int = int(node.get("nearest_edge", -1))
+			var target_t: float = float(node.get("edge_t", 0.0))
+			if not router.is_admitted(target):
+				continue
+			var started: int = Time.get_ticks_usec()
+			router.prepare(target, target_t)
+			prepares.append(float(Time.get_ticks_usec() - started))
+			# The first route after a prepare carries no allocation of its own,
+			# but the sweep is warmed once anyway, as `_check_query_time` is.
+			router.route(sources[0], ROUTE_FROM_T, target, target_t)
+			for source: int in sources:
+				started = Time.get_ticks_usec()
+				var route: RoadRouter.Route = router.route(source, ROUTE_FROM_T, target, target_t)
+				samples.append(float(Time.get_ticks_usec() - started))
+				if route.found:
+					found += 1
+		if samples.size() < 100:
+			problems.append("%s: %d route samples is too few to time" % [label, samples.size()])
+			continue
+		prepares.sort()
+		samples.sort()
+		var prepare_max: float = prepares[prepares.size() - 1]
+		var p99: float = _percentile(samples, 0.99)
+		print(
+			(
+				"  route time (%s): %d destinations prepared, p50 %.0f us, max %.0f us; %d routes, %d found — p50 %.1f us, p99 %.1f us, max %.1f us"
+				% [
+					label,
+					prepares.size(),
+					_percentile(prepares, 0.5),
+					prepare_max,
+					samples.size(),
+					found,
+					_percentile(samples, 0.5),
+					p99,
+					samples[samples.size() - 1],
+				]
+			)
+		)
+		if prepare_max > PREPARE_BUDGET_USEC:
+			problems.append(
+				(
+					"%s: preparing a destination took %.0f us, above the %.0f us frame"
+					% [label, prepare_max, PREPARE_BUDGET_USEC]
+				)
+			)
+		if p99 > QUERY_BUDGET_USEC:
+			problems.append(
+				(
+					"%s: route p99 is %.1f us, above the %.0f us budget"
+					% [label, p99, QUERY_BUDGET_USEC]
+				)
+			)
 	return problems
 
 
