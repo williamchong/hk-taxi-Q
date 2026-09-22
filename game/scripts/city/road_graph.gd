@@ -46,6 +46,14 @@ extends RefCounted
 ## across a level-0 and a level-1 edge because `ELEVATION` flips partway up
 ## rather than at the touchdown. `P2-7` will sample both sides from the map
 ## sheets; this refusal stays regardless, because opening the network is Phase 4.
+##
+## **Topology is loaded here and traversed nowhere here** (`P3-43`). Each edge's
+## `from` / `to` node, the turn bans and a 64-bit plan length are read so that
+## `road_router.gd` can build its directed-edge search over the accessors; the
+## graph itself stays an index and an attribute table. `_prefix` is float32 and
+## serves `t`; `plan_length_of` is summed from the document's own doubles and is
+## the number `tools/reachability.py` publishes, which is why a route summed
+## from it can be diffed against that tool at a millimetre.
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
@@ -162,6 +170,19 @@ var _ids: PackedInt32Array = PackedInt32Array()
 var _polylines: Array[PackedVector3Array] = []
 var _one_way: PackedInt32Array = PackedInt32Array()
 var _levels: PackedInt32Array = PackedInt32Array()
+# The node each edge's polyline starts at and ends at, in travel order (the ETL
+# reverses a `backward` source, so vertex order IS travel order). -1 where the
+# document carried none. `P3-43`.
+var _from: PackedInt32Array = PackedInt32Array()
+var _to: PackedInt32Array = PackedInt32Array()
+# Plan length of each edge in 64-bit, summed from the document's doubles before
+# the `Vector3` cast. `_prefix` below is float32, and over a 3 km route the
+# float32 sum drifts 4.7e-4 m from `reachability.py`'s — inside a millimetre,
+# but not by enough to call an agreement at 0.001 m a check.
+var _lengths: PackedFloat64Array = PackedFloat64Array()
+# Every turn restriction the document carries, as `(from_edge, via_node, to_edge)`.
+# Bans only: the source's impedance field is -1 throughout (`roads.py`).
+var _banned: Dictionary[Vector3i, bool] = {}
 var _widths: PackedFloat32Array = PackedFloat32Array()
 var _lanes: PackedInt32Array = PackedInt32Array()
 var _speed_limits: PackedInt32Array = PackedInt32Array()
@@ -468,6 +489,59 @@ func _drivable(slot: int) -> bool:
 ## True where the source signs the edge one-way.
 func is_one_way(edge_id: int) -> bool:
 	return _by_id.has(edge_id) and _one_way[_by_id[edge_id]] == 1
+
+
+## The node an edge's polyline starts at, in travel order; -1 for an unknown id.
+func from_node_of(edge_id: int) -> int:
+	return _from[_by_id[edge_id]] if _by_id.has(edge_id) else -1
+
+
+## The node an edge's polyline ends at, in travel order; -1 for an unknown id.
+func to_node_of(edge_id: int) -> int:
+	return _to[_by_id[edge_id]] if _by_id.has(edge_id) else -1
+
+
+## Plan length of an edge in metres, 64-bit; 0.0 for an unknown id.
+##
+## This is the number `tools/reachability.py` sums a route from, so it is the
+## one a router must sum too. `_prefix` is float32 and answers `t`, never this.
+func plan_length_of(edge_id: int) -> float:
+	return _lengths[_by_id[edge_id]] if _by_id.has(edge_id) else 0.0
+
+
+## True where the source bans driving `from_edge` through `via_node` onto `to_edge`.
+##
+## The movement is a directed triple, which is why a router's state is an edge
+## and not a node: "no right turn from HENNESSY into CANAL" is unsayable at a
+## node that both roads pass through.
+func is_turn_banned(from_edge: int, via_node: int, to_edge: int) -> bool:
+	return _banned.has(Vector3i(from_edge, via_node, to_edge))
+
+
+## The point `t` of the way along an edge by plan length — `Hit.t`'s inverse,
+## and what `fares.json`'s `edge_t` names. The edge's own vertex order, so the
+## start for `t = 0` whichever way a car would drive it. `Vector3.ZERO` for an
+## unknown id.
+func point_at(edge_id: int, t: float) -> Vector3:
+	if not _by_id.has(edge_id):
+		return Vector3.ZERO
+	var slot: int = _by_id[edge_id]
+	var points: PackedVector3Array = _polylines[slot]
+	var lengths: PackedFloat32Array = _prefix[slot]
+	# The ends are answered by name. `dedupe` rules out a repeated vertex, not a
+	# repeated PLAN position: `e219` and `e686` end on a vertical step, whose
+	# zero plan length the walk below would stop short of.
+	if t <= 0.0:
+		return points[0]
+	if t >= 1.0:
+		return points[points.size() - 1]
+	var target: float = t * lengths[lengths.size() - 1]
+	var step: int = 0
+	while step < lengths.size() - 2 and lengths[step + 1] < target:
+		step += 1
+	var span_m: float = lengths[step + 1] - lengths[step]
+	var fraction: float = (target - lengths[step]) / span_m if span_m > 0.0 else 0.0
+	return points[step].lerp(points[step + 1], clampf(fraction, 0.0, 1.0))
 
 
 ## The street width the graph publishes — not what is drawn.
@@ -863,7 +937,17 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 
 	for edge: Dictionary in edges:
 		var points: PackedVector3Array = PackedVector3Array()
+		# The 64-bit sum runs over the raw doubles, in the same order
+		# `pipeline.polyline.plan_lengths` takes them, BEFORE the `Vector3` cast
+		# below rounds each coordinate to float32.
+		var length_m: float = 0.0
+		var previous: Array = []
 		for raw: Array in edge.get("polyline", []):
+			if not previous.is_empty():
+				var dx: float = float(raw[0]) - float(previous[0])
+				var dz: float = float(raw[2]) - float(previous[2])
+				length_m += sqrt(dx * dx + dz * dz)
+			previous = raw
 			points.append(Vector3(raw[0], raw[1], raw[2]))
 		# A one-point edge has no direction and no length; it would poison the
 		# index with a zero-length segment that every query ties on.
@@ -885,6 +969,9 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		_polylines.append(points)
 		_one_way.append(1 if StringName(edge.get("direction", BOTH)) == FORWARD else 0)
 		_levels.append(int(edge.get("elevation_level", 0)))
+		_from.append(int(edge.get("from", -1)))
+		_to.append(int(edge.get("to", -1)))
+		_lengths.append(length_m)
 		_widths.append(float(edge.get("width_m", 6.0)))
 		_lanes.append(int(edge.get("lanes", 2)))
 		_speed_limits.append(int(edge.get("speed_limit_kph", 50)))
@@ -938,6 +1025,16 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 
 	_warn_out_of_step(out_of_step, "carriageway width")
 	_warn_out_of_step(clear_out_of_step, "clearance")
+
+	# Keyed, not listed: a router asks "is THIS turn banned" once per arc it
+	# builds, and 217 rules against ~1,000 arcs is a hash each, not a scan each.
+	for rule: Dictionary in document.get("turn_restrictions", []):
+		var key := Vector3i(
+			int(rule.get("from_edge", -1)),
+			int(rule.get("via_node", -1)),
+			int(rule.get("to_edge", -1))
+		)
+		_banned[key] = true
 
 	_index()
 

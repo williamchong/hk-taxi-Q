@@ -246,6 +246,9 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 	problems.append_array(_check_kerbside(edges))
 	problems.append_array(_check_foreign(edges, document.get("foreign_edges", [])))
 
+	# --- P3-43: the topology a router reads is the document's ---------------
+	problems.append_array(_check_topology(graph, edges, document.get("turn_restrictions", [])))
+
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
 
@@ -622,6 +625,104 @@ func _time_queries(
 			)
 		)
 	return problems
+
+
+## `P3-43`: `from` / `to`, the turn bans, the 64-bit plan length and `point_at`
+## read back what the document says, edge by edge.
+##
+## The length is pinned at 1e-6 m against a float64 re-sum done HERE, over the
+## raw doubles — that is what holds the loader to 64-bit. ⚠️ A loader that summed
+## `Vector3`s instead would still land within 0.001 m (measured 4.7e-4 over the
+## longest route), so a millimetre tolerance would not be a check of this.
+func _check_topology(graph: RoadGraph, edges: Array, rules: Array) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var checked: int = 0
+	var worst_length_m: float = 0.0
+	for edge: Dictionary in edges:
+		var polyline: Array = edge.get("polyline", [])
+		if polyline.size() < 2:
+			continue
+		var id: int = int(edge.get("id", -1))
+		checked += 1
+		if graph.from_node_of(id) != int(edge.get("from", -2)):
+			problems.append("e%d: from_node_of disagrees with the document" % id)
+		if graph.to_node_of(id) != int(edge.get("to", -2)):
+			problems.append("e%d: to_node_of disagrees with the document" % id)
+
+		var expected_m: float = 0.0
+		for step: int in polyline.size() - 1:
+			var a: Array = polyline[step]
+			var b: Array = polyline[step + 1]
+			var dx: float = float(b[0]) - float(a[0])
+			var dz: float = float(b[2]) - float(a[2])
+			expected_m += sqrt(dx * dx + dz * dz)
+		var error_m: float = absf(graph.plan_length_of(id) - expected_m)
+		worst_length_m = maxf(worst_length_m, error_m)
+		if error_m > 1e-6:
+			problems.append(
+				(
+					"e%d: plan_length_of %.9f m against %.9f m re-summed from the document"
+					% [id, graph.plan_length_of(id), expected_m]
+				)
+			)
+
+		var points: PackedVector3Array = graph.polyline_of(id)
+		var first: Vector3 = points[0]
+		var last: Vector3 = points[points.size() - 1]
+		if graph.point_at(id, 0.0) != first or graph.point_at(id, 1.0) != last:
+			problems.append("e%d: point_at(0) / point_at(1) are not the polyline's ends" % id)
+		var middle: Vector3 = graph.point_at(id, 0.5)
+		if _plan_gap_to_polyline(middle, points) > 0.01:
+			problems.append("e%d: point_at(0.5) is off the polyline" % id)
+
+	if checked == 0:
+		problems.append("no edge to check the topology of")
+	if rules.is_empty():
+		problems.append("no turn restriction to check is_turn_banned against")
+
+	var keys: Dictionary[Vector3i, bool] = {}
+	for rule: Dictionary in rules:
+		keys[Vector3i(int(rule["from_edge"]), int(rule["via_node"]), int(rule["to_edge"]))] = true
+	var reversals_checked: int = 0
+	for key: Vector3i in keys:
+		if not graph.is_turn_banned(key.x, key.y, key.z):
+			problems.append(
+				"turn %d -> %d -> %d is published and not banned" % [key.x, key.y, key.z]
+			)
+		# The reversed movement is a different turn and must NOT be banned by it,
+		# unless the source bans both — then it is its own rule and is skipped.
+		var reversed := Vector3i(key.z, key.y, key.x)
+		if keys.has(reversed):
+			continue
+		reversals_checked += 1
+		if graph.is_turn_banned(reversed.x, reversed.y, reversed.z):
+			problems.append(
+				"turn %d -> %d -> %d is banned and nothing publishes it" % [key.z, key.y, key.x]
+			)
+	if not rules.is_empty() and reversals_checked == 0:
+		problems.append("every turn restriction has its reversal published too; nothing to refute")
+	print(
+		(
+			"  topology: %d edges, %d turn bans (%d reversals refuted), plan length worst %.9f m"
+			% [checked, keys.size(), reversals_checked, worst_length_m]
+		)
+	)
+	return problems
+
+
+## Plan distance from a point to the nearest segment of a polyline.
+static func _plan_gap_to_polyline(point: Vector3, points: PackedVector3Array) -> float:
+	var best: float = INF
+	for step: int in points.size() - 1:
+		var a := Vector2(points[step].x, points[step].z)
+		var b := Vector2(points[step + 1].x, points[step + 1].z)
+		var p := Vector2(point.x, point.z)
+		var span: Vector2 = b - a
+		var t: float = 0.0
+		if span.length_squared() > 0.0:
+			t = clampf((p - a).dot(span) / span.length_squared(), 0.0, 1.0)
+		best = minf(best, p.distance_to(a + span * t))
+	return best
 
 
 ## Midpoint of every drivable edge — where the car actually asks from.
