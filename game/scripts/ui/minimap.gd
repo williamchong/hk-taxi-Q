@@ -143,10 +143,11 @@ func set_pickups(points: PackedVector3Array) -> void:
 		pin.queue_free()
 	_pending.clear()
 	_pending_plan.clear()
+	var shape: PackedVector2Array = pin_shape(_style.map_pending_px)
 	for point: Vector3 in points:
 		var pin := Polygon2D.new()
 		pin.name = "Pending%d" % _pending.size()
-		pin.polygon = pin_shape(_style.map_pending_px)
+		pin.polygon = shape
 		pin.color = _style.map_pickup
 		pin.visible = _pending_shown
 		_field.add_child(pin)
@@ -164,6 +165,7 @@ func show_pending(shown: bool) -> void:
 	_pending_shown = shown
 	for pin: Polygon2D in _pending:
 		pin.visible = shown
+	_place_pending()
 
 
 func _place_pending() -> void:

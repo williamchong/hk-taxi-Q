@@ -50,10 +50,9 @@ var timer_urgent: bool = false
 var has_target: bool = false
 var target: Vector3 = Vector3.ZERO
 ## The target is the destination (true) or the closest pending customer
-## (false). While no one is aboard every pending customer is marked, on the
-## map and on the road (`pending_shown`).
+## (false). While it is not the destination, every pending customer is
+## marked, on the map and on the road.
 var target_is_destination: bool = false
-var pending_shown: bool = false
 
 var _language: String = Locale.DEFAULT
 var _hold_samples: int = 0
@@ -97,7 +96,6 @@ func on_sampled(
 		has_target = true
 		target = fare.destination.point
 		target_is_destination = true
-		pending_shown = false
 		if state == FareSystem.State.BOARDING:
 			caption = _say("上客中", "PICKING UP")
 		else:
@@ -114,7 +112,6 @@ func on_sampled(
 	has_target = nearest != null
 	target = nearest.point if nearest != null else Vector3.ZERO
 	target_is_destination = false
-	pending_shown = true
 	if _notice != Notice.NONE and _notice_left > 0:
 		_notice_left -= 1
 		if _notice == Notice.DELIVERED:

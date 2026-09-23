@@ -447,6 +447,13 @@ func nearest_pickup_any(position: Vector3) -> Fare.Stop:
 	return _nearest_pickup_within(position, INF)
 
 
+## `nearest_pickup_any` while no one is aboard, null otherwise: hailed, a
+## reader points at the destination and would throw the scan away, so the
+## gate lives here rather than at each reader.
+func nearest_pending(position: Vector3) -> Fare.Stop:
+	return _nearest_pickup_within(position, INF) if state == State.IDLE else null
+
+
 ## How often `sampled` fires, for a consumer that counts samples.
 func sample_hz() -> float:
 	return _profile.sample_hz if _profile != null else 0.0

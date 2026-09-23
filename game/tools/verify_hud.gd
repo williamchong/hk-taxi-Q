@@ -351,6 +351,15 @@ func _check_style() -> void:
 		_fail("style", "the timer has no size, or no bar under which it is urgent")
 	if style.callout_size_en <= 0 or style.callout_size_zh <= 0 or style.callout_hold_s <= 0.0:
 		_fail("style", "the callout has no sizes, or no hold after a fare ends")
+	_expect(
+		(
+			style.callout_caption_size_zh > style.callout_caption_size
+			and style.callout_sub_size_zh > style.callout_sub_size
+			and style.callout_size_zh > style.callout_size_en
+		),
+		"style",
+		"the Chinese callout sizes are larger than the Latin ones — the Kai thins out"
+	)
 	# The pips: both legible on the map, the destination the fare's red and
 	# the pool's amber a different hue — one colour would make every stand a
 	# destination.
@@ -1521,7 +1530,7 @@ func _check_fare_face() -> void:
 		"face",
 		"idle with a pending customer, the arrow points at the closest one and the box stays down"
 	)
-	_expect(face.pending_shown, "face", "and every pending customer is marked")
+	_expect(not face.target_is_destination, "face", "and every pending customer is marked")
 	_expect(
 		face.meter_text == "0.0" and face.total_text == "TOTAL HK$0.0" and not face.show_timer,
 		"face",
@@ -1564,7 +1573,7 @@ func _check_fare_face() -> void:
 		"and the guide points at the destination, as the destination"
 	)
 	_expect(
-		not face.pending_shown,
+		face.target_is_destination,
 		"face",
 		"with the pending customers unmarked while someone is aboard"
 	)
@@ -1713,6 +1722,14 @@ func _check_guide() -> void:
 		"red far, green near (the user's call)"
 	)
 	_expect(profile.ring_width_m < profile.ring_radius_m, "guide", "the ring is a band, not a disc")
+	_expect(
+		(
+			profile.pending_colour.a > 0.0
+			and profile.pending_colour.g > profile.pending_colour.b * 2.0
+		),
+		"guide",
+		"the pending customers' rings have a colour, and it is the map's amber, not a blue"
+	)
 	_expect(
 		(
 			FareGuideScript.closeness(profile, profile.far_m + 1.0) == 0.0

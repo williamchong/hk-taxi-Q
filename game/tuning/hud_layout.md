@@ -10,16 +10,28 @@ bottom-right, and the middle kept for what the player is reading now. It was
 Midtown Madness 2's mirror of this until `P3-44`. See hud_layout.gd, and Q80 for
 why the check grades `thumb_rest_*` and not `touch_zone_*`.
 
-⚠️ BOTH DRAWN READOUTS SHARE A BASELINE AT y 860 — one clear band above
-`thumb_rest_*`, which is as low as the touch contract allows, and level with
-each other so they read as a pair of corners rather than as two floats.
+⚠️ EVERY HOUSED PANEL SITS ON THE SCREEN'S EDGE (`Q142`, the user's call,
+2026-09-24): the map and the speed on the side edges, the meter and the
+callout on the top edge, no margin — the safe-area inset is the only gap. The
+two bottom readouts share a baseline at y 960, one clear band above
+`thumb_rest_*`, which is as low as the touch contract allows: the bottom edge
+is the thumbs', so those two go to the SIDE edges only. ⚠️ THE RESTS ARE THE
+BOTTOM 100 px, not 200, since the user asked for the map and the speed closer
+to the bottom (2026-09-24): `P2-4` has no handset yet, so the rest's height is
+a guess either way, and this one is the user's. `P2-4` re-measures it.
+
+⚠️ THE GOAL BOX IS 520 WIDE, not 700: it carries one language since `Q142`,
+and the street plate's strip is 56 tall for the same reason — one line.
+
+⚠️ THE NO ENTRY SIGN SITS UNDER THE COUNTDOWN AND THE TICK (y 320, the user's
+call), not at the top: the top-centre is the callout's, flush with the edge.
 
 🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the world, right is
 the car, top is the fare, and the middle is the road — with ONE exception the
-user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred at
-y 300, over the road and under the horizon, with no housing behind them. A
-countdown is what an arcade racer puts there, and it is only up while a fare
-runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
+user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred
+just under the goal box (y 116), with no housing behind them, and the meter's
+tick and the NO ENTRY sign follow down the same column. A countdown is what an
+arcade racer puts there, and it is only up while a fare runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
 fades; nothing else joins them.
 
 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the

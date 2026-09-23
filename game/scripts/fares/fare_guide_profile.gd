@@ -15,9 +15,12 @@ const PATH: String = "res://tuning/guide.tres"
 @export var arrow_near_m: float
 @export var arrow_far_m: float
 @export var height_m: float
-## The colours at each end: red far, green near (the user's call).
+## The colours at each end: red far, green near (the user's call); and the
+## pending customers' rings, the map's amber restated here so this profile
+## owns every colour the guide draws.
 @export var far_colour: Color
 @export var near_colour: Color
+@export var pending_colour: Color
 ## The ring on the road at the target: its radius and band, how far above
 ## the surface it floats, and the pulse.
 @export var ring_radius_m: float

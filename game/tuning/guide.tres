@@ -11,6 +11,7 @@ arrow_far_m = 1.0
 height_m = 2.6
 far_colour = Color(0.92, 0.2, 0.15, 1)
 near_colour = Color(0.3, 0.85, 0.38, 1)
+pending_colour = Color(0.9, 0.75, 0.3, 1)
 ring_radius_m = 4.0
 ring_width_m = 0.6
 ring_lift_m = 0.08

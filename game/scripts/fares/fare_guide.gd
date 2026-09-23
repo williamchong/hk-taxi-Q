@@ -17,6 +17,8 @@ extends Node3D
 ## read from the loop at its own 5 Hz, inside its `sampled` signal (`hud.gd`
 ## says why nothing here may poll the system).
 
+const PropBatch = preload("res://scripts/city/prop_batch.gd")
+
 ## The loop whose target this shows. Assign in the scene, AFTER the system in
 ## tree order so its `usable()` is decided before this reads it.
 @export var fares: FareSystem
@@ -75,18 +77,15 @@ func _ready() -> void:
 	_ring.top_level = true
 	add_child(_ring)
 	_pending_material = _unshaded(_profile.ring_alpha)
-	var style: HudStyle = load(HudStyle.PATH) as HudStyle
-	var amber: Color = style.map_pickup if style != null else Color(0.9, 0.75, 0.3)
-	amber.a = _profile.ring_alpha
-	_pending_material.albedo_color = amber
-	_pending = MultiMeshInstance3D.new()
-	_pending.name = "Pending"
-	_pending.multimesh = MultiMesh.new()
-	_pending.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	_pending.multimesh.mesh = _ring.mesh
+	var pending: Color = _profile.pending_colour
+	pending.a = _profile.ring_alpha
+	_pending_material.albedo_color = pending
+	var placed: Array[Transform3D] = []
 	for stop: Fare.Stop in fares.pickups():
-		_pending_at.append(stop.point + Vector3.UP * _profile.ring_lift_m)
-	_pending.multimesh.instance_count = _pending_at.size()
+		var at: Vector3 = stop.point + Vector3.UP * _profile.ring_lift_m
+		_pending_at.append(at)
+		placed.append(Transform3D(Basis.IDENTITY, at))
+	_pending = PropBatch.batch(_ring.mesh, placed, "Pending")
 	_pending.material_override = _pending_material
 	_pending.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_pending.top_level = true
@@ -109,8 +108,8 @@ static func _unshaded(alpha: float) -> StandardMaterial3D:
 
 func _on_sampled() -> void:
 	var nearest: Fare.Stop = null
-	if fares.state == FareSystem.State.IDLE:
-		nearest = fares.nearest_pickup_any(vehicle.global_position)
+	if is_instance_valid(vehicle):
+		nearest = fares.nearest_pending(vehicle.global_position)
 	# The clock's bar and the takings are the HUD's; only the target is read.
 	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
 	if visible != _face.has_target:
@@ -120,13 +119,10 @@ func _on_sampled() -> void:
 	if _ring.visible != _face.target_is_destination:
 		_ring.visible = _face.target_is_destination
 	# Every pending customer's ring while no one is aboard (the user's call).
-	if _pending.visible != _face.pending_shown:
-		_pending.visible = _face.pending_shown
-	# Frames are spent only while something of this is up.
-	var busy: bool = _face.has_target or _face.pending_shown
-	if is_processing() != busy:
-		set_process(busy)
-	if _face.has_target:
+	var pending_shown: bool = not _face.target_is_destination and not _pending_at.is_empty()
+	if _pending.visible != pending_shown:
+		_pending.visible = pending_shown
+	if _ring.visible:
 		_ring.global_position = _face.target + Vector3.UP * _profile.ring_lift_m
 
 
@@ -157,7 +153,8 @@ func _process(delta: float) -> void:
 		_material.albedo_color = ink
 		ink.a = _profile.ring_alpha
 		_ring_material.albedo_color = ink
-	_ring.scale = Vector3(pulse, 1.0, pulse)
+	if _ring.visible:
+		_ring.scale = Vector3(pulse, 1.0, pulse)
 	if apart < 0.1:
 		return
 	# `-Z` is the arrow's nose (`arrow_mesh`), which is what `look_at` points.

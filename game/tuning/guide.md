@@ -26,8 +26,9 @@ The arrow's length near and far (`arrow_far_m` 1.0): a flat unshaded arrow at 2.
 reads small from the chase camera, so it grows as it starts to matter.
 
 Every pending customer gets a ring too while no one is aboard (the user's call: all of them, like
-a map), in the map's amber, as one multimesh; the destination's ring alone takes the guide's
-distance colour.
+a map), in `pending_colour` — the same amber as `hud_style.tres`'s `map_pickup`, restated here
+rather than loaded from the HUD's table so the guide's every colour is its own — as one multimesh;
+the destination's ring alone takes the guide's distance colour.
 
 ## `ring_radius_m = 4.0`
 

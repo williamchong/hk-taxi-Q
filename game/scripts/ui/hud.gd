@@ -270,10 +270,16 @@ func _build() -> void:
 
 	_plate_lines = _lines(_plate_host, 0)
 
+	# One language on the plate too (the user's call, `Q142`): the other line
+	# is built and hidden, so the tracker still writes both and the language
+	# switch is one flag.
+	_language = Locale.language()
 	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
+	_plate_en.visible = _language == Locale.ENGLISH
 	_plate_lines.add_child(_plate_en)
 
 	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
+	_plate_zh.visible = _language == Locale.CHINESE
 	if font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
 		# Noto Sans on purpose — a real Hong Kong plate carries a Latin
@@ -379,21 +385,30 @@ func _build() -> void:
 	_timer_value = _outlined(_label("Value", _style.timer_size, _style.chip_ink))
 	_timer_box.add_child(_timer_value)
 	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
-	seconds.text = "s left"
+	seconds.text = "秒" if Locale.language() == Locale.CHINESE else "s left"
+	if Locale.language() == Locale.CHINESE and _font_zh != null:
+		seconds.add_theme_font_override(&"font", _font_zh)
 	_timer_box.add_child(seconds)
 
 	# The place over the road (`Q142`), in one language (`Locale`).
-	_language = Locale.language()
 	var chinese: bool = _language == Locale.CHINESE
 	_callout_panel = _housing("Callout", root, _layout.callout)
 	var callout_lines: VBoxContainer = _lines(_callout_panel, -4)
-	_caption = _label("Caption", _style.callout_caption_size, _style.chip_muted)
+	_caption = _label(
+		"Caption",
+		_style.callout_caption_size_zh if chinese else _style.callout_caption_size,
+		_style.chip_muted
+	)
 	callout_lines.add_child(_caption)
 	_callout = _label(
 		"Place", _style.callout_size_zh if chinese else _style.callout_size_en, _style.plate_ink
 	)
 	callout_lines.add_child(_callout)
-	_callout_sub = _label("Road", _style.callout_sub_size, _style.chip_muted)
+	_callout_sub = _label(
+		"Road",
+		_style.callout_sub_size_zh if chinese else _style.callout_sub_size,
+		_style.chip_muted
+	)
 	callout_lines.add_child(_callout_sub)
 	if chinese and _font_zh != null:
 		_caption.add_theme_font_override(&"font", _font_zh)
@@ -863,11 +878,7 @@ func _on_fare_bailed(fare: Fare) -> void:
 ## painted.
 func _on_fare_sampled() -> void:
 	var car: VehicleController = _vehicle()
-	var nearest: Fare.Stop = null
-	# The pool is scanned only while idle: hailed, the face points at the
-	# destination and would throw the nearest pickup away.
-	if car != null and fares.state == FareSystem.State.IDLE:
-		nearest = fares.nearest_pickup_any(car.global_position)
+	var nearest: Fare.Stop = null if car == null else fares.nearest_pending(car.global_position)
 	_face.on_sampled(fares.state, fares.fare, nearest, _style.timer_warn_s, fares.earned_hkd)
 	_paint_fares()
 
@@ -923,8 +934,12 @@ func _paint_fares() -> void:
 		var road: String = StreetPlate.substitute(_face.callout_sub, _substitutions)
 		if _callout_sub.text != road:
 			_callout_sub.text = road
-			StreetPlate.shrink_to(_callout_sub, _style.callout_sub_size, room)
+			StreetPlate.shrink_to(
+				_callout_sub,
+				_style.callout_sub_size_zh if chinese else _style.callout_sub_size,
+				room
+			)
 
 	if _minimap != null:
 		_minimap.set_target(_face.target, _face.has_target and _face.target_is_destination)
-		_minimap.show_pending(_face.pending_shown)
+		_minimap.show_pending(not _face.target_is_destination)

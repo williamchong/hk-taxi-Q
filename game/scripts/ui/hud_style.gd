@@ -203,6 +203,10 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var callout_size_en: int
 @export var callout_size_zh: int
 @export var callout_sub_size: int
+## The Chinese face is a Kai whose strokes thin out at the Latin sizes, so
+## its caption and road line are set larger (the user's call: unreadable).
+@export var callout_caption_size_zh: int
+@export var callout_sub_size_zh: int
 @export var callout_hold_s: float
 ## The meter's tick flash under the clock: its size and how long it fades.
 @export var tick_size: int
