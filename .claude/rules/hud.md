@@ -94,7 +94,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   HUD** (103 → 134 on the boot stand) against `Q139`'s +15 — the three housings, the LED, two
   labels, four callout labels, two pip nodes and the arrow; measure BOTH sides again after any
   change here. 🔴 **One language at a time in the callout** (`Locale`, `--lang=`): never English beside
-  Chinese on a row; the plate alone stays bilingual. 🔴 **The distance is never between two
+  Chinese on a row — the street plate too, since the user asked (default Chinese, `Locale.DEFAULT`). 🔴 **The distance is never between two
   names** — road first, then "320 m". 🔴 **The guide answers distance** (`tuning/guide.tres`,
   `guide.md`): the arrow small and red far, large and green near, the ring on the road the same
   colour; `verify_hud`'s `guide:` assertions hold both ends and the middle. 🔴 **The countdown

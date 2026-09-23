@@ -6839,7 +6839,7 @@ not a measurement, and reopens on `P3-9`
   | `combo` | `P3-2b` | under the timer — both count the session |
   | `meter` | `P3-5a` | top-right |
   | `award` | `P3-2a`, `P3-2b` | under the meter — points are money |
-  | `callout` | `P3-5a` | top-centre, under the wrong-way sign's y 136 |
+  | `callout` | `P3-5a` | top-centre, under the wrong-way sign's y 136 — since `Q142` flush with the top edge, the sign moved under the countdown |
 
 - 🚫 The award in the middle of the frame, where an arcade racer puts it: the middle is the road.
 - 🚫 A slot for the destination arrow: it is in the world (`Q80`). 🚫 A pause button: no planned
@@ -7053,12 +7053,13 @@ had two readings, and the one built is the one that changes no loop.
      re-placed by `follow`. The pool's other pickups stay dots.
   3. **A ring on the road** at the target: a 4 m radius band 0.6 m wide, 8 cm over the surface,
      pulsing at 1.2 Hz by 15%, alpha-blended, the guide's colour.
-  4. **The countdown is centred, with no housing** — bare 84 px numerals at y 300 outlined in
+  4. **The countdown is centred, with no housing** — bare 84 px numerals outlined in
      the housing's dark, the one readout allowed in the middle (`hud_layout.md`).
   5. **The distance is never between two names**: "TONNOCHY ROAD  320 m", the road first.
   6. **One language at a time** — `Locale.language()`, `--lang=en|zh` until the options menu owns
      it; the callout reads "新鴻基中心 / 杜老誌道  320 m" or the English, never both on a row.
-     The street plate stays bilingual because the real one is. `Fare.Stop.place(language)` /
+     The street plate stayed bilingual because the real one is — until the user asked for it in
+     the one language too (2026-09-24), and for **Chinese as the default**. `Fare.Stop.place(language)` /
      `road(language)`; `FareFace` takes the language at construction and `verify_hud` reads it in
      both.
 - **The user's four calls on the second frames (2026-09-24), all built:**
@@ -7083,6 +7084,15 @@ had two readings, and the one built is the one that changes no loop.
   road at each (one `MultiMeshInstance3D`, one draw, pulsed with the destination's). Hailed, the
   pending marks go down and the destination's pin and ring come up. This supersedes item 1 of the
   round above: idle is no longer dark, but the goal UI still is.
+- **Layout (2026-09-24, the user's call):** every housed panel sits flush on the screen's edge —
+  the map and the speed on the side edges (the bottom edge is the thumbs', so their y 860 baseline
+  stays), the meter and the callout on the top edge — the countdown moves up to sit just under the goal
+  box (y 116), the tick under it, and the NO ENTRY sign moves from the top to under them both, at
+  y 320. The map and the speed then moved down to a y 960 baseline, the thumb rests shrinking to
+  the bottom 100 px to let them (`P2-4` has no handset yet; the rest's height was a guess and is
+  now the user's). The goal box narrowed to 520 px once it carried one language. A `.tres` edit,
+  as `Q80` built it to be; `verify_hud` passed with nothing but the rects moved. The reserved
+  `award` and `combo` rects followed their neighbours.
 - 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
   arrow (`Q138`), a route line (`Q137`), the options menu (`P3-5b`).
 
