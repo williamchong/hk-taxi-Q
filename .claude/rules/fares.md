@@ -85,7 +85,7 @@ the loop's own numbers in `tuning/fares.tres`.
   radius, the footprint-not-centroid distance and the mention rule from both sides.
 - ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
   `fare_guide.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
-  `nearest_pickup_any` and `pickups()` inside them, because under `--fares=off` the system frees
+  `nearest_pending` and `pickups()` inside them, because under `--fares=off` the system frees
   itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
   reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.
 - 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul

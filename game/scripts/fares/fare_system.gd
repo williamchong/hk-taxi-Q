@@ -459,7 +459,7 @@ func nearest_pending(position: Vector3) -> Fare.Stop:
 	if state != State.IDLE:
 		return null
 	if _armed:
-		return _nearest_pickup_within(position, INF)
+		return nearest_pickup_any(position)
 	var best: Fare.Stop = null
 	var best_m: float = INF
 	for stop: Fare.Stop in _pickups:

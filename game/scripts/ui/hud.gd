@@ -385,8 +385,8 @@ func _build() -> void:
 	_timer_value = _outlined(_label("Value", _style.timer_size, _style.chip_ink))
 	_timer_box.add_child(_timer_value)
 	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
-	seconds.text = "秒" if Locale.language() == Locale.CHINESE else "s left"
-	if Locale.language() == Locale.CHINESE and _font_zh != null:
+	seconds.text = "秒" if _language == Locale.CHINESE else "s left"
+	if _language == Locale.CHINESE and _font_zh != null:
 		seconds.add_theme_font_override(&"font", _font_zh)
 	_timer_box.add_child(seconds)
 
@@ -394,22 +394,20 @@ func _build() -> void:
 	var chinese: bool = _language == Locale.CHINESE
 	_callout_panel = _housing("Callout", root, _layout.callout)
 	var callout_lines: VBoxContainer = _lines(
-		_callout_panel, _style.callout_line_gap_zh if chinese else _style.callout_line_gap
+		_callout_panel, _sized(_style.callout_line_gap_zh, _style.callout_line_gap)
 	)
 	_caption = _label(
 		"Caption",
-		_style.callout_caption_size_zh if chinese else _style.callout_caption_size,
+		_sized(_style.callout_caption_size_zh, _style.callout_caption_size),
 		_style.chip_muted
 	)
 	callout_lines.add_child(_caption)
 	_callout = _label(
-		"Place", _style.callout_size_zh if chinese else _style.callout_size_en, _style.plate_ink
+		"Place", _sized(_style.callout_size_zh, _style.callout_size_en), _style.plate_ink
 	)
 	callout_lines.add_child(_callout)
 	_callout_sub = _label(
-		"Road",
-		_style.callout_sub_size_zh if chinese else _style.callout_sub_size,
-		_style.chip_muted
+		"Road", _sized(_style.callout_sub_size_zh, _style.callout_sub_size), _style.chip_muted
 	)
 	callout_lines.add_child(_callout_sub)
 	if chinese and _font_zh != null:
@@ -472,6 +470,12 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	label.add_theme_color_override(&"font_color", ink)
 	label.add_theme_font_size_override(&"font_size", size)
 	return label
+
+
+## A style number for the callout's language, Chinese first like
+## `FareFace._say`: the Kai face sets larger than the Latin at every line.
+func _sized(zh: int, en: int) -> int:
+	return zh if _language == Locale.CHINESE else en
 
 
 ## Numerals with the housing's dark round them, for a readout with no panel.
@@ -926,20 +930,17 @@ func _paint_fares() -> void:
 		# Cut to the box, like the plate's lettering: a building's name can run
 		# to forty characters, and the box is the worst case, not a suggestion.
 		var room: float = _layout.callout.size.x - _style.plate_pad.x * 2.0
-		var chinese: bool = _language == Locale.CHINESE
 		var place: String = StreetPlate.substitute(_face.callout, _substitutions)
 		if _callout.text != place:
 			_callout.text = place
 			StreetPlate.shrink_to(
-				_callout, _style.callout_size_zh if chinese else _style.callout_size_en, room
+				_callout, _sized(_style.callout_size_zh, _style.callout_size_en), room
 			)
 		var road: String = StreetPlate.substitute(_face.callout_sub, _substitutions)
 		if _callout_sub.text != road:
 			_callout_sub.text = road
 			StreetPlate.shrink_to(
-				_callout_sub,
-				_style.callout_sub_size_zh if chinese else _style.callout_sub_size,
-				room
+				_callout_sub, _sized(_style.callout_sub_size_zh, _style.callout_sub_size), room
 			)
 
 	if _minimap != null:
