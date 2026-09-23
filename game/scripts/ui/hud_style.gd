@@ -195,6 +195,7 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## The tip clock: seconds left on the allowance, red under `timer_warn_s`.
 @export var timer_size: int
 @export var timer_unit_size: int
+@export var timer_unit_gap: int
 @export var timer_warn_s: float
 @export var timer_outline_px: int
 ## The bilingual callout: the nearest pickup or the destination, and the

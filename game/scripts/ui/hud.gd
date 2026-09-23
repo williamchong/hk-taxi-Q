@@ -111,7 +111,7 @@ var _meter: SevenSegment = null
 var _total: Label = null
 ## The tip clock: bare numerals in the middle of the frame, no housing (the
 ## user's call), outlined so they read on any road.
-var _timer_box: VBoxContainer = null
+var _timer_box: HBoxContainer = null
 var _timer_value: Label = null
 var _callout_panel: ChamferPanel = null
 ## A caption saying what the box is, the place, and the road under it, in one
@@ -375,20 +375,33 @@ func _build() -> void:
 	_total = _label("Total", _style.meter_label_size, _style.chip_muted)
 	meter_lines.add_child(_total)
 
-	_timer_box = VBoxContainer.new()
+	_timer_box = HBoxContainer.new()
 	_timer_box.name = "Timer"
 	_timer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_timer_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_timer_box.add_theme_constant_override(&"separation", _style.speed_line_tighten)
+	_timer_box.add_theme_constant_override(&"separation", _style.timer_unit_gap)
 	_timer_box.visible = false
 	_layout.place(root, _timer_box, _layout.timer)
 	_timer_value = _outlined(_label("Value", _style.timer_size, _style.chip_ink))
+	_timer_value.size_flags_vertical = Control.SIZE_SHRINK_END
 	_timer_box.add_child(_timer_value)
 	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
 	seconds.text = "秒" if _language == Locale.CHINESE else "s left"
 	if _language == Locale.CHINESE and _font_zh != null:
 		seconds.add_theme_font_override(&"font", _font_zh)
-	_timer_box.add_child(seconds)
+	# Both on their feet, then the unit lifted by the difference of the two
+	# descents: bottoms alone would hang it off the number's descender line.
+	var foot := MarginContainer.new()
+	foot.name = "UnitFoot"
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	foot.size_flags_vertical = Control.SIZE_SHRINK_END
+	var lift: float = (
+		_timer_value.get_theme_font(&"font").get_descent(_style.timer_size)
+		- seconds.get_theme_font(&"font").get_descent(_style.timer_unit_size)
+	)
+	foot.add_theme_constant_override(&"margin_bottom", maxi(roundi(lift), 0))
+	foot.add_child(seconds)
+	_timer_box.add_child(foot)
 
 	# The place over the road (`Q142`), in one language (`Locale`).
 	var chinese: bool = _language == Locale.CHINESE

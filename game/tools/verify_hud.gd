@@ -347,7 +347,12 @@ func _check_style() -> void:
 		or style.meter_label_size <= 0
 	):
 		_fail("style", "the meter has no digit height, segment weight, cell count or label size")
-	if style.timer_size <= 0 or style.timer_unit_size <= 0 or style.timer_warn_s <= 0.0:
+	if (
+		style.timer_size <= 0
+		or style.timer_unit_size <= 0
+		or style.timer_unit_gap < 0
+		or style.timer_warn_s <= 0.0
+	):
 		_fail("style", "the timer has no size, or no bar under which it is urgent")
 	if style.callout_size_en <= 0 or style.callout_size_zh <= 0 or style.callout_hold_s <= 0.0:
 		_fail("style", "the callout has no sizes, or no hold after a fare ends")

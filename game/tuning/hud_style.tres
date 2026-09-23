@@ -49,6 +49,7 @@ meter_cells = 5
 meter_label_size = 20
 timer_size = 84
 timer_unit_size = 22
+timer_unit_gap = 4
 timer_warn_s = 10.0
 timer_outline_px = 6
 callout_caption_size = 15

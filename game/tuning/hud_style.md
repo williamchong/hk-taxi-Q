@@ -74,6 +74,14 @@ middle of the frame, no backdrop), so its numerals carry the housing's dark as
 an outline instead, and `verify_hud.gd` refuses a zero: a bare white 84 px
 number over a light road is the one place this HUD could vanish.
 
+## `timer_unit_gap = 4`
+
+The unit sits to the right of the seconds on one baseline, `99 秒` (the user's
+call), this many pixels after the number. It was the line under it; a row keeps
+the clock one line tall in the middle of the frame. The baseline is not a dial:
+the unit is lifted by the difference of the two fonts' descents, so it follows
+`timer_size`, `timer_unit_size` and the language's face.
+
 ## `timer_warn_s = 10.0`
 
 The tip clock is seconds left on the allowance (`Q141`: the seconds left are
