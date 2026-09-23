@@ -119,7 +119,7 @@ Wan Chai sheets.
 | `CartoPedLine`, `PA` — *"Pavement margin"* | 2,945 / 50,904 m | The footway edge. Not in use |
 | `CartoPedLine`, `STP` / `FBR` / `SWY` / `CWY` | 3,577 / 384 / 18 / 85 | Steps, footbridge, subway, covered walkway. Not in use |
 | `StreetCentreLines`, `STREETTYPE` | 794 | Carries `ST_CODE`, the same street code `NSR` joins on — a second key, not a second graph |
-| `BUILDINGNAME` / `ADDRESS` / `Street_Code` | 306 / 422 / 112 per sheet | Bilingual building names and addresses; bears on fare destinations |
+| `BUILDINGNAME` / `ADDRESS` / `Street_Code` | 306 / 422 / 112 per sheet | Bilingual building names and addresses. **In use since `P3-5a`** (`Q142`): `fares.places` joins `Building` → `BUILDINGRELATEBUILDINGNAME` → `BUILDINGNAME` (both relate tables are non-spatial; a name can sit in a different sheet from its footprint, so names are pooled across sheets first). `NAMESTATUS` is `E` on 1,081 of the six sheets' 1,126 names and `O` (the old spelling beside the current one) on 45; only `E` ships. 1,083 blocks carry one name, 159 more than one. Wan Chai: 47 of 48 fare nodes land on a named footprint within 25 m, furthest 24.6 m; `f_001` (*opposite* Great Eagle Centre) correctly none |
 
 ⚠️ **Three-letter codes are traps.** `TW` is *Tramway* here and *tactile warning strip* in Traffic
 Aids Drawings; `RM` is *Road margin* here and a road-marking prefix there.

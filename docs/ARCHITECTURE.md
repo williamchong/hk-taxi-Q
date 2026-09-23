@@ -696,13 +696,20 @@ never culled or streamed — `Q115`, `Q120`).
       "nearest_edge": 42,
       "edge_t": 0.6382,
       "pickup": true,
-      "dropoff": true
+      "dropoff": true,
+      "place": { "en": "Soundwill Plaza", "zh": "金朝陽中心" }
     }
   ]
 }
 ```
 
 - `kind` ∈ `taxi_stand` | `pudo` | `poi`. `stand_category` is null unless `taxi_stand`.
+- `place` (`P3-5a`, `Q142`, schema 1 additive — a reader without it keeps `name`) is the named
+  building the passenger stands at: iB1000's current `BUILDINGNAME` for the footprint nearest
+  `pos` within `fares.places.max_distance_m`, the one the point's own text names where it names
+  one inside the radius. `null` where no name table is configured or no footprint is near — a
+  stand *opposite* a building is none of that building's. Either language may be null. The HUD
+  leads with it and puts the road under it; `name` stays the publisher's description of the kerb.
 - `poi` is TD's tram stops (`P3-14`). ⚠️ Their `name` is null in both languages — the source
   publishes none — so `name_en`/`name_zh` are optional roles in a fare group; and `pickup` and
   `dropoff` are both false, which must be said because `FareCategory` defaults both true.

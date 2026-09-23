@@ -24,6 +24,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 import numpy as np
 from pyogrio.raw import read as _ogr_read
@@ -115,20 +116,45 @@ def read_layer(
             f"layer '{layer}' is in {meta['crs']}, but the caller expects {expect_crs}. "
             f"Reprojection is not done here — fix the config."
         )
-    read = {str(name): values for name, values in zip(meta["fields"], fields, strict=True)}
-    missing = [name for name in columns if name not in read]
-    if missing:
-        # OGR drops an unknown column silently, so a renamed field in a new
-        # release of the source would otherwise surface far downstream as an
-        # attribute that is uniformly null.
-        raise KeyError(f"layer '{layer}' has no column(s): {', '.join(missing)}")
-
     return Layer(
         name=layer,
         crs=meta["crs"],
         fids=np.asarray(fids, dtype=np.int64),
         geometry=list(geometry),
-        columns=read,
+        columns=_columns(layer, meta, fields, columns),
+    )
+
+
+def _columns(layer: str, meta: Any, fields: Any, wanted: list[str]) -> dict[str, np.ndarray]:
+    """The read columns by name, refusing a column OGR silently dropped: a
+    renamed field in a new release of the source would otherwise surface far
+    downstream as an attribute that is uniformly null."""
+    read = {str(name): values for name, values in zip(meta["fields"], fields, strict=True)}
+    missing = [name for name in wanted if name not in read]
+    if missing:
+        raise KeyError(f"layer '{layer}' has no column(s): {', '.join(missing)}")
+    return read
+
+
+def read_table(
+    path: Path | str, layer: str, *, columns: list[str], zip_member: str | None = None
+) -> Layer:
+    """`read_layer` for a table with no geometry — a relate table in a
+    geodatabase, which OGR lists as a layer whose every feature has none.
+
+    Separate rather than a flag on `read_layer` because nothing spatial applies:
+    no bbox, no CRS to expect, and `geometry` comes back as a list of Nones a
+    caller must not try to decode. `fids` are still the table's own.
+    """
+    meta, fids, geometry, fields = _ogr_read(
+        _vsi_path(path, zip_member), layer=layer, columns=columns, return_fids=True
+    )
+    return Layer(
+        name=layer,
+        crs=None,
+        fids=np.asarray(fids, dtype=np.int64),
+        geometry=[None] * len(fids) if geometry is None else list(geometry),
+        columns=_columns(layer, meta, fields, columns),
     )
 
 

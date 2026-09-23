@@ -6,10 +6,19 @@ through `pipeline.config`, which re-exports every name here.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
-from pipeline.config_blocks.base import _field, _fields, _require
+from pipeline.config_blocks.base import (
+    LayerSpec,
+    SourceLayer,
+    _field,
+    _fields,
+    _require,
+    _source_layer,
+    _spec_header,
+)
 
 # Fare-node kinds in the data contract. `poi` is listed because the contract
 # lists it; no dataset produces one yet, and a city that adds hotels or malls
@@ -121,6 +130,40 @@ class FareGroup:
         )
 
 
+_PLACE_BLOCK_ROLES = ("block_id",)
+
+
+_PLACE_NAME_ROLES = ("name_id", "name_en", "name_zh", "status")
+
+
+_PLACE_RELATE_ROLES = ("name_id", "block_id")
+
+
+@dataclass(frozen=True)
+class Places(LayerSpec):
+    """Named buildings, for a fare node to be said the way a passenger says it
+    (`P3-5a`, `Q142`): "Sun Hung Kai Centre", not "Tonnochy Road outside Sun
+    Hung Kai Centre".
+
+    Three tables of one per-sheet source: `layer` is the footprint polygons
+    keyed by `block_id`; `names` the bilingual names keyed by `name_id` with a
+    `status` code; `relate` the many-to-many between them. The publisher's
+    vocabulary — every column, and which status codes are current — is the
+    city file's (hard rule 3). A node takes the nearest named footprint within
+    `max_distance_m` of where the passenger stands, or none.
+    """
+
+    names: SourceLayer
+    relate: SourceLayer
+    keep_status: tuple[str, ...]
+    max_distance_m: float
+    # A regex for the block designation a publisher appends to a name —
+    # "Elizabeth House Tower C", "伊利莎伯大廈Ｃ座" — stripped before the name is
+    # looked for in a point's description, which names the house and not the
+    # tower. Empty strips nothing. The publisher's spelling, so the city's.
+    block_suffix: str
+
+
 @dataclass(frozen=True)
 class Fares:
     """How `P1-5` turns published point datasets into fare nodes."""
@@ -132,6 +175,8 @@ class Fares:
     max_snap_m: float
     # Strings that mean "no value" in a text field, as in `RoadNetwork`.
     null_values: tuple[str, ...]
+    # Optional: a city with no building-name table publishes `place: null`.
+    places: Places | None
 
 
 def _fares(body: dict[str, Any], where: str) -> Fares:
@@ -152,6 +197,35 @@ def _fares(body: dict[str, Any], where: str) -> Fares:
         groups=groups,
         max_snap_m=max_snap_m,
         null_values=tuple(str(value) for value in (body.get("null_values") or ())),
+        places=_places(body.get("places"), f"{where}:places"),
+    )
+
+
+def _places(body: Any, where: str) -> Places | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    keep_status = tuple(str(code) for code in _require(body, "keep_status", where))
+    if not keep_status:
+        raise ValueError(f"{where}:keep_status is empty; no name would ever be current")
+    max_distance_m = float(_require(body, "max_distance_m", where))
+    if max_distance_m <= 0.0:
+        raise ValueError(f"{where}:max_distance_m must be positive, got {max_distance_m}")
+    block_suffix = str(body.get("block_suffix") or "")
+    try:
+        re.compile(block_suffix)
+    except re.error as error:
+        raise ValueError(f"{where}:block_suffix is not a regex: {error}") from error
+    return Places(
+        **_spec_header(body, where, _PLACE_BLOCK_ROLES),
+        names=_source_layer(_require(body, "names", where), f"{where}:names", _PLACE_NAME_ROLES),
+        relate=_source_layer(
+            _require(body, "relate", where), f"{where}:relate", _PLACE_RELATE_ROLES
+        ),
+        keep_status=keep_status,
+        max_distance_m=max_distance_m,
+        block_suffix=block_suffix,
     )
 
 

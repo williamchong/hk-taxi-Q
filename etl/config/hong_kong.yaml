@@ -3887,6 +3887,46 @@ fares:
   # dataset actually uses it today; every name is populated in both languages.
   null_values: ["-99"]
 
+  # The building a passenger names (`P3-5a`, `Q142`): iB1000's `BUILDINGNAME`
+  # relate table, which DATA_SOURCES.md flagged as "bears on fare destinations"
+  # from the first survey. Three tables per sheet: the `Building` footprints,
+  # the bilingual names, and `BUILDINGRELATEBUILDINGNAME` joining them. A name
+  # can sit in a different sheet from its footprint, so the stage pools every
+  # sheet's names before resolving any footprint.
+  #
+  # `NAMESTATUS` is `E` on 1,081 of the six sheets' 1,126 names and `O` on 45
+  # — the old spelling beside the current one ("雅閣苑大廈" `O`, "雅閣大廈" `E`,
+  # both Ascot Mansion), so only `E` is a name a passenger would say today.
+  # 1,083 blocks carry one name, 159 more than one; the lowest name id wins.
+  #
+  # `max_distance_m` is from the kerbside `pos` to the footprint edge: the
+  # region's points sit 0-9 m from the building they are outside, and 25 m
+  # reaches across a wide footway without crossing a street to the far side.
+  places:
+    source: topography
+    member: "{tile}/{tile}.gdb"
+    layer: Building
+    fields:
+      block_id: BUILDINGID
+    names:
+      layer: BUILDINGNAME
+      fields:
+        name_id: BUILDINGNAMEID
+        name_en: ENGLISHBUILDINGNAME
+        name_zh: CHINESEBUILDINGNAME
+        status: NAMESTATUS
+    relate:
+      layer: BUILDINGRELATEBUILDINGNAME
+      fields:
+        name_id: BUILDINGNAMEID
+        block_id: BUILDINGID
+    keep_status: [E]
+    max_distance_m: 25.0
+    # "Elizabeth House Tower C" / "伊利莎伯大廈Ｃ座" / "華登大廈Ａ—Ｂ座": the point's
+    # text says "outside Elizabeth House", so the designation is dropped before
+    # the name is looked for in it. Full-width letters, as the publisher types them.
+    block_suffix: "\\s*(Tower|Block)\\s+[A-Z0-9-]+$|[Ａ-Ｚ0-9—-]+座$"
+
   groups:
     - kind: taxi_stand
       source: taxi_stands

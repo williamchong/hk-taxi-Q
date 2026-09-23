@@ -44,15 +44,20 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import TAXI_STAND, Config, FareCategory, FareGroup, load_config
-from pipeline.crs import transformer
+import numpy as np
+import shapely
+
+from pipeline import gdb
+from pipeline.config import TAXI_STAND, Config, FareCategory, FareGroup, Places, load_config
+from pipeline.crs import GameTransform, transformer
 from pipeline.documents import round_position, write_document
-from pipeline.fetch import cached_source, read_feature_collection
+from pipeline.fetch import cached_source, read_feature_collection, source_reads
 from pipeline.polyline import Segments, Snap
 from pipeline.roads import ROADGRAPH_NAME, clean_text, read_graph
 
@@ -84,6 +89,24 @@ class FareNode:
     edge_t: float
     pickup: bool
     dropoff: bool
+    # The named building the passenger stands at (`P3-5a`, `Q142`): the nearest
+    # current name in the city's building-name table within
+    # `places.max_distance_m` of `pos`, or None. What a passenger says —
+    # "新鴻基中心" — where `name` is what the publisher wrote about the kerb.
+    place: dict[str, str | None] | None
+
+
+@dataclass(frozen=True)
+class Place:
+    """One named footprint, in game plan metres."""
+
+    name_en: str | None
+    name_zh: str | None
+    footprint: shapely.Polygon
+
+    def distance_m(self, x: float, z: float) -> float:
+        """Plan distance from the point to the footprint: 0 inside it."""
+        return float(self.footprint.distance(shapely.Point(x, z)))
 
 
 @dataclass
@@ -118,6 +141,15 @@ class FareReport:
     # Counted rather than derived from `nodes`, because a `pudo` node does not
     # carry its category into the contract — only what it permits.
     by_category: dict[str, int] = field(default_factory=dict)
+    # The building-name join (`Q142`): named footprints read, and the furthest
+    # any node reached for its name — not stored on the node, so kept here.
+    places_read: int = 0
+    worst_place_m: float = 0.0
+
+    @property
+    def placed(self) -> int:
+        """Nodes that took a named footprint."""
+        return sum(1 for node in self.nodes if node.place is not None)
 
     @property
     def unnamed(self) -> int:
@@ -173,6 +205,10 @@ def build_region(
     far_x, far_z = city.region_high(region_id)
 
     report = FareReport()
+    places: list[Place] = []
+    if style.places is not None:
+        places = read_places(city, style.places, region_id, transform, sources_root=sources_root)
+        report.places_read = len(places)
     for group in style.groups:
         features = read_feature_collection(
             cached_source(city, group.source, root=sources_root),
@@ -210,7 +246,26 @@ def build_region(
                 report.unsnapped += 1
                 continue
 
-            node, category = _node(feature, group, style.null_values, (x, snap.y, z), snap, report)
+            properties = feature.get("properties") or {}
+            name = {
+                "en": _text(properties, group.optional_field("name_en"), style.null_values),
+                "zh": _text(properties, group.optional_field("name_zh"), style.null_values),
+            }
+            place: Place | None = None
+            if style.places is not None:
+                place = nearest_place(
+                    x,
+                    z,
+                    places,
+                    style.places.max_distance_m,
+                    [text or "" for text in name.values()],
+                    block_suffix=style.places.block_suffix,
+                )
+                if place is not None:
+                    report.worst_place_m = max(report.worst_place_m, place.distance_m(x, z))
+            node, category = _node(
+                properties, group, name, style.null_values, (x, snap.y, z), snap, report, place
+            )
             report.add(node, category, snap.distance_m)
 
     _write(out_dir, city, region_id, report)
@@ -218,12 +273,14 @@ def build_region(
 
 
 def _node(
-    feature: dict[str, Any],
+    properties: dict[str, Any],
     group: FareGroup,
+    name: dict[str, str | None],
     null_values: Sequence[str],
     pos: tuple[float, float, float],
     snap: Snap,
     report: FareReport,
+    place: Place | None,
 ) -> tuple[FareNode, FareCategory]:
     """One fare node, and the category rule it matched.
 
@@ -231,7 +288,6 @@ def _node(
     filed under is the report's bookkeeping, not this function's, and `pudo`
     nodes drop theirs before it reaches the contract.
     """
-    properties = feature.get("properties") or {}
     category = group.categorise(_text(properties, group.field("category"), null_values) or "")
     return (
         FareNode(
@@ -250,17 +306,155 @@ def _node(
             # TD's tram stops do exactly that — 117 features carrying an
             # `OBJECTID`, a `STOP_ID` and a date — and a null name is what the
             # contract should then carry. `FareReport.unnamed` counts them.
-            name={
-                "en": _text(properties, group.optional_field("name_en"), null_values),
-                "zh": _text(properties, group.optional_field("name_zh"), null_values),
-            },
+            name=name,
             nearest_edge=snap.edge,
             edge_t=round(snap.t, 6),
             pickup=category.pickup,
             dropoff=category.dropoff,
+            place=None if place is None else {"en": place.name_en, "zh": place.name_zh},
         ),
         category,
     )
+
+
+def nearest_place(
+    x: float,
+    z: float,
+    places: Sequence[Place],
+    max_distance_m: float,
+    mentioned: Sequence[str] = (),
+    *,
+    block_suffix: str = "",
+) -> Place | None:
+    """The named footprint at `(x, z)`: within `max_distance_m`, the one the
+    publisher's own text names if any, else the nearest. None beyond the radius.
+
+    Distance to the footprint, not to its centroid: a passenger at the kerb of
+    a podium a block long is at that building, and its centroid can be 60 m
+    away across the roof. `mentioned` is the point's published description in
+    each language — "Jaffe Road outside Elizabeth House" — and a building it
+    names inside the radius beats a nearer one it does not: measured on Wan
+    Chai, the nearest footprint to that point is Tak Fai Building, across the
+    footway from where TD says the passenger stands. Both readings are the
+    publisher's; the text is the more specific one. `block_suffix` is stripped
+    off a footprint's name first, because the text names the house and iB1000
+    names the tower: "Elizabeth House Tower C". Ties break to the first read —
+    sheet order then row order — which is deterministic.
+    """
+    folded = [text.casefold() for text in mentioned if text]
+    best: Place | None = None
+    best_m = max_distance_m
+    named: Place | None = None
+    named_m = max_distance_m
+    for place in places:
+        apart = place.distance_m(x, z)
+        if apart > max_distance_m:
+            continue
+        if apart <= best_m:
+            best_m = apart
+            best = place
+        if apart <= named_m and _mentions(folded, place, block_suffix):
+            named_m = apart
+            named = place
+    return named if named is not None else best
+
+
+def _mentions(folded_texts: Sequence[str], place: Place, block_suffix: str) -> bool:
+    for name in (place.name_en, place.name_zh):
+        if name is None:
+            continue
+        if block_suffix:
+            name = re.sub(block_suffix, "", name).strip()
+        if len(name) < 2:
+            continue
+        needle = name.casefold()
+        if any(needle in text for text in folded_texts):
+            return True
+    return False
+
+
+def read_places(
+    city: Config,
+    spec: Places,
+    region_id: str,
+    transform: GameTransform,
+    *,
+    sources_root: Path | None,
+) -> list[Place]:
+    """Every named footprint the region's sheets hold, in game plan metres.
+
+    Three tables joined in Python rather than in OGR: the names and the relate
+    table are non-spatial, and a name can live in a different sheet from the
+    footprint it names — 11-SW-10C relates footprints to name ids its own name
+    table does not carry — so every sheet's names are pooled before any
+    footprint is resolved. A footprint with more than one current name takes
+    the lowest name id, so the choice is stable across rebuilds.
+    """
+    reads = source_reads(city, spec, region_id, root=sources_root)
+    bbox = city.projected_bounds(region_id).bbox
+    keep = set(spec.keep_status)
+
+    names: dict[str, tuple[str | None, str | None]] = {}
+    relate: dict[str, list[str]] = {}
+    footprints: list[tuple[str, shapely.Polygon]] = []
+    for path, member in reads:
+        table = gdb.read_table(
+            path, spec.names.layer, columns=spec.names.columns, zip_member=member
+        )
+        name_ids = table.column(spec.names.field("name_id"))
+        english = table.column(spec.names.field("name_en"))
+        chinese = table.column(spec.names.field("name_zh"))
+        status = table.column(spec.names.field("status"))
+        for row in range(len(name_ids)):
+            if str(status[row]) not in keep:
+                continue
+            names[str(name_ids[row])] = (
+                clean_text(english[row], _TABLE_NULLS),
+                clean_text(chinese[row], _TABLE_NULLS),
+            )
+
+        pairs = gdb.read_table(
+            path, spec.relate.layer, columns=spec.relate.columns, zip_member=member
+        )
+        pair_names = pairs.column(spec.relate.field("name_id"))
+        pair_blocks = pairs.column(spec.relate.field("block_id"))
+        for row in range(len(pair_names)):
+            relate.setdefault(str(pair_blocks[row]), []).append(str(pair_names[row]))
+
+        blocks = gdb.read_layer(
+            path,
+            spec.layer.layer,
+            columns=spec.layer.columns,
+            bbox=bbox,
+            zip_member=member,
+            expect_crs=city.projected_crs,
+        )
+        block_ids = blocks.column(spec.layer.field("block_id"))
+        owners, parts = gdb.polygons(blocks)
+        for owner, rings in zip(owners, parts, strict=True):
+            outer = np.asarray(rings[0], dtype=np.float64)
+            if len(outer) < 3:
+                continue
+            game_x, _, game_z = transform.to_game(outer[:, 0], outer[:, 1])
+            footprints.append(
+                (str(block_ids[owner]), shapely.Polygon(np.column_stack([game_x, game_z])))
+            )
+
+    places: list[Place] = []
+    for block_id, footprint in footprints:
+        current = sorted(name_id for name_id in relate.get(block_id, ()) if name_id in names)
+        if not current:
+            continue
+        english, chinese = names[current[0]]
+        if english is None and chinese is None:
+            continue
+        places.append(Place(name_en=english, name_zh=chinese, footprint=footprint))
+    return places
+
+
+# How an empty cell in a non-spatial geodatabase table reads back through OGR:
+# a Python None, or the string form of a missing float.
+_TABLE_NULLS = ("None", "nan")
 
 
 def _point(geometry: Any) -> tuple[float, float] | None:
@@ -306,6 +500,7 @@ def _write(out_dir: Path, city: Config, region_id: str, report: FareReport) -> i
                 "edge_t": node.edge_t,
                 "pickup": node.pickup,
                 "dropoff": node.dropoff,
+                "place": node.place,
             }
             for node in report.nodes
         ],
@@ -354,6 +549,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     if report.unnamed:
         log.warning("  %d fare nodes are missing a name in at least one language", report.unnamed)
+    if city.fares.places is not None:
+        log.info(
+            "  %d of %d nodes at a named building (%d read; furthest %.1f m)",
+            report.placed,
+            len(report.nodes),
+            report.places_read,
+            report.worst_place_m,
+        )
     return 0
 
 

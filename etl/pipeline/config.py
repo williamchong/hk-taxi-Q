@@ -100,6 +100,7 @@ from pipeline.config_blocks.fares import (  # noqa: F401
     FareCategory,
     FareGroup,
     Fares,
+    Places,
     _check_categories_are_reachable,
     _fare_group,
     _fares,
@@ -760,6 +761,8 @@ def load_config(path: Path | None = None) -> Config:
         )
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
+    if city.fares.places is not None:
+        _check_declared_source(city, city.fares.places, f"{path}:fares.places.source")
     if city.podiums is not None:
         _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
     if city.carriageway_survey is not None:

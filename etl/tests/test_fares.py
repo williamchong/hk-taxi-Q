@@ -19,10 +19,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import shapely
 
 from pipeline.config import load_config
 from pipeline.crs import transformer
-from pipeline.fares import FARES_NAME, FARES_SCHEMA, build_region
+from pipeline.fares import FARES_NAME, FARES_SCHEMA, Place, build_region, nearest_place
 from pipeline.polyline import Segments
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from tests.helpers import CITY_YAML
@@ -580,3 +581,110 @@ class TestEdgePositions:
             polyline[:, 0],
         )
         assert walked == pytest.approx(node.pos[0], abs=0.01)
+
+
+class TestNearestPlace:
+    """The building a passenger names (`P3-5a`, `Q142`)."""
+
+    def _square(self, name_en: str, name_zh: str, x0: float, z0: float, side: float = 20.0):
+        return Place(
+            name_en=name_en,
+            name_zh=name_zh,
+            footprint=shapely.Polygon(
+                [(x0, z0), (x0 + side, z0), (x0 + side, z0 + side), (x0, z0 + side)]
+            ),
+        )
+
+    def test_the_nearest_footprint_within_the_radius_wins(self) -> None:
+        near = self._square("Near House", "近樓", 0.0, 0.0)
+        far = self._square("Far House", "遠樓", 60.0, 0.0)
+        assert nearest_place(25.0, 10.0, [far, near], 25.0) is near
+
+    def test_distance_is_to_the_footprint_not_its_centroid(self) -> None:
+        """A point 3 m off the edge of a 100 m podium is at that podium, though
+        its centroid is 53 m away."""
+        podium = self._square("Podium", "平台", 0.0, 0.0, side=100.0)
+        assert nearest_place(103.0, 50.0, [podium], 25.0) is podium
+
+    def test_inside_a_footprint_is_zero_and_beyond_the_radius_is_none(self) -> None:
+        house = self._square("House", "樓", 0.0, 0.0)
+        assert house.distance_m(10.0, 10.0) == 0.0
+        assert nearest_place(60.0, 10.0, [house], 25.0) is None
+
+    def test_a_building_the_publisher_names_beats_a_nearer_one(self) -> None:
+        """TD writes "Jaffe Road outside Elizabeth House"; the nearest footprint
+        is another building across the footway. The text is the publisher's
+        more specific reading and wins — inside the radius only."""
+        nearer = self._square("Tak Fai Building", "德輝大廈", 0.0, 0.0)
+        named = self._square("Elizabeth House", "伊利莎伯大廈", 30.0, 0.0)
+        at = (24.0, 10.0)
+        assert nearest_place(*at, [nearer, named], 25.0) is nearer
+        assert (
+            nearest_place(*at, [nearer, named], 25.0, ["Jaffe Road outside Elizabeth House", ""])
+            is named
+        )
+        assert nearest_place(*at, [nearer, named], 25.0, ["", "謝斐道伊利莎伯大廈對出"]) is named
+        # iB1000 names the tower where TD names the house: the designation is
+        # stripped before the text is searched, by the city's own regex.
+        tower = self._square("Elizabeth House Tower C", "伊利莎伯大廈Ｃ座", 30.0, 0.0)
+        suffix = r"\s*(Tower|Block)\s+[A-Z0-9-]+$|[Ａ-Ｚ0-9—-]+座$"  # noqa: RUF001
+        assert (
+            nearest_place(*at, [nearer, tower], 25.0, ["Jaffe Road outside Elizabeth House"])
+            is nearer
+        )
+        assert (
+            nearest_place(
+                *at,
+                [nearer, tower],
+                25.0,
+                ["Jaffe Road outside Elizabeth House"],
+                block_suffix=suffix,
+            )
+            is tower
+        )
+        assert (
+            nearest_place(
+                *at, [nearer, tower], 25.0, ["謝斐道伊利莎伯大廈對出"], block_suffix=suffix
+            )
+            is tower
+        )
+        # Named but 40 m away: the mention does not stretch the radius.
+        distant = self._square("Elizabeth House", "伊利莎伯大廈", 70.0, 0.0)
+        assert (
+            nearest_place(*at, [nearer, distant], 25.0, ["Jaffe Road outside Elizabeth House"])
+            is nearer
+        )
+
+    def test_a_city_without_a_name_table_publishes_null(self, testville) -> None:
+        testville(stands=[testville.feature(300.0, 305.0, "Urban", "Stand", "站")])
+        document = _written(testville.out_dir)
+        assert testville.city.fares.places is None
+        assert all(node["place"] is None for node in document["nodes"])
+
+    def test_a_named_footprint_beside_a_stand_is_published(self, testville, monkeypatch) -> None:
+        from pipeline import fares as stage
+        from pipeline.config_blocks.base import SourceLayer
+        from pipeline.config_blocks.fares import Places
+
+        spec = Places(
+            source="sheets",
+            member="{tile}/{tile}.gdb",
+            layer=SourceLayer("Building", {"block_id": "BID"}),
+            names=SourceLayer(
+                "Names", {"name_id": "NID", "name_en": "EN", "name_zh": "ZH", "status": "S"}
+            ),
+            relate=SourceLayer("Relate", {"name_id": "NID", "block_id": "BID"}),
+            keep_status=("E",),
+            max_distance_m=25.0,
+            block_suffix="",
+        )
+        object.__setattr__(testville.city.fares, "places", spec)
+        monkeypatch.setattr(
+            stage,
+            "read_places",
+            lambda *args, **kwargs: [self._square("Times Square", "時代廣場", 290.0, 310.0)],
+        )
+        report = testville(stands=[testville.feature(300.0, 305.0, "Urban", "Stand", "站")])
+        node = _written(testville.out_dir)["nodes"][0]
+        assert node["place"] == {"en": "Times Square", "zh": "時代廣場"}
+        assert report.placed == 1 and report.places_read == 1
