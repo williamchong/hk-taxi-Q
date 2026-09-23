@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="FareTariff" format=3 uid="uid://c82771iwnie31"]
+
+[ext_resource type="Script" uid="uid://4s8oa4r8qfm5" path="res://scripts/fares/fare_tariff.gd" id="1_tariff"]
+
+[resource]
+script = ExtResource("1_tariff")
+flagfall_hkd = 29.0
+flagfall_m = 2000.0
+step_m = 200.0
+step_s = 60.0
+step_hkd = 2.1
+step_hkd_after = 1.4
+threshold_hkd = 102.5
