@@ -115,7 +115,6 @@ func _on_sampled() -> void:
 	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
 	if visible != _face.has_target:
 		visible = _face.has_target
-		set_process(_face.has_target or _face.pending_shown)
 	# The ring marks where the passenger gets out; a pending customer gets the
 	# arrow alone (the user's call).
 	if _ring.visible != _face.target_is_destination:
@@ -123,7 +122,10 @@ func _on_sampled() -> void:
 	# Every pending customer's ring while no one is aboard (the user's call).
 	if _pending.visible != _face.pending_shown:
 		_pending.visible = _face.pending_shown
-		set_process(_face.has_target or _face.pending_shown)
+	# Frames are spent only while something of this is up.
+	var busy: bool = _face.has_target or _face.pending_shown
+	if is_processing() != busy:
+		set_process(busy)
 	if _face.has_target:
 		_ring.global_position = _face.target + Vector3.UP * _profile.ring_lift_m
 
