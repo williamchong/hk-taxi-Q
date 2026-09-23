@@ -683,6 +683,20 @@ func _parse_args() -> bool:
 				# `asset_viewer.gd` reads this one itself (`P5-22`); it is named
 				# here so the scene's one flag is not refused as unknown.
 				pass
+			"--fares":
+				# `fare_system.gd` reads this one itself (`P3-1a`), and its
+				# fallback is to leave the loop ON — a typo would hand `P3-9` a
+				# fare it meant to run without.
+				if not ["off", "on"].has(value):
+					_fail("--fares=%s is not off or on" % value)
+					return false
+			"--fare-seed":
+				# `fare_system.gd` reads this one itself; a seed that is not an
+				# int would silently randomise, and two "A/B" drives would draw
+				# two destinations.
+				if not value.is_valid_int():
+					_fail("--fare-seed=%s is not an integer" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

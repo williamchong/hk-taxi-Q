@@ -98,6 +98,8 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
 | `--minimap=off\|on` | the minimap alone (`P3-44`); `--hud=off` takes it with everything else. `P3-9` runs with it off |
+| `--fares=off\|on` | the fare loop (`P3-1a`). On by default — the car boots at a stand, so a stationary start hails within a second; `P3-9`'s free roam runs with it off |
+| `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 
 One authored asset under the shipped rig, no city needed — the readout prints as `asset:` lines and

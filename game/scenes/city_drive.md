@@ -75,6 +75,23 @@ no world around it.
 the road and written out as text. Dev-only, and after the Taxi so the node it
 follows already exists when it looks for it.
 
+## `[node name="Fares" type="Node" parent="."]`
+
+`P3-1a`'s `FareSystem`: the hail → board → carry → deliver / bail loop over the
+resident regions' fare nodes, metered at the real tariff (`Q141`). A plain
+`Node` under the level, not under `GUI`: it owns no pixels — its state reaches
+the HUD through signals. After the Taxi, which it reads every physics tick, and
+before the camera, which it does not. `--fares=off` frees it, which is free
+roam and what `P3-9` runs.
+
+## `[node name="Readout" type="Node" parent="Fares"]`
+
+`fare_readout.gd`: the loop's state, destination, clock and meter on the
+`DebugHud` overlay, its only face until `P3-5a`. A child of `Fares` rather than
+lines inside it, on `GraphOverlay`'s pattern: this one names the `DebugHud`
+autoload, and `FareSystem` must not, because `verify_fares.gd` loads that
+script before any autoload exists. Freed with its parent under `--fares=off`.
+
 ## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
 
 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km

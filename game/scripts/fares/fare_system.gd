@@ -1,0 +1,474 @@
+class_name FareSystem
+extends Node
+## The fare loop (`P3-1a`, `Q141`): hail → board → carry → deliver or bail, on
+## the fare nodes `P1-5` published and the routes `P3-43` built. The first
+## consumer of `RoadRouter`.
+##
+## **What a fare is worth is two numbers.** The 咪錶 runs Transport Department's
+## tariff (`FareTariff`) on the metres actually driven and the seconds actually
+## waited — honest money, and nothing the player does at the wheel changes it
+## except driving further or sitting still. The tip is what the drive *earned*:
+## here the seconds left on the allowance, priced per second, so a shortcut and
+## a fast run pay the same way; `P3-2b`'s style chain adds to the same field.
+## Delivery banks the sum; a bail banks nothing.
+##
+## **The allowance is road distance, not a table.** At boarding the legal
+## route's length over `par_kph`, floored by the kind — `GAME_DESIGN.md`'s 30 s
+## and 60 s survive as floors. Legal, not the player's profile (`Q137`'s
+## recommendation): par is what a driver obeying the signs would do, and the
+## player may break every rule to beat it.
+##
+## **The reach is computed once, at load; the hail pays one `prepare`.**
+## `.claude/rules/router.md`: `prepare` is a reverse Dijkstra priced against a
+## frame (0.7 ms legal on Wan Chai), `route` then microseconds. `setup` prepares
+## every destination once and routes every pickup to it — 19 × 23 on Wan Chai,
+## ~20 ms — and keeps, per pickup, which destinations the legal network reaches
+## at `min_trip_m` or beyond. A hail draws uniformly from that list and routes
+## once for the par. Drawing blind and retrying was built first and refused:
+## a stand with one reachable destination was refused most of its hails.
+##
+## ⚠️ **"No route" is an answer** (`Q137`), and here it is a pool decision. 40%
+## of ordered fare pairs in Wan Chai have none — the clip is not strongly
+## connected — and a pickup that reaches NO destination is **stranded**: kept
+## as a destination, dropped as a pickup, counted and named, never asserted. On
+## the shipped regions these are the westbound Hennessy and Johnston Road
+## points at the clip's west edge and Causeway Bay's far-side stands: forward
+## leaves the clip and the one-way network never comes back.
+##
+## **Its own `nearest_edge`, at its own rate.** `hud.gd` samples the graph at
+## 5 Hz too, but its `Hit` is a local and the HUD can be off (`--hud=off`), so
+## this node asks for itself: one query per sample, p99 45 µs (`P2-2`).
+##
+## **No dev chrome here.** `fare_readout.gd` beside it draws the state on the
+## `DebugHud` overlay, and names that autoload; this script does not, because a
+## `--script` verify tool loads it before any autoload is registered, and a
+## script that names one fails to compile there — a green run over nothing.
+##
+## **Pure enough to verify without a frame.** `sample()` takes a position, a
+## speed, a heading and an elapsed time; `_physics_process` is the only thing
+## that reads the car. `tools/verify_fares.gd` builds one with `setup()` and
+## drives the whole loop with synthetic samples, dwells from both sides.
+##
+## `--fares=off` frees the node — free roam, and what `P3-9` runs.
+## `--fare-seed=<int>` fixes the destination draw for a repeatable drive.
+
+## Emitted at the hail, with the fare drawn: the passenger is walking to the car.
+signal hailed(fare: Fare)
+## Emitted when the passenger is aboard and the meter and the clock start.
+signal boarded(fare: Fare)
+## Emitted when the car left the pickup's radius before boarding finished.
+signal cancelled(fare: Fare)
+## Emitted at the destination, with `banked_hkd` set.
+signal delivered(fare: Fare)
+## Emitted when the allowance ran out; `banked_hkd` is 0.
+signal bailed(fare: Fare)
+## Emitted whenever the reading moves, with the new reading in HK$.
+signal meter_changed(hkd: float)
+## Emitted after each graph sample, at `sample_hz`: when a readout should
+## re-read `state`, `fare` and the counters. Never per frame.
+signal sampled
+
+const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+
+## `--fares=off` frees this node. Read by prefix, like `--hud=`.
+const FARES_ARG: String = "--fares="
+## `--fare-seed=<int>` seeds the destination draw; absent, it is randomised.
+const SEED_ARG: String = "--fare-seed="
+
+enum State { IDLE, BOARDING, CARRYING }
+
+## The car. Set by the scene; `setup()` leaves it null for a headless run.
+@export var vehicle: VehicleController
+
+var state: State = State.IDLE
+## The fare in flight, or the last one to end; null before the first hail.
+var fare: Fare = null
+## Everything banked this session, in HK$.
+var earned_hkd: float = 0.0
+## The counters a drive is checked against.
+var deliveries: int = 0
+var bails: int = 0
+var cancellations: int = 0
+var hail_refusals: int = 0
+## The pickups `setup` dropped for reaching no destination, in document order.
+var stranded: Array[Fare.Stop] = []
+## What the reach table cost to build, in milliseconds.
+var reach_ms: float = 0.0
+
+var _profile: FareProfile = null
+var _tariff: FareTariff = null
+var _rng: RandomNumberGenerator = null
+# A member, not a local: `RoadGraph.shared()` holds it weakly.
+var _graph: RoadGraph = null
+var _router: RoadRouter = null
+var _pickups: Array[Fare.Stop] = []
+var _dropoffs: Array[Fare.Stop] = []
+## Per pickup id, the indices into `_dropoffs` the legal network reaches from
+## it at `min_trip_m` or beyond.
+var _reach: Dictionary[String, PackedInt32Array] = {}
+## False until a whole profile and tariff were handed in; nothing is judged before then.
+var _usable: bool = false
+var _sample_accum_s: float = 0.0
+var _board_accum_s: float = 0.0
+## Whether a hail may start. Cleared when a fare ends or a hail is refused,
+## and set again once the car has been outside every hail radius at a sample —
+## or a delivery at a stand that is also a pickup would hail again on the spot.
+var _armed: bool = true
+var _last_reading_hkd: float = 0.0
+
+
+func _ready() -> void:
+	if Cmdline.value(FARES_ARG).to_lower() == "off":
+		print("fares: off")
+		set_physics_process(false)
+		queue_free()
+		return
+	if vehicle == null:
+		push_warning("FareSystem has no VehicleController assigned; nothing will be hailed.")
+		set_physics_process(false)
+		return
+
+	var rng := RandomNumberGenerator.new()
+	var seed_text: String = Cmdline.value(SEED_ARG)
+	if seed_text.is_valid_int():
+		rng.seed = int(seed_text)
+	else:
+		rng.randomize()
+
+	var fares: Dictionary[String, Dictionary] = {}
+	for region: String in GeneratedRegions.resident():
+		fares[region] = GeneratedFares.load_fares(GeneratedFares.path(region))
+	setup(
+		RoadGraph.shared(),
+		fares,
+		load(FareProfile.PATH) as FareProfile,
+		load(FareTariff.PATH) as FareTariff,
+		rng
+	)
+	if not _usable:
+		set_physics_process(false)
+		return
+	var names: PackedStringArray = []
+	for stop: Fare.Stop in stranded:
+		names.append("%s/%s" % [stop.region, stop.id])
+	print(
+		(
+			"fares: %d pickups (%d stranded: %s), %d destinations, reach %.1f ms"
+			% [_pickups.size(), stranded.size(), ", ".join(names), _dropoffs.size(), reach_ms]
+		)
+	)
+
+
+## Everything the loop needs, handed in: the merged graph, each resident
+## region's `fares.json` document by region, the two tables and the draw.
+## A missing or zeroed table makes an INERT system — nothing hails, and the
+## error names why — never one running on a literal.
+func setup(
+	graph: RoadGraph,
+	fares_by_region: Dictionary[String, Dictionary],
+	profile: FareProfile,
+	tariff: FareTariff,
+	rng: RandomNumberGenerator
+) -> void:
+	_usable = false
+	if graph == null or graph.is_empty():
+		push_error("FareSystem: the road graph is empty; nothing will be hailed.")
+		return
+	if profile == null:
+		push_error("FareSystem: no FareProfile handed in; nothing will be hailed.")
+		return
+	if (
+		profile.hail_radius_m <= 0.0
+		or profile.board_s <= 0.0
+		or profile.deliver_radius_m <= 0.0
+		or profile.stop_below_kph <= 0.0
+	):
+		push_error("FareSystem: %s has a zero radius, dwell or bar." % profile.resource_path)
+		return
+	if (
+		profile.min_trip_m <= 0.0
+		or profile.par_kph <= 0.0
+		or profile.short_hop_floor_s <= 0.0
+		or profile.standard_floor_s <= 0.0
+	):
+		push_error("FareSystem: %s has a zero trip, par or floor." % profile.resource_path)
+		return
+	if profile.tip_hkd_per_s <= 0.0 or profile.sample_hz <= 0.0:
+		push_error("FareSystem: %s has a zero tip or rate." % profile.resource_path)
+		return
+	var probe := FareMeter.new(tariff)
+	if not probe.usable():
+		return
+	if rng == null:
+		push_error("FareSystem: no RandomNumberGenerator handed in.")
+		return
+
+	_graph = graph
+	_profile = profile
+	_tariff = tariff
+	_rng = rng
+	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
+	_pickups.clear()
+	_dropoffs.clear()
+	for region: String in fares_by_region:
+		_add_stops(region, fares_by_region[region])
+	_build_reach()
+	_usable = true
+
+
+func usable() -> bool:
+	return _usable
+
+
+## The stops a fare may start at, and end at.
+func pickups() -> Array[Fare.Stop]:
+	return _pickups
+
+
+func dropoffs() -> Array[Fare.Stop]:
+	return _dropoffs
+
+
+## Whether the next sample inside a hail radius may hail.
+func armed() -> bool:
+	return _armed
+
+
+func _physics_process(delta: float) -> void:
+	var heading: Vector3 = -vehicle.global_transform.basis.z
+	sample(vehicle.global_position, vehicle.linear_velocity.length(), heading, delta)
+
+
+## One tick of the loop: the car is at `position` doing `speed_mps` along
+## `heading`, `delta_s` after the last tick. The odometer and the clock run
+## every tick; the graph is asked once per `sample_hz`.
+func sample(position: Vector3, speed_mps: float, heading: Vector3, delta_s: float) -> void:
+	if not _usable:
+		return
+	var elapsed: float = maxf(delta_s, 0.0)
+	if state == State.CARRYING:
+		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
+		_announce_reading()
+		fare.remaining_s -= elapsed
+		if fare.remaining_s <= 0.0:
+			fare.remaining_s = 0.0
+			_bail()
+			return
+
+	_sample_accum_s += elapsed
+	if _sample_accum_s < 1.0 / _profile.sample_hz:
+		return
+	var since_sample: float = _sample_accum_s
+	_sample_accum_s = 0.0
+
+	var speed_kph: float = maxf(speed_mps, 0.0) * 3.6
+	match state:
+		State.IDLE:
+			_sample_idle(position, speed_kph)
+		State.BOARDING:
+			_sample_boarding(position, since_sample)
+		State.CARRYING:
+			_sample_carrying(position, speed_kph, heading)
+	sampled.emit()
+
+
+func _sample_idle(position: Vector3, speed_kph: float) -> void:
+	var nearest: Fare.Stop = _nearest_pickup(position)
+	if nearest == null:
+		_armed = true
+		return
+	if not _armed or speed_kph >= _profile.stop_below_kph:
+		return
+	_hail(nearest)
+
+
+func _sample_boarding(position: Vector3, since_sample: float) -> void:
+	if RoadGraph.plan_distance(position, fare.pickup.point) > _profile.hail_radius_m:
+		cancellations += 1
+		state = State.IDLE
+		_armed = false
+		cancelled.emit(fare)
+		return
+	_board_accum_s += since_sample
+	if _board_accum_s < _profile.board_s:
+		return
+	_board()
+
+
+func _sample_carrying(position: Vector3, speed_kph: float, heading: Vector3) -> void:
+	var hit: RoadGraph.Hit = _graph.nearest_edge(position, heading)
+	if hit.hit():
+		var route: RoadRouter.Route = _router.route(
+			hit.edge_id, hit.t, fare.destination.edge, fare.destination.t
+		)
+		fare.remaining_road_m = route.distance_m
+	else:
+		fare.remaining_road_m = RoadGraph.plan_distance(position, fare.destination.point)
+	if RoadGraph.plan_distance(position, fare.destination.point) > _profile.deliver_radius_m:
+		return
+	if speed_kph >= _profile.stop_below_kph:
+		return
+	_deliver()
+
+
+## The passenger has hailed from `pickup`: draw where they are going, or refuse.
+func _hail(pickup: Fare.Stop) -> void:
+	var destination: Fare.Stop = pick_destination(pickup)
+	if destination == null:
+		hail_refusals += 1
+		_armed = false
+		return
+	var drawn := Fare.new()
+	drawn.kind = Fare.kind_of(destination.node)
+	drawn.pickup = pickup
+	drawn.destination = destination
+	var route: RoadRouter.Route = _router.route(
+		pickup.edge, pickup.t, destination.edge, destination.t
+	)
+	drawn.route_found = route.found
+	drawn.par_m = route.distance_m
+	drawn.plan_m = route.plan_m
+	drawn.remaining_road_m = route.distance_m
+	drawn.meter = FareMeter.new(_tariff)
+	fare = drawn
+	_board_accum_s = 0.0
+	state = State.BOARDING
+	hailed.emit(fare)
+
+
+## A destination for a fare hailed at `pickup`: one drawn uniformly on `_rng`
+## from what the reach table says the legal network reaches from it at
+## `min_trip_m` or beyond; null for a pickup the table does not know. Public so
+## the verify tool can draw at every pickup.
+func pick_destination(pickup: Fare.Stop) -> Fare.Stop:
+	var reachable: PackedInt32Array = _reach.get(pickup.id, PackedInt32Array())
+	if reachable.is_empty():
+		return null
+	return _dropoffs[reachable[_rng.randi_range(0, reachable.size() - 1)]]
+
+
+## Which destinations each pickup reaches, and which pickups reach none. One
+## `prepare` per destination, one `route` per pair; the cost is `reach_ms`.
+func _build_reach() -> void:
+	var started: int = Time.get_ticks_usec()
+	_reach.clear()
+	stranded.clear()
+	for index: int in _dropoffs.size():
+		var destination: Fare.Stop = _dropoffs[index]
+		if not _router.prepare(destination.edge, destination.t):
+			continue
+		for pickup: Fare.Stop in _pickups:
+			if pickup.same_as(destination):
+				continue
+			var route: RoadRouter.Route = _router.route(
+				pickup.edge, pickup.t, destination.edge, destination.t
+			)
+			if not route.found or route.distance_m < _profile.min_trip_m:
+				continue
+			if not _reach.has(pickup.id):
+				_reach[pickup.id] = PackedInt32Array()
+			_reach[pickup.id].append(index)
+	var kept: Array[Fare.Stop] = []
+	for pickup: Fare.Stop in _pickups:
+		if _reach.has(pickup.id):
+			kept.append(pickup)
+		else:
+			stranded.append(pickup)
+	_pickups = kept
+	reach_ms = float(Time.get_ticks_usec() - started) / 1000.0
+
+
+## How many destinations `pickup` reaches; 0 for one the table does not know.
+func reach_of(pickup: Fare.Stop) -> int:
+	return _reach.get(pickup.id, PackedInt32Array()).size()
+
+
+## The allowance a fare of `kind` gets over `par_m` of legal road.
+func allowance_for(kind: Fare.Kind, par_m: float) -> float:
+	var floor_s: float = (
+		_profile.short_hop_floor_s if kind == Fare.Kind.SHORT_HOP else _profile.standard_floor_s
+	)
+	return maxf(floor_s, par_m / (_profile.par_kph / 3.6))
+
+
+func _board() -> void:
+	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
+	fare.remaining_s = fare.allowance_s
+	state = State.CARRYING
+	_last_reading_hkd = fare.meter.reading_hkd()
+	boarded.emit(fare)
+	meter_changed.emit(_last_reading_hkd)
+
+
+func _deliver() -> void:
+	fare.tip_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
+	earned_hkd += fare.banked_hkd
+	deliveries += 1
+	state = State.IDLE
+	_armed = false
+	delivered.emit(fare)
+
+
+func _bail() -> void:
+	fare.tip_hkd = 0.0
+	fare.banked_hkd = 0.0
+	bails += 1
+	state = State.IDLE
+	_armed = false
+	bailed.emit(fare)
+	sampled.emit()
+
+
+func _announce_reading() -> void:
+	var reading: float = fare.meter.reading_hkd()
+	if is_equal_approx(reading, _last_reading_hkd):
+		return
+	_last_reading_hkd = reading
+	meter_changed.emit(reading)
+
+
+## The pickup whose stop point is nearest `position` within the hail radius, or
+## null. Plan distance: the stop point is on the road at the graph's height and
+## the car is on the drawn ribbon, and the two differ by a kerb.
+func _nearest_pickup(position: Vector3) -> Fare.Stop:
+	var best: Fare.Stop = null
+	var best_m: float = _profile.hail_radius_m
+	for stop: Fare.Stop in _pickups:
+		var apart: float = RoadGraph.plan_distance(position, stop.point)
+		if apart <= best_m:
+			best_m = apart
+			best = stop
+	return best
+
+
+## `region`'s published nodes into the two pools. A stand is a pickup and a
+## destination unless it is cross-harbour (`P3-1b`'s); a PUDO point is what its
+## `pickup` / `dropoff` say — a quarter are drop-off only, and a Hong Kong
+## player would notice a hail at one; a tram stop (`poi`) is neither.
+func _add_stops(region: String, fares: Dictionary) -> void:
+	for node: Dictionary in fares.get("nodes", []):
+		var kind: String = str(node.get("kind", ""))
+		if kind == GeneratedFares.POI:
+			continue
+		if kind == GeneratedFares.TAXI_STAND:
+			var category: Variant = node.get("stand_category", null)
+			if category != null and str(category) == GeneratedFares.CROSS_HARBOUR:
+				continue
+		elif kind != GeneratedFares.PUDO:
+			continue
+		var edge: int = _graph.edge_id_in(region, int(node.get("nearest_edge", -1)))
+		if edge < 0:
+			continue
+		var stop := Fare.Stop.new()
+		stop.region = region
+		stop.id = str(node.get("id", ""))
+		stop.node = node
+		stop.edge = edge
+		stop.t = clampf(float(node.get("edge_t", 0.0)), 0.0, 1.0)
+		stop.point = _graph.point_at(edge, stop.t) + _graph.region_offset(region)
+		if bool(node.get("pickup", false)):
+			_pickups.append(stop)
+		if bool(node.get("dropoff", false)):
+			_dropoffs.append(stop)

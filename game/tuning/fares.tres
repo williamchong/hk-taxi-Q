@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="FareProfile" format=3 uid="uid://gy0oj4jt3y5x"]
+
+[ext_resource type="Script" uid="uid://epltq3slm6e3" path="res://scripts/fares/fare_profile.gd" id="1_fares"]
+
+[resource]
+script = ExtResource("1_fares")
+hail_radius_m = 12.0
+board_s = 1.0
+deliver_radius_m = 12.0
+stop_below_kph = 5.0
+min_trip_m = 300.0
+par_kph = 30.0
+short_hop_floor_s = 30.0
+standard_floor_s = 60.0
+tip_hkd_per_s = 0.5
+sample_hz = 5.0
