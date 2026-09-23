@@ -380,6 +380,26 @@ func _check_loop() -> void:
 		"loop",
 		"and the pending customer pointed at is not the stand under the car"
 	)
+	# Nor is it marked (the user's call): the end of a trip is not the start of
+	# another, so no ring or pin on a pickup the loop would refuse right now.
+	var withheld: PackedInt32Array = system.withheld_pickups(destination.point)
+	var marked_in_reach: int = 0
+	var hidden_out_of_reach: int = 0
+	for index: int in system.pickups().size():
+		var apart: float = RoadGraph.plan_distance(destination.point, system.pickups()[index].point)
+		var in_reach: bool = apart <= _profile.hail_radius_m
+		if in_reach and not withheld.has(index):
+			marked_in_reach += 1
+		if not in_reach and withheld.has(index):
+			hidden_out_of_reach += 1
+	_expect(
+		marked_in_reach == 0 and hidden_out_of_reach == 0,
+		"loop",
+		(
+			"after a delivery no pickup in reach is marked and none beyond it is hidden (%d, %d)"
+			% [marked_in_reach, hidden_out_of_reach]
+		)
+	)
 	var expected_tip: float = (remaining - TICK_S) * _profile.tip_hkd_per_s
 	_expect(
 		is_equal_approx(system.fare.tip_hkd, expected_tip),

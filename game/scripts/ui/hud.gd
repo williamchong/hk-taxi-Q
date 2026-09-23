@@ -899,6 +899,8 @@ func _on_fare_sampled() -> void:
 	var car: VehicleController = _vehicle()
 	var nearest: Fare.Stop = null if car == null else fares.nearest_pending(car.global_position)
 	_face.on_sampled(fares.state, fares.fare, nearest, _style.timer_warn_s, fares.earned_hkd)
+	if _minimap != null and car != null:
+		_minimap.withhold(fares.withheld_pickups(car.global_position))
 	_paint_fares()
 
 

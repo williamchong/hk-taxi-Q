@@ -471,6 +471,21 @@ func nearest_pending(position: Vector3) -> Fare.Stop:
 	return best
 
 
+## The indices into `pickups()` of the customers a reader must not mark: those
+## the loop would refuse right now, by `nearest_pending`'s rule. Empty while
+## armed. ⚠️ **The end of a trip is not the start of another** (the user's
+## call): a delivery at a stand that is also a pickup would otherwise put a
+## pending ring under the car the moment the passenger is out.
+func withheld_pickups(position: Vector3) -> PackedInt32Array:
+	var withheld := PackedInt32Array()
+	if _armed:
+		return withheld
+	for index: int in _pickups.size():
+		if RoadGraph.plan_distance(position, _pickups[index].point) <= _profile.hail_radius_m:
+			withheld.append(index)
+	return withheld
+
+
 ## How often `sampled` fires, for a consumer that counts samples.
 func sample_hz() -> float:
 	return _profile.sample_hz if _profile != null else 0.0

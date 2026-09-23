@@ -39,6 +39,8 @@ var _pin_plan: Vector2 = Vector2.ZERO
 var _pending: Array[Polygon2D] = []
 var _pending_plan: PackedVector2Array = PackedVector2Array()
 var _pending_shown: bool = true
+## Indices into `_pending` the fare loop is withholding (`withhold`).
+var _withheld: PackedInt32Array = PackedInt32Array()
 var _style: HudStyle = null
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
@@ -149,7 +151,7 @@ func set_pickups(points: PackedVector3Array) -> void:
 		pin.name = "Pending%d" % _pending.size()
 		pin.polygon = shape
 		pin.color = _style.map_pickup
-		pin.visible = _pending_shown
+		pin.visible = _pending_shown and not _withheld.has(_pending.size())
 		_field.add_child(pin)
 		# Under the destination's pin and the car, over the roads.
 		_field.move_child(pin, _pin.get_index())
@@ -163,9 +165,24 @@ func show_pending(shown: bool) -> void:
 	if _pending_shown == shown:
 		return
 	_pending_shown = shown
-	for pin: Polygon2D in _pending:
-		pin.visible = shown
+	_show_pins()
 	_place_pending()
+
+
+## Hide the pending pins at `indices`, the pickups the fare loop would refuse
+## right now (`FareSystem.withheld_pickups`), and show the rest.
+func withhold(indices: PackedInt32Array) -> void:
+	if _withheld == indices:
+		return
+	_withheld = indices
+	_show_pins()
+
+
+func _show_pins() -> void:
+	for index: int in _pending.size():
+		var shown: bool = _pending_shown and not _withheld.has(index)
+		if _pending[index].visible != shown:
+			_pending[index].visible = shown
 
 
 func _place_pending() -> void:

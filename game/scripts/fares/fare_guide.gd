@@ -33,6 +33,8 @@ var _ring: MeshInstance3D = null
 ## aboard, pulsed with the destination's.
 var _pending: MultiMeshInstance3D = null
 var _pending_at: PackedVector3Array = PackedVector3Array()
+## Indices into `_pending_at` drawn at zero scale: `FareSystem.withheld_pickups`.
+var _withheld: PackedInt32Array = PackedInt32Array()
 var _pending_material: StandardMaterial3D = null
 var _material: StandardMaterial3D = null
 var _ring_material: StandardMaterial3D = null
@@ -108,8 +110,10 @@ static func _unshaded(alpha: float) -> StandardMaterial3D:
 
 func _on_sampled() -> void:
 	var nearest: Fare.Stop = null
+	_withheld = PackedInt32Array()
 	if is_instance_valid(vehicle):
 		nearest = fares.nearest_pending(vehicle.global_position)
+		_withheld = fares.withheld_pickups(vehicle.global_position)
 	# The clock's bar and the takings are the HUD's; only the target is read.
 	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
 	if visible != _face.has_target:
@@ -133,9 +137,11 @@ func _process(delta: float) -> void:
 	var pulse: float = 1.0 + _profile.pulse_depth * sin(TAU * _pulse_s * _profile.pulse_hz)
 	if _pending.visible:
 		var pulsed := Transform3D(Basis.from_scale(Vector3(pulse, 1.0, pulse)), Vector3.ZERO)
+		var hidden := Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO)
 		for index: int in _pending_at.size():
-			pulsed.origin = _pending_at[index]
-			_pending.multimesh.set_instance_transform(index, pulsed)
+			var placed: Transform3D = hidden if _withheld.has(index) else pulsed
+			placed.origin = _pending_at[index]
+			_pending.multimesh.set_instance_transform(index, placed)
 	if not visible:
 		return
 	var at: Vector3 = vehicle.global_position + Vector3.UP * _profile.height_m
