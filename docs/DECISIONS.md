@@ -7093,6 +7093,22 @@ had two readings, and the one built is the one that changes no loop.
   now the user's). The goal box narrowed to 520 px once it carried one language. A `.tres` edit,
   as `Q80` built it to be; `verify_hud` passed with nothing but the rects moved. The reserved
   `award` and `combo` rects followed their neighbours.
+- **The user's fourth round (2026-09-24), built:**
+  1. **The clock's unit on the number's row**, `99 秒`, on one baseline: the unit is lifted by
+     the difference of the two fonts' descents, so it follows the sizes and the language's face;
+     `timer_unit_gap` (4 px) is the one new dial.
+  2. **The end of a trip is not the start of another.** A delivery at a stand that is also a
+     pickup put a pending ring under the car the moment the passenger was out. The loop was
+     already disarmed there and the arrow already skipped it; the ring and the map pin now do
+     too, through `FareSystem.withheld_pickups` — the pickups inside `hail_radius_m` while
+     disarmed, one rule with `nearest_pending`. `verify_fares` asserts it at the delivery, and
+     returning nothing from it fails by name.
+  3. **The game starts when the player pulls forward.** The car started on `f_004`'s stand and
+     boarded before a key was pressed; it now starts `RoadSpawn.DEFAULT_SETBACK_M` (20 m) back
+     along the road, 8 m outside the hail reach, and `verify_spawn` holds it behind the stand and
+     out of reach. A setback that would land on a road running another way is not taken.
+     `--spawn-fare` still starts ON the named node (setback 0), so a dev route timed from a fare
+     node keeps its timing; a route timed from the default start moved 20 m.
 - 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
   arrow (`Q138`), a route line (`Q137`), the options menu (`P3-5b`).
 

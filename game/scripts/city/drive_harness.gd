@@ -57,6 +57,9 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Fare node the drive starts at. See `RoadSpawn.DEFAULT_FARE_ID`.
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
 
+## How far short of that stand the car starts. See `RoadSpawn.DEFAULT_SETBACK_M`.
+@export var spawn_setback_m: float = RoadSpawn.DEFAULT_SETBACK_M
+
 ## The region `spawn_fare_id` belongs to — `f_001` exists in more than one
 ## (`P5-9d`). "" is the frame.
 @export var spawn_region: String = ""
@@ -137,7 +140,8 @@ func _place_on_start_line() -> Transform3D:
 		GeneratedFares.load_fares(GeneratedFares.path(spawn_region)),
 		spawn_fare_id,
 		vehicle.profile.ray_length_m(),
-		spawn_region
+		spawn_region,
+		spawn_setback_m
 	)
 	if not pose.resolved():
 		push_warning(
@@ -159,7 +163,7 @@ func _place_on_start_line() -> Transform3D:
 		push_warning(
 			(
 				"Fare node '%s' publishes edge %d but the graph query returned %d; the two documents may be from different runs."
-				% [pose.fare_id, pose.published_edge_id, pose.edge_id]
+				% [pose.fare_id, pose.published_edge_id, pose.stand_edge_id]
 			)
 		)
 

@@ -32,6 +32,8 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 ## built from. Loaded rather than assumed so a retuned car moves this check with
 ## it.
 const HANDLING_PATH: String = "res://tuning/handling.tres"
+## The fare loop's own numbers: the start line is held out of their hail reach.
+const FARES_PATH: String = "res://tuning/fares.tres"
 
 ## How far apart the good basis and its transpose must be before this street can
 ## discriminate between them. Below it the check would pass either way and is
@@ -201,10 +203,30 @@ func _check(graph: RoadGraph, fares: Dictionary, profile: HandlingProfile) -> Pa
 		problems.append("the handling profile gives a wheel-ray length of %.3f m" % ride)
 		return problems
 
-	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(graph, fares, RoadSpawn.DEFAULT_FARE_ID, ride)
+	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(
+		graph, fares, RoadSpawn.DEFAULT_FARE_ID, ride, "", RoadSpawn.DEFAULT_SETBACK_M
+	)
 	if not pose.resolved():
 		problems.append("the spawn did not resolve: %s" % pose.problem)
 		return problems
+
+	# --- short of the stand, not on it (the user's call) --------------------
+	#
+	# The first fare starts when the player pulls forward into the stand: ahead
+	# of the car, and out of the hail's reach where it is set down.
+	var hail_m: float = (load(FARES_PATH) as FareProfile).hail_radius_m
+	var to_stand: Vector3 = pose.stand - pose.point
+	var short_m: float = RoadGraph.plan_distance(pose.lane_centre, pose.stand)
+	if to_stand.dot(pose.forward) <= 0.0 or short_m <= hail_m:
+		(
+			problems
+			. append(
+				(
+					"the spawn is not short of the stand: %.2f m from it, %.2f m ahead, the hail reaches %.2f m"
+					% [short_m, to_stand.dot(pose.forward), hail_m]
+				)
+			)
+		)
 
 	# --- the spawn is on a street a car is allowed on (Q13) ----------------
 	if not graph.is_drivable(pose.edge_id):
@@ -218,7 +240,7 @@ func _check(graph: RoadGraph, fares: Dictionary, profile: HandlingProfile) -> Pa
 		problems.append(
 			(
 				"fare node '%s' publishes edge %d but the query returned %d"
-				% [pose.fare_id, pose.published_edge_id, pose.edge_id]
+				% [pose.fare_id, pose.published_edge_id, pose.stand_edge_id]
 			)
 		)
 

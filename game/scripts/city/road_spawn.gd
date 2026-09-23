@@ -45,6 +45,15 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 ## why the spawn is derived at all.
 const DEFAULT_FARE_ID: String = "f_004"
 
+## How far short of the stand the car starts, back along the road it faces.
+##
+## ⚠️ **Outside the hail reach, and not by much** (the user's call): set down on
+## the stand, the first fare boarded before the player touched anything; the
+## game starts when the player pulls forward into it. 20 m against `fares.tres`'s
+## 12 m `hail_radius_m` is eight metres of driving, and `verify_spawn` holds the
+## start behind the stand and out of its reach.
+const DEFAULT_SETBACK_M: float = 20.0
+
 ## Air under the tyres at the moment of placement.
 ##
 ## The car is dropped, not set down: it starts this far clear of the road and
@@ -53,6 +62,10 @@ const DEFAULT_FARE_ID: String = "f_004"
 ## `wheel_radius_m` or `suspension_rest_length_m` moves the spawn with it instead
 ## of burying the car or hanging it in the air.
 const DROP_CLEARANCE_M: float = 0.30
+
+## How closely the road behind the stand must run the stand's way for the
+## setback to be taken: within about 45°.
+const SETBACK_MIN_DOT: float = 0.7
 
 
 ## A resolved start line, or an unresolved one carrying why.
@@ -67,6 +80,10 @@ class Pose:
 	## consumer measuring the lane offset does not have to re-query for it, and
 	## so it is guaranteed to belong to `edge_id` when it does.
 	var point: Vector3 = Vector3.ZERO
+	## Where the stand itself resolved, and on which edge — the start line is
+	## `setback_m` behind it. The same as `point` / `edge_id` with no setback.
+	var stand: Vector3 = Vector3.ZERO
+	var stand_edge_id: int = -1
 	## The edge id the fare node itself published, for cross-checking. `fares.py`
 	## already did this projection; disagreeing with it means one of the two
 	## documents is stale.
@@ -127,7 +144,7 @@ class Pose:
 	## nearest to either arm — but a caller that finds them disagreeing is
 	## looking at two documents built from different runs.
 	func agrees_with_published() -> bool:
-		return published_edge_id < 0 or published_edge_id == edge_id
+		return published_edge_id < 0 or published_edge_id == stand_edge_id
 
 
 ## Rotation that faces `forward`, level, with no way to transpose it.
@@ -166,8 +183,19 @@ static func basis_facing(forward: Vector3) -> Basis:
 ## its position and `nearest_edge` are that region's, so both go through the
 ## graph's place for the region and its id map. "" is the frame, where both are
 ## identity.
+##
+## `setback_m` starts the car that far back along the road it faces
+## (`DEFAULT_SETBACK_M`), asked of the graph again from there with the stand's
+## heading. A setback that lands on a road running another way — backed round a
+## corner or across onto the opposing carriageway — is not taken, and the car
+## starts on the stand as it did before there was one.
 static func at_fare_node(
-	graph: RoadGraph, fares: Dictionary, fare_id: String, ride_height_m: float, region: String = ""
+	graph: RoadGraph,
+	fares: Dictionary,
+	fare_id: String,
+	ride_height_m: float,
+	region: String = "",
+	setback_m: float = 0.0
 ) -> Pose:
 	var pose := Pose.new()
 	pose.fare_id = fare_id
@@ -191,6 +219,14 @@ static func at_fare_node(
 	if not hit.hit():
 		pose.problem = "fare node '%s' resolved to no drivable edge" % fare_id
 		return pose
+	pose.stand = hit.point
+	pose.stand_edge_id = hit.edge_id
+	if setback_m > 0.0:
+		var back: RoadGraph.Hit = graph.nearest_edge(
+			hit.point - hit.forward * setback_m, hit.forward
+		)
+		if back.hit() and back.forward.dot(hit.forward) > SETBACK_MIN_DOT:
+			hit = back
 
 	pose.edge_id = hit.edge_id
 	pose.point = hit.point

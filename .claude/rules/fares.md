@@ -56,6 +56,12 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **`nearest_pending` never returns a pickup the loop would refuse**: disarmed after a
   delivery, it skips every pickup inside `hail_radius_m` — the user read an arrow at the kerb
   under the car as a "dumb 3 s cooldown". `verify_fares` asserts it at the delivery.
+- ⚠️ **Nor is it marked** (`Q142`'s fourth round, the user's call): `withheld_pickups` is the
+  same rule as `nearest_pending`'s skip, and the road rings and map pins hide those indices. A
+  new marker of pending customers reads it too, or the drop-off grows a ring under the car.
+- ⚠️ **The game starts short of the stand** (`RoadSpawn.DEFAULT_SETBACK_M`, 20 m back, outside
+  the 12 m hail): `verify_spawn` fails a `hail_radius_m` raised past it. `--spawn-fare` is on the
+  node itself.
 - ⚠️ **A fare cannot start where the last one ended.** `_armed` clears on every end and on a
   refusal, and sets again only once a sample finds no pickup in reach. Without it a delivery at a
   stand that is also a pickup hails again on the spot.

@@ -551,6 +551,9 @@ func _set_spawn_fare(instance: Node) -> bool:
 			node.set("spawn_fare_id", _spawn_fare_id)
 			# The frame is "" to the harness; naming it keeps one spelling.
 			node.set("spawn_region", _spawn_region if _spawn_region != Regions.frame() else "")
+			# On the node itself, as before the game's start moved back off its
+			# stand: a named spawn is a dev position, and routes are timed from it.
+			node.set("spawn_setback_m", 0.0)
 			set_on += 1
 	if set_on == 0:
 		_fail("--spawn-fare given but %s has no drive harness" % _scene_path)
