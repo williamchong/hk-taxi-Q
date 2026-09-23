@@ -207,6 +207,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## its caption and road line are set larger (the user's call: unreadable).
 @export var callout_caption_size_zh: int
 @export var callout_sub_size_zh: int
+## The gap between the callout's three lines, per language: the Kai wants air.
+@export var callout_line_gap: int
+@export var callout_line_gap_zh: int
 @export var callout_hold_s: float
 ## The meter's tick flash under the clock: its size and how long it fades.
 @export var tick_size: int

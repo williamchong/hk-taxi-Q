@@ -393,7 +393,9 @@ func _build() -> void:
 	# The place over the road (`Q142`), in one language (`Locale`).
 	var chinese: bool = _language == Locale.CHINESE
 	_callout_panel = _housing("Callout", root, _layout.callout)
-	var callout_lines: VBoxContainer = _lines(_callout_panel, -4)
+	var callout_lines: VBoxContainer = _lines(
+		_callout_panel, _style.callout_line_gap_zh if chinese else _style.callout_line_gap
+	)
 	_caption = _label(
 		"Caption",
 		_style.callout_caption_size_zh if chinese else _style.callout_caption_size,

@@ -96,9 +96,11 @@ this (the user's call: feedback near the centre for every tick). Long enough to
 be read at a glance, short enough that ticks a few seconds apart never stack.
 `callout_caption_size` is the small line over the goal — DESTINATION, PICKING
 UP, DELIVERED — that says what the box is, which the box alone did not.
-⚠️ THE CHINESE SIZES ARE LARGER (`callout_size_zh` 40, `callout_caption_size_zh`
-22, `callout_sub_size_zh` 26): the Kai face's strokes thin out at the Latin
-sizes and the user read the box as unreadable at 30 / 15 / 20.
+⚠️ THE CHINESE SIZES ARE LARGER (`callout_size_zh` 34, `callout_caption_size_zh`
+22, `callout_sub_size_zh` 26) AND THE LINES FURTHER APART (`callout_line_gap_zh`
+8 against −4 for the Latin): the Kai face's strokes thin out at the Latin
+sizes and the user read the box as unreadable at 30 / 15 / 20; 40 for the
+place was then too much, and the lines wanted air.
 
 ## `callout_hold_s = 3.0`
 
