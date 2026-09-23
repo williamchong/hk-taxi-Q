@@ -88,10 +88,12 @@ func _on_sampled() -> void:
 	var nearest: Fare.Stop = null
 	if fares.state == FareSystem.State.IDLE:
 		nearest = fares.nearest_pickup_any(at)
-	var apart: float = 0.0 if nearest == null else RoadGraph.plan_distance(at, nearest.point)
-	_face.on_sampled(fares.state, fares.fare, nearest, apart, 0.0, 0.0)
+	# The distance and the takings are the HUD's strings; only the target is
+	# read here, so neither is computed.
+	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
 	if visible != _face.has_target:
 		visible = _face.has_target
+		set_process(_face.has_target)
 	if _face.has_target:
 		_ring.global_position = _face.target + Vector3.UP * _profile.ring_lift_m
 

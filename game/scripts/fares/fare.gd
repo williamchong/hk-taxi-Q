@@ -44,7 +44,7 @@ class Stop:
 
 	## The street the stop is on, in `language`; "" where unnamed.
 	func road(language: String) -> String:
-		return road_zh if language == "zh" else road_en
+		return road_zh if language == Locale.CHINESE else road_en
 
 	func name(language: String) -> String:
 		return _text(node.get("name", null), language)

@@ -700,7 +700,7 @@ func _parse_args() -> bool:
 			"--lang":
 				# `locale.gd` reads this one itself (`Q142`); anything but the
 				# two languages would silently read as the default.
-				if not ["en", "zh"].has(value):
+				if not [Locale.ENGLISH, Locale.CHINESE].has(value):
 					_fail("--lang=%s is not en or zh" % value)
 					return false
 			_:

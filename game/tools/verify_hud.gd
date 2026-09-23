@@ -1676,6 +1676,7 @@ func _check_guide() -> void:
 		"ring_width_m": profile.ring_width_m,
 		"ring_lift_m": profile.ring_lift_m,
 		"pulse_hz": profile.pulse_hz,
+		"pulse_depth": profile.pulse_depth,
 		"ring_alpha": profile.ring_alpha,
 	}
 	for key: String in floors:
