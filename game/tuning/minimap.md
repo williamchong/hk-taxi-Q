@@ -41,7 +41,14 @@ a direction on the map.
 An alley at its authored width is under 2 px here and flickers out as the map
 turns. A floor, never a multiplier — `Q95`'s rule for the drawn road, borrowed.
 
-## `arrow_px = 7.0`
+## `arrow_px = 0.0`
+
+⚠️ **Off** (2026-09-24, the user's call, reversing `Q136`'s): at 7 px on a
+240 px map the arrows were noise, and at 13 px they were wider than most Wan
+Chai streets and drew as barbs. A GPS does not print them either at this scale
+— the route does their job, and this map has none (`Q137`). The mesh code and
+its `verify_hud` assertions stay, so the dial turns them back on. What follows
+is the design they shipped with.
 
 The one-way arrows (`Q136`, the user's call): an arrowhead 7 px long and 0.8
 as wide, about every `arrow_spacing_px` along a one-way road, pointing the way

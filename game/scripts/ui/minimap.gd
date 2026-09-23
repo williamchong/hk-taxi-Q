@@ -7,9 +7,10 @@ extends Control
 ## keyline round both — a GPS's current-road bar. `Q80` had already called the
 ## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
 ##
-## **Driving only.** Roads, which way they run, the car, and since `P3-5a` the
-## fare's pins: every pending customer while no one is aboard, and the one
-## destination once hailed. No route is
+## **Driving only.** Roads, the car, and since `P3-5a` the fare's pins: every
+## pending customer while no one is aboard, the one destination once hailed,
+## and an arrow on the border toward whichever is the target while it is off
+## the map. The one-way arrows are off (`minimap.md`). No route is
 ## drawn and none will be without `Q137` reopening.
 ##
 ## The meter's housing, like every panel (`Q139`): light roads on black, and
@@ -41,6 +42,15 @@ var _pending_plan: PackedVector2Array = PackedVector2Array()
 var _pending_shown: bool = true
 ## Indices into `_pending` the fare loop is withholding (`withhold`).
 var _withheld: PackedInt32Array = PackedInt32Array()
+## The target's arrow on the map's border while the target is off it (the
+## user's call): where the pin would be if the map were bigger.
+var _beacon: Polygon2D = null
+var _beacon_plan: Vector2 = Vector2.ZERO
+var _beacon_on: bool = false
+## Where the beacon may stand: the map's slot — `map_px`, which the strip sits
+## below, not in — in from its keyline by the beacon's own size so it clears
+## the chamfered corners.
+var _beacon_room: Rect2 = Rect2()
 var _style: HudStyle = null
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
@@ -81,27 +91,10 @@ func setup(
 	)
 	_field.add_child(_roads)
 
-	# Rim and fill in ONE polygon node, by vertex colour: a `Line2D` rim was a
-	# draw call of its own on a HUD that costs five in all.
-	_marker = Polygon2D.new()
-	_marker.name = "Car"
-	var outer: PackedVector2Array = chevron(mapping.marker_px)
-	# Shorter by four keylines: a chevron scales about its centre and its flanks
-	# lie 0.37 of its length out, so that leaves them about one keyline of rim.
-	var inner: PackedVector2Array = chevron(mapping.marker_px - style.edge_px * 4.0)
-	_marker.polygon = outer + inner
-	_marker.polygons = [
-		PackedInt32Array(range(0, outer.size())),
-		PackedInt32Array(range(outer.size(), outer.size() + inner.size()))
-	]
-	var inks := PackedColorArray()
-	for index: int in outer.size() + inner.size():
-		inks.append(style.map_marker_edge if index < outer.size() else style.map_marker)
-	_marker.vertex_colors = inks
+	_marker = _rimmed("Car", chevron, mapping.marker_px, style.map_marker)
 	# Placed once: the anchor never moves, and heading-up neither does the
 	# chevron — the map turns under it.
 	_marker.position = map_px * mapping.anchor
-	_field.add_child(_marker)
 
 	# The target's pin (the user's call: an icon, not a dot), its tip on the
 	# point. Under the car, over the roads; hidden until there is a target.
@@ -112,6 +105,15 @@ func setup(
 	_pin.visible = false
 	_field.add_child(_pin)
 	_field.move_child(_pin, _marker.get_index())
+
+	# Over the pins, under the car; hidden until a target leaves the map.
+	# A plain triangle, not the car's notched chevron: nothing on the map but
+	# the car may read as the car.
+	_beacon = _rimmed("Beacon", pointer, style.map_beacon_px, style.map_destination)
+	_beacon.visible = false
+	_field.move_child(_beacon, _marker.get_index())
+	var inset: float = style.map_beacon_px
+	_beacon_room = Rect2(Vector2(inset, inset), map_px - Vector2(inset * 2.0, inset * 2.0))
 
 	# A child of the field so the chamfer clips its two bottom corners too, and
 	# after the roads so it covers them. The rule above it is the keyline's.
@@ -202,6 +204,30 @@ func set_target(point: Vector3, shown: bool) -> void:
 	_pin.position = _roads.transform * _pin_plan
 
 
+## Point the border's arrow at `point` while it is off the map, in `ink` — the
+## destination's red or a pending customer's amber — or put it away.
+func set_beacon(point: Vector3, shown: bool, ink: Color) -> void:
+	_beacon_on = shown
+	_beacon_plan = MinimapProjection.plan(point)
+	if shown:
+		_fill(_beacon, ink)
+	_place_beacon()
+
+
+func _place_beacon() -> void:
+	var at: Vector2 = Vector2.INF
+	if _beacon_on:
+		at = beacon_point(_beacon_room, _marker.position, _roads.transform * _beacon_plan)
+	var shown: bool = at.is_finite()
+	if _beacon.visible != shown:
+		_beacon.visible = shown
+	if not shown:
+		return
+	_beacon.position = at
+	# The chevron points up (`-Y`), so a quarter turn past the heading's angle.
+	_beacon.rotation = (at - _marker.position).angle() + PI * 0.5
+
+
 ## Put `car` on the anchor, nose along `forward`.
 func follow(car: Vector3, forward: Vector3) -> void:
 	var anchor_px: Vector2 = _marker.position
@@ -213,6 +239,7 @@ func follow(car: Vector3, forward: Vector3) -> void:
 	if _pin.visible:
 		_pin.position = _roads.transform * _pin_plan
 	_place_pending()
+	_place_beacon()
 
 
 func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:
@@ -225,6 +252,66 @@ func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> Cha
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 	return panel
+
+
+## `outline(length)` — `chevron` or `pointer` — in `fill`, rimmed in the
+## marker's edge colour.
+## Rim and fill in ONE polygon node, by vertex colour — outer ring first, fill
+## second: a `Line2D` rim was a draw call of its own on a HUD that costs five in
+## all.
+func _rimmed(node_name: String, outline: Callable, length: float, fill: Color) -> Polygon2D:
+	var shape := Polygon2D.new()
+	shape.name = node_name
+	var outer: PackedVector2Array = outline.call(length)
+	# Shorter by four keylines, about the outline's own centre: the chevron's
+	# flanks lie 0.37 of its length out, so that leaves them about one keyline
+	# of rim, and `pointer` is centred on its centroid for the same even rim.
+	var inner: PackedVector2Array = outline.call(length - _style.edge_px * 4.0)
+	shape.polygon = outer + inner
+	shape.polygons = [
+		PackedInt32Array(range(0, outer.size())),
+		PackedInt32Array(range(outer.size(), outer.size() + inner.size()))
+	]
+	var inks := PackedColorArray()
+	for index: int in outer.size() + inner.size():
+		inks.append(_style.map_marker_edge if index < outer.size() else fill)
+	shape.vertex_colors = inks
+	_field.add_child(shape)
+	return shape
+
+
+## Recolour `shape`'s fill — `_rimmed`'s second polygon — to `ink`, writing
+## nothing when it already is.
+static func _fill(shape: Polygon2D, ink: Color) -> void:
+	var inks: PackedColorArray = shape.vertex_colors
+	var fill: PackedInt32Array = shape.polygons[1]
+	if inks[fill[0]] == ink:
+		return
+	for index: int in fill:
+		inks[index] = ink
+	shape.vertex_colors = inks
+
+
+## Where the border's arrow stands for a target at `at`, in slot pixels: on the
+## edge of `room`, on the line from `from` (the car, inside it) toward the
+## target — or `Vector2.INF` while the target is inside `room`, where its own
+## pin shows it.
+static func beacon_point(room: Rect2, from: Vector2, at: Vector2) -> Vector2:
+	if room.has_point(at):
+		return Vector2.INF
+	var toward: Vector2 = at - from
+	var reach: float = 1.0
+	if toward.x > 0.0:
+		reach = minf(reach, (room.end.x - from.x) / toward.x)
+	elif toward.x < 0.0:
+		reach = minf(reach, (room.position.x - from.x) / toward.x)
+	if toward.y > 0.0:
+		reach = minf(reach, (room.end.y - from.y) / toward.y)
+	elif toward.y < 0.0:
+		reach = minf(reach, (room.position.y - from.y) / toward.y)
+	# Never behind the car: with `from` outside `room` a negative reach would
+	# stand the beacon on the far side, pointing away.
+	return from + toward * maxf(reach, 0.0)
 
 
 ## A pin: a map marker `tall` px high with its TIP at the origin — a head the
@@ -240,6 +327,18 @@ static func pin_shape(tall: float) -> PackedVector2Array:
 		points.append(Vector2(cos(angle) * half, centre + sin(angle) * half))
 	points.append(Vector2.ZERO)
 	return points
+
+
+## The beacon, pointing up (`-Y`): a plain arrowhead `length` tall, as wide as
+## the car's, about its CENTROID — two thirds of the way to the tip — so the
+## smaller copy `_rimmed` lays inside it leaves a rim all round, not a base.
+static func pointer(length: float) -> PackedVector2Array:
+	var half: float = length * 0.5
+	var tip: float = length * 2.0 / 3.0
+	var base: float = length / 3.0
+	return PackedVector2Array(
+		[Vector2(0.0, -tip), Vector2(half * 0.8, base), Vector2(-half * 0.8, base)]
+	)
 
 
 ## The car, pointing up (`-Y`): a notched arrowhead `length` tall about its own

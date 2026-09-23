@@ -190,7 +190,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q133` | The ETL is refactored, not rewritten; the drawn road gets one reader | Closed — decided; `P3-35a`–`h` built below, `P3-35g4` refused. |
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
-| `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
+| `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up and the merged plate are the user's calls; the one-way arrows were, and are off since 2026-09-24 for a border arrow toward an off-map target. Owed the user: `span_m`. |
 | `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
 | `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named. The user's drive owed. |
 | `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
@@ -6731,6 +6731,16 @@ cell through `library_meshes`.
   order, which is how the ETL guarantees a `forward` edge runs; 5 mutations, each caught.
   The panel with them: **+4 `draws`, +13.4k `prims`** against `--minimap=off` (`Q139` has the
   three-state table).
+- **Arrows off, and a border arrow on (2026-09-24, the user's calls).** The user found the one-way
+  arrows "not providing anything useful or clear"; trial frames at 7 px and at 13 px every 110 px
+  agreed — at 13 px the head is wider than most Wan Chai streets and draws as barbs — and a GPS
+  prints none at this scale, the route doing their job. `arrow_px = 0`; the mesh code and its
+  assertions stay behind the dial. In their place, from "what does an ordinary GPS show that we
+  are missing": while the target is off the 320 m map, a plain triangle stands on the border on
+  the line from the car toward it, in the target's colour (`map_beacon_px`, `beacon_point`, three
+  `verify_hud` assertions and the anchor held inside its room). **+6 `draws`, +12.6k `prims`**
+  against `--minimap=off` carrying a fare 1.2 km off (the pin and the border arrow one call each),
+  from +4 / +13.4k. The harbour and a main-road class are the same round's other two asks.
 - **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
   all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and
   it is an empty setter. Listed under `B4` because `hud.gd` gave the slot to `P3-5b` — a grouping,

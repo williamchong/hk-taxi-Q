@@ -221,5 +221,7 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var map_destination: Color
 @export var map_pending_px: float
 @export var map_pin_px: float
+## The target's arrow on the map's border while it is off the map, tip to tail.
+@export var map_beacon_px: float
 @export var slot_fill: Color
 @export var slot_edge: Color

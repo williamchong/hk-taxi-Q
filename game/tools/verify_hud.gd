@@ -386,6 +386,8 @@ func _check_style() -> void:
 	)
 	if style.map_pending_px <= 0.0 or style.map_pin_px <= style.map_pending_px:
 		_fail("style", "map_pending_px is 0, or the destination's pin is not larger")
+	if style.map_beacon_px <= 0.0:
+		_fail("style", "map_beacon_px is 0 — is it missing from the .tres?")
 	if style.timer_outline_px <= 0:
 		_fail("style", "the bare timer has no outline — it would vanish on a light road")
 
@@ -1125,6 +1127,18 @@ func _check_minimap() -> void:
 		"map",
 		"the car's anchor is inside the slot (%.2f, %.2f)" % [anchor.x, anchor.y]
 	)
+	# The border's arrow stands on a ray FROM the car, so the car must be inside
+	# the room it may stand in, or the arrow lands on the car or behind it.
+	var layout: Resource = load(HudLayoutScript.PATH)
+	if layout != null:
+		var slot: Vector2 = layout.minimap.size
+		var inset: float = style.map_beacon_px
+		var room := Rect2(Vector2(inset, inset), slot - Vector2(inset, inset) * 2.0)
+		_expect(
+			room.grow(-mapping.marker_px * 0.5).has_point(slot * anchor),
+			"map",
+			"the car stands clear inside the border arrow's room (%s in %s)" % [slot * anchor, room]
+		)
 
 	# 🔴 Opaque, both. Strokes overlap at every joint, a deck's casing is the
 	# field drawn over the street beneath it, and the roads are clipped by the
@@ -1389,6 +1403,7 @@ func _check_minimap_mesh() -> void:
 	)
 
 	_check_minimap_arrows(road, field)
+	_check_minimap_beacon()
 
 	var wobble := PackedVector2Array([Vector2.ZERO, Vector2(50.0, 0.2), Vector2(100.0, 0.0)])
 	_expect(
@@ -1397,6 +1412,34 @@ func _check_minimap_mesh() -> void:
 		"a vertex 0.2 m off its road is dropped at a 0.5 m tolerance"
 	)
 	_expect(MinimapMeshScript.simplified(wobble, 0.1).size() == 3, "map", "and kept at a 0.1 m one")
+
+
+## The target's arrow on the map's border (the user's call): down while the
+## target is on the map, on the border on the line from the car toward it
+## otherwise — never at a corner the line does not pass through.
+func _check_minimap_beacon() -> void:
+	var room := Rect2(10.0, 10.0, 200.0, 100.0)
+	var car := Vector2(110.0, 80.0)
+	_expect(
+		not MinimapScript.beacon_point(room, car, Vector2(150.0, 30.0)).is_finite(),
+		"map",
+		"a target on the map takes no beacon"
+	)
+	var east: Vector2 = MinimapScript.beacon_point(room, car, Vector2(1000.0, 80.0))
+	_expect(
+		east.is_equal_approx(Vector2(210.0, 80.0)),
+		"map",
+		"a target due east stands the beacon on the east edge, level with the car (%s)" % east
+	)
+	var ahead: Vector2 = MinimapScript.beacon_point(room, car, Vector2(170.0, -220.0))
+	_expect(
+		(
+			is_equal_approx(ahead.y, 10.0)
+			and is_zero_approx((ahead - car).cross(Vector2(170.0, -220.0) - car))
+		),
+		"map",
+		"a target ahead and right meets the top edge, on the line to it (%s)" % ahead
+	)
 
 
 ## The one-way arrows (`Q136`). 🔴 **An arrow pointing the wrong way is the one

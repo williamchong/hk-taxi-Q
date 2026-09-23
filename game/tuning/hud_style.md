@@ -124,6 +124,16 @@ calls): its tip on the point, upright whatever the map's heading, in
 range is a pin too — all of them, like a map, not the closest alone — at
 `map_pending_px` in `map_pickup`, shown only while no one is aboard.
 
+## `map_beacon_px = 22.0`
+
+The target's arrow on the map's border (2026-09-24, the user's call): while the
+target is off the map — the destination 1.2 km away on a 320 m map — a plain
+triangle stands on the border on the line from the car toward it, in the
+target's own colour (`map_destination` or `map_pickup`), rimmed like the car.
+Not the car's notched chevron: nothing else on the map may read as the car. In
+from the keyline by its own length so it clears the chamfer, and above the
+strip. `verify_hud` holds where it stands; the frame holds the rest.
+
 ## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
 
 Every pending customer as an amber pin on the map (`Q142`, the user's call:

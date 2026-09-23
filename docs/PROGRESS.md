@@ -158,7 +158,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
-- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate with one-way arrows — +4 `draws`, +13.4k `prims` over `--minimap=off` (37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
+- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target — +6 `draws`, +12.6k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
@@ -243,7 +243,7 @@ and there in the same change.
 - `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
-- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: a drive; `span_m`. Owed: the web frame.
+- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the border arrow are the user's calls; the one-way arrows are off (2026-09-24). Owed the user: a drive; `span_m`. Owed: the web frame.
 - `Q140` Harbour on the minimap (user; `P3-45`). Surveyed, not built: no sea polygon in iB1000, and the waterfront is in three sheets north of the ones held.
 - `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. Open: four stranded pickups at clip edges on the merged graph (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`).
 - `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.

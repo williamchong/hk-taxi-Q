@@ -917,6 +917,7 @@ func _paint_fares() -> void:
 		_tick.visible = false
 		if _minimap != null:
 			_minimap.set_target(Vector3.ZERO, false)
+			_minimap.set_beacon(Vector3.ZERO, false, _style.map_destination)
 			_minimap.show_pending(false)
 		return
 	if not _meter_panel.visible:
@@ -960,4 +961,8 @@ func _paint_fares() -> void:
 
 	if _minimap != null:
 		_minimap.set_target(_face.target, _face.has_target and _face.target_is_destination)
+		var beacon_ink: Color = (
+			_style.map_destination if _face.target_is_destination else _style.map_pickup
+		)
+		_minimap.set_beacon(_face.target, _face.has_target, beacon_ink)
 		_minimap.show_pending(not _face.target_is_destination)

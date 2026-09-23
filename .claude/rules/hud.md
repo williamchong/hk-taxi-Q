@@ -57,7 +57,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `tools/check.sh` (the `map:` assertions), an A/B drive with and without `--minimap=off` at one
   route, and BOTH deltas pasted — `draws` and `prims`.** ⚠️ **Re-run BOTH sides together**: a "+6" was reported here off a baseline taken before the dial existed. 🔴 **The map is a mesh drawn every frame,
   so it has a triangle cost the rest of the HUD does not**: built naively it was **37.7k** prims,
-  an eighth of the mobile budget; it ships at **13.4k / +4 draws** over `--minimap=off` (whole HUD +15), arrows and the merged plate included, on shared junction caps,
+  an eighth of the mobile budget; it ships at **12.6k / +6 draws** over `--minimap=off` carrying (whole HUD +15 before `P3-5a`), the destination pin and the border arrow included, the one-way arrows off, on shared junction caps,
   one-sided bevels and sub-pixel simplification (`minimap_mesh.gd`). ⚠️ **`map_field` and `map_road`
   are opaque and asserted** — strokes overlap, a deck's casing is the field's colour, and the clip
   is the field's alpha. ⚠️ **A mirrored map looks right on a grid**; the east-is-right assertions
@@ -65,7 +65,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
   build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
   `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
-  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
+  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order; the arrows are off (`arrow_px = 0`, the user's call) and the assertions keep the mesh honest for the dial. 🔴 **The border arrow stands on the ray from the car** — `beacon_point` is asserted, and so is the car inside its room; a room cut short put it ON the car once. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
 - **Fare HUD changes — `fare_face.gd`, the fare panels in `hud.gd`, `fare_guide.gd` and
   `tuning/guide.tres`, `locale.gd`, the pips and the pin in
   `minimap.gd`, `seven_segment.gd`'s dot, or the `meter_*` / `timer_*` / `callout_*` / `map_pickup`
