@@ -193,6 +193,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
 | `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
 | `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named. The user's drive owed. |
+| `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | 🟡 Router half ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. The route line stays a design call, not a measurement; reopens on `P3-9`. |
@@ -6977,5 +6978,74 @@ not a measurement, and reopens on `P3-9`
   HK$25 + HK$25 return toll (`P3-1b`), the HUD's meter, timer, callout, world arrow and minimap
   pip (`P3-5a`), operating hours (`Q14`).
 
-**See.** `Q137` · `Q139` · `.claude/rules/fares.md` · `tuning/tariff.md` · `tuning/fares.md` ·
+**See.** `Q137` · `Q139` · `Q142` · `.claude/rules/fares.md` · `tuning/tariff.md` · `tuning/fares.md` ·
 `PLAN.md` `P3-1a`
+
+---
+
+## `Q142` — The pending customer is the pickup pool, said as its building; the arrow points as the crow flies
+
+**Status.** ✅ Closed — the user's asks (2026-09-23 and 24), built as `P3-5a`. The user's drive owed.
+
+The user asked, with the minimal fare HUD, for "simple UI on where the pending customer is (taxi
+stand?)". Nothing in `P3-1a` is a pending customer: the loop hails whichever pickup the car stops
+within `hail_radius_m` of, drawn from a pool of 17 on the merged runtime (`Q141`). So the question
+had two readings, and the one built is the one that changes no loop.
+
+- **The pool is the customer.** Every pickup in the pool is an amber pip on the minimap
+  (`map_pickup`, one mesh under the roads' transform, so it costs a matrix a frame and no
+  geometry); the callout names the NEAREST one with its plan distance while the loop is idle
+  (`Paterson Street between Kingston Street and Great George Street  31 m`), and the world arrow
+  points at it in the pips' amber. Once hailed, all three turn to the destination: the callout
+  reads `→ <name>`, the pip is one in the chevron's red, the arrow is red. `FareFace` decides every
+  string and `verify_hud` reads it on synthetic fares: idle names the pickup, boarding names the
+  destination and not the stand under the car, a new hail inside the DELIVERED hold wins.
+- 🚫 **Not one designated waiting passenger per hail.** That reading would make the loop refuse a
+  hail anywhere but the drawn stand — a `FareSystem` change, a different game, and not what a Hong
+  Kong player expects of a cab that stops where it is flagged. Weighed, not taken; reopens only on
+  the user's word.
+- **A stop is said the way a passenger says it: the building first, the road under it** (the
+  user's call, 2026-09-24, on seeing "→ Leighton Road eastbound near Matheson Street" as a
+  destination). TD's `Location_EN` describes the kerb; a passenger says "皇冠假日酒店". The
+  building comes from the source `DATA_SOURCES.md` flagged for exactly this on day one — iB1000's
+  `BUILDINGNAME` — joined in the ETL (`fares.places`, `pipeline/fares.py::read_places`):
+  `Building` footprint → `BUILDINGRELATEBUILDINGNAME` → `BUILDINGNAME`, names pooled across sheets
+  first because a footprint's name can live in a neighbouring sheet, `NAMESTATUS` `E` only (the 45
+  `O` rows are old spellings beside current ones), lowest name id where a block carries several.
+  A node takes the footprint nearest its kerbside `pos` within 25 m — **and where the point's own
+  text names a building inside that radius, that one wins over a nearer one**: "Jaffe Road outside
+  Elizabeth House" sits nearer Tak Fai Building's footprint, across the footway, and both readings
+  are the publisher's, the text the more specific. iB1000 names the tower ("Elizabeth House Tower
+  C", "伊利莎伯大廈Ｃ座") where TD names the house, so the city's `block_suffix` regex is stripped
+  before the search; the published `place` keeps the publisher's full name. Wan Chai: 47 of 48
+  nodes placed, furthest 24.6 m; `f_001` "opposite to Great Eagle Centre" is correctly none —
+  opposite is not at. Published as `fares.json`'s `place` (schema 1, additive; `ARCHITECTURE.md`).
+  The runtime: `Fare.Stop.place_en()` falls back to the description where there is no place, and
+  the road is the graph's own name for the stop's edge (`RoadGraph.name_of`), never re-parsed out
+  of the text. The callout is two rows of English beside Chinese — the Kai face has no Latin —
+  the English shrinking first because the Chinese is the shorter string in every name this city
+  publishes. 🚫 Parsing the building out of TD's free text ("near X", "outside X", "X對面") —
+  weighed, not taken: a second reading of a description when the survey publishes the footprint.
+- **The arrow is as the crow flies**, a flat unshaded arrow 2.6 m over the car's origin
+  (`fare_arrow.gd`, in the world per `Q80`, no slot). `Q138` holds the next-junction arrow for
+  after the first fare review; in a one-way grid this one will sometimes point down a street the
+  car cannot enter, which is the acceptance test's premise. `--fares=off` takes it with the loop;
+  it reads the loop only inside `sampled`, where the node is alive by definition.
+- **The 咪錶 is the LED** (`Q139` paid out): `SevenSegment` draws the fare in dollars to one place,
+  right-aligned in five cells over their ghosts, with a decimal point that marks a cell rather than
+  taking one (`cells_of`). Between fares it reads the last banked sum, as a real meter does at a
+  stand; before the first, 0.0. The tip clock is seconds left on the allowance, rounded UP, in the
+  chip's ink until `timer_warn_s` (10 s) and the fare's red after.
+- **Cost.** At the boot stand, one route, `--debug-view=off`: HUD off 103 `draws` / 760,232
+  `prims`; HUD on with the loop carrying 134 / 774,153. The whole HUD is now **+31 draws** against
+  `Q139`'s +15: the three housings, the LED mesh, the currency and unit labels, four callout
+  labels, the pool mesh, the destination pip and the 3D arrow. The brief was "deliberately ugly, no layout
+  work"; the draw count is the first thing `P3-5b` should spend on.
+- **Measured shut here:** a fare hailed at a "drop-off only" spawn (`f_023`) is not a pool leak —
+  `f_022` is inside 12 m of it across the kerb; `verify_fares` still refuses a drop-off-only point
+  in the pool. `f_025` (31 m from any pickup) is the spawn that boots idle.
+- 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
+  arrow (`Q138`), a route line (`Q137`), any layout work (`P3-5b`).
+
+**See.** `Q141` · `Q139` · `Q138` · `Q80` · `.claude/rules/hud.md` · `.claude/rules/fares.md` ·
+`tuning/hud_style.md` · `PLAN.md` `P3-5a`

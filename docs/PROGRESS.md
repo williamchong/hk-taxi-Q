@@ -28,9 +28,9 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     centre) are built; `P3-35g4` was measured and refused. `P3-35h`'s user drive is outstanding.
   - `P3-36` stands the arrows where TD surveyed them and `P3-37` paints the decks (`Q134`); the
     user's drive of both is owed.
-  - `B1` ("one fare") is in progress: HUD chassis, wrong-way warning, the router (`P3-43`) and
-    the fare loop (`P3-1a`, `Q141`) built; the minimal fare HUD (`P3-5a`) remains, and the user's
-    drive of the loop is owed. `B3`, `B4`, `P3-9` not started.
+  - `B1` ("one fare") is built: HUD chassis, wrong-way warning, the router (`P3-43`), the fare
+    loop (`P3-1a`, `Q141`) and the minimal fare HUD (`P3-5a`, `Q142`); the user's drive of one
+    fare, start to finish, is `B1`'s review and is owed. `B3`, `B4`, `P3-9` not started.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
@@ -154,7 +154,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   fare par 1,575 m / 189 s banks HK$122.88; 7 mutations caught; driven from the Expo Drive stand,
   aboard by 0.8 s, `build/driver/fare/`. The user's drive under `--debug-view=full` owed. Open:
   the stranded four at clip edges.
-- `P3-5a` ⬜ Minimal fare HUD — what `B1` still needs; `Fare` and `FareSystem`'s signals are its input.
+- `P3-5a` ✅ Minimal fare HUD (`Q142`) — the LED meter, the tip clock, the bilingual callout naming the nearest pickup while idle and the destination once hailed as its building over its road (iB1000 `BUILDINGNAME` joined in the ETL: Wan Chai 47 of 48 nodes placed, furthest 24.6 m; Causeway Bay 4 of 7), the pool's pips and the destination pip on the minimap, a crow-flies arrow in the world; `face:` / `map:` / `digits:` assertions in `verify_hud`, 4 mutations caught; whole HUD +31 `draws` (was +15) at 103 → 134 on the boot stand. Frames in `build/driver/fare_hud/`. The user's drive owed.
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
@@ -246,6 +246,7 @@ and there in the same change.
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: a drive; `span_m`. Owed: the web frame.
 - `Q140` Harbour on the minimap (user; `P3-45`). Surveyed, not built: no sea polygon in iB1000, and the waterfront is in three sheets north of the ones held.
 - `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. Open: four stranded pickups at clip edges on the merged graph (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`).
+- `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, no route line. The router half is built (`P3-43`); the line stays a design

@@ -72,7 +72,18 @@ the loop's own numbers in `tuning/fares.tres`.
   the file named rather than run on a literal.
 - ⚠️ **`--fares=off` is free roam** and what `P3-9` runs with the arrow off; `--fare-seed=<int>`
   fixes the draw for an A/B drive. Both go through `Cmdline`, like `--hud=`.
+- ⚠️ **A stop carries its building and its road** (`Q142`): `fares.json`'s `place` is iB1000's
+  `BUILDINGNAME` for the footprint nearest the kerbside `pos` within `fares.places.max_distance_m`
+  (25 m), the one the point's text names where it names one inside the radius, `NAMESTATUS` `E`
+  only, the city's `block_suffix` stripped for the search and never from the published name;
+  `Fare.Stop.place_en()` falls back to the description, and `road_en` is `RoadGraph.name_of` at
+  load. A node that loses its place on a rebuild is a finding about the data (`f_001`, opposite
+  its building, is correctly none). `pytest tests/test_fares.py::TestNearestPlace` holds the
+  radius, the footprint-not-centroid distance and the mention rule from both sides.
+- ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
+  `fare_arrow.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
+  `nearest_pickup_any` and `pickups()` inside them, because under `--fares=off` the system frees
+  itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
+  reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.
 - 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul
-  with the tunnel toll (`P3-1b`), the meter and timer on the HUD, the world-space arrow and the
-  minimap pip (`P3-5a` — the readout under `--debug-view=full` is the loop's only face until
-  then), operating hours (`Q14`).
+  with the tunnel toll (`P3-1b`), operating hours (`Q14`).
