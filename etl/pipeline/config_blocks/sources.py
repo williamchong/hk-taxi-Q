@@ -76,6 +76,12 @@ class TiledSource:
     # Without it such a tile would land as `<id>.bin`, which the zip-aware
     # readers refuse to route through `/vsizip/`.
     tile_suffix: str | None = None
+    # Metres past the region's read box the fetch selects sheets over, on every
+    # side. 0 selects on the read box alone. For a source some stage reads wider
+    # than the region — the minimap's basemap shows 320 m around the car
+    # (`pipeline/basemap.py`) — and only the fetch widens: every other reader
+    # still selects its own sheets from the cached index (`cached_tiles`).
+    fetch_margin_m: float = 0.0
 
 
 def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
@@ -147,6 +153,9 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
         suffix = str(suffix)
         if not suffix.startswith("."):
             raise ValueError(f"{where}:tile_suffix is {suffix!r}, expected a '.suffix'")
+    margin = float(body.get("fetch_margin_m", 0.0))
+    if margin < 0.0:
+        raise ValueError(f"{where}:fetch_margin_m must not be negative, got {margin}")
     return TiledSource(
         id=source_id,
         index_url=str(_require(body, "index_url", where)),
@@ -155,4 +164,5 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
         url_property=str(_require(body, "url_property", where)),
         revision_property=None if revision is None else str(revision),
         tile_suffix=suffix,
+        fetch_margin_m=margin,
     )

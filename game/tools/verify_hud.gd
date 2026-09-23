@@ -1149,9 +1149,25 @@ func _check_minimap() -> void:
 	# field drawn over the street beneath it, and the roads are clipped by the
 	# field's drawn alpha — three things a translucent colour breaks quietly.
 	_expect(
-		style.map_field.a == 1.0 and style.map_road.a == 1.0 and style.map_road_main.a == 1.0,
+		(
+			style.map_field.a == 1.0
+			and style.map_road.a == 1.0
+			and style.map_road_main.a == 1.0
+			and style.map_water.a == 1.0
+			and style.map_park.a == 1.0
+		),
 		"map",
-		"the field and the roads, main and minor, are opaque"
+		"the field, the roads, the water and the parks are opaque"
+	)
+	# The ground is the background, never the figure: a road over the harbour or
+	# through Victoria Park reads as well as one on the bare field.
+	_expect(
+		(
+			_contrast(style.map_road, style.map_water) >= MIN_CONTRAST
+			and _contrast(style.map_road, style.map_park) >= MIN_CONTRAST
+		),
+		"map",
+		"a minor road is legible over the water and the parks"
 	)
 	_expect(
 		_contrast(style.map_road, style.map_field) >= MIN_CONTRAST,
@@ -1428,6 +1444,7 @@ func _check_minimap_mesh() -> void:
 
 	_check_minimap_arrows(road, field)
 	_check_minimap_main_roads(road, field)
+	_check_minimap_ground(road, field)
 	_check_minimap_beacon()
 
 	var wobble := PackedVector2Array([Vector2.ZERO, Vector2(50.0, 0.2), Vector2(100.0, 0.0)])
@@ -1464,6 +1481,37 @@ func _check_minimap_beacon() -> void:
 		),
 		"map",
 		"a target ahead and right meets the top edge, on the line to it (%s)" % ahead
+	)
+
+
+## The ground is drawn FIRST, so every road is over it, and a region's triangles
+## land where its offset puts them.
+func _check_minimap_ground(road: Color, field: Color) -> void:
+	var water := Color.BLUE
+	var park := Color.GREEN
+	var ground := MinimapMeshScript.Ground.new()
+	ground.add(
+		{"water": [[0.0, 0.0, 10.0, 0.0, 0.0, 10.0]], "parks": [[1.0, 1.0, 2.0, 1.0, 1.0, 2.0]]},
+		Vector2(100.0, 0.0),
+		water,
+		park
+	)
+	ground.add({"water": [[0.0, 0.0, 1.0]]}, Vector2.ZERO, water, park)
+	_expect(
+		ground.vertices.size() == 6 and ground.vertices[1] == Vector2(110.0, 0.0),
+		"map",
+		"the ground moves by the region's offset, and a malformed triangle adds nothing"
+	)
+	var street: RefCounted = _stroke(Vector2(-50.0, 0.0), Vector2(50.0, 0.0), 0)
+	var inks: PackedColorArray = (
+		MinimapMeshScript
+		. build([street], road, road, field, 2.0, null, ground)
+		. surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	)
+	_expect(
+		inks[0] == water and inks[3] == park and inks.find(road) == 6,
+		"map",
+		"the water and the parks are drawn before any road"
 	)
 
 

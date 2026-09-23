@@ -24,6 +24,7 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
+from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
@@ -186,6 +187,14 @@ class _Region:
                     {"edge": _EDGE_ID, "clear_width_m": [10.24, 10.24]},
                     {"edge": _EDGE_ID + 1, "clear_width_m": [10.24, 2.0]},
                 ],
+            },
+            # Written on every run, on `fence`'s terms.
+            BASEMAP_NAME: {
+                "schema_version": BASEMAP_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "water": [],
+                "parks": [],
             },
             FENCE_NAME: {
                 "schema_version": FENCE_SCHEMA,
@@ -1008,6 +1017,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
+            "basemap",
             "export",
         ]
 
@@ -1047,6 +1057,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
+            "basemap",
             "export",
         ]
 

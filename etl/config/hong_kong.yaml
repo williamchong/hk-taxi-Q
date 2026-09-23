@@ -563,6 +563,12 @@ tiled_sources:
     # The download URL's path is `/OpenData/directDownload` — the format lives
     # in the query string, so the URL offers no filename suffix to inherit.
     tile_suffix: .zip
+    # The minimap shows 320 m across, so its basemap (`basemap:` below) reads the
+    # shoreline and parks that far past the region — and the region's own sheets
+    # stop 76 m north of Wan Chai, short of the whole HKCEC waterfront and the
+    # typhoon shelter. About twelve more 45 MB sheets; a download is never the
+    # reason to go without (the user's standing rule).
+    fetch_margin_m: 320.0
 
 # open.hkmapservice.gov.hk serves leaf + root but not the issuing
 # intermediate. A browser chases the gap through the certificate's AIA URL;
@@ -2867,6 +2873,38 @@ railings:
 # ⚠️ The sweep above is measured with a scratch host; the stage's own join adds
 # `too_far` and `no_ribbon`, so it ships **897** rather than 924. `lamps.json` is
 # the live count and these are the shape of the trade.
+# The minimap's harbour and parks (`pipeline/basemap.py`, 2026-09-24, the
+# user's call: "what does an ordinary GPS show that we are missing"). Read off
+# iB1000's own published domains, beside the lamps and the street types.
+basemap:
+  source: topography
+  member: "{tile}/{tile}.gdb"
+  # The map's span: it shows the water the car can see. The fetch downloads
+  # this far (`tiled_sources.topography.fetch_margin_m`), and `config.py`
+  # refuses a reach past it — a missing sheet would read as open sea.
+  reach_m: 320.0
+  shoreline:
+    layer: Shoreline
+    fields:
+      type: SHORELINETYPE
+    # The published domain: `SWA` Sea Wall, `HWM` High Water Mark, `BRE`
+    # Breakwater — the three that bound the harbour.
+    types: [SWA, HWM, BRE]
+  parks:
+    layer: Site
+    fields:
+      code: SITECODE
+    # The published domain's open space: `PAR` Park / Garden, `PLA`
+    # Playground, `SOA` Sitting-out Area, `SGR` Sports Ground, `PRO` Promenade.
+    # Victoria Park is one `PAR` of 188,001 m².
+    codes: [PAR, PLA, SOA, SGR, PRO]
+  buildings:
+    layer: Building
+    fields: {}
+  seal_m: 40.0
+  land_cover: 0.01
+  simplify_m: 1.0
+
 lamps:
   source: topography
   member: "{tile}/{tile}.gdb"

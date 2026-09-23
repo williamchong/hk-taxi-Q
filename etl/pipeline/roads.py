@@ -1245,7 +1245,16 @@ class _StreetIndex:
             box.max_easting + reach,
             box.max_northing + reach,
         )
-        for path, member in source_reads(city, spec, region_id, root=sources_root):
+        # Sheets selected over the same widened box: a street at the region's
+        # edge is drawn in the sheet beyond it.
+        sheets = source_reads(
+            city,
+            spec,
+            region_id,
+            root=sources_root,
+            bounds=city.bounds_past(region_id, reach),
+        )
+        for path, member in sheets:
             layer = gdb.read_layer(
                 path,
                 spec.layer.layer,

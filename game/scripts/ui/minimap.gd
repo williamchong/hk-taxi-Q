@@ -7,7 +7,8 @@ extends Control
 ## keyline round both — a GPS's current-road bar. `Q80` had already called the
 ## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
 ##
-## **Driving only.** Roads, the car, and since `P3-5a` the fare's pins: every
+## **Driving only.** The harbour and the parks under the roads (`basemap.json`),
+## roads with the main ones apart, the car, and since `P3-5a` the fare's pins: every
 ## pending customer while no one is aboard, the one destination once hailed,
 ## and an arrow on the border toward whichever is the target while it is off
 ## the map. The one-way arrows are off (`minimap.md`). No route is
@@ -22,6 +23,9 @@ extends Control
 
 ## How far a vertex may be dropped from its road, in design pixels: under what
 ## the slot can show. A property of the raster, not a look to tune.
+const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+
 const SUBPIXEL_PX: float = 0.4
 
 var _mapping: MinimapProfile = null
@@ -88,7 +92,8 @@ func setup(
 		style.map_road_main,
 		style.map_field,
 		mapping.casing_px / _px_per_m,
-		arrows
+		arrows,
+		_ground(graph, style)
 	)
 	_field.add_child(_roads)
 
@@ -138,6 +143,25 @@ func setup(
 	# clipping parent draws before its children, so its edge would sit under the
 	# roads that reach it.
 	_panel("Frame", style, Color.TRANSPARENT, style.plate_edge)
+
+
+## Every resident region's water and parks, each moved to its place in the
+## frame the graph is in. A region whose document is missing adds nothing: the
+## map still has its roads, and `verify_city` reports the file.
+static func _ground(graph: RoadGraph, style: HudStyle) -> MinimapMesh.Ground:
+	var ground := MinimapMesh.Ground.new()
+	for region: String in GeneratedRegions.resident():
+		var manifest: CityManifest = CityManifest.load_manifest(region)
+		if manifest == null or manifest.basemap_path.is_empty():
+			continue
+		var offset: Vector3 = graph.region_offset(region)
+		ground.add(
+			GeneratedBasemap.load_basemap(manifest.basemap_path),
+			Vector2(offset.x, offset.z),
+			style.map_water,
+			style.map_park
+		)
+	return ground
 
 
 ## Every pending customer as an upright pin (the user's call: all of them,

@@ -734,7 +734,10 @@ def _tiles_for(
         raise
 
     tiles = select_tiles(
-        index, source, region_bounds=city.read_bounds(region.id), region_crs=city.geodetic_crs
+        index,
+        source,
+        region_bounds=city.bounds_past(region.id, source.fetch_margin_m),
+        region_crs=city.geodetic_crs,
     )
     log.info(
         "  %s: %d of %d sheets overlap %s",

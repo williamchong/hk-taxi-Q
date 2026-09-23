@@ -210,7 +210,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 35 since `P3-35g2`: the manifest names `crossings.glb`, TD's surveyed
 ## pedestrian-crossing stripes — a new shipped asset, on `P3-18`'s precedent.
-const SCHEMA_VERSION: int = 35
+##
+## 36 since the minimap's harbour (2026-09-24): the manifest names `basemap.json`,
+## the water and parks under the map's roads — required, on `fence`'s terms.
+const SCHEMA_VERSION: int = 36
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -315,6 +318,9 @@ var landmarks_path: String
 ## to close and a *missing file* means the stage never ran — two states a
 ## build has to be able to tell apart.
 var fence_path: String
+## The minimap's water and parks (`etl/pipeline/basemap.py`), in this region's
+## game plan metres. Required: the stage writes it on every run.
+var basemap_path: String
 
 ## The tramway mesh (`P3-14`), or **empty** where the region ships none.
 ##
@@ -551,6 +557,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.fares_path = _resolve(document.get("fares", ""), manifest.directory)
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""), manifest.directory)
 	manifest.fence_path = _resolve(document.get("fence", ""), manifest.directory)
+	manifest.basemap_path = _resolve(document.get("basemap", ""), manifest.directory)
 	# A **null** `tramway` is the "this region has no tramway" state, and
 	# `_resolve` maps it to empty. Not a branch here on purpose: `str(null)` is
 	# `"<null>"`, which would resolve to a plausible-looking path that loads
@@ -660,7 +667,9 @@ static func bearing_deg(forward: Vector3) -> float:
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `path()`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
-	var paths: PackedStringArray = [road_graph_path, fares_path, landmarks_path, fence_path]
+	var paths: PackedStringArray = [
+		road_graph_path, fares_path, landmarks_path, fence_path, basemap_path
+	]
 	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
 	# `etl/pipeline/export.py`'s `shipped()` holds the same names in the same
 	# order, so the two can be read side by side as the mirrors they are. It was

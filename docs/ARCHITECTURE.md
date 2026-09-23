@@ -284,6 +284,7 @@ hk-taxi-Q/
 │   │   ├── drawnroad.py         # the ONE reader of the drawn road: ribbon and running kerb line (Q133)
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fence.py             # barriers where fits_car refuses an edge → fence.json (P3-29)
+│   │   ├── basemap.py           # iB1000 shoreline + parks → basemap.json, the minimap's ground
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fares.json
 │   │   ├── tramway.py           # tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
@@ -398,6 +399,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "roadmarks": "roadmarks.glb",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
+  "basemap": "basemap.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
   "generated_utc": "2026-07-30T20:04:03Z"
@@ -944,6 +946,30 @@ removed the stage, config block, material, verify tool, preview node and tests o
 `city.json` lost the `signals` key at schema 34. Record: `DECISIONS.md` `Q76`/`Q77`. ⚠️ Its return
 is a port to a library + placements (`P5-2`'s shape), not a re-declared block.
 
+### `basemap.json` — the minimap's ground (2026-09-24)
+
+The harbour and the parks the minimap draws under its roads, for that one reader. Written on
+every run, empty for a city with no `basemap:` block; `city.json` names it unconditionally
+(schema 36), on `fence.json`'s terms.
+
+```json
+{
+  "schema_version": 1, "city_id": "hong_kong", "region_id": "wan_chai",
+  "water": [[x0, z0, x1, z1, x2, z2], ...],
+  "parks": [[x0, z0, x1, z1, x2, z2], ...],
+  "report": { "pieces": 3, "sea_pieces": 2, "sea_m2": 748723.0, "park_m2": 462245.0, ... }
+}
+```
+
+| Field | Source and meaning |
+|---|---|
+| `water` | Triangles in this region's game plan metres, no winding. The frame — the read box and `basemap.reach_m` round it — cut along iB1000 `Shoreline` (`SWA`/`HWM`/`BRE`) thickened by `seal_m`; a piece is sea where `Building` covers ≤ `land_cover` of it, grown back over the seam. ⚠️ The sheets publish no sea polygon. An inlet narrower than `seal_m` is land |
+| `parks` | iB1000 `Site` where `SITECODE` is open space (`PAR`/`PLA`/`SOA`/`SGR`/`PRO`), less the sea, holes kept (constrained triangulation) |
+
+⚠️ Frames overlap across regions; the minimap draws each resident region's ground at its
+`RoadGraph.region_offset`, overlap and all — opaque, one colour a class, so a triangle drawn twice
+draws once.
+
 ### `landmarks.json` — hero building placement
 
 ```json
@@ -1105,7 +1131,7 @@ city_space = region_local + city_offset
 | `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes; a reach table at load (every destination prepared once), a hail drawn from it, `route` at 5 Hz; the allowance `max(kind floor, legal route / par)`; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
 | `FareMeter` | TD's tariff in `scripts/core/`: flagfall, then a unit per 200 m or per minute past it, in cents, charged as the unit begins (`tuning/tariff.tres`, cited in `tariff.md`) | ✅ `P3-1a` |
 | `ScoreSystem` | The **style chain** and **fare combo** — two distinct multipliers — paying into `Fare.tip_hkd` beside the time bonus `P3-1a` already pays | ⬜ `P3-2` |
-| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, an arrow on its border toward an off-map target, +6 draw calls and 12.6k primitives over `--minimap=off` carrying; the one-way arrows are off) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
+| `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, an arrow on its border toward an off-map target, main roads apart and the harbour and parks under the roads, +5 draw calls and 14.7k primitives over `--minimap=off` carrying; the one-way arrows are off) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
 Every library layer draws one call per library mesh through a `MultiMesh`; each placements document

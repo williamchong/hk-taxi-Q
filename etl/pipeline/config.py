@@ -52,6 +52,10 @@ from pipeline.config_blocks.base import (  # noqa: F401
     _tracked,
     _unread,
 )
+from pipeline.config_blocks.basemap import (
+    Basemap,
+    _basemap,
+)
 from pipeline.config_blocks.boxjunctions import (  # noqa: F401
     _BOXJUNCTION_ROLES,
     BoxJunctions,
@@ -375,6 +379,9 @@ class Config:
     # pitch, and a derived rhythm would be `Q54`'s invention on the one property
     # — regularity — that is this layer's entire visual content.
     lamps: Lamps | None = None
+    # The minimap's harbour and parks (`pipeline/basemap.py`). Optional: absent,
+    # the map draws its roads on a bare field, as it did before.
+    basemap: Basemap | None = None
     # Published yellow box junctions, drawn by `pipeline/boxjunctions.py`
     # (`P3-18`). Optional for the same reason `arrows` is — and the fallback it
     # deliberately does not offer is sharper: the region publishes 20 boxes
@@ -566,6 +573,21 @@ class Config:
             north=region.north + reach["north"] * per_lat,
         )
 
+    def bounds_past(self, region_id: str, margin_m: float) -> GeodeticBounds:
+        """`read_bounds` widened by `margin_m` on every side, converted to degrees
+        the way `read_bounds` converts the reach."""
+        read = self.read_bounds(region_id)
+        region = self.region(region_id).bounds
+        projected = self.projected_bounds(region_id)
+        per_lon = (region.east - region.west) / projected.width_m
+        per_lat = (region.north - region.south) / projected.height_m
+        return GeodeticBounds(
+            west=read.west - margin_m * per_lon,
+            east=read.east + margin_m * per_lon,
+            south=read.south - margin_m * per_lat,
+            north=read.north + margin_m * per_lat,
+        )
+
     def read_box(self, region_id: str) -> ProjectedBounds:
         """The projected rectangle a region's vector sources are read with."""
         bounds = self.projected_bounds(region_id)
@@ -738,6 +760,7 @@ def load_config(path: Path | None = None) -> Config:
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         signs=_signs(document.get("signs"), f"{path}:signs"),
         lamps=_lamps(document.get("lamps"), f"{path}:lamps", table),
+        basemap=_basemap(document.get("basemap"), f"{path}:basemap"),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
@@ -774,6 +797,11 @@ def load_config(path: Path | None = None) -> Config:
             _check_declared_source(city, edge, f"{path}:carriageway_survey.edges[{index}].source")
     if city.tramway is not None:
         _check_declared_source(city, city.tramway, f"{path}:tramway.source")
+    if city.roads.street_class is not None:
+        _check_declared_source(city, city.roads.street_class, f"{path}:roads.street_class.source")
+    if city.basemap is not None:
+        _check_declared_source(city, city.basemap, f"{path}:basemap.source")
+        _check_basemap_reach_is_fetched(city, path)
     if city.arrows is not None:
         _check_declared_source(city, city.arrows, f"{path}:arrows.source")
     if city.boxjunctions is not None:
@@ -793,6 +821,21 @@ def load_config(path: Path | None = None) -> Config:
         # A key nothing read is a setting that tunes nothing — see `_Read`.
         raise ValueError(f"{path} declares keys nothing reads: {', '.join(unread)}")
     return city
+
+
+def _check_basemap_reach_is_fetched(city: Config, path: Path) -> None:
+    """The basemap reads as far as the fetch downloaded, never further: past
+    it the sheets are missing and the sea would be cut off at a sheet edge
+    that looks exactly like a coastline."""
+    basemap = city.basemap
+    if basemap is None or not basemap.tiled:
+        return
+    fetched = city.tiled_sources[basemap.source].fetch_margin_m
+    if basemap.reach_m > fetched:
+        raise ValueError(
+            f"{path}:basemap.reach_m is {basemap.reach_m} m and "
+            f"tiled_sources.{basemap.source}.fetch_margin_m fetches only {fetched} m"
+        )
 
 
 def _check_declared_source(city: Config, spec: Any, where: str) -> None:

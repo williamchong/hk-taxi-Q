@@ -66,6 +66,29 @@ class Arrows:
 	var spacing_m: float = 0.0
 
 
+## The ground under the roads — the harbour and the parks, the ETL's
+## `basemap.json` — as coloured triangles in plan metres, emitted before any
+## road so every road draws over it. Water and parks are published disjoint.
+class Ground:
+	var vertices: PackedVector2Array = PackedVector2Array()
+	var colours: PackedColorArray = PackedColorArray()
+
+	## `document`'s water and parks, moved by `offset` — the region's place in
+	## the frame (`RoadGraph.region_offset`), in plan metres.
+	func add(document: Dictionary, offset: Vector2, water: Color, park: Color) -> void:
+		for layer: Array in [[document.get("water", []), water], [document.get("parks", []), park]]:
+			var ink: Color = layer[1]
+			for triangle: Variant in layer[0]:
+				if not triangle is Array or (triangle as Array).size() != 6:
+					continue
+				var flat: Array = triangle
+				for corner: int in 3:
+					vertices.append(
+						offset + Vector2(float(flat[corner * 2]), float(flat[corner * 2 + 1]))
+					)
+					colours.append(ink)
+
+
 ## Every drivable edge of `graph` as a stroke, no narrower than `min_width_m`,
 ## less the vertices that move it under `tolerance_m`.
 static func strokes_of(graph: RoadGraph, min_width_m: float, tolerance_m: float) -> Array[Stroke]:
@@ -102,15 +125,17 @@ static func simplified(points: PackedVector2Array, tolerance_m: float) -> Packed
 	return kept
 
 
-## The mesh, or null where there is nothing to draw. `arrows` null draws none.
-## `main_road` is a main road's colour; minor roads take `road`.
+## The mesh, or null where there is nothing to draw. `arrows` null draws none,
+## and `ground` null draws the roads on the bare field. `main_road` is a main
+## road's colour; minor roads take `road`.
 static func build(
 	strokes: Array[Stroke],
 	road: Color,
 	main_road: Color,
 	casing: Color,
 	casing_m: float,
-	arrows: Arrows = null
+	arrows: Arrows = null,
+	ground: Ground = null
 ) -> ArrayMesh:
 	var by_level: Dictionary[int, Array] = {}
 	for stroke: Stroke in strokes:
@@ -126,6 +151,9 @@ static func build(
 	levels.sort()
 	var vertices := PackedVector2Array()
 	var colours := PackedColorArray()
+	if ground != null:
+		vertices.append_array(ground.vertices)
+		colours.append_array(ground.colours)
 	for level: int in levels:
 		# The casing first and whole, then the roads: cased a stroke at a time, a
 		# deck's casing would cut the deck it joins at a node.

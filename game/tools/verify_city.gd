@@ -19,6 +19,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
+const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
@@ -126,6 +127,11 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# on every run, so a region with nothing to close names it and carries an
 	# empty `barriers` list. A missing file means the stage never ran (`P3-29`).
 	problems.append_array(_check_document("fence", manifest.fence_path, GeneratedFence.path()))
+	# Unguarded on `fence`'s terms: written on every run, empty where the city
+	# declares no `basemap:` block.
+	problems.append_array(
+		_check_document("minimap ground", manifest.basemap_path, GeneratedBasemap.path())
+	)
 	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
 	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
 	# so an empty path is the honest answer rather than a missing file. What the

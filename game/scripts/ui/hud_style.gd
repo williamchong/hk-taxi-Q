@@ -179,6 +179,10 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## A main road (`RoadGraph.is_main`) — lighter than `map_road`, opaque for the
 ## same reason.
 @export var map_road_main: Color
+## The ground under the roads (`basemap.json`): the harbour and the parks. Dark,
+## so the roads keep the figure — opaque for the same reason as the roads.
+@export var map_water: Color
+@export var map_park: Color
 ## The car's chevron and its rim: taxi red, the one saturated thing on the map. Not the bar's green, which already means "gaining".
 @export var map_marker: Color
 @export var map_marker_edge: Color

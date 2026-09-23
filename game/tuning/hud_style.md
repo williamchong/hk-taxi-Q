@@ -57,6 +57,16 @@ mid-grey grid. The grey came down from 0.72 to make the room; `verify_hud` holds
 both on the field and the main road 0.15 of luminance over the minor. Not amber:
 amber is a waiting customer's, and a road the colour of a pin hides the pin.
 
+## `map_water = Color(0.1, 0.19, 0.31, 1)` and `map_park = Color(0.11, 0.21, 0.13, 1)`
+
+The ground under the map's roads (2026-09-24, the user's call): the harbour and
+the parks, `basemap.json`. In Wan Chai the waterfront is the strongest landmark
+there is, and a GPS always shows the water. Dark and quiet — a blue and a green
+barely off the field — because they are the background and the roads are the
+figure: `verify_hud` holds a minor road 0.30 of luminance over both, which is
+what took them down from a first 0.36 blue and 0.25 green. Opaque, like the rest
+of the mesh.
+
 ## `dial_needle = Color(1, 0.6, 0.12, 1)`
 
 The speedometer's needle: amber, a Crown Comfort's. 🔴 NOT RED, and verify_hud

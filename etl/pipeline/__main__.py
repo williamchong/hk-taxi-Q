@@ -29,6 +29,7 @@ from collections.abc import Callable
 
 from pipeline import (
     arrows,
+    basemap,
     boxjunctions,
     buildings,
     carve,
@@ -141,6 +142,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # height and the kerb side its arm reaches away from. Before `export`, which
     # names the asset.
     "lamps": lamps.main,
+    # Anywhere before `export`, which names the document: it reads only the
+    # source sheets and the city file, no stage output.
+    "basemap": basemap.main,
     "export": export.main,
 }
 

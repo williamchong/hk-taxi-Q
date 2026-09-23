@@ -6750,7 +6750,23 @@ cell through `library_meshes`.
   carry no code or have no segment within 30 m — Convention Avenue until the north row of sheets
   is fetched. Published as `street_class`, additive, no bump. The map draws `main` near-white
   over a mid-grey minor grid, each its own pass so a main road runs through the junctions. As
-  published: Lockhart, Jaffe and Harbour Road are secondary.
+  published: Lockhart, Jaffe and Harbour Road are secondary. ⚠️ Convention Avenue's `ST_CODE`
+  10334 is in no sheet's street centrelines, so its 7 edges stay unclassed — a data gap, not a
+  missing sheet.
+- **The harbour and the parks (2026-09-24, the user's call).** A new stage, `pipeline/basemap.py`
+  → `basemap.json` (`CITY_SCHEMA` 36, required on `fence`'s terms). The sheets publish no sea
+  polygon, so the frame (read box + the map's 320 m) is cut along iB1000 `Shoreline`
+  (`SWA`/`HWM`/`BRE`) and a piece with no `Building` on it is sea. The region's own sheets stop
+  76 m north of Wan Chai — short of the HKCEC frontage and the typhoon shelter — so
+  `tiled_sources.topography.fetch_margin_m` = 320 fetches the ring (8 + 8 sheets, 257 MB each
+  region, shared), and `config.py` refuses a `reach_m` past it: a missing sheet reads as open
+  sea. ⚠️ **Bridging loose shoreline ends was built and refused** — pier and shelter outlines
+  dangle at dozens of sub-metre joins no nearest-line rule closes; thickening the whole line by
+  `seal_m` = 40 m closes the one real gap (~35 m at a pier end) at the price of any inlet under
+  40 m, which a 240 px map cannot show anyway. Wan Chai 748,723 m² of sea, Causeway Bay 177,055;
+  parks off `Site.SITECODE` (`PAR`/`PLA`/`SOA`/`SGR`/`PRO`), Victoria Park one 188,001 m² `PAR`.
+  Triangles first in the minimap's mesh, so every road is over them: **+5 `draws`, +14.7k
+  `prims`** against `--minimap=off` carrying (one mesh, so no new call).
 - **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
   all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and
   it is an empty setter. Listed under `B4` because `hud.gd` gave the slot to `P3-5b` — a grouping,

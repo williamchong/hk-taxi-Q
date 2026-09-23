@@ -45,6 +45,7 @@ from pathlib import Path, PurePosixPath
 
 from pipeline import __version__
 from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
+from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED
@@ -252,7 +253,12 @@ CITY_NAME = "city.json"
 # 35 since `P3-35g2`: the manifest names `crossings.glb`, TD's surveyed
 # pedestrian-crossing stripes — a new shipped asset, on `P3-18`'s and `P3-23`'s
 # precedent. A v34 reader does not know the key and ships a region without it.
-CITY_SCHEMA = 35
+#
+# 36 since the minimap's harbour (2026-09-24): the manifest names `basemap.json`,
+# the water and parks the map draws under its roads — a new shipped document,
+# required like `fence` because the stage writes it on every run (empty for a
+# city with no `basemap:` block). A v35 reader ships a region without it.
+CITY_SCHEMA = 36
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -275,7 +281,7 @@ LANDMARKS_SCHEMA = 2
 #
 # ⚠️ `road_surface` left this tuple at `P5-6`: it is a LIST of chunk entries
 # now, on `tiles`' pattern, and `shipped()` walks it the way it walks the tiles.
-DOCUMENT_KEYS = ("road_graph", "fares", "landmarks", "fence")
+DOCUMENT_KEYS = ("road_graph", "fares", "landmarks", "fence", "basemap")
 
 # Manifest keys naming an asset that ships **when the region has one**, in the
 # order `shipped()` lists them. Optional and nullable every one: a city whose
@@ -331,6 +337,7 @@ INPUTS: tuple[Input, ...] = (
     Input(SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, "surface"),
     Input(CLEARANCE_NAME, CLEARANCE_SCHEMA, "clearance"),
     Input(FENCE_NAME, FENCE_SCHEMA, "fence"),
+    Input(BASEMAP_NAME, BASEMAP_SCHEMA, "basemap"),
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
@@ -568,6 +575,8 @@ def build_region(
         # ran and an empty `barriers` list means it found nothing to close —
         # two states a build has to be able to tell apart.
         "fence": FENCE_NAME,
+        # The minimap's water and parks, written on every run on `fence`'s terms.
+        "basemap": BASEMAP_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

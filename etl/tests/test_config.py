@@ -2761,3 +2761,35 @@ class TestEveryKeyIsRead:
 
         with pytest.raises(ValueError, match=r"railings:classes\[0\]:outsett_m"):
             load_config(rewrite(mutate))
+
+
+class TestBasemapBlock:
+    def test_a_reach_past_the_fetch_is_refused(self, rewrite) -> None:
+        def far(doc: dict[str, Any]) -> None:
+            doc["basemap"]["reach_m"] = 5000.0
+
+        with pytest.raises(ValueError, match="fetches only"):
+            load_config(rewrite(far))
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        assert load_config(rewrite(lambda doc: doc.pop("basemap"))).basemap is None
+
+
+class TestFetchMargin:
+    def test_the_topography_is_fetched_past_the_map_reach(self, hong_kong) -> None:
+        assert hong_kong.tiled_sources["topography"].fetch_margin_m >= hong_kong.basemap.reach_m
+        assert hong_kong.tiled_sources["buildings"].fetch_margin_m == 0.0
+
+    def test_the_margin_widens_the_read_bounds_on_every_side(self, hong_kong) -> None:
+        read = hong_kong.read_bounds("wan_chai")
+        past = hong_kong.bounds_past("wan_chai", 320.0)
+        assert past.west < read.west and past.east > read.east
+        assert past.south < read.south and past.north > read.north
+        assert hong_kong.bounds_past("wan_chai", 0.0) == read
+
+    def test_a_negative_margin_is_refused(self, rewrite) -> None:
+        def negative(doc) -> None:
+            doc["tiled_sources"]["topography"]["fetch_margin_m"] = -1.0
+
+        with pytest.raises(ValueError, match="fetch_margin_m"):
+            load_config(rewrite(negative))
