@@ -66,6 +66,12 @@ const SpeedDialScript = preload("res://scripts/ui/speed_dial.gd")
 const MinimapProfileScript = preload("res://scripts/ui/minimap_profile.gd")
 const MinimapProjectionScript = preload("res://scripts/ui/minimap_projection.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
+const MinimapScript = preload("res://scripts/ui/minimap.gd")
+const FareFaceScript = preload("res://scripts/ui/fare_face.gd")
+const FareScript = preload("res://scripts/fares/fare.gd")
+const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
+const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
+const FareMeterScript = preload("res://scripts/core/fare_meter.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -131,6 +137,7 @@ func _init() -> void:
 	_check_tracker()
 	_check_wrong_way()
 	_check_minimap()
+	_check_fare_face()
 
 	if _failed > 0:
 		push_error("verify_hud: %d check(s) failed" % _failed)
@@ -175,6 +182,30 @@ func _check_layout() -> void:
 	# The map and the plate are one panel (`Q136`): same width, one on the other.
 	# Nudging either alone opens a gap or a step in a shared keyline, which no
 	# other check here would see.
+	# `P3-5a` filled three slots. A filled slot leaves the reserved set — it is
+	# no longer outlined as empty — and MUST stay in the graded set, or the
+	# meter could drift onto a thumb with the check still green.
+	var reserved: Dictionary[String, Rect2] = layout.reserved_slots()
+	_expect(
+		(
+			not reserved.has("MeterSlot")
+			and not reserved.has("TimerSlot")
+			and not reserved.has("CalloutSlot")
+			and reserved.has("AwardSlot")
+			and reserved.has("ComboSlot")
+		),
+		"layout",
+		"the meter, the timer and the callout are filled; the award and the combo stay reserved"
+	)
+	_expect(
+		(
+			layout.hud_slots().has("meter")
+			and layout.hud_slots().has("timer")
+			and layout.hud_slots().has("callout")
+		),
+		"layout",
+		"and the three filled slots are still graded against the thumbs"
+	)
 	_expect(layout.abutting(), "layout", "the minimap sits on the street plate at its width")
 	var apart: Resource = layout.duplicate()
 	apart.minimap = Rect2(apart.minimap.position - Vector2(0.0, 8.0), apart.minimap.size)
@@ -251,7 +282,7 @@ func _check_style() -> void:
 
 	# 🔴 **The speed is the DASHBOARD's and red is the FARE's** (the user's
 	# calls): speed was never on a 咪錶, so it is a dial with an amber needle, and
-	# the meter's red LED waits for `P3-5a`. An amber that drifts to red spends
+	# the meter's red LED is the fare's (`P3-5a`). An amber that drifts to red spends
 	# the one colour the fare has to itself — and the bar's red already means
 	# "losing speed", two pixels below the needle.
 	var needle: Color = style.dial_needle
@@ -286,6 +317,58 @@ func _check_style() -> void:
 	)
 	if style.dial_tick_px <= 0.0 or style.speed_size <= 0:
 		_fail("style", "the dial has no tick weight, or the numerals no size")
+
+	# 🔴 **The 咪錶's LED (`P3-5a`)**: red, lit off its ghost, and the ghost a
+	# face rather than a second reading — a ghost as bright as the housing's
+	# ink would read "888.8" behind every fare.
+	var lit: Color = style.meter_lit
+	_expect(
+		lit.r > lit.g * 2.0 and lit.r > lit.b * 2.0,
+		"style",
+		"the meter's digits are the fare's red"
+	)
+	_expect(
+		_contrast(lit, style.meter_unlit) >= MIN_CONTRAST,
+		"style",
+		"and a lit segment separates from its ghost"
+	)
+	_expect(
+		_contrast(style.meter_unlit, housing) < MIN_CONTRAST,
+		"style",
+		"and the ghost stays a face, not a reading"
+	)
+	if (
+		style.meter_digit_px <= 0.0
+		or style.meter_segment_px <= 0.0
+		or style.meter_cells <= 0
+		or style.meter_label_size <= 0
+	):
+		_fail("style", "the meter has no digit height, segment weight, cell count or label size")
+	if style.timer_size <= 0 or style.timer_unit_size <= 0 or style.timer_warn_s <= 0.0:
+		_fail("style", "the timer has no size, or no bar under which it is urgent")
+	if style.callout_size_en <= 0 or style.callout_size_zh <= 0 or style.callout_hold_s <= 0.0:
+		_fail("style", "the callout has no sizes, or no hold after a fare ends")
+	# The pips: both legible on the map, the destination the fare's red and
+	# the pool's amber a different hue — one colour would make every stand a
+	# destination.
+	_expect(
+		(
+			_contrast(style.map_pickup, style.map_field) >= MIN_CONTRAST
+			and _contrast(style.map_destination, style.map_field) >= MIN_CONTRAST
+		),
+		"style",
+		"both pips read on the map"
+	)
+	_expect(
+		(
+			style.map_destination.r > style.map_destination.g * 2.0
+			and style.map_pickup.g > style.map_pickup.r * 0.6
+		),
+		"style",
+		"the destination's pip is red and the pool's is not"
+	)
+	if style.map_pip_px <= 0.0:
+		_fail("style", "map_pip_px is 0 — is it missing from the .tres?")
 
 	# Ink must be readable on its own field. Two numbers, and either can be
 	# nudged past the other by someone tuning a colour they liked.
@@ -549,6 +632,55 @@ func _check_digits() -> void:
 		"digits",
 		"no cells, no mesh"
 	)
+
+	# The decimal point (`P3-5a`): a mark on the cell before it, not a cell.
+	var cells: Array[Array] = SevenSegmentScript.cells_of("29.0", 4)
+	_expect(
+		cells == [[" ", false], ["2", false], ["9", true], ["0", false]],
+		"digits",
+		'"29.0" is four cells with the 9 dotted, right-aligned (%s)' % str(cells)
+	)
+	_expect(
+		SevenSegmentScript.cells_of(".5", 2) == [[" ", false], ["5", false]],
+		"digits",
+		"a dot with no cell before it marks nothing"
+	)
+	_expect(
+		SevenSegmentScript.cells_of("1234.5", 3) == [["3", false], ["4", true], ["5", false]],
+		"digits",
+		"a value wider than the display keeps its right-hand cells, dot included"
+	)
+	var dotted: ArrayMesh = SevenSegmentScript.build(
+		"29.0", 4, 60.0, 8.0, 0.0, Color.WHITE, Color.BLACK
+	)
+	var plain: ArrayMesh = SevenSegmentScript.build(
+		"290", 4, 60.0, 8.0, 0.0, Color.WHITE, Color.BLACK
+	)
+	var dotted_points: PackedVector2Array = dotted.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var dotted_inks: PackedColorArray = dotted.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var plain_points: PackedVector2Array = plain.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	_expect(
+		plain_points.size() == per_cell * 4 and dotted_points.size() == per_cell * 4 + 6,
+		"digits",
+		"the dot is six vertices after every cell's segments, and none without it"
+	)
+	var dot_ok: bool = dotted_points.size() == per_cell * 4 + 6
+	if dot_ok:
+		var cell_w: float = 60.0 * SevenSegmentScript.CELL_ASPECT
+		var pitch: float = cell_w + 60.0 * SevenSegmentScript.CELL_GAP
+		# The dotted cell is the third (index 2): its right edge and the next's left.
+		var gap_from: float = 2.0 * pitch + cell_w
+		var gap_to: float = 3.0 * pitch
+		for index: int in range(per_cell * 4, dotted_points.size()):
+			var point: Vector2 = dotted_points[index]
+			dot_ok = (
+				dot_ok
+				and point.x >= gap_from - 0.01
+				and point.x <= gap_to + 0.01
+				and point.y >= 60.0 - 8.0 - 0.01
+				and dotted_inks[index] == Color.WHITE
+			)
+	_expect(dot_ok, "digits", "and it sits lit at the foot of the gap after the 9")
 
 
 # ----------------------------------------------------------- plate tuning ----
@@ -1046,6 +1178,96 @@ func _check_minimap() -> void:
 	)
 
 	_check_minimap_mesh()
+	_check_minimap_pips(mapping, style)
+
+
+## The fare's pips (`P3-5a`) ride the roads' transform: a destination east of
+## a north-facing car lands right of the chevron, and the pool's mesh is the
+## roads' child, so `follow` moves both for nothing. A pip parented to the
+## field instead would sit still in the slot while the city turned under it.
+func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
+	var diamond: PackedVector2Array = MinimapScript.pip(8.0)
+	_expect(
+		(
+			diamond.size() == 4
+			and diamond[0] == Vector2(0.0, -4.0)
+			and diamond[1] == Vector2(4.0, 0.0)
+			and diamond[2] == Vector2(0.0, 4.0)
+			and diamond[3] == Vector2(-4.0, 0.0)
+		),
+		"map",
+		"a pip is a diamond about its own centre"
+	)
+
+	var map: Control = MinimapScript.new()
+	# An empty graph: no roads, and everything else built as shipped.
+	map.setup(mapping, style, RoadGraph.new(), Vector2(280.0, 236.0), 88.0)
+	var roads: Node = map.get_node("Field/Roads")
+	var destination: Polygon2D = roads.get_node("Destination") as Polygon2D
+	if destination == null:
+		_fail("map", "the destination pip is not the roads' child — every assertion below is inert")
+		map.free()
+		return
+	_expect(not destination.visible, "map", "the destination pip is hidden until there is one")
+	var car := Vector3(500.0, 6.0, 300.0)
+	var north := Vector3(0.0, 0.0, -1.0)
+	var east := Vector3(1.0, 0.0, 0.0)
+	map.follow(car, north)
+	map.set_destination(car + east * 100.0, true)
+	var anchor: Vector2 = Vector2(280.0, 236.0) * mapping.anchor
+	var px_per_m: float = 280.0 / mapping.span_m
+	var landed: Vector2 = roads.transform * destination.position
+	_expect(
+		destination.visible and landed.distance_to(anchor + Vector2(100.0 * px_per_m, 0.0)) < 0.01,
+		"map",
+		"facing north, a destination 100 m east lands right of the chevron"
+	)
+	map.follow(car, east)
+	landed = roads.transform * destination.position
+	_expect(
+		landed.distance_to(anchor + Vector2(0.0, -100.0 * px_per_m)) < 0.01,
+		"map",
+		"and facing east it is ahead, because the roads carry it"
+	)
+	map.set_destination(Vector3.ZERO, false)
+	_expect(not destination.visible, "map", "and it hides again between fares")
+
+	map.set_pickups(PackedVector3Array([car + north * 50.0, car + east * 50.0]))
+	var pickups: MeshInstance2D = roads.get_node_or_null("Pickups") as MeshInstance2D
+	if pickups == null:
+		_fail("map", "the pool's pips are not the roads' child")
+	else:
+		var points: PackedVector2Array = pickups.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var inks: PackedColorArray = pickups.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+		_expect(
+			points.size() == 12 and inks.size() == 12,
+			"map",
+			"two pickups are two diamonds of six vertices"
+		)
+		var centred: bool = points.size() == 12
+		if centred:
+			var first := Vector2.ZERO
+			for index: int in 6:
+				first += points[index]
+			centred = (
+				(first / 6.0).distance_to(MinimapProjectionScript.plan(car + north * 50.0)) < 1.0
+			)
+		_expect(centred, "map", "each about its pickup, in plan metres")
+		_expect(
+			pickups.get_index() < destination.get_index(),
+			"map",
+			"and the pool draws under the destination"
+		)
+	map.set_pickups(PackedVector3Array())
+	_expect(
+		(
+			roads.get_node_or_null("Pickups") == null
+			or roads.get_node("Pickups").is_queued_for_deletion()
+		),
+		"map",
+		"an empty pool draws no pips"
+	)
+	map.free()
 
 
 ## The draw order, which IS the grade separation: a mesh draws in index order.
@@ -1225,6 +1447,200 @@ func _stroke(from: Vector2, to: Vector2, level: int) -> RefCounted:
 ## True where `placed` carries `world` onto `wanted`, to a hundredth of a pixel.
 static func _lands(placed: Transform2D, world: Vector3, wanted: Vector2) -> bool:
 	return (placed * MinimapProjectionScript.plan(world)).distance_to(wanted) < 0.01
+
+
+# -------------------------------------------------------------- fare face ----
+
+
+## What the fare panels say (`P3-5a`), on synthetic fares: the pickup while
+## idle, the destination once hailed, the outcome held after, the clock on
+## both sides of its bar, and money as the 咪錶 shows it.
+func _check_fare_face() -> void:
+	var tariff: Resource = load(FareTariffScript.PATH)
+	var style: Resource = load(HudStyleScript.PATH)
+	if tariff == null or style == null:
+		_fail("face", "%s or the style did not load" % FareTariffScript.PATH)
+		return
+	if style.callout_sub_size <= 0:
+		_fail("face", "callout_sub_size is 0 — is it missing from the .tres?")
+	var stand: RefCounted = _stop(
+		"Tonnochy Road outside Sun Hung Kai Centre",
+		"杜老誌道新鴻基中心外",
+		Vector3(100.0, 0.0, 0.0),
+		["Sun Hung Kai Centre", "新鴻基中心"],
+		["TONNOCHY ROAD", "杜老誌道"]
+	)
+	var square: RefCounted = _stop(
+		"Russell Street (within Times Square)",
+		"羅素街（時代廣場內）",
+		Vector3(900.0, 0.0, 400.0),
+		["Times Square", "時代廣場"],
+		["RUSSELL STREET", "羅素街"]
+	)
+	# No building near it and its edge unnamed: the publisher's description is
+	# all there is, and the subtitle is the distance alone.
+	var kerb: RefCounted = _stop(
+		"Harbour Road (opposite to Great Eagle Centre)", "港灣道（鷹君中心對面）", Vector3.ZERO, [], []
+	)
+	var idle: int = FareSystemScript.State.IDLE
+	var boarding: int = FareSystemScript.State.BOARDING
+	var carrying: int = FareSystemScript.State.CARRYING
+
+	var face: RefCounted = FareFaceScript.new(3)
+	face.on_sampled(idle, null, stand, 320.4, 10.0)
+	_expect(
+		face.callout_en == "Sun Hung Kai Centre" and face.callout_zh == "新鴻基中心",
+		"face",
+		"idle, the callout leads with the building the passenger names (%s)" % face.callout_en
+	)
+	_expect(
+		face.callout_sub_en == "TONNOCHY ROAD  320 m" and face.callout_sub_zh == "杜老誌道",
+		"face",
+		"and the road and the distance sit under it (%s)" % face.callout_sub_en
+	)
+	_expect(
+		face.has_target and not face.target_is_destination and face.target == stand.point,
+		"face",
+		"and the arrow points at it, as a pickup"
+	)
+	_expect(
+		face.meter_text == "0.0" and not face.show_timer,
+		"face",
+		"the meter reads nothing yet and the clock is down"
+	)
+	face.on_sampled(idle, null, kerb, 48.0, 10.0)
+	_expect(
+		(
+			face.callout_en == "Harbour Road (opposite to Great Eagle Centre)"
+			and face.callout_sub_en == "48 m"
+			and face.callout_sub_zh.is_empty()
+		),
+		"face",
+		"with no building and no street name, the description leads and the distance stands alone"
+	)
+	face.on_sampled(idle, null, null, 0.0, 10.0)
+	_expect(
+		face.callout_en.is_empty() and face.callout_zh.is_empty() and not face.has_target,
+		"face",
+		"with no pool there is nothing to say and nothing to point at"
+	)
+
+	var fare: RefCounted = FareScript.new()
+	fare.pickup = stand
+	fare.destination = square
+	fare.meter = FareMeterScript.new(tariff)
+	fare.allowance_s = 60.0
+	fare.remaining_s = 42.4
+	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
+	_expect(
+		face.callout_en == "→ Times Square" and face.callout_zh == "時代廣場",
+		"face",
+		"boarding, the callout names the destination's building, not the stand under the car"
+	)
+	_expect(
+		face.callout_sub_en == "RUSSELL STREET" and face.callout_sub_zh == "羅素街",
+		"face",
+		"with its street under it and no distance"
+	)
+	_expect(
+		face.has_target and face.target_is_destination and face.target == square.point,
+		"face",
+		"and the arrow points at it, as the destination"
+	)
+	_expect(not face.show_timer, "face", "the clock waits for the passenger to board")
+	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	_expect(
+		face.show_timer and face.timer_text == "43" and not face.timer_urgent,
+		"face",
+		"carrying, 42.4 s left reads 43 — rounded up, not down — and is not urgent"
+	)
+	_expect(face.meter_text == "29.0", "face", "and the meter shows the flagfall, to one place")
+	fare.remaining_s = 10.0
+	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	_expect(face.timer_urgent, "face", "at the bar, the clock is urgent")
+	fare.remaining_s = 10.05
+	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	_expect(not face.timer_urgent, "face", "a twentieth past it, not yet")
+	fare.meter.advance(2200.0, 0.0)
+	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	_expect(
+		face.meter_text == "31.1", "face", "2,200 m reads 31.1 — the first unit past the flagfall"
+	)
+
+	fare.banked_hkd = 122.88
+	fare.tip_hkd = 12.5
+	face.on_ended(fare, true)
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(
+		face.callout_en == "DELIVERED  HK$122.9" and face.callout_zh == "小費 HK$12.5",
+		"face",
+		"delivered: the callout holds what was banked and the tip (%s)" % face.callout_en
+	)
+	_expect(
+		face.callout_sub_en.is_empty() and face.callout_sub_zh.is_empty(),
+		"face",
+		"with nothing under it"
+	)
+	_expect(
+		face.meter_text == "122.9" and not face.show_timer and not face.target_is_destination,
+		"face",
+		"the meter reads the banked sum, the clock is down and the arrow is back on the pool"
+	)
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(face.callout_en.begins_with("DELIVERED"), "face", "still held on the third sample")
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(
+		face.callout_en == "Sun Hung Kai Centre" and face.callout_sub_en == "TONNOCHY ROAD  3 m",
+		"face",
+		"and on the fourth it names the nearest pickup again (%s)" % face.callout_sub_en
+	)
+
+	face.on_ended(fare, false)
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(
+		face.callout_en == "PASSENGER BAILED" and face.callout_zh == "乘客下車",
+		"face",
+		"bailed says so"
+	)
+	# A new hail inside the hold wins: the outcome is old news.
+	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
+	_expect(face.callout_en == "→ Times Square", "face", "and a new hail inside the hold wins")
+	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(
+		face.callout_en == "Sun Hung Kai Centre", "face", "with the old notice dropped, not resumed"
+	)
+
+	_expect(
+		(
+			FareFaceScript.money(102.5) == "102.5"
+			and FareFaceScript.money(29.0) == "29.0"
+			and FareFaceScript.seconds(0.2) == "1"
+			and FareFaceScript.seconds(0.0) == "0"
+			and FareFaceScript.seconds(-1.0) == "0"
+		),
+		"face",
+		"money is HK$ to one place and the clock never reads below zero"
+	)
+
+
+## A synthetic stop the way `FareSystem` resolves one: the publisher's
+## description, the document's `place` (empty for none) and the graph's road.
+static func _stop(
+	en: String, zh: String, point: Vector3, place: PackedStringArray, road: PackedStringArray
+) -> RefCounted:
+	var stop: RefCounted = FareScript.Stop.new()
+	stop.region = "test"
+	stop.id = en
+	var node: Dictionary = {"name": {"en": en, "zh": zh}}
+	if place.size() == 2:
+		node["place"] = {"en": place[0], "zh": place[1]}
+	stop.node = node
+	stop.point = point
+	if road.size() == 2:
+		stop.road_en = road[0]
+		stop.road_zh = road[1]
+	return stop
 
 
 # ----------------------------------------------------------------- report ----
