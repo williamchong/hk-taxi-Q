@@ -37,7 +37,7 @@ the loop's own numbers in `tuning/fares.tres`.
   allowance. 🚫 Not the player's profile: par is what obeying the signs costs, and the player may
   break every rule to beat it.
 - ⚠️ **The reach table is built once at load; the hail pays one `prepare`.** `_build_reach`
-  prepares every destination and routes every pickup to it (~20 ms on Wan Chai, `reach_ms` on the
+  prepares every destination and routes every pickup to it (14 ms on Wan Chai, `reach_ms` on the
   boot line and in `verify_fares`); `pick_destination` draws uniformly from a pickup's reachable
   list on the seeded RNG; `route` at the sample rate from the car's `Hit`; never per frame
   (`router.md`). 🚫 Drawing blind and retrying at the hail was built and refused: a stand with one
@@ -49,8 +49,8 @@ the loop's own numbers in `tuning/fares.tres`.
   neither. The kind of a fare is the DESTINATION's (`pudo` → short hop, `taxi_stand` → standard).
 - ⚠️ **A pickup that reaches no destination at `min_trip_m` is stranded**: dropped from the
   pickup pool at load, kept as a destination, counted in `FareSystem.stranded` and named by
-  `verify_fares` and the boot line. Five on the shipped regions (`Q141`), all at a clip edge whose
-  forward direction leaves it. A new one is a finding about the data, answered by looking at the
+  `verify_fares` and the boot line. Five region by region, four on the merged runtime (`Q141`), all
+  at a clip edge whose forward direction leaves it. A new one is a finding about the data, answered by looking at the
   node — never by lowering the bar silently, and never by an assert that would fail every region
   with an edge.
 - ⚠️ **A fare cannot start where the last one ended.** `_armed` clears on every end and on a

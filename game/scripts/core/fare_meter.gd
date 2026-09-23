@@ -53,8 +53,6 @@ var _distance_m: float = 0.0
 ## unit began. Each reset by the other: a unit is one or the other, never both.
 var _bucket_m: float = 0.0
 var _bucket_s: float = 0.0
-## Whether the first unit past the flagfall has begun.
-var _past_flagfall: bool = false
 
 
 ## A missing or zeroed tariff makes an INERT meter — it reads 0 and never moves,
@@ -64,15 +62,21 @@ func _init(tariff: FareTariff) -> void:
 	if tariff == null:
 		push_error("FareMeter: no FareTariff handed in; the meter will read 0.")
 		return
-	if tariff.flagfall_hkd <= 0.0 or tariff.flagfall_m <= 0.0:
-		push_error("FareMeter: %s has no flagfall; the meter will read 0." % tariff.resource_path)
-		return
-	if tariff.step_m <= 0.0 or tariff.step_s <= 0.0:
-		push_error("FareMeter: %s has a zero unit; the meter will read 0." % tariff.resource_path)
-		return
-	if tariff.step_hkd <= 0.0 or tariff.step_hkd_after <= 0.0 or tariff.threshold_hkd <= 0.0:
-		push_error("FareMeter: %s has a zero price; the meter will read 0." % tariff.resource_path)
-		return
+	var required: Dictionary[String, float] = {
+		"flagfall_hkd": tariff.flagfall_hkd,
+		"flagfall_m": tariff.flagfall_m,
+		"step_m": tariff.step_m,
+		"step_s": tariff.step_s,
+		"step_hkd": tariff.step_hkd,
+		"step_hkd_after": tariff.step_hkd_after,
+		"threshold_hkd": tariff.threshold_hkd,
+	}
+	for key: String in required:
+		if required[key] <= 0.0:
+			push_error(
+				"FareMeter: %s has no %s; the meter will read 0." % [tariff.resource_path, key]
+			)
+			return
 	_flagfall_cents = _cents_of(tariff.flagfall_hkd)
 	_flagfall_m = tariff.flagfall_m
 	_step_m = tariff.step_m
@@ -110,11 +114,10 @@ func advance(metres: float, delta_s: float) -> void:
 	var past_m: float = _distance_m - _flagfall_m
 	if past_m <= 0.0:
 		return
-	if not _past_flagfall:
+	if steps == 0:
 		# The first unit begins the moment the flagfall distance is exceeded.
 		# Only the metres beyond it count towards the next one, and the time
 		# bucket starts from here: nothing waited on the flagfall is charged.
-		_past_flagfall = true
 		_charge()
 		_bucket_m = past_m
 		_bucket_s = 0.0

@@ -198,9 +198,13 @@ func _check_pools() -> void:
 	var edge: int = int(dropoffs[0].node.get("nearest_edge", -1))
 	var smuggled: Dictionary = _fares.duplicate(true)
 	var nodes: Array = smuggled["nodes"]
-	nodes.append(_node("x_dropoff", "pudo", null, edge, false, true))
-	nodes.append(_node("x_tram", "poi", null, edge, true, true))
-	nodes.append(_node("x_harbour", "taxi_stand", "cross_harbour", edge, true, true))
+	nodes.append(_node("x_dropoff", GeneratedFares.PUDO, null, edge, false, true))
+	nodes.append(_node("x_tram", GeneratedFares.POI, null, edge, true, true))
+	nodes.append(
+		_node(
+			"x_harbour", GeneratedFares.TAXI_STAND, GeneratedFares.CROSS_HARBOUR, edge, true, true
+		)
+	)
 	var probe: FareSystem = _system(smuggled, _profile, SEED)
 	_expect(
 		probe.pickups().size() == pickups.size(),
@@ -280,9 +284,10 @@ func _check_reach() -> void:
 	mutated.free()
 
 
-## Both branches of the allowance.
+## Both branches of the allowance. A pure function of the profile, so the
+## system is built over no nodes: no reach table to pay for.
 func _check_allowance() -> void:
-	var system: FareSystem = _system(_fares, _profile, SEED)
+	var system: FareSystem = _system({"nodes": []}, _profile, SEED)
 	var per_s: float = _profile.par_kph / 3.6
 	_expect(
 		is_equal_approx(

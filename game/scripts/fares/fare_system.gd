@@ -178,25 +178,24 @@ func setup(
 	if profile == null:
 		push_error("FareSystem: no FareProfile handed in; nothing will be hailed.")
 		return
-	if (
-		profile.hail_radius_m <= 0.0
-		or profile.board_s <= 0.0
-		or profile.deliver_radius_m <= 0.0
-		or profile.stop_below_kph <= 0.0
-	):
-		push_error("FareSystem: %s has a zero radius, dwell or bar." % profile.resource_path)
-		return
-	if (
-		profile.min_trip_m <= 0.0
-		or profile.par_kph <= 0.0
-		or profile.short_hop_floor_s <= 0.0
-		or profile.standard_floor_s <= 0.0
-	):
-		push_error("FareSystem: %s has a zero trip, par or floor." % profile.resource_path)
-		return
-	if profile.tip_hkd_per_s <= 0.0 or profile.sample_hz <= 0.0:
-		push_error("FareSystem: %s has a zero tip or rate." % profile.resource_path)
-		return
+	var required: Dictionary[String, float] = {
+		"hail_radius_m": profile.hail_radius_m,
+		"board_s": profile.board_s,
+		"deliver_radius_m": profile.deliver_radius_m,
+		"stop_below_kph": profile.stop_below_kph,
+		"min_trip_m": profile.min_trip_m,
+		"par_kph": profile.par_kph,
+		"short_hop_floor_s": profile.short_hop_floor_s,
+		"standard_floor_s": profile.standard_floor_s,
+		"tip_hkd_per_s": profile.tip_hkd_per_s,
+		"sample_hz": profile.sample_hz,
+	}
+	for key: String in required:
+		if required[key] <= 0.0:
+			push_error(
+				"FareSystem: %s has no %s; nothing will be hailed." % [profile.resource_path, key]
+			)
+			return
 	var probe := FareMeter.new(tariff)
 	if not probe.usable():
 		return
@@ -236,8 +235,8 @@ func armed() -> bool:
 
 
 func _physics_process(delta: float) -> void:
-	var heading: Vector3 = -vehicle.global_transform.basis.z
-	sample(vehicle.global_position, vehicle.linear_velocity.length(), heading, delta)
+	var placed: Transform3D = vehicle.global_transform
+	sample(placed.origin, vehicle.linear_velocity.length(), -placed.basis.z, delta)
 
 
 ## One tick of the loop: the car is at `position` doing `speed_mps` along
@@ -274,6 +273,9 @@ func sample(position: Vector3, speed_mps: float, heading: Vector3, delta_s: floa
 
 
 func _sample_idle(position: Vector3, speed_kph: float) -> void:
+	if _armed and speed_kph >= _profile.stop_below_kph:
+		# Nothing to arm and too fast to hail: the pool scan would decide nothing.
+		return
 	var nearest: Fare.Stop = _nearest_pickup(position)
 	if nearest == null:
 		_armed = true
@@ -297,15 +299,20 @@ func _sample_boarding(position: Vector3, since_sample: float) -> void:
 
 
 func _sample_carrying(position: Vector3, speed_kph: float, heading: Vector3) -> void:
+	var apart_m: float = RoadGraph.plan_distance(position, fare.destination.point)
 	var hit: RoadGraph.Hit = _graph.nearest_edge(position, heading)
 	if hit.hit():
+		# A cache hit: the hail's `route` prepared this destination and nothing
+		# else prepares on this router. ⚠️ A consumer that shared `_router` and
+		# prepared more than `TREE_CACHE` others mid-fare would turn this into a
+		# reverse Dijkstra at 5 Hz.
 		var route: RoadRouter.Route = _router.route(
 			hit.edge_id, hit.t, fare.destination.edge, fare.destination.t
 		)
 		fare.remaining_road_m = route.distance_m
 	else:
-		fare.remaining_road_m = RoadGraph.plan_distance(position, fare.destination.point)
-	if RoadGraph.plan_distance(position, fare.destination.point) > _profile.deliver_radius_m:
+		fare.remaining_road_m = apart_m
+	if apart_m > _profile.deliver_radius_m:
 		return
 	if speed_kph >= _profile.stop_below_kph:
 		return

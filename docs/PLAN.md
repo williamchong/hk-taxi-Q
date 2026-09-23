@@ -437,7 +437,7 @@ infrastructure, so its own task, first in `B1` (`Q137`).
   pay through one number; `P3-2b`'s style chain adds to it. Delivery banks meter + tip.
 - **Allowance** `max(kind floor, legal route / 30 kph)`; par is `Profile.legal()`.
 - **Reach at load**: every destination prepared once, every pickup routed to it (14 ms on
-  Wan Chai); a hail draws from the reachable list. Five pickups on the shipped regions reach no
+  Wan Chai); a hail draws from the reachable list. Four pickups on the merged runtime reach no
   destination at 300 m and are dropped from the pool, named — `Q141`.
 - `--fares=off` for `P3-9`; `--fare-seed=` for a repeatable drive. The state, destination, clock
   and meter are a `DebugHud` readout until `P3-5a`; `Fare` and the signals are what `P3-5a` and
