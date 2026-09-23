@@ -161,16 +161,12 @@ func set_pickups(points: PackedVector3Array) -> void:
 	_roads.move_child(_pickups, 0)
 
 
-## Put the pin on `point` — the destination in its red, a pickup in the
-## pool's amber — or hide it.
-func set_target(point: Vector3, shown: bool, is_destination: bool) -> void:
+## Put the pin on the destination at `point`, or hide it.
+func set_target(point: Vector3, shown: bool) -> void:
 	if _pin.visible != shown:
 		_pin.visible = shown
 	if not shown:
 		return
-	var ink: Color = _style.map_destination if is_destination else _style.map_pickup
-	if _pin.color != ink:
-		_pin.color = ink
 	_pin_plan = MinimapProjection.plan(point)
 	_pin.position = _roads.transform * _pin_plan
 

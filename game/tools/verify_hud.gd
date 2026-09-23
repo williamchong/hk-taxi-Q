@@ -1230,7 +1230,7 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 	var north := Vector3(0.0, 0.0, -1.0)
 	var east := Vector3(1.0, 0.0, 0.0)
 	map.follow(car, north)
-	map.set_target(car + east * 100.0, true, true)
+	map.set_target(car + east * 100.0, true)
 	var anchor: Vector2 = Vector2(280.0, 236.0) * mapping.anchor
 	var px_per_m: float = 280.0 / mapping.span_m
 	_expect(
@@ -1246,9 +1246,7 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 		"and facing east it is ahead: follow re-places it, upright"
 	)
 	_expect(pin.rotation == 0.0, "map", "— the pin does not turn with the map")
-	map.set_target(car + north * 40.0, true, false)
-	_expect(pin.color == style.map_pickup, "map", "a pickup target takes the pool's amber")
-	map.set_target(Vector3.ZERO, false, false)
+	map.set_target(Vector3.ZERO, false)
 	_expect(not pin.visible, "map", "and it hides again between targets")
 
 	map.set_pickups(PackedVector3Array([car + north * 50.0, car + east * 50.0]))
@@ -1647,12 +1645,12 @@ func _check_fare_face() -> void:
 			and FareFaceScript.seconds(0.2) == "1"
 			and FareFaceScript.seconds(0.0) == "0"
 			and FareFaceScript.seconds(-1.0) == "0"
-			and FareFaceScript.distance(999.4) == "999 m"
-			and FareFaceScript.distance(1000.0) == "1.0 km"
+			and FareFaceScript.distance(324.9) == "320 m"
+			and FareFaceScript.distance(995.0) == "1.0 km"
 			and FareFaceScript.flash(2.1) == "+HK$2.1"
 		),
 		"face",
-		"money is HK$ to one place, the clock never reads below zero, a kilometre is 1.0 km"
+		"money is HK$ to one place, the clock never reads below zero, distance steps by 10 m"
 	)
 
 

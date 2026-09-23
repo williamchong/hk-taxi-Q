@@ -389,7 +389,7 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 | `P3-25` ✅ | Wrong-way warning — blinking NO ENTRY, top-centre | Built; passed review (`Q81`) |
 | `P3-43` ✅ | `RoadRouter` — directed-edge search over `RoadGraph`: one-way, the 217 turn restrictions, `is_routable`; a legal profile and a player profile | Agrees with `tools/reachability.py`'s pairwise table on both shipped regions and across the join (every pair, worst 0.000000 m); a prepared route under 1 ms and a destination prepared inside a frame (`Q137`) |
 | `P3-1a` ✅ | `FareSystem` — hail → board → carry → deliver / bail, metered at TD's tariff on what was driven, the seconds left paid as a tip (`Q141`). Standard and short hop only | The loop runs end to end and can be failed: `verify_fares` drives it on synthetic samples, both sides of every dwell and bar, 7 mutations caught; the user's drive under `--debug-view=full` owed |
-| `P3-5a` ✅ | Minimal HUD — the 咪錶's LED, the tip clock, the bilingual callout (the building over the road, from iB1000's `BUILDINGNAME` joined in the ETL), the pool's pips and the destination on the minimap, a crow-flies arrow in the world; the nearest pickup named while idle (`Q142`). Deliberately ugly | Legible in three frames (boarding, carrying, idle); no layout work — the reserved rects taken as they are; `verify_hud` reads `FareFace` on synthetic fares, 4 mutations caught; 47 of 48 Wan Chai nodes placed; whole HUD +31 `draws`. The user's drive owed |
+| `P3-5a` ✅ | Minimal HUD — the 咪錶's LED, the tip clock, the bilingual callout (the building over the road, from iB1000's `BUILDINGNAME` joined in the ETL), the pool's pips and the destination on the minimap, a crow-flies guide in the world; nothing shown until there is a customer (`Q142`). Deliberately ugly | Legible in three frames (boarding, carrying, idle); no layout work — the reserved rects taken as they are; `verify_hud` reads `FareFace` on synthetic fares, 4 mutations caught; 47 of 48 Wan Chai nodes placed; whole HUD +31 `draws`. The user's drive owed |
 
 - **Deps:** `P1-5`, `P2-2`, `B2` (by order: the review is played on the city that ships).
 - **Review:** play one fare, start to finish | web build | **Is completing a fare worth doing
@@ -453,8 +453,8 @@ which leave `reserved_slots()` and stay in `hud_slots()`; `minimap.gd` carries t
 roads' transform; `scripts/fares/fare_guide.gd` is the world guide; `Main` hands `level.fares` to
 the HUD beside the car.
 
-- **The pending customer is the pool**: every pickup a pip, the nearest named with its distance
-  while idle, the arrow on it; hailed, all three point at the destination.
+- **Nothing until there is a customer**: idle, only the pool's pips on the map; hailed, the
+  callout, the pin and the guide all point at the destination.
 - **A stop is its building over its road**: `fares.json` carries `place` from iB1000's
   `BUILDINGNAME` (`etl/pipeline/fares.py::read_places`, `fares.places` in the yaml), and the
   road is the graph's name for the stop's edge.

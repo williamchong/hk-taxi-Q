@@ -122,7 +122,6 @@ var _callout_sub: Label = null
 ## The meter's tick, flashed under the clock and faded out (the user's call).
 var _tick: Label = null
 var _tick_s: float = 0.0
-var _last_reading_hkd: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
 
@@ -828,11 +827,9 @@ func _on_fare_delivered(fare: Fare) -> void:
 
 
 ## A unit began: the tick, in the chip's ink. The first is the flagfall.
-func _on_meter_changed(hkd: float) -> void:
-	var delta: float = hkd - _last_reading_hkd
-	_last_reading_hkd = hkd
-	if delta > 0.0:
-		_flash(FareFace.flash(delta), _style.chip_ink)
+func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
+	if delta_hkd > 0.0:
+		_flash(FareFace.flash(delta_hkd), _style.chip_ink)
 
 
 ## Show `text` under the clock and start it fading.
@@ -865,8 +862,6 @@ func _on_fare_bailed(fare: Fare) -> void:
 ## One sample of the loop, at its 5 Hz: the face decides and the panels are
 ## painted.
 func _on_fare_sampled() -> void:
-	if fares.state == FareSystem.State.IDLE:
-		_last_reading_hkd = 0.0
 	_face.on_sampled(fares.state, fares.fare, _style.timer_warn_s, fares.earned_hkd)
 	_paint_fares()
 
@@ -883,7 +878,7 @@ func _paint_fares() -> void:
 		_callout_panel.visible = false
 		_tick.visible = false
 		if _minimap != null:
-			_minimap.set_target(Vector3.ZERO, false, false)
+			_minimap.set_target(Vector3.ZERO, false)
 		return
 	if not _meter_panel.visible:
 		_meter_panel.visible = true
@@ -906,8 +901,8 @@ func _paint_fares() -> void:
 	if saying:
 		if _caption.text != _face.caption:
 			_caption.text = _face.caption
-		# Each line on its own guard: while idle the road line changes every
-		# metre and the place does not, and a refit reshapes the label.
+		# Each line on its own guard: carrying, the road line changes every ten
+		# metres and the place does not, and a refit reshapes the label.
 		# Cut to the box, like the plate's lettering: a building's name can run
 		# to forty characters, and the box is the worst case, not a suggestion.
 		var room: float = _layout.callout.size.x - _style.plate_pad.x * 2.0
@@ -924,4 +919,4 @@ func _paint_fares() -> void:
 			StreetPlate.shrink_to(_callout_sub, _style.callout_sub_size, room)
 
 	if _minimap != null:
-		_minimap.set_target(_face.target, _face.has_target, true)
+		_minimap.set_target(_face.target, _face.has_target)

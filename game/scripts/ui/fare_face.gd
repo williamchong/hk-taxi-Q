@@ -70,12 +70,11 @@ func on_ended(fare: Fare, delivered: bool) -> void:
 ## One sample of the loop: its `state` and `fare`, the bar under which the
 ## clock is urgent, and what the session has banked.
 func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: float) -> void:
-	var chinese: bool = _language == Locale.CHINESE
-	total_text = ("合計 HK$" if chinese else "TOTAL HK$") + money(earned_hkd)
+	total_text = _say("合計 HK$", "TOTAL HK$") + money(earned_hkd)
 	show_timer = state == FareSystem.State.CARRYING
 	timer_urgent = false
 	timer_text = ""
-	meter_text = money(0.0)
+	meter_text = "0.0"
 	if state == FareSystem.State.CARRYING:
 		timer_text = seconds(fare.remaining_s)
 		timer_urgent = fare.remaining_s <= warn_s
@@ -88,9 +87,9 @@ func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: 
 		has_target = true
 		target = fare.destination.point
 		if state == FareSystem.State.BOARDING:
-			caption = "上客中" if chinese else "PICKING UP"
+			caption = _say("上客中", "PICKING UP")
 		else:
-			caption = "目的地" if chinese else "DESTINATION"
+			caption = _say("目的地", "DESTINATION")
 		callout = fare.destination.place(_language)
 		var road: String = fare.destination.road(_language)
 		if state == FareSystem.State.CARRYING:
@@ -105,11 +104,11 @@ func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: 
 	if _notice != Notice.NONE and _notice_left > 0:
 		_notice_left -= 1
 		if _notice == Notice.DELIVERED:
-			caption = "已送達" if chinese else "DELIVERED"
+			caption = _say("已送達", "DELIVERED")
 			callout = "HK$" + money(_notice_fare.banked_hkd)
-			callout_sub = ("小費 HK$" if chinese else "tip HK$") + money(_notice_fare.tip_hkd)
+			callout_sub = _say("小費 HK$", "tip HK$") + money(_notice_fare.tip_hkd)
 		else:
-			caption = "乘客下車" if chinese else "PASSENGER BAILED"
+			caption = _say("乘客下車", "PASSENGER BAILED")
 			callout = ""
 			callout_sub = ""
 		return
@@ -119,15 +118,22 @@ func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: 
 	callout_sub = ""
 
 
+## The string for the face's language, Chinese first so a pair reads the
+## same way at every call site.
+func _say(zh: String, en: String) -> String:
+	return zh if _language == Locale.CHINESE else en
+
+
 ## Dollars to one place, as the 咪錶 shows them.
 static func money(hkd: float) -> String:
 	return "%.1f" % hkd
 
 
-## A road distance: whole metres under a kilometre, else to a tenth of one.
+## A road distance: to ten metres under a kilometre, else to a tenth of one —
+## a nav readout's steps, so the last digit does not flicker at 5 Hz.
 static func distance(metres: float) -> String:
-	var m: float = maxf(metres, 0.0)
-	return ("%d m" % roundi(m)) if m < 1000.0 else ("%.1f km" % (m / 1000.0))
+	var tens: int = roundi(maxf(metres, 0.0) / 10.0) * 10
+	return ("%d m" % tens) if tens < 1000 else ("%.1f km" % (tens / 1000.0))
 
 
 ## What a meter tick flashes: the unit that just began, signed.

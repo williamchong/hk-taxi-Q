@@ -99,17 +99,17 @@ UP, DELIVERED — that says what the box is, which the box alone did not.
 
 ## `callout_hold_s = 3.0`
 
-How long DELIVERED or PASSENGER BAILED stays in the callout before it goes back
-to naming the nearest pickup: fifteen samples at the loop's 5 Hz, and the
-model counts samples, not seconds, so `verify_hud.gd` can step it.
+How long DELIVERED or PASSENGER BAILED stays in the callout before the box goes
+down: fifteen samples at the loop's 5 Hz, and the model counts samples, not
+seconds, so `verify_hud.gd` can step it.
 
 ## `map_pin_px = 26.0`
 
 The target's marker on the map is a PIN, not a dot (`Q142`, the user's call:
 an icon on the customer's and the destination's location): its tip on the
-point, upright whatever the map's heading, in `map_destination` for the fare
-and `map_pickup` for the nearest pickup. The pool's other pickups stay
-`map_pip_px` dots.
+point, upright whatever the map's heading, in `map_destination` — up only
+while a fare has a destination. The pool's pickups stay `map_pip_px` dots in
+`map_pickup`.
 
 ## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
 

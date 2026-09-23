@@ -62,8 +62,10 @@ signal cancelled(fare: Fare)
 signal delivered(fare: Fare)
 ## Emitted when the allowance ran out; `banked_hkd` is 0.
 signal bailed(fare: Fare)
-## Emitted whenever the reading moves, with the new reading in HK$.
-signal meter_changed(hkd: float)
+## Emitted whenever the reading moves: the new reading in HK$, and the unit
+## that just began — the flagfall at boarding — so a readout that shows the
+## tick keeps no copy of the last reading (`P3-5a`).
+signal meter_changed(hkd: float, delta_hkd: float)
 ## Emitted after each graph sample, at `sample_hz`: when a readout should
 ## re-read `state`, `fare` and the counters. Never per frame.
 signal sampled
@@ -405,7 +407,7 @@ func _board() -> void:
 	state = State.CARRYING
 	_last_reading_hkd = fare.meter.reading_hkd()
 	boarded.emit(fare)
-	meter_changed.emit(_last_reading_hkd)
+	meter_changed.emit(_last_reading_hkd, _last_reading_hkd)
 
 
 func _deliver() -> void:
@@ -432,8 +434,9 @@ func _announce_reading() -> void:
 	var reading: float = fare.meter.reading_hkd()
 	if is_equal_approx(reading, _last_reading_hkd):
 		return
+	var delta: float = reading - _last_reading_hkd
 	_last_reading_hkd = reading
-	meter_changed.emit(reading)
+	meter_changed.emit(reading, delta)
 
 
 ## How often `sampled` fires, for a consumer that counts samples.
