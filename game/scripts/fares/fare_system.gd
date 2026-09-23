@@ -447,11 +447,28 @@ func nearest_pickup_any(position: Vector3) -> Fare.Stop:
 	return _nearest_pickup_within(position, INF)
 
 
-## `nearest_pickup_any` while no one is aboard, null otherwise: hailed, a
-## reader points at the destination and would throw the scan away, so the
-## gate lives here rather than at each reader.
+## The pending customer a reader may point at: the nearest pickup while no one
+## is aboard, null otherwise — hailed, a reader points at the destination and
+## would throw the scan away, so the gate lives here rather than at each
+## reader. ⚠️ **Never one the loop would refuse right now** (the user's call):
+## after a delivery at a stand that is also a pickup the hail is disarmed
+## until the car leaves reach, and an arrow pointing at the kerb under the
+## car with nothing happening reads as a broken cooldown. Those pickups are
+## skipped until the car is armed again.
 func nearest_pending(position: Vector3) -> Fare.Stop:
-	return _nearest_pickup_within(position, INF) if state == State.IDLE else null
+	if state != State.IDLE:
+		return null
+	if _armed:
+		return _nearest_pickup_within(position, INF)
+	var best: Fare.Stop = null
+	var best_m: float = INF
+	for stop: Fare.Stop in _pickups:
+		var apart: float = RoadGraph.plan_distance(position, stop.point)
+		if apart <= _profile.hail_radius_m or apart > best_m:
+			continue
+		best_m = apart
+		best = stop
+	return best
 
 
 ## How often `sampled` fires, for a consumer that counts samples.

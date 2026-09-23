@@ -361,6 +361,25 @@ func _check_loop() -> void:
 	_tick(system, destination.point, CRAWL, 1)
 	_expect(system.state == FareSystem.State.IDLE, "loop", "stopping at the destination delivers")
 	_expect(system.deliveries == 1, "loop", "deliveries counted")
+	# The pending customer a reader may point at is never the stand the car
+	# is disarmed on (the user's call): a delivery at a stand that is also a
+	# pickup would otherwise aim the arrow at the kerb under the car.
+	var pointed: Fare.Stop = system.nearest_pending(destination.point)
+	_expect(
+		(
+			not system.armed()
+			and (pointed == null or not pointed.same_as(destination))
+			and (
+				pointed == null
+				or (
+					RoadGraph.plan_distance(destination.point, pointed.point)
+					> _profile.hail_radius_m
+				)
+			)
+		),
+		"loop",
+		"and the pending customer pointed at is not the stand under the car"
+	)
 	var expected_tip: float = (remaining - TICK_S) * _profile.tip_hkd_per_s
 	_expect(
 		is_equal_approx(system.fare.tip_hkd, expected_tip),

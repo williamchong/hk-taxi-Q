@@ -53,6 +53,9 @@ the loop's own numbers in `tuning/fares.tres`.
   at a clip edge whose forward direction leaves it. A new one is a finding about the data, answered by looking at the
   node — never by lowering the bar silently, and never by an assert that would fail every region
   with an edge.
+- ⚠️ **`nearest_pending` never returns a pickup the loop would refuse**: disarmed after a
+  delivery, it skips every pickup inside `hail_radius_m` — the user read an arrow at the kerb
+  under the car as a "dumb 3 s cooldown". `verify_fares` asserts it at the delivery.
 - ⚠️ **A fare cannot start where the last one ended.** `_armed` clears on every end and on a
   refusal, and sets again only once a sample finds no pickup in reach. Without it a delivery at a
   stand that is also a pickup hails again on the spot.
