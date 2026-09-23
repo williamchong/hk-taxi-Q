@@ -388,7 +388,7 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 | `P3-24` ✅ | HUD chassis — speed, bilingual street plate, reserved slots, thumb-rest contract | Built; passed review (`Q79`, `Q80`) |
 | `P3-25` ✅ | Wrong-way warning — blinking NO ENTRY, top-centre | Built; passed review (`Q81`) |
 | `P3-43` ✅ | `RoadRouter` — directed-edge search over `RoadGraph`: one-way, the 217 turn restrictions, `is_routable`; a legal profile and a player profile | Agrees with `tools/reachability.py`'s pairwise table on both shipped regions and across the join (every pair, worst 0.000000 m); a prepared route under 1 ms and a destination prepared inside a frame (`Q137`) |
-| `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. Standard and short hop only | The loop runs end to end and can be failed |
+| `P3-1a` ✅ | `FareSystem` — hail → board → carry → deliver / bail, metered at TD's tariff on what was driven, the seconds left paid as a tip (`Q141`). Standard and short hop only | The loop runs end to end and can be failed: `verify_fares` drives it on synthetic samples, both sides of every dwell and bar, 7 mutations caught; the user's drive under `--debug-view=full` owed |
 | `P3-5a` | Minimal HUD — destination arrow, timer, meter. Deliberately ugly | Legible; no layout work |
 
 - **Deps:** `P1-5`, `P2-2`, `B2` (by order: the review is played on the city that ships).
@@ -402,9 +402,9 @@ of the drawn road goes through one door. Complete but for `g4`'s refusal.
 `turn_restrictions` is only counted (`tools/reachability.py` says so, having needed one). Shared
 infrastructure, so its own task, first in `B1` (`Q137`).
 
-- **Consumers:** `P3-1a` — a fare's length and its time allowance are road distance, and
-  `GAME_DESIGN.md` already owes a minimum trip for the cross-harbour stands 191 m from the portal;
-  `P3-3` — a legal route; `P3-44` — nothing yet (`Q137`).
+- **Consumers:** `P3-1a` ✅ — a fare's par and its allowance are the legal route's length, and
+  `min_trip_m` is the minimum trip `GAME_DESIGN.md` owed (`Q141`); `P3-3` — a legal route;
+  `P3-44` — nothing yet (`Q137`).
 - ✅ `scripts/city/road_router.gd`, reading `RoadGraph`, never inside it. ⚠️ The search state is a
   **directed edge**, not a node: a restriction is `from_edge → via_node → to_edge`, which a node
   search cannot express. `RoadGraph` loads `from` / `to`, the turn bans and a 64-bit plan length
@@ -422,7 +422,28 @@ infrastructure, so its own task, first in `B1` (`Q137`).
   a divergence is a finding. Do not import one into the other (`Q95`'s arrangement). ✅ Its
   `--json` writes the tables; both verify tools read them (`.claude/rules/router.md`).
 - Once per fare and on leaving the path, off the `Hit` `hud.gd` already fetches at 5 Hz. Never
-  per frame. Nothing in the game calls it yet — `P3-1a` is the first consumer.
+  per frame. `P3-1a` is the first consumer: the reach table at load, `route` at its own 5 Hz.
+
+#### `P3-1a` — the loop, and what a fare is worth
+
+✅ Built (`Q141`, `.claude/rules/fares.md`). `scripts/fares/fare_system.gd` over `RoadGraph` and
+`RoadRouter`; `scripts/core/fare_meter.gd` pure; `tuning/tariff.tres` (TD's numbers, cited) and
+`tuning/fares.tres` (ours); `tools/verify_fares.gd` per region.
+
+- **The meter is Transport Department's urban tariff on the metres driven and the seconds
+  waited** — HK$29 / 2 km, HK$2.1 a unit of 200 m or 1 min, HK$1.4 past HK$102.5 — in cents,
+  charged as a unit begins. Most trips inside the region stay on the flagfall; that is the tariff.
+- **The tip is the skill.** Seconds left on the allowance × HK$0.5, so a shortcut and a fast run
+  pay through one number; `P3-2b`'s style chain adds to it. Delivery banks meter + tip.
+- **Allowance** `max(kind floor, legal route / 30 kph)`; par is `Profile.legal()`.
+- **Reach at load**: every destination prepared once, every pickup routed to it (14 ms on
+  Wan Chai); a hail draws from the reachable list. Five pickups on the shipped regions reach no
+  destination at 300 m and are dropped from the pool, named — `Q141`.
+- `--fares=off` for `P3-9`; `--fare-seed=` for a repeatable drive. The state, destination, clock
+  and meter are a `DebugHud` readout until `P3-5a`; `Fare` and the signals are what `P3-5a` and
+  `P3-2b` read.
+- 🚫 Not built: the session timer and combo (`P3-2b`), cross-harbour and long haul (`P3-1b`), any
+  HUD, the minimap pip (`P3-5a`).
 
 #### `P3-24` — how the HUD gets its chassis
 

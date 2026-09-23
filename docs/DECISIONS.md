@@ -192,9 +192,10 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up, the merged plate and the one-way arrows are the user's calls. Owed the user: `span_m`. |
 | `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
+| `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Five stranded pickups named. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
-| `Q137` | A router is built; a route line on the map is not | 🟡 Router half ✅ built (`P3-43`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. The route line stays a design call, not a measurement; reopens on `P3-9`. |
+| `Q137` | A router is built; a route line on the map is not | 🟡 Router half ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. The route line stays a design call, not a measurement; reopens on `P3-9`. |
 
 ---
 
@@ -6916,3 +6917,65 @@ not a measurement, and reopens on `P3-9`
 
 **See.** `Q136` · `Q133` · `DATA_SOURCES.md` iB1000 · `PLAN.md` `P3-45`
 
+## `Q141` — The 咪錶 runs Transport Department's tariff on what was driven; the skill is the tip
+
+**Status.** ✅ Closed — the user's calls (2026-09-23), built as `P3-1a`. The user's drive owed.
+
+- **The meter is real money.** `tuning/tariff.tres` is TD's urban fare, effective 14 July 2024:
+  HK$29 for the first 2 km, HK$2.1 per 200 m or per minute of waiting until HK$102.5, HK$1.4
+  after; cited in `tariff.md`. It runs on the metres the car actually drove and the seconds it
+  actually waited (`FareMeter`, `scripts/core/`, integer cents). 🚫 No abstract multiplier: the
+  user chose the meter over `GAME_DESIGN.md`'s 1× / 2× table and over a fare fixed at the hail.
+  ⚠️ The stated cost: inside a 1.5 km² region most trips are under the flagfall, so the reading is
+  HK$29 for most fares and only waiting past 2 km moves it. Authentic, and why the tip carries
+  the skill.
+- **The unit rule is "or part thereof", on two buckets.** A unit is charged when it begins (2,001 m
+  reads 31.1, 2,200 m still 31.1, 2,201 m 33.2); either bucket exceeding its unit charges and
+  resets both; nothing is charged for waiting inside the flagfall distance. No waiting-speed
+  threshold exists as a field: the tariff's own two units cross at 12 kph. `verify_fares` pins
+  2,001 / 2,200 / 2,201 / 9,000 (= 102.5, the 35th unit) / 9,200 m (= 103.9, the first 1.4) and
+  the bucket reset from both sides.
+- **The tip is the skill, and speed pays now.** The user asked that a fast arrival — a shortcut
+  or speeding — be rewarded. A shortcut *lowers* the meter (less distance), so the reward is on
+  the clock: `tip_hkd = remaining_s × tip_hkd_per_s` at delivery, HK$0.5 a second. `P3-2b`'s
+  style chain adds to the same `Fare.tip_hkd`; delivery banks meter + tip as one HK$ sum, one
+  seven-segment display (`Q139`). Measured on Wan Chai's seed-7 fare: par 1,575 m, allowance
+  189 s, delivered after 1.25 s banks HK$122.88 (29.00 + 93.88); the same trip 2 s later
+  HK$121.88. Driven (`--fare-seed=1` from the Expo Drive stand): aboard by 0.8 s, a short hop of
+  par 1,216 m on a 146 s clock, meter HK$29.0, the remaining road distance falling as the car
+  goes. 🚫 Separate score points beside the money — weighed, not taken.
+- **The allowance is road distance with a floor**: `max(kind floor, legal route / par_kph)`,
+  `par_kph` 30, `GAME_DESIGN.md`'s 30 s / 60 s becoming the floors. Par is `Profile.legal()`
+  (`Q137`'s recommendation): what obeying the signs costs; the player may break every rule to
+  beat it. 🚫 Fixed per kind — weighed, not taken.
+- **The reach is computed at load, not at the hail.** `setup` prepares every destination once and
+  routes every pickup to it (Wan Chai 16 × 23, 14.0 ms), keeping per pickup what the legal network
+  reaches at `min_trip_m` (300 m) or beyond; a hail draws uniformly from that list on the seeded
+  RNG (`--fare-seed=`) and pays one `prepare`. 🚫 Built first and refused: drawing blind and
+  retrying up to eight times — a stand with one reachable destination was refused most of its
+  hails.
+- **Stranded pickups.** A pickup reaching no destination at the bar is dropped from the pickup
+  pool, kept as a destination, counted (`FareSystem.stranded`) and named. Wan Chai: `f_017`,
+  `f_018`, `f_020` — westbound Hennessy and Johnston Road PUDO points at the clip's west edge,
+  where forward leaves the clip and the one-way network never comes back. Causeway Bay alone:
+  `f_001`, `f_002`, its only two stands, so that region has no pickup of its own; its five other
+  nodes are tram stops. `verify_fares` says SKIP there rather than certifying nothing. On the
+  merged runtime (`wan_chai` + `causeway_bay`) the join un-strands `f_002` (Tung Lo Wan Road) and
+  `f_001` (Electric Road) stays stranded: 17 pickups, 4 stranded, 25 destinations, reach 18.1 ms
+  on the boot line. ⚠️ A new stranded node is a finding about the data, never a reason to lower
+  the bar.
+- **The pools are the yaml's rules.** A stand is a pickup and a destination unless
+  `cross_harbour` (`P3-1b`); a PUDO point is what `pickup` / `dropoff` say; a `poi` tram stop is
+  neither. The kind is the destination's. Wan Chai: 19 pickups → 16, 23 destinations.
+- **A fare cannot start where the last one ended.** The hail re-arms only once a sample finds no
+  pickup in reach; otherwise a delivery at a stand that is also a pickup hails again on the spot.
+- **No dev chrome in the system.** `fare_readout.gd` names the `DebugHud` autoload;
+  `fare_system.gd` cannot, because `verify_fares.gd` loads it before any autoload exists
+  (`Identifier not found: DebugHud`, measured). `GraphOverlay`'s arrangement.
+- **`--fares=off`** is free roam, what `P3-9` runs. Both flags through `Cmdline`.
+- 🚫 Not here: the session timer and fare combo (`P3-2b`), cross-harbour and long haul with the
+  HK$25 + HK$25 return toll (`P3-1b`), the HUD's meter, timer, callout, world arrow and minimap
+  pip (`P3-5a`), operating hours (`Q14`).
+
+**See.** `Q137` · `Q139` · `.claude/rules/fares.md` · `tuning/tariff.md` · `tuning/fares.md` ·
+`PLAN.md` `P3-1a`

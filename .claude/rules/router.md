@@ -64,6 +64,7 @@ paths:
   h. A table header edited (`"edges"`) → the stale guard, naming the command.
   i. Python: `--json` rows from `world.reach` instead of `distances` → `TestTable`.
   🚫 Storing `false` under the key is NOT a mutation: `is_turn_banned` tests presence.
-- ⚠️ **No consumer is wired.** `hud.gd`, `fare_preview.gd` and the minimap do not call it; `P3-1a`
-  is the first, and which par it uses (legal recommended) is recorded there. 🚫 No route line on
-  the minimap (`Q137`, `hud.md`).
+- ⚠️ **One consumer is wired: `FareSystem`** (`P3-1a`, `fares.md`). It pays `prepare` at the hail,
+  one per candidate destination, and `route` at its own 5 Hz sample from the car's `Hit`; its par
+  is `Profile.legal()` (`Q141`). `hud.gd`, `fare_preview.gd` and the minimap still do not call it.
+  🚫 No route line on the minimap (`Q137`, `hud.md`).

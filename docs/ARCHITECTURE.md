@@ -95,7 +95,7 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--minimap=`, `--touch=` and `--asset=` go through it.
+  `--minimap=`, `--fares=`, `--fare-seed=`, `--touch=` and `--asset=` go through it.
 
 ### The debug overlay
 
@@ -140,7 +140,7 @@ name globals whatever the tool does (`Q119`).
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the `meshes/*` keys `[importer_defaults]` pins (`P5-16`, `Q122`; authored since `P5-20`, `Q124`). Keys are read from the project file and their count asserted. 0 sidecars checked passes — a clone has no city | yes |
 | warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`) | yes |
 | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures. None needs a built region | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |
 
 ⚠️ `verify_road_graph` and `verify_join` also need `reachability.json` beside each graph they read
@@ -1077,7 +1077,7 @@ city_space = region_local + city_offset
 | `CityStreamer` | Loads/unloads tile meshes and road chunks by camera distance, one per region, camera through `to_local`; owns the LOD tier | ✅ `P2-1`, `P5-6`, `P5-9c` |
 | `Landmarks` | Places the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
 | `RoadGraph` | Queries over `roadgraph.json` — nearest edge, lane centre; loads the topology (`from` / `to`, turn bans, 64-bit plan length) and traverses none of it | ✅ `P2-2`, `P3-43` |
-| `RoadRouter` | Directed-edge search over `RoadGraph`: one-way, turn restrictions, U-turn ban, a bar. `Profile.legal()` (traffic, lane bar) and `Profile.player()` (rules free, car bar). One reverse search per destination (`prepare`), then `route()` is a lookup; "no route" is an answer. Diffed pair for pair against `tools/reachability.py` (`Q137`) | ✅ `P3-43`; no consumer until `P3-1a` |
+| `RoadRouter` | Directed-edge search over `RoadGraph`: one-way, turn restrictions, U-turn ban, a bar. `Profile.legal()` (traffic, lane bar) and `Profile.player()` (rules free, car bar). One reverse search per destination (`prepare`), then `route()` is a lookup; "no route" is an answer. Diffed pair for pair against `tools/reachability.py` (`Q137`) | ✅ `P3-43`; consumed by `FareSystem` (`P3-1a`) |
 | `RoadSpawn` | Where a car starts, resolved from a fare node, and what it stands in (`Q52`) | ✅ `P2-3` |
 | `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, drift, collision response, auto-right | ✅ `P0-5`/`P2-3`/`Q50` |
 | `InputRouter` | Touch / gamepad / keyboard into one action set (autoload) | 🟡 touch ships 3 of 5 actions; `P2-4` |
@@ -1093,8 +1093,9 @@ city_space = region_local + city_offset
 | `signs.glb` + `signs_placements.json` | Traffic signs on the poles TD surveyed. Shape-faced signs only. Library of one mesh per face variant plus a unit pole; one placement per plate, lettering quad and pole (`scale` on the pole). No collider | ✅ `P3-16`, `P5-2` |
 | `lamps.glb` + `lamps_placements.json` | Lamp posts on the drawn kerb with a bracket arm over the carriageway; `rot_y_deg` is the arm's bearing. Unlit (`Q38`, `Q26`). Library of one mesh per drawn kind. No collider | ✅ `P3-26`, `P5-3` |
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |
-| `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
-| `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
+| `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes; a reach table at load (every destination prepared once), a hail drawn from it, `route` at 5 Hz; the allowance `max(kind floor, legal route / par)`; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
+| `FareMeter` | TD's tariff in `scripts/core/`: flagfall, then a unit per 200 m or per minute past it, in cents, charged as the unit begins (`tuning/tariff.tres`, cited in `tariff.md`) | ✅ `P3-1a` |
+| `ScoreSystem` | The **style chain** and **fare combo** — two distinct multipliers — paying into `Fare.tip_hkd` beside the time bonus `P3-1a` already pays | ⬜ `P3-2` |
 | `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, one-way arrows, +4 draw calls and 13.4k primitives over `--minimap=off`) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 

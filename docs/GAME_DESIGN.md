@@ -62,12 +62,20 @@ The session ends when the global session timer expires; delivering fares adds ti
 Fare nodes come from `fares.json`, built from the Taxi Stands and Taxi Pick-up & Drop-off Points
 datasets, plus hand-added POIs.
 
-| Type | Source | Time allowance | Payout | Notes |
+| Type | Source | Allowance floor | Payout | Notes |
 |---|---|---|---|---|
-| Short hop | `pudo` | 30 s | 1× | Common; keeps the chain alive |
-| Standard | `taxi_stand` (urban) | 60 s | 2× | The default fare |
-| Long haul | `poi`, cross-district | 90 s | 4× | Rewards route knowledge |
-| **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | 75 s | 5× | Terminates at the tunnel approach |
+| Short hop | `pudo` | 30 s | The meter | Common; keeps the chain alive |
+| Standard | `taxi_stand` (urban) | 60 s | The meter | The default fare |
+| Long haul | `poi`, cross-district | 90 s | The meter | Rewards route knowledge (`P3-1b`) |
+| **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | 75 s | The meter + the HK$25 toll and HK$25 return toll | Terminates at the tunnel approach (`P3-1b`) |
+
+**The meter is real** (`Q141`): the 咪錶 runs Transport Department's urban tariff — HK$29 for the
+first 2 km, then HK$2.1 per 200 m or per minute waiting until HK$102.5, HK$1.4 after — on the
+metres actually driven and the seconds actually waited. Inside one region most trips stay on the
+flagfall, so the base is HK$29 and the drive earns the rest as a tip (Scoring). The kind is the
+destination's. **The allowance is road distance**: the legal route over a par of 30 kph, floored by
+the kind's figure above. A destination is only ever drawn at 300 m of legal route or more, and a
+pickup that reaches none is not a pickup.
 
 The cross-harbour fare is the signature mechanic: the source dataset distinguishes that stand
 category, it pays the most, and it ends at a diegetic map boundary. The fare terminates at the
@@ -91,8 +99,9 @@ the arrow disabled.
 
 | Component | Rule |
 |---|---|
-| Base fare | By fare type multiplier |
-| Time bonus | Remaining seconds × rate |
+| Base fare | The meter's reading at delivery (`Q141`) |
+| **Tip** (小費) | Everything below, in HK$, banked with the meter as one sum |
+| Time bonus | Remaining seconds × HK$0.5 — pays a shortcut and a fast run alike (`P3-1a`) |
 | **Drift** | Points/second while sliding above a threshold angle |
 | **Near miss** | Passing traffic within ~1 m at speed |
 | **Air** | Points by airtime duration |

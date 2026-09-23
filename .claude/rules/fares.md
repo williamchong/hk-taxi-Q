@@ -1,0 +1,78 @@
+---
+paths:
+  - "game/scripts/fares/*.gd"
+  - "game/scripts/core/fare_meter.gd"
+  - "game/tuning/tariff.tres"
+  - "game/tuning/tariff.md"
+  - "game/tuning/fares.tres"
+  - "game/tuning/fares.md"
+  - "game/tools/verify_fares.gd"
+---
+
+# The fare loop — before marking work done
+
+`P3-1a`, `Q141`. `FareSystem` (`game/scripts/fares/fare_system.gd`) runs hail → board → carry →
+deliver / bail over the published fare nodes, metered by `FareMeter`
+(`game/scripts/core/fare_meter.gd`) at Transport Department's tariff (`tuning/tariff.tres`), with
+the loop's own numbers in `tuning/fares.tres`.
+
+- 🔴 **`tariff.tres` is the government's table, not ours.** Every value is TD's published urban
+  fare with its effective date in `tariff.md`; a change there is a tariff revision, cited, never a
+  tuning pass. What is ours — radii, dwells, the par speed, the tip rate — lives in `fares.tres`.
+  🚫 No abstract multiplier (`1×`, `2×`) anywhere: the meter shows money.
+- 🔴 **The meter is honest and the tip is the skill.** The reading is the tariff on the metres
+  driven and the seconds waited; nothing a player does at the wheel moves it except driving
+  further or sitting still. Everything earned — the seconds left on the allowance now, `P3-2b`'s
+  style chain later — is `Fare.tip_hkd`, and the two bank as one sum. 🚫 Do not make a shortcut
+  or a fast run *raise the meter*; a shortcut lowers it and raises the tip, by design.
+- 🔴 **The unit rule is "or part thereof", on two buckets, no speed bar.** A unit is charged when
+  it BEGINS (one centimetre past 2,000 m reads 31.1), either bucket exceeding its unit charges and
+  resets both, and nothing is charged for waiting inside the flagfall distance. `verify_fares.gd`
+  pins 2,001 / 2,200 / 2,201 / 9,000 / 9,200 m and the bucket reset; a "waiting speed" threshold
+  is not a field because the tariff's two units already cross at 12 kph.
+- 🔴 **Cents, not dollars, inside `FareMeter`.** 29 + 35 × 2.1 must land on 102.50 exactly for
+  the threshold comparison; `_cents_of` rounds once at construction.
+- ⚠️ **Par is the legal profile** (`Q137`'s recommendation): the allowance is
+  `max(kind floor, legal route / par_kph)`. `GAME_DESIGN.md`'s 30 s / 60 s are the floors, not the
+  allowance. 🚫 Not the player's profile: par is what obeying the signs costs, and the player may
+  break every rule to beat it.
+- ⚠️ **The reach table is built once at load; the hail pays one `prepare`.** `_build_reach`
+  prepares every destination and routes every pickup to it (~20 ms on Wan Chai, `reach_ms` on the
+  boot line and in `verify_fares`); `pick_destination` draws uniformly from a pickup's reachable
+  list on the seeded RNG; `route` at the sample rate from the car's `Hit`; never per frame
+  (`router.md`). 🚫 Drawing blind and retrying at the hail was built and refused: a stand with one
+  reachable destination was refused most of its hails. 🚫 "No route" is a pool decision, never an
+  assert (`Q137`).
+- ⚠️ **The pools are the yaml's rules.** A stand is a pickup and a destination unless
+  `cross_harbour` (`P3-1b`'s); a PUDO point is what its `pickup` / `dropoff` say — a quarter are
+  drop-off only, and a hail at one is what a Hong Kong player notices; a `poi` tram stop is
+  neither. The kind of a fare is the DESTINATION's (`pudo` → short hop, `taxi_stand` → standard).
+- ⚠️ **A pickup that reaches no destination at `min_trip_m` is stranded**: dropped from the
+  pickup pool at load, kept as a destination, counted in `FareSystem.stranded` and named by
+  `verify_fares` and the boot line. Five on the shipped regions (`Q141`), all at a clip edge whose
+  forward direction leaves it. A new one is a finding about the data, answered by looking at the
+  node — never by lowering the bar silently, and never by an assert that would fail every region
+  with an edge.
+- ⚠️ **A fare cannot start where the last one ended.** `_armed` clears on every end and on a
+  refusal, and sets again only once a sample finds no pickup in reach. Without it a delivery at a
+  stand that is also a pickup hails again on the spot.
+- ⚠️ **Mutation-check it rather than reading its pass** (`Q72`). Each of these fails by name in
+  `verify_fares.gd`: `step_m = 1` (a linear meter) at the 2,200 m point; a zero price (an inert
+  meter); a drop-off-only point, a tram stop and a cross-harbour stand smuggled into `fares.json`
+  (the pools); `min_trip_m` raised past every route (every pickup stranded, the pool empty);
+  half the tip rate (what the same drive banks); the same trip delivered 2 s later (banks
+  strictly less). Dwells and bars are asserted from BOTH sides: 0.75 s boarding and 1.0 s
+  aboard; arriving fast and arriving stopped; one tick short of the allowance and one past it.
+- ⚠️ **Verify tools never run by hand and read** (`verify_hud`'s rule): `verify_fares.gd` can
+  print `ok` having checked nothing when a preload fails to compile. `tools/check.sh` is the
+  reading. `TICK_S` is 0.25 — exact in binary — so a 1.0 s dwell lands on the fourth tick and not
+  the fifth; do not "round" it to 0.2.
+- ⚠️ **Two tables, two sidecars, both required** (`Q119`): `tariff.md` and `fares.md` beside the
+  `.tres`, no defaults in either profile script, and `FareSystem.setup` refuses a zero field with
+  the file named rather than run on a literal.
+- ⚠️ **`--fares=off` is free roam** and what `P3-9` runs with the arrow off; `--fare-seed=<int>`
+  fixes the draw for an A/B drive. Both go through `Cmdline`, like `--hud=`.
+- 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul
+  with the tunnel toll (`P3-1b`), the meter and timer on the HUD, the world-space arrow and the
+  minimap pip (`P3-5a` — the readout under `--debug-view=full` is the loop's only face until
+  then), operating hours (`Q14`).
