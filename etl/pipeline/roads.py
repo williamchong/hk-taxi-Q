@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import logging
+import math
 import re
 import unicodedata
 from collections import Counter, defaultdict
@@ -47,11 +48,12 @@ from pipeline.config import (
     GroundProfile,
     RoadNetwork,
     SourceLayer,
+    StreetClass,
     load_config,
 )
 from pipeline.crs import GameTransform, PlanExtent, inside_plan, transformer
 from pipeline.documents import read_document, round_position, write_document
-from pipeline.fetch import cached_source
+from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import normalise
 from pipeline.polyline import plan_lengths_2d, plan_steps_2d
 from pipeline.terrain import HeightField
@@ -382,6 +384,11 @@ class Edge:
     # The region that owns this edge, where it is not this one (`P5-7e`). Set on
     # every entry of `foreign_edges` and on nothing in `edges`.
     foreign: str | None = None
+    # Which class of street this is (`STREET_CLASSES`), from the published street
+    # hierarchy joined by street code (`_StreetIndex`). None where the city
+    # publishes none, or this edge carries no code or has no same-code segment
+    # in reach — drawn as a minor road, never guessed from its width.
+    street_class: str | None = None
 
 
 @dataclass(frozen=True)
@@ -494,6 +501,11 @@ class RoadReport:
     # `P3-13`'s counters. `None` for a city whose sources carry no no-stopping
     # layer, which is not the same as one that carries an empty one.
     kerbside: kerbside.KerbsideReport | None = None
+    # The street hierarchy's join: edges per class, and the two ways an edge
+    # goes unclassed — no street code on it, or no same-code segment in reach.
+    street_classes: dict[str, int] = field(default_factory=dict)
+    street_no_code: int = 0
+    street_no_segment: int = 0
     # `Q95`'s counters. `None` for a city whose file transcribes no design
     # manual, which is not the same as one whose survey measured nothing.
     carriageway: carriageway.CarriagewayReport | None = None
@@ -1004,6 +1016,16 @@ def build_region(
     direction_code = centrelines.column(style.centrelines.field("travel_direction"))
     name_en = centrelines.column(style.centrelines.field("name_en"))
     name_zh = centrelines.column(style.centrelines.field("name_zh"))
+    street_code = (
+        None
+        if style.street_class is None
+        else centrelines.column(style.centrelines.field("street_code"))
+    )
+    streets = (
+        None
+        if style.street_class is None
+        else _StreetIndex.read(city, region_id, style.street_class, transform, sources_root)
+    )
 
     # Read, clipped and named in one pass; measured in a second. The seam is
     # forced by `P2-7`: whether a level-0 edge sits on a ramp depends on whether
@@ -1046,6 +1068,16 @@ def build_region(
                 report.margin_dropped += 1
                 continue
             report.vertices_kept += len(run)
+            classed = None
+            if streets is not None and street_code is not None:
+                code = street_code_text(street_code[owner])
+                classed = None if code is None else streets.class_of(code, run)
+                if code is None:
+                    report.street_no_code += 1
+                elif classed is None:
+                    report.street_no_segment += 1
+                else:
+                    report.street_classes[classed] = report.street_classes.get(classed, 0) + 1
             # The owner is the region holding the run's first vertex in the
             # direction of travel — after the `BACKWARD` reversal above, source
             # order for `both`. Tolerance-free, and the same answer from either
@@ -1078,6 +1110,7 @@ def build_region(
                             "en": english,
                             "zh": clean_text(name_zh[owner], style.null_values),
                         },
+                        street_class=classed,
                     ),
                     plan=run,
                 )
@@ -1162,6 +1195,115 @@ class _Source:
             bbox=self.bbox,
             expect_crs=self.city.projected_crs,
         )
+
+
+def street_code_text(value: object) -> str | None:
+    """A street code as the two publishers can agree on it: digits, no float.
+
+    The network stores `ST_CODE` as a number (null as NaN) and the topographic
+    map as text, so `10181.0` and `"10181"` must meet as one key.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (float, np.floating)):
+        if not math.isfinite(float(value)):
+            return None
+        return str(int(value))
+    text = str(value).strip()
+    return text or None
+
+
+@dataclass
+class _StreetIndex:
+    """The published street hierarchy's segments, by street code, in game plan
+    metres — read once per region, asked once per edge.
+    """
+
+    spec: StreetClass
+    # Street code to (segment starts, segment ends, class) arrays.
+    segments: dict[str, tuple[np.ndarray, np.ndarray, list[str | None]]]
+
+    @classmethod
+    def read(
+        cls,
+        city: Config,
+        region_id: str,
+        spec: StreetClass,
+        transform: GameTransform,
+        sources_root: Path | None,
+    ) -> _StreetIndex:
+        starts: dict[str, list[np.ndarray]] = defaultdict(list)
+        ends: dict[str, list[np.ndarray]] = defaultdict(list)
+        kinds: dict[str, list[str | None]] = defaultdict(list)
+        # The read box widened by the join's reach: an edge at the box's edge
+        # still finds its street's segment just outside it.
+        box = city.read_box(region_id)
+        reach = spec.max_distance_m
+        bbox = (
+            box.min_easting - reach,
+            box.min_northing - reach,
+            box.max_easting + reach,
+            box.max_northing + reach,
+        )
+        for path, member in source_reads(city, spec, region_id, root=sources_root):
+            layer = gdb.read_layer(
+                path,
+                spec.layer.layer,
+                columns=spec.layer.columns,
+                bbox=bbox,
+                zip_member=member,
+                expect_crs=city.projected_crs,
+            )
+            codes = layer.column(spec.layer.field("street_code"))
+            types = layer.column(spec.layer.field("type"))
+            owners, parts = gdb.polylines(layer)
+            for owner, points in zip(owners, parts, strict=True):
+                code = street_code_text(codes[owner])
+                if code is None or len(points) < 2:
+                    continue
+                game_x, _, game_z = transform.to_game(points[:, 0], points[:, 1])
+                plan = np.column_stack([game_x, game_z])
+                starts[code].append(plan[:-1])
+                ends[code].append(plan[1:])
+                kinds[code].extend([spec.class_of(str(types[owner]))] * (len(plan) - 1))
+        return cls(
+            spec=spec,
+            segments={
+                code: (np.concatenate(starts[code]), np.concatenate(ends[code]), kinds[code])
+                for code in starts
+            },
+        )
+
+    def class_of(self, code: str, run: np.ndarray) -> str | None:
+        """The class of the same-code segment nearest `run`'s middle, or None
+        where the code has no segment within `max_distance_m` of it.
+
+        The middle by length, not the middle vertex: a run simplified to two
+        vertices has no middle vertex at all.
+        """
+        found = self.segments.get(code)
+        if found is None:
+            return None
+        middle = _middle_of(run)
+        a, b, kinds = found
+        along = b - a
+        span = np.maximum((along * along).sum(axis=1), 1e-12)
+        t = np.clip(((middle - a) * along).sum(axis=1) / span, 0.0, 1.0)
+        apart = np.hypot(*(a + along * t[:, None] - middle).T)
+        nearest = int(np.argmin(apart))
+        if apart[nearest] > self.spec.max_distance_m:
+            return None
+        return kinds[nearest]
+
+
+def _middle_of(run: np.ndarray) -> np.ndarray:
+    """The point halfway along a plan polyline by length."""
+    steps = np.hypot(*np.diff(run, axis=0).T)
+    half = steps.sum() * 0.5
+    walked = np.concatenate([[0.0], np.cumsum(steps)])
+    index = int(np.clip(np.searchsorted(walked, half) - 1, 0, len(steps) - 1))
+    share = (half - walked[index]) / max(steps[index], 1e-12)
+    return run[index] + (run[index + 1] - run[index]) * share
 
 
 def _kerbside(
@@ -2314,6 +2456,7 @@ def _edge_document(edge: Edge) -> dict:
         "tram_tracks": edge.tram_tracks,
         "elevation_level": edge.elevation_level,
         "road_name": edge.road_name,
+        "street_class": edge.street_class,
         "kerbside": [
             {
                 "side": run.side,
@@ -2474,6 +2617,13 @@ def main(argv: list[str] | None = None) -> int:
         report.vertices_kept,
         100.0 * report.vertices_kept / max(1, report.vertices_read),
     )
+    if report.street_classes or report.street_no_code or report.street_no_segment:
+        log.info(
+            "  street class: %s; %d runs carry no street code, %d no same-code segment in reach",
+            ", ".join(f"{count} {name}" for name, count in sorted(report.street_classes.items())),
+            report.street_no_code,
+            report.street_no_segment,
+        )
     if report.kerbside is not None:
         found = report.kerbside
         by_kind = ", ".join(

@@ -17,7 +17,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.config import BACKWARD, BOTH, FORWARD, DeckSampling, GroundProfile
+from pipeline.config import (
+    BACKWARD,
+    BOTH,
+    FORWARD,
+    DeckSampling,
+    GroundProfile,
+    SourceLayer,
+    StreetClass,
+)
 from pipeline.gltf import MeshData
 from pipeline.roads import (
     ROADGRAPH_SCHEMA,
@@ -29,8 +37,10 @@ from pipeline.roads import (
     _follow_ground,
     _levels_at_node,
     _lifted_heights,
+    _middle_of,
     _node_heights,
     _ramp_ends,
+    _StreetIndex,
     _structure_bounded,
     build_region,
     clean_text,
@@ -41,6 +51,7 @@ from pipeline.roads import (
     resample_anchored,
     simplify,
     simplify_mask,
+    street_code_text,
 )
 from pipeline.terrain import HeightField
 from tests.helpers import (
@@ -431,8 +442,11 @@ class TestBuildRegion:
             "tram_tracks",
             "elevation_level",
             "road_name",
+            "street_class",
             "kerbside",
         }
+        # Testville declares no street hierarchy, so nothing is classed.
+        assert {edge["street_class"] for edge in document["edges"]} == {None}
 
     def test_on_structure_is_parallel_to_the_polyline(self, testville) -> None:
         """`surface.py` indexes one against the other to pick a per-station
@@ -1478,3 +1492,51 @@ class TestLevelsAtNode:
         and excluding level -1 is what keeps `_lifted_heights` off it."""
         tunnel = _edge_at_level(-1, 0, 1)
         assert _ramp_ends(tunnel, {0: {-1, 0}, 1: {-1, 0}}) == (False, False)
+
+
+class TestStreetClass:
+    """The published street hierarchy, joined by code and placed by distance."""
+
+    def test_the_two_publishers_spellings_meet_as_one_key(self) -> None:
+        assert street_code_text(10181.0) == street_code_text("10181") == "10181"
+        assert street_code_text(np.float64(10181.0)) == "10181"
+        assert street_code_text(float("nan")) is None
+        assert street_code_text(None) is None
+        assert street_code_text("  ") is None
+
+    def test_the_middle_is_by_length_not_by_vertex(self) -> None:
+        run = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 30.0]])
+        assert np.allclose(_middle_of(run), [10.0, 10.0])
+        assert np.allclose(_middle_of(np.array([[0.0, 0.0], [4.0, 0.0]])), [2.0, 0.0])
+
+    @staticmethod
+    def _index() -> _StreetIndex:
+        spec = StreetClass(
+            source="topography",
+            member="{tile}/{tile}.gdb",
+            layer=SourceLayer(layer="StreetCentreLines", fields={}),
+            classes={"MAR": "main", "SER": "minor"},
+            max_distance_m=30.0,
+        )
+        # One code carrying two types, as Canal Road East does: main to the
+        # west of x=100, minor to the east.
+        return _StreetIndex(
+            spec=spec,
+            segments={
+                "1": (
+                    np.array([[0.0, 0.0], [100.0, 0.0]]),
+                    np.array([[100.0, 0.0], [200.0, 0.0]]),
+                    ["main", "minor"],
+                )
+            },
+        )
+
+    def test_a_code_with_two_types_takes_its_nearest_segment(self) -> None:
+        index = self._index()
+        assert index.class_of("1", np.array([[10.0, 5.0], [60.0, 5.0]])) == "main"
+        assert index.class_of("1", np.array([[150.0, 5.0], [190.0, 5.0]])) == "minor"
+
+    def test_a_segment_out_of_reach_or_another_code_classes_nothing(self) -> None:
+        index = self._index()
+        assert index.class_of("1", np.array([[10.0, 40.0], [60.0, 40.0]])) is None
+        assert index.class_of("2", np.array([[10.0, 5.0], [60.0, 5.0]])) is None

@@ -176,6 +176,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## pixels wide and wants the most contrast the palette has.
 ## 🔴 **Opaque too**: strokes overlap at every joint (`minimap_mesh.gd`).
 @export var map_road: Color
+## A main road (`RoadGraph.is_main`) — lighter than `map_road`, opaque for the
+## same reason.
+@export var map_road_main: Color
 ## The car's chevron and its rim: taxi red, the one saturated thing on the map. Not the bar's green, which already means "gaining".
 @export var map_marker: Color
 @export var map_marker_edge: Color

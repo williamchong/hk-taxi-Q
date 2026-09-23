@@ -587,6 +587,7 @@ before the lights.
       "tram_tracks": false,
       "elevation_level": 0,
       "road_name": { "en": "Gloucester Road", "zh": "告士打道" },
+      "street_class": "main",
       "kerbside": [{ "side": "near", "from_m": 12.4, "to_m": 88.1, "kind": "double" }]
     }
   ],
@@ -614,6 +615,7 @@ before the lights.
 | `on_structure` | ⚠️ Derived, per vertex (schema 3): true where that station's height came from sampled structure. False where ramped down to a node (`Q90`). Only `roads.py` can produce it |
 | `structure_bounded` | Derived, per vertex (schema 8): true where structure stands **beside** the carriageway. `on_structure` cannot stand in — a walled approach ramp sampled off terrain is off structure (`e233`, `e55`, `e398`) |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME`. The null sentinel has four spellings; normalise NFKC and fold dashes |
+| `street_class` | `main`, `minor` or null (2026-09-24, additive — no bump: a reader that ignores it draws every road alike, as before). iB1000 `StreetCentreLines.STREETTYPE`, joined on `ST_CODE` and placed by the nearest same-code segment to the edge's middle within `roads.street_class.max_distance_m`; which codes are `main` is the city file's. Null: no code, no segment in reach, or a city with no hierarchy. The minimap's main roads |
 | `kerbside` | `NSR` (schema 4, `P3-13`, `Q54`): runs of one kerb under a no-stopping restriction. ⚠️ Not a key join — `pipeline/kerbside.py` linear-references it. `side` is `near` (`U = 0`) or `off` (`U = lanes`); `from_m`/`to_m` are along this polyline, so a consumer on the trimmed ribbon subtracts `trim_start_m`. `kind` is `double` (24-hour) or `single`, from `TIME_ZONE`. Only `VEHICLE_TYPE = 1`. Runs ordered and disjoint per side |
 | `source_id` / `run` | 🔴 The identity that survives across regions (schema 12, `P5-7e`, `Q116`). `id` is a per-region read ordinal with gaps — never index `edges` by position; dedupe merged regions on `(source_id, run)` |
 | `foreign_edges` | Neighbour-owned runs, in their own list and never a flag on `edges` (so every reader of `edges` is inert). A crossing feature is kept whole and owned by the region whose `bounds` contain its travel-start vertex, half-open; the non-owner publishes it here with `foreign: <owner>` and the authored width — drawn by nothing, so a boundary junction keeps its mouth (`P5-7f`) and the merged graph its handover edge (`P5-9`). `nodes` includes their far ends |

@@ -110,6 +110,9 @@ const LEVEL_REACH_M: float = 2.5
 const BOTH: StringName = &"both"
 const FORWARD: StringName = &"forward"
 
+## `street_class`'s main-road value in the contract (`roads.py`'s `STREET_MAIN`).
+const STREET_MAIN: StringName = &"main"
+
 
 ## What the car is on: the edge, where on it, and which way the law runs there.
 class Hit:
@@ -169,6 +172,9 @@ class Hit:
 var _ids: PackedInt32Array = PackedInt32Array()
 var _polylines: Array[PackedVector3Array] = []
 var _one_way: PackedInt32Array = PackedInt32Array()
+# 1 where the ETL classes the edge a main road (`street_class`, 2026-09-24); 0
+# for a minor road, an unclassed edge, and a bundle built before the field.
+var _main: PackedInt32Array = PackedInt32Array()
 var _levels: PackedInt32Array = PackedInt32Array()
 # The node each edge's polyline starts at and ends at, in travel order (the ETL
 # reverses a `backward` source, so vertex order IS travel order). -1 where the
@@ -500,6 +506,12 @@ func _drivable(slot: int) -> bool:
 ## True where the source signs the edge one-way.
 func is_one_way(edge_id: int) -> bool:
 	return _by_id.has(edge_id) and _one_way[_by_id[edge_id]] == 1
+
+
+## True where the published street hierarchy calls the edge a main road — the
+## minimap draws it apart. False for a minor road and for an unclassed one.
+func is_main(edge_id: int) -> bool:
+	return _by_id.has(edge_id) and _main[_by_id[edge_id]] == 1
 
 
 ## The node an edge's polyline starts at, in travel order; -1 for an unknown id.
@@ -980,6 +992,7 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		_ids.append(id)
 		_polylines.append(points)
 		_one_way.append(1 if StringName(edge.get("direction", BOTH)) == FORWARD else 0)
+		_main.append(1 if StringName(str(edge.get("street_class", ""))) == STREET_MAIN else 0)
 		_levels.append(int(edge.get("elevation_level", 0)))
 		_from.append(int(edge.get("from", -1)))
 		_to.append(int(edge.get("to", -1)))

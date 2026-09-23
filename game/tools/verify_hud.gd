@@ -110,6 +110,11 @@ const MAX_BLINK_HZ: float = 3.0
 ## and it was written out three times before it had a name.
 const MIN_CONTRAST: float = 0.30
 
+## Least luminance separation between a main road and a minor one on the map:
+## half the ink bar, because both sit on the same dark field and the eye reads
+## the two strokes side by side rather than one against the field.
+const MAIN_ROAD_CONTRAST: float = 0.15
+
 ## A speed comfortably over the shipped `wrong_way.tres` `min_kph`, and one well
 ## under it, in m/s. 10 m/s is 36 kph; 1.0 is 3.6.
 const FAST: float = 10.0
@@ -1144,14 +1149,27 @@ func _check_minimap() -> void:
 	# field drawn over the street beneath it, and the roads are clipped by the
 	# field's drawn alpha — three things a translucent colour breaks quietly.
 	_expect(
-		style.map_field.a == 1.0 and style.map_road.a == 1.0,
+		style.map_field.a == 1.0 and style.map_road.a == 1.0 and style.map_road_main.a == 1.0,
 		"map",
-		"the field and the roads are opaque"
+		"the field and the roads, main and minor, are opaque"
 	)
 	_expect(
 		_contrast(style.map_road, style.map_field) >= MIN_CONTRAST,
 		"map",
 		"the roads are legible on the field"
+	)
+	# A main road that does not stand apart from a minor one is the defect the
+	# class exists to fix; lighter, so it reads as the bigger road on the dark.
+	_expect(
+		(
+			style.map_road_main.get_luminance() > style.map_road.get_luminance()
+			and _contrast(style.map_road_main, style.map_road) >= MAIN_ROAD_CONTRAST
+		),
+		"map",
+		(
+			"a main road is lighter than a minor one, by %.2f"
+			% _contrast(style.map_road_main, style.map_road)
+		)
 	)
 	_expect(
 		_contrast(style.map_marker, style.map_marker_edge) >= MIN_CONTRAST,
@@ -1320,11 +1338,13 @@ func _check_minimap_mesh() -> void:
 	var field := Color.WHITE
 	var street: RefCounted = _stroke(Vector2(-50.0, 0.0), Vector2(50.0, 0.0), 0)
 	var deck: RefCounted = _stroke(Vector2(0.0, -50.0), Vector2(0.0, 50.0), 1)
-	_expect(MinimapMeshScript.build([], road, field, 2.0) == null, "map", "no strokes, no mesh")
+	_expect(
+		MinimapMeshScript.build([], road, road, field, 2.0) == null, "map", "no strokes, no mesh"
+	)
 
 	# Deck handed in FIRST, so an order that merely preserved the input fails.
 	var strokes: Array[MinimapMeshScript.Stroke] = [deck, street]
-	var mesh: ArrayMesh = MinimapMeshScript.build(strokes, road, field, 2.0)
+	var mesh: ArrayMesh = MinimapMeshScript.build(strokes, road, road, field, 2.0)
 	if mesh == null:
 		_fail("map", "two strokes built no mesh — every assertion below is inert")
 		return
@@ -1368,7 +1388,9 @@ func _check_minimap_mesh() -> void:
 	bend.points = PackedVector2Array([Vector2(-50.0, 0.0), Vector2.ZERO, Vector2(0.0, 50.0)])
 	var bent: Array[MinimapMeshScript.Stroke] = [bend]
 	var corner: PackedVector2Array = (
-		MinimapMeshScript.build(bent, road, field, 2.0).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		MinimapMeshScript
+		. build(bent, road, road, field, 2.0)
+		. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	)
 	var bevels: int = 0
 	var outside: bool = false
@@ -1388,7 +1410,9 @@ func _check_minimap_mesh() -> void:
 	avenue.width_m = 16.0
 	var meeting: Array[MinimapMeshScript.Stroke] = [lane, avenue]
 	var met: PackedVector2Array = (
-		MinimapMeshScript.build(meeting, road, field, 2.0).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		MinimapMeshScript
+		. build(meeting, road, road, field, 2.0)
+		. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	)
 	var fans: int = 0
 	var reach: float = 0.0
@@ -1403,6 +1427,7 @@ func _check_minimap_mesh() -> void:
 	)
 
 	_check_minimap_arrows(road, field)
+	_check_minimap_main_roads(road, field)
 	_check_minimap_beacon()
 
 	var wobble := PackedVector2Array([Vector2.ZERO, Vector2(50.0, 0.2), Vector2(100.0, 0.0)])
@@ -1442,6 +1467,27 @@ func _check_minimap_beacon() -> void:
 	)
 
 
+## Main roads draw after the minor roads of their level, in their own colour:
+## a junction's cap is its pass's, so a main road runs through the grid unbroken.
+func _check_minimap_main_roads(road: Color, field: Color) -> void:
+	var main_road := Color.RED
+	var trunk: RefCounted = _stroke(Vector2(-50.0, 0.0), Vector2(50.0, 0.0), 0)
+	trunk.main = true
+	var side: RefCounted = _stroke(Vector2(0.0, -50.0), Vector2(0.0, 50.0), 0)
+	# The main road handed in FIRST, so an order that kept the input fails.
+	var inks: PackedColorArray = (
+		MinimapMeshScript
+		. build([trunk, side], road, main_road, field, 2.0)
+		. surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	)
+	var first_main: int = inks.find(main_road)
+	_expect(
+		first_main > 0 and inks.rfind(road) < first_main and inks[inks.size() - 1] == main_road,
+		"map",
+		"a main road is drawn after the minor road it crosses, in its own colour"
+	)
+
+
 ## The one-way arrows (`Q136`). 🔴 **An arrow pointing the wrong way is the one
 ## defect here that sends a driver into oncoming traffic**, and at 7 px no
 ## frame shows it — so the tip is asserted AHEAD along the vertex order, which
@@ -1455,7 +1501,7 @@ func _check_minimap_arrows(road: Color, field: Color) -> void:
 	var plain: Array[MinimapMeshScript.Stroke] = [lawful]
 	var bare: int = (
 		MinimapMeshScript
-		. build(plain, road, field, 2.0, arrows)
+		. build(plain, road, road, field, 2.0, arrows)
 		. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 		. size()
 	)
@@ -1464,7 +1510,7 @@ func _check_minimap_arrows(road: Color, field: Color) -> void:
 			bare
 			== (
 				MinimapMeshScript
-				. build(plain, road, field, 2.0)
+				. build(plain, road, road, field, 2.0)
 				. surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 				. size()
 			)
@@ -1475,7 +1521,7 @@ func _check_minimap_arrows(road: Color, field: Color) -> void:
 
 	lawful.one_way = true
 	var arrowed: Array = (
-		MinimapMeshScript.build(plain, road, field, 2.0, arrows).surface_get_arrays(0)
+		MinimapMeshScript.build(plain, road, road, field, 2.0, arrows).surface_get_arrays(0)
 	)
 	var points: PackedVector2Array = arrowed[Mesh.ARRAY_VERTEX]
 	var inks: PackedColorArray = arrowed[Mesh.ARRAY_COLOR]
@@ -1497,7 +1543,7 @@ func _check_minimap_arrows(road: Color, field: Color) -> void:
 	lawful.width_m = 4.0
 	var narrow: PackedColorArray = (
 		MinimapMeshScript
-		. build(plain, road, field, 2.0, arrows)
+		. build(plain, road, road, field, 2.0, arrows)
 		. surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 	)
 	_expect(

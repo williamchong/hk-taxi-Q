@@ -1947,6 +1947,25 @@ class TestKerbsideRestrictions:
         assert kerbside.kind_for(1) == "double"
         assert {kerbside.kind_for(code) for code in (2, 3, 4, 5)} == {"single"}
 
+    def test_the_street_class_joins_on_a_declared_street_code(self, rewrite, hong_kong) -> None:
+        """The hierarchy is read off the published domain, and a class with no
+        key to join on is refused at load rather than classing nothing."""
+        spec = hong_kong.roads.street_class
+        assert spec.class_of("MAR") == "main" and spec.class_of("SER") == "minor"
+        assert spec.class_of("ZZZ") is None
+
+        def unkeyed(doc: dict[str, Any]) -> None:
+            doc["roads"]["centrelines"]["fields"].pop("street_code")
+
+        with pytest.raises(ValueError, match="declares no street_code"):
+            load_config(rewrite(unkeyed))
+
+        def doubled(doc: dict[str, Any]) -> None:
+            doc["roads"]["street_class"]["classes"]["minor"].append("MAR")
+
+        with pytest.raises(ValueError, match="in two classes"):
+            load_config(rewrite(doubled))
+
     def test_the_block_is_optional(self, rewrite) -> None:
         """A city whose sources carry no such layer draws no kerbside line,
         which is the honest answer rather than the invented one."""

@@ -6741,6 +6741,16 @@ cell through `library_meshes`.
   `verify_hud` assertions and the anchor held inside its room). **+6 `draws`, +12.6k `prims`**
   against `--minimap=off` carrying a fare 1.2 km off (the pin and the border arrow one call each),
   from +4 / +13.4k. The harbour and a main-road class are the same round's other two asks.
+- **Main roads apart (2026-09-24, the user's call).** Nothing in the road network ranks a road —
+  `ROUTE_NUM` numbers only Route 1 and 4's flyovers and tunnels, and speed ≥ 70 or `lanes` ≥ 3
+  flag Gloucester Road and miss Hennessy — but iB1000's `StreetCentreLines.STREETTYPE` is a
+  published domain beside the same `ST_CODE`. `roads.py` joins it by code and places it by the
+  nearest same-code segment to an edge's middle (25 of 585 codes carry two types; the majority
+  misclassed 38 of 762 edges). Wan Chai 320 main / 424 minor, Causeway Bay 48 / 139; the rest
+  carry no code or have no segment within 30 m — Convention Avenue until the north row of sheets
+  is fetched. Published as `street_class`, additive, no bump. The map draws `main` near-white
+  over a mid-grey minor grid, each its own pass so a main road runs through the junctions. As
+  published: Lockhart, Jaffe and Harbour Road are secondary.
 - **No dependency on the fare system or the router.** It needs `RoadGraph`, the car and the slot,
   all shipped; free roam has no fare and the map is whole there. Only the pip waits on `P3-1a`, and
   it is an empty setter. Listed under `B4` because `hud.gd` gave the slot to `P3-5b` — a grouping,

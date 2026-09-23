@@ -3043,6 +3043,9 @@ roads:
       route: ROUTE_ID
       name_en: STREET_ENAME
       name_zh: STREET_CNAME
+      # The street code, which the topographic map's street centrelines carry
+      # too: the key `street_class` below joins on.
+      street_code: ST_CODE
 
   turns:
     layer: TURN
@@ -3062,6 +3065,30 @@ roads:
     layer: BUS_ONLY_LANE
     fields:
       route: ROAD_ROUTE_ID
+
+  # Which class of street each edge is — the minimap draws main roads apart
+  # (2026-09-24, the user's call). ✅ Read off the PUBLISHED domain: iB1000's
+  # `StreetCentreLines.STREETTYPE` is a coded-value domain inside every sheet's
+  # geodatabase (`HIG` Highway, `TUN` Tunnel, `ROB` Road Bridge, `SLR` Slip
+  # Road, `MAR` Main Road, `SER` Secondary Road, `TRA` Track, `RER` Restricted
+  # Road), beside the same `ST_CODE` the centrelines carry. Joined by that key,
+  # and by the nearest same-code segment to an edge's middle where one code
+  # carries two types. ⚠️ As published: Lockhart, Jaffe and Harbour Road are
+  # `SER`, and so they draw.
+  street_class:
+    source: topography
+    member: "{tile}/{tile}.gdb"
+    layer: StreetCentreLines
+    fields:
+      street_code: ST_CODE
+      type: STREETTYPE
+    classes:
+      main: [HIG, TUN, ROB, SLR, MAR]
+      minor: [SER, TRA, RER]
+    # The two publishers draw one street's centreline metres apart, and a dual
+    # carriageway as one line in the map and two in the network; past this the
+    # nearest same-code segment is another stretch of the street, not this one.
+    max_distance_m: 30.0
 
   # No-stopping restrictions (`P3-13`, closes `Q54`). ⚠️ **This layer does not
   # join by key.** SPEED_LIMIT and BUS_ONLY_LANE above carry ROUTE_ID, which is

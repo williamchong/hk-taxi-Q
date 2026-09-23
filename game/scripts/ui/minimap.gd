@@ -85,6 +85,7 @@ func setup(
 	_roads.mesh = MinimapMesh.build(
 		MinimapMesh.strokes_of(graph, mapping.min_stroke_px / _px_per_m, SUBPIXEL_PX / _px_per_m),
 		style.map_road,
+		style.map_road_main,
 		style.map_field,
 		mapping.casing_px / _px_per_m,
 		arrows

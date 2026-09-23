@@ -315,6 +315,42 @@ KERB_SINGLE = "single"
 KERB_DOUBLE = "double"
 
 
+# Classes of street in the data contract (the minimap's main roads, 2026-09-24).
+# The pipeline owns this vocabulary; which publisher codes fall in which class
+# arrives from the city file (hard rule 3).
+STREET_MAIN = "main"
+STREET_MINOR = "minor"
+STREET_CLASSES = (STREET_MAIN, STREET_MINOR)
+
+
+@dataclass(frozen=True)
+class StreetClass(LayerSpec):
+    """Which class of street each edge is, from a published street hierarchy.
+
+    ✅ **The hierarchy is PUBLISHED.** Nothing in the road network says a road
+    is a main road — its `ROUTE_NUM` numbers the strategic routes only, and
+    speed limits and lane counts flag Gloucester Road and the flyovers and miss
+    Hennessy — but the topographic map's street centrelines carry a coded type
+    beside the same street code, and its domain is in every sheet. So the class
+    is joined by KEY (the street code) and disambiguated by PLACE: a code that
+    carries two types (Canal Road East, Morrison Hill Road) takes the type of its
+    nearest segment to the edge's middle, not the code's majority.
+
+    ⚠️ Read as published, not as a local would rank them: the publisher calls
+    Lockhart, Jaffe and Harbour Road secondary, and so does the map.
+    """
+
+    # Publisher's type code to a class in `STREET_CLASSES`.
+    classes: dict[str, str]
+    # How far the nearest same-code segment may lie from an edge's middle and
+    # still class it, in metres.
+    max_distance_m: float
+
+    def class_of(self, code: str) -> str | None:
+        """The contract class of a publisher type code, or None if unmapped."""
+        return self.classes.get(code)
+
+
 KERB_KINDS = (KERB_SINGLE, KERB_DOUBLE)
 
 
@@ -763,6 +799,10 @@ class RoadNetwork:
     # city whose sources carry no such layer, and it draws none.
     kerbside: KerbsideRestrictions | None
 
+    # Which class of street each edge is, for the minimap's main roads. `None`
+    # publishes no class, and every road draws alike.
+    street_class: StreetClass | None
+
     def lanes_for(self, speed_limit_kph: int) -> int:
         """Lane count for an edge, from the fastest matching rule.
 
@@ -844,7 +884,60 @@ def _road_network(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
             _ground_profile(profile, f"{where}:ground_profile") if profile is not None else None
         ),
         kerbside=_kerbside(body.get("kerbside_restrictions"), f"{where}:kerbside_restrictions"),
+        street_class=_street_class_for(body, layers["centrelines"], where),
     )
+
+
+def _street_class_for(
+    body: dict[str, Any], centrelines: SourceLayer, where: str
+) -> StreetClass | None:
+    """The street-class block, and the centreline role it joins on: required
+    only where the block is declared, so a city with no hierarchy names no key."""
+    spec = _street_class(body.get("street_class"), f"{where}:street_class")
+    if spec is not None and "street_code" not in centrelines.fields:
+        raise ValueError(
+            f"{where}:street_class joins on the street code, and "
+            f"{where}:centrelines:fields declares no street_code"
+        )
+    return spec
+
+
+def _street_class(body: Any, where: str) -> StreetClass | None:
+    """The optional street-hierarchy block, checked at load."""
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    classes: dict[str, str] = {}
+    raw = _require(body, "classes", where)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{where}:classes must be a mapping of class to codes, got {raw!r}")
+    for name, codes in raw.items():
+        if name not in STREET_CLASSES:
+            raise ValueError(
+                f"{where}:classes has {name!r}, expected one of {', '.join(STREET_CLASSES)}"
+            )
+        if isinstance(codes, str) or not isinstance(codes, (list, tuple)) or not codes:
+            raise ValueError(f"{where}:classes:{name} must be a non-empty list of codes")
+        for code in codes:
+            if str(code) in classes:
+                raise ValueError(f"{where}:classes puts {code!r} in two classes")
+            classes[str(code)] = str(name)
+    if STREET_MAIN not in classes.values():
+        # A hierarchy with no main road draws every road alike, which is the
+        # outcome of omitting the block — refused so the difference is a choice.
+        raise ValueError(f"{where}:classes names no {STREET_MAIN!r} code")
+    distance = float(_require(body, "max_distance_m", where))
+    if distance <= 0.0:
+        raise ValueError(f"{where}:max_distance_m must be positive, got {distance}")
+    return StreetClass(
+        **_spec_header(body, where, STREET_CLASS_ROLES),
+        classes=classes,
+        max_distance_m=distance,
+    )
+
+
+STREET_CLASS_ROLES = ("street_code", "type")
 
 
 def _kerbside(body: Any, where: str) -> KerbsideRestrictions | None:

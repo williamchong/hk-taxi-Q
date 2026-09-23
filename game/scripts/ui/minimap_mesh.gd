@@ -48,6 +48,9 @@ class Stroke:
 	## True where the law runs one way — along `points`, always: the ETL
 	## reverses a backward edge's polyline (`road_graph.gd`).
 	var one_way: bool = false
+	## True for a main road (`RoadGraph.is_main`): drawn after the level's minor
+	## roads, in its own colour, so it runs unbroken through their junctions.
+	var main: bool = false
 
 
 ## The one-way arrows (`Q136`, the user's call), in plan metres: an arrowhead
@@ -78,6 +81,7 @@ static func strokes_of(graph: RoadGraph, min_width_m: float, tolerance_m: float)
 		stroke.width_m = maxf(graph.width_of(edge_id), min_width_m)
 		stroke.level = graph.level_of(edge_id)
 		stroke.one_way = graph.is_one_way(edge_id)
+		stroke.main = graph.is_main(edge_id)
 		strokes.append(stroke)
 	return strokes
 
@@ -99,8 +103,14 @@ static func simplified(points: PackedVector2Array, tolerance_m: float) -> Packed
 
 
 ## The mesh, or null where there is nothing to draw. `arrows` null draws none.
+## `main_road` is a main road's colour; minor roads take `road`.
 static func build(
-	strokes: Array[Stroke], road: Color, casing: Color, casing_m: float, arrows: Arrows = null
+	strokes: Array[Stroke],
+	road: Color,
+	main_road: Color,
+	casing: Color,
+	casing_m: float,
+	arrows: Arrows = null
 ) -> ArrayMesh:
 	var by_level: Dictionary[int, Array] = {}
 	for stroke: Stroke in strokes:
@@ -121,7 +131,15 @@ static func build(
 		# deck's casing would cut the deck it joins at a node.
 		if level > 0:
 			_emit_pass(vertices, colours, by_level[level], casing_m, casing)
-		_emit_pass(vertices, colours, by_level[level], 0.0, road)
+		# Minor then main, each a pass of its own: a junction's cap is the pass's,
+		# so a main road's is drawn over the minor road meeting it and the main
+		# road reads as one line through the grid.
+		var minor: Array = by_level[level].filter(
+			func(stroke: Stroke) -> bool: return not stroke.main
+		)
+		var main: Array = by_level[level].filter(func(stroke: Stroke) -> bool: return stroke.main)
+		_emit_pass(vertices, colours, minor, 0.0, road)
+		_emit_pass(vertices, colours, main, 0.0, main_road)
 		# After this level's roads and before the next level's casing, so a deck
 		# hides the arrows of the street under it and carries its own.
 		if arrows != null:

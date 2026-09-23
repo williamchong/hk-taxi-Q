@@ -41,10 +41,21 @@ by verify_hud; the bar draws in plate_field. See hud_style.gd and Q81.
 
 The minimap (`P3-44`, `Q136`): light roads on the housing — a figure-ground
 plan, which is what survives under a pixel to the metre.
-🔴 `map_field` AND `map_road` ARE OPAQUE, and verify_hud refuses otherwise:
+🔴 `map_field`, `map_road` AND `map_road_main` ARE OPAQUE, and verify_hud refuses otherwise:
 strokes overlap at every joint, a deck's casing is the field drawn over the
 street beneath it, and minimap.gd clips by the field's drawn alpha. The chevron
 is taxi red: it is the taxi, and the one saturated thing on the map.
+
+## `map_road = Color(0.5, 0.5, 0.48, 1)` and `map_road_main = Color(0.94, 0.92, 0.86, 1)`
+
+Main roads apart from minor ones (2026-09-24, the user's call, after "what does
+an ordinary GPS show that we are missing"): a GPS draws the arterials bolder, and
+on a dark plan the bolder one is the lighter one. Main is iB1000's published
+`MAR`/`HIG`/`TUN`/`ROB`/`SLR` (`roadgraph.json`'s `street_class`), so Hennessy,
+Gloucester, King's Road and Yee Wo Street run as one near-white line through a
+mid-grey grid. The grey came down from 0.72 to make the room; `verify_hud` holds
+both on the field and the main road 0.15 of luminance over the minor. Not amber:
+amber is a waiting customer's, and a road the colour of a pin hides the pin.
 
 ## `dial_needle = Color(1, 0.6, 0.12, 1)`
 
