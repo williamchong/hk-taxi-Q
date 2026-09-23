@@ -28,9 +28,11 @@ call): the map sits on the plate at the plate's width, under one keyline, and
 was built first and read as too large (the user's call). The
 pair is anchored as the PLATE is — bottom, with the speed.
 
-⚠️ `callout`, `award` AND `combo` ARE RESERVED, like `timer` and `meter`: one
-rect for every component a planned task is known to add (`Q138`), graded now
-and drawn only under `--debug-view=full`.
+⚠️ `award` AND `combo` ARE RESERVED: one rect for every component a planned
+task is known to add (`Q138`), graded now and drawn only under
+`--debug-view=full`. `timer`, `meter` and `callout` were, until `P3-5a` filled
+them as they stood — the 咪錶 top-right, the tip clock top-left, the bilingual
+callout top-centre — and they stay graded against the thumbs as filled slots.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
 missing here is a zero-size rect rather than something sensible, and

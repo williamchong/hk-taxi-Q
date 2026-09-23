@@ -7,9 +7,9 @@ extends Control
 ## keyline round both — a GPS's current-road bar. `Q80` had already called the
 ## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
 ##
-## **Driving only.** Roads, which way they run, and the car. No route is drawn and none will be
-## without `Q137` reopening; the destination pip arrives with `P3-1a`, which is
-## the first thing that has a destination.
+## **Driving only.** Roads, which way they run, the car, and since `P3-5a` the
+## fare's pips: every pickup in the pool, and the one destination. No route is
+## drawn and none will be without `Q137` reopening.
 ##
 ## The meter's housing, like every panel (`Q139`): light roads on black, and
 ## the chevron in the LED's red — the one thing on the map that is the car.
@@ -29,6 +29,12 @@ var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
 var _marker: Polygon2D = null
+## The fare's pips (`P3-5a`), children of the roads so `follow` moves them for
+## nothing: the pickups as one mesh in plan metres, the destination as one
+## polygon re-placed by `set_destination`.
+var _pickups: MeshInstance2D = null
+var _destination: Polygon2D = null
+var _style: HudStyle = null
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
 ## and the map shows through until then.
@@ -42,6 +48,7 @@ func setup(
 	mapping: MinimapProfile, style: HudStyle, graph: RoadGraph, map_px: Vector2, strip_px: float
 ) -> void:
 	_mapping = mapping
+	_style = style
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# The field clips the roads to its own cut corners. ⚠️ `clip_children` masks
@@ -66,6 +73,15 @@ func setup(
 		arrows
 	)
 	_field.add_child(_roads)
+
+	# The destination's pip, over the roads and under the car. Hidden until a
+	# fare has one; placed in plan metres, so the roads' transform carries it.
+	_destination = Polygon2D.new()
+	_destination.name = "Destination"
+	_destination.polygon = pip(style.map_pip_px / _px_per_m)
+	_destination.color = style.map_destination
+	_destination.visible = false
+	_roads.add_child(_destination)
 
 	# Rim and fill in ONE polygon node, by vertex colour: a `Line2D` rim was a
 	# draw call of its own on a HUD that costs five in all.
@@ -113,6 +129,48 @@ func setup(
 	_panel("Frame", style, Color.TRANSPARENT, style.plate_edge)
 
 
+## Every pickup in the pool as one mesh of pips, in plan metres under the
+## roads' transform (`P3-5a`). Built once: the pool does not move.
+func set_pickups(points: PackedVector3Array) -> void:
+	if _pickups != null:
+		_pickups.queue_free()
+		_pickups = null
+	if points.is_empty():
+		return
+	var vertices := PackedVector2Array()
+	var colours := PackedColorArray()
+	var shape: PackedVector2Array = pip(_style.map_pip_px / _px_per_m)
+	for point: Vector3 in points:
+		var at: Vector2 = MinimapProjection.plan(point)
+		# A diamond is two triangles about its centre.
+		for triangle: PackedVector2Array in [
+			PackedVector2Array([shape[0], shape[1], shape[2]]),
+			PackedVector2Array([shape[0], shape[2], shape[3]])
+		]:
+			for corner: Vector2 in triangle:
+				vertices.append(at + corner)
+				colours.append(_style.map_pickup)
+	_pickups = MeshInstance2D.new()
+	_pickups.name = "Pickups"
+	_pickups.mesh = CanvasMesh.of(vertices, colours)
+	_roads.add_child(_pickups)
+	# Under the destination: the one pip that is a fare covers the pool's.
+	_roads.move_child(_pickups, 0)
+
+
+## Put the destination's pip at `point`, or hide it.
+func set_destination(point: Vector3, shown: bool) -> void:
+	if _destination.visible != shown:
+		_destination.visible = shown
+	if not shown:
+		return
+	# Guarded like `visible`: the destination is fixed for the whole fare and
+	# this is called every sample.
+	var at: Vector2 = MinimapProjection.plan(point)
+	if _destination.position != at:
+		_destination.position = at
+
+
 ## Put `car` on the anchor, nose along `forward`.
 func follow(car: Vector3, forward: Vector3) -> void:
 	var anchor_px: Vector2 = _marker.position
@@ -133,6 +191,15 @@ func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> Cha
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 	return panel
+
+
+## A pip: a diamond `across` wide about its own centre, which turns with the
+## map and still reads as a point.
+static func pip(across: float) -> PackedVector2Array:
+	var half: float = across * 0.5
+	return PackedVector2Array(
+		[Vector2(0.0, -half), Vector2(half, 0.0), Vector2(0.0, half), Vector2(-half, 0.0)]
+	)
 
 
 ## The car, pointing up (`-Y`): a notched arrowhead `length` tall about its own

@@ -67,6 +67,10 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## request.
 @export var regions: CityRegions
 
+## The fare loop this level runs, for `Main` to hand the HUD beside the car
+## (`P3-5a`). Assign in the scene; a level without one has no fare panels.
+@export var fares: FareSystem
+
 ## The rig that follows the car, snapped wherever this moves it — see
 ## `ChaseCamera.snap_to_target` for why the rig's own `_ready` cannot cover it.
 ## Assign in the scene; a scene without one skips the snap.

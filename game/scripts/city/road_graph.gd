@@ -448,6 +448,17 @@ func edge_ids() -> PackedInt32Array:
 	return _ids.duplicate()
 
 
+## The edge's street name in `language` — "en" or "zh" — or "" for an edge
+## the graph does not hold or a name the publisher left null (74 of Wan
+## Chai's 797 edges). The same strings a `Hit` reports, for a caller that
+## holds an edge id and no position: a fare stop's road (`P3-5a`).
+func name_of(edge_id: int, language: String) -> String:
+	if not _by_id.has(edge_id):
+		return ""
+	var slot: int = _by_id[edge_id]
+	return _names_zh[slot] if language == "zh" else _names[slot]
+
+
 ## Grade-separation level of an edge, or 0 for an id that is not in the graph.
 func level_of(edge_id: int) -> int:
 	return _levels[_by_id[edge_id]] if _by_id.has(edge_id) else 0

@@ -436,12 +436,28 @@ func _announce_reading() -> void:
 	meter_changed.emit(reading)
 
 
+## The pickup nearest `position` at any distance, or null with an empty pool:
+## where the pending customer is, for the HUD, the map and the arrow (`P3-5a`).
+## ⚠️ Not the hail: `_nearest_pickup` keeps the radius, and this never hails.
+func nearest_pickup_any(position: Vector3) -> Fare.Stop:
+	return _nearest_pickup_within(position, INF)
+
+
+## How often `sampled` fires, for a consumer that counts samples.
+func sample_hz() -> float:
+	return _profile.sample_hz if _profile != null else 0.0
+
+
 ## The pickup whose stop point is nearest `position` within the hail radius, or
 ## null. Plan distance: the stop point is on the road at the graph's height and
 ## the car is on the drawn ribbon, and the two differ by a kerb.
 func _nearest_pickup(position: Vector3) -> Fare.Stop:
+	return _nearest_pickup_within(position, _profile.hail_radius_m)
+
+
+func _nearest_pickup_within(position: Vector3, max_m: float) -> Fare.Stop:
 	var best: Fare.Stop = null
-	var best_m: float = _profile.hail_radius_m
+	var best_m: float = max_m
 	for stop: Fare.Stop in _pickups:
 		var apart: float = RoadGraph.plan_distance(position, stop.point)
 		if apart <= best_m:
@@ -475,6 +491,8 @@ func _add_stops(region: String, fares: Dictionary) -> void:
 		stop.edge = edge
 		stop.t = clampf(float(node.get("edge_t", 0.0)), 0.0, 1.0)
 		stop.point = _graph.point_at(edge, stop.t) + _graph.region_offset(region)
+		stop.road_en = _graph.name_of(edge, "en")
+		stop.road_zh = _graph.name_of(edge, "zh")
 		if bool(node.get("pickup", false)):
 			_pickups.append(stop)
 		if bool(node.get("dropoff", false)):

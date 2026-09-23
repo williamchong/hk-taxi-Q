@@ -1,9 +1,12 @@
 class_name Hud
 extends CanvasLayer
-## The player's HUD: how fast, and what street (`P3-24`).
+## The player's HUD: how fast, what street, and the fare (`P3-24`, `P3-5a`).
 ##
-## Two readouts and the minimap (`P3-44`) ship and five slots are reserved,
-## one for every component a planned task is known to add (`Q138`).
+## Two readouts, the minimap (`P3-44`) and the fare's three panels ship — the
+## 咪錶 top-right, the tip clock top-left, the bilingual callout top-centre —
+## and two slots stay reserved for `P3-2a`/`b` (`Q138`). The fare panels are
+## painted from `FareFace`, which decides every string; this file only puts
+## them in their rects.
 ## The slots are laid out and checked **now**, empty, because a HUD that grows
 ## into whatever space is left is how the touch controls end up under the speed.
 ##
@@ -47,6 +50,9 @@ const STREET_HZ: float = 5.0
 ## strobes unreadably when it is redrawn at 60 Hz.
 const SPEED_HZ: float = 10.0
 
+## The gap between English and Chinese on one row of the callout.
+const ROW_GAP_PX: int = 14
+
 var _layout: HudLayout = null
 var _style: HudStyle = null
 var _tracker: StreetTracker = null
@@ -80,13 +86,36 @@ var _dial: SpeedDial = null
 var _speed_chip: AccentBar = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
-## HUD holds for `P3-5a` and `P3-2a`/`b` can be SEEN rather than taken on trust
+## HUD holds for `P3-2a`/`b` can be SEEN rather than taken on trust
 ## from a `.tres`, and invisible in every shipped frame.
 var _slots: Array[ChamferPanel] = []
 ## The wrong-way sign. Hidden in every ordinary frame.
 var _warning: NoEntryIcon = null
 ## Null under `--minimap=off`, and where there is no city to map.
 var _minimap: Minimap = null
+
+## The fare loop this HUD reads, handed in by `Main` like the car. Null, or a
+## system that is not `usable()`, hides the three fare panels.
+var fares: FareSystem = null:
+	set(value):
+		_unfollow_fares()
+		fares = value
+		_follow_fares()
+
+## What the fare panels say (`fare_face.gd`); rebuilt when a system arrives.
+var _face: FareFace = null
+var _meter_panel: ChamferPanel = null
+var _meter: SevenSegment = null
+var _timer_panel: ChamferPanel = null
+var _timer_value: Label = null
+var _callout_panel: ChamferPanel = null
+## The place, in both languages on one row; the road under it on another.
+var _callout_en: Label = null
+var _callout_zh: Label = null
+var _callout_sub_en: Label = null
+var _callout_sub_zh: Label = null
+## The plate's Chinese face, kept for the callout's second line.
+var _font_zh: Font = null
 
 var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
@@ -188,6 +217,7 @@ func _build() -> void:
 	var font_zh: Font = null
 	if _graph != null and not _graph.is_empty():
 		font_zh = load(plate_tuning.get("font_zh", "")) as Font
+	_font_zh = font_zh
 	if font_zh == null and _graph != null and not _graph.is_empty():
 		# Not fatal, and loud. The English line still draws; the Chinese line
 		# would be a row of tofu, which reads as a bug in the game rather than a
@@ -248,7 +278,7 @@ func _build() -> void:
 	#
 	# The cab's other instrument (`Q139`): a dial's ticks and an amber needle
 	# over printed numerals, with the acceleration bar along the bottom. NOT the
-	# 咪錶's LED — a meter shows the fare, and `P3-5a`'s will.
+	# 咪錶's LED — a meter shows the fare, and the one top-right does.
 	_speed_chip = AccentBar.new()
 	_speed_chip.name = "Speed"
 	_speed_chip.chamfer_px = _style.chamfer_px
@@ -305,6 +335,56 @@ func _build() -> void:
 	_warning.visible = false
 	_layout.place(root, _warning, _layout.wrong_way)
 
+	# ---- the fare: the 咪錶, the tip clock and the callout ----
+	#
+	# Top is the fare (`Q138`). Deliberately plain (`P3-5a`'s brief): the
+	# reserved rects are taken as they are, and nothing here is laid out.
+	# All three hide until a usable `FareSystem` is handed in.
+	_meter_panel = _housing("Meter", root, _layout.meter)
+	var meter_row: HBoxContainer = _row(_lines(_meter_panel, 0), "Row", roundi(_style.plate_pad.y))
+	var currency: Label = _label("Currency", _style.meter_label_size, _style.chip_muted)
+	currency.text = "HK$"
+	currency.size_flags_vertical = Control.SIZE_SHRINK_END
+	meter_row.add_child(currency)
+	# The LED (`Q139`): the fare's red, and the one place it is spent.
+	_meter = SevenSegment.new()
+	_meter.name = "Digits"
+	_meter.cells = _style.meter_cells
+	_meter.digit_px = _style.meter_digit_px
+	_meter.segment_px = _style.meter_segment_px
+	_meter.slant = _style.meter_slant
+	_meter.lit = _style.meter_lit
+	_meter.unlit = _style.meter_unlit
+	_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	meter_row.add_child(_meter)
+
+	_timer_panel = _housing("Timer", root, _layout.timer)
+	var timer_lines: VBoxContainer = _lines(_timer_panel, _style.speed_line_tighten)
+	_timer_value = _label("Value", _style.timer_size, _style.chip_ink)
+	timer_lines.add_child(_timer_value)
+	var seconds: Label = _label("Unit", _style.timer_unit_size, _style.chip_muted)
+	seconds.text = "s left"
+	timer_lines.add_child(seconds)
+
+	# The place over the road (`Q142`): two rows, each English beside Chinese,
+	# because the Chinese face is a Kai that has no Latin of its own.
+	_callout_panel = _housing("Callout", root, _layout.callout)
+	var callout_lines: VBoxContainer = _lines(_callout_panel, -4)
+	var place_row: HBoxContainer = _row(callout_lines, "Place", ROW_GAP_PX)
+	_callout_en = _label("English", _style.callout_size_en, _style.plate_ink)
+	place_row.add_child(_callout_en)
+	_callout_zh = _label("Chinese", _style.callout_size_zh, _style.plate_ink)
+	if _font_zh != null:
+		_callout_zh.add_theme_font_override(&"font", _font_zh)
+	place_row.add_child(_callout_zh)
+	var road_row: HBoxContainer = _row(callout_lines, "Road", ROW_GAP_PX)
+	_callout_sub_en = _label("English", _style.callout_sub_size, _style.chip_muted)
+	road_row.add_child(_callout_sub_en)
+	_callout_sub_zh = _label("Chinese", _style.callout_sub_size, _style.chip_muted)
+	if _font_zh != null:
+		_callout_sub_zh.add_theme_font_override(&"font", _font_zh)
+	road_row.add_child(_callout_sub_zh)
+
 	# ---- the reserved slots ----
 	#
 	# ⚠️ Built as named, empty Controls rather than left out, and **outlined under
@@ -325,6 +405,20 @@ func _build() -> void:
 	DebugHud.view_changed.connect(_show_slots)
 
 
+## A panel in the housing's colours, placed on its rect and hidden: every fare
+## panel starts dark and `_paint_fares` shows what has something to say.
+func _housing(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
+	var panel := ChamferPanel.new()
+	panel.name = node_name
+	panel.chamfer_px = _style.chamfer_px
+	panel.fill = _style.plate_field
+	panel.edge = _style.plate_edge
+	panel.edge_px = _style.edge_px
+	panel.visible = false
+	_layout.place(root, panel, rect)
+	return panel
+
+
 ## A centred line of HUD text. Four of these differed only in a name, a size and
 ## a colour.
 ##
@@ -340,6 +434,17 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	label.add_theme_color_override(&"font_color", ink)
 	label.add_theme_font_size_override(&"font_size", size)
 	return label
+
+
+## A centred row of controls, `gap` px apart, inside `parent`.
+static func _row(parent: Control, node_name: String, gap: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = node_name
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override(&"separation", gap)
+	parent.add_child(row)
+	return row
 
 
 ## A panel's stack of lines, centred in it.
@@ -645,3 +750,135 @@ func _vehicle() -> VehicleController:
 		# across the gap and pins the bar hard over for a filter time-constant.
 		_last_speed_ms = 0.0 if vehicle == null else vehicle.speed_kph / 3.6
 	return vehicle
+
+
+## Fit a row's two labels into `room`: the Chinese keeps its size unless it
+## alone needs half the row, and the English takes what is left. The Chinese is
+## the shorter string in every name this city publishes, so it is the one to
+## keep legible.
+static func _fit_row(en: Label, zh: Label, size_en: int, size_zh: int, room: float) -> void:
+	var gap: float = float(ROW_GAP_PX)
+	StreetPlate.shrink_to(zh, size_zh, room * 0.5)
+	var zh_font: Font = zh.get_theme_font(&"font")
+	var zh_size: int = zh.get_theme_font_size(&"font_size")
+	var taken: float = 0.0
+	if not zh.text.is_empty():
+		taken = zh_font.get_string_size(zh.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, zh_size).x + gap
+	StreetPlate.shrink_to(en, size_en, maxf(room - taken, room * 0.25))
+
+
+# ------------------------------------------------------------------ fares ----
+
+
+## Let go of the system this HUD was reading, if it is still there to let go of.
+func _unfollow_fares() -> void:
+	if not is_instance_valid(fares):
+		return
+	if fares.sampled.is_connected(_on_fare_sampled):
+		fares.sampled.disconnect(_on_fare_sampled)
+		fares.delivered.disconnect(_on_fare_delivered)
+		fares.bailed.disconnect(_on_fare_bailed)
+
+
+## Read the new system: its pool onto the map, its samples into the face.
+##
+## ⚠️ **Signal-driven, never polled.** Under `--fares=off` the system frees
+## itself in its own `_ready`, before `Main` hands it here, so a `_process`
+## that reached into it would be reading a freed node by the second frame.
+## Everything this reads from it is read inside one of its own signals, where
+## it is alive by definition, or right here, where it still is.
+func _follow_fares() -> void:
+	_face = null
+	if _meter_panel == null or not is_instance_valid(fares) or not fares.usable():
+		_paint_fares()
+		return
+	_face = FareFace.new(ceili(_style.callout_hold_s * fares.sample_hz()))
+	fares.sampled.connect(_on_fare_sampled)
+	fares.delivered.connect(_on_fare_delivered)
+	fares.bailed.connect(_on_fare_bailed)
+	if _minimap != null:
+		var points := PackedVector3Array()
+		for stop: Fare.Stop in fares.pickups():
+			points.append(stop.point)
+		_minimap.set_pickups(points)
+	_on_fare_sampled()
+
+
+func _on_fare_delivered(fare: Fare) -> void:
+	_face.on_ended(fare, true)
+
+
+func _on_fare_bailed(fare: Fare) -> void:
+	_face.on_ended(fare, false)
+
+
+## One sample of the loop, at its 5 Hz: where the nearest pickup is from here,
+## then the face decides and the panels are painted.
+func _on_fare_sampled() -> void:
+	var car: VehicleController = _vehicle()
+	var nearest: Fare.Stop = null
+	var nearest_m: float = 0.0
+	# The pool is scanned only while idle: hailed, the face points at the
+	# destination and would throw the nearest pickup away.
+	if car != null and fares.state == FareSystem.State.IDLE:
+		nearest = fares.nearest_pickup_any(car.global_position)
+		if nearest != null:
+			nearest_m = RoadGraph.plan_distance(car.global_position, nearest.point)
+	_face.on_sampled(fares.state, fares.fare, nearest, nearest_m, _style.timer_warn_s)
+	_paint_fares()
+
+
+## The face onto the three panels and the map. Every write is guarded on what
+## is already shown: `Label.text` is a reshape and `visible` a re-composite,
+## and this runs for the whole session.
+func _paint_fares() -> void:
+	if _meter_panel == null:
+		return
+	if _face == null:
+		_meter_panel.visible = false
+		_timer_panel.visible = false
+		_callout_panel.visible = false
+		if _minimap != null:
+			_minimap.set_destination(Vector3.ZERO, false)
+		return
+	if not _meter_panel.visible:
+		_meter_panel.visible = true
+	_meter.text = _face.meter_text
+
+	if _timer_panel.visible != _face.show_timer:
+		_timer_panel.visible = _face.show_timer
+	if _face.show_timer:
+		if _timer_value.text != _face.timer_text:
+			_timer_value.text = _face.timer_text
+		var ink: Color = _style.meter_lit if _face.timer_urgent else _style.chip_ink
+		if _timer_value.get_theme_color(&"font_color") != ink:
+			_timer_value.add_theme_color_override(&"font_color", ink)
+
+	var saying: bool = not _face.callout_en.is_empty()
+	if _callout_panel.visible != saying:
+		_callout_panel.visible = saying
+	if saying:
+		# Each row on its own guard: while idle the road row changes every
+		# metre and the place row does not, and a refit reshapes both labels.
+		# Cut to the box, like the plate's lettering: a building's name can run
+		# to forty characters, and the box is the worst case, not a suggestion.
+		var room: float = _layout.callout.size.x - _style.plate_pad.x * 2.0
+		var zh: String = StreetPlate.substitute(_face.callout_zh, _substitutions)
+		if _callout_en.text != _face.callout_en or _callout_zh.text != zh:
+			_callout_en.text = _face.callout_en
+			_callout_zh.text = zh
+			_fit_row(_callout_en, _callout_zh, _style.callout_size_en, _style.callout_size_zh, room)
+		var sub_zh: String = StreetPlate.substitute(_face.callout_sub_zh, _substitutions)
+		if _callout_sub_en.text != _face.callout_sub_en or _callout_sub_zh.text != sub_zh:
+			_callout_sub_en.text = _face.callout_sub_en
+			_callout_sub_zh.text = sub_zh
+			_fit_row(
+				_callout_sub_en,
+				_callout_sub_zh,
+				_style.callout_sub_size,
+				_style.callout_sub_size,
+				room
+			)
+
+	if _minimap != null:
+		_minimap.set_destination(_face.target, _face.has_target and _face.target_is_destination)

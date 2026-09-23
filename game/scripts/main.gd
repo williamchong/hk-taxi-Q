@@ -24,3 +24,4 @@ func _ready() -> void:
 		push_warning("Main has no level assigned; the HUD has no car to read.")
 		return
 	hud.vehicle = level.vehicle
+	hud.fares = level.fares

@@ -233,15 +233,12 @@ const PATH: String = "res://tuning/hud_layout.tres"
 
 ## The slots this HUD reserves and does not yet fill, by node name: every HUD
 ## component a planned task is known to add (`Q138`). The minimap was one until
-## `P3-44` filled it.
+## `P3-44` filled it; the timer, the meter and the callout until `P3-5a` did.
 ## Iterated by `hud.gd` to build them, so both ends stay statically typed —
 ## an array of `[name, rect]` pairs makes each element a `Variant` and defeats
 ## the enforced typing at exactly the point a wrong rect would be silent.
 func reserved_slots() -> Dictionary[String, Rect2]:
 	return {
-		"TimerSlot": timer,
-		"MeterSlot": meter,
-		"CalloutSlot": callout,
 		"AwardSlot": award,
 		"ComboSlot": combo,
 	}
@@ -256,7 +253,13 @@ func reserved_slots() -> Dictionary[String, Rect2]:
 ## file whose entire job is to be trusted about where things are.
 func hud_slots() -> Dictionary[String, Rect2]:
 	var slots: Dictionary[String, Rect2] = {
-		"speed": speed, "street_plate": street_plate, "wrong_way": wrong_way, "minimap": minimap
+		"speed": speed,
+		"street_plate": street_plate,
+		"wrong_way": wrong_way,
+		"minimap": minimap,
+		"timer": timer,
+		"meter": meter,
+		"callout": callout,
 	}
 	slots.merge(reserved_slots())
 	return slots

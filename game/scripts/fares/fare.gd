@@ -31,6 +31,27 @@ class Stop:
 	var t: float = 0.0
 	## `RoadGraph.point_at(edge, t)` plus the region's offset.
 	var point: Vector3 = Vector3.ZERO
+	## The street the stop is on, from the graph at load; "" where unnamed.
+	var road_en: String = ""
+	var road_zh: String = ""
+
+	## What a passenger calls this stop (`Q142`): the named building the
+	## document put beside it, or the publisher's description of the kerb where
+	## there is none. Either language may fall back on its own.
+	func place_en() -> String:
+		var found: String = _place("en")
+		return found if not found.is_empty() else name_en()
+
+	func place_zh() -> String:
+		var found: String = _place("zh")
+		return found if not found.is_empty() else name_zh()
+
+	func _place(language: String) -> String:
+		var place: Variant = node.get("place", null)
+		if not place is Dictionary:
+			return ""
+		var found: Variant = (place as Dictionary).get(language, null)
+		return "" if found == null else str(found)
 
 	func name_en() -> String:
 		var names: Dictionary = node.get("name", {})

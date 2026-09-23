@@ -1,7 +1,7 @@
 extends Node
 ## The fare loop's state on the dev overlay (`P3-1a`): what `FareSystem` is
 ## doing, where the passenger is going, the clock and the 咪錶, as text under
-## `--debug-view=full`. Its only face until `P3-5a` gives it the HUD's.
+## `--debug-view=full`. The raw counters beside the HUD's face (`P3-5a`).
 ##
 ## A sibling script rather than lines in `fare_system.gd`, on
 ## `road_graph_overlay.gd`'s pattern: this one names the `DebugHud` autoload

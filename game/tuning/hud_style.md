@@ -58,3 +58,40 @@ fast, and one the car can run off pins the needle when it matters.
 
 The NO ENTRY bar's white, the world sign's `#f0f0ea`. It borrowed the plate's
 white while the plate had one (`Q139`).
+
+## `meter_lit = Color(1, 0.22, 0.12, 1)`
+
+The 咪錶's LED (`P3-5a`, `Q139`): the fare in red seven-segment digits over
+their ghosts (`meter_unlit`), dollars to one place, right-aligned in five cells
+— a Hong Kong meter's face, and the one place red is spent. `verify_hud.gd`
+holds the lit digit off the ghost and the ghost off the housing, so the unlit
+segments stay a face and never a second reading.
+
+## `timer_warn_s = 10.0`
+
+The tip clock is seconds left on the allowance (`Q141`: the seconds left are
+the tip), in the chip's ink until ten seconds, then the fare's red — the
+passenger is about to bail, and it is the tip draining, so it takes the meter's
+colour. A first guess ahead of the user's drive.
+
+## `callout_sub_size = 20`
+
+The callout is the place over the road (`Q142`, the user's call: a passenger
+says a building, not a kerb): the building's name on the first line in both
+languages at the plate's sizes, and the street under it at this size in the
+chip's muted ink, with the distance while idle. Both lines shrink to the box,
+the English giving way first because the Chinese is the shorter.
+
+## `callout_hold_s = 3.0`
+
+How long DELIVERED or PASSENGER BAILED stays in the callout before it goes back
+to naming the nearest pickup: fifteen samples at the loop's 5 Hz, and the
+model counts samples, not seconds, so `verify_hud.gd` can step it.
+
+## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
+
+Every pickup in the pool as an amber pip on the map — where the pending
+customer is (`Q142`, the user's call: the pool, not one invented passenger).
+The destination is ONE pip in `map_destination`, the chevron's red, because the
+destination is the fare and red is the fare's. `map_pip_px` is baked in metres
+at the slot's scale, like the strokes.

@@ -11,12 +11,14 @@
 [ext_resource type="Resource" uid="uid://43k707iftboe" path="res://tuning/camera.tres" id="18_cameratune"]
 [ext_resource type="Script" uid="uid://475kwutlgbhi" path="res://scripts/fares/fare_system.gd" id="19_fares"]
 [ext_resource type="Script" uid="uid://cdseb2a8jldoc" path="res://scripts/fares/fare_readout.gd" id="20_readout"]
+[ext_resource type="Script" uid="uid://b3pwwpdwrkt7u" path="res://scripts/fares/fare_arrow.gd" id="21_arrow"]
 
-[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig")]
+[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "fares")]
 script = ExtResource("6_harness")
 vehicle = NodePath("Taxi")
 regions = NodePath("Regions")
 camera_rig = NodePath("CameraRig")
+fares = NodePath("Fares")
 
 [node name="Regions" type="Node3D" parent="." unique_id=254386670 node_paths=PackedStringArray("camera")]
 script = ExtResource("1_regions")
@@ -41,6 +43,11 @@ vehicle = NodePath("../Taxi")
 [node name="Readout" type="Node" parent="Fares" node_paths=PackedStringArray("fares")]
 script = ExtResource("20_readout")
 fares = NodePath("..")
+
+[node name="FareArrow" type="Node3D" parent="." node_paths=PackedStringArray("fares", "vehicle")]
+script = ExtResource("21_arrow")
+fares = NodePath("../Fares")
+vehicle = NodePath("../Taxi")
 
 [node name="CameraRig" type="SpringArm3D" parent="." unique_id=73203193 node_paths=PackedStringArray("target", "camera")]
 margin = 0.3

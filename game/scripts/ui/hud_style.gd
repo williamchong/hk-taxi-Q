@@ -183,5 +183,28 @@ const PATH: String = "res://tuning/hud_style.tres"
 # ---- dev only ----
 
 ## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.
+## The 咪錶's face (`P3-5a`): red LED digits over their ghosts, the fare in
+## dollars to one place in `meter_cells` cells.
+@export var meter_lit: Color
+@export var meter_unlit: Color
+@export var meter_digit_px: float
+@export var meter_segment_px: float
+@export var meter_slant: float
+@export var meter_cells: int
+@export var meter_label_size: int
+## The tip clock: seconds left on the allowance, red under `timer_warn_s`.
+@export var timer_size: int
+@export var timer_unit_size: int
+@export var timer_warn_s: float
+## The bilingual callout: the nearest pickup or the destination, and the
+## outcome of a fare held for `callout_hold_s` after it ends.
+@export var callout_size_en: int
+@export var callout_size_zh: int
+@export var callout_sub_size: int
+@export var callout_hold_s: float
+## The map's pips: every pickup in the pool, and the one destination.
+@export var map_pickup: Color
+@export var map_destination: Color
+@export var map_pip_px: float
 @export var slot_fill: Color
 @export var slot_edge: Color
