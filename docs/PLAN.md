@@ -453,8 +453,9 @@ which leave `reserved_slots()` and stay in `hud_slots()`; `minimap.gd` carries t
 roads' transform; `scripts/fares/fare_guide.gd` is the world guide; `Main` hands `level.fares` to
 the HUD beside the car.
 
-- **Nothing until there is a customer**: idle, only the pool's pips on the map; hailed, the
-  callout, the pin and the guide all point at the destination.
+- **No goal until someone is aboard**: idle, every pending customer is pinned on the map and
+  ringed on the road and the arrow points at the closest; hailed, the callout, the pin, the ring
+  and the arrow all point at the destination.
 - **A stop is its building over its road**: `fares.json` carries `place` from iB1000's
   `BUILDINGNAME` (`etl/pipeline/fares.py::read_places`, `fares.places` in the yaml), and the
   road is the graph's name for the stop's edge.

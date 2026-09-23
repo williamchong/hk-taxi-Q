@@ -6,7 +6,8 @@ extends Node3D
 ##
 ## In the world, not the HUD — both references with a destination do this, and
 ## `hud_layout.tres` reserves no slot for it (`Q80`). It points where
-## `FareFace` says: the destination once hailed, and nothing while idle.
+## `FareFace` says: the closest pending customer while idle — the arrow alone,
+## no ring — and the destination once hailed.
 ## **As the crow flies.** `Q138` holds the next-junction arrow for after the
 ## first fare review; in a one-way grid this one will sometimes point down a
 ## street that cannot be entered, and `GAME_DESIGN.md`'s acceptance test is a
@@ -26,6 +27,11 @@ var _profile: FareGuideProfile = null
 var _face: FareFace = null
 var _arrow: MeshInstance3D = null
 var _ring: MeshInstance3D = null
+## One ring per pending customer, as one multimesh: shown while no one is
+## aboard, pulsed with the destination's.
+var _pending: MultiMeshInstance3D = null
+var _pending_at: PackedVector3Array = PackedVector3Array()
+var _pending_material: StandardMaterial3D = null
 var _material: StandardMaterial3D = null
 var _ring_material: StandardMaterial3D = null
 ## The closeness last painted, quantised, so a frame that moved a centimetre
@@ -68,6 +74,24 @@ func _ready() -> void:
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ring.top_level = true
 	add_child(_ring)
+	_pending_material = _unshaded(_profile.ring_alpha)
+	var style: HudStyle = load(HudStyle.PATH) as HudStyle
+	var amber: Color = style.map_pickup if style != null else Color(0.9, 0.75, 0.3)
+	amber.a = _profile.ring_alpha
+	_pending_material.albedo_color = amber
+	_pending = MultiMeshInstance3D.new()
+	_pending.name = "Pending"
+	_pending.multimesh = MultiMesh.new()
+	_pending.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	_pending.multimesh.mesh = _ring.mesh
+	for stop: Fare.Stop in fares.pickups():
+		_pending_at.append(stop.point + Vector3.UP * _profile.ring_lift_m)
+	_pending.multimesh.instance_count = _pending_at.size()
+	_pending.material_override = _pending_material
+	_pending.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_pending.top_level = true
+	_pending.visible = false
+	add_child(_pending)
 	visible = false
 	fares.sampled.connect(_on_sampled)
 	_on_sampled()
@@ -84,17 +108,37 @@ static func _unshaded(alpha: float) -> StandardMaterial3D:
 
 
 func _on_sampled() -> void:
+	var nearest: Fare.Stop = null
+	if fares.state == FareSystem.State.IDLE:
+		nearest = fares.nearest_pickup_any(vehicle.global_position)
 	# The clock's bar and the takings are the HUD's; only the target is read.
-	_face.on_sampled(fares.state, fares.fare, 0.0, 0.0)
+	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
 	if visible != _face.has_target:
 		visible = _face.has_target
-		set_process(_face.has_target)
+		set_process(_face.has_target or _face.pending_shown)
+	# The ring marks where the passenger gets out; a pending customer gets the
+	# arrow alone (the user's call).
+	if _ring.visible != _face.target_is_destination:
+		_ring.visible = _face.target_is_destination
+	# Every pending customer's ring while no one is aboard (the user's call).
+	if _pending.visible != _face.pending_shown:
+		_pending.visible = _face.pending_shown
+		set_process(_face.has_target or _face.pending_shown)
 	if _face.has_target:
 		_ring.global_position = _face.target + Vector3.UP * _profile.ring_lift_m
 
 
 func _process(delta: float) -> void:
-	if not visible or not is_instance_valid(vehicle):
+	if not is_instance_valid(vehicle):
+		return
+	_pulse_s = fmod(_pulse_s + delta, 1.0 / maxf(_profile.pulse_hz, 0.001))
+	var pulse: float = 1.0 + _profile.pulse_depth * sin(TAU * _pulse_s * _profile.pulse_hz)
+	if _pending.visible:
+		var pulsed := Transform3D(Basis.from_scale(Vector3(pulse, 1.0, pulse)), Vector3.ZERO)
+		for index: int in _pending_at.size():
+			pulsed.origin = _pending_at[index]
+			_pending.multimesh.set_instance_transform(index, pulsed)
+	if not visible:
 		return
 	var at: Vector3 = vehicle.global_position + Vector3.UP * _profile.height_m
 	var flat := Vector3(_face.target.x - at.x, 0.0, _face.target.z - at.z)
@@ -111,8 +155,6 @@ func _process(delta: float) -> void:
 		_material.albedo_color = ink
 		ink.a = _profile.ring_alpha
 		_ring_material.albedo_color = ink
-	_pulse_s = fmod(_pulse_s + delta, 1.0 / maxf(_profile.pulse_hz, 0.001))
-	var pulse: float = 1.0 + _profile.pulse_depth * sin(TAU * _pulse_s * _profile.pulse_hz)
 	_ring.scale = Vector3(pulse, 1.0, pulse)
 	if apart < 0.1:
 		return

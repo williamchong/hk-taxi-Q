@@ -7076,6 +7076,13 @@ had two readings, and the one built is the one that changes no loop.
      flagfall, and the banked sum in the gain's green at delivery — bare outlined numerals in the
      `tick` rect under the clock, fading over `tick_fade_s` (1.2 s). Driven by
      `FareSystem.meter_changed` and `delivered`, never polled.
+- **The user's third round (2026-09-24), built:** with no one aboard and one or more pending
+  customers, the **arrow points at the closest one** — no goal box, no clock — and **every pending
+  customer in range is marked, like a map**: an amber pin per pickup on the minimap (the field's
+  children, upright, re-placed by `follow`; hidden while a fare runs), and an amber ring on the
+  road at each (one `MultiMeshInstance3D`, one draw, pulsed with the destination's). Hailed, the
+  pending marks go down and the destination's pin and ring come up. This supersedes item 1 of the
+  round above: idle is no longer dark, but the goal UI still is.
 - 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
   arrow (`Q138`), a route line (`Q137`), the options menu (`P3-5b`).
 

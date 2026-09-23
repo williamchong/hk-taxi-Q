@@ -8,7 +8,8 @@ extends Control
 ## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
 ##
 ## **Driving only.** Roads, which way they run, the car, and since `P3-5a` the
-## fare's pips: every pickup in the pool, and the one destination. No route is
+## fare's pins: every pending customer while no one is aboard, and the one
+## destination once hailed. No route is
 ## drawn and none will be without `Q137` reopening.
 ##
 ## The meter's housing, like every panel (`Q139`): light roads on black, and
@@ -29,13 +30,15 @@ var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
 var _marker: Polygon2D = null
-## The fare's marks (`P3-5a`): the pool's pips as one mesh under the roads,
-## moved by `follow` for nothing; and the target's pin, the field's child so
-## it stands upright whatever the map's heading, re-placed by `follow` at the
-## roads' transform of its plan point.
-var _pickups: MeshInstance2D = null
+## The fare's marks (`P3-5a`): the destination's pin and one pin per pending
+## customer, the field's children so they stand upright whatever the map's
+## heading, each re-placed by `follow` at the roads' transform of its plan
+## point.
 var _pin: Polygon2D = null
 var _pin_plan: Vector2 = Vector2.ZERO
+var _pending: Array[Polygon2D] = []
+var _pending_plan: PackedVector2Array = PackedVector2Array()
+var _pending_shown: bool = true
 var _style: HudStyle = null
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
@@ -102,7 +105,7 @@ func setup(
 	# point. Under the car, over the roads; hidden until there is a target.
 	_pin = Polygon2D.new()
 	_pin.name = "Pin"
-	_pin.polygon = pin(style.map_pin_px)
+	_pin.polygon = pin_shape(style.map_pin_px)
 	_pin.color = style.map_destination
 	_pin.visible = false
 	_field.add_child(_pin)
@@ -132,36 +135,45 @@ func setup(
 	_panel("Frame", style, Color.TRANSPARENT, style.plate_edge)
 
 
-## Every pickup in the pool as one mesh of pips, in plan metres under the
-## roads' transform (`P3-5a`). Built once: the pool does not move.
+## Every pending customer as an upright pin (the user's call: all of them,
+## like a map, not the closest alone). The field's children, re-placed by
+## `follow`; shown only while no one is aboard (`show_pending`).
 func set_pickups(points: PackedVector3Array) -> void:
-	if _pickups != null:
-		_pickups.queue_free()
-		_pickups = null
-	if points.is_empty():
-		return
-	var vertices := PackedVector2Array()
-	var colours := PackedColorArray()
-	var shape: PackedVector2Array = pip(_style.map_pip_px / _px_per_m)
+	for pin: Polygon2D in _pending:
+		pin.queue_free()
+	_pending.clear()
+	_pending_plan.clear()
 	for point: Vector3 in points:
-		var at: Vector2 = MinimapProjection.plan(point)
-		# A diamond is two triangles about its centre.
-		for triangle: PackedVector2Array in [
-			PackedVector2Array([shape[0], shape[1], shape[2]]),
-			PackedVector2Array([shape[0], shape[2], shape[3]])
-		]:
-			for corner: Vector2 in triangle:
-				vertices.append(at + corner)
-				colours.append(_style.map_pickup)
-	_pickups = MeshInstance2D.new()
-	_pickups.name = "Pickups"
-	_pickups.mesh = CanvasMesh.of(vertices, colours)
-	_roads.add_child(_pickups)
-	# Under the destination: the one pip that is a fare covers the pool's.
-	_roads.move_child(_pickups, 0)
+		var pin := Polygon2D.new()
+		pin.name = "Pending%d" % _pending.size()
+		pin.polygon = pin_shape(_style.map_pending_px)
+		pin.color = _style.map_pickup
+		pin.visible = _pending_shown
+		_field.add_child(pin)
+		# Under the destination's pin and the car, over the roads.
+		_field.move_child(pin, _pin.get_index())
+		_pending.append(pin)
+		_pending_plan.append(MinimapProjection.plan(point))
+	_place_pending()
 
 
-## Put the pin on the destination at `point`, or hide it.
+## Show or hide every pending customer's pin at once.
+func show_pending(shown: bool) -> void:
+	if _pending_shown == shown:
+		return
+	_pending_shown = shown
+	for pin: Polygon2D in _pending:
+		pin.visible = shown
+
+
+func _place_pending() -> void:
+	if not _pending_shown:
+		return
+	for index: int in _pending.size():
+		_pending[index].position = _roads.transform * _pending_plan[index]
+
+
+## Put the destination's pin on `point`, or hide it.
 func set_target(point: Vector3, shown: bool) -> void:
 	if _pin.visible != shown:
 		_pin.visible = shown
@@ -181,6 +193,7 @@ func follow(car: Vector3, forward: Vector3) -> void:
 		_marker.rotation = MinimapProjection.marker_rotation(forward, false)
 	if _pin.visible:
 		_pin.position = _roads.transform * _pin_plan
+	_place_pending()
 
 
 func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:
@@ -197,7 +210,7 @@ func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> Cha
 
 ## A pin: a map marker `tall` px high with its TIP at the origin — a head the
 ## width of half its height over a point — so it stands on its place.
-static func pin(tall: float) -> PackedVector2Array:
+static func pin_shape(tall: float) -> PackedVector2Array:
 	var head: float = tall * 0.55
 	var half: float = head * 0.5
 	var centre: float = -tall + half
@@ -208,15 +221,6 @@ static func pin(tall: float) -> PackedVector2Array:
 		points.append(Vector2(cos(angle) * half, centre + sin(angle) * half))
 	points.append(Vector2.ZERO)
 	return points
-
-
-## A pip: a diamond `across` wide about its own centre, which turns with the
-## map and still reads as a point.
-static func pip(across: float) -> PackedVector2Array:
-	var half: float = across * 0.5
-	return PackedVector2Array(
-		[Vector2(0.0, -half), Vector2(half, 0.0), Vector2(0.0, half), Vector2(-half, 0.0)]
-	)
 
 
 ## The car, pointing up (`-Y`): a notched arrowhead `length` tall about its own

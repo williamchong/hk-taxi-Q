@@ -105,16 +105,15 @@ seconds, so `verify_hud.gd` can step it.
 
 ## `map_pin_px = 26.0`
 
-The target's marker on the map is a PIN, not a dot (`Q142`, the user's call:
-an icon on the customer's and the destination's location): its tip on the
-point, upright whatever the map's heading, in `map_destination` — up only
-while a fare has a destination. The pool's pickups stay `map_pip_px` dots in
-`map_pickup`.
+The destination's marker on the map is a PIN, not a dot (`Q142`, the user's
+calls): its tip on the point, upright whatever the map's heading, in
+`map_destination`, up only while a fare has one. Every PENDING customer in
+range is a pin too — all of them, like a map, not the closest alone — at
+`map_pending_px` in `map_pickup`, shown only while no one is aboard.
 
 ## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
 
-Every pickup in the pool as an amber pip on the map — where the pending
-customer is (`Q142`, the user's call: the pool, not one invented passenger).
-The destination is ONE pip in `map_destination`, the chevron's red, because the
-destination is the fare and red is the fare's. `map_pip_px` is baked in metres
-at the slot's scale, like the strokes.
+Every pending customer as an amber pin on the map (`Q142`, the user's call:
+the pool, not one invented passenger). The destination is ONE pin in
+`map_destination`, the chevron's red, because the destination is the fare and
+red is the fare's.

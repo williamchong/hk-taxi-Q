@@ -207,10 +207,11 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## The meter's tick flash under the clock: its size and how long it fades.
 @export var tick_size: int
 @export var tick_fade_s: float
-## The map's pips: every pickup in the pool, and the one destination.
+## The map's pins: every pending customer at `map_pending_px`, and the one
+## destination at `map_pin_px`.
 @export var map_pickup: Color
 @export var map_destination: Color
-@export var map_pip_px: float
+@export var map_pending_px: float
 @export var map_pin_px: float
 @export var slot_fill: Color
 @export var slot_edge: Color

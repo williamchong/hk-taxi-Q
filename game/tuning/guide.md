@@ -25,6 +25,10 @@ first guess ahead of the user's drive.
 The arrow's length near and far (`arrow_far_m` 1.0): a flat unshaded arrow at 2.6 m over the car
 reads small from the chase camera, so it grows as it starts to matter.
 
+Every pending customer gets a ring too while no one is aboard (the user's call: all of them, like
+a map), in the map's amber, as one multimesh; the destination's ring alone takes the guide's
+distance colour.
+
 ## `ring_radius_m = 4.0`
 
 The ring on the road: a car length across, `ring_width_m` 0.6 wide, floated `ring_lift_m` 0.08

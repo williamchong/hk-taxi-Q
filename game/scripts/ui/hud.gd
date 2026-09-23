@@ -862,7 +862,13 @@ func _on_fare_bailed(fare: Fare) -> void:
 ## One sample of the loop, at its 5 Hz: the face decides and the panels are
 ## painted.
 func _on_fare_sampled() -> void:
-	_face.on_sampled(fares.state, fares.fare, _style.timer_warn_s, fares.earned_hkd)
+	var car: VehicleController = _vehicle()
+	var nearest: Fare.Stop = null
+	# The pool is scanned only while idle: hailed, the face points at the
+	# destination and would throw the nearest pickup away.
+	if car != null and fares.state == FareSystem.State.IDLE:
+		nearest = fares.nearest_pickup_any(car.global_position)
+	_face.on_sampled(fares.state, fares.fare, nearest, _style.timer_warn_s, fares.earned_hkd)
 	_paint_fares()
 
 
@@ -879,6 +885,7 @@ func _paint_fares() -> void:
 		_tick.visible = false
 		if _minimap != null:
 			_minimap.set_target(Vector3.ZERO, false)
+			_minimap.show_pending(false)
 		return
 	if not _meter_panel.visible:
 		_meter_panel.visible = true
@@ -919,4 +926,5 @@ func _paint_fares() -> void:
 			StreetPlate.shrink_to(_callout_sub, _style.callout_sub_size, room)
 
 	if _minimap != null:
-		_minimap.set_target(_face.target, _face.has_target)
+		_minimap.set_target(_face.target, _face.has_target and _face.target_is_destination)
+		_minimap.show_pending(_face.pending_shown)

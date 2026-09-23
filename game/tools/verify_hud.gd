@@ -370,8 +370,8 @@ func _check_style() -> void:
 		"style",
 		"the destination's pip is red and the pool's is not"
 	)
-	if style.map_pip_px <= 0.0 or style.map_pin_px <= style.map_pip_px:
-		_fail("style", "map_pip_px is 0, or the pin is not larger than a pip")
+	if style.map_pending_px <= 0.0 or style.map_pin_px <= style.map_pending_px:
+		_fail("style", "map_pending_px is 0, or the destination's pin is not larger")
 	if style.timer_outline_px <= 0:
 		_fail("style", "the bare timer has no outline — it would vanish on a light road")
 
@@ -1191,19 +1191,7 @@ func _check_minimap() -> void:
 ## roads' child, so `follow` moves both for nothing. A pip parented to the
 ## field instead would sit still in the slot while the city turned under it.
 func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
-	var diamond: PackedVector2Array = MinimapScript.pip(8.0)
-	_expect(
-		(
-			diamond.size() == 4
-			and diamond[0] == Vector2(0.0, -4.0)
-			and diamond[1] == Vector2(4.0, 0.0)
-			and diamond[2] == Vector2(0.0, 4.0)
-			and diamond[3] == Vector2(-4.0, 0.0)
-		),
-		"map",
-		"a pip is a diamond about its own centre"
-	)
-	var marker: PackedVector2Array = MinimapScript.pin(26.0)
+	var marker: PackedVector2Array = MinimapScript.pin_shape(26.0)
 	var above: bool = true
 	for point: Vector2 in marker:
 		above = above and point.y <= 0.0 and point.y >= -26.0
@@ -1216,7 +1204,6 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 	var map: Control = MinimapScript.new()
 	# An empty graph: no roads, and everything else built as shipped.
 	map.setup(mapping, style, RoadGraph.new(), Vector2(280.0, 236.0), 88.0)
-	var roads: Node = map.get_node("Field/Roads")
 	var pin: Polygon2D = map.get_node_or_null("Field/Pin") as Polygon2D
 	if pin == null:
 		_fail("map", "the pin is not the field's child — every assertion below is inert")
@@ -1249,35 +1236,50 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 	map.set_target(Vector3.ZERO, false)
 	_expect(not pin.visible, "map", "and it hides again between targets")
 
+	# Every pending customer a pin of its own, upright, re-placed by `follow`.
+	map.follow(car, north)
 	map.set_pickups(PackedVector3Array([car + north * 50.0, car + east * 50.0]))
-	var pickups: MeshInstance2D = roads.get_node_or_null("Pickups") as MeshInstance2D
-	if pickups == null:
-		_fail("map", "the pool's pips are not the roads' child")
+	var first: Polygon2D = map.get_node_or_null("Field/Pending0") as Polygon2D
+	var second: Polygon2D = map.get_node_or_null("Field/Pending1") as Polygon2D
+	if first == null or second == null:
+		_fail("map", "two pending customers are not two pins under the field")
 	else:
-		var points: PackedVector2Array = pickups.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-		var inks: PackedColorArray = pickups.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 		_expect(
-			points.size() == 12 and inks.size() == 12,
+			(
+				first.position.distance_to(anchor + Vector2(0.0, -50.0 * px_per_m)) < 0.01
+				and second.position.distance_to(anchor + Vector2(50.0 * px_per_m, 0.0)) < 0.01
+			),
 			"map",
-			"two pickups are two diamonds of six vertices"
+			"two pending customers are two pins, each on its place"
 		)
-		var centred: bool = points.size() == 12
-		if centred:
-			var first := Vector2.ZERO
-			for index: int in 6:
-				first += points[index]
-			centred = (
-				(first / 6.0).distance_to(MinimapProjectionScript.plan(car + north * 50.0)) < 1.0
-			)
-		_expect(centred, "map", "each about its pickup, in plan metres")
+		_expect(
+			first.color == style.map_pickup and first.get_index() < pin.get_index(),
+			"map",
+			"in the pool's amber, under the destination's pin"
+		)
+		map.follow(car, east)
+		_expect(
+			(
+				first.position.distance_to(anchor + Vector2(-50.0 * px_per_m, 0.0)) < 0.01
+				and first.rotation == 0.0
+			),
+			"map",
+			"and facing east the northern one is to the left, upright: follow re-places them"
+		)
+		map.show_pending(false)
+		_expect(
+			not first.visible and not second.visible, "map", "hidden together while a fare runs"
+		)
+		map.show_pending(true)
+		_expect(first.visible, "map", "and shown again")
 	map.set_pickups(PackedVector3Array())
 	_expect(
 		(
-			roads.get_node_or_null("Pickups") == null
-			or roads.get_node("Pickups").is_queued_for_deletion()
+			map.get_node_or_null("Field/Pending0") == null
+			or map.get_node("Field/Pending0").is_queued_for_deletion()
 		),
 		"map",
-		"an empty pool draws no pips"
+		"an empty pool draws no pins"
 	)
 	map.free()
 
@@ -1502,19 +1504,31 @@ func _check_fare_face() -> void:
 
 	var face: RefCounted = FareFaceScript.new(3, "en")
 	var zh: RefCounted = FareFaceScript.new(3, "zh")
-	face.on_sampled(idle, null, 10.0, 0.0)
+	face.on_sampled(idle, null, null, 10.0, 0.0)
 	_expect(
 		face.caption.is_empty() and face.callout.is_empty() and not face.has_target,
 		"face",
 		"idle with no customer, nothing is said and nothing is pointed at (the user's call)"
 	)
+	face.on_sampled(idle, null, stand, 10.0, 0.0)
+	_expect(
+		(
+			face.caption.is_empty()
+			and face.has_target
+			and not face.target_is_destination
+			and face.target == stand.point
+		),
+		"face",
+		"idle with a pending customer, the arrow points at the closest one and the box stays down"
+	)
+	_expect(face.pending_shown, "face", "and every pending customer is marked")
 	_expect(
 		face.meter_text == "0.0" and face.total_text == "TOTAL HK$0.0" and not face.show_timer,
 		"face",
 		"the meter reads nothing yet, the total nothing, and the clock is down"
 	)
-	face.on_sampled(idle, null, 10.0, 245.7)
-	zh.on_sampled(idle, null, 10.0, 245.7)
+	face.on_sampled(idle, null, null, 10.0, 245.7)
+	zh.on_sampled(idle, null, null, 10.0, 245.7)
 	_expect(
 		face.total_text == "TOTAL HK$245.7" and zh.total_text == "合計 HK$245.7",
 		"face",
@@ -1528,7 +1542,7 @@ func _check_fare_face() -> void:
 	fare.allowance_s = 60.0
 	fare.remaining_s = 42.4
 	fare.remaining_road_m = 1234.0
-	face.on_sampled(boarding, fare, 10.0, 0.0)
+	face.on_sampled(boarding, fare, null, 10.0, 0.0)
 	_expect(
 		(
 			face.caption == "PICKING UP"
@@ -1538,29 +1552,34 @@ func _check_fare_face() -> void:
 		"face",
 		"boarding: the caption says so, the destination's building, its street, no distance"
 	)
-	zh.on_sampled(boarding, fare, 10.0, 0.0)
+	zh.on_sampled(boarding, fare, null, 10.0, 0.0)
 	_expect(
 		zh.caption == "上客中" and zh.callout == "時代廣場" and zh.callout_sub == "羅素街",
 		"face",
 		"and in Chinese the same (%s)" % zh.callout
 	)
 	_expect(
-		face.has_target and face.target == square.point,
+		face.has_target and face.target_is_destination and face.target == square.point,
 		"face",
-		"and the guide points at the destination"
+		"and the guide points at the destination, as the destination"
+	)
+	_expect(
+		not face.pending_shown,
+		"face",
+		"with the pending customers unmarked while someone is aboard"
 	)
 	_expect(not face.show_timer, "face", "the clock waits for the passenger to board")
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(
 		face.caption == "DESTINATION" and face.callout_sub == "RUSSELL STREET  1.2 km",
 		"face",
 		"carrying: DESTINATION, and the road distance left after the street (%s)" % face.callout_sub
 	)
 	fare.remaining_road_m = 320.4
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(face.callout_sub == "RUSSELL STREET  320 m", "face", "under a kilometre, in metres")
 	fare.destination = kerb
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(
 		(
 			face.callout == "Harbour Road (opposite to Great Eagle Centre)"
@@ -1570,7 +1589,7 @@ func _check_fare_face() -> void:
 		"with no building and no street name, the description leads and the distance stands alone"
 	)
 	fare.destination = square
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(
 		face.show_timer and face.timer_text == "43" and not face.timer_urgent,
 		"face",
@@ -1578,13 +1597,13 @@ func _check_fare_face() -> void:
 	)
 	_expect(face.meter_text == "29.0", "face", "and the meter shows the flagfall, to one place")
 	fare.remaining_s = 10.0
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(face.timer_urgent, "face", "at the bar, the clock is urgent")
 	fare.remaining_s = 10.05
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(not face.timer_urgent, "face", "a twentieth past it, not yet")
 	fare.meter.advance(2200.0, 0.0)
-	face.on_sampled(carrying, fare, 10.0, 0.0)
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(
 		face.meter_text == "31.1", "face", "2,200 m reads 31.1 — the first unit past the flagfall"
 	)
@@ -1592,7 +1611,7 @@ func _check_fare_face() -> void:
 	fare.banked_hkd = 122.88
 	fare.tip_hkd = 12.5
 	face.on_ended(fare, true)
-	face.on_sampled(idle, fare, 10.0, 122.88)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		(
 			face.caption == "DELIVERED"
@@ -1603,7 +1622,7 @@ func _check_fare_face() -> void:
 		"delivered: the callout holds what was banked over the tip (%s)" % face.callout
 	)
 	zh.on_ended(fare, true)
-	zh.on_sampled(idle, fare, 10.0, 122.88)
+	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		zh.caption == "已送達" and zh.callout_sub == "小費 HK$12.5",
 		"face",
@@ -1614,11 +1633,15 @@ func _check_fare_face() -> void:
 		"face",
 		"everything but the total resets: the meter reads 0.0, the clock is down"
 	)
-	_expect(not face.has_target, "face", "and the guide is down until the next customer")
-	face.on_sampled(idle, fare, 10.0, 122.88)
-	face.on_sampled(idle, fare, 10.0, 122.88)
+	_expect(
+		face.has_target and not face.target_is_destination and face.target == stand.point,
+		"face",
+		"and the guide is back on the closest pending customer, ring down"
+	)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(face.caption == "DELIVERED", "face", "still held on the third sample")
-	face.on_sampled(idle, fare, 10.0, 122.88)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		face.caption.is_empty() and face.callout.is_empty(),
 		"face",
@@ -1626,16 +1649,16 @@ func _check_fare_face() -> void:
 	)
 
 	face.on_ended(fare, false)
-	face.on_sampled(idle, fare, 10.0, 122.88)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		face.caption == "PASSENGER BAILED" and face.callout.is_empty(),
 		"face",
 		"bailed says so, with nothing under it"
 	)
 	# A new hail inside the hold wins: the outcome is old news.
-	face.on_sampled(boarding, fare, 10.0, 122.88)
+	face.on_sampled(boarding, fare, null, 10.0, 122.88)
 	_expect(face.caption == "PICKING UP", "face", "and a new hail inside the hold wins")
-	face.on_sampled(idle, fare, 10.0, 122.88)
+	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(face.caption.is_empty(), "face", "with the old notice dropped, not resumed")
 
 	_expect(

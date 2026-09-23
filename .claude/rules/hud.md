@@ -72,10 +72,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   / `map_destination` / `map_pip_px` keys: `tools/check.sh` (the `face:`, `digits:` and pip
   `map:` assertions), plus THREE frames at `--debug-view=off` — boarding at the boot stand,
   carrying, and idle from `--spawn-fare=wan_chai/f_025` (31 m from any pickup, the one spawn that
-  boots idle) — and the draw-call delta against `--hud=off` pasted.** 🔴 **Nothing is shown until there is a customer** (`Q142`, the user's call): idle, the
-  callout, the guide and the pin are down and only the pool's pips remain; do not bring the
-  nearest-pickup callout back, and do not invent a designated stand per hail — that is a
-  `FareSystem` change and the user's call. 🔴 **Every meter tick flashes under the clock**
+  boots idle) — and the draw-call delta against `--hud=off` pasted.** 🔴 **No goal until someone is aboard** (`Q142`, the user's calls): idle, the callout and the
+  clock are down, the arrow points at the CLOSEST pending customer, and EVERY pending customer in
+  range is marked — a pin per pickup on the map and a ring per pickup on the road (one multimesh)
+  — all hidden while a fare runs; do not bring the nearest-pickup callout back, and do not invent
+  a designated stand per hail — that is a `FareSystem` change and the user's call. 🔴 **Every meter tick flashes under the clock**
   (`tick` rect, `tick_fade_s`) off `meter_changed`, and the banked sum in green off `delivered`;
   after a delivery everything but the total resets. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
   decided in `hud.gd` is one the check cannot see. 🔴 **A stop is its building over its road**

@@ -8,10 +8,11 @@ extends RefCounted
 ## — so "the callout names the pickup while idle and the destination while
 ## carrying" is a check, not a screenshot.
 ##
-## **Nothing is shown until there is a customer** (the user's call, `Q142`,
-## 2026-09-24, reversing the nearest-pickup callout): idle, the guide, the pin
-## and the callout are down and only the pool's pips on the map say where a
-## stand is. Hailed, everything points at the destination.
+## **No goal until there is a customer aboard** (the user's calls, `Q142`,
+## 2026-09-24): idle, the callout and the clock are down, and the guide's
+## arrow and the map's pin point at the CLOSEST pending customer — the nearest
+## pickup in the pool — with no ring on the road. Hailed, everything points at
+## the destination.
 ##
 ## **A stop is said the way a passenger says it** (the user's call, `Q142`):
 ## a caption saying what the box is, the building — `Fare.Stop.place()`,
@@ -44,9 +45,15 @@ var timer_text: String = ""
 var show_timer: bool = false
 ## Under the style's `timer_warn_s`: the clock turns the fare's red.
 var timer_urgent: bool = false
-## Where the guide and the map's pin point: the destination, once hailed.
+## Where the guide and the map's pin point: the closest pending customer
+## while idle, the destination once hailed.
 var has_target: bool = false
 var target: Vector3 = Vector3.ZERO
+## The target is the destination (true) or the closest pending customer
+## (false). While no one is aboard every pending customer is marked, on the
+## map and on the road (`pending_shown`).
+var target_is_destination: bool = false
+var pending_shown: bool = false
 
 var _language: String = Locale.DEFAULT
 var _hold_samples: int = 0
@@ -67,9 +74,12 @@ func on_ended(fare: Fare, delivered: bool) -> void:
 	_notice_fare = fare
 
 
-## One sample of the loop: its `state` and `fare`, the bar under which the
-## clock is urgent, and what the session has banked.
-func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: float) -> void:
+## One sample of the loop: its `state` and `fare`, the closest pending
+## customer (null with none), the bar under which the clock is urgent, and
+## what the session has banked.
+func on_sampled(
+	state: FareSystem.State, fare: Fare, nearest: Fare.Stop, warn_s: float, earned_hkd: float
+) -> void:
 	total_text = _say("合計 HK$", "TOTAL HK$") + money(earned_hkd)
 	show_timer = state == FareSystem.State.CARRYING
 	timer_urgent = false
@@ -86,6 +96,8 @@ func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: 
 		_notice = Notice.NONE
 		has_target = true
 		target = fare.destination.point
+		target_is_destination = true
+		pending_shown = false
 		if state == FareSystem.State.BOARDING:
 			caption = _say("上客中", "PICKING UP")
 		else:
@@ -99,8 +111,10 @@ func on_sampled(state: FareSystem.State, fare: Fare, warn_s: float, earned_hkd: 
 			callout_sub = road
 		return
 
-	has_target = false
-	target = Vector3.ZERO
+	has_target = nearest != null
+	target = nearest.point if nearest != null else Vector3.ZERO
+	target_is_destination = false
+	pending_shown = true
 	if _notice != Notice.NONE and _notice_left > 0:
 		_notice_left -= 1
 		if _notice == Notice.DELIVERED:
