@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="FareGuideProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/fares/fare_guide_profile.gd" id="1_guide"]
+
+[resource]
+script = ExtResource("1_guide")
+near_m = 30.0
+far_m = 400.0
+arrow_near_m = 2.4
+arrow_far_m = 1.0
+height_m = 2.6
+far_colour = Color(0.92, 0.2, 0.15, 1)
+near_colour = Color(0.3, 0.85, 0.38, 1)
+ring_radius_m = 4.0
+ring_width_m = 0.6
+ring_lift_m = 0.08
+pulse_hz = 1.2
+pulse_depth = 0.15
+ring_alpha = 0.85

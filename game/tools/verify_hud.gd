@@ -72,6 +72,8 @@ const FareScript = preload("res://scripts/fares/fare.gd")
 const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
 const FareMeterScript = preload("res://scripts/core/fare_meter.gd")
+const FareGuideScript = preload("res://scripts/fares/fare_guide.gd")
+const FareGuideProfileScript = preload("res://scripts/fares/fare_guide_profile.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -138,6 +140,7 @@ func _init() -> void:
 	_check_wrong_way()
 	_check_minimap()
 	_check_fare_face()
+	_check_guide()
 
 	if _failed > 0:
 		push_error("verify_hud: %d check(s) failed" % _failed)
@@ -367,8 +370,10 @@ func _check_style() -> void:
 		"style",
 		"the destination's pip is red and the pool's is not"
 	)
-	if style.map_pip_px <= 0.0:
-		_fail("style", "map_pip_px is 0 — is it missing from the .tres?")
+	if style.map_pip_px <= 0.0 or style.map_pin_px <= style.map_pip_px:
+		_fail("style", "map_pip_px is 0, or the pin is not larger than a pip")
+	if style.timer_outline_px <= 0:
+		_fail("style", "the bare timer has no outline — it would vanish on a light road")
 
 	# Ink must be readable on its own field. Two numbers, and either can be
 	# nudged past the other by someone tuning a colour they liked.
@@ -1198,39 +1203,53 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 		"map",
 		"a pip is a diamond about its own centre"
 	)
+	var marker: PackedVector2Array = MinimapScript.pin(26.0)
+	var above: bool = true
+	for point: Vector2 in marker:
+		above = above and point.y <= 0.0 and point.y >= -26.0
+	_expect(
+		marker[marker.size() - 1] == Vector2.ZERO and above and marker.size() >= 6,
+		"map",
+		"a pin stands on its tip: the tip at the origin, the head above it"
+	)
 
 	var map: Control = MinimapScript.new()
 	# An empty graph: no roads, and everything else built as shipped.
 	map.setup(mapping, style, RoadGraph.new(), Vector2(280.0, 236.0), 88.0)
 	var roads: Node = map.get_node("Field/Roads")
-	var destination: Polygon2D = roads.get_node("Destination") as Polygon2D
-	if destination == null:
-		_fail("map", "the destination pip is not the roads' child — every assertion below is inert")
+	var pin: Polygon2D = map.get_node_or_null("Field/Pin") as Polygon2D
+	if pin == null:
+		_fail("map", "the pin is not the field's child — every assertion below is inert")
 		map.free()
 		return
-	_expect(not destination.visible, "map", "the destination pip is hidden until there is one")
+	_expect(not pin.visible, "map", "the pin is hidden until there is a target")
+	_expect(
+		pin.get_index() < map.get_node("Field/Car").get_index(), "map", "and it draws under the car"
+	)
 	var car := Vector3(500.0, 6.0, 300.0)
 	var north := Vector3(0.0, 0.0, -1.0)
 	var east := Vector3(1.0, 0.0, 0.0)
 	map.follow(car, north)
-	map.set_destination(car + east * 100.0, true)
+	map.set_target(car + east * 100.0, true, true)
 	var anchor: Vector2 = Vector2(280.0, 236.0) * mapping.anchor
 	var px_per_m: float = 280.0 / mapping.span_m
-	var landed: Vector2 = roads.transform * destination.position
 	_expect(
-		destination.visible and landed.distance_to(anchor + Vector2(100.0 * px_per_m, 0.0)) < 0.01,
+		pin.visible and pin.position.distance_to(anchor + Vector2(100.0 * px_per_m, 0.0)) < 0.01,
 		"map",
 		"facing north, a destination 100 m east lands right of the chevron"
 	)
+	_expect(pin.color == style.map_destination, "map", "in the destination's red")
 	map.follow(car, east)
-	landed = roads.transform * destination.position
 	_expect(
-		landed.distance_to(anchor + Vector2(0.0, -100.0 * px_per_m)) < 0.01,
+		pin.position.distance_to(anchor + Vector2(0.0, -100.0 * px_per_m)) < 0.01,
 		"map",
-		"and facing east it is ahead, because the roads carry it"
+		"and facing east it is ahead: follow re-places it, upright"
 	)
-	map.set_destination(Vector3.ZERO, false)
-	_expect(not destination.visible, "map", "and it hides again between fares")
+	_expect(pin.rotation == 0.0, "map", "— the pin does not turn with the map")
+	map.set_target(car + north * 40.0, true, false)
+	_expect(pin.color == style.map_pickup, "map", "a pickup target takes the pool's amber")
+	map.set_target(Vector3.ZERO, false, false)
+	_expect(not pin.visible, "map", "and it hides again between targets")
 
 	map.set_pickups(PackedVector3Array([car + north * 50.0, car + east * 50.0]))
 	var pickups: MeshInstance2D = roads.get_node_or_null("Pickups") as MeshInstance2D
@@ -1253,11 +1272,6 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 				(first / 6.0).distance_to(MinimapProjectionScript.plan(car + north * 50.0)) < 1.0
 			)
 		_expect(centred, "map", "each about its pickup, in plan metres")
-		_expect(
-			pickups.get_index() < destination.get_index(),
-			"map",
-			"and the pool draws under the destination"
-		)
 	map.set_pickups(PackedVector3Array())
 	_expect(
 		(
@@ -1486,41 +1500,60 @@ func _check_fare_face() -> void:
 	var boarding: int = FareSystemScript.State.BOARDING
 	var carrying: int = FareSystemScript.State.CARRYING
 
-	var face: RefCounted = FareFaceScript.new(3)
+	# 🔴 One language at a time (the user's call): the same sample read in
+	# each, and neither line ever carries both.
+	var zh: RefCounted = FareFaceScript.new(3, "zh")
+	zh.on_sampled(idle, null, stand, 320.4, 10.0)
+	_expect(
+		zh.callout == "新鴻基中心" and zh.callout_sub == "杜老誌道  320 m",
+		"face",
+		(
+			"in Chinese, the building over the road and the distance (%s / %s)"
+			% [zh.callout, zh.callout_sub]
+		)
+	)
+
+	var face: RefCounted = FareFaceScript.new(3, "en")
 	face.on_sampled(idle, null, stand, 320.4, 10.0)
 	_expect(
-		face.callout_en == "Sun Hung Kai Centre" and face.callout_zh == "新鴻基中心",
+		face.callout == "Sun Hung Kai Centre",
 		"face",
-		"idle, the callout leads with the building the passenger names (%s)" % face.callout_en
+		"idle, the callout leads with the building the passenger names (%s)" % face.callout
 	)
 	_expect(
-		face.callout_sub_en == "TONNOCHY ROAD  320 m" and face.callout_sub_zh == "杜老誌道",
+		face.callout_sub == "TONNOCHY ROAD  320 m",
 		"face",
-		"and the road and the distance sit under it (%s)" % face.callout_sub_en
+		"and the road and the distance sit under it, the distance last (%s)" % face.callout_sub
 	)
 	_expect(
 		face.has_target and not face.target_is_destination and face.target == stand.point,
 		"face",
-		"and the arrow points at it, as a pickup"
+		"and the guide points at it, as a pickup"
 	)
 	_expect(
-		face.meter_text == "0.0" and not face.show_timer,
+		face.meter_text == "0.0" and face.total_text == "TOTAL HK$0.0" and not face.show_timer,
 		"face",
-		"the meter reads nothing yet and the clock is down"
+		"the meter reads nothing yet, the total nothing, and the clock is down"
+	)
+	face.on_sampled(idle, null, stand, 320.4, 10.0, 245.7)
+	zh.on_sampled(idle, null, stand, 320.4, 10.0, 245.7)
+	_expect(
+		face.total_text == "TOTAL HK$245.7" and zh.total_text == "合計 HK$245.7",
+		"face",
+		"the session's takings read under the meter, in the language"
 	)
 	face.on_sampled(idle, null, kerb, 48.0, 10.0)
 	_expect(
 		(
-			face.callout_en == "Harbour Road (opposite to Great Eagle Centre)"
-			and face.callout_sub_en == "48 m"
-			and face.callout_sub_zh.is_empty()
+			face.callout == "Harbour Road (opposite to Great Eagle Centre)"
+			and face.callout_sub == "48 m"
 		),
 		"face",
 		"with no building and no street name, the description leads and the distance stands alone"
 	)
 	face.on_sampled(idle, null, null, 0.0, 10.0)
 	_expect(
-		face.callout_en.is_empty() and face.callout_zh.is_empty() and not face.has_target,
+		face.callout.is_empty() and face.callout_sub.is_empty() and not face.has_target,
 		"face",
 		"with no pool there is nothing to say and nothing to point at"
 	)
@@ -1533,19 +1566,20 @@ func _check_fare_face() -> void:
 	fare.remaining_s = 42.4
 	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_en == "→ Times Square" and face.callout_zh == "時代廣場",
+		face.callout == "→ Times Square" and face.callout_sub == "RUSSELL STREET",
 		"face",
-		"boarding, the callout names the destination's building, not the stand under the car"
+		"boarding, the callout names the destination's building over its street, no distance"
 	)
+	zh.on_sampled(boarding, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_sub_en == "RUSSELL STREET" and face.callout_sub_zh == "羅素街",
+		zh.callout == "→ 時代廣場" and zh.callout_sub == "羅素街",
 		"face",
-		"with its street under it and no distance"
+		"and in Chinese the same (%s)" % zh.callout
 	)
 	_expect(
 		face.has_target and face.target_is_destination and face.target == square.point,
 		"face",
-		"and the arrow points at it, as the destination"
+		"and the guide points at it, as the destination"
 	)
 	_expect(not face.show_timer, "face", "the clock waits for the passenger to board")
 	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
@@ -1572,43 +1606,45 @@ func _check_fare_face() -> void:
 	face.on_ended(fare, true)
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_en == "DELIVERED  HK$122.9" and face.callout_zh == "小費 HK$12.5",
+		face.callout == "DELIVERED  HK$122.9" and face.callout_sub == "tip HK$12.5",
 		"face",
-		"delivered: the callout holds what was banked and the tip (%s)" % face.callout_en
+		"delivered: the callout holds what was banked over the tip (%s)" % face.callout
 	)
+	zh.on_ended(fare, true)
+	zh.on_sampled(idle, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_sub_en.is_empty() and face.callout_sub_zh.is_empty(),
+		zh.callout == "已送達  HK$122.9" and zh.callout_sub == "小費 HK$12.5",
 		"face",
-		"with nothing under it"
+		"and in Chinese (%s)" % zh.callout
 	)
 	_expect(
 		face.meter_text == "122.9" and not face.show_timer and not face.target_is_destination,
 		"face",
-		"the meter reads the banked sum, the clock is down and the arrow is back on the pool"
+		"the meter reads the banked sum, the clock is down and the guide is back on the pool"
 	)
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
-	_expect(face.callout_en.begins_with("DELIVERED"), "face", "still held on the third sample")
+	_expect(face.callout.begins_with("DELIVERED"), "face", "still held on the third sample")
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_en == "Sun Hung Kai Centre" and face.callout_sub_en == "TONNOCHY ROAD  3 m",
+		face.callout == "Sun Hung Kai Centre" and face.callout_sub == "TONNOCHY ROAD  3 m",
 		"face",
-		"and on the fourth it names the nearest pickup again (%s)" % face.callout_sub_en
+		"and on the fourth it names the nearest pickup again (%s)" % face.callout_sub
 	)
 
 	face.on_ended(fare, false)
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_en == "PASSENGER BAILED" and face.callout_zh == "乘客下車",
+		face.callout == "PASSENGER BAILED" and face.callout_sub.is_empty(),
 		"face",
-		"bailed says so"
+		"bailed says so, with nothing under it"
 	)
 	# A new hail inside the hold wins: the outcome is old news.
 	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
-	_expect(face.callout_en == "→ Times Square", "face", "and a new hail inside the hold wins")
+	_expect(face.callout == "→ Times Square", "face", "and a new hail inside the hold wins")
 	face.on_sampled(idle, fare, stand, 3.0, 10.0)
 	_expect(
-		face.callout_en == "Sun Hung Kai Centre", "face", "with the old notice dropped, not resumed"
+		face.callout == "Sun Hung Kai Centre", "face", "with the old notice dropped, not resumed"
 	)
 
 	_expect(
@@ -1622,6 +1658,73 @@ func _check_fare_face() -> void:
 		"face",
 		"money is HK$ to one place and the clock never reads below zero"
 	)
+
+
+## The world guide (`Q142`): its table, and how size and colour answer distance.
+func _check_guide() -> void:
+	var profile: Resource = load(FareGuideProfileScript.PATH)
+	if profile == null:
+		_fail("guide", "%s did not load" % FareGuideProfileScript.PATH)
+		return
+	var floors: Dictionary[String, float] = {
+		"near_m": profile.near_m,
+		"far_m": profile.far_m,
+		"arrow_near_m": profile.arrow_near_m,
+		"arrow_far_m": profile.arrow_far_m,
+		"height_m": profile.height_m,
+		"ring_radius_m": profile.ring_radius_m,
+		"ring_width_m": profile.ring_width_m,
+		"ring_lift_m": profile.ring_lift_m,
+		"pulse_hz": profile.pulse_hz,
+		"ring_alpha": profile.ring_alpha,
+	}
+	for key: String in floors:
+		if floors[key] <= 0.0:
+			_fail("guide", "%s is 0 — is it missing from the .tres?" % key)
+	_expect(profile.far_m > profile.near_m, "guide", "far is further than near")
+	_expect(
+		profile.arrow_near_m > profile.arrow_far_m,
+		"guide",
+		"the arrow is LARGER near than far (the user's call)"
+	)
+	var far: Color = profile.far_colour
+	var near: Color = profile.near_colour
+	_expect(
+		far.r > far.g * 2.0 and near.g > near.r * 2.0,
+		"guide",
+		"red far, green near (the user's call)"
+	)
+	_expect(profile.ring_width_m < profile.ring_radius_m, "guide", "the ring is a band, not a disc")
+	_expect(
+		(
+			FareGuideScript.closeness(profile, profile.far_m + 1.0) == 0.0
+			and FareGuideScript.closeness(profile, profile.far_m) == 0.0
+			and FareGuideScript.closeness(profile, profile.near_m) == 1.0
+			and FareGuideScript.closeness(profile, 0.0) == 1.0
+		),
+		"guide",
+		"closeness is 0 at and beyond far, 1 at and inside near"
+	)
+	var mid: float = (profile.near_m + profile.far_m) * 0.5
+	var a: float = FareGuideScript.closeness(profile, mid)
+	var b: float = FareGuideScript.closeness(profile, mid - 10.0)
+	_expect(is_equal_approx(a, 0.5) and b > a, "guide", "halfway reads 0.5 and closer reads more")
+	var arrow: ArrayMesh = FareGuideScript.arrow_mesh(1.0)
+	var ring: ArrayMesh = FareGuideScript.ring_mesh(4.0, 0.6)
+	var arrow_points: PackedVector3Array = arrow.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var ring_points: PackedVector3Array = ring.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	_expect(
+		arrow_points.size() == 9 and arrow_points[0] == Vector3(0.0, 0.0, -0.5),
+		"guide",
+		"the arrow is three triangles with its nose along -Z"
+	)
+	var flat: bool = ring_points.size() == 48 * 6
+	var banded: bool = flat
+	for point: Vector3 in ring_points:
+		flat = flat and point.y == 0.0
+		var r: float = Vector2(point.x, point.z).length()
+		banded = banded and (is_equal_approx(r, 4.0) or is_equal_approx(r, 3.4))
+	_expect(flat and banded, "guide", "the ring is flat, 48 segments between radius 3.4 and 4.0")
 
 
 ## A synthetic stop the way `FareSystem` resolves one: the publisher's

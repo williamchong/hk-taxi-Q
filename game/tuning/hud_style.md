@@ -67,6 +67,13 @@ their ghosts (`meter_unlit`), dollars to one place, right-aligned in five cells
 holds the lit digit off the ghost and the ghost off the housing, so the unlit
 segments stay a face and never a second reading.
 
+## `timer_outline_px = 6`
+
+The tip clock has no housing (`Q142`, the user's call: the countdown in the
+middle of the frame, no backdrop), so its numerals carry the housing's dark as
+an outline instead, and `verify_hud.gd` refuses a zero: a bare white 84 px
+number over a light road is the one place this HUD could vanish.
+
 ## `timer_warn_s = 10.0`
 
 The tip clock is seconds left on the allowance (`Q141`: the seconds left are
@@ -87,6 +94,14 @@ the English giving way first because the Chinese is the shorter.
 How long DELIVERED or PASSENGER BAILED stays in the callout before it goes back
 to naming the nearest pickup: fifteen samples at the loop's 5 Hz, and the
 model counts samples, not seconds, so `verify_hud.gd` can step it.
+
+## `map_pin_px = 26.0`
+
+The target's marker on the map is a PIN, not a dot (`Q142`, the user's call:
+an icon on the customer's and the destination's location): its tip on the
+point, upright whatever the map's heading, in `map_destination` for the fare
+and `map_pickup` for the nearest pickup. The pool's other pickups stay
+`map_pip_px` dots.
 
 ## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
 

@@ -697,6 +697,12 @@ func _parse_args() -> bool:
 				if not value.is_valid_int():
 					_fail("--fare-seed=%s is not an integer" % value)
 					return false
+			"--lang":
+				# `locale.gd` reads this one itself (`Q142`); anything but the
+				# two languages would silently read as the default.
+				if not ["en", "zh"].has(value):
+					_fail("--lang=%s is not en or zh" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

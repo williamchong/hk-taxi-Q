@@ -50,8 +50,8 @@ const STREET_HZ: float = 5.0
 ## strobes unreadably when it is redrawn at 60 Hz.
 const SPEED_HZ: float = 10.0
 
-## The gap between English and Chinese on one row of the callout.
-const ROW_GAP_PX: int = 14
+## The language the callout reads in (`Locale`); the plate stays bilingual.
+var _language: String = Locale.DEFAULT
 
 var _layout: HudLayout = null
 var _style: HudStyle = null
@@ -106,14 +106,17 @@ var fares: FareSystem = null:
 var _face: FareFace = null
 var _meter_panel: ChamferPanel = null
 var _meter: SevenSegment = null
-var _timer_panel: ChamferPanel = null
+## The session's takings, under the LED (the user's call: a total beside the
+## current fare).
+var _total: Label = null
+## The tip clock: bare numerals in the middle of the frame, no housing (the
+## user's call), outlined so they read on any road.
+var _timer_box: VBoxContainer = null
 var _timer_value: Label = null
 var _callout_panel: ChamferPanel = null
-## The place, in both languages on one row; the road under it on another.
-var _callout_en: Label = null
-var _callout_zh: Label = null
-var _callout_sub_en: Label = null
-var _callout_sub_zh: Label = null
+## The place, and the road under it, in one language.
+var _callout: Label = null
+var _callout_sub: Label = null
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
 
@@ -341,7 +344,8 @@ func _build() -> void:
 	# reserved rects are taken as they are, and nothing here is laid out.
 	# All three hide until a usable `FareSystem` is handed in.
 	_meter_panel = _housing("Meter", root, _layout.meter)
-	var meter_row: HBoxContainer = _row(_lines(_meter_panel, 0), "Row", roundi(_style.plate_pad.y))
+	var meter_lines: VBoxContainer = _lines(_meter_panel, _style.speed_line_tighten)
+	var meter_row: HBoxContainer = _row(meter_lines, "Row", roundi(_style.plate_pad.y))
 	var currency: Label = _label("Currency", _style.meter_label_size, _style.chip_muted)
 	currency.text = "HK$"
 	currency.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -357,33 +361,36 @@ func _build() -> void:
 	_meter.unlit = _style.meter_unlit
 	_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	meter_row.add_child(_meter)
+	_total = _label("Total", _style.meter_label_size, _style.chip_muted)
+	meter_lines.add_child(_total)
 
-	_timer_panel = _housing("Timer", root, _layout.timer)
-	var timer_lines: VBoxContainer = _lines(_timer_panel, _style.speed_line_tighten)
-	_timer_value = _label("Value", _style.timer_size, _style.chip_ink)
-	timer_lines.add_child(_timer_value)
-	var seconds: Label = _label("Unit", _style.timer_unit_size, _style.chip_muted)
+	_timer_box = VBoxContainer.new()
+	_timer_box.name = "Timer"
+	_timer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_timer_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_timer_box.add_theme_constant_override(&"separation", _style.speed_line_tighten)
+	_timer_box.visible = false
+	_layout.place(root, _timer_box, _layout.timer)
+	_timer_value = _outlined(_label("Value", _style.timer_size, _style.chip_ink))
+	_timer_box.add_child(_timer_value)
+	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
 	seconds.text = "s left"
-	timer_lines.add_child(seconds)
+	_timer_box.add_child(seconds)
 
-	# The place over the road (`Q142`): two rows, each English beside Chinese,
-	# because the Chinese face is a Kai that has no Latin of its own.
+	# The place over the road (`Q142`), in one language (`Locale`).
+	_language = Locale.language()
+	var chinese: bool = _language == Locale.CHINESE
 	_callout_panel = _housing("Callout", root, _layout.callout)
 	var callout_lines: VBoxContainer = _lines(_callout_panel, -4)
-	var place_row: HBoxContainer = _row(callout_lines, "Place", ROW_GAP_PX)
-	_callout_en = _label("English", _style.callout_size_en, _style.plate_ink)
-	place_row.add_child(_callout_en)
-	_callout_zh = _label("Chinese", _style.callout_size_zh, _style.plate_ink)
-	if _font_zh != null:
-		_callout_zh.add_theme_font_override(&"font", _font_zh)
-	place_row.add_child(_callout_zh)
-	var road_row: HBoxContainer = _row(callout_lines, "Road", ROW_GAP_PX)
-	_callout_sub_en = _label("English", _style.callout_sub_size, _style.chip_muted)
-	road_row.add_child(_callout_sub_en)
-	_callout_sub_zh = _label("Chinese", _style.callout_sub_size, _style.chip_muted)
-	if _font_zh != null:
-		_callout_sub_zh.add_theme_font_override(&"font", _font_zh)
-	road_row.add_child(_callout_sub_zh)
+	_callout = _label(
+		"Place", _style.callout_size_zh if chinese else _style.callout_size_en, _style.plate_ink
+	)
+	callout_lines.add_child(_callout)
+	_callout_sub = _label("Road", _style.callout_sub_size, _style.chip_muted)
+	callout_lines.add_child(_callout_sub)
+	if chinese and _font_zh != null:
+		_callout.add_theme_font_override(&"font", _font_zh)
+		_callout_sub.add_theme_font_override(&"font", _font_zh)
 
 	# ---- the reserved slots ----
 	#
@@ -433,6 +440,13 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override(&"font_color", ink)
 	label.add_theme_font_size_override(&"font_size", size)
+	return label
+
+
+## Numerals with the housing's dark round them, for a readout with no panel.
+func _outlined(label: Label) -> Label:
+	label.add_theme_constant_override(&"outline_size", _style.timer_outline_px)
+	label.add_theme_color_override(&"font_outline_color", _style.plate_field)
 	return label
 
 
@@ -752,21 +766,6 @@ func _vehicle() -> VehicleController:
 	return vehicle
 
 
-## Fit a row's two labels into `room`: the Chinese keeps its size unless it
-## alone needs half the row, and the English takes what is left. The Chinese is
-## the shorter string in every name this city publishes, so it is the one to
-## keep legible.
-static func _fit_row(en: Label, zh: Label, size_en: int, size_zh: int, room: float) -> void:
-	var gap: float = float(ROW_GAP_PX)
-	StreetPlate.shrink_to(zh, size_zh, room * 0.5)
-	var zh_font: Font = zh.get_theme_font(&"font")
-	var zh_size: int = zh.get_theme_font_size(&"font_size")
-	var taken: float = 0.0
-	if not zh.text.is_empty():
-		taken = zh_font.get_string_size(zh.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, zh_size).x + gap
-	StreetPlate.shrink_to(en, size_en, maxf(room - taken, room * 0.25))
-
-
 # ------------------------------------------------------------------ fares ----
 
 
@@ -792,7 +791,7 @@ func _follow_fares() -> void:
 	if _meter_panel == null or not is_instance_valid(fares) or not fares.usable():
 		_paint_fares()
 		return
-	_face = FareFace.new(ceili(_style.callout_hold_s * fares.sample_hz()))
+	_face = FareFace.new(ceili(_style.callout_hold_s * fares.sample_hz()), _language)
 	fares.sampled.connect(_on_fare_sampled)
 	fares.delivered.connect(_on_fare_delivered)
 	fares.bailed.connect(_on_fare_bailed)
@@ -824,7 +823,9 @@ func _on_fare_sampled() -> void:
 		nearest = fares.nearest_pickup_any(car.global_position)
 		if nearest != null:
 			nearest_m = RoadGraph.plan_distance(car.global_position, nearest.point)
-	_face.on_sampled(fares.state, fares.fare, nearest, nearest_m, _style.timer_warn_s)
+	_face.on_sampled(
+		fares.state, fares.fare, nearest, nearest_m, _style.timer_warn_s, fares.earned_hkd
+	)
 	_paint_fares()
 
 
@@ -836,17 +837,19 @@ func _paint_fares() -> void:
 		return
 	if _face == null:
 		_meter_panel.visible = false
-		_timer_panel.visible = false
+		_timer_box.visible = false
 		_callout_panel.visible = false
 		if _minimap != null:
-			_minimap.set_destination(Vector3.ZERO, false)
+			_minimap.set_target(Vector3.ZERO, false, false)
 		return
 	if not _meter_panel.visible:
 		_meter_panel.visible = true
 	_meter.text = _face.meter_text
+	if _total.text != _face.total_text:
+		_total.text = _face.total_text
 
-	if _timer_panel.visible != _face.show_timer:
-		_timer_panel.visible = _face.show_timer
+	if _timer_box.visible != _face.show_timer:
+		_timer_box.visible = _face.show_timer
 	if _face.show_timer:
 		if _timer_value.text != _face.timer_text:
 			_timer_value.text = _face.timer_text
@@ -854,31 +857,26 @@ func _paint_fares() -> void:
 		if _timer_value.get_theme_color(&"font_color") != ink:
 			_timer_value.add_theme_color_override(&"font_color", ink)
 
-	var saying: bool = not _face.callout_en.is_empty()
+	var saying: bool = not _face.callout.is_empty()
 	if _callout_panel.visible != saying:
 		_callout_panel.visible = saying
 	if saying:
-		# Each row on its own guard: while idle the road row changes every
-		# metre and the place row does not, and a refit reshapes both labels.
+		# Each line on its own guard: while idle the road line changes every
+		# metre and the place does not, and a refit reshapes the label.
 		# Cut to the box, like the plate's lettering: a building's name can run
 		# to forty characters, and the box is the worst case, not a suggestion.
 		var room: float = _layout.callout.size.x - _style.plate_pad.x * 2.0
-		var zh: String = StreetPlate.substitute(_face.callout_zh, _substitutions)
-		if _callout_en.text != _face.callout_en or _callout_zh.text != zh:
-			_callout_en.text = _face.callout_en
-			_callout_zh.text = zh
-			_fit_row(_callout_en, _callout_zh, _style.callout_size_en, _style.callout_size_zh, room)
-		var sub_zh: String = StreetPlate.substitute(_face.callout_sub_zh, _substitutions)
-		if _callout_sub_en.text != _face.callout_sub_en or _callout_sub_zh.text != sub_zh:
-			_callout_sub_en.text = _face.callout_sub_en
-			_callout_sub_zh.text = sub_zh
-			_fit_row(
-				_callout_sub_en,
-				_callout_sub_zh,
-				_style.callout_sub_size,
-				_style.callout_sub_size,
-				room
+		var chinese: bool = _language == Locale.CHINESE
+		var place: String = StreetPlate.substitute(_face.callout, _substitutions)
+		if _callout.text != place:
+			_callout.text = place
+			StreetPlate.shrink_to(
+				_callout, _style.callout_size_zh if chinese else _style.callout_size_en, room
 			)
+		var road: String = StreetPlate.substitute(_face.callout_sub, _substitutions)
+		if _callout_sub.text != road:
+			_callout_sub.text = road
+			StreetPlate.shrink_to(_callout_sub, _style.callout_sub_size, room)
 
 	if _minimap != null:
-		_minimap.set_destination(_face.target, _face.has_target and _face.target_is_destination)
+		_minimap.set_target(_face.target, _face.has_target, _face.target_is_destination)

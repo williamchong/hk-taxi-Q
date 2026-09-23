@@ -15,7 +15,11 @@ why the check grades `thumb_rest_*` and not `touch_zone_*`.
 each other so they read as a pair of corners rather than as two floats.
 
 🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the world, right is
-the car, top is the fare, and the middle is the road and stays empty.
+the car, top is the fare, and the middle is the road — with ONE exception the
+user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred at
+y 300, over the road and under the horizon, with no housing behind them. A
+countdown is what an arcade racer puts there, and it is only up while a fare
+runs. Nothing else joins it.
 
 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
 reserved slots do not exist, because they do not; a slot's contents arriving
@@ -31,8 +35,9 @@ pair is anchored as the PLATE is — bottom, with the speed.
 ⚠️ `award` AND `combo` ARE RESERVED: one rect for every component a planned
 task is known to add (`Q138`), graded now and drawn only under
 `--debug-view=full`. `timer`, `meter` and `callout` were, until `P3-5a` filled
-them as they stood — the 咪錶 top-right, the tip clock top-left, the bilingual
-callout top-centre — and they stay graded against the thumbs as filled slots.
+them — the 咪錶 top-right, the callout top-centre as they stood, and the tip
+clock moved to the middle of the frame (`Q142`) — and they stay graded against
+the thumbs as filled slots.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
 missing here is a zero-size rect rather than something sensible, and

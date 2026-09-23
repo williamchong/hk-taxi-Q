@@ -35,33 +35,31 @@ class Stop:
 	var road_en: String = ""
 	var road_zh: String = ""
 
-	## What a passenger calls this stop (`Q142`): the named building the
-	## document put beside it, or the publisher's description of the kerb where
-	## there is none. Either language may fall back on its own.
-	func place_en() -> String:
-		var found: String = _place("en")
-		return found if not found.is_empty() else name_en()
+	## What a passenger calls this stop (`Q142`) in `language`: the named
+	## building the document put beside it, or the publisher's description of
+	## the kerb where there is none. Either language may fall back on its own.
+	func place(language: String) -> String:
+		var found: String = _text(node.get("place", null), language)
+		return found if not found.is_empty() else name(language)
 
-	func place_zh() -> String:
-		var found: String = _place("zh")
-		return found if not found.is_empty() else name_zh()
+	## The street the stop is on, in `language`; "" where unnamed.
+	func road(language: String) -> String:
+		return road_zh if language == "zh" else road_en
 
-	func _place(language: String) -> String:
-		var place: Variant = node.get("place", null)
-		if not place is Dictionary:
+	func name(language: String) -> String:
+		return _text(node.get("name", null), language)
+
+	static func _text(names: Variant, language: String) -> String:
+		if not names is Dictionary:
 			return ""
-		var found: Variant = (place as Dictionary).get(language, null)
+		var found: Variant = (names as Dictionary).get(language, null)
 		return "" if found == null else str(found)
 
 	func name_en() -> String:
-		var names: Dictionary = node.get("name", {})
-		var found: Variant = names.get("en", null)
-		return "" if found == null else str(found)
+		return name("en")
 
 	func name_zh() -> String:
-		var names: Dictionary = node.get("name", {})
-		var found: Variant = names.get("zh", null)
-		return "" if found == null else str(found)
+		return name("zh")
 
 	func same_as(other: Stop) -> bool:
 		return other != null and other.region == region and other.id == id

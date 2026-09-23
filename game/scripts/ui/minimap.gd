@@ -29,11 +29,13 @@ var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
 var _marker: Polygon2D = null
-## The fare's pips (`P3-5a`), children of the roads so `follow` moves them for
-## nothing: the pickups as one mesh in plan metres, the destination as one
-## polygon re-placed by `set_destination`.
+## The fare's marks (`P3-5a`): the pool's pips as one mesh under the roads,
+## moved by `follow` for nothing; and the target's pin, the field's child so
+## it stands upright whatever the map's heading, re-placed by `follow` at the
+## roads' transform of its plan point.
 var _pickups: MeshInstance2D = null
-var _destination: Polygon2D = null
+var _pin: Polygon2D = null
+var _pin_plan: Vector2 = Vector2.ZERO
 var _style: HudStyle = null
 
 ## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
@@ -74,15 +76,6 @@ func setup(
 	)
 	_field.add_child(_roads)
 
-	# The destination's pip, over the roads and under the car. Hidden until a
-	# fare has one; placed in plan metres, so the roads' transform carries it.
-	_destination = Polygon2D.new()
-	_destination.name = "Destination"
-	_destination.polygon = pip(style.map_pip_px / _px_per_m)
-	_destination.color = style.map_destination
-	_destination.visible = false
-	_roads.add_child(_destination)
-
 	# Rim and fill in ONE polygon node, by vertex colour: a `Line2D` rim was a
 	# draw call of its own on a HUD that costs five in all.
 	_marker = Polygon2D.new()
@@ -104,6 +97,16 @@ func setup(
 	# chevron — the map turns under it.
 	_marker.position = map_px * mapping.anchor
 	_field.add_child(_marker)
+
+	# The target's pin (the user's call: an icon, not a dot), its tip on the
+	# point. Under the car, over the roads; hidden until there is a target.
+	_pin = Polygon2D.new()
+	_pin.name = "Pin"
+	_pin.polygon = pin(style.map_pin_px)
+	_pin.color = style.map_destination
+	_pin.visible = false
+	_field.add_child(_pin)
+	_field.move_child(_pin, _marker.get_index())
 
 	# A child of the field so the chamfer clips its two bottom corners too, and
 	# after the roads so it covers them. The rule above it is the keyline's.
@@ -158,17 +161,18 @@ func set_pickups(points: PackedVector3Array) -> void:
 	_roads.move_child(_pickups, 0)
 
 
-## Put the destination's pip at `point`, or hide it.
-func set_destination(point: Vector3, shown: bool) -> void:
-	if _destination.visible != shown:
-		_destination.visible = shown
+## Put the pin on `point` — the destination in its red, a pickup in the
+## pool's amber — or hide it.
+func set_target(point: Vector3, shown: bool, is_destination: bool) -> void:
+	if _pin.visible != shown:
+		_pin.visible = shown
 	if not shown:
 		return
-	# Guarded like `visible`: the destination is fixed for the whole fare and
-	# this is called every sample.
-	var at: Vector2 = MinimapProjection.plan(point)
-	if _destination.position != at:
-		_destination.position = at
+	var ink: Color = _style.map_destination if is_destination else _style.map_pickup
+	if _pin.color != ink:
+		_pin.color = ink
+	_pin_plan = MinimapProjection.plan(point)
+	_pin.position = _roads.transform * _pin_plan
 
 
 ## Put `car` on the anchor, nose along `forward`.
@@ -179,6 +183,8 @@ func follow(car: Vector3, forward: Vector3) -> void:
 	)
 	if not _mapping.heading_up:
 		_marker.rotation = MinimapProjection.marker_rotation(forward, false)
+	if _pin.visible:
+		_pin.position = _roads.transform * _pin_plan
 
 
 func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:
@@ -191,6 +197,21 @@ func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> Cha
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 	return panel
+
+
+## A pin: a map marker `tall` px high with its TIP at the origin — a head the
+## width of half its height over a point — so it stands on its place.
+static func pin(tall: float) -> PackedVector2Array:
+	var head: float = tall * 0.55
+	var half: float = head * 0.5
+	var centre: float = -tall + half
+	var points := PackedVector2Array()
+	# The head as a half-round of eight segments, then the two flanks to the tip.
+	for index: int in 9:
+		var angle: float = PI + PI * index / 8.0
+		points.append(Vector2(cos(angle) * half, centre + sin(angle) * half))
+	points.append(Vector2.ZERO)
+	return points
 
 
 ## A pip: a diamond `across` wide about its own centre, which turns with the

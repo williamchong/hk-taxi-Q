@@ -196,6 +196,7 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var timer_size: int
 @export var timer_unit_size: int
 @export var timer_warn_s: float
+@export var timer_outline_px: int
 ## The bilingual callout: the nearest pickup or the destination, and the
 ## outcome of a fare held for `callout_hold_s` after it ends.
 @export var callout_size_en: int
@@ -206,5 +207,6 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var map_pickup: Color
 @export var map_destination: Color
 @export var map_pip_px: float
+@export var map_pin_px: float
 @export var slot_fill: Color
 @export var slot_edge: Color
