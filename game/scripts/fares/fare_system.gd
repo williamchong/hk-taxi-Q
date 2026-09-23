@@ -436,13 +436,6 @@ func _announce_reading() -> void:
 	meter_changed.emit(reading)
 
 
-## The pickup nearest `position` at any distance, or null with an empty pool:
-## where the pending customer is, for the HUD, the map and the arrow (`P3-5a`).
-## ⚠️ Not the hail: `_nearest_pickup` keeps the radius, and this never hails.
-func nearest_pickup_any(position: Vector3) -> Fare.Stop:
-	return _nearest_pickup_within(position, INF)
-
-
 ## How often `sampled` fires, for a consumer that counts samples.
 func sample_hz() -> float:
 	return _profile.sample_hz if _profile != null else 0.0

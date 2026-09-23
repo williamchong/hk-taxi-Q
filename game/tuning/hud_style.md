@@ -89,6 +89,14 @@ languages at the plate's sizes, and the street under it at this size in the
 chip's muted ink, with the distance while idle. Both lines shrink to the box,
 the English giving way first because the Chinese is the shorter.
 
+## `tick_fade_s = 1.2`
+
+Each meter tick flashes "+HK$2.1" under the clock at `tick_size` and fades over
+this (the user's call: feedback near the centre for every tick). Long enough to
+be read at a glance, short enough that ticks a few seconds apart never stack.
+`callout_caption_size` is the small line over the goal — DESTINATION, PICKING
+UP, DELIVERED — that says what the box is, which the box alone did not.
+
 ## `callout_hold_s = 3.0`
 
 How long DELIVERED or PASSENGER BAILED stays in the callout before it goes back

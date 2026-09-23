@@ -7061,6 +7061,21 @@ had two readings, and the one built is the one that changes no loop.
      The street plate stays bilingual because the real one is. `Fare.Stop.place(language)` /
      `road(language)`; `FareFace` takes the language at construction and `verify_hud` reads it in
      both.
+- **The user's four calls on the second frames (2026-09-24), all built:**
+  1. **Nothing is shown until there is a customer.** The nearest-pickup callout, the guide and
+     the pin are down while idle — only the pool's pips on the map remain. 🚫 The "pending
+     customer is the pool" reading above is withdrawn as a *display*; the loop is unchanged.
+     After a delivery everything but the total resets: the meter reads 0.0, the clock is down,
+     and DELIVERED holds in the callout for its three seconds.
+  2. **The goal box reads as one thing**: a caption line (DESTINATION / PICKING UP / DELIVERED),
+     the building, and the road with the **road distance left** after it — `remaining_road_m` at
+     5 Hz, metres under a kilometre, a tenth of a kilometre above.
+  3. **The total sits under the meter** without overlapping it: the LED at 46 px, the stack
+     unsqueezed.
+  4. **Every meter tick flashes near the centre**: "+HK$2.1" as a unit begins, "+HK$29.0" at the
+     flagfall, and the banked sum in the gain's green at delivery — bare outlined numerals in the
+     `tick` rect under the clock, fading over `tick_fade_s` (1.2 s). Driven by
+     `FareSystem.meter_changed` and `delivered`, never polled.
 - 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
   arrow (`Q138`), a route line (`Q137`), the options menu (`P3-5b`).
 

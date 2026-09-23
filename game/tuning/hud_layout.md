@@ -19,7 +19,8 @@ the car, top is the fare, and the middle is the road — with ONE exception the
 user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred at
 y 300, over the road and under the horizon, with no housing behind them. A
 countdown is what an arcade racer puts there, and it is only up while a fare
-runs. Nothing else joins it.
+runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
+fades; nothing else joins them.
 
 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
 reserved slots do not exist, because they do not; a slot's contents arriving

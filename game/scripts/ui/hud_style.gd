@@ -199,10 +199,14 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var timer_outline_px: int
 ## The bilingual callout: the nearest pickup or the destination, and the
 ## outcome of a fare held for `callout_hold_s` after it ends.
+@export var callout_caption_size: int
 @export var callout_size_en: int
 @export var callout_size_zh: int
 @export var callout_sub_size: int
 @export var callout_hold_s: float
+## The meter's tick flash under the clock: its size and how long it fades.
+@export var tick_size: int
+@export var tick_fade_s: float
 ## The map's pips: every pickup in the pool, and the one destination.
 @export var map_pickup: Color
 @export var map_destination: Color

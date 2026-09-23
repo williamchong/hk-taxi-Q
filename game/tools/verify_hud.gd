@@ -1475,8 +1475,10 @@ func _check_fare_face() -> void:
 	if tariff == null or style == null:
 		_fail("face", "%s or the style did not load" % FareTariffScript.PATH)
 		return
-	if style.callout_sub_size <= 0:
-		_fail("face", "callout_sub_size is 0 — is it missing from the .tres?")
+	if style.callout_sub_size <= 0 or style.callout_caption_size <= 0:
+		_fail("face", "callout_sub_size or callout_caption_size is 0 — missing from the .tres?")
+	if style.tick_size <= 0 or style.tick_fade_s <= 0.0:
+		_fail("face", "the tick has no size or no fade")
 	var stand: RefCounted = _stop(
 		"Tonnochy Road outside Sun Hung Kai Centre",
 		"杜老誌道新鴻基中心外",
@@ -1500,62 +1502,25 @@ func _check_fare_face() -> void:
 	var boarding: int = FareSystemScript.State.BOARDING
 	var carrying: int = FareSystemScript.State.CARRYING
 
-	# 🔴 One language at a time (the user's call): the same sample read in
-	# each, and neither line ever carries both.
-	var zh: RefCounted = FareFaceScript.new(3, "zh")
-	zh.on_sampled(idle, null, stand, 320.4, 10.0)
-	_expect(
-		zh.callout == "新鴻基中心" and zh.callout_sub == "杜老誌道  320 m",
-		"face",
-		(
-			"in Chinese, the building over the road and the distance (%s / %s)"
-			% [zh.callout, zh.callout_sub]
-		)
-	)
-
 	var face: RefCounted = FareFaceScript.new(3, "en")
-	face.on_sampled(idle, null, stand, 320.4, 10.0)
+	var zh: RefCounted = FareFaceScript.new(3, "zh")
+	face.on_sampled(idle, null, 10.0, 0.0)
 	_expect(
-		face.callout == "Sun Hung Kai Centre",
+		face.caption.is_empty() and face.callout.is_empty() and not face.has_target,
 		"face",
-		"idle, the callout leads with the building the passenger names (%s)" % face.callout
-	)
-	_expect(
-		face.callout_sub == "TONNOCHY ROAD  320 m",
-		"face",
-		"and the road and the distance sit under it, the distance last (%s)" % face.callout_sub
-	)
-	_expect(
-		face.has_target and not face.target_is_destination and face.target == stand.point,
-		"face",
-		"and the guide points at it, as a pickup"
+		"idle with no customer, nothing is said and nothing is pointed at (the user's call)"
 	)
 	_expect(
 		face.meter_text == "0.0" and face.total_text == "TOTAL HK$0.0" and not face.show_timer,
 		"face",
 		"the meter reads nothing yet, the total nothing, and the clock is down"
 	)
-	face.on_sampled(idle, null, stand, 320.4, 10.0, 245.7)
-	zh.on_sampled(idle, null, stand, 320.4, 10.0, 245.7)
+	face.on_sampled(idle, null, 10.0, 245.7)
+	zh.on_sampled(idle, null, 10.0, 245.7)
 	_expect(
 		face.total_text == "TOTAL HK$245.7" and zh.total_text == "合計 HK$245.7",
 		"face",
 		"the session's takings read under the meter, in the language"
-	)
-	face.on_sampled(idle, null, kerb, 48.0, 10.0)
-	_expect(
-		(
-			face.callout == "Harbour Road (opposite to Great Eagle Centre)"
-			and face.callout_sub == "48 m"
-		),
-		"face",
-		"with no building and no street name, the description leads and the distance stands alone"
-	)
-	face.on_sampled(idle, null, null, 0.0, 10.0)
-	_expect(
-		face.callout.is_empty() and face.callout_sub.is_empty() and not face.has_target,
-		"face",
-		"with no pool there is nothing to say and nothing to point at"
 	)
 
 	var fare: RefCounted = FareScript.new()
@@ -1564,25 +1529,50 @@ func _check_fare_face() -> void:
 	fare.meter = FareMeterScript.new(tariff)
 	fare.allowance_s = 60.0
 	fare.remaining_s = 42.4
-	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
+	fare.remaining_road_m = 1234.0
+	face.on_sampled(boarding, fare, 10.0, 0.0)
 	_expect(
-		face.callout == "→ Times Square" and face.callout_sub == "RUSSELL STREET",
+		(
+			face.caption == "PICKING UP"
+			and face.callout == "Times Square"
+			and face.callout_sub == "RUSSELL STREET"
+		),
 		"face",
-		"boarding, the callout names the destination's building over its street, no distance"
+		"boarding: the caption says so, the destination's building, its street, no distance"
 	)
-	zh.on_sampled(boarding, fare, stand, 3.0, 10.0)
+	zh.on_sampled(boarding, fare, 10.0, 0.0)
 	_expect(
-		zh.callout == "→ 時代廣場" and zh.callout_sub == "羅素街",
+		zh.caption == "上客中" and zh.callout == "時代廣場" and zh.callout_sub == "羅素街",
 		"face",
 		"and in Chinese the same (%s)" % zh.callout
 	)
 	_expect(
-		face.has_target and face.target_is_destination and face.target == square.point,
+		face.has_target and face.target == square.point,
 		"face",
-		"and the guide points at it, as the destination"
+		"and the guide points at the destination"
 	)
 	_expect(not face.show_timer, "face", "the clock waits for the passenger to board")
-	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	face.on_sampled(carrying, fare, 10.0, 0.0)
+	_expect(
+		face.caption == "DESTINATION" and face.callout_sub == "RUSSELL STREET  1.2 km",
+		"face",
+		"carrying: DESTINATION, and the road distance left after the street (%s)" % face.callout_sub
+	)
+	fare.remaining_road_m = 320.4
+	face.on_sampled(carrying, fare, 10.0, 0.0)
+	_expect(face.callout_sub == "RUSSELL STREET  320 m", "face", "under a kilometre, in metres")
+	fare.destination = kerb
+	face.on_sampled(carrying, fare, 10.0, 0.0)
+	_expect(
+		(
+			face.callout == "Harbour Road (opposite to Great Eagle Centre)"
+			and face.callout_sub == "320 m"
+		),
+		"face",
+		"with no building and no street name, the description leads and the distance stands alone"
+	)
+	fare.destination = square
+	face.on_sampled(carrying, fare, 10.0, 0.0)
 	_expect(
 		face.show_timer and face.timer_text == "43" and not face.timer_urgent,
 		"face",
@@ -1590,13 +1580,13 @@ func _check_fare_face() -> void:
 	)
 	_expect(face.meter_text == "29.0", "face", "and the meter shows the flagfall, to one place")
 	fare.remaining_s = 10.0
-	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	face.on_sampled(carrying, fare, 10.0, 0.0)
 	_expect(face.timer_urgent, "face", "at the bar, the clock is urgent")
 	fare.remaining_s = 10.05
-	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	face.on_sampled(carrying, fare, 10.0, 0.0)
 	_expect(not face.timer_urgent, "face", "a twentieth past it, not yet")
 	fare.meter.advance(2200.0, 0.0)
-	face.on_sampled(carrying, fare, stand, 3.0, 10.0)
+	face.on_sampled(carrying, fare, 10.0, 0.0)
 	_expect(
 		face.meter_text == "31.1", "face", "2,200 m reads 31.1 — the first unit past the flagfall"
 	)
@@ -1604,48 +1594,51 @@ func _check_fare_face() -> void:
 	fare.banked_hkd = 122.88
 	fare.tip_hkd = 12.5
 	face.on_ended(fare, true)
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	face.on_sampled(idle, fare, 10.0, 122.88)
 	_expect(
-		face.callout == "DELIVERED  HK$122.9" and face.callout_sub == "tip HK$12.5",
+		(
+			face.caption == "DELIVERED"
+			and face.callout == "HK$122.9"
+			and face.callout_sub == "tip HK$12.5"
+		),
 		"face",
 		"delivered: the callout holds what was banked over the tip (%s)" % face.callout
 	)
 	zh.on_ended(fare, true)
-	zh.on_sampled(idle, fare, stand, 3.0, 10.0)
+	zh.on_sampled(idle, fare, 10.0, 122.88)
 	_expect(
-		zh.callout == "已送達  HK$122.9" and zh.callout_sub == "小費 HK$12.5",
+		zh.caption == "已送達" and zh.callout_sub == "小費 HK$12.5",
 		"face",
-		"and in Chinese (%s)" % zh.callout
+		"and in Chinese (%s)" % zh.caption
 	)
 	_expect(
-		face.meter_text == "122.9" and not face.show_timer and not face.target_is_destination,
+		face.meter_text == "0.0" and face.total_text == "TOTAL HK$122.9" and not face.show_timer,
 		"face",
-		"the meter reads the banked sum, the clock is down and the guide is back on the pool"
+		"everything but the total resets: the meter reads 0.0, the clock is down"
 	)
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
-	_expect(face.callout.begins_with("DELIVERED"), "face", "still held on the third sample")
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	_expect(not face.has_target, "face", "and the guide is down until the next customer")
+	face.on_sampled(idle, fare, 10.0, 122.88)
+	face.on_sampled(idle, fare, 10.0, 122.88)
+	_expect(face.caption == "DELIVERED", "face", "still held on the third sample")
+	face.on_sampled(idle, fare, 10.0, 122.88)
 	_expect(
-		face.callout == "Sun Hung Kai Centre" and face.callout_sub == "TONNOCHY ROAD  3 m",
+		face.caption.is_empty() and face.callout.is_empty(),
 		"face",
-		"and on the fourth it names the nearest pickup again (%s)" % face.callout_sub
+		"and on the fourth the box is down"
 	)
 
 	face.on_ended(fare, false)
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
+	face.on_sampled(idle, fare, 10.0, 122.88)
 	_expect(
-		face.callout == "PASSENGER BAILED" and face.callout_sub.is_empty(),
+		face.caption == "PASSENGER BAILED" and face.callout.is_empty(),
 		"face",
 		"bailed says so, with nothing under it"
 	)
 	# A new hail inside the hold wins: the outcome is old news.
-	face.on_sampled(boarding, fare, stand, 3.0, 10.0)
-	_expect(face.callout == "→ Times Square", "face", "and a new hail inside the hold wins")
-	face.on_sampled(idle, fare, stand, 3.0, 10.0)
-	_expect(
-		face.callout == "Sun Hung Kai Centre", "face", "with the old notice dropped, not resumed"
-	)
+	face.on_sampled(boarding, fare, 10.0, 122.88)
+	_expect(face.caption == "PICKING UP", "face", "and a new hail inside the hold wins")
+	face.on_sampled(idle, fare, 10.0, 122.88)
+	_expect(face.caption.is_empty(), "face", "with the old notice dropped, not resumed")
 
 	_expect(
 		(
@@ -1654,9 +1647,12 @@ func _check_fare_face() -> void:
 			and FareFaceScript.seconds(0.2) == "1"
 			and FareFaceScript.seconds(0.0) == "0"
 			and FareFaceScript.seconds(-1.0) == "0"
+			and FareFaceScript.distance(999.4) == "999 m"
+			and FareFaceScript.distance(1000.0) == "1.0 km"
+			and FareFaceScript.flash(2.1) == "+HK$2.1"
 		),
 		"face",
-		"money is HK$ to one place and the clock never reads below zero"
+		"money is HK$ to one place, the clock never reads below zero, a kilometre is 1.0 km"
 	)
 
 

@@ -72,10 +72,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   / `map_destination` / `map_pip_px` keys: `tools/check.sh` (the `face:`, `digits:` and pip
   `map:` assertions), plus THREE frames at `--debug-view=off` — boarding at the boot stand,
   carrying, and idle from `--spawn-fare=wan_chai/f_025` (31 m from any pickup, the one spawn that
-  boots idle) — and the draw-call delta against `--hud=off` pasted.** 🔴 **The pending customer is
-  the pool, not a passenger** (`Q142`): the callout names the NEAREST pickup and the arrow points at
-  it; do not invent a designated stand per hail — that is a `FareSystem` change and the user's
-  call. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
+  boots idle) — and the draw-call delta against `--hud=off` pasted.** 🔴 **Nothing is shown until there is a customer** (`Q142`, the user's call): idle, the
+  callout, the guide and the pin are down and only the pool's pips remain; do not bring the
+  nearest-pickup callout back, and do not invent a designated stand per hail — that is a
+  `FareSystem` change and the user's call. 🔴 **Every meter tick flashes under the clock**
+  (`tick` rect, `tick_fade_s`) off `meter_changed`, and the banked sum in green off `delivered`;
+  after a delivery everything but the total resets. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
   decided in `hud.gd` is one the check cannot see. 🔴 **A stop is its building over its road**
   (`Q142`): the first row is `Fare.Stop.place_en()` / `place_zh()` — `fares.json`'s `place`, iB1000's
   name, falling back to TD's description — and the second is the graph's road name for the stop's

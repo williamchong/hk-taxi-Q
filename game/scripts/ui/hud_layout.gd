@@ -144,6 +144,9 @@ extends Resource
 ## sign, which ends at y 136 and leaves it this band (see `wrong_way`). Declared
 ## since `Q138` so the space is graded before the task that fills it starts.
 @export var callout: Rect2
+## The meter's tick — "+HK$2.1" as a unit begins — flashed under the clock
+## (`P3-5a`, the user's call: feedback near the centre for every tick).
+@export var tick: Rect2
 ## `P3-2a`'s live award — "+250 NEAR MISS" — and `P3-2b`'s style chain after it.
 ## Under the meter, because points are money: NOT in the middle of the frame,
 ## where an arcade racer puts them and where this layout puts nothing.
@@ -260,6 +263,7 @@ func hud_slots() -> Dictionary[String, Rect2]:
 		"timer": timer,
 		"meter": meter,
 		"callout": callout,
+		"tick": tick,
 	}
 	slots.merge(reserved_slots())
 	return slots

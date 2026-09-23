@@ -114,9 +114,15 @@ var _total: Label = null
 var _timer_box: VBoxContainer = null
 var _timer_value: Label = null
 var _callout_panel: ChamferPanel = null
-## The place, and the road under it, in one language.
+## A caption saying what the box is, the place, and the road under it, in one
+## language.
+var _caption: Label = null
 var _callout: Label = null
 var _callout_sub: Label = null
+## The meter's tick, flashed under the clock and faded out (the user's call).
+var _tick: Label = null
+var _tick_s: float = 0.0
+var _last_reading_hkd: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
 
@@ -344,7 +350,7 @@ func _build() -> void:
 	# reserved rects are taken as they are, and nothing here is laid out.
 	# All three hide until a usable `FareSystem` is handed in.
 	_meter_panel = _housing("Meter", root, _layout.meter)
-	var meter_lines: VBoxContainer = _lines(_meter_panel, _style.speed_line_tighten)
+	var meter_lines: VBoxContainer = _lines(_meter_panel, 0)
 	var meter_row: HBoxContainer = _row(meter_lines, "Row", roundi(_style.plate_pad.y))
 	var currency: Label = _label("Currency", _style.meter_label_size, _style.chip_muted)
 	currency.text = "HK$"
@@ -382,6 +388,8 @@ func _build() -> void:
 	var chinese: bool = _language == Locale.CHINESE
 	_callout_panel = _housing("Callout", root, _layout.callout)
 	var callout_lines: VBoxContainer = _lines(_callout_panel, -4)
+	_caption = _label("Caption", _style.callout_caption_size, _style.chip_muted)
+	callout_lines.add_child(_caption)
 	_callout = _label(
 		"Place", _style.callout_size_zh if chinese else _style.callout_size_en, _style.plate_ink
 	)
@@ -389,8 +397,15 @@ func _build() -> void:
 	_callout_sub = _label("Road", _style.callout_sub_size, _style.chip_muted)
 	callout_lines.add_child(_callout_sub)
 	if chinese and _font_zh != null:
+		_caption.add_theme_font_override(&"font", _font_zh)
 		_callout.add_theme_font_override(&"font", _font_zh)
 		_callout_sub.add_theme_font_override(&"font", _font_zh)
+
+	# The tick: "+HK$2.1" under the clock as a unit begins, bare like the
+	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`.
+	_tick = _outlined(_label("Tick", _style.tick_size, _style.chip_ink))
+	_tick.visible = false
+	_layout.place(root, _tick, _layout.tick)
 
 	# ---- the reserved slots ----
 	#
@@ -550,6 +565,7 @@ func _process(delta: float) -> void:
 	# blink is an animation: gating it at 5 Hz would quantise a 2 Hz square wave
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
+	_update_tick(delta)
 	# The map and the needle, every frame and off one look at the car: both are
 	# motion, and a needle stepped at the numerals' 10 Hz ticks like a clock.
 	# Each is a transform, so nothing is redrawn (`minimap.gd`, `speed_dial.gd`).
@@ -777,6 +793,7 @@ func _unfollow_fares() -> void:
 		fares.sampled.disconnect(_on_fare_sampled)
 		fares.delivered.disconnect(_on_fare_delivered)
 		fares.bailed.disconnect(_on_fare_bailed)
+		fares.meter_changed.disconnect(_on_meter_changed)
 
 
 ## Read the new system: its pool onto the map, its samples into the face.
@@ -795,6 +812,7 @@ func _follow_fares() -> void:
 	fares.sampled.connect(_on_fare_sampled)
 	fares.delivered.connect(_on_fare_delivered)
 	fares.bailed.connect(_on_fare_bailed)
+	fares.meter_changed.connect(_on_meter_changed)
 	if _minimap != null:
 		var points := PackedVector3Array()
 		for stop: Fare.Stop in fares.pickups():
@@ -805,27 +823,51 @@ func _follow_fares() -> void:
 
 func _on_fare_delivered(fare: Fare) -> void:
 	_face.on_ended(fare, true)
+	# What was banked, meter and tip as one, in the gain's green.
+	_flash(FareFace.flash(fare.banked_hkd), _style.accent)
+
+
+## A unit began: the tick, in the chip's ink. The first is the flagfall.
+func _on_meter_changed(hkd: float) -> void:
+	var delta: float = hkd - _last_reading_hkd
+	_last_reading_hkd = hkd
+	if delta > 0.0:
+		_flash(FareFace.flash(delta), _style.chip_ink)
+
+
+## Show `text` under the clock and start it fading.
+func _flash(text: String, ink: Color) -> void:
+	_tick.text = text
+	_tick.add_theme_color_override(&"font_color", ink)
+	_tick.modulate = Color.WHITE
+	_tick.visible = true
+	_tick_s = _style.tick_fade_s
+
+
+## Fade the tick out: alpha follows the time left, and the label hides at the
+## end rather than sitting invisible in the tree.
+func _update_tick(delta: float) -> void:
+	if not _tick.visible:
+		return
+	_tick_s -= delta
+	if _tick_s <= 0.0:
+		_tick.visible = false
+		return
+	_tick.modulate = Color(
+		1.0, 1.0, 1.0, clampf(_tick_s / maxf(_style.tick_fade_s, 0.001), 0.0, 1.0)
+	)
 
 
 func _on_fare_bailed(fare: Fare) -> void:
 	_face.on_ended(fare, false)
 
 
-## One sample of the loop, at its 5 Hz: where the nearest pickup is from here,
-## then the face decides and the panels are painted.
+## One sample of the loop, at its 5 Hz: the face decides and the panels are
+## painted.
 func _on_fare_sampled() -> void:
-	var car: VehicleController = _vehicle()
-	var nearest: Fare.Stop = null
-	var nearest_m: float = 0.0
-	# The pool is scanned only while idle: hailed, the face points at the
-	# destination and would throw the nearest pickup away.
-	if car != null and fares.state == FareSystem.State.IDLE:
-		nearest = fares.nearest_pickup_any(car.global_position)
-		if nearest != null:
-			nearest_m = RoadGraph.plan_distance(car.global_position, nearest.point)
-	_face.on_sampled(
-		fares.state, fares.fare, nearest, nearest_m, _style.timer_warn_s, fares.earned_hkd
-	)
+	if fares.state == FareSystem.State.IDLE:
+		_last_reading_hkd = 0.0
+	_face.on_sampled(fares.state, fares.fare, _style.timer_warn_s, fares.earned_hkd)
 	_paint_fares()
 
 
@@ -839,6 +881,7 @@ func _paint_fares() -> void:
 		_meter_panel.visible = false
 		_timer_box.visible = false
 		_callout_panel.visible = false
+		_tick.visible = false
 		if _minimap != null:
 			_minimap.set_target(Vector3.ZERO, false, false)
 		return
@@ -857,10 +900,12 @@ func _paint_fares() -> void:
 		if _timer_value.get_theme_color(&"font_color") != ink:
 			_timer_value.add_theme_color_override(&"font_color", ink)
 
-	var saying: bool = not _face.callout.is_empty()
+	var saying: bool = not _face.caption.is_empty()
 	if _callout_panel.visible != saying:
 		_callout_panel.visible = saying
 	if saying:
+		if _caption.text != _face.caption:
+			_caption.text = _face.caption
 		# Each line on its own guard: while idle the road line changes every
 		# metre and the place does not, and a refit reshapes the label.
 		# Cut to the box, like the plate's lettering: a building's name can run
@@ -879,4 +924,4 @@ func _paint_fares() -> void:
 			StreetPlate.shrink_to(_callout_sub, _style.callout_sub_size, room)
 
 	if _minimap != null:
-		_minimap.set_target(_face.target, _face.has_target, _face.target_is_destination)
+		_minimap.set_target(_face.target, _face.has_target, true)

@@ -6,7 +6,7 @@ extends Node3D
 ##
 ## In the world, not the HUD — both references with a destination do this, and
 ## `hud_layout.tres` reserves no slot for it (`Q80`). It points where
-## `FareFace` says: the nearest pickup while idle, the destination once hailed.
+## `FareFace` says: the destination once hailed, and nothing while idle.
 ## **As the crow flies.** `Q138` holds the next-junction arrow for after the
 ## first fare review; in a one-way grid this one will sometimes point down a
 ## street that cannot be entered, and `GAME_DESIGN.md`'s acceptance test is a
@@ -84,13 +84,8 @@ static func _unshaded(alpha: float) -> StandardMaterial3D:
 
 
 func _on_sampled() -> void:
-	var at: Vector3 = vehicle.global_position
-	var nearest: Fare.Stop = null
-	if fares.state == FareSystem.State.IDLE:
-		nearest = fares.nearest_pickup_any(at)
-	# The distance and the takings are the HUD's strings; only the target is
-	# read here, so neither is computed.
-	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
+	# The clock's bar and the takings are the HUD's; only the target is read.
+	_face.on_sampled(fares.state, fares.fare, 0.0, 0.0)
 	if visible != _face.has_target:
 		visible = _face.has_target
 		set_process(_face.has_target)
