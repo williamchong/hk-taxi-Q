@@ -450,7 +450,7 @@ infrastructure, so its own task, first in `B1` (`Q137`).
 ✅ Built (`Q142`, `.claude/rules/hud.md`). `scripts/ui/fare_face.gd` decides every string;
 `hud.gd` paints the three panels in `hud_layout.tres`'s `timer`, `meter` and `callout` rects,
 which leave `reserved_slots()` and stay in `hud_slots()`; `minimap.gd` carries the pips under the
-roads' transform; `scripts/fares/fare_arrow.gd` is the world arrow; `Main` hands `level.fares` to
+roads' transform; `scripts/fares/fare_guide.gd` is the world guide; `Main` hands `level.fares` to
 the HUD beside the car.
 
 - **The pending customer is the pool**: every pickup a pip, the nearest named with its distance
@@ -459,6 +459,9 @@ the HUD beside the car.
   `BUILDINGNAME` (`etl/pipeline/fares.py::read_places`, `fares.places` in the yaml), and the
   road is the graph's name for the stop's edge.
 - **The LED shows money**: `SevenSegment` gained a decimal point that marks a cell, not a cell.
+- **The user's six calls on the first frames** (`Q142`): the guide sized and coloured by distance
+  with a ring on the road, a pin on the map, the countdown bare and centred, the road before the
+  distance, one language at a time (`Locale`, `--lang=`).
 - **Signal-driven, never polled**: under `--fares=off` the system frees itself before `Main` hands
   it over; everything the HUD and the arrow read from it is read inside `sampled`.
 - 🚫 Not built: the next-junction arrow (`Q138`), the session timer and combo (`P3-2b`), the award

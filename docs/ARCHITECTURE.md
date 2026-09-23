@@ -95,7 +95,7 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--minimap=`, `--fares=`, `--fare-seed=`, `--touch=` and `--asset=` go through it.
+  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--touch=` and `--asset=` go through it.
 
 ### The debug overlay
 

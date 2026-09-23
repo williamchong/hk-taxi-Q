@@ -66,7 +66,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
   `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
   never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
-- **Fare HUD changes — `fare_face.gd`, the fare panels in `hud.gd`, `fare_arrow.gd`, the pips in
+- **Fare HUD changes — `fare_face.gd`, the fare panels in `hud.gd`, `fare_guide.gd` and
+  `tuning/guide.tres`, `locale.gd`, the pips and the pin in
   `minimap.gd`, `seven_segment.gd`'s dot, or the `meter_*` / `timer_*` / `callout_*` / `map_pickup`
   / `map_destination` / `map_pip_px` keys: `tools/check.sh` (the `face:`, `digits:` and pip
   `map:` assertions), plus THREE frames at `--debug-view=off` — boarding at the boot stand,
@@ -89,7 +90,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   clock rounds UP**: 0.2 s left reads 1, never 0 with time on it. ⚠️ **+31 draws for the whole
   HUD** (103 → 134 on the boot stand) against `Q139`'s +15 — the three housings, the LED, two
   labels, four callout labels, two pip nodes and the arrow; measure BOTH sides again after any
-  change here. 🚫 No route line (`Q137`), no next-junction arrow yet (`Q138`), no layout work (`P3-5b`).
+  change here. 🔴 **One language at a time in the callout** (`Locale`, `--lang=`): never English beside
+  Chinese on a row; the plate alone stays bilingual. 🔴 **The distance is never between two
+  names** — road first, then "320 m". 🔴 **The guide answers distance** (`tuning/guide.tres`,
+  `guide.md`): the arrow small and red far, large and green near, the ring on the road the same
+  colour; `verify_hud`'s `guide:` assertions hold both ends and the middle. 🔴 **The countdown
+  is bare and centred** — the one readout in the middle, outlined in the housing's dark
+  (`timer_outline_px`), no panel. ⚠️ **The pin is the field's child, not the roads'** — it must
+  stand upright as the map turns; `follow` re-places it. 🚫 No route line (`Q137`), no
+  next-junction arrow yet (`Q138`), no options menu yet (`P3-5b`).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

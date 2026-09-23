@@ -76,12 +76,12 @@ the loop's own numbers in `tuning/fares.tres`.
   `BUILDINGNAME` for the footprint nearest the kerbside `pos` within `fares.places.max_distance_m`
   (25 m), the one the point's text names where it names one inside the radius, `NAMESTATUS` `E`
   only, the city's `block_suffix` stripped for the search and never from the published name;
-  `Fare.Stop.place_en()` falls back to the description, and `road_en` is `RoadGraph.name_of` at
+  `Fare.Stop.place(language)` falls back to the description, and `road_en` is `RoadGraph.name_of` at
   load. A node that loses its place on a rebuild is a finding about the data (`f_001`, opposite
   its building, is correctly none). `pytest tests/test_fares.py::TestNearestPlace` holds the
   radius, the footprint-not-centroid distance and the mention rule from both sides.
 - ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
-  `fare_arrow.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
+  `fare_guide.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
   `nearest_pickup_any` and `pickups()` inside them, because under `--fares=off` the system frees
   itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
   reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.

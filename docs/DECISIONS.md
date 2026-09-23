@@ -7020,14 +7020,14 @@ had two readings, and the one built is the one that changes no loop.
   before the search; the published `place` keeps the publisher's full name. Wan Chai: 47 of 48
   nodes placed, furthest 24.6 m; `f_001` "opposite to Great Eagle Centre" is correctly none —
   opposite is not at. Published as `fares.json`'s `place` (schema 1, additive; `ARCHITECTURE.md`).
-  The runtime: `Fare.Stop.place_en()` falls back to the description where there is no place, and
+  The runtime: `Fare.Stop.place(language)` falls back to the description where there is no place, and
   the road is the graph's own name for the stop's edge (`RoadGraph.name_of`), never re-parsed out
   of the text. The callout is two rows of English beside Chinese — the Kai face has no Latin —
   the English shrinking first because the Chinese is the shorter string in every name this city
   publishes. 🚫 Parsing the building out of TD's free text ("near X", "outside X", "X對面") —
   weighed, not taken: a second reading of a description when the survey publishes the footprint.
 - **The arrow is as the crow flies**, a flat unshaded arrow 2.6 m over the car's origin
-  (`fare_arrow.gd`, in the world per `Q80`, no slot). `Q138` holds the next-junction arrow for
+  (`fare_guide.gd`, in the world per `Q80`, no slot). `Q138` holds the next-junction arrow for
   after the first fare review; in a one-way grid this one will sometimes point down a street the
   car cannot enter, which is the acceptance test's premise. `--fares=off` takes it with the loop;
   it reads the loop only inside `sampled`, where the node is alive by definition.
@@ -7044,8 +7044,25 @@ had two readings, and the one built is the one that changes no loop.
 - **Measured shut here:** a fare hailed at a "drop-off only" spawn (`f_023`) is not a pool leak —
   `f_022` is inside 12 m of it across the kerb; `verify_fares` still refuses a drop-off-only point
   in the pool. `f_025` (31 m from any pickup) is the spawn that boots idle.
+- **The user's six calls on the first frames (2026-09-24), all built:**
+  1. **The guide answers distance** — `tuning/guide.tres` (`fare_guide.gd`, was `fare_arrow.gd`):
+     the arrow over the taxi is 1.0 m and red at 400 m and beyond, 2.4 m and green inside 30 m,
+     straight between (`closeness`, asserted at both ends and the middle).
+  2. **A pin, not a dot, on the map** at the target — the nearest pickup while idle in the pool's
+     amber, the destination in its red — the field's child so it stands upright as the map turns,
+     re-placed by `follow`. The pool's other pickups stay dots.
+  3. **A ring on the road** at the target: a 4 m radius band 0.6 m wide, 8 cm over the surface,
+     pulsing at 1.2 Hz by 15%, alpha-blended, the guide's colour.
+  4. **The countdown is centred, with no housing** — bare 84 px numerals at y 300 outlined in
+     the housing's dark, the one readout allowed in the middle (`hud_layout.md`).
+  5. **The distance is never between two names**: "TONNOCHY ROAD  320 m", the road first.
+  6. **One language at a time** — `Locale.language()`, `--lang=en|zh` until the options menu owns
+     it; the callout reads "新鴻基中心 / 杜老誌道  320 m" or the English, never both on a row.
+     The street plate stays bilingual because the real one is. `Fare.Stop.place(language)` /
+     `road(language)`; `FareFace` takes the language at construction and `verify_hud` reads it in
+     both.
 - 🚫 Not here: the session timer and the combo (`P3-2b`), the award (`P3-2a`), the next-junction
-  arrow (`Q138`), a route line (`Q137`), any layout work (`P3-5b`).
+  arrow (`Q138`), a route line (`Q137`), the options menu (`P3-5b`).
 
 **See.** `Q141` · `Q139` · `Q138` · `Q80` · `.claude/rules/hud.md` · `.claude/rules/fares.md` ·
-`tuning/hud_style.md` · `PLAN.md` `P3-5a`
+`tuning/hud_style.md` · `tuning/guide.md` · `PLAN.md` `P3-5a`
