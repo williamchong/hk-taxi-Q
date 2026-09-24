@@ -47,14 +47,30 @@ crossing it. Harbour chop, not swell: from the quay at 5 m the pattern has to be
 pattern, and from the `ground` viewpoint at 45 m it has to stop short of moiré on a 1080 p
 frame — a 6 m wave 250 m out is ~4 px.
 
+## shader_parameter/wave_cross_deg
+
+53°: the second train is turned this far off the first. Not 90 — two trains at right angles
+tile the sea into a chequerboard that reads as a texture — and not under ~30, where the
+two merge into one stripe with a beat along it. A number here rather than in the shader, on
+CLAUDE.md hard rule 4: it is a look.
+
 ## shader_parameter/wave_speed_hz
 
 0.25 crests a second, the second train at 0.7 of it the other way. Slow: the taxi does 70 kph
 past this water and a fast wave under a fast car reads as strobing.
 
+## shader_parameter/wave_speed_ratio
+
+0.7: the second train runs the other way at seven tenths of the first's rate, so their beat
+never settles into a standing pattern. A look, so data here, not a constant in the shader.
+⚠️ `TIME` wraps at the project's `time_rollover_secs` (3600 s), so a speed whose cycles a wrap
+is not a whole number jumps once an hour: 0.25 Hz is 900 cycles and the second train's 0.7 of
+it 630, both whole. A retune to 0.33 would jump.
+
 ## shader_parameter/wave_slope
 
-0.12 rise over run — the normal leans ~7°. What it moves is the sky's reflection, so at
+0.12 rise over run — the normal leans ~7° on either train: the second is shorter by
+`wave_ratio` and lower by the same, so its crests are exactly as steep. What it moves is the sky's reflection, so at
 `roughness_value` 0.45 the effect is bands of lighter and darker blue, not glints. Raise it
 before raising `crest_lift` if the water reads as flat.
 

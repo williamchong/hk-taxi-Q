@@ -6,8 +6,8 @@
 // and add the include."* `P3-12`'s road markings were the fourth. The rule fired
 // as written, which is the whole value of having written it down.
 //
-// Included by `city_facade`, `city_facade_clean`, `vehicle_body` and
-// `road_markings`. `docs/ARCHITECTURE.md`'s `COLOR_0` row names them.
+// Included by `city_facade`, `city_facade_clean`, `vehicle_body`, `road_markings`,
+// `tramway`, `vertex_albedo` and `water`. `docs/ARCHITECTURE.md`'s `COLOR_0` row names them.
 
 // sRGB bytes to linear, which every shader reading `COLOR` has to do for itself.
 //
