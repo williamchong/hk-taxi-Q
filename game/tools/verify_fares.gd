@@ -573,6 +573,11 @@ func _check_skills() -> void:
 	system.skilled.connect(_count_skilled)
 	_tick(system, pickup.point, CRAWL, 5)
 	_expect(system.state == FareSystem.State.CARRYING, "skills", "carrying, to earn on")
+	_expect(
+		is_equal_approx(system.fare.tip_hkd, system.fare.remaining_s * _profile.tip_hkd_per_s),
+		"skills",
+		"the tip stands live at the seconds left priced (HK$%.2f)" % system.fare.tip_hkd
+	)
 	var threshold: float = _slip_threshold_deg
 	var drift_ticks: int = int(ceil(_skills.drift_s / TICK_S))
 	_slide(system, FAST, threshold - 1.0, drift_ticks * 3)
@@ -589,12 +594,27 @@ func _check_skills() -> void:
 			system.fare.awards.size() == 1
 			and system.fare.awards[0].skill == Fare.Skill.DRIFT
 			and is_equal_approx(system.fare.awards[0].hkd, _skills.drift_hkd)
-			and is_equal_approx(system.fare.tip_hkd, _skills.drift_hkd)
 			and is_equal_approx(system.fare.skills_hkd, _skills.drift_hkd)
 			and _skilled == 1
 		),
 		"skills",
 		"the tick that reaches drift_s AT the threshold pays drift_hkd into the tip, once, and says so"
+	)
+	_expect(
+		is_equal_approx(
+			system.fare.tip_hkd,
+			system.fare.remaining_s * _profile.tip_hkd_per_s + _skills.drift_hkd
+		),
+		"skills",
+		"and the live tip is the time left plus the skill"
+	)
+	_expect(
+		(
+			is_zero_approx(FareSystem.tip_of(3.0, -5.0))
+			and is_equal_approx(FareSystem.tip_of(3.0, -2.0), 1.0)
+		),
+		"skills",
+		"a penalty docks the tip and floors it at zero, never below"
 	)
 	_slide(system, FAST, threshold + 20.0, drift_ticks)
 	_expect(

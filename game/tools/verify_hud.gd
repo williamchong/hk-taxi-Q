@@ -1792,9 +1792,14 @@ func _check_fare_face() -> void:
 	)
 	_expect(not face.target_is_destination, "face", "and every pending customer is marked")
 	_expect(
-		face.meter_text == "0.0" and face.total_text == "TOTAL HK$0.0" and not face.show_timer,
+		(
+			face.meter_text == "0.0"
+			and face.total_text == "TOTAL HK$0.0"
+			and face.tip_text.is_empty()
+			and not face.show_timer
+		),
 		"face",
-		"the meter reads nothing yet, the total nothing, and the clock is down"
+		"the meter reads nothing yet, the total nothing, no tip, and the clock is down"
 	)
 	face.on_sampled(idle, null, null, 10.0, 245.7)
 	zh.on_sampled(idle, null, null, 10.0, 245.7)
@@ -1973,6 +1978,33 @@ func _check_fare_face() -> void:
 	_expect(face.caption == "PICKING UP", "face", "and a new hail inside the hold wins")
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(face.caption.is_empty(), "face", "with the old notice dropped, not resumed")
+
+	# A penalty (`P3-50`, planned) is an award with negative money: docked on
+	# the receipt with a minus, flashed as a deduction.
+	var docked: RefCounted = FareScript.Award.new(FareScript.Skill.CRASH, -5.0)
+	bare.awards.append(docked)
+	bare.time_hkd = 4.0
+	_expect(
+		(
+			face.receipt(bare) == "meter 29.0 + time 4.0 + crash −5.0"
+			and face.award_text(docked) == "−HK$5.0 crash"
+			and zh.award_text(docked) == "−HK$5.0 撞車"
+		),
+		"face",
+		"a penalty is docked on the receipt and flashed as a deduction (%s)" % face.receipt(bare)
+	)
+	# The tip, live, under the meter while carrying and nowhere else.
+	fare.tip_hkd = 27.5
+	face.on_sampled(carrying, fare, null, 10.0, 0.0)
+	_expect(
+		face.tip_text == "TIP HK$27.5",
+		"face",
+		"carrying, the tip stands under the meter (%s)" % face.tip_text
+	)
+	zh.on_sampled(carrying, fare, null, 10.0, 0.0)
+	_expect(zh.tip_text == "小費 HK$27.5", "face", "and in Chinese")
+	face.on_sampled(boarding, fare, null, 10.0, 0.0)
+	_expect(face.tip_text.is_empty(), "face", "boarding, no tip yet")
 
 	_expect(
 		(

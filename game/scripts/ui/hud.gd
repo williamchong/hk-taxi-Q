@@ -116,6 +116,8 @@ var _meter: SevenSegment = null
 ## The session's takings, under the LED (the user's call: a total beside the
 ## current fare).
 var _total: Label = null
+## The tip as it stands, under the LED while carrying (`P3-49`).
+var _tip: Label = null
 ## The tip clock: bare numerals in the middle of the frame, no housing (the
 ## user's call), outlined so they read on any road.
 var _timer_box: HBoxContainer = null
@@ -379,6 +381,11 @@ func _build() -> void:
 	_meter.unlit = _style.meter_unlit
 	_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	meter_row.add_child(_meter)
+	# The tip, live, in the gain's green: the one number on the meter the
+	# driver can move at the wheel.
+	_tip = _label("Tip", _style.meter_label_size, _style.accent)
+	_tip.visible = false
+	meter_lines.add_child(_tip)
 	_total = _label("Total", _style.meter_label_size, _style.chip_muted)
 	meter_lines.add_child(_total)
 
@@ -906,7 +913,8 @@ func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
 ## A skill paid (`P3-49`): the money and its name, in the gain's green, so a
 ## tip is seen being earned and not only counted at the door.
 func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
-	_flash(_face.award_text(award), _style.accent)
+	var ink: Color = _style.accent if award.hkd >= 0.0 else _style.accent_negative
+	_flash(_face.award_text(award), ink)
 
 
 ## Show `text` under the clock and start it fading.
@@ -967,6 +975,11 @@ func _paint_fares() -> void:
 	if not _meter_panel.visible:
 		_meter_panel.visible = true
 	_meter.text = _face.meter_text
+	var tipping: bool = not _face.tip_text.is_empty()
+	if _tip.visible != tipping:
+		_tip.visible = tipping
+	if tipping and _tip.text != _face.tip_text:
+		_tip.text = _face.tip_text
 	if _total.text != _face.total_text:
 		_total.text = _face.total_text
 

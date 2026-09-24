@@ -338,6 +338,11 @@ func sample(
 			fare.remaining_s = 0.0
 			_bail()
 			return
+		# The tip as it stands: what the clock would pay if the passenger got
+		# out now, plus what the skills have paid. Live, so the HUD can show
+		# it falling with the seconds and jumping with a skill.
+		fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+		fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 
 	_sample_accum_s += elapsed
 	if _sample_accum_s < 1.0 / _profile.sample_hz:
@@ -498,6 +503,8 @@ func _board() -> void:
 	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
 	fare.remaining_s = fare.allowance_s
 	_tracker = SkillTracker.new(_skills, _slip_threshold_deg)
+	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+	fare.tip_hkd = fare.time_hkd
 	state = State.CARRYING
 	_last_reading_hkd = fare.meter.reading_hkd()
 	boarded.emit(fare)
@@ -512,7 +519,7 @@ func _deliver() -> void:
 		_award(early)
 	_tracker = null
 	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
-	fare.tip_hkd = fare.time_hkd + fare.skills_hkd
+	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
 	deliveries += 1
@@ -536,12 +543,20 @@ func _bail() -> void:
 	sampled.emit()
 
 
-## A skill paid: onto the receipt, into the tip, and announced.
+## A skill paid, or a penalty docked: onto the receipt, into the tip, and
+## announced.
 func _award(award: Fare.Award) -> void:
 	fare.awards.append(award)
 	fare.skills_hkd += award.hkd
-	fare.tip_hkd += award.hkd
+	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 	skilled.emit(fare, award)
+
+
+## The tip from its two parts. Never negative: a penalty (`P3-50`) docks the
+## tip and can empty it, but the passenger never charges the driver — the
+## meter is the meter (`Q141`).
+static func tip_of(time_hkd: float, skills_hkd: float) -> float:
+	return maxf(time_hkd + skills_hkd, 0.0)
 
 
 func _announce_reading() -> void:

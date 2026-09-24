@@ -22,10 +22,13 @@ enum Kind { SHORT_HOP, STANDARD }
 
 ## What a skill is. Drift, speed and early arrival pay today; near miss and
 ## air are slots, waiting on `B3`'s traffic and on something to jump off.
-enum Skill { DRIFT, SPEED, EARLY, NEAR_MISS, AIR }
+## `CRASH` is the first PENALTY (`P3-50`, planned): an award whose `hkd` is
+## negative, on the same receipt — the passenger docks the tip, never the
+## meter, and the tip floors at zero.
+enum Skill { DRIFT, SPEED, EARLY, NEAR_MISS, AIR, CRASH }
 
 
-## One skill paid, in HK$.
+## One skill paid, in HK$ — negative for a penalty.
 class Award:
 	extends RefCounted
 	var skill: Skill = Skill.DRIFT
@@ -107,9 +110,11 @@ var route: RoadRouter.Route = null
 ## hail, the car's `Hit.t` after.
 var route_from_t: float = 0.0
 var meter: FareMeter = null
-## The tip: `time_hkd` plus `skills_hkd`; 0 on a bail.
+## The tip: `time_hkd` plus `skills_hkd`. Live while carrying — what the
+## passenger would tip if they got out now — frozen at delivery, 0 on a bail.
 var tip_hkd: float = 0.0
-## The seconds left on the allowance at delivery, priced; 0 until then.
+## The seconds left on the allowance, priced: falling while carrying, the
+## door's value after delivery, 0 on a bail.
 var time_hkd: float = 0.0
 ## Everything the skills paid, banked or not: the sum of `awards`.
 var skills_hkd: float = 0.0

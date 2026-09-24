@@ -46,6 +46,9 @@ var callout_sub: String = ""
 ## the total resetting at delivery (the user's call) — and the session's
 ## takings under them.
 var meter_text: String = "0.0"
+## The tip as it stands, under the meter while carrying — the seconds left
+## priced plus the skills paid, falling and jumping as they do; "" otherwise.
+var tip_text: String = ""
 var total_text: String = ""
 ## The tip clock: whole seconds left, shown only while carrying.
 var timer_text: String = ""
@@ -102,10 +105,12 @@ func on_sampled(
 	timer_urgent = false
 	timer_text = ""
 	meter_text = "0.0"
+	tip_text = ""
 	if state == FareSystem.State.CARRYING:
 		timer_text = seconds(fare.remaining_s)
 		timer_urgent = fare.remaining_s <= warn_s
 		meter_text = money(fare.meter.reading_hkd())
+		tip_text = _say("小費 HK$", "TIP HK$") + money(fare.tip_hkd)
 	elif state == FareSystem.State.BOARDING:
 		meter_text = money(fare.meter.reading_hkd())
 
@@ -166,8 +171,10 @@ static func flash(delta_hkd: float) -> String:
 
 
 ## What a skill flashes under the clock as it pays: the money, then the skill.
+## A penalty flashes as "−HK$5.0 crash".
 func award_text(award: Fare.Award) -> String:
-	return "%s %s" % [flash(award.hkd), skill_name(award.skill)]
+	var amount: String = flash(award.hkd) if award.hkd >= 0.0 else "−HK$" + money(-award.hkd)
+	return "%s %s" % [amount, skill_name(award.skill)]
 
 
 ## A skill's name, in the face's language. Cantonese for the two the street
@@ -184,6 +191,8 @@ func skill_name(skill: Fare.Skill) -> String:
 			return _say("擦身", "near miss")
 		Fare.Skill.AIR:
 			return _say("飛車", "air")
+		Fare.Skill.CRASH:
+			return _say("撞車", "crash")
 	return ""
 
 
@@ -220,8 +229,14 @@ func _sum_lines(fare: Fare, after: PackedStringArray) -> PackedStringArray:
 		var name: String = skill_name(skill as Fare.Skill)
 		if counts[skill] > 1:
 			name += " ×%d" % counts[skill]
-		lines.append("%s %s" % [name, money(paid[skill])])
+		lines.append("%s %s" % [name, signed(paid[skill])])
 	return lines
+
+
+## Money with a minus sign for a penalty — a proper minus, not a hyphen, so
+## "crash −5.0" reads as a deduction and not a range.
+static func signed(hkd: float) -> String:
+	return ("−" + money(-hkd)) if hkd < 0.0 else money(hkd)
 
 
 ## Whole seconds left, rounded UP: a clock that reads 0 with time still on it
