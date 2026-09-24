@@ -162,7 +162,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
-- `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
+- `P3-45` ✅ The harbour (`Q140`, the user's calls) — on the minimap as `P3-44`'s `basemap.json` (2026-09-24), and in the world since 2026-09-25: `water.glb`, one flat mesh at mean sea level (+1.3 mPD), the ground under it sunk to −3.0 m by the tile stage because the sheets' terrain over the harbour is 1.1–4.2 m of noise against a 2.7–4.9 m shore; after the sink 2.1% of the sea's ground stands above the water and 10.1% of the 12 m shore band sits under it (both the straddling slopes). `verify_water` holds the plane flat at `water_level_m`; `city.json` 37, `basemap.json` 2. Cost on the throttle route at t=6: **+1 `draws`, +213 `prims`** (804,679 / 108 against 804,466 / 107 with `--hide-layers=water`). The user's frame owed (the blue, the roughness, a skirt past the frame).
 - `P3-46` ✅ Route line on the minimap (`Q137` reversed, the user's call of 2026-09-24) — the legal route to the destination from the fare's own `Route`, from the car's hit to the stop point, re-routed at the 5 Hz sample and seeded the way the car faces (`Hit.along`); `route_px` 5 px in `map_route`; `map:` assertions on the cut, the mesh and the transform, and `verify_road_graph` pins the drawn polyline to `distance_m`; carrying from the boot stand at rest (`--fare-seed=1`, t=8): +1 `draws`, +221 `prims` over `route_px = 0`, and +7 / +14.9k over `--minimap=off` (137 / 775.5k against 130 / 760.6k; the map alone was +5 / +14.7k) — frames in `build/driver/route_a` (the line from the chevron, clockwise round the Expo Drive roundabout, east to 華懋世紀廣場) and `route_d` (cleared once the car left the network). The user's frame owed (colour, width).
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
@@ -248,10 +248,10 @@ and there in the same change.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the border arrow are the user's calls; the one-way arrows are off (2026-09-24). Owed the user: a drive; `span_m`. Owed: the web frame.
-- `Q140` Harbour on the minimap (user; `P3-45`). Surveyed, not built: no sea polygon in iB1000, and the waterfront is in three sheets north of the ones held.
 - `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. Open: four stranded pickups at clip edges on the merged graph (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`).
 - `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
+- `Q140` The harbour (user; `P3-45`): on the minimap with `P3-44`, in the world as a plane at sea level over ground the tile stage sinks (2026-09-25). The user's frame owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
   the legal route drawn on the minimap. Held: arrow to the next junction.
@@ -408,7 +408,7 @@ Scaling (`Q120`, four regions)
 - Library meshes are region-invariant, so draw calls are too; only bytes and triangles scale.
 - LOD1/LOD0 triangle ratio 0.49 / 0.38 / 0.45 / 0.39.
 
-Bundle, from `etl/out` (schemas: `city.json` 35, `roadgraph.json` 15, `roadsurface.json` 12,
+Bundle, from `etl/out` (schemas: `city.json` 37, `basemap.json` 2, `roadgraph.json` 15, `roadsurface.json` 12,
 `carriageway_region.json` 4)
 
 | Counter | Latest |
@@ -425,6 +425,7 @@ Bundle, from `etl/out` (schemas: `city.json` 35, `roadgraph.json` 15, `roadsurfa
 | Crossings drawn | 120 of 121, 762 stripes / 16 of 17, 80 |
 | Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
 | Tramway | 126 of 132 rails (7,300 m), 55 beds, `off_gauge_stations` 53 of 1,041, `inverted` 0 |
+| Harbour (`P3-45`) | 748,723 m² of sea, 213 triangles, 12,270 ground vertices sunk / 177,055 m², 55, 3 (its read box stops at the shore) |
 | Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends (316 units) / 3 components, 6 mouths, 19 clipped ends (85 units) |
 | Kerbside restriction published | 33,385 m over 722 edge sides; 96.4% agreement with `DTAD_RST_ZONE_LINE` (pre-region figure) |
 

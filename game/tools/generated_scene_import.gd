@@ -88,6 +88,14 @@ const SHADERS: Dictionary = {
 	# picket fence where a road barrier should stand.
 	"landmark_vertex": "res://tuning/landmarks.tres",
 	"barrier_vertex": "res://tuning/barrier_vertex.tres",
+	# The harbour (2026-09-25): `WATER_MATERIAL` in `etl/pipeline/basemap.py`.
+	# `vertex_albedo.gdshader` again — the colour is on the vertex from
+	# `materials:`, and what makes water read as water is the roughness in the
+	# `.tres`, a parameterisation and not a shader (`Q61`, `Q71`). ⚠️ Its fallback
+	# failure is `signs.tres`'s quiet one: a plane left on its imported
+	# `BaseMaterial3D` draws the right blue at 0.9 roughness, matte and pale,
+	# which is why `verify_water.gd` checks the dispatch by `resource_path`.
+	"sea_water": "res://tuning/water.tres",
 }
 
 ## The one material in the bundle that arrives carrying an image (`P3-20`).

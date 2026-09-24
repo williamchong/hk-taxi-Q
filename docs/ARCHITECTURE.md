@@ -140,7 +140,7 @@ name globals whatever the tool does (`Q119`).
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the `meshes/*` keys `[importer_defaults]` pins (`P5-16`, `Q122`; authored since `P5-20`, `Q124`). Keys are read from the project file and their count asserted. 0 sidecars checked passes — a clone has no city | yes |
 | warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`) | yes |
 | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures. None needs a built region | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |
 
 ⚠️ `verify_road_graph` and `verify_join` also need `reachability.json` beside each graph they read
@@ -284,7 +284,7 @@ hk-taxi-Q/
 │   │   ├── drawnroad.py         # the ONE reader of the drawn road: ribbon and running kerb line (Q133)
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fence.py             # barriers where fits_car refuses an edge, at touchdowns and on the region's line → fence.json (P3-29, Q143)
-│   │   ├── basemap.py           # iB1000 shoreline + parks → basemap.json, the minimap's ground
+│   │   ├── basemap.py           # iB1000 shoreline + parks → basemap.json (the minimap's ground) + water.glb (the world's sea)
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fares.json
 │   │   ├── tramway.py           # tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
@@ -397,6 +397,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "signs_text_atlas": "signs_text.png",
   "signs_placements": "signs_placements.json",
   "roadmarks": "roadmarks.glb",
+  "water": "water.glb",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "basemap": "basemap.json",
@@ -413,7 +414,7 @@ Keys (`etl/pipeline/export.py`):
   `barriers` list means nothing to close, a missing file means the stage never ran.
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
-  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`. Null where the estate publishes no
+  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`. Null where the estate publishes no
   such layer, **or** where every feature failed the join — a stage names its asset from what it
   drew.
 - The manifest names the other documents, it does not contain them; each is separately versioned.
@@ -946,17 +947,19 @@ removed the stage, config block, material, verify tool, preview node and tests o
 `city.json` lost the `signals` key at schema 34. Record: `DECISIONS.md` `Q76`/`Q77`. ⚠️ Its return
 is a port to a library + placements (`P5-2`'s shape), not a re-declared block.
 
-### `basemap.json` — the minimap's ground (2026-09-24)
+### `basemap.json` — the harbour and the parks (2026-09-24, world water 2026-09-25)
 
-The harbour and the parks the minimap draws under its roads, for that one reader. Written on
-every run, empty for a city with no `basemap:` block; `city.json` names it unconditionally
-(schema 36), on `fence.json`'s terms.
+The harbour and the parks the minimap draws under its roads, and the sea the world draws as a
+plane. Written on every run, empty for a city with no `basemap:` block; `city.json` names it
+unconditionally (schema 36), on `fence.json`'s terms. ⚠️ **It runs BEFORE `buildings`** since
+2026-09-25: the tile stage sinks the ground under this document's `water` (below).
 
 ```json
 {
-  "schema_version": 1, "city_id": "hong_kong", "region_id": "wan_chai",
+  "schema_version": 2, "city_id": "hong_kong", "region_id": "wan_chai",
   "water": [[x0, z0, x1, z1, x2, z2], ...],
   "parks": [[x0, z0, x1, z1, x2, z2], ...],
+  "asset": "water.glb", "water_level_m": 1.3,
   "report": { "pieces": 3, "sea_pieces": 2, "sea_m2": 748723.0, "park_m2": 462245.0, ... }
 }
 ```
@@ -965,6 +968,14 @@ every run, empty for a city with no `basemap:` block; `city.json` names it uncon
 |---|---|
 | `water` | Triangles in this region's game plan metres, no winding. The frame — the read box and `basemap.reach_m` round it — cut along iB1000 `Shoreline` (`SWA`/`HWM`/`BRE`) thickened by `seal_m`; a piece is sea where `Building` covers ≤ `land_cover` of it, grown back over the seam. ⚠️ The sheets publish no sea polygon. An inlet narrower than `seal_m` is land |
 | `parks` | iB1000 `Site` where `SITECODE` is open space (`PAR`/`PLA`/`SOA`/`SGR`/`PRO`), less the sea, holes kept (constrained triangulation) |
+| `asset` | `water.glb` — the `water` triangles as one flat mesh at `water_level_m`, wound to face `+Y`, `COLOR_0` from `materials.sea_water`, glTF material `sea_water` (→ `tuning/water.tres`). `null` where the frame held no sea; named from what was drawn (`tramway`'s terms). `city.json` names it as `water` (schema 37). No collider |
+| `water_level_m` | The plane's height, game metres: `basemap.water_level_m`, mean sea level +1.3 mPD. `verify_water.gd` holds the mesh flat at it |
+
+⚠️ **The ground under the sea is sunk by the tile stage** (`buildings.sink_sea`, 2026-09-25):
+every terrain vertex inside `water` drops to `basemap.seabed_m` before decimation, reported as
+`buildings.json`'s `ground_sunk_vertices`. The sheets' terrain over the harbour is not flat —
+1.1–4.2 m over Wan Chai's sea against 2.7–4.9 m on the land within 12 m of the shore — so no
+plane laid over it as published meets the shoreline (`Q140`).
 
 ⚠️ Frames overlap across regions; the minimap draws each resident region's ground at its
 `RoadGraph.region_offset`, overlap and all — opaque, one colour a class, so a triangle drawn twice
@@ -1125,6 +1136,7 @@ city_space = region_local + city_offset
 | `crossings.glb` | Pedestrian-crossing stripes at the surveyed extent; signal yellow and zebra white, a mesh a paint a 300 m cell (`P3-42`). No collider | ✅ `P3-35g2` |
 | `boxjunctions.glb` | Yellow box junctions at the surveyed extents, lifted under the arrows that paint over them. A mesh a 300 m cell (`P3-42`), no collider | ✅ `P3-18` |
 | `roadmarks.glb` | Stop and give-way lines, hosted by the road each one *crosses*, not the nearest. One primitive, no collider | ✅ `P3-23` |
+| `water.glb` | The harbour: the basemap's sea as one flat mesh at mean sea level, the ground beneath it sunk to the seabed by the tile stage. One primitive, no collider, no shadow | ✅ `P3-45` |
 | `signs.glb` + `signs_placements.json` | Traffic signs on the poles TD surveyed. Shape-faced signs only. Library of one mesh per face variant plus a unit pole; one placement per plate, lettering quad and pole (`scale` on the pole). No collider | ✅ `P3-16`, `P5-2` |
 | `lamps.glb` + `lamps_placements.json` | Lamp posts on the drawn kerb with a bracket arm over the carriageway; `rot_y_deg` is the arm's bearing. Unlit (`Q38`, `Q26`). Library of one mesh per drawn kind. No collider | ✅ `P3-26`, `P5-3` |
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |

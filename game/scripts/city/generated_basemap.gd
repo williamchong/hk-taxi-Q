@@ -1,5 +1,5 @@
-## Where the ETL's minimap ground lives — the harbour and the parks — and how to
-## read it (2026-09-24).
+## Where the ETL's harbour and parks live — the minimap's ground, and since
+## 2026-09-25 the level of the world's water plane — and how to read it.
 ##
 ## A locator on `generated_fence.gd`'s terms: the minimap and `verify_city.gd`
 ## both want the document, and a moved path only one of them learns about fails
@@ -13,7 +13,11 @@ const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const FILE: String = "basemap.json"
 
 ## Schema this understands, matching `BASEMAP_SCHEMA` in `etl/pipeline/basemap.py`.
-const SCHEMA_VERSION: int = 1
+##
+## 2 since the world's water (2026-09-25): the document names `asset` — the
+## sea as `water.glb`, null where the frame holds none — and `water_level_m`,
+## the height the plane is drawn at, which `verify_water.gd` holds the mesh to.
+const SCHEMA_VERSION: int = 2
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".
@@ -30,7 +34,7 @@ static func load_basemap(at: String = "") -> Dictionary:
 
 static func missing_hint() -> String:
 	return (
-		"No minimap ground at %s. Run the ETL and copy its output there:\n" % path()
+		"No basemap at %s. Run the ETL and copy its output there:\n" % path()
 		+ "  python -m pipeline.basemap --region wan_chai\n"
 		+ "  tools/sync_generated.sh wan_chai causeway_bay"
 	)

@@ -18,8 +18,10 @@ from typing import Any
 import numpy as np
 from pyogrio.raw import write as _ogr_write
 
+from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from pipeline.crs import GameTransform
+from pipeline.documents import write_document
 from pipeline.gltf import MeshData
 from pipeline.terrain import HeightField
 
@@ -514,3 +516,28 @@ def ribbon_of(arm: dict, half_width_m: float = 5.12) -> dict:
         "level": int(arm.get("elevation_level", 0)),
         "rails": [(points - left).tolist(), (points + left).tolist()],
     }
+
+
+def write_basemap(
+    out_root: Path, city, region_id: str, water: list[list[float]] | None = None
+) -> Path:
+    """The basemap stage's document, as `buildings.build_region` expects to find
+    it (2026-09-25): the sink under the sea reads it, so a test that builds tiles
+    writes one first. `water` is the sea's triangles in game plan metres, none
+    by default."""
+    out_dir = city.out_dir(region_id, out_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_document(
+        out_dir / BASEMAP_NAME,
+        {
+            "schema_version": BASEMAP_SCHEMA,
+            "city_id": city.id,
+            "region_id": region_id,
+            "water": water or [],
+            "parks": [],
+            "asset": None,
+            "water_level_m": None if city.basemap is None else city.basemap.water_level_m,
+            "report": {},
+        },
+    )
+    return out_dir

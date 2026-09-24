@@ -40,6 +40,7 @@ from pipeline.buildings import (
     material_for,
     occluder_name,
     podium_blocks,
+    sink_sea,
 )
 from pipeline.config import (
     BuildingStyle,
@@ -52,7 +53,16 @@ from pipeline.config import (
 )
 from pipeline.gltf import MeshData, read_glb, read_render
 from pipeline.mesh import collapse
-from tests.helpers import BOX_FACES, box_corners, box_soup, covered, flat_mesh, soup, style
+from tests.helpers import (
+    BOX_FACES,
+    box_corners,
+    box_soup,
+    covered,
+    flat_mesh,
+    soup,
+    style,
+    write_basemap,
+)
 
 # --------------------------------------------------------------------------
 # Fixture construction — a sheet zip shaped like the real ones
@@ -735,11 +745,14 @@ class TestBuildRegion:
         tmp_path: Path,
         fixtures: list[Fixture] | None = None,
         out: str = "out",
+        water: list[list[float]] | None = None,
     ):
         """One end-to-end run. `fixtures` overrides the default set, `hong_kong`
         takes any city so a test can vary the config, and `out` separates two
         runs in one test — without it the second silently overwrites the first's
-        GLBs under the same tmp_path."""
+        GLBs under the same tmp_path. `water` is the basemap's sea, none by
+        default: the stage reads that document before it tiles."""
+        write_basemap(tmp_path / out, hong_kong, "wan_chai", water)
         return build_region(
             hong_kong,
             "wan_chai",
@@ -1229,6 +1242,24 @@ class TestBuildRegion:
         assert low_sunk[1] == pytest.approx(low_flat[1] - sink)
         assert high_sunk[1] == pytest.approx(high_flat[1])
 
+    def test_the_ground_under_the_sea_drops_to_the_seabed(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The world's water (2026-09-25): the basemap's sea is read before the
+        tiles are cut, and every ground vertex inside it lands at `seabed_m` —
+        under the water plane, where the sheets' own terrain (1.1-4.2 m over
+        the harbour) would show through it. The building stands where it was."""
+        # Two triangles covering the ground patch's eastern half (x >= 75).
+        sea = [[75.0, 0.0, 200.0, 0.0, 200.0, 200.0], [75.0, 0.0, 200.0, 200.0, 75.0, 200.0]]
+        report = self.build(hong_kong, sources, tmp_path, self.ground(), water=sea)
+        assert report.sunk > 0
+
+        manifest = json.loads((tmp_path / "out" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text())
+        assert manifest["ground_sunk_vertices"] == report.sunk
+        low, high = self.tile(report, "t_00_00").aabb
+        assert low[1] == pytest.approx(hong_kong.basemap.seabed_m, abs=0.01)
+        assert high[1] > hong_kong.basemap.water_level_m
+
     def test_the_ground_takes_no_jitter(self, hong_kong, sources, tmp_path) -> None:
         """Jitter is seeded per source mesh, and the ground arrives as a handful
         of sheet-sized meshes rather than one per object — so the setting that
@@ -1285,6 +1316,8 @@ class TestBuildRegion:
         root = sources(self.buildings())
         first = tmp_path / "a"
         second = tmp_path / "b"
+        write_basemap(first, hong_kong, "wan_chai")
+        write_basemap(second, hong_kong, "wan_chai")
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=first)
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=second)
 
@@ -1296,6 +1329,7 @@ class TestBuildRegion:
         """Exiting 0 with no buildings is the failure this pipeline is most
         exposed to — wrong bounds and a wrong datum both land here."""
         root = sources([Fixture("B0009", "BUILDING", -900.0, 300.0, 40.0)])
+        write_basemap(tmp_path / "out", hong_kong, "wan_chai")
         with pytest.raises(ValueError, match="no tiles"):
             build_region(hong_kong, "wan_chai", sources_root=root, out_root=tmp_path / "out")
 
@@ -1347,6 +1381,7 @@ class TestLandmarkExclusion:
         )
 
     def build(self, city, sources, tmp_path: Path):
+        write_basemap(tmp_path / "out", city, "wan_chai")
         return build_region(
             city,
             "wan_chai",
@@ -1534,3 +1569,25 @@ def test_real_blocks_reproduce_the_documented_counts(hong_kong) -> None:
             for ring in rings:
                 assert len(ring) >= 4
                 assert np.isfinite(ring).all()
+
+
+class TestSinkSea:
+    """`sink_sea`: vertices in the sea drop, the rest stay, and nothing is cut."""
+
+    def test_only_the_vertices_in_the_sea_move(self) -> None:
+        from shapely.geometry import box as plan_box
+
+        mesh = soup(
+            [[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]], name="ground", colour=None
+        )
+        sunk, count = sink_sea(mesh, plan_box(-1.0, -1.0, 5.0, 5.0), -3.0)
+        assert count == 1
+        assert sunk.positions[:, 1].tolist() == [-3.0, 4.0, 4.0]
+        assert sunk.triangle_count == mesh.triangle_count
+
+    def test_no_sea_is_the_same_mesh(self) -> None:
+        from shapely.geometry import Polygon as Plan
+
+        mesh = soup([[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]], name="g", colour=None)
+        same, count = sink_sea(mesh, Plan(), -3.0)
+        assert count == 0 and same is mesh

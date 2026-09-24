@@ -333,6 +333,22 @@ materials:
     source: "weathered hot-dip galvanised steel; fresh is 50-60% and dulls to 25-35%"
     bounds: [25, 35]
 
+  # The harbour (2026-09-25, the user's call): the water plane `basemap.py`
+  # draws where the sea is. ⚠️ **This is the DIFFUSE albedo of the water body,
+  # and it is dark** — open ocean reflects ~6% diffusely, turbid coastal water
+  # 8-12%. What makes the harbour read blue on screen is the sky reflected off a
+  # low-roughness surface, which is `tuning/water.tres`'s dial and not a colour:
+  # `tramway.md` records the same split for the rail head. Do not lighten this
+  # to make the water bluer; that is the roughness.
+  #
+  # Blue-green rather than blue: Victoria Harbour is a turbid estuary, and its
+  # own colour is the greener half of the sky's.
+  sea_water:
+    colour: "#205672"
+    reflectance: 8.2
+    source: "turbid coastal sea water, diffuse; open ocean ~6%, coastal 8-12%"
+    bounds: [5, 12]
+
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -2904,6 +2920,26 @@ basemap:
   seal_m: 40.0
   land_cover: 0.01
   simplify_m: 1.0
+  # The world's water plane (2026-09-25, the user's call): `water.glb`, the
+  # same sea as the map's, drawn flat at this height. Mean sea level is about
+  # +1.3 m above Hong Kong Principal Datum (Hong Kong Observatory, "Tidal
+  # Information": MSL 1.3 mPD at Quarry Bay), and game y = 0 is the Principal
+  # Datum (`GameTransform.origin_elevation`), so 1.3 puts the harbour where the
+  # tide tables put it. A fact about the city, not a dial.
+  water_level_m: 1.3
+  # Where the tile stage sinks the ground under the sea, in game metres.
+  # 🔴 **The sheets' terrain over the harbour is not flat** — 1.1–4.2 m over Wan
+  # Chai's sea at a 4 m grid, against 2.7–4.9 m on the land within 12 m of the
+  # shore (both measured on the shipped LOD0 tiles, 2026-09-25) — so a plane
+  # laid over the ground as shipped shows grey through the blue at 3.0 m (9.6%
+  # of the sea) and floods the promenade at 3.5 m (~40% of the shore band).
+  # Sinking the ground under the sea polygon is what lets the water sit at sea
+  # level and meet the published shoreline. -3.0 is shallow for a harbour that
+  # is 10 m deep off Wan Chai, and deliberately: the drop from the quay is what
+  # a driver sees, and the terrain triangles that straddle the shoreline slope
+  # down over their own width, so a deeper bed is a longer beach, not a wall.
+  seabed_m: -3.0
+  water_material: sea_water
 
 lamps:
   source: topography

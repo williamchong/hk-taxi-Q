@@ -56,6 +56,7 @@ screen) are different colours; do not read one as the other.
 | `concrete_sooty` | 22.0% | 20–30% | weathered + sooty concrete | `#84817b` | `#615f5a` |
 | `concrete_paving` | 20.0% | 20–30% | weathered concrete, grubby end of 20–30% | `#817b6f` | `#5f5a51` |
 | `asphalt_aged` | 10.0% | 7–12% | aged urban asphalt, 7–12% | `#5b5854` | `#42403d` |
+| `sea_water` | 8.2% | 5–12% | turbid coastal sea water, diffuse; open ocean ~6% | `#205672` | `#153e53` |
 
 - ⚠️ The five façade materials are the soft entries: their reflectance is what the shipped colour
   claims, 49–62%, the top of what painted render and ceramic tile do. If that is wrong every other
@@ -66,6 +67,9 @@ screen) are different colours; do not read one as the other.
   code from 60.1% to 59.9%).
 - ⚠️ The five façade names are one material family at five lightnesses (`Q34`). Do not rename
   `panel_grey` to anything glazed — 55.2% contradicts curtain-wall glass's 8–15% diffuse albedo.
+- ⚠️ `sea_water` is the harbour's *diffuse* albedo and renders near-black on its own; the blue the
+  player sees is the sky reflected off `tuning/water.tres`'s roughness (0.45; 0.15 read near-white). Do not lighten the
+  entry to make the water bluer — that is the roughness dial, as `steel_rail` is the tramway's.
 
 ### Material is not a function of height (`Q34`)
 

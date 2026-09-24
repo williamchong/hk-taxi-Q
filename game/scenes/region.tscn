@@ -6,6 +6,10 @@
 
 [node name="Region" type="Node3D" unique_id=1475960313]
 
+[node name="Water" type="Node3D" parent="." unique_id=1938201744]
+script = ExtResource("1_layer")
+layer = "water"
+
 [node name="Tramway" type="Node3D" parent="." unique_id=867783560]
 script = ExtResource("1_layer")
 layer = "tramway"

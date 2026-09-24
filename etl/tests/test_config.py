@@ -2772,7 +2772,36 @@ class TestBasemapBlock:
             load_config(rewrite(far))
 
     def test_the_block_is_optional(self, rewrite) -> None:
-        assert load_config(rewrite(lambda doc: doc.pop("basemap"))).basemap is None
+        """Dropped together with the water's material: a city that draws no
+        harbour declares no colour for one (`_check_every_material_is_used`)."""
+
+        def without(doc: dict[str, Any]) -> None:
+            doc.pop("basemap")
+            doc["materials"].pop("sea_water")
+
+        assert load_config(rewrite(without)).basemap is None
+
+    def test_the_water_is_a_material_and_sits_at_sea_level(self, hong_kong) -> None:
+        """The world's water (2026-09-25): its colour comes from `materials:`
+        like every other, and it is drawn at mean sea level on the Principal
+        Datum — a fact, not a dial."""
+        assert hong_kong.basemap.water_material is hong_kong.materials["sea_water"]
+        assert hong_kong.basemap.water_level_m == 1.3
+        assert hong_kong.basemap.seabed_m < hong_kong.basemap.water_level_m
+
+    def test_a_seabed_above_the_water_is_refused(self, rewrite) -> None:
+        def raised(doc: dict[str, Any]) -> None:
+            doc["basemap"]["seabed_m"] = doc["basemap"]["water_level_m"]
+
+        with pytest.raises(ValueError, match="not under water_level_m"):
+            load_config(rewrite(raised))
+
+    def test_an_undeclared_water_material_is_refused(self, rewrite) -> None:
+        def stray(doc: dict[str, Any]) -> None:
+            doc["basemap"]["water_material"] = "sea_watter"
+
+        with pytest.raises(ValueError, match="basemap:water_material names material"):
+            load_config(rewrite(stray))
 
 
 class TestFetchMargin:

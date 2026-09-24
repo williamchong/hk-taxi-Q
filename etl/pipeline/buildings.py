@@ -61,13 +61,17 @@ from urllib.parse import unquote
 from zlib import crc32
 
 import numpy as np
+import shapely
 from numpy.typing import ArrayLike
+from shapely.geometry import Polygon
+from shapely.geometry.base import BaseGeometry
 
 from pipeline import gdb
+from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.colour import chroma_and_hue, with_hue
 from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_config
 from pipeline.crs import GameTransform, GeodeticBounds
-from pipeline.documents import round_position, write_document
+from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
 from pipeline.gltf import (
     COLLISION_ONLY_SUFFIX,
@@ -260,6 +264,10 @@ class BuildReport:
     replaced: int = 0
     # Game-space AABB union per replaced stem, for the manifest's `excluded`.
     excluded: dict[str, Bounds] = field(default_factory=dict)
+    # Ground vertices sunk to the seabed under the basemap's sea (2026-09-25).
+    # Zero with a `basemap:` block declared and sea in the frame is the
+    # stage-order failure: `basemap` runs first, and this read its document.
+    sunk: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -825,6 +833,48 @@ def _ground(mesh: MeshData, offset: np.ndarray, style: BuildingStyle) -> MeshDat
     return replace(mesh.translated(sunk), texture=None, uvs=None)
 
 
+def sea_of_bundle(out_dir: Path, region_id: str) -> BaseGeometry:
+    """The basemap's sea as one plan polygon, from the document `basemap.py`
+    wrote — which is why that stage runs before this one (`__main__`)."""
+    document = read_document(
+        out_dir / BASEMAP_NAME, BASEMAP_SCHEMA, f"python -m pipeline.basemap --region {region_id}"
+    )
+    triangles = [
+        Polygon([(flat[0], flat[1]), (flat[2], flat[3]), (flat[4], flat[5])])
+        for flat in document.get("water", [])
+        if len(flat) == 6
+    ]
+    return shapely.union_all(triangles) if triangles else Polygon()
+
+
+def sink_sea(mesh: MeshData, sea: BaseGeometry, seabed_m: float) -> tuple[MeshData, int]:
+    """`mesh` with every vertex whose plan position lies in `sea` dropped to
+    `seabed_m`, and how many were (2026-09-25, the user's call).
+
+    🔴 **The sheets' terrain over the harbour is not flat** — 1.1-4.2 m over Wan
+    Chai's sea against 2.7-4.9 m on the land within 12 m of the shore, both
+    measured on the shipped tiles — so no water plane laid over the ground as
+    published meets the shoreline: at 3.0 m 9.6% of the sea shows grey through
+    it, at 3.5 m it floods ~40% of the shore band. Sinking the ground under the
+    published sea is what lets `water.glb` sit at sea level. Vertices move, not
+    triangles: one that straddles the shoreline keeps its land corners and
+    slopes down over its own width, which is the sea wall the low-poly look
+    affords. Before `collapse`, so the cluster means average sunk with sunk.
+
+    ⚠️ **Not a hole.** The sunk ground still collides: a car that leaves the
+    quay lands on it, under the water, rather than falling through the world.
+    """
+    if sea.is_empty or len(mesh.positions) == 0:
+        return mesh, 0
+    inside = shapely.contains_xy(sea, mesh.positions[:, 0], mesh.positions[:, 2])
+    count = int(inside.sum())
+    if count == 0:
+        return mesh, 0
+    positions = mesh.positions.copy()
+    positions[inside, 1] = seabed_m
+    return replace(mesh, positions=positions), count
+
+
 # --------------------------------------------------------------------------
 # Orchestration
 # --------------------------------------------------------------------------
@@ -879,6 +929,12 @@ def build_region(
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
     hue = facade_hue(style, root=sources_root)
+    # The sea the ground drops under (`sink_sea`), read from the basemap stage's
+    # document; a city with no `basemap:` block sinks nothing.
+    if city.basemap is None:
+        sea, seabed_m = Polygon(), 0.0
+    else:
+        sea, seabed_m = sea_of_bundle(place.out_dir, region_id), city.basemap.seabed_m
 
     report = BuildReport()
     # Stems a landmark replaces (`P3-6`), across the whole city config: a stem
@@ -917,6 +973,8 @@ def build_region(
                 if inside is None:
                     report.clipped += 1
                     continue
+                inside, sunk = sink_sea(inside, sea, seabed_m)
+                report.sunk += sunk
                 # A sheet's ground is one object, keyed by its own name: `stem`
                 # is a building's variant suffix and means nothing on terrain.
                 ordinal = _register(objects, inside.name, class_id, inside.aabb())
@@ -1415,6 +1473,9 @@ def _write_manifest(
             # Per replaced stem, the game-space AABB union of the meshes this
             # stage dropped for it (`P3-6`). Sorted so a rerun is byte-stable.
             "excluded": {key: report.excluded[key] for key in sorted(report.excluded)},
+            # Ground vertices dropped to `basemap.seabed_m` under the sea
+            # (`sink_sea`), before decimation. Zero where the frame holds no sea.
+            "ground_sunk_vertices": report.sunk,
         },
     )
 

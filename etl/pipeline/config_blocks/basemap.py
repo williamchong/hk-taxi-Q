@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from pipeline.config_blocks.base import (
+    Material,
     SourceLayer,
+    _MaterialTable,
     _require,
     _source_layer,
     _tile_member,
@@ -19,8 +21,10 @@ from pipeline.config_blocks.base import (
 
 @dataclass(frozen=True)
 class Basemap:
-    """The minimap's ground: the harbour and the parks under its roads
-    (`pipeline/basemap.py`, 2026-09-24, the user's call).
+    """The harbour and the parks: the minimap's ground under its roads
+    (`pipeline/basemap.py`, 2026-09-24, the user's call), and since 2026-09-25
+    the water plane the world draws where the sea is (`water.glb`), on the
+    user's call as well.
 
     ✅ **Every class is PUBLISHED.** The sea is cut from the topographic map's
     own shoreline — sea walls, high-water marks and breakwaters, a coded domain
@@ -55,6 +59,24 @@ class Basemap:
     # Douglas-Peucker tolerance for the published outlines, in metres: under
     # what a 320 m map shows at 240 px.
     simplify_m: float
+    # The height the world's water plane is drawn at, in game metres — the
+    # source vertical datum, since `GameTransform.origin_elevation` is 0.0. A
+    # fact about the city, not a look: mean sea level on Hong Kong Principal
+    # Datum, cited in the city file.
+    water_level_m: float
+    # The height the tile stage sinks the ground to under the sea, in game
+    # metres. 🔴 **The sheets' terrain over the harbour is NOT flat** — measured
+    # 1.1-4.2 m over Wan Chai's sea at a 4 m grid, against 2.7-4.9 m on the land
+    # within 12 m of the shore — so a plane laid over the shipped ground either
+    # shows grey through the blue or floods the promenade, at every level tried.
+    # `buildings._tile_ground` drops every ground vertex inside the sea polygon
+    # to this instead, so the water meets the published shoreline and nothing
+    # else. Must lie under `water_level_m`.
+    seabed_m: float
+    # The water's colour, from `materials:` like every other colour the city
+    # ships (`Q33`). Its diffuse albedo; the blue is the sky reflected off
+    # `tuning/water.tres`'s roughness.
+    water_material: Material
 
     @property
     def tiled(self) -> bool:
@@ -79,8 +101,9 @@ def _positive(body: dict[str, Any], key: str, where: str) -> float:
     return value
 
 
-def _basemap(body: Any, where: str) -> Basemap | None:
-    """The optional minimap-basemap block. Absent, the map draws roads alone."""
+def _basemap(body: Any, where: str, table: _MaterialTable) -> Basemap | None:
+    """The optional basemap block. Absent, the map draws roads alone and the
+    world draws no water."""
     if body is None:
         return None
     if not isinstance(body, dict):
@@ -90,6 +113,13 @@ def _basemap(body: Any, where: str) -> Basemap | None:
     cover = float(_require(body, "land_cover", where))
     if not 0.0 < cover < 1.0:
         raise ValueError(f"{where}:land_cover must be a share in (0, 1), got {cover}")
+    water_level_m = float(_require(body, "water_level_m", where))
+    seabed_m = float(_require(body, "seabed_m", where))
+    if seabed_m >= water_level_m:
+        raise ValueError(
+            f"{where}:seabed_m is {seabed_m} m, not under water_level_m {water_level_m} m — "
+            "the ground sunk under the sea would stand above the water drawn over it"
+        )
     return Basemap(
         source=str(_require(body, "source", where)),
         member=_tile_member(body, where),
@@ -102,4 +132,9 @@ def _basemap(body: Any, where: str) -> Basemap | None:
         seal_m=_positive(body, "seal_m", where),
         land_cover=cover,
         simplify_m=_positive(body, "simplify_m", where),
+        water_level_m=water_level_m,
+        seabed_m=seabed_m,
+        water_material=table.get(
+            str(_require(body, "water_material", where)), f"{where}:water_material"
+        ),
     )

@@ -60,6 +60,12 @@ log = logging.getLogger(__name__)
 STAGES: dict[str, Callable[[list[str]], int]] = {
     "fetch": fetch.main,
     "podiums": podiums.main,
+    # Before `buildings`, and forced since the world's water (2026-09-25):
+    # the tile stage sinks the ground under this stage's sea polygon
+    # (`buildings.sink_sea`), so the document has to exist first. It reads
+    # only the source sheets and the city file, no stage output, so nothing
+    # upstream of it moves.
+    "basemap": basemap.main,
     "buildings": buildings.main,
     "landmarks": landmarks.main,
     "roads": roads.main,
@@ -142,9 +148,6 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # height and the kerb side its arm reaches away from. Before `export`, which
     # names the asset.
     "lamps": lamps.main,
-    # Anywhere before `export`, which names the document: it reads only the
-    # source sheets and the city file, no stage output.
-    "basemap": basemap.main,
     "export": export.main,
 }
 

@@ -1,10 +1,18 @@
-"""The minimap's ground: the harbour and the parks (2026-09-24, the user's call).
+"""The harbour and the parks (2026-09-24, the user's call): the minimap's ground,
+and since 2026-09-25 the water the world draws where the sea is.
 
 What an ordinary GPS shows and this map did not — the water, first of all: in
 Wan Chai the waterfront is the strongest landmark there is. Both classes are
 read off the topographic map's sheets (`basemap:` in the city file), and
-published as triangles in game plan metres for the one reader, the minimap,
-which draws them under its roads in one mesh.
+published as triangles in game plan metres for the minimap, which draws them
+under its roads in one mesh. The sea is published a second time as `water.glb`
+(the user's call, 2026-09-25): the same triangles, flat at `water_level_m`, one
+mesh in `water_material`'s colour, drawn in the world by `region.tscn`'s
+`Water` node. ⚠️ **The ground under it is the tile stage's business**: the
+sheets' terrain over the harbour is not flat (1.1-4.2 m over Wan Chai's sea),
+so `buildings._tile_ground` sinks every ground vertex inside this stage's sea
+to `seabed_m` — which is why this stage runs BEFORE `buildings` (`__main__`),
+reading only the sheets.
 
 ⚠️ **The sheets publish no sea polygon.** `HydroPolygon` is culverts, ponds and
 streams; the harbour is the absence of land north of the shoreline. So the
@@ -40,12 +48,28 @@ from pipeline.config import Basemap, Config, SourceLayer, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_reads
+from pipeline.geometry import wound_up
+from pipeline.gltf import MeshData, write_glb
+from pipeline.mesh import select_triangles
+from pipeline.meshbuild import MIN_TWICE_AREA_M2
 
 log = logging.getLogger(__name__)
 
 
 BASEMAP_NAME = "basemap.json"
-BASEMAP_SCHEMA = 1
+# 2 since the world's water (2026-09-25): the document names `asset` — the
+# water plane, or null where the frame holds no sea — and `water_level_m`, the
+# height it is drawn at, which `verify_water.gd` holds the mesh to. A v1 reader
+# ships a region without the plane.
+BASEMAP_SCHEMA = 2
+
+# The water plane, in the region's bundle. ⚠️ **No `-col` suffix**: water is not
+# a floor. The car that leaves the quay lands on the sunk ground under it.
+WATER_NAME = "water.glb"
+# glTF material name, the contract channel every drawn layer uses:
+# `tools/generated_scene_import.gd` maps this string onto `tuning/water.tres`,
+# and `verify_water.gd` checks that it did.
+WATER_MATERIAL = "sea_water"
 
 
 @dataclass
@@ -59,6 +83,10 @@ class BasemapReport:
     park_polygons: int = 0
     water_triangles: int = 0
     park_triangles: int = 0
+    # `WATER_NAME` where the frame held sea, else "".
+    water_asset: str = ""
+    # The plane's height, `basemap.water_level_m`; None with no block.
+    water_level_m: float | None = None
 
 
 def frame_of(city: Config, region_id: str, reach_m: float) -> Polygon:
@@ -184,6 +212,38 @@ def triangles_of(
     return triangles
 
 
+def water_mesh(
+    triangles: list[list[float]], level_m: float, colour: tuple[int, int, int]
+) -> MeshData | None:
+    """The sea as one flat mesh at `level_m`, every triangle wound to face `+Y`
+    and coloured `colour` on the vertex, or None with no sea.
+
+    Vertices are not shared: the triangulation is the minimap's, in plan, and
+    a flat plane has no shading seam to close. ⚠️ **Wound here, not trusted**:
+    `triangles_of` publishes no winding — the map draws them flat — and a
+    reversed triangle renders as *nothing* under `cull_back`.
+    """
+    if not triangles:
+        return None
+    rings = [wound_up(np.asarray(flat, dtype=np.float64).reshape(3, 2)) for flat in triangles]
+    plan = np.vstack(rings)
+    positions = np.column_stack([plan[:, 0], np.full(len(plan), level_m), plan[:, 1]])
+    count = len(positions)
+    mesh = MeshData(
+        name="water",
+        positions=positions,
+        normals=np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (count, 1)),
+        triangles=np.arange(count, dtype=np.uint32).reshape(-1, 3),
+        colours=np.tile(np.array([*colour, 255], dtype=np.uint8), (count, 1)),
+        material=WATER_MATERIAL,
+    )
+    # A simplified sliver can collapse to nothing at the glb's float32; drop it
+    # rather than ship a triangle `check_faces_up` cannot judge. The bar is
+    # shared: see `meshbuild.MIN_TWICE_AREA_M2`.
+    twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
+    return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
+
+
 def build_region(
     city: Config,
     region_id: str,
@@ -191,7 +251,8 @@ def build_region(
     sources_root: Path | None = None,
     out_root: Path | None = None,
 ) -> BasemapReport:
-    """Read the region's shoreline, buildings and parks and write `basemap.json`."""
+    """Read the region's shoreline, buildings and parks; write `basemap.json`
+    and, where the frame held sea, `water.glb`."""
     report = BasemapReport()
     out_dir = city.out_dir(region_id, out_root)
     spec = city.basemap
@@ -222,6 +283,17 @@ def build_region(
     park = triangles_of(green, spec.simplify_m, transform)
     report.water_triangles = len(water)
     report.park_triangles = len(park)
+
+    report.water_level_m = spec.water_level_m
+    plane = water_mesh(water, spec.water_level_m, spec.water_material.colour)
+    if plane is not None:
+        write_glb(out_dir / WATER_NAME, [plane])
+        report.water_asset = WATER_NAME
+    else:
+        # Named from what was drawn, never from the constant: a stale plane
+        # beside a document that says "no sea" is the state `sync_generated.sh`
+        # sweeps, and one this stage must not leave behind.
+        (out_dir / WATER_NAME).unlink(missing_ok=True)
     write_document(out_dir / BASEMAP_NAME, _document(city.id, region_id, water, park, report))
     return report
 
@@ -241,6 +313,11 @@ def _document(
         # in no particular winding — the minimap draws them flat, uncelled.
         "water": water,
         "parks": parks,
+        # The world's water plane: `water.glb`, or null where the frame held no
+        # sea (`tramway`'s terms — named from what was drawn). Flat at
+        # `water_level_m`, which the engine-side check holds it to.
+        "asset": report.water_asset or None,
+        "water_level_m": report.water_level_m,
         "report": {
             "pieces": report.pieces,
             "sea_pieces": report.sea_pieces,
@@ -275,6 +352,12 @@ def main(argv: list[str] | None = None) -> int:
         report.park_polygons,
         report.park_m2,
         report.park_triangles,
+    )
+    log.info(
+        "  water plane: %s",
+        f"{report.water_asset}, {report.water_triangles} triangles"
+        if report.water_asset
+        else "none — no sea in the frame",
     )
     return 0
 

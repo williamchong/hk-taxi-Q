@@ -130,7 +130,7 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# Unguarded on `fence`'s terms: written on every run, empty where the city
 	# declares no `basemap:` block.
 	problems.append_array(
-		_check_document("minimap ground", manifest.basemap_path, GeneratedBasemap.path())
+		_check_document("basemap", manifest.basemap_path, GeneratedBasemap.path())
 	)
 	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
 	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
@@ -236,6 +236,15 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"road markings",
 				manifest.roadmarks_path,
 				GeneratedLayer.path(GeneratedLayer.ROADMARKS)
+			)
+		)
+	# Guarded on the same terms: `verify_water.gd` treats an absent asset as a
+	# pass, so a manifest naming `water.glb` with the file gone would otherwise
+	# pass every check here.
+	if not manifest.water_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"harbour water", manifest.water_path, GeneratedLayer.path(GeneratedLayer.WATER)
 			)
 		)
 	return problems

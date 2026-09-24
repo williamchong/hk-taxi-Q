@@ -1,6 +1,6 @@
 ## Where the ETL's one-mesh layers live, and how to load them (`P5-1`).
 ##
-## One table for the eight `.glb` layers that ship as a single mesh — or a
+## One table for the nine `.glb` layers that ship as a single mesh — or a
 ## library of props — per region, replacing a file each. Every one of those files carried the same three
 ## functions and the same reason for existing: two things want a layer for
 ## different purposes — the preview draws it, its verify tool checks it — and a
@@ -91,6 +91,7 @@ const ROADMARKS: String = "roadmarks"
 const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
 const SIGNS: String = "signs"
+const WATER: String = "water"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
@@ -183,6 +184,18 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no shape-faced signs ships none, and that is not a failure.",
 		"placements": "signs_placements.json",
 		"casts_shadow": true,
+	},
+	# The harbour (2026-09-25, the user's call): the basemap's sea, flat at sea
+	# level. `casts_shadow` false for the paint's reason — a plane at the bottom
+	# of the world throws a shadow onto nothing.
+	WATER:
+	{
+		"file": "water.glb",
+		"noun": "harbour water",
+		"module": "basemap",
+		"absence": "A region whose frame holds no shoreline ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": false,
 	},
 }
 

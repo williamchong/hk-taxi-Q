@@ -195,6 +195,8 @@ class _Region:
                 "region_id": REGION,
                 "water": [],
                 "parks": [],
+                "asset": None,
+                "water_level_m": 1.3,
             },
             FENCE_NAME: {
                 "schema_version": FENCE_SCHEMA,
@@ -1000,6 +1002,7 @@ class TestOrchestrator:
         assert [name for name, _ in calls] == [
             "fetch",
             "podiums",
+            "basemap",
             "buildings",
             "landmarks",
             "roads",
@@ -1017,7 +1020,6 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
-            "basemap",
             "export",
         ]
 
@@ -1057,7 +1059,6 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
-            "basemap",
             "export",
         ]
 
@@ -1082,6 +1083,7 @@ class TestOrchestrator:
         assert [name for name, _ in calls] == [
             "fetch",
             "podiums",
+            "basemap",
             "buildings",
             "landmarks",
             "roads",

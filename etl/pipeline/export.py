@@ -258,7 +258,11 @@ CITY_NAME = "city.json"
 # the water and parks the map draws under its roads — a new shipped document,
 # required like `fence` because the stage writes it on every run (empty for a
 # city with no `basemap:` block). A v35 reader ships a region without it.
-CITY_SCHEMA = 36
+#
+# 37 since the world's water (2026-09-25): the manifest names `water.glb`, the
+# sea drawn flat at sea level — a new shipped asset, on `P3-18`'s precedent,
+# null where the frame holds no sea. A v36 reader ships a region without it.
+CITY_SCHEMA = 37
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -308,6 +312,7 @@ OPTIONAL_ASSET_KEYS = (
     "signs_text_atlas",
     "signs_placements",
     "roadmarks",
+    "water",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -429,6 +434,7 @@ def build_region(
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
+    basemap = documents[BASEMAP_NAME]
 
     tiles = [
         {
@@ -577,6 +583,9 @@ def build_region(
         "fence": FENCE_NAME,
         # The minimap's water and parks, written on every run on `fence`'s terms.
         "basemap": BASEMAP_NAME,
+        # The world's water plane, `null` where the frame held no sea — read
+        # from the stage's own document on `tramway`'s terms.
+        "water": basemap["asset"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

@@ -191,7 +191,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q134` | Paint stands where TD surveyed it: arrows off the lane slot, and the decks' paint read | `P3-36`, `P3-37` built; the user's drive owed. |
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up and the merged plate are the user's calls; the one-way arrows were, and are off since 2026-09-24 for a border arrow toward an off-map target. Owed the user: `span_m`. |
-| `Q140` | The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold | 🟡 Open — asked for by the user, surveyed, not built · `P3-45` |
+| `Q140` | The harbour is a frame minus the land, and the land is north of the sheets we hold | ✅ Closed — the user's calls: on the minimap with `P3-44` (2026-09-24), in the world as a plane over sunk ground (2026-09-25) · `P3-45` |
 | `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named. The user's drive owed. |
 | `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
@@ -6966,9 +6966,12 @@ legal route to the fare's destination is drawn on the minimap — `P3-46`, the s
 
 ---
 
-## `Q140` — The harbour on the minimap is a frame minus the land, and the land is north of the sheets we hold
+## `Q140` — The harbour is a frame minus the land, and the land is north of the sheets we hold
 
-**Status.** 🟡 Open — asked for by the user (2026-09-22), surveyed, not built · `P3-45`
+**Status.** ✅ Closed — the user's calls. The minimap half was built with `P3-44` (2026-09-24,
+`basemap.json`; the section under `Q136`). The world half — "draw something blue where the water
+is" — was built on 2026-09-25, the section at the end; it reverses the "out of scope" below.
+`P3-45`. The user's frame owed.
 
 - **Why it is wanted.** On a heading-up map the harbour is the one fixed cue — north is always the
   water (`000` faces it). The only borrowed map convention judged to pay at this scale (`Q136`).
@@ -6993,9 +6996,52 @@ legal route to the fare's destination is drawn on the minimap — `P3-46`, the s
 - A new stage and document (`water.json`, triangulated at build), a `city.json` key, the game's
   loader, `map_water` in `hud_style.tres`, drawn first in the minimap mesh — no draw call.
   Hard rule 5: both sides together.
-- Not decided: whether the 3D city should get the same water plane. Out of scope here.
+- Not decided: whether the 3D city should get the same water plane. Out of scope here — until
+  the user asked for it (below).
 
-**See.** `Q136` · `Q133` · `DATA_SOURCES.md` iB1000 · `PLAN.md` `P3-45`
+### The world's water — a plane at sea level over ground the tile stage sinks (2026-09-25, the user's call)
+
+- **What ships.** `water.glb`: the basemap's sea triangles as one flat mesh at
+  `basemap.water_level_m` = 1.3 (mean sea level +1.3 mPD; game y = 0 is the Principal Datum),
+  `COLOR_0` from `materials.sea_water`, drawn by `region.tscn`'s `Water` node through the layer
+  table (`generated_layer.gd`), one draw call a region, no collider, no shadow. `city.json` names
+  it as `water` (schema 37), null where the frame holds no sea; `basemap.json` (schema 2) names
+  it as `asset` and publishes `water_level_m`, which `verify_water.gd` holds the mesh flat at.
+- 🔴 **A plane over the ground as shipped does not work, and it was measured before the sink was
+  built.** The 3D map's terrain over the harbour is not flat: sampled at 4 m over Wan Chai's sea
+  on the LOD0 tiles, 1.1–4.2 m (p10 1.2, median 2.3, p90 3.0), and the land within 12 m of the
+  shore is 2.7–4.9 m (median 3.7). No level separates them: at 3.0 m 9.6% of the sea shows grey
+  through the plane, at 3.5 m 0.4% does but ~40% of the shore band is under water, and at 2.5 m a
+  third of the sea is grey. So `buildings.sink_sea` drops every terrain vertex inside the sea
+  polygon to `basemap.seabed_m` = −3.0 before decimation — vertices, not triangles, so a triangle
+  straddling the shoreline slopes down over its own width, the sea wall the low-poly look
+  affords. Re-measured after: **2.1%** of the sea's ground above the water (12.6% in the 0–4 m
+  band, 0.5% past 16 m — the slopes), and **10.1%** of the land within 12 m of the shore under it
+  (p10 exactly 1.30 — the same slopes, from the other side). 12,270 vertices sunk in Wan Chai,
+  3 in Causeway Bay, whose read box stops at the shore. Cost on the throttle route: +1 `draws`,
+  +213 `prims` (frames in `build/driver/water_after_ground`, `water_drive_on`). `basemap` moved ahead of `buildings` in `__main__` for it.
+- **The colour obeys `Q33`.** `sea_water` is 8.2% — turbid coastal water's *diffuse* albedo,
+  5–12% — and renders near-black on its own; the blue is the sky reflected off
+  `tuning/water.tres`'s roughness, `tramway.md`'s split for the rail head — 0.45 ships: at 0.15
+  the harbour is a near-white mirror of the horizon haze, at 0.45 one deep blue plane (both frames
+  under `build/driver/`, the user's pick owed). `ART_DESIGN.md`'s
+  table carries it. Do not lighten the entry to make the harbour bluer.
+- ⚠️ **The car can leave the quay.** Water is not a floor: a car that drives off lands on the sunk
+  ground under the plane, 4 m down, and stays there. Before it drove onto grey sea at 1–4 m and
+  kept going; neither is a game state, and a reset is owed (`P3-9`'s family, not this task's).
+- ⚠️ **The plane ends at `reach_m`** (320 m past the read box) — beyond the fetched sheets there is
+  no shoreline to cut, so no water. From the HKCEC frontage that is ~250 m of sea before the fog
+  and the sky's horizon; Kowloon is not drawn either. A skirt past the frame is a look question
+  for the user's frame, not a data one.
+- ⚠️ **A pier narrower than `seal_m` is sea** — the mirror of the inlet rule above — and its
+  ground sinks with the rest; the pier's own building stays at its base height, on nothing. Not
+  seen from the road in Wan Chai; recorded so it is not re-found.
+- 🚫 **Not built**: draping the plane on the terrain (bumpy water), rendering it with no depth test
+  (draws over the piers), flattening the terrain to a level instead of sinking it (the shore band
+  is the same noise from the other side).
+
+**See.** `Q136` · `Q133` · `Q33` · `DATA_SOURCES.md` iB1000 · `PLAN.md` `P3-45` ·
+`.claude/rules/basemap.md`
 
 ## `Q141` — The 咪錶 runs Transport Department's tariff on what was driven; the skill is the tip
 

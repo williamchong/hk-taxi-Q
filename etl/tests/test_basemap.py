@@ -1,15 +1,22 @@
-"""The minimap's ground (`pipeline/basemap.py`): the sea cut from the frame by
-the shoreline, and triangles that keep a park's holes."""
+"""The harbour (`pipeline/basemap.py`): the sea cut from the frame by the
+shoreline, triangles that keep a park's holes, and the world's water plane."""
 
 from __future__ import annotations
 
+from typing import ClassVar
+
+import numpy as np
 import pytest
 import shapely
 from shapely.geometry import LineString, Polygon, box
 
-from pipeline.basemap import BasemapReport, sea_of, triangles_of
-from pipeline.config import Basemap, SourceLayer
+from pipeline.basemap import WATER_MATERIAL, BasemapReport, sea_of, triangles_of, water_mesh
+from pipeline.config import Basemap, Material, SourceLayer
 from pipeline.crs import GameTransform
+
+SEA = Material(
+    name="sea_water", colour=(32, 86, 114), reflectance=8.2, source="test", bounds=(5.0, 12.0)
+)
 
 
 def _spec(seal_m: float = 8.0) -> Basemap:
@@ -26,6 +33,9 @@ def _spec(seal_m: float = 8.0) -> Basemap:
         seal_m=seal_m,
         land_cover=0.01,
         simplify_m=1.0,
+        water_level_m=1.3,
+        seabed_m=-3.0,
+        water_material=SEA,
     )
 
 
@@ -74,3 +84,31 @@ class TestTriangles:
         )
         assert area == pytest.approx(900.0 - 100.0)
         assert all(len(t) == 6 for t in triangles)
+
+
+class TestWaterMesh:
+    """The world's water plane (2026-09-25): the map's triangles, flat at sea
+    level, every one facing the sky."""
+
+    # One triangle wound each way in plan, as `triangles_of` may publish them.
+    TRIANGLES: ClassVar[list[list[float]]] = [
+        [0.0, 0.0, 10.0, 0.0, 0.0, 10.0],
+        [20.0, 0.0, 20.0, 10.0, 30.0, 0.0],
+    ]
+
+    def test_every_triangle_faces_up_at_the_level(self) -> None:
+        mesh = water_mesh(self.TRIANGLES, 1.3, SEA.colour)
+        assert mesh is not None and mesh.triangle_count == 2
+        assert np.all(mesh.positions[:, 1] == 1.3)
+        # `triangle_cross`'s y is positive for a face toward +Y (`Q59`: the
+        # ETL-side sign, opposite to the engine's).
+        assert np.all(mesh.triangle_cross()[:, 1] > 0.0)
+
+    def test_the_colour_is_on_the_vertex_and_the_material_is_the_contract(self) -> None:
+        mesh = water_mesh(self.TRIANGLES, 1.3, SEA.colour)
+        assert mesh is not None
+        assert mesh.material == WATER_MATERIAL
+        assert mesh.colours is not None and np.all(mesh.colours[0] == [32, 86, 114, 255])
+
+    def test_no_sea_is_no_mesh(self) -> None:
+        assert water_mesh([], 1.3, SEA.colour) is None

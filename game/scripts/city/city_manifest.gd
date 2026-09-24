@@ -213,7 +213,11 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 36 since the minimap's harbour (2026-09-24): the manifest names `basemap.json`,
 ## the water and parks under the map's roads — required, on `fence`'s terms.
-const SCHEMA_VERSION: int = 36
+##
+## 37 since the world's water (2026-09-25): the manifest names `water.glb`, the
+## sea drawn flat at sea level — optional on `tramway`'s terms, null where the
+## frame holds no sea.
+const SCHEMA_VERSION: int = 37
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -403,6 +407,11 @@ var signs_path: String
 ## "no stop lines in this bundle", never "no road_marks block".
 var roadmarks_path: String
 
+## The harbour's water plane (`water.glb`, 2026-09-25), or **empty** where the
+## region's frame holds no sea. Optional on `tramway_path`'s terms: named from
+## what `pipeline/basemap.py` drew, never from a constant.
+var water_path: String
+
 ## 🔴 **The one image in the bundle** (`Q70`, `Q63`, `P3-20`) — the sign
 ## lettering's atlas — or **empty** where the region baked none.
 ##
@@ -572,6 +581,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
 	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"), manifest.directory)
+	manifest.water_path = _resolve(document.get("water"), manifest.directory)
 	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"), manifest.directory)
 	manifest.signs_placements_path = _resolve(document.get("signs_placements"), manifest.directory)
 	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"), manifest.directory)
@@ -694,6 +704,7 @@ func shipped() -> PackedStringArray:
 		signs_text_atlas_path,
 		signs_placements_path,
 		roadmarks_path,
+		water_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

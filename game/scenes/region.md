@@ -15,6 +15,20 @@ There are no tiles here. They are the one child the two scenes disagree on — t
 (`CityStreamer`), the preview loads every one (`tile_preview.gd`) — so `CityRegions` adds them, as
 the region's first child, according to whether it was given a `StreamingProfile`.
 
+## `[node name="Water" type="Node3D" parent="."]`
+
+The harbour (2026-09-25, the user's call): the basemap's sea as one flat mesh at
+mean sea level, `water.glb`, drawn where the minimap already drew it blue. The
+ground under it is not this node's: `pipeline/buildings.py` sinks every terrain
+vertex inside the sea to `basemap.seabed_m`, because the sheets' terrain over the
+harbour is 1.1-4.2 m of noise and no plane laid over it meets the shoreline. A
+region whose frame holds no shoreline ships none and this node simply stays
+empty.
+No collider, and deliberately: water is not a floor. A car that leaves the quay
+lands on the sunk ground beneath, under the plane, rather than driving on the
+sea — which is the one honest thing a harbour can do to a taxi until something
+resets it (owed).
+
 ## `[node name="Tramway" type="Node3D" parent="."]`
 
 The tramway (`P3-14`), beside the road surface rather than under it: it is a
