@@ -308,12 +308,21 @@ func _sample_carrying(position: Vector3, speed_kph: float, heading: Vector3) -> 
 		# else prepares on this router. ⚠️ A consumer that shared `_router` and
 		# prepared more than `TREE_CACHE` others mid-fare would turn this into a
 		# reverse Dijkstra at 5 Hz.
+		# Seeded the way the car faces (`hit.along`), so on a two-way street the
+		# drawn route (`P3-46`) leaves along the car rather than behind it.
 		var route: RoadRouter.Route = _router.route(
-			hit.edge_id, hit.t, fare.destination.edge, fare.destination.t
+			hit.edge_id,
+			hit.t,
+			fare.destination.edge,
+			fare.destination.t,
+			RoadRouter.Facing.ALONG if hit.along else RoadRouter.Facing.AGAINST
 		)
 		fare.remaining_road_m = route.distance_m
+		fare.route = route
+		fare.route_from_t = hit.t
 	else:
 		fare.remaining_road_m = apart_m
+		fare.route = null
 	if apart_m > _profile.deliver_radius_m:
 		return
 	if speed_kph >= _profile.stop_below_kph:
@@ -339,6 +348,8 @@ func _hail(pickup: Fare.Stop) -> void:
 	drawn.par_m = route.distance_m
 	drawn.plan_m = route.plan_m
 	drawn.remaining_road_m = route.distance_m
+	drawn.route = route
+	drawn.route_from_t = pickup.t
 	drawn.meter = FareMeter.new(_tariff)
 	fare = drawn
 	_board_accum_s = 0.0

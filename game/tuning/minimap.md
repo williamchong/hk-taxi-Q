@@ -46,7 +46,7 @@ turns. A floor, never a multiplier — `Q95`'s rule for the drawn road, borrowed
 ⚠️ **Off** (2026-09-24, the user's call, reversing `Q136`'s): at 7 px on a
 240 px map the arrows were noise, and at 13 px they were wider than most Wan
 Chai streets and drew as barbs. A GPS does not print them either at this scale
-— the route does their job, and this map has none (`Q137`). The mesh code and
+— the route does their job, and since `P3-46` this map draws one (`route_px`). The mesh code and
 its `verify_hud` assertions stay, so the dial turns them back on. What follows
 is the design they shipped with.
 
@@ -63,3 +63,13 @@ About 64 m at the shipped scale: one or two to a Wan Chai block, which is as
 many as say the direction once. Every edge half a spacing long gets at least
 one, centred, so a short link between two junctions is not left unsigned.
 
+
+## `route_px = 5.0`
+
+The legal route to the destination (`P3-46`, reopening `Q137` on the user's call of 2026-09-24),
+a GPS's line: `hud_style.tres`'s `map_route` over every road and under the pins, from the car's
+road hit to the stop point, rebuilt at the fare's 5 Hz sample from wherever the car is — a wrong
+turn re-routes, and an edge the legal network does not reach draws nothing. 5 px: over the 2 px
+stroke floor and under a 10 m carriageway's 8.75 px, so it reads as a line ON the road, not a
+road. 0 draws none — `P3-9`'s arrow-disabled test runs with it off. ⚠️ Baked as metres at the
+slot's scale, like the strokes. Not yet driven; the user's frame to move.

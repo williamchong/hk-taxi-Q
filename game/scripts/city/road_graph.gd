@@ -132,6 +132,10 @@ class Hit:
 	## Unit travel direction, already resolved against the query heading for a
 	## two-way edge. Never zero on a hit.
 	var forward: Vector3 = Vector3.FORWARD
+	## True where `forward` runs with the edge's vertex order — the router's
+	## "along" state (`P3-46`); false where a two-way edge was turned round to
+	## face the asker. Always true on a one-way edge, whichever way the car faces.
+	var along: bool = true
 	## Centre of the nearside lane for `forward` — where a car belongs, and
 	## deliberately not the centreline. See `lane_offset`.
 	var lane_centre: Vector3 = Vector3.ZERO
@@ -1257,8 +1261,10 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	# ribbon is drawn `offset` to that side whichever way the car faces it.
 	var edge_left: Vector3 = left_of(along)
 	var flat_heading := Vector3(heading.x, 0.0, heading.z)
+	hit.along = true
 	if not hit.one_way and flat_heading.length_squared() > 0.0 and along.dot(flat_heading) < 0.0:
 		along = -along
+		hit.along = false
 	hit.forward = along
 
 	# The width where the car actually is, not where the edge starts. On the

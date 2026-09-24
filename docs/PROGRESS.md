@@ -160,6 +160,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ⬜ Harbour and channels on the minimap (`Q140`) — asked for, surveyed, not built.
+- `P3-46` ✅ Route line on the minimap (`Q137` reversed, the user's call of 2026-09-24) — the legal route to the destination from the fare's own `Route`, from the car's hit to the stop point, re-routed at the 5 Hz sample and seeded the way the car faces (`Hit.along`); `route_px` 5 px in `map_route`; `map:` assertions on the cut, the mesh and the transform, and `verify_road_graph` pins the drawn polyline to `distance_m`; carrying from the boot stand at rest (`--fare-seed=1`, t=8): +1 `draws`, +221 `prims` over `route_px = 0`, and +7 / +14.9k over `--minimap=off` (137 / 775.5k against 130 / 760.6k; the map alone was +5 / +14.7k) — frames in `build/driver/route_a` (the line from the chevron, clockwise round the Expo Drive roundabout, east to 華懋世紀廣場) and `route_d` (cleared once the car left the network). The user's frame owed (colour, width).
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
 
@@ -249,8 +250,8 @@ and there in the same change.
 - `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
-- `Q137` A router, no route line. The router half is built (`P3-43`); the line stays a design
-  call, not measured, and reopens on `P3-9`. Held: arrow to the next junction.
+- `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
+  the legal route drawn on the minimap. Held: arrow to the next junction.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);

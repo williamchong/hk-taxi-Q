@@ -97,16 +97,108 @@ static func strokes_of(graph: RoadGraph, min_width_m: float, tolerance_m: float)
 		if not graph.is_drivable(edge_id):
 			continue
 		var stroke := Stroke.new()
-		var published := PackedVector2Array()
-		for point: Vector3 in graph.polyline_of(edge_id):
-			published.append(MinimapProjection.plan(point))
-		stroke.points = simplified(published, tolerance_m)
+		stroke.points = simplified(_projected(graph, edge_id), tolerance_m)
 		stroke.width_m = maxf(graph.width_of(edge_id), min_width_m)
 		stroke.level = graph.level_of(edge_id)
 		stroke.one_way = graph.is_one_way(edge_id)
 		stroke.main = graph.is_main(edge_id)
 		strokes.append(stroke)
 	return strokes
+
+
+## The drawn route (`P3-46`) as one polyline in plan metres: `route`'s edges
+## in driving order, each read against its vertex order where `forward` says
+## so, the first cut to start at `from_t` and the last to end at `to_t` — the
+## car's hit and the stop point. Empty where the route was not found, so a
+## caller draws nothing rather than a stale line.
+##
+## The cut is by plan length along the polyline, the same parameter
+## `RoadGraph.point_at` and `Hit.t` use, so the line starts ON the car's hit.
+## ⚠️ One edge driven from `from_t` to `to_t` is the whole route: cut from the
+## near end, then to the far one, in whichever direction it is driven.
+static func route_points(
+	graph: RoadGraph, route: RoadRouter.Route, from_t: float, to_t: float
+) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	if route == null or not route.found or route.edges.is_empty():
+		return points
+	var last: int = route.edges.size() - 1
+	for index: int in route.edges.size():
+		var edge_id: int = route.edges[index]
+		var along: bool = route.forward[index] == 1
+		var published: PackedVector2Array = _projected(graph, edge_id)
+		if not along:
+			published.reverse()
+		# In the DRIVEN order the start is `t` from the driven-from end: `from_t`
+		# along, `1 - from_t` against.
+		var start: float = 0.0
+		var stop: float = 1.0
+		if index == 0:
+			start = from_t if along else 1.0 - from_t
+		if index == last:
+			stop = to_t if along else 1.0 - to_t
+		var piece: PackedVector2Array = cut(
+			published, clampf(start, 0.0, 1.0), clampf(stop, 0.0, 1.0)
+		)
+		# Every edge's first point is the last edge's last: a junction node.
+		var skip: int = 1 if not points.is_empty() and not piece.is_empty() else 0
+		for point_index: int in range(skip, piece.size()):
+			points.append(piece[point_index])
+	return points
+
+
+## An edge's polyline in plan metres.
+static func _projected(graph: RoadGraph, edge_id: int) -> PackedVector2Array:
+	var published := PackedVector2Array()
+	for point: Vector3 in graph.polyline_of(edge_id):
+		published.append(MinimapProjection.plan(point))
+	return published
+
+
+## `points` between `start` and `stop`, both fractions of its plan length, the
+## two cut points included; empty where `stop` is not past `start`.
+static func cut(points: PackedVector2Array, start: float, stop: float) -> PackedVector2Array:
+	var piece := PackedVector2Array()
+	if points.size() < 2 or stop <= start:
+		return piece
+	var total: float = 0.0
+	for index: int in points.size() - 1:
+		total += points[index].distance_to(points[index + 1])
+	if total <= 0.0:
+		return piece
+	var from_m: float = start * total
+	var to_m: float = stop * total
+	var walked: float = 0.0
+	for index: int in points.size() - 1:
+		var a: Vector2 = points[index]
+		var b: Vector2 = points[index + 1]
+		var run: float = a.distance_to(b)
+		var end_m: float = walked + run
+		if end_m >= from_m and piece.is_empty():
+			piece.append(a.lerp(b, clampf((from_m - walked) / run, 0.0, 1.0) if run > 0.0 else 0.0))
+		if not piece.is_empty():
+			if end_m >= to_m:
+				piece.append(
+					a.lerp(b, clampf((to_m - walked) / run, 0.0, 1.0) if run > 0.0 else 1.0)
+				)
+				break
+			piece.append(b)
+		walked = end_m
+	return piece
+
+
+## The route as a mesh of its own (`P3-46`): one stroke `width_m` wide in `ink`,
+## bevelled like a road, or null for under two points. Rebuilt only when the
+## route's edges change, and moved with the roads by their transform.
+static func route_mesh(points: PackedVector2Array, width_m: float, ink: Color) -> ArrayMesh:
+	if points.size() < 2 or width_m <= 0.0:
+		return null
+	var vertices := PackedVector2Array()
+	_emit(vertices, points, width_m * 0.5)
+	var colours := PackedColorArray()
+	colours.resize(vertices.size())
+	colours.fill(ink)
+	return CanvasMesh.of(vertices, colours)
 
 
 ## `points` less every interior vertex within `tolerance_m` of the line through

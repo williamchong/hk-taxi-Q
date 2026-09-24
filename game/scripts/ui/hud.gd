@@ -36,6 +36,9 @@ const HUD_ARG: String = "--hud="
 ## test disables the minimap and the arrow and says nothing about the speed or
 ## the plate, so the map cannot share `--hud=off`'s switch.
 const MINIMAP_ARG: String = "--minimap="
+## How far the route's start must move along its edge before the map's line
+## is rebuilt, in metres: under half a pixel at any span the map is drawn at.
+const ROUTE_STEP_M: float = 0.5
 
 ## How often the road graph is asked what is under the car.
 ##
@@ -93,6 +96,10 @@ var _slots: Array[ChamferPanel] = []
 var _warning: NoEntryIcon = null
 ## Null under `--minimap=off`, and where there is no city to map.
 var _minimap: Minimap = null
+## The route last handed to the map (`_paint_route`): its edges and where on
+## the first it started.
+var _route_edges: PackedInt32Array = PackedInt32Array()
+var _route_from_t: float = 0.0
 
 ## The fare loop this HUD reads, handed in by `Main` like the car. Null, or a
 ## system that is not `usable()`, hides the three fare panels.
@@ -854,6 +861,34 @@ func _follow_fares() -> void:
 	_on_fare_sampled()
 
 
+## The legal route to the destination onto the map (`P3-46`): the fare's own
+## `route`, read here inside the sample it was written in; none with no
+## target, before the hail, and where the car's edge reaches nothing.
+##
+## Walked and rebuilt only when it moved: the same edges from a start under
+## `ROUTE_STEP_M` further along is the line already drawn, and a parked car's
+## `Hit.t` jitters in its last bits every sample.
+func _paint_route() -> void:
+	var fare: Fare = null
+	if _face.has_target and _face.target_is_destination and is_instance_valid(fares):
+		fare = fares.fare
+	if fare == null or fare.destination == null or fare.route == null or not fare.route.found:
+		_route_edges = PackedInt32Array()
+		_minimap.set_route(PackedVector2Array())
+		return
+	if fare.route.edges == _route_edges:
+		var moved_m: float = (
+			absf(fare.route_from_t - _route_from_t) * _graph.plan_length_of(_route_edges[0])
+		)
+		if moved_m < ROUTE_STEP_M:
+			return
+	_route_edges = fare.route.edges
+	_route_from_t = fare.route_from_t
+	_minimap.set_route(
+		MinimapMesh.route_points(_graph, fare.route, fare.route_from_t, fare.destination.t)
+	)
+
+
 func _on_fare_delivered(fare: Fare) -> void:
 	_face.on_ended(fare, true)
 	# What was banked, meter and tip as one, in the gain's green.
@@ -917,6 +952,7 @@ func _paint_fares() -> void:
 		_tick.visible = false
 		if _minimap != null:
 			_minimap.set_target(Vector3.ZERO, false)
+			_minimap.set_route(PackedVector2Array())
 			_minimap.set_beacon(Vector3.ZERO, false, _style.map_destination)
 			_minimap.show_pending(false)
 		return
@@ -961,6 +997,7 @@ func _paint_fares() -> void:
 
 	if _minimap != null:
 		_minimap.set_target(_face.target, _face.has_target and _face.target_is_destination)
+		_paint_route()
 		var beacon_ink: Color = (
 			_style.map_destination if _face.target_is_destination else _style.map_pickup
 		)

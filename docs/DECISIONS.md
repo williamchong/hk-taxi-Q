@@ -196,7 +196,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
-| `Q137` | A router is built; a route line on the map is not | 🟡 Router half ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. The route line stays a design call, not a measurement; reopens on `P3-9`. |
+| `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
 
 ---
 
@@ -6778,8 +6778,9 @@ cell through `library_meshes`.
 
 ## `Q137` — A router is built; a route line on the map is not
 
-**Status.** 🟡 The router half is ✅ built (`P3-43`); the guidance stance stays a design call,
-not a measurement, and reopens on `P3-9`
+**Status.** ✅ Closed. The router half is ✅ built (`P3-43`). The guidance stance below was a
+design call, not a measurement, and **the user reversed it on 2026-09-24, before `P3-9`**: the
+legal route to the fare's destination is drawn on the minimap — `P3-46`, the section at the end.
 
 - **The router is owed whatever the map does.** `P3-3` needs a legal route; `P3-1a` needs road
   distance for a minimum trip and for a fair allowance — in a region 93.5% one-way by drivable
@@ -6845,8 +6846,50 @@ not a measurement, and reopens on `P3-9`
   junction on the route rather than as the crow flies. In a one-way grid a straight-line arrow
   often points down a street that cannot be entered; this helps a non-local without drawing the
   answer.
-- Still open: whether guidance, if it ever ships, routes legally or as the player drives. Both
-  profiles exist now, so it is one line to switch when the answer arrives.
+- ~~Still open: whether guidance, if it ever ships, routes legally or as the player drives.~~
+  Answered by `P3-46`: legally.
+
+### The route line — `P3-46`, built (the user's call, 2026-09-24)
+
+- **What the user asked for**: an "ideal" GPS route on the minimap whenever there is a goal,
+  "which follows all the road direction and rules", against the arrow that only points at the
+  goal. That is the legal profile, and the pillar-1 stance above is reversed on instruction, not
+  on `P3-9`'s evidence; `P3-9` still runs with it off (`route_px = 0`, `--minimap=off`, `--hud=off`).
+- **The fare's own route, drawn.** `FareSystem` already routed from the car's `Hit` at 5 Hz while
+  carrying and kept only the distance; now it keeps the `Route` on the fare (`Fare.route`,
+  `route_from_t`), set at the hail from the pickup and refreshed each carrying sample. `hud.gd`
+  reads it inside the `sampled` signal, like everything else it reads from the system, and hands
+  the map plan points. **Par and the line are the same drive**, so the clock and the line agree.
+- **Only while there is a goal** (`Q142`): from the hail to the delivery or bail, on the
+  destination. Idle has no goal, so no line to the nearest customer.
+- **Starts on the car, ends on the stop point.** `MinimapMesh.route_points` reads each edge's
+  polyline in driving order (reversed where `forward` is 0), cuts the first at the hit's `t` and
+  the last at the stop's, by plan length — the same parameter `Hit.t` and `point_at` use.
+  `verify_road_graph.gd` pins it on real routes: starts on the source point, ends on the target
+  point, and re-sums to `distance_m` within 5 cm (float32 polyline against 64-bit lengths).
+- **A wrong turn re-routes for free**: the next sample routes from wherever the car is, a lookup
+  on the hail's tree. **No route is no line**: an edge the legal network does not reach clears
+  the line, and the pin and the border arrow stay — `Route.found` false is an answer, not a stale
+  line. A car facing the wrong way down a one-way street is drawn the law's way out; the wrong-way
+  sign (`Q81`) already covers that case.
+- **Seeded the way the car faces.** `route()` takes an optional `Facing` (`ALONG`, `AGAINST`,
+  `EITHER` — the default and the tables' convention); the fare passes `Hit.along`, new on the hit, so on a
+  two-way street the line leaves along the car rather than starting behind it with a U-turn the
+  profile bans anyway. `verify_road_graph.gd` pins both seeds on a two-way edge: along, the point
+  behind is reached round the block or not at all and never shorter; against, the direct drive
+  back. Every existing call is unchanged and the tables did not move (regenerated, three lines).
+- **One mesh, the roads' child.** `MinimapMesh.route_mesh` is one stroke in `map_route`,
+  `route_px` wide at the slot's scale, over every road and under the pins; it rides the roads'
+  transform so `follow` never touches it. `hud.gd` walks and rebuilds it only when the edges
+  change or the start moves `ROUTE_STEP_M` (0.5 m) along the first — a parked car's `Hit.t`
+  jitters every sample — and `set_route` rebuilds nothing for the same points. Cost: +1 draw and
+  the route's quads — measured in `PROGRESS.md`.
+- **Colour**: `map_route` (`hud_style.tres`), opaque like the roads, asserted legible on the field
+  and apart from both road colours by `MAIN_ROAD_CONTRAST`; a first guess ahead of the user's frame.
+- Mutation-checked (each fails by name): the reverse dropped in `route_points` → the drawn start;
+  the `along` seed ignored → the same-edge pin; `set_route` never hiding → the map's empty-route
+  assertion; the roads' transform not carrying the route → facing east.
+- 🚫 Not built: the next-junction arrow (held), a route while idle, a route on the player's profile.
 
 **See.** `Q136` · `Q80` · `Q51` · `Q19` · `Q95` · `PLAN.md` `P3-43` · `.claude/rules/router.md`
 

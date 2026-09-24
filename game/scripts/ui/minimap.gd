@@ -11,8 +11,10 @@ extends Control
 ## roads with the main ones apart, the car, and since `P3-5a` the fare's pins: every
 ## pending customer while no one is aboard, the one destination once hailed,
 ## and an arrow on the border toward whichever is the target while it is off
-## the map. The one-way arrows are off (`minimap.md`). No route is
-## drawn and none will be without `Q137` reopening.
+## the map. The one-way arrows are off (`minimap.md`). Since `P3-46` the
+## legal route to the destination is drawn (`Q137`, reopened on the user's
+## call): a GPS's line over the roads, rebuilt at the fare's sample rate from
+## wherever the car is, so a wrong turn simply re-routes.
 ##
 ## The meter's housing, like every panel (`Q139`): light roads on black, and
 ## the chevron in the LED's red — the one thing on the map that is the car.
@@ -34,6 +36,12 @@ var _mapping: MinimapProfile = null
 var _px_per_m: float = 0.0
 var _field: ChamferPanel = null
 var _roads: MeshInstance2D = null
+## The route (`P3-46`): the roads' child, so it rides their transform and
+## `follow` never touches it; rebuilt by `set_route` only when its points
+## change, which a stationary car never does.
+var _route: MeshInstance2D = null
+var _route_points: PackedVector2Array = PackedVector2Array()
+var _route_width_m: float = 0.0
 var _marker: Polygon2D = null
 ## The fare's marks (`P3-5a`): the destination's pin and one pin per pending
 ## customer, the field's children so they stand upright whatever the map's
@@ -96,6 +104,13 @@ func setup(
 		_ground(graph, style)
 	)
 	_field.add_child(_roads)
+
+	# Over every road, under the pins and the car; empty until a fare is hailed.
+	_route = MeshInstance2D.new()
+	_route.name = "Route"
+	_route.visible = false
+	_route_width_m = mapping.route_px / _px_per_m
+	_roads.add_child(_route)
 
 	_marker = _rimmed("Car", chevron, mapping.marker_px, style.map_marker)
 	# Placed once: the anchor never moves, and heading-up neither does the
@@ -217,6 +232,20 @@ func _place_pending() -> void:
 		return
 	for index: int in _pending.size():
 		_pending[index].position = _roads.transform * _pending_plan[index]
+
+
+## Draw the route through `points` (plan metres, `MinimapMesh.route_points`),
+## or none for under two. Nothing is rebuilt while the points stand still, and
+## `route_px` 0 draws none whatever is handed in.
+func set_route(points: PackedVector2Array) -> void:
+	if points == _route_points:
+		return
+	_route_points = points
+	var mesh: ArrayMesh = MinimapMesh.route_mesh(points, _route_width_m, _style.map_route)
+	_route.mesh = mesh
+	var shown: bool = mesh != null
+	if _route.visible != shown:
+		_route.visible = shown
 
 
 ## Put the destination's pin on `point`, or hide it.

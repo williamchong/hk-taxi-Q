@@ -99,6 +99,12 @@ class Profile:
 		return true
 
 
+## Which way the source edge is being driven when a route is asked for: with
+## its vertex order, against it, or whichever is cheaper — the tables'
+## convention, and `Route.forward`'s 1 / 0 for the two directions.
+enum Facing { EITHER = -1, AGAINST = 0, ALONG = 1 }
+
+
 ## A route between two points on the network, or the defined answer for none.
 class Route:
 	extends RefCounted
@@ -210,7 +216,14 @@ func prepare(edge_id: int, t: float) -> bool:
 ##
 ## Prepares the destination if it has not been. Either point off the network
 ## gives the defined answer rather than a route: `found` false, plan distance.
-func route(from_edge: int, from_t: float, to_edge: int, to_t: float) -> Route:
+##
+## `facing` is which way the source edge is being driven (`Facing`). A drawn
+## route (`P3-46`) passes the car's `Hit.along`, so a two-way street facing
+## the car is left along it, not turned round behind it; a direction the
+## profile has no state for falls back to either.
+func route(
+	from_edge: int, from_t: float, to_edge: int, to_t: float, facing: Facing = Facing.EITHER
+) -> Route:
 	var result := Route.new()
 	result.plan_m = RoadGraph.plan_distance(
 		_graph.point_at(from_edge, from_t), _graph.point_at(to_edge, to_t)
@@ -226,18 +239,26 @@ func route(from_edge: int, from_t: float, to_edge: int, to_t: float) -> Route:
 	var best: float = INF
 	var best_state: int = -1
 	var best_onward: int = -1
-	for state: int in _states_of[from_edge]:
-		var along: bool = _state_forward[state] == 1
+	var seeds: PackedInt32Array = _states_of[from_edge]
+	if facing != Facing.EITHER:
+		var faced := PackedInt32Array()
+		for state: int in seeds:
+			if _state_forward[state] == facing:
+				faced.append(state)
+		if not faced.is_empty():
+			seeds = faced
+	for state: int in seeds:
+		var along_edge: bool = _state_forward[state] == 1
 		# Staying on the edge, where the destination lies ahead in this
 		# direction of travel. A loop back round to a point behind falls out of
 		# the junction search below, since the goal seeds its own edge's states.
 		if from_edge == to_edge:
-			var direct: float = (target_t - source_t) if along else (source_t - target_t)
+			var direct: float = (target_t - source_t) if along_edge else (source_t - target_t)
 			if direct >= 0.0 and direct * length_m < best:
 				best = direct * length_m
 				best_state = state
 				best_onward = -1
-		var partial: float = ((1.0 - source_t) if along else source_t) * length_m
+		var partial: float = ((1.0 - source_t) if along_edge else source_t) * length_m
 		for arc: int in range(_succ_start[state], _succ_start[state + 1]):
 			var onward: int = _succ[arc]
 			var candidate: float = partial + tree.to_goal[onward]

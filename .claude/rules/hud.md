@@ -65,7 +65,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
   build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
   `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
-  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order; the arrows are off (`arrow_px = 0`, the user's call) and the assertions keep the mesh honest for the dial. 🔴 **The border arrow stands on the ray from the car** — `beacon_point` is asserted, and so is the car inside its room; a room cut short put it ON the car once. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🚫 No route line (`Q137`). Owed: the web build's `clip_children` frame (`Q136`).
+  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order; the arrows are off (`arrow_px = 0`, the user's call) and the assertions keep the mesh honest for the dial. 🔴 **The border arrow stands on the ray from the car** — `beacon_point` is asserted, and so is the car inside its room; a room cut short put it ON the car once. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🔴 **The route line is the fare's own `Route`** (`P3-46`, `Q137` reversed by the user): `Fare.route` read inside `sampled`, cut to the car's hit by plan length, one mesh under `Field/Roads`, walked and rebuilt only when its edges change or its start moves `ROUTE_STEP_M`; `route_px` 0 draws none and `P3-9` runs so. Its cost: **+1 draw, +221 prims** carrying (137 / 775.5k over 136 / 775.3k at `route_px = 0`; +7 / +14.9k over `--minimap=off`), so the map's number to hold is now 14.9k / +7 with a route up. 🚫 No route while idle (`Q142`), none on the player's profile. Owed: the web build's `clip_children` frame (`Q136`).
 - **Fare HUD changes — `fare_face.gd`, the fare panels in `hud.gd`, `fare_guide.gd` and
   `tuning/guide.tres`, `locale.gd`, the pips and the pin in
   `minimap.gd`, `seven_segment.gd`'s dot, or the `meter_*` / `timer_*` / `callout_*` / `map_pickup`
@@ -100,7 +100,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   colour; `verify_hud`'s `guide:` assertions hold both ends and the middle. 🔴 **The countdown
   is bare and centred** — the one readout in the middle, outlined in the housing's dark
   (`timer_outline_px`), no panel. ⚠️ **The pin is the field's child, not the roads'** — it must
-  stand upright as the map turns; `follow` re-places it. 🚫 No route line (`Q137`), no
+  stand upright as the map turns; `follow` re-places it. ⚠️ **The route is the ROADS' child**
+  (`P3-46`), so their transform carries it and `follow` never touches it. 🚫 No
   next-junction arrow yet (`Q138`), no options menu yet (`P3-5b`).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the

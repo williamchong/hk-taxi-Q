@@ -80,6 +80,14 @@ var remaining_s: float = 0.0
 ## The legal road distance still to drive, refreshed at the sample rate from
 ## wherever the car is; what the arrow and the pip read (`P3-5a`).
 var remaining_road_m: float = 0.0
+## The legal route itself, from wherever the car was last sampled to the
+## destination (`P3-46`): the hail's from the pickup, then refreshed with
+## `remaining_road_m`. Null until the hail; `found` false where the car's edge
+## reaches nothing — the map then draws no line and says so by drawing none.
+var route: RoadRouter.Route = null
+## Where along `route.edges[0]` the route starts, 0..1: the pickup's `t` at the
+## hail, the car's `Hit.t` after.
+var route_from_t: float = 0.0
 var meter: FareMeter = null
 var tip_hkd: float = 0.0
 ## What delivery paid: the reading plus the tip; 0 on a bail.

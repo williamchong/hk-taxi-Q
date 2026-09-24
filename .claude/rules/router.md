@@ -66,5 +66,9 @@ paths:
   🚫 Storing `false` under the key is NOT a mutation: `is_turn_banned` tests presence.
 - ⚠️ **One consumer is wired: `FareSystem`** (`P3-1a`, `fares.md`). It pays `prepare` at the hail,
   one per candidate destination, and `route` at its own 5 Hz sample from the car's `Hit`; its par
-  is `Profile.legal()` (`Q141`). `hud.gd`, `fare_preview.gd` and the minimap still do not call it.
-  🚫 No route line on the minimap (`Q137`, `hud.md`).
+  is `Profile.legal()` (`Q141`). The minimap draws that same `Route` (`P3-46`, `hud.md`) off the
+  fare, never a second search; `fare_preview.gd` still does not call it.
+- ⚠️ **`route(..., facing)` seeds one direction of the source edge** (`P3-46`): `Facing.ALONG`,
+  `AGAINST`, or `EITHER` — the default, and every table pin and the tables themselves use it. A
+  direction the profile has no state for falls back to either. `verify_road_graph.gd`'s same-edge check pins
+  both seeds on a two-way edge; `Hit.along` is what the fare passes.

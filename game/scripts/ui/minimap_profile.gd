@@ -37,3 +37,7 @@ const PATH: String = "res://tuning/minimap.tres"
 
 ## The car's chevron, tip to tail, in design pixels.
 @export var marker_px: float
+
+## The drawn route to the fare's destination (`P3-46`, reopening `Q137`), in
+## design pixels wide. 0 draws none — what `P3-9`'s arrow-disabled test runs.
+@export var route_px: float

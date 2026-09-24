@@ -1246,6 +1246,7 @@ func _check_minimap() -> void:
 
 	_check_minimap_mesh()
 	_check_minimap_pips(mapping, style)
+	_check_minimap_route(mapping, style)
 
 
 ## The fare's pips (`P3-5a`) ride the roads' transform: a destination east of
@@ -1344,6 +1345,123 @@ func _check_minimap_pips(mapping: Resource, style: Resource) -> void:
 		"an empty pool draws no pins"
 	)
 	map.free()
+
+
+## The route (`P3-46`): cut by plan length like `Hit.t`, one stroke in its own
+## colour, the roads' child so `follow` carries it, and off at `route_px` 0.
+func _check_minimap_route(mapping: Resource, style: Resource) -> void:
+	_expect(style.map_route.a == 1.0, "map", "the route is opaque: its strokes overlap at a bend")
+	_expect(
+		(
+			_contrast(style.map_route, style.map_field) >= MIN_CONTRAST
+			and _contrast(style.map_route, style.map_road) >= MAIN_ROAD_CONTRAST
+			and _contrast(style.map_route, style.map_road_main) >= MAIN_ROAD_CONTRAST
+		),
+		"map",
+		"and legible on the field and apart from both road colours"
+	)
+	_expect(mapping.route_px >= 0.0, "map", "route_px is a width or 0, never negative")
+
+	var line := PackedVector2Array([Vector2(0.0, 0.0), Vector2(60.0, 0.0), Vector2(100.0, 0.0)])
+	var middle: PackedVector2Array = MinimapMeshScript.cut(line, 0.25, 0.75)
+	_expect(
+		(
+			middle.size() == 3
+			and middle[0].is_equal_approx(Vector2(25.0, 0.0))
+			and middle[1].is_equal_approx(Vector2(60.0, 0.0))
+			and middle[2].is_equal_approx(Vector2(75.0, 0.0))
+		),
+		"map",
+		"a cut is by plan length, keeping the vertex between its ends (%s)" % middle
+	)
+	_expect(
+		MinimapMeshScript.cut(line, 0.75, 0.25).is_empty(),
+		"map",
+		"and a cut ending before it starts is empty"
+	)
+	_expect(MinimapMeshScript.cut(line, 0.0, 1.0) == line, "map", "the whole line cut is the line")
+
+	var ink := Color.BLUE
+	var north_50 := PackedVector2Array([Vector2(500.0, 300.0), Vector2(500.0, 250.0)])
+	_expect(
+		(
+			MinimapMeshScript.route_mesh(PackedVector2Array([Vector2.ZERO]), 4.0, ink) == null
+			and MinimapMeshScript.route_mesh(north_50, 0.0, ink) == null
+		),
+		"map",
+		"one point, or no width, is no mesh"
+	)
+	var mesh: ArrayMesh = MinimapMeshScript.route_mesh(north_50, 4.0, ink)
+	if mesh == null:
+		_fail("map", "two points built no route mesh — every assertion below is inert")
+		return
+	var vertices: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var colours: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var within: bool = vertices.size() == 6
+	for index: int in vertices.size():
+		within = within and absf(vertices[index].x - 500.0) <= 2.0 + 1e-4
+		within = within and colours[index].is_equal_approx(ink)
+	_expect(within, "map", "a straight route is one quad, half its width each side, in its ink")
+
+	var map: Control = MinimapScript.new()
+	map.setup(mapping, style, RoadGraph.new(), Vector2(280.0, 236.0), 88.0)
+	var roads: MeshInstance2D = map.get_node_or_null("Field/Roads") as MeshInstance2D
+	var route: MeshInstance2D = map.get_node_or_null("Field/Roads/Route") as MeshInstance2D
+	if roads == null or route == null:
+		_fail("map", "the route is not the roads' child — every assertion below is inert")
+		map.free()
+		return
+	_expect(not route.visible and route.mesh == null, "map", "no route until one is set")
+	var pin: Node = map.get_node("Field/Pin")
+	_expect(roads.get_index() < pin.get_index(), "map", "the route draws under the pins")
+	var car := Vector3(500.0, 6.0, 300.0)
+	var north := Vector3(0.0, 0.0, -1.0)
+	var east := Vector3(1.0, 0.0, 0.0)
+	map.follow(car, north)
+	map.set_route(north_50)
+	var anchor: Vector2 = Vector2(280.0, 236.0) * mapping.anchor
+	var px_per_m: float = 280.0 / mapping.span_m
+	var placed: Transform2D = roads.transform * route.transform
+	_expect(
+		(
+			route.visible
+			and route.mesh != null
+			and placed.basis_xform(Vector2.RIGHT).length() > 0.0
+			and (placed * north_50[1]).distance_to(anchor + Vector2(0.0, -50.0 * px_per_m)) < 0.01
+		),
+		"map",
+		"facing north, a route's far end 50 m north lands 50 m up from the chevron"
+	)
+	var widths: PackedVector2Array = route.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var expected_half: float = mapping.route_px / px_per_m * 0.5
+	var at_width: bool = widths.size() == 6
+	for vertex: Vector2 in widths:
+		at_width = at_width and is_equal_approx(absf(vertex.x - 500.0), expected_half)
+	_expect(at_width, "map", "drawn route_px wide at the slot's scale, in metres")
+	var before: ArrayMesh = route.mesh
+	map.set_route(north_50)
+	_expect(route.mesh == before, "map", "the same points rebuild nothing")
+	map.follow(car, east)
+	placed = roads.transform * route.transform
+	_expect(
+		(placed * north_50[1]).distance_to(anchor + Vector2(-50.0 * px_per_m, 0.0)) < 0.01,
+		"map",
+		"and facing east it is to the left: the roads' transform carries it, follow untouched"
+	)
+	map.set_route(PackedVector2Array())
+	_expect(not route.visible and route.mesh == null, "map", "an empty route hides it again")
+	map.free()
+
+	# The dial at 0: what `P3-9` runs.
+	var off: Resource = mapping.duplicate()
+	off.route_px = 0.0
+	var bare: Control = MinimapScript.new()
+	bare.setup(off, style, RoadGraph.new(), Vector2(280.0, 236.0), 88.0)
+	bare.follow(car, north)
+	bare.set_route(north_50)
+	var none: MeshInstance2D = bare.get_node("Field/Roads/Route") as MeshInstance2D
+	_expect(not none.visible and none.mesh == null, "map", "route_px 0 draws no route")
+	bare.free()
 
 
 ## The draw order, which IS the grade separation: a mesh draws in index order.

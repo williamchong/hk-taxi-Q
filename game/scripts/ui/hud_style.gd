@@ -230,5 +230,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var map_pin_px: float
 ## The target's arrow on the map's border while it is off the map, tip to tail.
 @export var map_beacon_px: float
+## The drawn route to the destination (`P3-46`): a GPS's line, over the roads
+## and under the pins. 🔴 Opaque, like the roads — its own strokes overlap at
+## every bend.
+@export var map_route: Color
 @export var slot_fill: Color
 @export var slot_edge: Color

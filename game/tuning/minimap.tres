@@ -12,3 +12,4 @@ casing_px = 1.5
 arrow_px = 0.0
 arrow_spacing_px = 56.0
 marker_px = 32.0
+route_px = 5.0

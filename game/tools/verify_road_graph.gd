@@ -74,6 +74,8 @@ class RoutePins:
 	var resummed: int = 0
 	var started_against: int = 0
 	var tied: int = 0
+	## Re-summed routes also drawn (`_check_drawn`); every re-sum is.
+	var drawn: int = 0
 
 	func done() -> bool:
 		return (
@@ -157,6 +159,7 @@ class RoutePins:
 					% [source, target, route.distance_m, expected_m]
 				)
 			)
+		_check_drawn(graph, route, source, target)
 		for index: int in route.edges.size() - 1:
 			var leave: int = (
 				graph.to_node_of(route.edges[index])
@@ -171,6 +174,46 @@ class RoutePins:
 			if leave != enter:
 				problems.append("e%d -> e%d: the route breaks between its edges" % [source, target])
 				return
+
+	## The route as the minimap draws it (`P3-46`, `MinimapMesh.route_points`):
+	## starts on the source point, ends on the target point, one polyline with
+	## no jump, and as long as the router says the drive is. The polyline is
+	## float32 and the length 64-bit, so the pin is a centimetre, not 1e-6.
+	func _check_drawn(graph: RoadGraph, route: RoadRouter.Route, source: int, target: int) -> void:
+		var points: PackedVector2Array = MinimapMesh.route_points(
+			graph, route, ROUTE_FROM_T, ROUTE_TO_T
+		)
+		if points.size() < 2:
+			problems.append("e%d -> e%d: the drawn route has under two points" % [source, target])
+			return
+		var start: Vector3 = graph.point_at(source, ROUTE_FROM_T)
+		var stop: Vector3 = graph.point_at(target, ROUTE_TO_T)
+		if points[0].distance_to(Vector2(start.x, start.z)) > 0.01:
+			problems.append(
+				(
+					"e%d -> e%d: the drawn route starts %s, the source point is %s"
+					% [source, target, points[0], Vector2(start.x, start.z)]
+				)
+			)
+		var end: Vector2 = points[points.size() - 1]
+		if end.distance_to(Vector2(stop.x, stop.z)) > 0.01:
+			problems.append(
+				(
+					"e%d -> e%d: the drawn route ends %s, the target point is %s"
+					% [source, target, end, Vector2(stop.x, stop.z)]
+				)
+			)
+		var drawn_m: float = 0.0
+		for index: int in points.size() - 1:
+			drawn_m += points[index].distance_to(points[index + 1])
+		if absf(drawn_m - route.distance_m) > 0.05:
+			problems.append(
+				(
+					"e%d -> e%d: the drawn route is %.3f m, distance_m %.3f"
+					% [source, target, drawn_m, route.distance_m]
+				)
+			)
+		drawn += 1
 
 	## What a route's path costs, summed here from the graph: the source's
 	## remainder, every edge between whole, and the target's part.
@@ -1025,8 +1068,11 @@ func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArra
 	)
 	print(
 		(
-			"  routes: %d re-summed (%d set off against), %d tied to the table, %d without a route"
-			% [pins.resummed, pins.started_against, pins.tied, pins.unreachable]
+			(
+				"  routes: %d re-summed (%d set off against, %d drawn), %d tied to the table, "
+				+ "%d without a route"
+			)
+			% [pins.resummed, pins.started_against, pins.drawn, pins.tied, pins.unreachable]
 		)
 	)
 	return problems
@@ -1062,6 +1108,29 @@ func _check_same_edge(graph: RoadGraph, router: RoadRouter) -> PackedStringArray
 				problems.append(
 					"e%d: 0.75 -> 0.25 on a two-way edge is not half its length, against" % edge_id
 				)
+			# Seeded the way the car faces (`P3-46`): facing along, the point
+			# behind is reached the long way round or not at all, never by
+			# turning on the spot; seeded against, it is the direct drive again.
+			var facing: RoadRouter.Route = router.route(
+				edge_id, 0.75, edge_id, 0.25, RoadRouter.Facing.ALONG
+			)
+			if facing.found and (facing.forward[0] != 1 or facing.edges.size() < 2):
+				problems.append(
+					"e%d: 0.75 -> 0.25 seeded along still turns round on the spot" % edge_id
+				)
+			if facing.found and facing.distance_m <= back.distance_m:
+				problems.append(
+					"e%d: the drive round the block is no longer than the U-turn" % edge_id
+				)
+			var turned: RoadRouter.Route = router.route(
+				edge_id, 0.75, edge_id, 0.25, RoadRouter.Facing.AGAINST
+			)
+			if (
+				not turned.found
+				or turned.edges != back.edges
+				or absf(turned.distance_m - back.distance_m) > 1e-6
+			):
+				problems.append("e%d: seeded against is not the direct drive back" % edge_id)
 		if one_way_checked and two_way_checked:
 			break
 	if not one_way_checked or not two_way_checked:
