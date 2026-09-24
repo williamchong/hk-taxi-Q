@@ -834,6 +834,7 @@ func _unfollow_fares() -> void:
 		fares.delivered.disconnect(_on_fare_delivered)
 		fares.bailed.disconnect(_on_fare_bailed)
 		fares.meter_changed.disconnect(_on_meter_changed)
+		fares.skilled.disconnect(_on_fare_skilled)
 
 
 ## Read the new system: its pool onto the map, its samples into the face.
@@ -853,6 +854,7 @@ func _follow_fares() -> void:
 	fares.delivered.connect(_on_fare_delivered)
 	fares.bailed.connect(_on_fare_bailed)
 	fares.meter_changed.connect(_on_meter_changed)
+	fares.skilled.connect(_on_fare_skilled)
 	if _minimap != null:
 		var points := PackedVector3Array()
 		for stop: Fare.Stop in fares.pickups():
@@ -899,6 +901,12 @@ func _on_fare_delivered(fare: Fare) -> void:
 func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
 	if delta_hkd > 0.0:
 		_flash(FareFace.flash(delta_hkd), _style.chip_ink)
+
+
+## A skill paid (`P3-49`): the money and its name, in the gain's green, so a
+## tip is seen being earned and not only counted at the door.
+func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
+	_flash(_face.award_text(award), _style.accent)
 
 
 ## Show `text` under the clock and start it fading.

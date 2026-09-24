@@ -7,6 +7,10 @@ extends Resource
 ## game/tuning/handling.tres. Deliberately no defaults here: a profile that was
 ## never assigned reads as all-zeroes and fails loudly, rather than quietly
 ## driving on values buried in a script.
+
+## Path to the shipped table, so a tool that needs one of its design targets
+## (`verify_fares.gd`, for `drift_slip_threshold_deg`) cannot load a second file.
+const PATH: String = "res://tuning/handling.tres"
 ##
 ## The model is Godot's VehicleBody3D/VehicleWheel3D, driven from these numbers.
 ##
@@ -352,7 +356,10 @@ extends Resource
 ## switch the assist off everywhere and reproduce exactly the silent disappearance
 ## drift_yaw_decay_s refuses to hide.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_to_kph: float
-## Slip angle above which the drift scores style points.
+## Slip angle above which the drift scores style points. Since `P3-49` it is
+## read: `FareSystem`'s drift skill pays per `SkillProfile.drift_s` the slip
+## holds at or over it, so it is a design target the skidpad grades dwell
+## against (`Q84`), never a knob turned to make a slide pay.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of rolling speed shed per second when coasting — engine braking.
 ## Small values glide, large values stop the car the moment you lift off.

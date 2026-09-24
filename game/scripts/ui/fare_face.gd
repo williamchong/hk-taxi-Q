@@ -24,6 +24,13 @@ extends RefCounted
 ## shows the last banked sum between fares — a meter left reading the last trip
 ## is what a real cab shows at a stand. No multiplier, no separate tip line
 ## while the fare runs: the tip is the seconds left, which the timer shows.
+##
+## **The receipt says why there was a tip** (`P3-49`, the user's ask): at a
+## delivery the callout holds what banked over a line adding it up — the
+## meter, the time left, each skill by name with its count. A skill that pays
+## mid-drive flashes under the clock as `award_text`. A bail is said as what
+## it is — the passenger ran off without paying — over what walked out with
+## them.
 
 ## What the callout holds after a fare ends, for `hold_samples` samples.
 enum Notice { NONE, DELIVERED, BAILED }
@@ -58,7 +65,11 @@ var _language: String = Locale.DEFAULT
 var _hold_samples: int = 0
 var _notice: Notice = Notice.NONE
 var _notice_left: int = 0
-var _notice_fare: Fare = null
+## The notice's three lines, decided once at `on_ended`: the fare is over and
+## nothing on it changes, so the receipt is not re-summed at 5 Hz.
+var _notice_caption: String = ""
+var _notice_callout: String = ""
+var _notice_sub: String = ""
 
 
 func _init(hold_samples: int, language: String) -> void:
@@ -70,7 +81,14 @@ func _init(hold_samples: int, language: String) -> void:
 func on_ended(fare: Fare, delivered: bool) -> void:
 	_notice = Notice.DELIVERED if delivered else Notice.BAILED
 	_notice_left = _hold_samples
-	_notice_fare = fare
+	if delivered:
+		_notice_caption = _say("已送達 · 小費 HK$", "DELIVERED · TIP HK$") + money(fare.tip_hkd)
+		_notice_callout = "HK$" + money(fare.banked_hkd)
+		_notice_sub = receipt(fare)
+	else:
+		_notice_caption = _say("乘客走數", "RAN OFF WITHOUT PAYING")
+		_notice_callout = "HK$0.0"
+		_notice_sub = forfeit(fare)
 
 
 ## One sample of the loop: its `state` and `fare`, the closest pending
@@ -114,14 +132,9 @@ func on_sampled(
 	target_is_destination = false
 	if _notice != Notice.NONE and _notice_left > 0:
 		_notice_left -= 1
-		if _notice == Notice.DELIVERED:
-			caption = _say("已送達", "DELIVERED")
-			callout = "HK$" + money(_notice_fare.banked_hkd)
-			callout_sub = _say("小費 HK$", "tip HK$") + money(_notice_fare.tip_hkd)
-		else:
-			caption = _say("乘客下車", "PASSENGER BAILED")
-			callout = ""
-			callout_sub = ""
+		caption = _notice_caption
+		callout = _notice_callout
+		callout_sub = _notice_sub
 		return
 	_notice = Notice.NONE
 	caption = ""
@@ -150,6 +163,65 @@ static func distance(metres: float) -> String:
 ## What a meter tick flashes: the unit that just began, signed.
 static func flash(delta_hkd: float) -> String:
 	return "+HK$" + money(delta_hkd)
+
+
+## What a skill flashes under the clock as it pays: the money, then the skill.
+func award_text(award: Fare.Award) -> String:
+	return "%s %s" % [flash(award.hkd), skill_name(award.skill)]
+
+
+## A skill's name, in the face's language. Cantonese for the two the street
+## has words for: 甩尾 is a drift and 飆車 is speeding.
+func skill_name(skill: Fare.Skill) -> String:
+	match skill:
+		Fare.Skill.DRIFT:
+			return _say("甩尾", "drift")
+		Fare.Skill.SPEED:
+			return _say("飆車", "speed")
+		Fare.Skill.EARLY:
+			return _say("早到", "early")
+		Fare.Skill.NEAR_MISS:
+			return _say("擦身", "near miss")
+		Fare.Skill.AIR:
+			return _say("飛車", "air")
+	return ""
+
+
+## The delivery's sum, as one line: the meter, the time left, then each skill
+## that paid with its count — "meter 29.0 + time 18.0 + drift ×2 10.0".
+## Skills that never paid are left out; a fare with no tip is the meter alone.
+func receipt(fare: Fare) -> String:
+	var time: PackedStringArray = []
+	if fare.time_hkd > 0.0:
+		time.append(_say("時間 ", "time ") + money(fare.time_hkd))
+	return " + ".join(_sum_lines(fare, time))
+
+
+## What a bail cost: the meter and every skill that had paid, all unpaid.
+func forfeit(fare: Fare) -> String:
+	return " + ".join(_sum_lines(fare, [])) + _say(" 冇收", " lost")
+
+
+## The meter, `after` it, then each skill that paid with its count and its
+## total — one pass over the awards.
+func _sum_lines(fare: Fare, after: PackedStringArray) -> PackedStringArray:
+	var lines: PackedStringArray = [_say("咪錶 ", "meter ") + money(fare.meter.reading_hkd())]
+	lines.append_array(after)
+	var counts: PackedInt32Array = []
+	var paid: PackedFloat64Array = []
+	counts.resize(Fare.Skill.size())
+	paid.resize(Fare.Skill.size())
+	for award: Fare.Award in fare.awards:
+		counts[award.skill] += 1
+		paid[award.skill] += award.hkd
+	for skill: int in Fare.Skill.size():
+		if counts[skill] == 0:
+			continue
+		var name: String = skill_name(skill as Fare.Skill)
+		if counts[skill] > 1:
+			name += " ×%d" % counts[skill]
+		lines.append("%s %s" % [name, money(paid[skill])])
+	return lines
 
 
 ## Whole seconds left, rounded UP: a clock that reads 0 with time still on it

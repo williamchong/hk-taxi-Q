@@ -68,6 +68,24 @@ vehicle material door like the body, so it renders with `vehicle_body.tres` and
 shades as the flank it fills. It carries no lamp, so `VehicleLamps` never finds
 it — that script takes the first mesh under `Mesh`, not under the car.
 
+## `[node name="PassengerEmote" type="Node3D" parent="."]`
+
+Where the passenger sits, and where their face pops out of the cab
+(`P3-49`, `Q145`): scripts/vehicle/passenger_emote.gd instances one of the
+two emote meshes here, rises it through the roof and shrinks it away. The
+origin is the rear kerbside seat — x on the kerb side like the door
+(-0.45, half way from the centreline to the flank), y 0.55 (between the belt
+line and the roof, `make_vehicle.Proportions`), z 0.8 (behind the door hinge
+at `cabin_mid_z_m` 0.315 and ahead of `cabin_rear_z_m` 1.25) — so the face is
+hidden by the roof at the pop and emerges from the back of the car rather than
+appearing on it. `verify_vehicle.gd` holds it on the door's side of the car and
+behind the hinge.
+
+The rise, life, pop, shrink and how many faces may be up at once are the
+script's exports; none is re-authored here, so the defaults are the values.
+
+No collider, and unshaded: a glyph in the world, not a surface the rig lights.
+
 ## `[node name="HeadlampL" type="SpotLight3D" parent="."]`
 
 The light the headlamps actually throw, switched by vehicle_lamps.gd along

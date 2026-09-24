@@ -31,6 +31,8 @@ const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 const FareMeterScript = preload("res://scripts/core/fare_meter.gd")
 const FareProfileScript = preload("res://scripts/fares/fare_profile.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
+const SkillProfileScript = preload("res://scripts/fares/skill_profile.gd")
+const HandlingProfileScript = preload("res://scripts/vehicle/handling_profile.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.**
 
@@ -51,6 +53,12 @@ var _region: String = ""
 var _fares: Dictionary = {}
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
+var _skills: SkillProfile = null
+## `HandlingProfile.drift_slip_threshold_deg`: the one number the skills read
+## from the handling table (`Q84`).
+var _slip_threshold_deg: float = 0.0
+## How many times `skilled` fired on the system under test.
+var _skilled: int = 0
 
 
 func _init() -> void:
@@ -64,16 +72,24 @@ func _init() -> void:
 	_fares = GeneratedFares.load_fares(manifest.fares_path)
 	_profile = load(FareProfileScript.PATH) as FareProfile
 	_tariff = load(FareTariffScript.PATH) as FareTariff
-	if _fares.is_empty() or _profile == null or _tariff == null:
-		printerr("  FAIL  fares, profile or tariff did not load")
+	_skills = load(SkillProfileScript.PATH) as SkillProfile
+	var handling: HandlingProfile = load(HandlingProfileScript.PATH) as HandlingProfile
+	if _fares.is_empty() or _profile == null or _tariff == null or _skills == null:
+		printerr("  FAIL  fares, profile, tariff or skills did not load")
 		quit(1)
 		return
+	if handling == null:
+		printerr("  FAIL  %s did not load" % HandlingProfileScript.PATH)
+		quit(1)
+		return
+	_slip_threshold_deg = handling.drift_slip_threshold_deg
 
 	_check_tariff()
 	_check_pools()
 	_check_reach()
 	_check_allowance()
 	_check_loop()
+	_check_skills()
 
 	if _failed > 0:
 		push_error("verify_fares: %d check(s) failed" % _failed)
@@ -400,11 +416,28 @@ func _check_loop() -> void:
 			% [marked_in_reach, hidden_out_of_reach]
 		)
 	)
-	var expected_tip: float = (remaining - TICK_S) * _profile.tip_hkd_per_s
+	# Arriving with nearly the whole allowance left is an early arrival
+	# (`P3-49`), so the tip is the time plus that one skill.
+	var expected_time: float = (remaining - TICK_S) * _profile.tip_hkd_per_s
+	var expected_tip: float = expected_time + _skills.early_hkd
+	_expect(
+		is_equal_approx(system.fare.time_hkd, expected_time),
+		"loop",
+		"the time tip is the seconds left times the rate (HK$%.2f)" % system.fare.time_hkd
+	)
+	_expect(
+		(
+			system.fare.awards.size() == 1
+			and system.fare.awards[0].skill == Fare.Skill.EARLY
+			and is_equal_approx(system.fare.skills_hkd, _skills.early_hkd)
+		),
+		"loop",
+		"arriving with the clock nearly full pays the early arrival, and only that"
+	)
 	_expect(
 		is_equal_approx(system.fare.tip_hkd, expected_tip),
 		"loop",
-		"the tip is the seconds left times the rate (HK$%.2f)" % system.fare.tip_hkd
+		"the tip is the time plus the skills (HK$%.2f)" % system.fare.tip_hkd
 	)
 	_expect(
 		is_equal_approx(system.fare.banked_hkd, reading + expected_tip),
@@ -487,9 +520,13 @@ func _check_loop() -> void:
 		"the allowance ran out: bailed, and counted"
 	)
 	_expect(
-		is_zero_approx(late.fare.banked_hkd) and is_zero_approx(late.earned_hkd),
+		(
+			is_zero_approx(late.fare.banked_hkd)
+			and is_zero_approx(late.earned_hkd)
+			and is_zero_approx(late.fare.tip_hkd)
+		),
 		"loop",
-		"a bail banks nothing"
+		"a bail banks nothing, and tips nothing"
 	)
 	_expect(
 		late.fare.meter.reading_hkd() >= _tariff.flagfall_hkd,
@@ -499,20 +536,247 @@ func _check_loop() -> void:
 	late.free()
 
 
+## The skills (`P3-49`): each dwell from both sides, a slide that ends
+## forfeits its unpaid part, the early arrival on both sides of its share, a
+## bail forfeits every award, and the mutations that prove each check is live.
+func _check_skills() -> void:
+	# A zeroed skill table is an inert system, named, never a literal.
+	var zeroed: SkillProfile = _skills.duplicate()
+	zeroed.drift_hkd = 0.0
+	var inert: FareSystem = _system_with({"nodes": []}, _profile, zeroed, SEED)
+	_expect(not inert.usable(), "skills", "mutation caught: a zero drift_hkd is an inert system")
+	inert.free()
+	var unhandled: FareSystem = FareSystemScript.new()
+	unhandled.setup(
+		_graph,
+		{_region: {"nodes": []}},
+		_profile,
+		_tariff,
+		_skills,
+		0.0,
+		RandomNumberGenerator.new()
+	)
+	_expect(not unhandled.usable(), "skills", "and so is a zero drift threshold")
+	unhandled.free()
+
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "skills", "SKIP: no pickup on this region alone to drive from")
+		return
+
+	# Aboard, out on the road, nothing earned yet.
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_skilled = 0
+	system.skilled.connect(_count_skilled)
+	_tick(system, pickup.point, CRAWL, 5)
+	_expect(system.state == FareSystem.State.CARRYING, "skills", "carrying, to earn on")
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_s / TICK_S))
+	_slide(system, FAST, threshold - 1.0, drift_ticks * 3)
+	_expect(
+		system.fare.awards.is_empty() and _skilled == 0,
+		"skills",
+		"a degree under the threshold, however long, is not a drift"
+	)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_expect(system.fare.awards.is_empty(), "skills", "one tick short of drift_s pays nothing")
+	_slide(system, FAST, threshold, 1)
+	_expect(
+		(
+			system.fare.awards.size() == 1
+			and system.fare.awards[0].skill == Fare.Skill.DRIFT
+			and is_equal_approx(system.fare.awards[0].hkd, _skills.drift_hkd)
+			and is_equal_approx(system.fare.tip_hkd, _skills.drift_hkd)
+			and is_equal_approx(system.fare.skills_hkd, _skills.drift_hkd)
+			and _skilled == 1
+		),
+		"skills",
+		"the tick that reaches drift_s AT the threshold pays drift_hkd into the tip, once, and says so"
+	)
+	_slide(system, FAST, threshold + 20.0, drift_ticks)
+	_expect(
+		system.fare.awards.size() == 2 and _skilled == 2,
+		"skills",
+		"held another drift_s, the same slide pays again"
+	)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_slide(system, FAST, 0.0, 1)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_expect(
+		system.fare.awards.size() == 2,
+		"skills",
+		"a slide that ends forfeits its unpaid dwell: two short slides are not one long one"
+	)
+	_slide(system, FAST, 0.0, 1)
+
+	# Sustained speed: the same shape on the speed floor.
+	var floor_mps: float = _skills.speed_min_kph / 3.6
+	var speed_ticks: int = int(ceil(_skills.speed_hold_s / TICK_S))
+	_slide(system, floor_mps - 0.5, 0.0, speed_ticks * 2)
+	_expect(system.fare.awards.size() == 2, "skills", "under the speed floor pays nothing")
+	_slide(system, floor_mps, 0.0, speed_ticks - 1)
+	_expect(system.fare.awards.size() == 2, "skills", "one tick short of speed_hold_s pays nothing")
+	_slide(system, floor_mps, 0.0, 1)
+	_expect(
+		(
+			system.fare.awards.size() == 3
+			and system.fare.awards[2].skill == Fare.Skill.SPEED
+			and is_equal_approx(system.fare.awards[2].hkd, _skills.speed_hkd)
+			and is_equal_approx(system.fare.skills_hkd, 2.0 * _skills.drift_hkd + _skills.speed_hkd)
+		),
+		"skills",
+		"the tick that reaches speed_hold_s AT the floor pays speed_hkd"
+	)
+	_slide(system, floor_mps, 0.0, speed_ticks - 1)
+	_slide(system, floor_mps - 0.5, 0.0, 1)
+	_slide(system, floor_mps, 0.0, speed_ticks - 1)
+	_expect(system.fare.awards.size() == 3, "skills", "dropping under the floor restarts the hold")
+	_expect(
+		system.fare.count_of(Fare.Skill.DRIFT) == 2 and system.fare.count_of(Fare.Skill.SPEED) == 1,
+		"skills",
+		"the receipt counts them by skill"
+	)
+
+	# Delivered: the tip is the time plus every skill, and the early arrival
+	# joins them at the door.
+	var destination: Fare.Stop = system.fare.destination
+	var skills_before: float = system.fare.skills_hkd
+	_tick(system, destination.point, CRAWL, 1)
+	_expect(system.deliveries == 1, "skills", "delivered")
+	_expect(
+		(
+			system.fare.awards.size() == 4
+			and system.fare.awards[3].skill == Fare.Skill.EARLY
+			and is_equal_approx(system.fare.skills_hkd, skills_before + _skills.early_hkd)
+			and _skilled == 4
+		),
+		"skills",
+		"the early arrival is paid at the door, last, and announced"
+	)
+	_expect(
+		(
+			is_equal_approx(system.fare.tip_hkd, system.fare.time_hkd + system.fare.skills_hkd)
+			and is_equal_approx(
+				system.fare.banked_hkd, system.fare.meter.reading_hkd() + system.fare.tip_hkd
+			)
+		),
+		"skills",
+		"delivery banks the meter plus the time plus the skills (HK$%.2f)" % system.fare.banked_hkd
+	)
+	var banked_skilled: float = system.fare.banked_hkd
+	system.free()
+
+	# The early arrival from the other side: the clock run just under the
+	# share pays nothing at the door.
+	var late: FareSystem = _system(_fares, _profile, SEED)
+	_tick(late, pickup.point, CRAWL, 5)
+	var allowance: float = late.fare.allowance_s
+	var run_s: float = allowance * (1.0 - _skills.early_share) + TICK_S
+	_tick(late, FAR_AWAY, CRAWL, int(ceil(run_s / TICK_S)))
+	_expect(late.state == FareSystem.State.CARRYING, "skills", "still carrying, under the share")
+	_tick(late, late.fare.destination.point, CRAWL, 1)
+	_expect(
+		late.deliveries == 1 and late.fare.count_of(Fare.Skill.EARLY) == 0,
+		"skills",
+		"delivered with less than early_share of the clock left, no early arrival"
+	)
+	late.free()
+	var prompt: FareSystem = _system(_fares, _profile, SEED)
+	_tick(prompt, pickup.point, CRAWL, 5)
+	var on_share: float = prompt.fare.allowance_s * (1.0 - _skills.early_share) - TICK_S
+	_tick(prompt, FAR_AWAY, CRAWL, int(floor(on_share / TICK_S)))
+	_tick(prompt, prompt.fare.destination.point, CRAWL, 1)
+	_expect(
+		prompt.deliveries == 1 and prompt.fare.count_of(Fare.Skill.EARLY) == 1,
+		"skills",
+		"and with the share still on the clock, paid"
+	)
+	prompt.free()
+
+	# A bail forfeits every skill already paid: the receipt keeps them, the
+	# money does not.
+	var bailer: FareSystem = _system(_fares, _profile, SEED)
+	_tick(bailer, pickup.point, CRAWL, 5)
+	_slide(bailer, FAST, threshold, drift_ticks)
+	_expect(bailer.fare.awards.size() == 1, "skills", "a drift paid before the bail")
+	var ticks: int = int(ceil(bailer.fare.remaining_s / TICK_S)) + 1
+	_tick(bailer, FAR_AWAY, CRAWL, ticks)
+	_expect(
+		(
+			bailer.bails == 1
+			and bailer.fare.awards.size() == 1
+			and is_equal_approx(bailer.fare.skills_hkd, _skills.drift_hkd)
+			and is_zero_approx(bailer.fare.tip_hkd)
+			and is_zero_approx(bailer.fare.banked_hkd)
+		),
+		"skills",
+		"the bail keeps the award on the receipt and pays none of it"
+	)
+	bailer.free()
+
+	# Mutation: half the drift price banks strictly less on the same drive.
+	var stingy: SkillProfile = _skills.duplicate()
+	stingy.drift_hkd = _skills.drift_hkd * 0.5
+	var mutated: FareSystem = _system_with(_fares, _profile, stingy, SEED)
+	_tick(mutated, pickup.point, CRAWL, 5)
+	_slide(mutated, FAST, threshold, drift_ticks)
+	_slide(mutated, FAST, threshold + 20.0, drift_ticks)
+	_slide(mutated, FAST, threshold, drift_ticks - 1)
+	_slide(mutated, FAST, 0.0, 1)
+	_slide(mutated, FAST, threshold, drift_ticks - 1)
+	_slide(mutated, FAST, 0.0, 1)
+	_slide(mutated, floor_mps - 0.5, 0.0, speed_ticks * 2)
+	_slide(mutated, floor_mps, 0.0, speed_ticks)
+	_slide(mutated, floor_mps, 0.0, speed_ticks - 1)
+	_slide(mutated, floor_mps - 0.5, 0.0, 1)
+	_slide(mutated, floor_mps, 0.0, speed_ticks - 1)
+	_tick(mutated, mutated.fare.destination.point, CRAWL, 1)
+	_expect(
+		mutated.deliveries == 1 and mutated.fare.banked_hkd < banked_skilled,
+		"skills",
+		(
+			"mutation caught: half the drift price banks HK$%.2f against HK$%.2f"
+			% [mutated.fare.banked_hkd, banked_skilled]
+		)
+	)
+	mutated.free()
+
+
+func _count_skilled(_fare: Fare, _award: Fare.Award) -> void:
+	_skilled += 1
+
+
 ## `ticks` samples of a car at `point` doing `speed_mps`, `TICK_S` apart.
 static func _tick(system: FareSystem, point: Vector3, speed_mps: float, ticks: int) -> void:
 	for tick: int in ticks:
 		system.sample(point, speed_mps, Vector3.FORWARD, TICK_S)
 
 
-## A system over `fares` with `profile`, the shipped tariff and a fixed draw.
-## Not added to the tree: `_ready` never runs, and `setup` is the whole load.
+## `ticks` samples of a car far from every stop doing `speed_mps` with
+## `slip_deg` between its nose and its travel, `TICK_S` apart.
+static func _slide(system: FareSystem, speed_mps: float, slip_deg: float, ticks: int) -> void:
+	for tick: int in ticks:
+		system.sample(FAR_AWAY, speed_mps, Vector3.FORWARD, TICK_S, slip_deg)
+
+
+## A system over `fares` with `profile`, the shipped tariff and skills, and a
+## fixed draw. Not added to the tree: `_ready` never runs, and `setup` is the
+## whole load.
 func _system(fares: Dictionary, profile: FareProfile, seed_value: int) -> FareSystem:
+	return _system_with(fares, profile, _skills, seed_value)
+
+
+func _system_with(
+	fares: Dictionary, profile: FareProfile, skills: SkillProfile, seed_value: int
+) -> FareSystem:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var by_region: Dictionary[String, Dictionary] = {_region: fares}
 	var system: FareSystem = FareSystemScript.new()
-	system.setup(_graph, by_region, profile, _tariff, rng)
+	system.setup(_graph, by_region, profile, _tariff, skills, _slip_threshold_deg, rng)
 	return system
 
 

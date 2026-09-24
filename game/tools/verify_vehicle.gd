@@ -64,6 +64,7 @@ const LAMPS_SCRIPT := "res://scripts/vehicle/vehicle_lamps.gd"
 const GLINT_SCRIPT := "res://scripts/vehicle/sun_glint.gd"
 const CONTROLLER_SCRIPT := "res://scripts/vehicle/vehicle_controller.gd"
 const DOOR_SCRIPT := "res://scripts/vehicle/taxi_door.gd"
+const EMOTE_SCRIPT := "res://scripts/vehicle/passenger_emote.gd"
 
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
 ## declares. This is the renderer's own list — the same one
@@ -144,6 +145,7 @@ func _run() -> void:
 	_check_the_rig_hangs_where_the_script_looks(car, lamps, material)
 	_check_the_beams_point_at_the_road(car)
 	_check_the_door_hangs_on_the_flank(car)
+	_check_the_passenger_can_make_a_face(car)
 
 	# Freed rather than left to the exit: an instantiated scene that never
 	# reaches a tree is leaked at exit, and Godot reports that as a page of
@@ -226,6 +228,70 @@ func _check_the_door_hangs_on_the_flank(car: Node3D) -> void:
 	_check_the_body_wears_its_shader(leaf)
 	if _failed == before:
 		print("  ok    the passenger door hangs on the flank, shut")
+
+
+## The passenger's face (`P3-49`) pops from the seat, and the meshes are built
+## the way round the script turns them.
+##
+## The rig sits on the door's side of the car and behind the hinge — the rear
+## kerbside seat — so the face rises out of the back of the cab. Each emote
+## scene must instance to a mesh whose features stand proud of -Z, the side
+## `look_at` turns to the camera: a face built on +Z renders as a blank coin
+## from every angle and no frame check would say why. `show_face` is then
+## called and the instance it made is graded — unshaded, vertex-coloured, one
+## live face — so a rig that quietly makes nothing fails here rather than in a
+## drive where nobody was looking at the back seat.
+func _check_the_passenger_can_make_a_face(car: Node3D) -> void:
+	var before: int = _failed
+	var emote := _running(car, EMOTE_SCRIPT) as Node3D
+	if emote == null:
+		_fail("no node in %s runs %s" % [SCENE_PATH, EMOTE_SCRIPT])
+		return
+	var door := _running(car, DOOR_SCRIPT) as Node3D
+	if emote.get_parent() != car:
+		_fail("%s is not a direct child of the car" % emote.name)
+	if door != null:
+		if signf(emote.position.x) != signf(door.position.x):
+			_fail("%s is not on the passenger door's side of the car" % emote.name)
+		if emote.position.z <= door.position.z:
+			_fail("%s is ahead of the door hinge, not in the rear seat" % emote.name)
+	if emote.position.y <= 0.0:
+		_fail("%s sits at or under the floor" % emote.name)
+	for face: int in 2:
+		var packed: PackedScene = emote.grin if face == 0 else emote.angry
+		var label: String = "grin" if face == 0 else "angry"
+		if packed == null:
+			_fail("%s has no %s scene assigned" % [emote.name, label])
+			continue
+		var live_before: int = emote.live()
+		emote.show_face(face)
+		if emote.live() != live_before + 1:
+			_fail("show_face(%s) put up %d faces, not one" % [label, emote.live() - live_before])
+			continue
+		var instance := emote.get_child(emote.get_child_count() - 1) as Node3D
+		var mesh: MeshInstance3D = _body_under(instance)
+		if mesh == null or mesh.mesh == null:
+			_fail("the %s scene has no MeshInstance3D with a mesh" % label)
+			continue
+		var bounds: AABB = mesh.mesh.get_aabb()
+		var behind: float = bounds.end.z
+		var proud: float = -bounds.position.z
+		if not proud > behind:
+			_fail(
+				(
+					"the %s face is built on +Z (%.3f proud, %.3f behind); look_at shows -Z"
+					% [label, proud, behind]
+				)
+			)
+		var material := mesh.material_override as StandardMaterial3D
+		if material == null:
+			_fail("the %s face has no material override; it would be lit as a surface" % label)
+		elif material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+			_fail("the %s face is shaded; a glyph is unshaded" % label)
+		elif not material.vertex_color_use_as_albedo:
+			_fail("the %s face ignores its vertex colours" % label)
+	if _failed == before:
+		print("  ok    the passenger's face pops from the rear seat, built to face the camera")
 
 
 ## The instance uniforms the renderer will actually dispatch on, by name and

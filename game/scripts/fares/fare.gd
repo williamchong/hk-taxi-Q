@@ -11,11 +11,29 @@ extends RefCounted
 ##
 ## **The money is two numbers, and stays two.** `meter` is the tariff on what
 ## was driven and waited, honest to the cent; `tip_hkd` is everything the
-## player *earned* — here the seconds left on the allowance, later the style
-## chain (`P3-2b`) — and both bank as one HK$ sum. A shortcut lowers the meter
-## and raises the tip, which is the design.
+## player *earned* — the seconds left on the allowance (`time_hkd`) and the
+## skills paid on the way (`skills_hkd`, `P3-49`), later the style chain
+## (`P3-2b`) — and both bank as one HK$ sum. A shortcut lowers the meter and
+## raises the tip, which is the design. `awards` is the receipt: what each
+## skill paid, in the order it was earned, so the HUD can say WHY there was a
+## tip (`Q145`).
 
 enum Kind { SHORT_HOP, STANDARD }
+
+## What a skill is. Drift, speed and early arrival pay today; near miss and
+## air are slots, waiting on `B3`'s traffic and on something to jump off.
+enum Skill { DRIFT, SPEED, EARLY, NEAR_MISS, AIR }
+
+
+## One skill paid, in HK$.
+class Award:
+	extends RefCounted
+	var skill: Skill = Skill.DRIFT
+	var hkd: float = 0.0
+
+	func _init(paid_skill: Skill, paid_hkd: float) -> void:
+		skill = paid_skill
+		hkd = paid_hkd
 
 
 ## A published fare node resolved into the merged graph's frame: the stop
@@ -89,9 +107,26 @@ var route: RoadRouter.Route = null
 ## hail, the car's `Hit.t` after.
 var route_from_t: float = 0.0
 var meter: FareMeter = null
+## The tip: `time_hkd` plus `skills_hkd`; 0 on a bail.
 var tip_hkd: float = 0.0
+## The seconds left on the allowance at delivery, priced; 0 until then.
+var time_hkd: float = 0.0
+## Everything the skills paid, banked or not: the sum of `awards`.
+var skills_hkd: float = 0.0
+## Each skill paid, in the order it was earned. Kept on a bail too — the
+## receipt then says what walked out of the door.
+var awards: Array[Award] = []
 ## What delivery paid: the reading plus the tip; 0 on a bail.
 var banked_hkd: float = 0.0
+
+
+## How many of `awards` are `skill`.
+func count_of(skill: Skill) -> int:
+	var count: int = 0
+	for award: Award in awards:
+		if award.skill == skill:
+			count += 1
+	return count
 
 
 ## A destination node's kind. `taxi_stand` is standard and `pudo` a short hop;

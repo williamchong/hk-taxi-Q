@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="SkillProfile" format=3 uid="uid://bxtcfag75dg0f"]
+
+[ext_resource type="Script" uid="uid://ccexld0sab6dr" path="res://scripts/fares/skill_profile.gd" id="1_skills"]
+
+[resource]
+script = ExtResource("1_skills")
+drift_s = 1.0
+drift_hkd = 5.0
+speed_min_kph = 80.0
+speed_hold_s = 3.0
+speed_hkd = 5.0
+early_share = 0.5
+early_hkd = 10.0

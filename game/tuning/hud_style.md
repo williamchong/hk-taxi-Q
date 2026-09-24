@@ -131,11 +131,13 @@ UP, DELIVERED — that says what the box is, which the box alone did not.
 sizes and the user read the box as unreadable at 30 / 15 / 20; 40 for the
 place was then too much, and the lines wanted air.
 
-## `callout_hold_s = 3.0`
+## `callout_hold_s = 5.0`
 
-How long DELIVERED or PASSENGER BAILED stays in the callout before the box goes
-down: fifteen samples at the loop's 5 Hz, and the model counts samples, not
-seconds, so `verify_hud.gd` can step it.
+How long the delivery's receipt, or the bail's, stays in the callout before the
+box goes down: twenty-five samples at the loop's 5 Hz, and the model counts
+samples, not seconds, so `verify_hud.gd` can step it. Was 3.0 for a two-word
+notice; since `P3-49` the sub line is a sum — "meter 29.0 + time 18.0 + drift
+×2 10.0" — and five seconds is what reading it takes.
 
 ## `map_pin_px = 26.0`
 

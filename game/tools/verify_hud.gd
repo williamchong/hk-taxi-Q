@@ -1877,25 +1877,53 @@ func _check_fare_face() -> void:
 		face.meter_text == "31.1", "face", "2,200 m reads 31.1 — the first unit past the flagfall"
 	)
 
+	# The receipt (`P3-49`): what banked, over the sum that made it — the
+	# meter, the time and each skill by name with its count. 31.1 on the meter
+	# from the 2,200 m above; 12.5 of time; two drifts and a speed.
 	fare.banked_hkd = 122.88
-	fare.tip_hkd = 12.5
+	fare.time_hkd = 12.5
+	fare.awards.append(FareScript.Award.new(FareScript.Skill.DRIFT, 5.0))
+	fare.awards.append(FareScript.Award.new(FareScript.Skill.SPEED, 5.0))
+	fare.awards.append(FareScript.Award.new(FareScript.Skill.DRIFT, 5.0))
+	fare.skills_hkd = 15.0
+	fare.tip_hkd = 27.5
 	face.on_ended(fare, true)
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		(
-			face.caption == "DELIVERED"
+			face.caption == "DELIVERED · TIP HK$27.5"
 			and face.callout == "HK$122.9"
-			and face.callout_sub == "tip HK$12.5"
+			and face.callout_sub == "meter 31.1 + time 12.5 + drift ×2 10.0 + speed 5.0"
 		),
 		"face",
-		"delivered: the callout holds what was banked over the tip (%s)" % face.callout
+		"delivered: the callout holds what was banked over the receipt (%s)" % face.callout_sub
 	)
 	zh.on_ended(fare, true)
 	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
-		zh.caption == "已送達" and zh.callout_sub == "小費 HK$12.5",
+		(
+			zh.caption == "已送達 · 小費 HK$27.5"
+			and zh.callout_sub == "咪錶 31.1 + 時間 12.5 + 甩尾 ×2 10.0 + 飆車 5.0"
+		),
 		"face",
-		"and in Chinese (%s)" % zh.caption
+		"and in Chinese (%s)" % zh.callout_sub
+	)
+	_expect(
+		(
+			face.award_text(fare.awards[0]) == "+HK$5.0 drift"
+			and zh.award_text(fare.awards[1]) == "+HK$5.0 飆車"
+		),
+		"face",
+		"a skill flashes as its money and its name"
+	)
+	var bare: RefCounted = FareScript.new()
+	bare.pickup = stand
+	bare.destination = square
+	bare.meter = FareMeterScript.new(tariff)
+	_expect(
+		face.receipt(bare) == "meter 29.0",
+		"face",
+		"a fare with no tip is the meter alone (%s)" % face.receipt(bare)
 	)
 	_expect(
 		face.meter_text == "0.0" and face.total_text == "TOTAL HK$122.9" and not face.show_timer,
@@ -1909,7 +1937,7 @@ func _check_fare_face() -> void:
 	)
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
-	_expect(face.caption == "DELIVERED", "face", "still held on the third sample")
+	_expect(face.caption.begins_with("DELIVERED"), "face", "still held on the third sample")
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
 		face.caption.is_empty() and face.callout.is_empty(),
@@ -1917,12 +1945,28 @@ func _check_fare_face() -> void:
 		"and on the fourth the box is down"
 	)
 
+	# A bail is said as what it is, over what walked out unpaid: the meter
+	# and every skill that had paid.
+	fare.banked_hkd = 0.0
+	fare.tip_hkd = 0.0
+	fare.time_hkd = 0.0
 	face.on_ended(fare, false)
 	face.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
-		face.caption == "PASSENGER BAILED" and face.callout.is_empty(),
+		(
+			face.caption == "RAN OFF WITHOUT PAYING"
+			and face.callout == "HK$0.0"
+			and face.callout_sub == "meter 31.1 + drift ×2 10.0 + speed 5.0 lost"
+		),
 		"face",
-		"bailed says so, with nothing under it"
+		"bailed says so, over what was lost (%s)" % face.callout_sub
+	)
+	zh.on_ended(fare, false)
+	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
+	_expect(
+		zh.caption == "乘客走數" and zh.callout_sub == "咪錶 31.1 + 甩尾 ×2 10.0 + 飆車 5.0 冇收",
+		"face",
+		"and in Chinese (%s)" % zh.callout_sub
 	)
 	# A new hail inside the hold wins: the outcome is old news.
 	face.on_sampled(boarding, fare, null, 10.0, 122.88)

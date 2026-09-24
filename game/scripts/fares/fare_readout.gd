@@ -49,7 +49,12 @@ func _refresh() -> void:
 		FareSystem.State.IDLE:
 			lines.append("idle" if fares.armed() else "idle — leave the stand to hail")
 			if fare != null:
-				lines.append("last  HK$%.1f  (tip HK$%.1f)" % [fare.banked_hkd, fare.tip_hkd])
+				lines.append(
+					(
+						"last  HK$%.1f  (time HK$%.1f, skills HK$%.1f in %d)"
+						% [fare.banked_hkd, fare.time_hkd, fare.skills_hkd, fare.awards.size()]
+					)
+				)
 		FareSystem.State.BOARDING:
 			lines.append(
 				"boarding  → %s / %s" % [fare.destination.name_en(), fare.destination.name_zh()]
@@ -68,8 +73,14 @@ func _refresh() -> void:
 			)
 			lines.append(
 				(
-					"meter HK$%.1f  clock %.0f / %.0f s"
-					% [fare.meter.reading_hkd(), fare.remaining_s, fare.allowance_s]
+					"meter HK$%.1f  clock %.0f / %.0f s  skills HK$%.1f in %d"
+					% [
+						fare.meter.reading_hkd(),
+						fare.remaining_s,
+						fare.allowance_s,
+						fare.skills_hkd,
+						fare.awards.size()
+					]
 				)
 			)
 	_label.text = "\n".join(lines)

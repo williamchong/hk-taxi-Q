@@ -49,6 +49,21 @@ extends Node
 ## that reads the car. `tools/verify_fares.gd` builds one with `setup()` and
 ## drives the whole loop with synthetic samples, dwells from both sides.
 ##
+## **The skills pay as they happen** (`P3-49`, `Q145`). While a passenger is
+## aboard a `SkillTracker` reads every tick's speed and slip: a slide held at
+## or over `HandlingProfile.drift_slip_threshold_deg` for `SkillProfile.drift_s`
+## pays `drift_hkd`, a run over `speed_min_kph` for `speed_hold_s` pays
+## `speed_hkd`, each again for each further dwell, and an arrival with
+## `early_share` of the allowance left pays `early_hkd` at the door. Each is
+## a flat HK$ into `Fare.tip_hkd` the moment it is earned and a line on the
+## receipt; `skilled` says so. A bail forfeits the lot — the passenger walks
+## without paying, and the receipt says what walked.
+##
+## ⚠️ **`slip_deg_of` is a second copy of `skidpad_ablation.gd`'s slip, on
+## purpose** (`Q84`): the grader must never call what it grades, so the
+## instrument keeps its own, and the game — the consumer `PLAN.md` held the
+## slip signal back for — now has this one. Same flattening, same floor.
+##
 ## `--fares=off` frees the node — free roam, and what `P3-9` runs.
 ## `--fare-seed=<int>` fixes the destination draw for a repeatable drive.
 
@@ -62,6 +77,9 @@ signal cancelled(fare: Fare)
 signal delivered(fare: Fare)
 ## Emitted when the allowance ran out; `banked_hkd` is 0.
 signal bailed(fare: Fare)
+## Emitted each time a skill pays, with the award just appended to
+## `fare.awards` and added to `fare.tip_hkd` (`P3-49`).
+signal skilled(fare: Fare, award: Fare.Award)
 ## Emitted whenever the reading moves: the new reading in HK$, and the unit
 ## that just began — the flagfall at boarding — so a readout that shows the
 ## tick keeps no copy of the last reading (`P3-5a`).
@@ -77,6 +95,10 @@ const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const FARES_ARG: String = "--fares="
 ## `--fare-seed=<int>` seeds the destination draw; absent, it is randomised.
 const SEED_ARG: String = "--fare-seed="
+## Ground speed under which a slip angle is noise rather than a measurement:
+## a nearly stationary car has a velocity vector pointing anywhere at all.
+## `skidpad_ablation.gd`'s `SLIP_FLOOR_MPS`, restated on purpose (see above).
+const SLIP_FLOOR_MPS: float = 1.0
 
 enum State { IDLE, BOARDING, CARRYING }
 
@@ -100,6 +122,12 @@ var reach_ms: float = 0.0
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
+var _skills: SkillProfile = null
+## `HandlingProfile.drift_slip_threshold_deg`, handed in: the angle a slide
+## must hold to be a drift.
+var _slip_threshold_deg: float = 0.0
+## The skills of the fare in flight; null between fares.
+var _tracker: SkillTracker = null
 var _rng: RandomNumberGenerator = null
 # A member, not a local: `RoadGraph.shared()` holds it weakly.
 var _graph: RoadGraph = null
@@ -146,6 +174,8 @@ func _ready() -> void:
 		fares,
 		load(FareProfile.PATH) as FareProfile,
 		load(FareTariff.PATH) as FareTariff,
+		load(SkillProfile.PATH) as SkillProfile,
+		vehicle.profile.drift_slip_threshold_deg if vehicle.profile != null else 0.0,
 		rng
 	)
 	if not _usable:
@@ -163,14 +193,16 @@ func _ready() -> void:
 
 
 ## Everything the loop needs, handed in: the merged graph, each resident
-## region's `fares.json` document by region, the two tables and the draw.
-## A missing or zeroed table makes an INERT system — nothing hails, and the
-## error names why — never one running on a literal.
+## region's `fares.json` document by region, the three tables, the drift's
+## angle and the draw. A missing or zeroed table makes an INERT system —
+## nothing hails, and the error names why — never one running on a literal.
 func setup(
 	graph: RoadGraph,
 	fares_by_region: Dictionary[String, Dictionary],
 	profile: FareProfile,
 	tariff: FareTariff,
+	skills: SkillProfile,
+	slip_threshold_deg: float,
 	rng: RandomNumberGenerator
 ) -> void:
 	_usable = false
@@ -179,6 +211,9 @@ func setup(
 		return
 	if profile == null:
 		push_error("FareSystem: no FareProfile handed in; nothing will be hailed.")
+		return
+	if skills == null:
+		push_error("FareSystem: no SkillProfile handed in; nothing will be hailed.")
 		return
 	var required: Dictionary[String, float] = {
 		"hail_radius_m": profile.hail_radius_m,
@@ -192,12 +227,22 @@ func setup(
 		"tip_hkd_per_s": profile.tip_hkd_per_s,
 		"sample_hz": profile.sample_hz,
 	}
-	for key: String in required:
-		if required[key] <= 0.0:
-			push_error(
-				"FareSystem: %s has no %s; nothing will be hailed." % [profile.resource_path, key]
-			)
-			return
+	if _any_zero(profile, required):
+		return
+	var skill_keys: Dictionary[String, float] = {
+		"drift_s": skills.drift_s,
+		"drift_hkd": skills.drift_hkd,
+		"speed_min_kph": skills.speed_min_kph,
+		"speed_hold_s": skills.speed_hold_s,
+		"speed_hkd": skills.speed_hkd,
+		"early_share": skills.early_share,
+		"early_hkd": skills.early_hkd,
+	}
+	if _any_zero(skills, skill_keys):
+		return
+	if slip_threshold_deg <= 0.0:
+		push_error("FareSystem: no drift_slip_threshold_deg handed in; nothing will be hailed.")
+		return
 	var probe := FareMeter.new(tariff)
 	if not probe.usable():
 		return
@@ -208,6 +253,8 @@ func setup(
 	_graph = graph
 	_profile = profile
 	_tariff = tariff
+	_skills = skills
+	_slip_threshold_deg = slip_threshold_deg
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_pickups.clear()
@@ -216,6 +263,19 @@ func setup(
 		_add_stops(region, fares_by_region[region])
 	_build_reach()
 	_usable = true
+
+
+## Whether any of `table`'s `fields` reads zero — a key missing from the
+## `.tres`, since neither profile declares a default — naming the file and
+## the field.
+static func _any_zero(table: Resource, fields: Dictionary[String, float]) -> bool:
+	for key: String in fields:
+		if fields[key] <= 0.0:
+			push_error(
+				"FareSystem: %s has no %s; nothing will be hailed." % [table.resource_path, key]
+			)
+			return true
+	return false
 
 
 func usable() -> bool:
@@ -238,19 +298,41 @@ func armed() -> bool:
 
 func _physics_process(delta: float) -> void:
 	var placed: Transform3D = vehicle.global_transform
-	sample(placed.origin, vehicle.linear_velocity.length(), -placed.basis.z, delta)
+	var velocity: Vector3 = vehicle.linear_velocity
+	var nose: Vector3 = -placed.basis.z
+	# The slip is only read while a passenger is aboard.
+	var slip: float = slip_deg_of(velocity, nose) if state == State.CARRYING else 0.0
+	sample(placed.origin, velocity.length(), nose, delta, slip)
+
+
+## The angle between where the car points and where it is going, in degrees,
+## flattened to the ground plane so a ramp or a landing cannot read as slip,
+## and 0 under `SLIP_FLOOR_MPS`. `skidpad_ablation.gd::_slip_deg`, restated.
+static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
+	var travel := Vector3(velocity.x, 0.0, velocity.z)
+	if travel.length() < SLIP_FLOOR_MPS:
+		return 0.0
+	var heading := Vector3(nose.x, 0.0, nose.z)
+	if heading.is_zero_approx():
+		return 0.0
+	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
 
 
 ## One tick of the loop: the car is at `position` doing `speed_mps` along
-## `heading`, `delta_s` after the last tick. The odometer and the clock run
-## every tick; the graph is asked once per `sample_hz`.
-func sample(position: Vector3, speed_mps: float, heading: Vector3, delta_s: float) -> void:
+## `heading` with `slip_deg` between the two, `delta_s` after the last tick.
+## The odometer, the clock and the skills run every tick; the graph is asked
+## once per `sample_hz`.
+func sample(
+	position: Vector3, speed_mps: float, heading: Vector3, delta_s: float, slip_deg: float = 0.0
+) -> void:
 	if not _usable:
 		return
 	var elapsed: float = maxf(delta_s, 0.0)
 	if state == State.CARRYING:
 		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
 		_announce_reading()
+		for award: Fare.Award in _tracker.tick(maxf(speed_mps, 0.0) * 3.6, slip_deg, elapsed):
+			_award(award)
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:
 			fare.remaining_s = 0.0
@@ -415,6 +497,7 @@ func allowance_for(kind: Fare.Kind, par_m: float) -> float:
 func _board() -> void:
 	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
 	fare.remaining_s = fare.allowance_s
+	_tracker = SkillTracker.new(_skills, _slip_threshold_deg)
 	state = State.CARRYING
 	_last_reading_hkd = fare.meter.reading_hkd()
 	boarded.emit(fare)
@@ -422,7 +505,14 @@ func _board() -> void:
 
 
 func _deliver() -> void:
-	fare.tip_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+	# The early arrival is judged at the door, before the tip is summed, and
+	# announced like any other skill so the face pops for it too.
+	var early: Fare.Award = _tracker.arrival(fare.remaining_s, fare.allowance_s)
+	if early != null:
+		_award(early)
+	_tracker = null
+	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+	fare.tip_hkd = fare.time_hkd + fare.skills_hkd
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
 	deliveries += 1
@@ -431,7 +521,12 @@ func _deliver() -> void:
 	delivered.emit(fare)
 
 
+## The passenger walks without paying: nothing banks, and the skills already
+## paid into the tip are forfeit. `awards` and `skills_hkd` stay on the fare
+## so the receipt can say what was lost.
 func _bail() -> void:
+	_tracker = null
+	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0
 	fare.banked_hkd = 0.0
 	bails += 1
@@ -439,6 +534,14 @@ func _bail() -> void:
 	_armed = false
 	bailed.emit(fare)
 	sampled.emit()
+
+
+## A skill paid: onto the receipt, into the tip, and announced.
+func _award(award: Fare.Award) -> void:
+	fare.awards.append(award)
+	fare.skills_hkd += award.hkd
+	fare.tip_hkd += award.hkd
+	skilled.emit(fare, award)
 
 
 func _announce_reading() -> void:

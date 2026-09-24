@@ -9,6 +9,9 @@
 [ext_resource type="Script" uid="uid://0hn8wip47gb4" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
 [ext_resource type="Script" uid="uid://cnylod33j23s7" path="res://scripts/vehicle/taxi_door.gd" id="10_door"]
 [ext_resource type="PackedScene" uid="uid://f8704fhlex1s" path="res://assets/authored/vehicles/taxi_door.glb" id="11_doorleaf"]
+[ext_resource type="Script" uid="uid://dy4frsvydwtl7" path="res://scripts/vehicle/passenger_emote.gd" id="12_emote"]
+[ext_resource type="PackedScene" uid="uid://bhyxmrokmcy8f" path="res://assets/authored/vehicles/emote_grin.glb" id="13_grin"]
+[ext_resource type="PackedScene" uid="uid://2nf8gjdx0yu" path="res://assets/authored/vehicles/emote_angry.glb" id="14_angry"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(1.8, 0.7, 4)
@@ -30,6 +33,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, 0.315)
 script = ExtResource("10_door")
 
 [node name="Leaf" parent="PassengerDoor" unique_id=402915663 instance=ExtResource("11_doorleaf")]
+
+[node name="PassengerEmote" type="Node3D" parent="." unique_id=1719064073]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0.55, 0.8)
+script = ExtResource("12_emote")
+grin = ExtResource("13_grin")
+angry = ExtResource("14_angry")
 
 [node name="HeadlampL" type="SpotLight3D" parent="." unique_id=1438472936]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.24192, 0, -0.24192, 0.9703, -0.58, 0.5, -2.05)
