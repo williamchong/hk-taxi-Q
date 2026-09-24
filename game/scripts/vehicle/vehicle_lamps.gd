@@ -125,8 +125,10 @@ const TURN_RELEASE: float = 0.75
 ## ⚠️ **The one circuit on this car that answers to neither the driver nor the
 ## light, and that is what it is for.** A roof sign says the car is a taxi and
 ## whether it is in service; it is not a read-out of steering, of the pedal, or
-## of whether the sky is shut out. Nothing simulates a hire state yet — there is
-## no fare system on the car — so it holds on, which is a taxi plying for hire.
+## of whether the sky is shut out. It answers to `for_hire` alone, which the
+## fare loop writes (`TaxiHire`): lit while the car is plying for hire, dark with
+## a passenger aboard — the Hong Kong taxi's "TAXI" lamp, which the meter flag
+## puts out.
 ##
 ## ⚠️ **A level rather than a switch, and the reason is the one thing every other
 ## circuit here wants and this one must not have: bloom.** `lamp_emission` is 1.6
@@ -143,8 +145,8 @@ const TURN_RELEASE: float = 0.75
 ##
 ## ⚠️ **This is not the place to make the sign dimmer in daylight.** A level that
 ## tracked `_lighting` would put the sign back on the light ladder, which is the
-## one thing the paragraph above refuses. Whatever ends up owning the hire state
-## writes this; the sun does not.
+## one thing the paragraph above refuses. This is how bright the sign burns
+## *when* it is lit; whether it is lit is `for_hire`, and the sun owns neither.
 @export_range(0.0, 1.0, 0.05) var sign_lit: float = 0.45
 
 @export_group("Light probe")
@@ -259,6 +261,15 @@ const TURN_RELEASE: float = 0.75
 ## ⚠️ A rig that deletes its `DirectionalLight3D` outright is **not** caught, and
 ## that is deliberate rather than an oversight — see `read_rig`.
 @export_range(0.0, 1.0, 0.01) var night_energy: float = 0.05
+
+## Whether the roof sign is lit: the car is free for hire (`P3-48`).
+##
+## ⚠️ **Written from outside, and true until something says otherwise.** The
+## fare loop owns the hire state (`TaxiHire` writes this on board and on drop);
+## a car with no fare loop over it — free roam under `--fares=off`, a verify
+## tool, `B3`'s traffic — is a taxi plying for hire, which is what the sign
+## showed before anything simulated a fare.
+var for_hire: bool = true
 
 var _car: VehicleController = null
 var _body: MeshInstance3D = null
@@ -528,7 +539,7 @@ func _physics_process(delta: float) -> void:
 	var front := Vector4(
 		1.0 if _lighting != Lighting.SUN else 0.0,
 		1.0 if _lighting == Lighting.DARK else 0.0,
-		sign_lit,
+		sign_lit if for_hire else 0.0,
 		0.0,
 	)
 	_body.set_instance_shader_parameter(PARAMETER_FRONT, front)

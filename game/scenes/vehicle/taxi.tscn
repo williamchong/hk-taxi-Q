@@ -7,6 +7,8 @@
 [ext_resource type="Script" uid="uid://ijwc4ig2wcn5" path="res://scripts/vehicle/sun_glint.gd" id="7_glint"]
 [ext_resource type="Material" uid="uid://8021hi0isst6" path="res://tuning/vehicle_body.tres" id="8_bodymat"]
 [ext_resource type="Script" uid="uid://0hn8wip47gb4" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
+[ext_resource type="Script" uid="uid://cnylod33j23s7" path="res://scripts/vehicle/taxi_door.gd" id="10_door"]
+[ext_resource type="PackedScene" uid="uid://f8704fhlex1s" path="res://assets/authored/vehicles/taxi_door.glb" id="11_doorleaf"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(1.8, 0.7, 4)
@@ -22,6 +24,12 @@ shape = SubResource("BoxShape3D_body")
 
 [node name="Mesh" parent="." unique_id=1596244631 instance=ExtResource("4_body")]
 script = ExtResource("9_lamps")
+
+[node name="PassengerDoor" type="Node3D" parent="." unique_id=1283577419]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, 0.315)
+script = ExtResource("10_door")
+
+[node name="Leaf" parent="PassengerDoor" unique_id=402915663 instance=ExtResource("11_doorleaf")]
 
 [node name="HeadlampL" type="SpotLight3D" parent="." unique_id=1438472936]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.24192, 0, -0.24192, 0.9703, -0.58, 0.5, -2.05)

@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pipeline.gltf import MeshData, MeshGroup, write_glb  # noqa: E402
+from pipeline.hongkong import DRIVES_ON_LEFT  # noqa: E402
 from pipeline.mesh import merge, select_triangles  # noqa: E402
 from primitives import (  # noqa: E402
     Colour,
@@ -72,6 +73,17 @@ BODY_FILE = "taxi_body.glb"
 # stopped drawing. Nothing reported an error. Suffixes to avoid: _wheel, _col,
 # _convcol, _navmesh, _occ, _rigid, _vehicle.
 WHEEL_FILE = "taxi_tyre.glb"
+# The passenger door, hinged in `taxi.tscn` and swung by `taxi_door.gd`
+# (`P3-48`). A file of its own for the reason the tyre is: the scene owns where
+# the hinge is, and a part merged into the body could not be moved at all.
+DOOR_FILE = "taxi_door.glb"
+
+# The side the passenger door is on: the kerb's. A fare boards from the
+# pavement, and Hong Kong drives on the left, so that is the car's left — -x,
+# with the car facing -z. Only the REAR door opens, which is the Hong Kong
+# taxi's own habit: the driver swings it from the seat with a lever, and the
+# passenger never touches the front one.
+KERB_SIDE = -1.0 if DRIVES_ON_LEFT else 1.0
 
 # How far a lamp or a plate stands out of the bodywork it is seated in. Small
 # enough to read as part of the panel, large enough that no view resolves the
@@ -194,8 +206,8 @@ CIRCUIT_SIDELAMP = 5.0
 CIRCUIT_HEADLAMP = 6.0
 # The roof sign. Seventh rather than folded in with the front lamps because it
 # answers to a different question: the two above are a read-out of the *light*,
-# and this one is a read-out of whether the car is in service. Nothing simulates
-# that yet, so `vehicle_lamps.gd` holds it on — see `sign_lit` there.
+# and this one is a read-out of whether the car is in service: lit for hire,
+# dark with a fare aboard — see `for_hire` in `vehicle_lamps.gd`.
 CIRCUIT_ROOFSIGN = 7.0
 
 # ⚠️ **Left and right are separate circuits, and that is the whole point of
@@ -442,6 +454,10 @@ class Proportions:
     # box literals because `_rear_door_z_m` needs it: "is there room for a second
     # handle behind the first" is a question about the handle's own size.
     handle_half_length_m: float = 0.075
+    # The passenger door leaf (`P3-48`): how thick the swung panel is. Thin, and
+    # inside the doorway's depth, which is the greenhouse's own wall — see
+    # `_doorway` for why the recess stops there and nowhere deeper.
+    door_thickness_m: float = 0.03
     # The 4 SEATS badge, as a shape. It was a green dome with lettering on it,
     # drawn as pixels; the words are gone and the dome is geometry now, faceted
     # at the segment count the wheel arch uses because nothing else in this city
@@ -993,10 +1009,18 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     flank_z1 = min(rear_z - inset_z - ring_cut for inset_z, _, ring_cut in profile)
     for side_tag, side in (("l", -1.0), ("r", 1.0)):
         parts.extend(
-            _flank(chassis, shape, side=side, ends=(flank_z0, flank_z1), name=f"flank_{side_tag}")
+            _flank(
+                chassis,
+                shape,
+                side=side,
+                ends=(flank_z0, flank_z1),
+                name=f"flank_{side_tag}",
+                door=door_span_m(chassis, shape) if side == KERB_SIDE else None,
+            )
         )
 
     parts.extend(_flank_detail(chassis, shape))
+    parts.extend(_doorway(chassis, shape))
     _check_wiring(parts)
     body = merge([_marked(part) for part in parts], name="taxi_body")
     # `merge` deliberately does not carry `material` — many meshes in, one out,
@@ -1209,8 +1233,13 @@ def _flank(
     side: float,
     ends: tuple[float, float],
     name: str,
+    door: tuple[float, float] | None = None,
 ) -> list[MeshData]:
     """One side of the lower body, with an arch cut out over each wheel.
+
+    `door`, where given, is the (front, rear) z of a doorway cut through the
+    stretch between the arches — the passenger door's, which is a part of its
+    own (`taxi_door`) and fills the hole when shut. See `_doorway`.
 
     ⚠️ This replaced a body narrower than its own track with a lip perched on
     top. That arrangement put the tyres and their arches *outside* the flank,
@@ -1331,11 +1360,23 @@ def _flank(
 
     parts: list[MeshData] = []
     # Solid stretches: nose to front arch, between the arches, rear arch to tail.
-    spans = (
+    spans: tuple[tuple[float, float], ...] = (
         (front_z, wheels_z[0] - opening_r),
         (wheels_z[0] + opening_r, wheels_z[1] - opening_r),
         (wheels_z[1] + opening_r, rear_z),
     )
+    if door is not None:
+        # Split round the doorway rather than drawn under it: a panel left
+        # behind the leaf would be coplanar with the shut door and fight it,
+        # and would stand in the opening once the door swings.
+        between = spans[1]
+        if not between[0] < door[0] < door[1] <= between[1]:
+            raise ValueError(
+                f"the door {door[0]:+.3f}..{door[1]:+.3f} does not fit between the wheel "
+                f"openings at {between[0]:+.3f}..{between[1]:+.3f}"
+            )
+        spans = (spans[0], (between[0], door[0]), (door[1], between[1]), spans[2])
+        spans = tuple((z0, z1) for z0, z1 in spans if z1 > z0)
     for i, (z0, z1) in enumerate(spans):
         parts.extend(panels(z0, z1, shape.sill_y_m, shape.sill_y_m, tag=f"span_{i}"))
 
@@ -1418,7 +1459,6 @@ def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     comes first, because the arch is where a real rear door stops.
     """
     parts: list[MeshData] = []
-    hw = shape.half_width_m
     rear_door_z = _rear_door_z_m(chassis, shape)
 
     for tag, side in (("l", -1.0), ("r", 1.0)):
@@ -1451,13 +1491,11 @@ def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
         # a recess and a rib light identically, and only the silhouette differs.
         # A panel line is a texture, and that is where this one goes.
         for door, trailing_z in (("front", shape.cabin_mid_z_m), ("rear", rear_door_z)):
+            # The passenger door carries its own handle, so it swings with it.
+            if door == "rear" and side == KERB_SIDE:
+                continue
             parts.append(
-                box_at(
-                    (side * (hw + 0.02), 0.30, trailing_z - shape.handle_inset_m),
-                    (0.02, 0.025, shape.handle_half_length_m),
-                    SILVER,
-                    name=f"handle_{door}_{tag}",
-                )
+                _handle(shape, side=side, trailing_z=trailing_z, name=f"handle_{door}_{tag}")
             )
 
     # ⚠️ No grille slats. Three silver blocks sat in the middle of the dark
@@ -1466,6 +1504,186 @@ def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     # is one flat dark rectangle now, which is what every other flat-shaded
     # surface in the city is.
     return parts
+
+
+def _handle(shape: Proportions, *, side: float, trailing_z: float, name: str) -> MeshData:
+    """A door handle, `handle_inset_m` ahead of the door's trailing edge."""
+    return box_at(
+        (side * (shape.half_width_m + 0.02), 0.30, trailing_z - shape.handle_inset_m),
+        (0.02, 0.025, shape.handle_half_length_m),
+        SILVER,
+        name=name,
+    )
+
+
+def door_span_m(chassis: Chassis, shape: Proportions) -> tuple[float, float]:
+    """(front z, rear z) of the passenger door: the rear door, hinged at the front.
+
+    The same two edges `_flank_detail` places the handles from — the cabin's
+    middle, and `_rear_door_z_m` — so the door that opens is the door the
+    handle was always on.
+    """
+    return shape.cabin_mid_z_m, _rear_door_z_m(chassis, shape)
+
+
+def _doorway(chassis: Chassis, shape: Proportions) -> list[MeshData]:
+    """The recess behind the passenger door: what the open door shows.
+
+    Five dark faces, open to the kerb — a back wall, a sill, a head and the two
+    jambs. Without them the hole `_flank` cuts would look straight through the
+    shell, because every face of it is culled from inside.
+
+    ⚠️ **As deep as the bevel, and no deeper.** The back wall stands at the
+    greenhouse's own half-width, `cabin_half_width_m`, because the greenhouse's
+    down-facing bottom cap spans exactly that far out at the belt line: a head
+    reaching further in would lie in the same plane, facing the same way, and
+    z-fight it in the one place an open door invites the eye. The leaf is
+    `door_thickness_m` deep and must fit inside, which `taxi_door` refuses
+    rather than clamps.
+    """
+    side = KERB_SIDE
+    z0, z1 = door_span_m(chassis, shape)
+    x_out = side * shape.half_width_m
+    x_back = side * shape.cabin_half_width_m
+    y0, y1 = shape.sill_y_m, shape.belt_y_m
+    return [
+        polygon_facing(
+            [(x_back, y0, z0), (x_back, y1, z0), (x_back, y1, z1), (x_back, y0, z1)],
+            DARK,
+            (side, 0.0, 0.0),
+            name="doorway_back",
+        ),
+        polygon_facing(
+            [(x_out, y0, z0), (x_back, y0, z0), (x_back, y0, z1), (x_out, y0, z1)],
+            DARK,
+            (0.0, 1.0, 0.0),
+            name="doorway_sill",
+        ),
+        polygon_facing(
+            [(x_out, y1, z0), (x_back, y1, z0), (x_back, y1, z1), (x_out, y1, z1)],
+            DARK,
+            (0.0, -1.0, 0.0),
+            name="doorway_head",
+        ),
+        polygon_facing(
+            [(x_out, y0, z0), (x_back, y0, z0), (x_back, y1, z0), (x_out, y1, z0)],
+            DARK,
+            (0.0, 0.0, 1.0),
+            name="doorway_front",
+        ),
+        polygon_facing(
+            [(x_out, y0, z1), (x_back, y0, z1), (x_back, y1, z1), (x_out, y1, z1)],
+            DARK,
+            (0.0, 0.0, -1.0),
+            name="doorway_rear",
+        ),
+    ]
+
+
+def door_hinge(chassis: Chassis, shape: Proportions) -> tuple[float, float, float]:
+    """Where `taxi.tscn` hangs the door: the doorway's front edge, on the flank.
+
+    ⚠️ **Mirrored by hand in the scene**, like every hardpoint in `Chassis`, and
+    `test_make_vehicle.py` binds the two — nothing carries a coordinate across
+    the Python/Godot seam, so a moved door would otherwise swing about a hinge
+    standing in mid-air.
+    """
+    return (KERB_SIDE * shape.half_width_m, 0.0, door_span_m(chassis, shape)[0])
+
+
+def taxi_door(chassis: Chassis, shape: Proportions) -> MeshData:
+    """The passenger door leaf, in its hinge's frame (`P3-48`).
+
+    Built where it sits on the car and then moved so `door_hinge` is the
+    origin: the scene places the node at the hinge, and a rotation about the
+    node's own `y` is then the swing. Shut, its outer face is the flank's plane
+    and fills the hole `_flank` cut, painted as the flank is — dark below
+    `rocker_top_y_m`, red above — and it carries the rear handle.
+
+    Only the lower door, sill to belt line. The window above stays the
+    greenhouse's, because the glass is one lofted band round the whole cabin
+    and cutting a pane out of it would re-tile every ring above the belt. On a
+    toy, a door that swings below a window that stays reads as a door.
+    """
+    side = KERB_SIDE
+    z0, z1 = door_span_m(chassis, shape)
+    if shape.door_thickness_m >= shape.half_width_m - shape.cabin_half_width_m:
+        raise ValueError(
+            f"door_thickness_m={shape.door_thickness_m} does not fit the doorway's "
+            f"{shape.half_width_m - shape.cabin_half_width_m:.3f} m depth"
+        )
+    x_out = side * shape.half_width_m
+    x_in = side * (shape.half_width_m - shape.door_thickness_m)
+    y0, y1 = shape.sill_y_m, shape.belt_y_m
+    rocker = shape.rocker_top_y_m
+    parts: list[MeshData] = []
+    # The outer skin, in the flank's two bands. `rocker_top_y_m = sill_y_m`
+    # switches the dark band off on the flank, and so here.
+    if rocker > y0:
+        parts.append(
+            polygon_facing(
+                [(x_out, y0, z0), (x_out, rocker, z0), (x_out, rocker, z1), (x_out, y0, z1)],
+                DARK,
+                (side, 0.0, 0.0),
+                name="door_rocker",
+            )
+        )
+    parts.append(
+        polygon_facing(
+            [
+                (x_out, max(y0, rocker), z0),
+                (x_out, y1, z0),
+                (x_out, y1, z1),
+                (x_out, max(y0, rocker), z1),
+            ],
+            RED,
+            (side, 0.0, 0.0),
+            name="door_skin",
+        )
+    )
+    # The door card, and the four edges. Dark, as the doorway is, except the
+    # top: shut, it lies in the plane of the lower body's red top cap and faces
+    # the same way, and two coplanar faces with one colour, one normal and one
+    # material shade to the same pixel whichever wins the depth test.
+    parts.append(
+        polygon_facing(
+            [(x_in, y0, z0), (x_in, y1, z0), (x_in, y1, z1), (x_in, y0, z1)],
+            DARK,
+            (-side, 0.0, 0.0),
+            name="door_card",
+        )
+    )
+    parts.append(
+        polygon_facing(
+            [(x_out, y1, z0), (x_in, y1, z0), (x_in, y1, z1), (x_out, y1, z1)],
+            RED,
+            (0.0, 1.0, 0.0),
+            name="door_top",
+        )
+    )
+    parts.append(
+        polygon_facing(
+            [(x_out, y0, z0), (x_in, y0, z0), (x_in, y0, z1), (x_out, y0, z1)],
+            DARK,
+            (0.0, -1.0, 0.0),
+            name="door_bottom",
+        )
+    )
+    for z, facing, edge in ((z0, -1.0, "front"), (z1, 1.0, "rear")):
+        parts.append(
+            polygon_facing(
+                [(x_out, y0, z), (x_in, y0, z), (x_in, y1, z), (x_out, y1, z)],
+                DARK,
+                (0.0, 0.0, facing),
+                name=f"door_{edge}",
+            )
+        )
+    tag = "l" if side < 0.0 else "r"
+    parts.append(_handle(shape, side=side, trailing_z=z1, name=f"handle_rear_{tag}"))
+
+    door = merge([_marked(part) for part in parts], name="taxi_door")
+    hinge = np.asarray(door_hinge(chassis, shape), dtype=np.float64)
+    return replace(door.translated(-hinge), material=BODY_MATERIAL)
 
 
 def build_taxi(chassis: Chassis, shape: Proportions) -> list[MeshData]:
@@ -1489,11 +1707,16 @@ def write_taxi(
 ) -> list[tuple[Path, int, MeshData]]:
     """Write one `.glb` per mesh and return what went where."""
     body, wheel = build_taxi(chassis, shape)
+    door = taxi_door(chassis, shape)
     body_path = out_dir / BODY_FILE
     wheel_path = out_dir / WHEEL_FILE
+    door_path = out_dir / DOOR_FILE
     return [
         (body_path, write_glb(body_path, [material_parts(body)]), body),
         (wheel_path, write_glb(wheel_path, [wheel]), wheel),
+        # Through the same material-name door as the body, so the import hook
+        # hands it `vehicle_body.tres` and it shades as the flank it fills.
+        (door_path, write_glb(door_path, [material_parts(door)]), door),
     ]
 
 
@@ -1523,12 +1746,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 low[2],
                 high[2],
             )
-        body, wheel = (mesh for _, _, mesh in written)
+        body, wheel, door = (mesh for _, _, mesh in written)
         LOG.info(
-            "  as the scene builds it: %d body + 4 x %d tyre = %d triangles",
+            "  as the scene builds it: %d body + 4 x %d tyre + %d door = %d triangles",
             body.triangle_count,
             wheel.triangle_count,
-            body.triangle_count + 4 * wheel.triangle_count,
+            door.triangle_count,
+            body.triangle_count + 4 * wheel.triangle_count + door.triangle_count,
         )
         LOG.info("  ground plane at y %+.2f, hub at y %+.2f", chassis.ground_y_m, chassis.hub_y_m)
     return 0

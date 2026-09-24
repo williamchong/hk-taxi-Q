@@ -51,6 +51,7 @@ from make_vehicle import (
     DEEP_RED,
     FIXTURE_PROUD_M,
     GLASS,
+    KERB_SIDE,
     LAMP,
     LAMP_CIRCUITS,
     MARKER_GLASS,
@@ -69,14 +70,18 @@ from make_vehicle import (
     _rear_door_z_m,
     _wheel,
     build_taxi,
+    door_hinge,
+    door_span_m,
     opening_radius_m,
     taxi_body,
+    taxi_door,
     write_taxi,
 )
 from primitives import Colour, box, polygon
 
-from pipeline.gltf import MeshData, triangle_cross
+from pipeline.gltf import MeshData, normalise, triangle_cross
 from pipeline.mesh import select_triangles
+from pipeline.terrain import covered
 
 ROOT = Path(__file__).resolve().parents[2]
 TAXI_SCENE = ROOT / "game" / "scenes" / "vehicle" / "taxi.tscn"
@@ -134,13 +139,17 @@ def _marker_origins(scene: str) -> dict[str, tuple[float, float, float]]:
     renumbers the ids on an editor save and a stale literal would quietly select
     no nodes at all — leaving this guard passing over nothing.
     """
+    return _node_origins(scene, 'type="VehicleWheel3D"')
+
+
+def _node_origins(scene: str, marked: str = "") -> dict[str, tuple[float, float, float]]:
+    """Every node in the scene that carries a `Transform3D` and whose block
+    contains `marked`, by name, as its xyz origin — the last three floats."""
     origins: dict[str, tuple[float, float, float]] = {}
     for block in re.split(r"^\[node ", scene, flags=re.MULTILINE)[1:]:
         name = re.match(r'name="([^"]+)"', block)
         transform = re.search(r"transform = Transform3D\(([^)]*)\)", block)
-        if name is None or transform is None:
-            continue
-        if 'type="VehicleWheel3D"' not in block:
+        if name is None or transform is None or marked not in block:
             continue
         values = [float(part) for part in transform.group(1).split(",")]
         origins[name.group(1)] = (values[-3], values[-2], values[-1])
@@ -805,9 +814,12 @@ class TestTaxiContract:
         assert meshes[1].uvs is None, "the wheel needs no shader payload"
 
     def test_within_the_triangle_ceiling(self, meshes: list[MeshData]) -> None:
-        """Counted as the scene instances it: one body, four wheels."""
+        """Counted as the scene instances it: one body, four wheels, one door."""
         body, wheel = meshes
-        assert body.triangle_count + 4 * wheel.triangle_count <= TRIANGLE_CEILING
+        door = taxi_door(Chassis(), Proportions())
+        assert (
+            body.triangle_count + 4 * wheel.triangle_count + door.triangle_count <= TRIANGLE_CEILING
+        )
 
     def test_every_vertex_is_coloured(self, meshes: list[MeshData]) -> None:
         """An uncoloured vertex renders at whatever the attribute defaults to."""
@@ -850,6 +862,113 @@ class TestTaxiContract:
             assert np.sign(plate.positions[:, 2]).mean() == expected_sign, (
                 f"{plate.name} is on the wrong end"
             )
+
+
+def _flank_paint(
+    mesh: MeshData, side: float, points: np.ndarray, shape: Proportions
+) -> list[Colour | None]:
+    """What an eye at the kerb sees at each (y, z) of `points` on the `side`
+    flank's plane: the colour of the outward face covering it, or None where
+    no face does — a hole."""
+    facing = normalise(mesh.triangle_cross())[:, 0]
+    corners = mesh.positions[mesh.triangles]
+    on_plane = (facing * side > 0.999) & np.all(
+        np.isclose(corners[:, :, 0], side * shape.half_width_m, atol=1e-6), axis=1
+    )
+    # `terrain.covered` tests (x, z); the flank's plane is (y, z), so y goes in x's column.
+    flank = corners[on_plane][:, :, [1, 0, 2]]
+    firsts = mesh.triangles[on_plane][:, 0]
+    found: list[Colour | None] = []
+    for y, z in points:
+        hit, _ = covered(flank, y, z)
+        if not hit.any():
+            found.append(None)
+            continue
+        rgb = mesh.colours[firsts[np.argmax(hit)], :3]
+        found.append(tuple(int(channel) for channel in rgb))
+    return found
+
+
+def _door_samples(shape: Proportions, band: tuple[float, float]) -> np.ndarray:
+    """A grid of (y, z) inside the doorway and inside the height `band`, clear
+    of every edge so no sample lands on a seam two faces share."""
+    z0, z1 = door_span_m(Chassis(), shape)
+    ys = np.linspace(band[0], band[1], 7)[1:-1]
+    zs = np.linspace(z0, z1, 7)[1:-1]
+    return np.array([(y, z) for y in ys for z in zs])
+
+
+@pytest.fixture(scope="module")
+def placed_door() -> MeshData:
+    """The leaf shut, back in the car's frame."""
+    return taxi_door(Chassis(), Proportions()).translated(door_hinge(Chassis(), Proportions()))
+
+
+class TestPassengerDoor:
+    """The rear kerbside door, cut out of the body and hung on a hinge (`P3-48`).
+
+    Nothing else sees the seam between the two parts: the body and the leaf are
+    separate files placed by a hand-copied origin, and a door that stops filling
+    its hole — or a hole the door no longer fills — renders as a car with a
+    missing panel or a doubled, z-fighting one, which no import check reads."""
+
+    def test_the_scene_hangs_it_on_the_generator_hinge(self) -> None:
+        origins = _node_origins(TAXI_SCENE.read_text())
+        assert "PassengerDoor" in origins, "taxi.tscn hangs no PassengerDoor"
+        assert origins["PassengerDoor"] == pytest.approx(door_hinge(Chassis(), Proportions()))
+
+    def test_it_is_on_the_kerb_side(self) -> None:
+        """Hong Kong drives on the left, so a fare boards from the car's left —
+        which is -x on a car facing -z (`test_the_taxi_faces_negative_z`)."""
+        assert KERB_SIDE == -1.0
+
+    def test_shut_it_fills_the_hole_the_flank_was_cut_with(
+        self, meshes: list[MeshData], placed_door: MeshData
+    ) -> None:
+        """Every sample of the doorway is a hole in the body and paint on the
+        door: never both, which would z-fight, and never neither."""
+        shape = Proportions()
+        samples = _door_samples(shape, (shape.sill_y_m, shape.belt_y_m))
+        assert _flank_paint(meshes[0], KERB_SIDE, samples, shape) == [None] * len(samples)
+        assert None not in _flank_paint(placed_door, KERB_SIDE, samples, shape)
+
+    def test_the_offside_is_not_cut(self, meshes: list[MeshData]) -> None:
+        shape = Proportions()
+        samples = _door_samples(shape, (shape.sill_y_m, shape.belt_y_m))
+        assert None not in _flank_paint(meshes[0], -KERB_SIDE, samples, shape)
+
+    def test_the_leaf_is_painted_as_the_flank_it_replaces(
+        self, meshes: list[MeshData], placed_door: MeshData
+    ) -> None:
+        """Dark below the rocker line and red above, as the offside is."""
+        shape = Proportions()
+        for band in (
+            (shape.sill_y_m, shape.rocker_top_y_m),
+            (shape.rocker_top_y_m, shape.belt_y_m),
+        ):
+            samples = _door_samples(shape, band)
+            assert _flank_paint(placed_door, KERB_SIDE, samples, shape) == _flank_paint(
+                meshes[0], -KERB_SIDE, samples, shape
+            )
+
+    def test_the_handle_swings_with_the_door(
+        self, meshes: list[MeshData], placed_door: MeshData
+    ) -> None:
+        shape = Proportions()
+        span = door_span_m(Chassis(), shape)
+        body = meshes[0]
+        kerb_rear = (
+            (body.positions[:, 0] * KERB_SIDE > shape.half_width_m)
+            & (body.positions[:, 2] > span[0])
+            & (body.positions[:, 2] < span[1])
+        )
+        assert SILVER not in _rgbs(body, kerb_rear), "the body still carries the rear handle"
+        assert SILVER in _rgbs(placed_door)
+
+    def test_a_leaf_thicker_than_the_doorway_is_refused(self) -> None:
+        shape = Proportions()
+        with pytest.raises(ValueError, match="does not fit the doorway"):
+            taxi_door(Chassis(), replace(shape, door_thickness_m=shape.bevel_m))
 
 
 class TestSurfaceMarkers:

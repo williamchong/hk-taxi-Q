@@ -38,6 +38,36 @@ tyre mesh rides on its wheel: the circuits are per-instance shader state, and
 the instance is the `MeshInstance3D` inside this .glb. See
 scripts/vehicle/vehicle_lamps.gd.
 
+## `[node name="PassengerDoor" type="Node3D" parent="."]`
+
+The rear kerbside door, swung by scripts/vehicle/taxi_door.gd while a fare
+boards or alights (`P3-48`). THE NODE IS THE HINGE: its origin is the doorway's
+front edge on the flank, and the leaf below it is built in that frame, so the
+swing is this node's rotation about y and the script needs no pivot maths.
+
+⚠️ **The origin is a hand copy of `make_vehicle.door_hinge`** — x the kerb
+side's `half_width_m`, z `cabin_mid_z_m` — exactly as the wheels are copies of
+`Chassis`, and `etl/tests/test_make_vehicle.py` binds the two. Move the door in
+the generator and not here and the leaf swings about a hinge standing in air;
+shut, it no longer fills the hole the body was cut with.
+
+Which way is out is read off the sign of x, so the same script hangs a door on
+either flank. The kerb is the left (-x) because Hong Kong drives on the left
+(`DRIVES_ON_LEFT`), and only the REAR door opens: a Hong Kong taxi's driver
+swings it from the seat with a lever. Swing angle, time and the hold at a drop
+are the script's exports; none is re-authored here, so the defaults are the
+values.
+
+No collider, deliberately: the door is presentation, and an open leaf that
+could catch a lamp post would change how the car drives.
+
+## `[node name="Leaf" parent="PassengerDoor" instance=ExtResource("11_doorleaf")]`
+
+`taxi_door.glb`, from tools/make_vehicle.py. It goes through the import hook's
+vehicle material door like the body, so it renders with `vehicle_body.tres` and
+shades as the flank it fills. It carries no lamp, so `VehicleLamps` never finds
+it — that script takes the first mesh under `Mesh`, not under the car.
+
 ## `[node name="HeadlampL" type="SpotLight3D" parent="."]`
 
 The light the headlamps actually throw, switched by vehicle_lamps.gd along

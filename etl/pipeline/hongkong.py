@@ -33,8 +33,10 @@ GEODETIC_CRS = "EPSG:4326"
 # Hong Kong drives on the left. `surface.mitres` offsets one half-width to the
 # **left** of travel and `TEXCOORD_0`'s `U = 0` is the nearside kerb; every
 # `_register` reads the sign of an offset the same way. Named here so the fact
-# has a home; nothing reads the boolean, because the convention is baked into
-# those frames and a flag that could disagree with them would be a lie.
+# has a home; nothing in the ETL reads the boolean, because the convention is
+# baked into those frames and a flag that could disagree with them would be a
+# lie. Its one reader is `tools/make_vehicle.py`, which puts the taxi's
+# passenger door on the kerb side (`P3-48`).
 DRIVES_ON_LEFT = True
 
 # The sign codes whose instruction the road graph independently carries, so

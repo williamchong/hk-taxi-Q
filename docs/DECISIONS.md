@@ -88,6 +88,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `P3-11d` | The lamps switch, and that is what finally separates the red lens | ✅ Passed review 2026-09-06 · **Owner.** `P3-11`. In `tools/make_vehicle.py`, |
 | `P3-11e` | The front lamps answer to the light, not to the driver | 🟡 Awaiting review · **Owner.** `P3-11`. Night path untested until `Q26`'s rig exists. |
 | `P3-11f` | The roof sign lights, and it is the one lens that must not bloom | 🟡 Awaiting review · **Owner.** `P3-11`. |
+| `P3-48` | The fare shows on the car: the sign goes out with a passenger aboard, and the rear kerbside door swings | 🟡 Awaiting review · **Owner.** `P3-1a` · `P3-11`. |
 | `BeamBudget` | the eight spot lights are rationed by distance, not by pair order | ✅ Shipped · **Owner.** `P3-11e` → `P3-3`. |
 | `verify_vehicle.gd` | the import and the scene are the half no test could see | ✅ Shipped · **Owner.** `P3-11c`–`P3-11e` → `P3-3`. |
 | `Q42` | The reader answers seven questions nobody consumes | 🚫 Moot — **Superseded by** `Q102`: the vision reader and `TEXCOORD_1` are removed; a |
@@ -2118,12 +2119,44 @@ file, no rebuild.
   `sign` joins silently; `test_the_roof_sign_is_the_only_thing_lit_above_the_roof` bounds it by
   geometry. The `SILVER` cap is deliberately a lens too — "fixing" the precedence leaves a lit box
   with a dark lid.
-- ⚠️ Not scaled with the light ladder: the sign answers to "in service", which nothing simulates.
+- ⚠️ Not scaled with the light ladder: the sign answers to "in service" — `for_hire`, written by
+  the fare loop since `P3-48` — and `sign_lit` is only how bright it burns when lit.
 - `steer_hold_s` 0.5 → 0.3 s on the user's call; `steer_threshold` rejects corrections on
   amplitude. ⚠️ An amber-pixel count cannot grade indicators (the unlit lens and plate are amber);
   use an A/B frame diff.
 
 **See.** `P3-11d` · `P3-11e` · `Q43`
+
+## `P3-48` — The fare shows on the car: the sign goes out with a passenger aboard, and the rear kerbside door swings
+
+**Status.** 🟡 Awaiting review · **Owner.** `P3-1a` · `P3-11`.
+
+- **The sign is the hire state.** `VehicleLamps.for_hire` gates the `CIRCUIT_ROOFSIGN` channel at
+  `sign_lit`; true by default, so free roam (`--fares=off`), verify tools and `B3`'s traffic ply
+  for hire. Out at `boarded`, back at `delivered` / `bailed`. ⚠️ A hail does not put it out: the
+  fare can still be `cancelled` until the passenger is in the seat.
+- **One door, the rear kerbside one** — Hong Kong drives on the left (`DRIVES_ON_LEFT`, read by
+  `make_vehicle.KERB_SIDE`), and the driver opens that door from the seat with a lever. Open from
+  `hailed` to `boarded`, shut on `cancelled`, open for `alight_hold_s` at a drop.
+- **Cut out, not overlaid.** `_flank` leaves a hole in the kerb flank between `cabin_mid_z_m` and
+  `_rear_door_z_m`; `_doorway` backs it with five dark faces; `taxi_door.glb` is the leaf in its
+  hinge's frame, painted as the flank (dark below the rocker, red above) and carrying the rear
+  handle. 🚫 A leaf over an uncut flank was the alternative: shut it z-fights, open it leaves the
+  door painted on the car.
+- ⚠️ **The doorway is `bevel_m` deep and no deeper**: its head would otherwise lie in the plane of
+  the greenhouse's down-facing bottom cap and z-fight it. The leaf (`door_thickness_m` 0.03) must
+  fit inside; `taxi_door` refuses one that does not.
+- ⚠️ **Lower door only.** The window stays the greenhouse's — cutting a pane from the lofted glass
+  band would re-tile every ring above the belt.
+- ⚠️ **The hinge is a hand copy** in `taxi.tscn` (`PassengerDoor` at `door_hinge`), bound by
+  `test_the_scene_hangs_it_on_the_generator_hinge`; the hole and the leaf are held by point samples
+  of the flank plane (hole in the body, paint on the leaf, never both). Mutation-checked: an uncut
+  flank and a handle left on the body each fail by name.
+- Presentation only: `TaxiHire` (a child of `Fares`) listens to the loop's signals, `TaxiDoor`
+  swings on the physics tick with no collider, and neither script knows the other exists. Body
+  604 → 602 triangles, leaf 26, as a second mesh instance on the car (its draw cost unmeasured).
+
+**See.** `P3-11f` · `P3-1a` · `Q141`
 
 ## `BeamBudget` — the eight spot lights are rationed by distance, not by pair order
 

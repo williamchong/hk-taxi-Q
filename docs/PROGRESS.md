@@ -90,6 +90,7 @@ Phase 3 — Build `B2`
 - `P3-11d` ✅ Lamp circuits — reviewed; circuits are `instance uniform`; `lamp_emission` 1.6.
 - `P3-11e` 🟡 Front lamps — awaiting review; night path has no rig to fire on (`Q26`).
 - `P3-11f` 🟡 Roof sign — awaiting review; level 0.45, not a daylight dimmer.
+- `P3-48` 🟡 Hire state on the car — sign dark with a passenger aboard; rear kerbside door swings at the hail and the drop. The user's drive owed.
 - `P3-10` 🟡 Ground surface — awaiting review; buries the carriageway on hill streets (`Q24`).
 - `P3-7` 🟡 Window-band shader — awaiting review; draws through `city_facade_clean`.
 - `P3-7a` 🚫 Withdrawn (`Q102`) — `W1` (`Q44`) and `W2` (`Q45`) still ship; `W3` gone.

@@ -92,6 +92,14 @@ lines inside it, on `GraphOverlay`'s pattern: this one names the `DebugHud`
 autoload, and `FareSystem` must not, because `verify_fares.gd` loads that
 script before any autoload exists. Freed with its parent under `--fares=off`.
 
+## `[node name="Hire" type="Node" parent="Fares"]`
+
+`taxi_hire.gd` (`P3-48`): the fare loop as the car shows it — the roof sign
+dark from boarding to the drop, the passenger door open from the hail to the
+boarding and briefly at the drop. Signals only, so it adds nothing per frame. A
+child of `Fares` on `Readout`'s pattern, so `--fares=off` frees it with the
+loop and the car keeps its authored state: sign lit, door shut.
+
 ## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
 
 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km

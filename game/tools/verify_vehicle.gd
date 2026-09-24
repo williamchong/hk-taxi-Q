@@ -63,6 +63,7 @@ const SHADER_PATH := "res://assets/shaders/vehicle_body.gdshader"
 const LAMPS_SCRIPT := "res://scripts/vehicle/vehicle_lamps.gd"
 const GLINT_SCRIPT := "res://scripts/vehicle/sun_glint.gd"
 const CONTROLLER_SCRIPT := "res://scripts/vehicle/vehicle_controller.gd"
+const DOOR_SCRIPT := "res://scripts/vehicle/taxi_door.gd"
 
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
 ## declares. This is the renderer's own list — the same one
@@ -142,6 +143,7 @@ func _run() -> void:
 	_check_the_sun_belongs_to_the_material(declared, material)
 	_check_the_rig_hangs_where_the_script_looks(car, lamps, material)
 	_check_the_beams_point_at_the_road(car)
+	_check_the_door_hangs_on_the_flank(car)
 
 	# Freed rather than left to the exit: an instantiated scene that never
 	# reaches a tree is leaked at exit, and Godot reports that as a page of
@@ -193,8 +195,37 @@ func _check_the_body_wears_its_shader(body: MeshInstance3D) -> ShaderMaterial:
 	# failure and then print an `ok` line claiming both surfaces were shaded —
 	# and the `ok` is the line a reader believes.
 	if _failed == before:
-		print("  ok    the body renders %d surface(s) with %s" % [surfaces, MATERIAL_PATH])
+		print("  ok    %s renders %d surface(s) with %s" % [body.name, surfaces, MATERIAL_PATH])
 	return found
+
+
+## The passenger door (`P3-48`) hangs where `taxi_door.gd` can swing it.
+##
+## A direct child of the car, so its rotation is the swing in the car's frame; off
+## the centreline, because the script reads which way is out from the sign of `x`
+## and stays shut at zero; authored shut, because the script only ever eases
+## *from* where it is; and a leaf that wears the body shader, because it goes
+## through the same material door as the body and fails the same silent way. The
+## hinge's position against the generator is `test_make_vehicle.py`'s to hold.
+func _check_the_door_hangs_on_the_flank(car: Node3D) -> void:
+	var before: int = _failed
+	var door := _running(car, DOOR_SCRIPT) as Node3D
+	if door == null:
+		_fail("no node in %s runs %s" % [SCENE_PATH, DOOR_SCRIPT])
+		return
+	if door.get_parent() != car:
+		_fail("%s is not a direct child of the car, so its rotation is not the swing" % door.name)
+	if is_zero_approx(door.position.x):
+		_fail("%s sits on the centreline and cannot tell which way is out" % door.name)
+	if not door.transform.basis.is_equal_approx(Basis.IDENTITY):
+		_fail("%s is authored turned; the door must start shut" % door.name)
+	var leaf: MeshInstance3D = _body_under(door)
+	if leaf == null or leaf.mesh == null:
+		_fail("%s has no MeshInstance3D with a mesh below it to swing" % door.name)
+		return
+	_check_the_body_wears_its_shader(leaf)
+	if _failed == before:
+		print("  ok    the passenger door hangs on the flank, shut")
 
 
 ## The instance uniforms the renderer will actually dispatch on, by name and

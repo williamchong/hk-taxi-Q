@@ -549,7 +549,8 @@ side, two front pairs, the roof sign; eight circuits across two `instance unifor
 instance, because the body material is shared by the roster.
 
 - The rear lamps read the car, the front lamps read the light (shade, or no sky overhead), and the
-  roof sign reads neither — held on, and deliberately off the light ladder.
+  roof sign reads neither — it reads the fare: lit for hire, dark with a passenger aboard
+  (`P3-48`), and deliberately off the light ladder.
 - Two front lens pairs, not one at two brightnesses: a lens under the 1.0 glow threshold has no
   bloom, which is the whole difference at chase distance. The sign is a lit surface, not a source,
   so `sign_lit` runs 0.45, under the 0.63 where `lamp_emission` 1.6 crosses the threshold.
