@@ -7026,9 +7026,16 @@ is" — was built on 2026-09-25, the section at the end; it reverses the "out of
   the harbour is a near-white mirror of the horizon haze, at 0.45 one deep blue plane (both frames
   under `build/driver/`, the user's pick owed). `ART_DESIGN.md`'s
   table carries it. Do not lighten the entry to make the harbour bluer.
-- ⚠️ **The car can leave the quay.** Water is not a floor: a car that drives off lands on the sunk
-  ground under the plane, 4 m down, and stays there. Before it drove onto grey sea at 1–4 m and
-  kept going; neither is a game state, and a reset is owed (`P3-9`'s family, not this task's).
+- **The car can leave the quay, and comes back (2026-09-25, the user's call: "reset car if fall
+  into water").** Water is not a floor: a car that drives off lands on the sunk ground under the
+  plane, 4 m down, where the harness's fall margin never fires (the seabed is 9 m below the start
+  line, the Bypass tunnel 16 m). `drive_harness.gd` reads every resident region's `water`
+  triangles and `water_level_m` once, and a car whose origin is `drown_depth_m` (1.0, the roof)
+  under the surface AND inside the sea in plan is put back on the nearest edge's lane centre
+  facing the way it was going, dropped from the spawn's own height — the start line if no edge is
+  within `nearest_edge`'s reach. Both halves of the test, never the level alone: the Cross-Harbour
+  Tunnel approach is 8 m under datum on dry road. Measured: full throttle from the start line
+  leaves Expo Drive's roundabout at ~7 s and is back on edge 665 the same second.
 - ⚠️ **The plane ends at `reach_m`** (320 m past the read box) — beyond the fetched sheets there is
   no shoreline to cut, so no water. From the HKCEC frontage that is ~250 m of sea before the fog
   and the sky's horizon; Kowloon is not drawn either. A skirt past the frame is a look question

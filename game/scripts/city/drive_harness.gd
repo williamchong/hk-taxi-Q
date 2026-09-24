@@ -25,7 +25,9 @@ class_name DriveHarness
 ## car.
 extends Node3D
 
+const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## How far the resolved start line may sit from the Taxi's authored transform
 ## before it is worth saying so, in metres.
@@ -53,6 +55,20 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## someone edits a scene. Re-check it rather than trusting this line. It also sets how long you spend watching nothing: at this
 ## profile's 1.6 gravity scale, 25 m is 1.8 seconds.
 @export var fall_margin_m: float = 25.0
+
+## How far under the harbour's surface the car's origin has to be before it is
+## pulled out (2026-09-25, the user's call: "reset car if fall into water").
+##
+## The water is a plane with no collider (`region.md`, `Water`): a car that
+## leaves the quay lands on the ground the tile stage sank under it, 4 m down,
+## and would sit there for ever — the fall margin above never fires, because
+## the seabed is 9 m below the start line and the Bypass tunnel 16 m. Judged
+## against the plane's own published level (`basemap.json`'s `water_level_m`)
+## AND the sea's plan extent, never the level alone: the Cross-Harbour Tunnel
+## approach runs 8 m below datum, under sea level and on dry road. One metre is
+## the car's roof: the origin is at the hubs, so at 1 m under the surface the
+## car is submerged, and a wheel clipping the water's edge at the quay is not.
+@export var drown_depth_m: float = 1.0
 
 ## Fare node the drive starts at. See `RoadSpawn.DEFAULT_FARE_ID`.
 @export var spawn_fare_id: String = RoadSpawn.DEFAULT_FARE_ID
@@ -82,6 +98,13 @@ const AUTHORED_DRIFT_M: float = 1.0
 var _spawn: Transform3D
 var _floor_m: float = 0.0
 var _falls: int = 0
+var _drownings: int = 0
+## The harbour's surface, or NAN where no resident region ships a water plane
+## — then nothing here can drown.
+var _water_level_m: float = NAN
+## Every resident region's sea, as plan triangles in the frame — three
+## `Vector2` a triangle, moved by the region's offset like the minimap's are.
+var _sea: PackedVector2Array = PackedVector2Array()
 var _checked_for_road: bool = false
 
 
@@ -93,6 +116,7 @@ func _ready() -> void:
 
 	_spawn = _place_on_start_line()
 	_floor_m = _spawn.origin.y - fall_margin_m
+	_load_sea()
 	_snap_camera()
 	_hold_ground()
 
@@ -219,12 +243,82 @@ func _physics_process(_delta: float) -> void:
 	if not _checked_for_road:
 		_checked_for_road = true
 		_warn_if_there_is_no_road()
-	if vehicle.global_position.y > _floor_m:
+	if vehicle.global_position.y <= _floor_m:
+		_falls += 1
+		print("fell out of the world (%d); back to the start line" % _falls)
+		vehicle.place_at(_spawn)
+		_snap_camera()
 		return
+	if _in_the_harbour(vehicle.global_position):
+		_drownings += 1
+		_pull_out()
 
-	_falls += 1
-	print("fell out of the world (%d); back to the start line" % _falls)
-	vehicle.place_at(_spawn)
+
+## Every resident region's water (`basemap.json`) and the level it is drawn at,
+## read once: the plane never moves. A region with no plane contributes no
+## triangles, and a bundle with none leaves `_water_level_m` NAN.
+func _load_sea() -> void:
+	var graph: RoadGraph = RoadGraph.shared()
+	for region: String in GeneratedRegions.resident():
+		var manifest: CityManifest = CityManifest.load_manifest(region)
+		if manifest == null or manifest.water_path.is_empty():
+			continue
+		var document: Dictionary = GeneratedBasemap.load_basemap(manifest.basemap_path)
+		if document.is_empty() or document.get("water_level_m") == null:
+			continue
+		# One city, one sea: every region publishes the same level, and the first
+		# read is the one held.
+		if is_nan(_water_level_m):
+			_water_level_m = float(document["water_level_m"])
+		var offset: Vector3 = graph.region_offset(region)
+		for triangle: Variant in document.get("water", []):
+			if not triangle is Array or (triangle as Array).size() != 6:
+				continue
+			var flat: Array = triangle
+			for corner: int in 3:
+				_sea.append(
+					Vector2(
+						offset.x + float(flat[corner * 2]), offset.z + float(flat[corner * 2 + 1])
+					)
+				)
+
+
+## Under the surface by `drown_depth_m` AND over the sea in plan. The depth
+## gate first: it is one compare a tick, and the triangle walk runs only for a
+## car that is already below sea level — the tunnel approach, or the harbour.
+func _in_the_harbour(at: Vector3) -> bool:
+	if is_nan(_water_level_m) or at.y > _water_level_m - drown_depth_m:
+		return false
+	var plan := Vector2(at.x, at.z)
+	for first: int in range(0, _sea.size(), 3):
+		if Geometry2D.point_is_inside_triangle(plan, _sea[first], _sea[first + 1], _sea[first + 2]):
+			return true
+	return false
+
+
+## Back onto the nearest road, facing the way the car was going, dropped from
+## the spawn's own height; the start line where no road is within reach — a
+## car 300 m out in the harbour has no nearest street worth the name.
+func _pull_out() -> void:
+	var graph: RoadGraph = RoadGraph.shared()
+	var heading: Vector3 = -vehicle.global_transform.basis.z
+	var hit: RoadGraph.Hit = graph.nearest_edge(vehicle.global_position, heading)
+	var pose: Transform3D = _spawn
+	if hit.edge_id >= 0:
+		var lift: float = vehicle.profile.ray_length_m() + RoadSpawn.DROP_CLEARANCE_M
+		pose = Transform3D(RoadSpawn.basis_facing(hit.forward), hit.lane_centre + Vector3.UP * lift)
+	print(
+		(
+			"in the harbour (%d); back onto %s"
+			% [
+				_drownings,
+				"the start line" if hit.edge_id < 0 else "edge %d" % hit.edge_id,
+			]
+		)
+	)
+	if regions != null:
+		regions.hold_ground_at(pose.origin)
+	vehicle.place_at(pose)
 	_snap_camera()
 
 

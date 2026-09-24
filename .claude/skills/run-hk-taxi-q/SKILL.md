@@ -312,14 +312,19 @@ to — see Gotchas.
   at `t=2.0` returned one hash. **Shoot the skyline at `--seconds=3 --shots=2.0`**, and on either
   camera shoot until a hash repeats — a run launched immediately after another one can still come
   back short.
-- **`FAIL no frame drawn in 600 ticks` gets more likely the longer the shot time.** macOS stops
-  compositing a window it considers obscured, and the capture waits on `frame_post_draw` forever.
-  Captures at `t=3.0` failed repeatedly in one session while `t=0.8` succeeded. Keep the window
-  visible, and prefer early shot times.
+- **`FAIL no frame drawn in 600 ticks` means NOTHING ON SCREEN CHANGED when the shot came due**
+  (measured 2026-09-25, replacing an "obscured window" diagnosis that fitted the symptom): a car at
+  rest with `--hud=off --debug-view=off` has no HUD and no fps counter redrawing, so no new frame
+  is drawn and the capture waits on `frame_post_draw` for ever. A `TIME`-animated shader does not
+  count. The same runs with `--debug-view=minimal` capture every shot, and a moving car never
+  stalls. For a shot of a stationary car keep the overlay on; preview shots at `t=0.8` are fine
+  because the frames after load count as changed.
 - **Six seconds of full throttle leaves the carriageway.** The default run tops 56 kph and clips
   something at ~5 s. There is no terrain: everything that is not road is void, and the kerbs are
   0.15 m and mountable by design. `drive_harness.gd` respawns the car after a 25 m fall and says so
-  on stdout.
+  on stdout — and since 2026-09-25 pulls a car that drives into the harbour back onto the nearest
+  road (`in the harbour (n); back onto edge …`): full throttle from the start line is in the water
+  at ~7 s.
 - **The window steals focus** for the length of the run. Nothing to be done about it on macOS.
 - **`game/project.godot` and `game/export_presets.cfg` are committed in Godot's own written form**
   (`Q119`), so an editor save, an export or a drive leaves them clean. If `git status` shows either

@@ -37,5 +37,8 @@ paths:
   `vertex_albedo.gdshader`.
 - **A frame's `water` extent moves with `reach_m` and the fetched sheets** — a reach past the fetch
   is refused at load, and a missing sheet would read as open sea. `hud` owns the minimap's half.
-- ⚠️ **Water is not a floor.** No collider, and a car that leaves the quay lands on the sunk ground
-  under the plane; a reset is owed elsewhere, not a collider here.
+- ⚠️ **Water is not a floor.** No collider; a car that leaves the quay lands on the sunk ground
+  under the plane and `drive_harness.gd` pulls it out (`drown_depth_m`, judged against
+  `water_level_m` AND the sea's plan — the tunnel approach is under sea level on dry road). The
+  evidence is a drive: full throttle from the start line is in the harbour at ~7 s
+  (`--seconds=12 --hold=accelerate@0.5+11.5`), and the `in the harbour` line names the edge.

@@ -26,8 +26,8 @@ region whose frame holds no shoreline ships none and this node simply stays
 empty.
 No collider, and deliberately: water is not a floor. A car that leaves the quay
 lands on the sunk ground beneath, under the plane, rather than driving on the
-sea — which is the one honest thing a harbour can do to a taxi until something
-resets it (owed).
+sea; `drive_harness.gd` pulls it back onto the nearest road a tick later
+(`drown_depth_m`).
 
 ## `[node name="Tramway" type="Node3D" parent="."]`
 
