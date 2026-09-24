@@ -7036,6 +7036,14 @@ is" — was built on 2026-09-25, the section at the end; it reverses the "out of
 - ⚠️ **A pier narrower than `seal_m` is sea** — the mirror of the inlet rule above — and its
   ground sinks with the rest; the pier's own building stays at its base height, on nothing. Not
   seen from the road in Wan Chai; recorded so it is not re-found.
+- **Waves (2026-09-25, the user's ask: "a moving simple texture trick").** No texture — the
+  bundle carries none (`Q63`) and the plane has 213 triangles to displace — so `water.gdshader`
+  fakes them per pixel: two crossed sine trains in world plan (6.0 m and 3.6 m, 0.25 Hz and 0.7 of
+  it, bearing 20°) tilt the shading normal by a slope of 0.12 so the sky's reflection breaks into
+  moving bands, and their product lifts the crests 6%. Every number is in `water.tres`. Its own
+  shader, not a change to `vertex_albedo.gdshader`, whose header forbids growing it. Measured:
+  73k pixels of the `ground` frame move between t=0.8 and t=2.8, all on the water; `check.sh` and
+  the runs report no shader error; the drive frame's cost is unchanged (804,679 / 108).
 - 🚫 **Not built**: draping the plane on the terrain (bumpy water), rendering it with no depth test
   (draws over the piers), flattening the terrain to a level instead of sinking it (the shore band
   is the same noise from the other side).

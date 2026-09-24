@@ -4,6 +4,7 @@ paths:
   - "etl/pipeline/config_blocks/basemap.py"
   - "etl/tests/test_basemap.py"
   - "game/tuning/water.{tres,md}"
+  - "game/assets/shaders/water.gdshader"
   - "game/tools/verify_water.gd"
   - "game/scripts/city/generated_basemap.gd"
 ---
@@ -29,6 +30,11 @@ paths:
   --hud=off`. 🔴 The albedo is *diffuse* (5–12%) and the blue is the sky off the roughness — lighten
   the material and `_check_reflectance` refuses it; the dial is `roughness_value` (0.45 ships; 0.15 read as a near-white mirror of the haze). `sea_water`
   sits in `materials:` under `Q33`, so the `facade` rule's one-commit clause applies.
+- **`water.gdshader`**: a shader change owes a render and `grep -i "shader error"` on the check and
+  the run (CLAUDE.md), plus TWO frames at different sim times diffed — a wave that does not move
+  renders perfectly. `NORMAL` in the fragment is VIEW space: a world normal goes through
+  `VIEW_MATRIX` first, or the waves swim with the camera. Own shader, never a change to
+  `vertex_albedo.gdshader`.
 - **A frame's `water` extent moves with `reach_m` and the fetched sheets** — a reach past the fetch
   is refused at load, and a missing sheet would read as open sea. `hud` owns the minimap's half.
 - ⚠️ **Water is not a floor.** No collider, and a car that leaves the quay lands on the sunk ground

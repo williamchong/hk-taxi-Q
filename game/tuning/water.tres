@@ -1,9 +1,15 @@
 [gd_resource type="ShaderMaterial" format=3 uid="uid://dcaxk5l52nfo8"]
 
-[ext_resource type="Shader" uid="uid://bwvvyb3tf7lj3" path="res://assets/shaders/vertex_albedo.gdshader" id="1_albedo"]
+[ext_resource type="Shader" uid="uid://dkbff4o6fy7yw" path="res://assets/shaders/water.gdshader" id="1_water"]
 
 [resource]
 resource_name = "water"
 render_priority = 0
-shader = ExtResource("1_albedo")
+shader = ExtResource("1_water")
 shader_parameter/roughness_value = 0.45
+shader_parameter/wave_length_m = 6.0
+shader_parameter/wave_ratio = 0.6
+shader_parameter/wave_speed_hz = 0.25
+shader_parameter/wave_slope = 0.12
+shader_parameter/crest_lift = 0.12
+shader_parameter/wave_bearing_deg = 20.0
