@@ -83,10 +83,15 @@ func _check(manifest: Manifest, document: Dictionary) -> PackedStringArray:
 	# bar; these are off-grade edges closed because nothing *grades* them, not
 	# because they are narrow. Pooling the two here would defeat the join below.
 	var touchdowns: Array = document.get("touchdown_edges", []) as Array
+	# The third population (`Q143`): streets the region's clip cut, closed on
+	# the line. Re-derived from the graph below, the way `fenced_edges` is.
+	var clipped: Array = document.get("clipped_edges", []) as Array
 
 	problems.append_array(_check_the_prop(document, barriers.size()))
 	problems.append_array(_check_placements(manifest, barriers))
-	problems.append_array(_check_against_the_graph(manifest, fenced, touchdowns, barriers))
+	problems.append_array(
+		_check_against_the_graph(manifest, document, fenced, touchdowns, clipped, barriers)
+	)
 
 	if problems.is_empty():
 		print(
@@ -116,6 +121,17 @@ func _check(manifest: Manifest, document: Dictionary) -> PackedStringArray:
 					int(document.get("touchdowns", 0)),
 					touchdowns.size(),
 					str(levels)
+				]
+			)
+		)
+		print(
+			(
+				"  fence: %d clipped ends dressed of %d found, over %d edges within %s m of the line"
+				% [
+					int(document.get("clipped_ends", 0)) - int(document.get("clipped_no_width", 0)),
+					int(document.get("clipped_ends", 0)),
+					clipped.size(),
+					str(document.get("clipped_within_m"))
 				]
 			)
 		)
@@ -204,7 +220,12 @@ func _check_placements(manifest: Manifest, barriers: Array) -> PackedStringArray
 
 ## The two directions the fence can disagree with the graph it dresses.
 func _check_against_the_graph(
-	manifest: Manifest, fenced: Array, touchdowns: Array, barriers: Array
+	manifest: Manifest,
+	fence: Dictionary,
+	fenced: Array,
+	touchdowns: Array,
+	clipped: Array,
+	barriers: Array
 ) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var document: Dictionary = GeneratedRoadGraph.load_graph()
@@ -261,6 +282,49 @@ func _check_against_the_graph(
 			)
 		closed[edge_id] = true
 
+	# 🔴 **The clipped set is re-derived from the graph, not read back.** It is a
+	# third population (`Q143`) with its own rule — one open arm, no foreign run
+	# continuing the node, the end on the region's own line — and every part of
+	# that rule fails silently: an ETL that stopped excluding the neighbour's way
+	# in would wall off the join, and one that read the far end of a crossing
+	# run would stand a row in the neighbour's junction, both as perfectly good
+	# barriers. So the walk is repeated here over `edges`, `foreign_edges` and
+	# the rectangle the document says it measured against, and the two sets
+	# must agree both ways. ⚠️ `region_extent_m`, never `manifest.bounds` — that
+	# is the content's union and reaches past the line wherever a building
+	# overhangs its tile.
+	var levels_shut: Dictionary[int, bool] = {}
+	for level: float in fence.get("touchdown_levels", []) as Array:
+		levels_shut[int(level)] = true
+	var expected_clipped: Dictionary[int, bool] = _clipped_in_the_graph(
+		document, fence, levels_shut
+	)
+	var published_clipped: Dictionary[int, bool] = {}
+	for edge_id: int in clipped:
+		published_clipped[int(edge_id)] = true
+		if published.has(edge_id) or touchdowns.has(edge_id):
+			problems.append(
+				"edge %d is published as clipped and as another population (Q143: three)" % edge_id
+			)
+		if levels_shut.has(graph.level_of(edge_id)):
+			problems.append("edge %d is closed as clipped and sits on a closed level" % edge_id)
+		if not expected_clipped.has(edge_id):
+			problems.append(
+				(
+					"edge %d is clipped in %s and does not end on the line"
+					% [edge_id, GeneratedFence.path()]
+				)
+			)
+		closed[edge_id] = true
+	for edge_id: int in expected_clipped:
+		if not published_clipped.has(edge_id):
+			problems.append(
+				(
+					"edge %d ends on the region's line and is absent from %s"
+					% [edge_id, GeneratedFence.path()]
+				)
+			)
+
 	# A barrier may only stand on an edge the graph closes — the second failure
 	# direction, a wall nobody asked for.
 	var dressed: Dictionary[int, bool] = {}
@@ -296,6 +360,52 @@ func _check_against_the_graph(
 			)
 		)
 	return problems
+
+
+## Every open edge with one arm at a node on the region's own line that no
+## foreign run continues — `pipeline/fence.py::clipped_ends` on this side of the
+## contract (`Q143`). Empty when the document declares no reach.
+func _clipped_in_the_graph(
+	document: Dictionary, fence: Dictionary, levels_shut: Dictionary
+) -> Dictionary[int, bool]:
+	var found: Dictionary[int, bool] = {}
+	if fence.get("clipped_within_m") == null or fence.get("region_extent_m") == null:
+		return found
+	var within: float = float(fence.get("clipped_within_m"))
+	var extent: Array = fence.get("region_extent_m") as Array
+	var high := Vector2(float(extent[0]), float(extent[1]))
+
+	var foreign_nodes: Dictionary[int, bool] = {}
+	for edge: Dictionary in document.get("foreign_edges", []) as Array:
+		foreign_nodes[int(edge.get("from", -1))] = true
+		foreign_nodes[int(edge.get("to", -1))] = true
+	var arms: Dictionary[int, Array] = {}
+	var line_end: Dictionary[int, Array] = {}
+	for edge: Dictionary in document.get("edges", []) as Array:
+		if levels_shut.has(int(edge.get("elevation_level", 0))):
+			continue
+		var edge_id: int = int(edge.get("id", -1))
+		var polyline: Array = edge.get("polyline", []) as Array
+		var nodes: Array = [int(edge.get("from", -1)), int(edge.get("to", -1))]
+		for index: int in range(2):
+			var node: int = nodes[index]
+			if not arms.has(node):
+				arms[node] = []
+			arms[node].append(edge_id)
+			line_end[node] = polyline[0 if index == 0 else polyline.size() - 1] as Array
+	for node: int in arms:
+		if arms[node].size() != 1 or foreign_nodes.has(node):
+			continue
+		var at: Array = line_end[node]
+		var x: float = float(at[0])
+		var z: float = float(at[2])
+		var inside: bool = (
+			x >= -within and x <= high.x + within and z >= -within and z <= high.y + within
+		)
+		var line_m: float = minf(minf(absf(x), absf(z)), minf(absf(high.x - x), absf(high.y - z)))
+		if inside and line_m <= within:
+			found[int(arms[node][0])] = true
+	return found
 
 
 ## Fenced edges no dressed edge can be reached from, walking the fenced set.

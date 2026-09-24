@@ -105,10 +105,11 @@ func _ready() -> void:
 	# `layer_preview.gd` prints its collider count for the mirror-image reason.
 	print(
 		(
-			"fence: %d barriers placed at %d mouths, %d refused, %d colliders"
+			"fence: %d barriers placed at %d mouths and %d clipped ends, %d refused, %d colliders"
 			% [
 				transforms.size(),
 				int(document.get("mouths", 0)),
+				int(document.get("clipped_ends", 0)),
 				refused,
 				MeshContract.colliders(self)
 			]

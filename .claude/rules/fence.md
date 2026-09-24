@@ -45,6 +45,14 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   MultiMesh is **pixel-identical** at +1. ⚠️ **The split opens a gap `verify_fence.gd` cannot see** —
   it grades the `.glb`'s own `-col` import, so a placer that stopped building bodies stays green and
   renders perfectly. `fence.gd` prints its collider count for that reason; keep it, and read it.
+  🔴 **`clipped_edges` is a THIRD population (`Q143`) and joins neither list.** An end is clipped
+  when its node has one open arm, no `foreign_edges` run touches it (the neighbour's way in is
+  never closed), and the polyline end lies within `fence.clipped_within_m` of the rectangle's line
+  **from the inside** — the far end of an owned crossing run stands on the neighbour's ground and
+  the first build closed five of them. Paste `clipped_edges` / `clipped_ends` / `clipped_no_width`
+  before and after, and **mutation-check `verify_fence.gd`'s re-derivation** (drop an edge, add an
+  interior one, shrink `region_extent_m`) rather than reading its pass. ⚠️ `region_extent_m` is
+  `Config.region_high`, never `bounds_game`.
   ⚠️ **`fence.unit_width_m` must equal `tools/make_barrier.py`'s `UNIT_WIDTH_M`** — a row is tiled
   from a standard unit and never one barrier scaled, because an x-scale to a 10.24 m mouth stretches
   the posts with it. `etl/tests/test_fence.py` binds the two.

@@ -283,7 +283,7 @@ hk-taxi-Q/
 │   │   ├── drawnsurface.py      # DrawnSurface + crease cutting, for layers painted on the road
 │   │   ├── drawnroad.py         # the ONE reader of the drawn road: ribbon and running kerb line (Q133)
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
-│   │   ├── fence.py             # barriers where fits_car refuses an edge → fence.json (P3-29)
+│   │   ├── fence.py             # barriers where fits_car refuses an edge, at touchdowns and on the region's line → fence.json (P3-29, Q143)
 │   │   ├── basemap.py           # iB1000 shoreline + parks → basemap.json, the minimap's ground
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fares.json
 │   │   ├── tramway.py           # tram rails → tram.glb (P3-14)

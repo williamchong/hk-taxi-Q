@@ -15,7 +15,7 @@ const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const FILE: String = "fence.json"
 
 ## Schema this understands, matching `FENCE_SCHEMA` in `etl/pipeline/fence.py`.
-const SCHEMA_VERSION: int = 2
+const SCHEMA_VERSION: int = 3
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".

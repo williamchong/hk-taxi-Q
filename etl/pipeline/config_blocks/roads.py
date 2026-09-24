@@ -1503,10 +1503,20 @@ class Fence:
     # itself, so admitting it would fence every junction in the region — the
     # one value here whose mistake is catastrophic rather than inert.
     touchdown_levels: tuple[int, ...]
+    # How near the region's own rectangle an open dead end must lie to be read
+    # as a street the clip cut, and closed there (`Q143`). `None` closes none,
+    # which is the pre-`Q143` build exactly.
+    #
+    # 🔴 **A THIRD POPULATION, and again not a bar.** These ends are neither
+    # narrow nor ungraded: the road stops where the region does, and past the
+    # line there is no tile to stand on. A node that any `foreign_edges` run
+    # touches is the neighbour's way in and is never closed — that is what
+    # "not yet connected to another region" means here, read off the graph.
+    clipped_within_m: float | None
 
 
 def _fence(body: Any, where: str) -> Fence | None:
-    """The optional barrier-placement block (`P3-29`, `Q103`)."""
+    """The optional barrier-placement block (`P3-29`, `Q103`, `Q143`)."""
     if body is None:
         return None
     if not isinstance(body, dict):
@@ -1516,9 +1526,26 @@ def _fence(body: Any, where: str) -> Fence | None:
     # and would refuse a list. The closure still holds: anything else unknown
     # reaches `_thresholds` and is rejected there.
     levels = _touchdown_levels(body.get("touchdown_levels"), f"{where}:touchdown_levels")
-    measures = {key: value for key, value in body.items() if key != "touchdown_levels"}
+    # Lifted out too, because it is optional and `_thresholds` requires every
+    # name it is handed. Absent is a real state (nothing clipped is closed).
+    within = _clipped_within(body.get("clipped_within_m"), where)
+    lifted = ("touchdown_levels", "clipped_within_m")
+    measures = {key: value for key, value in body.items() if key not in lifted}
     values = _thresholds(measures, where, positive=("inset_m", "unit_width_m"), signed=())
-    return Fence(touchdown_levels=levels, **values)
+    return Fence(touchdown_levels=levels, clipped_within_m=within, **values)
+
+
+def _clipped_within(body: Any, where: str) -> float | None:
+    """The optional reach of the clipped-end closure (`Q143`).
+
+    Zero is refused as degenerate rather than read as "off": the clip puts a
+    node *on* the line to float epsilon, so a zero reach would close nothing
+    and say it was on — and absent already means off.
+    """
+    if body is None:
+        return None
+    name = "clipped_within_m"
+    return _measures({name: body}, where, (name,), positive=True)[name]
 
 
 def _elevation_level_int(value: Any, where: str, index: int) -> int:

@@ -57,6 +57,21 @@ is a mouth.
 ⚠️ **This is a closure, not a fix.** It restores *reachable ⟺ graded* and buys
 the time to open the network properly; `PLAN.md` `P4-1` owns the other ending.
 
+**The third population is the region's own edge (`Q143`).** A street the clip
+cut ends on the rectangle with nothing past it: no tile, no ground, no
+neighbour. `GAME_DESIGN.md` calls the map edges diegetic, and they are — for
+the harbour and the escarpment. The streets that simply stop on the line (67
+in Wan Chai and 19 in Causeway Bay, 2026-09-25) are not, and a car driven down
+one leaves the world. So every open dead end
+within `fence.clipped_within_m` of the rectangle is closed with the same row,
+stood `inset_m` inside the map and **facing the interior**, at the car coming
+out. ⚠️ **A node any `foreign_edges` run touches is never closed**: past that
+node the road is the neighbour's, and that is what "not yet connected to
+another region" means, read off the graph rather than declared. They travel
+as `clipped_edges`, a third list, on the two-populations reasoning above — a
+clipped end is neither narrow nor ungraded, and `verify_fence.gd` re-derives
+the set from the graph's own nodes, the way it re-derives `fenced_edges`.
+
 ⚠️ **The prop is 192 triangles and the row is the layer's whole cost**, so the
 unit count is the number to watch: 90 → 253 units is 17,280 → **48,576**
 triangles. That is 4.9% of the desktop `< 1M` budget and **16.2% of the mobile
@@ -83,6 +98,7 @@ from pipeline.clearance import (
     ClearanceReport,
 )
 from pipeline.config import Config, load_config
+from pipeline.crs import inside_plan
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.polyline import plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -91,7 +107,7 @@ from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 log = logging.getLogger(__name__)
 
 FENCE_NAME = "fence.json"
-FENCE_SCHEMA = 2
+FENCE_SCHEMA = 3
 
 # The committed prop this stage places. ⚠️ Under `authored/`, which is the
 # licence boundary: this is the project's own CC BY-SA work and never
@@ -170,6 +186,32 @@ class FenceReport:
     # `touchdown_error.py`'s `ends_no_target` shape.
     touchdowns_no_width: int = 0
 
+    # ---- the clipped population (`Q143`), counted apart from both above -----
+    #
+    # The reach asked for, published so the document says what rule closed
+    # these ends; `None` is the pre-`Q143` build and every counter below is 0.
+    clipped_within_m: float | None = None
+    # The rectangle those ends were measured against (`Config.region_high`),
+    # published so `verify_fence.gd` can re-derive the set — `city.json`'s
+    # `bounds_game` is the content's union, not this. Recorded where it is
+    # decided, beside the reach, rather than threaded past the report.
+    region_high: tuple[float, float] | None = None
+    # Open edge ends the region's clip cut, closed — one per row placed.
+    clipped_dressed: int = 0
+    # The edges those ends belong to, de-duplicated on `touchdown_edges`' terms:
+    # a street clipped at both ends (across a corner) is one edge here and two
+    # in `clipped_dressed`. Disjoint from both other lists by construction — a
+    # fenced edge's clipped end is already behind that edge's own barrier.
+    clipped_edges: list[int] = field(default_factory=list)
+    # A clipped end whose edge published no ribbon to span. Counted, never a
+    # zero in `span_m` — `mouths_no_width`'s own rule.
+    clipped_no_width: int = 0
+
+    @property
+    def clipped(self) -> int:
+        """Clipped edge ends found at the region's rectangle, dressed or not."""
+        return self.clipped_dressed + self.clipped_no_width
+
     @property
     def mouths(self) -> int:
         """Fenced-edge ends the open network arrives at, dressed or not."""
@@ -192,12 +234,13 @@ class FenceReport:
         matching the prop, or a span rounded after the row was sized all break
         it, and those are the bugs worth catching.
 
-        ⚠️ **Both populations are covered by one identity on purpose.** They are
-        counted apart because they mean different things, but every span in
-        `span_m` owes its row whichever list it came from, and a second identity
-        over a second span list would be a second thing to forget.
+        ⚠️ **All three populations are covered by one identity on purpose.**
+        They are counted apart because they mean different things, but every
+        span in `span_m` owes its row whichever list it came from, and a second
+        identity over a second span list would be a second thing to forget.
         """
-        if len(self.span_m) != self.mouths_dressed + self.touchdowns_dressed:
+        dressed = self.mouths_dressed + self.touchdowns_dressed + self.clipped_dressed
+        if len(self.span_m) != dressed:
             return False
         expected = sum(max(1, math.ceil(span / unit_width_m)) for span in self.span_m)
         return self.barriers == expected
@@ -355,6 +398,63 @@ def touchdown_mouths(graph: dict, levels: tuple[int, ...]) -> list[tuple[int, in
     return sorted(row for row in off_grade if row[1] in open_network)
 
 
+def clipped_ends(
+    graph: dict,
+    closed_levels: Iterable[int],
+    region_high: tuple[float, float],
+    within_m: float,
+) -> list[tuple[int, int, bool]]:
+    """`(edge, node, at_start)` for every open dead end on the region's rectangle (`Q143`).
+
+    Three tests, and each one is a population deliberately left out:
+
+    - **One open arm at the node**, over the same level policy `fenced_edges`
+      and `_adjacency` apply. A junction on the line is entered from its other
+      arms and is not a dead end; a closed-level edge meeting the node is shut
+      at its own touchdown and is not a way in.
+    - **On no `foreign_edges` run.** Since `P5-7e` a road that crosses into a
+      declared neighbour is kept whole and the far half published under that
+      list, so a boundary node the neighbour continues is the one kind of edge
+      end that must stay open — it is the join. Read off the graph, never off
+      `Config.neighbours`: a neighbour declared and not built would otherwise
+      leave the line open on the promise of a bundle that is not there.
+    - **Within `within_m` of the rectangle's line, from the inside**, tested on
+      the edge's own polyline end rather than `nodes[]`, so the barrier and the
+      test share one point. A cul-de-sac inside the region is a dead end the
+      player can turn round in and gets nothing. ⚠️ **An end OUTSIDE the
+      rectangle gets nothing either, and the first build closed five of them**:
+      an owned run that crosses into the neighbour is kept whole (`P5-7`), so
+      its far end stands on the neighbour's ground with degree 1 in *this*
+      graph — COTTON PATH `e691` ends at a Causeway Bay junction 51 m past the
+      line. A signed distance read those as "on the line"; the test is the
+      unsigned distance to the nearest side, and the point within the
+      rectangle grown by `within_m`.
+
+    ⚠️ `region_high` is the region's own rectangle (`Config.region_high`), never
+    `city.json`'s `bounds_game`, which is the union of the content and reaches
+    past the line wherever a building overhangs its tile (`export.py`).
+    """
+    at_node, ends = _adjacency(graph, closed_levels)
+    foreign_nodes: set[int] = set()
+    for edge in graph.get("foreign_edges", []):
+        foreign_nodes.update((int(edge["from"]), int(edge["to"])))
+    points = {int(edge["id"]): edge["polyline"] for edge in graph["edges"]}
+    grown_low = (-within_m, -within_m)
+    grown_high = (region_high[0] + within_m, region_high[1] + within_m)
+    found: list[tuple[int, int, bool]] = []
+    for node, arms in at_node.items():
+        if len(arms) != 1 or node in foreign_nodes:
+            continue
+        edge_id = arms[0]
+        at_start = ends[edge_id][0] == node
+        x, _, z = points[edge_id][0 if at_start else -1]
+        line_m = min(abs(x), abs(z), abs(region_high[0] - x), abs(region_high[1] - z))
+        if line_m > within_m or not inside_plan(x, z, grown_low, grown_high):
+            continue
+        found.append((edge_id, node, at_start))
+    return sorted(found)
+
+
 @dataclass(frozen=True)
 class Placement:
     """One barrier unit, in game-space metres."""
@@ -440,14 +540,21 @@ def _dress(
     offset: float,
     inset_m: float,
     unit_width_m: float,
+    faces_node: bool = True,
 ) -> tuple[list[Placement], float]:
     """One mouth's row of units, and the span it was laid across.
 
-    Shared by both populations rather than written twice. ⚠️ The two differ in
-    *which* ends they close and in nothing else — a row across a ramp mouth is a
-    row across a street mouth — so a second copy here would be two places for
-    the pitch, the centring and the facing to drift apart, on a layer where all
-    three render perfectly when wrong (`Q62`).
+    Shared by all three populations rather than written thrice. ⚠️ They differ
+    in *which* ends they close and in nothing else — a row across a ramp mouth
+    is a row across a street mouth — so a second copy here would be two places
+    for the pitch, the centring and the facing to drift apart, on a layer where
+    all three render perfectly when wrong (`Q62`).
+
+    `faces_node` is the one thing a clipped end reverses: at a mouth the car
+    arrives *from* the node, at the region's edge it arrives from the interior
+    and the node is the void, so the row faces back down the street instead.
+    ⚠️ The prop has no front (`tools/make_barrier.py`), so this cannot be seen
+    in a frame; it is kept right so the day it grows one it stands right.
     """
     span = round(2.0 * half, 3)
     at, tangent = _mouth_frame(points, at_start, inset_m)
@@ -473,11 +580,48 @@ def _dress(
                 edge=edge_id,
                 node=node,
                 position=round_position(tuple(float(v) for v in centre)),
-                # Back along the edge, at the car coming in.
-                facing=tuple(round(float(-value), 4) for value in tangent),
+                # At the car coming in: back along the edge toward the node,
+                # or down the street when the node is the region's edge.
+                facing=tuple(round(float(-value if faces_node else value), 4) for value in tangent),
             )
         )
     return placements, span
+
+
+def _dress_open_end(
+    edge_id: int,
+    node: int,
+    at_start: bool,
+    *,
+    points: dict[int, np.ndarray],
+    drawn: dict,
+    inset_m: float,
+    unit_width_m: float,
+    faces_node: bool = True,
+) -> tuple[list[Placement], float] | None:
+    """One end the open network arrives at, dressed, or `None` where its edge
+    published no ribbon to span.
+
+    The plumbing the touchdown and clipped loops share — ribbon lookup, the
+    no-width refusal, the row. ⚠️ **The bookkeeping stays at the call site**:
+    which counter a refusal lands in and which list the edge joins is what
+    keeps the populations apart, so this returns and never counts.
+    """
+    ribbon = _ribbon_at_end(drawn, edge_id, at_start)
+    if ribbon is None or ribbon[0] <= 0.0:
+        return None
+    half, offset = ribbon
+    return _dress(
+        edge_id,
+        node,
+        points=points[edge_id],
+        at_start=at_start,
+        half=half,
+        offset=offset,
+        inset_m=inset_m,
+        unit_width_m=unit_width_m,
+        faces_node=faces_node,
+    )
 
 
 def place(
@@ -488,8 +632,10 @@ def place(
     inset_m: float,
     unit_width_m: float,
     touchdown_levels: tuple[int, ...] = (),
+    region_high: tuple[float, float] | None = None,
+    clipped_within_m: float | None = None,
 ) -> tuple[list[Placement], FenceReport]:
-    """Every barrier unit the two closed populations need, and what they came to.
+    """Every barrier unit the three closed populations need, and what they came to.
 
     ⚠️ **The levels rather than the mouths, so the report cannot be half-filled.**
     Handed a mouth list, this function could publish `touchdown_edges` while its
@@ -497,7 +643,16 @@ def place(
     ramps it closed and refusing to say under what rule. Owning the call makes
     that state unreachable rather than merely unlikely.
     """
-    report = FenceReport(fenced=list(fenced), touchdown_levels=list(touchdown_levels))
+    if clipped_within_m is not None and region_high is None:
+        # Refused rather than defaulted: the rectangle is what the closure is
+        # measured against, and no default rectangle is the region's.
+        raise ValueError("clipped_within_m needs the region's own rectangle (region_high)")
+    report = FenceReport(
+        fenced=list(fenced),
+        touchdown_levels=list(touchdown_levels),
+        clipped_within_m=clipped_within_m,
+        region_high=region_high,
+    )
     at_node, ends = _adjacency(graph, touchdown_levels)
     points = {
         int(edge["id"]): np.asarray(edge["polyline"], dtype=np.float64) for edge in graph["edges"]
@@ -553,26 +708,59 @@ def place(
     # would stand behind a barrier. A touchdown is by construction a node where
     # the *open* network arrives, so every one of them is a way in.
     for edge_id, node, at_start in touchdown_mouths(graph, touchdown_levels):
-        ribbon = _ribbon_at_end(drawn, edge_id, at_start)
-        if ribbon is None or ribbon[0] <= 0.0:
-            report.touchdowns_no_width += 1
-            continue
-        half, offset = ribbon
-        row, span = _dress(
+        dressed = _dress_open_end(
             edge_id,
             node,
-            points=points[edge_id],
-            at_start=at_start,
-            half=half,
-            offset=offset,
+            at_start,
+            points=points,
+            drawn=drawn,
             inset_m=inset_m,
             unit_width_m=unit_width_m,
         )
+        if dressed is None:
+            report.touchdowns_no_width += 1
+            continue
+        row, span = dressed
         report.span_m.append(span)
         report.touchdowns_dressed += 1
         if edge_id not in report.touchdown_edges:
             report.touchdown_edges.append(edge_id)
         placements.extend(row)
+
+    # ---- the clipped population (`Q143`) ------------------------------------
+    #
+    # ⚠️ **A fenced edge's clipped end is skipped, not counted.** That end is
+    # `ends_with_no_way_in`'s already — counted there as the dead end it is —
+    # and its street is closed at its mouth, so a row here would stand behind a
+    # barrier (`Q19`'s pocket, at the third population). A touchdown edge cannot
+    # reach here at all: it sits on a closed level and `clipped_ends` reads the
+    # open ones.
+    if clipped_within_m is not None:
+        assert region_high is not None  # the ValueError above guards; narrows the type
+        for edge_id, node, at_start in clipped_ends(
+            graph, touchdown_levels, region_high, clipped_within_m
+        ):
+            if edge_id in blocked:
+                continue
+            dressed = _dress_open_end(
+                edge_id,
+                node,
+                at_start,
+                points=points,
+                drawn=drawn,
+                inset_m=inset_m,
+                unit_width_m=unit_width_m,
+                faces_node=False,
+            )
+            if dressed is None:
+                report.clipped_no_width += 1
+                continue
+            row, span = dressed
+            report.span_m.append(span)
+            report.clipped_dressed += 1
+            if edge_id not in report.clipped_edges:
+                report.clipped_edges.append(edge_id)
+            placements.extend(row)
 
     report.barriers = len(placements)
     return placements, report
@@ -582,7 +770,11 @@ def _document(
     city: Config, region_id: str, placements: list[Placement], report: FenceReport
 ) -> dict:
     """Written unconditionally, `carve.json`'s precedent: a missing file means
-    the stage never ran, not that there was nothing to fence."""
+    the stage never ran, not that there was nothing to fence.
+
+    Schema 3 (`Q143`): `clipped_*` and `region_extent_m`. A v2 reader would
+    report every clipped barrier as standing on an edge nothing closes.
+    """
     return {
         "schema_version": FENCE_SCHEMA,
         "city_id": city.id,
@@ -600,6 +792,15 @@ def _document(
         "touchdown_edges": sorted(report.touchdown_edges),
         "touchdowns": report.touchdowns,
         "touchdowns_no_width": report.touchdowns_no_width,
+        # The third population, with the rectangle it was measured against so
+        # `verify_fence.gd` can re-derive it — `bounds_game` is not that rectangle.
+        "clipped_within_m": report.clipped_within_m,
+        "region_extent_m": (
+            None if report.region_high is None else [round(v, 3) for v in report.region_high]
+        ),
+        "clipped_edges": sorted(report.clipped_edges),
+        "clipped_ends": report.clipped,
+        "clipped_no_width": report.clipped_no_width,
         "span_m": report.span_m,
         "barriers": [
             {
@@ -661,6 +862,7 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
             out_dir / FENCE_NAME, _document(city, region_id, [], FenceReport(fenced=fenced))
         )
 
+    region_high = city.region_high(region_id)
     placements, report = place(
         graph,
         drawn,
@@ -668,6 +870,8 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         inset_m=city.fence.inset_m,
         unit_width_m=city.fence.unit_width_m,
         touchdown_levels=closed_levels,
+        region_high=region_high,
+        clipped_within_m=city.fence.clipped_within_m,
     )
     if not report.closes(city.fence.unit_width_m):
         # The identity that says every mouth is accounted for. Raised rather
@@ -675,8 +879,9 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         # a number nobody can read.
         raise ValueError(
             f"{report.barriers} barrier units against {len(report.span_m)} spans over "
-            f"{report.mouths_dressed} dressed mouths and {report.touchdowns_dressed} dressed "
-            f"touchdowns — the row width and the published spans disagree"
+            f"{report.mouths_dressed} dressed mouths, {report.touchdowns_dressed} dressed "
+            f"touchdowns and {report.clipped_dressed} dressed clipped ends — the row width "
+            "and the published spans disagree"
         )
 
     log.info(
@@ -705,6 +910,19 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         log.warning(
             "  no fence.touchdown_levels — the off-grade network stays open and ungraded (Q103)"
         )
+    if city.fence.clipped_within_m is not None:
+        log.info(
+            "  clipped ends within %.2f m of the rectangle: %d dressed over %d edges, %d with no"
+            " width",
+            city.fence.clipped_within_m,
+            report.clipped_dressed,
+            len(report.clipped_edges),
+            report.clipped_no_width,
+        )
+    else:
+        # Loud on `touchdown_levels`' terms: an open line is a way out of the
+        # world, and a build that leaves it open should say so.
+        log.warning("  no fence.clipped_within_m — streets cut by the region stay open (Q143)")
     spans = [span for span in report.span_m if span > 0.0]
     if spans:
         log.info(

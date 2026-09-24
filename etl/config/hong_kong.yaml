@@ -3937,6 +3937,26 @@ fence:
   # by omission.
   touchdown_levels: [-1, 2]
 
+  # How near the region's own rectangle an open dead end lies to be read as a
+  # street the clip cut, and closed there (Q143, 2026-09-25, the user's call).
+  #
+  # 🔴 A THIRD POPULATION, and again not a bar. These streets are neither
+  # narrow nor ungraded: they stop where the region does, and past the line
+  # there is no tile. GAME_DESIGN.md's diegetic edges are the harbour and the
+  # escarpment; the 67 Wan Chai and 19 Causeway Bay streets that run to the
+  # line and stop are not diegetic, and a car driven down one leaves the world.
+  # The row stands inset_m inside the map, facing the interior.
+  #
+  # ⚠️ A node any foreign_edges run touches is NEVER closed: past it the road
+  # is the neighbour's (P5-7e), and that is what "not yet connected to another
+  # region" means, read off the built graph rather than off `neighbours:`.
+  #
+  # The clip puts a node on the line to float epsilon (roads._touches_only's
+  # micrometre of slack), so anything positive finds every one; 1.0 m keeps
+  # the rule legible and admits nothing a metre inside the region. Absent, no
+  # clipped end is closed and the bundle is byte-identical.
+  clipped_within_m: 1.0
+
 
 # How P1-5 turns published taxi points into fare nodes.
 fares:

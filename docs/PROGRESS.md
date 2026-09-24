@@ -111,6 +111,9 @@ Phase 3 — Build `B2`
 - `P3-9a` 🟢 Recognition round 0 — run and closed; recognised, blocked by bridges (`P3-9a′`).
 - `P3-28` ✅ `Q19` carve — 8 edges cut, `e99` at an authored width.
 - `P3-29` ✅ `Q19` fence, dressed — car bar 1.80 m; the vertical term refuted.
+- `P3-29a` ✅ Region-edge closure (`Q143`) — 67 / 19 streets cut by the rectangle closed on the
+  line, the neighbour's way in never; the set re-derived in `verify_fence`, 3 mutations caught.
+  The user's drive owed.
 - `P3-30` ✅ Box-junction extent grader — `tools/box_extent.py` (`Q104`).
 - `P3-31` ✅ Median void closed — stub clusters and through corridors (`Q104`). Open: lamps,
   signs and railings do not refuse a foot standing under a level-0 cap.
@@ -252,6 +255,8 @@ and there in the same change.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
   the legal route drawn on the minimap. Held: arrow to the next junction.
+- `Q143` A street the region cuts is closed on the line; the neighbour's way in never (user;
+  `P3-29a`, built). Closed. The user's drive owed.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
@@ -420,7 +425,7 @@ Bundle, from `etl/out` (schemas: `city.json` 35, `roadgraph.json` 15, `roadsurfa
 | Crossings drawn | 120 of 121, 762 stripes / 16 of 17, 80 |
 | Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
 | Tramway | 126 of 132 rails (7,300 m), 55 beds, `off_gauge_stations` 53 of 1,041, `inverted` 0 |
-| Player fence | 14 components, 15 mouths, 5 touchdowns / 3 components, 6 mouths |
+| Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends (316 units) / 3 components, 6 mouths, 19 clipped ends (85 units) |
 | Kerbside restriction published | 33,385 m over 722 edge sides; 96.4% agreement with `DTAD_RST_ZONE_LINE` (pre-region figure) |
 
 Graders (report-only unless a target is shown)

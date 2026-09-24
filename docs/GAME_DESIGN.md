@@ -244,7 +244,9 @@ Fast spine plus technical parallel is the contrast arcade driving lives on, and 
 real layout. The flyover half rests on `P4-1` (`Q111`); `P4-2`–`P4-5` are not started.
 
 **Map edges are diegetic:** Victoria Harbour north, the escarpment toward Kennedy Road south,
-Admiralty west, Victoria Park east. No invisible walls needed.
+Admiralty west, Victoria Park east. No invisible walls needed — the streets the rectangle cuts
+are closed on the line with the fence's own barrier row (`Q143`), and a road a neighbouring
+region continues is never closed.
 
 ---
 

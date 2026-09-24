@@ -26,6 +26,7 @@ from pipeline.fence import (
     _adjacency,
     _components,
     _mouth_frame,
+    clipped_ends,
     fenced_edges,
     place,
     touchdown_mouths,
@@ -551,6 +552,208 @@ class TestTouchdowns:
     def test_touchdowns_is_derived_from_the_two_outcomes(self) -> None:
         report = FenceReport(touchdowns_dressed=5, touchdowns_no_width=2)
         assert report.touchdowns == 7
+
+
+class TestClippedEnds:
+    """The third closed population (`Q143`): streets the region's clip cut.
+
+    ⚠️ **Every one of these fails silently in a frame.** A clipped end left open
+    is a street the car drives off the world down, which is the state that
+    shipped; a barrier on the wrong kind of end — the neighbour's way in, or
+    the far end of a crossing run standing on the neighbour's ground — is a
+    perfectly good barrier across a road that goes somewhere.
+    """
+
+    HIGH = (100.0, 100.0)
+
+    def _region(self) -> dict:
+        """A junction at (50, 50) with four arms: west to the line at x = 0 (edge
+        1), north to the line at z = 0 (edge 2), east to a cul-de-sac inside the
+        region (edge 3), and south to the line at z = 100 where a foreign run
+        continues it (edge 4, foreign edge 9)."""
+        return {
+            "edges": [
+                _edge(1, [[50, 0, 50], [0, 0, 50]], 1, 2),
+                _edge(2, [[50, 0, 50], [50, 0, 0]], 1, 3),
+                _edge(3, [[50, 0, 50], [80, 0, 50]], 1, 4),
+                _edge(4, [[50, 0, 50], [50, 0, 100]], 1, 5),
+            ],
+            "foreign_edges": [_edge(9, [[50, 0, 100], [50, 0, 140]], 5, 6)],
+        }
+
+    def _drawn(self) -> dict:
+        return _drawn({edge: [3.0, 3.0] for edge in (1, 2, 3, 4)})
+
+    def test_a_street_ending_on_the_line_is_a_clipped_end(self) -> None:
+        """The end is carried out with the node on `touchdown_mouths`' terms —
+        `at_start` False for both, because the line end is each edge's `to`."""
+        assert clipped_ends(self._region(), (), self.HIGH, 1.0) == [(1, 2, False), (2, 3, False)]
+
+    def test_a_cul_de_sac_inside_the_region_is_not(self) -> None:
+        """Edge 3 ends 20 m short of the line: a dead end the player can turn
+        round in, and a barrier there would close a street for no reason."""
+        assert 3 not in [edge for edge, _, _ in clipped_ends(self._region(), (), self.HIGH, 1.0)]
+
+    def test_the_neighbours_way_in_is_never_closed(self) -> None:
+        """🔴 The rule that makes this "not yet connected to another region"
+        rather than "on the line". Node 5 is on the line and has one owned arm,
+        and a foreign run continues it — the join `P5-7e` publishes. Read off
+        the graph rather than off `neighbours:`, so a neighbour declared and
+        not built still leaves nothing open on a promise."""
+        assert 4 not in [edge for edge, _, _ in clipped_ends(self._region(), (), self.HIGH, 1.0)]
+
+    def test_a_junction_on_the_line_is_not_a_dead_end(self) -> None:
+        graph = self._region()
+        graph["edges"].append(_edge(5, [[0, 0, 50], [20, 0, 80]], 2, 7))
+        # Node 2 now carries two open arms: the line end is a junction, and edge
+        # 5's own far end is 20 m inside the region.
+        assert [node for _, node, _ in clipped_ends(graph, (), self.HIGH, 1.0)] == [3]
+
+    def test_an_end_outside_the_rectangle_is_the_neighbours_ground(self) -> None:
+        """🔴 The first build closed five of these. An owned crossing run is kept
+        whole (`P5-7`), so its far end has degree 1 here and stands at a
+        junction in the neighbour's graph — COTTON PATH `e691`, 51 m past the
+        line. A signed distance to the side read it as on the line."""
+        graph = self._region()
+        graph["edges"].append(_edge(6, [[50, 0, 0], [50, 0, -51]], 3, 8))
+        found = clipped_ends(graph, (), self.HIGH, 1.0)
+        assert 6 not in [edge for edge, _, _ in found]
+        # And node 3 is a junction now (edges 2 and 6 meet there), so edge 2's
+        # line end is not a dead end either.
+        assert found == [(1, 2, False)]
+
+    def test_a_closed_level_is_not_read(self) -> None:
+        """The same level policy `fenced_edges` and `_adjacency` apply: a tunnel
+        end on the line sits behind its own touchdown closure, and a second
+        barrier there would stand behind the first."""
+        graph = self._region()
+        graph["edges"].append(_edge(6, [[50, 0, 50], [100, 0, 50]], 1, 8, level=-1))
+        assert 6 not in [edge for edge, _, _ in clipped_ends(graph, (-1,), self.HIGH, 1.0)]
+        assert 6 in [edge for edge, _, _ in clipped_ends(graph, (), self.HIGH, 1.0)]
+
+    def test_the_row_faces_the_interior(self) -> None:
+        """At a mouth the car arrives from the node; at the region's edge the
+        node is the void and the car arrives from the street, so the facing is
+        reversed. The prop has no front, so this cannot be seen in a frame."""
+        placements, report = place(
+            self._region(),
+            self._drawn(),
+            [],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            region_high=self.HIGH,
+            clipped_within_m=1.0,
+        )
+        assert report.clipped_edges == [1, 2]
+        assert report.clipped_dressed == 2
+        west = [item for item in placements if item.edge == 1]
+        # Edge 1 runs toward -x and ends at x = 0; the row stands 4 m in and
+        # faces +x, back down the street at the car coming out.
+        assert all(item.facing == (1.0, 0.0, 0.0) for item in west)
+        assert all(item.position[0] == pytest.approx(4.0) for item in west)
+
+    def test_a_fenced_edges_clipped_end_stands_behind_its_own_barrier(self) -> None:
+        """`Q19`'s pocket at the third population: the street is closed at its
+        mouth, and its line end is `ends_with_no_way_in`'s already."""
+        graph = self._region()
+        drawn = self._drawn()
+        placements, report = place(
+            graph,
+            drawn,
+            [1],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            region_high=self.HIGH,
+            clipped_within_m=1.0,
+        )
+        assert report.clipped_edges == [2]
+        assert report.ends_with_no_way_in == 1
+        assert {item.node for item in placements if item.edge == 1} == {1}
+
+    def test_absent_is_the_pre_q143_build(self) -> None:
+        """The inertness proof: the key absent must reproduce the build before
+        it exactly, or `clipped_within_m` is not a switch."""
+        graph, drawn = self._region(), self._drawn()
+        before, report_before = place(graph, drawn, [], inset_m=4.0, unit_width_m=2.0)
+        after, report_after = place(
+            graph, drawn, [], inset_m=4.0, unit_width_m=2.0, region_high=self.HIGH
+        )
+        assert before == after == []
+        assert report_before.clipped == report_after.clipped == 0
+        assert report_after.clipped_within_m is None
+
+    def test_the_reach_without_a_rectangle_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="region_high"):
+            place(
+                self._region(),
+                self._drawn(),
+                [],
+                inset_m=4.0,
+                unit_width_m=2.0,
+                clipped_within_m=1.0,
+            )
+
+    def test_a_clipped_end_with_no_ribbon_is_counted_not_padded(self) -> None:
+        placements, report = place(
+            self._region(),
+            _drawn({}),
+            [],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            region_high=self.HIGH,
+            clipped_within_m=1.0,
+        )
+        assert report.clipped_no_width == 2
+        assert report.clipped == 2
+        assert report.span_m == []
+        assert placements == []
+        assert report.closes(2.0)
+
+    def test_all_three_populations_close_under_one_identity(self) -> None:
+        graph = self._region()
+        graph["edges"].append(_edge(7, [[80, 0, 50], [80, 6, 70]], 4, 9, level=1))
+        drawn = self._drawn() | _drawn({7: [3.2, 3.2]})
+        placements, report = place(
+            graph,
+            drawn,
+            [3],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            touchdown_levels=(1,),
+            region_high=self.HIGH,
+            clipped_within_m=1.0,
+        )
+        assert report.fenced == [3]
+        assert report.touchdown_edges == [7]
+        assert report.clipped_edges == [1, 2]
+        assert not set(report.clipped_edges) & (set(report.fenced) | set(report.touchdown_edges))
+        assert report.closes(2.0)
+        assert len(placements) == sum(max(1, math.ceil(span / 2.0)) for span in report.span_m)
+        report.clipped_dressed += 1
+        assert not report.closes(2.0)
+
+
+class TestClippedWithinConfig:
+    """The reach is a switch as much as a measure, so its degenerate value is
+    refused at load rather than read as off."""
+
+    def test_zero_is_refused_because_absent_already_means_off(self) -> None:
+        from pipeline.config_blocks.roads import _clipped_within
+
+        with pytest.raises(ValueError):
+            _clipped_within(0, "fence")
+
+    def test_absent_is_none(self) -> None:
+        from pipeline.config_blocks.roads import _clipped_within
+
+        assert _clipped_within(None, "fence") is None
+
+    def test_the_shipped_config_closes_the_line(self) -> None:
+        from pipeline.config import load_config
+
+        city = load_config()
+        assert city.fence is not None
+        assert city.fence.clipped_within_m == 1.0
 
 
 class TestTouchdownLevelsConfig:

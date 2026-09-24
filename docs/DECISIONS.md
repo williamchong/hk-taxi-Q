@@ -7193,3 +7193,50 @@ had two readings, and the one built is the one that changes no loop.
 
 **See.** `Q141` · `Q139` · `Q138` · `Q80` · `.claude/rules/hud.md` · `.claude/rules/fares.md` ·
 `tuning/hud_style.md` · `tuning/guide.md` · `PLAN.md` `P3-5a`
+
+## `Q143` — A street the region cuts is closed on the line; the neighbour's way in never is
+
+**Status.** ✅ Closed — the user's ask (2026-09-25), built as `P3-29a`. The user's drive owed.
+
+The user asked for "some blockage" on every road not yet connected to another region — the
+streets that reach the region boundary and stop. `GAME_DESIGN.md` calls the map edges diegetic and
+that holds for the harbour and the escarpment; it never held for the 67 Wan Chai and 19 Causeway
+Bay streets the clip cuts on the rectangle. Past that line there is no tile and no ground, so a
+car driven down one left the world and `drive_harness` respawned it after a 25 m fall.
+
+- **A third fence population, not a third bar.** `pipeline/fence.py` already closes two sets with
+  one row of the authored barrier: the starved edges (`Q19`) and the ungraded touchdowns
+  (`Q103`). A clipped end is neither narrow nor ungraded, so it travels as `clipped_edges`, a
+  third list with its own counters (`clipped_ends`, `clipped_no_width`), under the same
+  `closes()` identity, and `fenced_edges` does not gain it — `RoadGraph.fits_car` re-derives that
+  set and must not. Schema 2 → 3 on `fence.json`; a v2 reader reports every clipped row as a
+  barrier on an edge nothing closes.
+- **The rule is read off the built graph, never off `neighbours:`.** An end is clipped when its
+  node carries one open arm (the same level policy as `fenced_edges` and `_adjacency`), no
+  `foreign_edges` run touches it, and the edge's own polyline end lies within
+  `fence.clipped_within_m` (1.0 m) of the region rectangle's line **from the inside**. A foreign
+  run at the node is the join `P5-7e` publishes — the road continues into the neighbour — and that
+  is what "not yet connected to another region" means. A neighbour declared and not built leaves
+  nothing open on a promise. The row stands `inset_m` inside the map and faces the interior; the
+  prop has no front, so the facing is kept right without being visible.
+- 🔴 **The first build closed five ends on the neighbour's ground.** An owned run that crosses the
+  line is kept whole (`P5-7`), so its far end has degree 1 in *this* graph and stands at a junction
+  in the neighbour's: COTTON PATH `e691` ends 51 m past the line in Causeway Bay, TUNG LO WAN ROAD
+  `e1` 37 m inside Wan Chai. A signed distance to the nearest side read them as on the line. The
+  test is the unsigned distance and the point within the rectangle grown by the reach; `verify_fence.gd`
+  re-derives the whole set from `edges`, `foreign_edges` and the document's own `region_extent_m`
+  (never `bounds_game`, the content's union) and a wrong edge either way fails it — mutation-checked
+  three ways: an edge dropped, an interior edge added, the rectangle shrunk.
+- **Left open on purpose:** the 9 + 2 level −1 tunnel ends on the line (behind their own touchdown
+  closure, `Q21`), a fenced edge's line end (behind its mouth, `ends_with_no_way_in` counts it),
+  and cul-de-sacs inside the region. The far ends of crossing runs get nothing here; when both
+  regions are resident the neighbour's own graph carries on from them.
+- **Cost.** 239 + 61 units, +45,888 / +11,712 triangles on the one static `MultiMesh`; draw calls
+  unchanged. Wan Chai's barrier layer is now 60,672 triangles — 20% of the mobile `< 300k` budget,
+  the figure `fence.py`'s docstring said to have on hand. Every pre-existing row is byte-identical.
+  `tools/reachability.py --refuse` on the fenced set is unchanged (0 pairs lost).
+- **Frames.** `build/driver/clip_{before,after}_{1,2}/` — Convention Avenue `e573` at the western
+  line from `--camera=34,7,256 --look=4,4.3,254.6`; each pair hash-identical, the rows across three
+  streets in the after frame and open road into the void in the before.
+
+**See.** `Q19` · `Q103` · `P5-7` · `.claude/rules/fence.md` · `PLAN.md` `P3-29a`

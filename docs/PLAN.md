@@ -229,6 +229,7 @@ The order is load-bearing: the fence set is measured after the carve.
 |---|---|
 | `P3-28` | ✅ The carve — cuts `INFRASTRUCTURE` back to the surveyed span; prism is centreline × surveyed `width_m`, never the drawn floor. The cut face is a constructed retaining wall, because the estate is not watertight (5.38% of edge slots open at source). `e99` is the one exception, carved at its authored 6.40 m. `Q19`, `Q104` |
 | `P3-29` | ✅ The fence — `fits_car` beside `is_passable` (`clearance.car_width_m`), and authored barrier props with colliders at the mouths of the post-carve fence set, computed never hand-kept. `e207` needs no exemption (3.25 m). `Q19` |
+| `P3-29a` | ✅ Region-edge closure — every open street the rectangle cuts is closed on the line with the same row, `fence.clipped_within_m`; a node a `foreign_edges` run continues is never closed; the set re-derived by `verify_fence.gd`. `Q143` |
 
 - ⚠️ The carve reads spans from the published graph (`width_source` measured), never from
   `carriageway_width.json`. It inherits the station-normal trap (`Q78`).

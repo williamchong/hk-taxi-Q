@@ -262,6 +262,8 @@ TRIGGERS: dict[str, Trigger] = {
                     "mouths",
                     "ends_behind_another_fence",
                     "ends_with_no_way_in",
+                    "clipped_edges",
+                    "clipped_ends",
                     "barriers",
                 ),
             ),
