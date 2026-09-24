@@ -7454,6 +7454,16 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
 - **The face comes OUT of the car.** `PassengerEmote` sits at the rear kerbside seat, under the
   roof; the pop starts hidden and rises through the roof, so it reads as the passenger and not as a
   sticker. The door already swings open at a bail (`P3-48`); the rage face rises beside it.
+- **The tip stands live under the meter** (the user's second ask, the same day): `Fare.time_hkd`
+  is the seconds left priced on every tick while carrying and `tip_hkd = tip_of(time, skills)`,
+  so the HUD's "TIP HK$18.0" falls with the clock and jumps with a skill; `FareFace.tip_text`,
+  a label in the meter housing in the gain's green, carrying only.
+- **Penalties are the same machinery with the sign flipped** (the user's third ask, planned as
+  `P3-50`): an `Award` with negative `hkd`, `CRASH` the first `Fare.Skill`, "crash −5.0" on the
+  receipt, "−HK$5.0 crash" flashed in `accent_negative`; `tip_of` floors the tip at zero, because
+  a passenger docks a tip and never charges the driver — the meter is `Q141`'s. The face, the
+  receipt and the floor are built and checked; the detector is `P3-50`'s, measured on the skidpad
+  before a bar is chosen.
 - 🚫 Refused: a second slip threshold in `skills.tres` (one copy, `Q84`); reading
   `_drift_engagement` (the player's intent, not the car's slide — a held button on a straight would
   pay); a happy face at delivery (the receipt is the delivery's word; not asked for).

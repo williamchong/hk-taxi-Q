@@ -112,6 +112,11 @@ the loop's own numbers in `tuning/fares.tres`.
   a zeroed `drift_hkd` and a zero threshold are inert systems, named; half the price banks less.
   ⚠️ Arriving with the clock nearly full IS an early arrival, so the loop's own delivery check
   expects `time + early_hkd`.
+- 🔴 **The tip is live and floored at zero.** `time_hkd` is re-priced every carrying tick and
+  `tip_hkd = FareSystem.tip_of(time, skills)`; `FareFace.tip_text` shows it under the LED while
+  carrying. A penalty (`P3-50`) is an `Award` with negative `hkd` — same receipt, minus sign,
+  `accent_negative` flash — and `tip_of` never goes below 0: the passenger docks the tip, never
+  the meter (`Q141`). 🚫 No penalty on the meter, no negative bank.
 - 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,
   `awards` and `skills_hkd` stay on the fare so `FareFace.forfeit` can say what walked out.
 - ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;
