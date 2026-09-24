@@ -349,6 +349,22 @@ materials:
     source: "turbid coastal sea water, diffuse; open ocean ~6%, coastal 8-12%"
     bounds: [5, 12]
 
+  # The parks (2026-09-25, the user's call): the ground the tile stage paints
+  # inside the basemap's open space, the minimap's green in the world. ⚠️ **This
+  # is the LUMINOUS reflectance of turf, and it is dark**: a leaf absorbs most
+  # visible light, so mown grass reflects ~5-15% of it; the 20-26% broadband
+  # albedo usually quoted for grass is carried by the near-infrared, which no
+  # eye sees. Do not lighten it to read greener — ART_DESIGN's vegetation row is
+  # "deep saturated green".
+  #
+  # ⚠️ Every open-space code is painted, the user's call over the paved ones: a
+  # sitting-out area and the promenade are paving on the street, grass here.
+  park_grass:
+    colour: "#416227"
+    reflectance: 10.0
+    source: "mown turf, luminous reflectance; green leaves 5-15% in the visible"
+    bounds: [5, 15]
+
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -2940,6 +2956,10 @@ basemap:
   # down over their own width, so a deeper bed is a longer beach, not a wall.
   seabed_m: -3.0
   water_material: sea_water
+  # The parks in the world (2026-09-25, the user's call): the tile stage paints
+  # every ground vertex inside the document's `parks` in this colour, beside the
+  # sink under the sea. No mesh of its own — the ground already is one.
+  park_material: park_grass
 
 lamps:
   source: topography

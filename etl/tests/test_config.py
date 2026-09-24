@@ -2778,6 +2778,7 @@ class TestBasemapBlock:
         def without(doc: dict[str, Any]) -> None:
             doc.pop("basemap")
             doc["materials"].pop("sea_water")
+            doc["materials"].pop("park_grass")
 
         assert load_config(rewrite(without)).basemap is None
 
@@ -2788,6 +2789,11 @@ class TestBasemapBlock:
         assert hong_kong.basemap.water_material is hong_kong.materials["sea_water"]
         assert hong_kong.basemap.water_level_m == 1.3
         assert hong_kong.basemap.seabed_m < hong_kong.basemap.water_level_m
+
+    def test_the_parks_are_a_material(self, hong_kong) -> None:
+        """The parks in the world (2026-09-25): the green the tile stage paints
+        comes from `materials:`, graded by the palette rule like the rest."""
+        assert hong_kong.basemap.park_material is hong_kong.materials["park_grass"]
 
     def test_a_seabed_above_the_water_is_refused(self, rewrite) -> None:
         def raised(doc: dict[str, Any]) -> None:
@@ -2801,6 +2807,13 @@ class TestBasemapBlock:
             doc["basemap"]["water_material"] = "sea_watter"
 
         with pytest.raises(ValueError, match="basemap:water_material names material"):
+            load_config(rewrite(stray))
+
+    def test_an_undeclared_park_material_is_refused(self, rewrite) -> None:
+        def stray(doc: dict[str, Any]) -> None:
+            doc["basemap"]["park_material"] = "park_grasss"
+
+        with pytest.raises(ValueError, match="basemap:park_material names material"):
             load_config(rewrite(stray))
 
 

@@ -17,6 +17,9 @@ from pipeline.crs import GameTransform
 SEA = Material(
     name="sea_water", colour=(32, 86, 114), reflectance=8.2, source="test", bounds=(5.0, 12.0)
 )
+GRASS = Material(
+    name="park_grass", colour=(65, 98, 39), reflectance=10.0, source="test", bounds=(5.0, 15.0)
+)
 
 
 def _spec(seal_m: float = 8.0) -> Basemap:
@@ -36,6 +39,7 @@ def _spec(seal_m: float = 8.0) -> Basemap:
         water_level_m=1.3,
         seabed_m=-3.0,
         water_material=SEA,
+        park_material=GRASS,
     )
 
 

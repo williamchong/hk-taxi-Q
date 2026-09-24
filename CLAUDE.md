@@ -174,7 +174,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `fares` | `fare_system.gd`, `fare_meter.gd`, `fare.gd`, `tariff.tres` (TD's numbers, cited), `fares.tres` (ours), the pools, the allowance, the tip, `verify_fares.gd` |
 | `router` | `road_router.gd`, `RoadGraph`'s `from` / `to` / turn bans / `plan_length_of`, `tools/reachability.py`, a profile's rules or bar, anything that consumes a route |
 | `tiles` | Colliders (`collision_cell_m`, `_collider`, `_road_collider`) and occluders (`occluder_cell_m`, `use_occlusion_culling`), any tile reader |
-| `basemap` | `pipeline/basemap.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `water_material`), `buildings.sink_sea`, `water.tres`, the `Water` node |
+| `basemap` | `pipeline/basemap.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `water_material`, `park_material`), `buildings.sink_sea` and `paint_parks`, `water.tres`, the `Water` node |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any
 `roads.surface` width) moves the drawn kerb, so it owes `clearance`, `carriageway`, `railings`,

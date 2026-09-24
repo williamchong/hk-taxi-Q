@@ -471,9 +471,10 @@ Colour:
 2. ❌ **Land-cover classes — refused.** Resolution mismatch no tuning reaches: the photo is ~10 px/m,
    the ground clusters at 4 m. Its "water" class is shadow (51.1% on rooftops); vegetation resolves
    to one-cell fringes round footprints (5.5% of cells above half vegetation). **If parks are
-   wanted, the source is vector land-use polygons** (`Q18`). A geometric hillside split was also
-   refused (`Q36`): high terrain draws 0.000% of all six viewpoints, and the road that climbs looks
-   over ground that is 97.5% flat.
+   wanted, the source is vector land-use polygons** (`Q18`) — and since 2026-09-25 they are:
+   iB1000's open-space `Site` polygons paint the ground `park_grass` `#416227`, 10% (`Q144`).
+   A geometric hillside split was also refused (`Q36`): high terrain draws 0.000% of all six
+   viewpoints, and the road that climbs looks over ground that is 97.5% flat.
 
 ⚠️ **Solved as a surface, unsolved as a place.** In `build/driver/art_ground` the reclamation south
 of HKCEC is 200 m of one correct colour carrying nothing, and converges on beach whatever its hue.

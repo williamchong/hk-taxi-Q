@@ -268,6 +268,9 @@ class BuildReport:
     # Zero with a `basemap:` block declared and sea in the frame is the
     # stage-order failure: `basemap` runs first, and this read its document.
     sunk: int = 0
+    # Ground vertices painted `basemap.park_material` inside the basemap's
+    # parks (2026-09-25) — zero with parks in the frame is the same failure.
+    greened: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -833,18 +836,31 @@ def _ground(mesh: MeshData, offset: np.ndarray, style: BuildingStyle) -> MeshDat
     return replace(mesh.translated(sunk), texture=None, uvs=None)
 
 
-def sea_of_bundle(out_dir: Path, region_id: str) -> BaseGeometry:
-    """The basemap's sea as one plan polygon, from the document `basemap.py`
-    wrote — which is why that stage runs before this one (`__main__`)."""
+def ground_of_bundle(out_dir: Path, region_id: str) -> tuple[BaseGeometry, BaseGeometry]:
+    """The basemap's sea and parks, each as one plan polygon, from the document
+    `basemap.py` wrote — which is why that stage runs before this one
+    (`__main__`). Published disjoint: the parks are cut from outside the sea."""
     document = read_document(
         out_dir / BASEMAP_NAME, BASEMAP_SCHEMA, f"python -m pipeline.basemap --region {region_id}"
     )
-    triangles = [
-        Polygon([(flat[0], flat[1]), (flat[2], flat[3]), (flat[4], flat[5])])
-        for flat in document.get("water", [])
-        if len(flat) == 6
-    ]
-    return shapely.union_all(triangles) if triangles else Polygon()
+
+    def plan(key: str) -> BaseGeometry:
+        triangles = [
+            Polygon([(flat[0], flat[1]), (flat[2], flat[3]), (flat[4], flat[5])])
+            for flat in document.get(key, [])
+            if len(flat) == 6
+        ]
+        return shapely.union_all(triangles) if triangles else Polygon()
+
+    return plan("water"), plan("parks")
+
+
+def _in_plan(mesh: MeshData, area: BaseGeometry) -> np.ndarray:
+    """Which of `mesh`'s vertices lie in `area` in plan — the selection
+    `sink_sea` and `paint_parks` share. All false for an empty area."""
+    if area.is_empty or len(mesh.positions) == 0:
+        return np.zeros(len(mesh.positions), dtype=bool)
+    return shapely.contains_xy(area, mesh.positions[:, 0], mesh.positions[:, 2])
 
 
 def sink_sea(mesh: MeshData, sea: BaseGeometry, seabed_m: float) -> tuple[MeshData, int]:
@@ -864,15 +880,43 @@ def sink_sea(mesh: MeshData, sea: BaseGeometry, seabed_m: float) -> tuple[MeshDa
     ⚠️ **Not a hole.** The sunk ground still collides: a car that leaves the
     quay lands on it, under the water, rather than falling through the world.
     """
-    if sea.is_empty or len(mesh.positions) == 0:
-        return mesh, 0
-    inside = shapely.contains_xy(sea, mesh.positions[:, 0], mesh.positions[:, 2])
+    inside = _in_plan(mesh, sea)
     count = int(inside.sum())
     if count == 0:
         return mesh, 0
     positions = mesh.positions.copy()
     positions[inside, 1] = seabed_m
     return replace(mesh, positions=positions), count
+
+
+def paint_parks(
+    mesh: MeshData, parks: BaseGeometry, colour: tuple[int, int, int]
+) -> tuple[MeshData, int]:
+    """`mesh` with every vertex whose plan position lies in `parks` coloured
+    `colour`, and how many were (2026-09-25, the user's call).
+
+    The minimap's green on the ground: `sink_sea`'s terms, a vertex moved into
+    another material rather than a mesh of its own, so the parks cost no draw
+    call and cannot z-fight the ground they lie on. Before `collapse`, which
+    keeps one representative's colour per cluster rather than an average, so
+    every shipped vertex is grass or paving and nothing between. ⚠️ **The edge
+    is still a blend on screen**: `COLOR_0` interpolates across a triangle with
+    corners either side, so a park fades into the paving over one ground
+    triangle — a streak where the decimated terrain's triangle is long (seen
+    east of Victoria Park, 2026-09-25). Unjittered, like the rest of the ground
+    (`class_colour_jitter`).
+    """
+    if mesh.colours is None:
+        return mesh, 0
+    inside = _in_plan(mesh, parks)
+    count = int(inside.sum())
+    if count == 0:
+        return mesh, 0
+    # `colour_for` hands back a read-only broadcast view; this is where the
+    # ground's colours first differ per vertex, so it is materialised here.
+    colours = np.array(mesh.colours, dtype=np.uint8)
+    colours[inside] = (*colour, 255)
+    return replace(mesh, colours=colours), count
 
 
 # --------------------------------------------------------------------------
@@ -929,12 +973,14 @@ def build_region(
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
     hue = facade_hue(style, root=sources_root)
-    # The sea the ground drops under (`sink_sea`), read from the basemap stage's
-    # document; a city with no `basemap:` block sinks nothing.
+    # The sea the ground drops under (`sink_sea`) and the parks it is painted
+    # green in (`paint_parks`), read from the basemap stage's document; a city
+    # with no `basemap:` block sinks and paints nothing.
     if city.basemap is None:
-        sea, seabed_m = Polygon(), 0.0
+        sea, parks, seabed_m, grass = Polygon(), Polygon(), 0.0, (0, 0, 0)
     else:
-        sea, seabed_m = sea_of_bundle(place.out_dir, region_id), city.basemap.seabed_m
+        sea, parks = ground_of_bundle(place.out_dir, region_id)
+        seabed_m, grass = city.basemap.seabed_m, city.basemap.park_material.colour
 
     report = BuildReport()
     # Stems a landmark replaces (`P3-6`), across the whole city config: a stem
@@ -978,14 +1024,18 @@ def build_region(
                 # A sheet's ground is one object, keyed by its own name: `stem`
                 # is a building's variant suffix and means nothing on terrain.
                 ordinal = _register(objects, inside.name, class_id, inside.aabb())
-                ground.append(
+                painted, greened = paint_parks(
                     replace(
                         inside,
                         colours=colour_for(style, class_id, inside),
                         uvs=facade_uv(style, class_id, inside),
                         uv2=identity_uv2(style, class_id, inside, ordinal),
-                    )
+                    ),
+                    parks,
+                    grass,
                 )
+                report.greened += greened
+                ground.append(painted)
                 kept += 1
                 continue
             key = stem(mesh.name)
@@ -1476,6 +1526,9 @@ def _write_manifest(
             # Ground vertices dropped to `basemap.seabed_m` under the sea
             # (`sink_sea`), before decimation. Zero where the frame holds no sea.
             "ground_sunk_vertices": report.sunk,
+            # Ground vertices painted `basemap.park_material` inside the parks
+            # (`paint_parks`), before decimation. Zero where the frame holds none.
+            "ground_park_vertices": report.greened,
         },
     )
 

@@ -163,6 +163,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ✅ The harbour (`Q140`, the user's calls) — on the minimap as `P3-44`'s `basemap.json` (2026-09-24), and in the world since 2026-09-25: `water.glb`, one flat mesh at mean sea level (+1.3 mPD), the ground under it sunk to −3.0 m by the tile stage because the sheets' terrain over the harbour is 1.1–4.2 m of noise against a 2.7–4.9 m shore; after the sink 2.1% of the sea's ground stands above the water and 10.1% of the 12 m shore band sits under it (both the straddling slopes). `verify_water` holds the plane flat at `water_level_m`; `city.json` 37, `basemap.json` 2. Cost on the throttle route at t=6: **+1 `draws`, +213 `prims`** (804,679 / 108 against 804,466 / 107 with `--hide-layers=water`). Waves since the same day: `water.gdshader`, two scrolling sine trains tilting the normal and lifting the crests, every number in `water.tres`, no texture. A car that drives off the quay is pulled back onto the nearest road (`drive_harness.gd`, `drown_depth_m`; the user's call). The user's frame owed (the blue, the wave dials, a skirt past the frame).
+- `P3-47` ✅ The parks in the world (`Q144`, the user's calls) — the tile stage paints every ground vertex inside `basemap.json`'s `parks` `materials.park_grass` (`#416227`, 10%), all five open-space codes like the minimap; no mesh, no draw call. 131,534 / 122,157 vertices painted (`ground_park_vertices`). ⚠️ The edge fades over one ground triangle and streaks where it is long. The user's frame owed.
 - `P3-46` ✅ Route line on the minimap (`Q137` reversed, the user's call of 2026-09-24) — the legal route to the destination from the fare's own `Route`, from the car's hit to the stop point, re-routed at the 5 Hz sample and seeded the way the car faces (`Hit.along`); `route_px` 5 px in `map_route`; `map:` assertions on the cut, the mesh and the transform, and `verify_road_graph` pins the drawn polyline to `distance_m`; carrying from the boot stand at rest (`--fare-seed=1`, t=8): +1 `draws`, +221 `prims` over `route_px = 0`, and +7 / +14.9k over `--minimap=off` (137 / 775.5k against 130 / 760.6k; the map alone was +5 / +14.7k) — frames in `build/driver/route_a` (the line from the chevron, clockwise round the Expo Drive roundabout, east to 華懋世紀廣場) and `route_d` (cleared once the car left the network). The user's frame owed (colour, width).
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
@@ -255,6 +256,7 @@ and there in the same change.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
   the legal route drawn on the minimap. Held: arrow to the next junction.
+- `Q144` The parks in the world are the ground painted green, every code the minimap draws (user; `P3-47`, 2026-09-25). The user's frame owed.
 - `Q143` A street the region cuts is closed on the line; the neighbour's way in never (user;
   `P3-29a`, built). Closed. The user's drive owed.
 
@@ -426,6 +428,7 @@ Bundle, from `etl/out` (schemas: `city.json` 37, `basemap.json` 2, `roadgraph.js
 | Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
 | Tramway | 126 of 132 rails (7,300 m), 55 beds, `off_gauge_stations` 53 of 1,041, `inverted` 0 |
 | Harbour (`P3-45`) | 748,723 m² of sea, 213 triangles, 12,270 ground vertices sunk / 177,055 m², 55, 3 (its read box stops at the shore) |
+| Parks painted (`P3-47`) | 131,534 ground vertices / 86 polygons, 462,245 m² / 122,157, 57, 336,334 m² |
 | Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends (316 units) / 3 components, 6 mouths, 19 clipped ends (85 units) |
 | Kerbside restriction published | 33,385 m over 722 edge sides; 96.4% agreement with `DTAD_RST_ZONE_LINE` (pre-region figure) |
 

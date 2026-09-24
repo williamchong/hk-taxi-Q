@@ -39,6 +39,7 @@ from pipeline.buildings import (
     identity_uv2,
     material_for,
     occluder_name,
+    paint_parks,
     podium_blocks,
     sink_sea,
 )
@@ -746,13 +747,15 @@ class TestBuildRegion:
         fixtures: list[Fixture] | None = None,
         out: str = "out",
         water: list[list[float]] | None = None,
+        parks: list[list[float]] | None = None,
     ):
         """One end-to-end run. `fixtures` overrides the default set, `hong_kong`
         takes any city so a test can vary the config, and `out` separates two
         runs in one test — without it the second silently overwrites the first's
-        GLBs under the same tmp_path. `water` is the basemap's sea, none by
-        default: the stage reads that document before it tiles."""
-        write_basemap(tmp_path / out, hong_kong, "wan_chai", water)
+        GLBs under the same tmp_path. `water` and `parks` are the basemap's sea
+        and open space, none by default: the stage reads that document before
+        it tiles."""
+        write_basemap(tmp_path / out, hong_kong, "wan_chai", water, parks)
         return build_region(
             hong_kong,
             "wan_chai",
@@ -1260,6 +1263,25 @@ class TestBuildRegion:
         assert low[1] == pytest.approx(hong_kong.basemap.seabed_m, abs=0.01)
         assert high[1] > hong_kong.basemap.water_level_m
 
+    def test_the_ground_in_a_park_is_painted_grass(self, hong_kong, sources, tmp_path) -> None:
+        """The parks in the world (2026-09-25): the basemap's open space is read
+        before the tiles are cut, and the ground inside it ships in
+        `park_material`'s colour beside the paving's: the vertices either side
+        of the park's edge ship one each."""
+        # Two triangles covering the ground patch's eastern half (x >= 75).
+        park = [[75.0, 0.0, 200.0, 0.0, 200.0, 200.0], [75.0, 0.0, 200.0, 200.0, 75.0, 200.0]]
+        report = self.build(hong_kong, sources, tmp_path, self.ground(), parks=park)
+        assert report.greened > 0
+
+        manifest = json.loads((tmp_path / "out" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text())
+        assert manifest["ground_park_vertices"] == report.greened
+        path = tmp_path / "out" / "wan_chai" / self.tile(report, "t_00_00").lods[0].path
+        shades = {tuple(row) for mesh in read_render(path) for row in mesh.colours[:, :3].tolist()}
+        grass = hong_kong.basemap.park_material.colour
+        paving = hong_kong.materials["concrete_paving"].colour
+        assert tuple(grass) in shades
+        assert tuple(paving) in shades
+
     def test_the_ground_takes_no_jitter(self, hong_kong, sources, tmp_path) -> None:
         """Jitter is seeded per source mesh, and the ground arrives as a handful
         of sheet-sized meshes rather than one per object — so the setting that
@@ -1569,6 +1591,36 @@ def test_real_blocks_reproduce_the_documented_counts(hong_kong) -> None:
             for ring in rings:
                 assert len(ring) >= 4
                 assert np.isfinite(ring).all()
+
+
+class TestPaintParks:
+    """`paint_parks`: vertices in a park turn grass, the rest keep their colour."""
+
+    def test_only_the_vertices_in_the_park_change(self) -> None:
+        from shapely.geometry import box as plan_box
+
+        mesh = soup(
+            [[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]],
+            name="ground",
+            colour=(129, 123, 111, 255),
+        )
+        before = np.array(mesh.colours)
+        painted, count = paint_parks(mesh, plan_box(-1.0, -1.0, 5.0, 5.0), (65, 98, 39))
+        assert count == 1
+        assert painted.colours[0].tolist() == [65, 98, 39, 255]
+        assert (painted.colours[1:] == before[1:]).all()
+        assert (painted.positions == mesh.positions).all()
+
+    def test_no_park_is_the_same_mesh(self) -> None:
+        from shapely.geometry import Polygon as Plan
+
+        mesh = soup(
+            [[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]],
+            name="g",
+            colour=(129, 123, 111, 255),
+        )
+        same, count = paint_parks(mesh, Plan(), (65, 98, 39))
+        assert count == 0 and same is mesh
 
 
 class TestSinkSea:

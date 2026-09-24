@@ -77,6 +77,11 @@ class Basemap:
     # ships (`Q33`). Its diffuse albedo; the blue is the sky reflected off
     # `tuning/water.tres`'s roughness.
     water_material: Material
+    # The parks' colour in the world (2026-09-25, the user's call): the tile
+    # stage paints every ground vertex inside the document's `parks` in it —
+    # the minimap's green on the ground, no mesh of its own. Every open-space
+    # code, the paved ones included, on the user's call.
+    park_material: Material
 
     @property
     def tiled(self) -> bool:
@@ -136,5 +141,8 @@ def _basemap(body: Any, where: str, table: _MaterialTable) -> Basemap | None:
         seabed_m=seabed_m,
         water_material=table.get(
             str(_require(body, "water_material", where)), f"{where}:water_material"
+        ),
+        park_material=table.get(
+            str(_require(body, "park_material", where)), f"{where}:park_material"
         ),
     )

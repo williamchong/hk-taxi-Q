@@ -7301,3 +7301,40 @@ car driven down one left the world and `drive_harness` respawned it after a 25 m
   streets in the after frame and open road into the void in the before.
 
 **See.** `Q19` · `Q103` · `P5-7` · `.claude/rules/fence.md` · `PLAN.md` `P3-29a`
+
+## `Q144` — The parks in the world are the ground painted green, every code the minimap draws
+
+**Status.** ✅ Closed — the user's calls (2026-09-25), built as `P3-47`. The user's frame owed.
+
+The user asked, "similar to the sea", for the minimap's green areas in the world — "grass or tree or
+paint them green". The harbour went map → world as `P3-45`; this is the same move for `basemap.json`'s
+`parks`.
+
+- **Paint, not trees (the user's pick).** `buildings.paint_parks` recolours every terrain vertex
+  inside the document's `parks` to `materials.park_grass`, beside `sink_sea` and on its terms: read
+  from the basemap stage's document (`ground_of_bundle`), before decimation, no mesh of its own —
+  so no draw call, no prim, no collider change, and nothing to z-fight. `Q18` / `Q36` had already
+  named vector land-use polygons as the only admissible vegetation source; these are they. 🚫 Trees
+  are not built: the sheets survey no canopy (`Tree` is 9 Old and Valuable Trees), so any placement
+  would be invented. Left to `B3`'s "what stands on the ground".
+- **Every open-space code — `PAR`, `PLA`, `SOA`, `SGR`, `PRO` — the user's pick over `PAR` alone.**
+  A sitting-out area and the promenade are paving on the street and grass here; the map and the
+  world now agree. Narrowing it is a user question, not a correction.
+- **The colour obeys `Q33`.** `park_grass` `#416227`, 10.0% — mown turf's *luminous* reflectance,
+  5–15%; the 20–26% broadband figure quoted for grass is near-infrared. Dark on purpose: ART_DESIGN's
+  vegetation row is "deep saturated green".
+- **No schema bump.** Hard rule 5: `COLOR_0` already means reflectance to every reader, and a tile
+  with green vertices is read correctly by an old game. The `facade` rule's one-commit clause is for
+  **re-colouring** a material, where the ETL and the rig's exposure must move together; a new
+  material has no game half.
+- ⚠️ **The edge fades over one ground triangle.** `collapse` keeps each vertex grass or paving, but
+  `COLOR_0` interpolates across a triangle whose corners straddle the edge, and where the decimated
+  terrain's triangle is long it draws a green streak (east of Victoria Park in
+  `build/driver/parks_1`). Cutting the ground along the park outline would sharpen it at a
+  triangle cost; not built, a look question for the user's frame.
+- **Measured.** Wan Chai 131,534 ground vertices painted / Causeway Bay 122,157 (`ground_park_vertices`,
+  before decimation); 86 / 57 park polygons, 462,245 / 336,334 m². The sink is unmoved (12,270 / 3).
+  Pipeline end to end on both regions, `check.sh` passes; frame from
+  `--camera=1790,140,480 --look=1810,0,120` in `city_preview.tscn`.
+
+**See.** `Q140` · `Q18` · `Q36` · `Q33` · `PLAN.md` `P3-47` · `.claude/rules/basemap.md`

@@ -23,6 +23,17 @@ paths:
   triangles straddling the shoreline. The sheets' terrain over the harbour is **1.1–4.2 m** and the
   shore band **2.7–4.9 m**, so 🚫 **no plane laid over the ground as published meets the
   shoreline** — measured at 2.5, 3.0 and 3.5 m before the sink was built; do not re-propose one.
+- **`buildings.paint_parks`, `park_material` or `materials.park_grass` (`Q144`)**: the pipeline
+  end to end on both regions, `ground_park_vertices` in each region's buildings manifest pasted
+  (zero with parks in the frame is the stage-order failure), and a frame over Victoria Park —
+  `--debug-view=off --hud=off`. Colours only: the collider tier carries none, so `tiles` is not
+  owed. ⚠️ **The edge fades over one ground triangle** — `collapse` keeps each vertex grass or
+  paving, but `COLOR_0` interpolates across a triangle that straddles the edge, and a long
+  decimated triangle draws a green streak (east of Victoria Park). ⚠️ **Every open-space code is painted, paved ones included** (the user's
+  call, the promenade among them): narrowing it is a user question, not a correction. `park_grass`
+  sits in `materials:` under `Q33` and `_check_reflectance` grades it; **re-colouring** it owes the
+  `facade` rule's one-commit clause, while adding it bumped no schema — `COLOR_0` already means
+  reflectance to every reader (`Q144`).
 - **`water_level_m` is a fact, not a dial**: mean sea level +1.3 mPD, game y = 0 the Principal
   Datum. `seabed_m` is the dial, and the price of a deeper one is a longer beach, not a wall.
 - **`water.tres` or `materials.sea_water`**: a frame from the `ground` viewpoint
