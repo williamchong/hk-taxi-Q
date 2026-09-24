@@ -165,16 +165,15 @@ static func distance(metres: float) -> String:
 	return ("%d m" % tens) if tens < 1000 else ("%.1f km" % (tens / 1000.0))
 
 
-## What a meter tick flashes: the unit that just began, signed.
+## What a meter tick or a skill flashes: the money, signed — "+HK$2.1", or
+## "−HK$5.0" for a penalty, with a proper minus.
 static func flash(delta_hkd: float) -> String:
-	return "+HK$" + money(delta_hkd)
+	return ("+HK$" + money(delta_hkd)) if delta_hkd >= 0.0 else ("−HK$" + money(-delta_hkd))
 
 
 ## What a skill flashes under the clock as it pays: the money, then the skill.
-## A penalty flashes as "−HK$5.0 crash".
 func award_text(award: Fare.Award) -> String:
-	var amount: String = flash(award.hkd) if award.hkd >= 0.0 else "−HK$" + money(-award.hkd)
-	return "%s %s" % [amount, skill_name(award.skill)]
+	return "%s %s" % [flash(award.hkd), skill_name(award.skill)]
 
 
 ## A skill's name, in the face's language. Cantonese for the two the street

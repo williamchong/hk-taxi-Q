@@ -518,8 +518,8 @@ func _deliver() -> void:
 	if early != null:
 		_award(early)
 	_tracker = null
-	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
-	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
+	# `time_hkd` and `tip_hkd` are already current: `sample` priced them this
+	# tick, and `_award` re-summed the tip if the early arrival paid.
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
 	deliveries += 1
