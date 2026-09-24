@@ -102,18 +102,23 @@ the arrow disabled.
 | Base fare | The meter's reading at delivery (`Q141`) |
 | **Tip** (小費) | Everything below, in HK$, banked with the meter as one sum |
 | Time bonus | Remaining seconds × HK$0.5 — pays a shortcut and a fast run alike (`P3-1a`) |
-| **Drift** | Points/second while sliding above a threshold angle |
-| **Near miss** | Passing traffic within ~1 m at speed |
-| **Air** | Points by airtime duration |
-| **Sustained speed** | Points/second above a speed floor |
+| **Drift** | HK$ per second held at or over `drift_slip_threshold_deg` (`P3-49`, `skills.tres`) |
+| **Sustained speed** | HK$ per `speed_hold_s` held over `speed_min_kph` (`P3-49`) |
+| **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
+| **Near miss** | Passing traffic within ~1 m at speed — a slot until `B3` has traffic |
+| **Air** | By airtime duration — a slot until something can be jumped off |
 
-Style points are awarded during the drive and shown immediately, so players learn what the game
-rewards without being told.
+Skills are paid during the drive and shown at once — a flash under the clock, and the passenger's
+face popping out of the back seat — so players learn what the game rewards without being told. The
+delivery's callout is a receipt: the meter, the time left and each skill by name with its count,
+so the tip is never a number that appeared (`Q145`). A passenger whose clock runs out walks
+without paying, and the receipt says what walked out with them.
 
-⚠️ They accumulate into a *style chain* rather than popping and clearing — a deliberate divergence
-from the genre's per-event bonus: only a multiplier that can be lost makes the next corner tense.
-"Chain" elsewhere in this document means the fare sequence, so the style one is always the *style
-chain*.
+⚠️ **Flat money per event** (the user's call, `Q145`), not the *style chain* this section first
+sketched — a multiplier that a hard crash resets — because there is no crash detector yet and a
+pop the player can read beats a multiplier they cannot. `P3-2b` may layer the chain on top; the
+awards stay what they are. "Chain" elsewhere in this document means the fare sequence, so the style
+one is always the *style chain*.
 
 | | Scope | Climbs on | Resets on |
 |---|---|---|---|

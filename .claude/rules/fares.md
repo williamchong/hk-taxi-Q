@@ -94,5 +94,29 @@ the loop's own numbers in `tuning/fares.tres`.
   `nearest_pending` and `pickups()` inside them, because under `--fares=off` the system frees
   itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
   reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.
-- 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul
-  with the tunnel toll (`P3-1b`), operating hours (`Q14`).
+- 🔴 **The skills are flat money per event, paid as they happen** (`P3-49`, `Q145`, the user's
+  call over the style chain): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
+  slip by `sample()` while carrying, `tuning/skills.tres` prices them (sidecar `skills.md`), and
+  each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and out on `skilled`.
+  `time_hkd` is the seconds left priced at the door; `tip = time + skills`. 🚫 No multiplier, no
+  chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
+- 🔴 **The drift's angle has ONE copy: `HandlingProfile.drift_slip_threshold_deg`** (`Q84`'s
+  design target), handed to `setup` and loaded by `verify_fares` through `HandlingProfile.PATH`;
+  `skills.tres` carries no angle. ⚠️ `FareSystem.slip_deg_of` DUPLICATES
+  `skidpad_ablation.gd::_slip_deg` on purpose — the grader must never call what it grades — so a
+  change to either's flattening or floor is made twice, by hand, and named.
+- 🔴 **The bars are inclusive and every dwell is asserted from both sides** in `verify_fares`'s
+  `skills:` block: one tick short of `drift_s` / `speed_hold_s` pays nothing and the tick that
+  reaches it pays; a degree under the threshold never pays; a slide or run that ends forfeits its
+  unpaid part (two short ones are not one long one); the share a tick under and on. Mutations:
+  a zeroed `drift_hkd` and a zero threshold are inert systems, named; half the price banks less.
+  ⚠️ Arriving with the clock nearly full IS an early arrival, so the loop's own delivery check
+  expects `time + early_hkd`.
+- 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,
+  `awards` and `skills_hkd` stay on the fare so `FareFace.forfeit` can say what walked out.
+- ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;
+  `taxi_hire.gd` pops the grin (`PassengerEmote`, `vehicle/passenger_emote.gd`) and pops the rage
+  on `bailed`. A new consumer connects the signal; it never reads `awards` from `_process`.
+- 🚫 **Not here**: near miss and air (`Fare.Skill` slots — `B3`'s traffic, and something to jump
+  off), the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
+  toll (`P3-1b`), operating hours (`Q14`).

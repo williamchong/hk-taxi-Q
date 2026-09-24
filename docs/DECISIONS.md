@@ -89,6 +89,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `P3-11e` | The front lamps answer to the light, not to the driver | 🟡 Awaiting review · **Owner.** `P3-11`. Night path untested until `Q26`'s rig exists. |
 | `P3-11f` | The roof sign lights, and it is the one lens that must not bloom | 🟡 Awaiting review · **Owner.** `P3-11`. |
 | `P3-48` | The fare shows on the car: the sign goes out with a passenger aboard, and the rear kerbside door swings | 🟡 Awaiting review · **Owner.** `P3-1a` · `P3-11`. |
+| `P3-49` | The skills pay as they happen, the delivery is a receipt, and the passenger's face says so | 🟡 Awaiting review · **Owner.** `P3-1a` · `P3-2b` · `Q145`. |
 | `BeamBudget` | the eight spot lights are rationed by distance, not by pair order | ✅ Shipped · **Owner.** `P3-11e` → `P3-3`. |
 | `verify_vehicle.gd` | the import and the scene are the half no test could see | ✅ Shipped · **Owner.** `P3-11c`–`P3-11e` → `P3-3`. |
 | `Q42` | The reader answers seven questions nobody consumes | 🚫 Moot — **Superseded by** `Q102`: the vision reader and `TEXCOORD_1` are removed; a |
@@ -2157,6 +2158,51 @@ file, no rebuild.
   604 → 602 triangles, leaf 26, as a second mesh instance on the car (its draw cost unmeasured).
 
 **See.** `P3-11f` · `P3-1a` · `Q141`
+
+## `P3-49` — The skills pay as they happen, the delivery is a receipt, and the passenger's face says so
+
+**Status.** 🟡 Awaiting review · **Owner.** `P3-1a` · `P3-2b` · `Q145`.
+
+- **Three skills, one shape.** `SkillTracker` (`scripts/fares/skill_tracker.gd`) is fed every
+  tick's speed and slip by `FareSystem.sample` while a passenger is aboard. A slide at or over
+  `HandlingProfile.drift_slip_threshold_deg` pays `drift_hkd` every `drift_s`; a run at or over
+  `speed_min_kph` pays `speed_hkd` every `speed_hold_s`; dropping under either bar ends the event
+  and forfeits its unpaid part. At the door `arrival` pays `early_hkd` once when
+  `remaining_s / allowance_s ≥ early_share`. Every award goes onto `Fare.awards`, into
+  `Fare.skills_hkd` and `Fare.tip_hkd` at once, and out on `skilled`. `Fare.time_hkd` is the
+  seconds left priced at delivery; `tip = time + skills`; delivery banks `meter + tip`.
+- **The bars are inclusive** so the verify tool can stand on them: `verify_fares`'s `skills:`
+  block drives a synthetic car one tick short of each dwell and then onto it, at the threshold and
+  a degree under, on the share and a tick under, and asserts a bail keeps the awards on the
+  receipt and pays none of them. Mutation-checked: a zeroed `drift_hkd` and a zero threshold are
+  inert systems; a halved `drift_hkd` banks strictly less on the same drive. ⚠️ The existing
+  delivery check gained a line: arriving with the clock nearly full IS an early arrival, so
+  `expected_tip` there is the time plus `early_hkd`.
+- **Slip is computed twice, on purpose.** `FareSystem.slip_deg_of` restates
+  `skidpad_ablation.gd::_slip_deg` (flattened to the ground, 0 under 1 m/s): `Q84` says the grader
+  must never call what it grades, and `PLAN.md` held the slip signal back until a consumer was
+  built — this is the consumer. The threshold has one copy, `handling.tres`, which `verify_fares`
+  loads through the new `HandlingProfile.PATH`; `skills.tres` deliberately carries no angle.
+- **The receipt is `FareFace`'s.** DELIVERED · TIP HK$28.0 / HK$57.0 / "meter 29.0 + time 18.0 +
+  drift ×2 10.0", Chinese 咪錶 / 時間 / 甩尾 / 飆車 / 早到; a bail is RAN OFF WITHOUT PAYING /
+  乘客走數 over "meter 29.0 + drift 5.0 lost" (冇收). Each award flashes under the clock as
+  "+HK$5.0 drift" in the gain's green off `skilled`. `callout_hold_s` 3.0 → 5.0 so the sum can be
+  read. `verify_hud` holds every string in both languages.
+- **The face is a mesh, not a glyph.** `tools/make_emote.py` builds `emote_grin.glb` (160
+  triangles) and `emote_angry.glb` (212) from `primitives`, features proud of -Z; `PassengerEmote`
+  (`scripts/vehicle/passenger_emote.gd`, at the rear kerbside seat in `taxi.tscn`) instances one
+  per event, rises it 1.3 m through the roof over 1.6 s, pops it in, shrinks it out, turns it to
+  the camera with `look_at` on the physics tick, and overrides its material unshaded. `TaxiHire`
+  wires `skilled` → grin and `bailed` → angry, beside the door it already swings at a bail. At
+  most four faces up; the oldest drops. `verify_vehicle` grades the rig's seat and each face's
+  facing and material; `test_make_emote.py` the committed bytes, the facing and the brows.
+- 🚫 Near miss and air are `Fare.Skill` slots with a name each and no detector: the first is
+  `B3`'s, the second waits on something to jump off. 🚫 No style chain, no crash detector, no
+  session combo (`P3-2b`). 🚫 No `Q33` reflectance on the emote's colours: a glyph drawn unshaded,
+  like the fare guide's arrow.
+- Owed: the user's drive; the draw-call delta with faces up (each is one draw while it lives).
+
+**See.** `Q145` · `Q141` · `Q84` · `P3-48` · `.claude/rules/fares.md` · `tuning/skills.md`
 
 ## `BeamBudget` — the eight spot lights are rationed by distance, not by pair order
 
@@ -7371,3 +7417,47 @@ paint them green". The harbour went map → world as `P3-45`; this is the same m
   `--camera=1790,140,480 --look=1810,0,120` in `city_preview.tscn`.
 
 **See.** `Q140` · `Q18` · `Q36` · `Q33` · `PLAN.md` `P3-47` · `.claude/rules/basemap.md`
+
+## `Q145` — Skills pay flat money per event, the delivery is a receipt, and the passenger's face pops from the back seat
+
+**Status.** ✅ Closed — the user's calls (2026-09-25), built as `P3-49`. The user's drive owed.
+
+The user asked for the bonus system, with three things said plainly: show clearly at the end of a
+trip WHY there was a tip; when a bonus triggers, an emoji emerging from the customer's position,
+"like from the back of the car"; and when time is up the customer rage-quits without paying — door
+open, angry emoji. Asked which bonuses, they took all three offered (drift, sustained speed,
+early arrival) and named the genre — "Forza style skill bonus, near miss etc".
+
+- **Flat HK$ per event, not the style chain (the user's pick).** `GAME_DESIGN.md` sketched a
+  multiplier a hard crash resets. There is no crash detector, and the ask was for a pop the
+  passenger reacts to — an event, not a rate. Each skill is a price in `skills.tres`, paid the
+  moment it is earned into the same `Fare.tip_hkd` the time bonus fills (`Q141`: the tip is the
+  skill, the meter is honest). `P3-2b` may layer a chain on top; the awards do not change.
+- **Drift pays per second held, which is `Q84`'s rule as money.** The skidpad grades the grip dial
+  on `secs>thr` because "the game pays per second above the threshold"; now it does, at
+  `drift_slip_threshold_deg` — the one design target, read from `handling.tres`, never restated.
+  `drift_s` 1.0 is over the shipped tap's 0.57–0.85 s dwell, so a tap does not pay and a held slide
+  does, every second.
+- **Near miss and air are slots.** Forza's near miss is traffic, and there is none until `B3`
+  (`P3-3`, `P3-2a`); air waits on something to jump off. `Fare.Skill` names both so the receipt
+  and the face need no change when they land.
+- **The receipt.** The delivery callout's sub line is the sum — the meter, the time, each skill by
+  name with its count — and the caption carries the tip's total. Held five seconds instead of three
+  (`hud_style.md`). A bail is said as what it is, "RAN OFF WITHOUT PAYING" / 乘客走數, over what
+  walked out unpaid: the meter and every skill that had paid, "lost" / 冇收. The awards stay on the
+  fare after a bail for exactly that line; the money does not.
+- **Low-poly meshes for the face (the user's pick over a bundled emoji font).** The bundled
+  typeface has no emoji, a colour-emoji font is a fifth licence and megabytes of bitmap, and a
+  mesh built by `tools/make_emote.py` from `primitives` is ours under CC BY-SA, flat-shaded like
+  the car. Unshaded in the world, as the fare guide's arrow is: a glyph, not a `Q33` material. The
+  features are on -Z because `look_at` shows -Z, and the test holds it.
+- **The face comes OUT of the car.** `PassengerEmote` sits at the rear kerbside seat, under the
+  roof; the pop starts hidden and rises through the roof, so it reads as the passenger and not as a
+  sticker. The door already swings open at a bail (`P3-48`); the rage face rises beside it.
+- 🚫 Refused: a second slip threshold in `skills.tres` (one copy, `Q84`); reading
+  `_drift_engagement` (the player's intent, not the car's slide — a held button on a straight would
+  pay); a happy face at delivery (the receipt is the delivery's word; not asked for).
+- Owed: the user's drive, and the draw-call delta with faces up.
+
+**See.** `P3-49` · `Q141` · `Q84` · `P3-48` · `GAME_DESIGN.md` "Scoring" · `.claude/rules/fares.md`
+· `tuning/skills.md`

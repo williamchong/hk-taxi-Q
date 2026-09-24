@@ -30,7 +30,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     user's drive of both is owed.
   - `B1` ("one fare") is built: HUD chassis, wrong-way warning, the router (`P3-43`), the fare
     loop (`P3-1a`, `Q141`) and the minimal fare HUD (`P3-5a`, `Q142`); the user's drive of one
-    fare, start to finish, is `B1`'s review and is owed. `B3`, `B4`, `P3-9` not started.
+    fare, start to finish, is `B1`'s review and is owed. Of `B4`, the skills and the receipt are
+    built ahead of the chain (`P3-49`, `Q145`). `B3`, the rest of `B4`, `P3-9` not started.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
@@ -91,6 +92,7 @@ Phase 3 — Build `B2`
 - `P3-11e` 🟡 Front lamps — awaiting review; night path has no rig to fire on (`Q26`).
 - `P3-11f` 🟡 Roof sign — awaiting review; level 0.45, not a daylight dimmer.
 - `P3-48` 🟡 Hire state on the car — sign dark with a passenger aboard; rear kerbside door swings at the hail and the drop. The user's drive owed.
+- `P3-49` 🟡 The passenger's face — grins out of the back seat on every skill, rages out of it at a bail (`tools/make_emote.py`, 160 + 212 triangles, unshaded). The user's drive owed.
 - `P3-10` 🟡 Ground surface — awaiting review; buries the carriageway on hill streets (`Q24`).
 - `P3-7` 🟡 Window-band shader — awaiting review; draws through `city_facade_clean`.
 - `P3-7a` 🚫 Withdrawn (`Q102`) — `W1` (`Q44`) and `W2` (`Q45`) still ship; `W3` gone.
@@ -165,6 +167,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
 - `P3-45` ✅ The harbour (`Q140`, the user's calls) — on the minimap as `P3-44`'s `basemap.json` (2026-09-24), and in the world since 2026-09-25: `water.glb`, one flat mesh at mean sea level (+1.3 mPD), the ground under it sunk to −3.0 m by the tile stage because the sheets' terrain over the harbour is 1.1–4.2 m of noise against a 2.7–4.9 m shore; after the sink 2.1% of the sea's ground stands above the water and 10.1% of the 12 m shore band sits under it (both the straddling slopes). `verify_water` holds the plane flat at `water_level_m`; `city.json` 37, `basemap.json` 2. Cost on the throttle route at t=6: **+1 `draws`, +213 `prims`** (804,679 / 108 against 804,466 / 107 with `--hide-layers=water`). Waves since the same day: `water.gdshader`, two scrolling sine trains tilting the normal and lifting the crests, every number in `water.tres`, no texture. A car that drives off the quay is pulled back onto the nearest road (`drive_harness.gd`, `drown_depth_m`; the user's call). The user's frame owed (the blue, the wave dials, a skirt past the frame).
 - `P3-47` ✅ The parks in the world (`Q144`, the user's calls) — the tile stage paints every ground vertex inside `basemap.json`'s `parks` `materials.park_grass` (`#416227`, 10%), all five open-space codes like the minimap; no mesh, no draw call. 131,534 / 122,157 vertices painted (`ground_park_vertices`). ⚠️ The edge fades over one ground triangle and streaks where it is long. The user's frame owed.
+- `P3-49` 🟡 Skills and the receipt (`Q145`, the user's ask, 2026-09-25) — flat HK$ per event into the tip: drift HK$5 per second at or over `drift_slip_threshold_deg` (14°, `handling.tres`), speed HK$5 per 3 s over 80 kph, early arrival HK$10 with half the clock left (`skills.tres`); each flashed under the clock in the gain's green and the passenger's face popped from the rear seat; the delivery callout holds the receipt ("meter 29.0 + time 18.0 + drift ×2 10.0") for `callout_hold_s` 5 s; a bail reads RAN OFF WITHOUT PAYING / 乘客走數 over what was lost. `verify_fares` `skills:` 22 assertions on the frame region, `verify_hud` the strings in both languages, `verify_vehicle` the rig. Near miss and air are slots. The user's drive owed; the draw-call delta (two faces up) unmeasured.
 - `P3-46` ✅ Route line on the minimap (`Q137` reversed, the user's call of 2026-09-24) — the legal route to the destination from the fare's own `Route`, from the car's hit to the stop point, re-routed at the 5 Hz sample and seeded the way the car faces (`Hit.along`); `route_px` 5 px in `map_route`; `map:` assertions on the cut, the mesh and the transform, and `verify_road_graph` pins the drawn polyline to `distance_m`; carrying from the boot stand at rest (`--fare-seed=1`, t=8): +1 `draws`, +221 `prims` over `route_px = 0`, and +7 / +14.9k over `--minimap=off` (137 / 775.5k against 130 / 760.6k; the map alone was +5 / +14.7k) — frames in `build/driver/route_a` (the line from the chevron, clockwise round the Expo Drive roundabout, east to 華懋世紀廣場) and `route_d` (cleared once the car left the network). The user's frame owed (colour, width).
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
@@ -258,6 +261,7 @@ and there in the same change.
 - `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
   the legal route drawn on the minimap. Held: arrow to the next junction.
 - `Q144` The parks in the world are the ground painted green, every code the minimap draws (user; `P3-47`, 2026-09-25). The user's frame owed.
+- `Q145` Skills pay flat HK$ per event, the delivery is a receipt, and the passenger's face pops from the back seat (user; `P3-49`, 2026-09-25). Not the style chain. The user's drive owed.
 - `Q143` A street the region cuts is closed on the line; the neighbour's way in never (user;
   `P3-29a`, built). Closed. The user's drive owed.
 

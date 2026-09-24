@@ -219,7 +219,8 @@ read like inconsistencies and are not — "restoring consistency" is how most of
   `fold_tolerance_deg`; `opposed_pair_bearing_deg` beside `pair_bearing_tolerance_deg`.
 - **Deliberately DUPLICATED — do not import one into the other**: `pipeline/carriageway.py` and
   `tools/carriageway_margin.py` (`Q95`); `pipeline/region.py` and `tools/carriageway_region.py`
-  (`Q129`); the two arrow-row readers (`Q94`); `_Ribbon`'s scalar filter beside `_Occluders.cover`.
+  (`Q129`); the two arrow-row readers (`Q94`); `_Ribbon`'s scalar filter beside `_Occluders.cover`;
+  `skidpad_ablation._slip_deg` beside `FareSystem.slip_deg_of` (`Q84`, `Q145`).
 
 ## Where to look
 
