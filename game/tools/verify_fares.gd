@@ -791,6 +791,112 @@ func _check_skills() -> void:
 	)
 	prompt.free()
 
+	# Air (`P3-51`): seconds with every wheel off the ground, paid at the
+	# landing and only upright. Both sides of the bar, the repeat, the roll,
+	# the flight that never lands, and a mid-air slip that is not a drift.
+	var flier: FareSystem = _system(_fares, _profile, SEED)
+	_skilled = 0
+	flier.skilled.connect(_count_skilled)
+	_tick(flier, pickup.point, CRAWL, 5)
+	var air_ticks: int = int(ceil(_skills.air_min_s / TICK_S))
+	var air_repeat_ticks: int = int(ceil(_skills.air_s / TICK_S))
+	_fly(flier, FAST, air_ticks - 1, true, true)
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		flier.fare.awards.is_empty(),
+		"skills",
+		"one tick short of air_min_s pays nothing at the landing"
+	)
+	_fly(flier, FAST, air_ticks, true, true)
+	_expect(flier.fare.awards.is_empty(), "skills", "in the air, nothing has paid yet")
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		(
+			flier.fare.awards.size() == 1
+			and flier.fare.awards[0].skill == Fare.Skill.AIR
+			and is_equal_approx(flier.fare.awards[0].hkd, _skills.air_hkd)
+			and is_equal_approx(flier.fare.tip_hkd, _skills.air_hkd)
+			and _skilled == 1
+		),
+		"skills",
+		"the landing after air_min_s in the air pays air_hkd into the live tip, once, and says so"
+	)
+	_fly(flier, FAST, air_ticks + air_repeat_ticks, true, true)
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		flier.fare.count_of(Fare.Skill.AIR) == 3 and _skilled == 3,
+		"skills",
+		"held another air_s, the landing pays twice: the repeat is the flight's length"
+	)
+	_fly(flier, FAST, air_ticks, true, true)
+	_fly(flier, FAST, 1, false, false)
+	_expect(
+		flier.fare.count_of(Fare.Skill.AIR) == 3,
+		"skills",
+		"a flight that lands on its roof pays nothing"
+	)
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		flier.fare.count_of(Fare.Skill.AIR) == 3,
+		"skills",
+		"and righting afterwards does not pay it late: the landing tick decided"
+	)
+	_fly(flier, FAST, 1, true, true)
+	_fly(flier, FAST, air_ticks, true, false)
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		flier.fare.count_of(Fare.Skill.AIR) == 4,
+		"skills",
+		"rolling in the air is nothing; upright at the landing is what is asked"
+	)
+	_slide(flier, FAST, 0.0, 1)
+	var drifts_before: int = flier.fare.count_of(Fare.Skill.DRIFT)
+	for _tick_index: int in drift_ticks * 2:
+		flier.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, threshold + 20.0, true, true)
+	_fly(flier, FAST, 1, false, true)
+	_expect(
+		flier.fare.count_of(Fare.Skill.DRIFT) == drifts_before,
+		"skills",
+		"a car yawing in the air reads a slip angle and is not drifting"
+	)
+	flier.free()
+	var faller: FareSystem = _system(_fares, _profile, SEED)
+	_tick(faller, pickup.point, CRAWL, 5)
+	var fall_ticks: int = int(ceil(faller.fare.remaining_s / TICK_S)) + 1
+	_fly(faller, FAST, fall_ticks, true, true)
+	_expect(
+		faller.bails == 1 and faller.fare.count_of(Fare.Skill.AIR) == 0,
+		"skills",
+		"a flight that never lands pays nothing, however long"
+	)
+	faller.free()
+	var unpaid_air: SkillProfile = _skills.duplicate()
+	unpaid_air.air_hkd = 0.0
+	var no_air: FareSystem = _system_with({"nodes": []}, _profile, unpaid_air, SEED)
+	_expect(not no_air.usable(), "skills", "mutation caught: a zero air_hkd is an inert system")
+	no_air.free()
+	var jumped: FareSystem = _system(_fares, _profile, SEED)
+	_air_drive(jumped, pickup, air_ticks, air_repeat_ticks)
+	var stingy_air: SkillProfile = _skills.duplicate()
+	stingy_air.air_hkd = _skills.air_hkd * 0.5
+	var cheap_jump: FareSystem = _system_with(_fares, _profile, stingy_air, SEED)
+	_air_drive(cheap_jump, pickup, air_ticks, air_repeat_ticks)
+	_expect(
+		(
+			jumped.deliveries == 1
+			and cheap_jump.deliveries == 1
+			and jumped.fare.count_of(Fare.Skill.AIR) == 3
+			and cheap_jump.fare.banked_hkd < jumped.fare.banked_hkd
+		),
+		"skills",
+		(
+			"mutation caught: half the air price banks HK$%.2f against HK$%.2f"
+			% [cheap_jump.fare.banked_hkd, jumped.fare.banked_hkd]
+		)
+	)
+	jumped.free()
+	cheap_jump.free()
+
 	# A bail forfeits every skill already paid: the receipt keeps them, the
 	# money does not.
 	var bailer: FareSystem = _system(_fares, _profile, SEED)
@@ -851,6 +957,31 @@ static func _tick(system: FareSystem, point: Vector3, speed_mps: float, ticks: i
 static func _slide(system: FareSystem, speed_mps: float, slip_deg: float, ticks: int) -> void:
 	for tick: int in ticks:
 		system.sample(FAR_AWAY, speed_mps, Vector3.FORWARD, TICK_S, slip_deg)
+
+
+## `ticks` samples with every wheel off the ground (`airborne`) or back on
+## it, `upright` or on the roof, going nowhere that hails.
+static func _fly(
+	system: FareSystem, speed_mps: float, ticks: int, airborne: bool, upright: bool
+) -> void:
+	for tick: int in ticks:
+		system.sample(FAR_AWAY, speed_mps, Vector3.FORWARD, TICK_S, 0.0, airborne, upright)
+
+
+## One fare from `pickup`, driven the same way every time: a jump that pays
+## once, one that pays twice, a hop that pays nothing, then straight to the
+## door. Two systems given this drive differ only by their tables.
+static func _air_drive(
+	system: FareSystem, pickup: Fare.Stop, air_ticks: int, air_repeat_ticks: int
+) -> void:
+	_tick(system, pickup.point, CRAWL, 5)
+	_fly(system, FAST, air_ticks, true, true)
+	_fly(system, FAST, 1, false, true)
+	_fly(system, FAST, air_ticks + air_repeat_ticks, true, true)
+	_fly(system, FAST, 1, false, true)
+	_fly(system, FAST, air_ticks - 1, true, true)
+	_fly(system, FAST, 1, false, true)
+	_tick(system, system.fare.destination.point, CRAWL, 1)
 
 
 ## One fare from `pickup`, driven the same way every time: a slide that pays

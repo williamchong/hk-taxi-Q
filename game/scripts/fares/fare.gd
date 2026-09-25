@@ -20,8 +20,8 @@ extends RefCounted
 
 enum Kind { SHORT_HOP, STANDARD }
 
-## What a skill is. Drift, speed and early arrival pay today; near miss and
-## air are slots, waiting on `B3`'s traffic and on something to jump off.
+## What a skill is. Drift, speed, air and early arrival pay today; near miss
+## is a slot, waiting on `B3`'s traffic. Air (`P3-51`) is paid at the landing.
 ## `CRASH` is the first PENALTY (`P3-50`, planned): an award whose `hkd` is
 ## negative, on the same receipt — the passenger docks the tip, never the
 ## meter, and the tip floors at zero.

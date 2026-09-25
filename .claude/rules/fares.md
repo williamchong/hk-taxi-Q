@@ -135,6 +135,12 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;
   `taxi_hire.gd` pops the grin (`PassengerEmote`, `vehicle/passenger_emote.gd`) and pops the rage
   on `bailed`. A new consumer connects the signal; it never reads `awards` from `_process`.
-- 🚫 **Not here**: near miss and air (`Fare.Skill` slots — `B3`'s traffic, and something to jump
-  off), the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
+- 🔴 **Air pays at the LANDING, never per second in the air** (`P3-51`, `Q147`, the user's ask):
+  `SkillTracker._flight` meters seconds with every wheel off (`VehicleController.is_airborne`)
+  and on the first grounded tick pays `air_hkd` once the flight held `air_min_s`, again per
+  further `air_s`, only when `is_upright` on that tick — a roll is four wheels in the air too. A
+  flight that never lands (the harness resets a fallen car) pays nothing; the drift meter refuses
+  airborne ticks because a yawing car reads a slip. `verify_fares` drives `sample`'s `airborne` /
+  `upright` arguments through `_fly`; mutations: a zeroed `air_hkd`, a halved one on `_air_drive`.
+- 🚫 **Not here**: near miss (a `Fare.Skill` slot — `B3`'s traffic), the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

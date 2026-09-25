@@ -106,7 +106,7 @@ the arrow disabled.
 | **Sustained speed** | HK$ per `speed_hold_m` driven over `speed_min_kph` — never oftener than the meter's 200 m unit (`P3-49`) |
 | **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
 | **Near miss** | Passing traffic within ~1 m at speed — a slot until `B3` has traffic |
-| **Air** | By airtime duration — a slot until something can be jumped off |
+| **Air** | HK$ at the landing once every wheel has been off the ground for `air_min_s`, and again per `air_s` of flight — upright landings only, a roll pays nothing (`P3-51`, `Q147`) |
 
 Skills are paid during the drive and shown at once — a flash under the clock, the tip on its own
 LED under the meter in the meter's red, and the passenger's face popping out of the back seat — so
@@ -129,7 +129,8 @@ one is always the *style chain*.
 | **Fare combo** | The session | Consecutive deliveries | A bailed fare |
 
 Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy, so which
-route pays more is a real choice. Air is not scored until something can be jumped off.
+route pays more is a real choice. Air pays off any deck edge: the flyovers are jumpable by design
+(`Q147`), and the drop is the shortcut the time bonus already pays.
 
 ---
 

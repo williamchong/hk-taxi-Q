@@ -1932,6 +1932,12 @@ func _check_fare_face() -> void:
 		"face",
 		"a skill flashes as its money and its name"
 	)
+	var flight: RefCounted = FareScript.Award.new(FareScript.Skill.AIR, 5.0)
+	_expect(
+		face.award_text(flight) == "+HK$5.0 air" and zh.award_text(flight) == "+HK$5.0 飛車",
+		"face",
+		"a flight flashes as air / 飛車 (`P3-51`)"
+	)
 	# An early arrival is named in the delivery's caption, since its flash is
 	# overwritten by the banked sum in the same call.
 	var early_fare: RefCounted = FareScript.new()

@@ -33,6 +33,15 @@ const PATH: String = "res://tuning/skills.tres"
 @export var speed_hold_m: float
 ## What each `speed_hold_m` at or over the floor pays into the tip, in HK$.
 @export var speed_hkd: float
+## How long every wheel must be off the ground before the flight counts at
+## all, in seconds, judged at the landing. A kerb hop is under it.
+@export var air_min_s: float
+## Once a flight has counted, each further stretch of air that pays again, in
+## seconds — also at the landing.
+@export var air_s: float
+## What a flight pays into the tip when it counts, and again each `air_s`, in
+## HK$. Paid only on an upright landing.
+@export var air_hkd: float
 ## The share of the allowance that must be left at delivery for the early
 ## arrival to pay, 0..1.
 @export var early_share: float

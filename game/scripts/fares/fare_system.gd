@@ -53,7 +53,9 @@ extends Node
 ## aboard a `SkillTracker` reads every tick's speed and slip: a slide held at
 ## or over `HandlingProfile.drift_slip_threshold_deg` for `SkillProfile.drift_min_s`
 ## pays `drift_hkd` and again every further `drift_s`, a run at or over
-## `speed_min_kph` pays `speed_hkd` every `speed_hold_m` driven, and an
+## `speed_min_kph` pays `speed_hkd` every `speed_hold_m` driven, a flight
+## with every wheel off the ground for `air_min_s` pays `air_hkd` on an
+## upright landing and again per further `air_s` (`P3-51`), and an
 ## arrival with `early_share` of the allowance left pays `early_hkd` at the
 ## door. Each is a flat HK$ into `Fare.tip_hkd` the moment it is earned and a
 ## line on the receipt; `skilled` says so. A bail forfeits the lot — the
@@ -242,6 +244,9 @@ func setup(
 		"speed_min_kph": skills.speed_min_kph,
 		"speed_hold_m": skills.speed_hold_m,
 		"speed_hkd": skills.speed_hkd,
+		"air_min_s": skills.air_min_s,
+		"air_s": skills.air_s,
+		"air_hkd": skills.air_hkd,
 		"early_share": skills.early_share,
 		"early_hkd": skills.early_hkd,
 	}
@@ -307,9 +312,12 @@ func _physics_process(delta: float) -> void:
 	var placed: Transform3D = vehicle.global_transform
 	var velocity: Vector3 = vehicle.linear_velocity
 	var nose: Vector3 = -placed.basis.z
-	# The slip is only read while a passenger is aboard.
-	var slip: float = slip_deg_of(velocity, nose) if state == State.CARRYING else 0.0
-	sample(placed.origin, velocity.length(), nose, delta, slip)
+	# The slip, the wheels and the roll are only read while a passenger is aboard.
+	var carrying: bool = state == State.CARRYING
+	var slip: float = slip_deg_of(velocity, nose) if carrying else 0.0
+	var airborne: bool = vehicle.is_airborne() if carrying else false
+	var upright: bool = vehicle.is_upright() if carrying else true
+	sample(placed.origin, velocity.length(), nose, delta, slip, airborne, upright)
 
 
 ## The angle between where the car points and where it is going, in degrees,
@@ -326,11 +334,18 @@ static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
 
 
 ## One tick of the loop: the car is at `position` doing `speed_mps` along
-## `heading` with `slip_deg` between the two, `delta_s` after the last tick.
-## The odometer, the clock and the skills run every tick; the graph is asked
-## once per `sample_hz`.
+## `heading` with `slip_deg` between the two, `delta_s` after the last tick,
+## `airborne` with every wheel off the ground and `upright` on its wheels
+## rather than its roof (`P3-51`). The odometer, the clock and the skills run
+## every tick; the graph is asked once per `sample_hz`.
 func sample(
-	position: Vector3, speed_mps: float, heading: Vector3, delta_s: float, slip_deg: float = 0.0
+	position: Vector3,
+	speed_mps: float,
+	heading: Vector3,
+	delta_s: float,
+	slip_deg: float = 0.0,
+	airborne: bool = false,
+	upright: bool = true
 ) -> void:
 	if not _usable:
 		return
@@ -338,7 +353,7 @@ func sample(
 	if state == State.CARRYING:
 		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
 		_announce_reading()
-		for award: Fare.Award in _tracker.tick(speed_mps, slip_deg, elapsed):
+		for award: Fare.Award in _tracker.tick(speed_mps, slip_deg, elapsed, airborne, upright):
 			_award(award)
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:

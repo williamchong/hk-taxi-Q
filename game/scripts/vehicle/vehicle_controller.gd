@@ -550,6 +550,19 @@ func _any_wheel_grounded() -> bool:
 	return false
 
 
+## True while every wheel is off the ground: a jump, a drop off a deck, or a
+## roll. What the air skill meters (`P3-51`); the roll is told apart by
+## `is_upright` on the landing.
+func is_airborne() -> bool:
+	return not _any_wheel_grounded()
+
+
+## True while the body's up is still up — the same bar `_apply_auto_right`
+## rights the car at, read rather than acted on.
+func is_upright() -> bool:
+	return global_basis.y.dot(Vector3.UP) > OVERTURNED_DOT
+
+
 func _apply_drift_yaw() -> void:
 	if is_zero_approx(_drift_engagement):
 		return
@@ -681,7 +694,7 @@ func _write_drift_grip() -> void:
 ## Returns true if the car was righted this tick, so the caller can skip the
 ## drive and steering derived from the pose it no longer has.
 func _apply_auto_right(delta: float) -> bool:
-	if global_basis.y.dot(Vector3.UP) > OVERTURNED_DOT:
+	if is_upright():
 		_upside_down_for = 0.0
 		return false
 	_upside_down_for += delta

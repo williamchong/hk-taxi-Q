@@ -5,8 +5,8 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-The skill bonuses' dwells, bars and prices (`P3-49`, `Q145`) — what a drift, a run at speed and an
-early arrival pay into the tip. Ours, like `fares.tres`, and every number below is a first guess
+The skill bonuses' dwells, bars and prices (`P3-49`, `Q145`; air `P3-51`, `Q147`) — what a drift,
+a run at speed, a jump and an early arrival pay into the tip. Ours, like `fares.tres`, and every number below is a first guess
 ahead of the user's drive; what is not a guess is the shape: each skill is a flat HK$ per event
 (the user's call over `GAME_DESIGN.md`'s style chain), paid the moment it is earned, and a bail
 forfeits the lot.
@@ -61,6 +61,27 @@ Gloucester Road held does.
 
 The drift's price: a second sideways past the qualifying two and 200 m flat out are the same
 money, so neither route is the only one worth driving.
+
+## `air_min_s = 0.5`
+
+Every wheel off the ground for half a second before the flight counts, judged at the landing. A
+kerb hop or a crest on Gloucester Road is a tenth or two; a drop off a flyover deck at street
+speed is 0.8–1.2 s (a 6 m deck falls in 1.1 s on its own), so the bar sits between the two. Seconds
+rather than metres, like the drift: the skill is the flight, and the speed skill already pays the
+speed. Judged at the landing rather than paid in the air (`Q147`) so a car falling off the world
+pays nothing and a roll — four wheels in the air, upside down — can be told apart.
+
+## `air_s = 0.5`
+
+Once a flight has counted, each further half second pays again, all at the landing: a jump off the
+interchange pays twice, a hop off a kerb ramp once. The same repeat shape as `drift_s`.
+
+## `air_hkd = 5.0`
+
+The drift's and the speed's price: a qualifying flight is worth a second sideways past the two, so
+the shortcut off a bridge pays for itself in the tip as well as on the clock. Paid only on an
+upright landing — a jump that lands on the roof pays nothing, which is the whole of the crash
+penalty's job until `P3-50` builds one.
 
 ## `early_share = 0.5`
 
