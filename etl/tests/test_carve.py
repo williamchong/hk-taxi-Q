@@ -195,6 +195,29 @@ class TestRetainingWall:
         assert short.positions[:, 1].max() == pytest.approx(3.0)
         assert tall.positions[:, 1].max() == pytest.approx(9.0)
 
+    def test_the_wall_is_capped_at_the_face_top(self) -> None:
+        """`Q147`: the cut face closes the cut below the deck and stops just
+        above it. Drawn to the removed flank's top it was `e99`'s parapet."""
+        cut, plan = self._cut(4.0)
+        plan.face_above_m = 0.0
+
+        wall, metres = _retaining_wall(cut, plan, cut)
+
+        assert wall is not None and metres > 0.0
+        assert wall.positions[:, 1].max() == pytest.approx(0.5)
+
+    def test_the_cap_follows_the_higher_station_of_a_sloped_segment(self) -> None:
+        """A cap at the lower station would leave a slit into the hollow at
+        the higher end; the lip at the low end is one station's rise."""
+        cut = box(origin=(0.0, 0.0, -3.0), size=6.0)
+        plan = _plan(line((0, 0.5, 0), (6, 1.5, 0)), half_m=3.0)
+        plan.face_above_m = 0.0
+
+        wall, _ = _retaining_wall(cut, plan, cut)
+
+        assert wall is not None
+        assert wall.positions[:, 1].max() == pytest.approx(1.5)
+
     def test_the_wall_wears_the_class_of_what_it_replaces(self) -> None:
         """🔴 A tile is one merged primitive whose first vertex is usually a
         building, so taking the wall's channels from the tile tags a concrete
@@ -479,7 +502,12 @@ class TestParapetBand:
         nothing else."""
         spec = _spec(
             Parapets(
-                levels=(1,), on_structure=True, reach_m=1.5, wall_tolerance_m=0.3, wall_max_m=2.5
+                levels=(1,),
+                on_structure=True,
+                reach_m=1.5,
+                wall_tolerance_m=0.3,
+                wall_max_m=2.5,
+                face_above_m=0.0,
             )
         )
         edge = {

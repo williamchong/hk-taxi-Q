@@ -1266,6 +1266,11 @@ class Parapets:
     # — a pier carrying the flyover overhead, the side of a higher deck
     # alongside, a noise barrier — and is left whole.
     wall_max_m: float
+    # How far above the deck the carriageway carve's own cut face may stand,
+    # on the listed ramps: it closes the cut below the deck and no higher, so
+    # the face is never the parapet the band exists to remove. Zero allowed,
+    # and shipped: any lip above the ribbon is a step the car has to mount.
+    face_above_m: float
 
 
 @dataclass(frozen=True)
@@ -1434,6 +1439,8 @@ def _parapets(body: Any, where: str) -> Parapets | None:
     if not isinstance(on_structure, bool):
         raise ValueError(f"{where}:on_structure must be true or false, got {on_structure!r}")
     measures = _measures(body, where, ("reach_m", "wall_tolerance_m", "wall_max_m"), positive=True)
+    # Zero is the shipped value: the face stops flush with the ribbon.
+    measures.update(_measures(body, where, ("face_above_m",), positive=False))
     if measures["wall_max_m"] <= measures["wall_tolerance_m"]:
         raise ValueError(
             f"{where}:wall_max_m must be above wall_tolerance_m, or nothing is a parapet"

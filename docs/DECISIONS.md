@@ -7658,8 +7658,37 @@ parapets, and the band stands on the ramps the carve already cuts.
     deck at 49 km/h on a left steer, dropped 10.6 → 4.0 m and landed upright on Jaffe Road at
     4 km/h; the before frame shows the parapet, the after frame the bare deck and its kerb.
     With the withdrawal that parapet is back and the drive stops at it.
-- **Kept deliberately:** the flyover parapets (the user's call), the ramp retaining walls, the
-  tunnel touchdown fences (`fence.touchdown_levels`), the 0.15 m kerb (the one visible edge a
+- 🔴 **The eight ramps' own cut face WAS a guard rail, and the user caught it** (second
+  screenshot, `e99` from the street: a wall from the kerb to well above the ramp). `Q19`
+  measured the removed flank 1.5-2.0 m above the road, and `_retaining_wall` drew the face to
+  the top of what was removed — along both rails, on every listed edge — a parapet the band
+  cannot reach, because the face is built after the band runs. The face is **capped at the deck
+  plus `parapets.face_above_m`** (0 m — flush, the user's call over a first 0.30 m lip that sat
+  inside `Q19`'s 0.18-0.30 m beaching band; `EdgePlan.face_above_m`) so it closes the cut below
+  the deck (`Q104`'s hollow) and no higher; what stood beyond the rail above the deck is the
+  band's. Measured on the cap: the uncapped face stood up to **1.12 m** above the ribbon on `e99`
+  (p90 0.86 m, 47% of its vertices over 0.3 m) and up to 8 m on `e233`. The `e99` street-level
+  frames (`--camera=261,7,384 --look=229,5,422`) differ only where the face's top used to be; the
+  face below the deck stays in both, because the ramp is a hollow shell (`Q104`). A drive from
+  the `e99` ramp (`--spawn-at=260.7,6.2,413 --spawn-facing=261.8,6.6,421.8`, steer right) left
+  the deck at 25 km/h and landed 2.2 m lower on the street. ⚠️ The cap takes the HIGHER of a
+  segment's two stations where `floor` takes the lower — a cap at the lower end would leave a
+  slit into the hollow at the higher; `test_the_cap_follows_the_higher_station_of_a_sloped_segment`.
+- **The shipped build — the ramps banded and capped, the flyovers whole** (the `carve` battery
+  on both regions, before side a worktree of the flyover build; the withdrawal returns every
+  flyover figure to what the band had moved): 8 band rows in Wan Chai, all eight listed ramps,
+  8 cut, **665 m²** removed, 31,061 deck triangles kept; Causeway Bay 0 rows. Wan Chai's tiles
+  **1,011,521 → 968,206** vertices (93.7 MB, under the pre-band 974,450 because the ramps' band
+  and the cap take vertices the face used to carry); Causeway Bay 508,205 → 493,053 (46.0 MB).
+  Level +1 `INFRASTRUCTURE` in the bumper band 0.612% → **13.045%** (the parapets are back),
+  level 0 0.339% → 0.441% (`Q23`'s on-structure runs are no longer banded), the five off-grade
+  edges below the bar back (`e306`, `e364`, `e208`, `e257`, `e450`); `clearance_reconcile`
+  **25 / 28 / 7 → 28 / 32 / 8** and **8 / 11 / 3 → 9 / 13 / 4**, the `Q51` ratchet as it stood
+  before the band; `deck_error` 92.9% → 94.3% and `overhang` 7.6% → 5.0% (the caps answer as deck
+  again); `ground_clearance`'s 0.30–2.00 m band 505 → 542 cells; `narrowing` byte-identical;
+  Causeway Bay's `deck_error` and `overhang` fail before and after, pre-existing gates.
+- **Kept deliberately:** the flyover parapets (the user's call), the ramp cut faces below the
+  deck, the tunnel touchdown fences (`fence.touchdown_levels`), the 0.15 m kerb (the one visible edge a
   deck keeps).
 
 **See.** `P3-51` · `P3-49` · `Q145` · `Q19` · `Q22` · `Q23` · `Q104` · `Q110` · `tuning/skills.md` ·

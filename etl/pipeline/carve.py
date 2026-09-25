@@ -286,6 +286,14 @@ def _retaining_wall(
     shorter — a slab of concrete hanging over the carriageway with nothing behind
     it — and would read as correct in every counter. `Q72`'s tautology: a number
     the construction guarantees says nothing.
+
+    🔴 **And capped at the ribbon plus `plan.face_above_m` where the plan
+    carries one** (`Q147`):
+    the face closes the cut BELOW the deck, where the retained mass would
+    otherwise show its hollow, and stops just above it. Above the deck the
+    removed flank stood in the road and its remainder beyond the rail is the
+    band's. Uncapped, the face was the ramps' parapet, 1.5-2.0 m along both
+    rails of `e99`, and the user photographed it as the guard rail to remove.
     """
     points, offsets, half_m, floors = plan.points, plan.offsets, plan.half_m, plan.floors
     centroids = removed.triangle_centroids()
@@ -309,6 +317,14 @@ def _retaining_wall(
             if not near.any():
                 continue
             top = float(tops[near].max())
+            if plan.face_above_m is not None:
+                # The HIGHER of the segment's two stations, where `floor` and
+                # the prism's ceiling take the lower: the face is there to
+                # close the hollow under the deck, and a cap at the lower end
+                # would leave a slit into it at the higher. The price is a lip
+                # of one station's rise at the low end, 0.1-0.2 m on a ramp.
+                ribbon = float(max(points[index, 1], points[index + 1, 1]))
+                top = min(top, ribbon + plan.face_above_m)
             if top <= floor:
                 continue
             base = points[index] + wide * half_m * sign
@@ -468,6 +484,12 @@ class EdgePlan:
     band: bool = False
     wall_tolerance_m: float = 0.0
     wall_max_m: float = np.inf
+    # Listed (carriageway) plans: how far above the ribbon the cut face may
+    # stand, or None for the top of what was removed. `Q147`: a face drawn to
+    # the removed flank's top was a 1.5-2.0 m wall along both rails of `e99`,
+    # the one parapet the band could not reach because the face is built
+    # after it runs.
+    face_above_m: float | None = None
     # Band plans: the band's half-width at each station — the deck's rim, or
     # the drawn rail where that is wider, plus `reach_m`. `half_m` is its
     # maximum, for the plan box.
@@ -531,6 +553,7 @@ def _plan_edge(edge: dict, spec: Carve, overhead: HeightField) -> EdgePlan:
         half_m=half_m,
         floors=floors,
         prisms=_prisms(points, offsets, half_m, floors, ceilings),
+        face_above_m=None if spec.parapets is None else spec.parapets.face_above_m,
     )
 
 

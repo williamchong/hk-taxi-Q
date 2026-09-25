@@ -2489,6 +2489,7 @@ class TestCarve:
         assert band.reach_m == pytest.approx(1.5)
         assert band.wall_tolerance_m == pytest.approx(0.3)
         assert band.wall_max_m == pytest.approx(2.5)
+        assert band.face_above_m == pytest.approx(0.0)
 
     def test_a_wall_max_under_the_tolerance_is_refused(self, rewrite) -> None:
         """Nothing would be a parapet: every cap is above the tolerance and

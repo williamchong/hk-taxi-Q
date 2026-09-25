@@ -3866,6 +3866,19 @@ carve:
     # first build without this bound took 14,150 m2 in Wan Chai for 2,237 m
     # of parapet-bounded deck, which is neighbouring decks' sides.
     wall_max_m: 2.5
+    # How far above the ribbon the carriageway carve's cut face may stand on
+    # the eight listed ramps. Q19 measured the removed flank 1.5-2.0 m above
+    # the road, and a face drawn to its top was a wall along both rails of
+    # e99 — the one parapet the band cannot reach, because the face is built
+    # after the band runs. Capped here, the face closes the cut below the deck
+    # (where the retained mass would show its hollow, Q104) and stops FLUSH
+    # with the ribbon (the user's call, 2026-09-26): a 0.3 m lip was the first
+    # value, and it sits inside the 0.18-0.30 m band Q19 measured as the one
+    # that beaches the car, so a slow sideways exit could catch on it. The
+    # price is cosmetic: where the real deck top stands above the ribbon
+    # (deck_error p90 0.095 m, worst 0.24 m) a thin gap of hollow can show at
+    # the rim. Above the ribbon the band takes what stood beyond the rail.
+    face_above_m: 0.0
 
 
 # ---------------------------------------------------------------------------

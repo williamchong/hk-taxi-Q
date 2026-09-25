@@ -71,3 +71,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   🔴 **A widening, a `reach_m` or a `wall_max_m` change moves the band** the way `floor_default_m`
   moves a fence, so it owes this rule, `ground_clearance` and `clearance` too. The drive is the
   evidence a frame cannot give: off a listed ramp, `e99` FLEMING ROAD first.
+- 🔴 **The carriageway carve's cut face is CAPPED at the deck plus `parapets.face_above_m`**
+  (`EdgePlan.face_above_m`, `test_the_wall_is_capped_at_the_face_top`): uncapped, the face was a
+  1.5-2.0 m parapet along both rails of the eight ramps, and the user photographed it as the guard
+  rail to remove (`Q147`); the band takes what stood beyond the rail above it. A change to the cap
+  owes the `e99` street-level frame (`--camera=261,7,384 --look=229,5,422`) before and after, and a
+  drive off `e99`.
