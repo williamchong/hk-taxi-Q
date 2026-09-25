@@ -1934,28 +1934,28 @@ func _check_fare_face() -> void:
 	)
 	# An early arrival is named in the delivery's caption, since its flash is
 	# overwritten by the banked sum in the same call.
-	var prompt: RefCounted = FareScript.new()
-	prompt.meter = FareMeterScript.new(tariff)
-	prompt.meter.advance(2200.0, 0.0)
-	prompt.awards.append(FareScript.Award.new(FareScript.Skill.EARLY, 10.0))
-	prompt.skills_hkd = 10.0
-	prompt.time_hkd = 12.5
-	prompt.tip_hkd = 22.5
-	prompt.banked_hkd = 53.6
-	face.on_ended(prompt, true)
-	face.on_sampled(idle, prompt, stand, 10.0, 122.88)
+	var early_fare: RefCounted = FareScript.new()
+	early_fare.meter = FareMeterScript.new(tariff)
+	early_fare.meter.advance(2200.0, 0.0)
+	early_fare.awards.append(FareScript.Award.new(FareScript.Skill.EARLY, 10.0))
+	early_fare.skills_hkd = 10.0
+	early_fare.time_hkd = 12.5
+	early_fare.tip_hkd = 22.5
+	early_fare.banked_hkd = 53.6
+	face.on_ended(early_fare, true)
+	face.on_sampled(idle, early_fare, stand, 10.0, 122.88)
 	_expect(
 		(
-			face.caption == "DELIVERED · early +HK$10.0 · TIP HK$22.5"
+			face.caption == "DELIVERED · +HK$10.0 early · TIP HK$22.5"
 			and face.callout_sub == "meter 31.1 + time 12.5 + early 10.0"
 		),
 		"face",
 		"an early arrival is named at the door (%s)" % face.caption
 	)
-	zh.on_ended(prompt, true)
-	zh.on_sampled(idle, prompt, stand, 10.0, 122.88)
+	zh.on_ended(early_fare, true)
+	zh.on_sampled(idle, early_fare, stand, 10.0, 122.88)
 	_expect(
-		zh.caption == "已送達 · 早到 +HK$10.0 · 小費 HK$22.5", "face", "and in Chinese (%s)" % zh.caption
+		zh.caption == "已送達 · +HK$10.0 早到 · 小費 HK$22.5", "face", "and in Chinese (%s)" % zh.caption
 	)
 	var bare: RefCounted = FareScript.new()
 	bare.pickup = stand

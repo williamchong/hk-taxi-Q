@@ -96,7 +96,8 @@ func on_ended(fare: Fare, delivered: bool) -> void:
 		var early: String = ""
 		for award: Fare.Award in fare.awards:
 			if award.skill == Fare.Skill.EARLY:
-				early = " · " + skill_name(award.skill) + " " + flash(award.hkd)
+				early = " · " + award_text(award)
+				break
 		_notice_caption = (
 			_say("已送達", "DELIVERED") + early + _say(" · 小費 HK$", " · TIP HK$") + money(fare.tip_hkd)
 		)

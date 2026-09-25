@@ -7496,8 +7496,8 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
   holds the tip's digit under the meter's.
 - **The early arrival is named at the door** (the user's fifth ask, the same day): it pays inside
   `_deliver`, so its "+HK$10.0 early" flash was overwritten by the banked sum in the same call and
-  never drew. The delivery caption now carries it — "DELIVERED · early +HK$10.0 · TIP HK$22.5" /
-  已送達 · 早到 +HK$10.0 · 小費 HK$22.5 — held with the receipt; `verify_hud` holds both languages.
+  never drew. The delivery caption now carries it — "DELIVERED · +HK$10.0 early · TIP HK$22.5" /
+  已送達 · +HK$10.0 早到 · 小費 HK$22.5 — `award_text`, the flash's own wording — held with the receipt; `verify_hud` holds both languages.
 - Owed: the user's drive again on the new table, and the draw-call delta with faces up.
 
 **See.** `P3-49` · `Q141` · `Q84` · `P3-48` · `GAME_DESIGN.md` "Scoring" · `.claude/rules/fares.md`
