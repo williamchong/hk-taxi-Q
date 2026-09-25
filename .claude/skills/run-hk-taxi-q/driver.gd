@@ -218,7 +218,26 @@ func _boot() -> Node:
 	if _vehicle != null:
 		_spawn_y = _vehicle.global_position.y
 		print("vehicle: ", _vehicle.name, " at ", _vehicle.global_position)
+	# Every skill paid and every penalty docked, as it happens: the evidence a
+	# drive into a wall leaves on stdout (`P3-50`). Found by its signal, not
+	# its class, for `_find_vehicle`'s reason.
+	for node: Node in instance.find_children("*", "Node", true, false):
+		if node.has_signal("skilled"):
+			node.connect("skilled", _on_skilled)
 	return instance
+
+
+func _on_skilled(_fare: RefCounted, award: RefCounted) -> void:
+	print(
+		(
+			"award:   t=%5.2f  skill %d  HK$%+.1f"
+			% [
+				float(_trace_tick_index()) / Engine.physics_ticks_per_second,
+				award.get("skill"),
+				award.get("hkd")
+			]
+		)
+	)
 
 
 ## Steps the scene on the physics clock, applying the input timeline and
@@ -351,6 +370,12 @@ func _trace_tick() -> void:
 	_trace_line(
 		"tick %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f" % [tick, p.x, p.y, p.z, v.x, v.y, v.z]
 	)
+	# A wall contact this tick, as the fare loop read it (`P3-50`): the speed
+	# into the wall in m/s, the line absent on a tick with none.
+	if "last_impact_mps" in _vehicle:
+		var impact: float = float(_vehicle.get("last_impact_mps"))
+		if impact > 0.0:
+			_trace_line("hit %d %.6f" % [tick, impact])
 	# What stands under the car, and whose it is — a streamed body and a held one
 	# are indistinguishable from the car's state alone.
 	if _trace_query == null:

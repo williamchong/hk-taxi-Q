@@ -24,12 +24,15 @@ extends Node3D
 ## import hook does not dispatch, so it arrives with its vertex colours on and
 ## nothing else, and the override here is the whole material.
 
-enum Face { GRIN, ANGRY }
+enum Face { GRIN, ANGRY, HURT }
 
 ## The grin, shown when a skill pays. Assign in the scene: `emote_grin.glb`.
 @export var grin: PackedScene
 ## The rage, shown when the passenger walks. Assign in the scene: `emote_angry.glb`.
 @export var angry: PackedScene
+## The daze, shown when a penalty docks (`P3-50`). Assign in the scene:
+## `emote_hurt.glb`.
+@export var hurt: PackedScene
 
 ## How far a face rises over its life, in metres. Enough to clear the roof
 ## from the seat with room over it: the seat is 0.55 m up and the roof 0.86.
@@ -69,9 +72,20 @@ func _unshaded() -> StandardMaterial3D:
 	return _material
 
 
+func _scene_of(face: Face) -> PackedScene:
+	match face:
+		Face.GRIN:
+			return grin
+		Face.ANGRY:
+			return angry
+		Face.HURT:
+			return hurt
+	return null
+
+
 ## Pop `face` out of the seat.
 func show_face(face: Face) -> void:
-	var packed: PackedScene = grin if face == Face.GRIN else angry
+	var packed: PackedScene = _scene_of(face)
 	if packed == null:
 		push_warning("PassengerEmote has no scene for face %d; nothing to show." % face)
 		return

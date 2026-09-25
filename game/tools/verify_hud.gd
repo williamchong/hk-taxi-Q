@@ -2024,6 +2024,7 @@ func _check_fare_face() -> void:
 	# A penalty (`P3-50`, planned) is an award with negative money: docked on
 	# the receipt with a minus, flashed as a deduction.
 	var docked: RefCounted = FareScript.Award.new(FareScript.Skill.CRASH, -5.0)
+	var bumped: RefCounted = FareScript.Award.new(FareScript.Skill.BUMP, -2.0)
 	bare.awards.append(docked)
 	bare.time_hkd = 4.0
 	_expect(
@@ -2031,6 +2032,8 @@ func _check_fare_face() -> void:
 			face.receipt(bare) == "meter 29.0 + time 4.0 + crash −5.0"
 			and face.award_text(docked) == "−HK$5.0 crash"
 			and zh.award_text(docked) == "−HK$5.0 撞車"
+			and face.award_text(bumped) == "−HK$2.0 bump"
+			and zh.award_text(bumped) == "−HK$2.0 碰撞"
 		),
 		"face",
 		"a penalty is docked on the receipt and flashed as a deduction (%s)" % face.receipt(bare)

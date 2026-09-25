@@ -249,8 +249,21 @@ func setup(
 		"air_hkd": skills.air_hkd,
 		"early_share": skills.early_share,
 		"early_hkd": skills.early_hkd,
+		"bump_min_kph": skills.bump_min_kph,
+		"bump_hkd": skills.bump_hkd,
+		"crash_min_kph": skills.crash_min_kph,
+		"crash_hkd": skills.crash_hkd,
+		"crash_cool_s": skills.crash_cool_s,
 	}
 	if _any_zero(skills, skill_keys):
+		return
+	if skills.crash_min_kph <= skills.bump_min_kph:
+		push_error(
+			(
+				"FareSystem: %s crash_min_kph (%.1f) is not over bump_min_kph (%.1f); nothing will be hailed."
+				% [skills.resource_path, skills.crash_min_kph, skills.bump_min_kph]
+			)
+		)
 		return
 	if slip_threshold_deg <= 0.0:
 		push_error("FareSystem: no drift_slip_threshold_deg handed in; nothing will be hailed.")
@@ -317,7 +330,10 @@ func _physics_process(delta: float) -> void:
 	var slip: float = slip_deg_of(velocity, nose) if carrying else 0.0
 	var airborne: bool = vehicle.is_airborne() if carrying else false
 	var upright: bool = vehicle.is_upright() if carrying else true
-	sample(placed.origin, velocity.length(), nose, delta, slip, airborne, upright)
+	# Drained every tick, carrying or not: a hit taken empty must not be
+	# docked from the next passenger.
+	var impact: float = vehicle.take_impact_mps()
+	sample(placed.origin, velocity.length(), nose, delta, slip, airborne, upright, impact)
 
 
 ## The angle between where the car points and where it is going, in degrees,
@@ -336,8 +352,9 @@ static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
 ## One tick of the loop: the car is at `position` doing `speed_mps` along
 ## `heading` with `slip_deg` between the two, `delta_s` after the last tick,
 ## `airborne` with every wheel off the ground and `upright` on its wheels
-## rather than its roof (`P3-51`). The odometer, the clock and the skills run
-## every tick; the graph is asked once per `sample_hz`.
+## rather than its roof (`P3-51`), and `impact_mps` into a wall this tick
+## (`P3-50`). The odometer, the clock and the skills run every tick; the
+## graph is asked once per `sample_hz`.
 func sample(
 	position: Vector3,
 	speed_mps: float,
@@ -345,7 +362,8 @@ func sample(
 	delta_s: float,
 	slip_deg: float = 0.0,
 	airborne: bool = false,
-	upright: bool = true
+	upright: bool = true,
+	impact_mps: float = 0.0
 ) -> void:
 	if not _usable:
 		return
@@ -353,7 +371,9 @@ func sample(
 	if state == State.CARRYING:
 		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
 		_announce_reading()
-		for award: Fare.Award in _tracker.tick(speed_mps, slip_deg, elapsed, airborne, upright):
+		for award: Fare.Award in _tracker.tick(
+			speed_mps, slip_deg, elapsed, airborne, upright, impact_mps
+		):
 			_award(award)
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:

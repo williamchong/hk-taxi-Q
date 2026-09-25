@@ -87,6 +87,8 @@ func _on_bailed(_fare: Fare) -> void:
 		_emote.show_face(PassengerEmote.Face.ANGRY)
 
 
-func _on_skilled(_fare: Fare, _award: Fare.Award) -> void:
+## A skill grins; a penalty (`P3-50`) is the same signal with the sign
+## flipped, and the face flips with it.
+func _on_skilled(_fare: Fare, award: Fare.Award) -> void:
 	if _emote != null:
-		_emote.show_face(PassengerEmote.Face.GRIN)
+		_emote.show_face(PassengerEmote.Face.HURT if award.hkd < 0.0 else PassengerEmote.Face.GRIN)

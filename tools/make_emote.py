@@ -1,6 +1,6 @@
 """Generate the passenger's emotes: the faces that pop out of the cab (`P3-49`).
 
-Two low-poly faces, one file each, built the way `make_vehicle.py` builds the
+Three low-poly faces, one file each, built the way `make_vehicle.py` builds the
 taxi — flat convex faces from `primitives`, vertex-coloured, no texture — so
 they are ours under CC BY-SA like the rest of `assets/authored/`, and so they
 sit inside the toy-car art direction rather than beside it. The bundled
@@ -50,6 +50,7 @@ DEFAULT_OUT_DIR = ROOT / "game" / "assets" / "authored" / "vehicles"
 # time. ⚠️ No `_wheel` / `_col` / `_occ` suffix — see `WHEEL_FILE` there.
 GRIN_FILE = "emote_grin.glb"
 ANGRY_FILE = "emote_angry.glb"
+HURT_FILE = "emote_hurt.glb"
 
 # The glTF material name. Absent from `generated_scene_import.gd`'s table on
 # purpose: the hook's fallback turns the vertex colours on, and the rig then
@@ -61,6 +62,8 @@ MATERIAL = "emote"
 # rage is emoji red, and the features are one dark and one white.
 GRIN_YELLOW: Colour = (255, 204, 77)
 ANGRY_RED: Colour = (221, 46, 68)
+# The daze (`P3-50`): the grin's yellow gone pale, crossed eyes, a flat mouth.
+HURT_PALE: Colour = (247, 226, 140)
 DARK: Colour = (49, 55, 61)
 WHITE: Colour = (241, 241, 241)
 
@@ -101,6 +104,11 @@ class Proportions:
     brow_half_width_m: float = 0.014
     brow_y_m: float = 0.125
     brow_tilt_deg: float = 22.0
+    # The daze: each eye a cross of two bars, the mouth one flat bar.
+    cross_half_length_m: float = 0.04
+    cross_half_width_m: float = 0.011
+    flat_mouth_half_m: float = 0.07
+    flat_mouth_y_m: float = -0.12
 
 
 def _ring_xy(centre: tuple[float, float], radius: float, sides: int, z: float) -> list[Point]:
@@ -245,30 +253,83 @@ def _angry_mouth(shape: Proportions, *, z_face: float, name: str) -> list[MeshDa
 
 def _brows(shape: Proportions, *, z_face: float, name: str) -> list[MeshData]:
     """Two bars over the eyes, each tilted so its inner end is lower: anger, in two quads."""
-    parts: list[MeshData] = []
-    tilt = np.radians(shape.brow_tilt_deg)
-    for side, tag in ((-1.0, "l"), (1.0, "r")):
-        # The bar runs along `along` and is `across` thick; the inner end
-        # (towards x = 0) drops by the tilt.
-        along = np.array([np.cos(tilt), side * np.sin(tilt)])
-        across = np.array([-along[1], along[0]])
-        centre = np.array([side * shape.eye_x_m, shape.brow_y_m])
-        corners = [
-            centre - along * shape.brow_half_length_m - across * shape.brow_half_width_m,
-            centre + along * shape.brow_half_length_m - across * shape.brow_half_width_m,
-            centre + along * shape.brow_half_length_m + across * shape.brow_half_width_m,
-            centre - along * shape.brow_half_length_m + across * shape.brow_half_width_m,
-        ]
-        parts.append(
-            plate(
-                [(float(x), float(y)) for x, y in corners],
-                DARK,
-                z_front=z_face - PROUD_M,
-                z_back=z_face,
-                name=f"{name}_brow_{tag}",
-            )
+    # The tilt is mirrored per side, so the inner end (towards x = 0) drops.
+    return [
+        _bar(
+            (side * shape.eye_x_m, shape.brow_y_m),
+            shape.brow_half_length_m,
+            shape.brow_half_width_m,
+            side * shape.brow_tilt_deg,
+            DARK,
+            z_face=z_face,
+            name=f"{name}_brow_{tag}",
         )
+        for side, tag in ((-1.0, "l"), (1.0, "r"))
+    ]
+
+
+def _bar(
+    centre: tuple[float, float],
+    half_length: float,
+    half_width: float,
+    tilt_deg: float,
+    colour: Colour,
+    *,
+    z_face: float,
+    name: str,
+) -> MeshData:
+    """One tilted rectangle, a convex quad."""
+    tilt = np.radians(tilt_deg)
+    along = np.array([np.cos(tilt), np.sin(tilt)])
+    across = np.array([-along[1], along[0]])
+    c = np.array(centre)
+    corners = [
+        c - along * half_length - across * half_width,
+        c + along * half_length - across * half_width,
+        c + along * half_length + across * half_width,
+        c - along * half_length + across * half_width,
+    ]
+    return plate(
+        [(float(x), float(y)) for x, y in corners],
+        colour,
+        z_front=z_face - PROUD_M,
+        z_back=z_face,
+        name=name,
+    )
+
+
+def _crossed_eyes(shape: Proportions, *, z_face: float, name: str) -> list[MeshData]:
+    """An X over each eye's place: two bars at ±45°."""
+    parts: list[MeshData] = []
+    for side, tag in ((-1.0, "l"), (1.0, "r")):
+        centre = (side * shape.eye_x_m, shape.eye_y_m)
+        for tilt, arm in ((45.0, "a"), (-45.0, "b")):
+            parts.append(
+                _bar(
+                    centre,
+                    shape.cross_half_length_m,
+                    shape.cross_half_width_m,
+                    tilt,
+                    DARK,
+                    z_face=z_face,
+                    name=f"{name}_eye_{tag}_{arm}",
+                )
+            )
     return parts
+
+
+def _flat_mouth(shape: Proportions, *, z_face: float, name: str) -> list[MeshData]:
+    return [
+        _bar(
+            (0.0, shape.flat_mouth_y_m),
+            shape.flat_mouth_half_m,
+            shape.cross_half_width_m,
+            0.0,
+            DARK,
+            z_face=z_face,
+            name=f"{name}_mouth",
+        )
+    ]
 
 
 def build_grin(shape: Proportions | None = None) -> MeshData:
@@ -292,18 +353,30 @@ def build_angry(shape: Proportions | None = None) -> MeshData:
     return replace(merge(parts, name="emote_angry"), material=MATERIAL)
 
 
+def build_hurt(shape: Proportions | None = None) -> MeshData:
+    """The penalty face (`P3-50`): pale, eyes crossed out, a flat mouth."""
+    shape = shape or Proportions()
+    z_face = -shape.thickness_m / 2.0
+    parts = [_disc(HURT_PALE, shape, name="hurt_disc")]
+    parts += _crossed_eyes(shape, z_face=z_face, name="hurt")
+    parts += _flat_mouth(shape, z_face=z_face, name="hurt")
+    return replace(merge(parts, name="emote_hurt"), material=MATERIAL)
+
+
 def write_emotes(
     out_dir: Path, shape: Proportions | None = None
 ) -> list[tuple[Path, int, MeshData]]:
     """Write one `.glb` per face and return what went where."""
-    grin = build_grin(shape)
-    angry = build_angry(shape)
-    grin_path = out_dir / GRIN_FILE
-    angry_path = out_dir / ANGRY_FILE
-    return [
-        (grin_path, write_glb(grin_path, [grin]), grin),
-        (angry_path, write_glb(angry_path, [angry]), angry),
-    ]
+    written: list[tuple[Path, int, MeshData]] = []
+    for build, file in (
+        (build_grin, GRIN_FILE),
+        (build_angry, ANGRY_FILE),
+        (build_hurt, HURT_FILE),
+    ):
+        mesh = build(shape)
+        path = out_dir / file
+        written.append((path, write_glb(path, [mesh]), mesh))
+    return written
 
 
 def main(argv: Sequence[str] | None = None) -> int:

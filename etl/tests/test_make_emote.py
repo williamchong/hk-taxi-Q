@@ -26,12 +26,14 @@ from make_emote import (
     ANGRY_FILE,
     DARK,
     GRIN_FILE,
+    HURT_FILE,
     MATERIAL,
     PROUD_M,
     WHITE,
     Proportions,
     build_angry,
     build_grin,
+    build_hurt,
     plate,
     write_emotes,
 )
@@ -52,7 +54,7 @@ FORBIDDEN_SUFFIXES = ("_wheel", "_col", "_convcol", "_navmesh", "_occ", "_rigid"
 
 @pytest.fixture(scope="module")
 def faces() -> list[MeshData]:
-    return [build_grin(), build_angry()]
+    return [build_grin(), build_angry(), build_hurt()]
 
 
 def _outward_fraction(mesh: MeshData) -> float:
@@ -72,7 +74,7 @@ class TestShippedAssets:
             )
 
     def test_two_files_and_no_importer_suffix(self) -> None:
-        for name in (GRIN_FILE, ANGRY_FILE):
+        for name in (GRIN_FILE, ANGRY_FILE, HURT_FILE):
             stem = name.removesuffix(".glb")
             assert not any(stem.endswith(s) for s in FORBIDDEN_SUFFIXES), stem
 
@@ -112,10 +114,31 @@ class TestTheFaceIsOnTheSideTheCameraGets:
             radial = np.hypot(face.positions[:, 0], face.positions[:, 1])
             assert radial.max() <= shape.radius_m + 1e-9, f"{face.name} spills past its disc"
 
-    def test_the_two_faces_are_the_same_size(self, faces) -> None:
-        grin, angry = faces
-        assert np.allclose(grin.aabb()[0][:2], angry.aabb()[0][:2])
-        assert np.allclose(grin.aabb()[1][:2], angry.aabb()[1][:2])
+    def test_the_faces_are_the_same_size(self, faces) -> None:
+        grin = faces[0]
+        for other in faces[1:]:
+            assert np.allclose(grin.aabb()[0][:2], other.aabb()[0][:2])
+            assert np.allclose(grin.aabb()[1][:2], other.aabb()[1][:2])
+
+    def test_the_hurt_eyes_are_crossed(self) -> None:
+        # A daze, not a stare: over each eye's place the dark vertices spread
+        # along both diagonals, which a disc's ring or a bar's line does not.
+        shape = Proportions()
+        hurt = build_hurt()
+        rgb = hurt.colours[:, :3]
+        dark = np.all(rgb == np.array(DARK), axis=1)
+        for side in (-1.0, 1.0):
+            near = hurt.positions[
+                dark
+                & (np.sign(hurt.positions[:, 0]) == side)
+                & (hurt.positions[:, 1] > shape.eye_y_m - shape.cross_half_length_m - 1e-6)
+            ]
+            assert len(near) >= 16, f"side {side:+.0f} has no crossed eye"
+            local = near[:, :2] - np.array([side * shape.eye_x_m, shape.eye_y_m])
+            diag_a = local @ np.array([1.0, 1.0]) / np.sqrt(2.0)
+            diag_b = local @ np.array([1.0, -1.0]) / np.sqrt(2.0)
+            assert diag_a.max() > shape.cross_half_length_m * 0.9
+            assert diag_b.max() > shape.cross_half_length_m * 0.9
 
     def test_the_angry_brows_slope_down_towards_the_nose(self) -> None:
         # Anger, not worry: each brow's inner end is the lower one. Read off the

@@ -25,10 +25,18 @@ extends RefCounted
 ## slip angle, and `vehicle_controller.gd` refuses its yaw assist there for the
 ## same reason.
 ##
+## **Penalties are the same machinery with the sign flipped** (`P3-50`,
+## `Q148`): a wall hit arrives as `impact_mps`, the speed into the wall on
+## the tick of the contact, and two bars tier it — under `bump_min_kph` a
+## touch, free but the end of any slide; at or over it a collision docking
+## `bump_hkd`; at or over `crash_min_kph` a crash docking `crash_hkd`. One
+## wall is one dock: `crash_cool_s` after a dock every further contact is the
+## same event. The tip floors at zero in `FareSystem.tip_of`; the meter is
+## never docked.
+##
 ## 🚫 **Not a style chain.** `GAME_DESIGN.md` sketched a multiplier that a hard
-## crash resets; the user chose flat money per event (`Q145`), and there is no
-## crash detector to reset a chain with. `P3-2b` may layer the chain on top of
-## this; the awards stay what they are.
+## crash resets; the user chose flat money per event (`Q145`). `P3-2b` may
+## layer the chain on top of this; the awards stay what they are.
 ##
 ## **Pure, so `verify_fares.gd` can drive it without a car.** `tick` takes the
 ## speed, the slip and the elapsed time; `FareSystem` is the only caller and
@@ -54,6 +62,8 @@ var _slip_threshold_deg: float = INF
 var _drift: Dwell = Dwell.new()
 var _speed: Dwell = Dwell.new()
 var _air: Dwell = Dwell.new()
+## Seconds left in which a further contact is the last dock's event.
+var _cool_s: float = 0.0
 ## What the last `tick` earned. One array, cleared each tick rather than
 ## allocated: `tick` runs every physics tick and nearly always returns empty.
 var _earned: Array[Fare.Award] = []
@@ -66,17 +76,24 @@ func _init(profile: SkillProfile, slip_threshold_deg: float) -> void:
 
 ## One tick of the drive: what it earned, in the order it was earned. Usually
 ## nothing. `airborne` is every wheel off the ground this tick; `upright` is
-## the body's up still up — read on the landing tick, the one that decides.
+## the body's up still up — read on the landing tick, the one that decides;
+## `impact_mps` is the hardest wall contact this tick, 0 for none.
 ## ⚠️ The array is reused: read it before the next `tick`.
 func tick(
-	speed_mps: float, slip_deg: float, delta_s: float, airborne: bool = false, upright: bool = true
+	speed_mps: float,
+	slip_deg: float,
+	delta_s: float,
+	airborne: bool = false,
+	upright: bool = true,
+	impact_mps: float = 0.0
 ) -> Array[Fare.Award]:
 	_earned.clear()
 	var elapsed: float = maxf(delta_s, 0.0)
 	var speed: float = maxf(speed_mps, 0.0)
+	var touched: bool = impact_mps > 0.0
 	_dwell(
 		_drift,
-		slip_deg >= _slip_threshold_deg and not airborne,
+		slip_deg >= _slip_threshold_deg and not airborne and not touched,
 		elapsed,
 		_profile.drift_min_s,
 		_profile.drift_s,
@@ -93,7 +110,24 @@ func tick(
 		_profile.speed_hkd
 	)
 	_flight(airborne, upright, elapsed)
+	_hit(impact_mps, elapsed)
 	return _earned
+
+
+## The penalty tiers, on the speed into the wall. The cooldown runs down
+## first, so a dock at its last tick and a fresh wall on the next are two.
+func _hit(impact_mps: float, elapsed: float) -> void:
+	_cool_s = maxf(_cool_s - elapsed, 0.0)
+	var impact_kph: float = impact_mps * 3.6
+	if impact_kph < _profile.bump_min_kph:
+		return
+	if _cool_s > 0.0:
+		return
+	_cool_s = _profile.crash_cool_s
+	if impact_kph >= _profile.crash_min_kph:
+		_earned.append(Fare.Award.new(Fare.Skill.CRASH, -_profile.crash_hkd))
+	else:
+		_earned.append(Fare.Award.new(Fare.Skill.BUMP, -_profile.bump_hkd))
 
 
 ## The air meter: seconds in the air, judged on the tick the wheels come back.

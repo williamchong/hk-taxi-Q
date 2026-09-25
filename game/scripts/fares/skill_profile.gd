@@ -47,3 +47,20 @@ const PATH: String = "res://tuning/skills.tres"
 @export var early_share: float
 ## What an early arrival pays into the tip, in HK$, over the time tip.
 @export var early_hkd: float
+## The speed INTO a wall, in km/h, at or over which a contact is a collision
+## and docks `bump_hkd` (`P3-50`). Under it a contact is a touch: free, but
+## it ends a slide. Read off the skidpad's wall rows (`Q148`).
+@export var bump_min_kph: float
+## What a collision docks from the tip, in HK$ — stored positive, paid
+## negative.
+@export var bump_hkd: float
+## The speed into a wall at or over which a contact is a heavy crash and
+## docks `crash_hkd` instead. Must be over `bump_min_kph`.
+@export var crash_min_kph: float
+## What a heavy crash docks from the tip, in HK$ — stored positive, paid
+## negative.
+@export var crash_hkd: float
+## After a collision or a crash, how long further contacts are one and the
+## same event, in seconds: one wall is one dock, however many ticks the
+## body scrapes it.
+@export var crash_cool_s: float

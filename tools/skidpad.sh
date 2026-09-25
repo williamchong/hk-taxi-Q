@@ -5,8 +5,14 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all five
-#                                    (corner, drift, tap, brake, coast)
+#   --only=drift                     one manoeuvre instead of all six
+#                                    (corner, drift, tap, brake, coast, wall)
+#   --wall-deg=10,30,90              the wall rows' angles between the travel
+#                                    and the face (90 head-on). The wall
+#                                    manoeuvre stands its own slab and grades
+#                                    P3-50's penalty tiers: `approach` is the
+#                                    tool's reading, `impact` the controller's
+#                                    latch, and they must agree (Q148)
 #   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile float. A drift_*
 #                                    field re-runs only drift and tap, since the
 #                                    rest cannot move; anything else re-runs all

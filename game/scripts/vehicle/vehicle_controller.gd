@@ -37,6 +37,27 @@ const OVERTURNED_DOT: float = 0.1
 const RIGHTING_LIFT_M: float = 1.5
 ## Spin retained after a wall scrape. A glancing hit must never take control.
 const SCRAPE_SPIN_RETAINED: float = 0.5
+## The hardest wall contact since the last `take_impact_mps`, as the speed
+## INTO the wall in m/s — the pre-slide velocity's component along the
+## contact normal, the one number the tiers of `P3-50`'s penalty are read off.
+## Read before the slide rewrites the velocity, so it is the hit and not what
+## the arcade response left of it. 0 between contacts; a contact under the
+## 1 m/s floor in `_integrate_forces` never sets it, so a car pushing on a
+## wall from rest reads nothing.
+##
+## ⚠️ Read against `_velocity_into_step`, never `state.linear_velocity`: the
+## contacts `_integrate_forces` sees are the step's, and by then the solver
+## has already taken the normal velocity out — measured, a 69.5 kph head-on
+## on the skidpad read 1.6 kph off the state, and a 30° hit read nothing at
+## all because the state was already separating.
+var _impact_mps: float = 0.0
+## The velocity the car carried into this step: `linear_velocity` at the end
+## of `_physics_process`, before the server moves anything.
+var _velocity_into_step: Vector3 = Vector3.ZERO
+## What the last `take_impact_mps` handed over, kept for a reader that must
+## not drain the latch — `driver.gd`'s trace, which is how a kerb was shown
+## to read nothing (`Q148`). Never read by the game.
+var last_impact_mps: float = 0.0
 ## Speed over which the drift yaw assist reaches full strength, easing in from a
 ## standstill. A structural constant rather than a dial: it exists to stop a
 ## discontinuity, not to shape the feel, and every other rate in this file eases.
@@ -328,6 +349,7 @@ func _physics_process(delta: float) -> void:
 	_apply_drive()
 	_apply_coast_drag(delta)
 	_apply_drift(delta)
+	_velocity_into_step = linear_velocity
 
 
 ## Signed forward speed in km/h. Negative when reversing.
@@ -563,6 +585,17 @@ func is_upright() -> bool:
 	return global_basis.y.dot(Vector3.UP) > OVERTURNED_DOT
 
 
+## The hardest wall hit since the last call, in m/s into the wall, and clears
+## it: a latch, read once per physics tick by `FareSystem` (`P3-50`). One
+## contact is one reading — the slide leaves the car moving along the wall,
+## so the next tick reads 0 unless the player steers back into it.
+func take_impact_mps() -> float:
+	var impact: float = _impact_mps
+	_impact_mps = 0.0
+	last_impact_mps = impact
+	return impact
+
+
 func _apply_drift_yaw() -> void:
 	if is_zero_approx(_drift_engagement):
 		return
@@ -757,6 +790,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var normal: Vector3 = state.get_contact_local_normal(i)
 		if absf(normal.y) > WALL_NORMAL_Y:
 			continue  # road surface, handled by the suspension
+		# Latched before the two tests below, which read the SOLVED velocity:
+		# a 30° hit is already separating by then and would never register,
+		# and a head-on the solver stopped dead would fall under the speed
+		# floor, while the car it stopped is still stopped. The floor here is
+		# the same 1 m/s, on the velocity the wall met.
+		if _velocity_into_step.length() >= 1.0:
+			_impact_mps = maxf(_impact_mps, -_velocity_into_step.dot(normal))
 		var velocity: Vector3 = state.linear_velocity
 		if velocity.length() < 1.0:
 			continue

@@ -59,6 +59,20 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
   deepens underneath it. Sweep the taper dial itself (`Q88`).
+- ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
+  stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
+  its own reading of the speed into the face on the tick before contact, beside `impact`, the
+  controller's `take_impact_mps` latch, which is the number the game docks on — the two must
+  agree, and they do to the hundredth on every row. Run it at 4, 6 and 8 s like anything speed
+  dependent; `skills.md` quotes the matrix the bars were read from. ⚠️ **The latch reads
+  `_velocity_into_step`**, the velocity at the end of `_physics_process`, because by
+  `_integrate_forces` the solver has already removed the normal velocity — off the state a 69.5
+  kph head-on read 1.6 kph and a 30° hit read nothing, the state already separating. 🔴 **Finding
+  the wall rows made and this task did not act on**: at 30° and 90° the car stops DEAD (exit 0.09
+  kph at every entry) — the arcade `collision_speed_retained` / `collision_deflection` slide never
+  runs on those hits because the moving-away test reads the solved velocity, and only the 10°
+  brush keeps its speed. `GAME_DESIGN.md` says glancing hits deflect and head-on hits cost speed,
+  never control; the 30° row is not that. A handling task, with the wall rows as its before table.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target

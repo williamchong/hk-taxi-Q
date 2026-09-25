@@ -257,9 +257,11 @@ func _check_the_passenger_can_make_a_face(car: Node3D) -> void:
 			_fail("%s is ahead of the door hinge, not in the rear seat" % emote.name)
 	if emote.position.y <= 0.0:
 		_fail("%s sits at or under the floor" % emote.name)
-	for face: int in 2:
-		var packed: PackedScene = emote.grin if face == 0 else emote.angry
-		var label: String = "grin" if face == 0 else "angry"
+	var scenes: Array[PackedScene] = [emote.grin, emote.angry, emote.hurt]
+	var labels: PackedStringArray = ["grin", "angry", "hurt"]
+	for face: int in scenes.size():
+		var packed: PackedScene = scenes[face]
+		var label: String = labels[face]
 		if packed == null:
 			_fail("%s has no %s scene assigned" % [emote.name, label])
 			continue

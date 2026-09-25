@@ -26,7 +26,24 @@ extends SceneTree
 const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
-const MANOEUVRES: PackedStringArray = ["corner", "drift", "tap", "brake", "coast"]
+const MANOEUVRES: PackedStringArray = ["corner", "drift", "tap", "brake", "coast", "wall"]
+## The wall manoeuvre's angles, in degrees between the car's travel and the
+## wall's face: 90 is head-on, 10 a brush. `--wall-deg=` overrides; each
+## angle is a row. What it grades is `P3-50`'s penalty tiers — the controller's
+## impact latch against the geometric approach speed — and it is the one
+## manoeuvre that brings its own obstacle, since the pad is kept clear of
+## every building on purpose (`skidpad.md`).
+const DEFAULT_WALL_DEG: Array[float] = [10.0, 30.0, 90.0]
+## How far ahead of the car, at the end of the run-up, the wall is stood.
+## Close enough that the entry speed is the impact speed, far enough that the
+## body is not inside it when it appears.
+const WALL_AHEAD_M: float = 12.0
+## The slab: long so a brush at 10° still meets it, tall so the car cannot
+## jump it, thick so a 100 kph body cannot tunnel it in a tick.
+const WALL_SIZE := Vector3(240.0, 4.0, 1.0)
+## Seconds sampled after the first contact, so `exit kph` is what the arcade
+## response left and not the tick of the hit.
+const WALL_AFTER_S: float = 1.0
 
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
@@ -142,6 +159,9 @@ var _sweep: Array[float] = []
 ## `--sweep`, because the drift now has three yaw dials and a grid of them run
 ## through hand-edited tuning files is the hazard above.
 var _sweep_field: StringName = DEFAULT_SWEEP_FIELD
+var _wall_deg: Array[float] = DEFAULT_WALL_DEG.duplicate()
+## The slab the wall manoeuvre stood last, freed before the next row.
+var _wall: StaticBody3D = null
 ## Slip angle `seconds_above_deg` counts against, read off the profile at boot.
 ## INF when the profile does not publish one, which makes the column read 0.00
 ## everywhere rather than inventing a bar this project never authored.
@@ -201,6 +221,15 @@ class Result:
 	## car. Separates a drift from a spin far more clearly than slip does.
 	var yaw_deg: float = 0.0
 	var distance_m: float = 0.0
+	## The wall rows only. `approach_kph` is the geometric speed into the
+	## wall's face on the tick before contact — the row's own reading, from the
+	## velocity and the normal this tool placed; `impact_kph` is what the
+	## controller's latch (`take_impact_mps`) reported, the number the game
+	## pays on. The two must agree, and that agreement is the column's point.
+	var approach_kph: float = 0.0
+	var impact_kph: float = 0.0
+	## Ticks on which the latch read a hit: one wall should be one.
+	var impact_ticks: int = 0
 
 
 func _init() -> void:
@@ -238,6 +267,18 @@ func _parse_args() -> bool:
 				if _run_up_s <= 0.0:
 					_fail("--run-up must be positive, got %s" % _run_up_s)
 					return false
+			"--wall-deg":
+				var angles: Array[float] = []
+				for text: String in bits[1].split(","):
+					if not text.strip_edges().is_valid_float():
+						_fail("--wall-deg wants degrees, got '%s'" % text)
+						return false
+					var angle: float = text.to_float()
+					if angle <= 0.0 or angle > 90.0:
+						_fail("--wall-deg is 0 < deg <= 90, got %s" % text)
+						return false
+					angles.append(angle)
+				_wall_deg = angles
 			"--sweep":
 				# Split once more, so the field name carries its own "=" separator
 				# and `--sweep=drift_yaw_decay_s=0.4,0.6` reads as one flag.
@@ -360,6 +401,17 @@ func _measure_all() -> void:
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre:
 				continue
+			if manoeuvre == "wall":
+				# A row per angle; never swept, a wall does not take the drift
+				# branch and the arcade response has no dial here to sweep.
+				if not is_nan(value) and value != values[0]:
+					continue
+				for angle: float in _wall_deg:
+					var hit: Result = await _measure(manoeuvre, "wall@%.0f" % angle, angle)
+					if hit == null:
+						return
+					results.append(hit)
+				continue
 			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
 			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
 			# For such a field the other three never
@@ -382,7 +434,17 @@ func _measure_all() -> void:
 	if results.is_empty():
 		_fail("--only=%s matched no manoeuvre" % _only)
 		return
-	_print_table(results)
+	var handling: Array[Result] = []
+	var walls: Array[Result] = []
+	for result: Result in results:
+		if result.name.begins_with("wall@"):
+			walls.append(result)
+		else:
+			handling.append(result)
+	if not handling.is_empty():
+		_print_table(handling)
+	if not walls.is_empty():
+		_print_wall_table(walls)
 
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
@@ -392,9 +454,12 @@ func _measure_all() -> void:
 ## straight-line acceleration that says nothing about grip. Its *result* is
 ## reported, as `entry kph`, which is the number to quote when comparing runs at
 ## different `--run-up`.
-func _measure(manoeuvre: String, label: String) -> Result:
+func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
+	if _wall != null:
+		_wall.queue_free()
+		_wall = null
 	# A placed car has zero velocity but its wheels are still holding last
 	# manoeuvre's compression until they are simulated again, and the first tick
 	# after a reset lands a spring transient on the tyres. Settling first keeps
@@ -439,6 +504,8 @@ func _measure(manoeuvre: String, label: String) -> Result:
 			await _sample([&"brake_reverse"], TO_REST_LIMIT_S, true, result)
 		"coast":
 			await _sample([], TO_REST_LIMIT_S, true, result)
+		"wall":
+			await _hit_wall(wall_deg, result)
 		_:
 			_fail("unknown manoeuvre '%s'" % manoeuvre)
 			return null
@@ -452,6 +519,70 @@ func _measure(manoeuvre: String, label: String) -> Result:
 	if result.entry_kph > STOPPED_KPH and result.exit_kph > STOPPED_KPH:
 		result.decay_per_s = log(result.entry_kph / result.exit_kph) / result.seconds
 	return result
+
+
+## Stands a slab across the car's path at `wall_deg` to its travel and drives
+## into it under throttle, sampling until `WALL_AFTER_S` past the first hit.
+## The approach column is this tool's own reading; the impact column is the
+## controller's latch, read through `call()` for the reason `_vehicle` gives.
+func _hit_wall(wall_deg: float, into: Result) -> void:
+	var travel: Vector3 = _vehicle.linear_velocity
+	travel.y = 0.0
+	if travel.length() < SLIP_FLOOR_MPS:
+		_fail("%s: no speed at the end of the run-up" % into.name)
+		return
+	var along: Vector3 = travel.normalized()
+	# The face turned `wall_deg` off the travel: at 90 its normal is -along,
+	# at 10 the car brushes it. The slab is centred on the path so the car
+	# meets it whatever the angle.
+	var face: Vector3 = along.rotated(Vector3.UP, deg_to_rad(wall_deg))
+	var normal: Vector3 = face.cross(Vector3.UP).normalized()
+	if normal.dot(along) > 0.0:
+		normal = -normal
+	var centre: Vector3 = _vehicle.global_position + along * WALL_AHEAD_M
+	# The slab's base a metre under the spawn, so it stands in the ground
+	# rather than on it and no sill is left for a wheel to climb.
+	centre.y = _spawn.origin.y + WALL_SIZE.y * 0.5 - 1.0
+	_wall = StaticBody3D.new()
+	_wall.name = "Wall"
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = WALL_SIZE
+	shape.shape = box
+	_wall.add_child(shape)
+	root.add_child(_wall)
+	_wall.global_transform = Transform3D(Basis.looking_at(-normal, Vector3.UP), centre)
+	# Drained: a hit from an earlier row must not be read as this one's.
+	_vehicle.call("take_impact_mps")
+
+	Input.action_press(&"accelerate")
+	var first_tick: int = Engine.get_physics_frames()
+	var t: float = 0.0
+	var hit_at: float = INF
+	var last_position: Vector3 = _vehicle.global_position
+	var last_approach: float = 0.0
+	while t < MANOEUVRE_S and t < hit_at + WALL_AFTER_S:
+		await physics_frame
+		t = float(Engine.get_physics_frames() - first_tick) * _step
+		if not _vehicle.global_position.is_finite():
+			_fail("%s: vehicle position went non-finite — the physics blew up" % into.name)
+			break
+		var position: Vector3 = _vehicle.global_position
+		into.distance_m += last_position.distance_to(position)
+		last_position = position
+		var impact: float = float(_vehicle.call("take_impact_mps"))
+		if impact > 0.0:
+			into.impact_ticks += 1
+			if is_inf(hit_at):
+				hit_at = t
+				into.approach_kph = last_approach * 3.6
+			into.impact_kph = maxf(into.impact_kph, impact * 3.6)
+		# The tick before the hit is the approach; kept one tick behind so the
+		# reading is the velocity the wall met, not what the slide left.
+		last_approach = -_vehicle.linear_velocity.dot(normal)
+	into.seconds = t
+	if is_inf(hit_at):
+		_fail("%s: the wall was never hit in %.0f s" % [into.name, MANOEUVRE_S])
 
 
 ## Holds a set of actions and samples the car every tick, until the clock runs
@@ -570,9 +701,7 @@ func _release_everything() -> void:
 ## silently pushed every number on its row out of alignment under a fixed 13,
 ## which is a published table that misreads as a different quantity per row.
 func _print_table(results: Array[Result]) -> void:
-	var width: int = 13
-	for result: Result in results:
-		width = maxi(width, result.name.length())
+	var width: int = _column_width(results)
 	var row_format: String = "%%-%ds %%9s %%9s %%7s %%9s %%9s %%9s %%9s %%8s %%9s" % width
 	var data_format: String = (
 		"%%-%ds %%9.2f %%9.2f %%7.2f %%9.3f %%9.2f %%9.1f %%9.2f %%8.1f %%9.1f" % width
@@ -615,6 +744,41 @@ func _print_table(results: Array[Result]) -> void:
 				]
 			)
 		)
+
+
+## The wall rows, in their own table so the handling table above keeps the
+## shape every earlier before/after pair was pasted in.
+func _print_wall_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%7s %%9s" % width
+	var data_format: String = "%%-%ds %%9.2f %%9.2f %%9.2f %%9.2f %%7d %%9.1f" % width
+	print("")
+	print(row_format % ["run", "entry", "approach", "impact", "exit", "hits", "distance"])
+	print(row_format % ["", "kph", "kph", "kph", "kph", "ticks", "m"])
+	for result: Result in results:
+		_printed_rows += 1
+		print(
+			(
+				data_format
+				% [
+					result.name,
+					result.entry_kph,
+					result.approach_kph,
+					result.impact_kph,
+					result.exit_kph,
+					result.impact_ticks,
+					result.distance_m,
+				]
+			)
+		)
+
+
+## The label column, sized to its longest entry — see `_print_table`.
+static func _column_width(results: Array[Result]) -> int:
+	var width: int = 13
+	for result: Result in results:
+		width = maxi(width, result.name.length())
+	return width
 
 
 func _fail(message: String) -> void:

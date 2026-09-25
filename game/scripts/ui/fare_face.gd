@@ -209,6 +209,8 @@ func skill_name(skill: Fare.Skill) -> String:
 			return _say("飛車", "air")
 		Fare.Skill.CRASH:
 			return _say("撞車", "crash")
+		Fare.Skill.BUMP:
+			return _say("碰撞", "bump")
 	return ""
 
 

@@ -7711,3 +7711,77 @@ parapets, and the band stands on the ramps the carve already cuts.
 
 **See.** `P3-51` · `P3-49` · `Q145` · `Q19` · `Q22` · `Q23` · `Q104` · `Q110` · `tuning/skills.md` ·
 `.claude/rules/fares.md` · `.claude/rules/carve.md`
+
+## `Q148` — The penalties are three tiers on the speed into the wall, read off the skidpad's wall rows
+
+**Asked** 2026-09-25 (`P3-50`, the user's ask: the tip docked for the negative stuff). **Closed**
+2026-09-26 on the user's second ask — "distinguish between light touch, collision, and heavy
+crash" — with the detector built and the bars measured.
+
+**Decision.**
+
+- **One number, two bars, three tiers.** The car publishes the speed INTO a wall on the tick of
+  the hit — `VehicleController.take_impact_mps`, the pre-step velocity's component along the
+  contact normal, latched in `_integrate_forces` and drained every physics tick by `FareSystem`
+  — and `SkillTracker._hit` tiers it: under `bump_min_kph` (20) a TOUCH, free and unannounced,
+  but it ends any slide so a car pinned on a wall cannot farm the drift; at or over it a
+  COLLISION, `Fare.Skill.BUMP`, docking `bump_hkd` (2); at or over `crash_min_kph` (60) a CRASH
+  docking `crash_hkd` (5). `crash_cool_s` (1 s) makes one wall one dock, however many ticks the
+  body scrapes it. The tip floors at zero (`tip_of`), the meter is never docked (`Q141`), and the
+  HURT face pops from the back seat on any negative award.
+- **The bars are measured, not guessed.** `tools/skidpad.sh --only=wall` is a new manoeuvre that
+  stands its own slab across the car's path at `--wall-deg` (10, 30, 90) at the end of the
+  run-up, drives into it, and prints `approach` — the tool's own reading, the velocity along the
+  normal it placed, on the tick before contact — beside `impact`, the controller's latch. The
+  matrix, speed into the wall in kph:
+
+  | angle | 63.0 kph entry | 86.4 | 105.5 |
+  |---|---|---|---|
+  | 10° brush | 11.20 | 15.15 | 18.41 |
+  | 30° clip | 34.14 | 44.82 | 53.87 |
+  | 90° head-on | 69.51 | 90.49 | 108.30 |
+
+  The latch and the approach agree to the hundredth on every row. So 20 keeps every brush free at
+  any speed the car reaches, and 60 splits the hardest clip (53.9) from the softest head-on
+  (69.5). A brush reports 18–24 contact ticks and a head-on two, all inside a second, which is
+  the cooldown.
+- **Why not the two detectors the plan named.** A per-tick speed loss is contaminated by braking,
+  coast drag and `place_at` (which zeroes the velocity on every auto-right), so a hard stop on
+  the pedal would read as a wall. The engine's contact impulse is read after the arcade slide
+  has rewritten the velocity, so it measures the solve, not the hit. The contact normal with the
+  pre-step velocity is the hit itself, and it is the same quantity the slide already reads.
+- ⚠️ **Latched against `_velocity_into_step`, never `state.linear_velocity`.** The contacts
+  `_integrate_forces` sees are the step's, and by then the solver has removed the normal
+  velocity: off the state, the 69.5 kph head-on read 1.6 kph, and the 30° hit read nothing at
+  all — the state was already separating, so the existing "moving away" test skipped it. The
+  latch now sits before that test and reads the velocity kept from the end of `_physics_process`.
+- 🔴 **Finding for handling, not acted on here.** At 30° and 90° the car stops DEAD (exit 0.09
+  kph at every entry); only the 10° brush keeps its speed (35 / 56 / 70 kph). The arcade
+  `collision_speed_retained` / `collision_deflection` slide never runs on those hits, for the
+  same reason the latch missed them: the moving-away test reads the solved velocity.
+  `GAME_DESIGN.md` says glancing hits deflect and head-on hits cost speed, never control; the
+  30° row is not that. A handling task with the wall rows as its before table; the penalty bars
+  would be re-read after it.
+- **Measured on the drive** (`drive.sh --spawn-fare=wan_chai/f_004 --hold=accelerate@1.0+7
+  --hold=steer_right@2.5+2.0`, a passenger aboard): the car turns off Expo Drive into the
+  building south of it at 40 kph, the latch reads 11.44 m/s (41.2 kph into the wall), ONE
+  `hit` line in the trace, one `award:` line — `skill 6 HK$-2.0`, the bump — the flash
+  "−HK$2.0 碰撞" in `accent_negative` under the clock, the HURT face out of the back seat, the
+  tip 0.0 (`build/driver/p350_bump`). Two later turns hit at 24.6 and 43.7 kph into the wall,
+  bumps both; a scrape pinned on the wall afterwards reads 46 touch ticks under 0.0001 m/s and
+  docks nothing more. **A kerb reads nothing**: a right turn at speed put the car on the
+  pavement (the trace's `under` collider moves from the road surface to the tile for 35 ticks at
+  43–71 kph) with zero `hit` lines — the riser is 0.15 m and the body clears it, so no kerb
+  penalty is needed for the kerb to stay free. The crash tier has not been driven: nothing on
+  Expo Drive's approaches meets a wall at 60 kph into it; it is the pad's 90° rows and
+  `verify_fares`'s, and the user's drive is owed.
+- 🚫 Refused / not built: a kerb-mount penalty (measured free above), the wrong-way spell and
+  the red light (later penalties, the plan's list), a third price for the touch (a free tier is
+  what makes kerb-rubbing and wall-brushing arcade), a `crash_min_kph` at or under
+  `bump_min_kph` (`setup` refuses it), the two detectors the plan named (refuted above).
+- ⚠️ `driver.gd` prints every award as an `award:` line and writes `hit <tick> <m/s>` into a
+  `--trace` from the controller's `last_impact_mps`, the latch's last reading kept for a reader
+  that must not drain it. That line is how the kerb was shown free; the game never reads it.
+
+**See.** `P3-50` · `P3-49` · `Q145` · `Q141` · `Q84` · `tuning/skills.md` · `.claude/rules/fares.md` ·
+`.claude/rules/handling.md`

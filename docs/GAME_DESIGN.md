@@ -118,8 +118,10 @@ so the tip is never a number that appeared (`Q145`). A passenger whose clock run
 without paying, and the receipt says what walked out with them.
 
 ⚠️ **Flat money per event** (the user's call, `Q145`), not the *style chain* this section first
-sketched — a multiplier that a hard crash resets — because there is no crash detector yet and a
-pop the player can read beats a multiplier they cannot. `P3-2b` may layer the chain on top; the
+sketched — a multiplier that a hard crash resets — because a pop the player can read beats a
+multiplier they cannot. The crash detector exists since `P3-50` (`Q148`): a wall hit is tiered on
+the speed into the wall — a touch is free, a collision docks HK$2, a heavy crash HK$5 — and docks
+the tip, never the meter. `P3-2b` may layer the chain on top; the
 awards stay what they are. "Chain" elsewhere in this document means the fare sequence, so the style
 one is always the *style chain*.
 

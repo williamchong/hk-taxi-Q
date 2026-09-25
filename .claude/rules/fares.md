@@ -130,6 +130,24 @@ the loop's own numbers in `tuning/fares.tres`.
   with negative `hkd` — same receipt, minus sign,
   `accent_negative` flash — and `tip_of` never goes below 0: the passenger docks the tip, never
   the meter (`Q141`). 🚫 No penalty on the meter, no negative bank.
+- 🔴 **The penalties read ONE number off the car and tier it** (`P3-50`, `Q148`):
+  `VehicleController.take_impact_mps`, the speed INTO the wall on the tick of the hit — the
+  pre-step velocity's component along the contact normal, latched in `_integrate_forces` and
+  drained by `FareSystem._physics_process` every tick, carrying or not. Two bars in `skills.tres`:
+  under `bump_min_kph` (20) a TOUCH, free and unannounced, but it ends a slide (a car pinned on a
+  wall cannot farm the drift); at or over it a COLLISION, `Fare.Skill.BUMP`, docking `bump_hkd`
+  (2); at or over `crash_min_kph` (60) a CRASH docking `crash_hkd` (5). `crash_cool_s` (1 s)
+  makes one wall one dock. The bars are the skidpad's wall rows (`tools/skidpad.sh --only=wall`,
+  three angles at three run-ups) — a 10° brush never reaches 20, a 30° clip never reaches 60, a
+  head-on never misses it; change a bar only against a new matrix. `setup` refuses a crash bar
+  at or under the bump bar. `verify_fares`'s `penalty:` block holds every bar and the cooldown
+  from both sides, the touch that ends a slide, the tip floored, the meter unmoved, a zero price
+  and the folded bars as inert systems, and a halved price docking less. ⚠️ **Latched against
+  `_velocity_into_step`, never the state's velocity**: by `_integrate_forces` the solver has
+  taken the normal velocity out, and a 69.5 kph head-on read 1.6 off the state. 🚫 No speed-loss
+  detector (braking and `place_at` look like walls), no contact impulse (it measures the solve,
+  not the hit), no second wall list — the kerb riser is 0.15 m and the body clears it.
+  The face: a penalty pops the HURT emote (`emote_hurt.glb`, `taxi_hire.gd` on `hkd < 0`).
 - 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,
   `awards` and `skills_hkd` stay on the fare so `FareFace.forfeit` can say what walked out.
 - ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;

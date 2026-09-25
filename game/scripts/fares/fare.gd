@@ -22,10 +22,11 @@ enum Kind { SHORT_HOP, STANDARD }
 
 ## What a skill is. Drift, speed, air and early arrival pay today; near miss
 ## is a slot, waiting on `B3`'s traffic. Air (`P3-51`) is paid at the landing.
-## `CRASH` is the first PENALTY (`P3-50`, planned): an award whose `hkd` is
-## negative, on the same receipt — the passenger docks the tip, never the
-## meter, and the tip floors at zero.
-enum Skill { DRIFT, SPEED, EARLY, NEAR_MISS, AIR, CRASH }
+## `CRASH` and `BUMP` are the PENALTIES (`P3-50`, `Q148`): awards whose
+## `hkd` is negative, on the same receipt — a heavy crash and a collision,
+## tiered on the speed into the wall; a touch is neither and pays nothing.
+## The passenger docks the tip, never the meter, and the tip floors at zero.
+enum Skill { DRIFT, SPEED, EARLY, NEAR_MISS, AIR, CRASH, BUMP }
 
 
 ## One skill paid, in HK$ — negative for a penalty.

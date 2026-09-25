@@ -93,3 +93,37 @@ the end so the receipt has a line that says so.
 
 Twice a skill: arriving well early is the trip's point, and the receipt should show it as the
 biggest single line under the time itself.
+
+## `bump_min_kph = 20.0`
+
+The penalties (`P3-50`, `Q148`) read ONE number off the car: the speed into the wall on the tick
+of the hit, `VehicleController.take_impact_mps`, the pre-step velocity's component along the
+contact normal. Two bars on it make three tiers. Under this one a contact is a touch — free, no
+flash, but it ends a slide so a car pinned sideways on a wall cannot farm the drift. The
+skidpad's wall rows (`tools/skidpad.sh --only=wall`) put a 10° brush at 11.2 / 15.2 / 18.4 kph
+into the wall from 63 / 86 / 105 kph entries, so 20 keeps every brush free at any speed the car
+reaches, and a 30° clip at 63 kph reads 34.1, well over.
+
+## `bump_hkd = 2.0`
+
+A collision — a 30° clip at any speed, 34.1 to 53.9 kph into the wall on the pad — docks less
+than one skill pays: a warning, not a wipe, since the design line says a hit costs speed and
+never control and the tip should read the same way.
+
+## `crash_min_kph = 60.0`
+
+A head-on reads 69.5 / 90.5 / 108.3 kph into the wall from the three entries, and the hardest
+30° clip 53.9, so 60 splits them at every speed measured. `FareSystem.setup` refuses a value at
+or under `bump_min_kph`.
+
+## `crash_hkd = 5.0`
+
+One skill's worth: a heavy crash wipes the drift or the 200 m that paid before it, which is what
+makes the wall matter without making the meter a punishment — the meter is never docked (`Q141`)
+and the tip floors at zero.
+
+## `crash_cool_s = 1.0`
+
+One wall is one dock. The pad shows a head-on reporting two contact ticks and a brush eighteen to
+twenty-four, all inside a second; a rebound off the same wall inside the window is the same
+event. A second wall a second later is a second dock.

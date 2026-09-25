@@ -93,6 +93,7 @@ func _init() -> void:
 	_check_allowance()
 	_check_loop()
 	_check_skills()
+	_check_penalties()
 
 	if _failed > 0:
 		push_error("verify_fares: %d check(s) failed" % _failed)
@@ -942,8 +943,174 @@ func _check_skills() -> void:
 	mutated.free()
 
 
+## The penalties (`P3-50`, `Q148`): the tiers on the speed into the wall from
+## both sides of each bar, one wall one dock, the touch that ends a slide,
+## the tip floored and the meter untouched, and the table's mutations.
+func _check_penalties() -> void:
+	var zeroed: SkillProfile = _skills.duplicate()
+	zeroed.crash_hkd = 0.0
+	var inert: FareSystem = _system_with({"nodes": []}, _profile, zeroed, SEED)
+	_expect(not inert.usable(), "penalty", "mutation caught: a zero crash_hkd is an inert system")
+	inert.free()
+	var folded: SkillProfile = _skills.duplicate()
+	folded.crash_min_kph = folded.bump_min_kph
+	var flat: FareSystem = _system_with({"nodes": []}, _profile, folded, SEED)
+	_expect(not flat.usable(), "penalty", "and so is a crash bar that is not over the bump bar")
+	flat.free()
+
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "penalty", "SKIP: no pickup on this region alone to drive from")
+		return
+
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_skilled = 0
+	system.skilled.connect(_count_skilled)
+	_tick(system, pickup.point, CRAWL, 5)
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var cool_ticks: int = int(ceil(_skills.crash_cool_s / TICK_S))
+	_slide(system, FAST, threshold, drift_ticks)
+	_slide(system, FAST, 0.0, 1)
+	var live: float = system.fare.tip_hkd
+	_expect(is_equal_approx(live, _skills.drift_hkd), "penalty", "a drift in the tip to dock")
+
+	_hit(system, _skills.bump_min_kph - 1.0)
+	_expect(
+		system.fare.awards.size() == 1 and is_equal_approx(system.fare.tip_hkd, live),
+		"penalty",
+		"a kph under bump_min_kph is a touch: nothing docked, nothing said"
+	)
+	_hit(system, _skills.bump_min_kph)
+	_expect(
+		(
+			system.fare.awards.size() == 2
+			and system.fare.awards[1].skill == Fare.Skill.BUMP
+			and is_equal_approx(system.fare.awards[1].hkd, -_skills.bump_hkd)
+			and is_equal_approx(system.fare.tip_hkd, live - _skills.bump_hkd)
+			and _skilled == 2
+		),
+		"penalty",
+		"AT bump_min_kph a collision docks bump_hkd from the live tip and is announced"
+	)
+	_hit(system, _skills.crash_min_kph)
+	_expect(
+		system.fare.awards.size() == 2,
+		"penalty",
+		"a crash on the next tick is the same wall: inside crash_cool_s nothing more is docked"
+	)
+	# The ignored hit was a tick of the window too: one short is cool_ticks
+	# minus that tick, minus this probe.
+	_tick(system, FAR_AWAY, FAST, cool_ticks - 3)
+	_hit(system, _skills.crash_min_kph)
+	_expect(system.fare.awards.size() == 2, "penalty", "one tick short of crash_cool_s, still")
+	_hit(system, _skills.crash_min_kph - 1.0)
+	_expect(
+		(
+			system.fare.awards.size() == 3
+			and system.fare.awards[2].skill == Fare.Skill.BUMP
+			and is_equal_approx(system.fare.tip_hkd, live - 2.0 * _skills.bump_hkd)
+		),
+		"penalty",
+		"the tick that reaches crash_cool_s docks again, and a kph under crash_min_kph is a bump"
+	)
+	_tick(system, FAR_AWAY, FAST, cool_ticks - 1)
+	_hit(system, _skills.crash_min_kph)
+	var owed: float = _skills.drift_hkd - 2.0 * _skills.bump_hkd - _skills.crash_hkd
+	_expect(
+		(
+			system.fare.awards.size() == 4
+			and system.fare.awards[3].skill == Fare.Skill.CRASH
+			and is_equal_approx(system.fare.awards[3].hkd, -_skills.crash_hkd)
+			and is_equal_approx(system.fare.skills_hkd, owed)
+			and is_equal_approx(system.fare.tip_hkd, FareSystem.tip_of(0.0, owed))
+			and system.fare.count_of(Fare.Skill.CRASH) == 1
+		),
+		"penalty",
+		(
+			"AT crash_min_kph a crash docks crash_hkd; the skills owe HK$%.1f and the tip floors at %.1f"
+			% [owed, system.fare.tip_hkd]
+		)
+	)
+	var reading: float = system.fare.meter.reading_hkd()
+	_tick(system, FAR_AWAY, FAST, 1)
+	_expect(
+		system.fare.meter.reading_hkd() >= reading, "penalty", "the meter is never docked (`Q141`)"
+	)
+
+	# A touch ends a slide: the dwell restarts from the contact.
+	_tick(system, FAR_AWAY, FAST, cool_ticks)
+	var before: int = system.fare.awards.size()
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	system.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, threshold, false, true, 1.0)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_expect(
+		system.fare.awards.size() == before,
+		"penalty",
+		"a touch mid-slide ends the slide: drift_min_s counts again from the contact"
+	)
+	_slide(system, FAST, threshold, 1)
+	_expect(
+		(
+			system.fare.awards.size() == before + 1
+			and system.fare.awards[before].skill == Fare.Skill.DRIFT
+		),
+		"penalty",
+		"and the slide after it pays on its own dwell"
+	)
+
+	# Delivered: the time joins the skills at the door, so a debt that
+	# emptied the live tip comes off the time rather than the meter.
+	var skills_owed: float = system.fare.skills_hkd
+	_tick(system, system.fare.destination.point, CRAWL, 1)
+	_expect(system.deliveries == 1, "penalty", "delivered")
+	_expect(
+		(
+			is_equal_approx(
+				system.fare.tip_hkd, FareSystem.tip_of(system.fare.time_hkd, system.fare.skills_hkd)
+			)
+			and system.fare.skills_hkd <= skills_owed + _skills.early_hkd + 1e-6
+			and is_equal_approx(
+				system.fare.banked_hkd, system.fare.meter.reading_hkd() + system.fare.tip_hkd
+			)
+		),
+		"penalty",
+		(
+			"at the door the tip is the time plus the skills, floored, over the whole meter (HK$%.2f)"
+			% system.fare.banked_hkd
+		)
+	)
+	system.free()
+
+	# Half the price docks less on the same drive.
+	var cheaper: SkillProfile = _skills.duplicate()
+	cheaper.crash_hkd = _skills.crash_hkd * 0.5
+	var priced: FareSystem = _system(_fares, _profile, SEED)
+	var lenient: FareSystem = _system_with(_fares, _profile, cheaper, SEED)
+	for each: FareSystem in [priced, lenient]:
+		_tick(each, pickup.point, CRAWL, 5)
+		_slide(each, FAST, threshold, drift_ticks)
+		_slide(each, FAST, 0.0, 1)
+		_hit(each, _skills.crash_min_kph)
+	_expect(
+		lenient.fare.skills_hkd > priced.fare.skills_hkd,
+		"penalty",
+		"mutation caught: half the crash price docks less"
+	)
+	priced.free()
+	lenient.free()
+
+
 func _count_skilled(_fare: Fare, _award: Fare.Award) -> void:
 	_skilled += 1
+
+
+## One sample far from every stop with a wall hit of `impact_kph` into it.
+static func _hit(system: FareSystem, impact_kph: float) -> void:
+	system.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, 0.0, false, true, impact_kph / 3.6)
 
 
 ## `ticks` samples of a car at `point` doing `speed_mps`, `TICK_S` apart.
