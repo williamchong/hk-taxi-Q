@@ -79,7 +79,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   a designated stand per hail — that is a `FareSystem` change and the user's call. 🔴 **Every meter tick flashes under the clock**
   (`tick` rect, `tick_fade_s`) off `meter_changed`, and the banked sum in green off `delivered`;
   after a delivery everything but the total resets. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
-  decided in `hud.gd` is one the check cannot see. 🔴 **A stop is its building over its road**
+  decided in `hud.gd` is one the check cannot see. ⚠️ **The early arrival is named in the delivery
+  caption** ("DELIVERED · early +HK$10.0 · TIP HK$22.5", the user's ask): it pays in the same call
+  as `delivered`, so its `skilled` flash is overwritten by the banked sum before a frame shows it —
+  a skill paid at the door is shown by the caption, never by the flash. 🔴 **A stop is its building over its road**
   (`Q142`): the first row is `Fare.Stop.place_en()` / `place_zh()` — `fares.json`'s `place`, iB1000's
   name, falling back to TD's description — and the second is the graph's road name for the stop's
   edge with the distance while idle. 🚫 Do not parse the building out of the description; the

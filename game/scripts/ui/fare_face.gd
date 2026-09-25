@@ -90,7 +90,16 @@ func on_ended(fare: Fare, delivered: bool) -> void:
 	_notice = Notice.DELIVERED if delivered else Notice.BAILED
 	_notice_left = _hold_samples
 	if delivered:
-		_notice_caption = _say("已送達 · 小費 HK$", "DELIVERED · TIP HK$") + money(fare.tip_hkd)
+		# The early arrival is named in the caption (the user's ask): it pays in
+		# the same call as the delivery, so its flash under the clock is
+		# overwritten by the banked sum before a frame shows it.
+		var early: String = ""
+		for award: Fare.Award in fare.awards:
+			if award.skill == Fare.Skill.EARLY:
+				early = " · " + skill_name(award.skill) + " " + flash(award.hkd)
+		_notice_caption = (
+			_say("已送達", "DELIVERED") + early + _say(" · 小費 HK$", " · TIP HK$") + money(fare.tip_hkd)
+		)
 		_notice_callout = "HK$" + money(fare.banked_hkd)
 		_notice_sub = receipt(fare)
 	else:
