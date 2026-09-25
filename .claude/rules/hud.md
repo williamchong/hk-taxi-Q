@@ -119,6 +119,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   wording is a licence term** (hard rule 6, `LICENSING.md`): the ownership sentence, BOTH portals
   and the typeface's CC BY credit, in both languages — `verify_menu` holds the phrases, and an edit
   that fails it is a wording change to clear with `LICENSING.md`, not a check to loosen. 🔴 **The
+  engine's third-party notices are the engine's own tables at runtime** (`engine_notices.gd`:
+  `Engine.get_copyright_info()` + `Engine.get_license_info()`, `LICENSING.md` item 5) — never a
+  text pasted into `menu_text.json`, which would be wrong the release after a point upgrade, and
+  never `Engine.get_license_text()`, which is the MIT screen alone; `verify_menu` holds every
+  component named and every licence text whole. A page is shot with `--menu-page=<home|guide|
+  options|credits|notices>`. 🔴 **The
   menu never reaches into the level**: `Main` parks it (`DriveHarness.park` — pedals gated by
   `VehicleController.parked`, the fare loop's tick held, the rig handed to `MenuOrbit`) and
   resumes it on `started`; a second entry to the world goes through the harness, not the menu.

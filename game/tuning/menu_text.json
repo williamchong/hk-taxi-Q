@@ -5,7 +5,9 @@
     "credits are the attribution hard rule 6 and LICENSING.md require, and legal",
     "prose wants a diffable file the editor never rewrites. Read by",
     "scripts/ui/menu_text.gd; tools/verify_menu.gd holds the wording — the",
-    "ownership sentence, both portals, the typeface — in BOTH languages.",
+    "ownership sentence, both portals, the typeface — in BOTH languages. The",
+    "engine's third-party notices are not here: scripts/ui/engine_notices.gd",
+    "reads them from the engine at runtime, so they are the shipped binary's.",
     "",
     "The English data credit is docs/DATA_SOURCES.md's drafted text, verbatim.",
     "The Chinese is a rendering of it for the player: the terms name no",
@@ -51,6 +53,18 @@
     "guide": {
       "en": "HOW TO PLAY",
       "zh": "玩法"
+    },
+    "notices": {
+      "en": "ENGINE NOTICES",
+      "zh": "引擎聲明"
+    },
+    "notices_title": {
+      "en": "Engine third-party notices",
+      "zh": "引擎第三方聲明"
+    },
+    "notices_lead": {
+      "en": "The engine bundles the components below under their own terms. The text is the engine's own, in English.",
+      "zh": "引擎內含以下組件，各按其本身條款發行。以下為引擎自帶的英文原文。"
     }
   },
   "credits": [
@@ -80,8 +94,8 @@
         "zh": "引擎"
       },
       "body": {
-        "en": "Built with Godot Engine and Jolt Physics, both under the MIT licence. The engine's third-party notices ship with it.",
-        "zh": "以 Godot Engine 及 Jolt Physics 製作，兩者均按 MIT 授權條款發行。引擎的第三方聲明隨引擎附送。"
+        "en": "Built with Godot Engine and Jolt Physics, both under the MIT licence. The engine's third-party notices are under ENGINE NOTICES.",
+        "zh": "以 Godot Engine 及 Jolt Physics 製作，兩者均按 MIT 授權條款發行。引擎的第三方聲明見「引擎聲明」頁。"
       }
     },
     {

@@ -217,8 +217,14 @@ grant above, which sets no volume limit.
 5. ✅ **The credits screen itself** — built as `P6-1` (2026-09-26): the start menu's CREDITS &
    LICENCES page shows the government acknowledgement, the font's CC BY attribution, the engine's
    MIT notice and the code and assets' licences, in English and Chinese, and `check.sh` fails if
-   the required phrases leave `game/tuning/menu_text.json`. Still owed there: the engine's full
-   third-party notices (`Engine.get_license_text()`), which the store build must ship in full.
+   the required phrases leave `game/tuning/menu_text.json`. The engine's full third-party notices
+   ship on the ENGINE NOTICES page under it (same day): composed at runtime by
+   `game/scripts/ui/engine_notices.gd` from `Engine.get_copyright_info()` and
+   `Engine.get_license_info()` — the two tables the editor's own "Third-party Licenses" tab is
+   drawn from, compiled into every export template — so the words are the shipped binary's and
+   survive a point upgrade unedited. ⚠️ `Engine.get_license_text()` is Godot's MIT notice alone,
+   not the notices. `verify_menu.gd` holds that every component in the engine's table is named
+   and every licence's text is carried whole; mutation-checked by dropping the texts.
 
 The government terms are revisable by the publisher. Re-read them before launch and before adding a
 region (`Q100` retired the second city; the regions are the growth axis now).

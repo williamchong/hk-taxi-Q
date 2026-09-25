@@ -27,6 +27,7 @@ extends SceneTree
 const MenuProfileScript = preload("res://scripts/ui/menu_profile.gd")
 const MenuTextScript = preload("res://scripts/ui/menu_text.gd")
 const GuideCardScript = preload("res://scripts/ui/guide_card.gd")
+const EngineNoticesScript = preload("res://scripts/ui/engine_notices.gd")
 
 ## Every string the menu asks for, so a row missing from the table is a
 ## failure here and not a bracketed key on screen.
@@ -40,6 +41,9 @@ const KEYS: PackedStringArray = [
 	"language",
 	"language_zh",
 	"language_en",
+	"notices",
+	"notices_title",
+	"notices_lead",
 ]
 const LANGUAGES: PackedStringArray = ["en", "zh"]
 
@@ -100,6 +104,7 @@ var _failed: int = 0
 func _init() -> void:
 	_check_profile()
 	_check_text()
+	_check_notices()
 
 	if _failed > 0:
 		push_error("verify_menu: %d check(s) failed" % _failed)
@@ -188,6 +193,45 @@ func _check_text() -> void:
 			var body: String = MenuTextScript.pick((entry as Dictionary).get("body"), language, "")
 			_expect(not heading.is_empty(), "guide", "step %d has a %s heading" % [index, language])
 			_expect(not body.is_empty(), "guide", "step %d has a %s body" % [index, language])
+
+
+## The engine's third-party notices (`LICENSING.md` item 5): the composed
+## text names every component the engine's table lists and carries every
+## licence's text whole, so a build ships its notices in full, not the MIT
+## screen alone. Read from the running engine, so what is checked is what
+## ships from this version.
+func _check_notices() -> void:
+	var text: String = EngineNoticesScript.compose()
+	_expect(
+		text.length() > Engine.get_license_text().length(), "notices", "more than the MIT screen"
+	)
+	var components: Array = Engine.get_copyright_info()
+	_expect(
+		components.size() >= 50,
+		"notices",
+		"%d components in the engine's table" % components.size()
+	)
+	var missing: PackedStringArray = []
+	for component: Dictionary in components:
+		var name: String = str(component.get("name", ""))
+		if not text.contains(name):
+			missing.append(name)
+	_expect(
+		missing.is_empty(), "notices", "every component named (missing %s)" % ", ".join(missing)
+	)
+	for required: String in ["Godot Engine", "Jolt Physics"]:
+		_expect(text.contains(required), "notices", 'names "%s"' % required)
+	var licences: Dictionary = Engine.get_license_info()
+	_expect(licences.size() >= 10, "notices", "%d licences in the engine's table" % licences.size())
+	var unquoted: PackedStringArray = []
+	for id: String in licences:
+		if not text.contains(str(licences[id]).strip_edges()):
+			unquoted.append(id)
+	_expect(
+		unquoted.is_empty(),
+		"notices",
+		"every licence text whole (missing %s)" % ", ".join(unquoted)
+	)
 
 
 func _expect(condition: bool, area: String, what: String) -> void:

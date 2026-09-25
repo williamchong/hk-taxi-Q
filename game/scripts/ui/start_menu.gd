@@ -13,6 +13,8 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
+## `--menu-page=<home|guide|options|credits|notices>` opens on that page, so a
+## frame of any sheet is one `drive.sh` run and never a click.
 ##
 ## ⚠️ **The first Controls in this project that take a click.** `InputRouter`
 ## never marks an event handled, so the buttons see the pointer and the touch;
@@ -27,10 +29,14 @@ signal language_changed(code: String)
 
 ## Chooses whether the menu is shown at all. `off` for every scripted run.
 const MENU_ARG: String = "--menu="
+## The page the menu opens on; absent or unknown, the home page.
+const PAGE_ARG: String = "--menu-page="
 ## Over the HUD (10), under the dev overlay (127).
 const LAYER: int = 20
 
-enum Page { HOME, OPTIONS, CREDITS, GUIDE }
+## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
+## list by hand, since a `--script` tool cannot preload a `class_name` script.
+enum Page { HOME, OPTIONS, CREDITS, GUIDE, NOTICES }
 
 var _profile: MenuProfile = null
 var _style: HudStyle = null
@@ -45,6 +51,10 @@ var _page: Page = Page.HOME
 var _pages: Dictionary[int, Control] = {}
 ## Where the focus lands when a page opens, so a pad or the keys can drive it.
 var _first: Dictionary[int, Button] = {}
+## The notices' label, filled on the first visit: the text is the engine's and
+## costs a build, so neither boot nor a language change pays for a page the
+## player may never open.
+var _notices_label: RichTextLabel = null
 
 
 ## `--menu=off` turns it off; anything else, including nothing, leaves it on.
@@ -61,6 +71,9 @@ func _ready() -> void:
 		queue_free()
 		return
 	_language = Locale.language()
+	var wanted_page: String = Cmdline.value(PAGE_ARG).to_upper()
+	if Page.has(wanted_page):
+		_page = Page[wanted_page] as Page
 	_build()
 
 
@@ -102,6 +115,7 @@ func _build() -> void:
 	_pages[Page.OPTIONS] = _options()
 	_pages[Page.CREDITS] = _credits()
 	_pages[Page.GUIDE] = _guide()
+	_pages[Page.NOTICES] = _notices()
 	_show(_page)
 
 
@@ -116,6 +130,8 @@ func _show(page: Page) -> void:
 	_page = page
 	for key: int in _pages:
 		_pages[key].visible = key == page
+	if page == Page.NOTICES and _notices_label.text.is_empty():
+		_notices_label.text = EngineNotices.compose()
 	if _first.has(page):
 		# Deferred: the page has just been shown and focus needs a laid-out
 		# control.
@@ -124,7 +140,8 @@ func _show(page: Page) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _page != Page.HOME and event.is_action_pressed(&"ui_cancel"):
-		_show(Page.HOME)
+		# The notices hang off the credits, so the way back is one step.
+		_show(Page.CREDITS if _page == Page.NOTICES else Page.HOME)
 		get_viewport().set_input_as_handled()
 
 
@@ -196,19 +213,56 @@ func _credits() -> Control:
 		var entry: Variant = _text.credits[index]
 		if not entry is Dictionary:
 			continue
-		var heading: Label = _line(
-			"Heading%d" % index, MenuText.pick((entry as Dictionary).get("heading"), _language, "")
+		_heading(
+			lines,
+			"Heading%d" % index,
+			MenuText.pick((entry as Dictionary).get("heading"), _language, "")
 		)
-		_size(heading, _profile.heading_size_zh, _profile.heading_size)
-		heading.add_theme_color_override(&"font_color", _style.dial_needle)
-		lines.add_child(heading)
 		var body: Label = _line(
 			"Body%d" % index, MenuText.pick((entry as Dictionary).get("body"), _language, "")
 		)
 		_size(body, _profile.body_size_zh, _profile.body_size)
 		lines.add_child(body)
 
-	_first[Page.CREDITS] = _foot(column)
+	var foot: HBoxContainer = _foot_row(column)
+	_button(foot, "Notices", "notices", _show.bind(Page.NOTICES))
+	_first[Page.CREDITS] = _button(foot, "Back", "back", _show.bind(Page.HOME))
+	return panel
+
+
+## The engine's third-party notices, the engine's own words at runtime
+## (`EngineNotices` says why they are read and not copied): a heading and a
+## lead in the player's language over the English text, which is the only
+## text the licences exist in. A `RichTextLabel` for its own scroll and its
+## threaded layout — the text runs to some 100 components and 19 licences,
+## which a `Label` in a `ScrollContainer` lays out on the main thread at every
+## resize.
+func _notices() -> Control:
+	var panel: ChamferPanel = _sheet("Notices", _profile.credits_px)
+	var column: VBoxContainer = panel.get_node("Pad/Column")
+	_heading(column, "Heading", _text.say("notices_title", _language))
+	var lead: Label = _line("Lead", _text.say("notices_lead", _language))
+	_size(lead, _profile.body_size_zh, _profile.body_size)
+	lead.add_theme_color_override(&"font_color", _style.chip_muted)
+	column.add_child(lead)
+
+	var text := RichTextLabel.new()
+	text.name = "Text"
+	text.bbcode_enabled = false
+	text.threaded = true
+	text.scroll_active = true
+	text.selection_enabled = false
+	text.focus_mode = Control.FOCUS_NONE
+	text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# English, so the Latin size whatever the language; the theme's face, since
+	# the Kai has no Latin of its own.
+	text.add_theme_font_size_override(&"normal_font_size", _profile.body_size)
+	text.add_theme_color_override(&"default_color", _style.plate_ink)
+	column.add_child(text)
+	_notices_label = text
+
+	_first[Page.NOTICES] = _foot(column, Page.CREDITS)
 	return panel
 
 
@@ -217,10 +271,7 @@ func _credits() -> Control:
 func _guide() -> Control:
 	var panel: ChamferPanel = _sheet("Guide", _profile.guide_px)
 	var column: VBoxContainer = panel.get_node("Pad/Column")
-	var heading: Label = _line("Heading", _text.say("guide", _language))
-	_size(heading, _profile.heading_size_zh, _profile.heading_size)
-	heading.add_theme_color_override(&"font_color", _style.dial_needle)
-	column.add_child(heading)
+	_heading(column, "Heading", _text.say("guide", _language))
 
 	var row := HBoxContainer.new()
 	row.name = "Steps"
@@ -348,13 +399,19 @@ func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	return panel
 
 
-## A sheet's foot: the way back, right-aligned. Returned for the focus.
-func _foot(column: VBoxContainer) -> Button:
+## A sheet's foot: the way back to `to`, right-aligned. Returned for the focus.
+func _foot(column: VBoxContainer, to: Page = Page.HOME) -> Button:
+	return _button(_foot_row(column), "Back", "back", _show.bind(to))
+
+
+## The foot's row, for a sheet with more than the way back in it.
+func _foot_row(column: VBoxContainer) -> HBoxContainer:
 	var foot := HBoxContainer.new()
 	foot.name = "Foot"
 	foot.alignment = BoxContainer.ALIGNMENT_END
+	foot.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	column.add_child(foot)
-	return _button(foot, "Back", "back", _show.bind(Page.HOME))
+	return foot
 
 
 ## A choice: the housing with a flat `Button` filling it, the keyline lit in the
@@ -410,6 +467,16 @@ func _mark_current(button: Button, current: bool) -> void:
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_color_override(&"font_disabled_color", _style.dial_needle)
 	(button.get_parent() as ChamferPanel).edge = _style.dial_needle
+
+
+## A sheet's heading under `parent`: a line in the dial's amber at the heading
+## size.
+func _heading(parent: Control, node_name: String, text: String) -> Label:
+	var heading: Label = _line(node_name, text)
+	_size(heading, _profile.heading_size_zh, _profile.heading_size)
+	heading.add_theme_color_override(&"font_color", _style.dial_needle)
+	parent.add_child(heading)
+	return heading
 
 
 ## A line of menu text in the housing's ink, wrapping inside its column.

@@ -103,6 +103,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--fares=off\|on` | the fare loop (`P3-1a`). On by default — the car boots at a stand, so a stationary start hails within a second; `P3-9`'s free roam runs with it off |
 | `--lang=en\|zh` | the language the callout, the street plate and the menu read in (`Locale`, `Q142`). **`drive.sh` appends `zh`** unless a run names it: absent, the game reads the option the menu saved (`user://settings.cfg`), then the OS language, then `zh`, and a frame must not depend on this machine's pick or locale |
 | `--menu=off\|on` | the start menu (`P6-1`). **`drive.sh` appends `off`** unless a run names it, because the menu parks the car; `on` with `--seconds=3 --shots=2` is a menu frame — the orbit keeps the frame changing, so the capture never stalls |
+| `--menu-page=home\|guide\|options\|credits\|notices` | the sheet the menu opens on, so a frame of any page is one run and never a click; needs `--menu=on`. Default `home` |
 | `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 

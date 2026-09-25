@@ -7544,7 +7544,25 @@ system locale as the default "applying to both menu and game".
   Government's terms. `verify_menu.gd` (`ALWAYS_TOOLS`) fails `check.sh` when the ownership
   sentence, either portal, the typeface or the CC BY name leaves the file in either language;
   mutation-checked by removing the ownership sentence. `LICENSING.md` item 5 closes; item 2 (the
-  lawyer's sight-check) stays open, and the engine's full third-party notices are still owed.
+  lawyer's sight-check) stays open.
+- **The engine's third-party notices are read from the engine, never copied into the repo**
+  (same day, closing the last of item 5). An ENGINE NOTICES page under the credits' foot shows
+  `EngineNotices.compose()`: Godot's own notice, then every component in
+  `Engine.get_copyright_info()` with its files, holders and licence id, then every licence's text
+  from `Engine.get_license_info()` once — 102 components and 19 licences at 4.7.2, the two tables
+  the editor's "Third-party Licenses" tab is drawn from, compiled into every export template. A
+  text pasted at one version is wrong the release after a point upgrade; the engine's own tables
+  are the shipped binary's by construction. ⚠️ `Engine.get_license_text()` is NOT the notices —
+  it is the MIT screen alone, one page, and `LICENSING.md` named it by mistake. The page is a
+  `RichTextLabel` (its own scroll, threaded layout) since the text runs to a few hundred
+  kilobytes and a `Label` in a `ScrollContainer` re-lays it out on the main thread at every
+  resize, filled on the first visit so neither boot nor a language change pays for a page the
+  player may never open; English at the Latin size whatever the language, since the licences
+  exist in no other.
+  `verify_menu` holds that every component is named and every licence text carried whole,
+  mutation-checked by dropping the texts (19 missing, the check fails). `--menu-page=` opens the
+  menu on a named sheet so any page is one `drive.sh` frame, validated by `driver.gd` like
+  `--menu=`.
 - **The guide's steps are drawn pictures, not screenshots** (the user's third ask, "a simple
   guide with image steps"). The bundle ships no UI textures, and a screenshot of the city would be
   the generated data committed as a PNG — hard rule 7 says it is never committed. Five

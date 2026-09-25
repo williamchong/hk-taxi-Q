@@ -674,6 +674,15 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--menu=%s is not off or on" % value)
 					return false
+			"--menu-page":
+				# `start_menu.gd` reads this one itself and opens on the home
+				# page for a name it does not know — so a typo would shoot the
+				# wrong sheet and report success. ⚠️ The list is `StartMenu.Page`
+				# lower-cased, kept by hand: this tool cannot preload a
+				# `class_name` script (`verify_menu.gd` says why).
+				if not ["home", "guide", "options", "credits", "notices"].has(value):
+					_fail("--menu-page=%s is not home, guide, options, credits or notices" % value)
+					return false
 			"--touch":
 				# `input_router.gd` reads this one itself, so this is validation
 				# and nothing else — the same shape as the two above, for the
