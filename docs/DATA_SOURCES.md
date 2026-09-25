@@ -36,10 +36,12 @@ screen:
 > Street names are set in **Free HK Kai** (自由香港楷書) © 2016 Free Hong Kong Fonts, used under the
 > Creative Commons Attribution 4.0 International licence.
 
-🔴 **Not yet discharged: there is no credits screen.** `game/scripts/ui/` holds only the driving HUD,
-so the text exists only here and in `game/assets/authored/fonts/LICENSE` while the font ships in the
-PCK. This is a licence gap; build the screen before publishing anything beyond a playtest link.
-`LICENSING.md`, `Q79`.
+✅ **Discharged in the build since `P6-1` (2026-09-26).** The start menu's CREDITS & LICENCES page
+shows both texts above — the English verbatim, with a Chinese rendering beside it for the player —
+from `game/tuning/menu_text.json`, and `game/tools/verify_menu.gd` fails `check.sh` if the
+ownership sentence, either portal or the typeface's credit leaves the file, in either language.
+Every wording change here is a change there. The lawyer's sight-check of both texts stays open
+(`LICENSING.md` item 2); `Q79`.
 
 > **Legal note:** because this ships as a commercial product, have a Hong Kong IP lawyer sight-check
 > landmark depiction and the credits text before launch. **Landmark depiction is the top item** —

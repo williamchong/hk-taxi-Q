@@ -781,7 +781,11 @@ a grep something to find (`Q72`).
   primitive, one draw call, counters that publish both partitions, a `DATA_SOURCES.md` entry per
   layer read.
 - **Phase 6 — Production polish:** menus, settings, save/progression, accessibility,
-  localisation QA.
+  localisation QA. Pulled forward on the user's ask:
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P6-1` ✅ | Start menu (2026-09-26, the user's ask): START GAME, HOW TO PLAY (five drawn steps, `GuideCard`), OPTIONS (the language, saved to `user://settings.cfg` and read by `Locale` after `--lang=`), CREDITS & LICENCES (hard rule 6's data credit with the ownership sentence and both portals, the typeface's CC BY credit, the engine, the code and assets' licences — `menu_text.json`, both languages); drawn in the HUD's housing over the taxi standing at the Harbour Road stand (`showroom_fare_id`, HKCEC behind it) with the chase rig circling it (`MenuOrbit`, `menu.tres`), the OS language read before the default; `Main` parks the level and resumes it on start; `--menu=off` for every scripted run (`Q146`) | `verify_menu` in `ALWAYS_TOOLS` holds the credits' phrases in both languages and every menu string; a default `drive.sh` run is unchanged tick for tick; a `--menu=on` frame in each language; the user's look |
 - **Phase 7 — Ship:** free-slice boundary, one-time unlock IAP, store assets, web demo, HK press
   outreach, legal sight-check of landmark depiction.
 

@@ -61,9 +61,14 @@ VERIFY_TOOLS=(
 # verify_authored is here because its subject is committed: the Blender-exported
 # fixture under assets/authored/fixtures/ and what the importer does with it
 # (P5-10). A branch with no city is exactly where a hand-made asset arrives.
+#
+# verify_menu is here because what it holds is a licence term, not a frame: the
+# credits screen's wording (hard rule 6, LICENSING.md) and the menu's two
+# languages are committed tuning, and a clone with no city is where a wording
+# edit is most likely to land.
 ALWAYS_TOOLS=(
 	verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input
-	verify_authored
+	verify_authored verify_menu
 )
 
 # Tuning resources and scenes that carry no sidecar .md, and are allowed not

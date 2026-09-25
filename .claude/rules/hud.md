@@ -5,7 +5,12 @@ paths:
   - "game/scripts/core/street_tracker*.gd"
   - "game/tuning/{hud_layout,hud_style,wrong_way,street_tracker,minimap}.{tres,md}"
   - "game/tuning/street_plate.json"
+  - "game/tuning/menu.{tres,md}"
+  - "game/tuning/menu_text.json"
+  - "game/scripts/camera/menu_orbit.gd"
+  - "game/scripts/core/settings.gd"
   - "game/tools/verify_hud.gd"
+  - "game/tools/verify_menu.gd"
   - "tools/font_coverage.py"
   - "game/assets/authored/fonts/*"
 ---
@@ -105,11 +110,39 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`timer_outline_px`), no panel. ⚠️ **The pin is the field's child, not the roads'** — it must
   stand upright as the map turns; `follow` re-places it. ⚠️ **The route is the ROADS' child**
   (`P3-46`), so their transform carries it and `follow` never touches it. 🚫 No
-  next-junction arrow yet (`Q138`), no options menu yet (`P3-5b`).
+  next-junction arrow yet (`Q138`); the options menu is `P6-1`'s (below), the layout pass `P3-5b`'s.
+- **Start menu changes — `start_menu.gd`, `menu_orbit.gd`, `menu_profile.gd`, `menu_text.gd`,
+  `tuning/menu.tres`, `tuning/menu_text.json`, `settings.gd`, `locale.gd`'s readers, or
+  `main.gd`'s park / resume: `tools/check.sh` (which runs `verify_menu`), plus a frame at
+  `--menu=on --seconds=3 --shots=2 --debug-view=off` in EACH language (`--lang=zh`, `--lang=en`),
+  and a default `drive.sh` run to show the car still drives from tick one.** 🔴 **The credits'
+  wording is a licence term** (hard rule 6, `LICENSING.md`): the ownership sentence, BOTH portals
+  and the typeface's CC BY credit, in both languages — `verify_menu` holds the phrases, and an edit
+  that fails it is a wording change to clear with `LICENSING.md`, not a check to loosen. 🔴 **The
+  menu never reaches into the level**: `Main` parks it (`DriveHarness.park` — pedals gated by
+  `VehicleController.parked`, the fare loop's tick held, the rig handed to `MenuOrbit`) and
+  resumes it on `started`; a second entry to the world goes through the harness, not the menu.
+  ⚠️ **The car stands at `showroom_fare_id` (`f_001`, Harbour Road), not the start line** — the
+  line is under HKCEC's podium and the orbit there looks at a soffit; `resume` places it back on
+  the line, and the fare guide is hidden under the menu (`guide`).
+  ⚠️ **`--menu=off` is what keeps every scripted run what it was** — `drive.sh` appends it; a
+  driver that forgot would run six seconds of a parked car and print `DRIVER OK`. ⚠️ **`--lang=`
+  beats the saved option and the OS language** (`Locale`: flag, saved, `OS.get_locale_language()`,
+  default — the user's ask, a fresh install in the phone's language): a frame compared across runs
+  must not read the machine's pick or locale, so `drive.sh` appends `--lang=zh`; the menu warns
+  when the flag pins a choice it just saved. ⚠️ **A language change is
+  a new HUD, not a relabel**: `Main` retires the HUD and readies a fresh one so `hud.gd` keeps one
+  build path. ⚠️ **The menu's Chinese falls back to the theme's faces** (`FontVariation`) for a
+  glyph the Kai lacks — every character in `menu_text.json` was checked against the font's
+  `cmap` (0 missing, 2026-09-26); recheck with `tools/font_coverage.py`'s `read_cmap` after a
+  wording change. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
+  bundle ships no UI textures and a screenshot of the city is the generated data committed in
+  another form (hard rule 7); a step names a `GuideCard.KINDS` picture and `verify_menu` refuses
+  one that does not exist. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box
   on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
   — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font
   is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` carries it, and
-  the credits screen must when it exists — it does not yet, a recorded licence gap (`Q79`).
+  the credits screen carries it since `P6-1` (`menu_text.json`, held by `verify_menu`; `Q79`).

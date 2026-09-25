@@ -651,6 +651,14 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--minimap=%s is not off or on" % value)
 					return false
+			"--menu":
+				# `start_menu.gd` reads this one itself and falls back to showing
+				# the menu, under which the car is parked — so a typo would run a
+				# six-second drive that never moved and report success.
+				# `drive.sh` appends `--menu=off` unless a run names the flag.
+				if not ["off", "on"].has(value):
+					_fail("--menu=%s is not off or on" % value)
+					return false
 			"--touch":
 				# `input_router.gd` reads this one itself, so this is validation
 				# and nothing else — the same shape as the two above, for the

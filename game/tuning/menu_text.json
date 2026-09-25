@@ -1,0 +1,155 @@
+{
+  "_": [
+    "The start menu's strings and the credits (P6-1), each in both languages",
+    "(Locale: zh, en). JSON rather than a .tres, which hard rule 4 permits: the",
+    "credits are the attribution hard rule 6 and LICENSING.md require, and legal",
+    "prose wants a diffable file the editor never rewrites. Read by",
+    "scripts/ui/menu_text.gd; tools/verify_menu.gd holds the wording — the",
+    "ownership sentence, both portals, the typeface — in BOTH languages.",
+    "",
+    "The English data credit is docs/DATA_SOURCES.md's drafted text, verbatim.",
+    "The Chinese is a rendering of it for the player: the terms name no",
+    "language, so the English stands as the operative text and a lawyer's",
+    "sight-check of both is open item 2 in LICENSING.md.",
+    "",
+    "Every Chinese character here is covered by the plate's Kai; the menu falls",
+    "back to the theme's faces for a glyph it lacks, never to a box."
+  ],
+  "strings": {
+    "subtitle": {
+      "en": "Wan Chai · Causeway Bay",
+      "zh": "灣仔 · 銅鑼灣"
+    },
+    "start": {
+      "en": "START GAME",
+      "zh": "開始遊戲"
+    },
+    "options": {
+      "en": "OPTIONS",
+      "zh": "選項"
+    },
+    "credits": {
+      "en": "CREDITS & LICENCES",
+      "zh": "鳴謝及授權"
+    },
+    "back": {
+      "en": "BACK",
+      "zh": "返回"
+    },
+    "language": {
+      "en": "LANGUAGE",
+      "zh": "語言"
+    },
+    "language_zh": {
+      "en": "繁體中文",
+      "zh": "繁體中文"
+    },
+    "language_en": {
+      "en": "English",
+      "zh": "English"
+    },
+    "guide": {
+      "en": "HOW TO PLAY",
+      "zh": "玩法"
+    }
+  },
+  "credits": [
+    {
+      "heading": {
+        "en": "City data",
+        "zh": "城市數據"
+      },
+      "body": {
+        "en": "Contains geospatial data from the Lands Department, the Transport Department and the Highways Department of the Government of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial Data Infrastructure (CSDI) Portal. The Government of the HKSAR and the relevant organisations own the intellectual property rights in that data. Used under the DATA.GOV.HK and CSDI Portal Terms and Conditions of Use. The Government of the HKSAR does not endorse this product.",
+        "zh": "本遊戲載有香港特別行政區政府地政總署、運輸署及路政署的地理空間數據，經「資料一線通」(DATA.GOV.HK) 及「空間數據共享平台」(CSDI) 入門網站取得。香港特別行政區政府及有關機構擁有該等數據的知識產權。按「資料一線通」及「空間數據共享平台」入門網站的使用條款及條件使用。香港特別行政區政府並不認可本產品。"
+      }
+    },
+    {
+      "heading": {
+        "en": "Typeface",
+        "zh": "字型"
+      },
+      "body": {
+        "en": "Street names are set in Free HK Kai (自由香港楷書) © 2016 Free Hong Kong Fonts, used under the Creative Commons Attribution 4.0 International licence.",
+        "zh": "街道名稱以「自由香港楷書」(Free HK Kai) © 2016 自由香港字型 排版，按共享創意「署名 4.0 國際」授權條款使用。"
+      }
+    },
+    {
+      "heading": {
+        "en": "Engine",
+        "zh": "引擎"
+      },
+      "body": {
+        "en": "Built with Godot Engine and Jolt Physics, both under the MIT licence. The engine's third-party notices ship with it.",
+        "zh": "以 Godot Engine 及 Jolt Physics 製作，兩者均按 MIT 授權條款發行。引擎的第三方聲明隨引擎附送。"
+      }
+    },
+    {
+      "heading": {
+        "en": "Code and hand-made assets",
+        "zh": "程式碼與美術資源"
+      },
+      "body": {
+        "en": "The game's code is free software under the GNU General Public License v3.0 or later; its hand-authored assets are under Creative Commons Attribution-ShareAlike 4.0. The generated city data is neither: it stays under the Government's terms above and is regenerated, never relicensed.",
+        "zh": "本遊戲的程式碼為自由軟件，按 GNU 通用公眾授權條款第 3.0 版或更新版本發行；手繪美術資源按共享創意「署名－相同方式分享 4.0」授權。生成的城市數據不屬兩者：其仍受上述政府條款約束，只會重新生成，絕不重新授權。"
+      }
+    }
+  ],
+  "guide": [
+    {
+      "picture": "drive",
+      "heading": {
+        "en": "Drive",
+        "zh": "駕駛"
+      },
+      "body": {
+        "en": "Left thumb steers; right thumb up to go, down to brake or reverse. Keys: A D and W S, Space to drift.",
+        "zh": "左手拇指轉向；右手拇指向上前進，向下煞車或倒車。鍵盤：A D 及 W S，空白鍵甩尾。"
+      }
+    },
+    {
+      "picture": "pickup",
+      "heading": {
+        "en": "Pick up",
+        "zh": "接客"
+      },
+      "body": {
+        "en": "Customers wait in the amber rings on the road and on the map. Stop beside one to take the fare.",
+        "zh": "乘客在路上和地圖上的琥珀色圓環等候。停在旁邊即可接客。"
+      }
+    },
+    {
+      "picture": "deliver",
+      "heading": {
+        "en": "Deliver",
+        "zh": "送達"
+      },
+      "body": {
+        "en": "Follow the arrow and the route to the red pin before the clock in the middle runs out. The meter is real.",
+        "zh": "跟着箭頭和路線去紅色圖釘，趕在中間的倒數歸零前送達。咪錶按真實收費。"
+      }
+    },
+    {
+      "picture": "skills",
+      "heading": {
+        "en": "Earn tips",
+        "zh": "賺小費"
+      },
+      "body": {
+        "en": "Drifts, fast runs and an early arrival pay extra into the tip. Time left when you arrive pays too.",
+        "zh": "甩尾、飆車和早到都會加小費。送達時剩下的時間也會計入。"
+      }
+    },
+    {
+      "picture": "wrong_way",
+      "heading": {
+        "en": "Mind the signs",
+        "zh": "留意路牌"
+      },
+      "body": {
+        "en": "Streets run one way. The NO ENTRY sign appears when you are driving against the traffic: turn around.",
+        "zh": "街道是單程路。逆向行駛時會出現「不准駛入」路牌：請掉頭。"
+      }
+    }
+  ]
+}

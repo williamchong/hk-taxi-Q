@@ -95,7 +95,12 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--touch=` and `--asset=` go through it.
+  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--menu=`, `--touch=` and `--asset=` go
+  through it.
+- `Settings` (`scripts/core/settings.gd`) — a `class_name` static over `user://settings.cfg`,
+  the options the start menu saves (`P6-1`). `Locale.language()` reads `--lang=` first, then this,
+  then the OS language (`OS.get_locale_language()`), then its default; `drive.sh` names the flag
+  so a scripted run's frames never depend on the machine's pick or locale.
 
 ### The debug overlay
 
@@ -139,7 +144,7 @@ name globals whatever the tool does (`Q119`).
 | `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value, all three `[importer_defaults]` keys, read through `ProjectSettings` | yes |
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the `meshes/*` keys `[importer_defaults]` pins (`P5-16`, `Q122`; authored since `P5-20`, `Q124`). Keys are read from the project file and their count asserted. 0 sidecars checked passes — a clone has no city | yes |
 | warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`) | yes |
-| `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures. None needs a built region | yes |
+| `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures; the start menu's tables and the credits' licence wording in both languages (`P6-1`). None needs a built region | yes |
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |
 
@@ -1143,6 +1148,7 @@ city_space = region_local + city_offset
 | `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes; a reach table at load (every destination prepared once), a hail drawn from it, `route` at 5 Hz; the allowance `max(kind floor, legal route / par)`; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
 | `FareMeter` | TD's tariff in `scripts/core/`: flagfall, then a unit per 200 m or per minute past it, in cents, charged as the unit begins (`tuning/tariff.tres`, cited in `tariff.md`) | ✅ `P3-1a` |
 | `ScoreSystem` | The **style chain** and **fare combo** — two distinct multipliers — paying into `Fare.tip_hkd` beside the time bonus `P3-1a` already pays | ⬜ `P3-2` |
+| `StartMenu` | Start, options (the language), credits and licences, over the parked taxi with the rig circling it (`MenuOrbit`); `Main` parks the level while it is up and resumes it on `started`. `--menu=off` for scripted runs; every string in `tuning/menu_text.json`, every number in `tuning/menu.tres` | ✅ `P6-1` |
 | `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, an arrow on its border toward an off-map target, main roads apart and the harbour and parks under the roads, +5 draw calls and 14.7k primitives over `--minimap=off` carrying; the one-way arrows are off) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
@@ -1166,7 +1172,10 @@ All paths under `game/`.
 
 | Path | Role |
 |---|---|
-| `scripts/main.gd` | Entry point (`P5-24`): holds `World` and `GUI`, hands the HUD its car through typed exports `level` and `hud`; nothing under `GUI` searches for a car |
+| `scripts/main.gd` | Entry point (`P5-24`): holds `World` and `GUI`, hands the HUD its car through typed exports `level` and `hud`; nothing under `GUI` searches for a car. Parks the level under the start menu and resumes it on `started`; a language change retires the HUD and readies a fresh one (`P6-1`) |
+| `scripts/ui/start_menu.gd`, `menu_profile.gd`, `menu_text.gd`, `guide_card.gd` | The start menu (`P6-1`): four pages built in code (the guide's step pictures drawn, never textures) from the HUD's housing, `--menu=off`; the schema of `tuning/menu.tres` (no defaults); the reader of `tuning/menu_text.json` |
+| `scripts/camera/menu_orbit.gd` | `MenuOrbit`: the chase rig circling the parked car while the menu is up — the same rig, so the streamer keeps one camera |
+| `scripts/core/settings.gd` | `Settings`, the saved options under `user://settings.cfg`; `Locale` reads it after `--lang=` |
 | `scripts/city/city_manifest.gd` | `city.json`, typed: tiles, AABBs, per-edge widths and clearances, the lane-width bar, resolved document paths |
 | `scripts/city/city_regions.gd` | `CityRegions` (`P5-9c`) |
 | `scripts/city/generated_regions.gd` | The one place the generated root is spelled: synced regions, the frame, each directory; `--region=` picks one (`P5-9b`) |
@@ -1233,6 +1242,7 @@ Verify tools (`game/tools/`, run by `tools/check.sh`):
 | `verify_input.gd` | The touch scheme — zone geometry, both relative axes, two thumbs, per-axis override, `--touch=mouse`. Drives the router's `_input` directly. No built region needed. 🔴 Carries a 30 s watchdog: a `SceneTree` tool that aborts before `quit()` never exits, wedges `check.sh`, and a wedged instance rewrites `project.godot` on shutdown (`Q97`) |
 | `verify_vehicle.gd` | The taxi's wiring — `vehicle_body.tres` via the name channel, lamp instance uniforms, integral `UV` payload on lens vertices only, rig position, beams authored dark and below horizontal. No built region; ⚠️ sees no frame, so cannot tell the shader compiled |
 | `verify_authored.gd` | The authored-asset door against a real Blender export, `assets/authored/fixtures/dcc_vehicle.glb` (`P5-10`, `Q121`) |
+| `verify_menu.gd` | The start menu's tables load whole and the credits carry the licence phrases in both languages (`P6-1`, hard rule 6) |
 
 ---
 

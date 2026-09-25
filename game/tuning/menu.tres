@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="MenuProfile" format=3 uid="uid://d4lg7vboesfwa"]
+
+[ext_resource type="Script" uid="uid://bttr10af0ga4d" path="res://scripts/ui/menu_profile.gd" id="1_menu_profile"]
+
+[resource]
+script = ExtResource("1_menu_profile")
+orbit_distance_m = 7.5
+orbit_height_m = 1.6
+orbit_pitch_deg = -12.0
+orbit_period_s = 40.0
+orbit_start_deg = 35.0
+orbit_fov_deg = 60.0
+margin_px = Vector2(96, 72)
+button_px = Vector2(420, 72)
+button_gap_px = 14
+credits_px = Vector2(1100, 760)
+credits_pad_px = 28
+guide_px = Vector2(1500, 560)
+guide_picture_px = Vector2(240, 150)
+title_size = 72
+subtitle_size = 26
+subtitle_size_zh = 30
+button_size = 28
+button_size_zh = 32
+heading_size = 24
+heading_size_zh = 28
+body_size = 20
+body_size_zh = 24

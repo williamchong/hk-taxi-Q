@@ -3,11 +3,13 @@
 [ext_resource type="PackedScene" uid="uid://bly4o26y51bdn" path="res://scenes/city_drive.tscn" id="1_world"]
 [ext_resource type="Script" uid="uid://ddp75fdft6cd5" path="res://scripts/ui/hud.gd" id="2_hud"]
 [ext_resource type="Script" uid="uid://d1dvv4ljn83sk" path="res://scripts/main.gd" id="3_main"]
+[ext_resource type="Script" uid="uid://dpeim50ehatmm" path="res://scripts/ui/start_menu.gd" id="4_menu"]
 
-[node name="Main" type="Node" unique_id=900714504 node_paths=PackedStringArray("level", "hud")]
+[node name="Main" type="Node" unique_id=900714504 node_paths=PackedStringArray("level", "hud", "menu")]
 script = ExtResource("3_main")
 level = NodePath("World/CityDrive")
 hud = NodePath("GUI/Hud")
+menu = NodePath("GUI/StartMenu")
 
 [node name="World" type="Node" parent="." unique_id=379721513]
 
@@ -17,3 +19,6 @@ hud = NodePath("GUI/Hud")
 
 [node name="Hud" type="CanvasLayer" parent="GUI" unique_id=1766202831]
 script = ExtResource("2_hud")
+
+[node name="StartMenu" type="CanvasLayer" parent="GUI"]
+script = ExtResource("4_menu")

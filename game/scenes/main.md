@@ -24,7 +24,9 @@ the skidpad and the grey box stay there.
 typed exports pointing down into each. Before this the HUD found the first
 car in a group, a sibling reaching across the World / GUI boundary from below;
 now nothing under `GUI` searches for one, and a level change hands the next
-car in here. Both exports are checked for null with a warning, never a crash.
+car in here. Both exports are checked for null with a warning, never a crash. `menu` is
+the third (`P6-1`): checked with `wanted()` and `is_instance_valid`, because
+under `--menu=off` it frees itself in a `_ready` that has already run.
 
 ## `[node name="GUI" type="Node" parent="."]`
 
@@ -43,3 +45,13 @@ and its frame counter still win the corners when someone turns them on.
 drive with the direction arrow disabled, and a permanent street plate is
 closer to a navigation aid than that test's premise assumes — and for clean
 art-review frames second.
+
+## `[node name="StartMenu" type="CanvasLayer" parent="GUI"]`
+
+The start menu (`P6-1`, `Q146`): start, options, credits, on layer 20 — over
+the HUD, under the dev overlay. Under `GUI` beside the HUD and never inside
+the level: `Main` parks the level while it is up (`DriveHarness.park`) and
+resumes it on `started`, and a language pick retires the HUD and readies a
+fresh one. `--menu=off` frees it in its own `_ready`, the way `--hud=off`
+frees the HUD, and `drive.sh` passes that for every scripted run. Its numbers
+are `tuning/menu.tres`, its strings `tuning/menu_text.json`.

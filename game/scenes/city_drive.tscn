@@ -13,12 +13,17 @@
 [ext_resource type="Script" uid="uid://cdseb2a8jldoc" path="res://scripts/fares/fare_readout.gd" id="20_readout"]
 [ext_resource type="Script" uid="uid://b3pwwpdwrkt7u" path="res://scripts/fares/fare_guide.gd" id="21_guide"]
 [ext_resource type="Script" uid="uid://b5nuxye5pq4do" path="res://scripts/fares/taxi_hire.gd" id="22_hire"]
+[ext_resource type="Script" uid="uid://brd5ncoahr0l1" path="res://scripts/camera/menu_orbit.gd" id="23_orbit"]
+[ext_resource type="Resource" uid="uid://d4lg7vboesfwa" path="res://tuning/menu.tres" id="24_menu"]
 
-[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "fares")]
+[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares")]
 script = ExtResource("6_harness")
 vehicle = NodePath("Taxi")
 regions = NodePath("Regions")
 camera_rig = NodePath("CameraRig")
+attract = NodePath("Attract")
+showroom_fare_id = "f_001"
+guide = NodePath("FareGuide")
 fares = NodePath("Fares")
 
 [node name="Regions" type="Node3D" parent="." unique_id=254386670 node_paths=PackedStringArray("camera")]
@@ -64,3 +69,9 @@ profile = ExtResource("18_cameratune")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1550640081]
 far = 400.0
+
+[node name="Attract" type="Node" parent="." node_paths=PackedStringArray("rig", "target")]
+script = ExtResource("23_orbit")
+rig = NodePath("../CameraRig")
+target = NodePath("../Taxi")
+profile = ExtResource("24_menu")

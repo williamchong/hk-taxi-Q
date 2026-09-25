@@ -95,6 +95,23 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Assign in the scene; a scene without one skips the snap.
 @export var camera_rig: ChaseCamera
 
+## The rig's slow circle round the parked car for the start menu (`P6-1`).
+## Assign in the scene; a scene without one parks the car under the chase view.
+@export var attract: MenuOrbit
+
+## Where the car stands for the start menu (`P6-1`): a fare node, resolved
+## like the start line, in `spawn_region`. "" parks it on the start line
+## itself. The start line is under HKCEC's podium — the menu's orbit there
+## looks at a soffit — so the showroom is its own spot and `resume` brings the
+## car back to the line the drive begins on.
+@export var showroom_fare_id: String = ""
+
+## The world-space fare guide (`fare_guide.gd`), hidden while the menu is up:
+## it draws the pending customers' rings and the arrow, which under the menu
+## are a game telling you where to go before you have pressed start. Assign
+## in the scene; its own next sample shows it again on resume.
+@export var guide: Node3D
+
 var _spawn: Transform3D
 var _floor_m: float = 0.0
 var _falls: int = 0
@@ -119,6 +136,78 @@ func _ready() -> void:
 	_load_sea()
 	_snap_camera()
 	_hold_ground()
+
+
+## Hold the level for the start menu (`P6-1`, `Main`'s call): the pedals read
+## nothing, the fare loop holds — the car boots at a stand and would be hailed
+## within a second — and the rig circles the car instead of chasing it. The
+## physics runs on, so the car settles onto its wheels under the menu, and the
+## fall floor and the harbour still catch it.
+func park() -> void:
+	if vehicle == null:
+		return
+	vehicle.parked = true
+	if guide != null:
+		# Hidden AND stopped: its pulse rewrites every pending ring's
+		# transform a frame, behind a menu nobody sees it through.
+		guide.visible = false
+		guide.set_process(false)
+	_stand_in_showroom()
+	# `is_instance_valid` because the loop frees itself under `--fares=off`
+	# (`fare_system.gd`), and only a usable one ever had its tick turned on.
+	if is_instance_valid(fares) and fares.usable():
+		fares.set_physics_process(false)
+	if camera_rig != null:
+		camera_rig.set_physics_process(false)
+	if attract != null:
+		attract.begin()
+
+
+## Move the car to `showroom_fare_id`, ON the node (no setback: nobody drives
+## off from here), with the road held under it first. Where it does not
+## resolve the car stays on the start line, and the warning says why — the
+## menu still works, over a soffit.
+func _stand_in_showroom() -> void:
+	if showroom_fare_id.is_empty():
+		return
+	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(
+		RoadGraph.shared(),
+		GeneratedFares.load_fares(GeneratedFares.path(spawn_region)),
+		showroom_fare_id,
+		vehicle.profile.ray_length_m(),
+		spawn_region,
+		0.0
+	)
+	if not pose.resolved():
+		push_warning(
+			"Showroom fare node did not resolve; the menu shows the start line: %s" % pose.problem
+		)
+		return
+	if regions != null:
+		regions.hold_ground_at(pose.transform.origin)
+	vehicle.place_at(pose.transform)
+	print("showroom: %s on edge %d (%s)" % [pose.fare_id, pose.edge_id, pose.road_name_en])
+
+
+## Undo `park`: the drive as it boots without a menu. The rig is snapped, for
+## `snap_to_target`'s reason — it has been circling the car, not following it.
+func resume() -> void:
+	if vehicle == null:
+		return
+	vehicle.parked = false
+	if guide != null:
+		guide.set_process(true)
+	if attract != null:
+		attract.end()
+	if not showroom_fare_id.is_empty():
+		if regions != null:
+			regions.hold_ground_at(_spawn.origin)
+		vehicle.place_at(_spawn)
+	if camera_rig != null:
+		camera_rig.set_physics_process(true)
+		camera_rig.snap_to_target()
+	if is_instance_valid(fares) and fares.usable():
+		fares.set_physics_process(true)
 
 
 ## Before the first `_process`, which is when the streamer first asks where the

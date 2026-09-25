@@ -96,9 +96,9 @@ its letter.
 
 - **Attribution travels with the build.** Not with the repository — with every distributed copy. So
   the in-game credits screen must carry the font, alongside the government attribution hard rule 6
-  already requires. Same screen, same obligation, different owner. ⚠️ **That screen does not exist
-  yet** (`docs/DATA_SOURCES.md` records the gap), so any build distributed today ships a CC BY work
-  without its credit visible — a licence gap, not a to-do; it is open item 5 below.
+  already requires. Same screen, same obligation, different owner. ✅ The start menu's credits page
+  carries it since `P6-1` (`game/tuning/menu_text.json`, held by `game/tools/verify_menu.gd`); the
+  wording still owes the sight-check in item 2 below.
 - **Indicate changes if we make any.** Nothing modifies the font today.
 - **No further restrictions**, which is the clause that matters against the store grant below.
 
@@ -214,9 +214,11 @@ grant above, which sets no volume limit.
    Data reaches compilations, metadata and APIs, and a grant excluding derived works would prohibit
    most applications built on the portal.
 
-5. **The credits screen itself** — it does not exist yet, and until it does every distributed build
-   ships the font's CC BY attribution and the government acknowledgement nowhere the player can see
-   them. It must land before anything is distributed beyond testers.
+5. ✅ **The credits screen itself** — built as `P6-1` (2026-09-26): the start menu's CREDITS &
+   LICENCES page shows the government acknowledgement, the font's CC BY attribution, the engine's
+   MIT notice and the code and assets' licences, in English and Chinese, and `check.sh` fails if
+   the required phrases leave `game/tuning/menu_text.json`. Still owed there: the engine's full
+   third-party notices (`Engine.get_license_text()`), which the store build must ship in full.
 
 The government terms are revisable by the publisher. Re-read them before launch and before adding a
 region (`Q100` retired the second city; the regions are the growth axis now).

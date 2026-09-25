@@ -179,6 +179,11 @@ var steer_input: float = 0.0
 ## autoload lookups a tick, and an AI taxi on this script would have driven on the
 ## *player's* throttle while obeying its own brake and handbrake.
 var throttle_input: float = 0.0
+## Held by the start menu (`P6-1`, `DriveHarness.park`): the pedals read
+## nothing and the car coasts to rest under `_apply_coast_drag`. The router still
+## samples the thumbs and the keys — nothing here stops it — so this is the one
+## gate, and it is off on every scheme until a menu is up.
+var parked: bool = false
 
 
 ## The car in a scene, or null. For dev tools that are dropped into a scene and
@@ -308,7 +313,12 @@ func _physics_process(delta: float) -> void:
 		return
 
 	speed_kph = forward_speed_kph()
-	if _input != null:
+	if parked:
+		steer_input = 0.0
+		throttle_input = 0.0
+		brake_input = 0.0
+		drift_input = false
+	elif _input != null:
 		steer_input = _input.steer
 		throttle_input = _input.accelerate
 		brake_input = _input.brake_reverse

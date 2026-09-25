@@ -167,7 +167,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `carve` | `pipeline/carve.py`, the `carve` block, which edges are carved |
 | `crossings` | `pipeline/crossings.py`, the `crossings` block (`line_types`, `zebra`, `lift_m`, `max_stripe_width_m`), which paint a crossing takes |
 | `boxjunctions` | `pipeline/boxjunctions.py`, the `boxjunctions` block, the drawn ribbon's extent, any painted layer's height or `lift_m`, `DrawnSurface` |
-| `hud` | `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `wrong_way_monitor.gd`, `wrong_way.tres`, `street_plate.json`, the bundled font, any new region's street names |
+| `hud` | `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `wrong_way_monitor.gd`, `wrong_way.tres`, `street_plate.json`, the bundled font, any new region's street names, the start menu (`start_menu.gd`, `menu.tres`, `menu_text.json`, `settings.gd`, `main.gd`'s park / resume) |
 | `lamps` | `pipeline/lamps.py`, the `lamps` block |
 | `fence` | `pipeline/fence.py`, the `clearance` or `fence` blocks (`clipped_within_m` included), `RoadGraph`'s car bar |
 | `join` | `join.reach_m`, `Config.neighbours` / `read_*`, a region's `bounds`, who owns a crossing road |

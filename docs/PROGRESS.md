@@ -32,6 +32,9 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     loop (`P3-1a`, `Q141`) and the minimal fare HUD (`P3-5a`, `Q142`); the user's drive of one
     fare, start to finish, is `B1`'s review and is owed. Of `B4`, the skills and the receipt are
     built ahead of the chain (`P3-49`, `Q145`). `B3`, the rest of `B4`, `P3-9` not started.
+- **Phase 6:** pulled forward on the user's ask — `P6-1`, the start menu (start, the language
+  option, the credits and licences that discharge hard rule 6 in the build), built 2026-09-26
+  (`Q146`); the user's look owed.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
@@ -173,6 +176,10 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-2b` / `P3-1b` / `P3-5b` ⬜ `B4`.
 - `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
 
+Phase 6
+
+- `P6-1` ✅ Start menu (`Q146`, the user's ask, 2026-09-26) — START GAME / OPTIONS / CREDITS & LICENCES in the HUD's housing, bottom-left, over the taxi standing at the Harbour Road stand (`showroom_fare_id` `f_001`, HKCEC behind it) with the chase rig circling it (`MenuOrbit`, 40 s a turn); `Main` parks the level (pedals gated, fares held, guide hidden) and resumes it on start, the car back on the start line. The language: `Locale` reads `--lang=`, the saved option (`user://settings.cfg`), the OS language, then `zh`; a pick rebuilds the menu and readies a fresh HUD. The credits carry `DATA_SOURCES.md`'s drafted text with the ownership sentence and both portals, the Free HK Kai CC BY credit, the engine and the code and assets' licences, in both languages — `verify_menu` in `ALWAYS_TOOLS` holds every phrase (mutation-checked: the ownership sentence removed fails it). `--menu=off` and `--lang=zh` appended by `drive.sh`; the default drive unchanged tick for tick (71.22 kph at t=6). HOW TO PLAY (the user's second ask): five steps abreast — drive, pick up, deliver, earn tips, mind the signs — each a drawn picture (`GuideCard`, the HUD's palette, the NO ENTRY sign reused) over a caption in both languages. Frames in `build/driver/menu_zh`, `menu_en`, `menu_pages/`. Owed: the user's look, the engine's full third-party notices (`LICENSING.md` item 5), a pause menu.
+
 Phase 4–5
 
 - `P4-1` ✅ Level 1 open exactly where `clearance.LEVELS` measures — reviewed (`Q111`).
@@ -265,6 +272,8 @@ and there in the same change.
 - `Q145` Skills pay flat HK$ per event, the delivery is a receipt, and the passenger's face pops from the back seat (user; `P3-49`, 2026-09-25). Not the style chain. Fourth round (the user's drive): a drift qualifies at 2 s, the speed skill pays per 200 m, the live tip is the skills alone on the meter's LED. The user's drive on the new table owed.
 - `Q143` A street the region cuts is closed on the line; the neighbour's way in never (user;
   `P3-29a`, built). Closed. The user's drive owed.
+- `Q146` A start menu over the parked taxi, and the language read flag → saved option → OS → default
+  (user; `P6-1`, 2026-09-26). The credits screen is the licence gap closed. The user's look owed.
 
 Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
 cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);

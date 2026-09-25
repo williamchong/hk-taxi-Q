@@ -195,6 +195,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up and the merged plate are the user's calls; the one-way arrows were, and are off since 2026-09-24 for a border arrow toward an off-map target. Owed the user: `span_m`. |
 | `Q140` | The harbour is a frame minus the land, and the land is north of the sheets we hold | ✅ Closed — the user's calls: on the minimap with `P3-44` (2026-09-24), in the world as a plane over sunk ground (2026-09-25) · `P3-45` |
 | `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named. The user's drive owed. |
+| `Q146` | A start menu over the parked taxi; the language is the flag, then the saved option, then the OS, then Chinese | ✅ Closed — the user's asks (2026-09-26), built as `P6-1`. The credits screen discharges hard rule 6 in the build. The user's look owed. |
 | `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
@@ -7502,3 +7503,59 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
 
 **See.** `P3-49` · `Q141` · `Q84` · `P3-48` · `GAME_DESIGN.md` "Scoring" · `.claude/rules/fares.md`
 · `tuning/skills.md`
+
+## `Q146` — A start menu over the parked taxi; the language is the flag, then the saved option, then the OS, then Chinese
+
+**Status.** ✅ Closed — the user's asks (2026-09-26), built as `P6-1`. The user's look owed.
+
+The user asked for a simple start menu with start, options ("like locale") and licence / credits,
+"use the model car stopped in some part of city and hero in start menu maybe", and then for the
+system locale as the default "applying to both menu and game".
+
+- **The menu is a `CanvasLayer` under `GUI`, and `Main` parks the level.** `P5-24`'s rule holds:
+  siblings know their own hierarchies and the ancestor mediates. `DriveHarness.park` gates the
+  pedals (`VehicleController.parked` — the router still samples, the car reads nothing), holds
+  the fare loop's tick (the car boots at a stand and would be hailed within a second), hides the
+  fare guide, and hands the chase rig to `MenuOrbit`; `resume` undoes each. The physics runs on
+  under the menu so the car settles onto its wheels.
+- **The hero shot is the chase rig circling the car at a showroom stand, not the start line.**
+  The start line is under HKCEC Phase II's podium (`f_004`), and every orbit angle there frames
+  a soffit — measured, `build/driver/menu_zh` before the move. Candidates shot: `f_003` faces a
+  wall, `f_028` buries the spring arm in the pavement, **`f_001`** (Harbour Road, the cross-harbour
+  stand) has open sky, the old wing's sawtooth roof and a lamp post — chosen. The SAME rig, so the
+  streamer keeps one camera; `resume` snaps it back and places the car on the start line, so
+  `--menu=off` and the menu's drive begin at the same place and the default `drive.sh` run is
+  unchanged tick for tick (71.22 kph at t=6 before and after).
+- **One voice, no new colours.** `HudStyle`'s housing and `ChamferPanel`'s shape (`Q139`); the
+  focus is the accent, the current option the dial's amber, so the cursor and the choice are never
+  one colour. The Chinese lines take the plate's Kai through a `FontVariation` with the theme's
+  faces as fallbacks — every character in `menu_text.json` is in the font's `cmap` (0 missing),
+  and a future edit falls to another face, never to a box.
+- **The language is read in four steps, and the flag is first for `Q27`'s sake.** `--lang=`, then
+  the option the menu saved (`Settings`, `user://settings.cfg`, written at once), then
+  `OS.get_locale_language()` (`zh` for every Chinese variant — one Chinese here, the city's), then
+  Chinese. A scripted run's frames are compared across machines, so `drive.sh` appends `--lang=zh`
+  (and `--menu=off`) unless the run names them. A pick rebuilds the menu on the same page and
+  `Main` retires the HUD for a fresh one — the HUD keeps one build path, and `verify_hud` grades
+  the one that ships. The menu warns when a flag pins a choice it just saved.
+- **The credits are a licence term, held by a tool.** `DATA_SOURCES.md`'s drafted text verbatim
+  in English with a Chinese rendering, the Free HK Kai CC BY credit (`Q79`), the engine's MIT
+  notice, the code's GPL and the assets' CC BY-SA, and that the generated data stays under the
+  Government's terms. `verify_menu.gd` (`ALWAYS_TOOLS`) fails `check.sh` when the ownership
+  sentence, either portal, the typeface or the CC BY name leaves the file in either language;
+  mutation-checked by removing the ownership sentence. `LICENSING.md` item 5 closes; item 2 (the
+  lawyer's sight-check) stays open, and the engine's full third-party notices are still owed.
+- **The guide's steps are drawn pictures, not screenshots** (the user's third ask, "a simple
+  guide with image steps"). The bundle ships no UI textures, and a screenshot of the city would be
+  the generated data committed as a PNG — hard rule 7 says it is never committed. Five
+  `GuideCard`s in the HUD's palette (the taxi from above, the amber ring, the route and pin, the
+  three skills, the NO ENTRY sign reused from `NoEntryIcon`), captioned from `menu_text.json` in
+  both languages; `verify_menu` holds each step to a picture that exists.
+- 🚫 Refused / not built: a pause menu or Esc back to the menu from the drive (not asked); a
+  `TranslationServer` / `tr()` port (the project reads one language through `Locale` and per-string
+  pairs, `FareFace._say`; a port is a Phase 6 localisation-QA question); a second camera for the
+  orbit; a language other than the two the game speaks (an unknown OS language falls to Chinese,
+  the user's earlier call).
+
+**See.** `P6-1` · `Q142` · `Q139` · `Q79` · `Q27` · `tuning/menu.md` · `.claude/rules/hud.md` ·
+`LICENSING.md`

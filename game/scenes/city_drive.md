@@ -100,6 +100,18 @@ boarding and briefly at the drop. Signals only, so it adds nothing per frame. A
 child of `Fares` on `Readout`'s pattern, so `--fares=off` frees it with the
 loop and the car keeps its authored state: sign lit, door shut.
 
+## `[node name="Attract" type="Node" parent="."]`
+
+`MenuOrbit` (`P6-1`): the chase rig's slow circle round the car while the start
+menu is up. It moves the SAME rig — `Regions.camera` is the rig's camera and
+the streamer measures from it — with the rig's own `_physics_process` off,
+which `DriveHarness.park` and `resume` switch. Its numbers are
+`tuning/menu.tres`. The harness's `showroom_fare_id = "f_001"` is where the
+car stands for it: the Harbour Road stand, HKCEC's old wing behind it, not the
+start line under the Phase II podium (`menu.md`); `resume` puts the car back
+on the line. `guide` is the `FareGuide` below, hidden under the menu and shown
+again by its own next sample.
+
 ## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
 
 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km

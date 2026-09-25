@@ -64,6 +64,20 @@ case " $* " in
 *" --debug-view="*) ;;
 *) set -- "$@" --debug-view=minimal ;;
 esac
+# The start menu parks the car (P6-1), and a scripted run is a drive: skip it
+# unless the run names the flag — `--menu=on --seconds=3 --shots=2` is a menu
+# frame, the orbit moving the camera so the capture never stalls.
+case " $* " in
+*" --menu="*) ;;
+*) set -- "$@" --menu=off ;;
+esac
+# `Locale` reads the machine's saved option and its OS language when no flag
+# names one (P6-1); a scripted run's frames are compared across machines, so
+# the flag is always named here — Chinese, the default before the readers.
+case " $* " in
+*" --lang="*) ;;
+*) set -- "$@" --lang=zh ;;
+esac
 
 # Godot reports a failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
