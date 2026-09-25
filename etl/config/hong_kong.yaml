@@ -3820,6 +3820,53 @@ carve:
   # rather than being shaved by the ramp beneath it.
   soffit_clearance_m: 0.3
 
+  # The parapet band (P3-51, Q147, the user's call, 2026-09-26): a carved
+  # ramp's edge is jumpable. A SECOND population in the same pass: what stands
+  # ABOVE the deck beside the ribbon — the source INFRASTRUCTURE parapet, and
+  # what the carve's own cut face would otherwise stand as — is cut, render
+  # and collider together, so a car can leave the ramp over its edge. The
+  # population is `edges` above: the eight ramps Q19 licensed, whose flanks
+  # the carve already removes. `levels` and `on_structure` are the switch for
+  # the wider call; a band over every flyover edge was built, measured and
+  # withdrawn the same day (Q147: "keep the original structure").
+  #
+  # 🔴 The band keeps the DECK and removes the WALL by the triangle's normal
+  # (carve.py::_band_split): a prism floored at the ribbon would take the deck
+  # top beside the ribbon with the parapet, and a car leaving the road would
+  # fall THROUGH the deck. `deck_top_kept` in carve.json is the counter that
+  # mutation moves. The band draws no retaining wall — a parapet is a sheet.
+  #
+  # ⚠️ Absent, no deck edge is touched and the bundle is byte-identical to the
+  # carriageway carve alone (the Q95 validation move, and how a change here
+  # is proved to change only what it claims).
+  parapets:
+    # Elevation levels whose EVERY edge takes the band, over and above the
+    # listed ramps. Empty on the user's call (Q147, 2026-09-26): the open
+    # flyover network keeps its published parapets. `[1]` is the switch that
+    # made every flyover jumpable, measured in Q147; a tunnel (-1) has no
+    # edge to fall off.
+    levels: []
+    # Whether Q23's level-0 stations `on_structure` — the interchange
+    # approaches, HUNG HING ROAD FLYOVER — take the band too, by run of
+    # consecutive stations. Off for the same reason.
+    on_structure: false
+    # How far beyond the drawn rail the band reaches. A parapet stands on the
+    # deck's edge, within a metre of the kerb; 1.5 m reaches it across the
+    # deck_error p90 and leaves the next road's structure alone.
+    reach_m: 1.5
+    # A horizontal face this far above the ribbon or less is deck and stays;
+    # higher, it is a parapet's cap and goes. Above deck_error.py's p90
+    # (0.095 m, Q20) and its worst station (0.24 m), under the shortest
+    # parapet a car could not simply drive over.
+    wall_tolerance_m: 0.3
+    # A face whose top stands more than this above the deck is not a parapet
+    # and stays whole: a pier carrying the flyover overhead, the side of a
+    # higher deck alongside at the interchange, a noise barrier. Q19's bumper
+    # band tops at 2.50 m and a Hong Kong vehicle parapet is 1.1-1.4 m; the
+    # first build without this bound took 14,150 m2 in Wan Chai for 2,237 m
+    # of parapet-bounded deck, which is neighbouring decks' sides.
+    wall_max_m: 2.5
+
 
 # ---------------------------------------------------------------------------
 # The level-0 carriageway as a REGION (Q129, P3-33b) — pipeline/region.py

@@ -24,6 +24,7 @@ const Manifest = preload("res://scripts/city/city_manifest.gd")
 const Fares = preload("res://scripts/city/generated_fares.gd")
 const Regions = preload("res://scripts/city/generated_regions.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const Spawn = preload("res://scripts/city/road_spawn.gd")
 
 const DEFAULT_SCENE: String = "res://scenes/main.tscn"
 
@@ -85,6 +86,12 @@ var _spawn_fare_id: String = ""
 var _failures: PackedStringArray = []
 var _vehicle: Node3D = null
 var _spawn_y: float = 0.0
+## `--spawn-at=x,y,z` and `--spawn-facing=x,y,z`: put the car at a point in
+## engine metres facing another, after the harness has placed it — the one way
+## to start a drive on a deck, where no fare node stands (`P3-51`). Unset
+## until given; NaN is "not given".
+var _spawn_at := Vector3(NAN, NAN, NAN)
+var _spawn_facing := Vector3(NAN, NAN, NAN)
 ## Latched when the run has learned everything it is going to. Stops the loop
 ## rather than simulating a wrecked physics state to the end of its clock, and
 ## keeps one cause from printing one failure a second for the whole run.
@@ -200,6 +207,14 @@ func _boot() -> Node:
 	_place_camera(instance)
 
 	_vehicle = _find_vehicle(instance)
+	if _vehicle != null and _spawn_at.is_finite():
+		var forward: Vector3 = _spawn_facing - _spawn_at
+		forward.y = 0.0
+		if not _spawn_facing.is_finite() or forward.is_zero_approx():
+			_fail("--spawn-at needs a --spawn-facing point that is not above or below it")
+			return null
+		_vehicle.place_at(Transform3D(Spawn.basis_facing(forward.normalized()), _spawn_at))
+		print("spawn:   at ", _spawn_at, " facing ", _spawn_facing)
 	if _vehicle != null:
 		_spawn_y = _vehicle.global_position.y
 		print("vehicle: ", _vehicle.name, " at ", _vehicle.global_position)
@@ -672,6 +687,14 @@ func _parse_args() -> bool:
 				# actually settles whether the scheme is usable.
 				if not ["mouse", "off"].has(value):
 					_fail("--touch=%s is not mouse or off" % value)
+					return false
+			"--spawn-at":
+				_spawn_at = _parse_vector(key, value)
+				if not _spawn_at.is_finite():
+					return false
+			"--spawn-facing":
+				_spawn_facing = _parse_vector(key, value)
+				if not _spawn_facing.is_finite():
 					return false
 			"--trace":
 				_trace_path = value

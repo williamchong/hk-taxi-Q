@@ -2478,6 +2478,47 @@ class TestCarve:
         for region_id in ("causeway_bay", "sha_tin", "mong_kok"):
             assert hong_kong.carve.edges_for(region_id) == ()
 
+    def test_the_parapet_band_is_shipped_over_the_listed_ramps_alone(self, hong_kong) -> None:
+        """`P3-51`, `Q147`: no level and no on-structure station — the band's
+        population is the carve's own `edges`. `[1]` / `true` is the switch
+        that made every flyover jumpable, and the user withdrew it."""
+        band = hong_kong.carve.parapets
+        assert band is not None
+        assert band.levels == ()
+        assert band.on_structure is False
+        assert band.reach_m == pytest.approx(1.5)
+        assert band.wall_tolerance_m == pytest.approx(0.3)
+        assert band.wall_max_m == pytest.approx(2.5)
+
+    def test_a_wall_max_under_the_tolerance_is_refused(self, rewrite) -> None:
+        """Nothing would be a parapet: every cap is above the tolerance and
+        every wall's top is above the max."""
+
+        def inverted(doc: dict[str, Any]) -> None:
+            doc["carve"]["parapets"]["wall_max_m"] = 0.2
+
+        with pytest.raises(ValueError, match="wall_max_m must be above"):
+            load_config(rewrite(inverted))
+
+    def test_the_flyover_switch_still_parses(self, rewrite) -> None:
+        """The wider call is reopened by config, never re-derived: a level and
+        the on-structure runs load as the population they name."""
+
+        def flyovers(doc: dict[str, Any]) -> None:
+            doc["carve"]["parapets"]["levels"] = [1]
+            doc["carve"]["parapets"]["on_structure"] = True
+
+        band = load_config(rewrite(flyovers)).carve.parapets
+        assert band.levels == (1,)
+        assert band.on_structure is True
+
+    def test_a_zero_reach_is_refused(self, rewrite) -> None:
+        def flat(doc: dict[str, Any]) -> None:
+            doc["carve"]["parapets"]["reach_m"] = 0.0
+
+        with pytest.raises(ValueError, match="reach_m must be positive"):
+            load_config(rewrite(flat))
+
     def test_an_undeclared_region_carves_nothing_rather_than_raising(self, hong_kong) -> None:
         """The accessor's whole job. A region absent from the block is a region
         with nothing to cut, so it must answer empty and let the stage no-op —

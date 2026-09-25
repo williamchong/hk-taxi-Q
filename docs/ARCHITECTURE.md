@@ -548,7 +548,9 @@ with nothing. `CityStreamer` builds no shape at load.
   culls 2 draw calls on Wan Chai's throttle route and 12–47 at Mong Kok's worst camera.
   🔴 It costs +5,734,832 B of PCK (+10.3%). 8 m and 16 m cells and a separately streamed occluder
   are priced in `PLAN.md` `P5-13`/`P5-17` (`Q122`). Handset CPU cost is unmeasured.
-- The carve cuts all three primitives.
+- The carve cuts all three primitives — the listed carriageway prisms (`P3-28`) and the parapet
+  band beside those same ramps (`P3-51`, `carve.parapets`; `carve.json` schema 2 names each row's
+  `population` and the deck triangles the band kept).
 
 **`COLOR_0` is sRGB-encoded and every consumer linearises it itself** (`Q27`). Godot 4 has no
 `vertex_color_is_srgb` render mode, so every shader takes `vertex_srgb_to_linear` from

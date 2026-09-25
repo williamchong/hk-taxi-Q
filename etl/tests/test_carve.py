@@ -34,6 +34,10 @@ from pipeline.carve import (
     CarveReport,
     EdgeCarve,
     EdgePlan,
+    Population,
+    _band_plans,
+    _band_split,
+    _carve_plan,
     _carve_tile,
     _double_side,
     _facing_away,
@@ -42,8 +46,10 @@ from pipeline.carve import (
     _retaining_wall,
     _stations,
     _structure,
+    _structure_runs,
     build_region,
 )
+from pipeline.config_blocks.roads import Parapets
 from pipeline.documents import write_document
 from pipeline.gltf import MeshData, read_glb, write_glb
 from pipeline.mesh import subtract_prism
@@ -315,6 +321,231 @@ class TestStructureSelection:
         assert not _structure(box()).any()
 
 
+def _band_plan(
+    points: np.ndarray, *, half_m: float = 4.5, tolerance_m: float = 0.3, max_m: float = 2.5
+) -> EdgePlan:
+    """A parapet-band plan over a hand-built ribbon: floored AT the ribbon."""
+    offsets = mitres(points)
+    floors = points[:, 1].copy()
+    ceilings = np.full(len(points), np.inf)
+    row = EdgeCarve(0, "test", 6.0, "measured", len(points), 0, 0, 0.0, 0.0, 0.0)
+    row.population = Population.PARAPET
+    return EdgePlan(
+        row=row,
+        points=points,
+        offsets=offsets,
+        half_m=half_m,
+        floors=floors,
+        prisms=_prisms(points, offsets, half_m, floors, ceilings),
+        band=True,
+        wall_tolerance_m=tolerance_m,
+        wall_max_m=max_m,
+        half_at=np.full(len(points), half_m),
+    )
+
+
+def _deck_with_parapet() -> MeshData:
+    """A 1 m thick deck slab, top at y=0, 6 m wide across a ribbon at y=0
+    running along x, with a 0.3 m thick, 1.2 m tall parapet standing on its
+    z=+3 edge — the shape every flyover in the estate has."""
+    # `box` scales about the origin, so the origin is placed pre-scale.
+    deck = box(origin=(0.0, -6.0, -3.0), size=6.0)
+    deck = replace(deck, positions=deck.positions * np.array([1.0, 1.0 / 6.0, 1.0]))
+    parapet = box(origin=(0.0, 0.0, 54.0), size=6.0)
+    parapet = replace(parapet, positions=parapet.positions * np.array([1.0, 0.2, 0.05]))
+    return MeshData(
+        name="structure",
+        positions=np.concatenate([deck.positions, parapet.positions]),
+        normals=np.concatenate([deck.normals, parapet.normals]),
+        triangles=np.concatenate([deck.triangles, parapet.triangles + len(deck.positions)]),
+    )
+
+
+class TestParapetBand:
+    """🔴 `P3-51`'s band keeps the deck and removes the parapet, and the naive
+    prism does neither — a floor at the ribbon takes the deck top with the
+    wall, and a car leaving the road falls THROUGH the deck. Every test here
+    is on the hand-built deck above, where each triangle's fate is checkable."""
+
+    RIBBON = line((0, 0.0, 0), (6, 0.0, 0))
+
+    def test_the_parapet_goes_and_the_deck_top_stays(self) -> None:
+        structure = _deck_with_parapet()
+        plan = _band_plan(self.RIBBON)
+
+        carved = _carve_plan(structure, plan, structure)
+        remaining, cut, wall, metres, kept = (
+            carved.remaining,
+            carved.removed,
+            carved.wall,
+            carved.wall_m,
+            carved.deck_top_kept,
+        )
+
+        assert cut is not None and remaining is not None
+        # Nothing above the deck survives: the parapet's 1.2 m is gone.
+        assert remaining.positions[:, 1].max() == pytest.approx(0.0, abs=1e-6)
+        # And the deck top itself is still there, at the ribbon's own height —
+        # upward-facing triangles at y=0 inside the band.
+        top = remaining.positions[remaining.triangles][:, :, 1]
+        assert (np.abs(top) < 1e-6).all(axis=1).any()
+        assert kept > 0
+        # The band draws no wall.
+        assert wall is None and metres == 0.0
+
+    def test_the_naive_prism_takes_the_deck_with_the_wall(self) -> None:
+        """⚠️ The trap, pinned so nobody 'simplifies' the split away: the same
+        prism as a plain carve, floored at the ribbon, removes the deck top
+        beside the ribbon — the mutation `deck_top_kept` exists to catch."""
+        structure = _deck_with_parapet()
+        naive = _band_plan(self.RIBBON)
+        naive.band = False
+
+        carved = _carve_plan(structure, naive, structure)
+        remaining, cut, kept = carved.remaining, carved.removed, carved.deck_top_kept
+
+        assert cut is not None
+        assert kept == 0
+        top = None if remaining is None else remaining.positions[remaining.triangles][:, :, 1]
+        assert top is None or not (np.abs(top) < 1e-6).all(axis=1).any()
+
+    def test_the_split_reads_the_normal_and_the_height(self) -> None:
+        """Both tests, because each alone is wrong: by normal alone a cap a
+        metre up is kept as a floating slab; by height alone the deck top goes."""
+        structure = _deck_with_parapet()
+        parapet, deck = _band_split(structure, 0.0, 0.3)
+        corners = structure.positions[structure.triangles]
+        tops = corners[:, :, 1].min(axis=1)
+        # The parapet's cap: horizontal, wholly above the tolerance.
+        cap = tops > 1.0
+        assert cap.any() and parapet[cap].all()
+        # The parapet's faces: vertical, so walls.
+        faces = (corners[:, :, 2].min(axis=1) >= 2.7 - 1e-9) & (corners[:, :, 1].max(axis=1) > 0.5)
+        assert faces.any() and parapet[faces].all()
+        # The deck top: horizontal at the ribbon, kept.
+        deck_top = (np.abs(corners[:, :, 1]) < 1e-9).all(axis=1)
+        assert deck_top.any() and deck[deck_top].all()
+
+    def test_a_face_rising_past_wall_max_m_is_not_a_parapet(self) -> None:
+        """A pier, a higher deck's side, a noise barrier: a wall whose top
+        stands more than `wall_max_m` above the deck stays whole, however
+        close to the rail it stands."""
+        structure = _deck_with_parapet()
+        pier = box(origin=(0.0, 0.0, 54.0), size=6.0)
+        pier = replace(pier, positions=pier.positions * np.array([1.0, 1.0, 0.05]))
+        with_pier = MeshData(
+            name="structure",
+            positions=np.concatenate([structure.positions, pier.positions]),
+            normals=np.concatenate([structure.normals, pier.normals]),
+            triangles=np.concatenate(
+                [structure.triangles, pier.triangles + len(structure.positions)]
+            ),
+        )
+
+        remaining = _carve_plan(with_pier, _band_plan(self.RIBBON), with_pier).remaining
+
+        assert remaining is not None
+        assert remaining.positions[:, 1].max() == pytest.approx(6.0)
+        # The parapet's ten standing triangles go and its underside, flat on
+        # the deck at the ribbon's height, stays as deck; the pier's twelve stay.
+        assert remaining.triangle_count == with_pier.triangle_count - 10
+
+    def test_a_parapet_whole_in_the_band_is_taken_whole(self) -> None:
+        """No slicing where none is needed: the parapet's ten standing
+        triangles come out as ten, not as one sliver per station, and its
+        underside — flat on the deck, at the ribbon's height — is deck."""
+        structure = _deck_with_parapet()
+        plan = _band_plan(self.RIBBON)
+
+        carved = _carve_plan(structure, plan, structure)
+
+        assert carved.removed is not None
+        assert carved.removed.triangle_count == 10
+        assert carved.remaining is not None
+        assert carved.remaining.triangle_count == structure.triangle_count - 10
+
+    def test_a_face_below_the_ribbon_is_outside_the_band(self) -> None:
+        """The deck's outer face below the deck stays: the slab keeps its
+        thickness and the flyover is not a floating sheet from below."""
+        structure = _deck_with_parapet()
+        remaining = _carve_plan(structure, _band_plan(self.RIBBON), structure).remaining
+
+        assert remaining is not None
+        assert remaining.positions[:, 1].min() == pytest.approx(-1.0)
+
+    def test_the_band_is_planned_by_level_and_by_structure_run(self) -> None:
+        """A listed edge or a banded level takes the whole polyline; a level-0
+        edge takes each run of `on_structure` stations two or more long, and
+        nothing else."""
+        spec = _spec(
+            Parapets(
+                levels=(1,), on_structure=True, reach_m=1.5, wall_tolerance_m=0.3, wall_max_m=2.5
+            )
+        )
+        edge = {
+            "id": 7,
+            "road_name": {"en": "TEST"},
+            "width_m": 6.0,
+            "width_source": "measured",
+            "offset_m": 0.0,
+            "polyline": [[0, 5, 0], [10, 5, 0], [20, 5, 0], [30, 5, 0], [40, 5, 0]],
+            "elevation_level": 1,
+        }
+        flyover = _band_plans(edge, spec, _NoSoffit())
+        assert len(flyover) == 1 and flyover[0].band
+        assert flyover[0].row.population == Population.PARAPET
+        assert flyover[0].half_m == pytest.approx(3.0 + 1.5)
+
+        # The measured rim widens the band where it reaches past the width:
+        # the parapet stands at the rim, not at the authored rail.
+        rimmed = dict(edge, deck_rim_m=[[2.0, 4.0], [8.0, 3.0], [2.0, 2.0], [1.0, 1.0], [0.0, 0.0]])
+        assert _band_plans(rimmed, spec, _NoSoffit())[0].half_m == pytest.approx(8.0 + 1.5)
+
+        approach = dict(edge, elevation_level=0, on_structure=[False, True, True, False, True])
+        runs = _band_plans(approach, spec, _NoSoffit())
+        assert len(runs) == 1 and len(runs[0].points) >= 2
+        assert runs[0].points[:, 0].min() == pytest.approx(10.0)
+        assert runs[0].points[:, 0].max() == pytest.approx(20.0)
+
+        street = dict(edge, elevation_level=0, on_structure=[False] * 5)
+        assert _band_plans(street, spec, _NoSoffit()) == []
+        # A listed ramp takes the band whole, whatever its flags say: `Q19`'s
+        # eight are walled flanks whose heights came from terrain.
+        assert len(_band_plans(street, spec, _NoSoffit(), listed=(7,))) == 1
+        tunnel = dict(edge, elevation_level=-1)
+        assert _band_plans(tunnel, spec, _NoSoffit()) == []
+
+    def test_no_block_plans_no_band(self) -> None:
+        edge = {"id": 1, "polyline": [[0, 0, 0], [1, 0, 0]], "elevation_level": 1}
+        assert _band_plans(edge, _spec(None), _NoSoffit()) == []
+
+    def test_structure_runs_need_two_stations(self) -> None:
+        polyline = np.arange(18, dtype=np.float64).reshape(6, 3)
+        runs = _structure_runs(polyline, [True, False, True, True, False, True])
+        assert len(runs) == 1
+        assert runs[0].shape == (2, 3)
+
+
+class _NoSoffit:
+    """A height field with nothing overhead."""
+
+    def sample_lowest_soffit_above(self, x: np.ndarray, _z: np.ndarray, _above: np.ndarray):
+        return np.full(len(x), np.nan)
+
+
+def _spec(parapets: Parapets | None):
+    from pipeline.config_blocks.roads import Carve
+
+    return Carve(
+        edges={},
+        station_m=2.0,
+        floor_below_m=2.0,
+        headroom_m=5.1,
+        soffit_clearance_m=0.3,
+        parapets=parapets,
+    )
+
+
 class TestRegionScope:
     """🔴 An edge id is a per-region ORDINAL, so the list is keyed by region.
 
@@ -337,8 +568,11 @@ class TestRegionScope:
         """
         out = tmp_path / "causeway_bay"
         out.mkdir(parents=True)
+        # Without the parapet band: declared, it reads the tiles of every region
+        # even where it plans nothing.
+        unbanded = replace(hong_kong, carve=replace(hong_kong.carve, parapets=None))
 
-        report = build_region(hong_kong, "causeway_bay", out_root=tmp_path)
+        report = build_region(unbanded, "causeway_bay", out_root=tmp_path)
 
         assert report.edges == []
         assert report.tiles_written == []

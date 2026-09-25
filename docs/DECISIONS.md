@@ -7559,3 +7559,108 @@ system locale as the default "applying to both menu and game".
 
 **See.** `P6-1` · `Q142` · `Q139` · `Q79` · `Q27` · `tuning/menu.md` · `.claude/rules/hud.md` ·
 `LICENSING.md`
+
+## `Q147` — A carved ramp's edge is jumpable, and the flight is a skill paid at the landing
+
+**Status.** 🟡 Open — the air skill shipped as `P3-51 (b)`; the parapet band (`P3-51 (a)`)
+shipped over the eight listed ramps, and the flyover band was built, measured and withdrawn ·
+**Owner.** `P3-51` · `P3-49` · `Q19` · `Q22`
+
+The user asked (2026-09-26) to "remove the extra guard rail we added for bridges and structure,
+such that user can jump off bridge as short cut", and for jumping off a bridge or getting all
+four wheels in the air to be a stunt bonus. Asked which rail, the first call was **every deck
+edge, everywhere**; with that band built and measured, the second, the same day: **"we don't need
+all flyovers to be jumpable, keep the original structure"** — the flyovers keep their published
+parapets, and the band stands on the ramps the carve already cuts.
+
+- **There was no synthesised rail to remove, and the premise was checked before anything was
+  built.** Nothing in the pipeline or the game adds a rail along a deck edge: `railings.py`
+  discards every railing on structure (`on_structure`), no railing class collides, `fence.py`
+  closes road ENDS only (the flyover touchdowns opened at `P4-1`; tunnels stay shut), and `Q22`
+  already records that "a wheel leaving the deck finds air, not a parapet". What stops a car is
+  (1) the source `INFRASTRUCTURE` parapet, colliding through the building tile collider, (2) the
+  0.15 m mountable kerb, and on the eight carved Wan Chai ramps (3) the carve's constructed cut
+  face (`P3-28`, `Q104`) — the wall the user photographed on `e99` FLEMING ROAD.
+- 🚫 **Reverting `P3-28` / `Q104` was asked and refused.** The carve REMOVES structure that stood
+  in the published carriageway (three drivers stopped there, `P3-9a′`; the user beached on `e99`);
+  the wall is where the removed mass's edge now stands, moved out to the surveyed width. Reverting
+  restores the block in the road; deleting the face alone leaves the retained structure behind it
+  colliding and reopens `Q104`'s invisible cut. Neither reaches a flyover parapet.
+- **The population, read off the shipped graphs** (`structure_bounded`, the 0.30–2.50 m band
+  beside a station): Wan Chai 44 flyover edges / 5,899 m, **2,237 m** parapet-bounded on 29 edges;
+  Causeway Bay 10 / 997 m, 235 m on 3; plus `Q23`'s level-0 road on structure, 525 m and 87 m.
+  The ground under every deck collides (`buildings.py`), so a car that leaves a deck lands; the
+  harness fall reset is 25 m below the spawn and never fires on a flyover drop.
+- **(b) The air skill, built.** `VehicleController.is_airborne()` (no wheel in contact — the
+  loop the drift's yaw refusal already used) and `is_upright()` (the auto-right's own bar, read
+  rather than acted on) feed `FareSystem.sample` while carrying; `SkillTracker._flight` meters
+  seconds airborne and pays `air_hkd` on the first grounded tick once the flight held
+  `air_min_s` (0.5 s), again per further `air_s` (0.5 s), **only when that tick is upright**.
+  🔴 **At the landing, never per second in the air**: a per-second dwell would pay a car falling
+  off the world, and the roll can only be asked once the wheels are down. The drift meter refuses
+  airborne ticks — a car yawing in the air reads a slip angle. The receipt's 飛車 / air string
+  already existed (`Q145`); nothing else on the HUD changes. `verify_fares` holds each bar from
+  both sides, the roll, the flight that never lands, the mid-air slip, a zeroed price (inert) and
+  a halved one (banks less). Numbers in `tuning/skills.md`.
+- **(a) The parapet band, built over the listed ramps.** A second population in the `carve:`
+  block whose population is the carve's own `edges`: a listed edge takes the band whole, whatever
+  its flags say (`Q19`'s eight are walled flanks whose heights came from terrain, so
+  `on_structure` never trips). `levels` and `on_structure` widen it by rule — every edge on a
+  level, every run of level-0 stations on structure, in every region — and both ship OFF; the
+  switch stays so the wider call is reopened by config, never re-derived. Its band runs from the
+  deck's measured rim (`deck_rim_m`, `Q107`, or the drawn rail where wider) out to `reach_m`
+  (1.5 m), station by station — `e208` FLEMING ROAD is authored 5.60 m on a deck whose rim reads
+  8.0 m, and a band on the width alone missed its parapet. What is in the band and stands above
+  the deck is sorted by the triangle: a wall (normal within 60° of vertical) or a cap (a face
+  wholly above `wall_tolerance_m`, 0.30 m) whose top is within `wall_max_m` (2.50 m) of the deck
+  is a parapet; anything higher is a pier, a neighbouring deck's side or a noise barrier and
+  stays; the deck top and everything below it never enter. 🔴 **A parapet is taken WHOLE by its
+  centroid, after ONE floor cut at its station, with no prism at all.** Render and collider
+  together, no retaining wall (a parapet is a sheet), `deck_top_kept` published per row.
+- 🚫 **Every deck edge — built as `levels: [1]`, `on_structure: true`, measured, and withdrawn on
+  the user's call.** It removed 11,741 m² of published structure in Wan Chai on a design call
+  rather than a measured width, the one place the pipeline did that, and it grew the tiles
+  4.6% in vertices and 4 MB; the user chose the original structure over the shortcut. The
+  record stands because the shape was priced on it — three shapes refused on the way — and
+  because the switch is one line:
+  - 🚫 **Shape 1, refused:** the carriageway carve's per-station prisms floored at the ribbon.
+    Correct, and the deck top and every below-deck face along the road came back sliced at every
+    2 m station — Wan Chai's tiles **974,450 → 1,433,856** vertices (94 → 138 MB), `verify_tiles`
+    refusing 117 vertices whose identity row the slicer had interpolated between two objects.
+  - 🚫 **Shape 2, refused:** classify first, prisms over what rises above the deck only. The
+    deck survived; every wall straddling the band's side or end planes was still sliced and its
+    slivers kept — 1,120 triangles under 0.01 m² on one tile where the source had 145, the
+    region still +22%.
+  - 🚫 **Shape 3, refused:** widen the band to the rim's maximum with the prisms kept. More walls
+    to straddle: 7,492 slivers on the same tile.
+  - ✅ **Built:** whole by centroid, no prism. Wan Chai **974,450 → 1,018,912** vertices
+    (+4.6%, 94.3 → 98.3 MB, triangles fewer), the stage 35 → 6.5 s; 58 band rows, 55 cut,
+    11,741 m² of parapet removed, 149,136 deck triangles kept; Causeway Bay 12 rows, 10 cut,
+    1,820 m². `facing_away` 0 on both. `_snap_rows` copies the nearest source vertex's
+    `TEXCOORD_1` onto every vertex the floor cut invents. The price is exact and named: a wall
+    standing ACROSS the band comes out whole rather than cut at its edge.
+  - **The `Q19` battery, both regions, before a worktree of the commit before the band:** level +1
+    `INFRASTRUCTURE` occupancy of the bumper band **13.100% → 0.612%** (Wan Chai; total
+    2.776% → 0.769%), level 0 untouched at `BUILDING` 0.252%; `carriageway_occupancy`'s off-grade
+    edges below the bar 5 → 1 (`e364` alone); `clearance_reconcile` **28 / 32 / 8 → 25 / 28 / 7**
+    and **9 / 13 / 4 → 8 / 11 / 3** — every edge that left was off-grade and starved by its own
+    parapet, the at-grade halves held (the ratchet in `tools/clearance_reconcile.py` was moved
+    with it and moved back with the withdrawal);
+    `ground_clearance`'s 0.30–2.00 m band 556 → 519 cells (544.8 → 508.7 m²), the ground half
+    unmoved; `deck_error` measured 94.3% → 92.9% of what was asked (accepts 0.90; the parapet
+    caps used to answer as deck at the edge, 177 → 225 stations with none under them);
+    `overhang` 5.0% → 7.6% of level +1 hanging in air (3,127 → 4,781 m²) for the same reason —
+    `Q22`'s open cosmetic, now read without the caps; `narrowing` and `fence.json` byte-identical
+    (the fence gates level 0). Causeway Bay's `deck_error` fails before and after (67.3 → 64.5%),
+    a pre-existing gate. `check.sh` green on the synced bundle.
+  - **The drive** (`drive.sh --spawn-at=268,10.6,531 --spawn-facing=268,10,600 --fares=off`, a
+    new driver flag since no fare node stands on a deck): the car left `e208` FLEMING ROAD's
+    deck at 49 km/h on a left steer, dropped 10.6 → 4.0 m and landed upright on Jaffe Road at
+    4 km/h; the before frame shows the parapet, the after frame the bare deck and its kerb.
+    With the withdrawal that parapet is back and the drive stops at it.
+- **Kept deliberately:** the flyover parapets (the user's call), the ramp retaining walls, the
+  tunnel touchdown fences (`fence.touchdown_levels`), the 0.15 m kerb (the one visible edge a
+  deck keeps).
+
+**See.** `P3-51` · `P3-49` · `Q145` · `Q19` · `Q22` · `Q23` · `Q104` · `Q110` · `tuning/skills.md` ·
+`.claude/rules/fares.md` · `.claude/rules/carve.md`

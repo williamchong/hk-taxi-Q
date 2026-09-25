@@ -1221,6 +1221,54 @@ _CARRIAGEWAY_EDGE_ROLES = ("edge_type",)
 
 
 @dataclass(frozen=True)
+class Parapets:
+    """The parapet band (`P3-51`, `Q147`): a carved ramp's edge is jumpable.
+
+    🔴 **The population is `Carve.edges`, and the licence is the carve's.**
+    The carriageway carve removes structure standing IN a published width on
+    the listed ramps; this band removes what stands ABOVE the deck beside those
+    same ribbons — the parapet — so the ramp's edge is a drop, not a wall. A
+    listed edge takes the band whole, whatever its flags say (`Q19`'s eight are
+    walled flanks whose heights came from terrain, so `on_structure` never
+    trips). `levels` and `on_structure` widen it by RULE — every edge on a
+    level, every run of level-0 stations on structure, in every region — and
+    both are OFF: a band over every flyover edge was built, measured and
+    withdrawn on the user's call the same day (`Q147`: "keep the original
+    structure"). The switch stays so the call can be reopened, never re-derived.
+
+    ⚠️ **The band keeps the deck and removes the wall, by the triangle's
+    NORMAL, and takes a wall whole by its centroid** — a floor at the ribbon's
+    height alone would take the deck top beside the ribbon with the parapet,
+    and a car leaving the road would fall THROUGH the deck rather than off it;
+    a prism would slice every wall it straddles into slivers. `carve.py`'s
+    `_band_split` and `_band_candidates` hold the rules; `wall_tolerance_m` is
+    how far above the deck a horizontal face may stand and still be deck (a cap
+    higher than that is a parapet's top), `wall_max_m` how far above it a face
+    may rise and still be a parapet rather than a pier or a neighbouring deck.
+    """
+
+    # Elevation levels whose every edge takes the band, beyond the listed
+    # ramps. Empty as shipped; level 1 is the open flyover network
+    # (`clearance.LEVELS`), and a tunnel (-1) has no edge to fall off.
+    levels: tuple[int, ...]
+    # Whether level-0 stations `roads.py` publishes `on_structure` take it too
+    # — `Q23`'s approaches, a street that becomes a bridge mid-edge. Off as shipped.
+    on_structure: bool
+    # How far beyond the drawn rail the band reaches, in metres. A parapet
+    # stands on the deck's edge, within a metre of the kerb; further out is the
+    # next road's structure.
+    reach_m: float
+    # A horizontal face this far above the ribbon or less is deck and is kept;
+    # higher, it is a parapet's cap and goes. Above `deck_error.py`'s p90
+    # (0.095 m, `Q20`) and its worst station (0.24 m).
+    wall_tolerance_m: float
+    # A face whose top stands more than this above the deck is not a parapet
+    # — a pier carrying the flyover overhead, the side of a higher deck
+    # alongside, a noise barrier — and is left whole.
+    wall_max_m: float
+
+
+@dataclass(frozen=True)
 class Carve:
     """Which edges `pipeline/carve.py` cuts road structure back from (`Q19`).
 
@@ -1274,6 +1322,9 @@ class Carve:
     headroom_m: float
     # How far under a soffit the cut stops, so the deck keeps its own thickness.
     soffit_clearance_m: float
+    # The parapet band (`P3-51`), or None: absent, no deck edge is touched and
+    # the bundle is byte-identical to the carriageway carve alone.
+    parapets: Parapets | None = None
 
     def edges_for(self, region_id: str) -> tuple[int, ...]:
         """The edges carved in one region, empty where the region declares none.
@@ -1353,7 +1404,41 @@ def _carve(body: Any, where: str) -> Carve | None:
         ("station_m", "floor_below_m", "headroom_m", "soffit_clearance_m"),
         positive=True,
     )
-    return Carve(edges=edges, **measures)
+    parapets = _parapets(body.get("parapets"), f"{where}:parapets")
+    return Carve(edges=edges, parapets=parapets, **measures)
+
+
+def _parapets(body: Any, where: str) -> Parapets | None:
+    """The optional parapet band (`P3-51`).
+
+    `levels` and `on_structure` may both be empty, and are as shipped: the
+    band's population is then the carve's own `edges`, which `_carve` refuses
+    empty — so a declared band always has something to stand on, and the
+    "clean run over nothing" `_carriageway_survey` guards against cannot arise
+    here. Leave the block out to band nothing.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    levels_body = _require(body, "levels", where)
+    if not isinstance(levels_body, list):
+        raise ValueError(f"{where}:levels must be a list of elevation levels, got {levels_body!r}")
+    levels = tuple(
+        _elevation_level_int(level, f"{where}:levels", index)
+        for index, level in enumerate(levels_body)
+    )
+    if len(set(levels)) != len(levels):
+        raise ValueError(f"{where}:levels repeats a level")
+    on_structure = _require(body, "on_structure", where)
+    if not isinstance(on_structure, bool):
+        raise ValueError(f"{where}:on_structure must be true or false, got {on_structure!r}")
+    measures = _measures(body, where, ("reach_m", "wall_tolerance_m", "wall_max_m"), positive=True)
+    if measures["wall_max_m"] <= measures["wall_tolerance_m"]:
+        raise ValueError(
+            f"{where}:wall_max_m must be above wall_tolerance_m, or nothing is a parapet"
+        )
+    return Parapets(levels=levels, on_structure=on_structure, **measures)
 
 
 @dataclass(frozen=True)

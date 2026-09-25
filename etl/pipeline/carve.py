@@ -35,6 +35,24 @@ tiles.
 one merged primitive, so `INFRASTRUCTURE` and `BUILDING` arrive at the shader
 through one material with nothing else to tell them apart. `SurfaceClass.STRUCTURE`
 is that something, and this stage cuts on it — nothing else here may.
+
+**The parapet band is a SECOND population in the same pass** (`P3-51`, `Q147`):
+a carved ramp's edge is jumpable, on the user's call. Where the carriageway
+carve removes what stands IN a surveyed width on a listed edge, the band removes
+what stands ABOVE the deck beside that same ribbon — the parapet — on the listed
+edges, and by rule on any level or run of on-structure stations the config names
+(none as shipped: a band over every flyover edge was built, measured and
+withdrawn the same day, `Q147`). 🔴 **It keeps
+the deck and removes the wall by the triangle's normal** (`_band_split`), and
+**takes a wall whole by its centroid, with no prism at all** (`_band_candidates`):
+a prism floored at the ribbon's own height would take the deck top beside the
+ribbon along with the parapet, and a car leaving the road would fall THROUGH the
+deck rather than off it, and a prism's side and end planes slice every wall they
+straddle into slivers the tiles then ship. `deck_top_kept` on the row is the
+counter a mutation there moves. The band draws no wall — a parapet is a sheet,
+and what it leaves is the deck's own edge. ⚠️ **One pass for both populations**:
+the retaining walls stand on the carriageway prisms' side planes, and a second
+pass eats them.
 """
 
 from __future__ import annotations
@@ -42,6 +60,7 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import asdict, dataclass, field, replace
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
@@ -66,8 +85,8 @@ from pipeline.gltf import (
     read_render,
     write_glb,
 )
-from pipeline.mesh import merge, select_triangles, subtract_prism
-from pipeline.polyline import plan_lengths
+from pipeline.mesh import merge, select_triangles, slice_plane, subtract_prism
+from pipeline.polyline import plan_lengths, plan_projections, true_runs
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import mitres
 from pipeline.terrain import HeightField
@@ -75,7 +94,23 @@ from pipeline.terrain import HeightField
 log = logging.getLogger(__name__)
 
 CARVE_NAME = "carve.json"
-CARVE_SCHEMA = 1
+# 2: `population` and `deck_top_kept` per row (`P3-51`); a reader summing rows
+# as carriageway carves would be wrong about half of them.
+CARVE_SCHEMA = 2
+
+
+class Population(StrEnum):
+    """Which rule put a row in `carve.json`: `Q19`'s listed carriageway cut
+    or `P3-51`'s parapet band. A `str`, so the row serialises as the word."""
+
+    CARRIAGEWAY = "carriageway"
+    PARAPET = "parapet"
+
+
+# A triangle whose normal is within this angle of horizontal is a wall for the
+# band's purposes; steeper than this from the vertical, it is a deck or a cap.
+# 60° from the vertical: a 1:2 batter on a retaining face still reads as a wall.
+_BAND_WALL_COS = 0.5
 
 # Cell for the structure height field the soffit query runs on. Matches
 # `HeightField.from_meshes`' own default; a flyover deck is tens of metres
@@ -106,6 +141,11 @@ class EdgeCarve:
     # Tiles whose box the ribbon crosses — appended before any cut, so a row
     # can carry tiles alongside `triangles_removed: 0`. Not "tiles cut".
     tiles_considered: list[str] = field(default_factory=list)
+    # `carriageway` (`Q19`'s listed cut) or `parapet` (`P3-51`'s band), schema 2.
+    population: Population = Population.CARRIAGEWAY
+    # Band rows only: LOD0 triangles the band's box met and KEPT as deck —
+    # the counter a floor-at-the-ribbon mutation drives to 0 (`Q72`).
+    deck_top_kept: int = 0
 
 
 @dataclass
@@ -184,7 +224,7 @@ def _facing_away(wall: MeshData, points: np.ndarray) -> int:
     """
     centroids = wall.triangle_centroids()
     plan = points[:, [0, 2]]
-    nearest = np.argmin(((centroids[:, None, [0, 2]] - plan[None, :, :]) ** 2).sum(axis=2), axis=1)
+    nearest = _nearest_in_plan(centroids[:, [0, 2]], plan)
     toward = np.zeros_like(centroids)
     toward[:, [0, 2]] = plan[nearest] - centroids[:, [0, 2]]
     return int((np.sum(wall.triangle_cross() * toward, axis=1) < 0.0).sum())
@@ -413,7 +453,11 @@ def _double_side(wall: MeshData) -> MeshData:
 
 @dataclass
 class EdgePlan:
-    """One edge's stations, prisms and the row they will be reported on."""
+    """One edge's stations, prisms and the row they will be reported on.
+
+    `band` is the parapet population: what its box meets is sorted by
+    `_band_split` rather than removed whole, and it draws no wall.
+    """
 
     row: EdgeCarve
     points: np.ndarray
@@ -421,6 +465,13 @@ class EdgePlan:
     half_m: float
     floors: np.ndarray
     prisms: list[list[tuple[np.ndarray, float]]]
+    band: bool = False
+    wall_tolerance_m: float = 0.0
+    wall_max_m: float = np.inf
+    # Band plans: the band's half-width at each station — the deck's rim, or
+    # the drawn rail where that is wider, plus `reach_m`. `half_m` is its
+    # maximum, for the plan box.
+    half_at: np.ndarray | None = None
 
     def bounds(self) -> tuple[np.ndarray, np.ndarray]:
         """Plan box of the ribbon, widened by its own half-width."""
@@ -483,6 +534,291 @@ def _plan_edge(edge: dict, spec: Carve, overhead: HeightField) -> EdgePlan:
     )
 
 
+def _nearest_in_plan(queries: np.ndarray, targets: np.ndarray) -> np.ndarray:
+    """For each `(x, z)` query, the index of the nearest `(x, z)` target —
+    brute force, for the station-sized target sets the carve has; `_nearest`
+    is the chunked one for a whole mesh."""
+    return np.argmin(((queries[:, None, :] - targets[None, :, :]) ** 2).sum(axis=2), axis=1)
+
+
+def _band_plans(
+    edge: dict, spec: Carve, overhead: HeightField, listed: tuple[int, ...] = ()
+) -> list[EdgePlan]:
+    """The parapet band's plans over one edge: the whole polyline on a LISTED
+    edge (`Q19`'s eight ramps — walled flanks whose heights came from terrain,
+    so `on_structure` never trips) or on a banded level, or each run of
+    `on_structure` stations on a level-0 edge (`Q23`'s approaches). Empty where
+    the edge is none of these — every edge, as shipped, but the listed ones.
+
+    The prism spans the DECK — the drawn ribbon, `width_m` about `offset_m`,
+    or the measured rim (`deck_rim_m`, `Q107`) where that reaches further —
+    plus `reach_m` beyond it, floored AT the ribbon rather than `floor_below_m`
+    under it: the deck is what the car drives on and `_band_split` is what
+    keeps it. 🔴 **The rim, not the authored width, is where the parapet
+    stands**: `e208` FLEMING ROAD is authored 5.60 m wide on a deck the rim
+    survey reads out to 8.0 m, and a band on the width alone sliced that
+    parapet at its edge and left it. One prism over the whole deck rather than
+    two beside the rails, because the split already tells deck from wall and
+    nothing stands above the deck inside a ribbon a car can drive.
+    """
+    parapets = spec.parapets
+    if parapets is None:
+        return []
+    polyline = np.array(edge["polyline"], dtype=np.float64)
+    level = int(edge.get("elevation_level", 0))
+    runs: list[np.ndarray] = []
+    if edge["id"] in listed or level in parapets.levels:
+        runs.append(polyline)
+    elif level == 0 and parapets.on_structure:
+        runs.extend(_structure_runs(polyline, edge.get("on_structure") or []))
+    if not runs:
+        return []
+
+    name = edge["road_name"].get("en") or "(unnamed)"
+    row = EdgeCarve(
+        edge=edge["id"],
+        road_name=name,
+        width_m=float(edge["width_m"]),
+        width_source=edge["width_source"],
+        stations=0,
+        soffit_bounded=0,
+        triangles_removed=0,
+        carved_area_m2=0.0,
+        carved_volume_m3=0.0,
+        wall_m=0.0,
+        population=Population.PARAPET,
+    )
+    drawn = float(edge["width_m"]) / 2.0 + abs(float(edge.get("offset_m", 0.0)))
+    rim_at_vertex = _rim_reach(edge.get("deck_rim_m") or [], len(polyline), drawn)
+    plans = []
+    for run in runs:
+        points = _stations(run, spec.station_m)
+        if len(points) < 2:
+            continue
+        offsets = mitres(points)
+        ribbon = points[:, 1]
+        # The rim at each station is the nearest source vertex's, in plan.
+        nearest = _nearest_in_plan(points[:, [0, 2]], polyline[:, [0, 2]])
+        half_at = rim_at_vertex[nearest] + parapets.reach_m
+        half_m = float(half_at.max())
+        soffits = overhead.sample_lowest_soffit_above(
+            points[:, 0], points[:, 2], ribbon + spec.headroom_m
+        )
+        ceilings = np.where(np.isnan(soffits), np.inf, soffits - spec.soffit_clearance_m)
+        row.stations += len(points)
+        row.soffit_bounded += int(np.isfinite(ceilings).sum())
+        plans.append(
+            EdgePlan(
+                row=row,
+                points=points,
+                offsets=offsets,
+                half_m=half_m,
+                floors=ribbon,
+                # No prisms: the band cuts by centroid and floor alone
+                # (`_band_candidates`), and the ceiling's work is `wall_max_m`.
+                prisms=[],
+                band=True,
+                wall_tolerance_m=parapets.wall_tolerance_m,
+                wall_max_m=parapets.wall_max_m,
+                half_at=half_at,
+            )
+        )
+    return plans
+
+
+def _rim_reach(deck_rim_m: list, count: int, drawn: float) -> np.ndarray:
+    """Per source vertex, how far the deck reaches from the centreline: the
+    wider of the two published rims (`deck_rim_m`, `Q107`), or the drawn rail
+    where that is wider or the rim is unpublished."""
+    reach = np.full(count, drawn)
+    for index, pair in enumerate(deck_rim_m[:count]):
+        if not isinstance(pair, list | tuple):
+            continue
+        sides = [float(side) for side in pair if side is not None]
+        if sides:
+            reach[index] = max(drawn, *sides)
+    return reach
+
+
+def _structure_runs(polyline: np.ndarray, on_structure: list) -> list[np.ndarray]:
+    """Maximal runs of consecutive vertices published `on_structure`, two or
+    more long — a run of one is a point, and a point has no prism."""
+    flags = np.zeros(len(polyline), dtype=bool)
+    flags[: len(on_structure)] = [bool(flag) for flag in on_structure[: len(polyline)]]
+    return [polyline[start:stop] for start, stop in true_runs(flags) if stop - start >= 2]
+
+
+def _prisms_met(work: MeshData | None, plan: EdgePlan) -> np.ndarray:
+    """Per prism, whether its plan box meets any triangle's plan box."""
+    if work is None:
+        return np.zeros(len(plan.prisms), dtype=bool)
+    corners = work.positions[work.triangles][:, :, [0, 2]]
+    low, high = corners.min(axis=1), corners.max(axis=1)
+    met = np.zeros(len(plan.prisms), dtype=bool)
+    for index in range(len(plan.prisms)):
+        wide = _frame(plan.offsets, index)[0] * plan.half_m
+        wide_next = _frame(plan.offsets, index + 1)[0] * plan.half_m
+        rails = np.array(
+            [
+                plan.points[index] + wide,
+                plan.points[index] - wide,
+                plan.points[index + 1] + wide_next,
+                plan.points[index + 1] - wide_next,
+            ]
+        )[:, [0, 2]]
+        box_low, box_high = rails.min(axis=0), rails.max(axis=0)
+        met[index] = bool(((high >= box_low) & (low <= box_high)).all(axis=1).any())
+    return met
+
+
+def _station_of(centroids: np.ndarray, plan: EdgePlan) -> np.ndarray:
+    """Each plan `(x, z)` centroid's nearest station — the one whose floor its
+    triangle is judged against, so a ramp's deck is deck all the way down."""
+    return _nearest_in_plan(centroids, plan.points[:, [0, 2]])
+
+
+def _band_candidates(work: MeshData, plan: EdgePlan) -> _Candidates:
+    """What the band takes, whole, and what it never touches.
+
+    🔴 **No prism, no side plane, no end plane: a parapet is taken WHOLE by
+    its centroid, after ONE floor cut at its station.** Three builds priced
+    every other shape. Prisms over everything in the plan's box sliced the
+    slab's own side at every 2 m station (**974,450 → 1,433,856** vertices
+    over Wan Chai's tiles, 94 → 138 MB); prisms over what rises above the deck
+    still sliced every wall straddling the band's edge and kept the slivers
+    (1,120 triangles under 0.01 m² on one tile where the source had 145, the
+    region +22%); and widening the band to the rim fed them more walls to
+    straddle (7,492 slivers). A parapet runs along the road, so its centroid
+    says where it stands, and what it costs is exact: a wall standing across
+    the band comes out whole rather than cut at the band's edge. The floor
+    cut is the one slice, because a parapet's face and the slab's side are
+    often one face, and the side below the deck is the flyover seen from the
+    street.
+    """
+    # The band first, so the station search and the split run over what
+    # stands in it rather than over the plan's whole box.
+    centroids = work.triangle_centroids()[:, [0, 2]]
+    within = _within_band(centroids, plan)
+    station = np.zeros(len(centroids), dtype=int)
+    station[within] = _station_of(centroids[within], plan)
+    floors = plan.floors[station]
+    parapet, _ = _band_split(work, floors, plan.wall_tolerance_m, plan.wall_max_m)
+    heights = work.positions[work.triangles][:, :, 1]
+    candidate = within & parapet & (heights.max(axis=1) > floors)
+    aside = select_triangles(work, ~candidate)
+    if not candidate.any():
+        return _Candidates(None, aside)
+    candidates = select_triangles(work, candidate)
+    # Only a triangle its floor passes through needs the cut; one standing
+    # wholly above it goes whole, and the floor cut leaves it unchanged anyway.
+    at = station[candidate]
+    straddles = heights[candidate].min(axis=1) < plan.floors[at]
+    taken: list[MeshData] = []
+    below: list[MeshData] = [aside] if aside is not None else []
+    whole = select_triangles(candidates, ~straddles)
+    if whole is not None:
+        taken.append(whole)
+    for index in np.unique(at[straddles]):
+        group = select_triangles(candidates, straddles & (at == index))
+        floor = float(plan.floors[index])
+        cut = slice_plane(group, (0.0, 1.0, 0.0), floor)
+        over = cut.triangle_centroids()[:, 1] > floor
+        for keep, into in ((over, taken), (~over, below)):
+            part = select_triangles(cut, keep)
+            if part is not None:
+                into.append(part)
+    return _Candidates(_merged(taken, work.name), _merged(below, work.name))
+
+
+def _merged(parts: list[MeshData], name: str) -> MeshData | None:
+    if not parts:
+        return None
+    return merge(parts, name=name) if len(parts) > 1 else parts[0]
+
+
+def _within_band(points: np.ndarray, plan: EdgePlan) -> np.ndarray:
+    """Whether each plan `(x, z)` point lies within the band of some segment
+    of the run — that segment's half-width (`half_at`, the wider of its two
+    stations') about it — chunked like `_nearest`."""
+    starts = plan.points[:-1][:, [0, 2]]
+    deltas = plan.points[1:][:, [0, 2]] - starts
+    halves = np.maximum(plan.half_at[:-1], plan.half_at[1:])
+    out = np.empty(len(points), dtype=bool)
+    chunk = max(1, _NEAREST_CHUNK_ELEMENTS // max(1, len(starts)))
+    for start in range(0, len(points), chunk):
+        block = points[start : start + chunk]
+        _fraction, distance = plan_projections(block[:, None, :], starts[None, :, :], deltas)
+        out[start : start + chunk] = (distance <= halves[None, :]).any(axis=1)
+    return out
+
+
+@dataclass(frozen=True)
+class _Candidates:
+    """A band plan's work, sorted: what goes, whole, and what stays."""
+
+    taken: MeshData | None
+    kept: MeshData | None
+
+
+def _snap_rows(mesh: MeshData, source: MeshData) -> MeshData:
+    """`TEXCOORD_1` for every vertex a slice invented, copied from the nearest
+    source vertex. The slicer interpolates every channel, and a triangle
+    welded across two objects by `collapse` carries two rows, so its cut
+    vertex lands between them on a row nobody owns — `verify_tiles` refuses
+    it. The carriageway carve met none in 8 edges; the band met 117 in one
+    tile."""
+    if mesh.uv2 is None or source.uv2 is None:
+        return mesh
+    rows = mesh.uv2[:, 1]
+    invented = np.abs(rows - np.round(rows)) > 1e-4
+    if not invented.any():
+        return mesh
+    uv2 = mesh.uv2.copy()
+    uv2[invented] = source.uv2[_nearest(mesh.positions[invented], source)]
+    return replace(mesh, uv2=uv2)
+
+
+def _band_split(
+    removed: MeshData, floor: float | np.ndarray, tolerance_m: float, max_m: float = np.inf
+) -> tuple[np.ndarray, np.ndarray]:
+    """Which of the triangles a band may meet are parapet and which are deck.
+
+    🔴 **The deck is told from the wall by the NORMAL, and the cap by height.**
+    A wall is a triangle within 60° of vertical (`_BAND_WALL_COS`); the floor
+    cut then slices it at its station's deck, so only the part above goes. A
+    cap is any face standing wholly above `floor + tolerance_m`, the parapet's
+    top or a kerb upstand's — `floor` is per triangle, the ribbon's height at
+    its nearest station. Everything else — the deck top at the ribbon's height,
+    its underside, a face straddling the tolerance — is deck, and never enters
+    a prism. ⚠️ Keeping by "not wall" alone would keep the cap as a floating
+    slab a metre up; removing by height alone would take the deck. Both tests
+    are needed and both have a test.
+    """
+    corners = removed.positions[removed.triangles]
+    cross = removed.triangle_cross()
+    length = np.linalg.norm(cross, axis=1)
+    safe = np.where(length > 0.0, length, 1.0)
+    normal_y = np.where(length > 0.0, np.abs(cross[:, 1]) / safe, 1.0)
+    wall = normal_y < _BAND_WALL_COS
+    cap = corners[:, :, 1].min(axis=1) > floor + tolerance_m
+    # A face whose top stands more than `max_m` above the deck is not a
+    # parapet: a pier carrying the flyover overhead, the side of a higher deck
+    # alongside, a noise barrier. It stays whole.
+    low_enough = corners[:, :, 1].max(axis=1) <= floor + max_m
+    parapet = (wall | cap) & low_enough
+    return parapet, ~parapet
+
+
+def _register(plan: EdgePlan, tiles: dict, plans: dict[str, list[EdgePlan]]) -> None:
+    """Queue the plan on every tile its ribbon meets, and book the tile on its
+    row once — a band edge's runs share one row, so two plans can meet the
+    same tile."""
+    for tile_id in _tiles_for(plan, tiles):
+        plans.setdefault(tile_id, []).append(plan)
+        if tile_id not in plan.row.tiles_considered:
+            plan.row.tiles_considered.append(tile_id)
+
+
 def _tiles_for(plan: EdgePlan, tiles: dict) -> list[str]:
     """Tiles whose published AABB meets this edge's ribbon in plan."""
     low, high = plan.bounds()
@@ -495,14 +831,28 @@ def _tiles_for(plan: EdgePlan, tiles: dict) -> list[str]:
 
 
 @dataclass(frozen=True)
+class _Carved:
+    """One plan taken out of one mesh: what is left, and what to book."""
+
+    remaining: MeshData | None
+    # What the prisms removed; None where they met nothing.
+    removed: MeshData | None
+    # The inward-only retaining wall, before `_double_side`; None for a band.
+    wall: MeshData | None
+    wall_m: float
+    # Band plans only: the triangles classified deck and kept whole.
+    deck_top_kept: int
+
+
+@dataclass(frozen=True)
 class _Cut:
     """One mesh after every plan has been taken out of it."""
 
     mesh: MeshData
     # The inward-only wall each plan built, before `_double_side`.
     walls: list[tuple[MeshData, EdgePlan]]
-    # What each plan removed and the metres of wall it drew, for `_account`.
-    removals: list[tuple[EdgePlan, MeshData, float]]
+    # What each plan took, for `_account`.
+    removals: list[tuple[EdgePlan, _Carved]]
 
 
 def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveReport) -> None:
@@ -541,9 +891,10 @@ def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveR
 
         if cut is not None:
             if tier == 0:
-                for plan, removed, metres in cut.removals:
-                    _account(plan.row, removed)
-                    plan.row.wall_m += metres
+                for plan, carved in cut.removals:
+                    _account(plan.row, carved.removed)
+                    plan.row.wall_m += carved.wall_m
+                    plan.row.deck_top_kept += carved.deck_top_kept
             report.facing_away += sum(_facing_away(wall, plan.points) for wall, plan in cut.walls)
         carved = source if cut is None else cut.mesh
         written = [carved]
@@ -585,14 +936,15 @@ def _carve_mesh(source: MeshData, plans: list[EdgePlan], material: str | None) -
     rest = select_triangles(source, ~keep)
 
     walls: list[tuple[MeshData, EdgePlan]] = []
-    removals: list[tuple[EdgePlan, MeshData, float]] = []
+    removals: list[tuple[EdgePlan, _Carved]] = []
     for plan in plans:
-        structure, removed, wall, metres = _carve_plan(structure, plan, source)
-        if removed is None:
+        carved = _carve_plan(structure, plan, source)
+        structure = carved.remaining
+        if carved.removed is None:
             continue
-        removals.append((plan, removed, metres))
-        if wall is not None:
-            walls.append((wall, plan))
+        removals.append((plan, carved))
+        if carved.wall is not None:
+            walls.append((carved.wall, plan))
     if not removals:
         return None
 
@@ -622,10 +974,9 @@ def _carve_mesh(source: MeshData, plans: list[EdgePlan], material: str | None) -
     return _Cut(stamp_along(carved), walls, removals)
 
 
-def _carve_plan(
-    structure: MeshData | None, plan: EdgePlan, source: MeshData
-) -> tuple[MeshData | None, MeshData | None, MeshData | None, float]:
-    """One edge's prisms taken out of one tier: what is left, what was cut, its wall.
+def _carve_plan(structure: MeshData | None, plan: EdgePlan, source: MeshData) -> _Carved:
+    """One edge's prisms taken out of one tier: what is left, what was cut, its
+    wall and its metres, and the triangles a band classified deck and kept.
 
     ⚠️ **The tier is split against the ribbon's box before the prisms run, and
     that is not a micro-optimisation.** A prism is one 2 m segment and a tile's
@@ -641,7 +992,7 @@ def _carve_plan(
     structure they exist to remove.
     """
     if structure is None:
-        return None, None, None, 0.0
+        return _Carved(None, None, None, 0.0, 0)
 
     low, high = plan.bounds()
     corners = structure.positions[structure.triangles][:, :, [0, 2]]
@@ -649,15 +1000,44 @@ def _carve_plan(
         corners.min(axis=1) <= high[[0, 2]]
     ).all(axis=1)
     if not near.any():
-        return structure, None, None, 0.0
+        return _Carved(structure, None, None, 0.0, 0)
     work = select_triangles(structure, near)
     aside = select_triangles(structure, ~near)
 
-    taken: list[MeshData] = []
+    kept: list[MeshData] = []
+    taken_whole: MeshData | None = None
+    if plan.band and work is not None:
+        # 🔴 **The deck is set aside WHOLE before any prism runs, and so is
+        # everything below it.** The first build split the prism's removal
+        # into deck and parapet per station and merged the deck back: correct,
+        # and the deck came back sliced at every 2 m station — `e118` 82,598
+        # triangles removed for 673 m², the widest tier 22,486 → 91,670
+        # vertices. `_band_candidates` classifies first, so the prisms only
+        # ever meet what rises above the deck, and the deck ships as the
+        # publisher drew it.
+        sorted_work = _band_candidates(work, plan)
+        work = None
+        if sorted_work.kept is not None:
+            kept.append(sorted_work.kept)
+        taken_whole = sorted_work.taken
+
+    taken: list[MeshData] = [taken_whole] if taken_whole is not None else []
     volume = 0.0
-    for prism in plan.prisms:
+    if taken_whole is not None:
+        box_low, box_high = taken_whole.aabb()
+        volume += float(np.prod(np.asarray(box_high) - np.asarray(box_low)))
+    # ⚠️ **89% of prism calls met nothing** (38,104 of 42,812 on Wan Chai with
+    # the band, 11.9 s of 18.8 s): a plan's prisms run the whole edge and its
+    # work is one tile's corner of it. A prism whose plan box misses every
+    # triangle of the work it started from cannot meet a piece sliced from
+    # one either, so those are skipped here — byte-identical, and the
+    # carriageway prisms' 7,310 empty calls go with them.
+    met = _prisms_met(work, plan)
+    for prism, hit in zip(plan.prisms, met, strict=True):
         if work is None:
             break
+        if not hit:
+            continue
         work, removed = subtract_prism(work, prism)
         if removed is None:
             continue
@@ -669,15 +1049,23 @@ def _carve_plan(
             (box_high[0] - box_low[0]) * (box_high[1] - box_low[1]) * (box_high[2] - box_low[2])
         )
 
-    left = [part for part in (aside, work) if part is not None]
+    left = [part for part in (aside, work, *kept) if part is not None]
     remaining = merge(left, name=structure.name) if len(left) > 1 else (left[0] if left else None)
+    if plan.band and remaining is not None:
+        remaining = _snap_rows(remaining, structure)
+    kept_triangles = sum(part.triangle_count for part in kept)
     if not taken:
-        return remaining, None, None, 0.0
+        return _Carved(remaining, None, None, 0.0, kept_triangles)
 
     plan.row.carved_volume_m3 += volume
     cut = merge(taken, name="cut") if len(taken) > 1 else taken[0]
+    if plan.band:
+        # No wall: a parapet is a sheet, and what the band leaves is the deck's
+        # own edge. The deck triangles kept are handed back for the caller to
+        # book on LOD0 alone, like every other counter.
+        return _Carved(remaining, cut, None, 0.0, kept_triangles)
     wall, metres = _retaining_wall(cut, plan, source)
-    return remaining, cut, wall, metres
+    return _Carved(remaining, cut, wall, metres, kept_triangles)
 
 
 def _account(row: EdgeCarve, cut: MeshData) -> None:
@@ -728,24 +1116,29 @@ def _retile_aabb(tile: dict, boxes: list) -> None:
 
 def _log(report: CarveReport) -> None:
     carved = report.carved
+    band = [row for row in report.edges if row.population == Population.PARAPET]
     log.info(
-        "  carve: %d edges configured, %d cut, %d tiers re-emitted",
+        "  carve: %d edges planned (%d listed, %d banded), %d cut, %d tiers re-emitted",
         len(report.edges),
+        len(report.edges) - len(band),
+        len(band),
         len(carved),
         len(report.tiles_written),
     )
     for row in report.edges:
         log.info(
-            "    e%-4d %-24s w=%5.2f  %4d stations, %3d soffit-bounded  "
-            "%6d tris, %8.1f m2, wall %6.1f m",
+            "    e%-4d %-24s %-11s w=%5.2f  %4d stations, %3d soffit-bounded  "
+            "%6d tris, %8.1f m2, wall %6.1f m, deck kept %5d",
             row.edge,
             row.road_name[:24],
+            row.population,
             row.width_m,
             row.stations,
             row.soffit_bounded,
             row.triangles_removed,
             row.carved_area_m2,
             row.wall_m,
+            row.deck_top_kept,
         )
     if report.widest_tier_vertices > 65535:
         log.info(
@@ -824,7 +1217,8 @@ def build_region(
     # has measured has nothing to carve rather than a list gone missing. Both
     # arrive here as "no-op, and the bundle is byte-identical" (`Q95`).
     carved_edges = () if spec is None else spec.edges_for(region_id)
-    if not carved_edges:
+    banded = spec is not None and spec.parapets is not None
+    if not carved_edges and not banded:
         log.info("  no carve configured for %s; the bundle is unchanged", region_id)
         write_document(out_dir / CARVE_NAME, _document(city, region_id, report))
         return report
@@ -876,9 +1270,20 @@ def build_region(
             )
         plan = _plan_edge(edge, spec, overhead)
         report.edges.append(plan.row)
-        for tile_id in _tiles_for(plan, tiles):
-            plans.setdefault(tile_id, []).append(plan)
-            plan.row.tiles_considered.append(tile_id)
+        _register(plan, tiles, plans)
+
+    # The parapet band (`P3-51`): the listed edges, and by rule whatever else
+    # the block names, after the listed edges so their retaining walls are
+    # built from what the carriageway prisms removed and the band's rows
+    # follow theirs.
+    if banded:
+        for edge in graph["edges"]:
+            band = _band_plans(edge, spec, overhead, carved_edges)
+            if not band:
+                continue
+            report.edges.append(band[0].row)
+            for plan in band:
+                _register(plan, tiles, plans)
 
     for tile_id in sorted(plans):
         _carve_tile(out_dir, tiles[tile_id], plans[tile_id], report)

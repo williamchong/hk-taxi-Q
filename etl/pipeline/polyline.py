@@ -115,11 +115,15 @@ def plan_projections(
     asked, but not by construction, and that one's answers reach `clearance.json`
     and every kerbside join. A hoist that could move a published number for
     tidiness is the trade `Q118` refused.
+
+    The segment axis is the LAST: `point` may carry leading axes of its own
+    (`carve._within_band` asks a block of centroids against every segment at
+    once), and a plain `(2,)` point reads as before.
     """
-    squared = (delta**2).sum(axis=1)
+    squared = (delta**2).sum(axis=-1)
     offset = point - start
-    fraction = (offset * delta).sum(axis=1) / np.where(squared > 0.0, squared, 1.0)
-    return fraction, np.linalg.norm(offset - fraction.clip(0.0, 1.0)[:, None] * delta, axis=1)
+    fraction = (offset * delta).sum(axis=-1) / np.where(squared > 0.0, squared, 1.0)
+    return fraction, np.linalg.norm(offset - fraction.clip(0.0, 1.0)[..., None] * delta, axis=-1)
 
 
 @dataclass(frozen=True)
