@@ -19,17 +19,27 @@ restating it.
 zero, and `FareSystem` refuses to run on a zero dwell, bar or price rather than fall back to a
 literal.
 
+## `drift_min_s = 2.0`
+
+A slide must hold at or over the threshold for two seconds before it counts at all; a shorter
+one pays nothing. The first table paid at one second, and on the user's drive that paid a flick
+through a junction (2026-09-25, the user's call: a drift only counts when it is longer than a
+threshold). The skidpad's shipped drift dwells 0.57–0.85 s (`Q84`, `Q86`), so a tap is well
+under this, and a slide held through a corner on Hennessy is over it. Seconds, not metres,
+because `Q84` grades the drift dial on dwell in seconds, and a distance bar would pay a fast
+slide over a slow one for the same control — which is the speed skill's job.
+
 ## `drift_s = 1.0`
 
-A slide must hold at or over the threshold for a second before it pays, and pays again each
-further second. The skidpad's shipped drift dwells 0.57–0.85 s (`Q84`, `Q86`), so a tap does not
-pay and a held slide on Hennessy does — every second of it, which is `GAME_DESIGN.md`'s
-"points per second" as money.
+Once a slide has counted, it pays again each further second held — `GAME_DESIGN.md`'s "points
+per second" as money. The first payment lands at `drift_min_s`, the second at
+`drift_min_s + drift_s`, and so on; releasing the slide forfeits the part not yet paid.
 
 ## `drift_hkd = 5.0`
 
-Ten seconds of the time tip. A one-second slide is worth a block driven fast; a five-second one
-is worth half a short hop's allowance, which is what makes the corner worth taking sideways.
+Ten seconds of the time tip. A two-second slide is worth a block driven fast; a five-second one
+pays four times and is worth a short hop's allowance, which is what makes the corner worth
+taking sideways.
 
 ## `speed_min_kph = 80.0`
 
@@ -37,15 +47,20 @@ Above the drift's fade (`drift_fade_from_kph` 65) and well under `max_speed_kph`
 Road pays it, Hennessy between the trams does not, which is the route choice `GAME_DESIGN.md`
 asks for.
 
-## `speed_hold_s = 3.0`
+## `speed_hold_m = 200.0`
 
-Three seconds at the floor is 67 m; a burst between two junctions does not pay, a straight held
-does, and pays again every three seconds it is held.
+The tariff's own unit (`tariff.tres` `step_m`): the speed skill pays once per 200 m driven at or
+over the floor, and again each further 200 m, so it can never tick more often than the meter
+does (2026-09-25, the user's call — the first table paid every 3 s, four times a meter tick at
+the floor). Distance, not time, so a faster run pays sooner over the same road, which is the
+skill. `verify_fares` refuses a value under `step_m`; raising it is a tuning pass, lowering it
+past the tariff is not. At 80 kph a unit is 9 s; a burst between two junctions does not pay,
+Gloucester Road held does.
 
 ## `speed_hkd = 5.0`
 
-The drift's price: a second sideways and three seconds flat out are the same money, so neither
-route is the only one worth driving.
+The drift's price: a second sideways past the qualifying two and 200 m flat out are the same
+money, so neither route is the only one worth driving.
 
 ## `early_share = 0.5`
 

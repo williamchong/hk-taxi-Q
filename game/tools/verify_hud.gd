@@ -352,6 +352,17 @@ func _check_style() -> void:
 		or style.meter_label_size <= 0
 	):
 		_fail("style", "the meter has no digit height, segment weight, cell count or label size")
+	# The tip's LED shares the meter's face, smaller: both rows must fit one
+	# housing, so a tip digit as tall as the fare's is a layout defect.
+	_expect(
+		(
+			style.tip_digit_px > 0.0
+			and style.tip_segment_px > 0.0
+			and style.tip_digit_px < style.meter_digit_px
+		),
+		"style",
+		"the tip's LED has a digit height and a segment weight, under the meter's"
+	)
 	if (
 		style.timer_size <= 0
 		or style.timer_unit_size <= 0
@@ -1993,18 +2004,21 @@ func _check_fare_face() -> void:
 		"face",
 		"a penalty is docked on the receipt and flashed as a deduction (%s)" % face.receipt(bare)
 	)
-	# The tip, live, under the meter while carrying and nowhere else.
+	# The tip, live, under the meter while carrying and nowhere else: digits
+	# for the LED, the chip beside them.
 	fare.tip_hkd = 27.5
 	face.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(
-		face.tip_text == "TIP HK$27.5",
+		face.tip_text == "27.5" and face.tip_caption == "TIP",
 		"face",
-		"carrying, the tip stands under the meter (%s)" % face.tip_text
+		"carrying, the tip stands under the meter as LED digits (%s)" % face.tip_text
 	)
 	zh.on_sampled(carrying, fare, null, 10.0, 0.0)
-	_expect(zh.tip_text == "小費 HK$27.5", "face", "and in Chinese")
+	_expect(zh.tip_text == "27.5" and zh.tip_caption == "小費", "face", "and in Chinese")
 	face.on_sampled(boarding, fare, null, 10.0, 0.0)
-	_expect(face.tip_text.is_empty(), "face", "boarding, no tip yet")
+	_expect(
+		face.tip_text.is_empty() and face.tip_caption.is_empty(), "face", "boarding, no tip yet"
+	)
 
 	_expect(
 		(

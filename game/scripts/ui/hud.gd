@@ -116,8 +116,11 @@ var _meter: SevenSegment = null
 ## The session's takings, under the LED (the user's call: a total beside the
 ## current fare).
 var _total: Label = null
-## The tip as it stands, under the LED while carrying (`P3-49`).
-var _tip: Label = null
+## The tip as it stands, a second LED under the meter's while carrying
+## (`P3-49`), with its chip; the row hides between fares.
+var _tip_row: HBoxContainer = null
+var _tip_caption: Label = null
+var _tip: SevenSegment = null
 ## The tip clock: bare numerals in the middle of the frame, no housing (the
 ## user's call), outlined so they read on any road.
 var _timer_box: HBoxContainer = null
@@ -371,21 +374,17 @@ func _build() -> void:
 	currency.size_flags_vertical = Control.SIZE_SHRINK_END
 	meter_row.add_child(currency)
 	# The LED (`Q139`): the fare's red, and the one place it is spent.
-	_meter = SevenSegment.new()
-	_meter.name = "Digits"
-	_meter.cells = _style.meter_cells
-	_meter.digit_px = _style.meter_digit_px
-	_meter.segment_px = _style.meter_segment_px
-	_meter.slant = _style.meter_slant
-	_meter.lit = _style.meter_lit
-	_meter.unlit = _style.meter_unlit
-	_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_meter = _seven_segment("Digits", _style.meter_digit_px, _style.meter_segment_px)
 	meter_row.add_child(_meter)
-	# The tip, live, in the gain's green: the one number on the meter the
-	# driver can move at the wheel.
-	_tip = _label("Tip", _style.meter_label_size, _style.accent)
-	_tip.visible = false
-	meter_lines.add_child(_tip)
+	# The tip, live: the one number on the meter the driver can move at the
+	# wheel, on the same LED in the same red (the user's call), smaller.
+	_tip_row = _row(meter_lines, "TipRow", roundi(_style.plate_pad.y))
+	_tip_row.visible = false
+	_tip_caption = _label("TipCaption", _style.meter_label_size, _style.chip_muted)
+	_tip_caption.size_flags_vertical = Control.SIZE_SHRINK_END
+	_tip_row.add_child(_tip_caption)
+	_tip = _seven_segment("TipDigits", _style.tip_digit_px, _style.tip_segment_px)
+	_tip_row.add_child(_tip)
 	_total = _label("Total", _style.meter_label_size, _style.chip_muted)
 	meter_lines.add_child(_total)
 
@@ -480,6 +479,21 @@ func _housing(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
 	panel.visible = false
 	_layout.place(root, panel, rect)
 	return panel
+
+
+## A meter's LED in the meter's face — its red, its ghost, its cells and lean —
+## at a digit size: the fare's and the tip's differ only there.
+func _seven_segment(node_name: String, digit_px: float, segment_px: float) -> SevenSegment:
+	var led := SevenSegment.new()
+	led.name = node_name
+	led.cells = _style.meter_cells
+	led.digit_px = digit_px
+	led.segment_px = segment_px
+	led.slant = _style.meter_slant
+	led.lit = _style.meter_lit
+	led.unlit = _style.meter_unlit
+	led.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return led
 
 
 ## A centred line of HUD text. Four of these differed only in a name, a size and
@@ -976,10 +990,12 @@ func _paint_fares() -> void:
 		_meter_panel.visible = true
 	_meter.text = _face.meter_text
 	var tipping: bool = not _face.tip_text.is_empty()
-	if _tip.visible != tipping:
-		_tip.visible = tipping
-	if tipping and _tip.text != _face.tip_text:
+	if _tip_row.visible != tipping:
+		_tip_row.visible = tipping
+	if tipping:
 		_tip.text = _face.tip_text
+		if _tip_caption.text != _face.tip_caption:
+			_tip_caption.text = _face.tip_caption
 	if _total.text != _face.total_text:
 		_total.text = _face.total_text
 

@@ -15,17 +15,23 @@ extends Resource
 ## load two different files.
 const PATH: String = "res://tuning/skills.tres"
 
-## How long a slide must hold at or over the drift threshold before it pays,
-## in seconds — and how much longer before it pays again.
+## How long a slide must hold at or over the drift threshold before it counts
+## at all, in seconds. A shorter slide pays nothing (the user's call: a tap is
+## not a drift).
+@export var drift_min_s: float
+## Once a slide has counted, how much longer it must hold before it pays
+## again, in seconds.
 @export var drift_s: float
-## What each `drift_s` of slide pays into the tip, in HK$.
+## What a slide pays into the tip when it counts, and again each `drift_s`, in HK$.
 @export var drift_hkd: float
 ## The speed the sustained-speed skill starts counting at, in km/h.
 @export var speed_min_kph: float
-## How long the car must hold that speed before it pays, in seconds — and how
-## much longer before it pays again.
-@export var speed_hold_s: float
-## What each `speed_hold_s` above the floor pays into the tip, in HK$.
+## How far the car must drive at or over that speed before it pays, in metres
+## — and how much further before it pays again. Distance, not time, so the
+## skill can be held to the meter's own unit: `verify_fares` refuses a value
+## under `FareTariff.step_m` (the user's call, `Q145`).
+@export var speed_hold_m: float
+## What each `speed_hold_m` at or over the floor pays into the tip, in HK$.
 @export var speed_hkd: float
 ## The share of the allowance that must be left at delivery for the early
 ## arrival to pay, 0..1.

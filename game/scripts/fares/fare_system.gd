@@ -51,13 +51,19 @@ extends Node
 ##
 ## **The skills pay as they happen** (`P3-49`, `Q145`). While a passenger is
 ## aboard a `SkillTracker` reads every tick's speed and slip: a slide held at
-## or over `HandlingProfile.drift_slip_threshold_deg` for `SkillProfile.drift_s`
-## pays `drift_hkd`, a run over `speed_min_kph` for `speed_hold_s` pays
-## `speed_hkd`, each again for each further dwell, and an arrival with
-## `early_share` of the allowance left pays `early_hkd` at the door. Each is
-## a flat HK$ into `Fare.tip_hkd` the moment it is earned and a line on the
-## receipt; `skilled` says so. A bail forfeits the lot — the passenger walks
-## without paying, and the receipt says what walked.
+## or over `HandlingProfile.drift_slip_threshold_deg` for `SkillProfile.drift_min_s`
+## pays `drift_hkd` and again every further `drift_s`, a run at or over
+## `speed_min_kph` pays `speed_hkd` every `speed_hold_m` driven, and an
+## arrival with `early_share` of the allowance left pays `early_hkd` at the
+## door. Each is a flat HK$ into `Fare.tip_hkd` the moment it is earned and a
+## line on the receipt; `skilled` says so. A bail forfeits the lot — the
+## passenger walks without paying, and the receipt says what walked.
+##
+## **The live tip is the skills alone** (the user's call, `Q145`): the seconds
+## left are priced ONCE, at the door, into `Fare.time_hkd`. A tip that fell
+## with the clock read as a penalty for driving; now it only rises with a
+## skill, drops with a penalty, and the clock in the middle of the frame is
+## the one thing that runs down.
 ##
 ## ⚠️ **`slip_deg_of` is a second copy of `skidpad_ablation.gd`'s slip, on
 ## purpose** (`Q84`): the grader must never call what it grades, so the
@@ -230,10 +236,11 @@ func setup(
 	if _any_zero(profile, required):
 		return
 	var skill_keys: Dictionary[String, float] = {
+		"drift_min_s": skills.drift_min_s,
 		"drift_s": skills.drift_s,
 		"drift_hkd": skills.drift_hkd,
 		"speed_min_kph": skills.speed_min_kph,
-		"speed_hold_s": skills.speed_hold_s,
+		"speed_hold_m": skills.speed_hold_m,
 		"speed_hkd": skills.speed_hkd,
 		"early_share": skills.early_share,
 		"early_hkd": skills.early_hkd,
@@ -331,18 +338,13 @@ func sample(
 	if state == State.CARRYING:
 		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
 		_announce_reading()
-		for award: Fare.Award in _tracker.tick(maxf(speed_mps, 0.0) * 3.6, slip_deg, elapsed):
+		for award: Fare.Award in _tracker.tick(speed_mps, slip_deg, elapsed):
 			_award(award)
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:
 			fare.remaining_s = 0.0
 			_bail()
 			return
-		# The tip as it stands: what the clock would pay if the passenger got
-		# out now, plus what the skills have paid. Live, so the HUD can show
-		# it falling with the seconds and jumping with a skill.
-		fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
-		fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 
 	_sample_accum_s += elapsed
 	if _sample_accum_s < 1.0 / _profile.sample_hz:
@@ -503,8 +505,9 @@ func _board() -> void:
 	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
 	fare.remaining_s = fare.allowance_s
 	_tracker = SkillTracker.new(_skills, _slip_threshold_deg)
-	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
-	fare.tip_hkd = fare.time_hkd
+	# Nothing earned yet: the time is priced at the door, not here.
+	fare.time_hkd = 0.0
+	fare.tip_hkd = 0.0
 	state = State.CARRYING
 	_last_reading_hkd = fare.meter.reading_hkd()
 	boarded.emit(fare)
@@ -512,14 +515,16 @@ func _board() -> void:
 
 
 func _deliver() -> void:
-	# The early arrival is judged at the door, before the tip is summed, and
-	# announced like any other skill so the face pops for it too.
+	# The seconds left are priced once, here — the live tip never carried
+	# them (the user's call) — then the early arrival is judged, announced
+	# like any other skill so the face pops for it too, and `_award` sums
+	# the tip from both parts.
+	fare.time_hkd = fare.remaining_s * _profile.tip_hkd_per_s
+	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 	var early: Fare.Award = _tracker.arrival(fare.remaining_s, fare.allowance_s)
 	if early != null:
 		_award(early)
 	_tracker = null
-	# `time_hkd` and `tip_hkd` are already current: `sample` priced them this
-	# tick, and `_award` re-summed the tip if the early arrival paid.
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
 	deliveries += 1

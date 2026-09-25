@@ -60,7 +60,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
   deepens underneath it. Sweep the taper dial itself (`Q88`).
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
-  `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it (`Q145`), so the number the
+  `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target
   (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of

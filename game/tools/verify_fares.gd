@@ -42,6 +42,9 @@ const TICK_S: float = 0.25
 ## Well under the shipped `stop_below_kph` (5 kph is 1.39 m/s), and well over.
 const CRAWL: float = 0.5
 const FAST: float = 10.0
+## A run at speed for the distance skill: 12.5 m a tick, so a 200 m unit is
+## 16 ticks and exact in binary.
+const RUN: float = 50.0
 ## The draw every seeded system in this file uses, so two of them agree.
 const SEED: int = 7
 ## Somewhere no fare node is: the pools are inside the region and this is not.
@@ -567,27 +570,51 @@ func _check_skills() -> void:
 		_expect(all_stranded, "skills", "SKIP: no pickup on this region alone to drive from")
 		return
 
-	# Aboard, out on the road, nothing earned yet.
+	# The speed skill can never tick faster than the meter: its unit is at
+	# least the tariff's (the user's call).
+	_expect(
+		_skills.speed_hold_m >= _tariff.step_m,
+		"skills",
+		(
+			"speed_hold_m (%.0f m) is at least the tariff's step_m (%.0f m)"
+			% [_skills.speed_hold_m, _tariff.step_m]
+		)
+	)
+
+	# Aboard, out on the road, nothing earned yet — and the tip says so: the
+	# seconds left are priced at the door, never live (the user's call).
 	var system: FareSystem = _system(_fares, _profile, SEED)
 	_skilled = 0
 	system.skilled.connect(_count_skilled)
 	_tick(system, pickup.point, CRAWL, 5)
 	_expect(system.state == FareSystem.State.CARRYING, "skills", "carrying, to earn on")
 	_expect(
-		is_equal_approx(system.fare.tip_hkd, system.fare.remaining_s * _profile.tip_hkd_per_s),
+		is_zero_approx(system.fare.tip_hkd) and is_zero_approx(system.fare.time_hkd),
 		"skills",
-		"the tip stands live at the seconds left priced (HK$%.2f)" % system.fare.tip_hkd
+		(
+			"carrying with nothing earned, the live tip is 0 — the time is not in it (HK$%.2f)"
+			% system.fare.tip_hkd
+		)
 	)
 	var threshold: float = _slip_threshold_deg
-	var drift_ticks: int = int(ceil(_skills.drift_s / TICK_S))
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var repeat_ticks: int = int(ceil(_skills.drift_s / TICK_S))
 	_slide(system, FAST, threshold - 1.0, drift_ticks * 3)
 	_expect(
 		system.fare.awards.is_empty() and _skilled == 0,
 		"skills",
 		"a degree under the threshold, however long, is not a drift"
 	)
+	if repeat_ticks < drift_ticks:
+		_slide(system, FAST, threshold, repeat_ticks)
+		_slide(system, FAST, 0.0, 1)
+		_expect(
+			system.fare.awards.is_empty(),
+			"skills",
+			"a slide as long as drift_s but short of drift_min_s is a tap and pays nothing"
+		)
 	_slide(system, FAST, threshold, drift_ticks - 1)
-	_expect(system.fare.awards.is_empty(), "skills", "one tick short of drift_s pays nothing")
+	_expect(system.fare.awards.is_empty(), "skills", "one tick short of drift_min_s pays nothing")
 	_slide(system, FAST, threshold, 1)
 	_expect(
 		(
@@ -598,15 +625,15 @@ func _check_skills() -> void:
 			and _skilled == 1
 		),
 		"skills",
-		"the tick that reaches drift_s AT the threshold pays drift_hkd into the tip, once, and says so"
+		"the tick that reaches drift_min_s AT the threshold pays drift_hkd into the tip, once, and says so"
 	)
 	_expect(
-		is_equal_approx(
-			system.fare.tip_hkd,
-			system.fare.remaining_s * _profile.tip_hkd_per_s + _skills.drift_hkd
+		(
+			is_equal_approx(system.fare.tip_hkd, _skills.drift_hkd)
+			and is_zero_approx(system.fare.time_hkd)
 		),
 		"skills",
-		"and the live tip is the time left plus the skill"
+		"and the live tip is the skill alone"
 	)
 	_expect(
 		(
@@ -616,12 +643,13 @@ func _check_skills() -> void:
 		"skills",
 		"a penalty docks the tip and floors it at zero, never below"
 	)
-	_slide(system, FAST, threshold + 20.0, drift_ticks)
+	_slide(system, FAST, threshold + 20.0, repeat_ticks)
 	_expect(
 		system.fare.awards.size() == 2 and _skilled == 2,
 		"skills",
 		"held another drift_s, the same slide pays again"
 	)
+	_slide(system, FAST, 0.0, 1)
 	_slide(system, FAST, threshold, drift_ticks - 1)
 	_slide(system, FAST, 0.0, 1)
 	_slide(system, FAST, threshold, drift_ticks - 1)
@@ -631,50 +659,35 @@ func _check_skills() -> void:
 		"a slide that ends forfeits its unpaid dwell: two short slides are not one long one"
 	)
 	_slide(system, FAST, 0.0, 1)
-
-	# Sustained speed: the same shape on the speed floor.
-	var floor_mps: float = _skills.speed_min_kph / 3.6
-	var speed_ticks: int = int(ceil(_skills.speed_hold_s / TICK_S))
-	_slide(system, floor_mps - 0.5, 0.0, speed_ticks * 2)
-	_expect(system.fare.awards.size() == 2, "skills", "under the speed floor pays nothing")
-	_slide(system, floor_mps, 0.0, speed_ticks - 1)
-	_expect(system.fare.awards.size() == 2, "skills", "one tick short of speed_hold_s pays nothing")
-	_slide(system, floor_mps, 0.0, 1)
+	var tip_before: float = system.fare.tip_hkd
+	_slide(system, FAST, 0.0, 8)
 	_expect(
-		(
-			system.fare.awards.size() == 3
-			and system.fare.awards[2].skill == Fare.Skill.SPEED
-			and is_equal_approx(system.fare.awards[2].hkd, _skills.speed_hkd)
-			and is_equal_approx(system.fare.skills_hkd, 2.0 * _skills.drift_hkd + _skills.speed_hkd)
-		),
+		is_equal_approx(system.fare.tip_hkd, tip_before) and tip_before > 0.0,
 		"skills",
-		"the tick that reaches speed_hold_s AT the floor pays speed_hkd"
-	)
-	_slide(system, floor_mps, 0.0, speed_ticks - 1)
-	_slide(system, floor_mps - 0.5, 0.0, 1)
-	_slide(system, floor_mps, 0.0, speed_ticks - 1)
-	_expect(system.fare.awards.size() == 3, "skills", "dropping under the floor restarts the hold")
-	_expect(
-		system.fare.count_of(Fare.Skill.DRIFT) == 2 and system.fare.count_of(Fare.Skill.SPEED) == 1,
-		"skills",
-		"the receipt counts them by skill"
+		"two seconds of clock later the live tip has not moved: it never falls with the time"
 	)
 
-	# Delivered: the tip is the time plus every skill, and the early arrival
-	# joins them at the door.
+	# Delivered: the time is priced at the door and the early arrival joins
+	# it there, so the tip is the time plus every skill.
 	var destination: Fare.Stop = system.fare.destination
 	var skills_before: float = system.fare.skills_hkd
+	var remaining_before: float = system.fare.remaining_s
 	_tick(system, destination.point, CRAWL, 1)
 	_expect(system.deliveries == 1, "skills", "delivered")
 	_expect(
 		(
-			system.fare.awards.size() == 4
-			and system.fare.awards[3].skill == Fare.Skill.EARLY
+			system.fare.awards.size() == 3
+			and system.fare.awards[2].skill == Fare.Skill.EARLY
 			and is_equal_approx(system.fare.skills_hkd, skills_before + _skills.early_hkd)
-			and _skilled == 4
+			and _skilled == 3
 		),
 		"skills",
 		"the early arrival is paid at the door, last, and announced"
+	)
+	_expect(
+		is_equal_approx(system.fare.time_hkd, (remaining_before - TICK_S) * _profile.tip_hkd_per_s),
+		"skills",
+		"the time is priced at the door, from the seconds left (HK$%.2f)" % system.fare.time_hkd
 	)
 	_expect(
 		(
@@ -686,8 +699,70 @@ func _check_skills() -> void:
 		"skills",
 		"delivery banks the meter plus the time plus the skills (HK$%.2f)" % system.fare.banked_hkd
 	)
-	var banked_skilled: float = system.fare.banked_hkd
 	system.free()
+
+	# Sustained speed, on its own fare: the same shape, measured in metres.
+	# `RUN` is 50 m/s so a unit is 16 ticks and exact in binary; the floor's
+	# inclusiveness is asserted separately, one tick over its own unit.
+	var runner: FareSystem = _system(_fares, _profile, SEED)
+	_tick(runner, pickup.point, CRAWL, 5)
+	var floor_mps: float = _skills.speed_min_kph / 3.6
+	_expect(RUN >= floor_mps, "skills", "the test's run speed is at or over speed_min_kph")
+	var speed_ticks: int = int(ceil(_skills.speed_hold_m / (RUN * TICK_S)))
+	_slide(runner, floor_mps - 0.5, 0.0, speed_ticks)
+	_expect(runner.fare.awards.is_empty(), "skills", "under the speed floor pays nothing")
+	_slide(runner, RUN, 0.0, speed_ticks - 1)
+	_expect(runner.fare.awards.is_empty(), "skills", "one tick short of speed_hold_m pays nothing")
+	_slide(runner, RUN, 0.0, 1)
+	_expect(
+		(
+			runner.fare.awards.size() == 1
+			and runner.fare.awards[0].skill == Fare.Skill.SPEED
+			and is_equal_approx(runner.fare.awards[0].hkd, _skills.speed_hkd)
+			and is_equal_approx(runner.fare.tip_hkd, _skills.speed_hkd)
+		),
+		"skills",
+		"the tick that reaches speed_hold_m pays speed_hkd into the live tip"
+	)
+	_slide(runner, RUN, 0.0, speed_ticks - 1)
+	_slide(runner, floor_mps - 0.5, 0.0, 1)
+	_slide(runner, RUN, 0.0, speed_ticks - 1)
+	_expect(runner.fare.awards.size() == 1, "skills", "dropping under the floor restarts the run")
+	_slide(runner, floor_mps - 0.5, 0.0, 1)
+	var floor_ticks: int = int(ceil(_skills.speed_hold_m / (floor_mps * TICK_S)))
+	_slide(runner, floor_mps, 0.0, floor_ticks + 1)
+	_expect(
+		runner.fare.awards.size() == 2,
+		"skills",
+		"AT the floor, a unit driven pays: the bar is inclusive"
+	)
+	_slide(runner, floor_mps - 0.5, 0.0, 1)
+	var double_ticks: int = int(ceil(_skills.speed_hold_m / (2.0 * RUN * TICK_S)))
+	_slide(runner, 2.0 * RUN, 0.0, double_ticks - 1)
+	_expect(
+		runner.fare.awards.size() == 2, "skills", "at twice the speed, one tick short pays nothing"
+	)
+	_slide(runner, 2.0 * RUN, 0.0, 1)
+	_expect(
+		runner.fare.awards.size() == 3,
+		"skills",
+		"and pays in half the ticks: the unit is distance driven, not time held"
+	)
+	_expect(
+		runner.fare.count_of(Fare.Skill.SPEED) == 3 and runner.fare.count_of(Fare.Skill.DRIFT) == 0,
+		"skills",
+		"the receipt counts them by skill"
+	)
+	_tick(runner, runner.fare.destination.point, CRAWL, 1)
+	_expect(
+		(
+			runner.deliveries == 1
+			and is_equal_approx(runner.fare.tip_hkd, runner.fare.time_hkd + runner.fare.skills_hkd)
+		),
+		"skills",
+		"delivered, the run's tip is the time plus the speed skills (HK$%.2f)" % runner.fare.tip_hkd
+	)
+	runner.free()
 
 	# The early arrival from the other side: the clock run just under the
 	# share pays nothing at the door.
@@ -737,31 +812,27 @@ func _check_skills() -> void:
 	)
 	bailer.free()
 
-	# Mutation: half the drift price banks strictly less on the same drive.
+	# Mutation: half the drift price banks strictly less on the same drive —
+	# one drive, `_drift_drive`, on the shipped table and on the halved one.
+	var priced: FareSystem = _system(_fares, _profile, SEED)
+	_drift_drive(priced, pickup, threshold, drift_ticks, repeat_ticks)
 	var stingy: SkillProfile = _skills.duplicate()
 	stingy.drift_hkd = _skills.drift_hkd * 0.5
 	var mutated: FareSystem = _system_with(_fares, _profile, stingy, SEED)
-	_tick(mutated, pickup.point, CRAWL, 5)
-	_slide(mutated, FAST, threshold, drift_ticks)
-	_slide(mutated, FAST, threshold + 20.0, drift_ticks)
-	_slide(mutated, FAST, threshold, drift_ticks - 1)
-	_slide(mutated, FAST, 0.0, 1)
-	_slide(mutated, FAST, threshold, drift_ticks - 1)
-	_slide(mutated, FAST, 0.0, 1)
-	_slide(mutated, floor_mps - 0.5, 0.0, speed_ticks * 2)
-	_slide(mutated, floor_mps, 0.0, speed_ticks)
-	_slide(mutated, floor_mps, 0.0, speed_ticks - 1)
-	_slide(mutated, floor_mps - 0.5, 0.0, 1)
-	_slide(mutated, floor_mps, 0.0, speed_ticks - 1)
-	_tick(mutated, mutated.fare.destination.point, CRAWL, 1)
+	_drift_drive(mutated, pickup, threshold, drift_ticks, repeat_ticks)
 	_expect(
-		mutated.deliveries == 1 and mutated.fare.banked_hkd < banked_skilled,
+		(
+			priced.deliveries == 1
+			and mutated.deliveries == 1
+			and mutated.fare.banked_hkd < priced.fare.banked_hkd
+		),
 		"skills",
 		(
 			"mutation caught: half the drift price banks HK$%.2f against HK$%.2f"
-			% [mutated.fare.banked_hkd, banked_skilled]
+			% [mutated.fare.banked_hkd, priced.fare.banked_hkd]
 		)
 	)
+	priced.free()
 	mutated.free()
 
 
@@ -780,6 +851,21 @@ static func _tick(system: FareSystem, point: Vector3, speed_mps: float, ticks: i
 static func _slide(system: FareSystem, speed_mps: float, slip_deg: float, ticks: int) -> void:
 	for tick: int in ticks:
 		system.sample(FAR_AWAY, speed_mps, Vector3.FORWARD, TICK_S, slip_deg)
+
+
+## One fare from `pickup`, driven the same way every time: a slide that pays
+## twice, a tap that pays nothing, then straight to the door. Two systems
+## given this drive differ only by their tables.
+static func _drift_drive(
+	system: FareSystem, pickup: Fare.Stop, threshold: float, drift_ticks: int, repeat_ticks: int
+) -> void:
+	_tick(system, pickup.point, CRAWL, 5)
+	_slide(system, FAST, threshold, drift_ticks)
+	_slide(system, FAST, threshold + 20.0, repeat_ticks)
+	_slide(system, FAST, 0.0, 1)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_slide(system, FAST, 0.0, 1)
+	_tick(system, system.fare.destination.point, CRAWL, 1)
 
 
 ## A system over `fares` with `profile`, the shipped tariff and skills, and a

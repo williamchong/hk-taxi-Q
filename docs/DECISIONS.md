@@ -2165,16 +2165,23 @@ file, no rebuild.
 
 - **Three skills, one shape.** `SkillTracker` (`scripts/fares/skill_tracker.gd`) is fed every
   tick's speed and slip by `FareSystem.sample` while a passenger is aboard. A slide at or over
-  `HandlingProfile.drift_slip_threshold_deg` pays `drift_hkd` every `drift_s`; a run at or over
-  `speed_min_kph` pays `speed_hkd` every `speed_hold_s`; dropping under either bar ends the event
-  and forfeits its unpaid part. At the door `arrival` pays `early_hkd` once when
-  `remaining_s / allowance_s ≥ early_share`. Every award goes onto `Fare.awards`, into
-  `Fare.skills_hkd` and `Fare.tip_hkd` at once, and out on `skilled`. `Fare.time_hkd` is the
-  seconds left priced at delivery; `tip = time + skills`; delivery banks `meter + tip`.
+  `HandlingProfile.drift_slip_threshold_deg` counts once it has held `drift_min_s` and pays
+  `drift_hkd` then and every `drift_s` after; a run at or over `speed_min_kph` pays `speed_hkd`
+  every `speed_hold_m` driven (never under the tariff's `step_m`, so never oftener than the
+  meter); dropping under either bar ends the event and forfeits its unpaid part. One `Dwell`
+  meter each — the event's total and the awards paid on it — so the first bar and the repeat bar
+  can differ without a remainder drifting on a 0.25 s tick. At the door `arrival` pays
+  `early_hkd` once when `remaining_s / allowance_s ≥ early_share`. Every award goes onto
+  `Fare.awards`, into `Fare.skills_hkd` and `Fare.tip_hkd` at once, and out on `skilled`.
+  `Fare.time_hkd` is 0 while carrying and the seconds left priced at delivery; the live tip is the
+  skills alone; at the door `tip = time + skills`; delivery banks `meter + tip` (the user's
+  fourth-round calls, `Q145`).
 - **The bars are inclusive** so the verify tool can stand on them: `verify_fares`'s `skills:`
   block drives a synthetic car one tick short of each dwell and then onto it, at the threshold and
   a degree under, on the share and a tick under, and asserts a bail keeps the awards on the
-  receipt and pays none of them. Mutation-checked: a zeroed `drift_hkd` and a zero threshold are
+  receipt and pays none of them; the speed run at 50 m/s so a 200 m unit is 16 exact ticks, then
+  at the floor one tick over its own unit, then at twice the speed in half the ticks (distance,
+  not time). Mutation-checked: a zeroed `drift_hkd` and a zero threshold are
   inert systems; a halved `drift_hkd` banks strictly less on the same drive. ⚠️ The existing
   delivery check gained a line: arriving with the clock nearly full IS an early arrival, so
   `expected_tip` there is the time plus `early_hkd`.
@@ -2187,7 +2194,9 @@ file, no rebuild.
   drift ×2 10.0", Chinese 咪錶 / 時間 / 甩尾 / 飆車 / 早到; a bail is RAN OFF WITHOUT PAYING /
   乘客走數 over "meter 29.0 + drift 5.0 lost" (冇收). Each award flashes under the clock as
   "+HK$5.0 drift" in the gain's green off `skilled`. `callout_hold_s` 3.0 → 5.0 so the sum can be
-  read. `verify_hud` holds every string in both languages.
+  read. `verify_hud` holds every string in both languages. The live tip is a second
+  `SevenSegment` under the meter's, the same red at `tip_digit_px` 26, "TIP" / 小費 as a muted
+  chip beside it (`FareFace.tip_text` the bare digits, `tip_caption` the chip).
 - **The face is a mesh, not a glyph.** `tools/make_emote.py` builds `emote_grin.glb` (160
   triangles) and `emote_angry.glb` (212) from `primitives`, features proud of -Z; `PassengerEmote`
   (`scripts/vehicle/passenger_emote.gd`, at the rear kerbside seat in `taxi.tscn`) instances one
@@ -7467,7 +7476,25 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
 - 🚫 Refused: a second slip threshold in `skills.tres` (one copy, `Q84`); reading
   `_drift_engagement` (the player's intent, not the car's slide — a held button on a straight would
   pay); a happy face at delivery (the receipt is the delivery's word; not asked for).
-- Owed: the user's drive, and the draw-call delta with faces up.
+- **The user's drive, four calls (the same day, the fourth round).** (1) *A drift only counts
+  when it is longer than a threshold*: `drift_min_s` 2.0 qualifies a slide, `drift_s` 1.0 then
+  pays it again — the 1.0 s that paid the first table paid a flick through a junction. Seconds
+  rather than metres, because `Q84` grades the dial on dwell and a distance bar would pay a fast
+  slide over a slow one for the same control, which is the speed skill's job. (2) *The speed
+  bonus ticks no more often than a taxi's distance tick*: `speed_hold_s` 3.0 is gone,
+  `speed_hold_m` 200.0 pays per unit DRIVEN at or over the floor, and `verify_fares` refuses a
+  value under `tariff.step_m` — at 80 kph the old table paid four times a meter tick. Distance,
+  so the same road pays sooner driven faster; asserted as twice the speed paying in half the
+  ticks. (3) *The tip does not count the time in — it was decreasing and confusing*: the live
+  tip is the skills alone, `time_hkd` 0 while carrying and priced once in `_deliver` before the
+  early arrival, so the readout only rises (or is docked); the clock in the middle of the frame
+  is the one thing that runs down. `verify_fares` holds it still over two seconds of clock.
+  (4) *Same seven-segment display and colour as the meter*: `FareFace.tip_text` is bare digits
+  for a second `SevenSegment` under the meter's, `meter_lit` over `meter_unlit` at `tip_digit_px`
+  26 / `tip_segment_px` 5 (the housing is 120 px; both rows fit), `tip_caption` "TIP" / 小費 as a
+  muted chip beside it the way "HK$" stands beside the fare; the green label is gone. `verify_hud`
+  holds the tip's digit under the meter's.
+- Owed: the user's drive again on the new table, and the draw-call delta with faces up.
 
 **See.** `P3-49` · `Q141` · `Q84` · `P3-48` · `GAME_DESIGN.md` "Scoring" · `.claude/rules/fares.md`
 · `tuning/skills.md`

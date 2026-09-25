@@ -88,6 +88,16 @@ their ghosts (`meter_unlit`), dollars to one place, right-aligned in five cells
 holds the lit digit off the ghost and the ghost off the housing, so the unlit
 segments stay a face and never a second reading.
 
+## `tip_digit_px = 26.0`
+
+The tip's own LED under the meter's (`P3-49`, the user's call: the tip on the
+same seven-segment display in the same red as the fare, not a green label).
+The meter's housing is 120 px high and its digits 46, so the tip's are a bit
+over half that with `tip_segment_px` 5 — the same lit and unlit colours, the
+same five cells and lean, and still a meter's face at that size. It shows the
+skills paid so far while carrying and nothing else: the seconds left are
+priced at the door, since a tip that fell with the clock read as a penalty.
+
 ## `timer_outline_px = 6`
 
 The tip clock has no housing (`Q142`, the user's call: the countdown in the

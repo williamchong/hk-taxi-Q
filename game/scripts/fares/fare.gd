@@ -110,11 +110,13 @@ var route: RoadRouter.Route = null
 ## hail, the car's `Hit.t` after.
 var route_from_t: float = 0.0
 var meter: FareMeter = null
-## The tip: `time_hkd` plus `skills_hkd`. Live while carrying — what the
-## passenger would tip if they got out now — frozen at delivery, 0 on a bail.
+## The tip: `time_hkd` plus `skills_hkd`, never under 0. Live while carrying
+## — the skills paid so far, the time not yet in it (the user's call: a tip
+## that fell with the clock read as a penalty) — summed at delivery, 0 on a
+## bail.
 var tip_hkd: float = 0.0
-## The seconds left on the allowance, priced: falling while carrying, the
-## door's value after delivery, 0 on a bail.
+## The seconds left on the allowance, priced at the door: 0 while carrying,
+## the door's value after delivery, 0 on a bail.
 var time_hkd: float = 0.0
 ## Everything the skills paid, banked or not: the sum of `awards`.
 var skills_hkd: float = 0.0

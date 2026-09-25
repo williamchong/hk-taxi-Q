@@ -357,7 +357,7 @@ const PATH: String = "res://tuning/handling.tres"
 ## drift_yaw_decay_s refuses to hide.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_to_kph: float
 ## Slip angle above which the drift scores style points. Since `P3-49` it is
-## read: `FareSystem`'s drift skill pays per `SkillProfile.drift_s` the slip
+## read: `FareSystem`'s drift skill pays per `SkillProfile.drift_s` (past `drift_min_s`) the slip
 ## holds at or over it, so it is a design target the skidpad grades dwell
 ## against (`Q84`), never a knob turned to make a slide pay.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float

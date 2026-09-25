@@ -199,6 +199,10 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var meter_slant: float
 @export var meter_cells: int
 @export var meter_label_size: int
+## The tip's LED under the meter's (`P3-49`): the same red, the same cells and
+## lean, a smaller digit so both rows fit the meter's housing.
+@export var tip_digit_px: float
+@export var tip_segment_px: float
 ## The tip clock: seconds left on the allowance, red under `timer_warn_s`.
 @export var timer_size: int
 @export var timer_unit_size: int

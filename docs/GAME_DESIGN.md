@@ -101,15 +101,18 @@ the arrow disabled.
 |---|---|
 | Base fare | The meter's reading at delivery (`Q141`) |
 | **Tip** (小費) | Everything below, in HK$, banked with the meter as one sum |
-| Time bonus | Remaining seconds × HK$0.5 — pays a shortcut and a fast run alike (`P3-1a`) |
-| **Drift** | HK$ per second held at or over `drift_slip_threshold_deg` (`P3-49`, `skills.tres`) |
-| **Sustained speed** | HK$ per `speed_hold_s` held over `speed_min_kph` (`P3-49`) |
+| Time bonus | Remaining seconds × HK$0.5, priced at the door — pays a shortcut and a fast run alike (`P3-1a`); never in the live tip (`Q145`) |
+| **Drift** | HK$ once a slide has held `drift_min_s` at or over `drift_slip_threshold_deg`, and again per `drift_s` (`P3-49`, `skills.tres`) |
+| **Sustained speed** | HK$ per `speed_hold_m` driven over `speed_min_kph` — never oftener than the meter's 200 m unit (`P3-49`) |
 | **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
 | **Near miss** | Passing traffic within ~1 m at speed — a slot until `B3` has traffic |
 | **Air** | By airtime duration — a slot until something can be jumped off |
 
-Skills are paid during the drive and shown at once — a flash under the clock, and the passenger's
-face popping out of the back seat — so players learn what the game rewards without being told. The
+Skills are paid during the drive and shown at once — a flash under the clock, the tip on its own
+LED under the meter in the meter's red, and the passenger's face popping out of the back seat — so
+players learn what the game rewards without being told. The live tip is the skills alone and only
+rises (or is docked by a penalty); the time bonus joins it at the door, because a tip that fell
+with the clock read as a penalty for driving (`Q145`). The
 delivery's callout is a receipt: the meter, the time left and each skill by name with its count,
 so the tip is never a number that appeared (`Q145`). A passenger whose clock runs out walks
 without paying, and the receipt says what walked out with them.

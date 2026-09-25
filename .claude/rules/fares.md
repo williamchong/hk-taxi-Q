@@ -100,21 +100,34 @@ the loop's own numbers in `tuning/fares.tres`.
   each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and out on `skilled`.
   `time_hkd` is the seconds left priced at the door; `tip = time + skills`. 🚫 No multiplier, no
   chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
+- 🔴 **A drift must qualify, and the speed skill is paid by the metre** (the user's calls,
+  2026-09-25, `Q145`): a slide counts once it has held `drift_min_s` (2 s, over the 1 s that paid a
+  tap) and pays again every `drift_s`; a run at or over `speed_min_kph` pays every `speed_hold_m`
+  DRIVEN, and `verify_fares` refuses `speed_hold_m` under `tariff.step_m` so the skill can never
+  tick faster than the meter's 200 m unit. 🚫 No `speed_hold_s`: time at speed is what the clock
+  already pays. The drift's bar is seconds because `Q84` grades drift on dwell.
 - 🔴 **The drift's angle has ONE copy: `HandlingProfile.drift_slip_threshold_deg`** (`Q84`'s
   design target), handed to `setup` and loaded by `verify_fares` through `HandlingProfile.PATH`;
   `skills.tres` carries no angle. ⚠️ `FareSystem.slip_deg_of` DUPLICATES
   `skidpad_ablation.gd::_slip_deg` on purpose — the grader must never call what it grades — so a
   change to either's flattening or floor is made twice, by hand, and named.
 - 🔴 **The bars are inclusive and every dwell is asserted from both sides** in `verify_fares`'s
-  `skills:` block: one tick short of `drift_s` / `speed_hold_s` pays nothing and the tick that
-  reaches it pays; a degree under the threshold never pays; a slide or run that ends forfeits its
-  unpaid part (two short ones are not one long one); the share a tick under and on. Mutations:
+  `skills:` block: one tick short of `drift_min_s` / `speed_hold_m` pays nothing and the tick that
+  reaches it pays, a slide as long as `drift_s` but short of `drift_min_s` pays nothing, twice the
+  speed pays in half the ticks (distance, not time); a degree under the threshold never pays; a
+  slide or run that ends forfeits its unpaid part (two short ones are not one long one); the share
+  a tick under and on. Mutations:
   a zeroed `drift_hkd` and a zero threshold are inert systems, named; half the price banks less.
   ⚠️ Arriving with the clock nearly full IS an early arrival, so the loop's own delivery check
   expects `time + early_hkd`.
-- 🔴 **The tip is live and floored at zero.** `time_hkd` is re-priced every carrying tick and
-  `tip_hkd = FareSystem.tip_of(time, skills)`; `FareFace.tip_text` shows it under the LED while
-  carrying. A penalty (`P3-50`) is an `Award` with negative `hkd` — same receipt, minus sign,
+- 🔴 **The live tip is the skills alone, floored at zero; the time joins it at the door** (the
+  user's call, 2026-09-25: a tip that fell with the clock read as a penalty). `time_hkd` is 0
+  while carrying and priced once in `_deliver`, before the early arrival; `tip_hkd =
+  FareSystem.tip_of(time, skills)` after every award and at the door. `FareFace.tip_text` is the
+  bare digits for a second `SevenSegment` under the meter's, in `meter_lit` at `tip_digit_px`,
+  with `tip_caption` ("TIP" / 小費) beside it — the meter's face, never a green label. `verify_fares`
+  asserts the tip does not move over two seconds of clock. A penalty (`P3-50`) is an `Award`
+  with negative `hkd` — same receipt, minus sign,
   `accent_negative` flash — and `tip_of` never goes below 0: the passenger docks the tip, never
   the meter (`Q141`). 🚫 No penalty on the meter, no negative bank.
 - 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,

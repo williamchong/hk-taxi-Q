@@ -22,8 +22,9 @@ extends RefCounted
 ##
 ## **Money shows as HK$ to one place**, the way the 咪錶 shows it, and the meter
 ## shows the last banked sum between fares — a meter left reading the last trip
-## is what a real cab shows at a stand. No multiplier, no separate tip line
-## while the fare runs: the tip is the seconds left, which the timer shows.
+## is what a real cab shows at a stand. No multiplier: the tip under the meter
+## while the fare runs is the skills paid so far, in HK$, and the seconds left
+## are the timer's until the door prices them (`Q145`).
 ##
 ## **The receipt says why there was a tip** (`P3-49`, the user's ask): at a
 ## delivery the callout holds what banked over a line adding it up — the
@@ -46,9 +47,13 @@ var callout_sub: String = ""
 ## the total resetting at delivery (the user's call) — and the session's
 ## takings under them.
 var meter_text: String = "0.0"
-## The tip as it stands, under the meter while carrying — the seconds left
-## priced plus the skills paid, falling and jumping as they do; "" otherwise.
+## The tip as it stands, under the meter while carrying — the skills paid so
+## far, `money`-formatted for a second LED in the meter's red (the user's
+## call: same display, same colour as the fare), rising with each skill and
+## docked by a penalty, never falling with the clock; "" otherwise.
 var tip_text: String = ""
+## The chip beside the tip's digits, the way "HK$" stands beside the meter's.
+var tip_caption: String = ""
 var total_text: String = ""
 ## The tip clock: whole seconds left, shown only while carrying.
 var timer_text: String = ""
@@ -106,11 +111,13 @@ func on_sampled(
 	timer_text = ""
 	meter_text = "0.0"
 	tip_text = ""
+	tip_caption = ""
 	if state == FareSystem.State.CARRYING:
 		timer_text = seconds(fare.remaining_s)
 		timer_urgent = fare.remaining_s <= warn_s
 		meter_text = money(fare.meter.reading_hkd())
-		tip_text = _say("小費 HK$", "TIP HK$") + money(fare.tip_hkd)
+		tip_text = money(fare.tip_hkd)
+		tip_caption = _say("小費", "TIP")
 	elif state == FareSystem.State.BOARDING:
 		meter_text = money(fare.meter.reading_hkd())
 
