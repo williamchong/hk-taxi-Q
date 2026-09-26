@@ -7,7 +7,6 @@ extends Node
 ## which crossed the World / GUI boundary from below. A level change swaps
 ## `World`'s child and hands the next car in here — nothing under `GUI`
 ## searches for one.
-
 ##
 ## The start menu (`P6-1`) is mediated here for the same reason: it sits under
 ## `GUI`, the level it holds still sits under `World`, and this is the one node

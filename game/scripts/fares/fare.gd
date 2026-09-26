@@ -94,7 +94,6 @@ var destination: Stop = null
 ## none was found — which cannot happen for a drawn destination, but is the
 ## defined answer rather than an assert (`Q137`).
 var par_m: float = 0.0
-var plan_m: float = 0.0
 var route_found: bool = false
 ## Seconds granted at boarding, and seconds left now.
 var allowance_s: float = 0.0

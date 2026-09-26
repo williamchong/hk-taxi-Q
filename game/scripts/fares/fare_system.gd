@@ -146,10 +146,6 @@ var skill_counts: PackedInt32Array = []
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
-var _skills: SkillProfile = null
-## `HandlingProfile.drift_slip_threshold_deg`, handed in: the angle a slide
-## must hold to be a drift.
-var _slip_threshold_deg: float = 0.0
 ## The session's skills, built by `setup`, reset at every boarding.
 var _tracker: SkillTracker = null
 var _rng: RandomNumberGenerator = null
@@ -294,8 +290,6 @@ func setup(
 	_graph = graph
 	_profile = profile
 	_tariff = tariff
-	_skills = skills
-	_slip_threshold_deg = slip_threshold_deg
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_tracker = SkillTracker.new(skills, slip_threshold_deg)
@@ -493,7 +487,6 @@ func _hail(pickup: Fare.Stop) -> void:
 	)
 	drawn.route_found = route.found
 	drawn.par_m = route.distance_m
-	drawn.plan_m = route.plan_m
 	drawn.remaining_road_m = route.distance_m
 	drawn.route = route
 	drawn.route_from_t = pickup.t

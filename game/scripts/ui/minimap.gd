@@ -23,10 +23,11 @@ extends Control
 ## metres (`minimap_mesh.gd`) and `follow` only re-places it, so a turning map
 ## costs a matrix a frame and no geometry.
 
-## How far a vertex may be dropped from its road, in design pixels: under what
-## the slot can show. A property of the raster, not a look to tune.
 const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+
+## How far a vertex may be dropped from its road, in design pixels: under what
+## the slot can show. A property of the raster, not a look to tune.
 
 const SUBPIXEL_PX: float = 0.4
 

@@ -242,11 +242,6 @@ const TURN_RELEASE: float = 0.75
 ## to see by, so a side lamp that lights the road as far as a headlamp erases the
 ## difference the two circuits were split to express. A short dim pool says "lit,
 ## but not driving on it".
-##
-## ⚠️ **Not zero, and not much above it.** Position lamps exist to be *seen*, not
-## to see by, so a side lamp that lights the road as far as a headlamp erases the
-## difference the two circuits were split to express. A short dim pool says "lit,
-## but not driving on it".
 @export_range(0.0, 1.0, 0.01) var sidelamp_beam: float = 0.3
 
 ## Key-light energy at or below which the rig counts as night.

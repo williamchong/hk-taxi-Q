@@ -101,8 +101,8 @@ extends Resource
 ## maximum importance, and the one readout the player must act on **before**
 ## the destination they were driving to matters at all.
 ##
-## ⚠️ **It is not a fourth category in the taxonomy.** *Left is the car, right is
-## the world, top is the fare, the middle is the road* is about where a standing
+## ⚠️ **It is not a fourth category in the taxonomy.** *Left is the world, right is
+## the car, top is the fare, the middle is the road* is about where a standing
 ## readout lives. An alarm does not stand anywhere: it is an **interrupt**, it is
 ## absent from every ordinary frame, and it pre-empts. Adding "and alarms" to
 ## "top is the fare" would be reading it as furniture.

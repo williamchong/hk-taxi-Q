@@ -9,11 +9,10 @@ extends RefCounted
 ## Godot's virtual filesystem will not enumerate. A build learns what it
 ## contains from this file or not at all.
 ##
-## The three `generated_*.gd` locators beside this one still name their document
-## by a constant. They are dev-scene and verify-tool plumbing that predates the
-## manifest, and `RoadGraph` (`P2-2`) and `FareSystem` (`P3-1`) will take those
-## paths from here when they replace the previews. Until then `verify_city.gd`
-## asserts the two agree, so they cannot drift quietly.
+## The `generated_*.gd` locators beside this one still name their document by
+## a constant, for the dev scenes and the verify tools that predate the
+## manifest; `verify_city.gd` asserts the two agree, so they cannot drift
+## quietly.
 ##
 ## Reading the manifest loads no geometry. A `Tile` carries the AABB
 ## `export.py` measured, so `CityStreamer` (`P2-1`) can rule a tile out of range

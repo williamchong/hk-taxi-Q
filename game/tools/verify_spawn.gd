@@ -30,8 +30,9 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 
 ## The profile the drive scene runs, for the wheel-ray length the drop height is
 ## built from. Loaded rather than assumed so a retuned car moves this check with
-## it.
-const HANDLING_PATH: String = "res://tuning/handling.tres"
+## it, through the profile's own `PATH` so this and `verify_fares` cannot load
+## two different files.
+const HandlingProfileScript = preload("res://scripts/vehicle/handling_profile.gd")
 ## The fare loop's own numbers: the start line is held out of their hail reach.
 const FARES_PATH: String = "res://tuning/fares.tres"
 
@@ -175,9 +176,9 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var profile: HandlingProfile = load(HANDLING_PATH) as HandlingProfile
+	var profile: HandlingProfile = load(HandlingProfileScript.PATH) as HandlingProfile
 	if profile == null:
-		printerr("  FAIL  no HandlingProfile at %s" % HANDLING_PATH)
+		printerr("  FAIL  no HandlingProfile at %s" % HandlingProfileScript.PATH)
 		quit(1)
 		return
 

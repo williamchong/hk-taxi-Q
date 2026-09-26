@@ -187,9 +187,6 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var map_marker: Color
 @export var map_marker_edge: Color
 
-# ---- dev only ----
-
-## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.
 ## The 咪錶's face (`P3-5a`): red LED digits over their ghosts, the fare in
 ## dollars to one place in `meter_cells` cells.
 @export var meter_lit: Color
@@ -238,5 +235,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## and under the pins. 🔴 Opaque, like the roads — its own strokes overlap at
 ## every bend.
 @export var map_route: Color
+
+# ---- dev only ----
+
+## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.
 @export var slot_fill: Color
 @export var slot_edge: Color

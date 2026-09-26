@@ -341,18 +341,6 @@ static func check_no_occluder(node: Node, where: String) -> PackedStringArray:
 	)
 
 
-## The surface ended up on the shader its ETL asked for, or why it did not.
-##
-## glTF cannot say "use this shader", so the ETL writes a material *name* and
-## `tools/generated_scene_import.gd` dispatches on it. That dispatch has **no
-## failing state**: if the ETL stops writing the name, or the import script stops
-## recognising it, the asset quietly keeps its default `BaseMaterial3D`, passes
-## every other check here, and renders as whatever it looked like before the
-## shader existed — a flat-coloured city before `P3-7`, an unmarked road before
-## `P3-12`. There is nothing to see and nothing else to catch it.
-##
-## Here rather than in either caller because the tiles and the road surface ask
-## the identical question of different paths, which is what this file is for.
 ## The message both checks below give when a surface carries no ShaderMaterial.
 ##
 ## Extracted because the two were byte-identical apart from which name they
@@ -373,6 +361,18 @@ static func _no_shader_material(where: String, expected: String) -> PackedString
 	)
 
 
+## The surface ended up on the shader its ETL asked for, or why it did not.
+##
+## glTF cannot say "use this shader", so the ETL writes a material *name* and
+## `tools/generated_scene_import.gd` dispatches on it. That dispatch has **no
+## failing state**: if the ETL stops writing the name, or the import script stops
+## recognising it, the asset quietly keeps its default `BaseMaterial3D`, passes
+## every other check here, and renders as whatever it looked like before the
+## shader existed — a flat-coloured city before `P3-7`, an unmarked road before
+## `P3-12`. There is nothing to see and nothing else to catch it.
+##
+## Here rather than in either caller because the tiles and the road surface ask
+## the identical question of different paths, which is what this file is for.
 static func check_shader_material(
 	mesh: Mesh, surface: int, where: String, expected: String
 ) -> PackedStringArray:

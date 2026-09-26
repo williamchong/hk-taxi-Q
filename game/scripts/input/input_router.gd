@@ -19,12 +19,6 @@ extends Node
 ## `accelerate` above the touch origin and `brake_reverse` below. `drift` and
 ## `look_back` have no touch home yet, and the note above `TOUCH_ARG` says why.
 
-## Emitted by keyboard, gamepad, and — for these two — by nothing on touch yet.
-signal drift_started
-signal drift_ended
-signal look_back_started
-signal look_back_ended
-
 ## Steering, -1.0 (full left) to 1.0 (full right).
 var steer: float = 0.0
 ## Throttle, 0.0 to 1.0.
@@ -319,19 +313,7 @@ func _physics_process(_delta: float) -> void:
 	if auto_accelerate and is_zero_approx(brake_reverse):
 		accelerate = 1.0
 
-	drift = _track_hold(&"drift", drift, drift_started, drift_ended)
-	look_back = _track_hold(&"look_back", look_back, look_back_started, look_back_ended)
-
-
-## Comparing against the previous value rather than using
-## Input.is_action_just_pressed(), which the engine documents as unreliable in
-## _physics_process — it can report true across several ticks or none at all.
-func _track_hold(action: StringName, was_held: bool, started: Signal, ended: Signal) -> bool:
-	var held: bool = Input.is_action_pressed(action)
-	if held == was_held:
-		return held
-	if held:
-		started.emit()
-	else:
-		ended.emit()
-	return held
+	# Held state, not `is_action_just_pressed`, which the engine documents as
+	# unreliable in `_physics_process`; the controller ramps from the bool (Q83).
+	drift = Input.is_action_pressed(&"drift")
+	look_back = Input.is_action_pressed(&"look_back")

@@ -8,10 +8,6 @@ extends Resource
 ## never assigned reads as all-zeroes and fails loudly, rather than quietly
 ## driving on values buried in a script.
 
-## Path to the shipped table, so a tool that needs one of its design targets
-## (`verify_fares.gd`, for `drift_slip_threshold_deg`) cannot load a second file.
-const PATH: String = "res://tuning/handling.tres"
-##
 ## The model is Godot's VehicleBody3D/VehicleWheel3D, driven from these numbers.
 ##
 ## ⚠️ **That reverses P0-5a, at the user's explicit instruction (Q50).** The
@@ -21,6 +17,11 @@ const PATH: String = "res://tuning/handling.tres"
 ## per-axle scale on that single number. What that costs is recorded in
 ## docs/DECISIONS.md Q50, measured, and it is a cost rather than a trade.
 ## See also docs/GAME_DESIGN.md "Controls".
+
+## Path to the shipped table, so a tool that needs one of its design targets
+## (`verify_fares.gd`, for `drift_slip_threshold_deg`; `verify_spawn.gd`, for
+## the wheel ray) cannot load a second file.
+const PATH: String = "res://tuning/handling.tres"
 
 @export_group("Speed")
 ## Top speed in forward gear.
@@ -240,7 +241,7 @@ const PATH: String = "res://tuning/handling.tres"
 ##
 ## ⚠️ **`InputRouter.drift` stays a bool and this duration lives here** (Q83): the
 ## router is the single source of player *intent* and the intent is binary. A ramp
-## there would report held while nothing is held and lie to drift_started.
+## there would report held while nothing is held and lie about the button.
 @export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float
 ## Peak yaw torque at the moment the drift engages, in N⋅m, signed by the steer.
 ## Decays from here toward drift_yaw_sustain over drift_yaw_decay_s; this is the

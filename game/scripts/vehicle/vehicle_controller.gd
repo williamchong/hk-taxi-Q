@@ -540,23 +540,6 @@ func _apply_drift(delta: float) -> void:
 	_apply_drift_yaw()
 
 
-## Yaw assist while the drift is engaged. See drift_yaw_torque_nm for why this is
-## a torque and must not become a slip-angle setpoint.
-##
-## ⚠️ Signed from steer_ratio — see its own doc for the rotation-direction
-## convention — and negated for the same reason _update_steering negates on the
-## way in. Stated once there rather than restated here.
-##
-## 🔴 **Refused with no wheel on the ground.** Torque does not care whether the
-## tyres can answer it, and nothing else here would bound the spin: taxi.tscn sets
-## no angular_damp and the project sets no default, so what actually limits this
-## is tyre lateral force. Airborne there is none, and a held drift off a kerb
-## would be a mid-air pirouette — reachable, because GAME_DESIGN.md scores airtime.
-##
-## ⚠️ Eased in from a standstill rather than gated: a stationary car has no tyre
-## force to resist the assist either, so it would spin on the spot with the
-## handbrake down, and a hard cut-in at walking pace is a pop the rest of this
-## file's rates do not have.
 ## True while any wheel is on the ground.
 ##
 ## Two loops rather than `_front + _rear`, which would build a throwaway array
@@ -596,6 +579,23 @@ func take_impact_mps() -> float:
 	return impact
 
 
+## Yaw assist while the drift is engaged. See drift_yaw_torque_nm for why this is
+## a torque and must not become a slip-angle setpoint.
+##
+## ⚠️ Signed from steer_ratio — see its own doc for the rotation-direction
+## convention — and negated for the same reason _update_steering negates on the
+## way in. Stated once there rather than restated here.
+##
+## 🔴 **Refused with no wheel on the ground.** Torque does not care whether the
+## tyres can answer it, and nothing else here would bound the spin: taxi.tscn sets
+## no angular_damp and the project sets no default, so what actually limits this
+## is tyre lateral force. Airborne there is none, and a held drift off a kerb
+## would be a mid-air pirouette — reachable, because GAME_DESIGN.md scores airtime.
+##
+## ⚠️ Eased in from a standstill rather than gated: a stationary car has no tyre
+## force to resist the assist either, so it would spin on the spot with the
+## handbrake down, and a hard cut-in at walking pace is a pop the rest of this
+## file's rates do not have.
 func _apply_drift_yaw() -> void:
 	if is_zero_approx(_drift_engagement):
 		return

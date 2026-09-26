@@ -98,11 +98,6 @@ var raises: int = 0
 ## `street_tracker.gd::has_street` is the same courtesy for the same reason.
 var angle_deg: float = NOT_MEASURED
 
-# The angle bar, and the only thing a caller overrides — `street_tracker.gd`
-# takes one argument for the one thing its tests vary, and this follows it. The
-# dwells and the speed floor are read straight off their constants: making them
-# injectable meant a test restating two defaults positionally to reach the third
-# argument, which is a silent mis-grade the day the order changes.
 ## False until a whole profile was handed in; nothing is judged before then.
 var _usable: bool = false
 var _angle_deg: float = 0.0
