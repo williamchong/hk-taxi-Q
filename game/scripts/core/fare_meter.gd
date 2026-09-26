@@ -71,12 +71,8 @@ func _init(tariff: FareTariff) -> void:
 		"step_hkd_after": tariff.step_hkd_after,
 		"threshold_hkd": tariff.threshold_hkd,
 	}
-	for key: String in required:
-		if required[key] <= 0.0:
-			push_error(
-				"FareMeter: %s has no %s; the meter will read 0." % [tariff.resource_path, key]
-			)
-			return
+	if TuningTable.any_zero(tariff, required, "FareMeter", "the meter will read 0"):
+		return
 	_flagfall_cents = _cents_of(tariff.flagfall_hkd)
 	_flagfall_m = tariff.flagfall_m
 	_step_m = tariff.step_m

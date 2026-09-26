@@ -65,6 +65,9 @@ class Dwell:
 
 var _profile: SkillProfile = null
 var _slip_threshold_deg: float = INF
+## False until a whole table and a drift angle were handed in; an inert
+## tracker earns nothing, and `FareSystem.setup` refuses to hail on one.
+var _usable: bool = false
 var _drift: Dwell = Dwell.new()
 var _speed: Dwell = Dwell.new()
 var _air: Dwell = Dwell.new()
@@ -75,9 +78,51 @@ var _cool_s: float = 0.0
 var _earned: Array[Fare.Award] = []
 
 
+## A missing or zeroed table, a crash bar at or under the bump bar, or no
+## drift angle makes an INERT tracker, with the reason pushed — never one
+## running on a literal (`Q119`).
 func _init(profile: SkillProfile, slip_threshold_deg: float) -> void:
+	if profile == null:
+		push_error("SkillTracker: no SkillProfile handed in; no skill will pay.")
+		return
+	var required: Dictionary[String, float] = {
+		"drift_min_s": profile.drift_min_s,
+		"drift_s": profile.drift_s,
+		"drift_hkd": profile.drift_hkd,
+		"speed_min_kph": profile.speed_min_kph,
+		"speed_hold_m": profile.speed_hold_m,
+		"speed_hkd": profile.speed_hkd,
+		"air_min_s": profile.air_min_s,
+		"air_s": profile.air_s,
+		"air_hkd": profile.air_hkd,
+		"early_share": profile.early_share,
+		"early_hkd": profile.early_hkd,
+		"bump_min_kph": profile.bump_min_kph,
+		"bump_hkd": profile.bump_hkd,
+		"crash_min_kph": profile.crash_min_kph,
+		"crash_hkd": profile.crash_hkd,
+		"crash_cool_s": profile.crash_cool_s,
+	}
+	if TuningTable.any_zero(profile, required, "SkillTracker", "no skill will pay"):
+		return
+	if profile.crash_min_kph <= profile.bump_min_kph:
+		push_error(
+			(
+				"SkillTracker: %s crash_min_kph (%.1f) is not over bump_min_kph (%.1f); no skill will pay."
+				% [profile.resource_path, profile.crash_min_kph, profile.bump_min_kph]
+			)
+		)
+		return
+	if slip_threshold_deg <= 0.0:
+		push_error("SkillTracker: no drift_slip_threshold_deg handed in; no skill will pay.")
+		return
 	_profile = profile
 	_slip_threshold_deg = slip_threshold_deg
+	_usable = true
+
+
+func usable() -> bool:
+	return _usable
 
 
 ## Forget every dwell in progress and the cooldown: a slide or a flight held

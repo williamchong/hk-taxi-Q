@@ -238,9 +238,6 @@ func setup(
 	if profile == null:
 		push_error("FareSystem: no FareProfile handed in; nothing will be hailed.")
 		return
-	if skills == null:
-		push_error("FareSystem: no SkillProfile handed in; nothing will be hailed.")
-		return
 	var required: Dictionary[String, float] = {
 		"hail_radius_m": profile.hail_radius_m,
 		"board_s": profile.board_s,
@@ -253,38 +250,12 @@ func setup(
 		"tip_hkd_per_s": profile.tip_hkd_per_s,
 		"sample_hz": profile.sample_hz,
 	}
-	if _any_zero(profile, required):
+	if TuningTable.any_zero(profile, required, "FareSystem", "nothing will be hailed"):
 		return
-	var skill_keys: Dictionary[String, float] = {
-		"drift_min_s": skills.drift_min_s,
-		"drift_s": skills.drift_s,
-		"drift_hkd": skills.drift_hkd,
-		"speed_min_kph": skills.speed_min_kph,
-		"speed_hold_m": skills.speed_hold_m,
-		"speed_hkd": skills.speed_hkd,
-		"air_min_s": skills.air_min_s,
-		"air_s": skills.air_s,
-		"air_hkd": skills.air_hkd,
-		"early_share": skills.early_share,
-		"early_hkd": skills.early_hkd,
-		"bump_min_kph": skills.bump_min_kph,
-		"bump_hkd": skills.bump_hkd,
-		"crash_min_kph": skills.crash_min_kph,
-		"crash_hkd": skills.crash_hkd,
-		"crash_cool_s": skills.crash_cool_s,
-	}
-	if _any_zero(skills, skill_keys):
-		return
-	if skills.crash_min_kph <= skills.bump_min_kph:
-		push_error(
-			(
-				"FareSystem: %s crash_min_kph (%.1f) is not over bump_min_kph (%.1f); nothing will be hailed."
-				% [skills.resource_path, skills.crash_min_kph, skills.bump_min_kph]
-			)
-		)
-		return
-	if slip_threshold_deg <= 0.0:
-		push_error("FareSystem: no drift_slip_threshold_deg handed in; nothing will be hailed.")
+	# The skills' table and the drift's angle are the tracker's to refuse.
+	var tracker := SkillTracker.new(skills, slip_threshold_deg)
+	if not tracker.usable():
+		push_error("FareSystem: the SkillTracker is inert; nothing will be hailed.")
 		return
 	var probe := FareMeter.new(tariff)
 	if not probe.usable():
@@ -298,7 +269,7 @@ func setup(
 	_tariff = tariff
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
-	_tracker = SkillTracker.new(skills, slip_threshold_deg)
+	_tracker = tracker
 	skill_counts.resize(Fare.Skill.size())
 	skill_counts.fill(0)
 	_pickups.clear()
@@ -307,19 +278,6 @@ func setup(
 		_add_stops(region, fares_by_region[region])
 	_build_reach()
 	_usable = true
-
-
-## Whether any of `table`'s `fields` reads zero — a key missing from the
-## `.tres`, since neither profile declares a default — naming the file and
-## the field.
-static func _any_zero(table: Resource, fields: Dictionary[String, float]) -> bool:
-	for key: String in fields:
-		if fields[key] <= 0.0:
-			push_error(
-				"FareSystem: %s has no %s; nothing will be hailed." % [table.resource_path, key]
-			)
-			return true
-	return false
 
 
 func usable() -> bool:

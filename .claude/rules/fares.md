@@ -77,8 +77,10 @@ the loop's own numbers in `tuning/fares.tres`.
   reading. `TICK_S` is 0.25 — exact in binary — so a 1.0 s dwell lands on the fourth tick and not
   the fifth; do not "round" it to 0.2.
 - ⚠️ **Two tables, two sidecars, both required** (`Q119`): `tariff.md` and `fares.md` beside the
-  `.tres`, no defaults in either profile script, and `FareSystem.setup` refuses a zero field with
-  the file named rather than run on a literal.
+  `.tres`, no defaults in either profile script, and a zero field is refused with the file named
+  rather than run on a literal — by `TuningTable.any_zero` (`scripts/core/`), the one loop
+  `FareMeter`, `SkillTracker` and `FareSystem.setup` share. The skills' table and the drift angle
+  are the TRACKER's to refuse (`SkillTracker.usable()`); `setup` refuses to hail on an inert one.
 - ⚠️ **`--fares=off` is free roam** and what `P3-9` runs with the arrow off; `--fare-seed=<int>`
   fixes the draw for an A/B drive. Both go through `Cmdline`, like `--hud=`.
 - ⚠️ **A stop carries its building and its road** (`Q142`): `fares.json`'s `place` is iB1000's
@@ -155,8 +157,8 @@ the loop's own numbers in `tuning/fares.tres`.
   (2); at or over `crash_min_kph` (60) a CRASH docking `crash_hkd` (5). `crash_cool_s` (1 s)
   makes one wall one dock. The bars are the skidpad's wall rows (`tools/skidpad.sh --only=wall`,
   three angles at three run-ups) — a 10° brush never reaches 20, a 30° clip never reaches 60, a
-  head-on never misses it; change a bar only against a new matrix. `setup` refuses a crash bar
-  at or under the bump bar. `verify_fares`'s `penalty:` block holds every bar and the cooldown
+  head-on never misses it; change a bar only against a new matrix. `SkillTracker` refuses a crash bar
+  at or under the bump bar, and `setup` will not hail on it. `verify_fares`'s `penalty:` block holds every bar and the cooldown
   from both sides, the touch that ends a slide, the tip floored, the meter unmoved, a zero price
   and the folded bars as inert systems, and a halved price docking less. ⚠️ **Latched against
   `_velocity_into_step`, never the state's velocity**: by `_integrate_forces` the solver has
