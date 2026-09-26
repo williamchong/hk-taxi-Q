@@ -21,6 +21,7 @@ extends SceneTree
 
 const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's sea costs one draw call — the rule the
@@ -42,30 +43,7 @@ const LEVEL_TOLERANCE_M: float = 0.005
 
 
 func _init() -> void:
-	if not GeneratedLayer.is_present(GeneratedLayer.WATER):
-		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.WATER))
-		quit(0)
-		return
-
-	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.WATER)
-	if packed == null:
-		printerr(
-			(
-				"  FAIL  %s exists but did not load as a scene"
-				% GeneratedLayer.path(GeneratedLayer.WATER)
-			)
-		)
-		quit(1)
-		return
-
-	var scene_root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(scene_root)
-	scene_root.free()
-	for problem: String in problems:
-		printerr("  FAIL  ", problem)
-	if problems.is_empty():
-		print("  ok    ", GeneratedLayer.path(GeneratedLayer.WATER))
-	quit(1 if not problems.is_empty() else 0)
+	VerifyLayer.run(self, GeneratedLayer.WATER, _check)
 
 
 func _check(scene_root: Node3D) -> PackedStringArray:

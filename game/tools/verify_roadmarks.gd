@@ -18,6 +18,7 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One surface a mesh, so a cell costs one draw call — the rule the road
@@ -43,36 +44,7 @@ const ROADMARKS_MATERIAL: String = "res://tuning/roadmarks.tres"
 
 
 func _init() -> void:
-	if not GeneratedLayer.is_present(GeneratedLayer.ROADMARKS):
-		print(
-			"  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.ROADMARKS)
-		)
-		quit(0)
-		return
-
-	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.ROADMARKS)
-	if packed == null:
-		# Present but unloadable, which is not the same as absent — the hint
-		# about rebuilding would be the wrong advice here.
-		printerr(
-			(
-				"  FAIL  %s exists but did not load as a scene"
-				% GeneratedLayer.path(GeneratedLayer.ROADMARKS)
-			)
-		)
-		quit(1)
-		return
-
-	var scene_root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(scene_root)
-	# Instantiated outside the tree, so nothing else will free it — and a
-	# headless run that leaks buries its own result under exit warnings.
-	scene_root.free()
-	for problem: String in problems:
-		printerr("  FAIL  ", problem)
-	if problems.is_empty():
-		print("  ok    ", GeneratedLayer.path(GeneratedLayer.ROADMARKS))
-	quit(1 if not problems.is_empty() else 0)
+	VerifyLayer.run(self, GeneratedLayer.ROADMARKS, _check)
 
 
 func _check(scene_root: Node3D) -> PackedStringArray:

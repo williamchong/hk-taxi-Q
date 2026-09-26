@@ -20,6 +20,7 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive, so the whole region's tramway costs one draw call — the same
@@ -66,34 +67,7 @@ const TRACK_M_TOLERANCE: float = 0.05
 
 
 func _init() -> void:
-	if not GeneratedLayer.is_present(GeneratedLayer.TRAMWAY):
-		print("  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.TRAMWAY))
-		quit(0)
-		return
-
-	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.TRAMWAY)
-	if packed == null:
-		# Present but unloadable, which is not the same as absent — the hint
-		# about rebuilding would be the wrong advice here.
-		printerr(
-			(
-				"  FAIL  %s exists but did not load as a scene"
-				% GeneratedLayer.path(GeneratedLayer.TRAMWAY)
-			)
-		)
-		quit(1)
-		return
-
-	var scene_root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(scene_root)
-	# Instantiated outside the tree, so nothing else will free it — and a
-	# headless run that leaks buries its own result under exit warnings.
-	scene_root.free()
-	for problem: String in problems:
-		printerr("  FAIL  ", problem)
-	if problems.is_empty():
-		print("  ok    ", GeneratedLayer.path(GeneratedLayer.TRAMWAY))
-	quit(1 if not problems.is_empty() else 0)
+	VerifyLayer.run(self, GeneratedLayer.TRAMWAY, _check)
 
 
 func _check(scene_root: Node3D) -> PackedStringArray:

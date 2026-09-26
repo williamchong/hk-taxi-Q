@@ -16,6 +16,7 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One surface a mesh, so a cell of one paint costs one draw call.
@@ -42,32 +43,7 @@ const KIND_MATERIALS: Dictionary[String, String] = {
 
 
 func _init() -> void:
-	if not GeneratedLayer.is_present(GeneratedLayer.CROSSINGS):
-		print(
-			"  skip  no %s shipped for this region" % GeneratedLayer.noun(GeneratedLayer.CROSSINGS)
-		)
-		quit(0)
-		return
-
-	var packed: PackedScene = GeneratedLayer.load_layer(GeneratedLayer.CROSSINGS)
-	if packed == null:
-		printerr(
-			(
-				"  FAIL  %s exists but did not load as a scene"
-				% GeneratedLayer.path(GeneratedLayer.CROSSINGS)
-			)
-		)
-		quit(1)
-		return
-
-	var scene_root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(scene_root)
-	scene_root.free()
-	for problem: String in problems:
-		printerr("  FAIL  ", problem)
-	if problems.is_empty():
-		print("  ok    ", GeneratedLayer.path(GeneratedLayer.CROSSINGS))
-	quit(1 if not problems.is_empty() else 0)
+	VerifyLayer.run(self, GeneratedLayer.CROSSINGS, _check)
 
 
 func _check(scene_root: Node3D) -> PackedStringArray:
