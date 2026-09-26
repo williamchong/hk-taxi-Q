@@ -7803,3 +7803,55 @@ crash" — with the detector built and the bars measured.
 
 **See.** `P3-50` · `P3-49` · `Q145` · `Q141` · `Q84` · `tuning/skills.md` · `.claude/rules/fares.md` ·
 `.claude/rules/handling.md`
+
+## `Q149` — A refactor pass over the game scripts and the verify tools: what moved, what was found, what was refused
+
+**Status.** ✅ Closed — the user's ask (2026-09-26, "check for refactoring chance in broader sense",
+then "plan as verdict", then "complete plan"). Eight batches, one commit each, `check.sh` between.
+
+Three read-only surveys covered `game/scripts` and `game/tools` (about 31k lines); the ETL was left
+out on purpose, since its duplication is listed as deliberate in the root instructions and a survey
+there would re-propose what the `Q` log has refused. The strongest claims were checked by hand
+before anything moved; two were wrong and dropped (`HandlingProfile.PATH` is not dead — `verify_fares`
+loads through it; and a shared predicate under `is_passable` / `fits_car` is `Q19`'s one forbidden merge).
+
+- **Dead code** (batch 1): two fare-loop fields written and never read, `Fare.plan_m`, and the input
+  router's four drift / look-back signals with no listener anywhere; five doc comments re-attached to
+  the declarations they describe; `verify_spawn` on `HandlingProfile.PATH` rather than a restated string.
+- **One init for the nine per-layer verify tools** (batch 2, `tools/verify_layer.gd`): the same 30-line
+  body by hand nine times, two copies already without its WHY comments. Output byte-identical.
+- **`MeshContract` refuses its mirror** (batch 3): winding, upright normals, no-collision, the shader
+  dispatch and the mesh count each proved against a one-triangle mesh in `verify_mesh_contract`, which
+  runs in CI. 🐛 **Finding:** both winding checks aborted on a surface with no index buffer or no
+  normals — `surface_get_arrays` hands back `null` for an absent array and the typed assignment threw
+  before the guard ran, so the "no index buffer" refusals were unreachable. Fixed with `_indices_of`.
+- **`CityManifest.shared`** (batch 4): the 0.5 MB `city.json` was parsed about eleven times at boot;
+  one weak parse per region on `RoadGraph.shared()`'s pattern, `load_manifest` kept for the tools,
+  `verify_city` holding identity, freshness and the weak drop.
+- **One pending scan per sample** (batch 5): the HUD and the guide each rescanned the pickup pool from
+  the car twice per `sampled`, and the guide built a whole `FareFace` for three fields. `pending` /
+  `withheld` are scanned once before every `sampled`; `FareFace.target_of` is the one rule for where a
+  reader points. The HUD keeps its no-car guard (a handover window), as the review asked.
+- **One verify base** (batch 6, `tools/verify_tool.gd`, extended BY PATH): `_expect` / `_fail` /
+  `_problem` / `_finish` / `_start_watchdog` once; the two deferred-coroutine tools gain the watchdog
+  only `verify_input` had, proved by hanging `verify_vehicle`'s run (exit 1 at 30 s).
+- **The locators' hints name the path tried** (batch 7a), since a manifest may resolve another
+  region's; every hint's sync command names both regions — `sync_generated.sh` with one region as its
+  only argument deletes the other. The grey-box layout goes through `GeneratedDocument.load_object`.
+- **`TuningTable.any_zero`** (batch 7b): the "first zero field" loop once, in `scripts/core/`;
+  `SkillTracker` refuses its own table and the drift angle (`usable()`), as `FareMeter`, `StreetTracker`
+  and `WrongWayMonitor` already did, and `FareSystem.setup` will not hail on an inert one.
+- **UI sharing** (batch 8): `ChamferPanel.housing` / `styled`, `NoEntryIcon.styled`,
+  `StreetPlate.load_font_zh` (the HUD now has the menu's theme fallback; it had a bare `load` with none),
+  `Locale.pick` / `from_row`, `Cmdline.off`.
+- 🚫 **Deferred, not refused**: extracting `VehicleLamps`'s indicator and lighting-ladder policies into
+  `scripts/core/` (a byte-graded render path; needs an A/B render), and moving the lamp, door and emote
+  `@export` defaults into a `.tres` (`Q98`'s ask; a tuning migration that must reproduce today's values).
+  A `CityManifest` layer-path table and `DriveHarness`'s four jobs were surveyed and left.
+- ⚠️ Lessons the pass re-learned: a mutation must COMPILE (an unused parameter is a warning promoted to
+  error, and Godot then exits 0 having checked nothing); `git checkout <file>` to undo a mutation
+  discards the batch's own edits to that file — keep a copy and restore it instead.
+
+**See.** `Q145` · `Q19` · `Q59` · `Q63` · `Q97` · `Q119` · `docs/ARCHITECTURE.md` "Checks" ·
+`.claude/rules/fares.md`
+
