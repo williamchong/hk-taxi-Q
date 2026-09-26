@@ -7504,8 +7504,10 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
   fare-scoped — built at boarding, nulled at the door — and the car's slip, wheels and roll were
   not even read between fares, because every award was a line on a `Fare`. Now one
   `SkillTracker` lives for the session and `FareSystem._award` routes by state: aboard, onto the
-  fare as before; otherwise out on `practised(award)` and into `practice_counts[skill]`, on no
-  fare and in no tip. The HUD flashes `FareFace.practice_text` — the skill's name alone, no
+  fare as before; otherwise out on `practised(award)`, on no fare and in no tip. Every award,
+  paid or practised, counts in `skill_counts[skill]` — the session's tally, since a crash with a
+  passenger aboard was otherwise a line on one receipt and gone with the next fare — and that is
+  where an achievement reads. The HUD flashes `FareFace.practice_text` — the skill's name alone, no
   money, in the same ink; the passenger's face does not pop, since there is no passenger. A
   crash taken empty is shown the same way and docks nothing. `reset` at boarding keeps a slide
   held into the hail off the passenger's receipt — the one reachable seam, since a hail needs the

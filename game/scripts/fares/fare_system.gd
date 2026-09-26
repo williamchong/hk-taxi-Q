@@ -64,8 +64,8 @@ extends Node
 ## **The skills run empty too, shown and never paid** (the user's call,
 ## 2026-09-26): one `SkillTracker` for the session reads every tick, and
 ## `_award` decides where its award goes — onto the fare while a passenger is
-## aboard, out on `practised` otherwise, with a count per skill in
-## `practice_counts` for a later achievement. No money moves without a
+## aboard, out on `practised` otherwise — and counted in `skill_counts`
+## either way, the session's tally for a later achievement. No money moves without a
 ## passenger: the tip is theirs (`Q141`), and `earned_hkd` is what fares
 ## banked. `reset` at boarding keeps a slide held into the hail off the
 ## passenger's receipt.
@@ -139,9 +139,10 @@ var hail_refusals: int = 0
 var stranded: Array[Fare.Stop] = []
 ## What the reach table cost to build, in milliseconds.
 var reach_ms: float = 0.0
-## How many times each `Fare.Skill` was performed with no passenger aboard
-## this session, indexed by the skill: shown, never paid.
-var practice_counts: PackedInt32Array = []
+## How many times each `Fare.Skill` was performed this session, paid or
+## not, indexed by the skill: every award and every practice run, so an
+## achievement reads one number here rather than each fare's receipt.
+var skill_counts: PackedInt32Array = []
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
@@ -298,8 +299,8 @@ func setup(
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_tracker = SkillTracker.new(skills, slip_threshold_deg)
-	practice_counts.resize(Fare.Skill.size())
-	practice_counts.fill(0)
+	skill_counts.resize(Fare.Skill.size())
+	skill_counts.fill(0)
 	_pickups.clear()
 	_dropoffs.clear()
 	for region: String in fares_by_region:
@@ -608,8 +609,8 @@ func _bail() -> void:
 ## announced. With no passenger aboard it is practice — counted and shown,
 ## on no fare and in no tip (the user's call).
 func _award(award: Fare.Award) -> void:
+	skill_counts[award.skill] += 1
 	if state != State.CARRYING:
-		practice_counts[award.skill] += 1
 		practised.emit(award)
 		return
 	fare.awards.append(award)

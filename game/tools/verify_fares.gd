@@ -976,7 +976,7 @@ func _check_practice() -> void:
 			_practised == 1
 			and _last_practice != null
 			and _last_practice.skill == Fare.Skill.DRIFT
-			and system.practice_counts[Fare.Skill.DRIFT] == 1
+			and system.skill_counts[Fare.Skill.DRIFT] == 1
 			and _skilled == 0
 		),
 		"practice",
@@ -1024,6 +1024,15 @@ func _check_practice() -> void:
 		_skilled == 1 and system.fare.awards.size() == 1,
 		"practice",
 		"and the tick that reaches drift_min_s from the boarding pays the passenger"
+	)
+	# Every practice event but the crash was a drift, plus the one paid.
+	_expect(
+		(
+			system.skill_counts[Fare.Skill.DRIFT] == _practised
+			and system.skill_counts[Fare.Skill.CRASH] == 1
+		),
+		"practice",
+		"the session's count holds every drift, practised and paid alike, and the empty crash"
 	)
 	system.free()
 

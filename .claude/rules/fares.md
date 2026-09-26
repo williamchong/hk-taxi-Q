@@ -102,8 +102,9 @@ the loop's own numbers in `tuning/fares.tres`.
   🚫 No multiplier, no chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
 - 🔴 **Empty, the skills are shown and never paid** (the user's call, 2026-09-26: practice, and
   a later achievement). ONE tracker for the session, built in `setup`; `_award` routes by state —
-  not carrying, the award goes out on `practised(award)` and into `practice_counts[skill]`, on
-  no fare, in no tip, never into `earned_hkd`. `hud.gd` flashes `FareFace.practice_text`, the
+  every award counts in `skill_counts[skill]` (paid or not — the session's tally, the
+  achievement hook); not carrying, it goes out on `practised(award)`, on no fare, in no tip,
+  never into `earned_hkd`. `hud.gd` flashes `FareFace.practice_text`, the
   name alone; `taxi_hire.gd` does not listen (no passenger). `_tracker.reset()` at `_board` keeps
   a slide held into the hail off the passenger's receipt; `verify_fares`'s `practice:` block holds
   the empty drift and crash, the boarding seam, and the reset as a named mutation. 🚫 No money
