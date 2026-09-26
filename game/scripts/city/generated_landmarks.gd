@@ -31,9 +31,8 @@ static func path(region: String = "") -> String:
 ## (`P1-7`: the manifest is the shipping route) while the schema and the hint
 ## stay paired here — the locator remains the only loader of this document.
 static func load_landmarks(at: String = "") -> Dictionary:
-	return GeneratedDocument.load_object(
-		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
-	)
+	var resolved: String = at if not at.is_empty() else path()
+	return GeneratedDocument.load_object(resolved, SCHEMA_VERSION, missing_hint(resolved))
 
 
 ## A landmark's placement as a transform, or `null` where it has none.
@@ -74,9 +73,16 @@ static func excluded_bounds_of(entry: Dictionary) -> Variant:
 
 
 ## Message for the case that reads as "there are no heroes" rather than an error.
-static func missing_hint() -> String:
+## The message for a document missing at `at` — the path a caller actually
+## tried, since a manifest may have resolved another region's — or at `path()`.
+## ⚠️ Every resident region is synced in one call: `sync_generated.sh` with one
+## region as its only argument deletes the other.
+static func missing_hint(at: String = "") -> String:
 	return (
-		"No landmark placements at %s. Run the ETL and copy its output there:\n" % path()
+		(
+			"No landmark placements at %s. Run the ETL and copy its output there:\n"
+			% (at if not at.is_empty() else path())
+		)
 		+ "  python -m pipeline.export --region wan_chai\n"
-		+ "  tools/sync_generated.sh wan_chai"
+		+ "  tools/sync_generated.sh wan_chai causeway_bay"
 	)

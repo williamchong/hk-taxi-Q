@@ -27,14 +27,20 @@ static func path(region: String = "") -> String:
 
 ## The parsed document, or an empty dictionary with a pushed message.
 static func load_basemap(at: String = "") -> Dictionary:
-	return GeneratedDocument.load_object(
-		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
-	)
+	var resolved: String = at if not at.is_empty() else path()
+	return GeneratedDocument.load_object(resolved, SCHEMA_VERSION, missing_hint(resolved))
 
 
-static func missing_hint() -> String:
+## The message for a document missing at `at` — the path a caller actually
+## tried, since a manifest may have resolved another region's — or at `path()`.
+## ⚠️ Every resident region is synced in one call: `sync_generated.sh` with one
+## region as its only argument deletes the other.
+static func missing_hint(at: String = "") -> String:
 	return (
-		"No basemap at %s. Run the ETL and copy its output there:\n" % path()
+		(
+			"No basemap at %s. Run the ETL and copy its output there:\n"
+			% (at if not at.is_empty() else path())
+		)
 		+ "  python -m pipeline.basemap --region wan_chai\n"
 		+ "  tools/sync_generated.sh wan_chai causeway_bay"
 	)

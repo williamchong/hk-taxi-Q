@@ -10,6 +10,7 @@ extends Node3D
 ## Deliberately crude: boxes, flat colours, no LOD, no merging. Draw-call budget
 ## is P2-6's problem, not this scene's.
 
+const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const SUPPORTED_SCHEMA: int = 1
 const SIDES: Array[float] = [-1.0, 1.0]
 

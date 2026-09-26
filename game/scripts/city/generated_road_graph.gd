@@ -145,15 +145,21 @@ static func path(region: String = "") -> String:
 ## `at` is the path a manifest resolved (`CityManifest.road_graph_path`); "" is
 ## `path()`, for tools that hold no manifest.
 static func load_graph(at: String = "") -> Dictionary:
-	return GeneratedDocument.load_object(
-		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
-	)
+	var resolved: String = at if not at.is_empty() else path()
+	return GeneratedDocument.load_object(resolved, SCHEMA_VERSION, missing_hint(resolved))
 
 
 ## Message for the case that reads as "there are no roads" rather than an error.
-static func missing_hint() -> String:
+## The message for a document missing at `at` — the path a caller actually
+## tried, since a manifest may have resolved another region's — or at `path()`.
+## ⚠️ Every resident region is synced in one call: `sync_generated.sh` with one
+## region as its only argument deletes the other.
+static func missing_hint(at: String = "") -> String:
 	return (
-		"No road graph at %s. Run the ETL and copy its output there:\n" % path()
+		(
+			"No road graph at %s. Run the ETL and copy its output there:\n"
+			% (at if not at.is_empty() else path())
+		)
 		+ "  python -m pipeline.roads --region wan_chai\n"
-		+ "  cp etl/out/<region>/roadgraph.json game/assets/generated/<region>/"
+		+ "  tools/sync_generated.sh wan_chai causeway_bay"
 	)

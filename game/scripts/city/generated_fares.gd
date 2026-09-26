@@ -44,9 +44,8 @@ static func path(region: String = "") -> String:
 ## `at` is the path a manifest resolved (`CityManifest.fares_path`); "" is
 ## `path()`, for callers that hold no manifest.
 static func load_fares(at: String = "") -> Dictionary:
-	return GeneratedDocument.load_object(
-		at if not at.is_empty() else path(), SCHEMA_VERSION, missing_hint()
-	)
+	var resolved: String = at if not at.is_empty() else path()
+	return GeneratedDocument.load_object(resolved, SCHEMA_VERSION, missing_hint(resolved))
 
 
 ## The node with this id, or an empty dictionary.
@@ -74,9 +73,16 @@ static func position_of(node: Dictionary) -> Variant:
 
 
 ## Message for the case that reads as "there are no fares" rather than an error.
-static func missing_hint() -> String:
+## The message for a document missing at `at` — the path a caller actually
+## tried, since a manifest may have resolved another region's — or at `path()`.
+## ⚠️ Every resident region is synced in one call: `sync_generated.sh` with one
+## region as its only argument deletes the other.
+static func missing_hint(at: String = "") -> String:
 	return (
-		"No fare nodes at %s. Run the ETL and copy its output there:\n" % path()
+		(
+			"No fare nodes at %s. Run the ETL and copy its output there:\n"
+			% (at if not at.is_empty() else path())
+		)
 		+ "  python -m pipeline.fares --region wan_chai\n"
-		+ "  cp etl/out/<region>/fares.json game/assets/generated/<region>/"
+		+ "  tools/sync_generated.sh wan_chai causeway_bay"
 	)
