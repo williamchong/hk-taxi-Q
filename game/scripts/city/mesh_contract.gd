@@ -674,6 +674,17 @@ const MIN_FACING_UP: float = 0.1
 const MAX_UPRIGHT_Y: float = 0.35
 
 
+## The surface's index buffer, or an empty one where it carries none.
+##
+## ⚠️ `surface_get_arrays` hands back `null` for an absent array, not an empty
+## one, and assigning `null` to a typed `PackedInt32Array` is a script error
+## that aborts the check — so the "no index buffer" refusals below were
+## unreachable until `verify_mesh_contract.gd` asked for them.
+static func _indices_of(arrays: Array) -> PackedInt32Array:
+	var raw: Variant = arrays[Mesh.ARRAY_INDEX]
+	return PackedInt32Array() if raw == null else raw
+
+
 ## Every triangle of a ground-plane surface faces the sky.
 ##
 ## ⚠️ **The failure that fails to nothing.** The arrows, the box junctions and
@@ -705,7 +716,7 @@ static func check_faces_up(
 ) -> PackedStringArray:
 	var arrays: Array = mesh.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var indices: PackedInt32Array = _indices_of(arrays)
 	if indices.is_empty():
 		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
 
@@ -790,12 +801,13 @@ static func check_stands_upright(
 ) -> PackedStringArray:
 	var arrays: Array = mesh.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var indices: PackedInt32Array = _indices_of(arrays)
 	if indices.is_empty():
 		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
-	if normals.is_empty():
+	var raw_normals: Variant = arrays[Mesh.ARRAY_NORMAL]
+	if raw_normals == null:
 		return PackedStringArray(["%s carries no normals to check winding against" % where])
+	var normals: PackedVector3Array = raw_normals
 
 	var disagreeing: int = 0
 	var upright: int = 0

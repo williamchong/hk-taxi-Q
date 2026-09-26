@@ -108,7 +108,163 @@ func _init() -> void:
 		"in total against a declared budget"
 	)
 
+	_check_winding()
+	_check_collision_and_material()
+	_check_shapes()
 	_finish()
+
+
+## ⚠️ **Every other `MeshContract` check ran only against a built region until
+## this block, and there it only ever passed.** Winding is the one that has
+## shipped invisible geometry three times (`check_faces_up`'s header), and its
+## negated sign (`Q59`) was pinned by nothing CI could run. So each rule below
+## is shown to accept one triangle and refuse its mirror, on meshes built here.
+##
+## The triangle is in the ground plane with its corners (0,0,0) → (1,0,0) →
+## (0,0,1): under the contract's own cross product that order faces up, and the
+## reversed order faces down. If Godot's winding convention ever moved, the
+## first assertion would fail rather than go quietly green — which is the
+## finding, and the reason not to "fix" the sign to make it pass.
+func _check_winding() -> void:
+	var up: ArrayMesh = _triangle(Vector3.ZERO, Vector3.RIGHT, Vector3.BACK, Vector3.UP)
+	var down: ArrayMesh = _triangle(Vector3.ZERO, Vector3.BACK, Vector3.RIGHT, Vector3.UP)
+	_expect_clean(
+		"a triangle wound to face up", MeshContract.check_faces_up(up, 0, "probe", "paint")
+	)
+	_expect_refused(
+		"the same triangle wound the other way",
+		MeshContract.check_faces_up(down, 0, "probe", "paint"),
+		"do not face up"
+	)
+	_expect_refused(
+		"a surface with no index buffer",
+		MeshContract.check_faces_up(_surface(null), 0, "probe", "paint"),
+		"no index buffer"
+	)
+
+	# A wall: the triangle stood on its edge, wound to agree with its normal.
+	var wall: ArrayMesh = _triangle(Vector3.ZERO, Vector3.UP, Vector3.BACK, Vector3.LEFT)
+	var against: ArrayMesh = _triangle(Vector3.ZERO, Vector3.UP, Vector3.BACK, Vector3.RIGHT)
+	_expect_clean(
+		"an upright triangle wound with its normal",
+		MeshContract.check_stands_upright(wall, 0, "probe", "posts", "a post", 1.0)
+	)
+	_expect_refused(
+		"the same triangle with its normal reversed",
+		MeshContract.check_stands_upright(against, 0, "probe", "posts", "a post", 1.0),
+		"wound against their own normal"
+	)
+	_expect_refused(
+		"a flat triangle held to an upright share of 1.0",
+		MeshContract.check_stands_upright(up, 0, "probe", "posts", "a post", 1.0),
+		"laid flat"
+	)
+	var bare: ArrayMesh = _triangle(Vector3.ZERO, Vector3.UP, Vector3.BACK, Vector3.ZERO)
+	_expect_refused(
+		"an upright triangle with no normals",
+		MeshContract.check_stands_upright(bare, 0, "probe", "posts", "a post", 1.0),
+		"no normals"
+	)
+
+
+## The collider rule and the material dispatch, each from both sides.
+func _check_collision_and_material() -> void:
+	var clean := Node3D.new()
+	_expect_clean(
+		"a node with no StaticBody3D under it",
+		MeshContract.check_no_collision(clean, "probe", "PROBE")
+	)
+	clean.free()
+	var built := Node3D.new()
+	built.add_child(StaticBody3D.new())
+	_expect_refused(
+		"a node that built a collider",
+		MeshContract.check_no_collision(built, "probe", "PROBE"),
+		"must build none"
+	)
+	built.free()
+
+	var expected: String = "res://probe_material.tres"
+	var shared: ArrayMesh = _surface(null)
+	(shared.surface_get_material(0) as ShaderMaterial).take_over_path(expected)
+	_expect_clean(
+		"a surface on the shared material it was asked for",
+		MeshContract.check_shader_material(shared, 0, "probe", expected)
+	)
+	_expect_refused(
+		"a surface on a ShaderMaterial from nowhere",
+		MeshContract.check_shader_material(_surface(null), 0, "probe", expected),
+		"not %s" % expected
+	)
+	_expect_refused(
+		"a surface left on the importer's BaseMaterial3D",
+		MeshContract.check_shader_material(_standard_surface(null), 0, "probe", expected),
+		"did not import with a ShaderMaterial"
+	)
+
+
+## `single_primitive` and `library_meshes` refuse the wrong count of meshes and
+## surfaces, and hand back what they collected when they accept.
+func _check_shapes() -> void:
+	var one := Node3D.new()
+	one.add_child(_instance(1))
+	var problems: PackedStringArray = []
+	var mesh: ArrayMesh = MeshContract.single_primitive(one, 1, problems)
+	_expect_clean("one instance with one surface", problems)
+	if mesh == null:
+		_fail("single_primitive accepted one instance and handed back nothing")
+	one.free()
+
+	var two := Node3D.new()
+	two.add_child(_instance(1))
+	two.add_child(_instance(1))
+	problems = []
+	MeshContract.single_primitive(two, 1, problems)
+	_expect_refused("two instances where one is the rule", problems, "expected one MeshInstance3D")
+	two.free()
+
+	var doubled := Node3D.new()
+	doubled.add_child(_instance(2))
+	problems = []
+	MeshContract.single_primitive(doubled, 1, problems)
+	_expect_refused("one instance with two surfaces", problems, "expected 1")
+	problems = []
+	MeshContract.library_meshes(doubled, 1, problems)
+	_expect_refused("a library mesh with two surfaces", problems, "expected 1")
+	doubled.free()
+
+	var empty := Node3D.new()
+	problems = []
+	MeshContract.library_meshes(empty, 1, problems)
+	_expect_refused("a library with no mesh at all", problems, "no MeshInstance3D")
+	empty.free()
+
+
+## One indexed triangle `a` → `b` → `c` with every vertex's normal `normal`,
+## or no normals at all for `Vector3.ZERO`.
+func _triangle(a: Vector3, b: Vector3, c: Vector3, normal: Vector3) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([a, b, c])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	if not normal.is_zero_approx():
+		arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([normal, normal, normal])
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## A MeshInstance3D carrying an ArrayMesh of `surfaces` surfaces.
+func _instance(surfaces: int) -> MeshInstance3D:
+	var mesh := ArrayMesh.new()
+	for _surface_index: int in surfaces:
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP])
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	return instance
 
 
 ## One surface carrying `texture` on a shader that samples it, or none.
