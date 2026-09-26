@@ -856,6 +856,7 @@ func _unfollow_fares() -> void:
 		fares.bailed.disconnect(_on_fare_bailed)
 		fares.meter_changed.disconnect(_on_meter_changed)
 		fares.skilled.disconnect(_on_fare_skilled)
+		fares.practised.disconnect(_on_fare_practised)
 
 
 ## Read the new system: its pool onto the map, its samples into the face.
@@ -876,6 +877,7 @@ func _follow_fares() -> void:
 	fares.bailed.connect(_on_fare_bailed)
 	fares.meter_changed.connect(_on_meter_changed)
 	fares.skilled.connect(_on_fare_skilled)
+	fares.practised.connect(_on_fare_practised)
 	if _minimap != null:
 		var points := PackedVector3Array()
 		for stop: Fare.Stop in fares.pickups():
@@ -927,8 +929,17 @@ func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
 ## A skill paid (`P3-49`): the money and its name, in the gain's green, so a
 ## tip is seen being earned and not only counted at the door.
 func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
-	var ink: Color = _style.accent if award.hkd >= 0.0 else _style.accent_negative
-	_flash(_face.award_text(award), ink)
+	_flash(_face.award_text(award), _award_ink(award))
+
+
+## A skill performed with no passenger aboard: its name alone, in the same
+## ink, so a stunt can be practised between fares — nothing is paid.
+func _on_fare_practised(award: Fare.Award) -> void:
+	_flash(_face.practice_text(award), _award_ink(award))
+
+
+func _award_ink(award: Fare.Award) -> Color:
+	return _style.accent if award.hkd >= 0.0 else _style.accent_negative
 
 
 ## Show `text` under the clock and start it fading.

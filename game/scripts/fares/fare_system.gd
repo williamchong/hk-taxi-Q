@@ -61,6 +61,15 @@ extends Node
 ## line on the receipt; `skilled` says so. A bail forfeits the lot — the
 ## passenger walks without paying, and the receipt says what walked.
 ##
+## **The skills run empty too, shown and never paid** (the user's call,
+## 2026-09-26): one `SkillTracker` for the session reads every tick, and
+## `_award` decides where its award goes — onto the fare while a passenger is
+## aboard, out on `practised` otherwise, with a count per skill in
+## `practice_counts` for a later achievement. No money moves without a
+## passenger: the tip is theirs (`Q141`), and `earned_hkd` is what fares
+## banked. `reset` at boarding keeps a slide held into the hail off the
+## passenger's receipt.
+##
 ## **The live tip is the skills alone** (the user's call, `Q145`): the seconds
 ## left are priced ONCE, at the door, into `Fare.time_hkd`. A tip that fell
 ## with the clock read as a penalty for driving; now it only rises with a
@@ -88,6 +97,9 @@ signal bailed(fare: Fare)
 ## Emitted each time a skill pays, with the award just appended to
 ## `fare.awards` and added to `fare.tip_hkd` (`P3-49`).
 signal skilled(fare: Fare, award: Fare.Award)
+## Emitted each time a skill is performed with no passenger aboard — a
+## practice run, shown and never paid. The award is on no fare and in no tip.
+signal practised(award: Fare.Award)
 ## Emitted whenever the reading moves: the new reading in HK$, and the unit
 ## that just began — the flagfall at boarding — so a readout that shows the
 ## tick keeps no copy of the last reading (`P3-5a`).
@@ -127,6 +139,9 @@ var hail_refusals: int = 0
 var stranded: Array[Fare.Stop] = []
 ## What the reach table cost to build, in milliseconds.
 var reach_ms: float = 0.0
+## How many times each `Fare.Skill` was performed with no passenger aboard
+## this session, indexed by the skill: shown, never paid.
+var practice_counts: PackedInt32Array = []
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
@@ -134,7 +149,7 @@ var _skills: SkillProfile = null
 ## `HandlingProfile.drift_slip_threshold_deg`, handed in: the angle a slide
 ## must hold to be a drift.
 var _slip_threshold_deg: float = 0.0
-## The skills of the fare in flight; null between fares.
+## The session's skills, built by `setup`, reset at every boarding.
 var _tracker: SkillTracker = null
 var _rng: RandomNumberGenerator = null
 # A member, not a local: `RoadGraph.shared()` holds it weakly.
@@ -282,6 +297,9 @@ func setup(
 	_slip_threshold_deg = slip_threshold_deg
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
+	_tracker = SkillTracker.new(skills, slip_threshold_deg)
+	practice_counts.resize(Fare.Skill.size())
+	practice_counts.fill(0)
 	_pickups.clear()
 	_dropoffs.clear()
 	for region: String in fares_by_region:
@@ -325,15 +343,18 @@ func _physics_process(delta: float) -> void:
 	var placed: Transform3D = vehicle.global_transform
 	var velocity: Vector3 = vehicle.linear_velocity
 	var nose: Vector3 = -placed.basis.z
-	# The slip, the wheels and the roll are only read while a passenger is aboard.
-	var carrying: bool = state == State.CARRYING
-	var slip: float = slip_deg_of(velocity, nose) if carrying else 0.0
-	var airborne: bool = vehicle.is_airborne() if carrying else false
-	var upright: bool = vehicle.is_upright() if carrying else true
-	# Drained every tick, carrying or not: a hit taken empty must not be
-	# docked from the next passenger.
-	var impact: float = vehicle.take_impact_mps()
-	sample(placed.origin, velocity.length(), nose, delta, slip, airborne, upright, impact)
+	# Every tick, carrying or not: the skills run empty too, and a hit taken
+	# empty is drained here rather than docked from the next passenger.
+	sample(
+		placed.origin,
+		velocity.length(),
+		nose,
+		delta,
+		slip_deg_of(velocity, nose),
+		vehicle.is_airborne(),
+		vehicle.is_upright(),
+		vehicle.take_impact_mps()
+	)
 
 
 ## The angle between where the car points and where it is going, in degrees,
@@ -353,8 +374,8 @@ static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
 ## `heading` with `slip_deg` between the two, `delta_s` after the last tick,
 ## `airborne` with every wheel off the ground and `upright` on its wheels
 ## rather than its roof (`P3-51`), and `impact_mps` into a wall this tick
-## (`P3-50`). The odometer, the clock and the skills run every tick; the
-## graph is asked once per `sample_hz`.
+## (`P3-50`). The skills run every tick in every state; the odometer and
+## the clock while carrying; the graph is asked once per `sample_hz`.
 func sample(
 	position: Vector3,
 	speed_mps: float,
@@ -371,10 +392,11 @@ func sample(
 	if state == State.CARRYING:
 		fare.meter.advance(maxf(speed_mps, 0.0) * elapsed, elapsed)
 		_announce_reading()
-		for award: Fare.Award in _tracker.tick(
-			speed_mps, slip_deg, elapsed, airborne, upright, impact_mps
-		):
-			_award(award)
+	for award: Fare.Award in _tracker.tick(
+		speed_mps, slip_deg, elapsed, airborne, upright, impact_mps
+	):
+		_award(award)
+	if state == State.CARRYING:
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:
 			fare.remaining_s = 0.0
@@ -539,7 +561,8 @@ func allowance_for(kind: Fare.Kind, par_m: float) -> float:
 func _board() -> void:
 	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
 	fare.remaining_s = fare.allowance_s
-	_tracker = SkillTracker.new(_skills, _slip_threshold_deg)
+	# A slide or a flight held into the hail is not the passenger's.
+	_tracker.reset()
 	# Nothing earned yet: the time is priced at the door, not here.
 	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0
@@ -559,7 +582,6 @@ func _deliver() -> void:
 	var early: Fare.Award = _tracker.arrival(fare.remaining_s, fare.allowance_s)
 	if early != null:
 		_award(early)
-	_tracker = null
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
 	deliveries += 1
@@ -572,7 +594,6 @@ func _deliver() -> void:
 ## paid into the tip are forfeit. `awards` and `skills_hkd` stay on the fare
 ## so the receipt can say what was lost.
 func _bail() -> void:
-	_tracker = null
 	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0
 	fare.banked_hkd = 0.0
@@ -584,8 +605,13 @@ func _bail() -> void:
 
 
 ## A skill paid, or a penalty docked: onto the receipt, into the tip, and
-## announced.
+## announced. With no passenger aboard it is practice — counted and shown,
+## on no fare and in no tip (the user's call).
 func _award(award: Fare.Award) -> void:
+	if state != State.CARRYING:
+		practice_counts[award.skill] += 1
+		practised.emit(award)
+		return
 	fare.awards.append(award)
 	fare.skills_hkd += award.hkd
 	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)

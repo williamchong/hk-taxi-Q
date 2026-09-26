@@ -96,10 +96,19 @@ the loop's own numbers in `tuning/fares.tres`.
   reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.
 - 🔴 **The skills are flat money per event, paid as they happen** (`P3-49`, `Q145`, the user's
   call over the style chain): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
-  slip by `sample()` while carrying, `tuning/skills.tres` prices them (sidecar `skills.md`), and
-  each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and out on `skilled`.
-  `time_hkd` is the seconds left priced at the door; `tip = time + skills`. 🚫 No multiplier, no
-  chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
+  slip by `sample()` in every state, `tuning/skills.tres` prices them (sidecar `skills.md`), and
+  while carrying each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and
+  out on `skilled`. `time_hkd` is the seconds left priced at the door; `tip = time + skills`.
+  🚫 No multiplier, no chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
+- 🔴 **Empty, the skills are shown and never paid** (the user's call, 2026-09-26: practice, and
+  a later achievement). ONE tracker for the session, built in `setup`; `_award` routes by state —
+  not carrying, the award goes out on `practised(award)` and into `practice_counts[skill]`, on
+  no fare, in no tip, never into `earned_hkd`. `hud.gd` flashes `FareFace.practice_text`, the
+  name alone; `taxi_hire.gd` does not listen (no passenger). `_tracker.reset()` at `_board` keeps
+  a slide held into the hail off the passenger's receipt; `verify_fares`'s `practice:` block holds
+  the empty drift and crash, the boarding seam, and the reset as a named mutation. 🚫 No money
+  for practice, in any form — the chain (`P3-2b`) is where it becomes money. `--fares=off` still
+  frees the node, so free roam shows nothing.
 - 🔴 **A drift must qualify, and the speed skill is paid by the metre** (the user's calls,
   2026-09-25, `Q145`): a slide counts once it has held `drift_min_s` (2 s, over the 1 s that paid a
   tap) and pays again every `drift_s`; a run at or over `speed_min_kph` pays every `speed_hold_m`
@@ -133,7 +142,8 @@ the loop's own numbers in `tuning/fares.tres`.
 - 🔴 **The penalties read ONE number off the car and tier it** (`P3-50`, `Q148`):
   `VehicleController.take_impact_mps`, the speed INTO the wall on the tick of the hit — the
   pre-step velocity's component along the contact normal, latched in `_integrate_forces` and
-  drained by `FareSystem._physics_process` every tick, carrying or not. Two bars in `skills.tres`:
+  drained by `FareSystem._physics_process` every tick, carrying or not (empty, a hit is shown as
+  practice and docks nothing). Two bars in `skills.tres`:
   under `bump_min_kph` (20) a TOUCH, free and unannounced, but it ends a slide (a car pinned on a
   wall cannot farm the drift); at or over it a COLLISION, `Fare.Skill.BUMP`, docking `bump_hkd`
   (2); at or over `crash_min_kph` (60) a CRASH docking `crash_hkd` (5). `crash_cool_s` (1 s)

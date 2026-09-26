@@ -42,6 +42,12 @@ extends RefCounted
 ## speed, the slip and the elapsed time; `FareSystem` is the only caller and
 ## the only thing that reads the car. A dwell is measured from both sides in
 ## the verify tool: one tick short pays nothing, the tick that reaches it pays.
+##
+## **One tracker for the session, not one per fare** (the user's call,
+## 2026-09-26): it runs empty too, so a stunt can be practised between fares
+## and the HUD says what it was. Whether an award is PAID is `FareSystem`'s
+## decision — with a passenger aboard it lands on the fare, empty it is only
+## shown — and `reset` at boarding starts the passenger's receipt clean.
 
 
 ## One event's meter: how much of it has run (seconds for a slide, metres for
@@ -72,6 +78,15 @@ var _earned: Array[Fare.Award] = []
 func _init(profile: SkillProfile, slip_threshold_deg: float) -> void:
 	_profile = profile
 	_slip_threshold_deg = slip_threshold_deg
+
+
+## Forget every dwell in progress and the cooldown: a slide or a flight held
+## into the boarding does not pay the passenger for the part before them.
+func reset() -> void:
+	_drift.reset()
+	_speed.reset()
+	_air.reset()
+	_cool_s = 0.0
 
 
 ## One tick of the drive: what it earned, in the order it was earned. Usually

@@ -7499,6 +7499,22 @@ early arrival) and named the genre — "Forza style skill bonus, near miss etc".
   `_deliver`, so its "+HK$10.0 early" flash was overwritten by the banked sum in the same call and
   never drew. The delivery caption now carries it — "DELIVERED · +HK$10.0 early · TIP HK$22.5" /
   已送達 · +HK$10.0 早到 · 小費 HK$22.5 — `award_text`, the flash's own wording — held with the receipt; `verify_hud` holds both languages.
+- **The skills run empty too — shown, never paid** (the user's call, 2026-09-26: "so that user
+  can practice stunt when car is empty, or for future achievement support"). The tracker was
+  fare-scoped — built at boarding, nulled at the door — and the car's slip, wheels and roll were
+  not even read between fares, because every award was a line on a `Fare`. Now one
+  `SkillTracker` lives for the session and `FareSystem._award` routes by state: aboard, onto the
+  fare as before; otherwise out on `practised(award)` and into `practice_counts[skill]`, on no
+  fare and in no tip. The HUD flashes `FareFace.practice_text` — the skill's name alone, no
+  money, in the same ink; the passenger's face does not pop, since there is no passenger. A
+  crash taken empty is shown the same way and docks nothing. `reset` at boarding keeps a slide
+  held into the hail off the passenger's receipt — the one reachable seam, since a hail needs the
+  car under `stop_below_kph` but the verify tool can hold a slip through it; `verify_fares`'s
+  `practice:` block holds it as a mutation. 🚫 Refused: paying practice into `earned_hkd` (it
+  invents a payer, and the receipt can no longer explain the total — the tip is the passenger's,
+  `Q141`) and carrying it into the next fare's tip (a bail would forfeit stunts done before the
+  hail). `P3-2b`'s style chain, which climbs on seconds of driving and banks at delivery, is
+  where an empty-car stunt becomes money later. Free roam (`--fares=off`) still frees the node.
 - Owed: the user's drive again on the new table, and the draw-call delta with faces up.
 
 **See.** `P3-49` · `Q141` · `Q84` · `P3-48` · `GAME_DESIGN.md` "Scoring" · `.claude/rules/fares.md`

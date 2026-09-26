@@ -1938,6 +1938,11 @@ func _check_fare_face() -> void:
 		"face",
 		"a flight flashes as air / 飛車 (`P3-51`)"
 	)
+	_expect(
+		face.practice_text(flight) == "air" and zh.practice_text(fare.awards[0]) == "甩尾",
+		"face",
+		"a skill with no passenger aboard flashes its name alone, no money"
+	)
 	# An early arrival is named in the delivery's caption, since its flash is
 	# overwritten by the banked sum in the same call.
 	var early_fare: RefCounted = FareScript.new()

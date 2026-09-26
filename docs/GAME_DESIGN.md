@@ -110,7 +110,9 @@ the arrow disabled.
 
 Skills are paid during the drive and shown at once — a flash under the clock, the tip on its own
 LED under the meter in the meter's red, and the passenger's face popping out of the back seat — so
-players learn what the game rewards without being told. The live tip is the skills alone and only
+players learn what the game rewards without being told. With no passenger aboard the same skills
+still flash — by name alone, nothing paid — so a stunt can be practised between fares, and each is
+counted for a later achievement. The live tip is the skills alone and only
 rises (or is docked by a penalty); the time bonus joins it at the door, because a tip that fell
 with the clock read as a penalty for driving (`Q145`). The
 delivery's callout is a receipt: the meter, the time left and each skill by name with its count,

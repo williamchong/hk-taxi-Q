@@ -62,6 +62,9 @@ var _skills: SkillProfile = null
 var _slip_threshold_deg: float = 0.0
 ## How many times `skilled` fired on the system under test.
 var _skilled: int = 0
+## How many times `practised` fired, and the last award it carried.
+var _practised: int = 0
+var _last_practice: Fare.Award = null
 
 
 func _init() -> void:
@@ -93,6 +96,7 @@ func _init() -> void:
 	_check_allowance()
 	_check_loop()
 	_check_skills()
+	_check_practice()
 	_check_penalties()
 
 	if _failed > 0:
@@ -943,6 +947,87 @@ func _check_skills() -> void:
 	mutated.free()
 
 
+## Practice (the user's call, 2026-09-26): the skills run with no passenger
+## aboard, shown on `practised` and counted, never paid — no fare, no tip, no
+## bank — and a slide held into the boarding is not the passenger's.
+func _check_practice() -> void:
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "practice", "SKIP: no pickup on this region alone to drive from")
+		return
+
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_skilled = 0
+	_practised = 0
+	_last_practice = null
+	system.skilled.connect(_count_skilled)
+	system.practised.connect(_count_practised)
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	_expect(system.state == FareSystem.State.IDLE, "practice", "empty, far from every stop")
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_expect(_practised == 0, "practice", "one tick short of drift_min_s shows nothing, empty too")
+	_slide(system, FAST, threshold, 1)
+	_expect(
+		(
+			_practised == 1
+			and _last_practice != null
+			and _last_practice.skill == Fare.Skill.DRIFT
+			and system.practice_counts[Fare.Skill.DRIFT] == 1
+			and _skilled == 0
+		),
+		"practice",
+		"the tick that reaches it is shown on `practised` and counted, never on `skilled`"
+	)
+	_expect(
+		system.fare == null and is_zero_approx(system.earned_hkd),
+		"practice",
+		"and nothing is paid: no fare, nothing banked"
+	)
+	_hit(system, _skills.crash_min_kph)
+	_expect(
+		(
+			_practised == 2
+			and _last_practice.skill == Fare.Skill.CRASH
+			and is_zero_approx(system.earned_hkd)
+		),
+		"practice",
+		"a crash taken empty is shown as one and docks nothing"
+	)
+
+	# A slide held from the kerb through the boarding, one tick short of the
+	# bar as the car reaches the stand: what it pays before the passenger is
+	# aboard — at the hail, and again while boarding — is practice, and the
+	# passenger's own dwell starts at zero, since the tracker is reset at
+	# boarding.
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	var shown_before: int = _practised
+	for tick: int in 5:
+		system.sample(pickup.point, CRAWL, Vector3.FORWARD, TICK_S, threshold)
+	_expect(system.state == FareSystem.State.CARRYING, "practice", "boarded while sliding")
+	_expect(
+		_practised > shown_before and _skilled == 0 and system.fare.awards.is_empty(),
+		"practice",
+		"the slide held through the boarding was shown, and put nothing on the fare"
+	)
+	_slide(system, FAST, threshold, drift_ticks - 1)
+	_expect(
+		system.fare.awards.is_empty() and _skilled == 0,
+		"practice",
+		"mutation caught: aboard, the passenger's drift starts from zero — one tick short pays nothing"
+	)
+	_slide(system, FAST, threshold, 1)
+	_expect(
+		_skilled == 1 and system.fare.awards.size() == 1,
+		"practice",
+		"and the tick that reaches drift_min_s from the boarding pays the passenger"
+	)
+	system.free()
+
+
 ## The penalties (`P3-50`, `Q148`): the tiers on the speed into the wall from
 ## both sides of each bar, one wall one dock, the touch that ends a slide,
 ## the tip floored and the meter untouched, and the table's mutations.
@@ -1106,6 +1191,11 @@ func _check_penalties() -> void:
 
 func _count_skilled(_fare: Fare, _award: Fare.Award) -> void:
 	_skilled += 1
+
+
+func _count_practised(award: Fare.Award) -> void:
+	_practised += 1
+	_last_practice = award
 
 
 ## One sample far from every stop with a wall hit of `impact_kph` into it.

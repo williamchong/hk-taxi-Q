@@ -193,6 +193,12 @@ func award_text(award: Fare.Award) -> String:
 	return "%s %s" % [flash(award.hkd), skill_name(award.skill)]
 
 
+## What a skill flashes with no passenger aboard: the skill alone, since
+## nothing is paid — shown, never a sum (the user's call).
+func practice_text(award: Fare.Award) -> String:
+	return skill_name(award.skill)
+
+
 ## A skill's name, in the face's language. Cantonese for the two the street
 ## has words for: 甩尾 is a drift and 飆車 is speeding.
 func skill_name(skill: Fare.Skill) -> String:
