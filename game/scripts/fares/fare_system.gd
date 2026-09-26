@@ -139,6 +139,12 @@ var hail_refusals: int = 0
 var stranded: Array[Fare.Stop] = []
 ## What the reach table cost to build, in milliseconds.
 var reach_ms: float = 0.0
+## The pending customer a reader may point at as of the last sample, and the
+## pickups it must not mark (`nearest_pending`'s and `withheld_pickups`'s
+## answers, scanned once per sample rather than once per reader). Read inside
+## `sampled`, like everything else here.
+var pending: Fare.Stop = null
+var withheld: PackedInt32Array = []
 ## How many times each `Fare.Skill` was performed this session, paid or
 ## not, indexed by the skill: every award and every practice run, so an
 ## achievement reads one number here rather than each fare's receipt.
@@ -395,7 +401,7 @@ func sample(
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:
 			fare.remaining_s = 0.0
-			_bail()
+			_bail(position)
 			return
 
 	_sample_accum_s += elapsed
@@ -412,6 +418,7 @@ func sample(
 			_sample_boarding(position, since_sample)
 		State.CARRYING:
 			_sample_carrying(position, speed_kph, heading)
+	_rescan(position)
 	sampled.emit()
 
 
@@ -587,7 +594,7 @@ func _deliver() -> void:
 ## The passenger walks without paying: nothing banks, and the skills already
 ## paid into the tip are forfeit. `awards` and `skills_hkd` stay on the fare
 ## so the receipt can say what was lost.
-func _bail() -> void:
+func _bail(position: Vector3) -> void:
 	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0
 	fare.banked_hkd = 0.0
@@ -595,6 +602,7 @@ func _bail() -> void:
 	state = State.IDLE
 	_armed = false
 	bailed.emit(fare)
+	_rescan(position)
 	sampled.emit()
 
 
@@ -628,12 +636,12 @@ func _announce_reading() -> void:
 	meter_changed.emit(reading, delta)
 
 
-## The pickup nearest `position` at any distance, or null with an empty pool:
-## where the closest pending customer is, for the guide and the map while
-## no one is aboard (`P3-5a`, `Q142`). ⚠️ Not the hail: `_nearest_pickup`
-## keeps the radius, and this never hails.
-func nearest_pickup_any(position: Vector3) -> Fare.Stop:
-	return _nearest_pickup_within(position, INF)
+## One scan of the pickups from `position`: the pending customer a reader may
+## point at, and the pickups it must not mark.
+class Scan:
+	extends RefCounted
+	var pending: Fare.Stop = null
+	var withheld: PackedInt32Array = []
 
 
 ## The pending customer a reader may point at: the nearest pickup while no one
@@ -645,19 +653,7 @@ func nearest_pickup_any(position: Vector3) -> Fare.Stop:
 ## car with nothing happening reads as a broken cooldown. Those pickups are
 ## skipped until the car is armed again.
 func nearest_pending(position: Vector3) -> Fare.Stop:
-	if state != State.IDLE:
-		return null
-	if _armed:
-		return nearest_pickup_any(position)
-	var best: Fare.Stop = null
-	var best_m: float = INF
-	for stop: Fare.Stop in _pickups:
-		var apart: float = RoadGraph.plan_distance(position, stop.point)
-		if apart <= _profile.hail_radius_m or apart > best_m:
-			continue
-		best_m = apart
-		best = stop
-	return best
+	return _scan(position).pending
 
 
 ## The indices into `pickups()` of the customers a reader must not mark: those
@@ -666,13 +662,34 @@ func nearest_pending(position: Vector3) -> Fare.Stop:
 ## call): a delivery at a stand that is also a pickup would otherwise put a
 ## pending ring under the car the moment the passenger is out.
 func withheld_pickups(position: Vector3) -> PackedInt32Array:
-	var withheld := PackedInt32Array()
-	if _armed:
-		return withheld
+	return _scan(position).withheld
+
+
+## `pending` and `withheld` as of this sample, from one pass over the pool.
+func _rescan(position: Vector3) -> void:
+	var scan: Scan = _scan(position)
+	pending = scan.pending
+	withheld = scan.withheld
+
+
+## Both answers in one pass: idle and armed, the nearest pickup at any distance
+## and nothing withheld; idle and disarmed, the nearest pickup OUTSIDE the hail
+## radius and every pickup inside it withheld; not idle, neither.
+func _scan(position: Vector3) -> Scan:
+	var scan := Scan.new()
+	if state != State.IDLE:
+		return scan
+	var best_m: float = INF
 	for index: int in _pickups.size():
-		if RoadGraph.plan_distance(position, _pickups[index].point) <= _profile.hail_radius_m:
-			withheld.append(index)
-	return withheld
+		var stop: Fare.Stop = _pickups[index]
+		var apart: float = RoadGraph.plan_distance(position, stop.point)
+		if not _armed and apart <= _profile.hail_radius_m:
+			scan.withheld.append(index)
+			continue
+		if apart <= best_m:
+			best_m = apart
+			scan.pending = stop
+	return scan
 
 
 ## How often `sampled` fires, for a consumer that counts samples.

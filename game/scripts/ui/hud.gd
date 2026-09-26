@@ -972,11 +972,13 @@ func _on_fare_bailed(fare: Fare) -> void:
 ## One sample of the loop, at its 5 Hz: the face decides and the panels are
 ## painted.
 func _on_fare_sampled() -> void:
-	var car: VehicleController = _vehicle()
-	var nearest: Fare.Stop = null if car == null else fares.nearest_pending(car.global_position)
+	# The loop scanned from ITS car; this HUD points nowhere while it has none
+	# (a handover window, `vehicle`'s doc), as it did when it scanned itself.
+	var present: bool = _vehicle() != null
+	var nearest: Fare.Stop = fares.pending if present else null
 	_face.on_sampled(fares.state, fares.fare, nearest, _style.timer_warn_s, fares.earned_hkd)
-	if _minimap != null and car != null:
-		_minimap.withhold(fares.withheld_pickups(car.global_position))
+	if _minimap != null and present:
+		_minimap.withhold(fares.withheld)
 	_paint_fares()
 
 

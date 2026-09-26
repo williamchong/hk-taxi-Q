@@ -91,9 +91,14 @@ the loop's own numbers in `tuning/fares.tres`.
   radius, the footprint-not-centroid distance and the mention rule from both sides.
 - ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
   `fare_guide.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
-  `nearest_pending` and `pickups()` inside them, because under `--fares=off` the system frees
+  `pending`, `withheld` and `pickups()` inside them, because under `--fares=off` the system frees
   itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
-  reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided.
+  reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided,
+  and `FareFace.target_of` the one place a reader's target is — the guide's arrow and the map's
+  pin both take it. ⚠️ `pending` and `withheld` are ONE scan per sample (`_rescan`,
+  before every `sampled`); `nearest_pending` / `withheld_pickups` are the same scan as queries,
+  for `verify_fares`, which asserts the fields agree with them at the delivery. A reader never
+  rescans the pool from the car's position.
 - 🔴 **The skills are flat money per event, paid as they happen** (`P3-49`, `Q145`, the user's
   call over the style chain): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
   slip by `sample()` in every state, `tuning/skills.tres` prices them (sidecar `skills.md`), and

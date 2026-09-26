@@ -70,6 +70,30 @@ var target: Vector3 = Vector3.ZERO
 var target_is_destination: bool = false
 
 var _language: String = Locale.DEFAULT
+
+
+## Where a reader points: the destination once hailed, the closest pending
+## customer while idle, nothing with neither. One rule for the face, the
+## guide's arrow and the map's pin.
+class Target:
+	extends RefCounted
+	var has: bool = false
+	var point: Vector3 = Vector3.ZERO
+	var is_destination: bool = false
+
+
+static func target_of(state: FareSystem.State, fare: Fare, nearest: Fare.Stop) -> Target:
+	var aim := Target.new()
+	if state != FareSystem.State.IDLE:
+		aim.has = true
+		aim.point = fare.destination.point
+		aim.is_destination = true
+	elif nearest != null:
+		aim.has = true
+		aim.point = nearest.point
+	return aim
+
+
 var _hold_samples: int = 0
 var _notice: Notice = Notice.NONE
 var _notice_left: int = 0
@@ -131,11 +155,12 @@ func on_sampled(
 	elif state == FareSystem.State.BOARDING:
 		meter_text = money(fare.meter.reading_hkd())
 
+	var aim: Target = target_of(state, fare, nearest)
+	has_target = aim.has
+	target = aim.point
+	target_is_destination = aim.is_destination
 	if state != FareSystem.State.IDLE:
 		_notice = Notice.NONE
-		has_target = true
-		target = fare.destination.point
-		target_is_destination = true
 		if state == FareSystem.State.BOARDING:
 			caption = _say("上客中", "PICKING UP")
 		else:
@@ -149,9 +174,6 @@ func on_sampled(
 			callout_sub = road
 		return
 
-	has_target = nearest != null
-	target = nearest.point if nearest != null else Vector3.ZERO
-	target_is_destination = false
 	if _notice != Notice.NONE and _notice_left > 0:
 		_notice_left -= 1
 		caption = _notice_caption

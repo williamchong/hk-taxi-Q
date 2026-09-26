@@ -407,6 +407,19 @@ func _check_loop() -> void:
 	# Nor is it marked (the user's call): the end of a trip is not the start of
 	# another, so no ring or pin on a pickup the loop would refuse right now.
 	var withheld: PackedInt32Array = system.withheld_pickups(destination.point)
+	# The sample that delivered also refreshed the fields the readers use, and
+	# they say what the queries say from the same spot.
+	_expect(
+		(
+			(
+				(system.pending == null and pointed == null)
+				or (system.pending != null and system.pending.same_as(pointed))
+			)
+			and system.withheld == withheld
+		),
+		"loop",
+		"the delivering sample left `pending` and `withheld` where the queries read them"
+	)
 	var marked_in_reach: int = 0
 	var hidden_out_of_reach: int = 0
 	for index: int in system.pickups().size():

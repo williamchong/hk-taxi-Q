@@ -26,7 +26,8 @@ const PropBatch = preload("res://scripts/city/prop_batch.gd")
 @export var vehicle: Node3D
 
 var _profile: FareGuideProfile = null
-var _face: FareFace = null
+## Where the arrow points, as of the last sample.
+var _target: FareFace.Target = FareFace.Target.new()
 var _arrow: MeshInstance3D = null
 var _ring: MeshInstance3D = null
 ## One ring per pending customer, as one multimesh: shown while no one is
@@ -62,7 +63,6 @@ func _ready() -> void:
 		set_process(false)
 		visible = false
 		return
-	_face = FareFace.new(0, Locale.language())
 	_material = _unshaded(1.0)
 	_arrow = MeshInstance3D.new()
 	_arrow.name = "Arrow"
@@ -112,22 +112,22 @@ func _on_sampled() -> void:
 	var nearest: Fare.Stop = null
 	_withheld = PackedInt32Array()
 	if is_instance_valid(vehicle):
-		nearest = fares.nearest_pending(vehicle.global_position)
-		_withheld = fares.withheld_pickups(vehicle.global_position)
-	# The clock's bar and the takings are the HUD's; only the target is read.
-	_face.on_sampled(fares.state, fares.fare, nearest, 0.0, 0.0)
-	if visible != _face.has_target:
-		visible = _face.has_target
+		nearest = fares.pending
+		_withheld = fares.withheld
+	# The face's rule for where a reader points, without the face's strings.
+	_target = FareFace.target_of(fares.state, fares.fare, nearest)
+	if visible != _target.has:
+		visible = _target.has
 	# The ring marks where the passenger gets out; a pending customer gets the
 	# arrow alone (the user's call).
-	if _ring.visible != _face.target_is_destination:
-		_ring.visible = _face.target_is_destination
+	if _ring.visible != _target.is_destination:
+		_ring.visible = _target.is_destination
 	# Every pending customer's ring while no one is aboard (the user's call).
-	var pending_shown: bool = not _face.target_is_destination and not _pending_at.is_empty()
+	var pending_shown: bool = not _target.is_destination and not _pending_at.is_empty()
 	if _pending.visible != pending_shown:
 		_pending.visible = pending_shown
 	if _ring.visible:
-		_ring.global_position = _face.target + Vector3.UP * _profile.ring_lift_m
+		_ring.global_position = _target.point + Vector3.UP * _profile.ring_lift_m
 
 
 func _process(delta: float) -> void:
@@ -145,7 +145,7 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	var at: Vector3 = vehicle.global_position + Vector3.UP * _profile.height_m
-	var flat := Vector3(_face.target.x - at.x, 0.0, _face.target.z - at.z)
+	var flat := Vector3(_target.point.x - at.x, 0.0, _target.point.z - at.z)
 	global_position = at
 	var apart: float = flat.length()
 	var close: float = closeness(_profile, apart)
