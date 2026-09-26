@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## Does `BeamBudget` ever hand out more spot lights than the renderer honours?
 ##
@@ -25,7 +25,6 @@ const PROFILE_PATH := "res://tuning/beams.tres"
 ## roster risk is stated in — "at two lamps a car, four cars".
 const BEAMS_PER_CAR := 2
 
-var _failed: int = 0
 ## The stubs' 3D parent.
 ##
 ## ⚠️ **A `Node3D` parented straight to `root` — which is a `Window` — never gets
@@ -57,13 +56,14 @@ func _init() -> void:
 	# propagated yet, so a rank taken here reads every stub as being on the
 	# origin — the other half of the trap `_stage` documents.
 	_run.call_deferred()
+	_start_watchdog.call_deferred("verify_beam_budget", 30.0)
 
 
 func _run() -> void:
 	var profile: Resource = load(PROFILE_PATH)
 	if profile == null:
-		_fail("no beam profile at %s" % PROFILE_PATH)
-		_finish()
+		_problem("no beam profile at %s" % PROFILE_PATH)
+		_finish("verify_beam_budget")
 		return
 	var cap: int = int(profile.get("max_spot_lights"))
 	print("  budget: %d spot lights, %d-lamp cars fit %d" % [cap, BEAMS_PER_CAR, _fits(cap)])
@@ -72,7 +72,7 @@ func _run() -> void:
 	await _check_the_nearest_cars_win(cap)
 	await _check_a_rig_with_no_beams_takes_no_slot(cap)
 	await _check_leaving_the_tree_frees_the_slot(cap)
-	_finish()
+	_finish("verify_beam_budget")
 
 
 ## How many two-lamp cars the budget pays for.
@@ -144,7 +144,7 @@ func _check_cap_is_never_exceeded(cap: int) -> void:
 	# failure.
 	var spendable: int = _fits(cap) * BEAMS_PER_CAR
 	if spent > spendable:
-		_fail(
+		_problem(
 			(
 				"%d cars of %d lamps lit %d spot lights against a cap of %d"
 				% [wanted, BEAMS_PER_CAR, spent, cap]
@@ -153,7 +153,7 @@ func _check_cap_is_never_exceeded(cap: int) -> void:
 	elif spent != spendable:
 		# Under-spending is a bug too, and a quieter one — it means the roster is
 		# dimmer than the hardware allows for no reason anybody chose.
-		_fail(
+		_problem(
 			(
 				"%d cars lit only %d of the %d spendable slots (cap %d)"
 				% [wanted, spent, spendable, cap]
@@ -183,7 +183,7 @@ func _check_the_nearest_cars_win(cap: int) -> void:
 		var got: PackedStringArray = PackedStringArray()
 		for i: int in rigs.size():
 			got.append("%.0fm=%s" % [far_to_near[i], rigs[i].granted])
-		_fail("nearest-%d did not win: %s" % [fits, ", ".join(got)])
+		_problem("nearest-%d did not win: %s" % [fits, ", ".join(got)])
 	else:
 		print("  ok    the %d nearest cars took the slots, registration order ignored" % fits)
 	_close()
@@ -201,9 +201,9 @@ func _check_a_rig_with_no_beams_takes_no_slot(cap: int) -> void:
 	var real: Array[StubRig] = await _rigs(behind)
 	var spendable: int = _fits(cap) * BEAMS_PER_CAR
 	if _lit(empty) > 0:
-		_fail("a rig with no SpotLight3D was granted beams")
+		_problem("a rig with no SpotLight3D was granted beams")
 	elif _lit(real) * BEAMS_PER_CAR != spendable:
-		_fail(
+		_problem(
 			(
 				"beamless rigs in front cost the real cars %d of %d slots"
 				% [_lit(real) * BEAMS_PER_CAR, spendable]
@@ -223,28 +223,14 @@ func _check_leaving_the_tree_frees_the_slot(cap: int) -> void:
 	var near: Array[StubRig] = await _rigs(near_by)
 	var waiting: Array[StubRig] = await _rigs([900.0] as Array[float])
 	if waiting[0].granted:
-		_fail("a car 900 m away was granted while the budget was full")
+		_problem("a car 900 m away was granted while the budget was full")
 		_close()
 		return
 	for rig: StubRig in near:
 		_arbiter.unregister(rig)
 		rig.queue_free()
 	if not waiting[0].granted:
-		_fail("the far car was not granted after every near car left")
+		_problem("the far car was not granted after every near car left")
 	else:
 		print("  ok    a slot freed by a despawn is handed on")
 	_close()
-
-
-func _fail(message: String) -> void:
-	_failed += 1
-	printerr("  FAIL  %s" % message)
-
-
-func _finish() -> void:
-	if _failed > 0:
-		printerr("beam budget: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("  ok    verify_beam_budget")
-	quit(0)

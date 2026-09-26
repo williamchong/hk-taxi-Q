@@ -160,7 +160,11 @@ Traps:
   analyses clean.
 - ⚠️ A verify tool that appears to hang is a parse error: `_init` never runs, `quit()` is never
   called. Read the log for `Parse Error` / `Compile Error`, and give scripted Godot runs a
-  watchdog.
+  watchdog. The counting tools extend `tools/verify_tool.gd` BY PATH (a `class_name` would not
+  resolve under `--script` on a fresh clone): it holds `_expect` / `_fail` / `_problem`, the
+  `_finish(label)` line, and `_start_watchdog(label, seconds)`, which the deferred-coroutine
+  tools (`verify_input`, `verify_vehicle`, `verify_beam_budget`) arm from `_init`. The nine
+  per-layer tools run through `tools/verify_layer.gd`'s one `run`.
 - 🔴 A verify tool proves an asset is correct; nothing proves it is in the world.
   `verify_roadmarks.gd` passed while `roadmarks.glb` was in no scene (`Q73`). Adding a layer
   includes its node in `region.tscn` (instanced by `city_drive.tscn` and `city_preview.tscn`), and
@@ -1241,7 +1245,7 @@ Verify tools (`game/tools/`, run by `tools/check.sh`):
 | `verify_beam_budget.gd` | The spot-light cap is never exceeded or under-spent, nearest cars win, a beamless rig takes no slot, a despawn hands its slot on. No built region needed |
 | `verify_hud.gd` | Thumb-rest reservation (overlapping a tap zone stays legal), light-plate/dark-chip rule, the plate's font and substitution table, the street tracker from both sides of its dwell. No built region needed |
 | `verify_mesh_contract.gd` | The `Q63` texture amendment — asserts the *failures* (undeclared, over budget, never arrives), since no shipped asset declares a texture. No built region needed |
-| `verify_input.gd` | The touch scheme — zone geometry, both relative axes, two thumbs, per-axis override, `--touch=mouse`. Drives the router's `_input` directly. No built region needed. 🔴 Carries a 30 s watchdog: a `SceneTree` tool that aborts before `quit()` never exits, wedges `check.sh`, and a wedged instance rewrites `project.godot` on shutdown (`Q97`) |
+| `verify_input.gd` | The touch scheme — zone geometry, both relative axes, two thumbs, per-axis override, `--touch=mouse`. Drives the router's `_input` directly. No built region needed. 🔴 Arms `verify_tool.gd`'s 30 s watchdog, as `verify_vehicle` and `verify_beam_budget` do: a `SceneTree` tool that aborts before `quit()` never exits, wedges `check.sh`, and a wedged instance rewrites `project.godot` on shutdown (`Q97`) |
 | `verify_vehicle.gd` | The taxi's wiring — `vehicle_body.tres` via the name channel, lamp instance uniforms, integral `UV` payload on lens vertices only, rig position, beams authored dark and below horizontal. No built region; ⚠️ sees no frame, so cannot tell the shader compiled |
 | `verify_authored.gd` | The authored-asset door against a real Blender export, `assets/authored/fixtures/dcc_vehicle.glb` (`P5-10`, `Q121`) |
 | `verify_menu.gd` | The start menu's tables load whole and the credits carry the licence phrases in both languages (`P6-1`, hard rule 6) |

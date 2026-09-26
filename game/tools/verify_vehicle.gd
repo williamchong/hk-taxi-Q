@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## Does the taxi's shading actually reach the shader? (`P3-11c`, `P3-11d`, `P3-11e`)
 ##
@@ -86,12 +86,11 @@ const MARKER_LAMP := 2.0
 const MARKER_LAST := 3.0
 const CIRCUIT_NONE := 0.0
 
-var _failed: int = 0
-
 
 func _init() -> void:
 	# Deferred, then a frame, before anything is loaded. See the header.
 	_run.call_deferred()
+	_start_watchdog.call_deferred("verify_vehicle", 30.0)
 
 
 func _run() -> void:
@@ -99,8 +98,8 @@ func _run() -> void:
 
 	var packed := load(SCENE_PATH) as PackedScene
 	if packed == null:
-		_fail("%s did not load as a scene" % SCENE_PATH)
-		_finish()
+		_problem("%s did not load as a scene" % SCENE_PATH)
+		_finish("verify_vehicle")
 		return
 	# Instantiated into a `Node` and cast afterwards, so the failure path still has
 	# something to free. Casting on the way in discards the reference where the
@@ -109,9 +108,9 @@ func _run() -> void:
 	var instanced: Node = packed.instantiate()
 	var car := instanced as Node3D
 	if car == null:
-		_fail("%s did not instantiate as a Node3D" % SCENE_PATH)
+		_problem("%s did not instantiate as a Node3D" % SCENE_PATH)
 		instanced.free()
-		_finish()
+		_finish("verify_vehicle")
 		return
 
 	# Found the way the script finds them, so this grades the wiring rather than
@@ -119,9 +118,9 @@ func _run() -> void:
 	# path that was written down twice.
 	var lamps := _running(car, LAMPS_SCRIPT) as Node3D
 	if lamps == null:
-		_fail("no node in %s runs %s" % [SCENE_PATH, LAMPS_SCRIPT])
+		_problem("no node in %s runs %s" % [SCENE_PATH, LAMPS_SCRIPT])
 		car.free()
-		_finish()
+		_finish("verify_vehicle")
 		return
 	# ⚠️ **The mesh is checked here, not where it is read.** `_body_under` promises
 	# a `MeshInstance3D`, never that it carries a mesh — and dereferencing a null
@@ -130,9 +129,9 @@ func _run() -> void:
 	# whole file is built against, so it is refused at the door.
 	var body: MeshInstance3D = _body_under(lamps)
 	if body == null or body.mesh == null:
-		_fail("the lamp rig has no MeshInstance3D with a mesh below it to switch")
+		_problem("the lamp rig has no MeshInstance3D with a mesh below it to switch")
 		car.free()
-		_finish()
+		_finish("verify_vehicle")
 		return
 
 	var material: ShaderMaterial = _check_the_body_wears_its_shader(body)
@@ -151,7 +150,7 @@ func _run() -> void:
 	# reaches a tree is leaked at exit, and Godot reports that as a page of
 	# `ERROR: ... leaked` lines that read like a failure and are not one.
 	car.free()
-	_finish()
+	_finish("verify_vehicle")
 
 
 ## Every surface of the body must render with `vehicle_body.tres`.
@@ -168,7 +167,7 @@ func _check_the_body_wears_its_shader(body: MeshInstance3D) -> ShaderMaterial:
 	# one**, and would take the shader and payload checks down with it silently —
 	# the shape of quiet pass this tool exists to remove.
 	if surfaces == 0:
-		_fail("%s carries a mesh with no surfaces to render" % body.name)
+		_problem("%s carries a mesh with no surfaces to render" % body.name)
 	for surface: int in surfaces:
 		var material: Material = body.mesh.surface_get_material(surface)
 		var shaded := material as ShaderMaterial
@@ -176,10 +175,12 @@ func _check_the_body_wears_its_shader(body: MeshInstance3D) -> ShaderMaterial:
 			var what: String = "nothing"
 			if material != null:
 				what = "%s %s" % [material.get_class(), material.resource_path]
-			_fail("%s surface %d renders with %s, not the body shader" % [body.name, surface, what])
+			_problem(
+				"%s surface %d renders with %s, not the body shader" % [body.name, surface, what]
+			)
 			continue
 		if shaded.resource_path != MATERIAL_PATH:
-			_fail(
+			_problem(
 				(
 					"%s surface %d wears %s, not %s"
 					% [body.name, surface, shaded.resource_path, MATERIAL_PATH]
@@ -191,7 +192,7 @@ func _check_the_body_wears_its_shader(body: MeshInstance3D) -> ShaderMaterial:
 	# asked once rather than per surface — reported inside the loop it would
 	# print the same line, and count the same defect, once per surface.
 	if found != null and (found.shader == null or found.shader.resource_path != SHADER_PATH):
-		_fail("%s is not backed by %s" % [MATERIAL_PATH, SHADER_PATH])
+		_problem("%s is not backed by %s" % [MATERIAL_PATH, SHADER_PATH])
 	# ⚠️ **Against `_failed`, not against `found`.** `found` only says *some*
 	# surface passed, so a two-surface body with one fallback would report the
 	# failure and then print an `ok` line claiming both surfaces were shaded —
@@ -213,17 +214,19 @@ func _check_the_door_hangs_on_the_flank(car: Node3D) -> void:
 	var before: int = _failed
 	var door := _running(car, DOOR_SCRIPT) as Node3D
 	if door == null:
-		_fail("no node in %s runs %s" % [SCENE_PATH, DOOR_SCRIPT])
+		_problem("no node in %s runs %s" % [SCENE_PATH, DOOR_SCRIPT])
 		return
 	if door.get_parent() != car:
-		_fail("%s is not a direct child of the car, so its rotation is not the swing" % door.name)
+		_problem(
+			"%s is not a direct child of the car, so its rotation is not the swing" % door.name
+		)
 	if is_zero_approx(door.position.x):
-		_fail("%s sits on the centreline and cannot tell which way is out" % door.name)
+		_problem("%s sits on the centreline and cannot tell which way is out" % door.name)
 	if not door.transform.basis.is_equal_approx(Basis.IDENTITY):
-		_fail("%s is authored turned; the door must start shut" % door.name)
+		_problem("%s is authored turned; the door must start shut" % door.name)
 	var leaf: MeshInstance3D = _body_under(door)
 	if leaf == null or leaf.mesh == null:
-		_fail("%s has no MeshInstance3D with a mesh below it to swing" % door.name)
+		_problem("%s has no MeshInstance3D with a mesh below it to swing" % door.name)
 		return
 	_check_the_body_wears_its_shader(leaf)
 	if _failed == before:
@@ -245,41 +248,41 @@ func _check_the_passenger_can_make_a_face(car: Node3D) -> void:
 	var before: int = _failed
 	var emote := _running(car, EMOTE_SCRIPT) as Node3D
 	if emote == null:
-		_fail("no node in %s runs %s" % [SCENE_PATH, EMOTE_SCRIPT])
+		_problem("no node in %s runs %s" % [SCENE_PATH, EMOTE_SCRIPT])
 		return
 	var door := _running(car, DOOR_SCRIPT) as Node3D
 	if emote.get_parent() != car:
-		_fail("%s is not a direct child of the car" % emote.name)
+		_problem("%s is not a direct child of the car" % emote.name)
 	if door != null:
 		if signf(emote.position.x) != signf(door.position.x):
-			_fail("%s is not on the passenger door's side of the car" % emote.name)
+			_problem("%s is not on the passenger door's side of the car" % emote.name)
 		if emote.position.z <= door.position.z:
-			_fail("%s is ahead of the door hinge, not in the rear seat" % emote.name)
+			_problem("%s is ahead of the door hinge, not in the rear seat" % emote.name)
 	if emote.position.y <= 0.0:
-		_fail("%s sits at or under the floor" % emote.name)
+		_problem("%s sits at or under the floor" % emote.name)
 	var scenes: Array[PackedScene] = [emote.grin, emote.angry, emote.hurt]
 	var labels: PackedStringArray = ["grin", "angry", "hurt"]
 	for face: int in scenes.size():
 		var packed: PackedScene = scenes[face]
 		var label: String = labels[face]
 		if packed == null:
-			_fail("%s has no %s scene assigned" % [emote.name, label])
+			_problem("%s has no %s scene assigned" % [emote.name, label])
 			continue
 		var live_before: int = emote.live()
 		emote.show_face(face)
 		if emote.live() != live_before + 1:
-			_fail("show_face(%s) put up %d faces, not one" % [label, emote.live() - live_before])
+			_problem("show_face(%s) put up %d faces, not one" % [label, emote.live() - live_before])
 			continue
 		var instance := emote.get_child(emote.get_child_count() - 1) as Node3D
 		var mesh: MeshInstance3D = _body_under(instance)
 		if mesh == null or mesh.mesh == null:
-			_fail("the %s scene has no MeshInstance3D with a mesh" % label)
+			_problem("the %s scene has no MeshInstance3D with a mesh" % label)
 			continue
 		var bounds: AABB = mesh.mesh.get_aabb()
 		var behind: float = bounds.end.z
 		var proud: float = -bounds.position.z
 		if not proud > behind:
-			_fail(
+			_problem(
 				(
 					"the %s face is built on +Z (%.3f proud, %.3f behind); look_at shows -Z"
 					% [label, proud, behind]
@@ -287,11 +290,11 @@ func _check_the_passenger_can_make_a_face(car: Node3D) -> void:
 			)
 		var material := mesh.material_override as StandardMaterial3D
 		if material == null:
-			_fail("the %s face has no material override; it would be lit as a surface" % label)
+			_problem("the %s face has no material override; it would be lit as a surface" % label)
 		elif material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
-			_fail("the %s face is shaded; a glyph is unshaded" % label)
+			_problem("the %s face is shaded; a glyph is unshaded" % label)
 		elif not material.vertex_color_use_as_albedo:
-			_fail("the %s face ignores its vertex colours" % label)
+			_problem("the %s face ignores its vertex colours" % label)
 	if _failed == before:
 		print("  ok    the passenger's face pops from the rear seat, built to face the camera")
 
@@ -332,11 +335,13 @@ func _check_the_switched_channels_reach_the_shader(declared: Dictionary) -> int:
 	var missing: bool = false
 	var written: PackedStringArray = _channel_names()
 	if written.is_empty():
-		_fail("%s names no %s* channel constant to write" % [LAMPS_SCRIPT, CHANNEL_CONSTANT_PREFIX])
+		_problem(
+			"%s names no %s* channel constant to write" % [LAMPS_SCRIPT, CHANNEL_CONSTANT_PREFIX]
+		)
 		missing = true
 	for channel: String in written:
 		if not declared.has(channel):
-			_fail(
+			_problem(
 				(
 					"%s writes '%s', which %s does not declare as an instance uniform"
 					% [LAMPS_SCRIPT, channel, SHADER_PATH]
@@ -346,7 +351,7 @@ func _check_the_switched_channels_reach_the_shader(declared: Dictionary) -> int:
 			continue
 		var width: int = _slots(int(declared[channel]))
 		if width == 0:
-			_fail(
+			_problem(
 				(
 					"'%s' is declared as %s, which carries no countable circuits"
 					% [channel, type_string(int(declared[channel]))]
@@ -369,14 +374,14 @@ func _check_the_switched_channels_reach_the_shader(declared: Dictionary) -> int:
 func _check_the_sun_belongs_to_the_material(declared: Dictionary, material: ShaderMaterial) -> void:
 	var sun: String = _constant(GLINT_SCRIPT, "PARAMETER")
 	if sun.is_empty():
-		_fail("%s names no PARAMETER constant" % GLINT_SCRIPT)
+		_problem("%s names no PARAMETER constant" % GLINT_SCRIPT)
 	elif declared.has(sun):
-		_fail("'%s' is an instance uniform; %s writes it to the material" % [sun, GLINT_SCRIPT])
+		_problem("'%s' is an instance uniform; %s writes it to the material" % [sun, GLINT_SCRIPT])
 	elif material == null:
 		# The body check already reported why there is no material to ask.
 		pass
 	elif not _is_material_uniform(material, sun):
-		_fail("%s writes '%s', which %s does not declare" % [GLINT_SCRIPT, sun, SHADER_PATH])
+		_problem("%s writes '%s', which %s does not declare" % [GLINT_SCRIPT, sun, SHADER_PATH])
 	else:
 		print("  ok    '%s' is one uniform on the shared material, not one per car" % sun)
 
@@ -403,7 +408,7 @@ func _check_the_payload_survived_the_import(body: MeshInstance3D, channels: int)
 		# kills the coroutine where it stands and leaves `quit()` uncalled.
 		var payload: Variant = arrays[Mesh.ARRAY_TEX_UV]
 		if typeof(payload) != TYPE_PACKED_VECTOR2_ARRAY:
-			_fail(
+			_problem(
 				(
 					"%s surface %d carries no UVs, so it carries no shader payload"
 					% [body.name, surface]
@@ -430,18 +435,18 @@ func _check_the_payload_survived_the_import(body: MeshInstance3D, channels: int)
 				switched_bodywork += 1
 
 	if fractional > 0:
-		_fail(
+		_problem(
 			"%d vertices carry a fractional marker or circuit; the shader floors both" % fractional
 		)
 	if stray_markers > 0:
-		_fail(
+		_problem(
 			(
 				"%d vertices carry a marker outside 0-%.0f, which takes the paint branch"
 				% [stray_markers, MARKER_LAST]
 			)
 		)
 	if unreachable > 0:
-		_fail(
+		_problem(
 			(
 				"%d vertices ask for a circuit outside the 1-%d the payload carries"
 				% [unreachable, channels]
@@ -451,11 +456,11 @@ func _check_the_payload_survived_the_import(body: MeshInstance3D, channels: int)
 		# The shader reads `UV.x` only inside its `MARKER_LAMP` branch, so a
 		# circuit on bodywork is never switched — the same rule `_check_wiring`
 		# holds in the generator, asked here of what Godot actually imported.
-		_fail(
+		_problem(
 			"%d switched vertices are not lenses, so nothing ever lights them" % switched_bodywork
 		)
 	if circuits.is_empty():
-		_fail("no vertex carries a circuit at all; every lens on the car is unswitched")
+		_problem("no vertex carries a circuit at all; every lens on the car is unswitched")
 	if _failed == before:
 		var found: Array = circuits.keys()
 		found.sort()
@@ -478,22 +483,22 @@ func _check_the_rig_hangs_where_the_script_looks(
 	# is `verify_beam_budget.gd`'s idiom and for the same fresh-clone reason.
 	var controller := load(CONTROLLER_SCRIPT) as GDScript
 	if controller == null:
-		_fail("%s did not load" % CONTROLLER_SCRIPT)
+		_problem("%s did not load" % CONTROLLER_SCRIPT)
 	elif controller.call(&"above", lamps) == null:
-		_fail("the lamp rig has no %s above it to read the car from" % CONTROLLER_SCRIPT)
+		_problem("the lamp rig has no %s above it to read the car from" % CONTROLLER_SCRIPT)
 	else:
 		print("  ok    the lamp rig sits under the controller it reads")
 
 	var glint: Node = _running(car, GLINT_SCRIPT)
 	if glint == null:
-		_fail("no node in %s runs %s" % [SCENE_PATH, GLINT_SCRIPT])
+		_problem("no node in %s runs %s" % [SCENE_PATH, GLINT_SCRIPT])
 		return
 	# A glint written to a material nobody draws is invisible in every automated
 	# check this project has, which is `sun_glint.gd`'s own argument for assigning
 	# it in the scene rather than looking it up.
 	var fed := glint.get("material") as ShaderMaterial
 	if fed == null:
-		_fail("%s has no material assigned; the taxi's glint tracks nothing" % glint.name)
+		_problem("%s has no material assigned; the taxi's glint tracks nothing" % glint.name)
 	elif material == null:
 		# The body wears no shader at all, which is already reported. There is
 		# nothing to compare against, and ⚠️ an `ok` here would be a claim about
@@ -502,7 +507,7 @@ func _check_the_rig_hangs_where_the_script_looks(
 	elif fed != material:
 		# Against the material the body was *found* wearing, so this cannot pass by
 		# agreeing with a constant while the car renders with something else.
-		_fail(
+		_problem(
 			"%s feeds %s, which is not what the body renders with" % [glint.name, fed.resource_path]
 		)
 	else:
@@ -521,7 +526,7 @@ func _check_the_beams_point_at_the_road(car: Node3D) -> void:
 	# script would actually drive.
 	var spots: Array[Node] = car.find_children("*", "SpotLight3D", true, false)
 	if spots.is_empty():
-		_fail("the player's taxi throws no beams; %s found no SpotLight3D" % SCENE_PATH)
+		_problem("the player's taxi throws no beams; %s found no SpotLight3D" % SCENE_PATH)
 		return
 	var before: int = _failed
 	var worst: float = -180.0
@@ -531,9 +536,9 @@ func _check_the_beams_point_at_the_road(car: Node3D) -> void:
 			# `_apply_beam` puts them out on the first `_ready`, but only a car
 			# with a lamp rig runs one — and a roster model authored lit would
 			# drive through daylight on main beam until something switched it.
-			_fail("%s is authored visible; beams are switched on, never off" % beam.name)
+			_problem("%s is authored visible; beams are switched on, never off" % beam.name)
 		if beam.light_energy <= 0.0 or beam.spot_range <= 0.0:
-			_fail(
+			_problem(
 				(
 					"%s throws nothing: energy %.2f over %.2f m"
 					% [beam.name, beam.light_energy, beam.spot_range]
@@ -542,7 +547,7 @@ func _check_the_beams_point_at_the_road(car: Node3D) -> void:
 		var facing: Vector3 = (-_basis_in(beam, car).z).normalized()
 		var top: float = rad_to_deg(asin(clampf(facing.y, -1.0, 1.0))) + beam.spot_angle
 		if top >= 0.0:
-			_fail(
+			_problem(
 				(
 					"%s reaches %.2f° above horizontal, so part of it never meets the road"
 					% [beam.name, top]
@@ -588,7 +593,7 @@ func _constant(path: String, key: String) -> String:
 func _constants(path: String) -> Dictionary:
 	var script := load(path) as GDScript
 	if script == null:
-		_fail("%s did not load" % path)
+		_problem("%s did not load" % path)
 		return {}
 	return script.get_script_constant_map()
 
@@ -661,17 +666,3 @@ func _basis_in(node: Node3D, ancestor: Node3D) -> Basis:
 			basis = spatial.transform.basis * basis
 		walker = walker.get_parent()
 	return basis
-
-
-func _fail(message: String) -> void:
-	_failed += 1
-	printerr("  FAIL  %s" % message)
-
-
-func _finish() -> void:
-	if _failed > 0:
-		printerr("vehicle: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("  ok    verify_vehicle")
-	quit(0)

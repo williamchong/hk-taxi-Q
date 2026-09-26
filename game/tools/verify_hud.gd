@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## The HUD's two contracts: the touch reservation, and the street stabiliser (`P3-24`).
 ##
@@ -120,8 +120,6 @@ const MAIN_ROAD_CONTRAST: float = 0.15
 const FAST: float = 10.0
 const CRAWL: float = 1.0
 
-var _failed: int = 0
-
 ## The shipped tables, read once: every tracker and monitor below is built from
 ## them, so the assertions grade the numbers that ship and not a copy (`P5-26`).
 var _shipped: WrongWayProfile = null
@@ -147,12 +145,7 @@ func _init() -> void:
 	_check_fare_face()
 	_check_guide()
 
-	if _failed > 0:
-		push_error("verify_hud: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("verify_hud: ok")
-	quit(0)
+	_finish("verify_hud")
 
 
 # ---------------------------------------------------------------- layout ----
@@ -2177,15 +2170,3 @@ static func _stop(
 ## appeared three times and reads as arithmetic rather than as the question it is.
 static func _contrast(ink: Color, field: Color) -> float:
 	return absf(ink.get_luminance() - field.get_luminance())
-
-
-func _expect(condition: bool, area: String, what: String) -> void:
-	if condition:
-		print("  %s: %s" % [area, what])
-		return
-	_fail(area, what)
-
-
-func _fail(area: String, what: String) -> void:
-	_failed += 1
-	printerr("  FAIL %s: %s" % [area, what])

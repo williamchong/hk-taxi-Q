@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## The fare loop's contracts (`P3-1a`, `Q141`): the tariff's arithmetic, the two
 ## pools, every pickup's reach, the allowance, and the state machine driven by
@@ -50,7 +50,6 @@ const SEED: int = 7
 ## Somewhere no fare node is: the pools are inside the region and this is not.
 const FAR_AWAY := Vector3(-100000.0, 0.0, -100000.0)
 
-var _failed: int = 0
 var _graph: RoadGraph = null
 var _region: String = ""
 var _fares: Dictionary = {}
@@ -99,12 +98,7 @@ func _init() -> void:
 	_check_practice()
 	_check_penalties()
 
-	if _failed > 0:
-		push_error("verify_fares: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("verify_fares: ok")
-	quit(0)
+	_finish("verify_fares")
 
 
 ## The tariff against hand-computed points, in cents.
@@ -1318,15 +1312,3 @@ static func _node(
 		"pickup": pickup,
 		"dropoff": dropoff,
 	}
-
-
-func _expect(condition: bool, area: String, what: String) -> void:
-	if condition:
-		print("  %s: %s" % [area, what])
-		return
-	_fail(area, what)
-
-
-func _fail(area: String, what: String) -> void:
-	_failed += 1
-	printerr("  FAIL %s: %s" % [area, what])

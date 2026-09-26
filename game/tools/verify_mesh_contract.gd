@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## Does the no-texture contract still refuse what it is supposed to refuse?
 ##
@@ -34,8 +34,6 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## `P3-20` will declare. Nothing ships against this number; it exists so the
 ## over-budget path has something to exceed.
 const PROBE_BUDGET_PX := 8192
-
-var _failed: int = 0
 
 
 func _init() -> void:
@@ -111,7 +109,7 @@ func _init() -> void:
 	_check_winding()
 	_check_collision_and_material()
 	_check_shapes()
-	_finish()
+	_finish("verify_mesh_contract")
 
 
 ## ⚠️ **Every other `MeshContract` check ran only against a built region until
@@ -212,7 +210,7 @@ func _check_shapes() -> void:
 	var mesh: ArrayMesh = MeshContract.single_primitive(one, 1, problems)
 	_expect_clean("one instance with one surface", problems)
 	if mesh == null:
-		_fail("single_primitive accepted one instance and handed back nothing")
+		_problem("single_primitive accepted one instance and handed back nothing")
 	one.free()
 
 	var two := Node3D.new()
@@ -334,36 +332,24 @@ func _check(mesh: ArrayMesh, budget_px: int) -> PackedStringArray:
 ## them into one would still leave every assertion here green.
 func _expect_refused(label: String, problems: PackedStringArray, fragment: String) -> void:
 	if problems.is_empty():
-		_fail("%s was accepted" % label)
+		_problem("%s was accepted" % label)
 		return
 	# ⚠️ **Exactly one, not at least one.** Returning on the first match would let
 	# a regression that emits the right problem *plus* spurious extras stay green,
 	# and `_expect_clean` only covers the opposite failure of refusing everything.
 	if problems.size() != 1:
-		_fail("%s drew %d problems, expected 1: %s" % [label, problems.size(), ", ".join(problems)])
+		_problem(
+			"%s drew %d problems, expected 1: %s" % [label, problems.size(), ", ".join(problems)]
+		)
 		return
 	if not problems[0].contains(fragment):
-		_fail("%s was refused, but for the wrong reason: %s" % [label, problems[0]])
+		_problem("%s was refused, but for the wrong reason: %s" % [label, problems[0]])
 		return
 	print("  ok    %s is refused" % label)
 
 
 func _expect_clean(label: String, problems: PackedStringArray) -> void:
 	if not problems.is_empty():
-		_fail("%s was refused: %s" % [label, ", ".join(problems)])
+		_problem("%s was refused: %s" % [label, ", ".join(problems)])
 		return
 	print("  ok    %s passes" % label)
-
-
-func _fail(message: String) -> void:
-	_failed += 1
-	printerr("  FAIL  %s" % message)
-
-
-func _finish() -> void:
-	if _failed > 0:
-		printerr("mesh contract: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("  ok    verify_mesh_contract")
-	quit(0)

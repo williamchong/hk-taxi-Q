@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## The touch scheme, driven by synthetic fingers (`P2-4`).
 ##
@@ -65,20 +65,9 @@ const FINGER_B: int = 1
 ## start at y 480 and the drawn HUD's own top row is above that.
 const NOWHERE := Vector2(960.0, 100.0)
 
-## How long `_run` gets before this tool decides it is never going to finish.
-##
-## 🔴 **A watchdog and not a nicety.** `verify_hud.gd` records that a `preload`ed
-## script failing to compile aborts the calling function on the spot; what it
-## does not say is that a `SceneTree` tool which aborts before its `quit()`
-## **never exits**. That is worse than the green run it warns about: it wedges
-## `check.sh` and CI rather than failing them. This was not hypothetical — it
-## happened on this tool's first run, from an autoload identifier that does not
-## exist under `--script`. A guard inside `_run` cannot help, because
-## `RouterScript.new()` returning null aborts at the guard itself.
+## How long `_run` gets before the watchdog (`verify_tool.gd`) gives up on it.
 const WATCHDOG_S: float = 30.0
 
-var _failed: int = 0
-var _finished: bool = false
 var _router: Node = null
 var _touch: Resource = null
 var _layout: Resource = null
@@ -90,22 +79,7 @@ func _init() -> void:
 	# `DebugHud`; `verify_vehicle.gd`'s header records the trap, whose failure
 	# mode is a green run over an empty suite.
 	_run.call_deferred()
-	_watchdog.call_deferred()
-
-
-## Fails the run if `_run` never reaches `_finish`. A separate coroutine, so an
-## abort inside `_run` cannot take it down too.
-func _watchdog() -> void:
-	await create_timer(WATCHDOG_S).timeout
-	if _finished:
-		return
-	push_error(
-		(
-			"verify_input: gave up after %.0f s without finishing — a depended script almost certainly failed to compile, which aborts the run mid-function"
-			% WATCHDOG_S
-		)
-	)
-	quit(1)
+	_start_watchdog.call_deferred("verify_input", WATCHDOG_S)
 
 
 func _run() -> void:
@@ -115,7 +89,7 @@ func _run() -> void:
 	_layout = load(HudLayoutScript.PATH)
 	if _touch == null or _layout == null:
 		_fail("load", "%s or %s did not load" % [TouchProfileScript.PATH, HudLayoutScript.PATH])
-		_finish()
+		_finish("verify_input")
 		return
 
 	_check_profile()
@@ -139,17 +113,7 @@ func _run() -> void:
 	_check_mouse()
 
 	_router.queue_free()
-	_finish()
-
-
-func _finish() -> void:
-	_finished = true
-	if _failed > 0:
-		push_error("verify_input: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("verify_input: ok")
-	quit(0)
+	_finish("verify_input")
 
 
 # --------------------------------------------------------------- profile ----
@@ -561,15 +525,3 @@ func _accelerate() -> float:
 
 func _brake() -> float:
 	return _router.brake_reverse
-
-
-func _expect(condition: bool, area: String, what: String) -> void:
-	if condition:
-		print("  %s: %s" % [area, what])
-		return
-	_fail(area, what)
-
-
-func _fail(area: String, what: String) -> void:
-	_failed += 1
-	printerr("  FAIL %s: %s" % [area, what])

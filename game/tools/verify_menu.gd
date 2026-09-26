@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tools/verify_tool.gd"
 
 ## The start menu's two contracts (`P6-1`): its tables load whole, and the
 ## credits say what the licences require them to say.
@@ -98,20 +98,13 @@ const POSITIVE_VECTORS: PackedStringArray = [
 	"margin_px", "button_px", "credits_px", "guide_px", "guide_picture_px"
 ]
 
-var _failed: int = 0
-
 
 func _init() -> void:
 	_check_profile()
 	_check_text()
 	_check_notices()
 
-	if _failed > 0:
-		push_error("verify_menu: %d check(s) failed" % _failed)
-		quit(1)
-		return
-	print("verify_menu: ok")
-	quit(0)
+	_finish("verify_menu")
 
 
 func _check_profile() -> void:
@@ -232,15 +225,3 @@ func _check_notices() -> void:
 		"notices",
 		"every licence text whole (missing %s)" % ", ".join(unquoted)
 	)
-
-
-func _expect(condition: bool, area: String, what: String) -> void:
-	if condition:
-		print("  %s: %s" % [area, what])
-		return
-	_fail(area, what)
-
-
-func _fail(area: String, what: String) -> void:
-	_failed += 1
-	printerr("  FAIL %s: %s" % [area, what])
