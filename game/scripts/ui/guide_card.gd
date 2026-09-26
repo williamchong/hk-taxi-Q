@@ -29,12 +29,7 @@ var _sign: NoEntryIcon = null
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if kind == "wrong_way" and style != null:
-		_sign = NoEntryIcon.new()
-		_sign.name = "Sign"
-		_sign.disc = style.warn_disc
-		_sign.bar = style.warn_bar
-		_sign.bar_length = style.warn_bar_length
-		_sign.bar_thickness = style.warn_bar_thickness
+		_sign = NoEntryIcon.styled(style, "Sign")
 		_sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_sign)
 	resized.connect(_place_sign)

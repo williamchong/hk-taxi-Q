@@ -45,3 +45,19 @@ static func of_system(tag: String) -> String:
 ## Whether `code` is a language this game speaks.
 static func known(code: String) -> bool:
 	return code == ENGLISH or code == CHINESE
+
+
+## `zh` for Chinese, `en` otherwise — a string, a size, anything the two
+## languages set differently. Chinese first, the way every face here reads.
+static func pick(zh: Variant, en: Variant, code: String) -> Variant:
+	return zh if code == CHINESE else en
+
+
+## A published `{"en": …, "zh": …}` row's text in `code`, or `fallback`
+## where the row is not a dictionary or the language's entry is empty.
+static func from_row(row: Variant, code: String, fallback: String) -> String:
+	if row is Dictionary:
+		var value: Variant = (row as Dictionary).get(code)
+		if value is String and not (value as String).is_empty():
+			return value
+	return fallback

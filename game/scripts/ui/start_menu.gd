@@ -59,7 +59,7 @@ var _notices_label: RichTextLabel = null
 
 ## `--menu=off` turns it off; anything else, including nothing, leaves it on.
 func wanted() -> bool:
-	return Cmdline.value(MENU_ARG).to_lower() != "off"
+	return not Cmdline.off(MENU_ARG)
 
 
 func _ready() -> void:
@@ -90,20 +90,7 @@ func _load() -> bool:
 			)
 		)
 		return false
-	var face_path: String = str(StreetPlate.load_tuning().get("font_zh", ""))
-	var face: Font = null
-	if not face_path.is_empty() and ResourceLoader.exists(face_path):
-		face = load(face_path) as Font
-	if face == null:
-		# Not fatal, and loud: the Chinese lines fall to the theme's fallback
-		# face, which draws them in the wrong hand rather than not at all.
-		push_warning("menu: the plate's Chinese font did not load; using the theme's fallback")
-		return true
-	var kai := FontVariation.new()
-	kai.base_font = face
-	var fallbacks: Array[Font] = [ThemeDB.fallback_font]
-	kai.fallbacks = fallbacks
-	_font_zh = kai
+	_font_zh = StreetPlate.load_font_zh("menu")
 	return true
 
 
@@ -365,13 +352,7 @@ func _column(node_name: String) -> VBoxContainer:
 
 ## The housing: the HUD's panel, its numbers.
 func _panel(node_name: String) -> ChamferPanel:
-	var panel := ChamferPanel.new()
-	panel.name = node_name
-	panel.chamfer_px = _style.chamfer_px
-	panel.fill = _style.plate_field
-	panel.edge = _style.plate_edge
-	panel.edge_px = _style.edge_px
-	return panel
+	return ChamferPanel.housing(_style, node_name)
 
 
 ## A centred sheet of `size_px`: the housing with a padded column inside it,
@@ -499,10 +480,10 @@ func _gap(node_name: String, px: int) -> Control:
 	return gap
 
 
-## A size for the language, Chinese first like `FareFace._say`: the Kai face
-## sets larger than the Latin at every line, and takes the plate's font.
+## A size for the language: the Kai face sets larger than the Latin at every
+## line, and takes the plate's font.
 func _size(control: Control, zh: int, en: int) -> void:
 	var chinese: bool = _language == Locale.CHINESE
-	control.add_theme_font_size_override(&"font_size", zh if chinese else en)
+	control.add_theme_font_size_override(&"font_size", Locale.pick(zh, en, _language))
 	if chinese and _font_zh != null:
 		control.add_theme_font_override(&"font", _font_zh)

@@ -60,3 +60,26 @@ static func fitted_size(label: Label, size: int, room: float) -> int:
 	var font: Font = label.get_theme_font(&"font")
 	var wanted: float = font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
 	return size if wanted <= room else floori(size * room / wanted)
+
+
+## The plate's Chinese face over the theme's fallback, or null with a
+## warning: `tuning`'s `font_zh` wrapped in a `FontVariation` whose fallback is
+## `ThemeDB.fallback_font`, so a glyph the Kai lacks draws in the wrong hand
+## rather than as tofu. One loader for the HUD and the menu — the HUD's bare
+## `load` had no fallback and the menu's did, which was the drift.
+## ⚠️ The face is 6.4 MB; a caller with no city to name a street on skips it.
+static func load_font_zh(who: String) -> Font:
+	var face_path: String = str(load_tuning().get("font_zh", ""))
+	var face: Font = null
+	if not face_path.is_empty() and ResourceLoader.exists(face_path):
+		face = load(face_path) as Font
+	if face == null:
+		# Not fatal, and loud: a missing face is an asset problem, and the
+		# Chinese line in the wrong hand reads as one rather than as a bug.
+		push_warning("%s: the plate's Chinese font did not load; using the theme's fallback" % who)
+		return null
+	var kai := FontVariation.new()
+	kai.base_font = face
+	var fallbacks: Array[Font] = [ThemeDB.fallback_font]
+	kai.fallbacks = fallbacks
+	return kai

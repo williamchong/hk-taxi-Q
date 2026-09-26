@@ -34,3 +34,9 @@ static func value(prefix: String) -> String:
 ## Whether `flag` was passed exactly.
 static func has(flag: String) -> bool:
 	return arguments().has(flag)
+
+
+## Whether `prefix` was given as `off`, in any case: the one spelling every
+## `--x=off` switch reads.
+static func off(prefix: String) -> bool:
+	return value(prefix).to_lower() == "off"

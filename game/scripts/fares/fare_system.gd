@@ -175,7 +175,7 @@ var _last_reading_hkd: float = 0.0
 
 
 func _ready() -> void:
-	if Cmdline.value(FARES_ARG).to_lower() == "off":
+	if Cmdline.off(FARES_ARG):
 		print("fares: off")
 		set_physics_process(false)
 		queue_free()

@@ -298,12 +298,7 @@ func follow(car: Vector3, forward: Vector3) -> void:
 
 
 func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:
-	var panel := ChamferPanel.new()
-	panel.name = node_name
-	panel.chamfer_px = style.chamfer_px
-	panel.fill = fill
-	panel.edge = edge
-	panel.edge_px = style.edge_px
+	var panel: ChamferPanel = ChamferPanel.styled(style, node_name, fill, edge)
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 	return panel

@@ -222,7 +222,7 @@ func _load_layout() -> bool:
 ## nodes, because "the HUD failed to build" is exactly the kind of thing a
 ## headless check should be able to notice. Nothing is rasterised either way.
 func _wanted() -> bool:
-	return Cmdline.value(HUD_ARG).to_lower() != "off"
+	return not Cmdline.off(HUD_ARG)
 
 
 func _build() -> void:
@@ -234,15 +234,9 @@ func _build() -> void:
 	# verify tool that instantiates a drive scene, and every clone that has not
 	# built a region. `_wanted()` deliberately does not skip headless, so this is
 	# the guard that keeps it honest.
-	var font_zh: Font = null
+	_font_zh = null
 	if _graph != null and not _graph.is_empty():
-		font_zh = load(plate_tuning.get("font_zh", "")) as Font
-	_font_zh = font_zh
-	if font_zh == null and _graph != null and not _graph.is_empty():
-		# Not fatal, and loud. The English line still draws; the Chinese line
-		# would be a row of tofu, which reads as a bug in the game rather than a
-		# missing asset, so it is refused instead.
-		push_warning("hud: the plate's Chinese font did not load; drawing English only")
+		_font_zh = StreetPlate.load_font_zh("hud")
 
 	# One root Control so the safe-area inset is applied once rather than per
 	# slot. Everything below anchors inside it.
@@ -256,7 +250,7 @@ func _build() -> void:
 	# map's own would be, which spans the middle and would float off the baseline
 	# on a tall window. Skipped where there is no city: an empty panel is worse
 	# than nothing.
-	var mapped: bool = Cmdline.value(MINIMAP_ARG).to_lower() != "off"
+	var mapped: bool = not Cmdline.off(MINIMAP_ARG)
 	if mapped and _graph != null and not _graph.is_empty():
 		_minimap = Minimap.new()
 		_minimap.name = "Minimap"
@@ -269,15 +263,8 @@ func _build() -> void:
 		#
 		# Under `--minimap=off`, and on a clone with no city: a panel in the
 		# housing's colours, cut to the name on it by `_fit_plate`.
-		_plate = ChamferPanel.new()
-		_plate.name = "StreetPlate"
-		_plate.chamfer_px = _style.chamfer_px
-		_plate.fill = _style.plate_field
-		_plate.edge = _style.plate_edge
-		_plate.edge_px = _style.edge_px
 		# Hidden until there is a street, which without a city is never.
-		_plate.visible = false
-		_layout.place(root, _plate, _layout.street_plate)
+		_plate = _housing("StreetPlate", root, _layout.street_plate)
 		_plate_host = _plate
 
 	_plate_lines = _lines(_plate_host, 0)
@@ -292,12 +279,12 @@ func _build() -> void:
 
 	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
 	_plate_zh.visible = _language == Locale.CHINESE
-	if font_zh != null:
+	if _font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
 		# Noto Sans on purpose — a real Hong Kong plate carries a Latin
 		# grotesque above a Chinese Kai, so two typefaces is the accurate
 		# answer rather than an inconsistency to tidy up.
-		_plate_zh.add_theme_font_override(&"font", font_zh)
+		_plate_zh.add_theme_font_override(&"font", _font_zh)
 	_plate_lines.add_child(_plate_zh)
 
 	# ---- speed: the dashboard ----
@@ -352,12 +339,7 @@ func _build() -> void:
 	# `no_entry_icon.gd` for why a disc is admissible in a UI of cut polygons, and
 	# `hud_layout.gd::wrong_way` for why an alarm may share a band that a standing
 	# readout was refused.
-	_warning = NoEntryIcon.new()
-	_warning.name = "WrongWay"
-	_warning.disc = _style.warn_disc
-	_warning.bar = _style.warn_bar
-	_warning.bar_length = _style.warn_bar_length
-	_warning.bar_thickness = _style.warn_bar_thickness
+	_warning = NoEntryIcon.styled(_style, "WrongWay")
 	_warning.visible = false
 	_layout.place(root, _warning, _layout.wrong_way)
 
@@ -399,7 +381,7 @@ func _build() -> void:
 	_timer_value.size_flags_vertical = Control.SIZE_SHRINK_END
 	_timer_box.add_child(_timer_value)
 	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
-	seconds.text = "秒" if _language == Locale.CHINESE else "s left"
+	seconds.text = Locale.pick("秒", "s left", _language)
 	if _language == Locale.CHINESE and _font_zh != null:
 		seconds.add_theme_font_override(&"font", _font_zh)
 	# Both on their feet, then the unit lifted by the difference of the two
@@ -470,12 +452,7 @@ func _build() -> void:
 ## A panel in the housing's colours, placed on its rect and hidden: every fare
 ## panel starts dark and `_paint_fares` shows what has something to say.
 func _housing(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
-	var panel := ChamferPanel.new()
-	panel.name = node_name
-	panel.chamfer_px = _style.chamfer_px
-	panel.fill = _style.plate_field
-	panel.edge = _style.plate_edge
-	panel.edge_px = _style.edge_px
+	var panel: ChamferPanel = ChamferPanel.housing(_style, node_name)
 	panel.visible = false
 	_layout.place(root, panel, rect)
 	return panel
@@ -513,10 +490,10 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	return label
 
 
-## A style number for the callout's language, Chinese first like
-## `FareFace._say`: the Kai face sets larger than the Latin at every line.
+## A style number for the callout's language: the Kai face sets larger than
+## the Latin at every line.
 func _sized(zh: int, en: int) -> int:
-	return zh if _language == Locale.CHINESE else en
+	return Locale.pick(zh, en, _language)
 
 
 ## Numerals with the housing's dark round them, for a readout with no panel.

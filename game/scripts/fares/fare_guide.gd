@@ -46,12 +46,7 @@ var _pulse_s: float = 0.0
 
 
 func _ready() -> void:
-	if (
-		Cmdline.value(FareSystem.FARES_ARG).to_lower() == "off"
-		or fares == null
-		or vehicle == null
-		or not fares.usable()
-	):
+	if Cmdline.off(FareSystem.FARES_ARG) or fares == null or vehicle == null or not fares.usable():
 		set_process(false)
 		visible = false
 		return

@@ -87,3 +87,15 @@ static func bar_rect(box: Vector2, length: float, thickness: float) -> Rect2:
 	var diameter: float = minf(box.x, box.y)
 	var span := Vector2(diameter * length, diameter * thickness)
 	return Rect2((box - span) * 0.5, span)
+
+
+## The sign in `style`'s warning colours and bar, as the HUD's alarm and the
+## guide card's example both draw it.
+static func styled(style: HudStyle, node_name: String) -> NoEntryIcon:
+	var icon := NoEntryIcon.new()
+	icon.name = node_name
+	icon.disc = style.warn_disc
+	icon.bar = style.warn_bar
+	icon.bar_length = style.warn_bar_length
+	icon.bar_thickness = style.warn_bar_thickness
+	return icon

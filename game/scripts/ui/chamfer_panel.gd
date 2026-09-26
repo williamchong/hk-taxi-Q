@@ -108,3 +108,20 @@ static func _corners(box: Vector2, corner: float) -> PackedVector2Array:
 			Vector2(0.0, corner),
 		]
 	)
+
+
+## A panel in `style`'s housing colours — the plate's field and edge — cut at
+## its chamfer: the one shape the HUD, the start menu and the map all build.
+static func housing(style: HudStyle, node_name: String) -> ChamferPanel:
+	return styled(style, node_name, style.plate_field, style.plate_edge)
+
+
+## A panel at `style`'s chamfer and edge width, in `field` rimmed with `rim`.
+static func styled(style: HudStyle, node_name: String, field: Color, rim: Color) -> ChamferPanel:
+	var panel := ChamferPanel.new()
+	panel.name = node_name
+	panel.chamfer_px = style.chamfer_px
+	panel.fill = field
+	panel.edge = rim
+	panel.edge_px = style.edge_px
+	return panel

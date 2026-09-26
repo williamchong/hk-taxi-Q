@@ -66,16 +66,13 @@ class Stop:
 
 	## The street the stop is on, in `language`; "" where unnamed.
 	func road(language: String) -> String:
-		return road_zh if language == Locale.CHINESE else road_en
+		return Locale.pick(road_zh, road_en, language)
 
 	func name(language: String) -> String:
 		return _text(node.get("name", null), language)
 
 	static func _text(names: Variant, language: String) -> String:
-		if not names is Dictionary:
-			return ""
-		var found: Variant = (names as Dictionary).get(language, null)
-		return "" if found == null else str(found)
+		return Locale.from_row(names, language, "")
 
 	func name_en() -> String:
 		return name("en")

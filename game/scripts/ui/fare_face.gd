@@ -189,7 +189,7 @@ func on_sampled(
 ## The string for the face's language, Chinese first so a pair reads the
 ## same way at every call site.
 func _say(zh: String, en: String) -> String:
-	return zh if _language == Locale.CHINESE else en
+	return Locale.pick(zh, en, _language)
 
 
 ## Dollars to one place, as the 咪錶 shows them.

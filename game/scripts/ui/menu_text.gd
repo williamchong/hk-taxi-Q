@@ -51,8 +51,4 @@ func say(key: String, language: String) -> String:
 ## `row[language]` where `row` is a `{ en, zh }` table with that string, else
 ## `fallback`.
 static func pick(row: Variant, language: String, fallback: String) -> String:
-	if row is Dictionary:
-		var value: Variant = (row as Dictionary).get(language)
-		if value is String and not (value as String).is_empty():
-			return value
-	return fallback
+	return Locale.from_row(row, language, fallback)
