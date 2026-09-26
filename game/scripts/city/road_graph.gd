@@ -319,7 +319,7 @@ static func resident(regions: PackedStringArray) -> RoadGraph:
 ## and `report`, plus `error` where a pair would not merge.
 static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 	var frame: String = regions[0] if not regions.is_empty() else ""
-	var manifest: CityManifest = CityManifest.load_manifest(frame)
+	var manifest: CityManifest = CityManifest.shared(frame)
 	var document: Dictionary = GeneratedRoadGraph.load_graph(
 		manifest.road_graph_path if manifest != null else ""
 	)
@@ -345,7 +345,7 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 	var merged: Dictionary = document
 	for index: int in range(1, regions.size()):
 		var region: String = regions[index]
-		var other: CityManifest = CityManifest.load_manifest(region)
+		var other: CityManifest = CityManifest.shared(region)
 		var graph: Dictionary = GeneratedRoadGraph.load_graph(
 			other.road_graph_path if other != null else ""
 		)

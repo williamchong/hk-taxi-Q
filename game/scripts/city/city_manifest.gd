@@ -538,8 +538,31 @@ static func path(region: String = "") -> String:
 	return GeneratedRegions.dir(region) + FILE
 
 
-## The manifest, or null with a pushed message. `region` "" is the region a
-## single-region reader opens — `--region=`, else the frame.
+# One parse per region per scene, held weakly on `RoadGraph._shared`'s terms:
+# the scene's nodes keep it alive and dropping the scene drops it, so an ETL
+# re-run inside the editor is not served a stale manifest. Ten runtime readers
+# opened the same 0.5 MB `city.json` at boot before this existed, and
+# `RoadGraph._copy_tables` already assumed a cached one it must not write to.
+static var _shared: Dictionary[String, WeakRef] = {}
+
+
+## The manifest every runtime reader in a scene shares, or null with a pushed
+## message. ⚠️ Shared, so never written to: a reader that must change a table
+## copies first, as `RoadGraph._copy_tables` does. Verify tools keep
+## `load_manifest`, which parses afresh.
+static func shared(region: String = "") -> CityManifest:
+	var key: String = path(region)
+	var held: WeakRef = _shared.get(key, null)
+	var live: CityManifest = held.get_ref() if held != null else null
+	if live == null:
+		live = load_manifest(region)
+		if live != null:
+			_shared[key] = weakref(live)
+	return live
+
+
+## The manifest, parsed afresh, or null with a pushed message. `region` "" is
+## the region a single-region reader opens — `--region=`, else the frame.
 static func load_manifest(region: String = "") -> CityManifest:
 	var at: String = path(region)
 	var document: Dictionary = GeneratedDocument.load_object(

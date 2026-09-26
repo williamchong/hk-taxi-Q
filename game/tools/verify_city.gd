@@ -67,6 +67,7 @@ func _init() -> void:
 		return
 
 	var problems: PackedStringArray = _check_documents(manifest)
+	problems.append_array(_check_shared())
 	problems.append_array(_check_layer_nodes())
 	problems.append_array(_check_camera_rig())
 	for tile: Manifest.Tile in manifest.tiles:
@@ -114,6 +115,31 @@ func _init() -> void:
 ## file the dev locators point at — they carry their own constant until `P2-2`
 ## and `P3-1` take the path from the manifest, and this is what stops the two
 ## definitions drifting in the meantime.
+## `shared` is one parse while something holds it and a fresh one otherwise,
+## and `load_manifest` never hands out the shared object — the two facts the
+## runtime readers and `RoadGraph._copy_tables` lean on.
+func _check_shared() -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var first: Manifest = Manifest.shared()
+	if first == null:
+		problems.append("shared() returned null where load_manifest() did not")
+		return problems
+	if Manifest.shared() != first:
+		problems.append("shared() parsed the manifest twice while the first was still held")
+	if Manifest.load_manifest() == first:
+		problems.append("load_manifest() handed out the shared object rather than a fresh parse")
+	var held: Manifest = first
+	first = null
+	if Manifest.shared() != held:
+		problems.append("shared() dropped a manifest something still held")
+	held = null
+	# Nothing holds it now: the next call must parse again, which is the weak
+	# reference doing its job across an ETL re-run in the editor.
+	if Manifest.shared() == null:
+		problems.append("shared() could not parse again once every holder let go")
+	return problems
+
+
 func _check_documents(manifest: Manifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	problems.append_array(

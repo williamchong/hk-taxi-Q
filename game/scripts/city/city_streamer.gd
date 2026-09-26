@@ -102,7 +102,7 @@ var _announced: bool = false
 
 
 func _ready() -> void:
-	_manifest = CityManifest.load_manifest(region)
+	_manifest = CityManifest.shared(region)
 	if _manifest == null:
 		# `load_manifest` has already pushed the reason and the command to fix it.
 		return

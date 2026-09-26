@@ -113,5 +113,5 @@ func _tiles_for(id: String) -> Node3D:
 ## A region's `city_offset`, or zero where its manifest will not load — the
 ## manifest has pushed why, and the region's own children will say so again.
 static func _offset_of(id: String) -> Vector3:
-	var manifest: CityManifest = CityManifest.load_manifest(id)
+	var manifest: CityManifest = CityManifest.shared(id)
 	return manifest.city_offset if manifest != null else Vector3.ZERO

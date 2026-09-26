@@ -26,7 +26,7 @@ func _ready() -> void:
 	# enumerate `res://`, so what it does not name does not exist. The locator
 	# supplies the schema and the hint; `verify_landmarks.gd` asserts the two
 	# name the same file.
-	var manifest: CityManifest = CityManifest.load_manifest(region)
+	var manifest: CityManifest = CityManifest.shared(region)
 	if manifest == null:
 		return
 	var document: Dictionary = GeneratedLandmarks.load_landmarks(manifest.landmarks_path)

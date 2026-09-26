@@ -322,7 +322,7 @@ func _learn_where_the_city_is() -> void:
 	if _looked_for_manifest:
 		return
 	_looked_for_manifest = true
-	_manifest = CityManifest.load_manifest()
+	_manifest = CityManifest.shared()
 
 
 func _set_view(next: View) -> void:

@@ -167,7 +167,7 @@ func setup(
 static func _ground(graph: RoadGraph, style: HudStyle) -> MinimapMesh.Ground:
 	var ground := MinimapMesh.Ground.new()
 	for region: String in GeneratedRegions.resident():
-		var manifest: CityManifest = CityManifest.load_manifest(region)
+		var manifest: CityManifest = CityManifest.shared(region)
 		if manifest == null or manifest.basemap_path.is_empty():
 			continue
 		var offset: Vector3 = graph.region_offset(region)

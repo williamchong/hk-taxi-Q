@@ -349,7 +349,7 @@ func _physics_process(_delta: float) -> void:
 func _load_sea() -> void:
 	var graph: RoadGraph = RoadGraph.shared()
 	for region: String in GeneratedRegions.resident():
-		var manifest: CityManifest = CityManifest.load_manifest(region)
+		var manifest: CityManifest = CityManifest.shared(region)
 		if manifest == null or manifest.water_path.is_empty():
 			continue
 		var document: Dictionary = GeneratedBasemap.load_basemap(manifest.basemap_path)
