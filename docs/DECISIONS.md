@@ -5500,7 +5500,9 @@ Open items at the end.
 - Every `;` comment block moved to `<name>.md` beside its resource (0 differing stored properties
   across 33 files). `check.sh`'s `tuning` step requires a non-empty sidecar per resource unless
   `UNDOCUMENTED_OK` names it, refuses any `;` line, an orphan sidecar or a stale exemption.
-  ⚠️ `beams.tres` is empty because all its values equal `beam_profile.gd`'s defaults.
+  ⚠️ `beams.tres` was left EMPTY by that re-save: the writer omits any key equal to the script's
+  `@export` default, and `beam_profile.gd` then carried its three values as defaults. Nothing noticed
+  until `Q150` removed the defaults and filled the file — a second copy is how the first vanishes.
 - Divergences from Godot's best-practice guide, priced and kept:
   - HUD built in code — 387 µs against 140 µs from a `PackedScene`, once per load; a scene would be
     a second copy of `hud_style.tres` / `hud_layout.tres`.
@@ -7846,12 +7848,62 @@ loads through it; and a shared predicate under `is_passable` / `fits_car` is `Q1
   `Locale.pick` / `from_row`, `Cmdline.off`.
 - 🚫 **Deferred, not refused**: extracting `VehicleLamps`'s indicator and lighting-ladder policies into
   `scripts/core/` (a byte-graded render path; needs an A/B render), and moving the lamp, door and emote
-  `@export` defaults into a `.tres` (`Q98`'s ask; a tuning migration that must reproduce today's values).
+  `@export` defaults into a `.tres` (`Q98`'s ask; a tuning migration that must reproduce today's values
+  — done as `Q150`).
   A `CityManifest` layer-path table and `DriveHarness`'s four jobs were surveyed and left.
 - ⚠️ Lessons the pass re-learned: a mutation must COMPILE (an unused parameter is a warning promoted to
   error, and Godot then exits 0 having checked nothing); `git checkout <file>` to undo a mutation
   discards the batch's own edits to that file — keep a copy and restore it instead.
 
 **See.** `Q145` · `Q19` · `Q59` · `Q63` · `Q97` · `Q119` · `docs/ARCHITECTURE.md` "Checks" ·
+
+---
+
+## `Q150` — The taxi rigs' dials are tuning resources, one profile per script, and a zero key makes a rig inert
+
+**Status.** ✅ Closed 2026-09-29 — `Q149`'s deferred migration, on the user's call for one profile per
+script rather than one rig table.
+
+- What moved: 24 `@export` defaults. `vehicle_lamps.gd`'s 13 (indicators, roof sign, light probe,
+  side-lamp share) into `tuning/vehicle_lamps.tres` (`VehicleLampsProfile`; `lamps.tres` is the
+  street lamps' material), `taxi_door.gd`'s 3 into `tuning/taxi_door.tres` (`TaxiDoorProfile`),
+  `passenger_emote.gd`'s 5 into `tuning/passenger_emote.tres` (`PassengerEmoteProfile`; the three
+  face `PackedScene`s stay on the node — asset links, not tuning), and `beam_profile.gd`'s 3 into
+  `tuning/beams.tres`, which had been EMPTY since `Q119`'s re-save: the writer drops any key equal to
+  a script default, so the file lost every value while the script's copy hid it. Each profile is
+  schema only with a `PATH`, on `WrongWayProfile`'s shape; each node takes `@export var profile`
+  assigned in `taxi.tscn`; every sidecar holds the WHY paragraphs the scripts carried.
+- **The guard is `usable()`, pure over `profile`**, through `TuningTable.any_zero`, so `verify_vehicle`
+  can ask it of a car that never entered a tree and again after swapping a zeroed duplicate in.
+  Inert means: lamps never tick, never join the budget and never write a beam (every lens keeps the
+  shader's dark default); the door stays shut; no face goes up; `BeamBudget` grants nothing.
+  `BeamBudget.adopt(table)` is `_ready`'s one path and the verify seam; the `.new()`-on-the-script
+  fallback and the three `_number(&"…", 8.0)` literals are gone — each was a second copy.
+- 🔴 **Required set = every key whose `@export_range` floor is above zero**, and nothing else. A key
+  the editor may legally write as 0 cannot be told from a missing one, and raising floors would be a
+  schema change riding on a migration. Guarded: lamps `blink_hz`, `blink_duty`, `sun_probe_m`,
+  `cover_probe_m`, `probe_hz`; door `open_deg`, `swing_s`; every emote key; beams `regrant_hz`. The
+  hole: `steer_hold_s`, `dark_hold_s`, `light_hold_s`, `sign_lit`, `probe_height_m`, `steer_threshold`,
+  `sidelamp_beam`, `night_energy`, `alight_hold_s`, `max_spot_lights`, `swap_margin_m` read 0 and run if
+  a key goes missing. Named in every sidecar; closing it is a floor decision, not this one.
+- Proof. `verify_vehicle`: each node holds the shipped resource by path (identity is the values
+  proof), `usable()` true, then a zeroed divisor refuses and the door does not open / no face goes up.
+  `verify_beam_budget`: a shipped cap or rate of zero fails outright (its checks passed vacuously on
+  the empty file), the budget's literal, `BeamProfile.PATH` and the tool's own path pinned equal, a
+  zeroed `regrant_hz` and a null table each grant nothing. The drive: `--spawn-fare=wan_chai/f_004
+  --seconds=2.5 --shots=0.2…2.2` on the stashed HEAD and on the change — nine of eleven car-region
+  crops byte-identical through the door's open (0.4 s) and close (1.4–1.6 s), the two others a
+  boot frame and one whole-frame camera jitter; the 8 s recipe (steer hold, wall hit, hurt face) with
+  every diff inside the sea's animation, the pulsing guide ring and the fps counter, none on the car.
+  Then `blink_hz = 0.0` in the lamp table: the log carries `VehicleLamps: … has no blink_hz; every
+  lamp stays dark.` and the car region differs, restored by `cp` from a backup.
+- ⚠️ Lessons. (1) A `.tres` at rest can be byte-`cmp`ed only away from the debug overlay's fps
+  counter, the water and the guide ring; crop to the thing under test and shoot the same side twice.
+  (2) A first `--spawn-fare` run after an import can shift the hail by a few ticks — the first before
+  capture read the door shut at 0.5 and 1.5 s and the repeat did not; a fine shot series settled it.
+  (3) The at-rest recipe stalls on "no frame drawn" when nothing on screen changes.
+
+**See.** `Q149` · `Q119` · `Q98` · `Q124` · `tuning/vehicle_lamps.md` · `tuning/taxi_door.md` ·
+`tuning/passenger_emote.md` · `tuning/beams.md`
 `.claude/rules/fares.md`
 
