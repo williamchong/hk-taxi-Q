@@ -7775,7 +7775,7 @@ crash" — with the detector built and the bars measured.
   velocity: off the state, the 69.5 kph head-on read 1.6 kph, and the 30° hit read nothing at
   all — the state was already separating, so the existing "moving away" test skipped it. The
   latch now sits before that test and reads the velocity kept from the end of `_physics_process`.
-- 🔴 **Finding for handling, not acted on here.** At 30° and 90° the car stops DEAD (exit 0.09
+- 🔴 **Finding for handling, not acted on here — acted on as `Q151` (2026-09-29).** At 30° and 90° the car stops DEAD (exit 0.09
   kph at every entry); only the 10° brush keeps its speed (35 / 56 / 70 kph). The arcade
   `collision_speed_retained` / `collision_deflection` slide never runs on those hits, for the
   same reason the latch missed them: the moving-away test reads the solved velocity.
@@ -7907,3 +7907,60 @@ script rather than one rig table.
 `tuning/passenger_emote.md` · `tuning/beams.md`
 `.claude/rules/fares.md`
 
+## `Q151` — The wall slide reads the velocity the wall met, so a clip deflects instead of stopping the car dead
+
+**Asked** by `Q148`'s finding (2026-09-26, not acted on there). **Closed** 2026-09-29, the fix
+built and graded on the wall rows.
+
+**Decision.** `_integrate_forces` computes the arcade response — `velocity.slide(normal)` scaled
+by `collision_speed_retained` / `collision_deflection` — off `_velocity_into_step`, the velocity
+at the end of `_physics_process`, and writes the result to the state. Before, the response read
+`state.linear_velocity`, which is the SOLVED velocity: Jolt has already removed the normal
+component by the time the callback runs, so `into_wall` read ≈ 0, the retained fraction lerped to
+≈ 1, and the "slide" was a no-op on every hit. `P3-50` had found and fixed the same defect for the
+impact latch two lines above and left the slide as it was. Now one velocity feeds both: the latch
+reads it first, the slide rewrites it, and the slid velocity is chained through the contact loop so
+a second contact on the same slab sees what the first left. The spin is halved once per tick
+(`SCRAPE_SPIN_RETAINED`), where before it was halved once per contact — a head-on reports two or
+three contacts on one slab. No dial moved: 0.75 / 0.35 in `handling.tres` had never been
+exercised, so this is their first measurement.
+
+- **Wall rows, `tools/skidpad.sh --only=wall`, exit kph after 1 s of contact** (before → after;
+  `approach` and `impact` unchanged to the hundredth on every row, so `Q148`'s bars stand):
+
+  | angle | 63.0 kph entry | 86.4 | 105.5 |
+  |---|---|---|---|
+  | 10° brush | 34.5 → 57.1 | 55.2 → 78.9 | 72.8 → 97.5 |
+  | 30° clip | 0.09 → 28.8 | 0.09 → 51.3 | 0.09 → 76.2 |
+  | 90° head-on | 0.00 → 0.00 | 0.00 → 0.00 | 0.00 → 0.00 |
+
+  The full pad's other five rows (corner, drift, tap, brake, coast) are byte-identical before and
+  after — no wall there. `hits ticks` on the clip rose from 1 to 26 / 22 / 4: the car now scrapes
+  along the slab instead of parking on it, and each tick of scrape latches a small reading that
+  `crash_cool_s` folds into the one dock. ⚠️ The wall rows carry run-to-run noise the drift rows do
+  not: the same HEAD read the brush's exit as 34.95 in the full pad and 34.49 in the wall-only run,
+  and a head-on's tick count as 3 or 2. Grade a wall change against that band, not byte identity.
+- **The 30° exit is 46 / 59 / 72 % of entry, not the 80 % the formula gives for the first tick.**
+  The first tick leaves 0.866 × 0.919 = 0.80 of entry along the wall; the rest goes over the next
+  second to the tyres, because the car's heading stays 30° into the face and `VehicleWheel3D`'s
+  friction scrubs a body sliding sideways. The head-on stays a stop by construction: `slide` leaves
+  nothing along a face met square, and `GAME_DESIGN.md` says a head-on costs speed.
+- **The drive.** `Q148`'s recipe (`--spawn-fare=wan_chai/f_004 --hold=accelerate@1.0+7
+  --hold=steer_right@2.5+2.0`) meets the building south of Expo Drive square — the latch reads
+  11.44 m/s out of 11.4 — so it is a head-on and stops before and after, one `award:` line, HK$−2.
+  A shorter steer (`steer_right@2.5+0.8`) meets the same face at 37°, 41 kph, 6.81 m/s into it:
+  before, the velocity fell from 11.4 to 2.4 m/s on the hit tick and the car stood 0.5 m past it
+  (`build/driver/q151_clip_0.8_before`); after, it left the hit at 8.3 m/s along the face and
+  scrubbed to rest 2.3 m along it in 0.8 s, upright, nose on the wall, the HURT face up, the same
+  one dock (`build/driver/q151_clip_0.8`, `t04.50` / `t05.50`). Nothing spun, nothing crossed a
+  railing.
+- 🚫 **Left, a handling dial and not this fix**: the scrub after a clip. On the street a 40 kph
+  clip still comes to rest within a second because nothing turns the nose away from the face; a
+  yaw-away term or a lower tyre lateral grip while a wall contact is live would be the lever, and
+  it is graded on the clip rows' exit and the drive, never on the head-on. Not a reason to move
+  `collision_deflection`: that scales the first tick, and the first tick is not where the speed goes.
+- ⚠️ Lesson. Two readers of one physical quantity in one callback took two different sources for
+  it, and the finding sat for three days between the fix of one and the fix of the other. Anything
+  new in `_integrate_forces` reads `_velocity_into_step`; the state there is the solve, not the hit.
+
+**See.** `Q148` · `P3-50` · `Q84` · `docs/GAME_DESIGN.md` "Collision" · `.claude/rules/handling.md`

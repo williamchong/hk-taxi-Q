@@ -49,7 +49,8 @@ const SCRAPE_SPIN_RETAINED: float = 0.5
 ## contacts `_integrate_forces` sees are the step's, and by then the solver
 ## has already taken the normal velocity out — measured, a 69.5 kph head-on
 ## on the skidpad read 1.6 kph off the state, and a 30° hit read nothing at
-## all because the state was already separating.
+## all because the state was already separating. The arcade slide below it
+## reads the same velocity for the same reason (`Q151`).
 var _impact_mps: float = 0.0
 ## The velocity the car carried into this step: `linear_velocity` at the end
 ## of `_physics_process`, before the server moves anything.
@@ -785,26 +786,34 @@ func place_at(pose: Transform3D) -> void:
 ## RigidBody3D and this reads and writes the same PhysicsDirectBodyState3D. It is
 ## why collision_deflection and collision_speed_retained are still profile dials
 ## rather than joining the list of things the engine model cannot express.
+##
+## ⚠️ Everything here reads the velocity the wall MET, `_velocity_into_step`,
+## never `state.linear_velocity`: by this callback the solver has already
+## taken the normal component out, so off the state a 30° clip reads as
+## "already moving away" and a head-on as "under the floor", and the slide
+## never ran — the body's own friction then ground the car to 0.09 kph at
+## 30° and 90° while only the 10° brush kept its speed (`Q148`, `Q151`).
+## The latch reads the raw pre-step velocity on every contact, so its reading
+## never depends on the order the contacts arrive in; the slid velocity is
+## chained through the loop so a second contact on the same slab sees what
+## the first left, and the spin is halved once per tick.
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	var velocity: Vector3 = _velocity_into_step
+	var struck: bool = false
 	for i: int in state.get_contact_count():
 		var normal: Vector3 = state.get_contact_local_normal(i)
 		if absf(normal.y) > WALL_NORMAL_Y:
 			continue  # road surface, handled by the suspension
-		# Latched before the two tests below, which read the SOLVED velocity:
-		# a 30° hit is already separating by then and would never register,
-		# and a head-on the solver stopped dead would fall under the speed
-		# floor, while the car it stopped is still stopped. The floor here is
-		# the same 1 m/s, on the velocity the wall met.
 		if _velocity_into_step.length() >= 1.0:
 			_impact_mps = maxf(_impact_mps, -_velocity_into_step.dot(normal))
-		var velocity: Vector3 = state.linear_velocity
 		if velocity.length() < 1.0:
 			continue
 		var into_wall: float = velocity.normalized().dot(normal)
-		if into_wall > 0.0:
+		if into_wall >= 0.0:
 			continue  # already moving away
 		var retained: float = lerpf(1.0, profile.collision_speed_retained, absf(into_wall))
-		state.linear_velocity = (
-			velocity.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
-		)
+		velocity = velocity.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
+		struck = true
+	if struck:
+		state.linear_velocity = velocity
 		state.angular_velocity *= SCRAPE_SPIN_RETAINED

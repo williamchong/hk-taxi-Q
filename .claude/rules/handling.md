@@ -67,12 +67,17 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   dependent; `skills.md` quotes the matrix the bars were read from. ⚠️ **The latch reads
   `_velocity_into_step`**, the velocity at the end of `_physics_process`, because by
   `_integrate_forces` the solver has already removed the normal velocity — off the state a 69.5
-  kph head-on read 1.6 kph and a 30° hit read nothing, the state already separating. 🔴 **Finding
-  the wall rows made and this task did not act on**: at 30° and 90° the car stops DEAD (exit 0.09
-  kph at every entry) — the arcade `collision_speed_retained` / `collision_deflection` slide never
-  runs on those hits because the moving-away test reads the solved velocity, and only the 10°
-  brush keeps its speed. `GAME_DESIGN.md` says glancing hits deflect and head-on hits cost speed,
-  never control; the 30° row is not that. A handling task, with the wall rows as its before table.
+  kph head-on read 1.6 kph and a 30° hit read nothing, the state already separating. 🔴 **The slide
+  reads the same velocity** (`Q151`): off the state a 30° clip read as already separating and the
+  arcade `collision_speed_retained` / `collision_deflection` response never ran — the car stopped
+  DEAD at 30° and 90° while only the 10° brush kept its speed. Fixed 2026-09-29: exit on the clip
+  0.09 → 28.8 / 51.3 / 76.2 kph at the three run-ups, the brush 34.5 → 57.1, the head-on a stop by
+  construction. Anything new in `_integrate_forces` reads `_velocity_into_step`, never the state.
+  ⚠️ The wall rows are noisy where the drift rows are not (the brush's exit moved 0.5 kph and a
+  head-on's tick count 3 → 2 between two runs of one HEAD): grade a wall change against that band.
+  🚫 Left: the scrub after a clip — on the street a 40 kph clip still rests within a second with
+  the nose on the face. The lever is a yaw-away or a tyre-grip term while a wall contact is live,
+  graded on the clip rows and the drive; `collision_deflection` scales only the first tick.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target
