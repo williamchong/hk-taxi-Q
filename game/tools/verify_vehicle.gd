@@ -65,6 +65,73 @@ const GLINT_SCRIPT := "res://scripts/vehicle/sun_glint.gd"
 const CONTROLLER_SCRIPT := "res://scripts/vehicle/vehicle_controller.gd"
 const DOOR_SCRIPT := "res://scripts/vehicle/taxi_door.gd"
 const EMOTE_SCRIPT := "res://scripts/vehicle/passenger_emote.gd"
+## The tuning tables the three rigs read (`Q150`). Restated here rather than read
+## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
+## grades: what is asserted is that the scene hands each node THIS resource.
+const LAMPS_PROFILE_PATH := "res://tuning/vehicle_lamps.tres"
+const DOOR_PROFILE_PATH := "res://tuning/taxi_door.tres"
+const EMOTE_PROFILE_PATH := "res://tuning/passenger_emote.tres"
+
+
+## The rigs' dials are tuning resources, and a zero key makes each rig inert
+## (`Q150`, hard rule 4).
+##
+## Three things per rig, in the order a missing file would fail them: the scene
+## assigns a profile at all; it is the shipped resource by path, which is the
+## values proof — the node holds the very file, so equality of values is
+## identity; and the rig's `usable()` accepts it. Then the mutation: a duplicate
+## with the divisor zeroed is swapped in, `usable()` must refuse it, and the rig
+## must DO nothing on it — the door does not open, no face goes up. The lamps
+## are graded on `usable()` alone: their inertness is `_ready`'s, and nothing
+## here enters a tree. The `ERROR:` lines `TuningTable.any_zero` pushes during
+## the mutation are the guard speaking, not a failure — `verify_fares.gd` reads
+## the same lines for the skills.
+func _check_the_dials_are_data(car: Node3D) -> void:
+	var before: int = _failed
+	var rigs: Array[Array] = [
+		[_running(car, LAMPS_SCRIPT), LAMPS_PROFILE_PATH, "lamps", "probe_hz"],
+		[_running(car, DOOR_SCRIPT), DOOR_PROFILE_PATH, "door", "swing_s"],
+		[_running(car, EMOTE_SCRIPT), EMOTE_PROFILE_PATH, "emote", "life_s"],
+	]
+	for rig: Array in rigs:
+		var node := rig[0] as Node3D
+		var path: String = rig[1]
+		var label: String = rig[2]
+		var divisor: String = rig[3]
+		if node == null:
+			_problem("no node in %s carries the %s rig" % [SCENE_PATH, label])
+			continue
+		var table := node.get("profile") as Resource
+		if table == null:
+			_problem("the %s rig has no profile assigned in %s" % [label, SCENE_PATH])
+			continue
+		if table.resource_path != path:
+			_problem("the %s rig reads %s, not the shipped %s" % [label, table.resource_path, path])
+		if not node.usable():
+			_problem("the shipped %s table has a zero or missing key" % label)
+		var zeroed := table.duplicate() as Resource
+		zeroed.set(divisor, 0.0)
+		node.set("profile", zeroed)
+		if node.usable():
+			_problem(
+				"mutation missed: a zero %s in the %s table still reads usable" % [divisor, label]
+			)
+		match label:
+			"door":
+				node.open()
+				if node.is_open() or node.is_physics_processing():
+					_problem("mutation missed: the door moved on a zero swing_s")
+			"emote":
+				var live_before: int = node.live()
+				node.show_face(0)
+				if node.live() != live_before:
+					_problem("mutation missed: a face went up on a zero life_s")
+		node.set("profile", table)
+	if _failed == before:
+		print(
+			"  ok    the lamp, door and face dials are tuning resources, and a zero key makes each inert"
+		)
+
 
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
 ## declares. This is the renderer's own list — the same one
@@ -145,6 +212,9 @@ func _run() -> void:
 	_check_the_beams_point_at_the_road(car)
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
+	# Last, because it swaps zeroed tables into the rigs and no check above may
+	# run against one.
+	_check_the_dials_are_data(car)
 
 	# Freed rather than left to the exit: an instantiated scene that never
 	# reaches a tree is leaked at exit, and Godot reports that as a page of

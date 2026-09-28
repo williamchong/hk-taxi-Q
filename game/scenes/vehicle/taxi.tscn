@@ -13,6 +13,9 @@
 [ext_resource type="PackedScene" uid="uid://bhyxmrokmcy8f" path="res://assets/authored/vehicles/emote_grin.glb" id="13_grin"]
 [ext_resource type="PackedScene" uid="uid://2nf8gjdx0yu" path="res://assets/authored/vehicles/emote_angry.glb" id="14_angry"]
 [ext_resource type="PackedScene" uid="uid://b17e6jgelq8y3" path="res://assets/authored/vehicles/emote_hurt.glb" id="15_hurt"]
+[ext_resource type="Resource" uid="uid://zajwv3btt1jf" path="res://tuning/vehicle_lamps.tres" id="16_lamptune"]
+[ext_resource type="Resource" uid="uid://neogzmagjpoy" path="res://tuning/taxi_door.tres" id="17_doortune"]
+[ext_resource type="Resource" uid="uid://14q9gunypeuys" path="res://tuning/passenger_emote.tres" id="18_emotetune"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(1.8, 0.7, 4)
@@ -28,10 +31,12 @@ shape = SubResource("BoxShape3D_body")
 
 [node name="Mesh" parent="." unique_id=1596244631 instance=ExtResource("4_body")]
 script = ExtResource("9_lamps")
+profile = ExtResource("16_lamptune")
 
 [node name="PassengerDoor" type="Node3D" parent="." unique_id=1283577419]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, 0.315)
 script = ExtResource("10_door")
+profile = ExtResource("17_doortune")
 
 [node name="Leaf" parent="PassengerDoor" unique_id=402915663 instance=ExtResource("11_doorleaf")]
 
@@ -41,6 +46,7 @@ script = ExtResource("12_emote")
 grin = ExtResource("13_grin")
 angry = ExtResource("14_angry")
 hurt = ExtResource("15_hurt")
+profile = ExtResource("18_emotetune")
 
 [node name="HeadlampL" type="SpotLight3D" parent="." unique_id=1438472936]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.24192, 0, -0.24192, 0.9703, -0.58, 0.5, -2.05)

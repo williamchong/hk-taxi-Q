@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="TaxiDoorProfile" format=3 uid="uid://neogzmagjpoy"]
+
+[ext_resource type="Script" uid="uid://dyhwf08lsvn6" path="res://scripts/vehicle/taxi_door_profile.gd" id="1_door"]
+
+[resource]
+script = ExtResource("1_door")
+open_deg = 65.0
+swing_s = 0.35
+alight_hold_s = 0.8

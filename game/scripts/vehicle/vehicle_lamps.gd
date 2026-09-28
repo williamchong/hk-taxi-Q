@@ -74,188 +74,12 @@ enum Lighting {
 ## one thing that never comes on.
 const TURN_RELEASE: float = 0.75
 
-@export_group("Indicators")
-
-## Flashes per second. UK and Hong Kong regulation puts a real one between 1 and
-## 2 Hz, and the middle of that is also what reads as a flash rather than as a
-## flicker at the frame rates this ships at.
-@export_range(0.5, 4.0, 0.05) var blink_hz: float = 1.5
-
-## Share of each flash the lamp is lit for. Above a half on purpose: an
-## indicator seen from behind at speed is a small object, and the eye needs
-## longer on than off to call it a light rather than a glint.
-@export_range(0.1, 0.9, 0.05) var blink_duty: float = 0.55
-
-## How much lock counts as a turn, as a fraction of the lock available at this
-## speed. See `VehicleController.steer_ratio` — a fraction rather than an angle,
-## because full lock at 140 km/h is a quarter of full lock parked.
-##
-## ⚠️ The floor on this is comfort, not correctness. Set it near zero and the
-## indicators strobe through every steering correction the player makes on a
-## straight, which is what a real driver does *not* do.
-@export_range(0.0, 1.0, 0.01) var steer_threshold: float = 0.35
-
-## How long lock has to be *held* one way before the indicator comes on.
-##
-## ⚠️ **The threshold above cannot do this job on its own, and that is why both
-## exist.** One says how hard a turn is, the other says how long it lasts, and an
-## arcade car crosses hard lock constantly — a flick round a parked lorry, a
-## correction out of a drift, a lane change. Every one of those trips the
-## threshold, and without a hold the tail of the car strobes amber through all of
-## them, which is worse than no indicator at all: it stops meaning "turning".
-##
-## The cost is that the lamp is late by exactly this much, which is fine — a real
-## driver indicates before turning and this car indicates after, so it is already
-## a read-out of what the car is doing rather than a signal of intent.
-##
-## ⚠️ **0.3 rather than the 0.5 this shipped at, on the user's call** — the lamp
-## read as late from the chase camera. That buys back 0.2 s of the lateness above
-## and spends it on the other side of the same trade: a flick round a parked
-## lorry now has to be shorter than a third of a second to stay dark, where it
-## had half a second before. What still refuses a straight-line correction is
-## `steer_threshold`, which rejects on *amplitude* rather than on duration — the
-## hold was never the only guard, which is why it can be shortened without the
-## indicators strobing.
-@export_range(0.0, 3.0, 0.05) var steer_hold_s: float = 0.3
-
-@export_group("Roof sign")
-
-## How hard the illuminated box on the roof burns.
-##
-## ⚠️ **The one circuit on this car that answers to neither the driver nor the
-## light, and that is what it is for.** A roof sign says the car is a taxi and
-## whether it is in service; it is not a read-out of steering, of the pedal, or
-## of whether the sky is shut out. It answers to `for_hire` alone, which the
-## fare loop writes (`TaxiHire`): lit while the car is plying for hire, dark with
-## a passenger aboard — the Hong Kong taxi's "TAXI" lamp, which the meter flag
-## puts out.
-##
-## ⚠️ **A level rather than a switch, and the reason is the one thing every other
-## circuit here wants and this one must not have: bloom.** `lamp_emission` is 1.6
-## against `clean_daylight.tres`'s glow threshold of 1.0, so a lens driven to 1.0
-## carries a halo — which is what makes a brake lamp read as a lamp rather than
-## as paint, and is exactly what makes a roof sign read as a headlamp bolted to
-## the roof. Shipped full, in sun, it was reported as precisely that.
-##
-## Under about **0.63** the emission lands below the threshold and the sign
-## brightens without glowing, which the shader's own note calls "merely a
-## brighter swatch" — a fault for a lamp and the whole brief for a sign. 0.45
-## sits clear of the knee rather than on it, so the tonemap has room before the
-## halo comes back.
-##
-## ⚠️ **This is not the place to make the sign dimmer in daylight.** A level that
-## tracked `_lighting` would put the sign back on the light ladder, which is the
-## one thing the paragraph above refuses. This is how bright the sign burns
-## *when* it is lit; whether it is lit is `for_hire`, and the sun owns neither.
-@export_range(0.0, 1.0, 0.05) var sign_lit: float = 0.45
-
-@export_group("Light probe")
-
-## How far the shadow probe looks along the sun before calling the car sunlit.
-##
-## ⚠️ **Bounded by where collision exists, not by where shadow does.** Only the
-## finest tile tier ships a collider (`city_streamer.gd`), and `streaming.tres`
-## puts that band at 250 m — so a ray longer than this passes through the coarse
-## tiles beyond it as if they were air and reports sun. 200 m keeps the probe
-## inside the band with room for the hysteresis distance. It is not enough for
-## every caster: `golden_hour.tscn`'s sun sits at 30°, so anything over about
-## 115 m casts further than this ray reaches and its far shadow reads as sunlit.
-## Raising it past the collider band cannot fix that, and a taller number would
-## only look like it had.
-@export_range(10.0, 400.0, 5.0, "suffix:m") var sun_probe_m: float = 200.0
-
-## How far straight up the cover probe looks before calling the sky open.
-##
-## Sized to a road deck rather than to a building: this asks whether something
-## is *over* the car, and the tallest thing that legitimately is — an elevated
-## carriageway, the HKCEC's overhang — is tens of metres up, not hundreds.
-##
-## ⚠️ **Long is not safer here.** Extend it and the probe starts finding the
-## upper storeys of whatever the car is parked beside the moment the footprint
-## overhangs the kerb, which puts the taxi on main beam in open sun.
-@export_range(2.0, 100.0, 1.0, "suffix:m") var cover_probe_m: float = 25.0
-
-## Where both probes start, above the car's origin.
-##
-## Clear of the car's own roof — `taxi.tscn`'s body box tops out at 0.70 m — so
-## the rays begin outside the shell rather than relying on the self-exclusion
-## below to save them. Belt and braces, and it costs nothing.
-@export_range(0.0, 4.0, 0.05, "suffix:m") var probe_height_m: float = 1.0
-
-## How often the two probes are cast, against a 60 Hz physics tick.
-##
-## See the note in the header: this is the one thing here that *asks* the world
-## rather than reading what was written to it, and `dark_hold_s` already refuses
-## to believe a single reading. 10 Hz puts several samples inside the shortest
-## hold, which is all the hold can use.
-##
-## Measured on the built region with 65 tier-0 tiles resident: the 25 m cover ray
-## costs **0.49 µs** and the 200 m sun ray **0.91 µs**, against 0.50 µs for one of
-## the four wheel rays the controller already casts every tick. So a probe is
-## worth about three wheel rays, twenty times a second.
-##
-## ⚠️ **Every car on this script probes on the same tick, and that is left
-## alone deliberately.** `_probe_due_s` starts at zero on every instance, so a
-## roster spawned in one frame stays in lockstep for the life of the process —
-## ~28 µs on one tick at twenty cars rather than 1.4 µs amortised. The obvious
-## fix is a random starting phase, and it is **refused**: `.claude/skills`'
-## driver runs are byte-deterministic and this project grades frames by `cmp`,
-## so a per-run phase would make the moment a lamp switches unreproducible to
-## buy ~1% of a frame on the device floor. Stagger it from something stable —
-## the node path, a spawn index — if `P3-3` ever makes it matter.
-@export_range(1.0, 60.0, 1.0, "suffix:Hz") var probe_hz: float = 10.0
-
-## How long a *darker* reading must persist before the lamps follow it.
-##
-## Short, because being late into a dark place is the failure a driver notices.
-@export_range(0.0, 5.0, 0.05, "suffix:s") var dark_hold_s: float = 0.35
-
-## How long a *lighter* reading must persist before the lamps go out.
-##
-## ⚠️ **Deliberately several times `dark_hold_s`, and the asymmetry is the whole
-## anti-flicker mechanism.** A street in Wan Chai is a picket fence of shadow —
-## kerbside towers, gantries, footbridges, the gaps between them — and a car at
-## 50 km/h crosses one every second or so. Symmetric holds would strobe the
-## lamps through all of it, which is the failure `steer_hold_s` above already
-## records for the indicators: a lamp that switches constantly stops meaning
-## anything. Lingering on the way out costs a few seconds of lamps in sunlight
-## and buys a lamp that only changes when the light really has.
-@export_range(0.0, 10.0, 0.05, "suffix:s") var light_hold_s: float = 1.6
-
-@export_group("Thrown beams")
-
-## What share of the beam the side lamps throw, in energy and in reach.
-##
-## ⚠️ **The only beam dial here, because the scene owns the rest.** How bright a
-## lamp is and how far it reaches are properties of the *lamp*, authored beside
-## its position and its cone angle in `taxi.tscn` and read once in `_ready` —
-## which is what lets a roster car carry a dimmer or narrower beam without a
-## second export. This is the one number that belongs to the *state* rather than
-## to the fitting: what `SHADOW` does to whatever the lamp was authored at.
-##
-## ⚠️ It shipped the other way round for a moment, and the asymmetry was silent:
-## reach came from the scene while energy came from an export, so the authored
-## `light_energy` was overwritten before the first frame and editing it did
-## nothing at all.
-##
-## ⚠️ **Not zero, and not much above it.** Position lamps exist to be *seen*, not
-## to see by, so a side lamp that lights the road as far as a headlamp erases the
-## difference the two circuits were split to express. A short dim pool says "lit,
-## but not driving on it".
-@export_range(0.0, 1.0, 0.01) var sidelamp_beam: float = 0.3
-
-## Key-light energy at or below which the rig counts as night.
-##
-## ⚠️ **A dial rather than a rule, because the rig that would trip it does not
-## exist yet.** `DECISIONS.md` records night as a *switch between two static
-## rigs*, so whatever `Q26` authors is what this has to answer to; a rig that
-## dims its key light is caught here, and one that drops the sun below the
-## horizon is caught by the elevation test in `read_rig` beside it. The two
-## shipped rigs measure 1.4 and 0.9, so both clear this by a wide margin.
-##
-## ⚠️ A rig that deletes its `DirectionalLight3D` outright is **not** caught, and
-## that is deliberate rather than an oversight — see `read_rig`.
-@export_range(0.0, 1.0, 0.01) var night_energy: float = 0.05
+## The rig's dials — the indicators, the roof sign, the light probe and the
+## thrown beams' side-lamp share. Assigned in `taxi.tscn`; the values and their
+## reasons are `tuning/vehicle_lamps.md`'s. ⚠️ Read through `usable()` before
+## any lamp runs: the profile declares no defaults, so a missing key is a zero,
+## and `_physics_process` divides by `probe_hz` and never flashes on `blink_hz`.
+@export var profile: VehicleLampsProfile
 
 ## Whether the roof sign is lit: the car is free for hire (`P3-48`).
 ##
@@ -319,6 +143,8 @@ var _beam_energies: PackedFloat32Array = PackedFloat32Array()
 ## that assumed the slot and was later denied would light one frame of road it
 ## had no budget for.
 var _beams_granted: bool = false
+## `usable()`'s answer, taken once in `_ready`. See there.
+var _usable: bool = false
 
 
 func _ready() -> void:
@@ -330,10 +156,15 @@ func _ready() -> void:
 	if not found.is_empty():
 		_body = found[0] as MeshInstance3D
 	assert(_body != null, "VehicleLamps found no MeshInstance3D to switch.")
+	# Cached once for the per-tick path; `usable()` itself stays pure so a verify
+	# tool can ask it of a car outside a tree. A rig on a bad table never ticks,
+	# never joins the budget and never writes a beam: every lens keeps the
+	# shader's dark default, which is the inert state `verify_vehicle.gd` grades.
+	_usable = usable()
 	# Belt and braces, because asserts are stripped from release builds: without
 	# this a mis-wired scene crashes on the first frame of an exported build
 	# rather than driving around with dark lamps.
-	set_physics_process(_car != null and _body != null)
+	set_physics_process(_car != null and _body != null and _usable)
 	if _car != null:
 		# The car's own shell, so a probe cast from inside it cannot report the
 		# taxi as its own shade. `probe_height_m` starts the rays outside the
@@ -358,6 +189,8 @@ func _ready() -> void:
 			_beam_energies.append(beam.light_energy)
 	read_rig()
 	_join_budget()
+	if not _usable:
+		return
 	# ⚠️ **This call can only ever put the beams *out*, and that is the point.**
 	# Both `_lighting` and `_seen` start at `SUN`, so there is no state a car
 	# could boot into that this would light. What it is for is the scene: a car
@@ -366,6 +199,28 @@ func _ready() -> void:
 	# its beams on until the first state *change* happened to correct it, which
 	# on a sunny route is never.
 	_apply_beam()
+
+
+## Whether the table is whole: a profile, and no zero where a zero would divide
+## (`probe_hz`), never flash (`blink_hz`, `blink_duty`) or probe nowhere
+## (`sun_probe_m`, `cover_probe_m`). Loud on every call by design — a missing
+## key is a build defect, not a state to remember quietly — and pure over
+## `profile`, so `verify_vehicle.gd` can ask it of a car that never entered a
+## tree and again after swapping a zeroed table in. The eight keys whose export
+## floor is 0.0 are not in the table: a chosen zero there is legal, so a missing
+## one cannot be told from it (`tuning/vehicle_lamps.md`).
+func usable() -> bool:
+	if profile == null:
+		push_error("VehicleLamps: no VehicleLampsProfile assigned; every lamp stays dark.")
+		return false
+	var required: Dictionary[String, float] = {
+		"blink_hz": profile.blink_hz,
+		"blink_duty": profile.blink_duty,
+		"sun_probe_m": profile.sun_probe_m,
+		"cover_probe_m": profile.cover_probe_m,
+		"probe_hz": profile.probe_hz,
+	}
+	return not TuningTable.any_zero(profile, required, "VehicleLamps", "every lamp stays dark")
 
 
 ## How many spot-light slots this car asks for. `BeamBudget`'s side of the deal.
@@ -405,7 +260,9 @@ func _budget() -> Node:
 ## `SpotLight3D` costs no slot, so putting it in the ranking would let it
 ## displace a car that does.
 func _join_budget() -> void:
-	if _beams.is_empty():
+	# A rig on a bad table asks for no slot: it would never light the beam it
+	# was granted, and the slot is one a working car cannot use.
+	if _beams.is_empty() or not _usable:
 		return
 	var budget: Node = _budget()
 	if budget != null:
@@ -460,7 +317,9 @@ func _exit_tree() -> void:
 ## or drop its key light, not remove it.
 func read_rig() -> void:
 	var sun: DirectionalLight3D = SunGlint.rig_sun(self)
-	if sun == null:
+	# No table, no night bar to read the rig against — and nothing downstream
+	# will run anyway. Left as "no answer", the same as no rig.
+	if sun == null or not _usable:
 		_sun_toward = Vector3.ZERO
 		_night = false
 		return
@@ -471,16 +330,16 @@ func read_rig() -> void:
 	# Below the horizon or turned down to nothing. Either way there is no
 	# daylight to be in or out of, so the probes have nothing to answer and the
 	# ladder goes straight to its bottom rung.
-	_night = sun.light_energy <= night_energy or _sun_toward.y <= 0.0
+	_night = sun.light_energy <= profile.night_energy or _sun_toward.y <= 0.0
 
 
 func _physics_process(delta: float) -> void:
 	# The threshold to start turning; TURN_RELEASE's share of it to stop.
-	var leaving: float = steer_threshold * TURN_RELEASE
+	var leaving: float = profile.steer_threshold * TURN_RELEASE
 	var side: int = 0
-	if _car.steer_ratio > (leaving if _turn_side > 0 else steer_threshold):
+	if _car.steer_ratio > (leaving if _turn_side > 0 else profile.steer_threshold):
 		side = 1
-	elif _car.steer_ratio < -(leaving if _turn_side < 0 else steer_threshold):
+	elif _car.steer_ratio < -(leaving if _turn_side < 0 else profile.steer_threshold):
 		side = -1
 
 	# Straightening or swapping sides restarts the hold, and takes the blink
@@ -492,15 +351,15 @@ func _physics_process(delta: float) -> void:
 	if side != 0:
 		_turn_held_s += delta
 
-	var indicating: bool = side != 0 and _turn_held_s > steer_hold_s
+	var indicating: bool = side != 0 and _turn_held_s > profile.steer_hold_s
 	if indicating:
-		_blink_phase = fmod(_blink_phase + delta * blink_hz, 1.0)
+		_blink_phase = fmod(_blink_phase + delta * profile.blink_hz, 1.0)
 	else:
 		_blink_phase = 0.0
 	# One phase for both sides rather than a flasher each. They are never both
 	# live — `side` is one number — so the only thing a second phase could
 	# express is a hazard flash, which nothing asks for.
-	var flash: float = 1.0 if _blink_phase < blink_duty else 0.0
+	var flash: float = 1.0 if _blink_phase < profile.blink_duty else 0.0
 
 	# `CIRCUIT_*` order less one: x brake, y reverse, z indicator left, w right.
 	#
@@ -534,7 +393,7 @@ func _physics_process(delta: float) -> void:
 	var front := Vector4(
 		1.0 if _lighting != Lighting.SUN else 0.0,
 		1.0 if _lighting == Lighting.DARK else 0.0,
-		sign_lit if for_hire else 0.0,
+		profile.sign_lit if for_hire else 0.0,
 		0.0,
 	)
 	_body.set_instance_shader_parameter(PARAMETER_FRONT, front)
@@ -552,7 +411,7 @@ func _settle(delta: float) -> void:
 		# **8.58 Hz**, and 15 delivered 12. Carrying the remainder forward makes
 		# the dial mean what it says while still firing at most once a tick,
 		# since one period is never shorter than one tick at any allowed rate.
-		_probe_due_s += 1.0 / probe_hz
+		_probe_due_s += 1.0 / profile.probe_hz
 		var seen: Lighting = _read_lighting()
 		if seen != _seen:
 			# ⚠️ **The hold restarts when the reading crosses `_lighting`, not
@@ -580,7 +439,7 @@ func _settle(delta: float) -> void:
 	# deliberately far apart.
 	if _seen == _lighting:
 		return
-	var hold: float = dark_hold_s if _seen > _lighting else light_hold_s
+	var hold: float = profile.dark_hold_s if _seen > _lighting else profile.light_hold_s
 	if _seen_held_s >= hold:
 		_lighting = _seen
 		_apply_beam()
@@ -636,7 +495,7 @@ func _apply_beam() -> void:
 	# rationed. A car that stopped reading the world while dark would arrive at
 	# its slot with a stale state and light the wrong thing for a hold.
 	var lit: bool = throwing != Lighting.SUN and _beams_granted
-	var share: float = 1.0 if throwing == Lighting.DARK else sidelamp_beam
+	var share: float = 1.0 if throwing == Lighting.DARK else profile.sidelamp_beam
 	for i: int in _beams.size():
 		var beam: SpotLight3D = _beams[i]
 		beam.visible = lit
@@ -664,18 +523,18 @@ func _read_lighting() -> Lighting:
 		return Lighting.SUN
 
 	var space: PhysicsDirectSpaceState3D = _car.get_world_3d().direct_space_state
-	var origin: Vector3 = _car.global_position + Vector3.UP * probe_height_m
+	var origin: Vector3 = _car.global_position + Vector3.UP * profile.probe_height_m
 
 	# ⚠️ **World up, not the car's.** "Is there sky above me" is a question about
 	# the world, and a car mid-drift or cresting a ramp is still under open sky —
 	# probing along the body's own up would switch the main beams on every time
 	# the taxi leaned far enough to aim its roof at the tower beside it.
 	_probe.from = origin
-	_probe.to = origin + Vector3.UP * cover_probe_m
+	_probe.to = origin + Vector3.UP * profile.cover_probe_m
 	if not space.intersect_ray(_probe).is_empty():
 		return Lighting.DARK
 
-	_probe.to = origin + _sun_toward * sun_probe_m
+	_probe.to = origin + _sun_toward * profile.sun_probe_m
 	if not space.intersect_ray(_probe).is_empty():
 		return Lighting.SHADOW
 	return Lighting.SUN

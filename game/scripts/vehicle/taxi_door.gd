@@ -21,22 +21,11 @@ extends Node3D
 ## from `FareSystem._physics_process`, and the drive harness's frames are graded
 ## byte for byte, so the swing must advance on the clock that is fixed.
 
-## How far the door swings, in degrees off shut.
-##
-## Short of square on purpose. At 90° from the chase camera the leaf is edge-on
-## and vanishes into a line; 65° keeps its red face turned towards a camera
-## behind the car, which is the only place anyone sees it from.
-@export_range(10.0, 90.0, 1.0, "suffix:°") var open_deg: float = 65.0
-
-## How long a full swing takes, either way.
-##
-## Under `fares.tres`'s `board_s` with room left over, so a hail shows the door
-## standing open for most of the boarding rather than still moving when it ends.
-@export_range(0.05, 2.0, 0.05, "suffix:s") var swing_s: float = 0.35
-
-## How long `open_briefly` holds the door fully open before shutting it — the
-## fare stepping out at the destination, or storming out of a bail.
-@export_range(0.0, 5.0, 0.05, "suffix:s") var alight_hold_s: float = 0.8
+## The swing's dials — how far, how fast, how long a brief open holds. Assigned
+## in `taxi.tscn`; the values and their reasons are `tuning/taxi_door.md`'s.
+## ⚠️ Read through `usable()` before anything swings: the profile declares no
+## defaults, so a missing key is a zero, and `_physics_process` divides by one.
+@export var profile: TaxiDoorProfile
 
 ## -1 or +1: the side of the car the hinge is on, and so which way is out.
 var _outward: float = 0.0
@@ -54,25 +43,49 @@ func _ready() -> void:
 	# it would not swing at all, and nothing would say so.
 	if _outward == 0.0:
 		push_warning("TaxiDoor at x = 0 cannot tell which way is out; it stays shut.")
-	_apply()
+	if usable():
+		_apply()
 	set_physics_process(false)
+
+
+## Whether the table is whole: a profile, and no zero where a zero would divide
+## or swing nowhere. Loud on every call by design — a missing key is a build
+## defect, not a state to remember quietly — and pure over `profile`, so
+## `verify_vehicle.gd` can ask it of a car that never entered a tree and again
+## after swapping a zeroed table in. `alight_hold_s` may legally be 0.0 and is
+## not in the table (`tuning/taxi_door.md`).
+func usable() -> bool:
+	if profile == null:
+		push_error("TaxiDoor: no TaxiDoorProfile assigned; the door stays shut.")
+		return false
+	var required: Dictionary[String, float] = {
+		"open_deg": profile.open_deg,
+		"swing_s": profile.swing_s,
+	}
+	return not TuningTable.any_zero(profile, required, "TaxiDoor", "the door stays shut")
 
 
 ## Swing open and stay open.
 func open() -> void:
+	if not usable():
+		return
 	_hold_s = -1.0
 	_move_to(1.0)
 
 
 ## Swing shut.
 func close() -> void:
+	if not usable():
+		return
 	_hold_s = -1.0
 	_move_to(0.0)
 
 
 ## Swing open, hold for `alight_hold_s`, and swing shut again.
 func open_briefly() -> void:
-	_hold_s = alight_hold_s
+	if not usable():
+		return
+	_hold_s = profile.alight_hold_s
 	_move_to(1.0)
 
 
@@ -87,7 +100,7 @@ func _move_to(target: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var step: float = delta / swing_s
+	var step: float = delta / profile.swing_s
 	_swing = move_toward(_swing, _target, step)
 	_apply()
 	if _swing != _target:
@@ -106,4 +119,4 @@ func _physics_process(delta: float) -> void:
 func _apply() -> void:
 	# Eased at both ends, so the leaf leaves the frame and lands against its stop
 	# rather than starting and stopping at full speed.
-	rotation.y = _outward * deg_to_rad(open_deg) * smoothstep(0.0, 1.0, _swing)
+	rotation.y = _outward * deg_to_rad(profile.open_deg) * smoothstep(0.0, 1.0, _swing)

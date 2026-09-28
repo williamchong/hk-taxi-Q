@@ -34,18 +34,11 @@ enum Face { GRIN, ANGRY, HURT }
 ## `emote_hurt.glb`.
 @export var hurt: PackedScene
 
-## How far a face rises over its life, in metres. Enough to clear the roof
-## from the seat with room over it: the seat is 0.55 m up and the roof 0.86.
-@export_range(0.2, 3.0, 0.05, "suffix:m") var rise_m: float = 1.3
-## How long a face lives, in seconds, from the pop to gone.
-@export_range(0.3, 5.0, 0.05, "suffix:s") var life_s: float = 1.6
-## How long the pop takes: the face scales from nothing to full over this.
-@export_range(0.02, 1.0, 0.01, "suffix:s") var pop_s: float = 0.18
-## How long the face takes to shrink away at the end of its life.
-@export_range(0.02, 2.0, 0.01, "suffix:s") var shrink_s: float = 0.3
-## How many faces may be up at once. Skills can pay several times a second in
-## a long slide; past this the oldest is dropped rather than the newest.
-@export_range(1, 8, 1) var most_live: int = 4
+## The face's dials — rise, life, pop, shrink and how many at once. Assigned in
+## `taxi.tscn`; the values and their reasons are `tuning/passenger_emote.md`'s.
+## ⚠️ Read through `usable()` before a face goes up: the profile declares no
+## defaults, so a missing key is a zero, and `_physics_process` divides by one.
+@export var profile: PassengerEmoteProfile
 
 ## The faces up now, oldest first, and each one's age.
 var _live: Array[Node3D] = []
@@ -55,6 +48,25 @@ var _material: StandardMaterial3D = null
 
 func _ready() -> void:
 	set_physics_process(false)
+
+
+## Whether the table is whole: a profile, and no zero anywhere — every key has
+## an export floor above zero, so a zero is a missing key. Loud on every call by
+## design — a missing key is a build defect, not a state to remember quietly —
+## and pure over `profile`, so `verify_vehicle.gd` can ask it of a car that
+## never entered a tree and again after swapping a zeroed table in.
+func usable() -> bool:
+	if profile == null:
+		push_error("PassengerEmote: no PassengerEmoteProfile assigned; no face will show.")
+		return false
+	var required: Dictionary[String, float] = {
+		"rise_m": profile.rise_m,
+		"life_s": profile.life_s,
+		"pop_s": profile.pop_s,
+		"shrink_s": profile.shrink_s,
+		"most_live": float(profile.most_live),
+	}
+	return not TuningTable.any_zero(profile, required, "PassengerEmote", "no face will show")
 
 
 ## The one material every face wears: unshaded, its vertex colours as albedo.
@@ -85,6 +97,8 @@ func _scene_of(face: Face) -> PackedScene:
 
 ## Pop `face` out of the seat.
 func show_face(face: Face) -> void:
+	if not usable():
+		return
 	var packed: PackedScene = _scene_of(face)
 	if packed == null:
 		push_warning("PassengerEmote has no scene for face %d; nothing to show." % face)
@@ -95,7 +109,7 @@ func show_face(face: Face) -> void:
 		return
 	for node: Node in instance.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).material_override = _unshaded()
-	if _live.size() >= most_live:
+	if _live.size() >= profile.most_live:
 		_live[0].queue_free()
 		_live.remove_at(0)
 		_ages.remove_at(0)
@@ -118,13 +132,13 @@ func _physics_process(delta: float) -> void:
 	while index < _live.size():
 		var age: float = _ages[index] + delta
 		var face: Node3D = _live[index]
-		if age >= life_s:
+		if age >= profile.life_s:
 			face.queue_free()
 			_live.remove_at(index)
 			_ages.remove_at(index)
 			continue
 		_ages[index] = age
-		face.position = Vector3.UP * rise_m * _eased(age / life_s)
+		face.position = Vector3.UP * profile.rise_m * _eased(age / profile.life_s)
 		face.scale = Vector3.ONE * maxf(_size_at(age), 0.001)
 		if camera != null:
 			# `look_at` points -Z at the target, which is the side the face is
@@ -147,7 +161,7 @@ static func _eased(t: float) -> float:
 ## The face's scale at `age`: popped up over `pop_s`, full, then shrunk away
 ## over the last `shrink_s`.
 func _size_at(age: float) -> float:
-	var popped: float = smoothstep(0.0, pop_s, age)
-	var left: float = life_s - age
-	var kept: float = smoothstep(0.0, shrink_s, left)
+	var popped: float = smoothstep(0.0, profile.pop_s, age)
+	var left: float = profile.life_s - age
+	var kept: float = smoothstep(0.0, profile.shrink_s, left)
 	return minf(popped, kept)
