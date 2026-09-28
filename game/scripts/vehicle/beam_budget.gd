@@ -102,11 +102,11 @@ func _cap() -> int:
 func _regrant_hz() -> float:
 	# A guard value on a refused table, not a default: `_process` divides by
 	# this, and with no slots to hand out the period is moot. `adopt` owns zero
-	# on a real table; `@export_range` stops the editor writing one, but not a
-	# hand-edited `.tres`.
+	# on a real table; the floor below is the profile's own export floor, kept
+	# for a hand-edited `.tres` under it, which the editor cannot write.
 	if _profile == null:
 		return 1.0
-	return _number(&"regrant_hz")
+	return maxf(1.0, _number(&"regrant_hz"))
 
 
 func _swap_margin_m() -> float:

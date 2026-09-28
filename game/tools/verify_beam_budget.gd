@@ -113,19 +113,6 @@ func _check_the_three_paths_agree() -> void:
 		print("  ok    the budget, the profile and this tool name one table")
 
 
-## One string constant off a script `load`ed by path, or "" where it is not there.
-func _constant(path: String, key: String) -> String:
-	var script := load(path) as GDScript
-	if script == null:
-		_problem("%s did not load" % path)
-		return ""
-	var constants: Dictionary = script.get_script_constant_map()
-	if not constants.has(key):
-		_problem("%s declares no %s" % [path, key])
-		return ""
-	return str(constants[key])
-
-
 ## How many two-lamp cars the budget pays for.
 ##
 ## Written as a float divide and floored rather than `cap / BEAMS_PER_CAR`:

@@ -73,3 +73,25 @@ func _start_watchdog(label: String, seconds: float) -> void:
 		)
 	)
 	quit(1)
+
+
+## One string constant off a script `load`ed by path, or "" where it is not
+## there — the way a tool reads another script's `PATH` or a parameter name
+## without naming a `class_name` global.
+func _constant(path: String, key: String) -> String:
+	var constants: Dictionary = _constants(path)
+	if not constants.has(key):
+		return ""
+	return str(constants[key])
+
+
+## A script's constants, or an empty dictionary if it did not load.
+##
+## Built once per call — `get_script_constant_map()` returns a fresh Dictionary
+## every time, so indexing it inside the loop that walks it rebuilds it per hit.
+func _constants(path: String) -> Dictionary:
+	var script := load(path) as GDScript
+	if script == null:
+		_problem("%s did not load" % path)
+		return {}
+	return script.get_script_constant_map()

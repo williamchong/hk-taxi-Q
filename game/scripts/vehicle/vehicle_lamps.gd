@@ -143,7 +143,10 @@ var _beam_energies: PackedFloat32Array = PackedFloat32Array()
 ## that assumed the slot and was later denied would light one frame of road it
 ## had no budget for.
 var _beams_granted: bool = false
-## `usable()`'s answer, taken once in `_ready`. See there.
+## `usable()`'s answer, taken once in `_ready`. See there. ⚠️ Cached on the
+## invariant that `profile` is set by the scene and never swapped on a live
+## node: the door and the face re-ask per event and can take a swap,
+## this rig ticks at 60 Hz and does not.
 var _usable: bool = false
 
 
