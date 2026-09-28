@@ -20,6 +20,9 @@ extends "res://tools/verify_tool.gd"
 ## here exits 0.** `_fits` divides in floats for that reason alone.
 
 const BUDGET_SCRIPT := "res://scripts/vehicle/beam_budget.gd"
+const PROFILE_SCRIPT := "res://scripts/vehicle/beam_profile.gd"
+## Restated here rather than read off either script, so the tool cannot be
+## steered by the files it grades: both scripts' paths are pinned to THIS one.
 const PROFILE_PATH := "res://tuning/beams.tres"
 ## What a stub car costs. Two is the shipped taxi's count, and the number the
 ## roster risk is stated in — "at two lamps a car, four cars".
@@ -66,13 +69,61 @@ func _run() -> void:
 		_finish("verify_beam_budget")
 		return
 	var cap: int = int(profile.get("max_spot_lights"))
+	var regrant_hz: float = float(profile.get("regrant_hz"))
 	print("  budget: %d spot lights, %d-lamp cars fit %d" % [cap, BEAMS_PER_CAR, _fits(cap)])
+	# ⚠️ **The shipped file must carry its numbers, or every check below passes
+	# for nothing.** `beam_profile.gd` declares no defaults since `Q150`, and
+	# this file sat EMPTY for weeks before that with the script's copy hiding
+	# it; on a cap of 0 the cap-never-exceeded check is true of a budget that
+	# grants nothing.
+	if cap <= 0 or regrant_hz <= 0.0:
+		_problem(
+			(
+				"%s reads max_spot_lights %d, regrant_hz %.1f — a missing key, and the checks would pass vacuously"
+				% [PROFILE_PATH, cap, regrant_hz]
+			)
+		)
+		_finish("verify_beam_budget")
+		return
+	_check_the_three_paths_agree()
 
 	await _check_cap_is_never_exceeded(cap)
 	await _check_the_nearest_cars_win(cap)
 	await _check_a_rig_with_no_beams_takes_no_slot(cap)
 	await _check_leaving_the_tree_frees_the_slot(cap)
+	await _check_a_refused_table_grants_nothing(profile)
 	_finish("verify_beam_budget")
+
+
+## `beam_budget.gd` may not name `BeamProfile` (its `_profile` comment), so it
+## restates the path as a literal; the profile script carries `PATH`; this tool
+## restates it again. Three copies of one string, pinned equal here so none can
+## drift to a second file.
+func _check_the_three_paths_agree() -> void:
+	var budget_path: String = _constant(BUDGET_SCRIPT, "PROFILE_PATH")
+	var profile_path: String = _constant(PROFILE_SCRIPT, "PATH")
+	if budget_path != PROFILE_PATH or profile_path != PROFILE_PATH:
+		_problem(
+			(
+				"the beam table is named three ways: budget %s, profile %s, this tool %s"
+				% [budget_path, profile_path, PROFILE_PATH]
+			)
+		)
+	else:
+		print("  ok    the budget, the profile and this tool name one table")
+
+
+## One string constant off a script `load`ed by path, or "" where it is not there.
+func _constant(path: String, key: String) -> String:
+	var script := load(path) as GDScript
+	if script == null:
+		_problem("%s did not load" % path)
+		return ""
+	var constants: Dictionary = script.get_script_constant_map()
+	if not constants.has(key):
+		_problem("%s declares no %s" % [path, key])
+		return ""
+	return str(constants[key])
 
 
 ## How many two-lamp cars the budget pays for.
@@ -233,4 +284,32 @@ func _check_leaving_the_tree_frees_the_slot(cap: int) -> void:
 		_problem("the far car was not granted after every near car left")
 	else:
 		print("  ok    a slot freed by a despawn is handed on")
+	_close()
+
+
+## A table the budget refuses — a zeroed divisor, or no table at all — grants
+## nothing and says so, rather than running on a literal (`Q150`). The
+## mutation on the shipped table: a duplicate with `regrant_hz` zeroed fed
+## through `adopt`, the seam `_ready` itself uses. The `ERROR:` lines are the
+## guard speaking, as in `verify_fares.gd`.
+func _check_a_refused_table_grants_nothing(profile: Resource) -> void:
+	_open()
+	var zeroed := profile.duplicate() as Resource
+	zeroed.set("regrant_hz", 0.0)
+	_arbiter.adopt(zeroed)
+	var rigs: Array[StubRig] = await _rigs([1.0, 2.0] as Array[float])
+	var wrong: int = 0
+	if _arbiter.usable():
+		_problem("mutation missed: a zero regrant_hz still reads usable")
+		wrong += 1
+	if _lit(rigs) > 0 or _arbiter.spent()[0] > 0:
+		_problem("mutation missed: %d rigs lit on a refused table" % _lit(rigs))
+		wrong += 1
+	_arbiter.adopt(null)
+	_arbiter.refresh()
+	if _arbiter.usable() or _lit(rigs) > 0:
+		_problem("no table at all still granted %d rigs" % _lit(rigs))
+		wrong += 1
+	if wrong == 0:
+		print("  ok    a refused table grants nothing: zeroed regrant_hz, then no table")
 	_close()

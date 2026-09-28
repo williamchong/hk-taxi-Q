@@ -83,14 +83,12 @@ ALWAYS_TOOLS=(
 #                     and it is far too long to mirror at the resource.
 #   golden_hour.tres  clean_daylight.tres carries the comparison for both rigs.
 #   streaming.tres    Three numbers, all of them in ARCHITECTURE.md's budget.
-#   beams.tres        Same, and verify_beam_budget states the contract in full.
 #   greybox.tscn      A P0-5 harness that predates the convention.
 UNDOCUMENTED_OK=(
 	game/tuning/camera.tres
 	game/tuning/handling.tres
 	game/tuning/golden_hour.tres
 	game/tuning/streaming.tres
-	game/tuning/beams.tres
 	game/scenes/dev/greybox.tscn
 )
 

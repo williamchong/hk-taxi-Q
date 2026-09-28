@@ -12,27 +12,24 @@
 ## that bound. Two lamps a car makes `max_spot_lights`
 ## a **car** count once divided, and that is why this cannot be left to
 ## `distance_fade` — fade bounds who competes, it does not cap how many win.
+##
+## 🔴 **No `@export` here declares a default**, on `WrongWayProfile`'s
+## convention (`Q150`): a default is a second copy of the tuning table, and a
+## second copy drifts — and Godot's writer drops any key equal to one, which is
+## how `tuning/beams.tres` shipped EMPTY for a while, every value living only
+## here. A missing key reads as zero, and `BeamBudget` refuses the table rather
+## than fall back to a literal. The rationale for each value is in
+## `tuning/beams.md`; what each *is* is here.
 class_name BeamProfile
 extends Resource
 
+## Path to the shipped table. `beam_budget.gd` restates it as a literal — it may
+## not name this class — and `verify_beam_budget.gd` pins the two equal.
+const PATH: String = "res://tuning/beams.tres"
+
 ## Spot lights the renderer will honour on one object at once.
-##
-## 8 is measured, not quoted: brightness was linear to eight and **exactly zero**
-## from the ninth. Lower it to buy headroom for anything else that throws a spot;
-## raising it past the driver's own limit buys nothing and hides the cliff again.
-@export_range(0, 16, 1) var max_spot_lights: int = 8
-
+@export_range(0, 16, 1) var max_spot_lights: int
 ## How often the grant is re-ranked, in hertz.
-##
-## ⚠️ **Deliberately not every frame.** The ranking is a sort over every car with
-## a lamp rig, and beams that re-rank at frame rate *swap* at frame rate — a car
-## a metre either side of the cut flickers as the order churns. Slow enough that
-## a swap reads as a car arriving, fast enough that it has arrived before the
-## player is past it.
-@export_range(1.0, 60.0, 1.0) var regrant_hz: float = 6.0
-
+@export_range(1.0, 60.0, 1.0) var regrant_hz: float
 ## Extra distance a rig must make up before it takes a lit rig's slot, in metres.
-##
-## Hysteresis, and the reason two cars driving abreast do not trade beams every
-## regrant. Costs nothing when the field is not tied, which is most of the time.
-@export_range(0.0, 50.0, 0.5) var swap_margin_m: float = 8.0
+@export_range(0.0, 50.0, 0.5) var swap_margin_m: float

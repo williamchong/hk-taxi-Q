@@ -30,8 +30,9 @@ extends Node
 ## resolves at parse time, and a tool or a test scene that never loads
 ## `VehicleLamps` would fail to compile this instead of simply having no rigs.
 
+## ⚠️ A literal, and it must equal `BeamProfile.PATH` — this script may not name
+## that global (see `_profile`), so `verify_beam_budget.gd` pins the two equal.
 const PROFILE_PATH := "res://tuning/beams.tres"
-const PROFILE_SCRIPT := "res://scripts/vehicle/beam_profile.gd"
 
 ## Registered rigs, in registration order. Each entry is the rig node itself;
 ## everything else is asked of it when the grant is computed, so a rig that moves
@@ -45,7 +46,10 @@ var _granted: Dictionary = {}
 ## written — `verify_beam_budget.gd` `load`s it on a fresh clone, and a parse
 ## failure there exits **0** having checked nothing. `ARCHITECTURE.md` records
 ## that trap for `--script` tools; this is the same trap reached from the other
-## side, so the fields are read by name with the measured limits as fallbacks.
+## side, so the fields are read by name. There are no fallbacks behind them
+## since `Q150`: `beam_profile.gd` declares no defaults, so a table that did not
+## load or carries a zero is refused at `adopt` and this stays null — no rig is
+## ever granted, and the error names the file and the field.
 var _profile: Resource = null
 var _since_regrant_s: float = 0.0
 ## Set by `register`, consumed on the next frame. See `register`.
@@ -53,48 +57,62 @@ var _dirty: bool = false
 
 
 func _ready() -> void:
-	_profile = load(PROFILE_PATH) as Resource
-	if _profile == null:
-		# Not fatal, and deliberately so: a missing tuning file must not stop the
-		# game booting.
-		#
-		# ⚠️ **The fallback is the profile *script's* own defaults, not literals
-		# repeated here.** Hard rule 4 puts tuning values in `.tres`, and a second
-		# copy in code is a copy that goes stale: lower `max_spot_lights`'s default
-		# in `beam_profile.gd` against a hardcoded 8 here, and a missing-profile
-		# boot grants *more* than the profile intends — the one direction a
-		# fallback must never go. Instantiated by path rather than by `class_name`,
-		# for the reason `_profile`'s own comment gives.
-		push_warning("BeamBudget: no profile at %s; using the script defaults." % PROFILE_PATH)
-		var script: GDScript = load(PROFILE_SCRIPT) as GDScript
-		if script != null:
-			_profile = script.new() as Resource
+	adopt(load(PROFILE_PATH) as Resource)
 	# Nothing registered yet, and most scenes never will — a menu, or any car
 	# carrying no `SpotLight3D` at all. Woken by `register`.
 	set_process(false)
 
 
-func _number(field: StringName, fallback: float) -> float:
-	# `fallback` covers only the case where even the script would not load, which
-	# is a broken install rather than a missing tuning file.
-	if _profile == null:
-		return fallback
+## Take a tuning table, or refuse it and grant nothing.
+##
+## `_ready`'s one path, and the seam `verify_beam_budget.gd` feeds a zeroed
+## duplicate through — on `SkillTracker.setup`'s pattern. ⚠️ **Refused, never
+## defaulted.** The fallback this replaced instantiated `beam_profile.gd` for its
+## `@export` defaults, and since `Q150` the script declares none: a `.new()` would
+## read every dial as zero and grant nothing while saying nothing. The one key
+## guarded is the one whose zero divides (`regrant_hz`, floor 1.0);
+## `max_spot_lights` may legally be 0 — light nothing — and `swap_margin_m` 0.0.
+func adopt(table: Resource) -> void:
+	_profile = null
+	if table == null:
+		push_error("BeamBudget: %s did not load; no beam will be granted." % PROFILE_PATH)
+		return
+	var required: Dictionary[String, float] = {"regrant_hz": float(table.get("regrant_hz"))}
+	if TuningTable.any_zero(table, required, "BeamBudget", "no beam will be granted"):
+		return
+	_profile = table
+
+
+## Whether a table was adopted. False, and every rig stays denied.
+func usable() -> bool:
+	return _profile != null
+
+
+func _number(field: StringName) -> float:
 	return float(_profile.get(field))
 
 
 func _cap() -> int:
-	return int(_number(&"max_spot_lights", 8.0))
+	# No table, no slots: `_regrant` then refuses every rig as over budget.
+	if _profile == null:
+		return 0
+	return int(_number(&"max_spot_lights"))
 
 
 func _regrant_hz() -> float:
-	# Clamped low, because `1.0 / 0.0` is INF and a budget that never re-ranks
-	# again fails by going quiet. `@export_range` stops the editor writing 0; it
-	# does not stop a hand-edited `.tres`.
-	return maxf(1.0, _number(&"regrant_hz", 6.0))
+	# A guard value on a refused table, not a default: `_process` divides by
+	# this, and with no slots to hand out the period is moot. `adopt` owns zero
+	# on a real table; `@export_range` stops the editor writing one, but not a
+	# hand-edited `.tres`.
+	if _profile == null:
+		return 1.0
+	return _number(&"regrant_hz")
 
 
 func _swap_margin_m() -> float:
-	return _number(&"swap_margin_m", 8.0)
+	if _profile == null:
+		return 0.0
+	return _number(&"swap_margin_m")
 
 
 ## Take a lamp rig into the budget. Idempotent.
