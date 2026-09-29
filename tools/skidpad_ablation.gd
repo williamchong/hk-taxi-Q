@@ -1,4 +1,4 @@
-## Grades the shipped handling model on `skidpad.tscn` — eight manoeuvres, three
+## Grades the shipped handling model on `skidpad.tscn` — nine manoeuvres, three
 ## tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
@@ -27,7 +27,7 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold"
+	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "ride"
 ]
 ## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
 ## table so the handling table keeps the shape every earlier pair was pasted in.
@@ -36,7 +36,11 @@ const MANOEUVRES: PackedStringArray = [
 ## the wheel after the release — `_countersteer`, what a player does — so its
 ## `longest` column is the one to set against `SkillProfile.drift_min_s`, the
 ## continuous dwell the fare pays on.
-const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold"]
+##
+## `ride` is `tap` read in this table: the player's own input — the tap, the
+## steering held into the turn, the throttle held — with no driver on the
+## wheel, so its `longest` is what a player gets without countersteering.
+const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold", "ride"]
 ## When `lift` lets the throttle go, and how long after it the slip is read.
 const LIFT_AT_S: float = 1.0
 const AFTER_LIFT_S: float = 0.5
@@ -84,7 +88,7 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold"]
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "ride"]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -456,6 +460,12 @@ func _measure_all() -> void:
 		# The tyre model's table is swept the same way (`Q152`): a field the
 		# handling table lacks is looked for there before the run is refused.
 		var tyre: Resource = _vehicle.get("tyre") as Resource
+		# 🔴 A name in both tables is refused: resolved to the handling table,
+		# a sweep of the tyre model's roll point wrote a copy that car does not
+		# read and printed five identical rows under five labels (`Q152`).
+		if tyre != null and _sweep_field in profile and _sweep_field in tyre:
+			_fail("sweep: '%s' is in both tables; rename one" % _sweep_field)
+			return
 		if not _sweep_field in profile and tyre != null and _sweep_field in tyre:
 			sweep_table = tyre
 		# See DEFAULT_SWEEP_FIELD: set() would swallow a typo or a rename and print
@@ -605,7 +615,7 @@ func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Resul
 			await _sample([&"accelerate", &"steer_right"], MANOEUVRE_S, false, result)
 		"drift":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result)
-		"tap":
+		"tap", "ride":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S)
 		"brake":
 			await _sample([&"brake_reverse"], TO_REST_LIMIT_S, true, result)

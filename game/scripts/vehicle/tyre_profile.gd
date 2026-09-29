@@ -53,9 +53,20 @@ const PATH: String = "res://tuning/tyre.tres"
 @export_range(0.0, 5.0, 0.05, "suffix:s") var traction_rearm_s: float
 ## How far down towards the contact the sideways force goes in: 0 at the
 ## centre of mass's height, 1 at the tyre's contact — Bullet's
-## `m_rollInfluence`, the handling table's `roll_influence`, which the engine's
-## own friction used and this car's zeroed friction no longer reads. Its own
-## dial because the drift depends on it: the weight a corner moves onto the
-## outer tyres is what lets the unloaded inner rear spin and turn the car, and
-## the shipped 0.2 takes most of that away.
-@export_range(0.0, 1.0, 0.05) var roll_influence: float
+## `m_rollInfluence`, which the handling table's `roll_influence` sets for the
+## engine's own friction and this car, its friction zeroed, no longer reads.
+## A dial of its own because the drift depends on it: the weight a corner
+## moves onto the outer tyres is what lets the unloaded inner rear spin and
+## turn the car, and the shipped 0.2 takes most of that away. A name of its own
+## because a sweep resolves a field by name across both tables, and a shared
+## one wrote the handling table's copy, which this car does not read.
+@export_range(0.0, 1.0, 0.05) var side_force_depth: float
+## Countersteer assist: while the car slides, the share of the slip angle the
+## front wheels are turned towards the travel, on top of the player's own
+## steering. 0 is none; 1 points the fronts along the travel past the tyre's
+## peak slip angle. A steering aid, not a force: the tyres still decide the
+## slide, the assist does what a keyboard's on-off steering cannot.
+@export_range(0.0, 1.5, 0.05) var countersteer_assist: float
+## The most the front wheels may turn while the assist countersteers, where
+## the handling table's lock narrows with speed (16.4° at 63 kph).
+@export_range(0.0, 60.0, 1.0, "suffix:°") var countersteer_lock_deg: float

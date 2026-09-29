@@ -25,10 +25,13 @@ extends VehicleController
 ##      length, and the spring and damper settings on the wheel give its force
 ##      (`_load_n`, Godot's own formula restated).
 ##
-## Everything else — steering, the speed taper, coast drag, wall response,
-## auto-righting, the published reads the fare and the lamps take — is the
-## parent's, unchanged, so the skidpad and a street drive grade this car with
-## no special case.
+##   4. A countersteer assist on top of the parent's steering while the car
+##      slides (`_update_steering`), because a keyboard cannot countersteer.
+##
+## Everything else — the player's steering, the speed taper, coast drag, wall
+## response, auto-righting, the published reads the fare and the lamps take —
+## is the parent's, unchanged, so the skidpad and a street drive grade this car
+## with no special case.
 ##
 ## ⚠️ **A table with a zero key leaves the car on the engine's tyres**: every
 ## override hands straight back to the parent, so the car drives as the
@@ -76,6 +79,10 @@ var _brake_dial: float = 0.0
 var _cost_us: int = 0
 var _cost_ticks: int = 0
 var _usable: bool = false
+## The player's steering as the parent's rate limit left it, before the
+## countersteer assist was added; restored before the parent's next step so
+## the limit ramps the player's angle and never the assist's.
+var _driver_steering: float = 0.0
 ## The wheel being solved and its tick's curve, so the force and the spin solve
 ## read one contact rather than passing seven numbers down every call.
 var _radius: float = 0.0
@@ -113,7 +120,7 @@ func _ready() -> void:
 
 ## Whether `table` can run the model. `handbrake_torque_nm`,
 ## `yaw_assist_scale`, `traction_limit`, `traction_rearm_s` and
-## `roll_influence` may legally be 0 — no handbrake, no assist, no traction
+## `side_force_depth` may legally be 0 — no handbrake, no assist, no traction
 ## control, re-arm on the slip alone, the force at the centre of mass — so a
 ## missing one cannot be told from a chosen one and is not guarded.
 static func usable(table: TyreProfile) -> bool:
@@ -148,6 +155,40 @@ func take_tyre_cost_us() -> float:
 	_cost_us = 0
 	_cost_ticks = 0
 	return mean
+
+
+## The parent's steering, then the countersteer assist on top: the front
+## wheels turned towards the travel by `countersteer_assist` of the slip angle
+## beyond the tyre's peak, up to `countersteer_lock_deg`. Keyboard and touch
+## steer near on-off, so the fine countersteer a slide needs is the one input
+## a player cannot give; `hold`'s driver gave it and held 2.62 s where the
+## player's `tap` input held nothing. `steer_ratio`, which the lamps read, stays
+## the player's.
+##
+## ⚠️ Not a slip setpoint (`Q72`): the assist aims the fronts along the travel
+## and asks for no angle. The throttle and the rear tyres set the slide.
+func _update_steering(delta: float) -> void:
+	if not _usable:
+		super._update_steering(delta)
+		return
+	steering = _driver_steering
+	super._update_steering(delta)
+	_driver_steering = steering
+	if tyre.countersteer_assist <= 0.0:
+		return
+	var travel := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+	if travel.length() < tyre.low_speed_mps:
+		return
+	var nose := -global_basis.z
+	nose.y = 0.0
+	# Positive when the travel is left of the nose, which is Godot's positive
+	# (left) steering: the countersteer for a tail out to the left.
+	var slip: float = nose.signed_angle_to(travel, Vector3.UP)
+	var beyond: float = absf(slip) - deg_to_rad(tyre.peak_slip_angle_deg)
+	if beyond <= 0.0:
+		return
+	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
+	steering = clampf(steering + signf(slip) * beyond * tyre.countersteer_assist, -lock, lock)
 
 
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`
@@ -192,6 +233,7 @@ func place_at(pose: Transform3D) -> void:
 	_loads.fill(0.0)
 	_traction_off = false
 	_released_s = 0.0
+	_driver_steering = 0.0
 
 
 func _apply_tyres(delta: float) -> void:
@@ -280,10 +322,10 @@ func _apply_tyres(delta: float) -> void:
 		# over the centre of mass scaled by `roll_influence` (Bullet's
 		# `m_rollInfluence`). At the contact itself this car's cornering grip
 		# is a rolling moment — on the street it tipped onto its side at a kerb.
-		# The tyre table's own share (`TyreProfile.roll_influence`), not the
+		# The tyre table's own share (`TyreProfile.side_force_depth`), not the
 		# handling table's 0.2, which took the drift's load transfer away.
 		var arm: Vector3 = point - com
-		var raised: Vector3 = arm - up * arm.dot(up) * (1.0 - tyre.roll_influence)
+		var raised: Vector3 = arm - up * arm.dot(up) * (1.0 - tyre.side_force_depth)
 		apply_force(forward * fx, point - global_position)
 		apply_force(side * fy, com + raised - global_position)
 	_turn_visuals(delta)

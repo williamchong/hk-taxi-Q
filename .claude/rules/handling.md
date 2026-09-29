@@ -99,8 +99,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `secs>thr` sums every run. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
   configuration. 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
   wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
-  past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.roll_influence`):
+  past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.side_force_depth`):
   at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
+  🔴 **With `countersteer_assist` on, grade on `ride`, never `hold`**: `ride` is the player's plain
+  input (tap, steering and throttle held); `hold`'s scripted driver countersteers on top of the
+  assist and kills the slide. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
+  renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
 - ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
   approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change
   against that band.
