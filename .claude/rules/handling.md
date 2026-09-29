@@ -78,6 +78,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   is down, so this is what "the countersteer turns the car the other way" is; read `yaw@hold`, not
   `snap`, before reaching for a tyre dial — the shipped car does it too, so the tyre table is not
   the lever.
+  ⚠️ Its timing columns (`to lock`, `settled`, `turns`, `wheel@turn`) say which half of the
+  steering turns the car: held throttle turns at full lock, lifted before it (`Q152`'s timing
+  round). A lever keyed on the slip falling back is late — the heading reverses first.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the

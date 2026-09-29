@@ -8159,3 +8159,23 @@ full lock and the lock at speed — or the grip itself (`Q152`'s trade b), never
 An early catch with the throttle down does not catch at all (slip goes on to 46°: the spinning
 rears cannot grip to straighten); lifted, the slide dies at once (15°). Not acted on.
 
+**The countersteer timing round (2026-09-30, Phase 0 of easing the catch).** The `catch` table
+gains four columns, each timed from the wheel going over: `to lock` (the fronts at full lock while
+held), `settled` (the slip under 14°), `turns` (the heading first turning the other way past
+5°/s) and `wheel@turn` (the share of lock then). Nothing the car does changed. At 42 / 63 / 86 kph
+on the spike, throttle held: `to lock` 0.40 s, `turns` 0.47–0.50 s at **1.00** of lock, `settled`
+0.52–0.55 s, then about 90°/s the other way; lifted, `turns` 0.35–0.37 s at 0.77–0.85 of lock and
+about 55°/s. The shipped car at 63 kph turns at 0.28 s with the wheel at **0.44** of lock
+(`settled` 0.13 s). Three readings:
+- **A lock-to-lock reversal runs at the attack rate the whole way** (0.40 s, not 0.08 + 0.2):
+  `_update_steering` picks `steer_release_s` only while `|target| ≤ |steering|`, and a full
+  opposite target is larger after the first tick. The quick return to centre never applies to a
+  countersteer.
+- **The car turns the other way before the slide reads as caught** in every spike row, so a lever
+  keyed on the slip falling under the tyre's peak acts too late; only the heading's reversal comes
+  in time, and a lock keyed on it is closer to an assist than a table.
+- **Split by throttle**: held, the turn begins just after the wheel arrives at full lock, so the
+  lock it keeps is the lever; lifted, it begins while the wheel is still swinging, so the rate is.
+The user's call on which lever, if either, is owed. ⚠️ At `--entry-kph` 42 and 86 the shipped
+car's tap does not slide (peak 3.9°, 2.7°) — not investigated; `Q89`'s band was read by run-up.
+
