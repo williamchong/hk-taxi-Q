@@ -101,9 +101,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
   past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.side_force_depth`):
   at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
-  🔴 **With `countersteer_assist` on, grade on `ride`, never `hold`**: `ride` is the player's plain
-  input (tap, steering and throttle held); `hold`'s scripted driver countersteers on top of the
-  assist and kills the slide. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
+  🔴 **`countersteer_assist` ships at 0 on the user's call (2026-09-29) — grade on `ride` AND
+  `hold`.** `ride` is the player's plain input (tap, steering and throttle held), `hold` a player
+  who countersteers. With the assist on, grade on `ride` only: `hold`'s driver countersteers on
+  top of the assist and kills the slide (0.13 s). ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
   renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
 - ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
   approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change

@@ -8118,4 +8118,13 @@ the input a keyboard or a thumb can give.
   (`greybox_grid.gdshader`, `GreyboxBuilder.ground_grid_m`, off in `greybox.tscn`). Paint on the
   same box and collider: the `tap` / `ride` rows are byte-identical with and without it. The
   HKCEC start line is not flattened — its kerbs and railings are the street veto's whole job (`Q86`).
+- **The countersteer assist is off, and countersteering is gameplay** (the user, after the pad
+  drive: "i want counter steering to be part of gameplay"): `countersteer_assist` absent from
+  `tyre.tres`, the mechanism kept behind the zero. 🔴 The plain-input `ride` row is meant to fall
+  short of the fare's bar; the countersteered `hold` row is the skill that pays — do not re-add the
+  assist to lift `ride`. Graded at 42 / 63 / 86 kph: `ride` 1.63 / 1.60 / 1.68 s (peak 28–30°, from 1.85 / 2.55 /
+  3.15 at 37–38°), and `hold` — a player who countersteers — 1.87 / 2.55 / 1.40 s where the assist
+  had left it 0.13 s. ⚠️ A plain input no longer reaches `drift_min_s` (2.0 s); the countersteered
+  slide does at 63 kph. `tyre.md` holds the table. Open: `hold` at 86 kph (1.40 s) is under the
+  bar, the speed-narrowed steering lock the suspect.
 

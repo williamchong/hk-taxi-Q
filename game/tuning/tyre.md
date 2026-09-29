@@ -15,7 +15,9 @@ and `Q152` holds the tables.
 `wheel_inertia_kgm2`, `low_speed_mps` and `drive_scale` are required: `tyre_profile.gd` declares no
 defaults, and a zero leaves the car on the engine's own tyres (`TyreVehicleController.usable`).
 `yaw_assist_scale` is absent because it is 0.0 — Godot's writer drops a value equal to the type's
-zero — and 0 is the choice: the yaw torque is not needed once the countersteer assist is on.
+zero — and 0 is the choice: the yaw torque did not rescue the low end and is not needed for the
+held slide. `countersteer_assist` is absent for the same reason, off on the user's call from the
+pad (2026-09-29, "i think we should not do countersteering"); its section below keeps the numbers.
 
 ## `mu = 2.0`
 
@@ -90,18 +92,30 @@ and on the full-throttle kerb it bounces the body 0.19 m less than 0.8 (peak 6.5
 both still lift the inside wheels at 72 kph. Its own name, not `roll_influence`: a sweep resolves a
 field by name across both tables, and the shared name swept the handling table's copy.
 
-## `countersteer_assist = 1.5`
+## `countersteer_assist` — absent, 0.0
 
-While the car slides past the tyre's peak slip angle, the front wheels are turned towards the
-travel by 1.5 times the excess, on top of the player's steering. Keyboard and touch steer near on
-or off, so the fine countersteer a slide needs is the one input a player cannot give. Swept on
-`ride` (the player's input): 0 → 1.5 took 63 kph from 1.43 to 2.60 s above 14° and 86 kph from 1.57
-to 3.22 s with the peak held under 40°; 1.0 and 1.25 peaked near 50°. The `corner` row is untouched —
-the assist waits for a slide. ⚠️ With it on, `hold`'s scripted driver countersteers on top of it and
-kills the slide (0.13 s): grade the assisted car on `ride`, not `hold`.
+Off, on the user's call after driving the pad by hand (2026-09-29, "i want counter steering to
+be part of gameplay"): countersteering is the player's skill, not the car's. 🔴 Do not bring the
+assist back to lift the `ride` row — that row is *meant* to fall short of the fare's bar; the
+countersteered `hold` row is the one that pays. The mechanism stays in `TyreVehicleController._update_steering` behind
+the zero: while the car slides past the tyre's peak, the fronts would turn towards the travel by
+this share of the excess, and at 1.5 a plain held input (`ride`) held 1.85 / 2.55 / 3.15 s above 14°
+at 42 / 63 / 86 kph with the peak under 40°, where `hold`'s scripted driver, countersteering on top
+of it, killed the slide (0.13 s). At 0, graded the same day:
+
+| entry kph | `ride` longest | `ride` peak | `hold` longest | `hold` peak |
+|---|---|---|---|---|
+| 42 | 1.63 s | 28.0° | 1.87 s | 25.8° |
+| 63 | 1.60 s | 28.5° | 2.55 s | 24.9° |
+| 86 | 1.68 s | 30.3° | 1.40 s | 27.5° |
+
+A plain input does not reach the fare's first payment (`drift_min_s` 2.0 s); a player who
+countersteers does at 63 kph — the design. Both rows grade this car now. Open: `hold` at 86 kph
+(1.40 s) sits under the bar, and the handling table's speed-narrowed steering lock is the likely
+reason a countersteer has less to give up there.
 
 ## `countersteer_lock_deg = 35.0`
 
-How far the fronts may turn while the assist countersteers, where the handling table narrows the
+Inert while `countersteer_assist` is 0. How far the fronts may turn while the assist countersteers, where the handling table narrows the
 player's lock with speed (16.4° at 63 kph). A slide of 37° needs a front wheel near that angle to
 point along the travel.

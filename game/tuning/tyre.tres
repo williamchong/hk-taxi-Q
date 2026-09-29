@@ -16,5 +16,4 @@ drive_scale = 2.0
 traction_limit = 1.0
 traction_rearm_s = 2.0
 side_force_depth = 0.7
-countersteer_assist = 1.5
 countersteer_lock_deg = 35.0
