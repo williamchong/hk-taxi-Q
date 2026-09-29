@@ -176,19 +176,24 @@ func _update_steering(delta: float) -> void:
 	_driver_steering = steering
 	if tyre.countersteer_assist <= 0.0:
 		return
-	var travel := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
-	if travel.length() < tyre.low_speed_mps:
+	var nose: Vector3 = -global_basis.z
+	# Forward travel only: backing up reads as a slip near 180° and would snap
+	# the fronts to the assist's full lock; past 90° the car has spun anyway.
+	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < tyre.low_speed_mps:
 		return
-	var nose := -global_basis.z
-	nose.y = 0.0
-	# Positive when the travel is left of the nose, which is Godot's positive
-	# (left) steering: the countersteer for a tail out to the left.
-	var slip: float = nose.signed_angle_to(travel, Vector3.UP)
-	var beyond: float = absf(slip) - deg_to_rad(tyre.peak_slip_angle_deg)
+	# The size is the game's own slip (`FareSystem.slip_deg_of`, the one the
+	# fare pays on); the sign, from the cross product's up component, is
+	# positive when the travel is left of the nose — Godot's positive (left)
+	# steering, the countersteer for a tail out to the left.
+	var slip_deg: float = FareSystem.slip_deg_of(linear_velocity, nose)
+	var beyond: float = deg_to_rad(slip_deg - tyre.peak_slip_angle_deg)
 	if beyond <= 0.0:
 		return
+	var toward: float = signf(nose.cross(linear_velocity).y)
+	# Never less lock than the player already has: the assist adds to their
+	# angle and is clamped only where it would pass `countersteer_lock_deg`.
 	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
-	steering = clampf(steering + signf(slip) * beyond * tyre.countersteer_assist, -lock, lock)
+	steering = clampf(steering + toward * beyond * tyre.countersteer_assist, -lock, lock)
 
 
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`
@@ -319,8 +324,8 @@ func _apply_tyres(delta: float) -> void:
 			fx = clampf(fx, -cap * absf(_along), cap * absf(_along))
 		var fy: float = clampf(mean.y, -cap * absf(across), cap * absf(across))
 		# The sideways force goes in where Godot's does: the contact's height
-		# over the centre of mass scaled by `roll_influence` (Bullet's
-		# `m_rollInfluence`). At the contact itself this car's cornering grip
+		# over the centre of mass scaled by `side_force_depth` (Bullet's
+		# `m_rollInfluence`, the handling table's `roll_influence`). At the contact itself this car's cornering grip
 		# is a rolling moment — on the street it tipped onto its side at a kerb.
 		# The tyre table's own share (`TyreProfile.side_force_depth`), not the
 		# handling table's 0.2, which took the drift's load transfer away.

@@ -5,15 +5,16 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all nine
+#   --only=drift                     one manoeuvre instead of all eight
 #                                    (corner, drift, tap, brake, coast, wall,
-#                                    lift, hold, ride). The last three print
+#                                    lift, hold). lift, hold and ride print
 #                                    their own table (Q152): lift lets the
 #                                    throttle go mid-slide, hold puts a
 #                                    countersteering driver on the wheel, ride
-#                                    is the player's plain input (tap, steering
-#                                    and throttle held), and `longest` is the
-#                                    unbroken dwell the fare's drift pays on
+#                                    is tap's run reprinted there as the
+#                                    player's plain input (--only=ride runs
+#                                    tap), and `longest` is the unbroken dwell
+#                                    the fare's drift pays on
 #   --wall-deg=10,30,90              the wall rows' angles between the travel
 #                                    and the face (90 head-on). The wall
 #                                    manoeuvre stands its own slab and grades

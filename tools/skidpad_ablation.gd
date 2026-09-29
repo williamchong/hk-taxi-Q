@@ -1,4 +1,4 @@
-## Grades the shipped handling model on `skidpad.tscn` — nine manoeuvres, three
+## Grades the shipped handling model on `skidpad.tscn` — eight manoeuvres, three
 ## tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
@@ -27,7 +27,7 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "ride"
+	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold"
 ]
 ## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
 ## table so the handling table keeps the shape every earlier pair was pasted in.
@@ -39,7 +39,9 @@ const MANOEUVRES: PackedStringArray = [
 ##
 ## `ride` is `tap` read in this table: the player's own input — the tap, the
 ## steering held into the turn, the throttle held — with no driver on the
-## wheel, so its `longest` is what a player gets without countersteering.
+## wheel, so its `longest` is what a player gets without countersteering. Not
+## simulated twice: `tap`'s result is printed again under this name, and
+## `--only=ride` runs `tap`.
 const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold", "ride"]
 ## When `lift` lets the throttle go, and how long after it the slip is read.
 const LIFT_AT_S: float = 1.0
@@ -88,7 +90,7 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "ride"]
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold"]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -502,7 +504,7 @@ func _measure_all() -> void:
 		if not is_nan(value):
 			sweep_table.set(_sweep_field, value)
 		for manoeuvre: String in MANOEUVRES:
-			if not _only.is_empty() and _only != manoeuvre:
+			if not _only.is_empty() and _only != manoeuvre and not _rides(manoeuvre):
 				continue
 			if manoeuvre == "wall":
 				# A row per angle; never swept, a wall does not take the drift
@@ -541,12 +543,17 @@ func _measure_all() -> void:
 	var walls: Array[Result] = []
 	var sustained: Array[Result] = []
 	for result: Result in results:
-		if result.name.begins_with("wall@"):
+		var manoeuvre: String = result.name.get_slice("@", 0)
+		if manoeuvre == "wall":
 			walls.append(result)
-		elif result.name.get_slice("@", 0) in SUSTAIN_MANOEUVRES:
+		elif manoeuvre in SUSTAIN_MANOEUVRES:
 			sustained.append(result)
 		else:
-			handling.append(result)
+			if manoeuvre == "tap":
+				sustained.append(_as_ride(result))
+			# `--only=ride` asked for the sustain row alone.
+			if not _rides(manoeuvre):
+				handling.append(result)
 	if not handling.is_empty():
 		_print_table(handling)
 	if not walls.is_empty():
@@ -615,7 +622,7 @@ func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Resul
 			await _sample([&"accelerate", &"steer_right"], MANOEUVRE_S, false, result)
 		"drift":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result)
-		"tap", "ride":
+		"tap":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S)
 		"brake":
 			await _sample([&"brake_reverse"], TO_REST_LIMIT_S, true, result)
@@ -934,6 +941,21 @@ func _print_wall_table(results: Array[Result]) -> void:
 				]
 			)
 		)
+
+
+## Whether `--only=ride` asked for this manoeuvre: `ride` is `tap`'s run.
+func _rides(manoeuvre: String) -> bool:
+	return _only == "ride" and manoeuvre == "tap"
+
+
+## `tap`'s result under `ride`'s name, for the sustain table.
+static func _as_ride(tap: Result) -> Result:
+	var ride := Result.new()
+	for field: Dictionary in ride.get_property_list():
+		if field["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			ride.set(field["name"], tap.get(field["name"]))
+	ride.name = tap.name.replace("tap", "ride")
+	return ride
 
 
 ## The rows that ask whether a slide is kept (`Q152`), in their own table so
