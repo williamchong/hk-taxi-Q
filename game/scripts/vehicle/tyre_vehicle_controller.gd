@@ -28,6 +28,9 @@ extends VehicleController
 ##   4. A countersteer assist on top of the parent's steering while the car
 ##      slides (`_update_steering`). Shipped at 0 — countersteering is the
 ##      player's skill, on the user's call (`tyre.md`) — and kept behind it.
+##      A wider steering lock for the player on the countersteer side while
+##      the car slides (`_steer_lock_rad`) is also behind a zero: swept and
+##      refuted on the pad's driver.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
 ## response, auto-righting, the published reads the fare and the lamps take —
@@ -176,24 +179,57 @@ func _update_steering(delta: float) -> void:
 	_driver_steering = steering
 	if tyre.countersteer_assist <= 0.0:
 		return
-	var nose: Vector3 = -global_basis.z
-	# Forward travel only: backing up reads as a slip near 180° and would snap
-	# the fronts to the assist's full lock; past 90° the car has spun anyway.
-	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < tyre.low_speed_mps:
-		return
-	# The size is the game's own slip (`FareSystem.slip_deg_of`, the one the
-	# fare pays on); the sign, from the cross product's up component, is
-	# positive when the travel is left of the nose — Godot's positive (left)
-	# steering, the countersteer for a tail out to the left.
-	var slip_deg: float = FareSystem.slip_deg_of(linear_velocity, nose)
-	var beyond: float = deg_to_rad(slip_deg - tyre.peak_slip_angle_deg)
+	var beyond: float = _slide_beyond_peak_rad()
 	if beyond <= 0.0:
 		return
-	var toward: float = signf(nose.cross(linear_velocity).y)
 	# Never less lock than the player already has: the assist adds to their
 	# angle and is clamped only where it would pass `countersteer_lock_deg`.
 	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
-	steering = clampf(steering + toward * beyond * tyre.countersteer_assist, -lock, lock)
+	steering = clampf(steering + _slide_toward() * beyond * tyre.countersteer_assist, -lock, lock)
+
+
+## The lock the player has while the car slides: the parent's speed-narrowed
+## lock, widened to `slide_lock_deg` on the countersteer side alone once the
+## slip is past the tyre's peak. Built on the suspicion that the handling
+## table's lock (16° at 63 kph, under 14° at 86) was why a countersteered
+## slide at 86 kph fell short of the fare's 2 s; swept and refuted — every
+## value past the table's lock SHORTENED `hold` at all three speeds, because
+## the pad's driver steers a share of the lock it has and a wider one makes
+## its catch a straightening (`tyre.md`). Shipped absent, so 0 and inert; kept
+## because a player's hands, unlike the driver's, scale to the wheel, and the
+## user's own drive is the grade that could still want it. One side only: a
+## wider lock INTO the slide at 86 kph is a spin, not a skill. No angle asked
+## for (`Q72`).
+func _steer_lock_rad(speed_ratio: float) -> float:
+	var lock: float = super._steer_lock_rad(speed_ratio)
+	if not _usable or tyre.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
+		return lock
+	# `steer_input` is +1 for right, and the parent negates it into Godot's
+	# positive-left angle; `_slide_toward` is in the angle's sign, so the
+	# player is countersteering when the two have opposite signs.
+	if -steer_input * _slide_toward() <= 0.0:
+		return lock
+	return maxf(lock, deg_to_rad(tyre.slide_lock_deg))
+
+
+## How far the body's slip is past the tyre's peak, in radians, or 0 when it
+## is not sliding forward. The size is the game's own slip
+## (`FareSystem.slip_deg_of`, the one the fare pays on). Forward travel only:
+## backing up reads as a slip near 180° and would snap the fronts to full
+## lock; past 90° the car has spun anyway.
+func _slide_beyond_peak_rad() -> float:
+	var nose: Vector3 = -global_basis.z
+	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < tyre.low_speed_mps:
+		return 0.0
+	var slip_deg: float = FareSystem.slip_deg_of(linear_velocity, nose)
+	return maxf(deg_to_rad(slip_deg - tyre.peak_slip_angle_deg), 0.0)
+
+
+## The countersteer's sign in Godot's steering angle: from the cross product's
+## up component, positive when the travel is left of the nose — Godot's
+## positive (left) steering, the countersteer for a tail out to the left.
+func _slide_toward() -> float:
+	return signf((-global_basis.z).cross(linear_velocity).y)
 
 
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`

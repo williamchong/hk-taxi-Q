@@ -8128,3 +8128,14 @@ the input a keyboard or a thumb can give.
   slide does at 63 kph. `tyre.md` holds the table. Open: `hold` at 86 kph (1.40 s) is under the
   bar, the speed-narrowed steering lock the suspect.
 
+**The lock round (2026-09-29, the same day).** The suspect refuted. A wider steering lock for the
+player on the countersteer side while the car slides past the tyre's peak (`slide_lock_deg`,
+`TyreVehicleController._steer_lock_rad` over a behaviour-neutral seam in the parent, the shipped
+table byte-identical at 4 / 6 / 8 s) was swept 0–45° on `hold` at 42, 63 and 86 kph: under the
+table's lock inert, over it SHORTER at every speed (86 kph: 1.40 → 0.90 → 0.40 → 0.33 s at 0 / 24 /
+35 / 45°, the exit 72 → 105 kph). The reason is the instrument: the pad's driver commands a share
+of the lock it has, so more lock is more countersteer and the catch becomes a straightening; the
+driver's 20° target was set by the old lock in the first place. Shipped absent, mechanism kept
+(`tyre.md`, the rule in `handling.md`). What limits `hold` at 86 kph is still open, the drive's
+speed taper the next suspect; the driver itself is to be questioned before the next dial.
+

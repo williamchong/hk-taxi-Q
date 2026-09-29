@@ -387,9 +387,7 @@ func is_reversing() -> bool:
 ## switch. `steering` is now both the state and the output.
 func _update_steering(delta: float) -> void:
 	var speed_ratio: float = clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0)
-	var max_angle: float = deg_to_rad(
-		lerpf(profile.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio)
-	)
+	var max_angle: float = _steer_lock_rad(speed_ratio)
 	# Negated: steer_input is +1 for right, but a positive rotation about +Y
 	# turns the -Z forward vector toward -X, which is left.
 	var target: float = -steer_input * max_angle
@@ -404,6 +402,16 @@ func _update_steering(delta: float) -> void:
 	# that would fail loudly. This one would only ever produce a NAN in a lamp, so
 	# it is handled rather than asserted.
 	steer_ratio = -steering / max_angle if max_angle > 0.0 else 0.0
+
+
+## The lock available at this share of the limiter: `steer_angle_max_deg` at
+## rest, narrowing to `steer_angle_at_top_deg` at the limiter. A method so a
+## subclass can widen it (`TyreVehicleController` does, while the car slides);
+## the shipped car's table is unchanged by the seam.
+func _steer_lock_rad(speed_ratio: float) -> float:
+	return deg_to_rad(
+		lerpf(profile.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio)
+	)
 
 
 ## Throttle, brake and reverse, onto the two properties VehicleBody3D drives on.

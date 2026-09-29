@@ -64,6 +64,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
   deepens underneath it. Sweep the taper dial itself (`Q88`).
+- 🔴 **`hold`'s driver commands a SHARE of the lock, so a steering-lock change re-tunes the driver,
+  not the car** (`Q152`, the `slide_lock_deg` sweep in `tyre.md`): a wider lock while sliding read as
+  a SHORTER `hold` at every speed, because three quarters of 35° is a straightening where three
+  quarters of 14° was a catch. Its 20° target was itself set by the old lock. Grade a lock change on
+  the user's own drive, and never read `hold` as evidence that a lock is too narrow or too wide.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the

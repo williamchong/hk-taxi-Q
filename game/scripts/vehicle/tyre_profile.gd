@@ -70,3 +70,8 @@ const PATH: String = "res://tuning/tyre.tres"
 ## The most the front wheels may turn while the assist countersteers, where
 ## the handling table's lock narrows with speed (16.4° at 63 kph).
 @export_range(0.0, 60.0, 1.0, "suffix:°") var countersteer_lock_deg: float
+## The lock the PLAYER has on the countersteer side while the car slides past
+## the tyre's peak, where the handling table narrows it with speed (16.4° at
+## 63 kph, under 14° at 86). 0 leaves the table's lock alone. Absent from
+## `tyre.tres`: swept and refuted on the pad's driver (`tyre.md`).
+@export_range(0.0, 60.0, 1.0, "suffix:°") var slide_lock_deg: float

@@ -18,6 +18,8 @@ defaults, and a zero leaves the car on the engine's own tyres (`TyreVehicleContr
 zero — and 0 is the choice: the yaw torque did not rescue the low end and is not needed for the
 held slide. `countersteer_assist` is absent for the same reason, off on the user's call from the
 pad (2026-09-29, "i think we should not do countersteering"); its section below keeps the numbers.
+`slide_lock_deg` is absent for the same reason, refuted on the pad's driver; its section keeps the
+sweep.
 
 ## `mu = 2.0`
 
@@ -113,11 +115,42 @@ peak under 40°; 1.0 and 1.25 peaked near 50°. At 1.5 a plain held input held 1
 
 A plain input does not reach the fare's first payment (`drift_min_s` 2.0 s); a player who
 countersteers does at 63 kph — the design. Both rows grade this car now. Open: `hold` at 86 kph
-(1.40 s) sits under the bar, and the handling table's speed-narrowed steering lock is the likely
-reason a countersteer has less to give up there.
+(1.40 s) sits under the bar. The handling table's speed-narrowed steering lock was the suspect and
+is refuted (`slide_lock_deg` below).
 
 ## `countersteer_lock_deg = 35.0`
 
 Inert while `countersteer_assist` is 0. How far the fronts may turn while the assist
 countersteers, where the handling table narrows the player's lock with speed (16.4° at 63 kph). A
 slide of 37° needs a front wheel near that angle to point along the travel.
+
+## `slide_lock_deg` — absent, 0.0
+
+The lock the player has on the countersteer side while the car slides past the tyre's peak, where
+the handling table narrows it with speed (18.9° at 42 kph, 16.4° at 63, 13.6° at 86). Built on the
+suspicion above — a 27° slide needs a front wheel near that angle to point along the travel, and a
+countersteer at 86 kph had less to give than the slide asked. Swept on `hold` at all three speeds
+(2026-09-29), 0 being the table's lock alone:
+
+| `slide_lock_deg` | 42 kph `hold` / exit | 63 kph `hold` / exit | 86 kph `hold` / exit |
+|---|---|---|---|
+| 0 | 1.87 s / 50.7 kph | 2.55 s / 45.1 kph | 1.40 s / 71.6 kph |
+| 16 | 1.87 s / 50.7 | 2.55 s / 45.1 | 1.40 s / 71.5 |
+| 20 | 1.85 s / 53.5 | 2.55 s / 49.0 | — |
+| 24 | 0.78 s / 74.2 | 0.75 s / 81.6 | 0.90 s / 91.4 |
+| 35 | 0.37 s / 85.6 | 0.37 s / 97.2 | 0.40 s / 102.8 |
+| 45 | — | — | 0.33 s / 104.7 |
+
+Refuted: a value under the table's lock is inert, and every value over it SHORTENS the slide at
+every speed while the exit speed climbs — the driver catches the slide sooner and the throttle
+takes the straightened car away. The reason is the pad's driver, not the tyres:
+`skidpad_ablation._countersteer` commands a share of whatever lock the car has (three quarters of
+it at 27° of slip), so a wider lock re-tunes the driver, and 35° of lock makes its catch a 26°
+countersteer that straightens the car inside a step. `ride` never moves (its steering is held into
+the slide, so the lock never widens); `corner`, `brake` and `coast` are unmoved by construction.
+Absent, so 0 and inert; the tables above are byte-identical with the mechanism in the tree. Kept
+because a player's hands scale to the wheel where the driver's do not, and the user's own drive on
+the pad is the only grade that could still want it. 🔴 Do not set it to lift `hold` — the sweep
+says it cannot. What limits `hold` at 86 kph is still open; the drive's speed taper is the next
+suspect, and the driver itself (a gain in lock shares, a 20° target set by the old lock) is an
+instrument to question before another dial is.
