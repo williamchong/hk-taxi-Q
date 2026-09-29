@@ -24,6 +24,14 @@ of the nearest segment on 1600 m of ground.
 be a second copy of the same vehicle model. `tools/skidpad.sh --scene=` still
 takes a path, for when the roster has a second car worth grading here.
 
+## `[node name="City" type="Node3D" parent="."]`
+
+`ground_grid_m = 5.0` draws a 5 m grid, heavier every 20 m, on the greybox
+ground (`greybox_grid.gdshader`, `P3-52`, the user's ask 2026-09-29). Paint on
+the same box and collider, so no number the ablation grades moves; it is for
+the human at the wheel, who otherwise has a flat grey field and no way to see
+the tail step out. `greybox.tscn` leaves it at 0.
+
 ## `[node name="Taxi" parent="." instance=ExtResource("2_taxi")]`
 
 Facing +X, the same basis `greybox.tscn` uses. Row-major, and forward is the

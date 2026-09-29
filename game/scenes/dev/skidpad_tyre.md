@@ -10,6 +10,10 @@ sun and camera, so the spike and the shipped car are graded on one pad. `skidpad
 reasoning for everything but the car. Graded with
 `tools/skidpad.sh --scene=res://scenes/dev/skidpad_tyre.tscn --entry-kph=63`.
 
+## `[node name="City" type="Node3D" parent="."]`
+
+The shipped pad's grid, `ground_grid_m = 5.0` — see `skidpad.md`.
+
 ## `[node name="Taxi" parent="." instance=ExtResource("2_taxi")]`
 
 The shipped pad's transform and `sun`, unchanged — see `skidpad.md`.

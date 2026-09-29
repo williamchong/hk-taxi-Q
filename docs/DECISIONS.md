@@ -8112,4 +8112,10 @@ the input a keyboard or a thumb can give.
   out, in lane (`build/driver/q152_play`); held 2.5 s the steering takes it on into the far railing.
 - Still open for gameplay: the doubled pace; `lift` at 42 and 63 kph (8.0°, 6.7°); the inside wheels
   lifting at a kerb at 72 kph; 218 µs a tick; and the user's own drive, which no pad row replaces.
+- The user's own drive is on the pad, not the street ("can you let me drive in the ideal pad",
+  same day): `godot --path game res://scenes/dev/skidpad_tyre.tscn`, WASD, Space to drift. A flat
+  grey field gives the eye nothing, so both pads draw a 5 m grid, heavier every 20 m
+  (`greybox_grid.gdshader`, `GreyboxBuilder.ground_grid_m`, off in `greybox.tscn`). Paint on the
+  same box and collider: the `tap` / `ride` rows are byte-identical with and without it. The
+  HKCEC start line is not flattened — its kerbs and railings are the street veto's whole job (`Q86`).
 

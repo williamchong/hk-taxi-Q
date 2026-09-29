@@ -13,8 +13,17 @@ extends Node3D
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const SUPPORTED_SCHEMA: int = 1
 const SIDES: Array[float] = [-1.0, 1.0]
+## Loaded on use rather than preloaded, so `greybox.tscn`, which draws no
+## grid, never parses it.
+const GRID_SHADER_PATH: String = "res://assets/shaders/greybox_grid.gdshader"
 
 @export_file("*.json") var layout_path: String = "res://assets/authored/greybox_wanchai.json"
+
+## Draw a metre grid on the ground, every this many metres; 0 leaves the ground
+## the flat colour the layout names. The skidpad scenes set it so a human driver
+## has something to read a slide against (`P3-52`); paint only, on the same box
+## and collider, so nothing the skidpad grades moves. Off in `greybox.tscn`.
+@export var ground_grid_m: float = 0.0
 
 var _materials: Dictionary = {}
 ## Carriageway footprints in XZ, collected while building roads so that flanking
@@ -74,12 +83,27 @@ func _drivable_width(road_class: Dictionary) -> float:
 
 func _build_ground(ground: Dictionary) -> void:
 	var size: float = float(ground["size_m"])
+	var material: Material
+	if ground_grid_m > 0.0:
+		material = _grid_material(ground["colour"])
+	else:
+		material = _material("ground", ground["colour"])
 	_add_box(
 		Transform3D(Basis.IDENTITY, Vector3(0.0, -_slab_thickness * 0.5, 0.0)),
 		Vector3(size, _slab_thickness, size),
-		_material("ground", ground["colour"]),
+		material,
 		"Ground"
 	)
+
+
+## The ground's flat colour with `ground_grid_m` lines over it; the shader
+## lifts its own line colours from the base.
+func _grid_material(colour: Array) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = load(GRID_SHADER_PATH)
+	material.set_shader_parameter("grid_m", ground_grid_m)
+	material.set_shader_parameter("base_colour", Color(colour[0], colour[1], colour[2]))
+	return material
 
 
 func _build_segment(segment: Dictionary, road_class: Dictionary, kerb: Dictionary) -> void:
@@ -203,9 +227,7 @@ func _blocks_a_road(centre: Vector3, frame: Basis, footprint: float) -> bool:
 	return false
 
 
-func _add_box(
-	placement: Transform3D, size: Vector3, material: StandardMaterial3D, node_name: String
-) -> void:
+func _add_box(placement: Transform3D, size: Vector3, material: Material, node_name: String) -> void:
 	var body := StaticBody3D.new()
 	body.name = node_name
 	body.transform = placement

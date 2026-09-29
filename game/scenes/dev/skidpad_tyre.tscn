@@ -24,6 +24,7 @@ shadow_enabled = true
 
 [node name="City" type="Node3D" parent="." unique_id=1295540199]
 script = ExtResource("1_builder")
+ground_grid_m = 5.0
 
 [node name="Taxi" parent="." unique_id=163217350 node_paths=PackedStringArray("sun") instance=ExtResource("2_taxi")]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -400, 1, -500)
