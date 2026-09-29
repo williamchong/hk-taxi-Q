@@ -1,4 +1,4 @@
-## Grades the shipped handling model on `skidpad.tscn` — eight manoeuvres, three
+## Grades the shipped handling model on `skidpad.tscn` — nine manoeuvres, four
 ## tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
@@ -102,7 +102,7 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold"]
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "catch"]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -233,7 +233,8 @@ var _catch_lift: bool = false
 ## `--catch-at=<s>`: countersteer at this many seconds into the manoeuvre
 ## instead of at the slide's peak — an EARLY catch, while the slide is still
 ## building. `--catch-late=<s>`: this long after the peak — a LATE one, when
-## the car is already straightening on its own. 0 is the peak itself.
+## the car is already straightening on its own. 0, the default of both, is
+## the peak itself; the flags refuse it.
 var _catch_at_s: float = 0.0
 var _catch_late_s: float = 0.0
 ## The slab the wall manoeuvre stood last, freed before the next row.
@@ -387,10 +388,14 @@ func _parse_args() -> bool:
 						return false
 					angles.append(angle)
 				_wall_deg = angles
-			"--catch-at":
-				_catch_at_s = bits[1].to_float()
-			"--catch-late":
-				_catch_late_s = bits[1].to_float()
+			"--catch-at", "--catch-late":
+				if not bits[1].strip_edges().is_valid_float() or bits[1].to_float() <= 0.0:
+					_fail("%s wants seconds over 0, got '%s'" % [bits[0], bits[1]])
+					return false
+				if bits[0] == "--catch-at":
+					_catch_at_s = bits[1].to_float()
+				else:
+					_catch_late_s = bits[1].to_float()
 			"--catch-s":
 				var holds: Array[float] = []
 				for text: String in bits[1].split(","):
@@ -568,18 +573,6 @@ func _measure_all() -> void:
 						return
 					results.append(hit)
 				continue
-			if manoeuvre == "catch":
-				# A row per hold, never swept, for the wall's reason.
-				if not is_nan(value) and value != values[0]:
-					continue
-				for hold_s: float in _catch_s:
-					var caught: Result = await _measure(
-						manoeuvre, "catch@%.1fs" % hold_s, 90.0, hold_s
-					)
-					if caught == null:
-						return
-					results.append(caught)
-				continue
 			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
 			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
 			# For such a field the other three never
@@ -591,6 +584,18 @@ func _measure_all() -> void:
 			# stop, so it must not be the tool doing it.
 			var swept: bool = not is_nan(value) and (not confined or manoeuvre in DRIFT_MANOEUVRES)
 			if not is_nan(value) and not swept and value != values[0]:
+				continue
+			if manoeuvre == "catch":
+				# A row per hold, and swept like the other drift rows: the catch
+				# taps the drift button, so a drift dial or a tyre field moves it.
+				for hold_s: float in _catch_s:
+					var label: String = "catch@%.1fs" % hold_s
+					if swept:
+						label += "@%.4f" % value
+					var caught: Result = await _measure(manoeuvre, label, 90.0, hold_s)
+					if caught == null:
+						return
+					results.append(caught)
 				continue
 			var result: Result = await _measure(
 				manoeuvre, "%s@%.4f" % [manoeuvre, value] if swept else manoeuvre
@@ -834,7 +839,6 @@ func _sample(
 	var out_sign: float = 0.0
 	var out_peak: float = 0.0
 	var peak_at_s: float = INF
-	var catch_off_s: float = INF
 	var yaw_at_catch: float = 0.0
 
 	while t < limit_s:
@@ -891,13 +895,13 @@ func _sample(
 					into.slip_at_catch_deg = slip_deg
 					into.snap_deg = 0.0
 					yaw_at_catch = into.yaw_deg
-					catch_off_s = t + catch_s
 					_release_everything()
 					if not _catch_lift:
 						Input.action_press(&"accelerate")
 					Input.action_press(&"steer_right" if out_sign > 0.0 else &"steer_left")
 			else:
 				into.snap_deg = maxf(into.snap_deg, -signed * out_sign)
+				var catch_off_s: float = into.catch_at_s + catch_s
 				if t >= catch_off_s and is_nan(into.yaw_in_catch_deg):
 					# A right-hand drift (tail out left, `out_sign` −1) sweeps a
 					# negative heading; corrected so its own way reads negative
@@ -939,6 +943,18 @@ func _speed_kph() -> float:
 ## flattening below is what those recorded figures mean.
 ##
 ## Flattened to the ground plane so a ramp or a landing cannot read as slip.
+func _slip_deg() -> float:
+	var velocity: Vector3 = _vehicle.linear_velocity
+	var travel := Vector3(velocity.x, 0.0, velocity.z)
+	if travel.length() < SLIP_FLOOR_MPS:
+		return 0.0
+	var nose: Vector3 = -_vehicle.global_basis.z
+	var heading := Vector3(nose.x, 0.0, nose.z)
+	if heading.is_zero_approx():
+		return 0.0
+	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
+
+
 ## The slip's sign, +1 when the travel is to the right of the nose (the tail
 ## out to the LEFT, a right-hand drift's), −1 the other way, 0 stopped.
 ## ⚠️ Read against the same flattened travel and nose as `_slip_deg`, so the
@@ -951,18 +967,6 @@ func _slip_sign() -> float:
 		return 0.0
 	var nose: Vector3 = -_vehicle.global_basis.z
 	return -signf(nose.cross(travel).y)
-
-
-func _slip_deg() -> float:
-	var velocity: Vector3 = _vehicle.linear_velocity
-	var travel := Vector3(velocity.x, 0.0, velocity.z)
-	if travel.length() < SLIP_FLOOR_MPS:
-		return 0.0
-	var nose: Vector3 = -_vehicle.global_basis.z
-	var heading := Vector3(nose.x, 0.0, nose.z)
-	if heading.is_zero_approx():
-		return 0.0
-	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
 
 
 ## `hold`'s driver, one tick: steer into the corner while the slip is under
