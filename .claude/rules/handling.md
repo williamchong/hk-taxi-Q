@@ -69,6 +69,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   a SHORTER `hold` at every speed, because three quarters of 35° is a straightening where three
   quarters of 14° was a catch. Its 20° target was itself set by the old lock. Grade a lock change on
   the user's own drive, and never read `hold` as evidence that a lock is too narrow or too wide.
+- ⚠️ **`--only=catch` grades the CATCH, and reads two things a countersteer can do** (`Q152`, the
+  street report of 2026-09-30): `snap` is the slip the other way after full opposite lock, and
+  `yaw@hold` the heading swept while it was held. Neither car snaps — under 0.4° at every timing,
+  early, at the peak or late, throttle held or lifted. Both TURN the other way once caught: full
+  lock on gripping tyres sweeps 50–70° the other way inside the next 0.7 s of a 1.5 s hold, about
+  85°/s, on the shipped car and the spike alike. A keyboard holds full lock for as long as the key
+  is down, so this is what "the countersteer turns the car the other way" is; read `yaw@hold`, not
+  `snap`, before reaching for a tyre dial — the shipped car does it too, so the tyre table is not
+  the lever.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the

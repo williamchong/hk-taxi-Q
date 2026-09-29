@@ -8139,3 +8139,23 @@ driver's 20° target was set by the old lock in the first place. Shipped absent,
 (`tyre.md`, the rule in `handling.md`). What limits `hold` at 86 kph is still open, the drive's
 speed taper the next suspect; the driver itself is to be questioned before the next dial.
 
+**The catch round (2026-09-30, the user: "in street the counter steer turn the car to other way
+too easily"; "still not sure if it is driver control timing issue or tuning issue").** The pad got
+a `catch` row to tell the two apart: the tap, then full opposite lock held 0.1–1.5 s from the
+slide's peak (or early, `--catch-at`, or late, `--catch-late`), throttle held or lifted
+(`--catch-lift`), reporting `snap` (the peak slip the other way after the catch) and `yaw@hold`
+(the heading swept while the wheel was held, positive the other way). Both cars at 63 kph, the
+spike at 42 and 86 too: **no snap at any timing** — under 0.4° early, at the peak or late, held
+or lifted; a slip the other way is not what happens. **What happens is a gripping turn.** The
+catch is done 0.4–0.8 s after the wheel goes over (0.2 s with the throttle lifted), and from then
+full opposite lock on tyres with 2.7 g of grip turns the car the other way at about 85°/s: `yaw@hold`
+−12 → +52° between a 0.8 and a 1.5 s hold on the spike with the throttle down, +12 → +69° on the
+shipped car. So it is both, and the split is clean: the car does not throw the tail the other way
+(not a tyre-table fault — the shipped car turns the same way at the same rate), and a keyboard
+holds full lock for as long as the key is down, so a countersteer held 0.3 s past the catch is a
+25° turn the other way (a timing demand the input device makes, which a thumb or a stick would
+modulate). The levers, if it is to be eased, are the shipped steering's — the 0.2 s attack to
+full lock and the lock at speed — or the grip itself (`Q152`'s trade b), never the slide dials.
+An early catch with the throttle down does not catch at all (slip goes on to 46°: the spinning
+rears cannot grip to straighten); lifted, the slide dies at once (15°). Not acted on.
+

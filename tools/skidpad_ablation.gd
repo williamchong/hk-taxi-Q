@@ -27,7 +27,7 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold"
+	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch"
 ]
 ## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
 ## table so the handling table keeps the shape every earlier pair was pasted in.
@@ -46,6 +46,9 @@ const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold", "ride"]
 ## When `lift` lets the throttle go, and how long after it the slip is read.
 const LIFT_AT_S: float = 1.0
 const AFTER_LIFT_S: float = 0.5
+## `catch`: how far the slide's angle must fall off its running peak before
+## the tool reads the peak as passed and countersteers.
+const CATCH_DROP_DEG: float = 0.5
 ## `hold`'s driver: the slip it steers for, and its two gains. A proportional
 ## term on the slip's error from the target and a damping term on how fast the
 ## slip is moving, both over the target so the gains are unitless; full lock
@@ -76,6 +79,15 @@ const DRIFT_ACTIONS: Array[StringName] = [&"accelerate", &"steer_right", &"drift
 ## manoeuvre that brings its own obstacle, since the pad is kept clear of
 ## every building on purpose (`skidpad.md`).
 const DEFAULT_WALL_DEG: Array[float] = [10.0, 30.0, 90.0]
+## `catch`: the tap, then full OPPOSITE lock held for each of these seconds
+## from the tick the slide's angle stops growing, then the wheel let go with
+## the throttle still down — a keyboard player's countersteer, timed as well
+## as it can be. Asks whether the car swings the other way (`snap`, the peak
+## slip of the opposite sign after the catch) because the countersteer was
+## held too long (a timing fault: `snap` grows with the seconds) or because
+## the car does it on any catch (a tuning fault: `snap` at the shortest
+## hold). A row per value, like the wall's angles; never swept.
+const DEFAULT_CATCH_S: Array[float] = [0.1, 0.2, 0.4, 0.8]
 ## How far ahead of the car, at the end of the run-up, the wall is stood.
 ## Close enough that the entry speed is the impact speed, far enough that the
 ## body is not inside it when it appears.
@@ -212,6 +224,18 @@ var _sweep: Array[float] = []
 ## through hand-edited tuning files is the hazard above.
 var _sweep_field: StringName = DEFAULT_SWEEP_FIELD
 var _wall_deg: Array[float] = DEFAULT_WALL_DEG.duplicate()
+var _catch_s: Array[float] = DEFAULT_CATCH_S.duplicate()
+## `--catch-lift`: the catch lets the throttle go as the wheel goes over —
+## the street instinct — where the default keeps it down. With the drive on,
+## the rears are still spinning past the drift button and have little side
+## grip to swing the car with; lifted, they regrip, and that is the pendulum.
+var _catch_lift: bool = false
+## `--catch-at=<s>`: countersteer at this many seconds into the manoeuvre
+## instead of at the slide's peak — an EARLY catch, while the slide is still
+## building. `--catch-late=<s>`: this long after the peak — a LATE one, when
+## the car is already straightening on its own. 0 is the peak itself.
+var _catch_at_s: float = 0.0
+var _catch_late_s: float = 0.0
 ## The slab the wall manoeuvre stood last, freed before the next row.
 var _wall: StaticBody3D = null
 ## Slip angle `seconds_above_deg` counts against, read off the profile at boot.
@@ -289,6 +313,18 @@ class Result:
 	## `AFTER_LIFT_S` later. NAN on every other row.
 	var slip_at_lift_deg: float = NAN
 	var slip_after_lift_deg: float = NAN
+	## `catch` only: when the countersteer went on after the release, the
+	## slip then, the largest slip of the OPPOSITE sign after it, and the
+	## slip 0.5 s after the wheel was let go. NAN on every other row.
+	var catch_at_s: float = NAN
+	var slip_at_catch_deg: float = NAN
+	var snap_deg: float = NAN
+	var slip_after_catch_deg: float = NAN
+	## Heading swept while the countersteer was held, sign-corrected: negative
+	## is the way the drift was turning, positive the OTHER way — a gripping
+	## turn the other way once the slide is caught, which `snap_deg` (slip)
+	## cannot see.
+	var yaw_in_catch_deg: float = NAN
 	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
 	## without one.
 	var tyre_cost_us: float = NAN
@@ -312,6 +348,9 @@ func _run() -> void:
 
 func _parse_args() -> bool:
 	for arg: String in OS.get_cmdline_user_args():
+		if arg == "--catch-lift":
+			_catch_lift = true
+			continue
 		var bits: PackedStringArray = arg.split("=", true, 1)
 		if bits.size() < 2 or bits[1].is_empty():
 			_fail("%s needs a value, as %s=..." % [bits[0], bits[0]])
@@ -348,6 +387,18 @@ func _parse_args() -> bool:
 						return false
 					angles.append(angle)
 				_wall_deg = angles
+			"--catch-at":
+				_catch_at_s = bits[1].to_float()
+			"--catch-late":
+				_catch_late_s = bits[1].to_float()
+			"--catch-s":
+				var holds: Array[float] = []
+				for text: String in bits[1].split(","):
+					if not text.strip_edges().is_valid_float() or text.to_float() <= 0.0:
+						_fail("--catch-s wants seconds over 0, got '%s'" % text)
+						return false
+					holds.append(text.to_float())
+				_catch_s = holds
 			"--sweep":
 				# Split once more, so the field name carries its own "=" separator
 				# and `--sweep=drift_yaw_decay_s=0.4,0.6` reads as one flag.
@@ -517,6 +568,18 @@ func _measure_all() -> void:
 						return
 					results.append(hit)
 				continue
+			if manoeuvre == "catch":
+				# A row per hold, never swept, for the wall's reason.
+				if not is_nan(value) and value != values[0]:
+					continue
+				for hold_s: float in _catch_s:
+					var caught: Result = await _measure(
+						manoeuvre, "catch@%.1fs" % hold_s, 90.0, hold_s
+					)
+					if caught == null:
+						return
+					results.append(caught)
+				continue
 			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
 			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
 			# For such a field the other three never
@@ -542,10 +605,13 @@ func _measure_all() -> void:
 	var handling: Array[Result] = []
 	var walls: Array[Result] = []
 	var sustained: Array[Result] = []
+	var catches: Array[Result] = []
 	for result: Result in results:
 		var manoeuvre: String = result.name.get_slice("@", 0)
 		if manoeuvre == "wall":
 			walls.append(result)
+		elif manoeuvre == "catch":
+			catches.append(result)
 		elif manoeuvre in SUSTAIN_MANOEUVRES:
 			sustained.append(result)
 		else:
@@ -558,6 +624,8 @@ func _measure_all() -> void:
 		_print_table(handling)
 	if not walls.is_empty():
 		_print_wall_table(walls)
+	if not catches.is_empty():
+		_print_catch_table(catches)
 	if not sustained.is_empty():
 		_print_sustain_table(sustained)
 
@@ -569,7 +637,9 @@ func _measure_all() -> void:
 ## straight-line acceleration that says nothing about grip. Its *result* is
 ## reported, as `entry kph`, which is the number to quote when comparing runs at
 ## different `--run-up`.
-func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Result:
+func _measure(
+	manoeuvre: String, label: String, wall_deg: float = 90.0, catch_s: float = 0.0
+) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
 	if _wall != null:
@@ -634,6 +704,8 @@ func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Resul
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, LIFT_AT_S)
 		"hold":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, true)
+		"catch":
+			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, false, catch_s)
 		_:
 			_fail("unknown manoeuvre '%s'" % manoeuvre)
 			return null
@@ -740,7 +812,8 @@ func _sample(
 	into: Result,
 	drift_release_s: float = INF,
 	lift_at_s: float = INF,
-	countersteer: bool = false
+	countersteer: bool = false,
+	catch_s: float = 0.0
 ) -> void:
 	# ⚠️ Released first. The run-up holds the throttle and nothing had dropped it,
 	# so the coast manoeuvre measured 30 s of *acceleration* to 126 kph and then
@@ -756,6 +829,13 @@ func _sample(
 	var last_heading: float = _vehicle.global_rotation.y
 	var last_slip: float = 0.0
 	var run_s: float = 0.0
+	# `catch`: the sign the tail went out with, the running peak it is judged
+	# against, and when the wheel went over and came back.
+	var out_sign: float = 0.0
+	var out_peak: float = 0.0
+	var peak_at_s: float = INF
+	var catch_off_s: float = INF
+	var yaw_at_catch: float = 0.0
 
 	while t < limit_s:
 		await physics_frame
@@ -788,6 +868,45 @@ func _sample(
 			into.slip_after_lift_deg = slip_deg
 		if countersteer and t >= drift_release_s:
 			_countersteer(slip_deg, (slip_deg - last_slip) / _step)
+		if catch_s > 0.0 and t >= drift_release_s:
+			var signed: float = slip_deg * _slip_sign()
+			if is_nan(into.catch_at_s):
+				# Wait for the slide to stop growing, then go to full opposite
+				# lock: the best-timed catch a keyboard can give.
+				if out_sign == 0.0 and slip_deg >= _slip_threshold_deg:
+					out_sign = signf(signed)
+				if out_sign != 0.0 and signed * out_sign > out_peak:
+					out_peak = signed * out_sign
+				elif (
+					out_sign != 0.0
+					and out_peak - signed * out_sign > CATCH_DROP_DEG
+					and peak_at_s == INF
+				):
+					peak_at_s = t
+				var due: bool = (
+					t >= _catch_at_s if _catch_at_s > 0.0 else t >= peak_at_s + _catch_late_s
+				)
+				if due and out_sign != 0.0:
+					into.catch_at_s = t
+					into.slip_at_catch_deg = slip_deg
+					into.snap_deg = 0.0
+					yaw_at_catch = into.yaw_deg
+					catch_off_s = t + catch_s
+					_release_everything()
+					if not _catch_lift:
+						Input.action_press(&"accelerate")
+					Input.action_press(&"steer_right" if out_sign > 0.0 else &"steer_left")
+			else:
+				into.snap_deg = maxf(into.snap_deg, -signed * out_sign)
+				if t >= catch_off_s and is_nan(into.yaw_in_catch_deg):
+					# A right-hand drift (tail out left, `out_sign` −1) sweeps a
+					# negative heading; corrected so its own way reads negative
+					# for either hand.
+					into.yaw_in_catch_deg = (into.yaw_deg - yaw_at_catch) * -out_sign
+					Input.action_release(&"steer_left")
+					Input.action_release(&"steer_right")
+				if t >= catch_off_s + AFTER_LIFT_S and is_nan(into.slip_after_catch_deg):
+					into.slip_after_catch_deg = signed * out_sign
 		last_slip = slip_deg
 		if to_rest and _speed_kph() <= STOPPED_KPH:
 			break
@@ -820,6 +939,20 @@ func _speed_kph() -> float:
 ## flattening below is what those recorded figures mean.
 ##
 ## Flattened to the ground plane so a ramp or a landing cannot read as slip.
+## The slip's sign, +1 when the travel is to the right of the nose (the tail
+## out to the LEFT, a right-hand drift's), −1 the other way, 0 stopped.
+## ⚠️ Read against the same flattened travel and nose as `_slip_deg`, so the
+## two agree tick for tick; not `TyreVehicleController._slide_toward`, which
+## is in Godot's steering sign and belongs to the car.
+func _slip_sign() -> float:
+	var velocity: Vector3 = _vehicle.linear_velocity
+	var travel := Vector3(velocity.x, 0.0, velocity.z)
+	if travel.length() < SLIP_FLOOR_MPS:
+		return 0.0
+	var nose: Vector3 = -_vehicle.global_basis.z
+	return -signf(nose.cross(travel).y)
+
+
 func _slip_deg() -> float:
 	var velocity: Vector3 = _vehicle.linear_velocity
 	var travel := Vector3(velocity.x, 0.0, velocity.z)
@@ -1000,6 +1133,59 @@ func _print_sustain_table(results: Array[Result]) -> void:
 					_or_dash(result.slip_after_lift_deg, "%.1f"),
 					"%.1f" % result.yaw_deg,
 					_or_dash(result.tyre_cost_us, "%.1f"),
+				]
+			)
+		)
+
+
+## The `catch` rows: when the wheel went over, the slip then, the swing the
+## other way (`snap`, the peak slip of the opposite sign after it) and the
+## slip 0.5 s after the wheel was let go, sign-corrected so a positive number
+## is still the original tail-out side and a negative one the snap. A row
+## whose `snap` is over the threshold at the shortest hold is the car's
+## doing; one whose `snap` grows only with the hold is the driver's.
+func _print_catch_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s" % width
+	print("")
+	print(
+		(
+			row_format
+			% [
+				"run",
+				"entry",
+				"exit",
+				"peak slip",
+				"caught at",
+				"at catch",
+				"snap",
+				"+0.5 s",
+				"yaw@hold"
+			]
+		)
+	)
+	print(row_format % ["", "kph", "kph", "deg", "s", "deg", "deg", "deg", "deg"])
+	if _catch_lift:
+		print("  throttle lifted at the catch (--catch-lift)")
+	if _catch_at_s > 0.0:
+		print("  countersteer at %.2f s, before the peak (--catch-at)" % _catch_at_s)
+	elif _catch_late_s > 0.0:
+		print("  countersteer %.2f s after the peak (--catch-late)" % _catch_late_s)
+	for result: Result in results:
+		_printed_rows += 1
+		print(
+			(
+				row_format
+				% [
+					result.name,
+					"%.2f" % result.entry_kph,
+					"%.2f" % result.exit_kph,
+					"%.1f" % result.peak_slip_deg,
+					_or_dash(result.catch_at_s, "%.2f"),
+					_or_dash(result.slip_at_catch_deg, "%.1f"),
+					_or_dash(result.snap_deg, "%.1f"),
+					_or_dash(result.slip_after_catch_deg, "%.1f"),
+					_or_dash(result.yaw_in_catch_deg, "%.1f"),
 				]
 			)
 		)

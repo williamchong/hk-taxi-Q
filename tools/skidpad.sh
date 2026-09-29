@@ -5,9 +5,9 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all eight
+#   --only=drift                     one manoeuvre instead of all nine
 #                                    (corner, drift, tap, brake, coast, wall,
-#                                    lift, hold). lift, hold and ride print
+#                                    lift, hold, catch). lift, hold and ride print
 #                                    their own table (Q152): lift lets the
 #                                    throttle go mid-slide, hold puts a
 #                                    countersteering driver on the wheel, ride
@@ -15,6 +15,16 @@
 #                                    player's plain input (--only=ride runs
 #                                    tap), and `longest` is the unbroken dwell
 #                                    the fare's drift pays on
+#   --catch-s=0.1,0.2,0.4,0.8        the catch rows: the tap, then full OPPOSITE
+#                                    lock held for each of these seconds from
+#                                    the slide's peak, then the wheel let go.
+#                                    `snap` is the peak slip the OTHER way
+#                                    after it, `yaw@hold` the heading swept
+#                                    while it was held (positive = the other
+#                                    way). --catch-lift lifts the throttle at
+#                                    the catch; --catch-at=<s> countersteers
+#                                    that far into the manoeuvre (early),
+#                                    --catch-late=<s> that long after the peak
 #   --wall-deg=10,30,90              the wall rows' angles between the travel
 #                                    and the face (90 head-on). The wall
 #                                    manoeuvre stands its own slab and grades
