@@ -97,11 +97,13 @@ field by name across both tables, and the shared name swept the handling table's
 Off, on the user's call after driving the pad by hand (2026-09-29, "i want counter steering to
 be part of gameplay"): countersteering is the player's skill, not the car's. 🔴 Do not bring the
 assist back to lift the `ride` row — that row is *meant* to fall short of the fare's bar; the
-countersteered `hold` row is the one that pays. The mechanism stays in `TyreVehicleController._update_steering` behind
-the zero: while the car slides past the tyre's peak, the fronts would turn towards the travel by
-this share of the excess, and at 1.5 a plain held input (`ride`) held 1.85 / 2.55 / 3.15 s above 14°
-at 42 / 63 / 86 kph with the peak under 40°, where `hold`'s scripted driver, countersteering on top
-of it, killed the slide (0.13 s). At 0, graded the same day:
+countersteered `hold` row is the one that pays. The mechanism stays in
+`TyreVehicleController._update_steering` behind the zero: while the car slides past the tyre's
+peak, the fronts would turn towards the travel by this share of the excess. Swept on `ride` before
+the call: 0 → 1.5 took 63 kph from 1.43 to 2.60 s above 14° and 86 kph from 1.57 to 3.22 s with the
+peak under 40°; 1.0 and 1.25 peaked near 50°. At 1.5 a plain held input held 1.85 / 2.55 / 3.15 s at
+42 / 63 / 86 kph, where `hold`'s scripted driver, countersteering on top of it, killed the slide
+(0.13 s). At 0, graded the same day:
 
 | entry kph | `ride` longest | `ride` peak | `hold` longest | `hold` peak |
 |---|---|---|---|---|
@@ -116,6 +118,6 @@ reason a countersteer has less to give up there.
 
 ## `countersteer_lock_deg = 35.0`
 
-Inert while `countersteer_assist` is 0. How far the fronts may turn while the assist countersteers, where the handling table narrows the
-player's lock with speed (16.4° at 63 kph). A slide of 37° needs a front wheel near that angle to
-point along the travel.
+Inert while `countersteer_assist` is 0. How far the fronts may turn while the assist
+countersteers, where the handling table narrows the player's lock with speed (16.4° at 63 kph). A
+slide of 37° needs a front wheel near that angle to point along the travel.

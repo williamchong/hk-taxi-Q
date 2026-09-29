@@ -65,7 +65,7 @@ const PATH: String = "res://tuning/tyre.tres"
 ## front wheels are turned towards the travel, on top of the player's own
 ## steering. 0 is none; 1 points the fronts along the travel past the tyre's
 ## peak slip angle. A steering aid, not a force: the tyres still decide the
-## slide, the assist does what a keyboard's on-off steering cannot.
+## slide. Absent from `tyre.tres`: countersteering is the player's skill.
 @export_range(0.0, 1.5, 0.05) var countersteer_assist: float
 ## The most the front wheels may turn while the assist countersteers, where
 ## the handling table's lock narrows with speed (16.4° at 63 kph).

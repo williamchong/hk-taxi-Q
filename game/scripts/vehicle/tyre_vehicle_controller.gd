@@ -26,7 +26,8 @@ extends VehicleController
 ##      (`_load_n`, Godot's own formula restated).
 ##
 ##   4. A countersteer assist on top of the parent's steering while the car
-##      slides (`_update_steering`), because a keyboard cannot countersteer.
+##      slides (`_update_steering`). Shipped at 0 — countersteering is the
+##      player's skill, on the user's call (`tyre.md`) — and kept behind it.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
 ## response, auto-righting, the published reads the fare and the lamps take —
@@ -159,11 +160,10 @@ func take_tyre_cost_us() -> float:
 
 ## The parent's steering, then the countersteer assist on top: the front
 ## wheels turned towards the travel by `countersteer_assist` of the slip angle
-## beyond the tyre's peak, up to `countersteer_lock_deg`. Keyboard and touch
-## steer near on-off, so the fine countersteer a slide needs is the one input
-## a player cannot give; `hold`'s driver gave it and held 2.62 s where the
-## player's `tap` input held nothing. `steer_ratio`, which the lamps read, stays
-## the player's.
+## beyond the tyre's peak, up to `countersteer_lock_deg`. Built because keyboard
+## and touch steer near on-off; shipped at 0 because the user wants the
+## countersteer to be the player's (`tyre.md` has both tables). `steer_ratio`,
+## which the lamps read, stays the player's.
 ##
 ## ⚠️ Not a slip setpoint (`Q72`): the assist aims the fronts along the travel
 ## and asks for no angle. The throttle and the rear tyres set the slide.
