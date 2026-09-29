@@ -49,6 +49,12 @@ const AFTER_LIFT_S: float = 0.5
 ## `catch`: how far the slide's angle must fall off its running peak before
 ## the tool reads the peak as passed and countersteers.
 const CATCH_DROP_DEG: float = 0.5
+## `catch`: the heading rate, the other way, past which the car reads as
+## turning against the drift (`turns`). Over zero so a tick's jitter at the
+## reversal is not the event.
+const TURN_DPS: float = 5.0
+## `catch`: the share of the lock at which the wheel reads as there (`to lock`).
+const FULL_LOCK_SHARE: float = 0.99
 ## `hold`'s driver: the slip it steers for, and its two gains. A proportional
 ## term on the slip's error from the target and a damping term on how fast the
 ## slip is moving, both over the target so the gains are unitless; full lock
@@ -326,6 +332,19 @@ class Result:
 	## turn the other way once the slide is caught, which `snap_deg` (slip)
 	## cannot see.
 	var yaw_in_catch_deg: float = NAN
+	## `catch` only, each in seconds from the tick the wheel went over, NAN
+	## where it never happened: the front wheels reaching the countersteer's
+	## full lock while it is held (`steer_ratio`, a share of the lock at that
+	## speed), the slip falling under the threshold, and the heading first
+	## turning the OTHER way faster than `TURN_DPS`. `wheel_at_turn` is the
+	## share of lock on that last tick, near 0 if the turn came after the wheel
+	## was let go. Together they say whether the turn the
+	## other way comes from how fast the wheel arrives or from how much lock
+	## it keeps once it is there.
+	var to_lock_s: float = NAN
+	var settled_s: float = NAN
+	var turns_s: float = NAN
+	var wheel_at_turn: float = NAN
 	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
 	## without one.
 	var tyre_cost_us: float = NAN
@@ -851,7 +870,8 @@ func _sample(
 		var position: Vector3 = _vehicle.global_position
 		var heading: float = _vehicle.global_rotation.y
 		into.distance_m += last_position.distance_to(position)
-		into.yaw_deg += rad_to_deg(angle_difference(last_heading, heading))
+		var yaw_step_deg: float = rad_to_deg(angle_difference(last_heading, heading))
+		into.yaw_deg += yaw_step_deg
 		var slip_deg: float = _slip_deg()
 		into.peak_slip_deg = maxf(into.peak_slip_deg, slip_deg)
 		if slip_deg >= _slip_threshold_deg:
@@ -902,6 +922,18 @@ func _sample(
 			else:
 				into.snap_deg = maxf(into.snap_deg, -signed * out_sign)
 				var catch_off_s: float = into.catch_at_s + catch_s
+				var since_s: float = t - into.catch_at_s
+				# The countersteer's lock is the tail's side: `steer_ratio`
+				# follows `steer_input`, and the tool pressed right for a tail
+				# out right (`out_sign` +1), left for a tail out left (−1).
+				var wheel: float = float(_vehicle.get("steer_ratio")) * out_sign
+				if is_nan(into.to_lock_s) and t < catch_off_s and wheel >= FULL_LOCK_SHARE:
+					into.to_lock_s = since_s
+				if is_nan(into.settled_s) and signed * out_sign < _slip_threshold_deg:
+					into.settled_s = since_s
+				if is_nan(into.turns_s) and yaw_step_deg * -out_sign / _step > TURN_DPS:
+					into.turns_s = since_s
+					into.wheel_at_turn = wheel
 				if t >= catch_off_s and is_nan(into.yaw_in_catch_deg):
 					# A right-hand drift (tail out left, `out_sign` −1) sweeps a
 					# negative heading; corrected so its own way reads negative
@@ -1150,7 +1182,9 @@ func _print_sustain_table(results: Array[Result]) -> void:
 ## doing; one whose `snap` grows only with the hold is the driver's.
 func _print_catch_table(results: Array[Result]) -> void:
 	var width: int = _column_width(results)
-	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s" % width
+	var row_format: String = (
+		"%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s %%8s %%8s %%8s %%10s" % width
+	)
 	print("")
 	print(
 		(
@@ -1164,11 +1198,20 @@ func _print_catch_table(results: Array[Result]) -> void:
 				"at catch",
 				"snap",
 				"+0.5 s",
-				"yaw@hold"
+				"yaw@hold",
+				"to lock",
+				"settled",
+				"turns",
+				"wheel@turn"
 			]
 		)
 	)
-	print(row_format % ["", "kph", "kph", "deg", "s", "deg", "deg", "deg", "deg"])
+	print(
+		(
+			row_format
+			% ["", "kph", "kph", "deg", "s", "deg", "deg", "deg", "deg", "s", "s", "s", "of lock"]
+		)
+	)
 	if _catch_lift:
 		print("  throttle lifted at the catch (--catch-lift)")
 	if _catch_at_s > 0.0:
@@ -1190,6 +1233,10 @@ func _print_catch_table(results: Array[Result]) -> void:
 					_or_dash(result.snap_deg, "%.1f"),
 					_or_dash(result.slip_after_catch_deg, "%.1f"),
 					_or_dash(result.yaw_in_catch_deg, "%.1f"),
+					_or_dash(result.to_lock_s, "%.2f"),
+					_or_dash(result.settled_s, "%.2f"),
+					_or_dash(result.turns_s, "%.2f"),
+					_or_dash(result.wheel_at_turn, "%.2f"),
 				]
 			)
 		)

@@ -21,7 +21,13 @@
 #                                    `snap` is the peak slip the OTHER way
 #                                    after it, `yaw@hold` the heading swept
 #                                    while it was held (positive = the other
-#                                    way). --catch-lift lifts the throttle at
+#                                    way). `to lock`, `settled` and `turns`
+#                                    time, from the wheel going over, the
+#                                    wheel reaching full lock, the slip
+#                                    falling under the threshold and the car
+#                                    first turning the other way;
+#                                    `wheel@turn` is the share of lock then.
+#                                    --catch-lift lifts the throttle at
 #                                    the catch; --catch-at=<s> countersteers
 #                                    that far into the manoeuvre (early),
 #                                    --catch-late=<s> that long after the peak
