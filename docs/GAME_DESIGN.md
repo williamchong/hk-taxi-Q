@@ -181,6 +181,9 @@ here. See `.claude/rules/handling.md`.
 - ⬜ Open: the tap is dead below the design speed (3.9° at 42 km/h), and the yaw assist cannot fix
   it — there, unbroken grip turns torque into a tighter line (`Q89`). Sustained full lock spinning
   the car was never re-measured after `Q50`; re-grade before citing it.
+- 🟡 A physical drift is a spike, not the car (`P3-52`, `Q152`): a per-wheel tyre model holds a
+  countersteered slide past the 2 s the fare pays on, at twice the drive and with the car's
+  everyday cornering changed. The user's call on the trade is owed.
 
 ⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. Drift and
 `look_back` stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.

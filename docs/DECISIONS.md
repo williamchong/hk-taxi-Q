@@ -200,6 +200,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
+| `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | 🟡 Spike built and graded (`P3-52`); not shipped. The shipped taxi is untouched. Open: the user's call on the trade below. |
 
 ---
 
@@ -2564,7 +2565,8 @@ Re-seeded, not convertible from the old values:
 - `brake_force` 40 — Godot's `brake` is its own quantity; the old 2400 stopped the car at 173 m/s².
 - `tyre_grip` 2.5 — one number where there were two, chosen so `corner` holds the baseline speed.
 - `roll_influence` replaces `anti_roll`; `VehicleWheel3D` publishes no suspension compression
-  (`is_in_contact()` and `get_skidinfo()` only).
+  (`is_in_contact()` and `get_skidinfo()` only). ⚠️ Out of date for 4.7.2, which also publishes
+  the contact point, normal and body; `Q152` rebuilds the suspension force from them.
 - `suspension_max_force_n` 19000 — load-bearing: static corner load ≈ 4704 N leaves Godot's 6000 N
   default 1.27× headroom, and the spring clips on the first kerb silently.
 
@@ -7964,3 +7966,110 @@ exercised, so this is their first measurement.
   new in `_integrate_forces` reads `_velocity_into_step`; the state there is the solve, not the hit.
 
 **See.** `Q148` · `P3-50` · `Q84` · `docs/GAME_DESIGN.md` "Collision" · `.claude/rules/handling.md`
+
+---
+
+## `Q152` — A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering
+
+**Status.** 🟡 Spike built and graded 2026-09-29 (`P3-52`), on the user's ask to make the drift
+more real ("pre-change existing drift behaviour is not ideal, that's why this plan exists"). Not
+shipped: nothing the game loads changed. The trade at the end is the user's call.
+
+**The question.** `Q85` closed on "a tyre model layered on `VehicleWheel3D` is the only route to
+the physical mechanism; a `Q50`-scale call nobody has made". This builds that route as a second
+car and measures it, keeping `Q50`'s engine: Godot's suspension ray, spring, damper and contact,
+with the engine's tyre force turned off (`wheel_friction_slip` 0 zeroes both of its impulses) and
+a per-wheel model applied at each contact instead (`TyreVehicleController`, `TyreProfile`,
+`tuning/tyre.tres`, `scenes/vehicle/taxi_tyre.tscn`, `scenes/dev/skidpad_tyre.tscn`).
+
+**The pass bar, set before measuring** — skidpad rows at a fixed entry speed (`--entry-kph`, new
+here, because a car with another drive reaches another speed in the same seconds):
+
+| Row | Shipped | Spike | Bar | Verdict |
+|---|---|---|---|---|
+| `hold` longest unbroken dwell ≥ 14°, 63 / 86 kph | 0.12 / 0.00 s | 2.62 / 3.22 s | ≥ 2.0 s | pass |
+| `hold` peak slip, 63 / 86 kph | 14.4 / 2.7° | 23.5 / 27.2° | ≤ 60° | pass |
+| `lift` slip 0.5 s after the throttle comes up, 63 / 86 kph | 7.7 / 1.0° | 6.8 / 18.3° | ≥ 14° | 86 only |
+| `tap` peak slip at 42 kph | 3.9° | 9.2° | > 14° | fail |
+| `corner` exit / yaw at 63 kph | 62.35 kph / −358° | 109.17 / −251° | within 5% | fail |
+| `brake` decel at 42 / 63 / 86 kph | 8.42 / 8.75 / 9.07 m/s² | 8.32 / 8.58 / 8.88 | within 5% | pass |
+| `coast` decel at 42 / 63 / 86 kph | 1.54 / 1.84 / 2.14 m/s² | 1.50 / 1.78 / 2.09 | within 5% | pass |
+| tyre model per physics tick, desk, serial | — | 212–220 µs (318 before the solve took its exact slope) | stated | unpriced on a handset |
+
+The "held drift" row of the plan is read as `hold`: the drift button held for 4 s is now a real
+handbrake, and a held handbrake at full lock stops the car (`drift` exits 0 kph at every speed) —
+right for the physics, and not the slide the bar is about. `hold` taps the button for 0.5 s and
+puts a countersteering driver on the wheel (`skidpad_ablation._countersteer`: steers for 20°,
+feathers the throttle past it). The driver is the harness's, never the car's (`Q72`), and both cars
+get the same one. The shipped car under that driver dwells 0.12 s — `Q85`'s "no sustained drift
+equilibrium" measured directly.
+
+**What the model is, and the four things the measuring found wrong with it first.**
+
+1. **The load is rebuilt exactly** (phase 1's gate): Godot publishes the contact point, normal
+   and body (`Q50`'s "`is_in_contact()` and `get_skidinfo()` only" is out of date for 4.7.2), and
+   its own `_ray_cast` / `_update_suspension` restated give the spring force. ⚠️ Godot starts the
+   ray one radius above the hardpoint and rescales the hit onto the rest length; read as the hub's
+   drop minus a radius, the four loads summed to 1.50× the weight. Restated: 18,847 N against
+   18,816 N at rest (ratio 1.0017), front share 0.457 accelerating and 0.576 braking. The skidpad
+   prints the at-rest sum as `loads:` for any car that publishes `wheel_loads_n`, so the gate
+   re-runs with every grade.
+2. **The wheel's spin is solved implicitly** (a safeguarded Newton over 8 substeps a tick, the brake
+   as Coulomb friction). Stepped explicitly, a braked wheel past the curve's peak limit-cycled across
+   the road speed and the car crept at 1.2 m/s with the pedal down; clamped at zero slip instead, the
+   drive could not carry the rim past the road inside a step and the tap fell from 35° to 8°.
+   Solved, the brake is within 2.1% of the shipped car at all three speeds.
+3. **The forward force is never capped on a turning wheel** — a one-tick cap there held the car to
+   8.5 kph after 4 s of throttle. The sideways force keeps the cap near rest.
+4. **Where the sideways force goes in decides the drift.** At the contact the car's cornering grip
+   rolled it onto its side mounting a kerb on Expo Drive at 86 kph. At Godot's own
+   `roll_influence` 0.2 nothing slides: the load a corner moves onto the outer tyres is what lets the
+   unloaded inner rear spin and the outer rear push the tail round, and 0.2 takes most of it away
+   (`hold` 5.9° / 4.4°). `TyreProfile.roll_influence` 0.8 holds the slide and, on the same kerb at
+   72 kph, puts the car on two wheels and lands it upright.
+
+**What holding a slide costs, which is the finding.**
+
+- **Twice the drive** (`drive_scale` 2.0): a slide is held by spinning the rear tyres, and at the
+  shipped drive they cannot be spun — the corner row needs 1.7 g of grip, and the taxi's engine is
+  a third of what breaks that. Doubled, the car runs up to 119 kph in 4 s where it made 63, and the
+  `corner` row accelerates through the bend instead of holding its speed — the row fails on the
+  drive, not on the tyres.
+- **Traction control with a drift mode** (`traction_limit` 1.0, `traction_rearm_s` 1.0) is what
+  keeps full throttle at full lock gripping (peak 2.5° where it was 82°): drive is cut past peak
+  wheelspin, the drift button switches it off, and it re-arms once the button has been up 1 s and
+  the body's slip is under the 14° the game scores on. Keyed first on the combined slip, it cut the
+  drive at every cornering limit; keyed on the tyres' regrip, it re-armed before the throttle could
+  take the slide over.
+- **The load transfer that rotates the car also lifts it at a kerb** — see 4.
+- **The yaw assist is not needed for the held slide** and does not rescue the low end: at full
+  `yaw_assist_scale` the tap at 42 kph is still 9.1°; the `lift` row at 63 kph reaches 17.6° only with
+  the full shipped assist.
+
+**Street veto** (`drive.sh --tyres=res://tuning/tyre.tres`, new, and the Expo Drive tap-and-turn):
+not vetoed. At matched speed (51 kph) the spike takes the shipped car's line into the underpass and
+stops against the same railing; at full throttle it arrives at 86 kph, runs wide onto the pavement
+and stops at the HKCEC wall on its wheels (`build/driver/q152_tyre_r08`). Nothing crossed a railing
+or spun across the carriageway.
+
+**Harness findings, kept.**
+
+- The skidpad gained `lift` and `hold` in their own table with `longest` (the unbroken dwell the
+  fare pays on), `--entry-kph`, `--sweep` reaching the tyre table, and a cost column. The shipped
+  car's handling table is byte-identical before and after at all three run-ups.
+- ⚠️ The shipped car's `wall@30` exit wanders 28.4–31.7 kph across runs of one HEAD at 63 kph
+  (approach and impact identical to the hundredth) — wider than `Q151`'s 0.5 kph band. Grade a wall
+  change against that.
+- ⚠️ `hold` on the spike carries ±0.3 s run to run at one configuration (2.37 / 2.45 / 2.72 s)
+  because the entry lands on a slightly different tick.
+
+**The user's call.** A physical slide is reachable on `Q50`'s engine, and the tyre model is sound
+(load, spin and brake each checked against the engine or the shipped car). What it costs is the
+car's character: double the drive, a car that lifts a wheel at a kerb, and a corner row that no
+longer matches. Three ways on: (a) ship the spike's car and re-grade the everyday rows against a
+faster taxi, and every skill bar with them; (b) lower the grip to a real car's and re-derive the
+whole handling table under it, which is what a real drift sits in; (c) keep the shipped drift and
+take only the harness and the UX (`Q145`'s dwell shown live). The spike stays in the tree, inert,
+until the call.
+
+**See.** `Q85` · `Q50` · `Q49` · `Q84` · `Q72` · `Q145` · `P3-52` · `.claude/rules/handling.md`
