@@ -5,15 +5,22 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all six
-#                                    (corner, drift, tap, brake, coast, wall)
+#   --only=drift                     one manoeuvre instead of all eight
+#                                    (corner, drift, tap, brake, coast, wall,
+#                                    lift, hold). lift and hold print their own
+#                                    table (Q152): lift lets the throttle go
+#                                    mid-slide, hold puts a countersteering
+#                                    driver on the wheel, and `longest` is the
+#                                    unbroken dwell the fare's drift pays on
 #   --wall-deg=10,30,90              the wall rows' angles between the travel
 #                                    and the face (90 head-on). The wall
 #                                    manoeuvre stands its own slab and grades
 #                                    P3-50's penalty tiers: `approach` is the
 #                                    tool's reading, `impact` the controller's
 #                                    latch, and they must agree (Q148)
-#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile float. A drift_*
+#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile float, or a
+#                                    TyreProfile one on the Q152 spike car
+#                                    (--scene=res://scenes/dev/skidpad_tyre.tscn). A drift_*
 #                                    field re-runs only drift and tap, since the
 #                                    rest cannot move; anything else re-runs all
 #                                    five. One sweep per run — a second is
@@ -24,6 +31,9 @@
 #                                    i.e. the entry speed. Default 4 (~63 kph).
 #                                    Rows are only comparable within one run-up;
 #                                    quote `entry kph`, which is what was reached
+#   --entry-kph=63                   run up to a speed instead of for a time
+#                                    (Q152): a car with another drive reaches
+#                                    another speed in the same seconds
 #
 # Run it before AND after any change to VehicleController's drive model,
 # HandlingProfile or handling.tres, and paste both tables (CLAUDE.md).

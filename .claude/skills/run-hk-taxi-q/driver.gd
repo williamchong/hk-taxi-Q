@@ -91,6 +91,10 @@ var _spawn_y: float = 0.0
 ## to start a drive on a deck, where no fare node stands (`P3-51`). Unset
 ## until given; NaN is "not given".
 var _spawn_at := Vector3(NAN, NAN, NAN)
+## `--tyres=res://tuning/tyre.tres`: put `Q152`'s per-wheel tyre model on the
+## scene's car, driven by that table — the spike's street drive, the skidpad's
+## veto. Empty drives the car the scene ships.
+var _tyres_path: String = ""
 var _spawn_facing := Vector3(NAN, NAN, NAN)
 ## Latched when the run has learned everything it is going to. Stops the loop
 ## rather than simulating a wrecked physics state to the end of its clock, and
@@ -198,6 +202,9 @@ func _boot() -> Node:
 	var instance: Node = packed.instantiate()
 	# Before `add_child`: the harness places the car from its own `_ready`.
 	if not _spawn_fare_id.is_empty() and not _set_spawn_fare(instance):
+		instance.free()
+		return null
+	if not _tyres_path.is_empty() and not _fit_tyres(instance):
 		instance.free()
 		return null
 	root.add_child(instance)
@@ -601,6 +608,31 @@ func _set_spawn_fare(instance: Node) -> bool:
 	return true
 
 
+## Swaps the car's controller for `TyreVehicleController` before the scene
+## enters the tree, so its `_ready` is the tyre model's. By path, not by class
+## name, for the reason `_vehicle` is untyped. The script's own fields do not
+## survive `set_script`, so the four the scenes set are carried across; every
+## node that holds the car keeps holding the same object.
+func _fit_tyres(instance: Node) -> bool:
+	var car: Node3D = _find_vehicle(instance)
+	if car == null:
+		_fail("--tyres given but %s has no car" % _scene_path)
+		return false
+	var table: Resource = load(_tyres_path) if ResourceLoader.exists(_tyres_path) else null
+	if table == null:
+		_fail("--tyres: no table at %s" % _tyres_path)
+		return false
+	var kept: Dictionary = {}
+	for field: String in ["profile", "input_path", "sun", "parked"]:
+		kept[field] = car.get(field)
+	car.set_script(load("res://scripts/vehicle/tyre_vehicle_controller.gd"))
+	for field: String in kept:
+		car.set(field, kept[field])
+	car.set("tyre", table)
+	print("tyres:   %s on %s" % [_tyres_path, car.name])
+	return true
+
+
 ## The first VehicleController below `instance`, or null.
 ##
 ## Matched by method rather than by type because naming the type is not
@@ -631,6 +663,8 @@ func _parse_args() -> bool:
 		match key:
 			"--scene":
 				_scene_path = value
+			"--tyres":
+				_tyres_path = value
 			"--seconds":
 				_seconds = _to_float(key, value)
 				if is_nan(_seconds):

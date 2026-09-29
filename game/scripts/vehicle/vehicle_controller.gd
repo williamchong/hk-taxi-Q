@@ -519,6 +519,15 @@ func _apply_drift(delta: float) -> void:
 	# and behaves as it did before Q89 — inert rather than dangerous.
 	if _drift_low_locked and absf(speed_kph) >= profile.drift_fade_from_kph:
 		_drift_low_locked = false
+	_ramp_drift(delta)
+	_write_drift_grip()
+	_apply_drift_yaw()
+
+
+## The engagement ramp and the held clock, apart from the grip latch above so
+## a subclass with another drift mechanism can keep the ramp the yaw assist
+## reads without the grip cut it does not use (`Q152`).
+func _ramp_drift(delta: float) -> void:
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
 	# Held time keeps accruing through the release ramp — the car is still sliding,
@@ -537,8 +546,6 @@ func _apply_drift(delta: float) -> void:
 			_drift_held_s += delta
 	elif is_zero_approx(_drift_engagement):
 		_drift_held_s = 0.0
-	_write_drift_grip()
-	_apply_drift_yaw()
 
 
 ## True while any wheel is on the ground.
@@ -597,7 +604,10 @@ func take_impact_mps() -> float:
 ## force to resist the assist either, so it would spin on the spot with the
 ## handbrake down, and a hard cut-in at walking pace is a pop the rest of this
 ## file's rates do not have.
-func _apply_drift_yaw() -> void:
+##
+## `share` scales the whole torque, a caller's choice: 1.0 is the shipped
+## assist.
+func _apply_drift_yaw(share: float = 1.0) -> void:
 	if is_zero_approx(_drift_engagement):
 		return
 	if not _any_wheel_grounded():
@@ -616,7 +626,7 @@ func _apply_drift_yaw() -> void:
 	var decayed: float = clampf(_drift_held_s / profile.drift_yaw_decay_s, 0.0, 1.0)
 	var burst: float = lerpf(1.0, profile.drift_yaw_sustain, decayed)
 	var torque: float = (
-		-steer_ratio * profile.drift_yaw_torque_nm * burst * _drift_engagement * fade
+		-steer_ratio * profile.drift_yaw_torque_nm * burst * _drift_engagement * fade * share
 	)
 	# About the body's own up, not global +Y: a car on a camber or mid-kerb should
 	# rotate about the axis it is standing on.

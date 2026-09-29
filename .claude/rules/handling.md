@@ -6,6 +6,11 @@ paths:
   - "tools/skidpad.sh"
   - "tools/skidpad_ablation.gd"
   - "game/scenes/dev/skidpad.{tscn,md}"
+  - "game/scripts/vehicle/tyre_vehicle_controller.gd"
+  - "game/scripts/vehicle/tyre_profile.gd"
+  - "game/tuning/tyre.{tres,md}"
+  - "game/scenes/vehicle/taxi_tyre.{tscn,md}"
+  - "game/scenes/dev/skidpad_tyre.{tscn,md}"
 ---
 
 # Handling and the drift — before marking work done
@@ -84,3 +89,19 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of
   the ablation's, so a change to the flattening or the 1 m/s floor is made in both.
+- ⚠️ **The tyre-model spike (`P3-52`, `Q152`) is a second car, graded on its own pad** —
+  `tools/skidpad.sh --scene=res://scenes/dev/skidpad_tyre.tscn --entry-kph=63` (and 42, 86), and
+  driven with `drive.sh --tyres=res://tuning/tyre.tres`. Compare the two cars at one `--entry-kph`,
+  never one `--run-up`: at `drive_scale` 2 the spike makes 119 kph in the 4 s the shipped car makes
+  63. `--sweep` reaches `TyreProfile` fields; a drift_* field still sweeps only the drift rows.
+  🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
+  cars get the same one. `longest` is the unbroken dwell the fare's drift pays on (`drift_min_s`);
+  `secs>thr` sums every run. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
+  configuration. 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
+  wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
+  past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.roll_influence`):
+  at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
+- ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
+  approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change
+  against that band.
+

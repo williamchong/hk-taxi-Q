@@ -1,5 +1,5 @@
-## Grades the shipped handling model on `skidpad.tscn` — four manoeuvres, one
-## table, no human at the keyboard.
+## Grades the shipped handling model on `skidpad.tscn` — eight manoeuvres, three
+## tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd" -- --only=drift
@@ -26,7 +26,43 @@ extends SceneTree
 const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
-const MANOEUVRES: PackedStringArray = ["corner", "drift", "tap", "brake", "coast", "wall"]
+const MANOEUVRES: PackedStringArray = [
+	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold"
+]
+## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
+## table so the handling table keeps the shape every earlier pair was pasted in.
+## `lift` is `tap` with the throttle lifted at `LIFT_AT_S`: `Q85` measured the
+## shipped slide dying there, 21.8° to 7.3°. `hold` is `tap` with a driver on
+## the wheel after the release — `_countersteer`, what a player does — so its
+## `longest` column is the one to set against `SkillProfile.drift_min_s`, the
+## continuous dwell the fare pays on.
+const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold"]
+## When `lift` lets the throttle go, and how long after it the slip is read.
+const LIFT_AT_S: float = 1.0
+const AFTER_LIFT_S: float = 0.5
+## `hold`'s driver: the slip it steers for, and its two gains. A proportional
+## term on the slip's error from the target and a damping term on how fast the
+## slip is moving, both over the target so the gains are unitless; full lock
+## either way at most. ⚠️ **The driver is the tool's, never the car's.** A
+## slip setpoint in the controller would make `secs>thr` grade the button
+## (`Q72`); in the harness it plays the human, and the car still has to allow
+## the slide. Both cars are graded by the same driver.
+##
+## ⚠️ **20°, because the car cannot catch more.** `_update_steering` narrows the
+## lock with speed — 16.4° at 63 kph — so a front tyre can point along a slide
+## of about that plus its own peak slip angle and no further. Aimed at 30° the
+## driver was asking for a catch the rack does not have, and every overshoot
+## read as a spin that no dial could have prevented.
+const HOLD_TARGET_DEG: float = 20.0
+const HOLD_GAIN: float = 2.0
+const HOLD_DAMPING_S: float = 0.25
+## How hard `hold`'s driver lifts the throttle as the slip passes the target:
+## full throttle at the target, none at `1 / HOLD_LIFT_GAIN` targets over it.
+## Feathering the throttle is half of holding a slide, and a driver that only
+## steers grades a car on a technique nobody drives with.
+const HOLD_LIFT_GAIN: float = 2.0
+## What `drift`, `tap`, `lift` and `hold` press; they differ in when they let go.
+const DRIFT_ACTIONS: Array[StringName] = [&"accelerate", &"steer_right", &"drift"]
 ## The wall manoeuvre's angles, in degrees between the car's travel and the
 ## wall's face: 90 is head-on, 10 a brush. `--wall-deg=` overrides; each
 ## angle is a row. What it grades is `P3-50`'s penalty tiers — the controller's
@@ -48,7 +84,7 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap"]
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold"]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -111,6 +147,8 @@ const MANOEUVRE_S: float = 4.0
 ## Seconds a reset car is left alone before the run-up, so one manoeuvre is not
 ## measured against the suspension transient of the last.
 const SETTLE_S: float = 0.5
+## Seconds the tyre-model car stands before its rebuilt loads are read (`Q152`).
+const LOAD_SETTLE_S: float = 1.5
 
 ## How long the `tap` manoeuvre holds the drift button before letting go, while
 ## steering stays on for the full `MANOEUVRE_S`.
@@ -146,6 +184,14 @@ var _scene_path: String = DEFAULT_SCENE
 ## as `entry kph` rather than requested, because the run-up is open-loop: this
 ## asks for seconds of throttle and the car answers with whatever speed it made.
 var _run_up_s: float = DEFAULT_RUN_UP_S
+## A speed to run up to instead of a time, in kph, or 0 for `_run_up_s`. Since
+## `Q152`: a car with a different drive reaches a different speed in the same
+## seconds, and rows only compare at one entry. Throttle until the speed is
+## reached, then the manoeuvre starts on that tick.
+var _entry_kph: float = 0.0
+## Both run-up flags seen, which is refused rather than one silently winning.
+var _entry_given: bool = false
+var _run_up_given: bool = false
 ## Values to sweep `_sweep_field` over, or empty for whatever `handling.tres`
 ## ships. Set live on the loaded resource rather than by editing the file:
 ## nothing caches it, so it takes effect on the next tick, and a sweep that
@@ -230,6 +276,16 @@ class Result:
 	var impact_kph: float = 0.0
 	## Ticks on which the latch read a hit: one wall should be one.
 	var impact_ticks: int = 0
+	## The longest unbroken run at or above the threshold, in seconds — the
+	## dwell `SkillTracker` pays on, where `seconds_above_deg` sums every run.
+	var longest_above_s: float = 0.0
+	## `lift` only: the slip on the tick the throttle came up, and
+	## `AFTER_LIFT_S` later. NAN on every other row.
+	var slip_at_lift_deg: float = NAN
+	var slip_after_lift_deg: float = NAN
+	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
+	## without one.
+	var tyre_cost_us: float = NAN
 
 
 func _init() -> void:
@@ -264,9 +320,16 @@ func _parse_args() -> bool:
 					_fail("--run-up wants a number of seconds, got '%s'" % bits[1])
 					return false
 				_run_up_s = bits[1].to_float()
+				_run_up_given = true
 				if _run_up_s <= 0.0:
 					_fail("--run-up must be positive, got %s" % _run_up_s)
 					return false
+			"--entry-kph":
+				if not bits[1].is_valid_float() or bits[1].to_float() <= 0.0:
+					_fail("--entry-kph wants a positive speed, got '%s'" % bits[1])
+					return false
+				_entry_kph = bits[1].to_float()
+				_entry_given = true
 			"--wall-deg":
 				var angles: Array[float] = []
 				for text: String in bits[1].split(","):
@@ -296,6 +359,9 @@ func _parse_args() -> bool:
 			_:
 				_fail("unknown argument %s" % bits[0])
 				return false
+	if _entry_given and _run_up_given:
+		_fail("--run-up and --entry-kph both set a run-up; give one")
+		return false
 	return true
 
 
@@ -345,7 +411,10 @@ func _boot() -> bool:
 	# every manoeuvre should restart from, not the one it was dropped at.
 	_spawn = _vehicle.global_transform
 	_step = 1.0 / float(Engine.physics_ticks_per_second)
-	print("run-up:  %.2f s" % _run_up_s)
+	if _entry_kph > 0.0:
+		print("run-up:  to %.1f kph" % _entry_kph)
+	else:
+		print("run-up:  %.2f s" % _run_up_s)
 	print("scene:   %s" % _scene_path)
 	print("vehicle: %s at %s" % [_vehicle.name, _spawn.origin])
 	var profile: Resource = _vehicle.get("profile") as Resource
@@ -355,20 +424,44 @@ func _boot() -> bool:
 		print("slip threshold: %.1f deg" % _slip_threshold_deg)
 	else:
 		print("slip threshold: none published — secs>thr will read 0.00")
+	# `Q152`'s phase-1 gate, kept repeatable: the tyre model rebuilds each
+	# wheel's load from the contact, and at rest the four must be the weight.
+	# 1.5 s, not `SETTLE_S`: at 0.5 s the car is still coming down onto its springs
+	# from the spawn and the four read 0.974 of the weight.
+	if _vehicle.has_method("wheel_loads_n"):
+		await _hold(LOAD_SETTLE_S)
+		var total: float = 0.0
+		for load: float in _vehicle.call("wheel_loads_n"):
+			total += load
+		var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+		var weight: float = _vehicle.mass * gravity * _vehicle.gravity_scale
+		print(
+			(
+				"loads:   %.0f N at rest against %.0f N of weight (%.4f)"
+				% [total, weight, total / weight]
+			)
+		)
 	return true
 
 
 func _measure_all() -> void:
 	var results: Array[Result] = []
 	var profile: Resource = _vehicle.get("profile") as Resource
+	# The table a sweep writes: the handling table, or the tyre model's.
+	var sweep_table: Resource = profile
 	if not _sweep.is_empty():
 		if profile == null:
 			_fail("a sweep needs a profile on the vehicle and there is none")
 			return
+		# The tyre model's table is swept the same way (`Q152`): a field the
+		# handling table lacks is looked for there before the run is refused.
+		var tyre: Resource = _vehicle.get("tyre") as Resource
+		if not _sweep_field in profile and tyre != null and _sweep_field in tyre:
+			sweep_table = tyre
 		# See DEFAULT_SWEEP_FIELD: set() would swallow a typo or a rename and print
 		# a sweep of identical rows labelled with values it never applied.
-		if not _sweep_field in profile:
-			_fail("sweep: %s has no '%s'" % [profile.resource_path, _sweep_field])
+		if not _sweep_field in sweep_table:
+			_fail("sweep: %s has no '%s'" % [sweep_table.resource_path, _sweep_field])
 			return
 		# 🔴 The bar is not a knob, and generalising the flag is what made it
 		# reachable. `_slip_threshold_deg` is cached at boot, so setting the field
@@ -397,7 +490,7 @@ func _measure_all() -> void:
 	var confined: bool = String(_sweep_field).begins_with(DRIFT_FIELD_PREFIX)
 	for value: float in values:
 		if not is_nan(value):
-			profile.set(_sweep_field, value)
+			sweep_table.set(_sweep_field, value)
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre:
 				continue
@@ -436,15 +529,20 @@ func _measure_all() -> void:
 		return
 	var handling: Array[Result] = []
 	var walls: Array[Result] = []
+	var sustained: Array[Result] = []
 	for result: Result in results:
 		if result.name.begins_with("wall@"):
 			walls.append(result)
+		elif result.name.get_slice("@", 0) in SUSTAIN_MANOEUVRES:
+			sustained.append(result)
 		else:
 			handling.append(result)
 	if not handling.is_empty():
 		_print_table(handling)
 	if not walls.is_empty():
 		_print_wall_table(walls)
+	if not sustained.is_empty():
+		_print_sustain_table(sustained)
 
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
@@ -467,13 +565,24 @@ func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Resul
 	await _hold(SETTLE_S)
 
 	Input.action_press(&"accelerate")
-	await _hold(_run_up_s)
+	if _entry_kph > 0.0:
+		var first_tick: int = Engine.get_physics_frames()
+		while _speed_kph() < _entry_kph:
+			await physics_frame
+			if float(Engine.get_physics_frames() - first_tick) * _step > TO_REST_LIMIT_S:
+				_fail("%s: never reached %.1f kph" % [label, _entry_kph])
+				return null
+	else:
+		await _hold(_run_up_s)
 
 	var result := Result.new()
 	# Named before the manoeuvre runs, not after: `_sample` reports its failures
 	# through this, and during a sweep three bare `drift:` messages name no value.
 	result.name = label
 	result.entry_kph = _speed_kph()
+	# Drained so the row's cost is the manoeuvre's, not the run-up's.
+	if _vehicle.has_method("take_tyre_cost_us"):
+		_vehicle.call("take_tyre_cost_us")
 	# See TOP_SPEED_TAPER: entry inside the band means the drive taper is easing
 	# engine force off during the manoeuvre, which no column reports.
 	var max_speed: float = 0.0
@@ -495,21 +604,25 @@ func _measure(manoeuvre: String, label: String, wall_deg: float = 90.0) -> Resul
 		"corner":
 			await _sample([&"accelerate", &"steer_right"], MANOEUVRE_S, false, result)
 		"drift":
-			await _sample([&"accelerate", &"steer_right", &"drift"], MANOEUVRE_S, false, result)
+			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result)
 		"tap":
-			await _sample(
-				[&"accelerate", &"steer_right", &"drift"], MANOEUVRE_S, false, result, TAP_S
-			)
+			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S)
 		"brake":
 			await _sample([&"brake_reverse"], TO_REST_LIMIT_S, true, result)
 		"coast":
 			await _sample([], TO_REST_LIMIT_S, true, result)
 		"wall":
 			await _hit_wall(wall_deg, result)
+		"lift":
+			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, LIFT_AT_S)
+		"hold":
+			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, true)
 		_:
 			_fail("unknown manoeuvre '%s'" % manoeuvre)
 			return null
 	_release_everything()
+	if _vehicle.has_method("take_tyre_cost_us"):
+		result.tyre_cost_us = float(_vehicle.call("take_tyre_cost_us"))
 
 	result.exit_kph = _speed_kph()
 	result.decel_mps2 = (result.entry_kph - result.exit_kph) / 3.6 / result.seconds
@@ -599,12 +712,18 @@ func _hit_wall(wall_deg: float, into: Result) -> void:
 ## having covered some 70 m, and its 360-odd degrees of yaw came out of
 ## `angle_difference` as **5.1°**. Both read as "the car went almost nowhere and
 ## barely turned", which is the precise inverse of what happened.
+##
+## `lift_at_s` lets the throttle go at that time, and records the slip there and
+## `AFTER_LIFT_S` later. `countersteer` hands the wheel to `_countersteer` once
+## the drift button is released.
 func _sample(
 	actions: Array[StringName],
 	limit_s: float,
 	to_rest: bool,
 	into: Result,
-	drift_release_s: float = INF
+	drift_release_s: float = INF,
+	lift_at_s: float = INF,
+	countersteer: bool = false
 ) -> void:
 	# ⚠️ Released first. The run-up holds the throttle and nothing had dropped it,
 	# so the coast manoeuvre measured 30 s of *acceleration* to 126 kph and then
@@ -618,6 +737,8 @@ func _sample(
 	var t: float = 0.0
 	var last_position: Vector3 = _vehicle.global_position
 	var last_heading: float = _vehicle.global_rotation.y
+	var last_slip: float = 0.0
+	var run_s: float = 0.0
 
 	while t < limit_s:
 		await physics_frame
@@ -634,11 +755,23 @@ func _sample(
 		into.peak_slip_deg = maxf(into.peak_slip_deg, slip_deg)
 		if slip_deg >= _slip_threshold_deg:
 			into.seconds_above_deg += _step
+			run_s += _step
+			into.longest_above_s = maxf(into.longest_above_s, run_s)
+		else:
+			run_s = 0.0
 		last_position = position
 		last_heading = heading
 
 		if t >= drift_release_s and Input.is_action_pressed(&"drift"):
 			Input.action_release(&"drift")
+		if t >= lift_at_s and is_nan(into.slip_at_lift_deg):
+			Input.action_release(&"accelerate")
+			into.slip_at_lift_deg = slip_deg
+		if t >= lift_at_s + AFTER_LIFT_S and is_nan(into.slip_after_lift_deg):
+			into.slip_after_lift_deg = slip_deg
+		if countersteer and t >= drift_release_s:
+			_countersteer(slip_deg, (slip_deg - last_slip) / _step)
+		last_slip = slip_deg
 		if to_rest and _speed_kph() <= STOPPED_KPH:
 			break
 
@@ -680,6 +813,26 @@ func _slip_deg() -> float:
 	if heading.is_zero_approx():
 		return 0.0
 	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
+
+
+## `hold`'s driver, one tick: steer into the corner while the slip is under
+## `HOLD_TARGET_DEG`, against it while over, damped by how fast the slip is
+## moving, and feathering the throttle past the target. Pressed at a strength,
+## which `InputRouter` reads as an analogue axis.
+func _countersteer(slip_deg: float, slip_rate_dps: float) -> void:
+	var error: float = (HOLD_TARGET_DEG - slip_deg) / HOLD_TARGET_DEG
+	var damping: float = HOLD_DAMPING_S * slip_rate_dps / HOLD_TARGET_DEG
+	var steer: float = clampf(HOLD_GAIN * error - damping, -1.0, 1.0)
+	var throttle: float = clampf(1.0 + HOLD_LIFT_GAIN * error, 0.0, 1.0)
+	Input.action_release(&"accelerate")
+	if throttle > 0.0:
+		Input.action_press(&"accelerate", throttle)
+	Input.action_release(&"steer_left")
+	Input.action_release(&"steer_right")
+	if steer > 0.0:
+		Input.action_press(&"steer_right", steer)
+	elif steer < 0.0:
+		Input.action_press(&"steer_left", -steer)
 
 
 ## Lets the clock run with whatever is currently pressed, sampling nothing.
@@ -771,6 +924,57 @@ func _print_wall_table(results: Array[Result]) -> void:
 				]
 			)
 		)
+
+
+## The rows that ask whether a slide is kept (`Q152`), in their own table so
+## the handling table above keeps its pasted shape. `longest` is the unbroken
+## dwell the fare pays on; `at lift` and `+0.5 s` are `lift`'s; `us/tick` the
+## tyre model's cost, blank for a car without one.
+func _print_sustain_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s" % width
+	print("")
+	print(
+		(
+			row_format
+			% [
+				"run",
+				"entry",
+				"exit",
+				"peak slip",
+				"secs>thr",
+				"longest",
+				"at lift",
+				"+0.5 s",
+				"yaw",
+				"us/tick"
+			]
+		)
+	)
+	print(row_format % ["", "kph", "kph", "deg", "s", "s", "deg", "deg", "deg", ""])
+	for result: Result in results:
+		_printed_rows += 1
+		print(
+			(
+				row_format
+				% [
+					result.name,
+					"%.2f" % result.entry_kph,
+					"%.2f" % result.exit_kph,
+					"%.1f" % result.peak_slip_deg,
+					"%.2f" % result.seconds_above_deg,
+					"%.2f" % result.longest_above_s,
+					_or_dash(result.slip_at_lift_deg, "%.1f"),
+					_or_dash(result.slip_after_lift_deg, "%.1f"),
+					"%.1f" % result.yaw_deg,
+					_or_dash(result.tyre_cost_us, "%.1f"),
+				]
+			)
+		)
+
+
+static func _or_dash(value: float, format: String) -> String:
+	return "-" if is_nan(value) else format % value
 
 
 ## The label column, sized to its longest entry — see `_print_table`.

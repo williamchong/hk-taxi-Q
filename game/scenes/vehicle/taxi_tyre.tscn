@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://c5cacrr85ddoh"]
+
+[ext_resource type="PackedScene" uid="uid://cnmpjyxsjoqcu" path="res://scenes/vehicle/taxi.tscn" id="1_taxi"]
+[ext_resource type="Script" uid="uid://3kutesylag6r" path="res://scripts/vehicle/tyre_vehicle_controller.gd" id="2_ctrl"]
+[ext_resource type="Resource" uid="uid://lvvpus3qri30" path="res://tuning/tyre.tres" id="3_tyre"]
+
+[node name="Taxi" instance=ExtResource("1_taxi")]
+script = ExtResource("2_ctrl")
+tyre = ExtResource("3_tyre")
