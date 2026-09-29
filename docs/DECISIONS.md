@@ -8025,7 +8025,7 @@ equilibrium" measured directly.
    rolled it onto its side mounting a kerb on Expo Drive at 86 kph. At Godot's own
    `roll_influence` 0.2 nothing slides: the load a corner moves onto the outer tyres is what lets the
    unloaded inner rear spin and the outer rear push the tail round, and 0.2 takes most of it away
-   (`hold` 5.9° / 4.4°). `TyreProfile.roll_influence` 0.8 holds the slide and, on the same kerb at
+   (`hold` 5.9° / 4.4°). `TyreProfile.side_force_depth` 0.8 holds the slide and, on the same kerb at
    72 kph, puts the car on two wheels and lands it upright.
 
 **What holding a slide costs, which is the finding.**
@@ -8082,3 +8082,34 @@ hard to trust, and the scripted driver's 20° hold is the only evidence of "easy
 a player's drive is owed before any of it ships.
 
 **See.** `Q85` · `Q50` · `Q49` · `Q84` · `Q72` · `Q145` · `P3-52` · `.claude/rules/handling.md`
+
+**The gameplay round (2026-09-29, the user: "it has slide but still needs improvement for
+gameplay-acceptable").** Graded on what a player does rather than on a scripted driver: `ride`, new
+in the sustain table, is the tap with the steering and the throttle simply held, no countersteer —
+the input a keyboard or a thumb can give.
+
+| `ride`, longest unbroken dwell ≥ 14° | 42 kph | 63 kph | 86 kph |
+|---|---|---|---|
+| Shipped car | 0.00 s | 0.40 s | 0.00 s |
+| Spike, before this round | 0.00 s | 1.43 s summed | 1.57 s summed |
+| Spike now | 1.85 s, peak 36.8° | 2.55 s, 37.0° | 3.15 s, 38.2° |
+
+- **A countersteer assist** (`countersteer_assist` 1.5, `countersteer_lock_deg` 35): while the car
+  slides past the tyre's peak, the fronts turn towards the travel by 1.5× the excess, up to 35°
+  where the player's lock narrows to 16.4° at 63 kph. A steering aid, not a force and not a slip
+  setpoint (`Q72`) — the throttle and the rear tyres set the slide; the `corner` row is untouched.
+- **Traction control re-arms after 2 s, not 1** (`traction_rearm_s`): at 1 s it came back mid-slide
+  at 42 kph and cut the power the slow slide ran on (0 s → 1.85 s).
+- **The side force sits at 0.7 of the way down** (`side_force_depth`, renamed from the tyre table's
+  `roll_influence`): the least that slides at all three speeds; 0.19 m less kerb bounce than 0.8.
+  ⚠️ The shared name had let a sweep write the handling table's copy and print five identical rows;
+  `skidpad_ablation` now refuses a field present in both tables.
+- **The drive stays doubled** — power oversteer needs ≥ 1.75× the shipped drive (1.5× slid at no
+  speed), and 42 kph needs 2×. The cost stands: 123 kph after 4 s of throttle against 62.
+- ⚠️ `hold`'s scripted driver now countersteers on top of the assist and reads 0.13 s: the assisted
+  car is graded on `ride`.
+- Street: the plain-input tap under the Expo Drive underpass slides the right-hander at 50 kph, tail
+  out, in lane (`build/driver/q152_play`); held 2.5 s the steering takes it on into the far railing.
+- Still open for gameplay: the doubled pace; `lift` at 42 and 63 kph (8.0°, 6.7°); the inside wheels
+  lifting at a kerb at 72 kph; 218 µs a tick; and the user's own drive, which no pad row replaces.
+
