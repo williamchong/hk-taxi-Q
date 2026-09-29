@@ -8072,4 +8072,13 @@ whole handling table under it, which is what a real drift sits in; (c) keep the 
 take only the harness and the UX (`Q145`'s dwell shown live). The spike stays in the tree, inert,
 until the call.
 
+**The user's steer (2026-09-29, during the spike).** "We don't strictly need a one-to-one result
+with existing drift behaviour; we probably want some realistic physically but easy/simple to handle
+drifting." So the `corner` row's "within 5% of the shipped car" was the wrong bar for the drift's
+car — the everyday rows it guarded are the user's to re-set, not the shipped numbers. What the
+steer points at next is ease rather than parity: the tap at 42 kph (9.2°) and `lift` at 63 kph
+(6.8°) are where the physical slide is hard to start, the two-wheel lift at a kerb is where it is
+hard to trust, and the scripted driver's 20° hold is the only evidence of "easy to hold" so far —
+a player's drive is owed before any of it ships.
+
 **See.** `Q85` · `Q50` · `Q49` · `Q84` · `Q72` · `Q145` · `P3-52` · `.claude/rules/handling.md`
