@@ -17,5 +17,6 @@ traction_limit = 1.0
 traction_rearm_s = 2.0
 side_force_depth = 0.7
 countersteer_lock_deg = 35.0
+catch_lock_deg = 6.0
 catch_turn_dps = 10.0
 catch_window_s = 1.0

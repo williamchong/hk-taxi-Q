@@ -8217,7 +8217,7 @@ player's steering INTO the turn as a countersteer (the tap's peak 28.0° → 22.
 only while the yaw and the countersteer's sign disagree — tail out. Mutated, both guards bite: the
 trigger's sign flipped caps the catch itself (`capped` 0.02 s, `settled` 0.50 → 0.67 s); the latch
 without the tail-out test brings the plough back (28.0° → 22.7°).
-Not shipped: `catch_lock_deg` stays absent until the user drives it on the pad
-(`catch_lock_deg = 6.0` in `tyre.tres`), and the street drive stays the veto. What it asks of the
-user: whether a car that stops turning at 6° once caught still leaves the countersteer theirs.
+Set at 6.0 in `tyre.tres` on the user's call the same day ("go", over holding it for the drive:
+the pad passed it and the spike alone reads it); `slide_lock_deg` stays absent, refuted and pulling
+the other way. The drive stays the veto. What it asks of the user: whether a car that stops turning at 6° once caught still leaves the countersteer theirs.
 

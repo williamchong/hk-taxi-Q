@@ -77,8 +77,8 @@ const PATH: String = "res://tuning/tyre.tres"
 @export_range(0.0, 60.0, 1.0, "suffix:°") var slide_lock_deg: float
 ## The most the front wheels may turn on the countersteer side once a caught
 ## slide turns the car the other way: a cap on the player's angle, never an
-## angle added. 0 leaves the player's lock alone. Absent from `tyre.tres` until
-## the user's drive (`tyre.md`).
+## angle added. 0 leaves the player's lock alone. 6° in `tyre.tres`, the user's
+## drive the veto (`tyre.md`).
 @export_range(0.0, 60.0, 0.5, "suffix:°") var catch_lock_deg: float
 ## The heading rate, the other way from the slide, past which the car reads as
 ## turning against it and `catch_lock_deg` caps the countersteer. Inert, like

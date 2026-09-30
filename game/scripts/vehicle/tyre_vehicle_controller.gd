@@ -33,7 +33,7 @@ extends VehicleController
 ##      refuted on the pad's driver.
 ##   5. A cap on the countersteer once a caught slide turns the car the other
 ##      way (`_cap_catch`), because a key held down holds full lock past the
-##      catch (`Q152`'s catch round). Behind a zero until the user's drive.
+##      catch (`Q152`'s catch round). On at 6°; the user's drive is the veto.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
 ## response, auto-righting, the published reads the fare and the lamps take —

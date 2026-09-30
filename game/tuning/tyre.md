@@ -19,8 +19,8 @@ zero — and 0 is the choice: the yaw torque did not rescue the low end and is n
 held slide. `countersteer_assist` is absent for the same reason, off on the user's call from the
 pad (2026-09-29, "i think we should not do countersteering"); its section below keeps the numbers.
 `slide_lock_deg` is absent for the same reason, refuted on the pad's driver; its section keeps the
-sweep. `catch_lock_deg` is absent until the user's drive; `catch_turn_dps` and `catch_window_s` are
-set, and inert while it is 0.
+sweep. `catch_lock_deg` is set at 6.0 on the user's call (2026-09-30), ahead of their drive, which
+stays the veto.
 
 ## `mu = 2.0`
 
@@ -156,7 +156,7 @@ says it cannot. What limits `hold` at 86 kph is still open; the drive's speed ta
 suspect, and the driver itself (a gain in lock shares, a 20° target set by the old lock) is an
 instrument to question before another dial is.
 
-## `catch_lock_deg` — absent, 0.0
+## `catch_lock_deg = 6.0`
 
 A cap on the player's countersteer once a caught slide turns the car the other way (`Q152`'s
 catch round, the user's street report of 2026-09-30: "the counter steer turn the car to other way
@@ -206,7 +206,8 @@ Mutated, each guard bites: the trigger's sign flipped caps the catch itself (`ca
 `settled` 0.50 → 0.67 s), and the latch without the tail-out test brings the plough back (the
 tap's peak at 42 kph 28.0° → 22.7°).
 
-Absent until the user's own drive; to try it, `catch_lock_deg = 6.0` in `tyre.tres`.
+Set at 6.0 on the user's call (2026-09-30) rather than held for the drive: the pad passed it on every
+row and it touches the spike alone. The drive stays the veto; 0 turns it off.
 
 ## `catch_turn_dps = 10.0`
 
