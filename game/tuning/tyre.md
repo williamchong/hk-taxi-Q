@@ -19,7 +19,8 @@ zero — and 0 is the choice: the yaw torque did not rescue the low end and is n
 held slide. `countersteer_assist` is absent for the same reason, off on the user's call from the
 pad (2026-09-29, "i think we should not do countersteering"); its section below keeps the numbers.
 `slide_lock_deg` is absent for the same reason, refuted on the pad's driver; its section keeps the
-sweep.
+sweep. `catch_lock_deg` is absent until the user's drive; `catch_turn_dps` and `catch_window_s` are
+set, and inert while it is 0.
 
 ## `mu = 2.0`
 
@@ -154,3 +155,70 @@ the pad is the only grade that could still want it. 🔴 Do not set it to lift `
 says it cannot. What limits `hold` at 86 kph is still open; the drive's speed taper is the next
 suspect, and the driver itself (a gain in lock shares, a 20° target set by the old lock) is an
 instrument to question before another dial is.
+
+## `catch_lock_deg` — absent, 0.0
+
+A cap on the player's countersteer once a caught slide turns the car the other way (`Q152`'s
+catch round, the user's street report of 2026-09-30: "the counter steer turn the car to other way
+too easily"). The pad found no snap: full opposite lock on gripping tyres turns the car the other
+way at about 90°/s once the slide is caught, and a key holds full lock for as long as it is down.
+With the throttle held the turn starts only once the wheel is at full lock, so the lock kept is
+the lever; the user picked it over a slower countersteer rate and a keyboard ramp in
+`InputRouter` (2026-09-30). `TyreVehicleController._cap_catch` latches the side a tail-out slide
+went out on and, while the player keeps steering towards it, caps the fronts at this angle from
+the tick the heading turns the other way faster than `catch_turn_dps`, for `catch_window_s` after
+the tail was last out. It only takes angle away; the catch itself is the player's.
+
+Swept on `--only=catch` at 42 / 63 / 86 kph with `catch_turn_dps` 10 and `catch_window_s` 1.0,
+full opposite lock from the slide's peak. `yaw@hold` is the heading swept while the key was held,
+positive the other way:
+
+| `catch_lock_deg` | held 1.5 s, 42 / 63 / 86 kph | lifted 1.2 s, 42 / 63 / 86 kph |
+|---|---|---|
+| 0 | +51.8 / +52.0 / +49.6° | +26.0 / +23.2 / +26.8° |
+| 4 | −12.1 / −13.9 / −12.0° | −14.9 / −15.9 / −14.1° |
+| 6 | −0.5 / −2.4 / −0.4° | −9.9 / −11.2 / −9.2° |
+| 8 | +11.0 / +8.9 / +10.9° | −4.9 / −6.4 / −4.2° |
+| 12 | +31.9 / +30.0 / +31.3° | +5.2 / +3.1 / +5.9° |
+
+One value reads the same at every speed: with the throttle held, 6° holds the heading within 2.4°
+through a 1.5 s hold where the uncapped car turns 50° the other way. The catch is untouched — the
+slip falls under 14° at 0.50–0.53 s against 0.52–0.55 uncapped, the cap engages the tick after the
+turn (0.48 / 0.50 / 0.53 s held, 0.37–0.38 lifted), and the slip the other way stays under 1.4° on
+every row. It is not a straightening: a capped wheel is still steering, and the turn it keeps is
+the everyday one a few degrees of lock give at that speed. With the throttle lifted the cap works
+too, which the eval before it expected only of a slower rate. Past the window the lock comes back
+at the attack rate: on the 2.5 s hold the fronts are at the table's full lock again and the car
+turns the other way (+64.6° at 63 kph with 6°) — a key held a second after the slide is over is a
+turn the player asked for.
+
+🔴 A plough at turn-in is past the tyre's peak too, with the travel on the other side of the nose.
+Latched on the slip alone, the cap read the player's steering INTO the turn as a countersteer and
+capped it (the tap's peak at 42 kph 28.0° → 22.3°); the side latches only while the yaw and the
+countersteer's sign disagree, and the tap and `ride` rows are byte-identical with the cap set.
+With 6° set, every row but `catch` — `hold` included, 1.87 / 2.55 / 1.40 s — is byte-identical
+at all three speeds: the pad's countersteering driver never turns the car the other way, so the
+fare's row is not what the cap moves. An early catch (`--catch-at` 2.2 s at 63 kph, 1.6 s at 86)
+catches as before and turns 47° / 39° less the other way over a 1.5 s hold (+31.6 → −15.4°,
++14.6 → −24.1°); a late one (`--catch-late` 0.3 s at 63 kph) 45° less over 1.2 s (+42.2 → −3.0°),
+`settled` unmoved in both.
+Mutated, each guard bites: the trigger's sign flipped caps the catch itself (`capped` 0.02 s,
+`settled` 0.50 → 0.67 s), and the latch without the tail-out test brings the plough back (the
+tap's peak at 42 kph 28.0° → 22.7°).
+
+Absent until the user's own drive; to try it, `catch_lock_deg = 6.0` in `tyre.tres`.
+
+## `catch_turn_dps = 10.0`
+
+Inert while `catch_lock_deg` is 0. The heading rate the other way that engages the cap. Swept 5 /
+10 / 20 / 40 at 63 kph with 6° of cap: engaged at 0.48 / 0.48 / 0.50 / 0.53 s held (0.37–0.40
+lifted), the heading at 1.5 s −2.4 / −2.4 / −1.4 / +0.6° — flat, because the heading reverses
+sharply once the slide is caught. 10 sits inside the flat band and over a tick's jitter.
+
+## `catch_window_s = 1.0`
+
+Inert while `catch_lock_deg` is 0. How long after the tail was last out the cap may hold. Counted
+from the last tail-out tick, about half a second after the wheel goes over, so at 63 kph the full
+lock comes back before a 1.2 s hold at 0.5, between 1.2 and 1.5 s at 1.0, and between 1.5 and 2.5 s
+at 2.0 (the 1.2 s heading −8.3 / −14.7 / −14.7°). At 1.0 a key still held about 1.4 s after the
+countersteer is read as the player's own turn and gets the full lock.

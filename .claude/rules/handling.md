@@ -81,6 +81,14 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ Its timing columns (`to lock`, `settled`, `turns`, `wheel@turn`) say which half of the
   steering turns the car: held throttle turns at full lock, lifted before it (`Q152`'s timing
   round). A lever keyed on the slip falling back is late — the heading reverses first.
+  🔴 **`catch_lock_deg` is graded on `catch`'s `yaw@hold` and `settled`, never on `hold`**
+  (`Q152`'s catch cap round): `hold`'s driver never turns the car the other way, so the row is
+  byte-identical with the cap set and says nothing about it. `wheel` and `to lock` read
+  `steer_ratio`, the player's input, which the cap leaves alone — `fronts@off` reads the front
+  wheels, `capped` when the cap engaged. The row runs to the end of its hold now, so its exit and
+  `+0.5 s` do not compare with a table from before 2026-09-30. ⚠️ A countersteer latch keyed on
+  the slip alone takes a turn-in plough for a slide: latch on tail out (yaw and countersteer sign
+  disagree), and grade a latch change on the tap at 42 kph.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the

@@ -345,6 +345,13 @@ class Result:
 	var settled_s: float = NAN
 	var turns_s: float = NAN
 	var wheel_at_turn: float = NAN
+	## `catch` only: seconds from the wheel going over to the car's own cap on
+	## the countersteer engaging (`TyreVehicleController.catch_capped`), NAN
+	## on a car without one or a catch it never capped; and the front wheels'
+	## angle as the hold ends, in degrees — `steering` itself, where `wheel`
+	## above is `steer_ratio`, the player's input, which the cap leaves alone.
+	var capped_s: float = NAN
+	var fronts_off_deg: float = NAN
 	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
 	## without one.
 	var tyre_cost_us: float = NAN
@@ -859,8 +866,13 @@ func _sample(
 	var out_peak: float = 0.0
 	var peak_at_s: float = INF
 	var yaw_at_catch: float = 0.0
+	# `catch` runs on past `limit_s` until its hold and the read after it are
+	# done: a slide caught late (3.2 s at 42 kph) left every hold over 0.8 s
+	# unread inside the manoeuvre's 4 s.
+	var end_s: float = limit_s
+	var can_cap: bool = _vehicle.has_method("catch_capped")
 
-	while t < limit_s:
+	while t < end_s:
 		await physics_frame
 		t = float(Engine.get_physics_frames() - first_tick) * _step
 		if not _vehicle.global_position.is_finite():
@@ -912,6 +924,7 @@ func _sample(
 				)
 				if due and out_sign != 0.0:
 					into.catch_at_s = t
+					end_s = maxf(limit_s, t + catch_s + AFTER_LIFT_S)
 					into.slip_at_catch_deg = slip_deg
 					into.snap_deg = 0.0
 					yaw_at_catch = into.yaw_deg
@@ -934,11 +947,14 @@ func _sample(
 				if is_nan(into.turns_s) and yaw_step_deg * -out_sign / _step > TURN_DPS:
 					into.turns_s = since_s
 					into.wheel_at_turn = wheel
+				if can_cap and is_nan(into.capped_s) and _vehicle.call("catch_capped"):
+					into.capped_s = since_s
 				if t >= catch_off_s and is_nan(into.yaw_in_catch_deg):
 					# A right-hand drift (tail out left, `out_sign` −1) sweeps a
 					# negative heading; corrected so its own way reads negative
 					# for either hand.
 					into.yaw_in_catch_deg = (into.yaw_deg - yaw_at_catch) * -out_sign
+					into.fronts_off_deg = rad_to_deg(absf(float(_vehicle.get("steering"))))
 					Input.action_release(&"steer_left")
 					Input.action_release(&"steer_right")
 				if t >= catch_off_s + AFTER_LIFT_S and is_nan(into.slip_after_catch_deg):
@@ -1183,7 +1199,7 @@ func _print_sustain_table(results: Array[Result]) -> void:
 func _print_catch_table(results: Array[Result]) -> void:
 	var width: int = _column_width(results)
 	var row_format: String = (
-		"%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s %%8s %%8s %%8s %%10s" % width
+		"%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%8s %%9s %%8s %%8s %%8s %%10s %%8s %%10s" % width
 	)
 	print("")
 	print(
@@ -1202,14 +1218,32 @@ func _print_catch_table(results: Array[Result]) -> void:
 				"to lock",
 				"settled",
 				"turns",
-				"wheel@turn"
+				"wheel@turn",
+				"capped",
+				"fronts@off"
 			]
 		)
 	)
 	print(
 		(
 			row_format
-			% ["", "kph", "kph", "deg", "s", "deg", "deg", "deg", "deg", "s", "s", "s", "of lock"]
+			% [
+				"",
+				"kph",
+				"kph",
+				"deg",
+				"s",
+				"deg",
+				"deg",
+				"deg",
+				"deg",
+				"s",
+				"s",
+				"s",
+				"of lock",
+				"s",
+				"deg"
+			]
 		)
 	)
 	if _catch_lift:
@@ -1237,6 +1271,8 @@ func _print_catch_table(results: Array[Result]) -> void:
 					_or_dash(result.settled_s, "%.2f"),
 					_or_dash(result.turns_s, "%.2f"),
 					_or_dash(result.wheel_at_turn, "%.2f"),
+					_or_dash(result.capped_s, "%.2f"),
+					_or_dash(result.fronts_off_deg, "%.1f"),
 				]
 			)
 		)

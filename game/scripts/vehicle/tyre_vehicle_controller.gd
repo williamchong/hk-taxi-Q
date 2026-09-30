@@ -31,6 +31,9 @@ extends VehicleController
 ##      A wider steering lock for the player on the countersteer side while
 ##      the car slides (`_steer_lock_rad`) is also behind a zero: swept and
 ##      refuted on the pad's driver.
+##   5. A cap on the countersteer once a caught slide turns the car the other
+##      way (`_cap_catch`), because a key held down holds full lock past the
+##      catch (`Q152`'s catch round). Behind a zero until the user's drive.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
 ## response, auto-righting, the published reads the fare and the lamps take —
@@ -87,6 +90,15 @@ var _usable: bool = false
 ## countersteer assist was added; restored before the parent's next step so
 ## the limit ramps the player's angle and never the assist's.
 var _driver_steering: float = 0.0
+## The side the slide went out on, in Godot's steering sign, latched while the
+## tail is out past the tyre's peak: `_slide_toward` flips as the catch carries
+## the slip through zero, which is when `_cap_catch` needs it. 0 before any.
+var _slide_side: float = 0.0
+## Seconds since the tail was last out past the tyre's peak.
+var _since_slide_s: float = INF
+## True from the car turning the other way until the player lets the
+## countersteer go, or it goes on past `catch_window_s`.
+var _catch_capped: bool = false
 ## The wheel being solved and its tick's curve, so the force and the spin solve
 ## read one contact rather than passing seven numbers down every call.
 var _radius: float = 0.0
@@ -176,6 +188,7 @@ func _update_steering(delta: float) -> void:
 		return
 	steering = _driver_steering
 	super._update_steering(delta)
+	_cap_catch(delta)
 	_driver_steering = steering
 	if tyre.countersteer_assist <= 0.0:
 		return
@@ -186,6 +199,58 @@ func _update_steering(delta: float) -> void:
 	# angle and is clamped only where it would pass `countersteer_lock_deg`.
 	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
 	steering = clampf(steering + _slide_toward() * beyond * tyre.countersteer_assist, -lock, lock)
+
+
+## Caps the player's countersteer at `catch_lock_deg` once a caught slide turns
+## the car the other way. The catch round found no snap on either car: full
+## opposite lock on gripping tyres turns the car the other way at about 90°/s
+## once the slide is caught, and a key holds full lock for as long as it is
+## down; with the throttle held, the turn starts only once the wheel is at full
+## lock, so the lock kept is the lever and the steering rate is not (`Q152`).
+##
+## Keyed on the heading reversing, not the slip falling back under the tyre's
+## peak: the car turns the other way before the slide reads as caught. Holds
+## while the player keeps countersteering and the slide was live within
+## `catch_window_s`; the player letting go, or the window running out, hands
+## back the full lock at the parent's attack rate.
+##
+## Applied to the player's own angle, after the parent's rate limit, so the
+## limit ramps from the capped angle, and so `steer_ratio` — which the lamps
+## read, and the skidpad's `wheel` column — stays the player's input: read
+## `steering` for the front wheels. The cap lands in the tick it engages, where
+## the rack's release would take two or three. Never an angle added (`Q72`).
+func _cap_catch(delta: float) -> void:
+	if tyre.catch_lock_deg <= 0.0:
+		return
+	# Latched on a tail-out slide only: the nose turning past the travel, so
+	# the yaw rate and the countersteer's sign disagree. A plough at turn-in is
+	# past the peak too, with the travel on the other side of the nose, and
+	# latched it read the player's steering into the turn as a countersteer
+	# (42 kph: the tap's peak 28.0° → 22.3°). The catch's own reversal fails
+	# the test as well, which keeps the side the slide went out on.
+	var toward: float = _slide_toward()
+	if _slide_beyond_peak_rad() > 0.0 and angular_velocity.y * toward < 0.0:
+		_slide_side = toward
+		_since_slide_s = 0.0
+	else:
+		_since_slide_s += delta
+	# Countersteering: the player's input towards the side the slide went out
+	# on, in the steering angle's sign (see `_steer_lock_rad`).
+	var countersteering: bool = -steer_input * _slide_side > 0.0
+	if not countersteering or _since_slide_s >= tyre.catch_window_s:
+		_catch_capped = false
+		return
+	if not _catch_capped:
+		# A positive yaw rate turns the nose left, Godot's positive steering,
+		# so the car turns the other way when the two signs agree.
+		_catch_capped = angular_velocity.y * _slide_side > deg_to_rad(tyre.catch_turn_dps)
+	if _catch_capped and steering * _slide_side > 0.0:
+		steering = _slide_side * minf(absf(steering), deg_to_rad(tyre.catch_lock_deg))
+
+
+## Whether `_cap_catch` holds the countersteer this tick, for the skidpad.
+func catch_capped() -> bool:
+	return _catch_capped
 
 
 ## The lock the player has while the car slides: the parent's speed-narrowed
@@ -275,6 +340,9 @@ func place_at(pose: Transform3D) -> void:
 	_traction_off = false
 	_released_s = 0.0
 	_driver_steering = 0.0
+	_slide_side = 0.0
+	_since_slide_s = INF
+	_catch_capped = false
 
 
 func _apply_tyres(delta: float) -> void:

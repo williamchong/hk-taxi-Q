@@ -27,6 +27,10 @@
 #                                    falling under the threshold and the car
 #                                    first turning the other way;
 #                                    `wheel@turn` is the share of lock then.
+#                                    `capped` times the tyre car's own cap on
+#                                    the countersteer engaging, `fronts@off`
+#                                    is the front wheels' angle as the hold
+#                                    ends (`wheel` is the player's input).
 #                                    --catch-lift lifts the throttle at
 #                                    the catch; --catch-at=<s> countersteers
 #                                    that far into the manoeuvre (early),
