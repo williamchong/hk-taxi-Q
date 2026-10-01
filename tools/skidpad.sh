@@ -5,9 +5,16 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all nine
-#                                    (corner, drift, tap, brake, coast, wall,
-#                                    lift, hold, catch). lift, hold and ride print
+#   --only=drift                     one manoeuvre instead of all ten
+#                                    (corner, liftoff, drift, tap, brake, coast,
+#                                    wall, lift, hold, catch). liftoff is
+#                                    corner with the throttle lifted at 1 s and
+#                                    no drift button, printed beside corner in
+#                                    windows around the lift (speed, yaw rate,
+#                                    radius, front wheels, slip): a radius that
+#                                    falls on liftoff and not on corner is a
+#                                    pivot, not shed speed (Q153); --only=liftoff
+#                                    runs corner too. lift, hold and ride print
 #                                    their own table (Q152): lift lets the
 #                                    throttle go mid-slide, hold puts a
 #                                    countersteering driver on the wheel, ride

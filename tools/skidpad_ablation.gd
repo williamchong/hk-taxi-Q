@@ -1,4 +1,4 @@
-## Grades the shipped handling model on `skidpad.tscn` — nine manoeuvres, four
+## Grades the shipped handling model on `skidpad.tscn` — ten manoeuvres, five
 ## tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
@@ -27,7 +27,7 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch"
+	"corner", "liftoff", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch"
 ]
 ## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
 ## table so the handling table keeps the shape every earlier pair was pasted in.
@@ -46,6 +46,14 @@ const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold", "ride"]
 ## When `lift` lets the throttle go, and how long after it the slip is read.
 const LIFT_AT_S: float = 1.0
 const AFTER_LIFT_S: float = 0.5
+## `liftoff`: `corner`'s input, full lock and the throttle, with the throttle
+## lifted at `LIFT_AT_S` and no drift button — whether a lift in a fast turn
+## pivots the car. Read beside `corner`, its control, in these windows around
+## the lift (seconds from it): a radius that falls after the lift on `liftoff`
+## and not on `corner` is the pivot, not the speed it sheds.
+const LIFTOFF_WINDOWS_S: Array[Vector2] = [
+	Vector2(-0.5, 0.0), Vector2(0.0, 0.25), Vector2(0.25, 0.5), Vector2(0.5, 1.0), Vector2(1.0, 2.0)
+]
 ## `catch`: how far the slide's angle must fall off its running peak before
 ## the tool reads the peak as passed and countersteers.
 const CATCH_DROP_DEG: float = 0.5
@@ -352,6 +360,14 @@ class Result:
 	## above is `steer_ratio`, the player's input, which the cap leaves alone.
 	var capped_s: float = NAN
 	var fronts_off_deg: float = NAN
+	## Per tick on every row, read by `liftoff`'s table alone: seconds into the manoeuvre,
+	## forward speed, the heading rate into a right turn, the front wheels'
+	## angle (`steering`) and the slip.
+	var trace_s: PackedFloat32Array = []
+	var trace_kph: PackedFloat32Array = []
+	var trace_yaw_dps: PackedFloat32Array = []
+	var trace_fronts_deg: PackedFloat32Array = []
+	var trace_slip_deg: PackedFloat32Array = []
 	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
 	## without one.
 	var tyre_cost_us: float = NAN
@@ -586,7 +602,11 @@ func _measure_all() -> void:
 		if not is_nan(value):
 			sweep_table.set(_sweep_field, value)
 		for manoeuvre: String in MANOEUVRES:
-			if not _only.is_empty() and _only != manoeuvre and not _rides(manoeuvre):
+			if (
+				not _only.is_empty()
+				and _only != manoeuvre
+				and not _rides(manoeuvre)
+			):
 				continue
 			if manoeuvre == "wall":
 				# A row per angle; never swept, a wall does not take the drift
@@ -637,8 +657,15 @@ func _measure_all() -> void:
 	var walls: Array[Result] = []
 	var sustained: Array[Result] = []
 	var catches: Array[Result] = []
+	var lift_rows: Array[Result] = []
+	var lifted: bool = false
 	for result: Result in results:
 		var manoeuvre: String = result.name.get_slice("@", 0)
+		if manoeuvre in ["corner", "liftoff"]:
+			lift_rows.append(result)
+		if manoeuvre == "liftoff":
+			lifted = true
+			continue
 		if manoeuvre == "wall":
 			walls.append(result)
 		elif manoeuvre == "catch":
@@ -659,6 +686,8 @@ func _measure_all() -> void:
 		_print_catch_table(catches)
 	if not sustained.is_empty():
 		_print_sustain_table(sustained)
+	if lifted:
+		_print_liftoff_table(lift_rows)
 
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
@@ -721,6 +750,10 @@ func _measure(
 	match manoeuvre:
 		"corner":
 			await _sample([&"accelerate", &"steer_right"], MANOEUVRE_S, false, result)
+		"liftoff":
+			await _sample(
+				[&"accelerate", &"steer_right"], MANOEUVRE_S, false, result, INF, LIFT_AT_S
+			)
 		"drift":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result)
 		"tap":
@@ -894,6 +927,11 @@ func _sample(
 			run_s = 0.0
 		last_position = position
 		last_heading = heading
+		into.trace_s.append(t)
+		into.trace_kph.append(_speed_kph())
+		into.trace_yaw_dps.append(-yaw_step_deg / _step)
+		into.trace_fronts_deg.append(rad_to_deg(absf(float(_vehicle.get("steering")))))
+		into.trace_slip_deg.append(slip_deg)
 
 		if t >= drift_release_s and Input.is_action_pressed(&"drift"):
 			Input.action_release(&"drift")
@@ -1128,9 +1166,11 @@ func _print_wall_table(results: Array[Result]) -> void:
 		)
 
 
-## Whether `--only=ride` asked for this manoeuvre: `ride` is `tap`'s run.
+## Whether `--only` asked for this manoeuvre under another row's name: `ride`
+## is `tap`'s run, and `liftoff` runs `corner` as its control. Either is
+## printed in its own table alone.
 func _rides(manoeuvre: String) -> bool:
-	return _only == "ride" and manoeuvre == "tap"
+	return (_only == "ride" and manoeuvre == "tap") or (_only == "liftoff" and manoeuvre == "corner")
 
 
 ## `tap`'s result under `ride`'s name, for the sustain table.
@@ -1188,6 +1228,57 @@ func _print_sustain_table(results: Array[Result]) -> void:
 				]
 			)
 		)
+
+
+## `liftoff` beside `corner`, a row per window of `LIFTOFF_WINDOWS_S`: mean
+## speed, heading rate and front-wheel angle, the radius the speed and rate
+## make, and the peak slip. `corner` never lifts; its windows sit at the same
+## seconds, so the two differ only by the lift.
+func _print_liftoff_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%11s %%9s %%9s %%9s %%9s %%9s" % width
+	print("")
+	print(row_format % ["run", "window", "speed", "yaw rate", "radius", "fronts", "peak slip"])
+	print(row_format % ["", "s from lift", "kph", "deg/s", "m", "deg", "deg"])
+	for result: Result in results:
+		for window: Vector2 in LIFTOFF_WINDOWS_S:
+			var kph: float = 0.0
+			var yaw_dps: float = 0.0
+			var fronts_deg: float = 0.0
+			var slip_deg: float = 0.0
+			var ticks: int = 0
+			for i: int in result.trace_s.size():
+				# Nudged so a tick on an edge, stored as float32, falls on one
+				# side every run: the lift's own tick reads as before it.
+				var since_s: float = result.trace_s[i] - LIFT_AT_S - 1e-4
+				if since_s <= window.x or since_s > window.y:
+					continue
+				kph += result.trace_kph[i]
+				yaw_dps += result.trace_yaw_dps[i]
+				fronts_deg += result.trace_fronts_deg[i]
+				slip_deg = maxf(slip_deg, result.trace_slip_deg[i])
+				ticks += 1
+			if ticks == 0:
+				continue
+			kph /= ticks
+			yaw_dps /= ticks
+			fronts_deg /= ticks
+			var radius_m: float = (kph / 3.6) / deg_to_rad(yaw_dps) if yaw_dps > 0.0 else INF
+			_printed_rows += 1
+			print(
+				(
+					row_format
+					% [
+						result.name,
+						"%+.2f..%+.2f" % [window.x, window.y],
+						"%.1f" % kph,
+						"%.1f" % yaw_dps,
+						"%.1f" % radius_m,
+						"%.1f" % fronts_deg,
+						"%.1f" % slip_deg,
+					]
+				)
+			)
 
 
 ## The `catch` rows: when the wheel went over, the slip then, the swing the
