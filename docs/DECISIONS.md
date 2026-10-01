@@ -8294,3 +8294,20 @@ next lever (`P3-55`): the drive eased while traction control is ARMED and the fr
 the button disarms it, so a slide never sees the taper by construction.
 ⚠️ The spike's tap slides from 30 kph (28.1°, 1.52 s over 14°) and not at 20–25 (11.3–12.7°), at
 2.0 only; the "9.2° at 42 kph" in `P3-52`'s first round predates the gameplay round and is stale.
+
+**The bars (`P3-53`, 2026-10-02), written before the first row.** On the spike's pad
+(`skidpad_tyre.tscn`, `--entry-kph`), `drift_min_s` 2.0 s and the 14° threshold as the game pays:
+
+| Bar | Row | Entry kph | Assist | Pass |
+|---|---|---|---|---|
+| The button guarantees the start | `tap` peak slip | 30 / 42 / 63 / 86 / 100 | off | over 14° |
+| Below 30 | `tap` peak slip | 20 / 25 | off | recorded; the user's call |
+| A novice never spins | `ride` peak slip | 42 / 63 / 86 | off and on | under 60° |
+| A novice's plain input does not pay | `ride` longest | 42 / 63 / 86 | off | under 2.0 s |
+| An assisted slide pays | `ride` longest | 42 / 63 / 86 | on (1.5) | at least 2.0 s |
+| A countersteered slide pays | `hold` longest | 63 / 86 | off | at least 2.0 s |
+
+`hold` and `ride` run three times a row and the run nearest failing takes the bar — the shortest
+where a slide must pay, the longest where it must not: `hold` carries ±0.3 s run to run (`Q152`),
+so one run near 2.0 s says nothing. 60° is `Q152`'s peak bar carried over. `hold`
+with the assist on is not graded — the pad's driver countersteers on top of it (`Q152`).
