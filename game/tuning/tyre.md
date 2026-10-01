@@ -71,6 +71,11 @@ The finding in one number. At 1.0 — the shipped drive — the rear tyres canno
 holds a slide; at 2.0 `hold` passes at both speeds; at 3.0 the 86 kph slide spins. The cost: the
 car runs up to 119 kph in 4 s where it made 63, and the `corner` row accelerates through the bend.
 
+🔴 Not the lever for the power-on corner (`Q153`'s `liftoff` round, 2026-10-02): at 1.5 and 1.75
+the tap does not slide at 30, 42 or 63 kph (peak 5.2–10.9°, `hold` 0 s) and `hold` at 86 falls
+1.40 → 1.00 s, while `corner` still accelerates (86 → 118 kph at 1.5) and widens. The slide needs
+the whole 2.0; the corner is answered elsewhere (`P3-55`).
+
 ## `traction_limit = 1.0`
 
 Traction control cuts a driven wheel's torque past peak wheelspin, so full throttle at full lock

@@ -89,6 +89,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `+0.5 s` do not compare with a table from before 2026-09-30. ⚠️ A countersteer latch keyed on
   the slip alone takes a turn-in plough for a slide: latch on tail out (yaw and countersteer sign
   disagree), and grade a latch change on the tap at 42 kph.
+- ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
+  read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
+  for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
+  the windows. 🔴 `drive_scale` is not the power-on corner's lever: below 2.0 the spike's slide dies
+  at 30–63 kph before the corner stops accelerating (`tyre.md`).
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the

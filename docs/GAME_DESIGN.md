@@ -5,7 +5,9 @@
 1. **It must feel like Hong Kong to a Hong Kong driver.** Recognition beats fidelity. A local should
    navigate by memory, not by minimap.
 2. **Arcade, not simulation.** Three-minute sessions, instant restart, forgiving collision,
-   unrealistic grip. Fun outranks accuracy whenever they conflict.
+   unrealistic grip. Fun outranks accuracy whenever they conflict. **The drift is the one place for
+   sim-lite skill** (`Q153`): easy to start and forgiving to lose, held longer and wider by the
+   player's throttle and countersteer — a low entry bar and a high ceiling, inside arcade grip.
 3. **Readable at a glance.** Two thumbs on a phone, on a bus, in daylight (`Q97`); one-handed stays
    the deferred accessibility option (`auto_accelerate`, `P3-5b`).
 

@@ -8221,3 +8221,76 @@ Set at 6.0 in `tyre.tres` on the user's call the same day ("go", over holding it
 the pad passed it and the spike alone reads it); `slide_lock_deg` stays absent, refuted and pulling
 the other way. The drive stays the veto. What it asks of the user: whether a car that stops turning at 6° once caught still leaves the countersteer theirs.
 
+## `Q153` — Arcade grip, sim-lite slide: the drift is where the skill lives
+
+**Asked** by the user (2026-10-02), after the 120+ kph throttle-on / throttle-off rows on the spike
+(`Q152`; the `liftoff` round below) and the question "sim-lite or arcade?". **Closed** the same day, the
+user's call.
+
+**Decision.** Pillar 2 stands: arcade grip, forgiving collision, three-minute sessions, no spin-outs
+from small errors. One line is added to it: the drift is the one place for sim-lite skill — easy to
+start and forgiving to lose (the button breaks the tail, the hidden aids — traction control, the
+speed-narrowed lock, `catch_lock_deg` — keep a novice from spinning), held longer and wider by the
+player's throttle and countersteer, which the fare already pays per second (`Q145`). A low entry
+bar and a high ceiling, inside arcade grip.
+
+**Refused:** sim-lite everywhere. It reopens pillar 2 for everyday cornering, and lowering `mu`
+toward a road tyre's re-derives every corner of a city driven at arcade speed. **Not settled by
+this:** whether the spike ships (`Q152`); this is the bar it is worked toward.
+
+**What it asks of the spike** (`P3-52`): the slide's entry bar low at city speeds, and the parts of
+the car that read as neither style — the power-on corner that widens as the doubled drive
+(`drive_scale`) accelerates through it — graded and, if it costs nothing the slide needs, taken out.
+
+⚠️ Binary inputs bound the ceiling: keyboard and touch give full lock or none and full throttle or
+none (`Q97`), so on those devices the skill is timing. Analog touch input is a separate question.
+
+**The reference: Forza Horizon (the user's call, same day).** The drift aims at Forza Horizon's
+split, not Mario Kart's: in Mario Kart the button IS the drift — guaranteed, unspinnable, the
+radius clamped — and novice and expert get one slide, which closes the gap the ceiling lives in. In
+Forza Horizon real technique works and the floor comes from assists the player switches. Here:
+- **The button guarantees the start** and is a safety net, never the holder: one tap breaks the
+  tail at any city speed; past the first second the slide is the player's throttle and countersteer.
+- **Real technique works in the direction a driver expects**, forgivingly — countersteer, throttle
+  to hold the angle, the lift that tucks the nose, and (unmeasured) the flick, the trail-brake and
+  the handbrake entry. The power-on corner that accelerates and widens with no scrub is the one
+  technique the spike contradicts (`P3-55`).
+- **The assist is a setting, default on** (`P3-56`): `countersteer_assist` on for the floor, off
+  for the ceiling. The user's call of 2026-09-29 (off: countersteering is the player's skill) is
+  the off mode, not reversed. Default on because the devices are binary — keyboard and touch give
+  no partial lock or throttle (`Q97`), so the assists carry more than Forza Horizon's, as CarX's do
+  on a phone.
+- **Borrowed from Mario Kart: legibility, not control** — a tier that grows while the slide is
+  held (the fare's drift flash, `P3-49`), and no spin from the button alone.
+⚠️ Open: whether an assisted slide pays the full `drift_hkd` (Forza Horizon pays everyone).
+
+**The `liftoff` round (same day).** The user's street report: at speed the spike "never
+understeers, and oversteers somehow instead". The cap was ruled out first — every row but `catch`
+byte-identical with `catch_lock_deg` 0 and 6 at 86 and 105 kph. A new pad row, `liftoff`, is
+`corner`'s input (full lock, full throttle, no button) with the throttle lifted at 1 s, read beside
+`corner` in windows around the lift. First 0.25 s after the lift, against `corner` over the same
+window:
+
+| entry | car | yaw rate, `liftoff` / `corner` | radius, `liftoff` / `corner` |
+|---|---|---|---|
+| 125 kph | spike | 43 → 53 / 43 → 46 °/s | 47 → 37 / 47 → 44 m |
+| 125 kph | shipped | 61 → 74 / 61 → 65 °/s | 30 → 24 / 30 → 27 m |
+| 86 kph | spike | 57 → 59 / 57 → 53 °/s | 28 → 27 / 28 → 31 m |
+| 86 kph | shipped | 87 → 101 / 87 → 91 °/s | 15 → 12 / 15 → 13 m |
+
+The lift tucks the nose by about as much on both cars, slip 1–3°: no oversteer. An earlier reading
+off 4 s totals (+132° of heading on the spike against +38° shipped) was mostly the coasting car
+slowing, and is withdrawn. What differs is the power-on corner: the spike's `corner` from 86 kph
+ACCELERATES to 120 kph and its radius grows 28 → 41 m with no scrub, where the shipped car sheds
+speed and tightens. The fronts never pass the tyre's 8° peak under the speed-narrowed lock (12.0°
+of wheel at 99 kph carves 28 m where the kinematic circle is about 13), so it never ploughs either:
+the arc just widens.
+
+**`drive_scale` is not the lever for it** (swept 1.5 / 1.75 / 2.0 at 42 / 63 / 86 kph, `liftoff` at
+105, the tap at 25 / 30). Below 2.0 the slide is gone before the corner is tamed: `ride`'s peak
+9.7° / 5.2° at 42 / 63 kph and `hold` 0 s at 1.5 and 1.75; at 86 `hold` 1.40 → 1.17 → 1.00 s. The
+corner still accelerates at 1.5 (63 → 102 kph, 86 → 118) and still widens at 105 (36 → 42 m). The
+next lever (`P3-55`): the drive eased while traction control is ARMED and the fronts are turned —
+the button disarms it, so a slide never sees the taper by construction.
+⚠️ The spike's tap slides from 30 kph (28.1°, 1.52 s over 14°) and not at 20–25 (11.3–12.7°), at
+2.0 only; the "9.2° at 42 kph" in `P3-52`'s first round predates the gameplay round and is stale.
