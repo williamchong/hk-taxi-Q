@@ -8311,3 +8311,45 @@ the button disarms it, so a slide never sees the taper by construction.
 where a slide must pay, the longest where it must not: `hold` carries ±0.3 s run to run (`Q152`),
 so one run near 2.0 s says nothing. 60° is `Q152`'s peak bar carried over. `hold`
 with the assist on is not graded — the pad's driver countersteers on top of it (`Q152`).
+
+**Graded (same day), the bars above.** Three serial runs a row came out byte-identical at every
+speed — the ±0.3 s of `Q152` did not reproduce — so each cell is all three runs.
+
+| Bar | 42 kph | 63 kph | 86 kph | Verdict |
+|---|---|---|---|---|
+| `tap` peak, over 14° | 28.0° | 28.5° | 30.3° | pass (30 kph 28.1°, 100 kph 28.3°) |
+| `ride` peak, under 60°, assist off / on | 28.0 / 36.8° | 28.5 / 37.0° | 30.3 / 38.2° | pass |
+| `ride` longest, assist off, under 2.0 s | 1.63 s | 1.60 s | 1.68 s | pass |
+| `ride` longest, assist on, at least 2.0 s | 1.85 s | 2.55 s | 3.15 s | **fail at 42** |
+| `hold` longest, at least 2.0 s | (1.87 s) | 2.55 s | 1.40 s | **fail at 86** |
+
+Below 30 kph the tap peaks 11.3° at 20 and 12.7° at 25: no start, the user's call. Past the
+bars' range `hold` reads 1.52 s at 105 kph and 1.63 at 125, the tap 28.4° and 29.5°. Every number
+`tyre.md` held from 2026-09-29 reproduced to the digit, the catch cap in between included.
+
+**The pace, both cars** (`--only=coast --run-up=`, the entry speed read after that many seconds
+of throttle from rest):
+
+| throttle | 2 s | 4 s | 6 s | 8 s |
+|---|---|---|---|---|
+| Shipped | 34.5 kph | 63.0 | 86.4 | 105.5 |
+| Spike | 67.7 kph | 122.8 | 132.5 | 132.7 |
+
+The spike is at the speed skill's 80 kph (`speed_min_kph`) about 2.5 s from rest where the shipped
+car takes about 5.5 (interpolated), and sits on its limiter inside 6 s. The user's call owed:
+keep the faster taxi, or bring the pace back with a lower drive while traction control is armed
+(unmeasured) — it picks `P3-55`'s lever.
+
+**`P3-55`'s baseline, and what the shipped car's corner is.** `corner`, 4 s at full lock and full
+throttle, entry → exit:
+
+| entry | 42 kph | 63 | 86 | 105 | 125 |
+|---|---|---|---|---|---|
+| Spike | 107.7 | 120.0 | 127.2 | 127.6 | 127.7 |
+| Shipped (by run-up) | — | 62.4 | 62.6 | 65.0 | — |
+
+Both cars run to a terminal speed at full lock, whatever the entry: the shipped car to 62–65 kph,
+the spike to about 128. So the power-on corner's bar is a terminal speed, not a share of the entry:
+the shipped car sheds 28% from 86 kph and 38% from 105. ⚠️ The shipped car's tap is inert at an
+86 kph entry by run-up too (peak 2.7°), so the reading at `--entry-kph` 86 in the timing round was
+the car's and not the flag's; 42 kph by run-up is still unread.

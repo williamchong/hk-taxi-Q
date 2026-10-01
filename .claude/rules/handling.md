@@ -127,7 +127,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
   cars get the same one. `longest` is the unbroken dwell the fare's drift pays on (`drift_min_s`);
   `secs>thr` sums every run. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
-  configuration. 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
+  configuration (`Q152`; three serial runs were byte-identical on 2026-10-02, `Q153` — run the
+  repeats anyway). 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
   wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
   past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.side_force_depth`):
   at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
