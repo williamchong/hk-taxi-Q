@@ -77,6 +77,13 @@ var _visuals: Array[Node3D] = []
 var _traction_off: bool = false
 ## Seconds since the drift button came up while traction control is off.
 var _released_s: float = 0.0
+## Whether the player has steered since the drift button's press, so letting
+## the steering go can end the slide whichever of the two was pressed first.
+var _slide_steered: bool = false
+## The rear side cut, latched at the drift button's press. Latched, not
+## tracked: a slide sheds speed, and a cut that deepened as it did would feed
+## itself (`Q89`).
+var _side_cut: float = 0.0
 ## The drive force per traction wheel and the brake dial as the parent set them
 ## this tick, before this class took them back off the engine.
 var _drive_n: float = 0.0
@@ -339,6 +346,8 @@ func place_at(pose: Transform3D) -> void:
 	_loads.fill(0.0)
 	_traction_off = false
 	_released_s = 0.0
+	_slide_steered = false
+	_side_cut = 0.0
 	_driver_steering = 0.0
 	_slide_side = 0.0
 	_since_slide_s = INF
@@ -357,22 +366,29 @@ func _apply_tyres(delta: float) -> void:
 	var up: Vector3 = global_basis.y
 	var share: float = mass / float(_wheels.size())
 	var brake_nm: float = _brake_dial * float(Engine.physics_ticks_per_second)
-	var top_mps: float = profile.max_speed_kph / 3.6
+	var rim_limit_mps: float = profile.max_speed_kph / 3.6 * (1.0 + tyre.rim_overspeed)
 	_rearm_traction(delta)
 	var governor: bool = tyre.traction_limit > 0.0 and not _traction_off
+	var drive_share: float = 1.0
+	if _traction_off:
+		drive_share = _slide_drive_share()
+	elif governor:
+		drive_share = _turn_drive_share()
 	for i: int in _wheels.size():
 		var wheel: VehicleWheel3D = _wheels[i]
 		_radius = wheel.wheel_radius
 		var drive_nm: float = (
-			_drive_n * tyre.drive_scale * _radius if wheel.use_as_traction else 0.0
+			_drive_n * tyre.drive_scale * drive_share * _radius if wheel.use_as_traction else 0.0
 		)
 		# A limiter on the wheel, where the parent's taper is on the body: a
 		# spinning tyre must not run the wheel past top speed either.
-		if absf(_omega[i]) * _radius >= top_mps and signf(drive_nm) == signf(_omega[i]):
+		if absf(_omega[i]) * _radius >= rim_limit_mps and signf(drive_nm) == signf(_omega[i]):
 			drive_nm = 0.0
 		var hold_nm: float = brake_nm * _radius
 		if drift_input and i >= _front.size():
 			hold_nm += tyre.handbrake_torque_nm
+			if tyre.handbrake_declutch:
+				drive_nm = 0.0
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
 			_loads[i] = 0.0
@@ -427,6 +443,14 @@ func _apply_tyres(delta: float) -> void:
 		if is_zero_approx(omega):
 			fx = clampf(fx, -cap * absf(_along), cap * absf(_along))
 		var fy: float = clampf(mean.y, -cap * absf(across), cap * absf(across))
+		if i >= _front.size() and _side_cut > 0.0 and _drift_engagement > 0.0:
+			# Capped against what the turn asks of this wheel, not scaled: under
+			# arcade grip a scaled tyre just runs a little more slip angle and
+			# holds the turn (42 kph: no slide at half the force), and a cut
+			# deep enough for 42 kph spun the car at 63.
+			var asked: float = share * linear_velocity.length() * absf(angular_velocity.dot(up))
+			var kept: float = minf(absf(fy), asked * (1.0 - _side_cut))
+			fy = signf(fy) * lerpf(absf(fy), kept, _drift_engagement)
 		# The sideways force goes in where Godot's does: the contact's height
 		# over the centre of mass scaled by `side_force_depth` (Bullet's
 		# `m_rollInfluence`, the handling table's `roll_influence`). At the contact itself this car's cornering grip
@@ -442,6 +466,49 @@ func _apply_tyres(delta: float) -> void:
 	_cost_ticks += 1
 
 
+## The share of the forward drive left while traction control is armed and the
+## fronts are turned: 1 with the wheel straight, `1 - turn_drive_cut` at the
+## lock the speed allows. The doubled drive (`drive_scale`) the slide needs
+## otherwise accelerates a full-lock corner to about 128 kph from any entry,
+## its arc widening with no scrub, where the shipped car settles at 62-65
+## (`Q153`). Read off the front wheels' own angle, so the catch cap and the
+## rate limit count. Forward drive only: reversing is not the corner.
+func _turn_drive_share() -> float:
+	if tyre.turn_drive_cut <= 0.0 or _drive_n <= 0.0:
+		return 1.0
+	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0))
+	if lock <= 0.0:
+		return 1.0
+	return 1.0 - tyre.turn_drive_cut * minf(absf(steering) / lock, 1.0)
+
+
+## The share of the forward drive left while traction control is disarmed: 1
+## under `slide_drive_fade_from_deg` of body slip, none at
+## `slide_drive_fade_to_deg`. A key or a thumb holds full throttle, and with
+## the rim free to overspeed a plain held tap ran to 48-65° (`Q153`, the user's
+## street report: "the rear feels too spinny"). It takes power away and asks
+## for no angle (`Q72`): under the band the slide is the throttle's and the
+## countersteer's, as before.
+func _slide_drive_share() -> float:
+	if tyre.slide_drive_fade_to_deg <= tyre.slide_drive_fade_from_deg or _drive_n <= 0.0:
+		return 1.0
+	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
+	var over: float = inverse_lerp(
+		tyre.slide_drive_fade_from_deg, tyre.slide_drive_fade_to_deg, slip
+	)
+	return 1.0 - clampf(over, 0.0, 1.0)
+
+
+## The rear side cut for a press at `kph`: `drift_side_cut` up to
+## `drift_side_cut_from_kph`, easing to `drift_side_cut_fast` by
+## `drift_side_cut_to_kph`. With no band set, `drift_side_cut` at every speed.
+func _side_cut_at(kph: float) -> float:
+	if tyre.drift_side_cut_to_kph <= tyre.drift_side_cut_from_kph:
+		return tyre.drift_side_cut
+	var along: float = inverse_lerp(tyre.drift_side_cut_from_kph, tyre.drift_side_cut_to_kph, kph)
+	return lerpf(tyre.drift_side_cut, tyre.drift_side_cut_fast, clampf(along, 0.0, 1.0))
+
+
 ## Off at a drift press, and back on once the button has been up for
 ## `traction_rearm_s` and the car's slip is under the bar the game scores a
 ## slide on — the slide the player asked for is over. Keyed on the body's slip
@@ -449,12 +516,26 @@ func _apply_tyres(delta: float) -> void:
 ## to road speed before the throttle can take the slide over, and re-armed on
 ## that the governor cut the very torque the slide needed (the `hold` row at
 ## 63 kph fell from 2.22 s to nothing).
+##
+## With `rearm_on_steer_release` it also comes back the tick the player lets
+## the steering go, having steered since the press — ahead of the clock and
+## the slip bar, because that is the slide's ending handed to the steering key
+## (`Q153`). The press is also where the side cut is latched.
 func _rearm_traction(delta: float) -> void:
 	if drift_input:
+		if not _traction_off or _released_s > 0.0:
+			_slide_steered = false
+			_side_cut = _side_cut_at(absf(speed_kph))
+		_slide_steered = _slide_steered or not is_zero_approx(steer_input)
 		_traction_off = true
 		_released_s = 0.0
 		return
 	if not _traction_off:
+		return
+	if not is_zero_approx(steer_input):
+		_slide_steered = true
+	elif tyre.rearm_on_steer_release and _slide_steered:
+		_traction_off = false
 		return
 	_released_s += delta
 	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)

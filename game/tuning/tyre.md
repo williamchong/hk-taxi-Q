@@ -49,6 +49,28 @@ wrong way.
 A 0.35 m wheel and tyre with a share of the drivetrain. The spin is solved implicitly, so this sets
 how fast a wheel spins up, not whether the step is stable.
 
+## `drift_side_cut = 0.6`, `drift_side_cut_from_kph = 42.0`, `drift_side_cut_to_kph = 65.0`, `rearm_on_steer_release = true`
+
+The 90° drift (`Q153`, the user's street report of 2026-10-02). The cut caps the rears' sideways
+force at a share of what the turn asks while the button is engaged, so the slide starts inside the
+corner (0.57 s and 54° of heading at 42 kph, from 2.1 s and 181°); it is latched at the press and
+eases to `drift_side_cut_fast` (absent, 0) by 70 kph, because 0.6 at 63 kph spins the car and 0.2
+at 86 does. The re-arm brings traction control back the tick the steering is let go, which is the
+ending: settled at 81–85° at 42 kph and 83–91° at 63 on the pad's `turn` row (96–107° at 63 with
+the band to 70). It fires once the player has steered since the press, whichever came first. Graded on `turn`
+(start and settled heading) with `hold` and `ride` as the guard. `handbrake_declutch` is absent:
+built, measured, and only a harsh brake (`Q153`). The band ended at 70 kph first; 65 since the
+user's second street drive ("sometimes the rear feels too spinny"), with the fade below.
+
+## `slide_drive_fade_from_deg = 25.0`, `slide_drive_fade_to_deg = 40.0`
+
+The forward drive fades out over this band of body slip while traction control is disarmed, so a
+held throttle cannot spin the car (`Q153`, the user's street report). A plain held tap peaked 30.7 /
+47.8 / 65.1 / 49.7 / 50.0° at 42 / 50 / 63 / 75 / 86 kph; with the band and the cut ending at 65 kph,
+29.0 / 35.7 / 41.6 / 35.3 / 34.5°. `hold` never reaches the band (peak 23–27°) and is unchanged, as
+is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
+(`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
+
 ## `handbrake_torque_nm = 3000.0`
 
 Locks the rear wheels at the car's load (capacity ≈ 2 × 4,700 N × 0.35 m ≈ 3,300 N⋅m per wheel with
@@ -76,6 +98,16 @@ the tap does not slide at 30, 42 or 63 kph (peak 5.2–10.9°, `hold` 0 s) and `
 1.40 → 1.00 s, while `corner` still accelerates (86 → 118 kph at 1.5) and widens. The slide needs
 the whole 2.0; the corner is answered elsewhere (`P3-55`).
 
+## `rim_overspeed = 0.5`
+
+How far past top speed a driven wheel's rim may spin before the drive is stopped, as a share of it
+(`P3-53`, `Q153`). At 0 the limiter sits at 140 kph of rim speed and a countersteered slide at
+86 kph meets it mid-slide: `hold` 1.40 s. At 0.5, `hold` reads 1.93 / 2.63 / 3.17 s at 42 / 63 /
+86 kph and every bar but the assisted slide at 42 kph (1.92 s) passes; the cost is a plain input's
+peak, 28–30° → 48–52° against the 60° bar. 0.25 does not carry 86 kph (1.62 s). `Q153` holds the
+grid with `handbrake_torque_nm`. Set at 0.5 on the user's call after driving the pad (2026-10-02,
+"seems ok for now"); 0 is today's limiter.
+
 ## `traction_limit = 1.0`
 
 Traction control cuts a driven wheel's torque past peak wheelspin, so full throttle at full lock
@@ -89,6 +121,21 @@ and the body's slip is under the game's 14°. At 0 and 0.5 it re-armed before th
 slide over (`hold` at 63 kph 0.00 s). At 1.0 a player's own input — the tap, the steering and the
 throttle held (`ride`) — slid 0 s at 42 kph, because the governor came back and cut the power the
 slow slide needed; at 2.0 it slides 1.85 s. 3.0 reads the same as 2.0.
+
+## `turn_drive_cut = 0.5`
+
+The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,
+`Q153`), for the power-on corner: at 0 a full-lock corner under the doubled drive runs to about
+128 kph from any entry and its arc widens, where the shipped car settles at 62–65. The drift button
+disarms traction control, so a slide never sees it — `ride` and `hold` hold their peak and
+`longest` at every value, and only the exit after the re-arm moves. Swept 0–0.9 on `corner` at 42 /
+63 / 86 / 105 / 125 kph (`Q153` holds the table): 0.5 settles near 90 kph and pulls away from
+10 kph at full lock as the shipped car does (45.1 against 43.3 kph two seconds in); 0.6 settles
+near 70 and 0.7 near 57, the shipped car's terminal speed between them, pulling away 13% and 30%
+behind it. Set at 0.5 on the user's call after driving the pad (2026-10-02, "seems ok for now"):
+the arc stops widening and the pull-away is the shipped car's; 0 turns it off. 🔴 Graded on `corner` and
+`liftoff`'s windows across entries and on the 10 kph pull-away, never on `hold` or `ride`, which
+cannot see it.
 
 ## `side_force_depth = 0.7`
 
