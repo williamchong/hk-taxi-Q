@@ -47,6 +47,11 @@ Above the drift's fade (`drift_fade_from_kph` 65) and well under `max_speed_kph`
 Road pays it, Hennessy between the trams does not, which is the route choice `GAME_DESIGN.md`
 asks for.
 
+⚠️ Read off the car before `Q152` shipped (2026-10-03), which made 80 kph about 5.4 s and 66 m
+from rest. The tyre car makes it in about 2.4 s and 28 m, and is at about 117 kph where the old
+car was at 80 (the pad's `coast --run-up=` at 1–8 s, distances by trapezoid). Which street pays
+is not re-measured. Not moved: the user's call (`Q152`).
+
 ## `speed_hold_m = 200.0`
 
 The tariff's own unit (`tariff.tres` `step_m`): the speed skill pays once per 200 m driven at or
@@ -104,6 +109,10 @@ skidpad's wall rows (`tools/skidpad.sh --only=wall`) put a 10° brush at 11.2 / 
 into the wall from 63 / 86 / 105 kph entries, so 20 keeps every brush free at any speed the car
 reaches, and a 30° clip at 63 kph reads 34.1, well over.
 
+⚠️ On the tyre car (`Q152`, 2026-10-03) the brush reads 11.6 / 15.4 / 18.6 / 22.6 kph from
+63 / 86 / 105 / 130 kph entries: free to 105, a collision at 130, which the car now reaches in
+under 5 s of throttle. Not moved: the user's call.
+
 ## `bump_hkd = 2.0`
 
 A collision — a 30° clip at any speed, 34.1 to 53.9 kph into the wall on the pad — docks less
@@ -115,6 +124,11 @@ never control and the tip should read the same way.
 A head-on reads 69.5 / 90.5 / 108.3 kph into the wall from the three entries, and the hardest
 30° clip 53.9, so 60 splits them at every speed measured. `FareSystem.setup` refuses a value at
 or under `bump_min_kph`.
+
+⚠️ On the tyre car (`Q152`, 2026-10-03) the 30° clip reads 37.6 / 47.5 / 55.9 / 65.5 kph and
+the head-on 77.7 / 97.3 / 113.5 / 131.1 from 63 / 86 / 105 / 130 kph entries, so 60 no longer
+splits them at 130; a bar between 65.5 and 77.7 does at every speed measured. Not moved: the
+user's call.
 
 ## `crash_hkd = 5.0`
 

@@ -200,7 +200,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
-| `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | 🟡 Spike built and graded (`P3-52`); not shipped. The shipped taxi is untouched. Open: the user's call on the trade below. |
+| `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | ✅ Shipped 2026-10-03, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn`. Built and graded as a spike (`P3-52`). Owed, the user's call: `speed_min_kph` and the wall bars on the new pace. |
 
 ---
 
@@ -7971,9 +7971,11 @@ exercised, so this is their first measurement.
 
 ## `Q152` — A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering
 
-**Status.** 🟡 Spike built and graded 2026-09-29 (`P3-52`), on the user's ask to make the drift
-more real ("pre-change existing drift behaviour is not ideal, that's why this plan exists"). Not
-shipped: nothing the game loads changed. The trade at the end is the user's call.
+**Status.** ✅ Shipped 2026-10-03, trade (a) — the last section here. Built and graded as a spike
+2026-09-29 (`P3-52`), on the user's ask to make the drift more real ("pre-change existing drift
+behaviour is not ideal, that's why this plan exists"); until the ship nothing the game loaded
+changed, and "the shipped car" in every section before the last is `taxi.tscn` on the engine's
+tyres.
 
 **The question.** `Q85` closed on "a tyre model layered on `VehicleWheel3D` is the only route to
 the physical mechanism; a `Q50`-scale call nobody has made". This builds that route as a second
@@ -8220,6 +8222,59 @@ without the tail-out test brings the plough back (28.0° → 22.7°).
 Set at 6.0 in `tyre.tres` on the user's call the same day ("go", over holding it for the drive:
 the pad passed it and the spike alone reads it); `slide_lock_deg` stays absent, refuted and pulling
 the other way. The drive stays the veto. What it asks of the user: whether a car that stops turning at 6° once caught still leaves the countersteer theirs.
+
+**Shipped (2026-10-03, the user: "handle Q152", after asking whether the table tuned on the pad
+was in the main scene — it was not).** Trade (a), which the calls since had taken a piece at a
+time: the faster taxi stays (`Q153`, 2026-10-02), a lower `mu` — trade (b) — was measured and
+refused (`Q153`), and the two street drives ended on "happy" and "otherwise good". Trade (c)'s
+harness is kept either way.
+
+- **The change is one line**: `city_drive.tscn` instances `taxi_tyre.tscn` where it instanced
+  `taxi.tscn`, and the same line back is the off switch. `taxi.tscn` stays the base scene and, on
+  `skidpad.tscn`, the engine-tyre car the pad grades as its control. No table moved.
+- **It is the car the drives graded**: a street trace with `--tyres=res://tuning/tyre.tres` before
+  the swap and a plain one after are identical over all 1,273 lines (8 s from the start line:
+  throttle, a left turn, a tap). The menu parks it at rest (0 kph, height steady over 4 s).
+- **`verify_vehicle.gd` grades `taxi_tyre.tscn`** and gains one check: the car runs
+  `TyreVehicleController` on `tyre.tres` by path, `usable` accepts it and refuses a zero `mu`, and
+  `city_drive.tscn` instances that scene. A table with a zero key leaves the car on the engine's
+  tyres behind one `ERROR:` line, which is the silent way back this refuses. Mutated — the drive
+  scene pointed back at `taxi.tscn` — it fails.
+
+**The bars read off the old car's pace, re-graded (same day; `Q153` owed them).** The pace, both
+cars on the pad (`--only=coast --run-up=`):
+
+| throttle | 1 s | 2 s | 3 s | 4 s | 5 s | 6 s | 8 s |
+|---|---|---|---|---|---|---|---|
+| Engine tyres | 18.0 kph | 34.5 | 49.5 | 63.0 | 75.3 | 86.4 | 105.5 |
+| Tyre car | 35.5 kph | 67.7 | 96.9 | 122.8 | 131.3 | 132.5 | 132.7 |
+
+`speed_min_kph` 80 is about 5.4 s and 66 m from rest on the old car and about 2.4 s and 28 m on
+this one, which is at about 117 kph after the old car's 66 m (distances by trapezoid over the 1 s
+rows, an estimate). So the bar no longer asks for a long road; which street pays it is a drive,
+not measured. The wall tiers, the speed into the face (`--only=wall`, `approach` = `impact` to the
+hundredth on every row):
+
+| entry | 10° brush | 30° clip | head-on |
+|---|---|---|---|
+| 63 kph | 11.6 | 37.6 | 77.7 |
+| 86 | 15.4 | 47.5 | 97.3 |
+| 105 | 18.6 | 55.9 | 113.5 |
+| 130 | 22.6 | 65.5 | 131.1 |
+
+Against the old car's 11.2 / 15.2 / 18.4, 34.1–53.9 and 69.5 / 90.5 / 108.3 at 63 / 86 / 105: the
+same tiers, a little harder for the drive still pulling into the face. `bump_min_kph` 20 and
+`crash_min_kph` 60 hold to 105 kph and both break at 130, which this car reaches inside 5 s — a
+brush docks as a collision and a clip as a crash. A `crash_min_kph` between 65.5 and 77.7 splits
+the clip from the head-on at every speed measured; the brush at 130 is 22.6, and how far
+`bump_min_kph` can rise before a slow clip goes free is not measured (no clip row under 63 kph).
+**Not set: `speed_min_kph` and the two wall bars are the user's call**; `skills.md` carries the
+numbers beside each.
+
+Carried, none of them closed by the ship: the tyre model's cost on a handset (about 216 µs a tick
+on the desk; `P0-3b`'s handsets), the wheel lift at a kerb at 72 kph and the slide off a kerb at
+speed (`Q153`, not yet measured), the tap under 30 kph (`Q153`), and the assist as a setting
+(`P3-56`, which rode on this).
 
 ## `Q153` — Arcade grip, sim-lite slide: the drift is where the skill lives
 

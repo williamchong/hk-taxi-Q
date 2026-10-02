@@ -144,9 +144,11 @@ route pays more is a real choice. Air pays off any deck edge: the flyovers are j
 
 See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keyboard.
 
-**Handling model:** Godot's `VehicleBody3D` with arcade overrides (`Q50`). ⚠️ Its wheel friction is
-isotropic (`P0-5a`, never refuted; `Q50` accepted it as a cost): one `wheel_friction_slip`, one
-`tyre_grip`, no friction ellipse (`Q49`'s is gone). All values live in `game/tuning/handling.tres`;
+**Handling model:** Godot's `VehicleBody3D` with arcade overrides (`Q50`), and since 2026-10-03 a
+per-wheel tyre model in place of the engine's tyre force (`TyreVehicleController`, `Q152`). ⚠️ The
+engine's wheel friction is isotropic (`P0-5a`, never refuted; `Q50` accepted it as a cost): one
+`wheel_friction_slip`, one `tyre_grip`, no friction ellipse — which is why the tyres were replaced
+and the rest kept. All values live in `game/tuning/handling.tres` and `game/tuning/tyre.tres`;
 grade every change on `tools/skidpad.sh` and tune against a measurement, never a number written
 here. See `.claude/rules/handling.md`.
 
@@ -161,6 +163,12 @@ here. See `.claude/rules/handling.md`.
 | Coasting | Sheds a similar speed per second at 5 km/h as at 50, and comes to a stop. One pedal serves brake and reverse, so coasting is the only thing that can park the car (`P0-5b/c/d`) |
 
 ### The drift as shipped
+
+Since 2026-10-03 the game's car is the tyre car (`Q152`), and its drift is `Q153`'s: the button
+breaks the tail, the throttle and the countersteer hold it, traction control comes back when the
+steering is let go. `tyre.md` holds its tables. The list below describes the car before it —
+`taxi.tscn` on the engine's tyres, kept as the skidpad's control — and none of its numbers are the
+game's any more.
 
 - Three mechanisms: a rear grip cut (`drift_rear_grip_scale` 0.66), a yaw torque that decays on
   **time**, never on measured slip (`drift_yaw_torque_nm` 7000, `drift_yaw_decay_s` 0.8,
@@ -183,9 +191,10 @@ here. See `.claude/rules/handling.md`.
 - ⬜ Open: the tap is dead below the design speed (3.9° at 42 km/h), and the yaw assist cannot fix
   it — there, unbroken grip turns torque into a tighter line (`Q89`). Sustained full lock spinning
   the car was never re-measured after `Q50`; re-grade before citing it.
-- 🟡 A physical drift is a spike, not the car (`P3-52`, `Q152`): a per-wheel tyre model holds a
-  countersteered slide past the 2 s the fare pays on, at twice the drive and with the car's
-  everyday cornering changed. The user's call on the trade is owed.
+- ✅ A physical drift is the car (`P3-52`, `Q152`, shipped 2026-10-03): a per-wheel tyre model
+  holds a countersteered slide past the 2 s the fare pays on, at twice the drive and with the
+  car's everyday cornering changed. Owed: the speed skill's bar and the wall tiers, read off the
+  old car's pace (`Q152`), and the model's cost on a handset.
 
 ⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. Drift and
 `look_back` stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.

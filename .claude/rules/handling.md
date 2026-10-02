@@ -132,9 +132,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of
   the ablation's, so a change to the flattening or the 1 m/s floor is made in both.
-- ⚠️ **The tyre-model spike (`P3-52`, `Q152`) is a second car, graded on its own pad** —
+- 🔴 **The tyre car (`P3-52`, `Q152`) is the game's car since 2026-10-03, graded on its own pad** —
   `tools/skidpad.sh --scene=res://scenes/dev/skidpad_tyre.tscn --entry-kph=63` (and 42, 86), and
-  driven with `drive.sh --tyres=res://tuning/tyre.tres`. Compare the two cars at one `--entry-kph`,
+  driven with a plain `drive.sh`: `city_drive.tscn` instances `taxi_tyre.tscn`, and
+  `verify_vehicle.gd` refuses it any other car (`--tyres=` now fits a trial table). The default
+  pad, `skidpad.tscn`, grades `taxi.tscn` on the engine's tyres — the control, and "the shipped
+  car" in every note here written before the ship. A `handling.tres` drift dial tuned on it moves
+  nothing the player drives unless `tyre_vehicle_controller.gd` reads it: check there first.
+  ⚠️ `speed_min_kph` and the wall tiers were read off the old car's pace and are re-graded in
+  `Q152`, not yet moved. Compare the two cars at one `--entry-kph`,
   never one `--run-up`: at `drive_scale` 2 the spike makes 119 kph in the 4 s the shipped car makes
   63. `--sweep` reaches `TyreProfile` fields; a drift_* field still sweeps only the drift rows.
   🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
