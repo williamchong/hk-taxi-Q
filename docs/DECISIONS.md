@@ -8353,3 +8353,131 @@ the spike to about 128. So the power-on corner's bar is a terminal speed, not a 
 the shipped car sheds 28% from 86 kph and 38% from 105. ⚠️ The shipped car's tap is inert at an
 86 kph entry by run-up too (peak 2.7°), so the reading at `--entry-kph` 86 in the timing round was
 the car's and not the flag's; 42 kph by run-up is still unread.
+
+**The pace: the faster taxi stays (the user's call, 2026-10-02, after driving both pads).** No
+lower drive while traction control is armed; `P3-55` is the turn cut alone. Owed with it: the speed
+skill's 80 kph bar (`speed_min_kph`) and the wall tiers (`P3-50`) were read off the shipped car's
+pace and are re-graded if the spike ships (`Q152`).
+
+**The turn cut (`P3-55`, same day).** `TyreProfile.turn_drive_cut`: the share of the forward drive
+taken off at full lock while traction control is armed, in proportion to the fronts' angle over the
+lock the speed allows (`TyreVehicleController._turn_drive_share`). Absent, so 0 and inert: the
+63 kph table is unchanged with the mechanism in the tree, the wall rows inside their band. Swept on
+`corner` at five entries; the mean speed 2–3 s into the 4 s row, and the terminal speed the entries
+bracket:
+
+| `turn_drive_cut` | 42 kph | 63 | 86 | 105 | 125 | settles near |
+|---|---|---|---|---|---|---|
+| 0 | 88.1 | 101.8 | 119.9 | 127.0 | 127.7 | 128 kph |
+| 0.3 | 75.6 | 87.2 | 104.4 | 119.6 | 122.7 | 121 |
+| 0.5 | 63.4 | 72.8 | 88.2 | 102.7 | 115.6 | 90 |
+| 0.6 | 57.7 | 66.0 | 80.1 | 94.1 | 107.9 | 70 |
+| 0.7 | 51.6 | 59.8 | 72.2 | 85.4 | 99.5 | 57 |
+| 0.8 | 44.9 | 54.1 | 64.6 | 76.9 | 90.7 | 47 |
+| 0.9 | 37.9 | 48.4 | 57.6 | 68.4 | 81.6 | under 38 |
+
+"Settles near" is where a row from below still rises and the next from above falls; 4 s does not
+reach it. The shipped car's 62–65 kph sits between 0.6 and 0.7. From 86 kph the arc no longer
+widens from 0.5 up (radius 20.7 → 21.6 m at 0.5, 20.7 → 17.7 at 0.6, 17.9 → 11.4 at 0.8, against
+27.8 → 41.5 at 0); slip stays under 8°. `liftoff` still tucks at every value (0.6 at 86 kph:
+67 → 74 °/s and 20.7 → 17.6 m in the first 0.25 s).
+
+The slide never sees it, as built: at 0 / 0.5 / 0.6 / 0.7 and 42 / 63 / 86 kph `ride`'s and
+`hold`'s peak and `longest` are identical (1.63 / 1.60 / 1.68 s, 1.87 / 2.55 / 1.40 s), and
+`catch`'s `yaw@hold` and `settled` hold to 0.1°. What moves is the exit once traction control
+re-arms — `ride` at 63 kph leaves at 52.3 / 40.0 / 37.2 / 34.5 kph, `hold` at 86 at 71.6 / 57.6 /
+53.8 / 49.7. Mutated, the gate bites: applied with traction control disarmed too, 0.6 kills the
+slide at 63 kph (`hold` 2.55 → 0.00 s, `ride` 1.60 → 0.00, peak 7.5°).
+
+The cost is the pull-away at full lock. `corner` from a 10 kph entry, mean speed 2–3 s in: shipped
+43.3 kph; the spike 73.7 at 0, 45.1 at 0.5, 37.7 at 0.6, 30.3 at 0.7. So 0.5 pulls away as the
+shipped car does and settles near 90 kph; 0.6–0.7 settles where the shipped car does and pulls
+away 13–30% behind it. Not set: the value is the user's call, and their drive the veto.
+
+**The two failed bars, worked (`P3-53`, same day).** `hold` at 86 kph was the rim limiter, not the
+parent's speed taper (which starts at 119 kph): `_apply_tyres` stops the drive once a driven
+wheel's rim reaches top speed, and at 86 kph a spinning rear meets it mid-slide. Now a dial,
+`TyreProfile.rim_overspeed` (the share past top speed the rim may reach; absent, 0, today's
+limiter). Graded with `handbrake_torque_nm` on every bar, 42 / 63 / 86 kph:
+
+| `rim_overspeed` / handbrake | `hold` | assisted `ride` | plain `ride` | tap peak, 30–100 kph | fails |
+|---|---|---|---|---|---|
+| 0 / 3000 (today) | 1.87 / 2.55 / 1.40 s | 1.85 / 2.55 / 3.15 s | 1.63 / 1.60 / 1.68 s | 28.0–30.3° | `hold` 86, assisted 42 |
+| 0 / 2000 | 2.12 / 2.75 / 2.43 | 2.12 / 2.75 / 2.47 | 1.65 / 1.65 / 0.00 | 13.4° at 86, 7.3° at 100 | the start at speed |
+| 0 / 2500 | 1.98 / 2.68 / 2.80 | 1.98 / 2.68 / 2.80 | 1.63 / 1.63 / 1.22 | 12.0° at 100 | assisted 42, the start at 100 |
+| 0.25 / 2000 | 2.17 / 2.80 / 1.48 | 2.17 / 2.80 / 2.80 | 1.62 / 1.63 / 2.17 | 21.8–40.6° | `hold` 86, plain pays at 86 |
+| 0.25 / 3000 | 1.92 / 2.62 / 1.62 | 1.90 / 2.62 / 3.17 | 1.62 / 1.58 / 1.70 | 40.1–41.9° | `hold` 86, assisted 42 |
+| 0.5 / 2500 | 2.07 / 2.75 / 1.40 | 2.05 / 2.75 / 2.93 | 1.60 / 1.58 / 1.90 | 41.7–48.2° | `hold` 86 |
+| **0.5 / 3000** | 1.93 / 2.63 / **3.17** | **1.92** / 2.63 / 3.17 | 1.60 / 1.57 / 1.68 | 47.5–52.0° | assisted 42, by 0.08 s |
+
+0.5 / 3000 passes five of six. Its cost: a plain input's peak rises from 28–30° to 48–52° (the bar
+is 60°; 52.0° at 100 kph). A lighter handbrake lengthens every slow slide and loses the start at
+86–100 kph, where it no longer locks the rears. ⚠️ `hold` at 86 kph is bimodal — about 1.4 s or
+about 3 s, flipping on a neighbouring value — so one cell there is not a trend. Also swept on `hold`
+at 63 / 86: `slide_ratio` 0.8–0.85 (2.70–2.80 / 3.20–3.23 s), `side_force_depth` 0.8 (2.62 / 3.22),
+`peak_slip_angle_deg` 10 (2.58 / 3.22), `wheel_inertia_kgm2` flat; on assisted `ride` at 42:
+`traction_rearm_s`, `countersteer_assist` and `side_force_depth` flat, `slide_ratio` 0.8 2.05 s.
+Not set: the value is the user's call.
+
+**Set (the user's call, 2026-10-02, after driving the pad: "seems ok for now").**
+`turn_drive_cut` 0.5 and `rim_overspeed` 0.5 in `tyre.tres`. With both: `corner` from 63 kph holds
+about 73 kph two seconds in, `hold` at 86 kph 3.17 s. Provisional — the street drive is the veto,
+and the assisted slide at 42 kph (1.92 s) is left to `P3-56`. Open: the grip-limit form of the cut
+(a sim-lite's terminal speed, 60–65 kph, without the pull-away cost), and the tap below 30 kph.
+
+**The 90° drift (the user's street report, 2026-10-02: "it almost always drift too much and i
+have no obvious way to end the drift at 90"; also a slide "randomly" off a kerb at speed, not yet
+measured).** A new pad row, `turn` (`--only=turn`): the tap with steering and throttle held, ended
+at 45° of heading three ways — steering let go (`off`), steering and throttle let go (`lift`), full
+opposite lock (`counter`) — reading when the slip first reaches 14°, the heading by then, and the
+heading the car settles on. The bar: settles at 80–110° at 42 and 63 kph.
+
+What it found on the spike as it stood: the slide starts AFTER the corner — 14° at 2.1 s and 181°
+of heading at 42 kph, 1.4 s and 134° at 63, where the shipped car is at 0.70 s and 70° and settles
+at 79–83° on every ending. `P3-53`'s start bar read the peak and never when. Refuted as fixes, each
+measured: every tyre dial at 42 kph (`slide_ratio` 0.6–0.8 spins at 104–164°; `yaw_assist_scale`,
+`handbrake_torque_nm`, `wheel_inertia_kgm2`, `side_force_depth`, `peak_slip_angle_deg` leave the
+start past 170°); a handbrake that truly locks (at 3,000 N·m the held throttle fights it and
+neither rear locks; declutched and locked, `handbrake_declutch`, no slide under about 60 kph and
+40% of the speed gone in the tap); a lower `mu` (1.0 with the shipped drive slides by 50° and ends
+at 75° at 42 kph and spins at 63; 1.25 is right at 63 and inert at 42; neither ends under 140° at
+63, and `hold` falls under 1.2 s). The reason one car ends at 80°: arcade grip that comes BACK.
+
+Built (the user's "go"): a start and an ending, the hold left the player's.
+- **Start** — `drift_side_cut`: while the button is engaged (the handling table's ramp) the rears'
+  sideways force is capped at a share of what the turn asks of them. Capped, not scaled: scaled,
+  the tyre ran more slip angle and held the turn. Latched at the press on the speed then
+  (`Q89`'s reason): 0.6 to 42 kph, easing to 0 by 70 (`drift_side_cut_from_kph` / `_to_kph`).
+- **Ending** — `rearm_on_steer_release`: traction control comes back the tick the steering is let
+  go. Not on a reversal: a countersteer holds a slide, and re-armed on it `hold` fell 2.63 → 0.60 s.
+
+| entry | slide starts | settles, `off` / `lift` / `counter` |
+|---|---|---|
+| 30 kph | never (peak 7.5°) | no slide |
+| 42 | 0.57 s / 54° | 85.6 / 81.1 / 81.1° |
+| 50 | 0.73 s on `counter` only (peak 12–15°) | 83.0 / 78.6 / 76.1° |
+| 63 | 0.63 s on `counter` only (peak 13–26°) | 107.2 / 95.6 / 106.5° |
+| 75, 86 | none before the turn is ended | 57–79° on grip |
+
+The bar passes at 42 and 63. With it: `hold` 1.92 / 3.40 / 3.17 s and `ride` 1.00 / 1.13 / 1.68 s at
+42 / 63 / 86 kph. ⚠️ `ride`'s peak at 63 kph is 65.1°, over the 60° bar; the slide at 50–63 kph is
+shallow (12–15° unless countersteered); 30 kph still does not start. Set in `tyre.tres` for the
+user's drive, which is the veto.
+
+**The spinny rear (the user's second street drive, 2026-10-03: "sometimes the rear feels too
+spinny, otherwise good").** On the pad it is the plain held tap's peak: 30.7 / 47.8 / 65.1 / 49.7 /
+50.0° at 42 / 50 / 63 / 75 / 86 kph. Two causes — the side cut still partly on at 63 kph, and
+`rim_overspeed` feeding wheelspin at 75–86. Answered with `slide_drive_fade_from_deg` 25 /
+`slide_drive_fade_to_deg` 40 (the drive fades out over that band of body slip while traction
+control is disarmed; power taken away, no angle asked for, `Q72`) and the cut's band ending at
+65 kph: 29.0 / 35.7 / 41.6 / 35.3 / 34.5°. `hold` 2.00 / 3.28 / 3.17 s (it never reaches the band);
+`turn` settles 81–85° at 42 kph, 79–82° at 56, 83–91° at 63. The cost: at 50 kph the turn is mostly
+grip (settles 52–75°, peak 10–12°), and `ride`'s `longest` falls to 0.7–1.1 s. The user's drive
+is the veto.
+
+Left as built, and known: the side cut caps the rears against what the turn asks, which is nothing
+while the car is not yawing, so through the button's ramp a straight-line press under 65 kph leaves
+the rears no sideways force. `catch` at 42 / 63 kph reads no snap with it (under 0.1°, `settled`
+0.25–0.33 s); a floor under the cap brings back the scaled form, which did not slide at 42 kph.
+The slide's drive fade keys on the drift mode itself, so a table with no traction control
+(`traction_limit` 0) is not faded outside a slide.

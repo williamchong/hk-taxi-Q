@@ -93,7 +93,20 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
   for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
   the windows. 🔴 `drive_scale` is not the power-on corner's lever: below 2.0 the spike's slide dies
-  at 30–63 kph before the corner stops accelerating (`tyre.md`).
+  at 30–63 kph before the corner stops accelerating (`tyre.md`). The lever is `turn_drive_cut`
+  (`P3-55`), graded on `corner` across five entries — full lock runs to a TERMINAL speed, so one
+  entry reads a transient — and on the pull-away from `--entry-kph=10`; `hold` and `ride` cannot
+  see it while traction control is disarmed, and only their exits move.
+- ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
+  ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
+  the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is
+  80–110° settled at 42 and 63 kph. 🔴 A start bar that reads the PEAK passes a slide that begins
+  after the corner is over (181° of heading at 42 kph before the cut) — read `slide at`.
+  `drift_side_cut` and its band are graded here with `ride`'s peak as the guard (a cut right for
+  42 kph spins the car at 63); `slide_drive_fade_*` on `ride`'s peak across 42–86 kph with `hold`
+  as the guard; `rearm_on_steer_release` on the settled heading and on `hold`, which a re-arm on a
+  steering REVERSAL kills. Refused, each measured: a lower `mu`, a locked handbrake
+  (`handbrake_declutch`), every tyre dial at 42 kph.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the
