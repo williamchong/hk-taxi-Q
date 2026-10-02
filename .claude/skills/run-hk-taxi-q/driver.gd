@@ -91,9 +91,10 @@ var _spawn_y: float = 0.0
 ## to start a drive on a deck, where no fare node stands (`P3-51`). Unset
 ## until given; NaN is "not given".
 var _spawn_at := Vector3(NAN, NAN, NAN)
-## `--tyres=res://tuning/tyre.tres`: put `Q152`'s per-wheel tyre model on the
-## scene's car, driven by that table — the spike's street drive, the skidpad's
-## veto. Empty drives the car the scene ships.
+## `--tyres=res://tuning/<table>.tres`: put `Q152`'s per-wheel tyre model on
+## the scene's car, driven by that table. `city_drive`'s car carries the model
+## and `tyre.tres` itself since 2026-10-03, so this is for a trial table, or a
+## scene whose car is still `taxi.tscn`. Empty drives the car the scene ships.
 var _tyres_path: String = ""
 var _spawn_facing := Vector3(NAN, NAN, NAN)
 ## Latched when the run has learned everything it is going to. Stops the loop

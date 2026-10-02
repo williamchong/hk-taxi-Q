@@ -54,10 +54,14 @@ extends "res://tools/verify_tool.gd"
 ## Needs no built region: the taxi is a committed authored asset, so this runs
 ## outside `check.sh`'s `VERIFY_GENERATED` gate with `verify_beam_budget.gd`.
 
-## The player's car, and the only one. A roster car earns its own entry here
-## when it exists; a car carrying no lamp rig is supported rather than broken,
-## which `vehicle_lamps.gd` records, so such an entry would check less than this.
-const SCENE_PATH := "res://scenes/vehicle/taxi.tscn"
+## The player's car, and the only one: `taxi.tscn` with the per-wheel tyre model
+## on it (`Q152`), an inherited scene, so every rig below is `taxi.tscn`'s own. A
+## roster car earns its own entry here when it exists; a car carrying no lamp rig
+## is supported rather than broken, which `vehicle_lamps.gd` records, so such an
+## entry would check less than this.
+const SCENE_PATH := "res://scenes/vehicle/taxi_tyre.tscn"
+## The scene the game drives, which must instance the car graded here.
+const DRIVE_SCENE_PATH := "res://scenes/city_drive.tscn"
 const MATERIAL_PATH := "res://tuning/vehicle_body.tres"
 const SHADER_PATH := "res://assets/shaders/vehicle_body.gdshader"
 const LAMPS_SCRIPT := "res://scripts/vehicle/vehicle_lamps.gd"
@@ -65,12 +69,14 @@ const GLINT_SCRIPT := "res://scripts/vehicle/sun_glint.gd"
 const CONTROLLER_SCRIPT := "res://scripts/vehicle/vehicle_controller.gd"
 const DOOR_SCRIPT := "res://scripts/vehicle/taxi_door.gd"
 const EMOTE_SCRIPT := "res://scripts/vehicle/passenger_emote.gd"
+const TYRE_SCRIPT := "res://scripts/vehicle/tyre_vehicle_controller.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
 ## grades: what is asserted is that the scene hands each node THIS resource.
 const LAMPS_PROFILE_PATH := "res://tuning/vehicle_lamps.tres"
 const DOOR_PROFILE_PATH := "res://tuning/taxi_door.tres"
 const EMOTE_PROFILE_PATH := "res://tuning/passenger_emote.tres"
+const TYRE_PROFILE_PATH := "res://tuning/tyre.tres"
 
 
 ## The rigs' dials are tuning resources, and a zero key makes each rig inert
@@ -131,6 +137,40 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 		print(
 			"  ok    the lamp, door and face dials are tuning resources, and a zero key makes each inert"
 		)
+
+
+## The game's car runs the tyre model, on the shipped table (`Q152`).
+##
+## A tyre table with a zero key does not stop the car: every override hands back
+## to the parent and it drives on the engine's tyres, with one `ERROR:` line at
+## boot. So the fallback is refused here — the car's script, the table by path,
+## `usable()` on it, and the mutation, a duplicate with `mu` zeroed. Last, that
+## `city_drive.tscn` instances this scene, read off its dependency list rather
+## than by loading it: the drive scene needs a built region and this tool does
+## not.
+func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
+	var before: int = _failed
+	if not _runs(car, TYRE_SCRIPT):
+		_problem("%s does not run %s" % [SCENE_PATH, TYRE_SCRIPT])
+		return
+	var table := car.get("tyre") as Resource
+	if table == null:
+		_problem("the car has no tyre table assigned in %s" % SCENE_PATH)
+		return
+	if table.resource_path != TYRE_PROFILE_PATH:
+		_problem("the car reads %s, not the shipped %s" % [table.resource_path, TYRE_PROFILE_PATH])
+	var controller := car.get_script() as GDScript
+	if not controller.call(&"usable", table):
+		_problem("the shipped tyre table has a zero or missing key")
+	var zeroed := table.duplicate() as Resource
+	zeroed.set("mu", 0.0)
+	if controller.call(&"usable", zeroed):
+		_problem("mutation missed: a zero mu in the tyre table still reads usable")
+	var listed: Array = Array(ResourceLoader.get_dependencies(DRIVE_SCENE_PATH))
+	if not listed.any(func(dependency: String) -> bool: return dependency.ends_with(SCENE_PATH)):
+		_problem("%s does not instance %s" % [DRIVE_SCENE_PATH, SCENE_PATH])
+	if _failed == before:
+		print("  ok    the game's car runs the tyre model on the shipped table")
 
 
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
@@ -212,6 +252,7 @@ func _run() -> void:
 	_check_the_beams_point_at_the_road(car)
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
+	_check_the_car_runs_its_tyre_model(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)

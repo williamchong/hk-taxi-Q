@@ -5,9 +5,11 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-The per-wheel tyre model's table (`P3-52`, `Q152`): the spike that asks whether a drift can be
-physical on `VehicleBody3D`. Read by `TyreVehicleController` alone, through `taxi_tyre.tscn` and
-`drive.sh --tyres=`; the shipped taxi never loads it. Every value was graded on
+The per-wheel tyre model's table (`P3-52`, `Q152`): built as the spike that asked whether a
+drift can be physical on `VehicleBody3D`, and the game's car since 2026-10-03 (`city_drive.tscn`
+instances `taxi_tyre.tscn`). Read by `TyreVehicleController` alone. "The shipped car" below is the
+car before it — `taxi.tscn` on the engine's tyres, still the control on `skidpad.tscn`. Every
+value was graded on
 `tools/skidpad.sh --scene=res://scenes/dev/skidpad_tyre.tscn --entry-kph=` at 42, 63 and 86 kph,
 and `Q152` holds the tables.
 

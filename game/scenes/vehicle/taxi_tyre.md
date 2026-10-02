@@ -5,11 +5,13 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-The shipped taxi with `Q152`'s per-wheel tyre model on it (`P3-52`): an inherited scene of
-`taxi.tscn`, so the body, the lamps, the door and the face are the shipped car's and only the
-controller and its tyre table differ. A spike, graded on `skidpad_tyre.tscn`; nothing the game
-loads points at it. A street drive fits the same model to `city_drive`'s own car instead, with
-`drive.sh --tyres=`, so the scene's wiring stays the shipped one.
+The taxi with `Q152`'s per-wheel tyre model on it (`P3-52`): an inherited scene of `taxi.tscn`,
+so the body, the lamps, the door and the face are that car's and only the controller and its tyre
+table differ. Built as a spike and graded on `skidpad_tyre.tscn`; the game's car since 2026-10-03
+(`Q152`), when `city_drive.tscn` took it in place of `taxi.tscn`. That one `ext_resource` line is
+the off switch. `taxi.tscn` stays the base scene, and the car on the engine's tyres that
+`skidpad.tscn` grades as the control. `verify_vehicle.gd` grades this scene and refuses a drive
+scene that instances another.
 
 ## `[node name="Taxi" instance=ExtResource("1_taxi")]`
 

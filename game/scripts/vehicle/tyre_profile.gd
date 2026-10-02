@@ -1,8 +1,9 @@
 class_name TyreProfile
 extends Resource
-## The per-wheel tyre model's numbers (`P3-52`, `Q152`) — the spike that asks
-## whether a drift can be physical on `VehicleBody3D` rather than assisted.
-## Read by `TyreVehicleController` only; the shipped taxi never loads it.
+## The per-wheel tyre model's numbers (`P3-52`, `Q152`) — built as the spike
+## that asked whether a drift can be physical on `VehicleBody3D` rather than
+## assisted, and the game's car since 2026-10-03. Read by
+## `TyreVehicleController` only; `taxi.tscn` on its own never loads it.
 ## What each value *is* is here, why it is what it is in `tuning/tyre.md`.
 ##
 ## 🔴 **No `@export` here declares a default**, on `TaxiDoorProfile`'s
@@ -10,7 +11,7 @@ extends Resource
 ## drops any key equal to one (`Q119`). A missing key reads as zero, and the
 ## controller refuses a zero it cannot run on (`TyreVehicleController.usable`).
 
-## Path to the spike's table, so the scene and a probe cannot load two files.
+## Path to the table, so the scene and a probe cannot load two files.
 const PATH: String = "res://tuning/tyre.tres"
 
 ## Peak friction coefficient: the most force a tyre gives is `mu` × its load.

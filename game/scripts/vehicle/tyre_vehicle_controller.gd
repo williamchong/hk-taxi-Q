@@ -1,7 +1,9 @@
 class_name TyreVehicleController
 extends VehicleController
-## The shipped car with its tyres replaced by a per-wheel model (`P3-52`,
-## `Q152`): a spike on the skidpad, never loaded by the game.
+## `taxi.tscn`'s car with its tyres replaced by a per-wheel model (`P3-52`,
+## `Q152`): the game's car since 2026-10-03, through `taxi_tyre.tscn`. "The
+## shipped car" below and in `tyre.md` is the car before it, `taxi.tscn` on
+## the engine's tyres, which stays on `skidpad.tscn` as the pad's control.
 ##
 ## **Why it exists.** `Q85` closed on "a tyre model layered on `VehicleWheel3D`
 ## is the only route to the physical mechanism". Godot's wheel has one friction

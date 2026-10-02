@@ -45,7 +45,7 @@ VERIFY_TOOLS=(
 # The verify tools that need no built region, so they run whatever
 # VERIFY_GENERATED says. Most grade the taxi, which is a committed authored asset
 # plus its tuning: verify_beam_budget builds its own stub rigs, and
-# verify_vehicle instantiates taxi.tscn. Grouping them with the generated-asset
+# verify_vehicle instantiates taxi_tyre.tscn. Grouping them with the generated-asset
 # tools above would skip them exactly where they are cheapest to run: CI builds
 # no region, so these are the only runtime contracts it can check at all.
 #
