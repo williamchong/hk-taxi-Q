@@ -5,9 +5,17 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all ten
+#   --only=drift                     one manoeuvre instead of all eleven
 #                                    (corner, liftoff, drift, tap, brake, coast,
-#                                    wall, lift, hold, catch). liftoff is
+#                                    wall, lift, hold, catch, turn). turn is
+#                                    the street's 90° drift (Q153): the tap,
+#                                    ended at 45° of heading by letting the
+#                                    steering go (off), the throttle too
+#                                    (lift) or full opposite lock (counter);
+#                                    `slide at` / `turned` say when the slide
+#                                    began and how far round the car was,
+#                                    `came out` the heading it settled on.
+#                                    liftoff is
 #                                    corner with the throttle lifted at 1 s and
 #                                    no drift button, printed beside corner in
 #                                    windows around the lift (speed, yaw rate,

@@ -27,8 +27,19 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "liftoff", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch"
+	"corner", "liftoff", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch", "turn"
 ]
+## `turn`: the street's 90° drift (`Q153`, the user's street report). The tap,
+## steering and throttle held, then at `TURN_AT_DEG` of heading the player ends
+## it one of these ways; the row reads the heading the car comes to rest on.
+## `off` lets the steering go with the throttle held, `lift` lets both go,
+## `counter` goes to full opposite lock until the slip is under the threshold.
+const TURN_ENDS: PackedStringArray = ["off", "lift", "counter"]
+const TURN_AT_DEG: float = 45.0
+## The heading rate under which, with the slip under the threshold, the turn
+## reads as over.
+const TURN_SETTLED_DPS: float = 10.0
+const TURN_S: float = 6.0
 ## The rows that ask whether a slide can be KEPT (`Q152`), printed in their own
 ## table so the handling table keeps the shape every earlier pair was pasted in.
 ## `lift` is `tap` with the throttle lifted at `LIFT_AT_S`: `Q85` measured the
@@ -116,7 +127,7 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "catch"]
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "catch", "turn"]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -340,6 +351,19 @@ class Result:
 	## turn the other way once the slide is caught, which `snap_deg` (slip)
 	## cannot see.
 	var yaw_in_catch_deg: float = NAN
+	## Every manoeuvre: when the slip first reached the threshold, and the
+	## heading swept by then — a slide that starts after the corner is over is
+	## no use in it.
+	var slide_at_s: float = NAN
+	var slide_heading_deg: float = NAN
+	## `turn`: when the player ended it, the slip and speed then, and — once the
+	## slip is under the threshold and the heading under `TURN_SETTLED_DPS` —
+	## how long that took and the heading swept from the start of the turn.
+	var turn_off_s: float = NAN
+	var turn_off_slip_deg: float = NAN
+	var turn_off_kph: float = NAN
+	var turn_settled_s: float = NAN
+	var turn_heading_deg: float = NAN
 	## `catch` only, each in seconds from the tick the wheel went over, NAN
 	## where it never happened: the front wheels reaching the countersteer's
 	## full lock while it is held (`steer_ratio`, a share of the lock at that
@@ -643,6 +667,16 @@ func _measure_all() -> void:
 						return
 					results.append(caught)
 				continue
+			if manoeuvre == "turn":
+				for end: String in TURN_ENDS:
+					var turn_label: String = "turn@%s" % end
+					if swept:
+						turn_label += "@%.4f" % value
+					var turned: Result = await _measure(manoeuvre, turn_label, 90.0, 0.0, end)
+					if turned == null:
+						return
+					results.append(turned)
+				continue
 			var result: Result = await _measure(
 				manoeuvre, "%s@%.4f" % [manoeuvre, value] if swept else manoeuvre
 			)
@@ -658,6 +692,7 @@ func _measure_all() -> void:
 	var sustained: Array[Result] = []
 	var catches: Array[Result] = []
 	var lift_rows: Array[Result] = []
+	var turns: Array[Result] = []
 	var lifted: bool = false
 	for result: Result in results:
 		var manoeuvre: String = result.name.get_slice("@", 0)
@@ -670,6 +705,8 @@ func _measure_all() -> void:
 			walls.append(result)
 		elif manoeuvre == "catch":
 			catches.append(result)
+		elif manoeuvre == "turn":
+			turns.append(result)
 		elif manoeuvre in SUSTAIN_MANOEUVRES:
 			sustained.append(result)
 		else:
@@ -688,6 +725,8 @@ func _measure_all() -> void:
 		_print_sustain_table(sustained)
 	if lifted:
 		_print_liftoff_table(lift_rows)
+	if not turns.is_empty():
+		_print_turn_table(turns)
 
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
@@ -698,7 +737,11 @@ func _measure_all() -> void:
 ## reported, as `entry kph`, which is the number to quote when comparing runs at
 ## different `--run-up`.
 func _measure(
-	manoeuvre: String, label: String, wall_deg: float = 90.0, catch_s: float = 0.0
+	manoeuvre: String,
+	label: String,
+	wall_deg: float = 90.0,
+	catch_s: float = 0.0,
+	turn_end: String = ""
 ) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
@@ -770,6 +813,11 @@ func _measure(
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, true)
 		"catch":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, false, catch_s)
+		"turn":
+			if not turn_end in TURN_ENDS:
+				_fail("turn: no ending '%s'" % turn_end)
+				return null
+			await _sample(DRIFT_ACTIONS, TURN_S, false, result, TAP_S, INF, false, 0.0, turn_end)
 		_:
 			_fail("unknown manoeuvre '%s'" % manoeuvre)
 			return null
@@ -877,7 +925,8 @@ func _sample(
 	drift_release_s: float = INF,
 	lift_at_s: float = INF,
 	countersteer: bool = false,
-	catch_s: float = 0.0
+	catch_s: float = 0.0,
+	turn_end: String = ""
 ) -> void:
 	# ⚠️ Released first. The run-up holds the throttle and nothing had dropped it,
 	# so the coast manoeuvre measured 30 s of *acceleration* to 126 kph and then
@@ -904,6 +953,8 @@ func _sample(
 	# unread inside the manoeuvre's 4 s.
 	var end_s: float = limit_s
 	var can_cap: bool = _vehicle.has_method("catch_capped")
+	# `turn`: whether the car has slid since the player ended the turn.
+	var slid_since_off: bool = false
 
 	while t < end_s:
 		await physics_frame
@@ -920,6 +971,9 @@ func _sample(
 		var slip_deg: float = _slip_deg()
 		into.peak_slip_deg = maxf(into.peak_slip_deg, slip_deg)
 		if slip_deg >= _slip_threshold_deg:
+			if is_nan(into.slide_at_s):
+				into.slide_at_s = t
+				into.slide_heading_deg = absf(into.yaw_deg)
 			into.seconds_above_deg += _step
 			run_s += _step
 			into.longest_above_s = maxf(into.longest_above_s, run_s)
@@ -997,6 +1051,28 @@ func _sample(
 					Input.action_release(&"steer_right")
 				if t >= catch_off_s + AFTER_LIFT_S and is_nan(into.slip_after_catch_deg):
 					into.slip_after_catch_deg = signed * out_sign
+		if not turn_end.is_empty():
+			if is_nan(into.turn_off_s):
+				if absf(into.yaw_deg) >= TURN_AT_DEG:
+					into.turn_off_s = t
+					into.turn_off_slip_deg = slip_deg
+					into.turn_off_kph = _speed_kph()
+					Input.action_release(&"steer_right")
+					if turn_end == "lift":
+						Input.action_release(&"accelerate")
+					elif turn_end == "counter":
+						Input.action_press(&"steer_left")
+			elif is_nan(into.turn_settled_s):
+				# The countersteer is held until the slide has come and gone, or
+				# a second has passed with none: at the end of the turn the slip
+				# is often still under the threshold on its way up.
+				slid_since_off = slid_since_off or slip_deg >= _slip_threshold_deg
+				var over: bool = slid_since_off or t - into.turn_off_s > 1.0
+				if slip_deg < _slip_threshold_deg and over:
+					Input.action_release(&"steer_left")
+					if absf(yaw_step_deg) / _step < TURN_SETTLED_DPS:
+						into.turn_settled_s = t - into.turn_off_s
+						into.turn_heading_deg = absf(into.yaw_deg)
 		last_slip = slip_deg
 		if to_rest and _speed_kph() <= STOPPED_KPH:
 			break
@@ -1225,6 +1301,55 @@ func _print_sustain_table(results: Array[Result]) -> void:
 					_or_dash(result.slip_after_lift_deg, "%.1f"),
 					"%.1f" % result.yaw_deg,
 					_or_dash(result.tyre_cost_us, "%.1f"),
+				]
+			)
+		)
+
+
+## The `turn` rows: when the slide began and how far the car had `turned` by
+## then, when the player ended the turn at `TURN_AT_DEG`, the slip and speed
+## then, how long the car took to come out of it and the heading it `came out`
+## on. A 90° corner wants `turned` well under 90 and `came out` near it.
+func _print_turn_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%9s %%9s %%9s %%9s" % width
+	print("")
+	print(
+		(
+			row_format
+			% [
+				"run",
+				"entry",
+				"slide at",
+				"turned",
+				"ended at",
+				"slip then",
+				"kph then",
+				"settled",
+				"came out",
+				"peak slip",
+				"exit"
+			]
+		)
+	)
+	print(row_format % ["", "kph", "s", "deg", "s", "deg", "kph", "s", "deg", "deg", "kph"])
+	for result: Result in results:
+		_printed_rows += 1
+		print(
+			(
+				row_format
+				% [
+					result.name,
+					"%.2f" % result.entry_kph,
+					_or_dash(result.slide_at_s, "%.2f"),
+					_or_dash(result.slide_heading_deg, "%.1f"),
+					_or_dash(result.turn_off_s, "%.2f"),
+					_or_dash(result.turn_off_slip_deg, "%.1f"),
+					_or_dash(result.turn_off_kph, "%.1f"),
+					_or_dash(result.turn_settled_s, "%.2f"),
+					_or_dash(result.turn_heading_deg, "%.1f"),
+					"%.1f" % result.peak_slip_deg,
+					"%.2f" % result.exit_kph,
 				]
 			)
 		)
