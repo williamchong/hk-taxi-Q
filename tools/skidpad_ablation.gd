@@ -208,6 +208,31 @@ const DRIFT_FIELD_PREFIX: String = "drift_"
 ## silently.
 const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 
+## `HandlingProfile` fields the car pushes onto its body and wheels once, in
+## `_ready`, and never reads again. 🔴 Refused by `--sweep`: set live they
+## change nothing, and every row would come back identical under a distinct
+## label — the published table of numbers nobody measured. The body's own
+## values are swept through `BODY_SWEEP_PREFIX` instead.
+const READY_ONLY_FIELDS: PackedStringArray = [
+	"gravity_scale",
+	"centre_of_mass_offset_y",
+	"suspension_frequency_hz",
+	"suspension_damping_ratio",
+	"suspension_rest_length_m",
+	"suspension_travel_m",
+	"suspension_max_force_n",
+	"wheel_radius_m",
+	"roll_influence",
+]
+## `--sweep=body.<field>=...` writes the car's rigid body rather than a table,
+## live, for the values `READY_ONLY_FIELDS` cannot sweep (`P3-54`):
+## `center_of_mass_y` (height; the table's `centre_of_mass_offset_y`),
+## `center_of_mass_z` (along the car, + toward the rear) and `gravity_scale`.
+## A probe for what moves the car, never a tuning route — a value worth
+## keeping goes into `handling.tres`, where the car reads it.
+const BODY_SWEEP_PREFIX: String = "body."
+const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", "gravity_scale"]
+
 ## Default seconds of full throttle before every manoeuvre, to reach a working
 ## speed. Long enough to be well past the initial squat, short enough that the car
 ## is nowhere near the 140 kph limiter where the drive taper distorts things.
@@ -681,7 +706,14 @@ func _measure_all() -> void:
 	var profile: Resource = _vehicle.get("profile") as Resource
 	# The table a sweep writes: the handling table, or the tyre model's.
 	var sweep_table: Resource = profile
-	if not _sweep.is_empty():
+	var body_field: String = ""
+	if not _sweep.is_empty() and String(_sweep_field).begins_with(BODY_SWEEP_PREFIX):
+		body_field = String(_sweep_field).trim_prefix(BODY_SWEEP_PREFIX)
+		if not body_field in BODY_FIELDS:
+			_fail("sweep: no body field '%s'; one of %s" % [body_field, ", ".join(BODY_FIELDS)])
+			return
+		print("sweeping: %s" % _sweep_field)
+	elif not _sweep.is_empty():
 		if profile == null:
 			_fail("a sweep needs a profile on the vehicle and there is none")
 			return
@@ -710,6 +742,14 @@ func _measure_all() -> void:
 		if _sweep_field == SLIP_THRESHOLD_FIELD:
 			_fail("sweep: %s is the bar, not the knob — it is read once at boot" % _sweep_field)
 			return
+		if sweep_table == profile and String(_sweep_field) in READY_ONLY_FIELDS:
+			_fail(
+				(
+					"sweep: %s is read once, in _ready; sweep the body (%s%s) instead"
+					% [_sweep_field, BODY_SWEEP_PREFIX, ", ".join(BODY_FIELDS)]
+				)
+			)
+			return
 		print("sweeping: %s" % _sweep_field)
 
 	# One pass with the shipped tuning when nothing is swept. NAN is the "leave it
@@ -727,7 +767,9 @@ func _measure_all() -> void:
 	# anything else can.
 	var confined: bool = String(_sweep_field).begins_with(DRIFT_FIELD_PREFIX)
 	for value: float in values:
-		if not is_nan(value):
+		if not is_nan(value) and not body_field.is_empty():
+			_set_body(body_field, value)
+		elif not is_nan(value):
 			sweep_table.set(_sweep_field, value)
 		for manoeuvre: String in MANOEUVRES:
 			if (
@@ -1349,6 +1391,19 @@ func _switch(technique: String) -> void:
 		"trailbrake", "turnin":
 			Input.action_release(&"brake_reverse")
 			Input.action_press(&"accelerate")
+
+
+## `--sweep=body.*`'s write: the rigid body's own centre of mass or gravity
+## scale, which the car set from its table once and the tyre model reads off
+## the body every tick (`_load_n`, the side force's arm).
+func _set_body(field: String, value: float) -> void:
+	match field:
+		"center_of_mass_y":
+			_vehicle.center_of_mass.y = value
+		"center_of_mass_z":
+			_vehicle.center_of_mass.z = value
+		"gravity_scale":
+			_vehicle.gravity_scale = value
 
 
 ## Lets the clock run with whatever is currently pressed, sampling nothing.
