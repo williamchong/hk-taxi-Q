@@ -155,10 +155,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`P3-56`)** — `countersteer_assist` and `assist_drive_fade_from_deg` act only while
   `TyreVehicleController.drift_assist` is true (`DriftAssist`: `--assist=`, the saved option, on).
   Grade a drift change in BOTH modes: off on `ride` AND `hold` (`ride` the player's plain input,
-  `hold` a player who countersteers), on with `tools/skidpad.sh --assist=on` on `ride` and `turn`
-  only — `hold`'s driver countersteers into the assist and reads 0.27–1.05 s. `turn` must read the
-  same in both: the assist steps aside the moment the player lets go or countersteers, and an
-  assist that did not brought the 90° turn out at 58°. `drive.sh` pins `--assist=on`. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
+  `hold` a player who countersteers), on with `tools/skidpad.sh --assist=on` on `ride`, `turn` and
+  `hold`. `turn` must read the same in both: the assist steps aside the moment the player lets go
+  or countersteers, and an assist that did not brought the 90° turn out at 58°. `hold` must too:
+  after a countersteer the assist stays aside until the slide is over (`assist_yields`); re-tested
+  each tick it stepped back in at every zero crossing of the feathering driver, 0.27 s. ⚠️ At
+  86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90, both modes) —
+  compare the modes across 76–95 kph before reading one cell there as a fight. `drive.sh` pins `--assist=on`. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
   renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
 - ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
   approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change

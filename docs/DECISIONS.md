@@ -8570,11 +8570,32 @@ countersteering end the turn as they do with it off: `turn` byte-identical in bo
 
 Three byte-identical runs a cell at 42 / 63 / 86. `P3-53`'s bars all pass: the tap starts at 30–100
 kph with the assist on too (38.6° at 30), a plain input pays nothing (≤ 1.12 s), an assisted one
-pays at all three speeds, nothing spins (peak ≤ 41.6° off, ≤ 39.9° on). ⚠️ `hold` with the assist
-on is 0.27 / 0.27 / 1.05 s — the pad's driver countersteering into an assist that steps aside and
-back each time it crosses zero; not graded (`hold` is the off mode's row), and the user's drive in
-both modes is what says whether a player who countersteers with it on is fought. Open: whether an
+pays at all three speeds, nothing spins (peak ≤ 41.6° off, ≤ 39.9° on). Open: whether an
 assisted slide pays the full `drift_hkd` (above).
+
+**The assist stands aside for a countersteer until the slide is over (same day, the user's call).**
+`hold` with the assist on read 0.27 / 0.27 / 1.05 s at 42 / 63 / 86 kph against 2.00 / 3.28 / 3.17
+off: the gate re-tested the player's steering every tick, and the pad's driver — which feathers,
+countersteering over its target slip and steering back in under it — had the assist step back in
+at every zero crossing. Ablated first, `--sweep=countersteer_assist=0,1.5` with the assist on:
+at 0, 2.00 / 3.28 / 3.17 s, so the steering share was the whole loss and the assisted fade band
+none of it. Latched (`TyreVehicleController.assist_yields`): from the player's first countersteer
+in a slide until the slip falls back under the tyre's peak, the slide is theirs. "Until the slide
+ends" was the user's pick over a timed release; the cost, a novice who twitches the wrong way once
+loses the assist for the rest of that slide, is left to their drive.
+
+| entry kph | `hold` longest, off | on, before | on, latched |
+|---|---|---|---|
+| 42 | 2.00 s | 0.27 s | 2.00 s |
+| 63 | 3.28 s | 0.27 s | 3.28 s |
+| 86 | 3.17 s | 1.05 s | 1.45 s |
+
+Three runs a cell, identical bar the cost column and `hold`'s known 42 kph peak pair. Every other
+row — `tap`, `ride`, `catch`, `turn` — byte-identical in both modes, and every off row too. 86.48
+kph is `hold`'s cliff, not a fight: probed at 76 / 80 / 83 / 90 / 95 kph the off mode reads 3.08
+/ 3.12 / 3.15 / 1.33 / 1.37 s and the latched assist 3.10 / 3.13 / 3.15 / 1.38 / 1.45, so the two
+modes agree within 0.1 s and only the step's place moves by a few kph. `verify_vehicle` walks the
+latch through a slide and the next, mutation-checked. Owed: the user's drive in both modes.
 
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 

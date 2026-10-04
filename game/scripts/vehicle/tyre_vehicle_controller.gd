@@ -118,6 +118,9 @@ var _since_slide_s: float = INF
 ## True from the car turning the other way until the player lets the
 ## countersteer go, or it goes on past `catch_window_s`.
 var _catch_capped: bool = false
+## True from the player's first countersteer in a slide until the slide is
+## over: the countersteer assist stands aside for it. See `assist_yields`.
+var _assist_yielded: bool = false
 ## The wheel being solved and its tick's curve, so the force and the spin solve
 ## read one contact rather than passing seven numbers down every call.
 var _radius: float = 0.0
@@ -233,16 +236,29 @@ func _update_steering(delta: float) -> void:
 	# out at 58–69° where it settles at 81–91 (`tyre.md`). The sign test is
 	# `_steer_lock_rad`'s: the player countersteers when the product is over 0.
 	if not drift_assist or tyre.countersteer_assist <= 0.0:
+		# Cleared, so the option turned back on mid-slide starts unlatched.
+		_assist_yielded = false
 		return
-	if -steer_input * _slide_toward() >= 0.0:
-		return
+	var toward: float = _slide_toward()
 	var beyond: float = _slide_beyond_peak_rad()
-	if beyond <= 0.0:
+	var countersteer: float = -steer_input * toward
+	_assist_yielded = assist_yields(_assist_yielded, countersteer > 0.0, beyond > 0.0)
+	if _assist_yielded or countersteer >= 0.0 or beyond <= 0.0:
 		return
 	# Never less lock than the player already has: the assist adds to their
 	# angle and is clamped only where it would pass `countersteer_lock_deg`.
 	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
-	steering = clampf(steering + _slide_toward() * beyond * tyre.countersteer_assist, -lock, lock)
+	steering = clampf(steering + toward * beyond * tyre.countersteer_assist, -lock, lock)
+
+
+## Whether the countersteer assist stands aside this tick, given last tick's
+## answer: from the player's first countersteer in a slide until the slide is
+## over (the slip back under the tyre's peak), the slide is the player's.
+## Re-tested each tick instead, the assist stepped back in every time a
+## feathered countersteer crossed zero, and the pad's countersteering driver
+## held 0.27 s where it held 2.00–3.28 s with the assist off (`P3-56`, `Q153`).
+static func assist_yields(yielded: bool, countersteering: bool, sliding: bool) -> bool:
+	return sliding and (yielded or countersteering)
 
 
 ## Caps the player's countersteer at `catch_lock_deg` once a caught slide turns
@@ -389,6 +405,7 @@ func place_at(pose: Transform3D) -> void:
 	_slide_side = 0.0
 	_since_slide_s = INF
 	_catch_capped = false
+	_assist_yielded = false
 
 
 func _apply_tyres(delta: float) -> void:

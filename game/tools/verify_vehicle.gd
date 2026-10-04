@@ -183,6 +183,30 @@ func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
 		print("  ok    the game's car runs the tyre model on the shipped table")
 
 
+## The drift assist hands a slide to a player who countersteers (`P3-56`): once
+## they countersteer, steering back into the slide gets no assist until the
+## slide is over (`assist_yields` has why). Walked through one slide and the
+## next, each tick from the side that would read wrong.
+func _check_the_assist_yields_to_a_countersteer(car: Node3D) -> void:
+	var before: int = _failed
+	var controller := car.get_script() as GDScript
+	# Each tick: countersteering, sliding, whether the assist must stand aside.
+	var ticks: Array[Array] = [
+		[false, true, false, "steering into a slide"],
+		[true, true, true, "the first countersteer"],
+		[false, true, true, "steering back into the slide after a countersteer"],
+		[false, false, false, "the slide over"],
+		[false, true, false, "steering into the next slide"],
+	]
+	var yielded: bool = false
+	for tick: Array in ticks:
+		yielded = controller.call(&"assist_yields", yielded, tick[0], tick[1])
+		if yielded != tick[2]:
+			_problem("the assist %s on %s" % ["stepped in" if tick[2] else "stood aside", tick[3]])
+	if _failed == before:
+		print("  ok    the drift assist stands aside from a countersteer until the slide is over")
+
+
 ## The tyre marks' strip (`P3-57`), driven without a car: a wheel under the bar
 ## lays nothing; over it, the first tick only starts the mark and the next lays
 ## a piece, lifted and as wide as the tread; leaving the ground, falling under
@@ -384,6 +408,7 @@ func _run() -> void:
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
 	_check_the_car_runs_its_tyre_model(car)
+	_check_the_assist_yields_to_a_countersteer(car)
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may

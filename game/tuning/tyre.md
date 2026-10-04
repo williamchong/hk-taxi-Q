@@ -157,10 +157,16 @@ The share the drift assist turns the fronts by, while the player's option is on 
 skill — the user's call of 2026-09-29 ("i want counter steering to be part of gameplay") is the off
 mode, not reversed. 🔴 With the option off the `ride` row is *meant* to fall short of the fare's
 bar; the countersteered `hold` row is the one that pays. With it on, `ride` is the row, and `hold`
-is not graded: the pad's driver countersteers into it (0.27 / 0.27 / 1.05 s at 42 / 63 / 86 kph).
+must read as it does off: a player who countersteers is not fought.
 The assist acts only while the player steers INTO the slide (`_update_steering`): still turning the
 fronts after a let-go or a countersteer, it brought the 90° `turn` out at 58–75°; gated, `turn` is
-byte-identical in both modes. Graded 2026-10-05, `--assist=on`, three identical runs a cell:
+byte-identical in both modes. And once the player countersteers, it stands aside until the slide is
+over (`assist_yields`, the slip back under the tyre's peak): re-tested each tick, it stepped back in
+every time the pad's feathering driver crossed zero, and `hold` read 0.27 / 0.27 / 1.05 s at 42 /
+63 / 86 kph. Latched, 2.00 / 3.28 / 1.45 s — the off mode's 2.00 / 3.28 at 42 and 63, every other
+row in both modes byte-identical. 86.48 kph sits on `hold`'s own cliff (`Q153`): across 76–95 kph
+the two modes read within 0.1 s, about 3.1 s to 83 kph and about 1.4 s from 90, and only the
+step's place differs. Graded 2026-10-05, `--assist=on`, three identical runs a cell:
 
 | entry kph | `ride` longest, off / on | `ride` peak, off / on |
 |---|---|---|
