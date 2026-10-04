@@ -8597,6 +8597,42 @@ kph is `hold`'s cliff, not a fight: probed at 76 / 80 / 83 / 90 / 95 kph the off
 modes agree within 0.1 s and only the step's place moves by a few kph. `verify_vehicle` walks the
 latch through a slide and the next, mutation-checked. Owed: the user's drive in both modes.
 
+**Real technique: the bars (`P3-54`, 2026-10-05), written before the first row.** Three pad rows,
+each read in windows from its own input against a control that differs from it by that input
+alone, the way `liftoff` is read against `corner`. On the spike's pad, `--entry-kph`, no drift
+button unless the row says so:
+
+- `flick`: full lock left for 0.35 s, then full lock right held; `flick@held` keeps the throttle
+  down through the feint, `flick@lift` lifts it for the feint and puts it back at the turn-in.
+  Windows from the turn-in. Control `corner`.
+- `trailbrake`: the brake and full lock right for 0.6 s, then the brake off and the throttle on.
+  Windows from the brake. Control `turnin`, a new row: the same steering with no pedal at all.
+  Not `corner`: a car that sheds speed turns tighter for that alone (the `liftoff` round above),
+  so against a throttled corner the brake would be credited with the speed it loses. Read on slip
+  and turn rate, never radius, for the same reason.
+- `handbrake`: `corner`'s input, then the drift button tapped 0.5 s into the turn —
+  `handbrake@held` with the throttle down, `handbrake@lift` lifting it at the press. `tap` presses
+  the button with the steering from a straight line; this row presses it with the car already
+  turning. Windows from the press. Control `corner`.
+
+| Bar | Row | Entry kph | Assist | Pass |
+|---|---|---|---|---|
+| The flick brings the tail round | `flick@*` peak slip, from the turn-in | 63 / 86 | off and on | over 14°, and over `corner`'s |
+| — at 42 | `flick@*` peak slip | 42 | off and on | recorded, not graded |
+| The trail-brake rotates the car | `trailbrake` turn rate and peak slip, first 0.5 s | 42 / 63 / 86 | off and on | both over `turnin`'s |
+| The handbrake swings the tail | `handbrake@*` peak slip, first 0.5 s from the press | 42 / 63 / 86 | off and on | over 14° |
+| — and turns the car | `handbrake@*` turn rate, first 0.5 s | 42 / 63 / 86 | off and on | over `corner`'s |
+| No technique spins the car | every row's peak slip | 42 / 63 / 86 | off and on | under 60° |
+
+The flick at 42 kph is recorded only: the feint's load swing grows with the square of the speed,
+and on dry tarmac a real car rarely breaks the rear loose on a feint alone at that speed — it
+takes power, the handbrake or a loose surface (the user's question, same day). The handbrake bar
+holds at 42 because that is where the technique lives. A small trail-brake margin at 42 passes:
+the brake moves the load forward at any speed, and it moves it less there. Three runs a row, the
+run nearest failing takes the bar, as `P3-53`'s did. The shipped car (`skidpad.tscn`) runs every
+row beside the spike and is recorded, never graded — `Q85` already says it has no lift-then-flick.
+A fail is recorded with its candidate levers and left for a later round; this round turns no dial.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
