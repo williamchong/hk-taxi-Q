@@ -131,6 +131,7 @@ func _ready() -> void:
 		set_physics_process(false)
 		return
 
+	DriftAssist.apply(vehicle)
 	_spawn = _place_on_start_line()
 	_floor_m = _spawn.origin.y - fall_margin_m
 	_load_sea()
@@ -195,6 +196,8 @@ func resume() -> void:
 	if vehicle == null:
 		return
 	vehicle.parked = false
+	# Read again: the options page may have changed it while the car was parked.
+	DriftAssist.apply(vehicle)
 	if guide != null:
 		guide.set_process(true)
 	if attract != null:

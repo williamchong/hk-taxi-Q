@@ -8310,7 +8310,7 @@ Forza Horizon real technique works and the floor comes from assists the player s
   to hold the angle, the lift that tucks the nose, and (unmeasured) the flick, the trail-brake and
   the handbrake entry. The power-on corner that accelerates and widens with no scrub is the one
   technique the spike contradicts (`P3-55`).
-- **The assist is a setting, default on** (`P3-56`): `countersteer_assist` on for the floor, off
+- **The assist is a setting, default on** (`P3-56`, built — the round below): `countersteer_assist` on for the floor, off
   for the ceiling. The user's call of 2026-09-29 (off: countersteering is the player's skill) is
   the off mode, not reversed. Default on because the devices are binary — keyboard and touch give
   no partial lock or throttle (`Q97`), so the assists carry more than Forza Horizon's, as CarX's do
@@ -8536,6 +8536,45 @@ the rears no sideways force. `catch` at 42 / 63 kph reads no snap with it (under
 0.25–0.33 s); a floor under the cap brings back the scaled form, which did not slide at 42 kph.
 The slide's drive fade keys on the drift mode itself, so a table with no traction control
 (`traction_limit` 0) is not faded outside a slide.
+
+**The assist as a setting (`P3-56`, built 2026-10-05).** `DriftAssist.enabled()` — the `--assist=`
+flag, then the option the start menu saved (`Settings.drift_assist`, default on), then on — sets
+`TyreVehicleController.drift_assist`, which `DriveHarness` hands the car at boot and again on
+`resume`. The share and its band live in `tyre.tres` (`countersteer_assist` 1.5,
+`assist_drive_fade_from_deg` 35) and are inert while the switch is off, so off is today's car: the
+pads leave it off unless `tools/skidpad.sh --assist=on`, and `hold`, `tap`, `ride` and `turn` at 42 /
+63 / 86 kph read as before (`hold` at 42 within its own run-to-run pair, 22.5 / 22.7°).
+
+The baseline moved under the turn round: at 1.5 the assisted `ride` held 3.30 / 3.32 s at 42 / 63
+kph — the 42 kph gap closed — and **1.40 s at 86**, the plain fade band taking its drive at 25°.
+Refuted at 86: a higher share (2.0–3.0 straightens the slide at every speed, 0.73 s at 86),
+`countersteer_lock_deg` 15–60 (flat), `drift_side_cut_to_kph`, `turn_drive_cut`,
+`traction_rearm_s`, `side_force_depth`. `rim_overspeed` 0 lifts it (3.15 s) and loses `hold` at 86,
+which is why it is 0.5. The fade's start moves it with a cliff: 30° 1.58 s, 32° 3.17 s. Moved for
+everyone, 35° raised a plain tap's peak 41.6 → 49.3° at 63 kph; **the user's call: the assisted band
+only** (`assist_drive_fade_from_deg` 35), so the off mode keeps the turn round's calmer rear.
+
+Then gated on the player's steering, measured on `turn` with the assist on: the assist still turning
+the fronts along the travel after the player let go brought the 90° turn out at 57.9° at 42 kph
+(85.4 off) and 75.1° at 63; on a countersteer, at 58.8 / 68.6 / 65.1°. **The assist acts only while
+the player steers INTO the slide** — the plain input it stands in for — so letting go and
+countersteering end the turn as they do with it off: `turn` byte-identical in both modes.
+
+| entry kph | `ride` longest, off / on | `ride` peak, off / on | `turn` came out, off / lift / counter (both modes) |
+|---|---|---|---|
+| 42 | 0.85 / 3.30 s | 29.0 / 26.0° | 85.4 / 81.0 / 80.7° |
+| 63 | 0.80 / 3.32 s | 41.6 / 33.8° | 83.0 / 77.2 / 90.5° |
+| 86 | 1.12 / 3.17 s | 34.5 / 39.4° | 77.4 / 67.4 / 79.2° |
+| 105 | 1.23 / 3.32 s | 34.5 / 39.9° | — |
+| 125 | 1.30 / 1.73 s | 35.3 / 39.3° | — |
+
+Three byte-identical runs a cell at 42 / 63 / 86. `P3-53`'s bars all pass: the tap starts at 30–100
+kph with the assist on too (38.6° at 30), a plain input pays nothing (≤ 1.12 s), an assisted one
+pays at all three speeds, nothing spins (peak ≤ 41.6° off, ≤ 39.9° on). ⚠️ `hold` with the assist
+on is 0.27 / 0.27 / 1.05 s — the pad's driver countersteering into an assist that steps aside and
+back each time it crosses zero; not graded (`hold` is the off mode's row), and the user's drive in
+both modes is what says whether a player who countersteers with it on is fought. Open: whether an
+assisted slide pays the full `drift_hkd` (above).
 
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 

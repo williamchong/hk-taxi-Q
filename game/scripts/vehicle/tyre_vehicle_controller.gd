@@ -28,8 +28,10 @@ extends VehicleController
 ##      (`_load_n`, Godot's own formula restated).
 ##
 ##   4. A countersteer assist on top of the parent's steering while the car
-##      slides (`_update_steering`). Shipped at 0 — countersteering is the
-##      player's skill, on the user's call (`tyre.md`) — and kept behind it.
+##      slides (`_update_steering`), and a later start to the slide's drive
+##      fade with it: the player's option (`drift_assist`, `P3-56`), on by
+##      default in the game and off on the pads. Off, countersteering is the
+##      player's skill, the user's call of 2026-09-29 (`tyre.md`).
 ##      A wider steering lock for the player on the countersteer side while
 ##      the car slides (`_steer_lock_rad`) is also behind a zero: swept and
 ##      refuted on the pad's driver.
@@ -55,6 +57,10 @@ const SOLVE_ITERATIONS: int = 12
 const CONTACT_DOT_FLOOR: float = -0.1
 
 @export var tyre: TyreProfile
+## The player's drift assist (`P3-56`, `Q153`): the countersteer assist and its
+## drive fade on. Set by `DriveHarness` from `Settings.drift_assist()`; false
+## here, so a pad grades today's car unless `--assist=on` asks otherwise.
+var drift_assist: bool = false
 
 ## Every wheel, front axle first, so the per-wheel arrays below index the same.
 ## A third collection beside the parent's `_front` and `_rear`, which
@@ -205,10 +211,11 @@ func take_tyre_cost_us() -> float:
 
 ## The parent's steering, then the countersteer assist on top: the front
 ## wheels turned towards the travel by `countersteer_assist` of the slip angle
-## beyond the tyre's peak, up to `countersteer_lock_deg`. Built because keyboard
-## and touch steer near on-off; shipped at 0 because the user wants the
-## countersteer to be the player's (`tyre.md` has both tables). `steer_ratio`,
-## which the lamps read, stays the player's.
+## beyond the tyre's peak, up to `countersteer_lock_deg`, while `drift_assist`
+## is on. Built because keyboard and touch steer near on-off; an option, on by
+## default, because the user wants the countersteer to be the player's skill
+## and a novice's slide to pay (`Q153`; `tyre.md` has both tables).
+## `steer_ratio`, which the lamps read, stays the player's.
 ##
 ## ⚠️ Not a slip setpoint (`Q72`): the assist aims the fronts along the travel
 ## and asks for no angle. The throttle and the rear tyres set the slide.
@@ -220,7 +227,14 @@ func _update_steering(delta: float) -> void:
 	super._update_steering(delta)
 	_cap_catch(delta)
 	_driver_steering = steering
-	if tyre.countersteer_assist <= 0.0:
+	# Only while the player steers INTO the slide, the plain input it stands in
+	# for. Letting go or countersteering is how the street's 90° turn is ended,
+	# and an assist still turning the fronts along the travel then brought it
+	# out at 58–69° where it settles at 81–91 (`tyre.md`). The sign test is
+	# `_steer_lock_rad`'s: the player countersteers when the product is over 0.
+	if not drift_assist or tyre.countersteer_assist <= 0.0:
+		return
+	if -steer_input * _slide_toward() >= 0.0:
 		return
 	var beyond: float = _slide_beyond_peak_rad()
 	if beyond <= 0.0:
@@ -513,14 +527,17 @@ func _turn_drive_share() -> float:
 ## the rim free to overspeed a plain held tap ran to 48-65° (`Q153`, the user's
 ## street report: "the rear feels too spinny"). It takes power away and asks
 ## for no angle (`Q72`): under the band the slide is the throttle's and the
-## countersteer's, as before.
+## countersteer's, as before. With the drift assist on the band starts at
+## `assist_drive_fade_from_deg`: at 86 kph the plain band took the assisted
+## slide's drive at 1.40 s, short of `drift_min_s` (`tyre.md`).
 func _slide_drive_share() -> float:
-	if tyre.slide_drive_fade_to_deg <= tyre.slide_drive_fade_from_deg or _drive_n <= 0.0:
+	var from: float = tyre.slide_drive_fade_from_deg
+	if drift_assist and tyre.assist_drive_fade_from_deg > 0.0:
+		from = tyre.assist_drive_fade_from_deg
+	if tyre.slide_drive_fade_to_deg <= from or _drive_n <= 0.0:
 		return 1.0
 	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
-	var over: float = inverse_lerp(
-		tyre.slide_drive_fade_from_deg, tyre.slide_drive_fade_to_deg, slip
-	)
+	var over: float = inverse_lerp(from, tyre.slide_drive_fade_to_deg, slip)
 	return 1.0 - clampf(over, 0.0, 1.0)
 
 

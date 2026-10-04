@@ -806,6 +806,13 @@ func _parse_args() -> bool:
 				if not [Locale.ENGLISH, Locale.CHINESE].has(value):
 					_fail("--lang=%s is not en or zh" % value)
 					return false
+			"--assist":
+				# `drift_assist.gd` reads this one itself (`P3-56`) and falls
+				# back to the saved option for anything else — so a typo would
+				# drive whichever car this machine's menu last picked.
+				if not [DriftAssist.OFF, DriftAssist.ON].has(value):
+					_fail("--assist=%s is not off or on" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

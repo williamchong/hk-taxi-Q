@@ -11,7 +11,11 @@ extends RefCounted
 const PATH: String = "user://settings.cfg"
 const SECTION: String = "options"
 const KEY_LANGUAGE: String = "language"
+const KEY_DRIFT_ASSIST: String = "drift_assist"
 
+## The file read and written: `PATH`, except under `verify_menu`, which round
+## trips its own so a check never overwrites the player's choices.
+static var _path: String = PATH
 static var _file: ConfigFile = null
 
 
@@ -23,23 +27,44 @@ static func language() -> String:
 ## Save `code`. Written at once: the file IS the option, and a write deferred
 ## to quit is one a crash loses.
 static func set_language(code: String) -> void:
+	_write(KEY_LANGUAGE, code)
+
+
+## The saved drift assist (`P3-56`), or true where none was ever saved: on is
+## the default, the floor a novice's slide pays from (`Q153`).
+static func drift_assist() -> bool:
+	return bool(_read().get_value(SECTION, KEY_DRIFT_ASSIST, true))
+
+
+static func set_drift_assist(on: bool) -> void:
+	_write(KEY_DRIFT_ASSIST, on)
+
+
+## Point every read and write at `path` and forget what was read, as a restart
+## would. For `verify_menu`'s round trip; the game never calls it.
+static func use_file(path: String) -> void:
+	_path = path
+	_file = null
+
+
+static func _write(key: String, value: Variant) -> void:
 	var file: ConfigFile = _read()
-	file.set_value(SECTION, KEY_LANGUAGE, code)
-	var error: Error = file.save(PATH)
+	file.set_value(SECTION, key, value)
+	var error: Error = file.save(_path)
 	if error != OK:
-		push_warning("settings: could not write %s (%s)" % [PATH, error_string(error)])
+		push_warning("settings: could not write %s (%s)" % [_path, error_string(error)])
 
 
 static func _read() -> ConfigFile:
 	if _file == null:
 		_file = ConfigFile.new()
 		# A missing file is the first run, not a fault; anything else is said.
-		var error: Error = _file.load(PATH)
+		var error: Error = _file.load(_path)
 		if error != OK and error != ERR_FILE_NOT_FOUND:
 			push_warning(
 				(
 					"settings: %s did not load (%s); starting from defaults"
-					% [PATH, error_string(error)]
+					% [_path, error_string(error)]
 				)
 			)
 	return _file

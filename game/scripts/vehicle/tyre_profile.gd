@@ -106,8 +106,13 @@ const PATH: String = "res://tuning/tyre.tres"
 ## front wheels are turned towards the travel, on top of the player's own
 ## steering. 0 is none; 1 points the fronts along the travel past the tyre's
 ## peak slip angle. A steering aid, not a force: the tyres still decide the
-## slide. Absent from `tyre.tres`: countersteering is the player's skill.
+## slide. Inert while the car's `drift_assist` is off — the player's option
+## (`P3-56`), and off on every pad unless `--assist=on` asks for it.
 @export_range(0.0, 1.5, 0.05) var countersteer_assist: float
+## Where the slide's drive fade starts while the assist is on, in place of
+## `slide_drive_fade_from_deg`: the assisted slide runs wider at 86 kph, and
+## the plain band cut its drive before `drift_min_s`. 0 keeps the plain band.
+@export_range(0.0, 90.0, 1.0, "suffix:°") var assist_drive_fade_from_deg: float
 ## The most the front wheels may turn while the assist countersteers, where
 ## the handling table's lock narrows with speed (16.4° at 63 kph).
 @export_range(0.0, 60.0, 1.0, "suffix:°") var countersteer_lock_deg: float

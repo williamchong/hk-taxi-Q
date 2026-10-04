@@ -18,8 +18,9 @@ and `Q152` holds the tables.
 defaults, and a zero leaves the car on the engine's own tyres (`TyreVehicleController.usable`).
 `yaw_assist_scale` is absent because it is 0.0 — Godot's writer drops a value equal to the type's
 zero — and 0 is the choice: the yaw torque did not rescue the low end and is not needed for the
-held slide. `countersteer_assist` is absent for the same reason, off on the user's call from the
-pad (2026-09-29, "i think we should not do countersteering"); its section below keeps the numbers.
+held slide. `countersteer_assist` and `assist_drive_fade_from_deg` are the drift assist's, inert
+while `TyreVehicleController.drift_assist` is off — the player's option since `P3-56`, on by
+default in the game and off on the pads (`--assist=on` turns it on there).
 `slide_lock_deg` is absent for the same reason, refuted on the pad's driver; its section keeps the
 sweep. `catch_lock_deg` is set at 6.0 on the user's call (2026-09-30), ahead of their drive, which
 stays the veto.
@@ -149,12 +150,29 @@ and on the full-throttle kerb it bounces the body 0.19 m less than 0.8 (peak 6.5
 both still lift the inside wheels at 72 kph. Its own name, not `roll_influence`: a sweep resolves a
 field by name across both tables, and the shared name swept the handling table's copy.
 
-## `countersteer_assist` — absent, 0.0
+## `countersteer_assist = 1.5`
 
-Off, on the user's call after driving the pad by hand (2026-09-29, "i want counter steering to
-be part of gameplay"): countersteering is the player's skill, not the car's. 🔴 Do not bring the
-assist back to lift the `ride` row — that row is *meant* to fall short of the fare's bar; the
-countersteered `hold` row is the one that pays. The mechanism stays in
+The share the drift assist turns the fronts by, while the player's option is on (`P3-56`,
+`Q153`: default on, the floor a novice's slide pays from). Off, countersteering is the player's
+skill — the user's call of 2026-09-29 ("i want counter steering to be part of gameplay") is the off
+mode, not reversed. 🔴 With the option off the `ride` row is *meant* to fall short of the fare's
+bar; the countersteered `hold` row is the one that pays. With it on, `ride` is the row, and `hold`
+is not graded: the pad's driver countersteers into it (0.27 / 0.27 / 1.05 s at 42 / 63 / 86 kph).
+The assist acts only while the player steers INTO the slide (`_update_steering`): still turning the
+fronts after a let-go or a countersteer, it brought the 90° `turn` out at 58–75°; gated, `turn` is
+byte-identical in both modes. Graded 2026-10-05, `--assist=on`, three identical runs a cell:
+
+| entry kph | `ride` longest, off / on | `ride` peak, off / on |
+|---|---|---|
+| 42 | 0.85 / 3.30 s | 29.0 / 26.0° |
+| 63 | 0.80 / 3.32 s | 41.6 / 33.8° |
+| 86 | 1.12 / 3.17 s | 34.5 / 39.4° |
+
+2.0–3.0 straightens the slide at every speed (86 kph 0.73 s at 2.0). The history below is from
+before the call that made it an option.
+
+Before: off, on the user's call after driving the pad by hand (2026-09-29): countersteering is the
+player's skill, not the car's. The mechanism stays in
 `TyreVehicleController._update_steering` behind the zero: while the car slides past the tyre's
 peak, the fronts would turn towards the travel by this share of the excess. Swept on `ride` before
 the call: 0 → 1.5 took 63 kph from 1.43 to 2.60 s above 14° and 86 kph from 1.57 to 3.22 s with the
@@ -173,9 +191,21 @@ countersteers does at 63 kph — the design. Both rows grade this car now. Open:
 (1.40 s) sits under the bar. The handling table's speed-narrowed steering lock was the suspect and
 is refuted (`slide_lock_deg` below).
 
+## `assist_drive_fade_from_deg = 35.0`
+
+Where the slide's drive fade starts while the drift assist is on, in place of
+`slide_drive_fade_from_deg` (25). At 25 the assisted slide at 86 kph lost its drive at 1.40 s, under
+`drift_min_s`; 30° 1.58 s, 32° 3.17 s (a cliff, so 35 sits past it), 35° 3.17 s, with 42 / 63 kph
+unmoved. Moved for everyone, 35° raised a plain tap's peak 41.6 → 49.3° at 63 kph and left `turn`
+and `hold` identical; kept to the assist on the user's call (2026-10-05), so the off mode keeps the
+calmer rear. Refuted at 86 first: the share, `countersteer_lock_deg`, `drift_side_cut_to_kph`,
+`turn_drive_cut`, `traction_rearm_s`, `side_force_depth`; `rim_overspeed` 0 works and loses `hold`
+(`Q153`).
+
 ## `countersteer_lock_deg = 35.0`
 
-Inert while `countersteer_assist` is 0. How far the fronts may turn while the assist
+Inert while the drift assist is off. Swept 15–60 with it on: flat at 42 / 63 kph and 1.38–1.40 s at
+86 under the plain fade band. How far the fronts may turn while the assist
 countersteers, where the handling table narrows the player's lock with speed (16.4° at 63 kph). A
 slide of 37° needs a front wheel near that angle to point along the travel.
 

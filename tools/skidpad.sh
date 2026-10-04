@@ -65,6 +65,12 @@
 #                                    refused, not merged
 #   --drift-grip=0.38,0.40,0.42      alias for --sweep=drift_rear_grip_scale=...
 #   --scene=res://scenes/dev/...      grade a different car on the same ground
+#   --assist=on                      the tyre car's drift assist on (P3-56): the
+#                                    countersteer assist and its later drive
+#                                    fade. Off by default, so rows grade the
+#                                    car with the option off; grade `ride` with
+#                                    it, never `hold` (the driver countersteers
+#                                    on top of it)
 #   --run-up=6                       seconds of throttle before the manoeuvre,
 #                                    i.e. the entry speed. Default 4 (~63 kph).
 #                                    Rows are only comparable within one run-up;

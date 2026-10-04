@@ -95,12 +95,14 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--menu=`, `--touch=` and `--asset=` go
+  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--assist=`, `--menu=`, `--touch=` and `--asset=` go
   through it.
 - `Settings` (`scripts/core/settings.gd`) — a `class_name` static over `user://settings.cfg`,
   the options the start menu saves (`P6-1`). `Locale.language()` reads `--lang=` first, then this,
   then the OS language (`OS.get_locale_language()`), then its default; `drive.sh` names the flag
-  so a scripted run's frames never depend on the machine's pick or locale.
+  so a scripted run's frames never depend on the machine's pick or locale. `DriftAssist.enabled()`
+  reads the drift assist the same way (`--assist=`, then this, then on; `P3-56`), and
+  `DriveHarness` hands it to the tyre car at boot and on `resume`; `drive.sh` names `--assist=on`.
 
 ### The debug overlay
 
@@ -1182,6 +1184,7 @@ All paths under `game/`.
 | `scripts/ui/start_menu.gd`, `menu_profile.gd`, `menu_text.gd`, `guide_card.gd` | The start menu (`P6-1`): four pages built in code (the guide's step pictures drawn, never textures) from the HUD's housing, `--menu=off`; the schema of `tuning/menu.tres` (no defaults); the reader of `tuning/menu_text.json` |
 | `scripts/camera/menu_orbit.gd` | `MenuOrbit`: the chase rig circling the parked car while the menu is up — the same rig, so the streamer keeps one camera |
 | `scripts/core/settings.gd` | `Settings`, the saved options under `user://settings.cfg`; `Locale` reads it after `--lang=` |
+| `scripts/core/drift_assist.gd` | `DriftAssist`, whether the tyre car's drift assist is on: `--assist=`, then `Settings`, then on (`P3-56`) |
 | `scripts/city/city_manifest.gd` | `city.json`, typed: tiles, AABBs, per-edge widths and clearances, the lane-width bar, resolved document paths |
 | `scripts/city/city_regions.gd` | `CityRegions` (`P5-9c`) |
 | `scripts/city/generated_regions.gd` | The one place the generated root is spelled: synced regions, the frame, each directory; `--region=` picks one (`P5-9b`) |

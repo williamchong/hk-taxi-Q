@@ -28,6 +28,10 @@ const MenuProfileScript = preload("res://scripts/ui/menu_profile.gd")
 const MenuTextScript = preload("res://scripts/ui/menu_text.gd")
 const GuideCardScript = preload("res://scripts/ui/guide_card.gd")
 const EngineNoticesScript = preload("res://scripts/ui/engine_notices.gd")
+const SettingsScript = preload("res://scripts/core/settings.gd")
+
+## The file the settings round trip writes, never the player's own.
+const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
 
 ## Every string the menu asks for, so a row missing from the table is a
 ## failure here and not a bracketed key on screen.
@@ -41,6 +45,9 @@ const KEYS: PackedStringArray = [
 	"language",
 	"language_zh",
 	"language_en",
+	"drift_assist",
+	"assist_on",
+	"assist_off",
 	"notices",
 	"notices_title",
 	"notices_lead",
@@ -103,6 +110,7 @@ func _init() -> void:
 	_check_profile()
 	_check_text()
 	_check_notices()
+	_check_settings()
 
 	_finish("verify_menu")
 
@@ -225,3 +233,44 @@ func _check_notices() -> void:
 		"notices",
 		"every licence text whole (missing %s)" % ", ".join(unquoted)
 	)
+
+
+## The drift assist (`P3-56`) defaults on, and a choice survives a restart:
+## each read after `use_file`, which forgets the cached file as a new run would.
+func _check_settings() -> void:
+	_forget_settings_file()
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(SettingsScript.drift_assist(), "settings", "the drift assist is on with nothing saved")
+	for on: bool in [false, true]:
+		SettingsScript.set_drift_assist(on)
+		# The disk read first, apart from `Settings`: a cache kept across
+		# `use_file` would answer the restart below from memory.
+		var disk := ConfigFile.new()
+		_expect(
+			(
+				disk.load(SETTINGS_PATH) == OK
+				and disk.get_value(SettingsScript.SECTION, SettingsScript.KEY_DRIFT_ASSIST) == on
+			),
+			"settings",
+			"the drift assist saved %s is on disk" % on
+		)
+		SettingsScript.use_file(SETTINGS_PATH)
+		_expect(
+			SettingsScript.drift_assist() == on,
+			"settings",
+			"the drift assist saved %s reads %s after a restart" % [on, on]
+		)
+	SettingsScript.set_language("en")
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		SettingsScript.language() == "en" and SettingsScript.drift_assist(),
+		"settings",
+		"a language saved beside it keeps the assist and itself"
+	)
+	_forget_settings_file()
+	SettingsScript.use_file(SettingsScript.PATH)
+
+
+## A missing file is the state wanted, so the error is not read.
+func _forget_settings_file() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
