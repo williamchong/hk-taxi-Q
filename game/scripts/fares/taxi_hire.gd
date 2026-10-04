@@ -12,6 +12,8 @@ extends Node
 ## - **The face** (`P3-49`): the passenger grins out of the back seat each time
 ##   a skill pays, and rages out of it when the clock runs out and they walk
 ##   without paying — the door swinging open beside it.
+## - **The sparks** (`P3-58`): the drift's tier off the rear wheels, empty car
+##   or not — a practised slide shows as a paid one does.
 ##
 ## ⚠️ **Listens, and never polls.** Every change here is a `FareSystem` signal,
 ## so nothing runs per frame and the system stays pure enough for
@@ -33,6 +35,7 @@ extends Node
 var _lamps: VehicleLamps = null
 var _door: TaxiDoor = null
 var _emote: PassengerEmote = null
+var _sparks: DriftSparks = null
 
 
 func _ready() -> void:
@@ -49,6 +52,8 @@ func _ready() -> void:
 			_door = node as TaxiDoor
 		elif node is PassengerEmote and _emote == null:
 			_emote = node as PassengerEmote
+		elif node is DriftSparks and _sparks == null:
+			_sparks = node as DriftSparks
 	fares.hailed.connect(_on_hailed)
 	fares.boarded.connect(_on_boarded)
 	fares.cancelled.connect(_on_cancelled)
@@ -56,6 +61,8 @@ func _ready() -> void:
 	fares.bailed.connect(_on_alighted)
 	fares.bailed.connect(_on_bailed)
 	fares.skilled.connect(_on_skilled)
+	if _sparks != null:
+		fares.drift_tier_changed.connect(_sparks.show_tier)
 
 
 func _on_hailed(_fare: Fare) -> void:

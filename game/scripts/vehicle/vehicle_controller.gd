@@ -299,6 +299,13 @@ func _group_axles(wheels: Array[VehicleWheel3D]) -> void:
 			_rear.append(wheel)
 
 
+## The rear axle's wheels, split by position as `_group_axles` explains —
+## never by `use_as_steering` or `use_as_traction`. Empty until `_ready`. For
+## the rigs that hang off the rear tyres (`SkidMarks`' smoke, `DriftSparks`).
+func rear_wheels() -> Array[VehicleWheel3D]:
+	return _rear
+
+
 ## Push the profile onto one wheel.
 ##
 ## The two unit conversions are the only places this script claims to know

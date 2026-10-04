@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DriftSparksProfile" format=3 uid="uid://dadv8ujifp4ii"]
+
+[ext_resource type="Script" uid="uid://dp7thk4gi582" path="res://scripts/vehicle/drift_sparks_profile.gd" id="1_1h7ws"]
+
+[resource]
+script = ExtResource("1_1h7ws")
+colours = PackedColorArray(1, 0.95, 0.8, 1, 0.3, 0.6, 1, 1, 1, 0.55, 0.1, 1, 0.8, 0.35, 1, 1)
+amount = 24
+lifetime_s = 0.35
+speed_mps = 4.0
+spread_deg = 25.0
+length_m = 0.12
+thickness_m = 0.02
+burst_s = 0.3
+burst_scale = 2.0

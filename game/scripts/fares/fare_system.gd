@@ -100,6 +100,11 @@ signal skilled(fare: Fare, award: Fare.Award)
 ## Emitted each time a skill is performed with no passenger aboard — a
 ## practice run, shown and never paid. The award is on no fare and in no tip.
 signal practised(award: Fare.Award)
+## Emitted when the drift's tier moves (`SkillTracker.drift_tier`, `P3-58`):
+## -1 when no slide is at the threshold, 0 while one counts, then the awards
+## it has paid. Paid or practised alike — the sparks show the slide, not the
+## fare.
+signal drift_tier_changed(tier: int)
 ## Emitted whenever the reading moves: the new reading in HK$, and the unit
 ## that just began — the flagfall at boarding — so a readout that shows the
 ## tick keeps no copy of the last reading (`P3-5a`).
@@ -154,6 +159,8 @@ var _profile: FareProfile = null
 var _tariff: FareTariff = null
 ## The session's skills, built by `setup`, reset at every boarding.
 var _tracker: SkillTracker = null
+## The drift tier last emitted, so `drift_tier_changed` fires on a move only.
+var _drift_tier: int = -1
 var _rng: RandomNumberGenerator = null
 # A member, not a local: `RoadGraph.shared()` holds it weakly.
 var _graph: RoadGraph = null
@@ -270,6 +277,7 @@ func setup(
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_tracker = tracker
+	_drift_tier = -1
 	skill_counts.resize(Fare.Skill.size())
 	skill_counts.fill(0)
 	_pickups.clear()
@@ -355,6 +363,10 @@ func sample(
 		speed_mps, slip_deg, elapsed, airborne, upright, impact_mps
 	):
 		_award(award)
+	var tier: int = _tracker.drift_tier()
+	if tier != _drift_tier:
+		_drift_tier = tier
+		drift_tier_changed.emit(tier)
 	if state == State.CARRYING:
 		fare.remaining_s -= elapsed
 		if fare.remaining_s <= 0.0:

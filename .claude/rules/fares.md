@@ -171,6 +171,9 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;
   `taxi_hire.gd` pops the grin (`PassengerEmote`, `vehicle/passenger_emote.gd`) and pops the rage
   on `bailed`. A new consumer connects the signal; it never reads `awards` from `_process`.
+  `drift_tier_changed` (`P3-58`, `Q154`) is `SkillTracker.drift_tier` — -1, counting 0, then the
+  awards this slide has paid — emitted on a move only, paid or practised alike; `taxi_hire.gd`
+  hands it to `DriftSparks`. `verify_fares`'s `sparks:` block holds it.
 - 🔴 **Air pays at the LANDING, never per second in the air** (`P3-51`, `Q147`, the user's ask):
   `SkillTracker._flight` meters seconds with every wheel off (`VehicleController.is_airborne`)
   and on the first grounded tick pays `air_hkd` once the flight held `air_min_s`, again per

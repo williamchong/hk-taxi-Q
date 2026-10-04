@@ -69,6 +69,10 @@ var _hardpoints: PackedVector3Array = PackedVector3Array()
 var _omega: PackedFloat32Array = PackedFloat32Array()
 ## The load `_load_n` last rebuilt for each wheel, in newtons; 0 off the ground.
 var _loads: PackedFloat32Array = PackedFloat32Array()
+## Each wheel's combined slip at the end of the tick, in multiples of the
+## tyre's peak — 1.0 is the top of the curve; 0 off the ground. Written for the
+## tyre marks (`P3-57`) and read by nothing the solve uses.
+var _slips: PackedFloat32Array = PackedFloat32Array()
 ## The wheel's own spin angle, and the one Godot is rolling it by, so the tyre
 ## mesh can show the model's spin rather than the road's.
 var _spin_angle: PackedFloat32Array = PackedFloat32Array()
@@ -139,6 +143,7 @@ func _ready() -> void:
 		_visuals.append(wheel.get_node_or_null(^"Visual") as Node3D)
 	_omega.resize(_wheels.size())
 	_loads.resize(_wheels.size())
+	_slips.resize(_wheels.size())
 	_spin_angle.resize(_wheels.size())
 	_engine_angle.resize(_wheels.size())
 
@@ -171,6 +176,22 @@ static func usable(table: TyreProfile) -> bool:
 ## and the skidpad; nothing in the game reads it.
 func wheel_loads_n() -> PackedFloat32Array:
 	return _loads
+
+
+## Each wheel's combined slip, forward and sideways, in multiples of the
+## tyre's peak, front axle first as `tyre_wheels` lists them; 0 off the ground.
+## Past 1.0 the tyre is over the top of its curve — sliding, spinning or locked.
+## For the tyre marks and smoke (`P3-57`); the solve never reads it, so the
+## skidpad is the same with or without a reader.
+func wheel_slips() -> PackedFloat32Array:
+	return _slips
+
+
+## The wheels `wheel_slips` and `wheel_loads_n` index, front axle first. Empty
+## on a table with a zero key: the car is on the engine's tyres and publishes
+## no slip.
+func tyre_wheels() -> Array[VehicleWheel3D]:
+	return _wheels
 
 
 ## Mean microseconds per tick spent in the tyre model since the last call, and
@@ -394,6 +415,7 @@ func _apply_tyres(delta: float) -> void:
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
 			_loads[i] = 0.0
+			_slips[i] = 0.0
 			var inertia_s: float = delta / tyre.wheel_inertia_kgm2
 			var aloft: float = _omega[i] + drive_nm * inertia_s
 			var held: float = hold_nm * inertia_s
@@ -434,6 +456,7 @@ func _apply_tyres(delta: float) -> void:
 			omega = _solve_spin(omega, torque_nm, hold_nm, step, at_rest)
 			sum += _solved
 		_omega[i] = omega
+		_slips[i] = Vector2((omega * _radius - _along) * _per_slip, _slip_y).length()
 		var mean: Vector2 = sum / float(steps)
 		# Never more force than cancels this wheel's share of the slip velocity in
 		# one tick: near rest a slip curve is a stiff spring on the chassis, and

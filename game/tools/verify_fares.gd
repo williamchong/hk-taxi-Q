@@ -64,6 +64,8 @@ var _skilled: int = 0
 ## How many times `practised` fired, and the last award it carried.
 var _practised: int = 0
 var _last_practice: Fare.Award = null
+## Every `drift_tier_changed` the system under test emitted, in order.
+var _tiers: Array[int] = []
 
 
 func _init() -> void:
@@ -97,6 +99,7 @@ func _init() -> void:
 	_check_skills()
 	_check_practice()
 	_check_penalties()
+	_check_sparks()
 
 	_finish("verify_fares")
 
@@ -1203,6 +1206,60 @@ func _check_penalties() -> void:
 	)
 	priced.free()
 	lenient.free()
+
+
+## The sparks' tier (`P3-58`): `drift_tier_changed` is the tracker's own drift
+## meter, so it lights on the first tick at the threshold, steps on the very
+## tick an award is shown and not one before, goes out the tick a slide ends —
+## the slip falling, the wheels leaving the ground, a wall touched — and never
+## lights in the air. Driven empty, far from every stop: the sparks show a
+## practised slide as they show a paid one.
+func _check_sparks() -> void:
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_practised = 0
+	_tiers.clear()
+	system.practised.connect(_count_practised)
+	system.drift_tier_changed.connect(_count_tier)
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var repeat_ticks: int = int(ceil(_skills.drift_s / TICK_S))
+	_slide(system, FAST, threshold - 1.0, drift_ticks * 2)
+	_expect(_tiers.is_empty(), "sparks", "a degree under the threshold lights nothing")
+	_slide(system, FAST, threshold, 1)
+	_expect(_tiers == [0], "sparks", "the first tick on the threshold lights the counting tier")
+	_slide(system, FAST, threshold, drift_ticks - 2)
+	_expect(
+		_tiers == [0] and _practised == 0,
+		"sparks",
+		"one tick short of drift_min_s the tier has not stepped"
+	)
+	_slide(system, FAST, threshold, 1)
+	_expect(
+		_tiers == [0, 1] and _practised == 1,
+		"sparks",
+		"the tick that shows the first award steps the tier to 1, on that tick"
+	)
+	_slide(system, FAST, threshold, repeat_ticks)
+	_expect(_tiers == [0, 1, 2], "sparks", "the next award steps it to 2")
+	_slide(system, FAST, 0.0, 1)
+	_expect(_tiers.back() == -1, "sparks", "the slip falling puts the sparks out on that tick")
+
+	_tiers.clear()
+	for tick: int in drift_ticks:
+		system.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, threshold, true, true)
+	_expect(_tiers.is_empty(), "sparks", "a slip in the air lights nothing")
+	_slide(system, FAST, threshold, 1)
+	system.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, threshold, true, true)
+	_expect(_tiers == [0, -1], "sparks", "leaving the ground mid-slide puts them out")
+	_slide(system, FAST, threshold, 1)
+	var touch_mps: float = _skills.bump_min_kph / 3.6 * 0.5
+	system.sample(FAR_AWAY, FAST, Vector3.FORWARD, TICK_S, threshold, false, true, touch_mps)
+	_expect(_tiers == [0, -1, 0, -1], "sparks", "and so does a touch on a wall (P3-50)")
+	system.free()
+
+
+func _count_tier(tier: int) -> void:
+	_tiers.append(tier)
 
 
 func _count_skilled(_fare: Fare, _award: Fare.Award) -> void:

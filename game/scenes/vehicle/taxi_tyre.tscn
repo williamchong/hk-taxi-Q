@@ -3,7 +3,19 @@
 [ext_resource type="PackedScene" uid="uid://cnmpjyxsjoqcu" path="res://scenes/vehicle/taxi.tscn" id="1_taxi"]
 [ext_resource type="Script" uid="uid://3kutesylag6r" path="res://scripts/vehicle/tyre_vehicle_controller.gd" id="2_ctrl"]
 [ext_resource type="Resource" uid="uid://lvvpus3qri30" path="res://tuning/tyre.tres" id="3_tyre"]
+[ext_resource type="Script" uid="uid://b32cek0a3pwq7" path="res://scripts/vehicle/skid_marks.gd" id="4_marks"]
+[ext_resource type="Resource" uid="uid://cj2f8d1v2ctx3" path="res://tuning/skid_marks.tres" id="5_marks"]
+[ext_resource type="Script" uid="uid://dgvkfk3jbvr85" path="res://scripts/vehicle/drift_sparks.gd" id="6_sparks"]
+[ext_resource type="Resource" uid="uid://dadv8ujifp4ii" path="res://tuning/drift_sparks.tres" id="7_sparks"]
 
 [node name="Taxi" instance=ExtResource("1_taxi")]
 script = ExtResource("2_ctrl")
 tyre = ExtResource("3_tyre")
+
+[node name="SkidMarks" type="Node3D" parent="." unique_id=380330789]
+script = ExtResource("4_marks")
+profile = ExtResource("5_marks")
+
+[node name="DriftSparks" type="Node3D" parent="." unique_id=1919887256]
+script = ExtResource("6_sparks")
+profile = ExtResource("7_sparks")

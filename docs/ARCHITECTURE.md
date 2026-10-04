@@ -1213,6 +1213,7 @@ All paths under `game/`.
 | `scripts/vehicle/vehicle_controller.gd`, `handling_profile.gd` | The car and its tuning schema (`tuning/handling.tres`) |
 | `scripts/vehicle/vehicle_lamps.gd`, `sun_glint.gd`, `beam_budget.gd`, `beam_profile.gd` | Lamp circuits written as instance uniforms (`P3-11d`), the sun direction for `vehicle_body.gdshader`, and the spot-light budget (`tuning/beams.tres`) |
 | `scripts/vehicle/vehicle_lamps_profile.gd`, `taxi_door_profile.gd`, `passenger_emote_profile.gd` | Schemas for `tuning/vehicle_lamps.tres`, `tuning/taxi_door.tres` and `tuning/passenger_emote.tres` (`Q150`). No `@export` defaults; each rig refuses a zero through `usable()` |
+| `scripts/vehicle/skid_marks.gd`, `skid_strip.gd`, `drift_sparks.gd` (+ `*_profile.gd`) | The drift shown (`Q154`): tyre marks and smoke off `TyreVehicleController.wheel_slips` — one ring mesh, one draw call, `SkidStrip` pure for `verify_vehicle` — and sparks off `SkillTracker.drift_tier`, wired by `TaxiHire` from `FareSystem.drift_tier_changed`. `tuning/skid_marks.tres`, `tuning/drift_sparks.tres` |
 | `scripts/world/lighting_rig.gd` | `LightingRig`: an environment, a sun and the exposure (`P5-28b`, `Q38`) |
 | `scripts/ui/debug_hud.gd`, `fps_counter.gd` | The one owner of dev chrome, off by default; the counter is a `Label` it builds and stops counting while hidden (`Q119`) |
 | `scripts/ui/hud.gd` | `Hud`. Reads the car `Main` handed it. Samples speed at 10 Hz and the road graph at 5 Hz, sets text only on change, registers a raw-versus-displayed readout with `DebugHud` |

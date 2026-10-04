@@ -134,6 +134,14 @@ func reset() -> void:
 	_cool_s = 0.0
 
 
+## The drift's tier, for the sparks (`P3-58`): -1 with no slide at the
+## threshold, 0 while one is counting toward `drift_min_s`, then how many
+## awards this slide has paid. Read off the meter `tick` keeps, so the sparks
+## step on the very tick that pays and go out on the tick that forfeits.
+func drift_tier() -> int:
+	return _drift.paid if _drift.total > 0.0 else -1
+
+
 ## One tick of the drive: what it earned, in the order it was earned. Usually
 ## nothing. `airborne` is every wheel off the ground this tick; `upright` is
 ## the body's up still up — read on the landing tick, the one that decides;

@@ -70,6 +70,9 @@ const CONTROLLER_SCRIPT := "res://scripts/vehicle/vehicle_controller.gd"
 const DOOR_SCRIPT := "res://scripts/vehicle/taxi_door.gd"
 const EMOTE_SCRIPT := "res://scripts/vehicle/passenger_emote.gd"
 const TYRE_SCRIPT := "res://scripts/vehicle/tyre_vehicle_controller.gd"
+const MARKS_SCRIPT := "res://scripts/vehicle/skid_marks.gd"
+const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
+const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
 ## grades: what is asserted is that the scene hands each node THIS resource.
@@ -77,6 +80,8 @@ const LAMPS_PROFILE_PATH := "res://tuning/vehicle_lamps.tres"
 const DOOR_PROFILE_PATH := "res://tuning/taxi_door.tres"
 const EMOTE_PROFILE_PATH := "res://tuning/passenger_emote.tres"
 const TYRE_PROFILE_PATH := "res://tuning/tyre.tres"
+const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
+const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"
 
 
 ## The rigs' dials are tuning resources, and a zero key makes each rig inert
@@ -98,6 +103,8 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 		[_running(car, LAMPS_SCRIPT), LAMPS_PROFILE_PATH, "lamps", "probe_hz"],
 		[_running(car, DOOR_SCRIPT), DOOR_PROFILE_PATH, "door", "swing_s"],
 		[_running(car, EMOTE_SCRIPT), EMOTE_PROFILE_PATH, "emote", "life_s"],
+		[_running(car, MARKS_SCRIPT), MARKS_PROFILE_PATH, "tyre marks", "mark_width_m"],
+		[_running(car, SPARKS_SCRIPT), SPARKS_PROFILE_PATH, "sparks", "lifetime_s"],
 	]
 	for rig: Array in rigs:
 		var node := rig[0] as Node3D
@@ -135,7 +142,10 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 		node.set("profile", table)
 	if _failed == before:
 		print(
-			"  ok    the lamp, door and face dials are tuning resources, and a zero key makes each inert"
+			(
+				"  ok    the lamp, door, face, tyre-mark and spark dials are tuning resources,"
+				+ " and a zero key makes each inert"
+			)
 		)
 
 
@@ -171,6 +181,127 @@ func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
 		_problem("%s does not instance %s" % [DRIVE_SCENE_PATH, SCENE_PATH])
 	if _failed == before:
 		print("  ok    the game's car runs the tyre model on the shipped table")
+
+
+## The tyre marks' strip (`P3-57`), driven without a car: a wheel under the bar
+## lays nothing; over it, the first tick only starts the mark and the next lays
+## a piece, lifted and as wide as the tread; leaving the ground, falling under
+## the bar or jumping further than `max_step_m` in a tick breaks the mark, so
+## nothing is drawn across the gap; two wheels keep two marks; and past
+## `capacity` the oldest slot is reused. Each from both sides — the tick that
+## should lay, lays.
+func _check_the_tyre_marks_break_and_wrap() -> void:
+	var before: int = _failed
+	var table := load(MARKS_PROFILE_PATH) as Resource
+	var strip_script := load(STRIP_SCRIPT) as GDScript
+	if table == null or strip_script == null:
+		_problem("%s or %s did not load" % [MARKS_PROFILE_PATH, STRIP_SCRIPT])
+		return
+	var bar: float = table.get("mark_from_slip")
+	var width: float = table.get("mark_width_m")
+	var lift: float = table.get("lift_m")
+	var reach: float = table.get("max_step_m")
+	var capacity: int = table.get("capacity")
+	var strip: RefCounted = strip_script.new(2, table)
+	var up := Vector3.UP
+	var side := Vector3.RIGHT
+	var at := Vector3.ZERO
+	var step := Vector3(0.0, 0.0, -0.5)
+	# Under the bar, however long: nothing.
+	for tick: int in 3:
+		if strip.step(0, true, at, up, side, bar - 0.01) != -1:
+			_problem("a wheel a hair under mark_from_slip laid a mark")
+		at += step
+	# On the bar: the first tick starts the mark, the second lays a piece.
+	if strip.step(0, true, at, up, side, bar) != -1:
+		_problem("the first tick over the bar laid a piece with nothing to join it to")
+	at += step
+	var slot: int = strip.step(0, true, at, up, side, bar)
+	if slot != 0 or strip.get("laid") != 1:
+		_problem("the second tick on the bar laid nothing (slot %d)" % slot)
+	else:
+		var corners: PackedVector3Array = strip.positions()
+		var near_edge: float = corners[3].distance_to(corners[2])
+		if not is_equal_approx(near_edge, width):
+			_problem("a piece is %.3f m wide, not the tread's %.3f m" % [near_edge, width])
+		if not is_equal_approx(corners[2].y, lift):
+			_problem("a piece sits %.3f m off the road, not lift_m %.3f m" % [corners[2].y, lift])
+	# Each break, then the ticks that restart it. A jump lands over the bar,
+	# so its landing tick has already started the next mark.
+	var breaks: Array[Array] = [
+		["off the ground", false, bar, Vector3.ZERO, false],
+		["under the bar", true, bar - 0.01, Vector3.ZERO, false],
+		["a jump past max_step_m", true, bar, Vector3(0.0, 0.0, -(reach + 0.01)), true],
+	]
+	for broken: Array in breaks:
+		var why: String = broken[0]
+		var landed_marking: bool = broken[4]
+		at += step + (broken[3] as Vector3)
+		var laid_before: int = strip.get("laid")
+		if strip.step(0, broken[1], at, up, side, broken[2]) != -1:
+			_problem("a mark ran on across %s" % why)
+		if strip.get("laid") != laid_before:
+			_problem("a piece was drawn across %s" % why)
+		at += step
+		if not landed_marking and strip.step(0, true, at, up, side, bar) != -1:
+			_problem("the first tick back over the bar after %s laid a piece" % why)
+		at += step
+		if strip.step(0, true, at, up, side, bar) == -1:
+			_problem("the mark did not start again after %s" % why)
+	# Two wheels, two marks: wheel 1 marking lays nothing for wheel 0.
+	var pair: RefCounted = strip_script.new(2, table)
+	pair.step(1, true, Vector3.ZERO, up, side, bar)
+	if pair.step(0, true, step, up, side, bar) != -1:
+		_problem("wheel 0 joined its first tick to wheel 1's mark")
+	# The ring: `capacity` + 1 pieces reuse slot 0.
+	var ring: RefCounted = strip_script.new(1, table)
+	var last: int = -1
+	var along := Vector3.ZERO
+	for tick: int in capacity + 2:
+		last = ring.step(0, true, along, up, side, bar)
+		along += step
+	if ring.get("laid") != capacity + 1 or last != 0:
+		_problem(
+			(
+				"the ring did not wrap: %d laid, the last in slot %d, at capacity %d"
+				% [ring.get("laid"), last, capacity]
+			)
+		)
+	if _failed == before:
+		print(
+			"  ok    a tyre mark is laid over the bar, breaks at every gap, and wraps at capacity"
+		)
+
+
+## The sparks show `SkillTracker.drift_tier` (`P3-58`): clear at -1, the
+## table's colour per tier, the last colour past the end, and a table with no
+## colours or a zero key refused. The tier itself is `verify_fares`'
+## `sparks:` block, which steps it on the tracker that pays.
+func _check_the_sparks_take_the_tier(car: Node3D) -> void:
+	var before: int = _failed
+	var sparks := _running(car, SPARKS_SCRIPT) as Node3D
+	if sparks == null:
+		_problem("no node in %s runs %s" % [SCENE_PATH, SPARKS_SCRIPT])
+		return
+	var table := sparks.get("profile") as Resource
+	if table == null:
+		return
+	var colours: PackedColorArray = table.get("colours")
+	if sparks.colour_of(-1).a != 0.0:
+		_problem("the sparks are not clear with no slide counting")
+	for tier: int in colours.size():
+		if sparks.colour_of(tier) != colours[tier]:
+			_problem("tier %d does not show colours[%d]" % [tier, tier])
+	if sparks.colour_of(colours.size() + 3) != colours[colours.size() - 1]:
+		_problem("a tier past the table does not keep its last colour")
+	var emptied := table.duplicate() as Resource
+	emptied.set("colours", PackedColorArray())
+	sparks.set("profile", emptied)
+	if sparks.usable():
+		_problem("mutation missed: a spark table with no colours still reads usable")
+	sparks.set("profile", table)
+	if _failed == before:
+		print("  ok    the sparks take each tier's colour and are clear when no slide counts")
 
 
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
@@ -253,6 +384,8 @@ func _run() -> void:
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
 	_check_the_car_runs_its_tyre_model(car)
+	_check_the_tyre_marks_break_and_wrap()
+	_check_the_sparks_take_the_tier(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)

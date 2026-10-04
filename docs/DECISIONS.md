@@ -8536,3 +8536,42 @@ the rears no sideways force. `catch` at 42 / 63 kph reads no snap with it (under
 0.25–0.33 s); a floor under the cap brings back the scaled form, which did not slide at 42 kph.
 The slide's drive fade keys on the drift mode itself, so a table with no traction control
 (`traction_limit` 0) is not faded outside a slide.
+
+## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
+
+**Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
+like mario kart to show if a drift is 'done properly' and for how long (bonus count)". **Open** on
+the look alone — built 2026-10-05 (`P3-57`, `P3-58`) on provisional values; the colours, the tier
+count and the smoke are the user's pick from frames.
+
+**Settled, and why.**
+- **Two layers, two signals, so the road and the meter cannot be argued with.** The marks and the
+  smoke are the TYRES' — `TyreVehicleController.wheel_slips`, each wheel's combined slip in
+  multiples of the tyre's peak, any slide, wheelspin or lockup, paid or not. The sparks are the
+  TRACKER'S — `SkillTracker.drift_tier`, the meter that pays, so a spark is a counted slide and a
+  step up is the tick an award lands. 🚫 No third slip reading: `FareSystem.slip_deg_of` and
+  `skidpad_ablation._slip_deg` are already two on purpose (`Q84`, `Q145`).
+- **No boost** (`Q153`: legibility, not control; a drift buys line, never pace), **no fire** (on a
+  taxi in a real street, flames read as a crash).
+- **One draw call for every mark.** One `ArrayMesh` ring of `capacity` quads, allocated once, each
+  piece written in place with `mesh_surface_update_vertex_region`; the stride asked of the renderer
+  and refused unless it is the 12 bytes written. A `StandardMaterial3D`, not a shader: an unshaded
+  colour needs none, and a shader that fails to compile is invisible to `check.sh`.
+- **`CPUParticles3D`, not `GPUParticles3D`**, for the smoke and the sparks: the web build runs the
+  Compatibility renderer. Measured: the drift drives and renders under `--rendering-method
+  gl_compatibility` with marks and smoke, and no error from the stride guard.
+- **The sparks hang on the fare loop, the marks on the car.** `TaxiHire` wires
+  `drift_tier_changed` to `DriftSparks.show_tier`, so `--fares=off` shows no sparks and an AI taxi
+  (`B3`) never lights the player's; the marks are physical and need no fare.
+
+**Measured (2026-10-05).** The tyre car's skidpad, every row, before and after: byte-identical but for
+the `us/tick` cost column (`wheel_slips` is written, never read by the solve). Draw calls: the
+marks +1 always (148 against 147 at `t=1` on the throttle route), the smoke +1 per smoking rear
+(164 against 162 mid-slide), the sparks +1 per rear while lit. On Expo Drive a slide from 53 kph
+peaks 14.1° and lights the counting tier; an entry at 86 kph never reaches 14° (peak about 11.6°)
+and lights nothing — correct, it does not pay either. Smoke at 0.45 alpha and 0.35 m read as solid
+beads; 0.3 and 0.25 m shipped. Mutation-checked: the tier ignoring a slide's end, the signal only
+on a step up, the mark not broken by a jump or by leaving the ground — each fails its check.
+
+Owed: the user's look pick (rendered tiers 0–3 on the street), the user's drive, the handset's fill
+rate (`P0-3b`).
