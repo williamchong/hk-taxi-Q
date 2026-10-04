@@ -8606,7 +8606,9 @@ button unless the row says so:
   down through the feint, `flick@lift` lifts it for the feint and puts it back at the turn-in.
   Windows from the turn-in. Control `corner`.
 - `trailbrake`: the brake and full lock right for 0.6 s, then the brake off and the throttle on.
-  Windows from the brake. Control `turnin`, a new row: the same steering with no pedal at all.
+  Windows from the brake. Control `turnin`, a new row: the same steering and the same throttle
+  after 0.6 s, no brake (first written as "no pedal at all"; corrected when the row was built, so
+  the two differ by the brake alone and not by the throttle after it).
   Not `corner`: a car that sheds speed turns tighter for that alone (the `liftoff` round above),
   so against a throttled corner the brake would be credited with the speed it loses. Read on slip
   and turn rate, never radius, for the same reason.
@@ -8632,6 +8634,57 @@ the brake moves the load forward at any speed, and it moves it less there. Three
 run nearest failing takes the bar, as `P3-53`'s did. The shipped car (`skidpad.tscn`) runs every
 row beside the spike and is recorded, never graded — `Q85` already says it has no lift-then-flick.
 A fail is recorded with its candidate levers and left for a later round; this round turns no dial.
+
+**Graded (same day), the bars above.** `tools/skidpad.sh --only=technique`, both pads, 42 / 63 / 86
+kph, the spike with the assist off and on: 27 runs, each cell's three identical (one shipped-car
+radius at 86 kph read at 0.3°/s, 4055.5 against 4056.2 m). The full pad at 63 kph before and after
+the rows went in: every earlier row and the `liftoff` table byte-identical bar the cost column and
+the wall rows' known wander. Spike, `held` / `lift` where a row has both, control in brackets:
+
+| Bar | 42 kph | 63 kph | 86 kph | Verdict |
+|---|---|---|---|---|
+| `flick` peak slip from the turn-in, over 14° and `corner`'s | 6.1 / 7.8° (7.0) | 3.1 / 5.0° (3.2) | 0.8 / 1.3° (0.4) | **fail** — no slide at all; 42 recorded |
+| `trailbrake` turn rate, first 0.5 s, over `turnin`'s | 55.5 (63.9) °/s | 76.5 (73.4) | 78.1 (63.8) | **fail at 42** |
+| `trailbrake` peak slip, first 0.5 s, over `turnin`'s | 9.9° (8.7) | 7.1° (5.6) | 4.4° (1.5) | pass |
+| `handbrake` peak slip, first 0.5 s, over 14°, assist off | 8.4 / 12.5° | 3.0 / 30.1° | 8.5 / 39.9° | **fail**: `held` everywhere, `lift` at 42 |
+| — assist on | 8.4 / 15.1° | 3.0 / 36.8° | 8.5 / 40.7° | **fail**: `held` everywhere |
+| `handbrake` turn rate, first 0.5 s, over `corner`'s | 129.4 / 125.3 (92.6) | 112.8 / 160.0 (84.1) | 93.0 / 140.3 (64.0) | pass (on: lift 124.4 / 147.5 / 135.6) |
+| No row spins, peak slip under 60° | ≤ 38.6° | ≤ 40.6° | `handbrake@lift`, off: **168.5°** | **fail at 86, assist off** (on: 46.0°) |
+
+Every other cell reads the same in both modes: the assist touches only a slide the button began.
+
+What the rows say:
+- **The flick never breaks the rear.** The feint is a gripping turn the other way (−59 to −78°/s
+  of heading, slip 1–9°), and the wheel spends the first half second coming back through the
+  centre (fronts 9.2° mean in `+0.00..+0.50` at 63 kph, against `corner`'s 15.8°) — a lock-to-lock
+  reversal runs at `steer_attack_s` (`Q152`'s timing round). After it the car simply corners.
+  Candidate levers, none built: the feint's length first, since 0.35 s is one driver's timing and a
+  longer one is the driver's change, not the car's; then what holds the rear with no button —
+  traction control armed and `turn_drive_cut` easing the drive on the turn-in (`P3-55`), and the
+  rear's share of the load swing (`side_force_depth`, roll). Read on the flick rows, guarded by
+  `corner` / `liftoff` (a car that flicks must still grip on a plain corner — pillar 2).
+- **The trail-brake rotates at every speed, and at 42 kph also ploughs.** The slip rises over
+  `turnin`'s everywhere, but at 42 kph the turn rate falls: a keyboard's full brake on fronts
+  already near their peak (33.0 kph mean in the window against `turnin`'s 38.8). Above it the car
+  turns faster under the brake, as a driver expects. Candidate: a brake share while the fronts are
+  turned; ⚠️ keyboard and touch brake are binary (`Q97`), so a partial brake is the car's, not the
+  player's.
+- **The handbrake swings the tail late with the throttle held, at once with it lifted.** Held,
+  the slip stays near `corner`'s for the first half second and then rises — 21.5–37.6° in
+  `+0.50..+1.00` and 26–39° over the run — so the tail does come round, after the bar's window. Lifted it is
+  over 14° inside it from 63 kph (and at 42 with the assist on). The turn rate is over `corner`'s
+  in every cell. Candidate: the button's ramp, read on `handbrake@held`, guarded by `tap` and
+  `turn`, which a faster ramp moves.
+- **Handbrake and lift at 86 kph spins the car with the assist off** — 168.5°; the assist, on by
+  default, holds it to 46.0°. A real car on full lock with the handbrake and the throttle lifted
+  at that speed would spin too, and the shipped car does (129.0°). Whether the off mode should
+  forgive it is the user's call (`Q153` asks for no spin from small errors; this input is not
+  small).
+
+The shipped car, recorded: no flick either (peak ≤ 5.8°); the trail-brake's slip over `turnin`'s
+at all three speeds and its turn rate under it at 42 and 63; the handbrake 5.9 / 4.0°, 23.0 /
+25.9°, 14.2 / 26.4° inside 0.5 s at 42 / 63 / 86 kph, and `handbrake@lift` spinning at 63 (63.3°)
+and 86 (129.0°). `Q85`'s missing lift-then-flick holds on both cars.
 
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 

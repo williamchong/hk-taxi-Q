@@ -97,6 +97,17 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`P3-55`), graded on `corner` across five entries — full lock runs to a TERMINAL speed, so one
   entry reads a transient — and on the pull-away from `--entry-kph=10`; `hold` and `ride` cannot
   see it while traction control is disarmed, and only their exits move.
+- ⚠️ **`--only=technique` grades `P3-54`'s three techniques on DIRECTION, each against a control
+  that differs by its input alone** (`Q153`): `flick@held` / `@lift` and `handbrake@held` / `@lift`
+  against `corner`, `trailbrake` against `turnin` — the same steering and the same throttle after
+  0.6 s, no brake. 🔴 Never grade the brake against `corner`: a car that sheds speed turns tighter
+  for that alone, so read slip and turn rate in `+0.00..+0.50`, never radius. The windows run from
+  each row's own input (the feint's end, the press, the brake), and the control is re-read at that
+  same second, so `corner` prints different numbers under the flick and the handbrake. The flick at
+  42 kph is recorded, not graded (a real car rarely flicks on tarmac that slowly). Graded
+  2026-10-05: no flick on either car, the trail-brake ploughs at 42, the held handbrake swings
+  after 0.5 s, and handbrake-and-lift at 86 spins with the assist off — a tyre dial aimed at one
+  of these is read on its row and guarded by `corner`, `tap` and `turn`.
 - ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
   ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
   the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is
