@@ -346,6 +346,12 @@ var _step: float = 0.0
 ## exits 0 with no table. Measured — an `Array` / `Array[float]` mismatch did
 ## exactly that. Counting output is the only claim worth making.
 var _printed_rows: int = 0
+## The tyre car's wheels as `wheel_slips` / `wheel_loads_n` index them: the
+## steered pair, and the rear pair split by side. Empty on a car on the
+## engine's tyres, whose columns then read "-".
+var _front_i: PackedInt32Array = []
+var _rear_left_i: int = -1
+var _rear_right_i: int = -1
 
 
 ## One manoeuvre's measurements. A class rather than a Dictionary so a typo in a
@@ -452,6 +458,13 @@ class Result:
 	var trace_yaw_dps: PackedFloat32Array = []
 	var trace_fronts_deg: PackedFloat32Array = []
 	var trace_slip_deg: PackedFloat32Array = []
+	## The tyre car alone, per tick, for the techniques' table (`P3-54`): the
+	## most-used tyre on each axle, in multiples of its peak (1.0 the top of the
+	## curve), and the rear axle's load across it, left minus right over the
+	## two — positive is the left, the OUTSIDE of a right turn. NAN elsewhere.
+	var trace_front_use: PackedFloat32Array = []
+	var trace_rear_use: PackedFloat32Array = []
+	var trace_rear_swing: PackedFloat32Array = []
 	## Mean microseconds per tick in the tyre model (`Q152`), or NAN for a car
 	## without one.
 	var tyre_cost_us: float = NAN
@@ -633,6 +646,16 @@ func _boot() -> bool:
 		print("slip threshold: %.1f deg" % _slip_threshold_deg)
 	else:
 		print("slip threshold: none published — secs>thr will read 0.00")
+	if _vehicle.has_method("tyre_wheels"):
+		var wheels: Array = _vehicle.call("tyre_wheels")
+		for i: int in wheels.size():
+			var wheel: VehicleWheel3D = wheels[i]
+			if wheel.use_as_steering:
+				_front_i.append(i)
+			elif wheel.position.x < 0.0:
+				_rear_left_i = i
+			else:
+				_rear_right_i = i
 	# `Q152`'s phase-1 gate, kept repeatable: the tyre model rebuilds each
 	# wheel's load from the contact, and at rest the four must be the weight.
 	# 1.5 s, not `SETTLE_S`: at 0.5 s the car is still coming down onto its springs
@@ -1123,6 +1146,22 @@ func _sample(
 		into.trace_yaw_dps.append(-yaw_step_deg / _step)
 		into.trace_fronts_deg.append(rad_to_deg(absf(float(_vehicle.get("steering")))))
 		into.trace_slip_deg.append(slip_deg)
+		var front_use: float = NAN
+		var rear_use: float = NAN
+		var rear_swing: float = NAN
+		if _rear_left_i >= 0 and _rear_right_i >= 0:
+			var slips: PackedFloat32Array = _vehicle.call("wheel_slips")
+			var loads: PackedFloat32Array = _vehicle.call("wheel_loads_n")
+			front_use = 0.0
+			for i: int in _front_i:
+				front_use = maxf(front_use, slips[i])
+			rear_use = maxf(slips[_rear_left_i], slips[_rear_right_i])
+			var axle: float = loads[_rear_left_i] + loads[_rear_right_i]
+			if axle > 0.0:
+				rear_swing = (loads[_rear_left_i] - loads[_rear_right_i]) / axle
+		into.trace_front_use.append(front_use)
+		into.trace_rear_use.append(rear_use)
+		into.trace_rear_swing.append(rear_swing)
 
 		if t >= drift_release_s and Input.is_action_pressed(&"drift"):
 			Input.action_release(&"drift")
@@ -1543,10 +1582,31 @@ func _print_liftoff_table(results: Array[Result]) -> void:
 ## read `+0.00..+0.50` and, for the flick's slip, `+0.00..+3.50`.
 func _print_technique_table(results: Array[Result]) -> void:
 	var width: int = _column_width(results)
-	var row_format: String = "%%-%ds %%12s %%9s %%9s %%9s %%9s %%9s" % width
+	var row_format: String = "%%-%ds %%12s %%9s %%9s %%9s %%9s %%9s %%9s %%9s %%9s" % width
 	print("")
-	print(row_format % ["run", "window", "speed", "yaw rate", "radius", "fronts", "peak slip"])
-	print(row_format % ["", "s from input", "kph", "deg/s", "m", "deg", "deg"])
+	print(
+		(
+			row_format
+			% [
+				"run",
+				"window",
+				"speed",
+				"yaw rate",
+				"radius",
+				"fronts",
+				"peak slip",
+				"front use",
+				"rear use",
+				"rear load",
+			]
+		)
+	)
+	print(
+		(
+			row_format
+			% ["", "s from input", "kph", "deg/s", "m", "deg", "deg", "x peak", "x peak", "out-in"]
+		)
+	)
 	for result: Result in results:
 		var manoeuvre: String = result.name.get_slice("@", 0)
 		if not manoeuvre in TECHNIQUES:
@@ -1571,20 +1631,29 @@ func _print_technique_table(results: Array[Result]) -> void:
 		if control == null:
 			_fail("%s: its control %s did not run" % [result.name, control_name])
 			continue
-		_print_windows(control, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format)
-		_print_windows(result, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format)
+		_print_windows(control, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format, true)
+		_print_windows(result, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format, true)
 
 
 ## One row per window, in seconds from `from_s`: mean speed, heading rate and
 ## front-wheel angle, the radius the speed and rate make, and the peak slip.
+## `wheels` adds the tyre car's three: each axle's most-used tyre at its
+## highest in the window, and the rear load swing's mean.
 func _print_windows(
-	result: Result, from_s: float, windows: Array[Vector2], row_format: String
+	result: Result, from_s: float, windows: Array[Vector2], row_format: String, wheels := false
 ) -> void:
+	# NAN through every tick on a car on the engine's tyres.
+	var has_wheels: bool = (
+		wheels and not result.trace_rear_use.is_empty() and not is_nan(result.trace_rear_use[0])
+	)
 	for window: Vector2 in windows:
 		var kph: float = 0.0
 		var yaw_dps: float = 0.0
 		var fronts_deg: float = 0.0
 		var slip_deg: float = 0.0
+		var front_use: float = 0.0
+		var rear_use: float = 0.0
+		var rear_swing: float = 0.0
 		var ticks: int = 0
 		for i: int in result.trace_s.size():
 			# Nudged so a tick on an edge, stored as float32, falls on one
@@ -1596,6 +1665,10 @@ func _print_windows(
 			yaw_dps += result.trace_yaw_dps[i]
 			fronts_deg += result.trace_fronts_deg[i]
 			slip_deg = maxf(slip_deg, result.trace_slip_deg[i])
+			if has_wheels:
+				front_use = maxf(front_use, result.trace_front_use[i])
+				rear_use = maxf(rear_use, result.trace_rear_use[i])
+				rear_swing += result.trace_rear_swing[i]
 			ticks += 1
 		if ticks == 0:
 			continue
@@ -1604,20 +1677,22 @@ func _print_windows(
 		fronts_deg /= ticks
 		var radius_m: float = (kph / 3.6) / deg_to_rad(yaw_dps) if yaw_dps > 0.0 else INF
 		_printed_rows += 1
-		print(
-			(
-				row_format
-				% [
-					result.name,
-					"%+.2f..%+.2f" % [window.x, window.y],
-					"%.1f" % kph,
-					"%.1f" % yaw_dps,
-					"%.1f" % radius_m,
-					"%.1f" % fronts_deg,
-					"%.1f" % slip_deg,
-				]
-			)
-		)
+		var cells: Array = [
+			result.name,
+			"%+.2f..%+.2f" % [window.x, window.y],
+			"%.1f" % kph,
+			"%.1f" % yaw_dps,
+			"%.1f" % radius_m,
+			"%.1f" % fronts_deg,
+			"%.1f" % slip_deg,
+		]
+		if wheels and has_wheels:
+			cells.append("%.2f" % front_use)
+			cells.append("%.2f" % rear_use)
+			cells.append("%+.2f" % (rear_swing / ticks))
+		elif wheels:
+			cells.append_array(["-", "-", "-"])
+		print(row_format % cells)
 
 
 ## The `catch` rows: when the wheel went over, the slip then, the swing the
