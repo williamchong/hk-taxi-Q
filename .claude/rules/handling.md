@@ -111,7 +111,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   columns are the tyre car's own (`wheel_slips`, `wheel_loads_n`): each axle's most-used tyre in
   multiples of its peak, and the rear load's swing. The fronts sit at their peak in a plain corner
   from 63 kph while the rears use about half of theirs, so a dial that "frees the rear" can read
-  as nothing on the flick — read `rear use` before blaming the dial.
+  as nothing on the flick — read `rear use` before blaming the dial. ⚠️ It is COMBINED slip: a
+  rear over 1.0 at 2° of slip is wheelspin, not the side letting go (`Q153`'s step 2).
+- 🔴 **`--sweep` refuses a field the car reads once, in `_ready`** (`READY_ONLY_FIELDS`:
+  `gravity_scale`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`, `roll_influence`)
+  — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
+  instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
+  live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
 - ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
   ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
   the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is

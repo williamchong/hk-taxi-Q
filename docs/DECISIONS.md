@@ -8693,6 +8693,49 @@ What the rows say:
   (what the rear can carry against the front) and the fronts' authority on a reversal (the lock
   narrowed with speed, `steer_attack_s`), each guarded by `corner` and `liftoff`. The shipped car
   publishes no tyre slip, so its columns read "-".
+  **No single dial gives a flick and keeps the corner** (same day, the plan's step 2). Nine
+  levers swept one at a time on the spike, assist off, `--only=flick` (the flick rows and `corner`
+  as the guard) at 42 / 63 / 86 kph; the flick's peak slip after the turn-in, `held` / `lift`,
+  beside `corner`'s peak slip over the same 3.5 s:
+
+  | Lever | Values | Flick, best cell | `corner` at that value | Verdict |
+  |---|---|---|---|---|
+  | `traction_limit` | 0, 1.0 | 0: 42.8–48.0° at every speed | 0: 39.5–48.2° — slides too | frees both |
+  | `body.center_of_mass_y` (height) | −0.35, −0.15, +0.05 | +0.05: 78.2 / 38.6 / 36.5° | +0.05: 18–94° — spins | frees both |
+  | `mu` | 1.2, 1.6, 2.0 | 1.2: 31.3° at 86 only | 1.2: radius 15–38 m (11–22 at 2.0) | refused before (`Q153`) |
+  | `body.center_of_mass_z` (+ rearward) | −0.4 … +0.4 | −0.4: 8.4–10.5° | −0.4: tighter, rear past its peak | under 14° |
+  | `side_force_depth` | 0.4, 0.7, 1.0 | ≤ 7.8° | 1.0: tighter | nothing |
+  | `steer_angle_at_top_deg` | 7, 12, 18 | ≤ 9.1° | fronts further past peak | nothing |
+  | `steer_attack_s` | 0.05, 0.1, 0.2 | ≤ 8.0° | unmoved | nothing |
+  | `turn_drive_cut` | 0, 0.5 | ≤ 7.7° | 0: wider (`P3-55`'s push) | nothing |
+  | `body.gravity_scale` | 1.0, 1.6 | ≤ 7.1° | 1.0: radius 16–41 m | nothing |
+
+  🔴 **Step 1's reading is corrected here: traction control IS what holds the rear** — off, both
+  flicks slide at every speed. But it holds a plain corner's rear the same way: with the throttle
+  down, `corner` power-oversteers to 40–48°. The step 1 columns read combined slip, and a rear past
+  1.0 with no slide is wheelspin, not the side letting go — `rear use` over 1 under `turn_drive_cut`
+  0 at 2° of slip is exactly that. So every lever that frees the flick frees `corner` with it
+  (traction control, a raised centre of mass, a lower `mu`), and none that spares `corner` frees
+  the flick. The flick is not a dial; it needs the car to tell a flick from a corner.
+
+  **What the games do (the user's question, same day; web research — Unbound's drift entry
+  `steamcommunity.com/app/1846380/discussions/0/3466109393870252769`, NWH's assists
+  `nwhvehiclephysics.com/doku.php/NWH/VehiclePhysics2/Modules/Arcade/ArcadeModule`, Forza's steering
+  `support.forza.net/hc/en-us/articles/4409761195923`, the flick `en.wikipedia.org/wiki/Scandinavian_flick`):** no shipped game found lets a feint alone break the rear of a car that grips by
+  design. Need for Speed Unbound and Heat start the drift on an input pattern (a brake tap, or a
+  lift and re-apply), Ridge Racer on a brake tap while turning; NWH Vehicle Physics and Unreal's
+  Chaos vehicles layer a yaw torque that needs no tyre force; Space Dust Racing cuts rear grip only
+  in a drift state, beside an angle cap. Forza Horizon's assisted steering DAMPS fast lock-to-lock
+  input. And a real flick is the feint with a lift AND a light brake, which the pad's `flick@lift`
+  has only half of.
+
+  Candidates for the next round, none built — the user's pick: (a) **a flick trigger that does
+  what the button does**: a fast steering reversal with the throttle lifted or the brake touched,
+  above a speed, disarms traction control as the button's press does (`_traction_off`), and the
+  existing re-arm ends it; `corner` never reverses, so it never fires — graded on the flick rows,
+  guarded by `corner`, `liftoff`, `tap`, `turn`, `hold` and `ride` in both modes. (b) a yaw torque
+  on the reversal, the assist's (Forza keeps its steering help behind the setting). (c) a
+  `flick@brake` row first, so the fair technique is on the pad before a trigger is shaped to it.
 - **The trail-brake rotates at every speed, and at 42 kph also ploughs.** The slip rises over
   `turnin`'s everywhere, but at 42 kph the turn rate falls: a keyboard's full brake on fronts
   already near their peak (33.0 kph mean in the window against `turnin`'s 38.8). Above it the car
