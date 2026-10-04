@@ -84,8 +84,9 @@ const LIFTOFF_WINDOWS_S: Array[Vector2] = [
 ## `flick` and `handbrake` against `corner`, `trailbrake` against `turnin`.
 ## `--only=technique` runs the three and their controls.
 ##
-## `flick`: full lock LEFT for `FLICK_S`, then full lock right held, no drift
-## button — a feint the other way, then in. `@held` keeps the throttle down
+## `flick`: full lock LEFT for `FLICK_S` (or each of `--flick-s=`, a row per
+## feint, labelled with it), then full lock right held, no drift button — a
+## feint the other way, then in. `@held` keeps the throttle down
 ## through the feint; `@lift` lifts it for the feint and puts it back at the
 ## turn-in, the Scandinavian flick `Q85` says the shipped car cannot do.
 ## `handbrake`: `corner`'s input with the drift button tapped `HANDBRAKE_AT_S`
@@ -297,6 +298,10 @@ var _sweep: Array[float] = []
 var _sweep_field: StringName = DEFAULT_SWEEP_FIELD
 var _wall_deg: Array[float] = DEFAULT_WALL_DEG.duplicate()
 var _catch_s: Array[float] = DEFAULT_CATCH_S.duplicate()
+## `--flick-s=`: the feint's lengths, a `flick` row per value; the bar's own
+## `FLICK_S` alone unless asked, and only then are the rows labelled with it.
+var _flick_s: Array[float] = [FLICK_S]
+var _flick_given: bool = false
 ## `--catch-lift`: the catch lets the throttle go as the wheel goes over —
 ## the street instinct — where the default keeps it down. With the drive on,
 ## the rears are still spinning past the drift button and have little side
@@ -520,6 +525,15 @@ func _parse_args() -> bool:
 					_catch_at_s = bits[1].to_float()
 				else:
 					_catch_late_s = bits[1].to_float()
+			"--flick-s":
+				var feints: Array[float] = []
+				for text: String in bits[1].split(","):
+					if not text.strip_edges().is_valid_float() or text.to_float() <= 0.0:
+						_fail("--flick-s wants seconds over 0, got '%s'" % text)
+						return false
+					feints.append(text.to_float())
+				_flick_s = feints
+				_flick_given = true
 			"--catch-s":
 				var holds: Array[float] = []
 				for text: String in bits[1].split(","):
@@ -735,16 +749,22 @@ func _measure_all() -> void:
 					results.append(caught)
 				continue
 			if manoeuvre in TECHNIQUE_VARIANTS:
+				var feints: Array[float] = [FLICK_S]
+				if manoeuvre == "flick":
+					feints = _flick_s
 				for variant: String in TECHNIQUE_VARIANTS[manoeuvre]:
-					var variant_label: String = "%s@%s" % [manoeuvre, variant]
-					if swept:
-						variant_label += "@%.4f" % value
-					var row: Result = await _measure(
-						manoeuvre, variant_label, 90.0, 0.0, "", variant
-					)
-					if row == null:
-						return
-					results.append(row)
+					for feint_s: float in feints:
+						var variant_label: String = "%s@%s" % [manoeuvre, variant]
+						if manoeuvre == "flick" and _flick_given:
+							variant_label += "@%.2fs" % feint_s
+						if swept:
+							variant_label += "@%.4f" % value
+						var row: Result = await _measure(
+							manoeuvre, variant_label, 90.0, 0.0, "", variant, feint_s
+						)
+						if row == null:
+							return
+						results.append(row)
 				continue
 			if manoeuvre == "turn":
 				for end: String in TURN_ENDS:
@@ -828,7 +848,8 @@ func _measure(
 	wall_deg: float = 90.0,
 	catch_s: float = 0.0,
 	turn_end: String = "",
-	variant: String = ""
+	variant: String = "",
+	feint_s: float = FLICK_S
 ) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
@@ -919,7 +940,7 @@ func _measure(
 			var start: Array[StringName] = [&"accelerate", &"steer_right"]
 			var release_s: float = INF
 			if manoeuvre == "flick":
-				result.input_at_s = FLICK_S
+				result.input_at_s = feint_s
 				# Assigned per branch: a ternary of two literals types as a plain
 				# Array, which throws on the way into an Array[StringName].
 				start = [&"accelerate", &"steer_left"]
@@ -1189,7 +1210,9 @@ func _sample(
 					if absf(yaw_step_deg) / _step < TURN_SETTLED_DPS:
 						into.turn_settled_s = t - into.turn_off_s
 						into.turn_heading_deg = absf(into.yaw_deg)
-		if not switched and t >= _switch_at_s(technique):
+		# The flick's turn-in and the handbrake's press are their inputs; the
+		# brake's input is the start, and its second half `TRAIL_S` after it.
+		if not switched and t >= (into.input_at_s if into.input_at_s > 0.0 else TRAIL_S):
 			switched = true
 			_switch(technique)
 		last_slip = slip_deg
@@ -1268,16 +1291,6 @@ func _countersteer(slip_deg: float, slip_rate_dps: float) -> void:
 		Input.action_press(&"steer_right", steer)
 	elif steer < 0.0:
 		Input.action_press(&"steer_left", -steer)
-
-
-## When a technique's second half goes in, in seconds into the manoeuvre.
-static func _switch_at_s(technique: String) -> float:
-	match technique.get_slice("@", 0):
-		"flick":
-			return FLICK_S
-		"handbrake":
-			return HANDBRAKE_AT_S
-	return TRAIL_S
 
 
 ## A technique's second half: the flick's turn-in, the handbrake's press, the
@@ -1543,6 +1556,8 @@ func _print_technique_table(results: Array[Result]) -> void:
 		var own: String = manoeuvre
 		if manoeuvre in TECHNIQUE_VARIANTS:
 			own += "@" + result.name.get_slice("@", 1)
+		if manoeuvre == "flick" and _flick_given:
+			own += "@" + result.name.get_slice("@", 2)
 		var suffix: String = result.name.substr(own.length())
 		var control_name: String = TECHNIQUE_CONTROL[manoeuvre]
 		var control: Result = null

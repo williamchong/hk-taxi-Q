@@ -41,6 +41,9 @@
 #                                    player's plain input (--only=ride runs
 #                                    tap), and `longest` is the unbroken dwell
 #                                    the fare's drift pays on
+#   --flick-s=0.35,0.7,1.0           the flick rows' feint lengths, a row per
+#                                    value labelled with it (default 0.35, the
+#                                    bar's own, unlabelled)
 #   --catch-s=0.1,0.2,0.4,0.8        the catch rows: the tap, then full OPPOSITE
 #                                    lock held for each of these seconds from
 #                                    the slide's peak, then the wheel let go.
