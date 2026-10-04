@@ -246,6 +246,11 @@ to — see Gotchas.
 
 ## Gotchas
 
+- **The generic procedures live in `~/godot-agent-skills`**: `godot-ab-render` for a before/after
+  frame comparison net of import staleness and run-to-run noise, `godot-mutation-check` for
+  mutation-checking a verify tool under a time limit. This file keeps what is specific to this
+  repo: the viewpoints, `drive.sh`'s flags, and which parts of a drive frame move every run.
+
 - ⚠️ **`drive.sh` does NOT re-import changed assets, and says nothing about it.** It builds
   `game/.godot/` on its first run and thereafter renders whatever is already in
   `game/.godot/imported/`. Rewrite a `.glb` and every screenshot afterwards is of the **old** mesh,
