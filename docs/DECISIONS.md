@@ -8663,6 +8663,13 @@ What the rows say:
   traction control armed and `turn_drive_cut` easing the drive on the turn-in (`P3-55`), and the
   rear's share of the load swing (`side_force_depth`, roll). Read on the flick rows, guarded by
   `corner` / `liftoff` (a car that flicks must still grip on a plain corner — pillar 2).
+  **The feint's length is not it** (same day, the user's ask): `--flick-s=0.35,0.5,0.7,1.0,1.5`
+  at 42 / 63 / 86 kph, both modes and both cars. The longest slip after any turn-in is 8.7° on the
+  spike (42 kph, a 1.5 s lifted feint) and 7.6° on the shipped car — under 14° everywhere, and
+  every peak sits on the turn-in's own tick, the feint's residue, never rising after it. A longer
+  lifted feint adds a degree or two only by shedding speed (63 kph: 5.0° → 7.4° as the car slows
+  from 62 to 48 kph). The assist moves nothing (63 kph: 7.4° off, 7.5° on). So the rear holds
+  through any feint a player gives: the car's, and the next lever is what holds it.
 - **The trail-brake rotates at every speed, and at 42 kph also ploughs.** The slip rises over
   `turnin`'s everywhere, but at 42 kph the turn rate falls: a keyboard's full brake on fronts
   already near their peak (33.0 kph mean in the window against `turnin`'s 38.8). Above it the car
