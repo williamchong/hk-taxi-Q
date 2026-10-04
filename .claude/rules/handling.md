@@ -107,7 +107,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   42 kph is recorded, not graded (a real car rarely flicks on tarmac that slowly). Graded
   2026-10-05: no flick on either car, the trail-brake ploughs at 42, the held handbrake swings
   after 0.5 s, and handbrake-and-lift at 86 spins with the assist off — a tyre dial aimed at one
-  of these is read on its row and guarded by `corner`, `tap` and `turn`.
+  of these is read on its row and guarded by `corner`, `tap` and `turn`. ⚠️ Its last three
+  columns are the tyre car's own (`wheel_slips`, `wheel_loads_n`): each axle's most-used tyre in
+  multiples of its peak, and the rear load's swing. The fronts sit at their peak in a plain corner
+  from 63 kph while the rears use about half of theirs, so a dial that "frees the rear" can read
+  as nothing on the flick — read `rear use` before blaming the dial.
 - ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
   ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
   the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is

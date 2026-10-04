@@ -8670,6 +8670,29 @@ What the rows say:
   lifted feint adds a degree or two only by shedding speed (63 kph: 5.0° → 7.4° as the car slows
   from 62 to 48 kph). The assist moves nothing (63 kph: 7.4° off, 7.5° on). So the rear holds
   through any feint a player gives: the car's, and the next lever is what holds it.
+  **What holds it: the fronts run out first** (same day, the plan's step 1). The technique table
+  gains the spike's own tyres: `front use` / `rear use`, each axle's most-used tyre at its highest
+  in the window in multiples of its peak (`wheel_slips`), and `rear load`, the rear axle's load
+  left minus right over the two (`wheel_loads_n`; + the outside of a right turn). In the flick's
+  first 0.5 s after the turn-in, `held` / `lift`:
+
+  | entry | front use | rear use | rear load, feint → turn-in | `corner`'s front / rear use |
+  |---|---|---|---|---|
+  | 42 kph | 1.02 / 0.90 | 0.38 / 0.33 | −0.37 → +0.21 / −0.34 → +0.18 | 0.55 / 0.38 |
+  | 63 kph | 1.17 / 1.14 | 0.55 / 0.68 | −0.43 → +0.16 / −0.51 → +0.14 | 0.99 / 0.57 |
+  | 86 kph | 1.14 / 1.18 | 0.81 / 0.92 | −0.45 → +0.05 / −0.54 → +0.05 | 1.24 / 0.59 |
+
+  The fronts are at or past their peak in every flick and in `corner` itself from 63 kph, while the
+  rears use a third to nine tenths of theirs: the car is front-limited, so a turn-in cannot put
+  more yaw into it than the fronts can carry, and the rear never reaches its own top. The load
+  does swing — the rear axle goes from about 70 / 30 one way in the feint to the other in a
+  steady corner (±0.5) — but it arrives on a rear with grip to spare. The nearest miss is the
+  lifted flick at 86 kph (0.92); at 42 kph the rear is at a third. So traction control and
+  `turn_drive_cut` are unlikely to be it — the lifted flick has no drive to cut and fails too, and
+  no rear is spinning — and the levers step 2 should rank first are the balance between the axles
+  (what the rear can carry against the front) and the fronts' authority on a reversal (the lock
+  narrowed with speed, `steer_attack_s`), each guarded by `corner` and `liftoff`. The shipped car
+  publishes no tyre slip, so its columns read "-".
 - **The trail-brake rotates at every speed, and at 42 kph also ploughs.** The slip rises over
   `turnin`'s everywhere, but at 42 kph the turn rate falls: a keyboard's full brake on fronts
   already near their peak (33.0 kph mean in the window against `turnin`'s 38.8). Above it the car
