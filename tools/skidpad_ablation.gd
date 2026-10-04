@@ -1,5 +1,5 @@
-## Grades the shipped handling model on `skidpad.tscn` — ten manoeuvres, five
-## tables, no human at the keyboard.
+## Grades the shipped handling model on `skidpad.tscn` — fifteen manoeuvres,
+## seven tables, no human at the keyboard.
 ##
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd"
 ##     godot --headless --path game --script "$PWD/tools/skidpad_ablation.gd" -- --only=drift
@@ -27,7 +27,21 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = [
-	"corner", "liftoff", "drift", "tap", "brake", "coast", "wall", "lift", "hold", "catch", "turn"
+	"corner",
+	"liftoff",
+	"drift",
+	"tap",
+	"brake",
+	"coast",
+	"wall",
+	"lift",
+	"hold",
+	"catch",
+	"turn",
+	"turnin",
+	"flick",
+	"trailbrake",
+	"handbrake",
 ]
 ## `turn`: the street's 90° drift (`Q153`, the user's street report). The tap,
 ## steering and throttle held, then at `TURN_AT_DEG` of heading the player ends
@@ -64,6 +78,37 @@ const AFTER_LIFT_S: float = 0.5
 ## and not on `corner` is the pivot, not the speed it sheds.
 const LIFTOFF_WINDOWS_S: Array[Vector2] = [
 	Vector2(-0.5, 0.0), Vector2(0.0, 0.25), Vector2(0.25, 0.5), Vector2(0.5, 1.0), Vector2(1.0, 2.0)
+]
+## The techniques a driver brings (`P3-54`, `Q153`), each read in windows from
+## its own input against a control that differs from it by that input alone:
+## `flick` and `handbrake` against `corner`, `trailbrake` against `turnin`.
+## `--only=technique` runs the three and their controls.
+##
+## `flick`: full lock LEFT for `FLICK_S`, then full lock right held, no drift
+## button — a feint the other way, then in. `@held` keeps the throttle down
+## through the feint; `@lift` lifts it for the feint and puts it back at the
+## turn-in, the Scandinavian flick `Q85` says the shipped car cannot do.
+## `handbrake`: `corner`'s input with the drift button tapped `HANDBRAKE_AT_S`
+## into the turn — `tap` presses it with the steering from a straight line,
+## this with the car already turning. `@held` keeps the throttle down, `@lift`
+## lifts it at the press. `trailbrake`: the brake and full lock right for
+## `TRAIL_S`, then the brake off and the throttle on. `turnin` is its control:
+## the same steering and the same throttle after `TRAIL_S`, no brake. 🔴 Not
+## `corner`: a car that sheds speed turns tighter for that alone (`Q153`'s
+## `liftoff` round), so against a throttled corner the brake would be credited
+## with the speed it loses — read slip and turn rate, never radius.
+const TECHNIQUES: PackedStringArray = ["flick", "trailbrake", "handbrake"]
+const TECHNIQUE_VARIANTS: Dictionary = {"flick": ["held", "lift"], "handbrake": ["held", "lift"]}
+const TECHNIQUE_CONTROL: Dictionary = {
+	"flick": "corner", "trailbrake": "turnin", "handbrake": "corner"
+}
+const FLICK_S: float = 0.35
+const TRAIL_S: float = 0.6
+const HANDBRAKE_AT_S: float = 0.5
+## Seconds from each technique's input. `+0.00..+0.50` is the window `Q153`'s
+## bars read; the last is everything after the input the manoeuvre holds.
+const TECHNIQUE_WINDOWS_S: Array[Vector2] = [
+	Vector2(-0.25, 0.0), Vector2(0.0, 0.5), Vector2(0.5, 1.0), Vector2(1.0, 2.0), Vector2(0.0, 3.5)
 ]
 ## `catch`: how far the slide's angle must fall off its running peak before
 ## the tool reads the peak as passed and countersteers.
@@ -127,7 +172,9 @@ const WALL_AFTER_S: float = 1.0
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
 ## else reaches `VehicleController._apply_drift`.
-const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap", "lift", "hold", "catch", "turn"]
+const DRIFT_MANOEUVRES: PackedStringArray = [
+	"drift", "tap", "lift", "hold", "catch", "turn", "handbrake"
+]
 
 ## The profile field a sweep writes when `--sweep` does not name another, and the
 ## field `--drift-grip` is an alias for.
@@ -389,7 +436,10 @@ class Result:
 	## above is `steer_ratio`, the player's input, which the cap leaves alone.
 	var capped_s: float = NAN
 	var fronts_off_deg: float = NAN
-	## Per tick on every row, read by `liftoff`'s table alone: seconds into the manoeuvre,
+	## The techniques and their controls: seconds into the manoeuvre of the
+	## input the windows are read from. NAN on every other row.
+	var input_at_s: float = NAN
+	## Per tick on every row, read by `liftoff`'s and the techniques' tables: seconds into the manoeuvre,
 	## forward speed, the heading rate into a right turn, the front wheels'
 	## angle (`steering`) and the slip.
 	var trace_s: PackedFloat32Array = []
@@ -684,6 +734,18 @@ func _measure_all() -> void:
 						return
 					results.append(caught)
 				continue
+			if manoeuvre in TECHNIQUE_VARIANTS:
+				for variant: String in TECHNIQUE_VARIANTS[manoeuvre]:
+					var variant_label: String = "%s@%s" % [manoeuvre, variant]
+					if swept:
+						variant_label += "@%.4f" % value
+					var row: Result = await _measure(
+						manoeuvre, variant_label, 90.0, 0.0, "", variant
+					)
+					if row == null:
+						return
+					results.append(row)
+				continue
 			if manoeuvre == "turn":
 				for end: String in TURN_ENDS:
 					var turn_label: String = "turn@%s" % end
@@ -710,13 +772,18 @@ func _measure_all() -> void:
 	var catches: Array[Result] = []
 	var lift_rows: Array[Result] = []
 	var turns: Array[Result] = []
+	var techniques: Array[Result] = []
 	var lifted: bool = false
 	for result: Result in results:
 		var manoeuvre: String = result.name.get_slice("@", 0)
 		if manoeuvre in ["corner", "liftoff"]:
 			lift_rows.append(result)
+		if manoeuvre in ["corner", "turnin"] or manoeuvre in TECHNIQUES:
+			techniques.append(result)
 		if manoeuvre == "liftoff":
 			lifted = true
+			continue
+		if manoeuvre == "turnin" or manoeuvre in TECHNIQUES:
 			continue
 		if manoeuvre == "wall":
 			walls.append(result)
@@ -744,6 +811,8 @@ func _measure_all() -> void:
 		_print_liftoff_table(lift_rows)
 	if not turns.is_empty():
 		_print_turn_table(turns)
+	if techniques.any(func(r: Result) -> bool: return r.name.get_slice("@", 0) in TECHNIQUES):
+		_print_technique_table(techniques)
 
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
@@ -758,7 +827,8 @@ func _measure(
 	label: String,
 	wall_deg: float = 90.0,
 	catch_s: float = 0.0,
-	turn_end: String = ""
+	turn_end: String = "",
+	variant: String = ""
 ) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
@@ -835,6 +905,32 @@ func _measure(
 				_fail("turn: no ending '%s'" % turn_end)
 				return null
 			await _sample(DRIFT_ACTIONS, TURN_S, false, result, TAP_S, INF, false, 0.0, turn_end)
+		"turnin", "trailbrake":
+			result.input_at_s = 0.0
+			var pedal: Array[StringName] = [&"steer_right"]
+			if manoeuvre == "trailbrake":
+				pedal.append(&"brake_reverse")
+			await _sample(pedal, MANOEUVRE_S, false, result, INF, INF, false, 0.0, "", manoeuvre)
+		"flick", "handbrake":
+			if not variant in TECHNIQUE_VARIANTS[manoeuvre]:
+				_fail("%s: no variant '%s'" % [manoeuvre, variant])
+				return null
+			var technique: String = "%s@%s" % [manoeuvre, variant]
+			var start: Array[StringName] = [&"accelerate", &"steer_right"]
+			var release_s: float = INF
+			if manoeuvre == "flick":
+				result.input_at_s = FLICK_S
+				# Assigned per branch: a ternary of two literals types as a plain
+				# Array, which throws on the way into an Array[StringName].
+				start = [&"accelerate", &"steer_left"]
+				if variant == "lift":
+					start = [&"steer_left"]
+			else:
+				result.input_at_s = HANDBRAKE_AT_S
+				release_s = HANDBRAKE_AT_S + TAP_S
+			await _sample(
+				start, MANOEUVRE_S, false, result, release_s, INF, false, 0.0, "", technique
+			)
 		_:
 			_fail("unknown manoeuvre '%s'" % manoeuvre)
 			return null
@@ -943,7 +1039,8 @@ func _sample(
 	lift_at_s: float = INF,
 	countersteer: bool = false,
 	catch_s: float = 0.0,
-	turn_end: String = ""
+	turn_end: String = "",
+	technique: String = ""
 ) -> void:
 	# ⚠️ Released first. The run-up holds the throttle and nothing had dropped it,
 	# so the coast manoeuvre measured 30 s of *acceleration* to 126 kph and then
@@ -972,6 +1069,8 @@ func _sample(
 	var can_cap: bool = _vehicle.has_method("catch_capped")
 	# `turn`: whether the car has slid since the player ended the turn.
 	var slid_since_off: bool = false
+	# The techniques: whether the second half of the input has gone in.
+	var switched: bool = technique.is_empty()
 
 	while t < end_s:
 		await physics_frame
@@ -1090,6 +1189,9 @@ func _sample(
 					if absf(yaw_step_deg) / _step < TURN_SETTLED_DPS:
 						into.turn_settled_s = t - into.turn_off_s
 						into.turn_heading_deg = absf(into.yaw_deg)
+		if not switched and t >= _switch_at_s(technique):
+			switched = true
+			_switch(technique)
 		last_slip = slip_deg
 		if to_rest and _speed_kph() <= STOPPED_KPH:
 			break
@@ -1166,6 +1268,35 @@ func _countersteer(slip_deg: float, slip_rate_dps: float) -> void:
 		Input.action_press(&"steer_right", steer)
 	elif steer < 0.0:
 		Input.action_press(&"steer_left", -steer)
+
+
+## When a technique's second half goes in, in seconds into the manoeuvre.
+static func _switch_at_s(technique: String) -> float:
+	match technique.get_slice("@", 0):
+		"flick":
+			return FLICK_S
+		"handbrake":
+			return HANDBRAKE_AT_S
+	return TRAIL_S
+
+
+## A technique's second half: the flick's turn-in, the handbrake's press, the
+## brake let off for the throttle — `turnin` puts the same throttle on with no
+## brake to let off, so the two differ by the brake alone.
+func _switch(technique: String) -> void:
+	match technique:
+		"flick@held", "flick@lift":
+			Input.action_release(&"steer_left")
+			Input.action_press(&"steer_right")
+			Input.action_press(&"accelerate")
+		"handbrake@held":
+			Input.action_press(&"drift")
+		"handbrake@lift":
+			Input.action_press(&"drift")
+			Input.action_release(&"accelerate")
+		"trailbrake", "turnin":
+			Input.action_release(&"brake_reverse")
+			Input.action_press(&"accelerate")
 
 
 ## Lets the clock run with whatever is currently pressed, sampling nothing.
@@ -1261,9 +1392,16 @@ func _print_wall_table(results: Array[Result]) -> void:
 
 ## Whether `--only` asked for this manoeuvre under another row's name: `ride`
 ## is `tap`'s run, and `liftoff` runs `corner` as its control. Either is
-## printed in its own table alone.
+## printed in its own table alone. A technique runs its control the same way,
+## and `--only=technique` runs the three and both controls.
 func _rides(manoeuvre: String) -> bool:
-	return (_only == "ride" and manoeuvre == "tap") or (_only == "liftoff" and manoeuvre == "corner")
+	if _only == "technique":
+		return manoeuvre in TECHNIQUES or manoeuvre in TECHNIQUE_CONTROL.values()
+	if _only in TECHNIQUE_CONTROL:
+		return manoeuvre == TECHNIQUE_CONTROL[_only]
+	return (
+		(_only == "ride" and manoeuvre == "tap") or (_only == "liftoff" and manoeuvre == "corner")
+	)
 
 
 ## `tap`'s result under `ride`'s name, for the sustain table.
@@ -1383,44 +1521,88 @@ func _print_liftoff_table(results: Array[Result]) -> void:
 	print(row_format % ["run", "window", "speed", "yaw rate", "radius", "fronts", "peak slip"])
 	print(row_format % ["", "s from lift", "kph", "deg/s", "m", "deg", "deg"])
 	for result: Result in results:
-		for window: Vector2 in LIFTOFF_WINDOWS_S:
-			var kph: float = 0.0
-			var yaw_dps: float = 0.0
-			var fronts_deg: float = 0.0
-			var slip_deg: float = 0.0
-			var ticks: int = 0
-			for i: int in result.trace_s.size():
-				# Nudged so a tick on an edge, stored as float32, falls on one
-				# side every run: the lift's own tick reads as before it.
-				var since_s: float = result.trace_s[i] - LIFT_AT_S - 1e-4
-				if since_s <= window.x or since_s > window.y:
-					continue
-				kph += result.trace_kph[i]
-				yaw_dps += result.trace_yaw_dps[i]
-				fronts_deg += result.trace_fronts_deg[i]
-				slip_deg = maxf(slip_deg, result.trace_slip_deg[i])
-				ticks += 1
-			if ticks == 0:
+		_print_windows(result, LIFT_AT_S, LIFTOFF_WINDOWS_S, row_format)
+
+
+## The techniques (`P3-54`), each printed under its control read at the
+## technique's own input: the control's windows sit at the same seconds, so
+## the two differ by that input alone. Columns as `liftoff`'s; `Q153`'s bars
+## read `+0.00..+0.50` and, for the flick's slip, `+0.00..+3.50`.
+func _print_technique_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%12s %%9s %%9s %%9s %%9s %%9s" % width
+	print("")
+	print(row_format % ["run", "window", "speed", "yaw rate", "radius", "fronts", "peak slip"])
+	print(row_format % ["", "s from input", "kph", "deg/s", "m", "deg", "deg"])
+	for result: Result in results:
+		var manoeuvre: String = result.name.get_slice("@", 0)
+		if not manoeuvre in TECHNIQUES:
+			continue
+		# The control from the same sweep value: what follows the technique's
+		# own label, or the unswept control a drift dial never re-ran.
+		var own: String = manoeuvre
+		if manoeuvre in TECHNIQUE_VARIANTS:
+			own += "@" + result.name.get_slice("@", 1)
+		var suffix: String = result.name.substr(own.length())
+		var control_name: String = TECHNIQUE_CONTROL[manoeuvre]
+		var control: Result = null
+		for candidate: Result in results:
+			if candidate.name == control_name + suffix:
+				control = candidate
+				break
+			if candidate.name == control_name and control == null:
+				control = candidate
+		print("")
+		if control == null:
+			_fail("%s: its control %s did not run" % [result.name, control_name])
+			continue
+		_print_windows(control, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format)
+		_print_windows(result, result.input_at_s, TECHNIQUE_WINDOWS_S, row_format)
+
+
+## One row per window, in seconds from `from_s`: mean speed, heading rate and
+## front-wheel angle, the radius the speed and rate make, and the peak slip.
+func _print_windows(
+	result: Result, from_s: float, windows: Array[Vector2], row_format: String
+) -> void:
+	for window: Vector2 in windows:
+		var kph: float = 0.0
+		var yaw_dps: float = 0.0
+		var fronts_deg: float = 0.0
+		var slip_deg: float = 0.0
+		var ticks: int = 0
+		for i: int in result.trace_s.size():
+			# Nudged so a tick on an edge, stored as float32, falls on one
+			# side every run: the input's own tick reads as before it.
+			var since_s: float = result.trace_s[i] - from_s - 1e-4
+			if since_s <= window.x or since_s > window.y:
 				continue
-			kph /= ticks
-			yaw_dps /= ticks
-			fronts_deg /= ticks
-			var radius_m: float = (kph / 3.6) / deg_to_rad(yaw_dps) if yaw_dps > 0.0 else INF
-			_printed_rows += 1
-			print(
-				(
-					row_format
-					% [
-						result.name,
-						"%+.2f..%+.2f" % [window.x, window.y],
-						"%.1f" % kph,
-						"%.1f" % yaw_dps,
-						"%.1f" % radius_m,
-						"%.1f" % fronts_deg,
-						"%.1f" % slip_deg,
-					]
-				)
+			kph += result.trace_kph[i]
+			yaw_dps += result.trace_yaw_dps[i]
+			fronts_deg += result.trace_fronts_deg[i]
+			slip_deg = maxf(slip_deg, result.trace_slip_deg[i])
+			ticks += 1
+		if ticks == 0:
+			continue
+		kph /= ticks
+		yaw_dps /= ticks
+		fronts_deg /= ticks
+		var radius_m: float = (kph / 3.6) / deg_to_rad(yaw_dps) if yaw_dps > 0.0 else INF
+		_printed_rows += 1
+		print(
+			(
+				row_format
+				% [
+					result.name,
+					"%+.2f..%+.2f" % [window.x, window.y],
+					"%.1f" % kph,
+					"%.1f" % yaw_dps,
+					"%.1f" % radius_m,
+					"%.1f" % fronts_deg,
+					"%.1f" % slip_deg,
+				]
 			)
+		)
 
 
 ## The `catch` rows: when the wheel went over, the slip then, the swing the

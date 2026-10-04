@@ -5,9 +5,20 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all eleven
+#   --only=drift                     one manoeuvre instead of all fifteen
 #                                    (corner, liftoff, drift, tap, brake, coast,
-#                                    wall, lift, hold, catch, turn). turn is
+#                                    wall, lift, hold, catch, turn, turnin,
+#                                    flick, trailbrake, handbrake).
+#                                    --only=technique runs the three P3-54
+#                                    techniques with their controls, printed
+#                                    in windows from each one's own input
+#                                    under its control (Q153): flick@held /
+#                                    @lift a feint left then in, against
+#                                    corner; handbrake@held / @lift the button
+#                                    0.5 s into corner's turn, against corner;
+#                                    trailbrake the brake into the turn, then
+#                                    the throttle, against turnin, the same
+#                                    with no brake. turn is
 #                                    the street's 90° drift (Q153): the tap,
 #                                    ended at 45° of heading by letting the
 #                                    steering go (off), the throttle too
