@@ -145,6 +145,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   from before that day was read at the centre of mass and does not compare — re-run the before
   side. A band in degrees under the tyre's peak (8°) cuts a gripping corner: `armed_slip_cut_*`
   moved 3–6 → 8–14° for it.
+- 🔴 **The drive is sized on each driven wheel's own rim speed since 2026-10-06** (`Q153`,
+  `_drive_force_at`): the engine's power falls as a wheel spins up. Before, a spinning wheel had
+  more power than the engine, and several dials were set against the spin that fed — the side
+  cut's band (65 → 105 kph), `rev_limiter.overspeed_share` and `slip_power_cut_*` (neither
+  re-swept). A drift row from before that day does not compare.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target

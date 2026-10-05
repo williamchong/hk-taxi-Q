@@ -9073,6 +9073,25 @@ lock. Not sound, owed:
 - **The drive force is power over the car's speed, not the rim's** (`_drive_force_n`), so a
   spinning wheel is handed more power than the engine has, up to the rim limit. Read from the
   code, not measured; `rev_limiter.overspeed_share` 0 calming the tap is consistent with it.
+  **Fixed the same day:** each driven wheel's torque is the engine's envelope at that wheel's own
+  rim speed (`_drive_force_at`, per substep). `corner`, `brake` and `coast` are unmoved and 42 kph
+  barely (the launch force, not the power, is the limit there); the tap fell 19.8 → 13.8° at
+  63 kph and 36.3 → 27.2° at 86, 82.3 → 54.3° at 105 and 160.7 → 144.6° at 125 — the slides were
+  power-fed. At 63 it no longer slid, so the rear side cut's band, which ended at 65 kph to stop
+  that same spin, ends at 105 (`arcade_aids.md` has the sweep). After both, 42 / 63 / 86 kph
+  (before: the rear-axle column above):
+
+  | Row | after |
+  |---|---|
+  | `tap` peak | 43.2 / 26.8 / 27.3° |
+  | `ride` longest | 1.77 / 1.83 / 1.92 s |
+  | `hold` longest | 3.52 / 3.35 / 2.98 s |
+  | `turn@off` came out | 179.5 / 165.1 / 146.9° |
+  | `turn@counter` came out | 76.2 / 62.9 / 66.1° |
+
+  A plain tap starts at every speed and pays at none (`P3-53`'s bar, met for the first time on the
+  real taxi); a countersteered slide pays at all three. Owed: the `turn` rows, still outside
+  80–110°; the tap at 125 kph, which spins; `rev_limiter.overspeed_share`, not re-swept.
 - **`understeer_power_cut` keys on the steering angle**, so a full-key corner runs at half power
   whether or not the car ploughs: `corner` exits at 51.7 / 64.8 kph from 42 / 63 with it and 55.4 /
   74.6 without (under 42 the two cuts compound and one sweep cannot part them).

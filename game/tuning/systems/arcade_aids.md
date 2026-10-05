@@ -10,7 +10,18 @@ The game's own aids, which no real car has, grouped so they are never mistaken f
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
 2026-10-05); their prose keeps the names the dials had when it was written: unchanged; "traction control off" means drift mode engaged.
 
-## `drift_side_cut = 0.6`, `drift_side_cut_from_kph = 42.0`, `drift_side_cut_to_kph = 65.0`
+## `drift_side_cut = 0.6`, `drift_side_cut_from_kph = 42.0`, `drift_side_cut_to_kph = 105.0`
+
+**The band ends at 105 kph since 2026-10-06** (`Q153`), with the drive sized on the rim's speed.
+The band ended at 65 because "0.6 at 63 kph spins the car"; that spin was the engine handing a
+spinning wheel more power than it has. On the engine's real power the tap at 63 kph no longer
+slid at all with the band to 65 (13.8°, under the 14° a slide is). Swept 65 / 85 / 105 / 140 at
+50 / 63 / 75 / 86 kph — tap peak 26.8 / 13.7 / 18.1 / 27.1° at 65, 34.0 / 26.8 / 21.3 / 27.1° at
+105, 36.4 / 31.1 / 27.8 / 27.7° at 140 — and a cut at every speed (`to` 0) against 65 at 105 kph:
+the tap 69.8° against 54.3°, over the 60° bar. So 105: the tap starts at every speed from 30 to
+105 and spins at none of them; `hold` 3.43 / 3.35 / 3.13 / 2.98 s. At 86 kph the band reads the
+same at every end: the handbrake has the rears under what the cut would leave. The slips below
+are the centre of mass's, as read before that day.
 
 The 90° drift (`Q153`, the user's street report of 2026-10-02). The cut caps the rears' sideways
 force at a share of what the turn asks while the button is engaged, so the slide starts inside the

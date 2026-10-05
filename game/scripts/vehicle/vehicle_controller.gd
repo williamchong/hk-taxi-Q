@@ -449,11 +449,18 @@ func _apply_drive() -> void:
 ## is an unauthored profile and leaves the launch force at every speed, as the
 ## car drove before the power limit.
 func _drive_force_n() -> float:
+	return _drive_force_at(absf(speed_kph) / 3.6)
+
+
+## The same envelope at `mps`, for a caller that knows the driven wheels' own
+## speed (`TyreVehicleController`).
+func _drive_force_at(mps: float) -> float:
 	if profile.engine_power_kw <= 0.0 or profile.driveline_efficiency <= 0.0:
 		return profile.engine_force
 	# Floored so a car at rest asks for the launch force, not a division by 0.
-	var mps: float = maxf(absf(speed_kph) / 3.6, 0.1)
-	var powered: float = profile.engine_power_kw * 1000.0 * profile.driveline_efficiency / mps
+	var powered: float = (
+		profile.engine_power_kw * 1000.0 * profile.driveline_efficiency / maxf(mps, 0.1)
+	)
 	return minf(profile.engine_force, powered)
 
 

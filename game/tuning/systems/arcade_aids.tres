@@ -6,7 +6,7 @@
 script = ExtResource("1_table")
 drift_side_cut = 0.6
 drift_side_cut_from_kph = 42.0
-drift_side_cut_to_kph = 65.0
+drift_side_cut_to_kph = 105.0
 flick_window_s = 0.3
 flick_feint_s = 0.2
 flick_min_kph = 30.0

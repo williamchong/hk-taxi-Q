@@ -12,6 +12,10 @@ A real engine's cut-out, here on the driven wheels' rim speed.
 
 ## `overspeed_share = 0.5`
 
+⚠️ Set while the drive was sized on the car's speed, so a rim past the road's speed was handed
+more power than the engine has. Since 2026-10-06 (`Q153`) the drive is sized on the rim's own
+speed and falls as it spins up; this value has not been re-swept on that.
+
 How far past top speed a driven wheel's rim may spin before the drive is stopped, as a share of it
 (`P3-53`, `Q153`). At 0 the limiter sits at 140 kph of rim speed and a countersteered slide at
 86 kph meets it mid-slide: `hold` 1.40 s. At 0.5, `hold` reads 1.93 / 2.63 / 3.17 s at 42 / 63 /

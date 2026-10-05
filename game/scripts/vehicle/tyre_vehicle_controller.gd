@@ -388,6 +388,8 @@ func _apply_tyres(delta: float) -> void:
 	var front_share: float = profile.brake_front_share
 	if front_share <= 0.0:
 		front_share = 0.5
+	# What the parent's drive was sized on: the engine's force at the car's speed.
+	var body_force_n: float = _drive_force_n()
 	var governor: bool = wheelspin_limit > 0.0 and not _drift_mode.engaged
 	var drive_share: float = 1.0
 	if _drift_mode.engaged:
@@ -447,7 +449,13 @@ func _apply_tyres(delta: float) -> void:
 			# first, it cut the drive at every cornering limit and the corner row
 			# scrubbed 15% of its speed.
 			var slip_x: float = (omega * _radius - _along) * _per_slip
+			# The engine turns the wheels, so its power is spent at the rim's
+			# speed, not the car's: sized on the car's alone, a wheel spinning
+			# at three times the road's speed was handed three times the
+			# engine's power, and every slide was fed by it (`Q153`).
 			var torque_nm: float = drive_nm
+			if body_force_n > 0.0 and not is_zero_approx(drive_nm):
+				torque_nm *= _drive_force_at(absf(omega) * _radius) / body_force_n
 			if governed and absf(slip_x) >= wheelspin_limit and signf(drive_nm) == signf(slip_x):
 				torque_nm = 0.0
 			# ABS releases the foot brake on a wheel starting to lock — backward
