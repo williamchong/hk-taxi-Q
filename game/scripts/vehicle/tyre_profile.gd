@@ -87,6 +87,18 @@ const PATH: String = "res://tuning/tyre.tres"
 ## `HandlingProfile.drift_slip_threshold_deg`, the bar the game scores a slide
 ## on. 0 re-arms on the slip alone.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var traction_rearm_s: float
+## The flick (`P3-54`, `Q153`): seconds the steering may spend between the
+## feint's side and the other before the reversal stops counting as one. 0 is
+## no flick — only the drift button stands traction control down. See
+## `FlickWatch` for the whole test.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var flick_window_s: float
+## The flick: seconds the steering must be held to the feint's side first.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var flick_feint_s: float
+## The flick: the slowest a flick counts at.
+@export_range(0.0, 200.0, 1.0, "suffix:kph") var flick_min_kph: float
+## The flick: the share of an input that counts — the steering past it on a
+## side, the throttle under it as lifted.
+@export_range(0.05, 1.0, 0.05) var flick_input_share: float
 ## Share of the forward drive taken off at full lock while traction control is
 ## armed, in proportion to the front wheels' angle over the lock the speed
 ## allows: 0 leaves the drive alone, 1 leaves none at full lock. The drift

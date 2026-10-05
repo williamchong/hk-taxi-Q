@@ -84,9 +84,12 @@ var _slips: PackedFloat32Array = PackedFloat32Array()
 var _spin_angle: PackedFloat32Array = PackedFloat32Array()
 var _engine_angle: PackedFloat32Array = PackedFloat32Array()
 var _visuals: Array[Node3D] = []
-## True from a drift press until the slide is over: traction control stands
-## down for the slide the player asked for. See `traction_rearm_s`.
+## True from a drift press, or a flick, until the slide is over: traction
+## control stands down for the slide the player asked for. See `traction_rearm_s`.
 var _traction_off: bool = false
+## Watches the player's inputs for a flick (`P3-54`), which stands traction
+## control down as the drift button's press does.
+var _flick: FlickWatch = FlickWatch.new()
 ## Seconds since the drift button came up while traction control is off.
 var _released_s: float = 0.0
 ## Whether the player has steered since the drift button's press, so letting
@@ -406,6 +409,7 @@ func place_at(pose: Transform3D) -> void:
 	_since_slide_s = INF
 	_catch_capped = false
 	_assist_yielded = false
+	_flick.reset()
 
 
 func _apply_tyres(delta: float) -> void:
@@ -580,7 +584,15 @@ func _side_cut_at(kph: float) -> float:
 ## the steering go, having steered since the press — ahead of the clock and
 ## the slip bar, because that is the slide's ending handed to the steering key
 ## (`Q153`). The press is also where the side cut is latched.
+##
+## A flick (`FlickWatch`) stands it down too, while it is armed: the reversal
+## is the player asking for the slide, the rear side cut stays the button's,
+## and the same clock, slip bar and steering release bring it back. Never while
+## it is already off, so a countersteer inside a slide cannot stretch the slide.
 func _rearm_traction(delta: float) -> void:
+	var flicked: bool = _flick.step(
+		steer_input, throttle_input, brake_input, speed_kph, delta, tyre
+	)
 	if drift_input:
 		if not _traction_off or _released_s > 0.0:
 			_slide_steered = false
@@ -588,6 +600,11 @@ func _rearm_traction(delta: float) -> void:
 		_slide_steered = _slide_steered or not is_zero_approx(steer_input)
 		_traction_off = true
 		_released_s = 0.0
+		return
+	if flicked and not _traction_off:
+		_traction_off = true
+		_released_s = 0.0
+		_slide_steered = true
 		return
 	if not _traction_off:
 		return

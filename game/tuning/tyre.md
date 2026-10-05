@@ -125,6 +125,36 @@ slide over (`hold` at 63 kph 0.00 s). At 1.0 a player's own input — the tap, t
 throttle held (`ride`) — slid 0 s at 42 kph, because the governor came back and cut the power the
 slow slide needed; at 2.0 it slides 1.85 s. 3.0 reads the same as 2.0.
 
+## `flick_window_s = 0.3`, `flick_feint_s = 0.2`, `flick_min_kph = 30.0`, `flick_input_share = 0.5`
+
+The flick (`P3-54`, `Q153`), read by `FlickWatch`: the steering held past `flick_input_share` to
+one side for `flick_feint_s` with the throttle under that share or the brake touched at some point
+of it, then past the share on the other side within `flick_window_s` of leaving the first, at
+`flick_min_kph` or faster. On that tick traction control stands down as the drift button's press
+does, and comes back the same ways (the steering let go, or `traction_rearm_s` and the slip under
+the bar); it never fires while traction control is already off. `flick_window_s` 0 is no flick.
+
+Why traction control and not a dial: nine levers swept on the pad (`Q153`) — every one that let
+the rear go on a flick (traction control off, a raised centre of mass, a lower `mu`) let it go on a
+plain corner too, and none that spared the corner freed the flick. A plain corner never reverses
+the steering, so a trigger on the reversal leaves it alone by construction. The lift or the brake
+is required because the real flick has one (`Q153`'s research) and because a held-throttle slalom
+must stay a grip manoeuvre.
+
+The values are first choices, set before the pad and not swept: 0.2 s is under the pad's 0.35 s
+feint and well over a key's bounce; 0.3 s covers a keyboard's instant switch and a touch thumb
+crossing the centre; 30 kph is the button's own start floor (`Q153`: the tap slides from 30); 0.5
+is half an analogue input, the whole of a key. Graded 2026-10-05, `--sweep=flick_window_s=0,0.3`,
+peak slip after the turn-in, assist off / on (without the flick in brackets); every other row on
+the pad — `corner`, `liftoff`, `tap`, `turn`, `hold`, `ride`, `catch`, the walls, the handbrake and
+the trail-brake — byte-identical between 0 and 0.3, in both modes:
+
+| entry kph | `flick@lift` | `flick@brake` | `flick@held` |
+|---|---|---|---|
+| 42 | 34.4 / 38.8° (7.8 without) | no fire: the brake takes it under 30 kph | no fire, by design |
+| 63 | 32.7 / 39.3° (5.0) | 33.9 / 39.5° (5.5) | no fire |
+| 86 | 31.1 / 38.4° (1.3) | 33.5 / 39.7° (3.3) | no fire |
+
 ## `turn_drive_cut = 0.5`
 
 The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,

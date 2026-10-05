@@ -72,6 +72,7 @@ const EMOTE_SCRIPT := "res://scripts/vehicle/passenger_emote.gd"
 const TYRE_SCRIPT := "res://scripts/vehicle/tyre_vehicle_controller.gd"
 const MARKS_SCRIPT := "res://scripts/vehicle/skid_marks.gd"
 const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
+const FLICK_SCRIPT := "res://scripts/vehicle/flick_watch.gd"
 const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
@@ -205,6 +206,57 @@ func _check_the_assist_yields_to_a_countersteer(car: Node3D) -> void:
 			_problem("the assist %s on %s" % ["stepped in" if tick[2] else "stood aside", tick[3]])
 	if _failed == before:
 		print("  ok    the drift assist stands aside from a countersteer until the slide is over")
+
+
+## The flick (`P3-54`), driven without a car at 60 Hz on the shipped table: a
+## lifted or braked feint and the reversal fire on the tick the steering
+## arrives, once; a held throttle, a feint under `flick_feint_s`, a pause past
+## `flick_window_s`, a speed under `flick_min_kph` and a plain corner never do;
+## and a zero `flick_window_s` turns it off. Each from the side that would read
+## wrong.
+func _check_the_flick_is_read_off_the_inputs() -> void:
+	var before: int = _failed
+	var table := load(TYRE_PROFILE_PATH) as Resource
+	var watch_script := load(FLICK_SCRIPT) as GDScript
+	if table == null or watch_script == null:
+		_problem("%s or %s did not load" % [TYRE_PROFILE_PATH, FLICK_SCRIPT])
+		return
+	var delta: float = 1.0 / 60.0
+	var feint: float = table.get("flick_feint_s") + 0.05
+	var window: float = table.get("flick_window_s")
+	var slow: float = table.get("flick_min_kph") - 1.0
+	var off := table.duplicate() as Resource
+	off.set("flick_window_s", 0.0)
+	# Each: a list of [steer, throttle, brake, seconds] legs, the speed, the
+	# table, how many ticks may fire, and what the case is.
+	var cases: Array[Array] = [
+		[[[-1.0, 0.0, 0.0, feint], [1.0, 1.0, 0.0, 0.5]], 63.0, table, 1, "a lifted flick"],
+		[[[-1.0, 0.0, 1.0, feint], [1.0, 1.0, 0.0, 0.5]], 63.0, table, 1, "a braked flick"],
+		[[[-1.0, 1.0, 0.0, feint], [1.0, 1.0, 0.0, 0.5]], 63.0, table, 0, "a held throttle"],
+		[[[-1.0, 0.0, 0.0, 0.05], [1.0, 1.0, 0.0, 0.5]], 63.0, table, 0, "a feint too short"],
+		[
+			[[-1.0, 0.0, 0.0, feint], [0.0, 1.0, 0.0, window + 0.1], [1.0, 1.0, 0.0, 0.5]],
+			63.0,
+			table,
+			0,
+			"a pause past the window"
+		],
+		[[[-1.0, 0.0, 0.0, feint], [1.0, 1.0, 0.0, 0.5]], slow, table, 0, "a flick too slow"],
+		[[[1.0, 0.0, 0.0, 3.0]], 63.0, table, 0, "a plain lifted corner"],
+		[[[-1.0, 0.0, 0.0, feint], [1.0, 1.0, 0.0, 0.5]], 63.0, off, 0, "a zero window"],
+	]
+	for case: Array in cases:
+		var watch: RefCounted = watch_script.new()
+		var fired: int = 0
+		for leg: Array in case[0]:
+			var ticks: int = roundi(float(leg[3]) / delta)
+			for _tick: int in ticks:
+				if watch.step(leg[0], leg[1], leg[2], case[1], delta, case[2]):
+					fired += 1
+		if fired != case[3]:
+			_problem("the flick fired %d times on %s, not %d" % [fired, case[4], case[3]])
+	if _failed == before:
+		print("  ok    the flick fires on a lifted or braked reversal, and on nothing else")
 
 
 ## The tyre marks' strip (`P3-57`), driven without a car: a wheel under the bar
@@ -409,6 +461,7 @@ func _run() -> void:
 	_check_the_passenger_can_make_a_face(car)
 	_check_the_car_runs_its_tyre_model(car)
 	_check_the_assist_yields_to_a_countersteer(car)
+	_check_the_flick_is_read_off_the_inputs()
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
