@@ -118,6 +118,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
   instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
   live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
+- ⚠️ **A flick stands traction control down like the button** (`FlickWatch`, `flick_*` in
+  `tyre.tres`, `P3-54`): a lifted or braked feint, then the steering across within
+  `flick_window_s`. Grade a change to it with `--sweep=flick_window_s=0,<v>` on the full pad —
+  0 is the car without it, so every row but the flick's must read the same at both values. 🔴
+  Anything that adds a steering reversal with the throttle lifted to a pad row (a new driver, a
+  lifted catch) now reaches it, unless traction control is already off there — it never fires
+  then. `--catch-lift` was not run in the round that built it.
 - ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
   ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
   the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is

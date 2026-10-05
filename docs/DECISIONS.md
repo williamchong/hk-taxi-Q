@@ -8736,6 +8736,35 @@ What the rows say:
   guarded by `corner`, `liftoff`, `tap`, `turn`, `hold` and `ride` in both modes. (b) a yaw torque
   on the reversal, the assist's (Forza keeps its steering help behind the setting). (c) a
   `flick@brake` row first, so the fair technique is on the pad before a trigger is shaped to it.
+
+**The flick trigger, (a) — built (same day, the user's pick).** `FlickWatch` reads the player's
+inputs: the steering held to one side for `flick_feint_s` 0.2 s with the throttle lifted or the
+brake touched during it, then across to the other side within `flick_window_s` 0.3 s, at
+`flick_min_kph` 30 or faster. On that tick traction control stands down as the button's press
+does (no rear side cut — that stays the button's), and the button's own re-arm ends it; never
+while traction control is already off. `flick_window_s` 0 turns it off. `flick@brake` joined the
+pad first (c): the feint with the brake held, the throttle on at the turn-in. Graded with
+`--sweep=flick_window_s=0,0.3`, full pad, 42 / 63 / 86 kph, assist off and on, the 63 kph pair
+repeated byte-identical: every printed line pairs between 0 and 0.3 and reads the same in every
+cell but the windows of `flick@lift` and `flick@brake` (and at 42 kph `flick@lift`'s alone). Peak slip from the turn-in, assist off / on:
+
+| Bar | 42 kph | 63 kph | 86 kph | Verdict |
+|---|---|---|---|---|
+| `flick@lift` over 14° and `corner`'s | 34.4 / 38.8° (recorded) | 32.7 / 39.3° | 31.1 / 38.4° | **pass** |
+| `flick@brake` over 14° | no fire: under 30 kph by the reversal | 33.9 / 39.5° | 33.5 / 39.7° | **pass** |
+| `flick@held` | no fire | no fire | no fire | by design: no lift, a slalom |
+| No row spins (under 60°) | ≤ 38.8° | ≤ 39.5° | ≤ 39.7° | **pass** |
+| `corner`, `liftoff`, `tap`, `turn`, `hold`, `ride`, `catch` | identical | identical | identical | untouched |
+
+The slide arrives after the turn-in, not on it: 5–13° in `+0.50..+1.00`, 31–40° by `+1.00..+2.00`
+— the throttle back on with traction control down is power oversteer, which is the slide a driver
+asks for with the lift. `flick@held`'s bar from the first round is withdrawn rather than met: a
+held throttle through the feint is a slalom, and firing on it would put a slide into every quick
+lane change. `verify_vehicle` drives `FlickWatch` without a car — a lifted and a braked flick fire
+once; a held throttle, a short feint, a pause past the window, a speed under the floor, a plain
+lifted corner and a zero window never — four mutations caught (the lift, the floor, the feint, the
+off switch). Owed: the user's drive (a keyboard flick on the street, and whether a quick lane change
+with the throttle lifted now slides — the trigger's one false positive by construction).
 - **The trail-brake rotates at every speed, and at 42 kph also ploughs.** The slip rises over
   `turnin`'s everywhere, but at 42 kph the turn rate falls: a keyboard's full brake on fronts
   already near their peak (33.0 kph mean in the window against `turnin`'s 38.8). Above it the car
