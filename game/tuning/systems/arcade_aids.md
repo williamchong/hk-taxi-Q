@@ -52,6 +52,26 @@ the trail-brake — byte-identical between 0 and 0.3, in both modes:
 | 63 | 32.7 / 39.3° (5.0) | 33.9 / 39.5° (5.5) | no fire |
 | 86 | 31.1 / 38.4° (1.3) | 33.5 / 39.7° (3.3) | no fire |
 
+## `drive_boost = 0.5`, `steer_to_grip = 1.0`
+
+**Both since 2026-10-06, on the user's drive** ("i cant even throttle and turn at 50kph, it just
+slide out", then "we need faster acceleration"). Measured on the pad, the full-throttle full-lock
+`corner` at 50 kph: the speed-narrowed lock put the fronts at 22.9° on a road tyre that peaks at 8°
+of slip — front tyres at 2.54× their grip, the car ploughing wide at 24 m and shedding speed, with
+the marks and smoke of a slide. `steer_to_grip` 1.0 caps full input at the angle the tyres can use
+(16° at 50 kph, 11° at 80): front use 1.64, the car holding 54 kph on the same radius — the radius
+is the road tyre's (about v² ÷ g), which no steering changes. Swept 0.8 / 1.0 / 1.2: 0.8 put the
+plain tap at 42 kph to 102°. **Lifted while drift mode is engaged** (the user's question of what
+the cap does to a drift's start): capped through the press, the tap at 42 kph read 83–85° where it
+reads 69° without the aid; lifted, every drift row is the aid-off row's to a tenth.
+
+`drive_boost` 0.5, the user's pick from 0 / 0.25 / 0.5 / 1.0 (0–100 kph ≈ 10 / 7.9 / 7.1 / 6.1 s;
+69 kph after 4 s and 109 after 8 at 0.5, against 57 / 89). The launch is the rear tyres' grip
+under traction control, so past 0.25 the first seconds barely move. Unfaded it spun every tap
+(162°) and put the rears at 1.54× their grip in the 42 kph corner; so it is **off in drift mode**
+and **fades with the steering**, whole straight and gone at full lock. Faded: the corner's rears at
+0.65 / 0.66 / 0.72 / 0.88× at 42 / 50 / 63 / 86 kph, every drift row as without it.
+
 ## `slide_lock_deg` — absent, 0.0
 
 The lock the player has on the countersteer side while the car slides past the tyre's peak, where

@@ -68,8 +68,16 @@ const PATH: String = "res://tuning/handling.tres"
 ## stops the car within 2% of the engine-tyre car's stop (`Q152`). **47 since
 ## 2026-10-05**: the same stop on the 1,400 kg real taxi (8.62 m/s² from 63 kph,
 ## 2.00 s; 40 gave 7.45), because a real car's brakes are sized to its weight
-## (`Q153`). The 40 → 8.75 line above is the 1,200 kg car's.
+## (`Q153`). The 40 → 8.75 line above is the 1,200 kg car's. **70 since
+## 2026-10-06**, with 65% of it on the front (`brake_front_share`) and ABS
+## holding the tyres at their limit (`AntiLockBrakesProfile`): 9.3 m/s² from 63
+## kph; at 47 the brake itself was the limit, not the tyre.
 @export_range(0.0, 5000.0, 10.0) var brake_force: float
+## The share of the brake on the front axle, as a real car's brake bias — the
+## weight moves forward under braking, so the front tyres can carry more of it.
+## Spread over the axle's wheels; the total is `brake_force`'s. 0 is unauthored
+## and brakes all four wheels alike, as the car did before the bias (`Q153`).
+@export_range(0.0, 1.0, 0.01) var brake_front_share: float
 
 @export_group("Steering")
 ## Steering angle at standstill.

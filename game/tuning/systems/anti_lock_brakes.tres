@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="AntiLockBrakesProfile" format=3 uid="uid://dxpx52il4a36i"]
+
+[ext_resource type="Script" uid="uid://bjya67cdxlp3f" path="res://scripts/vehicle/systems/anti_lock_brakes_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+slip_limit = 1.0

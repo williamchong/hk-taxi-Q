@@ -53,6 +53,13 @@ const SOLVE_ITERATIONS: int = 12
 ## Normal-to-ray alignment under which Godot stops trusting the contact and
 ## pins its damper — `vehicle_body_3d.cpp`'s own -0.1, restated for `_load_n`.
 const CONTACT_DOT_FLOOR: float = -0.1
+## Body slip past which the car is travelling backwards, not sliding: stability
+## control's slip cuts stand aside there, so the throttle drives the wheels and
+## brakes the backward roll as a real car's does. Cut at every slip, a car spun
+## round in drift mode had no drive at all and rolled backwards at 10–30 kph
+## with the throttle held (the user's report, 2026-10-06). A geometric fact —
+## 90° is the travel crossing the axle — not a dial.
+const REVERSED_SLIP_DEG: float = 90.0
 
 @export var tyre: TyreProfile
 @export var traction_control: TractionControlProfile
@@ -62,6 +69,7 @@ const CONTACT_DOT_FLOOR: float = -0.1
 @export var handbrake: HandbrakeProfile
 @export var rev_limiter: RevLimiterProfile
 @export var arcade_aids: ArcadeAidsProfile
+@export var anti_lock_brakes: AntiLockBrakesProfile
 ## The player's drift assist (`P3-56`, `Q153`): the countersteer assist and its
 ## drive fade on. Set by `DriveHarness` from `Settings.drift_assist()`; false
 ## here, so a pad grades today's car unless `--assist=on` asks otherwise.
@@ -102,6 +110,10 @@ var _drive_n: float = 0.0
 ## Each driven wheel's share of `_drive_n`, from the wheels marked
 ## `use_as_traction`.
 var _traction_share: float = 0.0
+## The wheelbase off the wheels' own hardpoints, and gravity as this body feels
+## it, for `_grip_lock_rad`.
+var _wheelbase_m: float = 0.0
+var _gravity_mps2: float = 0.0
 var _brake_dial: float = 0.0
 ## Microseconds spent in `_apply_tyres` and the ticks that spent them, for the
 ## skidpad's cost column.
@@ -147,11 +159,21 @@ func _ready() -> void:
 	# `engine_force` is the car's whole drive, split across its driven wheels
 	# as the engine split it (`HandlingProfile.engine_force`).
 	_traction_share = 1.0 / float(maxi(driven, 1))
+	_wheelbase_m = absf(_axle_z(_front) - _axle_z(_rear))
+	_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity")) * gravity_scale
 	_omega.resize(_wheels.size())
 	_loads.resize(_wheels.size())
 	_slips.resize(_wheels.size())
 	_spin_angle.resize(_wheels.size())
 	_engine_angle.resize(_wheels.size())
+
+
+## The mean of `wheels`' authored positions along the car.
+func _axle_z(wheels: Array[VehicleWheel3D]) -> float:
+	var sum: float = 0.0
+	for wheel: VehicleWheel3D in wheels:
+		sum += wheel.position.z
+	return sum / float(maxi(wheels.size(), 1))
 
 
 ## Whether `table` can run the model. `side_force_depth` may legally be 0 —
@@ -187,6 +209,7 @@ func _systems_assigned() -> bool:
 		handbrake,
 		rev_limiter,
 		arcade_aids,
+		anti_lock_brakes,
 	]
 	if tables.has(null):
 		push_error("TyreVehicleController: a system's table is unassigned; the car does not drive.")
@@ -270,7 +293,15 @@ func catch_capped() -> bool:
 ## for (`Q72`).
 func _steer_lock_rad(speed_ratio: float) -> float:
 	var lock: float = super._steer_lock_rad(speed_ratio)
-	if arcade_aids.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
+	if _slide_beyond_peak_rad() <= 0.0:
+		# Not sliding: the lock the tyres can use (`steer_to_grip`), if it is
+		# under the table's — but never once drift mode is engaged: the button or
+		# a flick is the player asking for rotation, and a capped turn-in changed
+		# how the slide starts (the plain tap at 42 kph 69° → 83°).
+		if arcade_aids.steer_to_grip > 0.0 and not _drift_mode.engaged:
+			lock = minf(lock, arcade_aids.steer_to_grip * _grip_lock_rad())
+		return lock
+	if arcade_aids.slide_lock_deg <= 0.0:
 		return lock
 	# `steer_input` is +1 for right, and the parent negates it into Godot's
 	# positive-left angle; `_slide_toward` is in the angle's sign, so the
@@ -278,6 +309,16 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 	if -steer_input * _slide_toward() <= 0.0:
 		return lock
 	return maxf(lock, deg_to_rad(arcade_aids.slide_lock_deg))
+
+
+## The front wheels' angle that holds the tyres' grip in a steady turn at this
+## speed: the turn's own angle for `mu × g` of sideways pull on this wheelbase,
+## plus the tyre's peak slip angle. Under the tyre's low-speed floor the speed
+## is held at it, so a car at rest asks for no infinite angle.
+func _grip_lock_rad() -> float:
+	var mps: float = maxf(absf(speed_kph) / 3.6, tyre.low_speed_mps)
+	var turn: float = atan(_wheelbase_m * tyre.mu * _gravity_mps2 / (mps * mps))
+	return turn + deg_to_rad(tyre.peak_slip_angle_deg)
 
 
 ## How far the body's slip is past the tyre's peak, in radians, or 0 when it
@@ -306,7 +347,17 @@ func _slide_toward() -> float:
 func _apply_drive() -> void:
 	super._apply_drive()
 	# The parent writes `DRIVE_SIGN × force`, so the product is forward-positive.
-	_drive_n = engine_force * DRIVE_SIGN
+	# The arcade aid's boost goes on top of the real car's drive on the road,
+	# not in a slide the player asked for (drift mode as of last tick): there
+	# the real car's power is what the drift was tuned on, and the boost spun
+	# every tap (162°).
+	# It fades with the front wheels' angle over the lock, whole straight and
+	# gone at full lock: at 0.5 a full-throttle corner put the rears at 1.5×
+	# their grip at 42 kph, which stability control alone could not hold.
+	var boost: float = 0.0 if _drift_mode.engaged else arcade_aids.drive_boost
+	if boost > 0.0:
+		boost *= 1.0 - _steer_share()
+	_drive_n = engine_force * DRIVE_SIGN * (1.0 + boost)
 	_brake_dial = brake
 	engine_force = 0.0
 	brake = 0.0
@@ -364,12 +415,17 @@ func _apply_tyres(delta: float) -> void:
 		# it did would feed itself (`Q89`).
 		_side_cut = _side_cut_at(absf(speed_kph))
 	var wheelspin_limit: float = traction_control.wheelspin_limit
+	var lock_limit: float = anti_lock_brakes.slip_limit
+	# Each axle's share of the foot brake, so the four wheels sum to the dial.
+	var front_share: float = profile.brake_front_share
+	if front_share <= 0.0:
+		front_share = 0.5
 	var governor: bool = wheelspin_limit > 0.0 and not _drift_mode.engaged
 	var drive_share: float = 1.0
 	if _drift_mode.engaged:
 		drive_share = _slide_drive_share()
 	elif governor:
-		drive_share = _turn_drive_share()
+		drive_share = _turn_drive_share() * _armed_slip_share()
 	for i: int in _wheels.size():
 		var wheel: VehicleWheel3D = _wheels[i]
 		_radius = wheel.wheel_radius
@@ -380,9 +436,15 @@ func _apply_tyres(delta: float) -> void:
 		# spinning tyre must not run the wheel past top speed either.
 		if absf(_omega[i]) * _radius >= rim_limit_mps and signf(drive_nm) == signf(_omega[i]):
 			drive_nm = 0.0
-		var hold_nm: float = brake_nm * _radius
+		# The axle's share of all four wheels' brake, over that axle's wheels.
+		var on_front: bool = i < _front.size()
+		var axle_share: float = front_share if on_front else 1.0 - front_share
+		var axle_wheels: int = _front.size() if on_front else _rear.size()
+		var foot_nm: float = brake_nm * _radius * axle_share * _wheels.size() / axle_wheels
+		var hand_nm: float = 0.0
 		if drift_input and i >= _front.size():
-			hold_nm += handbrake.torque_nm
+			hand_nm = handbrake.torque_nm
+		var hold_nm: float = foot_nm + hand_nm
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
 			_loads[i] = 0.0
@@ -420,7 +482,12 @@ func _apply_tyres(delta: float) -> void:
 			var torque_nm: float = drive_nm
 			if governed and absf(slip_x) >= wheelspin_limit and signf(drive_nm) == signf(slip_x):
 				torque_nm = 0.0
-			omega = _solve_spin(omega, torque_nm, hold_nm, step, at_rest)
+			# ABS releases the foot brake on a wheel starting to lock — backward
+			# slip past its limit — and never the handbrake.
+			var held_nm: float = hold_nm
+			if lock_limit > 0.0 and foot_nm > 0.0 and slip_x <= -lock_limit:
+				held_nm = hand_nm
+			omega = _solve_spin(omega, torque_nm, held_nm, step, at_rest)
 			sum += _solved
 		_omega[i] = omega
 		_slips[i] = Vector2((omega * _radius - _along) * _per_slip, _slip_y).length()
@@ -468,10 +535,17 @@ func _apply_tyres(delta: float) -> void:
 func _turn_drive_share() -> float:
 	if stability_control.understeer_power_cut <= 0.0 or _drive_n <= 0.0:
 		return 1.0
+	return 1.0 - stability_control.understeer_power_cut * _steer_share()
+
+
+## The front wheels' angle over the lock the speed allows, 0 straight to 1 at
+## full lock: what the understeer cut and the drive boost fade on. Read off the
+## wheels' own angle, so the catch cap and the rate limit count.
+func _steer_share() -> float:
 	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0))
 	if lock <= 0.0:
-		return 1.0
-	return 1.0 - stability_control.understeer_power_cut * minf(absf(steering) / lock, 1.0)
+		return 0.0
+	return minf(absf(steering) / lock, 1.0)
 
 
 ## Stability control's slip cut: the share of the forward drive left while
@@ -488,11 +562,29 @@ func _slide_drive_share() -> float:
 	var from: float = cut.slip_power_cut_from_deg
 	if drift_assist and cut.assisted_slip_cut_from_deg > 0.0:
 		from = cut.assisted_slip_cut_from_deg
-	if cut.slip_power_cut_to_deg <= from or _drive_n <= 0.0:
+	return _slip_cut_share(from, cut.slip_power_cut_to_deg)
+
+
+## Stability control's slip cut on the road: the share of the forward drive
+## left while drift mode is off — 1 under `armed_slip_cut_from_deg` of body
+## slip, none at `armed_slip_cut_to_deg` — so a tail stepping out under power is
+## caught as a real ESC catches it. Forward drive only.
+func _armed_slip_share() -> float:
+	var cut: StabilityControlProfile = stability_control
+	return _slip_cut_share(cut.armed_slip_cut_from_deg, cut.armed_slip_cut_to_deg)
+
+
+## The forward drive left by a slip cut over `from`–`to` degrees of body slip:
+## 1 under `from`, none at `to`. 1 when the band is not authored (`to` not over
+## `from`), on reverse drive, and past `REVERSED_SLIP_DEG`, where the car is
+## travelling backwards and the throttle must brake the roll.
+func _slip_cut_share(from: float, to: float) -> float:
+	if to <= from or _drive_n <= 0.0:
 		return 1.0
 	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
-	var over: float = inverse_lerp(from, cut.slip_power_cut_to_deg, slip)
-	return 1.0 - clampf(over, 0.0, 1.0)
+	if slip > REVERSED_SLIP_DEG:
+		return 1.0
+	return 1.0 - clampf(inverse_lerp(from, to, slip), 0.0, 1.0)
 
 
 ## The rear side cut (an arcade aid) for a press at `kph`: `drift_side_cut` up to

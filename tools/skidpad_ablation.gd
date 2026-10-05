@@ -234,6 +234,7 @@ const SYSTEM_TABLES: PackedStringArray = [
 	"handbrake",
 	"rev_limiter",
 	"arcade_aids",
+	"anti_lock_brakes",
 ]
 const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", "gravity_scale"]
 

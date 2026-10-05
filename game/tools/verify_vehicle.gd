@@ -91,6 +91,7 @@ const SYSTEM_PATHS: Dictionary[String, String] = {
 	"handbrake": "res://tuning/systems/handbrake.tres",
 	"rev_limiter": "res://tuning/systems/rev_limiter.tres",
 	"arcade_aids": "res://tuning/systems/arcade_aids.tres",
+	"anti_lock_brakes": "res://tuning/systems/anti_lock_brakes.tres",
 }
 const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
 const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"

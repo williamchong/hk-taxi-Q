@@ -18,6 +18,13 @@ extends Resource
 ## `from`.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var slip_power_cut_from_deg: float
 @export_range(0.0, 90.0, 1.0, "suffix:°") var slip_power_cut_to_deg: float
+## The body slip over which the forward drive fades out on the road — drift
+## mode off — as a real ESC catches a tail stepping out under power: whole at
+## `armed_slip_cut_from_deg`, gone at `armed_slip_cut_to_deg`. The game's pace
+## boost (`ArcadeAidsProfile.drive_boost`) put the rears past their grip in a
+## full-throttle corner at 42–50 kph. Inert while `to` is not over `from`.
+@export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_from_deg: float
+@export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_to_deg: float
 ## Where the slip cut starts while the player's drift assist is on, in place of
 ## `slip_power_cut_from_deg`: the assisted slide runs wider at 86 kph, and the
 ## plain band cut its drive before `drift_min_s`. 0 keeps the plain band.

@@ -7,4 +7,6 @@ script = ExtResource("1_table")
 understeer_power_cut = 0.5
 slip_power_cut_from_deg = 10.0
 slip_power_cut_to_deg = 40.0
+armed_slip_cut_from_deg = 3.0
+armed_slip_cut_to_deg = 6.0
 assisted_slip_cut_from_deg = 35.0

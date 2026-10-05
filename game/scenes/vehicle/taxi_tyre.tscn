@@ -14,6 +14,7 @@
 [ext_resource type="Resource" uid="uid://mdkjfry40ntq" path="res://tuning/systems/handbrake.tres" id="12_handbrake"]
 [ext_resource type="Resource" uid="uid://d0wj2fg02maff" path="res://tuning/systems/rev_limiter.tres" id="13_rev_limiter"]
 [ext_resource type="Resource" uid="uid://bqrixp53ql6qs" path="res://tuning/systems/arcade_aids.tres" id="14_arcade_aids"]
+[ext_resource type="Resource" uid="uid://dxpx52il4a36i" path="res://tuning/systems/anti_lock_brakes.tres" id="15_anti_lock_brakes"]
 
 [node name="Taxi" instance=ExtResource("1_taxi")]
 script = ExtResource("2_ctrl")
@@ -25,6 +26,7 @@ countersteer_assist = ExtResource("11_countersteer_assist")
 handbrake = ExtResource("12_handbrake")
 rev_limiter = ExtResource("13_rev_limiter")
 arcade_aids = ExtResource("14_arcade_aids")
+anti_lock_brakes = ExtResource("15_anti_lock_brakes")
 
 [node name="SkidMarks" type="Node3D" parent="." unique_id=380330789]
 script = ExtResource("4_marks")

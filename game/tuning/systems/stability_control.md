@@ -52,6 +52,17 @@ held throttle cannot spin the car (`Q153`, the user's street report). A plain he
 is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
 (`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
 
+## `armed_slip_cut_from_deg = 3.0`, `armed_slip_cut_to_deg = 6.0`
+
+**Since 2026-10-06**: the road's ESC, drift mode off — power cut as the tail steps out, as a real
+car's catches power oversteer. Built for the drive boost; swept to 6 / 8 / 12° with the boost
+unfaded, 6° held the most (the 42 kph corner's rears 1.54 → 1.35× their grip) but not enough alone,
+which the boost's steering fade finished (`arcade_aids.md`). It also brings the let-go `turn` in
+(194 / 199 / 214 / 176° → 183 / 184 / 173 / 161° at 42 / 50 / 63 / 86 kph). Both slip cuts stand
+aside past 90° of slip (`REVERSED_SLIP_DEG`): a car rolling backwards after a spin had no drive at
+all and rolled at 10–30 kph with the throttle held (the user's report, 2026-10-06; the 50 kph
+assisted tap's exit −9.0 → +2.6 kph).
+
 ## `assisted_slip_cut_from_deg = 35.0`
 
 Where the slide's drive fade starts while the drift assist is on, in place of
