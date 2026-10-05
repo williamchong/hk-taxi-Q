@@ -25,7 +25,25 @@ the arc stops widening and the pull-away is the shipped car's; 0 turns it off. �
 `liftoff`'s windows across entries and on the 10 kph pull-away, never on `hold` or `ride`, which
 cannot see it.
 
-## `slip_power_cut_from_deg = 25.0`, `slip_power_cut_to_deg = 40.0`
+## `slip_power_cut_from_deg = 10.0`, `slip_power_cut_to_deg = 40.0`
+
+**From 10° since 2026-10-05** (the user's "tune the aids so the plain tap stops spinning"): on the
+real taxi's power (`Q153`, 6,000 N off the line, 83 kW above) a plain tap with the assist off
+spun at 42 and 86 kph. Swept one lever at a time at three speeds: the cut's start was the only
+lever that reached 42 kph (10 / 15 / 20° → tap 67.7 / 110.4 / 163.4° there) — `drift_side_cut`
+0.3 / 0.45, `rev_limiter.overspeed_share` 0 / 0.25 and the handbrake left it at 163° — so the
+spin there is power feeding the slide, not the rear's grip. The end stays at 40°: 20 / 25 / 30°
+collapse `hold` at 42 kph (0.68 / 0.78 / 0.92 s) and leave 86 kph at 75–81°. The handbrake
+(`handbrake.md`) finished 86 kph. The assisted mode starts at its own 35° and is not moved.
+
+| 42 / 63 / 86 kph, assist off | before | cut from 10° | + handbrake 1,150 |
+|---|---|---|---|
+| `tap` peak | 163.3 / 64.5 / 162.9° | 67.7 / 29.8 / 87.6° | 69.2 / 23.6 / 37.3° |
+| `hold` longest | 3.30 / 3.12 / 2.93 s | 2.07 / 3.12 / 2.88 s | 2.08 / 2.82 / 2.98 s |
+| `ride` longest | 3.30 / 2.35 / 3.47 s | 1.47 / 1.95 / 2.77 s | 1.50 / 2.82 / 2.30 s |
+| `turn@counter` came out | 178.2 / 154.8 / 138.6° | 109.8 / 67.6 / 133.7° | 117.8 / 61.1 / 120.6° |
+
+The section below is the band as first set, at 25°.
 
 The forward drive fades out over this band of body slip while traction control is disarmed, so a
 held throttle cannot spin the car (`Q153`, the user's street report). A plain held tap peaked 30.7 /

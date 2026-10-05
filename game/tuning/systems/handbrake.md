@@ -10,7 +10,15 @@ The drift button's handbrake: a torque on each rear wheel, as a real car's.
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
 2026-10-05); their prose keeps the names the dials had when it was written: `handbrake_torque_nm` → `torque_nm`.
 
-## `torque_nm = 1275.0`
+## `torque_nm = 1150.0`
+
+**1,150 since 2026-10-05**, with stability control's slip cut from 10° (`stability_control.md`
+has the table): about 1.08 × the rear wheels' lock on the real taxi (≈ 1,060 N·m), so the button
+still locks them. Swept 1,000 / 1,150 with the cut from 10°: the tap at 86 kph 21.1 / 37.3°
+(87.6° at 1,275), 63 kph 20.0 / 23.6°, 42 kph unmoved (70.9 / 69.2°); 1,000 drops the
+countersteered `turn` at 86 to 54° and the tap's slide under a start at 63 / 86, so 1,150.
+
+The section below is the value as first set, at 1,275.
 
 About 1.2 × the rear wheels' lock on the real taxi (`Q153`): 1,400 kg at `gravity_scale` 1.0 on
 0.31 m wheels, capacity ≈ 3,430 N × 0.31 m ≈ 1,060 N⋅m per wheel. It was 1,250 on the 1,200 kg car

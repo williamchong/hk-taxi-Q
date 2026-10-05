@@ -8983,6 +8983,20 @@ Comfort Hybrid a separate car later).** The constant 3,840 N took the 1,400 kg c
   speed. The real car stays; the fix is the gameplay layer (traction control, the slide's drive
   fade, the side cut), the user's "improve for gameplay later".
 
+**The plain tap stops spinning (the user's ask, 2026-10-05, after `Q155` split the aids).** On
+the real taxi's power a plain tap with the assist off spun at 42 and 86 kph (163°). Swept on the
+system tables one lever at a time at three speeds: `stability_control.slip_power_cut_from_deg`
+25 → 10° was the only lever reaching 42 kph (the spin there is power, not grip; the side cut, the
+rev limiter and the handbrake left it at 163°), and `handbrake.torque_nm` 1,275 → 1,150 (≈ 1.08 ×
+the lock) finished 86 kph. Assist off, 42 / 63 / 86 kph: tap 69.2 / 23.6 / 37.3° (was 163.3 /
+64.5 / 162.9), `hold` 2.08 / 2.82 / 2.98 s, `ride` 1.50 / 2.82 / 2.30 s, the countersteered
+`turn` 117.8 / 61.1 / 120.6°; brake and coast identical. Assist on: tap 84.1 / 70.0 / 62.5°
+(73.8 / 75.7 / 76.8), `hold` 3.32 / 2.82 / 3.05 s. Tables in `systems/stability_control.md`.
+**Still open:** a plain tap pays at 63 / 86 kph (`ride` over `drift_min_s`), which `P3-53`'s bar
+refuses; the countersteered `turn` misses 80–110° at every speed; handbrake-and-lift spins at
+42 / 86 kph (162.8 / 161.3°, recorded before as a big input) and the lifted flick at 42 with the
+assist on (159.5°); the user's drive.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
