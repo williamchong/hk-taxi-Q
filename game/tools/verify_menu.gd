@@ -45,9 +45,6 @@ const KEYS: PackedStringArray = [
 	"language",
 	"language_zh",
 	"language_en",
-	"drift_assist",
-	"assist_on",
-	"assist_off",
 	"notices",
 	"notices_title",
 	"notices_lead",
@@ -235,38 +232,31 @@ func _check_notices() -> void:
 	)
 
 
-## The drift assist (`P3-56`) defaults on, and a choice survives a restart:
-## each read after `use_file`, which forgets the cached file as a new run would.
+## No language is saved on a first run, and a choice survives a restart: each
+## read after `use_file`, which forgets the cached file as a new run would.
 func _check_settings() -> void:
 	_forget_settings_file()
 	SettingsScript.use_file(SETTINGS_PATH)
-	_expect(SettingsScript.drift_assist(), "settings", "the drift assist is on with nothing saved")
-	for on: bool in [false, true]:
-		SettingsScript.set_drift_assist(on)
+	_expect(SettingsScript.language() == "", "settings", "no language with nothing saved")
+	for code: String in ["en", "zh"]:
+		SettingsScript.set_language(code)
 		# The disk read first, apart from `Settings`: a cache kept across
 		# `use_file` would answer the restart below from memory.
 		var disk := ConfigFile.new()
 		_expect(
 			(
 				disk.load(SETTINGS_PATH) == OK
-				and disk.get_value(SettingsScript.SECTION, SettingsScript.KEY_DRIFT_ASSIST) == on
+				and disk.get_value(SettingsScript.SECTION, SettingsScript.KEY_LANGUAGE) == code
 			),
 			"settings",
-			"the drift assist saved %s is on disk" % on
+			"the language saved %s is on disk" % code
 		)
 		SettingsScript.use_file(SETTINGS_PATH)
 		_expect(
-			SettingsScript.drift_assist() == on,
+			SettingsScript.language() == code,
 			"settings",
-			"the drift assist saved %s reads %s after a restart" % [on, on]
+			"the language saved %s reads %s after a restart" % [code, code]
 		)
-	SettingsScript.set_language("en")
-	SettingsScript.use_file(SETTINGS_PATH)
-	_expect(
-		SettingsScript.language() == "en" and SettingsScript.drift_assist(),
-		"settings",
-		"a language saved beside it keeps the assist and itself"
-	)
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
 

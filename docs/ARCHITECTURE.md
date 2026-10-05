@@ -95,14 +95,12 @@ Not autoloads, deliberately:
   (`P5-25`, `Q124`). An autoload would hold ~6 MB for the process and serve a stale graph across an
   ETL re-run. `verify_road_graph.gd` builds its own through `from_document`.
 - `Cmdline` (`scripts/core/cmdline.gd`) — a `class_name` static; `--debug-view=`, `--hud=`,
-  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--assist=`, `--menu=`, `--touch=` and `--asset=` go
+  `--minimap=`, `--fares=`, `--fare-seed=`, `--lang=`, `--menu=`, `--touch=` and `--asset=` go
   through it.
 - `Settings` (`scripts/core/settings.gd`) — a `class_name` static over `user://settings.cfg`,
   the options the start menu saves (`P6-1`). `Locale.language()` reads `--lang=` first, then this,
   then the OS language (`OS.get_locale_language()`), then its default; `drive.sh` names the flag
-  so a scripted run's frames never depend on the machine's pick or locale. `DriftAssist.enabled()`
-  reads the drift assist the same way (`--assist=`, then this, then on; `P3-56`), and
-  `DriveHarness` hands it to the tyre car at boot and on `resume`; `drive.sh` names `--assist=on`.
+  so a scripted run's frames never depend on the machine's pick or locale.
 
 ### The debug overlay
 
@@ -1185,7 +1183,6 @@ All paths under `game/`.
 | `scripts/ui/start_menu.gd`, `menu_profile.gd`, `menu_text.gd`, `guide_card.gd` | The start menu (`P6-1`): four pages built in code (the guide's step pictures drawn, never textures) from the HUD's housing, `--menu=off`; the schema of `tuning/menu.tres` (no defaults); the reader of `tuning/menu_text.json` |
 | `scripts/camera/menu_orbit.gd` | `MenuOrbit`: the chase rig circling the parked car while the menu is up — the same rig, so the streamer keeps one camera |
 | `scripts/core/settings.gd` | `Settings`, the saved options under `user://settings.cfg`; `Locale` reads it after `--lang=` |
-| `scripts/core/drift_assist.gd` | `DriftAssist`, whether the tyre car's drift assist is on: `--assist=`, then `Settings`, then on (`P3-56`) |
 | `scripts/city/city_manifest.gd` | `city.json`, typed: tiles, AABBs, per-edge widths and clearances, the lane-width bar, resolved document paths |
 | `scripts/city/city_regions.gd` | `CityRegions` (`P5-9c`) |
 | `scripts/city/generated_regions.gd` | The one place the generated root is spelled: synced regions, the frame, each directory; `--region=` picks one (`P5-9b`) |
@@ -1216,7 +1213,7 @@ All paths under `game/`.
 | `scripts/input/input_router.gd`, `touch_profile.gd` | `InputRouter` and the touch travel schema (`tuning/touch.tres`) |
 | `scripts/vehicle/vehicle_controller.gd`, `handling_profile.gd` | The car and its tuning schema (`tuning/handling.tres`) |
 | `scripts/vehicle/tyre_vehicle_controller.gd`, `tyre_profile.gd`, `flick_watch.gd` | The per-wheel tyre model the game drives on (`Q152`), its tyre table (`tuning/tyre.tres`), and the flick read off the inputs |
-| `scripts/vehicle/systems/` | The car's systems (`Q155`), a schema each for `tuning/systems/*.tres`: traction control, stability control, drift mode (`DriftMode`), the countersteer assist (`CountersteerAssist`), the handbrake, the rev limiter, and the game's own arcade aids (`CatchLimiter` among them) |
+| `scripts/vehicle/systems/` | The car's systems (`Q155`), a schema each for `tuning/systems/*.tres`: traction control, stability control, drift mode (`DriftMode`), the handbrake, the rev limiter, and the game's own arcade aids (`CatchLimiter` among them) |
 | `scripts/vehicle/vehicle_lamps.gd`, `sun_glint.gd`, `beam_budget.gd`, `beam_profile.gd` | Lamp circuits written as instance uniforms (`P3-11d`), the sun direction for `vehicle_body.gdshader`, and the spot-light budget (`tuning/beams.tres`) |
 | `scripts/vehicle/vehicle_lamps_profile.gd`, `taxi_door_profile.gd`, `passenger_emote_profile.gd` | Schemas for `tuning/vehicle_lamps.tres`, `tuning/taxi_door.tres` and `tuning/passenger_emote.tres` (`Q150`). No `@export` defaults; each rig refuses a zero through `usable()` |
 | `scripts/vehicle/skid_marks.gd`, `skid_strip.gd`, `drift_sparks.gd` (+ `*_profile.gd`) | The drift shown (`Q154`): tyre marks and smoke off `TyreVehicleController.wheel_slips` — one ring mesh, one draw call, `SkidStrip` pure for `verify_vehicle` — and sparks off `SkillTracker.drift_tier`, wired by `TaxiHire` from `FareSystem.drift_tier_changed`. `tuning/skid_marks.tres`, `tuning/drift_sparks.tres` |

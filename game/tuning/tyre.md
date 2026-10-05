@@ -20,8 +20,8 @@ of the engine-tyre car's drift yaw torque) and `handbrake_declutch` went with th
 2026-10-05: both were 0 / off, the torque not rescuing the low end, the declutch only a harsh brake
 (`Q153`).
 
-The car's systems — traction control, stability control, drift mode, the countersteer assist, the
-handbrake, the rev limiter — and the game's own arcade aids have their own tables and notes under
+The car's systems — traction control, stability control, drift mode, the handbrake, the rev
+limiter — and the game's own arcade aids have their own tables and notes under
 `tuning/systems/` since 2026-10-05 (`Q155`), each moved out of this file with its sections; the
 rename map is in `Q155`. This table is the tyre: its grip curve, its wheel, its solve, and where
 its sideways force goes in.

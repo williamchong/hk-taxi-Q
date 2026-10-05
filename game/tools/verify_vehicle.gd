@@ -73,7 +73,6 @@ const TYRE_SCRIPT := "res://scripts/vehicle/tyre_vehicle_controller.gd"
 const MARKS_SCRIPT := "res://scripts/vehicle/skid_marks.gd"
 const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
 const FLICK_SCRIPT := "res://scripts/vehicle/flick_watch.gd"
-const ASSIST_SCRIPT := "res://scripts/vehicle/systems/countersteer_assist.gd"
 const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
@@ -87,7 +86,6 @@ const SYSTEM_PATHS: Dictionary[String, String] = {
 	"traction_control": "res://tuning/systems/traction_control.tres",
 	"stability_control": "res://tuning/systems/stability_control.tres",
 	"drift_mode": "res://tuning/systems/drift_mode.tres",
-	"countersteer_assist": "res://tuning/systems/countersteer_assist.tres",
 	"handbrake": "res://tuning/systems/handbrake.tres",
 	"rev_limiter": "res://tuning/systems/rev_limiter.tres",
 	"arcade_aids": "res://tuning/systems/arcade_aids.tres",
@@ -207,30 +205,6 @@ func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
 		_problem("%s does not instance %s" % [DRIVE_SCENE_PATH, SCENE_PATH])
 	if _failed == before:
 		print("  ok    the game's car runs the tyre model on the shipped table")
-
-
-## The drift assist hands a slide to a player who countersteers (`P3-56`): once
-## they countersteer, steering back into the slide gets no assist until the
-## slide is over (`CountersteerAssist.yields` has why). Walked through one slide and the
-## next, each tick from the side that would read wrong.
-func _check_the_assist_yields_to_a_countersteer() -> void:
-	var before: int = _failed
-	var assist := load(ASSIST_SCRIPT) as GDScript
-	# Each tick: countersteering, sliding, whether the assist must stand aside.
-	var ticks: Array[Array] = [
-		[false, true, false, "steering into a slide"],
-		[true, true, true, "the first countersteer"],
-		[false, true, true, "steering back into the slide after a countersteer"],
-		[false, false, false, "the slide over"],
-		[false, true, false, "steering into the next slide"],
-	]
-	var yielded: bool = false
-	for tick: Array in ticks:
-		yielded = assist.call(&"yields", yielded, tick[0], tick[1])
-		if yielded != tick[2]:
-			_problem("the assist %s on %s" % ["stepped in" if tick[2] else "stood aside", tick[3]])
-	if _failed == before:
-		print("  ok    the drift assist stands aside from a countersteer until the slide is over")
 
 
 ## The flick (`P3-54`), driven without a car at 60 Hz on the shipped table: a
@@ -485,7 +459,6 @@ func _run() -> void:
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
 	_check_the_car_runs_its_tyre_model(car)
-	_check_the_assist_yields_to_a_countersteer()
 	_check_the_flick_is_read_off_the_inputs()
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)

@@ -9033,6 +9033,18 @@ all four (`ride` longest 2.03 / 2.37 / 2.82 / 3.37 s), `hold` unmoved; a softer 
 worse. The assist-off mode never reads the dial (identical at 50 / 86 kph; 42 / 63 moved only with
 the spawn's settle, entry 42.29 → 42.11 kph).
 
+**The drift assist dropped (the user's call, 2026-10-06: "if all drift assist do is just auto
+counter steer, we should drop it first to simplify things").** It was that and one thing more: the
+fronts turned toward the travel while the player steered into a slide (`CountersteerAssist`, gain
+1.5 to 35°), and stability control's slip cut starting at 20° in place of 10° so the assisted slide
+kept its drive. Gone with it: the menu option and its strings, `Settings.drift_assist`,
+`DriftAssist`, `--assist=` on `drive.sh` and the pad, `countersteer_assist.tres`,
+`stability_control.assisted_slip_cut_from_deg`, and the controller's steering restore that kept
+the rate limit off the assist's angle. One car is left, the old off mode, so a drift change is
+graded once. ⚠️ The game's default was ON: a player now drives without the automatic countersteer.
+The pad at 42 / 63 / 86 kph, before and after: every row identical but the `us/tick` cost column.
+"Whether an assisted slide pays in full" closes with it.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

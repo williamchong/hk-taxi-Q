@@ -230,7 +230,6 @@ const SYSTEM_TABLES: PackedStringArray = [
 	"traction_control",
 	"stability_control",
 	"drift_mode",
-	"countersteer_assist",
 	"handbrake",
 	"rev_limiter",
 	"arcade_aids",
@@ -341,11 +340,6 @@ var _flick_given: bool = false
 ## the rears are still spinning past the drift button and have little side
 ## grip to swing the car with; lifted, they regrip, and that is the pendulum.
 var _catch_lift: bool = false
-## `--assist=on`: the tyre car's drift assist on (`P3-56`), the player's option
-## and the game's default. Off here unless asked, so every row grades the car
-## a player who turned it off drives, and `hold`'s driver — countersteering on
-## top of the assist — is never graded against it by accident.
-var _assist: bool = false
 ## `--catch-at=<s>`: countersteer at this many seconds into the manoeuvre
 ## instead of at the slide's peak — an EARLY catch, while the slide is still
 ## building. `--catch-late=<s>`: this long after the peak — a LATE one, when
@@ -526,9 +520,6 @@ func _parse_args() -> bool:
 		if arg == "--catch-lift":
 			_catch_lift = true
 			continue
-		if arg == "--assist=on":
-			_assist = true
-			continue
 		var bits: PackedStringArray = arg.split("=", true, 1)
 		if bits.size() < 2 or bits[1].is_empty():
 			_fail("%s needs a value, as %s=..." % [bits[0], bits[0]])
@@ -647,15 +638,6 @@ func _boot() -> bool:
 	if _vehicle == null:
 		_fail("no vehicle in %s — nothing answers forward_speed_kph()" % _scene_path)
 		return false
-
-	if _assist:
-		# Refused rather than ignored: `set()` on a car without the switch is a
-		# silent no-op, and the table would read as assisted rows that were not.
-		if not &"drift_assist" in _vehicle:
-			_fail("--assist=on: %s has no drift assist" % _vehicle.name)
-			return false
-		_vehicle.set(&"drift_assist", true)
-		print("assist:  on")
 
 	# Read back rather than taken from the scene file: `skidpad.tscn` authors the
 	# spawn, but a car that has settled onto its springs for a frame is the pose

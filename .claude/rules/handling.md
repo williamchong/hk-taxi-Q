@@ -145,7 +145,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of
   the ablation's, so a change to the flattening or the 1 m/s floor is made in both.
 - 🔴 **The car's dials are its systems, one table each under `game/tuning/systems/`** (`Q155`):
-  traction control, stability control, drift mode, the countersteer assist, the handbrake, the rev
+  traction control, stability control, drift mode, the handbrake, the rev
   limiter — real cars' — and `arcade_aids`, the game's own (the side cut, the flick, the catch
   limiter, the slide lock), never filed under a real system. `tyre.tres` is the tyre alone. A new
   dial goes in the system it belongs to, and an aid no real car has goes in `arcade_aids`; the old
@@ -169,17 +169,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
   past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.side_force_depth`):
   at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
-  🔴 **The drift assist is the player's option, default ON in the game and OFF on the pads
-  (`P3-56`)** — `countersteer_assist.gain` and `stability_control.assisted_slip_cut_from_deg` act only while
-  `TyreVehicleController.drift_assist` is true (`DriftAssist`: `--assist=`, the saved option, on).
-  Grade a drift change in BOTH modes: off on `ride` AND `hold` (`ride` the player's plain input,
-  `hold` a player who countersteers), on with `tools/skidpad.sh --assist=on` on `ride`, `turn` and
-  `hold`. `turn` must read the same in both: the assist steps aside the moment the player lets go
-  or countersteers, and an assist that did not brought the 90° turn out at 58°. `hold` must too:
-  after a countersteer the assist stays aside until the slide is over (`CountersteerAssist.yields`); re-tested
-  each tick it stepped back in at every zero crossing of the feathering driver, 0.27 s. ⚠️ At
-  86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90, both modes) —
-  compare the modes across 76–95 kph before reading one cell there as a fight. `drive.sh` pins `--assist=on`. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
+  🔴 **The drift assist is gone (`P3-56`, dropped 2026-10-06 on the user's call)** — it was an
+  automatic countersteer and its own later slip cut, an option default ON in the game and OFF on
+  the pads, so every drift change was graded in two modes. There is one car now, the old off mode:
+  grade a drift change on `ride` AND `hold` (`ride` the player's plain input, `hold` a player who
+  countersteers). "Assist on" figures in an earlier `Q` or sidecar are that removed mode's.
+  ⚠️ At 86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90) — read
+  76–95 kph before trusting one cell there. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
   renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
 - ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
   approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change

@@ -25,7 +25,3 @@ extends Resource
 ## full-throttle corner at 42–50 kph. Inert while `to` is not over `from`.
 @export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_from_deg: float
 @export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_to_deg: float
-## Where the slip cut starts while the player's drift assist is on, in place of
-## `slip_power_cut_from_deg`: the assisted slide runs wider at 86 kph, and the
-## plain band cut its drive before `drift_min_s`. 0 keeps the plain band.
-@export_range(0.0, 90.0, 1.0, "suffix:°") var assisted_slip_cut_from_deg: float

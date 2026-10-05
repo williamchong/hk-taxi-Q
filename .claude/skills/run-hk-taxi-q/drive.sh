@@ -78,12 +78,6 @@ case " $* " in
 *" --lang="*) ;;
 *) set -- "$@" --lang=zh ;;
 esac
-# `DriftAssist` reads the option the menu saved when no flag names it (P3-56);
-# pinned here for the same reason, on — the player's default.
-case " $* " in
-*" --assist="*) ;;
-*) set -- "$@" --assist=on ;;
-esac
 
 # Godot reports a failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'

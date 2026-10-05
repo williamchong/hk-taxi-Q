@@ -8,7 +8,7 @@ the file as a whole. Why it lives here and not in the file: `Q119`.
 Stability control's power cuts (a real car's ESC takes engine torque away when the car runs wide or its tail swings out). Power only: a real ESC also brakes single wheels, which this does not model.
 
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
-2026-10-05); their prose keeps the names the dials had when it was written: `turn_drive_cut` → `understeer_power_cut`, `slide_drive_fade_from_deg` / `_to_deg` → `slip_power_cut_from_deg` / `_to_deg`, `assist_drive_fade_from_deg` → `assisted_slip_cut_from_deg`.
+2026-10-05); their prose keeps the names the dials had when it was written: `turn_drive_cut` → `understeer_power_cut`, `slide_drive_fade_from_deg` / `_to_deg` → `slip_power_cut_from_deg` / `_to_deg`, `assist_drive_fade_from_deg` → `assisted_slip_cut_from_deg`, which went with the drift assist on 2026-10-06 (`P3-56`; `Q153` keeps its sweeps) — "the assisted mode" below is that removed option.
 
 ## `understeer_power_cut = 0.5`
 
@@ -34,7 +34,8 @@ lever that reached 42 kph (10 / 15 / 20° → tap 67.7 / 110.4 / 163.4° there) 
 0.3 / 0.45, `rev_limiter.overspeed_share` 0 / 0.25 and the handbrake left it at 163° — so the
 spin there is power feeding the slide, not the rear's grip. The end stays at 40°: 20 / 25 / 30°
 collapse `hold` at 42 kph (0.68 / 0.78 / 0.92 s) and leave 86 kph at 75–81°. The handbrake
-(`handbrake.md`) finished 86 kph. The assisted mode starts at its own 35° and is not moved.
+(`handbrake.md`) finished 86 kph. The assisted mode started at its own 35° and was
+not moved; it went with the assist (`P3-56`, 2026-10-06).
 
 | 42 / 63 / 86 kph, assist off | before | cut from 10° | + handbrake 1,150 |
 |---|---|---|---|
@@ -62,23 +63,3 @@ which the boost's steering fade finished (`arcade_aids.md`). It also brings the 
 aside past 90° of slip (`REVERSED_SLIP_DEG`): a car rolling backwards after a spin had no drive at
 all and rolled at 10–30 kph with the throttle held (the user's report, 2026-10-06; the 50 kph
 assisted tap's exit −9.0 → +2.6 kph).
-
-## `assisted_slip_cut_from_deg = 20.0`
-
-**20 since 2026-10-06** (the user's "fix the assisted tap spin at 50kph"): on the real taxi with
-the steering cap and the drive boost, the assisted tap rotated to 122.7° at 50 kph and 91.5° at
-42. Swept 20 / 25 / 30 / 35 with the assist on: the tap 65.9 / 70.7 / 75.1 / 91.5° at 42 kph and
-73.1 / 81.3 / 91.1 / 122.7° at 50; at 20 the assisted plain input still pays at every speed (`ride`
-longest 2.05 / 2.37 / 2.82 / 3.37 s at 42 / 50 / 63 / 86), `hold` unmoved, the countersteered
-`turn` in from 205–209° to 177–179° at 42–50, the lifted flick at 42 from 122° to 71°. A softer
-assist was worse (`countersteer_assist.gain` 1.0 / 1.25: the tap 123–140° at 42–50). The section
-below is the value as first set, at 35, when the car was weaker.
-
-Where the slide's drive fade starts while the drift assist is on, in place of
-`slide_drive_fade_from_deg` (25). At 25 the assisted slide at 86 kph lost its drive at 1.40 s, under
-`drift_min_s`; 30° 1.58 s, 32° 3.17 s (a cliff, so 35 sits past it), 35° 3.17 s, with 42 / 63 kph
-unmoved. Moved for everyone, 35° raised a plain tap's peak 41.6 → 49.3° at 63 kph and left `turn`
-and `hold` identical; kept to the assist on the user's call (2026-10-05), so the off mode keeps the
-calmer rear. Refuted at 86 first: the share, `countersteer_lock_deg`, `drift_side_cut_to_kph`,
-`turn_drive_cut`, `traction_rearm_s`, `side_force_depth`; `rim_overspeed` 0 works and loses `hold`
-(`Q153`).

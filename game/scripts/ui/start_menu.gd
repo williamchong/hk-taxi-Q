@@ -155,8 +155,8 @@ func _home() -> Control:
 	return column
 
 
-## Two options: the language, then the drift assist (`P3-56`), each a pair of
-## choices side by side with the current one marked, and the way back.
+## One option, the language: a pair of choices side by side with the current
+## one marked, and the way back.
 func _options() -> Control:
 	var column: VBoxContainer = _column("Options")
 	var heading: Label = _line("Heading", _text.say("language", _language))
@@ -173,20 +173,6 @@ func _options() -> Control:
 	_mark_current(chinese, _language == Locale.CHINESE)
 	_mark_current(english, _language == Locale.ENGLISH)
 	_first[Page.OPTIONS] = english if _language == Locale.CHINESE else chinese
-
-	column.add_child(_gap("AssistGap", _profile.button_gap_px))
-	var assist_heading: Label = _line("AssistHeading", _text.say("drift_assist", _language))
-	_size(assist_heading, _profile.heading_size_zh, _profile.heading_size)
-	column.add_child(assist_heading)
-	var assists := HBoxContainer.new()
-	assists.name = "Assists"
-	assists.add_theme_constant_override(&"separation", _profile.button_gap_px)
-	column.add_child(assists)
-	var assisted: bool = DriftAssist.enabled()
-	var on: Button = _button(assists, "On", "assist_on", _pick_assist.bind(true))
-	var off: Button = _button(assists, "Off", "assist_off", _pick_assist.bind(false))
-	_mark_current(on, assisted)
-	_mark_current(off, not assisted)
 
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "Back", "back", _show.bind(Page.HOME))
@@ -345,20 +331,6 @@ func _pick(code: String) -> void:
 	# a node freed inside its own `pressed` is a use-after-free on return.
 	_relabel.call_deferred()
 	language_changed.emit(chosen)
-
-
-## Save the drift assist; the car takes it when the drive starts
-## (`DriveHarness.resume`), since it is parked while this page is up.
-func _pick_assist(on: bool) -> void:
-	Settings.set_drift_assist(on)
-	# Through `DriftAssist`, for `_pick`'s reason: `--assist=` pins it this run.
-	if DriftAssist.enabled() != on:
-		push_warning(
-			"menu: --assist= pins the drift assist this run; the choice is saved for the next"
-		)
-		return
-	# Deferred, as in `_pick`: the pressed button is under the root rebuilt.
-	_relabel.call_deferred()
 
 
 # -------------------------------------------------------------- widgets ----

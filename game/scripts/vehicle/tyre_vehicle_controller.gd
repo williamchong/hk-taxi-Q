@@ -31,10 +31,9 @@ extends VehicleController
 ##   4. The car's systems, each with its own table under `tuning/systems/`
 ##      (`Q155`): traction control and stability control's power cuts, drift
 ##      mode that stands them down for a slide the player asked for
-##      (`DriftMode`), the countersteer assist (`CountersteerAssist`, the
-##      player's option `drift_assist`, `P3-56`), the handbrake and the rev
-##      limiter. The game's own aids, which no real car has, are grouped as
-##      such (`ArcadeAidsProfile`): the rear side cut, the flick, the cap on a
+##      (`DriftMode`), the handbrake and the rev limiter. The game's own
+##      aids, which no real car has, are grouped as such
+##      (`ArcadeAidsProfile`): the rear side cut, the flick, the cap on a
 ##      caught slide's countersteer (`CatchLimiter`) and the slide lock.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
@@ -65,15 +64,10 @@ const REVERSED_SLIP_DEG: float = 90.0
 @export var traction_control: TractionControlProfile
 @export var stability_control: StabilityControlProfile
 @export var drift_mode: DriftModeProfile
-@export var countersteer_assist: CountersteerAssistProfile
 @export var handbrake: HandbrakeProfile
 @export var rev_limiter: RevLimiterProfile
 @export var arcade_aids: ArcadeAidsProfile
 @export var anti_lock_brakes: AntiLockBrakesProfile
-## The player's drift assist (`P3-56`, `Q153`): the countersteer assist and its
-## drive fade on. Set by `DriveHarness` from `Settings.drift_assist()`; false
-## here, so a pad grades today's car unless `--assist=on` asks otherwise.
-var drift_assist: bool = false
 
 ## Every wheel, front axle first, so the per-wheel arrays below index the same.
 ## A third collection beside the parent's `_front` and `_rear`, which
@@ -98,7 +92,6 @@ var _spin_angle: PackedFloat32Array = PackedFloat32Array()
 var _engine_angle: PackedFloat32Array = PackedFloat32Array()
 var _visuals: Array[Node3D] = []
 var _drift_mode: DriftMode = DriftMode.new()
-var _assist: CountersteerAssist = CountersteerAssist.new()
 var _catch: CatchLimiter = CatchLimiter.new()
 ## The rear side cut, latched at the drift button's press. Latched, not
 ## tracked: a slide sheds speed, and a cut that deepened as it did would feed
@@ -119,10 +112,6 @@ var _brake_dial: float = 0.0
 ## skidpad's cost column.
 var _cost_us: int = 0
 var _cost_ticks: int = 0
-## The player's steering as the parent's rate limit left it, before the
-## countersteer assist was added; restored before the parent's next step so
-## the limit ramps the player's angle and never the assist's.
-var _driver_steering: float = 0.0
 ## The wheel being solved and its tick's curve, so the force and the spin solve
 ## read one contact rather than passing seven numbers down every call.
 var _radius: float = 0.0
@@ -205,7 +194,6 @@ func _systems_assigned() -> bool:
 		traction_control,
 		stability_control,
 		drift_mode,
-		countersteer_assist,
 		handbrake,
 		rev_limiter,
 		arcade_aids,
@@ -247,11 +235,9 @@ func take_tyre_cost_us() -> float:
 	return mean
 
 
-## The parent's steering, capped by the catch limiter, then the countersteer
-## assist on top while the player's `drift_assist` is on. `steer_ratio`, which
+## The parent's steering, capped by the catch limiter. `steer_ratio`, which
 ## the lamps read, stays the player's.
 func _update_steering(delta: float) -> void:
-	steering = _driver_steering
 	super._update_steering(delta)
 	if arcade_aids.catch_lock_deg > 0.0:
 		steering = _catch.step(
@@ -263,14 +249,6 @@ func _update_steering(delta: float) -> void:
 			delta,
 			arcade_aids
 		)
-	_driver_steering = steering
-	if not drift_assist or countersteer_assist.gain <= 0.0:
-		# Cleared, so the option turned back on mid-slide starts unlatched.
-		_assist.reset()
-		return
-	steering = _assist.steer(
-		steering, steer_input, _slide_toward(), _slide_beyond_peak_rad(), countersteer_assist
-	)
 
 
 ## Whether the catch limiter holds the countersteer this tick, for the skidpad.
@@ -378,9 +356,7 @@ func place_at(pose: Transform3D) -> void:
 	_omega.fill(0.0)
 	_loads.fill(0.0)
 	_side_cut = 0.0
-	_driver_steering = 0.0
 	_drift_mode.reset()
-	_assist.reset()
 	_catch.reset()
 
 
@@ -554,15 +530,10 @@ func _steer_share() -> float:
 ## the rim free to overspeed a plain held tap ran to 48-65° (`Q153`, the user's
 ## street report: "the rear feels too spinny"). It takes power away and asks
 ## for no angle (`Q72`): under the band the slide is the throttle's and the
-## countersteer's, as before. With the drift assist on the band starts at
-## `assisted_slip_cut_from_deg`: at 86 kph the plain band took the assisted
-## slide's drive at 1.40 s, short of `drift_min_s` (`systems/stability_control.md`).
+## countersteer's, as before.
 func _slide_drive_share() -> float:
 	var cut: StabilityControlProfile = stability_control
-	var from: float = cut.slip_power_cut_from_deg
-	if drift_assist and cut.assisted_slip_cut_from_deg > 0.0:
-		from = cut.assisted_slip_cut_from_deg
-	return _slip_cut_share(from, cut.slip_power_cut_to_deg)
+	return _slip_cut_share(cut.slip_power_cut_from_deg, cut.slip_power_cut_to_deg)
 
 
 ## Stability control's slip cut on the road: the share of the forward drive
