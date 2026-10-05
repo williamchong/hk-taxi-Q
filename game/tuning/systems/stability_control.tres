@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="StabilityControlProfile" format=3 uid="uid://grt3cd4e3xb7"]
+
+[ext_resource type="Script" uid="uid://bbcvw870m1yr0" path="res://scripts/vehicle/systems/stability_control_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+understeer_power_cut = 0.5
+slip_power_cut_from_deg = 25.0
+slip_power_cut_to_deg = 40.0
+assisted_slip_cut_from_deg = 35.0

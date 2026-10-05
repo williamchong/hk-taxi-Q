@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="TractionControlProfile" format=3 uid="uid://dgmqs0iiu7pfp"]
+
+[ext_resource type="Script" uid="uid://txc5m0lrq71t" path="res://scripts/vehicle/systems/traction_control_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+wheelspin_limit = 1.0

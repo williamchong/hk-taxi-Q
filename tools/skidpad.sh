@@ -72,7 +72,10 @@
 #                                    tool's reading, `impact` the controller's
 #                                    latch, and they must agree (Q148)
 #   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile or TyreProfile
-#                                    float. A drift_* field re-runs only the
+#                                    float, or a system's as SYSTEM.FIELD
+#                                    (traction_control.wheelspin_limit; the
+#                                    tables under tuning/systems/, Q155). A
+#                                    drift_* field re-runs only the
 #                                    rows that hold the button, since the rest
 #                                    cannot move; anything else re-runs all.
 #                                    One sweep per run — a second is refused,

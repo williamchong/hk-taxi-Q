@@ -1,10 +1,10 @@
 class_name FlickWatch
 extends RefCounted
 ## The flick as numbers (`P3-54`, `Q153`): which tick a Scandinavian flick
-## lands on, read off the player's own inputs. `TyreVehicleController` asks it
-## every tick and, on the tick it answers true, stands traction control down
-## as the drift button's press does — the lever the pad found holding the rear
-## (`Q153`'s step 2), and the one a plain corner never reaches, because a plain
+## lands on, read off the player's own inputs — an arcade aid
+## (`ArcadeAidsProfile`). `DriftMode` asks it every tick and, on the tick it
+## answers true, engages as the drift button's press does — the lever the pad
+## found holding the rear (`Q153`'s step 2), and the one a plain corner never reaches, because a plain
 ## corner never reverses the steering.
 ##
 ## A flick is the steering held to one side for `flick_feint_s` with the
@@ -40,7 +40,7 @@ func reset() -> void:
 ## and `brake` 0 to 1 — at `kph`. True on the tick the steering arrives on the
 ## far side of a flick, and never on a table whose `flick_window_s` is 0.
 func step(
-	steer: float, throttle: float, brake: float, kph: float, delta: float, table: TyreProfile
+	steer: float, throttle: float, brake: float, kph: float, delta: float, table: ArcadeAidsProfile
 ) -> bool:
 	if table.flick_window_s <= 0.0:
 		return false

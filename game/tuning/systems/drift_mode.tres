@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="DriftModeProfile" format=3 uid="uid://c3hddatps535t"]
+
+[ext_resource type="Script" uid="uid://fquleofq7fxl" path="res://scripts/vehicle/systems/drift_mode_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+rearm_s = 2.0
+rearm_on_steer_release = true

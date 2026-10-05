@@ -224,6 +224,17 @@ const READY_ONLY_FIELDS: PackedStringArray = [
 ## A probe for what moves the car, never a tuning route — a value worth
 ## keeping goes into `handling.tres`, where the car reads it.
 const BODY_SWEEP_PREFIX: String = "body."
+## The car's systems a `<system>.<field>` sweep may name (`Q155`): only these,
+## so `profile.` or `tyre.` cannot slip past the refusals the bare names get.
+const SYSTEM_TABLES: PackedStringArray = [
+	"traction_control",
+	"stability_control",
+	"drift_mode",
+	"countersteer_assist",
+	"handbrake",
+	"rev_limiter",
+	"arcade_aids",
+]
 const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", "gravity_scale"]
 
 ## Default seconds of full throttle before every manoeuvre, to reach a working
@@ -699,11 +710,30 @@ func _measure_all() -> void:
 	# The table a sweep writes: the handling table, or the tyre model's.
 	var sweep_table: Resource = profile
 	var body_field: String = ""
+	# The field a system sweep writes, without its `<system>.` prefix.
+	var system_field: StringName = &""
 	if not _sweep.is_empty() and String(_sweep_field).begins_with(BODY_SWEEP_PREFIX):
 		body_field = String(_sweep_field).trim_prefix(BODY_SWEEP_PREFIX)
 		if not body_field in BODY_FIELDS:
 			_fail("sweep: no body field '%s'; one of %s" % [body_field, ", ".join(BODY_FIELDS)])
 			return
+		print("sweeping: %s" % _sweep_field)
+	elif not _sweep.is_empty() and "." in String(_sweep_field):
+		# `<system>.<field>`: one of the car's systems' tables (`Q155`), named by
+		# the controller's property for it, as `body.` names the rigid body.
+		var parts: PackedStringArray = String(_sweep_field).split(".", true, 1)
+		if not parts[0] in SYSTEM_TABLES:
+			_fail("sweep: '%s' is not a system; one of %s" % [parts[0], ", ".join(SYSTEM_TABLES)])
+			return
+		var system_table := _vehicle.get(parts[0]) as Resource
+		if system_table == null:
+			_fail("sweep: the car has no system table '%s'" % parts[0])
+			return
+		if not parts[1] in system_table:
+			_fail("sweep: %s has no '%s'" % [system_table.resource_path, parts[1]])
+			return
+		sweep_table = system_table
+		system_field = StringName(parts[1])
 		print("sweeping: %s" % _sweep_field)
 	elif not _sweep.is_empty():
 		if profile == null:
@@ -757,18 +787,15 @@ func _measure_all() -> void:
 		values.append(NAN)
 	# See DRIFT_FIELD_PREFIX: a drift dial cannot move the other three manoeuvres,
 	# anything else can.
-	var confined: bool = String(_sweep_field).begins_with(DRIFT_FIELD_PREFIX)
+	var field: StringName = system_field if not system_field.is_empty() else _sweep_field
+	var confined: bool = String(field).begins_with(DRIFT_FIELD_PREFIX)
 	for value: float in values:
 		if not is_nan(value) and not body_field.is_empty():
 			_set_body(body_field, value)
 		elif not is_nan(value):
-			sweep_table.set(_sweep_field, value)
+			sweep_table.set(field, value)
 		for manoeuvre: String in MANOEUVRES:
-			if (
-				not _only.is_empty()
-				and _only != manoeuvre
-				and not _rides(manoeuvre)
-			):
+			if not _only.is_empty() and _only != manoeuvre and not _rides(manoeuvre):
 				continue
 			if manoeuvre == "wall":
 				# A row per angle; never swept, a wall does not take the drift

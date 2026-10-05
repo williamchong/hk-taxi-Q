@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="HandbrakeProfile" format=3 uid="uid://mdkjfry40ntq"]
+
+[ext_resource type="Script" uid="uid://clq2d4s5edmue" path="res://scripts/vehicle/systems/handbrake_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+torque_nm = 1275.0

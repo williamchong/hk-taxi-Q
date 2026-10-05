@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ArcadeAidsProfile" format=3 uid="uid://bqrixp53ql6qs"]
+
+[ext_resource type="Script" uid="uid://cmdjglpwph1gx" path="res://scripts/vehicle/systems/arcade_aids_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+drift_side_cut = 0.6
+drift_side_cut_from_kph = 42.0
+drift_side_cut_to_kph = 65.0
+flick_window_s = 0.3
+flick_feint_s = 0.2
+flick_min_kph = 30.0
+flick_input_share = 0.5
+catch_lock_deg = 6.0
+catch_turn_dps = 10.0
+catch_window_s = 1.0

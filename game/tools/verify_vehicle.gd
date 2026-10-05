@@ -73,6 +73,7 @@ const TYRE_SCRIPT := "res://scripts/vehicle/tyre_vehicle_controller.gd"
 const MARKS_SCRIPT := "res://scripts/vehicle/skid_marks.gd"
 const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
 const FLICK_SCRIPT := "res://scripts/vehicle/flick_watch.gd"
+const ASSIST_SCRIPT := "res://scripts/vehicle/systems/countersteer_assist.gd"
 const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
@@ -81,6 +82,16 @@ const LAMPS_PROFILE_PATH := "res://tuning/vehicle_lamps.tres"
 const DOOR_PROFILE_PATH := "res://tuning/taxi_door.tres"
 const EMOTE_PROFILE_PATH := "res://tuning/passenger_emote.tres"
 const TYRE_PROFILE_PATH := "res://tuning/tyre.tres"
+## The car's systems' tables (`Q155`), by the controller's property for each.
+const SYSTEM_PATHS: Dictionary[String, String] = {
+	"traction_control": "res://tuning/systems/traction_control.tres",
+	"stability_control": "res://tuning/systems/stability_control.tres",
+	"drift_mode": "res://tuning/systems/drift_mode.tres",
+	"countersteer_assist": "res://tuning/systems/countersteer_assist.tres",
+	"handbrake": "res://tuning/systems/handbrake.tres",
+	"rev_limiter": "res://tuning/systems/rev_limiter.tres",
+	"arcade_aids": "res://tuning/systems/arcade_aids.tres",
+}
 const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
 const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"
 
@@ -177,6 +188,19 @@ func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
 	zeroed.set("mu", 0.0)
 	if controller.call(&"usable", zeroed):
 		_problem("mutation missed: a zero mu in the tyre table still reads usable")
+	# Each system's table by path: an unassigned one parks the car, and a
+	# trial table left in the scene would grade a car the game does not ship.
+	for system: String in SYSTEM_PATHS:
+		var system_table := car.get(system) as Resource
+		if system_table == null:
+			_problem("the car has no %s table assigned in %s" % [system, SCENE_PATH])
+		elif system_table.resource_path != SYSTEM_PATHS[system]:
+			_problem(
+				(
+					"the car's %s reads %s, not %s"
+					% [system, system_table.resource_path, SYSTEM_PATHS[system]]
+				)
+			)
 	var listed: Array = Array(ResourceLoader.get_dependencies(DRIVE_SCENE_PATH))
 	if not listed.any(func(dependency: String) -> bool: return dependency.ends_with(SCENE_PATH)):
 		_problem("%s does not instance %s" % [DRIVE_SCENE_PATH, SCENE_PATH])
@@ -186,11 +210,11 @@ func _check_the_car_runs_its_tyre_model(car: Node3D) -> void:
 
 ## The drift assist hands a slide to a player who countersteers (`P3-56`): once
 ## they countersteer, steering back into the slide gets no assist until the
-## slide is over (`assist_yields` has why). Walked through one slide and the
+## slide is over (`CountersteerAssist.yields` has why). Walked through one slide and the
 ## next, each tick from the side that would read wrong.
-func _check_the_assist_yields_to_a_countersteer(car: Node3D) -> void:
+func _check_the_assist_yields_to_a_countersteer() -> void:
 	var before: int = _failed
-	var controller := car.get_script() as GDScript
+	var assist := load(ASSIST_SCRIPT) as GDScript
 	# Each tick: countersteering, sliding, whether the assist must stand aside.
 	var ticks: Array[Array] = [
 		[false, true, false, "steering into a slide"],
@@ -201,7 +225,7 @@ func _check_the_assist_yields_to_a_countersteer(car: Node3D) -> void:
 	]
 	var yielded: bool = false
 	for tick: Array in ticks:
-		yielded = controller.call(&"assist_yields", yielded, tick[0], tick[1])
+		yielded = assist.call(&"yields", yielded, tick[0], tick[1])
 		if yielded != tick[2]:
 			_problem("the assist %s on %s" % ["stepped in" if tick[2] else "stood aside", tick[3]])
 	if _failed == before:
@@ -216,10 +240,10 @@ func _check_the_assist_yields_to_a_countersteer(car: Node3D) -> void:
 ## wrong.
 func _check_the_flick_is_read_off_the_inputs() -> void:
 	var before: int = _failed
-	var table := load(TYRE_PROFILE_PATH) as Resource
+	var table := load(SYSTEM_PATHS["arcade_aids"]) as Resource
 	var watch_script := load(FLICK_SCRIPT) as GDScript
 	if table == null or watch_script == null:
-		_problem("%s or %s did not load" % [TYRE_PROFILE_PATH, FLICK_SCRIPT])
+		_problem("%s or %s did not load" % [SYSTEM_PATHS["arcade_aids"], FLICK_SCRIPT])
 		return
 	var delta: float = 1.0 / 60.0
 	var feint: float = table.get("flick_feint_s") + 0.05
@@ -460,7 +484,7 @@ func _run() -> void:
 	_check_the_door_hangs_on_the_flank(car)
 	_check_the_passenger_can_make_a_face(car)
 	_check_the_car_runs_its_tyre_model(car)
-	_check_the_assist_yields_to_a_countersteer(car)
+	_check_the_assist_yields_to_a_countersteer()
 	_check_the_flick_is_read_off_the_inputs()
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)

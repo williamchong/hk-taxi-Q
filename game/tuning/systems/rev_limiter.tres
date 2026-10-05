@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="RevLimiterProfile" format=3 uid="uid://d0wj2fg02maff"]
+
+[ext_resource type="Script" uid="uid://sekmkakwctnw" path="res://scripts/vehicle/systems/rev_limiter_profile.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+overspeed_share = 0.5

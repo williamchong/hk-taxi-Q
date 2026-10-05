@@ -7,10 +7,24 @@
 [ext_resource type="Resource" uid="uid://cj2f8d1v2ctx3" path="res://tuning/skid_marks.tres" id="5_marks"]
 [ext_resource type="Script" uid="uid://dgvkfk3jbvr85" path="res://scripts/vehicle/drift_sparks.gd" id="6_sparks"]
 [ext_resource type="Resource" uid="uid://dadv8ujifp4ii" path="res://tuning/drift_sparks.tres" id="7_sparks"]
+[ext_resource type="Resource" uid="uid://dgmqs0iiu7pfp" path="res://tuning/systems/traction_control.tres" id="8_traction_control"]
+[ext_resource type="Resource" uid="uid://grt3cd4e3xb7" path="res://tuning/systems/stability_control.tres" id="9_stability_control"]
+[ext_resource type="Resource" uid="uid://c3hddatps535t" path="res://tuning/systems/drift_mode.tres" id="10_drift_mode"]
+[ext_resource type="Resource" uid="uid://b4oi605lq5t7s" path="res://tuning/systems/countersteer_assist.tres" id="11_countersteer_assist"]
+[ext_resource type="Resource" uid="uid://mdkjfry40ntq" path="res://tuning/systems/handbrake.tres" id="12_handbrake"]
+[ext_resource type="Resource" uid="uid://d0wj2fg02maff" path="res://tuning/systems/rev_limiter.tres" id="13_rev_limiter"]
+[ext_resource type="Resource" uid="uid://bqrixp53ql6qs" path="res://tuning/systems/arcade_aids.tres" id="14_arcade_aids"]
 
 [node name="Taxi" instance=ExtResource("1_taxi")]
 script = ExtResource("2_ctrl")
 tyre = ExtResource("3_tyre")
+traction_control = ExtResource("8_traction_control")
+stability_control = ExtResource("9_stability_control")
+drift_mode = ExtResource("10_drift_mode")
+countersteer_assist = ExtResource("11_countersteer_assist")
+handbrake = ExtResource("12_handbrake")
+rev_limiter = ExtResource("13_rev_limiter")
+arcade_aids = ExtResource("14_arcade_aids")
 
 [node name="SkidMarks" type="Node3D" parent="." unique_id=380330789]
 script = ExtResource("4_marks")

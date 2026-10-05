@@ -28,17 +28,14 @@ extends VehicleController
 ##      length, and the spring and damper settings on the wheel give its force
 ##      (`_load_n`, Godot's own formula restated).
 ##
-##   4. A countersteer assist on top of the parent's steering while the car
-##      slides (`_update_steering`), and a later start to the slide's drive
-##      fade with it: the player's option (`drift_assist`, `P3-56`), on by
-##      default in the game and off on the pads. Off, countersteering is the
-##      player's skill, the user's call of 2026-09-29 (`tyre.md`).
-##      A wider steering lock for the player on the countersteer side while
-##      the car slides (`_steer_lock_rad`) is also behind a zero: swept and
-##      refuted on the pad's driver.
-##   5. A cap on the countersteer once a caught slide turns the car the other
-##      way (`_cap_catch`), because a key held down holds full lock past the
-##      catch (`Q152`'s catch round). On at 6°; the user's drive is the veto.
+##   4. The car's systems, each with its own table under `tuning/systems/`
+##      (`Q155`): traction control and stability control's power cuts, drift
+##      mode that stands them down for a slide the player asked for
+##      (`DriftMode`), the countersteer assist (`CountersteerAssist`, the
+##      player's option `drift_assist`, `P3-56`), the handbrake and the rev
+##      limiter. The game's own aids, which no real car has, are grouped as
+##      such (`ArcadeAidsProfile`): the rear side cut, the flick, the cap on a
+##      caught slide's countersteer (`CatchLimiter`) and the slide lock.
 ##
 ## Everything else — the player's steering, the speed taper, coast drag, wall
 ## response, auto-righting, the published reads the fare and the lamps take —
@@ -58,6 +55,13 @@ const SOLVE_ITERATIONS: int = 12
 const CONTACT_DOT_FLOOR: float = -0.1
 
 @export var tyre: TyreProfile
+@export var traction_control: TractionControlProfile
+@export var stability_control: StabilityControlProfile
+@export var drift_mode: DriftModeProfile
+@export var countersteer_assist: CountersteerAssistProfile
+@export var handbrake: HandbrakeProfile
+@export var rev_limiter: RevLimiterProfile
+@export var arcade_aids: ArcadeAidsProfile
 ## The player's drift assist (`P3-56`, `Q153`): the countersteer assist and its
 ## drive fade on. Set by `DriveHarness` from `Settings.drift_assist()`; false
 ## here, so a pad grades today's car unless `--assist=on` asks otherwise.
@@ -85,17 +89,9 @@ var _slips: PackedFloat32Array = PackedFloat32Array()
 var _spin_angle: PackedFloat32Array = PackedFloat32Array()
 var _engine_angle: PackedFloat32Array = PackedFloat32Array()
 var _visuals: Array[Node3D] = []
-## True from a drift press, or a flick, until the slide is over: traction
-## control stands down for the slide the player asked for. See `traction_rearm_s`.
-var _traction_off: bool = false
-## Watches the player's inputs for a flick (`P3-54`), which stands traction
-## control down as the drift button's press does.
-var _flick: FlickWatch = FlickWatch.new()
-## Seconds since the drift button came up while traction control is off.
-var _released_s: float = 0.0
-## Whether the player has steered since the drift button's press, so letting
-## the steering go can end the slide whichever of the two was pressed first.
-var _slide_steered: bool = false
+var _drift_mode: DriftMode = DriftMode.new()
+var _assist: CountersteerAssist = CountersteerAssist.new()
+var _catch: CatchLimiter = CatchLimiter.new()
 ## The rear side cut, latched at the drift button's press. Latched, not
 ## tracked: a slide sheds speed, and a cut that deepened as it did would feed
 ## itself (`Q89`).
@@ -115,18 +111,6 @@ var _cost_ticks: int = 0
 ## countersteer assist was added; restored before the parent's next step so
 ## the limit ramps the player's angle and never the assist's.
 var _driver_steering: float = 0.0
-## The side the slide went out on, in Godot's steering sign, latched while the
-## tail is out past the tyre's peak: `_slide_toward` flips as the catch carries
-## the slip through zero, which is when `_cap_catch` needs it. 0 before any.
-var _slide_side: float = 0.0
-## Seconds since the tail was last out past the tyre's peak.
-var _since_slide_s: float = INF
-## True from the car turning the other way until the player lets the
-## countersteer go, or it goes on past `catch_window_s`.
-var _catch_capped: bool = false
-## True from the player's first countersteer in a slide until the slide is
-## over: the countersteer assist stands aside for it. See `assist_yields`.
-var _assist_yielded: bool = false
 ## The wheel being solved and its tick's curve, so the force and the spin solve
 ## read one contact rather than passing seven numbers down every call.
 var _radius: float = 0.0
@@ -147,7 +131,7 @@ var _solved: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	super._ready()
-	if not usable(tyre):
+	if not usable(tyre) or not _systems_assigned():
 		# Parked rather than driven on the engine's tyres, which no grading
 		# covers since the engine-tyre control was dropped.
 		set_physics_process(false)
@@ -170,11 +154,10 @@ func _ready() -> void:
 	_engine_angle.resize(_wheels.size())
 
 
-## Whether `table` can run the model. `handbrake_torque_nm`,
-## `traction_limit`, `traction_rearm_s` and
-## `side_force_depth` may legally be 0 — no handbrake, no assist, no traction
-## control, re-arm on the slip alone, the force at the centre of mass — so a
-## missing one cannot be told from a chosen one and is not guarded.
+## Whether `table` can run the model. `side_force_depth` may legally be 0 —
+## the force at the centre of mass — so a missing one cannot be told from a
+## chosen one and is not guarded; nor is any system's table, where a zero is
+## that system off.
 static func usable(table: TyreProfile) -> bool:
 	if table == null:
 		push_error("TyreVehicleController: no TyreProfile; the car does not drive.")
@@ -191,6 +174,24 @@ static func usable(table: TyreProfile) -> bool:
 	return not TuningTable.any_zero(
 		table, fields, "TyreVehicleController", "the car does not drive"
 	)
+
+
+## Whether every system's table is assigned: a null one would stop the tick at
+## its first read, so the car is parked behind one error instead.
+func _systems_assigned() -> bool:
+	var tables: Array[Resource] = [
+		traction_control,
+		stability_control,
+		drift_mode,
+		countersteer_assist,
+		handbrake,
+		rev_limiter,
+		arcade_aids,
+	]
+	if tables.has(null):
+		push_error("TyreVehicleController: a system's table is unassigned; the car does not drive.")
+		return false
+	return true
 
 
 ## Each wheel's last rebuilt load in newtons, front axle first. For the probe
@@ -223,126 +224,60 @@ func take_tyre_cost_us() -> float:
 	return mean
 
 
-## The parent's steering, then the countersteer assist on top: the front
-## wheels turned towards the travel by `countersteer_assist` of the slip angle
-## beyond the tyre's peak, up to `countersteer_lock_deg`, while `drift_assist`
-## is on. Built because keyboard and touch steer near on-off; an option, on by
-## default, because the user wants the countersteer to be the player's skill
-## and a novice's slide to pay (`Q153`; `tyre.md` has both tables).
-## `steer_ratio`, which the lamps read, stays the player's.
-##
-## ⚠️ Not a slip setpoint (`Q72`): the assist aims the fronts along the travel
-## and asks for no angle. The throttle and the rear tyres set the slide.
+## The parent's steering, capped by the catch limiter, then the countersteer
+## assist on top while the player's `drift_assist` is on. `steer_ratio`, which
+## the lamps read, stays the player's.
 func _update_steering(delta: float) -> void:
 	steering = _driver_steering
 	super._update_steering(delta)
-	_cap_catch(delta)
+	if arcade_aids.catch_lock_deg > 0.0:
+		steering = _catch.step(
+			steering,
+			steer_input,
+			_slide_toward(),
+			_slide_beyond_peak_rad(),
+			angular_velocity.y,
+			delta,
+			arcade_aids
+		)
 	_driver_steering = steering
-	# Only while the player steers INTO the slide, the plain input it stands in
-	# for. Letting go or countersteering is how the street's 90° turn is ended,
-	# and an assist still turning the fronts along the travel then brought it
-	# out at 58–69° where it settles at 81–91 (`tyre.md`). The sign test is
-	# `_steer_lock_rad`'s: the player countersteers when the product is over 0.
-	if not drift_assist or tyre.countersteer_assist <= 0.0:
+	if not drift_assist or countersteer_assist.gain <= 0.0:
 		# Cleared, so the option turned back on mid-slide starts unlatched.
-		_assist_yielded = false
+		_assist.reset()
 		return
-	var toward: float = _slide_toward()
-	var beyond: float = _slide_beyond_peak_rad()
-	var countersteer: float = -steer_input * toward
-	_assist_yielded = assist_yields(_assist_yielded, countersteer > 0.0, beyond > 0.0)
-	if _assist_yielded or countersteer >= 0.0 or beyond <= 0.0:
-		return
-	# Never less lock than the player already has: the assist adds to their
-	# angle and is clamped only where it would pass `countersteer_lock_deg`.
-	var lock: float = maxf(deg_to_rad(tyre.countersteer_lock_deg), absf(steering))
-	steering = clampf(steering + toward * beyond * tyre.countersteer_assist, -lock, lock)
+	steering = _assist.steer(
+		steering, steer_input, _slide_toward(), _slide_beyond_peak_rad(), countersteer_assist
+	)
 
 
-## Whether the countersteer assist stands aside this tick, given last tick's
-## answer: from the player's first countersteer in a slide until the slide is
-## over (the slip back under the tyre's peak), the slide is the player's.
-## Re-tested each tick instead, the assist stepped back in every time a
-## feathered countersteer crossed zero, and the pad's countersteering driver
-## held 0.27 s where it held 2.00–3.28 s with the assist off (`P3-56`, `Q153`).
-static func assist_yields(yielded: bool, countersteering: bool, sliding: bool) -> bool:
-	return sliding and (yielded or countersteering)
-
-
-## Caps the player's countersteer at `catch_lock_deg` once a caught slide turns
-## the car the other way. The catch round found no snap on either car: full
-## opposite lock on gripping tyres turns the car the other way at about 90°/s
-## once the slide is caught, and a key holds full lock for as long as it is
-## down; with the throttle held, the turn starts only once the wheel is at full
-## lock, so the lock kept is the lever and the steering rate is not (`Q152`).
-##
-## Keyed on the heading reversing, not the slip falling back under the tyre's
-## peak: the car turns the other way before the slide reads as caught. Holds
-## while the player keeps countersteering and the slide was live within
-## `catch_window_s`; the player letting go, or the window running out, hands
-## back the full lock at the parent's attack rate.
-##
-## Applied to the player's own angle, after the parent's rate limit, so the
-## limit ramps from the capped angle, and so `steer_ratio` — which the lamps
-## read, and the skidpad's `wheel` column — stays the player's input: read
-## `steering` for the front wheels. The cap lands in the tick it engages, where
-## the rack's release would take two or three. Never an angle added (`Q72`).
-func _cap_catch(delta: float) -> void:
-	if tyre.catch_lock_deg <= 0.0:
-		return
-	# Latched on a tail-out slide only: the nose turning past the travel, so
-	# the yaw rate and the countersteer's sign disagree. A plough at turn-in is
-	# past the peak too, with the travel on the other side of the nose, and
-	# latched it read the player's steering into the turn as a countersteer
-	# (42 kph: the tap's peak 28.0° → 22.3°). The catch's own reversal fails
-	# the test as well, which keeps the side the slide went out on.
-	var toward: float = _slide_toward()
-	if _slide_beyond_peak_rad() > 0.0 and angular_velocity.y * toward < 0.0:
-		_slide_side = toward
-		_since_slide_s = 0.0
-	else:
-		_since_slide_s += delta
-	# Countersteering: the player's input towards the side the slide went out
-	# on, in the steering angle's sign (see `_steer_lock_rad`).
-	var countersteering: bool = -steer_input * _slide_side > 0.0
-	if not countersteering or _since_slide_s >= tyre.catch_window_s:
-		_catch_capped = false
-		return
-	if not _catch_capped:
-		# A positive yaw rate turns the nose left, Godot's positive steering,
-		# so the car turns the other way when the two signs agree.
-		_catch_capped = angular_velocity.y * _slide_side > deg_to_rad(tyre.catch_turn_dps)
-	if _catch_capped and steering * _slide_side > 0.0:
-		steering = _slide_side * minf(absf(steering), deg_to_rad(tyre.catch_lock_deg))
-
-
-## Whether `_cap_catch` holds the countersteer this tick, for the skidpad.
+## Whether the catch limiter holds the countersteer this tick, for the skidpad.
 func catch_capped() -> bool:
-	return _catch_capped
+	return _catch.capped
 
 
 ## The lock the player has while the car slides: the parent's speed-narrowed
-## lock, widened to `slide_lock_deg` on the countersteer side alone once the
+## lock, widened to `ArcadeAidsProfile.slide_lock_deg` on the countersteer side
+## alone once the
 ## slip is past the tyre's peak. Built on the suspicion that the handling
 ## table's lock (16° at 63 kph, under 14° at 86) was why a countersteered
 ## slide at 86 kph fell short of the fare's 2 s; swept and refuted — every
 ## value past the table's lock SHORTENED `hold` at all three speeds, because
 ## the pad's driver steers a share of the lock it has and a wider one makes
-## its catch a straightening (`tyre.md`). Shipped absent, so 0 and inert; kept
+## its catch a straightening (`systems/arcade_aids.md`). Shipped absent, so 0 and inert; kept
 ## because a player's hands, unlike the driver's, scale to the wheel, and the
 ## user's own drive is the grade that could still want it. One side only: a
 ## wider lock INTO the slide at 86 kph is a spin, not a skill. No angle asked
 ## for (`Q72`).
 func _steer_lock_rad(speed_ratio: float) -> float:
 	var lock: float = super._steer_lock_rad(speed_ratio)
-	if tyre.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
+	if arcade_aids.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
 		return lock
 	# `steer_input` is +1 for right, and the parent negates it into Godot's
 	# positive-left angle; `_slide_toward` is in the angle's sign, so the
 	# player is countersteering when the two have opposite signs.
 	if -steer_input * _slide_toward() <= 0.0:
 		return lock
-	return maxf(lock, deg_to_rad(tyre.slide_lock_deg))
+	return maxf(lock, deg_to_rad(arcade_aids.slide_lock_deg))
 
 
 ## How far the body's slip is past the tyre's peak, in radians, or 0 when it
@@ -391,16 +326,11 @@ func place_at(pose: Transform3D) -> void:
 	_brake_dial = 0.0
 	_omega.fill(0.0)
 	_loads.fill(0.0)
-	_traction_off = false
-	_released_s = 0.0
-	_slide_steered = false
 	_side_cut = 0.0
 	_driver_steering = 0.0
-	_slide_side = 0.0
-	_since_slide_s = INF
-	_catch_capped = false
-	_assist_yielded = false
-	_flick.reset()
+	_drift_mode.reset()
+	_assist.reset()
+	_catch.reset()
 
 
 func _apply_tyres(delta: float) -> void:
@@ -415,11 +345,28 @@ func _apply_tyres(delta: float) -> void:
 	var up: Vector3 = global_basis.y
 	var share: float = mass / float(_wheels.size())
 	var brake_nm: float = _brake_dial * float(Engine.physics_ticks_per_second)
-	var rim_limit_mps: float = profile.max_speed_kph / 3.6 * (1.0 + tyre.rim_overspeed)
-	_rearm_traction(delta)
-	var governor: bool = tyre.traction_limit > 0.0 and not _traction_off
+	var rim_limit_mps: float = profile.max_speed_kph / 3.6 * (1.0 + rev_limiter.overspeed_share)
+	var pressed: bool = _drift_mode.step(
+		drift_input,
+		steer_input,
+		throttle_input,
+		brake_input,
+		speed_kph,
+		linear_velocity,
+		nose,
+		profile.drift_slip_threshold_deg,
+		delta,
+		drift_mode,
+		arcade_aids
+	)
+	if pressed:
+		# Latched, not tracked: a slide sheds speed, and a cut that deepened as
+		# it did would feed itself (`Q89`).
+		_side_cut = _side_cut_at(absf(speed_kph))
+	var wheelspin_limit: float = traction_control.wheelspin_limit
+	var governor: bool = wheelspin_limit > 0.0 and not _drift_mode.engaged
 	var drive_share: float = 1.0
-	if _traction_off:
+	if _drift_mode.engaged:
 		drive_share = _slide_drive_share()
 	elif governor:
 		drive_share = _turn_drive_share()
@@ -435,7 +382,7 @@ func _apply_tyres(delta: float) -> void:
 			drive_nm = 0.0
 		var hold_nm: float = brake_nm * _radius
 		if drift_input and i >= _front.size():
-			hold_nm += tyre.handbrake_torque_nm
+			hold_nm += handbrake.torque_nm
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
 			_loads[i] = 0.0
@@ -471,11 +418,7 @@ func _apply_tyres(delta: float) -> void:
 			# scrubbed 15% of its speed.
 			var slip_x: float = (omega * _radius - _along) * _per_slip
 			var torque_nm: float = drive_nm
-			if (
-				governed
-				and absf(slip_x) >= tyre.traction_limit
-				and signf(drive_nm) == signf(slip_x)
-			):
+			if governed and absf(slip_x) >= wheelspin_limit and signf(drive_nm) == signf(slip_x):
 				torque_nm = 0.0
 			omega = _solve_spin(omega, torque_nm, hold_nm, step, at_rest)
 			sum += _solved
@@ -514,97 +457,53 @@ func _apply_tyres(delta: float) -> void:
 	_cost_ticks += 1
 
 
-## The share of the forward drive left while traction control is armed and the
-## fronts are turned: 1 with the wheel straight, `1 - turn_drive_cut` at the
+## Stability control's understeer cut: the share of the forward drive left
+## while traction control is armed and the fronts are turned: 1 with the wheel
+## straight, `1 - understeer_power_cut` at the
 ## lock the speed allows. The doubled drive the slide once needed (`Q153`)
 ## otherwise accelerated a full-lock corner to about 128 kph from any entry,
 ## its arc widening with no scrub, where the shipped car settles at 62-65
 ## (`Q153`). Read off the front wheels' own angle, so the catch cap and the
 ## rate limit count. Forward drive only: reversing is not the corner.
 func _turn_drive_share() -> float:
-	if tyre.turn_drive_cut <= 0.0 or _drive_n <= 0.0:
+	if stability_control.understeer_power_cut <= 0.0 or _drive_n <= 0.0:
 		return 1.0
 	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0))
 	if lock <= 0.0:
 		return 1.0
-	return 1.0 - tyre.turn_drive_cut * minf(absf(steering) / lock, 1.0)
+	return 1.0 - stability_control.understeer_power_cut * minf(absf(steering) / lock, 1.0)
 
 
-## The share of the forward drive left while traction control is disarmed: 1
-## under `slide_drive_fade_from_deg` of body slip, none at
-## `slide_drive_fade_to_deg`. A key or a thumb holds full throttle, and with
+## Stability control's slip cut: the share of the forward drive left while
+## drift mode is on: 1 under `slip_power_cut_from_deg` of body slip, none at
+## `slip_power_cut_to_deg`. A key or a thumb holds full throttle, and with
 ## the rim free to overspeed a plain held tap ran to 48-65° (`Q153`, the user's
 ## street report: "the rear feels too spinny"). It takes power away and asks
 ## for no angle (`Q72`): under the band the slide is the throttle's and the
 ## countersteer's, as before. With the drift assist on the band starts at
-## `assist_drive_fade_from_deg`: at 86 kph the plain band took the assisted
-## slide's drive at 1.40 s, short of `drift_min_s` (`tyre.md`).
+## `assisted_slip_cut_from_deg`: at 86 kph the plain band took the assisted
+## slide's drive at 1.40 s, short of `drift_min_s` (`systems/stability_control.md`).
 func _slide_drive_share() -> float:
-	var from: float = tyre.slide_drive_fade_from_deg
-	if drift_assist and tyre.assist_drive_fade_from_deg > 0.0:
-		from = tyre.assist_drive_fade_from_deg
-	if tyre.slide_drive_fade_to_deg <= from or _drive_n <= 0.0:
+	var cut: StabilityControlProfile = stability_control
+	var from: float = cut.slip_power_cut_from_deg
+	if drift_assist and cut.assisted_slip_cut_from_deg > 0.0:
+		from = cut.assisted_slip_cut_from_deg
+	if cut.slip_power_cut_to_deg <= from or _drive_n <= 0.0:
 		return 1.0
 	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
-	var over: float = inverse_lerp(from, tyre.slide_drive_fade_to_deg, slip)
+	var over: float = inverse_lerp(from, cut.slip_power_cut_to_deg, slip)
 	return 1.0 - clampf(over, 0.0, 1.0)
 
 
-## The rear side cut for a press at `kph`: `drift_side_cut` up to
+## The rear side cut (an arcade aid) for a press at `kph`: `drift_side_cut` up to
 ## `drift_side_cut_from_kph`, easing to `drift_side_cut_fast` by
 ## `drift_side_cut_to_kph`. With no band set, `drift_side_cut` at every speed.
 func _side_cut_at(kph: float) -> float:
-	if tyre.drift_side_cut_to_kph <= tyre.drift_side_cut_from_kph:
-		return tyre.drift_side_cut
-	var along: float = inverse_lerp(tyre.drift_side_cut_from_kph, tyre.drift_side_cut_to_kph, kph)
-	return lerpf(tyre.drift_side_cut, tyre.drift_side_cut_fast, clampf(along, 0.0, 1.0))
-
-
-## Off at a drift press, and back on once the button has been up for
-## `traction_rearm_s` and the car's slip is under the bar the game scores a
-## slide on — the slide the player asked for is over. Keyed on the body's slip
-## rather than the tyres': after a handbrake tap the rear tyres spin back up
-## to road speed before the throttle can take the slide over, and re-armed on
-## that the governor cut the very torque the slide needed (the `hold` row at
-## 63 kph fell from 2.22 s to nothing).
-##
-## With `rearm_on_steer_release` it also comes back the tick the player lets
-## the steering go, having steered since the press — ahead of the clock and
-## the slip bar, because that is the slide's ending handed to the steering key
-## (`Q153`). The press is also where the side cut is latched.
-##
-## A flick (`FlickWatch`) stands it down too, while it is armed: the reversal
-## is the player asking for the slide, the rear side cut stays the button's,
-## and the same clock, slip bar and steering release bring it back. Never while
-## it is already off, so a countersteer inside a slide cannot stretch the slide.
-func _rearm_traction(delta: float) -> void:
-	var flicked: bool = _flick.step(
-		steer_input, throttle_input, brake_input, speed_kph, delta, tyre
-	)
-	if drift_input:
-		if not _traction_off or _released_s > 0.0:
-			_slide_steered = false
-			_side_cut = _side_cut_at(absf(speed_kph))
-		_slide_steered = _slide_steered or not is_zero_approx(steer_input)
-		_traction_off = true
-		_released_s = 0.0
-		return
-	if flicked and not _traction_off:
-		_traction_off = true
-		_released_s = 0.0
-		_slide_steered = true
-		return
-	if not _traction_off:
-		return
-	if not is_zero_approx(steer_input):
-		_slide_steered = true
-	elif tyre.rearm_on_steer_release and _slide_steered:
-		_traction_off = false
-		return
-	_released_s += delta
-	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
-	if _released_s >= tyre.traction_rearm_s and slip < profile.drift_slip_threshold_deg:
-		_traction_off = false
+	var aids: ArcadeAidsProfile = arcade_aids
+	if aids.drift_side_cut_to_kph <= aids.drift_side_cut_from_kph:
+		return aids.drift_side_cut
+	var along: float = inverse_lerp(aids.drift_side_cut_from_kph, aids.drift_side_cut_to_kph, kph)
+	return lerpf(aids.drift_side_cut, aids.drift_side_cut_fast, clampf(along, 0.0, 1.0))
 
 
 ## The wheel's spin after `seconds`, solved implicitly: the spin at which the
