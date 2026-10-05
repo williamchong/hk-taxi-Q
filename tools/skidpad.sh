@@ -71,14 +71,12 @@
 #                                    P3-50's penalty tiers: `approach` is the
 #                                    tool's reading, `impact` the controller's
 #                                    latch, and they must agree (Q148)
-#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile float, or a
-#                                    TyreProfile one on the Q152 spike car
-#                                    (--scene=res://scenes/dev/skidpad_tyre.tscn). A drift_*
-#                                    field re-runs only drift and tap, since the
-#                                    rest cannot move; anything else re-runs all
-#                                    five. One sweep per run — a second is
-#                                    refused, not merged
-#   --drift-grip=0.38,0.40,0.42      alias for --sweep=drift_rear_grip_scale=...
+#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile or TyreProfile
+#                                    float. A drift_* field re-runs only the
+#                                    rows that hold the button, since the rest
+#                                    cannot move; anything else re-runs all.
+#                                    One sweep per run — a second is refused,
+#                                    not merged
 #   --scene=res://scenes/dev/...      grade a different car on the same ground
 #   --assist=on                      the tyre car's drift assist on (P3-56): the
 #                                    countersteer assist and its later drive

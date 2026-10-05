@@ -8276,6 +8276,27 @@ on the desk; `P0-3b`'s handsets), the wheel lift at a kerb at 72 kph and the sli
 speed (`Q153`, not yet measured), the tap under 30 kph (`Q153`), and the assist as a setting
 (`P3-56`, which rode on this).
 
+**The engine-tyre control dropped (the user's call, 2026-10-05).** `taxi.tscn` on the engine's
+tyres had graded nothing the player drives since the ship, and its drift — the per-axle grip cut and
+the yaw torque, `Q84`–`Q89` — was a third of `handling.tres`. Gone: that drift in
+`VehicleController` (`_write_drift_grip`, `_apply_drift_yaw`, the two tapers and the low latch),
+the engine-tyre friction and `roll_influence` writes, eleven `HandlingProfile` fields (`tyre_grip`,
+the five `drift_*grip*` / `drift_low_fade_kph`, the four yaw dials, `roll_influence`), the two
+`TyreProfile` fields that were off (`yaw_assist_scale`, `handbrake_declutch`), the pad tool's
+`--drift-grip` alias and `skidpad_tyre.tscn`, folded into `skidpad.tscn`, which with `greybox.tscn`
+now instances `taxi_tyre.tscn`. `slide_lock_deg` and `drift_side_cut_fast` stay, on the user's call
+(the first kept for their drive, the second an in-use 0, not an off). `VehicleController` keeps the
+button's ramp (`drift_attack_s`, `drift_release_s`), which the side cut reads.
+
+- **A table the model cannot run parks the car**, where it fell back to the engine's tyres: no
+  grading covers those any more. `verify_vehicle` still refuses it.
+- **No off switch**: a revert of the commit is the way back.
+- **Nothing moved.** The pad at 42 / 63 / 86 kph in both modes, before and after: every drift row
+  identical. Differences: the wall rows (noisy, as recorded), and `hold`'s exit speed (by up to 0.09
+  kph) and turn (by up to 1.1°). The pad samples the spawn after one rendered frame, and how many
+  physics ticks that frame carries depends on load time — the before runs of one HEAD settled at
+  0.935 and 0.957 m, the after ones at 0.909 on the new scene — and every row restarts from it.
+
 ## `Q153` — Arcade grip, sim-lite slide: the drift is where the skill lives
 
 **Asked** by the user (2026-10-02), after the 120+ kph throttle-on / throttle-off rows on the spike

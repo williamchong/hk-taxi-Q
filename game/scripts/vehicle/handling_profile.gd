@@ -8,15 +8,11 @@ extends Resource
 ## never assigned reads as all-zeroes and fails loudly, rather than quietly
 ## driving on values buried in a script.
 
-## The model is Godot's VehicleBody3D/VehicleWheel3D, driven from these numbers.
-##
-## ⚠️ **That reverses P0-5a, at the user's explicit instruction (Q50).** The
-## raycast controller this replaced kept lateral and longitudinal grip as separate
-## semi-axes of a friction ellipse; VehicleWheel3D exposes one isotropic
-## wheel_friction_slip, so the two collapse into tyre_grip and the drift becomes a
-## per-axle scale on that single number. What that costs is recorded in
-## docs/DECISIONS.md Q50, measured, and it is a cost rather than a trade.
-## See also docs/GAME_DESIGN.md "Controls".
+## The model is Godot's VehicleBody3D/VehicleWheel3D, driven from these numbers,
+## with the engine's tyre force replaced by `TyreVehicleController`'s per-wheel
+## model, whose numbers are `TyreProfile`'s (`Q152`). The engine-tyre grip and
+## drift dials went with the engine-tyre control car (2026-10-05); `Q50` to
+## `Q89` record them. See also docs/GAME_DESIGN.md "Controls".
 
 ## Path to the shipped table, so a tool that needs one of its design targets
 ## (`verify_fares.gd`, for `drift_slip_threshold_deg`; `verify_spawn.gd`, for
@@ -49,10 +45,8 @@ const PATH: String = "res://tuning/handling.tres"
 ## shipped value** — it has to keep reaching what a heavier roster vehicle needs,
 ## and 40 sitting near the bottom of it is information, not a mis-scaled slider.
 ##
-## Grip does not bind here: `tyre_grip` is isotropic and generous, and the stop is
-## limited by this dial rather than by the tyre. ⚠️ That was checked against
-## `grip_longitudinal` before `Q50` deleted it and has **not** been re-checked
-## against `tyre_grip`.
+## Handed to the tyre model as a brake torque (`TyreVehicleController`), where it
+## stops the car within 2% of the engine-tyre car's stop (`Q152`).
 @export_range(0.0, 5000.0, 10.0) var brake_force: float
 
 @export_group("Steering")
@@ -65,174 +59,17 @@ const PATH: String = "res://tuning/handling.tres"
 ## Seconds to return to centre when input is released.
 @export_range(0.01, 1.0, 0.01, "suffix:s") var steer_release_s: float
 
-@export_group("Grip")
-## VehicleWheel3D.wheel_friction_slip — the tyre's whole friction budget.
-##
-## ⚠️ **One number, and it is isotropic.** It is the tyre's lateral limit and its
-## longitudinal limit at once, so it cannot be spent asymmetrically: this is
-## exactly the property P0-5a rejected VehicleBody3D for, and Q50 accepted. The
-## grip_lateral / grip_longitudinal pair it replaces were the semi-axes of an
-## ellipse, and there is no ellipse here to be the semi-axes of.
-##
-## The practical consequence is that everything below which scales this scales
-## braking and traction with it, by exactly the same factor.
-@export_range(0.0, 20.0, 0.05) var tyre_grip: float
-
 @export_group("Drift")
-## Rear-axle tyre_grip multiplier while drift is held. 1.0 leaves the rear axle
-## alone; lower breaks it loose.
-##
-## ⚠️ **"Nothing lands on 14°" was published here until Q84 and it was wrong.**
-## It came from a 0.02 sweep grid read through a `%.2f` row label, which printed
-## 0.670, 0.668 and 0.665 as three rows all reading `drift@0.67` — a label that
-## could not resolve the band it was being used to explore. Swept at 0.002 the
-## response is smooth and monotonic at ~990°/unit between 0.68 and 0.66, and
-## **0.6695 peaks at exactly 14.0°**. There is no cliff.
-##
-## 🔴 **What is real is that the peak is the wrong target.** GAME_DESIGN.md pays
-## drift per *second* above the threshold, and 0.6695 spends 0.05 s there against
-## the shipped 0.66's 0.57 s — so tuning the peak onto the bar scores nothing.
-## Grade this dial on skidpad.sh's `secs>thr` column, never on `peak slip`.
-##
-## ⚠️ **And dwell is bought with speed, on this one dial, always.** 0.6695 exits
-## at 48.6 kph with 0.05 s of drift; 0.66 at 45.1 with 0.57 s; 0.64 at 41.1 with
-## 0.77 s; 0.60 at 36.4 with 0.85 s. "Easy to hold" and "scrubs little speed" are
-## opposite ends of it. That is Q50's isotropic cost, stated properly — one
-## wheel_friction_slip carries the rear axle's drive as well as its grip.
-##
-## ⚠️ **The window moves with tyre_grip**: re-swept at tyre_grip 4.0 it sits at
-## 0.43/0.44. Sweep it with `tools/skidpad.sh --sweep=drift_rear_grip_scale=`, at 0.002 or
-## finer (`--drift-grip=` is kept as an alias for it).
-##
-## ⚠️ **And inside it the slide does not hold.** Because tyre_grip is isotropic,
-## the same scale that lets the tail step out takes the rear axle's drive and
-## braking with it — so slip opens only while speed collapses (53.9 → 26.4 kph in
-## 0.75 s with the throttle down throughout), then self-terminates and the car
-## grips again. GAME_DESIGN.md asks for a drift that is easy to hold; this cannot
-## be one. Q50 records that as the accepted cost of the switch.
-@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale: float
-## Front-axle tyre_grip multiplier while drift is held.
-##
-## ⚠️ **Deliberately has no speed term where the rear does, and the asymmetry is
-## the mechanism rather than an omission.** What spins the car at speed is the
-## front/rear *imbalance*, so tapering the rear alone closes it — 0.19 down to 0.05
-## at the limiter — while tapering both would preserve the gap and fix nothing.
-##
-## A real handbrake does nothing to the front axle, and the raycast model this
-## replaced left it alone for that reason. It is back because the rear-only form
-## is unusable here: with one isotropic budget, softening the rear alone spins the
-## car rather than sliding it, and easing the front is the only lever left that
-## keeps the nose from biting. It models no mechanism — it is a fudge, and it is
-## named honestly rather than dressed up.
-@export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
-## Rear-axle multiplier at max_speed_kph, interpolated from drift_rear_grip_scale
-## starting at drift_fade_from_kph. Higher means less cut, i.e. the drift eases
-## off as speed rises.
-##
-## 🔴 **This is the half of Q87 the yaw fade could not reach.** With the yaw assist
-## switched off entirely the held drift still read 95.2 deg at 86 km/h and 165.2 at
-## 105 — one isotropic friction budget, cut by a constant factor, spins the car on
-## its own once there is enough speed in it. The cut needed a speed term and had
-## none.
-##
-## ⚠️ **The value the car wants MOVES with speed, which is why this interpolates to
-## max_speed_kph rather than plateauing at drift_yaw_fade_to_kph like the yaw
-## does.** Swept as a CONSTANT rear scale, 86 km/h wants ~0.680 and 105 km/h wants
-## ~0.710, and 0.680 at 105 still reads 163.5 — so no plateau serves both.
-##
-## 🔴 **Those constant-value figures are an upper bound on a fix, NOT a prediction
-## of one, and fitting this dial to them is the mistake Q88 exists to record.** A
-## constant holds for the whole run and this taper does not: the car decelerates
-## below the knee inside a drift and the cut deepens underneath it, so the spin
-## develops at a speed the entry reading never described. Fitted to reach ~0.708 at
-## 105 the run measured 159.4 deg — still a spin, against the 44.9 the constant
-## sweep promised.
-##
-## ⚠️ **So 0.80 was swept on THIS dial, not fitted.** It gives 86 km/h 50.4 deg /
-## 0.98 s — the design speed's own feel — and leaves 105 km/h inert at 2.4.
-##
-## 🔴 **It is the safe side of a cliff, chosen deliberately.** At 105 km/h 0.780
-## gives a real 75.8 deg drift and 0.790 gives 2.8; a value 0.01 from that edge is
-## hostage to any change in tyre_grip, mass or the yaw dials, which is what Q84
-## already cost this project on this exact dial. Inert is a failure a player drives
-## through; a spin is not.
-##
-## ⚠️ **The window closes ABOVE, not below** — at 86 km/h a constant 0.700 gives
-## 20.4 deg and 0.715 gives 2.1, the drift ceasing to exist rather than softening.
-## Sweep at 0.005 or finer near the knee, and sweep this dial rather than the
-## constant.
-##
-## ⚠️ **Lower than drift_rear_grip_scale is legal** and means a looser tail at
-## speed; the lerp is monotone either way. Nothing guards it against exceeding
-## drift_front_grip_scale, which would invert the axles — unreachable inside the
-## measured window, and unenforced.
-##
-## ⚠️ This dial touches nothing below drift_fade_from_kph — but
-## drift_rear_grip_scale_at_low does, so Q84's and Q86's 63 km/h figures no longer
-## describe the shipped car. Q89 re-published them: the drift there is 69.8 deg /
-## 0.87 s and the tap 20.5 / 0.40.
-@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_top: float
-## Rear-axle multiplier at and below drift_low_fade_kph, interpolating up to
-## drift_rear_grip_scale at drift_fade_from_kph. LOWER than the base scale: the
-## cut must DEEPEN as speed falls.
-##
-## 🔴 **The low end fails the opposite way from the high end and needs the
-## opposite correction.** Below ~50 km/h the tyre never saturates — 0.66 leaves
-## enough grip to hold the corner — so the drift returns 2.9-3.9 deg and the car
-## accelerates through the manoeuvre instead of scrubbing (Q89).
-##
-## 🔴 **The yaw assist CANNOT substitute here, and that is measured, not assumed.**
-## At 42 km/h slip reads 4.2 deg at zero torque and *falls* to 3.6 at 20000 N*m,
-## the top of drift_yaw_torque_nm's range — more torque makes LESS slip, because
-## with grip unbroken the rotation is absorbed as a tighter line rather than a
-## slide. That is Q85's multiplicative finding from the other side, and it is why
-## this is a grip dial and not a torque one.
-##
-## ⚠️ **The window here is narrow and moves ~8x faster than at the top.** Measured
-## as constants: 42 km/h wants ~0.45 (18.6 deg) and 0.35 spins it (152.9); 49 km/h
-## wants ~0.55 (16.7 deg) and 0.45 spins it (158.4). That is a ~0.10 window whose
-## centre moves ~0.010 per km/h, against 0.0012 above the knee. Sweep at 0.01 or
-## finer, and sweep THIS dial rather than a constant (Q88).
-@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_low: float
-## Speed at and below which drift_rear_grip_scale_at_low applies in full, in km/h.
-##
-## ⚠️ **A floor, not a knee, and it is what stops the low taper extrapolating into
-## nonsense.** The wanted curve is steep enough that a line through the measured
-## points reaches zero grip around 20 km/h; holding the value flat below here is
-## what keeps a parking-speed handbrake from being a guaranteed spin.
-@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_low_fade_kph: float
 ## Seconds for the drift to reach full engagement while the button is held.
 ##
 ## Short: the tail should step out when the player asks, not a moment later.
 @export_range(0.01, 1.0, 0.01, "suffix:s") var drift_attack_s: float
-## Seconds for grip to come back after the button is released.
+## Seconds for the drift to let go after the button is released. The tyre
+## model's rear side cut fades with it (`TyreVehicleController`, `Q153`).
 ##
-## 🔴 **This does NOT fix the tap, and Q84 built it expecting that it would.**
-## The diagnosis was that a 0.5 s tap returns 1.9 deg because grip is restored on
-## the tick the button comes up, so the slide carries no momentum out of the
-## release. Built and measured, the tap is unchanged: 1.9 deg, and a yaw and
-## distance still identical to `corner`. Swept, a release of 1.0 s reaches 2.0 deg,
-## 2.0 s reaches 2.2, and 3.0 s — six times the tap itself — reaches 3.3, against a
-## threshold of 14. **Nothing here is a tap any more and it still is not a drift.**
-##
-## ⚠️ **The real cause is that the slide takes seconds to build, not that it ends
-## too quickly.** Held, the drift spends 0.57 s of a 4.00 s run above 14 deg, so
-## the bar is not crossed until late in the fourth second; a 0.5 s tap is a small
-## fraction of the way there whatever happens afterwards. A locked raycast tyre
-## produced yaw immediately (7.1 deg) because the force appears the moment the
-## tyre stops rolling; an isotropic wheel_friction_slip has to be *driven* into
-## saturation, and that is a rate, not an event.
-##
-## 🔴 **Q85 then closed the route Q49, Q50 and Q84 all named.** get_rpm() is road
-## speed re-expressed — this class carries no wheel inertia, so per-wheel angular
-## velocity cannot be read here at all. The drift is assisted with a yaw torque
-## instead; see drift_yaw_torque_nm.
-##
-## ✅ **Kept anyway, for a consumer that is recorded and is not this one.** Q83's
-## touch scheme holds drift past a thumb threshold and needs hysteresis at the
-## boundary; every scheme there assumes `_drift_engagement` exists. It also stops
-## grip snapping between two values in one tick. Both are real, neither was the
-## reason it was built, and saying so is the point of this comment.
+## Built for the engine-tyre car's tap (`Q84`), which it did not fix, and kept for
+## Q83's touch scheme, which holds drift past a thumb threshold and needs the
+## engagement to exist for its hysteresis.
 ##
 ## ⚠️ **Asymmetric with drift_attack_s on purpose, and the asymmetry is the
 ## feature.** Same shape as steer_attack_s / steer_release_s above, and for the
@@ -243,120 +80,6 @@ const PATH: String = "res://tuning/handling.tres"
 ## router is the single source of player *intent* and the intent is binary. A ramp
 ## there would report held while nothing is held and lie about the button.
 @export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float
-## Peak yaw torque at the moment the drift engages, in N⋅m, signed by the steer.
-## Decays from here toward drift_yaw_sustain over drift_yaw_decay_s; this is the
-## kick, not the whole of what a held drift gets.
-##
-## 🔴 **This is the game asserting rotation the tyres did not produce, and that is
-## the point rather than a compromise.** Q84 measured the friction route: slip
-## needs about 3.4 s of held input to reach drift_slip_threshold_deg, because
-## lowering wheel_friction_slip only asks the tyres to lose an argument with
-## momentum and that takes seconds. Torque on the body opens the same angle in a
-## tick. Q49 already recorded that GAME_DESIGN.md's "easy to hold, scrubs little
-## speed" is anti-physical, so fidelity was never the target this had to hit.
-##
-## 🔴 **It is a TORQUE and must never become a slip-angle setpoint.** Drive the
-## car to a target angle and "slip above the threshold" degrades into "the player
-## held the button" — Q72's tautology moved into the gameplay, and secs>thr stops
-## grading anything. As a torque the physics still resists, so the angle is an
-## outcome and the measurement keeps its meaning. Same rule that makes Q84's
-## dwell column safe: the quantity controlled and the quantity measured must stay
-## different variables.
-##
-## ⚠️ Scaled by the drift engagement, so it inherits drift_attack_s and
-## drift_release_s rather than switching. Yaw inertia here is m(x²+z²)/12 =
-## 1200(1.8²+4.0²)/12 ≈ 1924 kg⋅m², so 2000 N⋅m is roughly 60°/s² before the
-## tyres take their share back.
-@export_range(0.0, 20000.0, 100.0, "suffix:N⋅m") var drift_yaw_torque_nm: float
-## Seconds over which the yaw torque decays from its peak to drift_yaw_sustain of
-## it, timed from the press.
-##
-## 🔴 **The decay runs on TIME, and must never be made to run on measured slip.**
-## Backing the torque off as the angle opens closes the loop, and "slip above the
-## threshold" degrades into "the dial said so" — Q72's tautology, and the exact
-## failure drift_yaw_torque_nm's own note refuses. On time it stays open-loop: the
-## tyres still get to argue, so the angle is an outcome and secs>thr keeps its
-## meaning. The quantity controlled and the quantity measured stay different
-## variables, which is the whole rule.
-##
-## ⚠️ **It exists because torque × time is rotation, so a tap collects a fraction
-## of what a hold does and one constant cannot serve both.** Measured at a flat
-## 1000 N⋅m the hold peaked 42.1° and the tap 2.4°; at 5000 the tap reached 27.0°
-## and the hold spun to 162.9° (Q85). Spending the budget early hands the tap the
-## whole burst and leaves the hold a sustain it can survive.
-##
-## ⚠️ Linear rather than exponential, on _update_steering's move_toward idiom and
-## because it gives the kick an end a player can be told about — "the burst lasts
-## 0.6 s" — instead of an asymptote.
-##
-## 🔴 **Floored at 0.01 because the decay divides by it — but the annotation binds
-## the inspector and NOT a value loaded from .tres.** This file declares no
-## defaults on purpose, so a handling.tres that simply omits this key reads 0.0,
-## and GDScript float division by zero is +INF rather than an error: the clamp
-## then saturates, the burst collapses to drift_yaw_sustain, and at the shipped
-## 0.0 **the whole yaw assist silently disappears**. That is not the "fails
-## loudly" this file's header promises, and it is stated rather than clamped
-## away because substituting 0.01 would be exactly the quiet default the header
-## refuses. drift_attack_s carries the identical hole. ⚠️ The 0.0/0.0 → NAN path
-## is unreachable: _apply_drift_yaw returns on zero engagement, and held time is
-## always at least one delta by then.
-@export_range(0.01, 2.0, 0.01, "suffix:s") var drift_yaw_decay_s: float
-## Fraction of drift_yaw_torque_nm the burst decays to and then holds for as long
-## as the button is down.
-##
-## 0.0 makes the drift a pure kick that friction then eats: the slide
-## self-terminates in about 1.8 s on its own (Q85). Above 0 is what
-## GAME_DESIGN.md's "easy to hold" asks for, so this is the dial that trades a
-## holdable angle against a spin, and drift_yaw_torque_nm no longer has to.
-@export_range(0.0, 1.0, 0.01) var drift_yaw_sustain: float
-## Speed at which the drift starts withdrawing upward, in km/h. At it exactly,
-## both the full yaw torque and the full drift_rear_grip_scale apply.
-##
-## 🔴 **This is ONE knee governing THREE envelopes, which is why it stopped saying
-## "yaw".** Below it the rear cut DEEPENS toward drift_rear_grip_scale_at_low
-## (Q89) rather than holding steady, so this is a hinge and not a floor. Above it the yaw assist fades toward nothing by drift_yaw_fade_to_kph,
-## and drift_rear_grip_scale eases toward drift_rear_grip_scale_at_top all the way
-## to max_speed_kph. They deliberately share no top: the assist is worthless above
-## the speed the drift spins at anyway, while the grip value the car wants keeps
-## MOVING with speed (Q88). Editing this moves both.
-##
-## ⚠️ **The yaw fade alone was necessary and not sufficient (Q87).** The assist was
-## tuned at the skidpad's 63 km/h and applied at every speed, so the same 0.5 s tap
-## that gives 16.0 deg at 63 spun the car at 105. But with the assist switched off
-## entirely the held drift still read **95.2 deg at 86 km/h and 165.2 at 105** —
-## the grip cut spins the car on its own, which is what
-## drift_rear_grip_scale_at_top then fixed. Q87 and Q88 carry the numbers.
-##
-## 🔴 **Q84's and Q86's 63 km/h figures are SUPERSEDED**: 63 sits 2 km/h under this
-## knee and so inside the low taper, which is why Q89 had to re-publish the
-## design-speed table where the three changes before it did not. The usable band is
-## now 34-86 km/h, against Q88's 60-100.
-##
-## ⚠️ Mirrors _update_steering's speed taper, which solves the same shape of
-## problem: an input authority that must shrink as speed rises.
-##
-## ⚠️ Distinct from VehicleController.YAW_ASSIST_FADE_KPH, which fades the assist
-## *in* from a standstill and is a structural constant because it shapes no feel.
-## ⚠️ **Keep this above that constant.** The two ramps multiply, so setting this
-## below it makes them overlap, the product never reaches 1.0, and
-## drift_yaw_torque_nm quietly stops meaning the torque actually applied. At the
-## shipped 65 against 10 they are disjoint and the product is a true 1.0 across
-## 10-65 km/h.
-## These shape feel — they decide the speed band the button works in — so
-## CLAUDE.md hard rule 4 makes them data.
-@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_fade_from_kph: float
-## Speed at or above which the yaw assist is fully withdrawn, in km/h. ⚠️ **Yaw
-## only** — it keeps its prefix because the grip taper does not stop here, it runs
-## on to max_speed_kph. The two envelopes share drift_fade_from_kph and nothing
-## else.
-##
-## ⚠️ Below drift_fade_from_kph this degenerates to a hard step at this speed
-## rather than dividing by a zero or negative span. 🔴 **A zero here means nobody
-## authored the pair, and yields FULL assist rather than none** — the step test is
-## true at every speed for an all-zero profile, so the safe-looking reading would
-## switch the assist off everywhere and reproduce exactly the silent disappearance
-## drift_yaw_decay_s refuses to hide.
-@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_to_kph: float
 ## Slip angle above which the drift scores style points. Since `P3-49` it is
 ## read: `FareSystem`'s drift skill pays per `SkillProfile.drift_s` (past `drift_min_s`) the slip
 ## holds at or over it, so it is a design target the skidpad grades dwell
@@ -422,21 +145,6 @@ const PATH: String = "res://tuning/handling.tres"
 @export_range(0.5, 5.0, 0.05, "suffix:Hz") var suspension_frequency_hz: float
 ## 1.0 is critically damped. Below 1.0 allows a little bounce, above is sluggish.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float
-## VehicleWheel3D.wheel_roll_influence — how much of the suspension force reaches
-## the chassis as roll torque. 0 suppresses body roll entirely, 1 passes it all.
-##
-## ⚠️ **Not an anti-roll bar, and not the anti_roll dial it replaces.** That one
-## added a restoring torque across each axle, sized from the compression
-## *difference* between its two wheels, so it fought roll only while the car was
-## actually rolling. This scales the force that causes roll in the first place,
-## at every wheel independently, whether the car is cornering or standing still.
-## The numbers do not convert, and a value ported across by arithmetic would be a
-## guess wearing a measurement's clothes.
-##
-## It is also why the anti-roll bar could not simply be kept: VehicleWheel3D
-## publishes is_in_contact() and get_skidinfo() but no suspension compression, so
-## the term the old bar was computed from is not readable from here.
-@export_range(0.0, 1.0, 0.01) var roll_influence: float
 ## VehicleWheel3D.suspension_max_force, in newtons — the ceiling on what one
 ## spring may push with.
 ##

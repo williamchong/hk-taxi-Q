@@ -8,20 +8,21 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 The per-wheel tyre model's table (`P3-52`, `Q152`): built as the spike that asked whether a
 drift can be physical on `VehicleBody3D`, and the game's car since 2026-10-03 (`city_drive.tscn`
 instances `taxi_tyre.tscn`). Read by `TyreVehicleController` alone. "The shipped car" below is the
-car before it — `taxi.tscn` on the engine's tyres, still the control on `skidpad.tscn`. Every
-value was graded on
-`tools/skidpad.sh --scene=res://scenes/dev/skidpad_tyre.tscn --entry-kph=` at 42, 63 and 86 kph,
-and `Q152` holds the tables.
+car before it — `taxi.tscn` on the engine's tyres, the pad's control until it was dropped on
+2026-10-05. Every value was graded on `tools/skidpad.sh --entry-kph=` at 42, 63 and 86 kph (on
+`skidpad_tyre.tscn` before that day, the same pad with this car on it), and `Q152` holds the
+tables.
 
 ⚠️ `substeps`, `mu`, `slide_ratio`, `peak_slip_ratio`, `peak_slip_angle_deg`,
 `wheel_inertia_kgm2`, `low_speed_mps` and `drive_scale` are required: `tyre_profile.gd` declares no
-defaults, and a zero leaves the car on the engine's own tyres (`TyreVehicleController.usable`).
-`yaw_assist_scale` is absent because it is 0.0 — Godot's writer drops a value equal to the type's
-zero — and 0 is the choice: the yaw torque did not rescue the low end and is not needed for the
-held slide. `countersteer_assist` and `assist_drive_fade_from_deg` are the drift assist's, inert
+defaults, and a zero parks the car (`TyreVehicleController.usable`). `yaw_assist_scale` (a share
+of the engine-tyre car's drift yaw torque) and `handbrake_declutch` went with that car on
+2026-10-05: both were 0 / off, the torque not rescuing the low end, the declutch only a harsh brake
+(`Q153`). `countersteer_assist` and `assist_drive_fade_from_deg` are the drift assist's, inert
 while `TyreVehicleController.drift_assist` is off — the player's option since `P3-56`, on by
 default in the game and off on the pads (`--assist=on` turns it on there).
-`slide_lock_deg` is absent for the same reason, refuted on the pad's driver; its section keeps the
+`slide_lock_deg` is absent because it is 0.0 — Godot's writer drops a value equal to the type's
+zero — refuted on the pad's driver and kept for the user's own drive; its section keeps the
 sweep. `catch_lock_deg` is set at 6.0 on the user's call (2026-09-30), ahead of their drive, which
 stays the veto.
 
@@ -76,8 +77,7 @@ eases to `drift_side_cut_fast` (absent, 0) by 70 kph, because 0.6 at 63 kph spin
 at 86 does. The re-arm brings traction control back the tick the steering is let go, which is the
 ending: settled at 81–85° at 42 kph and 83–91° at 63 on the pad's `turn` row (96–107° at 63 with
 the band to 70). It fires once the player has steered since the press, whichever came first. Graded on `turn`
-(start and settled heading) with `hold` and `ride` as the guard. `handbrake_declutch` is absent:
-built, measured, and only a harsh brake (`Q153`). The band ended at 70 kph first; 65 since the
+(start and settled heading) with `hold` and `ride` as the guard. The band ended at 70 kph first; 65 since the
 user's second street drive ("sometimes the rear feels too spinny"), with the fade below.
 
 ## `slide_drive_fade_from_deg = 25.0`, `slide_drive_fade_to_deg = 40.0`

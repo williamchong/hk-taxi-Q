@@ -1,9 +1,10 @@
 class_name TyreVehicleController
 extends VehicleController
 ## `taxi.tscn`'s car with its tyres replaced by a per-wheel model (`P3-52`,
-## `Q152`): the game's car since 2026-10-03, through `taxi_tyre.tscn`. "The
+## `Q152`): the game's car since 2026-10-03, through `taxi_tyre.tscn`, and the
+## only one since the engine-tyre control was dropped (2026-10-05). "The
 ## shipped car" below and in `tyre.md` is the car before it, `taxi.tscn` on
-## the engine's tyres, which stays on `skidpad.tscn` as the pad's control.
+## the engine's tyres.
 ##
 ## **Why it exists.** `Q85` closed on "a tyre model layered on `VehicleWheel3D`
 ## is the only route to the physical mechanism". Godot's wheel has one friction
@@ -44,9 +45,9 @@ extends VehicleController
 ## is the parent's, unchanged, so the skidpad and a street drive grade this car
 ## with no special case.
 ##
-## ⚠️ **A table with a zero key leaves the car on the engine's tyres**: every
-## override hands straight back to the parent, so the car drives as the
-## shipped one rather than on no tyres at all (`usable`).
+## ⚠️ **A table with a zero key parks the car** (`usable`): it does not drive,
+## where it once fell back to the engine's tyres, which nothing grades since
+## the engine-tyre car was dropped.
 
 ## The spin solve stops when the torques balance to within this, or after
 ## this many iterations — a safeguarded Newton, so it never leaves its bracket.
@@ -107,7 +108,6 @@ var _brake_dial: float = 0.0
 ## skidpad's cost column.
 var _cost_us: int = 0
 var _cost_ticks: int = 0
-var _usable: bool = false
 ## The player's steering as the parent's rate limit left it, before the
 ## countersteer assist was added; restored before the parent's next step so
 ## the limit ramps the player's angle and never the assist's.
@@ -144,8 +144,10 @@ var _solved: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	super._ready()
-	_usable = usable(tyre)
-	if not _usable:
+	if not usable(tyre):
+		# Parked rather than driven on the engine's tyres, which no grading
+		# covers since the engine-tyre control was dropped.
+		set_physics_process(false)
 		return
 	_wheels.append_array(_front)
 	_wheels.append_array(_rear)
@@ -161,13 +163,13 @@ func _ready() -> void:
 
 
 ## Whether `table` can run the model. `handbrake_torque_nm`,
-## `yaw_assist_scale`, `traction_limit`, `traction_rearm_s` and
+## `traction_limit`, `traction_rearm_s` and
 ## `side_force_depth` may legally be 0 — no handbrake, no assist, no traction
 ## control, re-arm on the slip alone, the force at the centre of mass — so a
 ## missing one cannot be told from a chosen one and is not guarded.
 static func usable(table: TyreProfile) -> bool:
 	if table == null:
-		push_error("TyreVehicleController: no TyreProfile; the car keeps the engine's tyres.")
+		push_error("TyreVehicleController: no TyreProfile; the car does not drive.")
 		return false
 	var fields: Dictionary[String, float] = {
 		"mu": table.mu,
@@ -180,7 +182,7 @@ static func usable(table: TyreProfile) -> bool:
 		"drive_scale": table.drive_scale,
 	}
 	return not TuningTable.any_zero(
-		table, fields, "TyreVehicleController", "the car keeps the engine's tyres"
+		table, fields, "TyreVehicleController", "the car does not drive"
 	)
 
 
@@ -200,8 +202,7 @@ func wheel_slips() -> PackedFloat32Array:
 
 
 ## The wheels `wheel_slips` and `wheel_loads_n` index, front axle first. Empty
-## on a table with a zero key: the car is on the engine's tyres and publishes
-## no slip.
+## on a table with a zero key: the car is parked and publishes no slip.
 func tyre_wheels() -> Array[VehicleWheel3D]:
 	return _wheels
 
@@ -226,9 +227,6 @@ func take_tyre_cost_us() -> float:
 ## ⚠️ Not a slip setpoint (`Q72`): the assist aims the fronts along the travel
 ## and asks for no angle. The throttle and the rear tyres set the slide.
 func _update_steering(delta: float) -> void:
-	if not _usable:
-		super._update_steering(delta)
-		return
 	steering = _driver_steering
 	super._update_steering(delta)
 	_cap_catch(delta)
@@ -330,7 +328,7 @@ func catch_capped() -> bool:
 ## for (`Q72`).
 func _steer_lock_rad(speed_ratio: float) -> float:
 	var lock: float = super._steer_lock_rad(speed_ratio)
-	if not _usable or tyre.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
+	if tyre.slide_lock_deg <= 0.0 or _slide_beyond_peak_rad() <= 0.0:
 		return lock
 	# `steer_input` is +1 for right, and the parent negates it into Godot's
 	# positive-left angle; `_slide_toward` is in the angle's sign, so the
@@ -365,8 +363,6 @@ func _slide_toward() -> float:
 ## applied as torque in `_apply_tyres` instead.
 func _apply_drive() -> void:
 	super._apply_drive()
-	if not _usable:
-		return
 	# The parent writes `DRIVE_SIGN × force`, so the product is forward-positive.
 	_drive_n = engine_force * DRIVE_SIGN
 	_brake_dial = brake
@@ -374,24 +370,12 @@ func _apply_drive() -> void:
 	brake = 0.0
 
 
-## The drift button is a handbrake here, not a grip cut: the ramp and the held
-## clock still run, because the yaw assist reads them, and the tyres come last
-## so they see this tick's pedals.
+## The drift button is a handbrake here: the parent's ramp still runs, because
+## the rear side cut reads it, and the tyres come last so they see this tick's
+## pedals.
 func _apply_drift(delta: float) -> void:
-	if not _usable:
-		super._apply_drift(delta)
-		return
-	_ramp_drift(delta)
-	if tyre.yaw_assist_scale > 0.0:
-		_apply_drift_yaw(tyre.yaw_assist_scale)
+	super._apply_drift(delta)
 	_apply_tyres(delta)
-
-
-## Nothing to write: the engine's friction stays at zero, and the parent's
-## `place_at` calls this to restore a grip this model does not use.
-func _write_drift_grip() -> void:
-	if not _usable:
-		super._write_drift_grip()
 
 
 func place_at(pose: Transform3D) -> void:
@@ -445,8 +429,6 @@ func _apply_tyres(delta: float) -> void:
 		var hold_nm: float = brake_nm * _radius
 		if drift_input and i >= _front.size():
 			hold_nm += tyre.handbrake_torque_nm
-			if tyre.handbrake_declutch:
-				drive_nm = 0.0
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
 			_loads[i] = 0.0
@@ -513,10 +495,9 @@ func _apply_tyres(delta: float) -> void:
 			fy = signf(fy) * lerpf(absf(fy), kept, _drift_engagement)
 		# The sideways force goes in where Godot's does: the contact's height
 		# over the centre of mass scaled by `side_force_depth` (Bullet's
-		# `m_rollInfluence`, the handling table's `roll_influence`). At the contact itself this car's cornering grip
-		# is a rolling moment — on the street it tipped onto its side at a kerb.
-		# The tyre table's own share (`TyreProfile.side_force_depth`), not the
-		# handling table's 0.2, which took the drift's load transfer away.
+		# `m_rollInfluence`). At the contact itself this car's cornering grip
+		# is a rolling moment — on the street it tipped onto its side at a kerb;
+		# at the engine-tyre car's 0.2 the drift lost its load transfer.
 		var arm: Vector3 = point - com
 		var raised: Vector3 = arm - up * arm.dot(up) * (1.0 - tyre.side_force_depth)
 		apply_force(forward * fx, point - global_position)

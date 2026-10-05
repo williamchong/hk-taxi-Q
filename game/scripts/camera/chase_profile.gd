@@ -63,8 +63,8 @@ extends Resource
 ## `steer_angle_max_deg`/`_at_top_deg`). At 3.12x the fastest steering alone can
 ## rotate the car it closed any *steering-induced* error inside a single tick, so
 ## the rig was rigid through every corner and the dial named "lag" produced none.
-## ⚠️ It is **not** a bound on body yaw: `drift_yaw_torque_nm` acts on the chassis
-## outside that model, and `Q88` records a 165.0° spin.
+## ⚠️ It is **not** a bound on body yaw: a slide turns the chassis outside that
+## model, and `Q88` records a 165.0° spin.
 ##
 ## Steady-state lag in a sustained turn is `ω · delta / (1 - exp(-k · delta))`,
 ## which at 60 Hz is 5.1% above the `ω / k` continuous limit: **11.9° at 30 kph

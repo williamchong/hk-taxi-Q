@@ -181,23 +181,13 @@ const DRIFT_MANOEUVRES: PackedStringArray = [
 	"drift", "tap", "lift", "hold", "catch", "turn", "handbrake"
 ]
 
-## The profile field a sweep writes when `--sweep` does not name another, and the
-## field `--drift-grip` is an alias for.
-##
-## ⚠️ Set through `Object.set()`, which is a **silent no-op** on a name the
-## resource does not have. Rename the field and every swept row comes back
-## identical, correctly labelled, and describing a value that was never applied —
-## a published table of numbers nobody measured. `_measure_all` refuses the run
-## instead, before any manoeuvre is simulated.
-const DEFAULT_SWEEP_FIELD: StringName = &"drift_rear_grip_scale"
-
 ## Name prefix marking a field whose effect is confined to the drift branch.
 ##
 ## ⚠️ **This decides whether a sweep re-runs three extra manoeuvres or reprints
 ## the first value's rows under later labels.** `drift_*` reaches nothing but
 ## `_apply_drift`, so `corner`, `brake` and `coast` cannot move and re-running
 ## them is 13.5 s of simulation per value to reproduce rows already printed. Any
-## other field — `engine_force`, `tyre_grip` — moves all five, and skipping them
+## other field — `engine_force`, `mu` — moves all five, and skipping them
 ## would dress stale rows up as measurements of a value never applied to them.
 const DRIFT_FIELD_PREFIX: String = "drift_"
 
@@ -208,7 +198,7 @@ const DRIFT_FIELD_PREFIX: String = "drift_"
 ## against. Lower it to make `seconds_above_deg` look better and the column
 ## becomes `Q58`'s `drawn_gauge_m` — a number bounded by the bar it is measured
 ## against, which cannot report the thing it exists to report. Read through `get()` and guarded
-## by `in` for `DEFAULT_SWEEP_FIELD`'s reason: `set()`/`get()` swallow a rename
+## by `in` for `_sweep_field`'s reason: `set()`/`get()` swallow a rename
 ## silently.
 const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 
@@ -226,7 +216,6 @@ const READY_ONLY_FIELDS: PackedStringArray = [
 	"suspension_travel_m",
 	"suspension_max_force_n",
 	"wheel_radius_m",
-	"roll_influence",
 ]
 ## `--sweep=body.<field>=...` writes the car's rigid body rather than a table,
 ## live, for the values `READY_ONLY_FIELDS` cannot sweep (`P3-54`):
@@ -321,10 +310,14 @@ var _run_up_given: bool = false
 ## avoid.** One such loop misfired on `set --`, blanked the field it was sweeping
 ## and published a table of all-zero rows that looked like a finding.
 var _sweep: Array[float] = []
-## The profile field `_sweep` writes. A variable rather than a constant since
-## `--sweep`, because the drift now has three yaw dials and a grid of them run
-## through hand-edited tuning files is the hazard above.
-var _sweep_field: StringName = DEFAULT_SWEEP_FIELD
+## The profile field `_sweep` writes, named by `--sweep`.
+##
+## ⚠️ Set through `Object.set()`, which is a **silent no-op** on a name the
+## resource does not have. Rename the field and every swept row comes back
+## identical, correctly labelled, and describing a value that was never applied —
+## a published table of numbers nobody measured. `_measure_all` refuses the run
+## instead, before any manoeuvre is simulated.
+var _sweep_field: StringName = &""
 var _wall_deg: Array[float] = DEFAULT_WALL_DEG.duplicate()
 var _catch_s: Array[float] = DEFAULT_CATCH_S.duplicate()
 ## `--flick-s=`: the feint's lengths, a `flick` row per value; the bar's own
@@ -376,8 +369,8 @@ var _step: float = 0.0
 ## exactly that. Counting output is the only claim worth making.
 var _printed_rows: int = 0
 ## The tyre car's wheels as `wheel_slips` / `wheel_loads_n` index them: the
-## steered pair, and the rear pair split by side. Empty on a car on the
-## engine's tyres, whose columns then read "-".
+## steered pair, and the rear pair split by side. Empty on a parked car (a
+## tyre table with a zero key), whose columns then read "-".
 var _front_i: PackedInt32Array = []
 var _rear_left_i: int = -1
 var _rear_right_i: int = -1
@@ -586,17 +579,13 @@ func _parse_args() -> bool:
 				_catch_s = holds
 			"--sweep":
 				# Split once more, so the field name carries its own "=" separator
-				# and `--sweep=drift_yaw_decay_s=0.4,0.6` reads as one flag.
+				# and `--sweep=drift_side_cut=0.4,0.6` reads as one flag.
 				var spec: PackedStringArray = bits[1].split("=", true, 1)
 				if spec.size() < 2 or spec[0].is_empty() or spec[1].is_empty():
 					_fail("--sweep wants field=v1,v2,..., got '%s'" % bits[1])
 					return false
 				_sweep_field = StringName(spec[0])
 				if not _parse_sweep_values(spec[1], "--sweep"):
-					return false
-			"--drift-grip":
-				_sweep_field = DEFAULT_SWEEP_FIELD
-				if not _parse_sweep_values(bits[1], "--drift-grip"):
 					return false
 			_:
 				_fail("unknown argument %s" % bits[0])
@@ -607,15 +596,13 @@ func _parse_args() -> bool:
 	return true
 
 
-## Shared by `--sweep` and its `--drift-grip` alias so the two cannot disagree
-## about what counts as a number.
+## `--sweep`'s values, parsed.
 func _parse_sweep_values(text: String, flag: String) -> bool:
-	# 🔴 One sweep per run, refused rather than merged. Both flags append into the
-	# same `_sweep` while `_sweep_field` is simply overwritten by whichever parsed
-	# last, so `--sweep=drift_yaw_decay_s=0.4,0.6 --drift-grip=0.62` would write all
-	# three values to `drift_rear_grip_scale` and print every row correctly labelled
-	# with a value applied to a field it was never meant for. That is the published
-	# table of numbers nobody measured this whole tool exists to prevent.
+	# 🔴 One sweep per run, refused rather than merged. Two flags would append into
+	# the same `_sweep` while `_sweep_field` is simply overwritten by whichever
+	# parsed last, and every row would print correctly labelled with a value
+	# applied to a field it was never meant for. That is the published table of
+	# numbers nobody measured this whole tool exists to prevent.
 	if not _sweep.is_empty():
 		_fail("%s: only one sweep per run, and one is already set" % flag)
 		return false
@@ -732,7 +719,7 @@ func _measure_all() -> void:
 			return
 		if not _sweep_field in profile and tyre != null and _sweep_field in tyre:
 			sweep_table = tyre
-		# See DEFAULT_SWEEP_FIELD: set() would swallow a typo or a rename and print
+		# See `_sweep_field`: set() would swallow a typo or a rename and print
 		# a sweep of identical rows labelled with values it never applied.
 		if not _sweep_field in sweep_table:
 			_fail("sweep: %s has no '%s'" % [sweep_table.resource_path, _sweep_field])
@@ -1704,7 +1691,7 @@ func _print_technique_table(results: Array[Result]) -> void:
 func _print_windows(
 	result: Result, from_s: float, windows: Array[Vector2], row_format: String, wheels := false
 ) -> void:
-	# NAN through every tick on a car on the engine's tyres.
+	# NAN through every tick on a car with no tyre wheels.
 	var has_wheels: bool = (
 		wheels and not result.trace_rear_use.is_empty() and not is_nan(result.trace_rear_use[0])
 	)

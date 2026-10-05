@@ -10,7 +10,7 @@ them without explicit instruction from the user.
 | Decision | Value | Why |
 |---|---|---|
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
-| Physics | **Jolt**, driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ `Q50` reversed `P0-5a`'s custom raycast controller on the user's instruction (2026-08-18). `VehicleWheel3D` friction is isotropic, so it cannot break lateral grip while keeping traction — still true, so the game's car turns the engine's tyre force off and applies a per-wheel one (`TyreVehicleController`, `tyre.tres`; `Q152`, shipped 2026-10-03); `taxi.tscn` on the engine's tyres is the skidpad's control. The drift dial is graded on *dwell*, never on landing peak slip on the threshold (`Q84`) |
+| Physics | **Jolt**, driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ `Q50` reversed `P0-5a`'s custom raycast controller on the user's instruction (2026-08-18). `VehicleWheel3D` friction is isotropic, so it cannot break lateral grip while keeping traction — still true, so the game's car turns the engine's tyre force off and applies a per-wheel one (`TyreVehicleController`, `tyre.tres`; `Q152`, shipped 2026-10-03), on a road tyre's `mu` 1.0 since 2026-10-05 (`Q153`); the engine-tyre control car is gone. The drift dial is graded on *dwell*, never on landing peak slip on the threshold (`Q84`) |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`, `shapely`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL and `shapely` its own GEOS (`Q129`, approved 2026-09-18), so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data (`Q47`, `Q100`) |
@@ -213,8 +213,7 @@ read like inconsistencies and are not — "restoring consistency" is how most of
 - **Deliberately NOT consistent — leave them**: the two station normals (`carriageway._stations`
   right, `surface.mitres` left); the ETL-side and engine-side winding tests' opposite signs (`Q59`);
   `lamps._strut`'s unreversed ring beside `signs._draw_pole`'s reversed one; `railings.py`'s
-  unconditional push beside the signs' outward-only clamp (`Q78`); the drift's low branch that
-  LATCHES beside the high branch that TRACKS (`Q89`); the wrong-way monitor that CLEARS on a miss
+  unconditional push beside the signs' outward-only clamp (`Q78`); the wrong-way monitor that CLEARS on a miss
   beside `street_tracker.gd` that HOLDS, and its two angle bars (`Q81`); `min_station_gap_m` beside
   `fold_tolerance_deg`; `opposed_pair_bearing_deg` beside `pair_bearing_tolerance_deg`.
 - **Deliberately DUPLICATED — do not import one into the other**: `pipeline/carriageway.py` and

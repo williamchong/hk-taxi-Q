@@ -152,10 +152,10 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 
 ## The game's car runs the tyre model, on the shipped table (`Q152`).
 ##
-## A tyre table with a zero key does not stop the car: every override hands back
-## to the parent and it drives on the engine's tyres, with one `ERROR:` line at
-## boot. So the fallback is refused here — the car's script, the table by path,
-## `usable()` on it, and the mutation, a duplicate with `mu` zeroed. Last, that
+## A tyre table with a zero key parks the car behind one `ERROR:` line at boot,
+## which a drive would show and a headless check would not. So it is refused
+## here — the car's script, the table by path, `usable()` on it, and the
+## mutation, a duplicate with `mu` zeroed. Last, that
 ## `city_drive.tscn` instances this scene, read off its dependency list rather
 ## than by loading it: the drive scene needs a built region and this tool does
 ## not.

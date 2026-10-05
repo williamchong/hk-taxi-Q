@@ -19,7 +19,7 @@ extends VehicleBody3D
 ##   1. Steering rate-limiting, and the speed-dependent lock it ramps toward.
 ##   2. The top-speed taper — Godot has no speed limiter.
 ##   3. Coast drag and rolling resistance — Godot has no engine braking.
-##   4. The drift, as a per-axle scale on the one isotropic friction number.
+##   4. The drift button's ramp, which the tyre model's side cut reads.
 ##   5. Arcade collision response, in _integrate_forces.
 ##   6. Auto-righting.
 ##
@@ -59,11 +59,6 @@ var _velocity_into_step: Vector3 = Vector3.ZERO
 ## not drain the latch — `driver.gd`'s trace, which is how a kerb was shown
 ## to read nothing (`Q148`). Never read by the game.
 var last_impact_mps: float = 0.0
-## Speed over which the drift yaw assist reaches full strength, easing in from a
-## standstill. A structural constant rather than a dial: it exists to stop a
-## discontinuity, not to shape the feel, and every other rate in this file eases.
-const YAW_ASSIST_FADE_KPH: float = 10.0
-
 ## Fraction of top speed over which drive force eases to zero. Shapes the
 ## approach to max_speed_kph rather than setting it, so it stays a structural
 ## constant while the speed itself remains a profile dial.
@@ -130,7 +125,7 @@ var _rear: Array[VehicleWheel3D] = []
 ## indicator on the wrong side of the car, which looks like a working feature.
 var steer_ratio: float = 0.0
 var _upside_down_for: float = 0.0
-## How far the drift has ramped in, 0 gripping to 1 fully loose.
+## How far the drift button's ramp has engaged, 0 off to 1 fully in.
 ##
 ## Private, and there is no public mirror. `drift_input` is the player's intent
 ## and this is the car's answer to it; a HUD or lamp wanting to show "drifting"
@@ -138,40 +133,6 @@ var _upside_down_for: float = 0.0
 ## `InputRouter` — see `drift_release_s` in handling_profile.gd for why, kept in
 ## one place so the two cannot drift apart.
 var _drift_engagement: float = 0.0
-## Seconds the drift button has been held, driving the yaw burst's decay.
-##
-## Separate from `_drift_engagement` because they answer different questions: the
-## engagement is how far in the drift is and rises and falls, this is how long it
-## has been asked for and only ever rises. Reusing one for both would make the
-## burst re-arm every time the engagement dipped.
-##
-## ⚠️ **Reset when the engagement reaches zero, not when the button comes up.**
-## That makes `drift_release_s` the re-arm cost with no dial of its own, and it is
-## what stops a player machine-gunning the button for a fresh kick every tick.
-var _drift_held_s: float = 0.0
-## The rear grip scale this drift is running at, sampled once when it engages.
-##
-## 🔴 **Latched, NOT tracked, and that is the whole reason the speed taper works.**
-## A drift scrubs speed, so a scale that follows the *current* speed feeds back on
-## itself below the knee: slower means a deeper cut means more slide means slower.
-## Built that way first and the design speed became a 165.0 deg spin (Q89). Sampled
-## at engagement it is constant for the manoeuvre, which is exactly what every
-## constant-value sweep measured — and those sweeps found a good drift at every
-## speed.
-##
-## ⚠️ The cost is that a live edit to a grip dial does not take hold until the next
-## press, where every other dial here applies on the next frame.
-var _drift_rear_scale: float = 0.0
-## True when this drift engaged below the knee, so _drift_rear_scale is in force.
-##
-## 🔴 **The latch is asymmetric ON PURPOSE and must not be "made consistent".**
-## Above the knee, losing speed moves the scale back toward drift_rear_grip_scale
-## — the value everything is tuned at — so tracking is self-correcting and gives
-## the better drift. Below it, losing speed moves the scale *away* from that value
-## into a deeper cut, which is the feedback loop that turned the design speed into
-## a 165.0 deg spin. So the branch that is stable tracks and the branch that is not
-## latches (Q89).
-var _drift_low_locked: bool = false
 ## Recomputed once per tick rather than per reader.
 ##
 ## `speed_kph` is public for the same reason it is cached: everything that wants
@@ -330,9 +291,6 @@ func _configure(wheel: VehicleWheel3D) -> void:
 	var damping: float = 2.0 * profile.suspension_damping_ratio * sqrt(stiffness)
 	wheel.damping_compression = damping
 	wheel.damping_relaxation = damping * RELAXATION_OVER_COMPRESSION
-
-	wheel.wheel_friction_slip = profile.tyre_grip
-	wheel.wheel_roll_influence = profile.roll_influence
 
 
 func _physics_process(delta: float) -> void:
@@ -494,80 +452,18 @@ func _apply_coast_drag(delta: float) -> void:
 	apply_central_force(forward * -mass * clampf(decel, -decel_to_rest, decel_to_rest))
 
 
-## The drift: a per-axle scale on the one friction number a wheel has.
-##
-## ⚠️ **This is the mechanism P0-5a rejected, shipping because Q50 said to.** It
-## is not the handbrake the raycast model had. There, a locked rear tyre stopped
-## having a preferred direction and its lateral force collapsed out of the
-## geometry, with nothing anywhere reducing grip. Here there is one isotropic
-## budget per tyre, so breaking the tail loose takes the rear axle's drive and
-## braking with it by exactly the same factor — the slide costs speed as its
-## mechanism rather than as a tuned penalty, and it self-terminates when the speed
-## that caused it is gone. That is why HandlingProfile carries no scrub dial: the
-## scrub is not a number any more, it is the mechanism.
-##
-## Written every tick rather than on change, so a live edit to either profile dial
-## takes effect on the next frame instead of on the next button press.
+## The drift button's ramp, rate-limited rather than switched on
+## `_update_steering`'s idiom: fast to answer, slow to let go. The tyre model
+## (`TyreVehicleController`) reads the engagement for its rear side cut.
 func _apply_drift(delta: float) -> void:
-	# Rate-limited rather than switched, on _update_steering's idiom and for the
-	# same reason: fast to answer, slow to let go. Grip used to be restored on the
-	# tick the button came up, which is why a 0.5 s tap returned 1.9° of slip and a
-	# yaw identical to a plain corner — the slide carried no momentum out of the
-	# release (Q84). ⚠️ It did not work — the tap is still 1.9° — and Q84 records
-	# why: the slide takes seconds to build rather than ending too soon. This is
-	# kept for Q83's touch hysteresis, which needs the engagement to exist.
-	# Sample before the ramp moves, so the entry tick is the one that latches.
-	if drift_input and is_zero_approx(_drift_engagement):
-		var entry: float = absf(speed_kph)
-		_drift_low_locked = entry < profile.drift_fade_from_kph
-		# Only the low branch is ever read back — see _drift_low_locked — so asking
-		# for the high one here would compute a value nothing consumes and write the
-		# knee test a second time, where the two copies could drift apart.
-		if _drift_low_locked:
-			_drift_rear_scale = _low_grip_scale(entry)
-	# 🔴 **The lock RELEASES but never re-arms, and both halves follow the same
-	# rule.** Gaining speed out of the low band is self-correcting for the same
-	# reason tracking works above the knee, so holding a 0.44 cut up there — where
-	# it spins the car — is not defensible. Re-arming on the way *down* is the
-	# thing that is not: that is the feedback loop, one step at a time. A drift
-	# that entered above the knee and fell below it therefore keeps the base scale
-	# and behaves as it did before Q89 — inert rather than dangerous.
-	if _drift_low_locked and absf(speed_kph) >= profile.drift_fade_from_kph:
-		_drift_low_locked = false
-	_ramp_drift(delta)
-	_write_drift_grip()
-	_apply_drift_yaw()
-
-
-## The engagement ramp and the held clock, apart from the grip latch above so
-## a subclass with another drift mechanism can keep the ramp the yaw assist
-## reads without the grip cut it does not use (`Q152`).
-func _ramp_drift(delta: float) -> void:
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
-	# Held time keeps accruing through the release ramp — the car is still sliding,
-	# so the burst it already spent must stay spent. See _drift_held_s for why the
-	# reset waits for the engagement rather than the button.
-	#
-	# ⚠️ **Only on ticks the torque could actually land.** _apply_drift_yaw refuses
-	# airborne, so accruing there would spend a burst that was never applied — the
-	# opposite of the sentence above — and with drift_yaw_sustain at 0.0 a drift
-	# held over a jump would land with no assist at all. GAME_DESIGN.md scores
-	# airtime, so that is a reachable state rather than a corner case. Deferring
-	# the kick to the landing does not reintroduce the mid-air pirouette the
-	# refusal exists for.
-	if drift_input:
-		if _any_wheel_grounded():
-			_drift_held_s += delta
-	elif is_zero_approx(_drift_engagement):
-		_drift_held_s = 0.0
 
 
 ## True while any wheel is on the ground.
 ##
 ## Two loops rather than `_front + _rear`, which would build a throwaway array
-## every tick the drift is held. Rear first: it is the axle the drift is about,
-## so it is the one most likely to answer on the first comparison.
+## on every call.
 func _any_wheel_grounded() -> bool:
 	for wheel: VehicleWheel3D in _rear:
 		if wheel.is_in_contact():
@@ -602,154 +498,6 @@ func take_impact_mps() -> float:
 	return impact
 
 
-## Yaw assist while the drift is engaged. See drift_yaw_torque_nm for why this is
-## a torque and must not become a slip-angle setpoint.
-##
-## ⚠️ Signed from steer_ratio — see its own doc for the rotation-direction
-## convention — and negated for the same reason _update_steering negates on the
-## way in. Stated once there rather than restated here.
-##
-## 🔴 **Refused with no wheel on the ground.** Torque does not care whether the
-## tyres can answer it, and nothing else here would bound the spin: taxi.tscn sets
-## no angular_damp and the project sets no default, so what actually limits this
-## is tyre lateral force. Airborne there is none, and a held drift off a kerb
-## would be a mid-air pirouette — reachable, because GAME_DESIGN.md scores airtime.
-##
-## ⚠️ Eased in from a standstill rather than gated: a stationary car has no tyre
-## force to resist the assist either, so it would spin on the spot with the
-## handbrake down, and a hard cut-in at walking pace is a pop the rest of this
-## file's rates do not have.
-##
-## `share` scales the whole torque, a caller's choice: 1.0 is the shipped
-## assist.
-func _apply_drift_yaw(share: float = 1.0) -> void:
-	if is_zero_approx(_drift_engagement):
-		return
-	if not _any_wheel_grounded():
-		return
-	var speed: float = absf(speed_kph)
-	var fade: float = clampf(speed / YAW_ASSIST_FADE_KPH, 0.0, 1.0) * _speed_fade_out(speed)
-	# ⚠️ Above drift_yaw_fade_to_kph this is exactly zero for every tick of a held
-	# drift, which is a band the car really does spend time in — so this returns
-	# rather than handing the physics server a torque of zero all the way up the
-	# speed range. Placed after the airborne guard, not before it: that refusal is
-	# 🔴 load-bearing and does not become optional because the assist is spent.
-	if is_zero_approx(fade):
-		return
-	# Linear decay from the peak to the sustain, on held time. ⚠️ On TIME — see
-	# drift_yaw_decay_s for why measured slip here would be Q72's tautology.
-	var decayed: float = clampf(_drift_held_s / profile.drift_yaw_decay_s, 0.0, 1.0)
-	var burst: float = lerpf(1.0, profile.drift_yaw_sustain, decayed)
-	var torque: float = (
-		-steer_ratio * profile.drift_yaw_torque_nm * burst * _drift_engagement * fade * share
-	)
-	# About the body's own up, not global +Y: a car on a camber or mid-kerb should
-	# rotate about the axis it is standing on.
-	apply_torque(global_basis.y * torque)
-
-
-## How much of the yaw assist survives at this speed, 1.0 full to 0.0 withdrawn.
-##
-## Separate from the fade-in above because they are different kinds of number: the
-## fade-in exists to remove a discontinuity and shapes no feel, and this decides
-## the speed band the drift button works in. See drift_fade_from_kph.
-##
-## 🔴 **A zero span returns full assist, NOT none, and the difference is the whole
-## point of the guard.** An unassigned profile reads as all-zeroes, and a naive
-## `speed >= fade_to` test is true at every speed for a zero pair — so it would
-## switch the assist off everywhere, which is exactly the silent disappearance
-## drift_yaw_decay_s documents and refuses to paper over. 1.0 leaves a
-## mis-authored profile behaving as it did before this fade existed, which is the
-## honest degenerate value here.
-##
-## ⚠️ **_update_steering's max_angle guard is NOT the precedent, though an earlier
-## version of this comment claimed it was.** There 0.0 is the only defined answer
-## and the alternative is a NAN. Here both 0.0 and 1.0 are well defined and the
-## choice between them is a design decision, not a numerical one.
-##
-## ⚠️ An equal, non-zero pair is still a deliberate hard cutoff at that speed, and
-## is kept as one — only a zero fade_to means "nobody authored this".
-func _speed_fade_out(speed: float) -> float:
-	var span: float = profile.drift_yaw_fade_to_kph - profile.drift_fade_from_kph
-	if span > 0.0:
-		return 1.0 - clampf((speed - profile.drift_fade_from_kph) / span, 0.0, 1.0)
-	if profile.drift_yaw_fade_to_kph <= 0.0:
-		return 1.0
-	return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
-
-
-## The rear scale at or above the knee, easing the cut off as speed rises. Returns
-## the base scale below the knee, so a drift that entered fast and then slowed
-## settles on the tuned value rather than falling into the low taper's feedback.
-##
-## 🔴 **The at_top guard lives HERE, on the per-tick path, and not in a wrapper.**
-## It stood one call up until review: `_write_drift_grip` reaches this directly, so
-## a profile leaving drift_rear_grip_scale_at_top unauthored would lerp the rear
-## grip toward *zero* as speed rose — the catastrophe the guard was written for,
-## with the guard still in the file and no longer on the path that reads it. Same
-## shape as `_speed_fade_out`'s zero span, and the second time a guard here has
-## been walked past rather than removed.
-##
-## ⚠️ Both degenerate cases return the base scale, i.e. behave as though this taper
-## did not exist.
-func _high_grip_scale(speed: float) -> float:
-	if profile.drift_rear_grip_scale_at_top <= 0.0:
-		return profile.drift_rear_grip_scale
-	var knee: float = profile.drift_fade_from_kph
-	var span: float = profile.max_speed_kph - knee
-	if span <= 0.0:
-		return profile.drift_rear_grip_scale
-	var over: float = clampf((speed - knee) / span, 0.0, 1.0)
-	return lerpf(profile.drift_rear_grip_scale, profile.drift_rear_grip_scale_at_top, over)
-
-
-## The rear scale below the knee, deepening the cut as speed falls.
-##
-## 🔴 **The opposite correction from the one above the knee, for the opposite
-## failure.** Up there a constant cut spins the car; down here it never breaks the
-## tyre at all, so the cut has to get deeper rather than shallower. See
-## drift_rear_grip_scale_at_low for why no amount of yaw torque substitutes.
-##
-## ⚠️ Same degenerate rule as everywhere else in this file: a zero at_low is an
-## unauthored profile and returns the base scale, i.e. behaves as though this
-## taper did not exist.
-func _low_grip_scale(speed: float) -> float:
-	if profile.drift_rear_grip_scale_at_low <= 0.0:
-		return profile.drift_rear_grip_scale
-	# ⚠️ Ordered before the floor deliberately. Below it this guard could never
-	# fire — the caller only enters under the knee, so the floor return already
-	# caught every such speed whenever the pair is inverted — and an inverted pair
-	# then gave a flat at_low right up to the knee and a step there, instead of the
-	# "behave as though the taper did not exist" this file promises everywhere else.
-	var span: float = profile.drift_fade_from_kph - profile.drift_low_fade_kph
-	if span <= 0.0:
-		return profile.drift_rear_grip_scale
-	if speed <= profile.drift_low_fade_kph:
-		return profile.drift_rear_grip_scale_at_low
-	var under: float = clampf((speed - profile.drift_low_fade_kph) / span, 0.0, 1.0)
-	return lerpf(profile.drift_rear_grip_scale_at_low, profile.drift_rear_grip_scale, under)
-
-
-## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()
-## can reset the engagement and push it out without a zero delta standing in for
-## "do not ramp" — the grip still has exactly one owner, which is the point the
-## caller's comment makes.
-func _write_drift_grip() -> void:
-	# Not named `scale`: Node3D has one, and this project promotes shadowing to an
-	# error — which the ablation wrapper caught and `gdformat` did not.
-	var rear_scale: float = (
-		_drift_rear_scale if _drift_low_locked else _high_grip_scale(absf(speed_kph))
-	)
-	var rear: float = profile.tyre_grip * lerpf(1.0, rear_scale, _drift_engagement)
-	var front: float = (
-		profile.tyre_grip * lerpf(1.0, profile.drift_front_grip_scale, _drift_engagement)
-	)
-	for wheel: VehicleWheel3D in _rear:
-		wheel.wheel_friction_slip = rear
-	for wheel: VehicleWheel3D in _front:
-		wheel.wheel_friction_slip = front
-
-
 ## Returns true if the car was righted this tick, so the caller can skip the
 ## drive and steering derived from the pose it no longer has.
 func _apply_auto_right(delta: float) -> bool:
@@ -775,11 +523,6 @@ func _apply_auto_right(delta: float) -> bool:
 ## a car that fell at full lock would otherwise be replaced at full lock and veer
 ## off immediately.
 ##
-## ⚠️ The `_write_drift_grip()` call is not tidying. `_apply_drift()` is skipped
-## for every tick `_apply_auto_right` returns true, so a car righted mid-drift
-## keeps its softened rear axle until the button is next released. Called rather
-## than open-coded so the un-drifted grip has one owner — a per-axle base grip
-## would otherwise have to be added here too, and would not be.
 func place_at(pose: Transform3D) -> void:
 	global_transform = pose
 	linear_velocity = Vector3.ZERO
@@ -789,19 +532,12 @@ func place_at(pose: Transform3D) -> void:
 	steering = 0.0
 	# Published state as well as private, or a car righted at full lock is
 	# replaced pointing straight ahead with its indicator still flashing. The
-	# engagement goes with it: the comment above says a car righted mid-drift keeps
-	# its softened axle until the button is next released, and a ramp that survived
-	# the reset would instead hand the replaced car a slide it can no longer see.
+	# engagement goes with it, or a ramp that survived the reset would hand the
+	# replaced car a slide it can no longer see.
 	steer_ratio = 0.0
 	_drift_engagement = 0.0
-	# Or a replaced car carries a spent burst and the next press is a sustain with
-	# no kick — which drives correctly, renders correctly, and is wrong.
-	_drift_held_s = 0.0
-	_drift_rear_scale = profile.drift_rear_grip_scale
-	_drift_low_locked = false
 	_upside_down_for = 0.0
 	drift_input = false
-	_write_drift_grip()
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but

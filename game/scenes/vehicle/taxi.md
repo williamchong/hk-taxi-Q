@@ -160,8 +160,8 @@ second copy of the rig's rotation. See scripts/vehicle/sun_glint.gd.
 
 ## `[node name="WheelFL" type="VehicleWheel3D" parent="."]`
 
-Suspension, friction and roll influence are written by the controller from
-`handling.tres` at `_ready`, so these four carry only what is geometry or role.
+Suspension is written by the controller from `handling.tres` at `_ready`, and the tyre model
+(`TyreVehicleController`) zeroes the friction, so these four carry only what is geometry or role.
 Leaving the numbers out of the scene is deliberate: two places to author one
 spring is how a car ends up measuring its own tuning instead of the profile's.
 

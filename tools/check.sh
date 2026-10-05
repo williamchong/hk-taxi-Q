@@ -79,8 +79,8 @@ ALWAYS_TOOLS=(
 #
 #   camera.tres       Q98 is three commits old and its argument is still in the
 #                     decision entry rather than in the file.
-#   handling.tres     The drift model's rationale is CLAUDE.md's and Q84-Q89's,
-#                     and it is far too long to mirror at the resource.
+#   handling.tres     Its rationale is in handling_profile.gd's field docs and
+#                     Q50-Q89; the tyre model's table has its sidecar (tyre.md).
 #   golden_hour.tres  clean_daylight.tres carries the comparison for both rigs.
 #   streaming.tres    Three numbers, all of them in ARCHITECTURE.md's budget.
 #   greybox.tscn      A P0-5 harness that predates the convention.

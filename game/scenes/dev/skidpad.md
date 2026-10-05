@@ -34,6 +34,11 @@ the tail step out. `greybox.tscn` leaves it at 0.
 
 ## `[node name="Taxi" parent="." instance=ExtResource("2_taxi")]`
 
+`taxi_tyre.tscn`, the game's car (`Q152`), since the engine-tyre control was dropped on
+2026-10-05: `taxi.tscn` on its own tyres sat here as the control, and `skidpad_tyre.tscn` was this
+scene with the tyre car in its place. Every number tagged "the shipped car" before 2026-10-03 was
+graded here on the engine's tyres.
+
 Facing +X, the same basis `greybox.tscn` uses. Row-major, and forward is the
 -Z column — do not rewrite these from a direction.
 

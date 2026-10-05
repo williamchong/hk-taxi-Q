@@ -1138,7 +1138,7 @@ city_space = region_local + city_offset
 | `RoadGraph` | Queries over `roadgraph.json` — nearest edge, lane centre; loads the topology (`from` / `to`, turn bans, 64-bit plan length) and traverses none of it | ✅ `P2-2`, `P3-43` |
 | `RoadRouter` | Directed-edge search over `RoadGraph`: one-way, turn restrictions, U-turn ban, a bar. `Profile.legal()` (traffic, lane bar) and `Profile.player()` (rules free, car bar). One reverse search per destination (`prepare`), then `route()` is a lookup; "no route" is an answer. Diffed pair for pair against `tools/reachability.py` (`Q137`) | ✅ `P3-43`; consumed by `FareSystem` (`P3-1a`) |
 | `RoadSpawn` | Where a car starts, resolved from a fare node, and what it stands in (`Q52`) | ✅ `P2-3` |
-| `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, drift, collision response, auto-right | ✅ `P0-5`/`P2-3`/`Q50` |
+| `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, the drift button's ramp, collision response, auto-right. `TyreVehicleController` extends it with the per-wheel tyre model the game drives on (`Q152`) | ✅ `P0-5`/`P2-3`/`Q50`/`Q152` |
 | `InputRouter` | Touch / gamepad / keyboard into one action set (autoload) | 🟡 touch ships 3 of 5 actions; `P2-4` |
 | `DebugHud` | Every dev readout, behind `F3` (autoload) | ✅ |
 | `BeamBudget` | Hands the renderer's spot-light slots to the cars nearest the camera (autoload) | ✅ |
@@ -1167,12 +1167,13 @@ uses `landmarks.json`'s transform shape, is written beside its `.glb` and is nul
 calls — unit-testable headlessly and portable.
 
 **A vehicle's drive layout is scene data.** `VehicleWheel3D.use_as_traction` is authored per wheel,
-each vehicle has its own `HandlingProfile`, and `centre_of_mass_offset_y` plus `roll_influence`
-cover a tall van. The roster is in `ART_DESIGN.md`.
+each vehicle has its own `HandlingProfile` and `TyreProfile`, and `centre_of_mass_offset_y` plus
+`TyreProfile.side_force_depth` cover a tall van. The roster is in `ART_DESIGN.md`.
 
-⚠️ Drift bias is derived from chassis geometry, not wheel role: `VehicleController._group_axles`
-splits wheels by position along the chassis. Keying off `use_as_traction` / `use_as_steering` would
-silently invert the drift bias on a front-wheel-drive car.
+⚠️ The drift's axle is derived from chassis geometry, not wheel role: `VehicleController._group_axles`
+splits wheels by position along the chassis, and the handbrake and the side cut act on the rear.
+Keying off `use_as_traction` / `use_as_steering` would silently move them onto a front-wheel-drive
+car's front axle.
 
 ### Script map
 

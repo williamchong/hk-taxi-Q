@@ -15,8 +15,6 @@ extends Resource
 const PATH: String = "res://tuning/tyre.tres"
 
 ## Peak friction coefficient: the most force a tyre gives is `mu` × its load.
-## ⚠️ Not `HandlingProfile.tyre_grip`, which is Bullet's `wheel_friction_slip`
-## and scales an impulse cap, not a force.
 @export_range(0.1, 4.0, 0.01) var mu: float
 ## Force left once the tyre is sliding, as a share of the peak: the curve's
 ## tail. Under 1 is a tyre that lets go past its peak, which is what makes a
@@ -56,19 +54,11 @@ const PATH: String = "res://tuning/tyre.tres"
 ## countersteer is how a slide is HELD, and re-armed on a reversal the
 ## countersteered slide died (`hold` 2.63 s -> 0.60 s at 63 kph).
 @export var rearm_on_steer_release: bool
-## Whether the drift button also takes the drive off the rear wheels while it
-## is down, as a handbrake's clutch does. Off, the held throttle fights the
-## handbrake and neither rear locks (`Q153`: rims at 30-41 kph on a 34-40 kph
-## car through the whole tap at 3,000 N·m).
-@export var handbrake_declutch: bool
 ## Ground speed under which slip is measured against this floor instead of the
 ## wheel's own speed, so a car at rest does not read an infinite slip.
 @export_range(0.1, 10.0, 0.1, "suffix:m/s") var low_speed_mps: float
 ## Wheel-spin integration steps per physics tick.
 @export_range(1, 32, 1) var substeps: int
-## Share of the shipped car's drift yaw torque still applied, 0 off to 1 as
-## shipped. 0 grades the physics alone.
-@export_range(0.0, 1.0, 0.05) var yaw_assist_scale: float
 ## Multiplier on `HandlingProfile.engine_force` for this car's drive torque.
 ## 1 is the shipped car's drive; above it the rear tyres can be spun.
 @export_range(0.1, 5.0, 0.05) var drive_scale: float
@@ -106,13 +96,10 @@ const PATH: String = "res://tuning/tyre.tres"
 @export_range(0.0, 1.0, 0.05) var turn_drive_cut: float
 ## How far down towards the contact the sideways force goes in: 0 at the
 ## centre of mass's height, 1 at the tyre's contact — Bullet's
-## `m_rollInfluence`, which the handling table's `roll_influence` sets for the
-## engine's own friction and this car, its friction zeroed, no longer reads.
-## A dial of its own because the drift depends on it: the weight a corner
-## moves onto the outer tyres is what lets the unloaded inner rear spin and
-## turn the car, and the shipped 0.2 takes most of that away. A name of its own
-## because a sweep resolves a field by name across both tables, and a shared
-## one wrote the handling table's copy, which this car does not read.
+## `m_rollInfluence`, which the engine-tyre car's `roll_influence` set at 0.2.
+## A dial because the drift depends on it: the weight a corner moves onto the
+## outer tyres is what lets the unloaded inner rear spin and turn the car, and
+## 0.2 took most of that away.
 @export_range(0.0, 1.0, 0.05) var side_force_depth: float
 ## Countersteer assist: while the car slides, the share of the slip angle the
 ## front wheels are turned towards the travel, on top of the player's own

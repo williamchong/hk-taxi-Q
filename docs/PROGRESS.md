@@ -356,8 +356,9 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q131` — `seam_m` 0.10, kerbed islands read through, no area cap.
 - `Q133` — refactor, not rewrite (`P3-35`); OSM unevaluated (hard rule 7).
 - `Q152` — the per-wheel tyre car is the game's car (2026-10-03, trade a): `city_drive.tscn`
-  instances `taxi_tyre.tscn`; `taxi.tscn` on the engine's tyres is the skidpad's control. Owed,
-  the user's call: `speed_min_kph` and the two wall bars on the new pace (numbers in `Q152`).
+  instances `taxi_tyre.tscn`; the engine-tyre control car and its drift code dropped on the
+  user's call (2026-10-05), `skidpad.tscn` grading the tyre car. `speed_min_kph` and the wall bars
+  were read off the old car's pace, which `drive_scale` 1.0 restored (`Q153`).
 
 ---
 
@@ -399,7 +400,8 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   --filler-report` reproduces `Q55`; hand-run.
 - **The tyre model is unpriced on a handset** — Medium. `Q152`: about 216 µs a physics tick on
   the desk, GDScript, eight substeps a wheel; never run on `P0-3b`'s floor handsets. Lever:
-  `substeps`. Off switch: `city_drive.tscn` back on `taxi.tscn`.
+  `substeps`. No off switch since the engine-tyre car was dropped (2026-10-05); a revert of that
+  commit is the way back.
 - **TAM too small** — Medium. Hong Kong only (`Q100`); scale by regions behind the IAP boundary.
 - **GPLv3 forecloses the App Store** — Medium. Contributions inbound MIT (`CONTRIBUTING.md`); no
   retrofit once an outside contributor declines.

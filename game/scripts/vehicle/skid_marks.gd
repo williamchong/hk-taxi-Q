@@ -59,7 +59,7 @@ func _setup() -> void:
 		return
 	_wheels = _car.tyre_wheels()
 	if _wheels.is_empty():
-		# The car is on the engine's tyres, and its own error says why.
+		# The car is parked on a tyre table it cannot run; its own error says why.
 		return
 	_strip = SkidStrip.new(_wheels.size(), profile)
 	if not _build_mesh():
