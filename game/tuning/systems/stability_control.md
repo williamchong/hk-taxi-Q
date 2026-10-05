@@ -63,7 +63,16 @@ aside past 90° of slip (`REVERSED_SLIP_DEG`): a car rolling backwards after a s
 all and rolled at 10–30 kph with the throttle held (the user's report, 2026-10-06; the 50 kph
 assisted tap's exit −9.0 → +2.6 kph).
 
-## `assisted_slip_cut_from_deg = 35.0`
+## `assisted_slip_cut_from_deg = 20.0`
+
+**20 since 2026-10-06** (the user's "fix the assisted tap spin at 50kph"): on the real taxi with
+the steering cap and the drive boost, the assisted tap rotated to 122.7° at 50 kph and 91.5° at
+42. Swept 20 / 25 / 30 / 35 with the assist on: the tap 65.9 / 70.7 / 75.1 / 91.5° at 42 kph and
+73.1 / 81.3 / 91.1 / 122.7° at 50; at 20 the assisted plain input still pays at every speed (`ride`
+longest 2.05 / 2.37 / 2.82 / 3.37 s at 42 / 50 / 63 / 86), `hold` unmoved, the countersteered
+`turn` in from 205–209° to 177–179° at 42–50, the lifted flick at 42 from 122° to 71°. A softer
+assist was worse (`countersteer_assist.gain` 1.0 / 1.25: the tap 123–140° at 42–50). The section
+below is the value as first set, at 35, when the car was weaker.
 
 Where the slide's drive fade starts while the drift assist is on, in place of
 `slide_drive_fade_from_deg` (25). At 25 the assisted slide at 86 kph lost its drive at 1.40 s, under

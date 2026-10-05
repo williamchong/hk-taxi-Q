@@ -9025,6 +9025,14 @@ throttle"; "its like the rear wheel is not moving at all". Each measured on the 
 - **Owed:** the assisted tap at 50 kph rotates to 123° (it recovers now); the countersteered `turn`
   still misses 80–110°; a plain tap pays at 63 / 86 kph; the user's drive.
 
+**The assisted tap's spin (the user's ask, 2026-10-06).** With the assist on, the plain tap rotated
+to 122.7° at 50 kph (91.5° at 42): the assisted slip cut began at 35°, set when the car was weaker
+so an assisted slide at 86 kph could reach `drift_min_s`. `stability_control.assisted_slip_cut_from_deg`
+35 → 20: tap 65.4 / 73.4 / 52.6 / 54.8° at 42 / 50 / 63 / 86 kph, the assisted plain input paying at
+all four (`ride` longest 2.03 / 2.37 / 2.82 / 3.37 s), `hold` unmoved; a softer assist gain made it
+worse. The assist-off mode never reads the dial (identical at 50 / 86 kph; 42 / 63 moved only with
+the spawn's settle, entry 42.29 → 42.11 kph).
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
