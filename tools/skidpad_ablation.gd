@@ -88,7 +88,9 @@ const LIFTOFF_WINDOWS_S: Array[Vector2] = [
 ## feint, labelled with it), then full lock right held, no drift button — a
 ## feint the other way, then in. `@held` keeps the throttle down
 ## through the feint; `@lift` lifts it for the feint and puts it back at the
-## turn-in, the Scandinavian flick `Q85` says the shipped car cannot do.
+## turn-in, the Scandinavian flick `Q85` says the shipped car cannot do;
+## `@brake` holds the brake through the feint instead, the real flick's light
+## brake (`Q153`'s research), and the throttle on at the turn-in.
 ## `handbrake`: `corner`'s input with the drift button tapped `HANDBRAKE_AT_S`
 ## into the turn — `tap` presses it with the steering from a straight line,
 ## this with the car already turning. `@held` keeps the throttle down, `@lift`
@@ -99,7 +101,9 @@ const LIFTOFF_WINDOWS_S: Array[Vector2] = [
 ## `liftoff` round), so against a throttled corner the brake would be credited
 ## with the speed it loses — read slip and turn rate, never radius.
 const TECHNIQUES: PackedStringArray = ["flick", "trailbrake", "handbrake"]
-const TECHNIQUE_VARIANTS: Dictionary = {"flick": ["held", "lift"], "handbrake": ["held", "lift"]}
+const TECHNIQUE_VARIANTS: Dictionary = {
+	"flick": ["held", "lift", "brake"], "handbrake": ["held", "lift"]
+}
 const TECHNIQUE_CONTROL: Dictionary = {
 	"flick": "corner", "trailbrake": "turnin", "handbrake": "corner"
 }
@@ -1011,6 +1015,8 @@ func _measure(
 				start = [&"accelerate", &"steer_left"]
 				if variant == "lift":
 					start = [&"steer_left"]
+				elif variant == "brake":
+					start = [&"steer_left", &"brake_reverse"]
 			else:
 				result.input_at_s = HANDBRAKE_AT_S
 				release_s = HANDBRAKE_AT_S + TAP_S
@@ -1379,7 +1385,8 @@ func _countersteer(slip_deg: float, slip_rate_dps: float) -> void:
 ## brake to let off, so the two differ by the brake alone.
 func _switch(technique: String) -> void:
 	match technique:
-		"flick@held", "flick@lift":
+		"flick@held", "flick@lift", "flick@brake":
+			Input.action_release(&"brake_reverse")
 			Input.action_release(&"steer_left")
 			Input.action_press(&"steer_right")
 			Input.action_press(&"accelerate")

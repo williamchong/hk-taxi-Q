@@ -13,7 +13,8 @@
 #                                    techniques with their controls, printed
 #                                    in windows from each one's own input
 #                                    under its control (Q153): flick@held /
-#                                    @lift a feint left then in, against
+#                                    @lift / @brake a feint left (throttle
+#                                    held, lifted, or the brake on) then in, against
 #                                    corner; handbrake@held / @lift the button
 #                                    0.5 s into corner's turn, against corner;
 #                                    trailbrake the brake into the turn, then
