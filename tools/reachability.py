@@ -92,7 +92,7 @@ log = logging.getLogger(__name__)
 # The taxi's body collider, in metres — `game/scenes/vehicle/taxi.tscn`. A
 # default rather than a hard-coded bar, so a wider car is a flag rather than an
 # edit. Same value and same reason as `tools/narrowing.py`.
-CAR_WIDTH_M = 1.8
+CAR_WIDTH_M = 1.695
 
 # A detour past this is called out by name rather than only folded into the
 # percentiles. Not a bar — nothing fails on it — but a distance a driver in an

@@ -39,7 +39,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - 🔴 **`clearance.LEVELS` and `carriageway_occupancy.CORRIDOR_LEVELS` are `(0, 1)` since
   2026-09-04 and they move TOGETHER — `centreline_error.py --levels` and `narrowing.py` stay at
   `(0,)`.** The bundle publishes a level-1 `clear_width_m`: `e208` FLEMING ROAD reads **2.00 m**,
-  under the lane bar and over the car's 1.80 m, where it published `-1.0` before. That is `Q13`'s
+  under the lane bar and over the car's 1.695 m (1.80 m until 2026-10-05), where it published `-1.0` before. That is `Q13`'s
   refusal expiring where it stood — `Q103` had already measured that 39 of 60 off-grade ends are
   reachable by driving at them. 🔴 **A level is a BUNDLE change and the user's call**, so `_write`
   still refuses anything but `LEVELS`; what the knob buys now is level **−1**, left out because a

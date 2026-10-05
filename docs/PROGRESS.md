@@ -116,7 +116,7 @@ Phase 3 — Build `B2`
 - `P3-26` ✅ Lamp posts from iB1000 (`Q82`).
 - `P3-9a` 🟢 Recognition round 0 — run and closed; recognised, blocked by bridges (`P3-9a′`).
 - `P3-28` ✅ `Q19` carve — 8 edges cut, `e99` at an authored width.
-- `P3-29` ✅ `Q19` fence, dressed — car bar 1.80 m; the vertical term refuted.
+- `P3-29` ✅ `Q19` fence, dressed — car bar 1.695 m since 2026-10-05 (a Crown Comfort's width; 1.80 m before, which fenced Causeway Bay's `e123`); the vertical term refuted.
 - `P3-29a` ✅ Region-edge closure (`Q143`) — 67 / 19 streets cut by the rectangle closed on the
   line, the neighbour's way in never; the set re-derived in `verify_fence`, 3 mutations caught.
   The user's drive owed.

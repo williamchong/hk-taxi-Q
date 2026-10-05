@@ -22,7 +22,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `tools/reachability.py --refuse <the fence set>` and paste its table, and A/B render one fenced
   mouth at a fixed camera.** 🔴 **The fence is a SECOND bar over the SAME measurement and the two may
   never be merged** (`Q19`): `is_passable` reads `clear_width_m` at the lane (3.20 m) and `fits_car`
-  reads it at the car (1.80 m), so re-pointing either at the other sends traffic down `e207`'s
+  reads it at the car (1.695 m, a Crown Comfort's width, since 2026-10-05; 1.80 m before), so re-pointing either at the other sends traffic down `e207`'s
   1.95 m or fences the player out of `e781`'s 3.50 m. `verify_road_graph.gd`'s `_check_car_bar`
   asserts an edge exists *between* the bars, because a region where every blocked edge is also
   fenced is what a merge looks like from the inside — ⚠️ **mutation-check it rather than reading its

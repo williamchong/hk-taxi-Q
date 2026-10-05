@@ -8925,6 +8925,26 @@ track 1,455 / 1,400 mm, turning circle 10.2 m, 1,695 mm wide, 4,695 mm long, 1,2
   the let-go `turn`, the assisted `ride` at 42 (1.62 s, under `drift_min_s`), the collider and
   the ETL bar, the user's drive.
 
+**The collider at the real width (the user's call, 2026-10-05).** `taxi.tscn`'s box 1.8 → 1.695 m
+(a Crown Comfort's 1,695 mm), and its mirrors with it: `clearance.car_width_m` in
+`hong_kong.yaml` and the `CAR_WIDTH_M` defaults of `narrowing.py`, `reachability.py` and
+`centreline_error.py`. Length (4.0 m against 4.695) and height stay. Both regions rebuilt and
+re-synced; `clearance.json` byte-identical (the measurement does not read the bar).
+
+- `fence.json`, before / after. Wan Chai unchanged: 14 fenced edges, 14 components, 15 mouths, 0
+  behind another fence, 13 with no way in, 316 barriers, 66 clipped edges / 67 ends / 0 with no
+  width. Causeway Bay: fenced edges 3 → 2 (`e123` freed, narrowest station 1.75 m), components
+  3 → 2, mouths 6 → 4, barriers 85 → 75; 0 / 0 behind or with no way in, 19 clipped edges / 19 ends
+  / 0 with no width, both sides.
+- `reachability.py --refuse` (the fence set): Causeway Bay starved at the car 3 → 2 edges, pairs
+  lost 170 → 171 of 13,314 → 13,461 (1.28% → 1.27%); Wan Chai identical but for the bar.
+- A/B render of `e123`'s node-20 mouth in `city_preview.tscn`
+  (`--camera=1978,14,146 --look=1987,4.2,158`, Causeway Bay at +1,649 m in the frame): the row of
+  barriers is gone and nothing else moved (`CHANGED`, signal only in the barrier's box).
+- `verify_road_graph.gd`'s car bar: 14 / 7 edges between the bars; mutation-checked — the synced
+  manifest's `car_width_m` set to the lane's 3.20 m fails with "the player fence and the routing
+  bar have converged".
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

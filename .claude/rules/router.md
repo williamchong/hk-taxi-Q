@@ -34,7 +34,7 @@ paths:
   against) and the goal's part. Do not "simplify" either end to a node cost: a node cannot carry a
   turn restriction.
 - 🔴 **Two bars, one measurement, never merged** (`Q19`): `Profile.legal()` is `is_routable` (lane,
-  3.20 m) and `Profile.player()` is `is_drivable and fits_car` (car, 1.80 m). Each profile reads
+  3.20 m) and `Profile.player()` is `is_drivable and fits_car` (car, 1.695 m since 2026-10-05, a Crown Comfort's width). Each profile reads
   its own predicate; `verify_road_graph.gd` pins `admits` to them edge by edge, and pins direction
   by STATE COUNT — a player profile that quietly obeyed one-way would still shorten routes through
   the turns and U-turns it frees, so "shorter somewhere" cannot tell the two apart.

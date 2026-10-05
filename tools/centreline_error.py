@@ -125,8 +125,8 @@ _LEFT = -1.0
 
 # The player's own width, from `taxi.tscn`. Same value and same reason as
 # `narrowing.py` and `reachability.py`; the wheels are raycasts with no collider
-# of their own since `Q50`, so 1.8 m is the whole car.
-CAR_WIDTH_M = 1.8
+# of their own since `Q50`, so 1.695 m — a Crown Comfort's width — is the whole car.
+CAR_WIDTH_M = 1.695
 
 
 def percentiles(values: list[float]) -> tuple[float, float, float, float]:

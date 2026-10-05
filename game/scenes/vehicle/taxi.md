@@ -29,7 +29,11 @@ lives in the scripts and in docs/, not here.
 
 ## `[sub_resource type="BoxShape3D" id="BoxShape3D_body"]`
 
-Not the visual body, deliberately — see docs/PROGRESS.md, P3-11.
+Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. 1.695 m wide since 2026-10-05, a
+Toyota Crown Comfort's width (`Q153`; 1.8 m before). ⚠️ **Mirrored, not read**, into
+`etl/config/hong_kong.yaml`'s `clearance.car_width_m` (the player fence) and the `CAR_WIDTH_M`
+defaults of `tools/narrowing.py`, `reachability.py` and `centreline_error.py`: change all of them
+together, rebuild the city and re-sync. Its length (4.0 m) and height are not yet the real car's.
 
 ## `[node name="Mesh" parent="." instance=ExtResource("4_body")]`
 

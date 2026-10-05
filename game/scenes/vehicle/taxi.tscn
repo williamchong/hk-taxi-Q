@@ -18,7 +18,7 @@
 [ext_resource type="Resource" uid="uid://14q9gunypeuys" path="res://tuning/passenger_emote.tres" id="18_emotetune"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(1.8, 0.7, 4)
+size = Vector3(1.695, 0.7, 4)
 
 [node name="Taxi" type="VehicleBody3D" unique_id=1800590424]
 mass = 1400.0

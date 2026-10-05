@@ -3962,12 +3962,13 @@ carriageway_region:
 #
 # ⚠️ Leave the block out and nothing is fenced; the bundle is byte-identical.
 clearance:
-  # The player's own width, from taxi.tscn's box collider. 🔴 The player fence is
-  # set at the car and NEVER at the lane (roads.lane_width_m, 3.20 m) — Q19 ruled
-  # that, and re-pointing is_passable at 1.80 m would send traffic down e207's
-  # 1.95 m. tools/reachability.py priced fencing at this bar: 0 ordered pairs of
+  # The player's own width, from taxi.tscn's box collider: a Toyota Crown
+  # Comfort's 1,695 mm since 2026-10-05 (1.80 m before, which fenced Causeway
+  # Bay's e123 at 1.75 m; Q153). 🔴 The player fence is set at the car and NEVER
+  # at the lane (roads.lane_width_m, 3.20 m) — Q19 ruled that, and re-pointing
+  # is_passable at the car would send traffic down e207's 1.95 m. tools/reachability.py priced fencing at this bar: 0 ordered pairs of
   # 187,946 lost.
-  car_width_m: 1.8
+  car_width_m: 1.695
 
   # ⚠️ There is deliberately NO suspension_travel_m beside it, and that is a
   # measured refusal rather than an omission. Q19 prescribed a vertical term

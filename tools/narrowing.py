@@ -141,7 +141,7 @@ _ROUNDING_M = 5e-4
 # The taxi's body collider, in metres — `game/scenes/vehicle/taxi.tscn`. A
 # default rather than a hard-coded bar, so a wider car is a flag rather than an
 # edit.
-CAR_WIDTH_M = 1.8
+CAR_WIDTH_M = 1.695
 
 # `BUILDING` is the complement of every class the config gives a flat material
 # to, exactly as `carriageway_occupancy.py` derives it — buildings take

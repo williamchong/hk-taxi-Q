@@ -955,7 +955,7 @@ def clamp_report(
     one. They are counted as two columns for that reason and never as one
     "too narrow". ⚠️ **The car bar is read from `clearance.car_width_m` where
     `narrowing.py`, `reachability.py` and `centreline_error.py` each hold their
-    own `CAR_WIDTH_M = 1.8` behind a `--car-width-m` flag.** The config's comment
+    own `CAR_WIDTH_M` (1.695) behind a `--car-width-m` flag.** The config's comment
     says that constant is the same fact — the taxi's own box collider — so the
     figures are comparable while the two agree and this side is the one that
     moves with the city. A city declaring no `clearance:` block loses the column

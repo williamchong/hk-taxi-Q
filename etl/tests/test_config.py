@@ -2608,7 +2608,7 @@ class TestClearance:
         car; re-pointing `RoadGraph.is_passable` at this value would send traffic
         down `e207`'s 1.95 m, which is why they are two numbers and not one."""
         assert hong_kong.clearance is not None
-        assert hong_kong.clearance.car_width_m == 1.8
+        assert hong_kong.clearance.car_width_m == 1.695  # a Crown Comfort, Q153
         assert hong_kong.clearance.car_width_m < hong_kong.roads.lane_width_m
 
     def test_the_block_is_optional(self, rewrite) -> None:
