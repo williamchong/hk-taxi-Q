@@ -25,12 +25,27 @@ default in the game and off on the pads (`--assist=on` turns it on there).
 sweep. `catch_lock_deg` is set at 6.0 on the user's call (2026-09-30), ahead of their drive, which
 stays the veto.
 
-## `mu = 2.0`
+## `mu = 1.0`
 
-The shipped car corners at 2.7 g on the skidpad's `corner` row (11.2 m radius at 63 kph), and the
-car carries `gravity_scale` 1.6, so its tyres need 1.7 × load at the limit. 2.0 leaves a margin.
-This is arcade grip — a real tyre is near 1.0 — and it is why the car needs twice the drive to
-spin its rear tyres (`drive_scale`).
+A road tyre's grip (`Q153`, the user's call 2026-10-05, with `drive_scale` and
+`handbrake_torque_nm` below). Pillar 2 asks for a car that is easy to drive, not for unrealistic
+grip: the ease is the hidden aids'. The car still carries `gravity_scale` 1.6, so the tyres hold
+about 1.6 g where a road car holds 0.9. Gravity at 1.0 or 1.3 was measured the same day and refused: with the
+handbrake at the same share of the lock, every tap spins and `corner` runs twice as wide (`Q153`).
+
+What a road tyre gives that 2.0 could not: weight transfer moves the rear. At 2.0 a corner left
+the tyres about 3.2 g, so a lift or a feint never took the rear under what the turn asked, and no
+single dial gave a flick while `corner` gripped (`Q153`'s nine levers). At 1.0 the lifted flick
+slides on physics alone, 44 / 48° at 42 / 63 kph (31–34° at 2.0, and those only because the flick
+trigger stood traction control down).
+
+⚠️ **1.0 alone spins the car** (2026-10-05, `mu` 1.0 with the rest as at 2.0): the tap and the
+lifted flick peak at 168–180° at 42, 63 and 86 kph, the plain `corner` slips 12 / 16 / 23°. Not
+answered by any stability dial: `turn_drive_cut` 0.8 / 1.0, `slide_drive_fade_from_deg` 10 / 15 /
+20, `traction_limit` 0.5 / 0.75, `drift_side_cut` 0.2 / 0.4, the drift assist and the body's
+gravity at 1.0 each left the tap at 164–168°. The spin was the two torques sized for 2.0 —
+`drive_scale` and `handbrake_torque_nm` — on a tyre with half the force to answer them. Refused
+before at 2.0's drive (`Q153`, 1.0 and 1.25) for the same reason.
 
 ## `slide_ratio = 0.9`
 
@@ -74,11 +89,19 @@ held throttle cannot spin the car (`Q153`, the user's street report). A plain he
 is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
 (`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
 
-## `handbrake_torque_nm = 3000.0`
+## `handbrake_torque_nm = 2000.0`
 
-Locks the rear wheels at the car's load (capacity ≈ 2 × 4,700 N × 0.35 m ≈ 3,300 N⋅m per wheel with
-`mu`). Swept 1,500–4,000 on `hold`: 3,000 was the best at 63 kph; 4,000 killed the slide there and
-helped it at 86.
+Over the rear wheels' lock at `mu` 1.0 (capacity ≈ 4,700 N × 0.35 m ≈ 1,650 N⋅m per wheel), so the
+button still locks them, by less than 3,000 did: about 1.2 × the lock, the gentle end of a
+rally hydraulic handbrake, which is built to lock the rears at once with margin (kept on the
+user's call after asking). Swept 1,000 / 1,500 / 2,000 at `mu` 1.0 and
+`drive_scale` 1.0 (2026-10-05): the tap peaks 69 / 62 / 53° at 42 kph and 47–48° at 63 at all
+three; 2,000 is the only value bringing the countersteered `turn` out inside 80–110° at both 42 and
+63 kph (100 / 96°; 158 / 70° at 1,000) and gives `hold` 3.40 / 3.12 s there. At 3,000 the tap
+spins at 63 and 86 (164 / 168°).
+
+At `mu` 2.0 it was 3,000 (capacity ≈ 3,300 N⋅m): swept 1,500–4,000 on `hold`, 3,000 the best at 63
+kph, 4,000 killed the slide there and helped it at 86.
 
 ## `low_speed_mps = 3.0`
 
@@ -90,16 +113,17 @@ at rest does not read an infinite slip.
 The spin solve's steps a tick. At 8 the residual stays monotone (the wheel's inertia term outweighs
 the tyre's falling slope); at fewer it may not, and the safeguarded Newton then bisects.
 
-## `drive_scale = 2.0`
+## `drive_scale = 1.0`
 
-The finding in one number. At 1.0 — the shipped drive — the rear tyres cannot be spun and no row
-holds a slide; at 2.0 `hold` passes at both speeds; at 3.0 the 86 kph slide spins. The cost: the
-car runs up to 119 kph in 4 s where it made 63, and the `corner` row accelerates through the bend.
+The handling table's drive, unscaled: at `mu` 1.0 it spins the rears, which is all 2.0 was for
+(`Q153`, 2026-10-05). The pace is the old car's again — 0 to 63 kph in about 4 s, not 2 — and the
+user's call that kept the faster taxi is reversed with it. At `mu` 1.0, 1.5 spins every tap (168°)
+and the lifted flick (158–168°); 1.0 keeps `corner` at 1.5–4.2° of slip, its exit 43 / 52 / 66 kph
+from 42 / 63 / 86.
 
-🔴 Not the lever for the power-on corner (`Q153`'s `liftoff` round, 2026-10-02): at 1.5 and 1.75
-the tap does not slide at 30, 42 or 63 kph (peak 5.2–10.9°, `hold` 0 s) and `hold` at 86 falls
-1.40 → 1.00 s, while `corner` still accelerates (86 → 118 kph at 1.5) and widens. The slide needs
-the whole 2.0; the corner is answered elsewhere (`P3-55`).
+At `mu` 2.0 it was 2.0, the spike's finding in one number: at 1.0 the rears could not be spun and
+no row held a slide, at 3.0 the 86 kph slide spun, and 1.5–1.75 lost the tap (`Q153`'s `liftoff`
+round). The car then ran up to 119 kph in 4 s, which `turn_drive_cut` (`P3-55`) answered.
 
 ## `rim_overspeed = 0.5`
 

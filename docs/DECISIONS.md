@@ -8788,6 +8788,46 @@ at all three speeds and its turn rate under it at 42 and 63; the handbrake 5.9 /
 25.9°, 14.2 / 26.4° inside 0.5 s at 42 / 63 / 86 kph, and `handbrake@lift` spinning at 63 (63.3°)
 and 86 (129.0°). `Q85`'s missing lift-then-flick holds on both cars.
 
+**A road tyre: `mu` 1.0, `drive_scale` 1.0, `handbrake_torque_nm` 2,000 (the user's call,
+2026-10-05).** Asked whether a lower `mu` with stability control could keep the corner; then "go".
+Pillar 2 is reworded, not reversed: **easy to drive**, the ease the hidden aids' (traction control,
+the speed-narrowed lock, the catch cap) rather than unrealistic grip (`GAME_DESIGN.md`). The faster
+taxi (`drive_scale` 2, this Q's pace call of 2026-10-02) is reversed with it: 0–63 kph in about
+4 s again, not 2.
+
+- **Why 2.0 blocked a weight-transfer drift:** with `gravity_scale` 1.6 the tyres held about 3.2 g,
+  so a lift or a feint never took the rear under what the turn asked, and the grip came back the
+  moment the slip fell under the peak. The car models load transfer (`_load_n`); it had nothing to
+  move.
+- **`mu` 1.0 alone spins every drift row** (168–180° on the tap, the lifted flick and `turn` at 42,
+  63 and 86 kph). Stability control does not answer it — `turn_drive_cut` 0.8 / 1.0, the slide fade
+  from 10 / 15 / 20°, `traction_limit` 0.5 / 0.75, `drift_side_cut` 0.2 / 0.4, the assist: the tap
+  stays at 164–168°. The spin is the two torques sized for 2.0. `drive_scale` 1.0 tidies `corner`
+  (1.5–4.2°) and gives the lifted flick 44 / 48° at 42 / 63 kph; the handbrake at 2,000 (about 1.2 ×
+  the rears' lock at 1.0, 3,000 having been about 0.9 × at 2.0) stops the tap's spin. Swept 1,000 /
+  1,500 / 2,000: only 2,000 brings the countersteered `turn` into 80–110° at both 42 and 63 kph.
+- **Before / after**, 42 / 63 / 86 kph, assist off (on in brackets where it differs):
+
+  | Row | `mu` 2.0 (shipped) | `mu` 1.0 |
+  |---|---|---|
+  | `corner` peak slip / exit | 7.1 / 3.2 / 1.1° · 69 / 76 / 88 kph | 4.2 / 1.5 / 2.9° · 43 / 52 / 66 kph |
+  | `tap` peak | 29.0 / 41.6 / 34.5° (26.0 / 33.8 / 39.4) | 53.1 / 47.5 / 73.7° (33.2 / 44.8 / 56.1) |
+  | `ride` longest | 0.85 / 0.80 / 1.12 s (3.30 / 3.32 / 3.17) | 0.98 / 1.42 / 1.70 s (3.33 / 3.12 / 2.08) |
+  | `hold` longest | 2.00 / 3.28 / 3.17 s (2.00 / 3.28 / 1.45) | 3.40 / 3.12 / 1.95 s (3.40 / 3.12 / 1.97) |
+  | `flick@lift` peak | 34.4 / 32.7 / 31.1° (38.8 / 39.3 / 38.4) | 43.6 / 47.5 / 97.3° (44.3 / 50.0 / 58.7) |
+  | `turn@counter` came out | 80.7 / 90.5 / 79.2° | 99.8 / 95.7 / 181.0° |
+  | `turn@off` came out | 85.4 / 83.0 / 77.4° | 136.4 / 219.8 / 187.0° |
+
+  Two parallel runs of one table read byte-identical but for `us/tick`.
+- **Owed:** 86 kph (the tap at 74°, the countersteered `turn` spinning, the flick at 97° with the
+  assist off); `turn` ended by letting go (the car keeps rotating to 136–220° at 23–31° of slip, a
+  slow over-rotation rather than a spin); the user's street drive, which is the veto.
+- **Gravity stays 1.6** (measured the same day, the user's "go for 1.0 if not much issue"):
+  `body.gravity_scale` 1.0 / 1.3 with the handbrake at the same 1.2 × lock (1,250 / 1,600 N·m) —
+  at 1.0 every tap and flick spins (164–180°), `hold` spins at 63 / 86 (152 / 179°) and `corner`
+  runs twice as wide (18 / 32 / 64 m against 10 / 17 / 29); 1.3 spins from 63. Less weight is less
+  grip again, so the drive is oversized again. A probe: the suspension stayed tuned for 1.6.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

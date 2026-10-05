@@ -92,8 +92,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
   read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
   for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
-  the windows. 🔴 `drive_scale` is not the power-on corner's lever: below 2.0 the spike's slide dies
-  at 30–63 kph before the corner stops accelerating (`tyre.md`). The lever is `turn_drive_cut`
+  the windows. 🔴 **`mu`, `drive_scale` and `handbrake_torque_nm` move together** (`Q153`, 2026-10-05): the
+  two torques are sized to what the tyre can answer, and `mu` 1.0 under 2.0's drive and handbrake
+  spun every tap (168°) where no stability dial helped. At `mu` 2.0, `drive_scale` under 2.0 lost
+  the slide (`tyre.md`). The power-on corner's lever is `turn_drive_cut`
   (`P3-55`), graded on `corner` across five entries — full lock runs to a TERMINAL speed, so one
   entry reads a transient — and on the pull-away from `--entry-kph=10`; `hold` and `ride` cannot
   see it while traction control is disarmed, and only their exits move.
@@ -133,8 +135,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `drift_side_cut` and its band are graded here with `ride`'s peak as the guard (a cut right for
   42 kph spins the car at 63); `slide_drive_fade_*` on `ride`'s peak across 42–86 kph with `hold`
   as the guard; `rearm_on_steer_release` on the settled heading and on `hold`, which a re-arm on a
-  steering REVERSAL kills. Refused, each measured: a lower `mu`, a locked handbrake
-  (`handbrake_declutch`), every tyre dial at 42 kph.
+  steering REVERSAL kills. Refused, each measured: a locked handbrake (`handbrake_declutch`),
+  every tyre dial at 42 kph. ⚠️ A lower `mu` was refused at 2.0's drive and shipped with the
+  drive and handbrake rescaled (`mu` 1.0, `Q153`, 2026-10-05) — the `turn` let go then fails (136 /
+  220° at 42 / 63 kph), owed.
 - ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
   stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
   its own reading of the speed into the face on the tick before contact, beside `impact`, the
@@ -169,8 +173,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   nothing the player drives unless `tyre_vehicle_controller.gd` reads it: check there first.
   ⚠️ `speed_min_kph` and the wall tiers were read off the old car's pace and are re-graded in
   `Q152`, not yet moved. Compare the two cars at one `--entry-kph`,
-  never one `--run-up`: at `drive_scale` 2 the spike makes 119 kph in the 4 s the shipped car makes
-  63. `--sweep` reaches `TyreProfile` fields; a drift_* field still sweeps only the drift rows.
+  never one `--run-up`: two drives reach two speeds in the same seconds. `--sweep` reaches `TyreProfile` fields; a drift_* field still sweeps only the drift rows.
   🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
   cars get the same one. `longest` is the unbroken dwell the fare's drift pays on (`drift_min_s`);
   `secs>thr` sums every run. ⚠️ `hold` on the spike carries ±0.3 s run to run at one

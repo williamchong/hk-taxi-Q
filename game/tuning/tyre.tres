@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1_tyre")
-mu = 2.0
+mu = 1.0
 slide_ratio = 0.9
 peak_slip_ratio = 0.1
 peak_slip_angle_deg = 8.0
 wheel_inertia_kgm2 = 1.2
-handbrake_torque_nm = 3000.0
+handbrake_torque_nm = 2000.0
 drift_side_cut = 0.6
 drift_side_cut_from_kph = 42.0
 drift_side_cut_to_kph = 65.0
@@ -18,7 +18,7 @@ slide_drive_fade_to_deg = 40.0
 rearm_on_steer_release = true
 low_speed_mps = 3.0
 substeps = 8
-drive_scale = 2.0
+drive_scale = 1.0
 rim_overspeed = 0.5
 traction_limit = 1.0
 traction_rearm_s = 2.0
