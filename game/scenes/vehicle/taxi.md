@@ -27,6 +27,14 @@ a wheel. See docs/ARCHITECTURE.md "The importer can reinstate VehicleWheel3D".
 Godot strips these comments on any editor resave, so anything load-bearing
 lives in the scripts and in docs/, not here.
 
+## `[node name="Taxi" type="VehicleBody3D"]`
+
+`linear_damp_mode = 1` (replace) with `linear_damp` left at 0, which Godot's writer drops: the body
+has no damping of its own since 2026-10-05 (`Q153`). The project default (0.1) damped the car at a
+tenth of its speed a second with the throttle down too, about 2,900 N at 75 kph, and held the real
+taxi under 80 kph. Air drag (`HandlingProfile.drag_area_m2`) and the coast's own terms
+(`coast_drag_per_s`, `rolling_resistance_mps2`) replace it.
+
 ## `[sub_resource type="BoxShape3D" id="BoxShape3D_body"]`
 
 Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. 1.695 m wide since 2026-10-05, a

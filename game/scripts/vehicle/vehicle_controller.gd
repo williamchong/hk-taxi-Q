@@ -64,6 +64,9 @@ var last_impact_mps: float = 0.0
 ## constant while the speed itself remains a profile dial.
 const TOP_SPEED_TAPER: float = 0.15
 
+## Sea-level air, kg/m³: a constant of the world, not a dial on the car.
+const AIR_DENSITY_KG_M3: float = 1.2
+
 ## Rebound is damped harder than bump, which is ordinary vehicle practice and is
 ## why one suspension_damping_ratio becomes Godot's two numbers.
 const RELAXATION_OVER_COMPRESSION: float = 1.2
@@ -313,6 +316,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_steering(delta)
 	_apply_drive()
+	_apply_air_drag()
 	_apply_coast_drag(delta)
 	_apply_drift(delta)
 	_velocity_into_step = linear_velocity
@@ -388,6 +392,8 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 ## `brake` as a braking torque — so the same number produces a different
 ## acceleration, and both were re-seeded against tools/skidpad.sh rather than
 ## carried across. The dial names survived; their calibration did not.
+## `engine_force` is the launch force since `Q153`; `_drive_force_n` limits it
+## by the engine's power above about 42 kph.
 ## ⚠️ Accumulated into locals and assigned **once**. `engine_force` and `brake` are
 ## not plain field stores: each setter fans out over the body's wheel array to push
 ## the value onto every traction wheel, so zeroing and then overwriting walks that
@@ -404,15 +410,44 @@ func _apply_drive() -> void:
 		var headroom: float = (
 			(profile.max_speed_kph - speed_kph) / (profile.max_speed_kph * TOP_SPEED_TAPER)
 		)
-		force = DRIVE_SIGN * profile.engine_force * throttle_input * clampf(headroom, 0.0, 1.0)
+		force = DRIVE_SIGN * _drive_force_n() * throttle_input * clampf(headroom, 0.0, 1.0)
 
 	if is_braking():
 		braking = profile.brake_force * brake_input
 	elif is_reversing() and speed_kph > -profile.max_reverse_kph:
-		force = -DRIVE_SIGN * profile.engine_force * brake_input
+		force = -DRIVE_SIGN * _drive_force_n() * brake_input
 
 	engine_force = force
 	brake = braking
+
+
+## The drive the engine has at this speed: `engine_force` off the line, and
+## above the speed where power limits it (about 42 kph on the shipped table),
+## that power over the speed — a 4-speed automatic's envelope with its shifts
+## smoothed away (`Q153`). A zero `engine_power_kw` or `driveline_efficiency`
+## is an unauthored profile and leaves the launch force at every speed, as the
+## car drove before the power limit.
+func _drive_force_n() -> float:
+	if profile.engine_power_kw <= 0.0 or profile.driveline_efficiency <= 0.0:
+		return profile.engine_force
+	# Floored so a car at rest asks for the launch force, not a division by 0.
+	var mps: float = maxf(absf(speed_kph) / 3.6, 0.1)
+	var powered: float = profile.engine_power_kw * 1000.0 * profile.driveline_efficiency / mps
+	return minf(profile.engine_force, powered)
+
+
+## The air's drag, at every speed and whatever the pedals, against the travel.
+## The body's own damping is replaced with 0 in `taxi.tscn`: Godot's default
+## damped the car at 10% of its speed a second, throttle or not (`Q153`).
+func _apply_air_drag() -> void:
+	var velocity: Vector3 = linear_velocity
+	var speed_sq: float = velocity.length_squared()
+	if is_zero_approx(speed_sq) or profile.drag_area_m2 <= 0.0:
+		return
+	# −v × |v| × ½ρCdA: the drag against the travel, one root and no normalise.
+	apply_central_force(
+		velocity * (-0.5 * AIR_DENSITY_KG_M3 * profile.drag_area_m2 * sqrt(speed_sq))
+	)
 
 
 ## Engine braking and rolling resistance, which VehicleBody3D does not model.

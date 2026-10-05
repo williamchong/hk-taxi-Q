@@ -27,11 +27,28 @@ const PATH: String = "res://tuning/handling.tres"
 ## Drive force at full throttle, handed to `VehicleBody3D.engine_force`.
 ##
 ## ⚠️ **Not per wheel.** It is split across the wheels marked
-## `use_as_traction` (`TyreVehicleController`), as the engine split it. 3,840 N
-## since 2026-10-05, a Toyota Crown Comfort's pull through town speeds (about
-## 81 kW: 3,900 N at 63 kph after driveline losses, `Q153`) — the real taxi is
-## the baseline, and a gameplay change is made on top of it.
-@export_range(0.0, 5000.0, 10.0) var engine_force: float
+## `use_as_traction` (`TyreVehicleController`), as the engine split it.
+##
+## The launch force: the most drive at any speed, which `engine_power_kw` takes
+## over from once power runs out (`VehicleController._drive_force_n`). 6,000 N
+## since 2026-10-05, a Crown Comfort LPG off the line — 186 N⋅m through a
+## Toyota 4-speed's first gear (≈2.8) and final drive (≈4.3, both typical, not
+## this car's published ratios) at 85% on 0.31 m wheels (`Q153`). It was a
+## constant 3,840 N, the pull at 63 kph, which left the car at 53 kph after 8 s.
+@export_range(0.0, 10000.0, 10.0) var engine_force: float
+## The engine's rated power: a Crown Comfort LPG's 1TR-FPE, 83 kW (`Q153`).
+## Above the speed where `engine_force` is power-limited, the drive is this
+## power through `driveline_efficiency` over the speed. 0 here or in the
+## efficiency turns the limit off.
+@export_range(0.0, 500.0, 1.0, "suffix:kW") var engine_power_kw: float
+## The share of `engine_power_kw` that reaches the tyres: gearbox, final drive
+## and the torque converter. 0.85, a typical automatic's.
+@export_range(0.0, 1.0, 0.01) var driveline_efficiency: float
+## Drag coefficient times frontal area, for the air's drag at every speed and
+## with the throttle down: ½ × ρ × this × v², against the travel. 0.72, a
+## saloon's Cd of about 0.36 on about 2.0 m² — typical figures, not the Crown
+## Comfort's published ones (`Q153`). About 240 N at 80 kph.
+@export_range(0.0, 3.0, 0.01, "suffix:m²") var drag_area_m2: float
 ## Braking, handed to `VehicleBody3D.brake`.
 ##
 ## ⚠️ **This is not newtons and does not convert from the value it replaced.** The
@@ -93,14 +110,12 @@ const PATH: String = "res://tuning/handling.tres"
 ## Fraction of rolling speed shed per second when coasting — engine braking.
 ## Small values glide, large values stop the car the moment you lift off.
 ##
-## ⚠️ **This is the minority of the coast drag, and the majority is invisible
-## from here.** Godot's `default_linear_damp` is 0.1 and `project.godot` does not
-## override it, so the engine damps the body as well. Measured on the flat
-## skidpad with this dial and rolling_resistance_mps2 both at zero, the car
-## decayed at **0.100/s** — exactly the engine default, and exactly twice what
-## this asks for. Restoring the dial gives 0.150/s, so it does contribute its
-## stated 0.05, but it is one third of the total. Tune against a measurement,
-## never against the number written here.
+## ⚠️ **0.15 since 2026-10-05, the whole of the coast's viscous term.** Until
+## then it was 0.05 and Godot's `default_linear_damp` (0.1) supplied the rest —
+## measured on the pad, 0.100/s with this at zero — but that damping acted with
+## the throttle down too, about 2,900 N at 75 kph against a real car's 200 N of
+## air, and held the real taxi under 80 kph. `taxi.tscn` replaces the body's
+## damping with 0 and this took its share, so a coast decays as before (`Q153`).
 @export_range(0.0, 1.0, 0.01) var coast_drag_per_s: float
 ## Speed-independent share of the coasting deceleration — rolling resistance.
 ##

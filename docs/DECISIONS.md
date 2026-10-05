@@ -8945,6 +8945,44 @@ re-synced; `clearance.json` byte-identical (the measurement does not read the ba
   manifest's `car_width_m` set to the lane's 3.20 m fails with "the player fence and the routing
   bar have converged".
 
+**The drive and the air are a Crown Comfort LPG's (the user's calls, 2026-10-05: "i dont think
+real world hk taxi accelerate that slow", then "model as so" — the old Crown Comfort LPG, the
+Comfort Hybrid a separate car later).** The constant 3,840 N took the 1,400 kg car to 53 kph in
+8 s and 68 in 12.
+
+- **Drive:** `engine_force` is the launch force, 6,000 N (186 N·m through a Toyota 4-speed's first
+  gear ≈2.8 and final drive ≈4.3 at 85% on 0.31 m wheels — the ratios typical, not published for
+  this car); above about 42 kph the drive is `engine_power_kw` 83 (the 1TR-FPE) ×
+  `driveline_efficiency` 0.85 ÷ speed (`VehicleController._drive_force_n`). A 4-speed automatic's
+  envelope with the shifts smoothed away; a zero in either field leaves the launch force at every
+  speed.
+- **Air:** Godot's `default_linear_damp` 0.1 damped the body with the throttle down too (about
+  2,900 N at 75 kph against a real car's 200 N of air) and held the car under 80 kph. `taxi.tscn`
+  replaces it with 0; `drag_area_m2` 0.72 (Cd ≈ 0.36 × ≈ 2.0 m², typical, not published) is drag
+  at every speed, and `coast_drag_per_s` 0.05 → 0.15 takes the damping's share of the coast.
+- **Pace, full throttle from rest:** 30 / 57 / 75 / 89 / 101 / 111 / 120 kph after 2 / 4 / 6 / 8 /
+  10 / 12 / 14 s (was 17 / 32 / 43 / 53 / 61 / 68 / 77 by 14 s). 0–100 in about 10 s, quicker than
+  an estimated 12–14 s for the real car: 83 kW is the peak, and a 4-speed sits under it between
+  shifts. Coast to rest about as before (9.1 s from 57 kph).
+- **Brakes:** the stop fell 8.62 → 7.8 m/s² from 63 kph, the damping having helped it; raising
+  `brake_force` barely moves it (54 gives 8.15) because the tyres bind, so 47 stays — 0.8 g is a
+  real emergency stop on a road tyre.
+- **The drift, before / after**, 42 / 63 / 86 kph, assist off (on in brackets):
+
+  | Row | constant 3,840 N | power-limited |
+  |---|---|---|
+  | `corner` radius / exit | 10 / 22 / 40 m · 29 / 40 / 55 kph | 20 / 34 / 58 m · 47 / 59 / 76 kph |
+  | `tap` peak | 39.6 / 29.6 / 48.4° (44.9 / 49.5 / 59.9) | **163.3** / 64.5 / **162.9°** (73.8 / 75.7 / 76.8) |
+  | `ride` longest | 1.30 / 1.95 / 2.40 s | 3.30 / 2.35 / 3.47 s (1.90 / 2.85 / 3.17) |
+  | `hold` longest | 0.53 / 1.77 / 2.58 s | 3.30 / 3.12 / 2.93 s (3.32 / 3.12 / 2.95) |
+  | `flick@lift` peak | 4.7 / 2.7 / 34.4° | 163.1 / 9.3 / 21.7° (159.5 / 9.4 / 49.6) |
+  | `turn@counter` came out | 81.8 / 65.0 / 133.0° | 178.2 / 154.8 / 138.6° |
+
+- **Owed — the aids were tuned to a weaker drive:** the plain tap and the lifted flick spin at 42
+  kph and the tap at 86 with the assist off, and the countersteered `turn` overshoots at every
+  speed. The real car stays; the fix is the gameplay layer (traction control, the slide's drive
+  fade, the side cut), the user's "improve for gameplay later".
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

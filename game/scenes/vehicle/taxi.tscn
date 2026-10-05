@@ -22,6 +22,7 @@ size = Vector3(1.695, 0.7, 4)
 
 [node name="Taxi" type="VehicleBody3D" unique_id=1800590424]
 mass = 1400.0
+linear_damp_mode = 1
 script = ExtResource("1_ctrl")
 profile = ExtResource("3_handling")
 

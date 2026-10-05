@@ -31,8 +31,8 @@ stays the veto.
 A road tyre's grip (`Q153`, the user's call 2026-10-05, with the drive and `handbrake_torque_nm`
 below). Pillar 2 asks for a car that is easy to drive, not for unrealistic grip: the ease is the
 hidden aids'. **A real taxi is the baseline** (the user, the same day): `gravity_scale` 1.0 and a
-Toyota Crown Comfort's drive (`HandlingProfile.engine_force` 3,840 N), so the tyres hold about
-1.0 g; a gameplay change is made on top of that, never by bending a physical number.
+Toyota Crown Comfort LPG's drive (`HandlingProfile`: 6,000 N off the line, 83 kW above about
+42 kph, air drag), so the tyres hold about 1.0 g; a gameplay change is made on top of that, never by bending a physical number.
 
 What a road tyre gives that 2.0 could not: weight transfer moves the rear. At 2.0 a corner left
 the tyres about 3.2 g, so a lift or a feint never took the rear under what the turn asked, and no

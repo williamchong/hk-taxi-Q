@@ -389,7 +389,8 @@ class Result:
 	var seconds: float = 0.0
 	## Exponential speed decay, per second: `ln(entry / exit) / seconds`. The
 	## same shape the coast and drag figures in `docs/PROGRESS.md` use, because
-	## Godot's `default_linear_damp` is viscous and those numbers are its rate.
+	## the coast's main term (`coast_drag_per_s`) is viscous and those numbers are
+	## its rate. Godot's own damping is replaced with 0 since `Q153`.
 	var decay_per_s: float = 0.0
 	## Mean deceleration over the phase, in m/s². The honest figure for braking,
 	## where the force is meant to be constant and a decay rate would hide that.
