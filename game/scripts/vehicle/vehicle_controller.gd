@@ -113,6 +113,8 @@ var _front: Array[VehicleWheel3D] = []
 ## The resolved `input_path`, or null. See `_physics_process`.
 var _input: Node = null
 var _rear: Array[VehicleWheel3D] = []
+## How far behind the centre of mass the rear axle sits, in metres.
+var _rear_axle_behind_m: float = 0.0
 
 ## Steering as a signed fraction of the lock available at this speed: -1.0 is
 ## full left, +1.0 is full right.
@@ -237,9 +239,18 @@ func _ready() -> void:
 	gravity_scale = profile.gravity_scale
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = Vector3(0.0, profile.centre_of_mass_offset_y, 0.0)
+	_rear_axle_behind_m = _axle_z(_rear) - center_of_mass.z
 	contact_monitor = true
 	max_contacts_reported = 8
 	can_sleep = false
+
+
+## The mean of `wheels`' authored positions along the car.
+func _axle_z(wheels: Array[VehicleWheel3D]) -> float:
+	var sum: float = 0.0
+	for wheel: VehicleWheel3D in wheels:
+		sum += wheel.position.z
+	return sum / float(maxi(wheels.size(), 1))
 
 
 ## Split the wheels into front and rear by their position along the chassis.
@@ -325,6 +336,16 @@ func _physics_process(delta: float) -> void:
 ## Signed forward speed in km/h. Negative when reversing.
 func forward_speed_kph() -> float:
 	return linear_velocity.dot(-global_basis.z) * 3.6
+
+
+## The rear axle's velocity, which is what the game reads a slide on
+## (`FareSystem.slip_deg_of`): its angle to the nose is how far the tail is
+## out. Not the centre of mass's: a car turning tightly with every tyre
+## gripping carries an angle there by geometry alone — 15° at full lock —
+## which read as a slide, paid as one, and had stability control cut the power
+## of a U-turn (`Q153`, 2026-10-06). At the rear axle a gripping turn reads 0.
+func rear_axle_velocity() -> Vector3:
+	return linear_velocity + angular_velocity.cross(global_basis.z * _rear_axle_behind_m)
 
 
 ## True while the brake/reverse pedal is slowing the car rather than backing it.

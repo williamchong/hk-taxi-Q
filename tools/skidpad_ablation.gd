@@ -366,6 +366,9 @@ var _failures: Array[String] = []
 ## which are engine classes touching no autoload, are found perfectly. Measured here before
 ## `driver.gd`'s duck-typing was understood to be deliberate.
 var _vehicle: RigidBody3D = null
+## How far behind the centre of mass the vehicle's rear axle sits, for
+## `_slide_velocity`: read off the wheels here, never asked of the car.
+var _rear_behind_m: float = 0.0
 var _spawn: Transform3D = Transform3D.IDENTITY
 var _step: float = 0.0
 ## Rows actually printed. The success test, because the ordinary GDScript
@@ -638,6 +641,7 @@ func _boot() -> bool:
 	if _vehicle == null:
 		_fail("no vehicle in %s — nothing answers forward_speed_kph()" % _scene_path)
 		return false
+	_rear_behind_m = _rear_axle_behind_m()
 
 	# Read back rather than taken from the scene file: `skidpad.tscn` authors the
 	# spawn, but a car that has settled onto its springs for a frame is the pose
@@ -1332,8 +1336,10 @@ func _speed_kph() -> float:
 ## flattening below is what those recorded figures mean.
 ##
 ## Flattened to the ground plane so a ramp or a landing cannot read as slip.
+## Read at the rear axle since 2026-10-06 (`Q153`): at the centre of mass a
+## gripping full-lock turn carries 15° by geometry alone, which read as a slide.
 func _slip_deg() -> float:
-	var velocity: Vector3 = _vehicle.linear_velocity
+	var velocity: Vector3 = _slide_velocity()
 	var travel := Vector3(velocity.x, 0.0, velocity.z)
 	if travel.length() < SLIP_FLOOR_MPS:
 		return 0.0
@@ -1344,13 +1350,43 @@ func _slip_deg() -> float:
 	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
 
 
+## The rear axle's velocity, which the slip is read on — the instrument's own
+## copy of `VehicleController.rear_axle_velocity`, as `_slip_deg` is of the
+## game's slip (`Q84`).
+func _slide_velocity() -> Vector3:
+	return (
+		_vehicle.linear_velocity
+		+ _vehicle.angular_velocity.cross(_vehicle.global_basis.z * _rear_behind_m)
+	)
+
+
+## The mean of the rear wheels' positions along the chassis, behind the centre
+## of mass: the wheels behind the mean of all of them (-Z is forward).
+func _rear_axle_behind_m() -> float:
+	var along: PackedFloat32Array = []
+	for node: Node in _vehicle.find_children("*", "VehicleWheel3D", false, false):
+		along.append((node as VehicleWheel3D).position.z)
+	if along.is_empty():
+		return 0.0
+	var mean: float = 0.0
+	for z: float in along:
+		mean += z / float(along.size())
+	var rear: float = 0.0
+	var count: int = 0
+	for z: float in along:
+		if z >= mean:
+			rear += z
+			count += 1
+	return rear / float(count) - _vehicle.center_of_mass.z
+
+
 ## The slip's sign, +1 when the travel is to the right of the nose (the tail
 ## out to the LEFT, a right-hand drift's), −1 the other way, 0 stopped.
 ## ⚠️ Read against the same flattened travel and nose as `_slip_deg`, so the
 ## two agree tick for tick; not `TyreVehicleController._slide_toward`, which
 ## is in Godot's steering sign and belongs to the car.
 func _slip_sign() -> float:
-	var velocity: Vector3 = _vehicle.linear_velocity
+	var velocity: Vector3 = _slide_velocity()
 	var travel := Vector3(velocity.x, 0.0, velocity.z)
 	if travel.length() < SLIP_FLOOR_MPS:
 		return 0.0

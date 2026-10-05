@@ -8,7 +8,7 @@ extends RefCounted
 ## under the bar the game scores a slide on, or, with `rearm_on_steer_release`,
 ## the tick the player lets the steering go having steered since the press.
 ##
-## Keyed on the body's slip rather than the tyres': after a handbrake tap the
+## Keyed on the rear axle's slip rather than the tyres': after a handbrake tap the
 ## rear tyres spin back up to road speed before the throttle can take the slide
 ## over, and re-armed on that, traction control cut the very torque the slide
 ## needed (the `hold` row at 63 kph fell from 2.22 s to nothing). The steering
@@ -34,9 +34,9 @@ func reset() -> void:
 	_flick.reset()
 
 
-## One tick of the player's inputs and the car's travel (`velocity` against
-## `nose`, the body slip the game scores a slide on). True on the tick a
-## drift press starts a slide — where the rear side cut is latched
+## One tick of the player's inputs and the car's travel (the rear axle's
+## `velocity` against `nose`, the slip the game scores a slide on). True on the
+## tick a drift press starts a slide — where the rear side cut is latched
 ## (`ArcadeAidsProfile.drift_side_cut`) — and false on every other.
 func step(
 	drift_input: bool,

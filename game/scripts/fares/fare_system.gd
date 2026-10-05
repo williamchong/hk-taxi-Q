@@ -79,7 +79,8 @@ extends Node
 ## ⚠️ **`slip_deg_of` is a second copy of `skidpad_ablation.gd`'s slip, on
 ## purpose** (`Q84`): the grader must never call what it grades, so the
 ## instrument keeps its own, and the game — the consumer `PLAN.md` held the
-## slip signal back for — now has this one. Same flattening, same floor.
+## slip signal back for — now has this one. Same flattening, same floor, and
+## the same velocity: the rear axle's (`VehicleController.rear_axle_velocity`).
 ##
 ## `--fares=off` frees the node — free roam, and what `P3-9` runs.
 ## `--fare-seed=<int>` fixes the destination draw for a repeatable drive.
@@ -317,14 +318,15 @@ func _physics_process(delta: float) -> void:
 		velocity.length(),
 		nose,
 		delta,
-		slip_deg_of(velocity, nose),
+		slip_deg_of(vehicle.rear_axle_velocity(), nose),
 		vehicle.is_airborne(),
 		vehicle.is_upright(),
 		vehicle.take_impact_mps()
 	)
 
 
-## The angle between where the car points and where it is going, in degrees,
+## The angle between where the car points and where `velocity` is going — the
+## rear axle's, for a slide (`VehicleController.rear_axle_velocity`) — in degrees,
 ## flattened to the ground plane so a ramp or a landing cannot read as slip,
 ## and 0 under `SLIP_FLOOR_MPS`. `skidpad_ablation.gd::_slip_deg`, restated.
 static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:

@@ -9052,6 +9052,24 @@ lock. Not sound, owed:
   where a tight turn has a geometric angle with no tyre sliding. Full lock and full throttle from
   10 / 20 / 30 kph exits after 4 s at 6.9 / 15.7 / 21.8 kph with the band and 30.9 / 35.3 / 42.5
   with `armed_slip_cut_to_deg` 0; at 10 kph the pad reads 3.80 s over the 14° pay threshold.
+  **Fixed the same day:** the slip is the rear axle's (`VehicleController.rear_axle_velocity`), in
+  the fare, drift mode, the slip cuts and the pad's own copy; a gripping turn reads 0 there, and a
+  slow U-turn no longer counts toward the drift. Under the tyre's low-speed floor the cuts stand
+  aside (a pivoting car reads near 90° at the rear axle). Read there, 3–6° sat inside a gripping
+  corner's 4–5° (`corner` out at 59.8 / 73.7 kph from 63 / 86), so the band is 8–14°: the tyre's
+  peak to the slide. After, 10 / 20 / 30 kph: 30.9 / 35.4 / 42.4 kph out, peak slip 3.5°. The pad
+  at 42 / 63 / 86 kph, centre of mass before / rear axle after:
+
+  | Row | before | after |
+  |---|---|---|
+  | `corner` exit | 51.7 / 64.8 / 78.8 kph | 51.6 / 64.7 / 81.0 kph |
+  | `tap` peak | 68.7 / 23.4 / 37.0° | 44.0 / 19.8 / 36.3° |
+  | `ride` longest | 1.53 / 2.82 / 2.30 s | 1.77 / 1.87 / 2.32 s |
+  | `hold` longest | 2.17 / 2.82 / 2.98 s | 3.52 / 3.03 / 2.95 s |
+  | `turn@off` came out | 183.2 / 173.1 / 161.2° | 179.9 / 168.1 / 158.7° |
+  | `turn@counter` came out | 117.1 / 60.7 / 120.8° | 76.8 / 56.3 / 117.9° |
+
+  A plain tap no longer pays at 63 kph (1.87 s under `drift_min_s`) and still does at 86.
 - **The drive force is power over the car's speed, not the rim's** (`_drive_force_n`), so a
   spinning wheel is handed more power than the engine has, up to the rim limit. Read from the
   code, not measured; `rev_limiter.overspeed_share` 0 calming the tap is consistent with it.

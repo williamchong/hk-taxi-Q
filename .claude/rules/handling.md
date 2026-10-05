@@ -138,6 +138,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   🚫 Left: the scrub after a clip — on the street a 40 kph clip still rests within a second with
   the nose on the face. The lever is a yaw-away or a tyre-grip term while a wall contact is live,
   graded on the clip rows and the drive; `collision_deflection` scales only the first tick.
+- 🔴 **The slip is the REAR AXLE's since 2026-10-06** (`Q153`): `VehicleController.rear_axle_velocity`
+  against the nose, in the fare, drift mode, stability control's cuts and the pad's own copy
+  (`_slide_velocity`). At the centre of mass a gripping full-lock turn carried 15° by geometry
+  alone, which paid as a drift and cut a U-turn's power. Every slip, `secs>thr` and `longest`
+  from before that day was read at the centre of mass and does not compare — re-run the before
+  side. A band in degrees under the tyre's peak (8°) cuts a gripping corner: `armed_slip_cut_*`
+  moved 3–6 → 8–14° for it.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target

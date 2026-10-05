@@ -157,14 +157,6 @@ func _ready() -> void:
 	_engine_angle.resize(_wheels.size())
 
 
-## The mean of `wheels`' authored positions along the car.
-func _axle_z(wheels: Array[VehicleWheel3D]) -> float:
-	var sum: float = 0.0
-	for wheel: VehicleWheel3D in wheels:
-		sum += wheel.position.z
-	return sum / float(maxi(wheels.size(), 1))
-
-
 ## Whether `table` can run the model. `side_force_depth` may legally be 0 —
 ## the force at the centre of mass — so a missing one cannot be told from a
 ## chosen one and is not guarded; nor is any system's table, where a zero is
@@ -299,8 +291,8 @@ func _grip_lock_rad() -> float:
 	return turn + deg_to_rad(tyre.peak_slip_angle_deg)
 
 
-## How far the body's slip is past the tyre's peak, in radians, or 0 when it
-## is not sliding forward. The size is the game's own slip
+## How far the rear axle's slip is past the tyre's peak, in radians, or 0 when
+## it is not sliding forward. The size is the game's own slip
 ## (`FareSystem.slip_deg_of`, the one the fare pays on). Forward travel only:
 ## backing up reads as a slip near 180° and would snap the fronts to full
 ## lock; past 90° the car has spun anyway.
@@ -308,7 +300,7 @@ func _slide_beyond_peak_rad() -> float:
 	var nose: Vector3 = -global_basis.z
 	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < tyre.low_speed_mps:
 		return 0.0
-	var slip_deg: float = FareSystem.slip_deg_of(linear_velocity, nose)
+	var slip_deg: float = FareSystem.slip_deg_of(rear_axle_velocity(), nose)
 	return maxf(deg_to_rad(slip_deg - tyre.peak_slip_angle_deg), 0.0)
 
 
@@ -316,7 +308,7 @@ func _slide_beyond_peak_rad() -> float:
 ## up component, positive when the travel is left of the nose — Godot's
 ## positive (left) steering, the countersteer for a tail out to the left.
 func _slide_toward() -> float:
-	return signf((-global_basis.z).cross(linear_velocity).y)
+	return signf((-global_basis.z).cross(rear_axle_velocity()).y)
 
 
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`
@@ -379,7 +371,7 @@ func _apply_tyres(delta: float) -> void:
 		throttle_input,
 		brake_input,
 		speed_kph,
-		linear_velocity,
+		rear_axle_velocity(),
 		nose,
 		profile.drift_slip_threshold_deg,
 		delta,
@@ -525,7 +517,7 @@ func _steer_share() -> float:
 
 
 ## Stability control's slip cut: the share of the forward drive left while
-## drift mode is on: 1 under `slip_power_cut_from_deg` of body slip, none at
+## drift mode is on: 1 under `slip_power_cut_from_deg` of rear-axle slip, none at
 ## `slip_power_cut_to_deg`. A key or a thumb holds full throttle, and with
 ## the rim free to overspeed a plain held tap ran to 48-65° (`Q153`, the user's
 ## street report: "the rear feels too spinny"). It takes power away and asks
@@ -545,14 +537,19 @@ func _armed_slip_share() -> float:
 	return _slip_cut_share(cut.armed_slip_cut_from_deg, cut.armed_slip_cut_to_deg)
 
 
-## The forward drive left by a slip cut over `from`–`to` degrees of body slip:
+## The forward drive left by a slip cut over `from`–`to` degrees of rear-axle slip:
 ## 1 under `from`, none at `to`. 1 when the band is not authored (`to` not over
 ## `from`), on reverse drive, and past `REVERSED_SLIP_DEG`, where the car is
 ## travelling backwards and the throttle must brake the roll.
 func _slip_cut_share(from: float, to: float) -> float:
 	if to <= from or _drive_n <= 0.0:
 		return 1.0
-	var slip: float = FareSystem.slip_deg_of(linear_velocity, -global_basis.z)
+	# Under the tyre's low-speed floor the rear axle's travel is mostly the
+	# car's own rotation, near 90° of slip on a pivot: no cut, as a real ESC
+	# stands aside at a crawl.
+	if linear_velocity.length() < tyre.low_speed_mps:
+		return 1.0
+	var slip: float = FareSystem.slip_deg_of(rear_axle_velocity(), -global_basis.z)
 	if slip > REVERSED_SLIP_DEG:
 		return 1.0
 	return 1.0 - clampf(inverse_lerp(from, to, slip), 0.0, 1.0)

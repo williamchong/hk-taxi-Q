@@ -11,14 +11,14 @@ extends Resource
 ## allows: 0 leaves the drive alone, 1 leaves none at full lock. Drift mode
 ## disarms it with traction control, so a slide never sees it (`P3-55`).
 @export_range(0.0, 1.0, 0.05) var understeer_power_cut: float
-## The body slip over which the forward drive fades out while drift mode is on:
+## The rear-axle slip over which the forward drive fades out while drift mode is on:
 ## whole at `slip_power_cut_from_deg`, gone at `slip_power_cut_to_deg`. A
 ## ceiling on the power that feeds a slide, so a held throttle cannot spin the
 ## car; under the band the slide is the player's. Inert while `to` is not over
 ## `from`.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var slip_power_cut_from_deg: float
 @export_range(0.0, 90.0, 1.0, "suffix:°") var slip_power_cut_to_deg: float
-## The body slip over which the forward drive fades out on the road — drift
+## The rear-axle slip over which the forward drive fades out on the road — drift
 ## mode off — as a real ESC catches a tail stepping out under power: whole at
 ## `armed_slip_cut_from_deg`, gone at `armed_slip_cut_to_deg`. The game's pace
 ## boost (`ArcadeAidsProfile.drive_boost`) put the rears past their grip in a

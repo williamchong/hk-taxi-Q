@@ -5,6 +5,10 @@ the file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
+⚠️ Every slip in this file is the rear axle's since 2026-10-06 (`Q153`,
+`VehicleController.rear_axle_velocity`); figures written before that day were read at the centre
+of mass and do not compare.
+
 Stability control's power cuts (a real car's ESC takes engine torque away when the car runs wide or its tail swings out). Power only: a real ESC also brakes single wheels, which this does not model.
 
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
@@ -53,7 +57,19 @@ held throttle cannot spin the car (`Q153`, the user's street report). A plain he
 is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
 (`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
 
-## `armed_slip_cut_from_deg = 3.0`, `armed_slip_cut_to_deg = 6.0`
+## `armed_slip_cut_from_deg = 8.0`, `armed_slip_cut_to_deg = 14.0`
+
+**8–14° since 2026-10-06, with the slip read at the rear axle** (`Q153`): the tyre's peak slip
+angle to the angle the game calls a slide, so the cut starts where the rear lets go and not before.
+The 3–6° below was set on the centre of mass's slip, which carries a tight turn's geometry: full
+lock and full throttle from 10 / 20 / 30 kph came out at 6.9 / 15.7 / 21.8 kph after 4 s (30.9 /
+35.4 / 42.4 now). Read at the rear axle a gripping corner runs 4–5° of slip, inside 3–6°: `corner`
+at 63 / 86 kph came out at 59.8 / 73.7 kph, and at 86 the rears ran at 0.90× their grip against
+0.73 with no cut at all. Swept `to` 0 / 6 / 10 / 14 at 20 / 42 / 63 / 86 on the technique table: 14
+reads as no cut on `corner` (rears 0.55–0.72×), so the band costs a gripping corner nothing. At
+8–14: `corner` out at 51.6 / 64.7 / 81.0 kph from 42 / 63 / 86, rears 0.60 / 0.57 / 0.60×.
+
+The section below is the band as first set, at 3–6° on the centre of mass's slip.
 
 **Since 2026-10-06**: the road's ESC, drift mode off — power cut as the tail steps out, as a real
 car's catches power oversteer. Built for the drive boost; swept to 6 / 8 / 12° with the boost
