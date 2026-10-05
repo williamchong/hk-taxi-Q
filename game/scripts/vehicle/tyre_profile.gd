@@ -59,9 +59,6 @@ const PATH: String = "res://tuning/tyre.tres"
 @export_range(0.1, 10.0, 0.1, "suffix:m/s") var low_speed_mps: float
 ## Wheel-spin integration steps per physics tick.
 @export_range(1, 32, 1) var substeps: int
-## Multiplier on `HandlingProfile.engine_force` for this car's drive torque.
-## 1 is the shipped car's drive; above it the rear tyres can be spun.
-@export_range(0.1, 5.0, 0.05) var drive_scale: float
 ## How far past the car's top speed a driven wheel's rim may spin, as a share
 ## of it: 0 stops the drive at top speed's rim speed, 0.5 at half as much
 ## again. A slide is held on wheelspin, and at 86 kph the rim met the limiter

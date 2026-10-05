@@ -68,10 +68,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
   read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
   for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
-  the windows. 🔴 **`mu`, `drive_scale` and `handbrake_torque_nm` move together** (`Q153`, 2026-10-05): the
-  two torques are sized to what the tyre can answer, and `mu` 1.0 under 2.0's drive and handbrake
-  spun every tap (168°) where no stability dial helped. At `mu` 2.0, `drive_scale` under 2.0 lost
-  the slide (`tyre.md`). The power-on corner's lever is `turn_drive_cut`
+  the windows. 🔴 **`mu`, gravity, `engine_force` and `handbrake_torque_nm` move together** (`Q153`,
+  2026-10-05): the two torques are sized to what the tyre can answer, and a grip or a weight change
+  under the old torques spun every tap (168°) where no stability dial helped. 🔴 **A real taxi is
+  the baseline** (the user's call): physical numbers are a Crown Comfort's, and gameplay is layered
+  on top as an aid, never by bending one. `engine_force` is the car's whole drive, split across
+  the driven wheels (`drive_scale`, which multiplied a per-wheel copy, is gone). The power-on corner's lever is `turn_drive_cut`
   (`P3-55`), graded on `corner` across five entries — full lock runs to a TERMINAL speed, so one
   entry reads a transient — and on the pull-away from `--entry-kph=10`; `hold` and `ride` cannot
   see it while traction control is disarmed, and only their exits move.

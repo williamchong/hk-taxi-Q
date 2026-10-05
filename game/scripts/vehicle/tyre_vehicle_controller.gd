@@ -100,9 +100,12 @@ var _slide_steered: bool = false
 ## tracked: a slide sheds speed, and a cut that deepened as it did would feed
 ## itself (`Q89`).
 var _side_cut: float = 0.0
-## The drive force per traction wheel and the brake dial as the parent set them
-## this tick, before this class took them back off the engine.
+## The car's whole drive force and the brake dial as the parent set them this
+## tick, before this class took them back off the engine.
 var _drive_n: float = 0.0
+## Each driven wheel's share of `_drive_n`, from the wheels marked
+## `use_as_traction`.
+var _traction_share: float = 0.0
 var _brake_dial: float = 0.0
 ## Microseconds spent in `_apply_tyres` and the ticks that spent them, for the
 ## skidpad's cost column.
@@ -151,10 +154,15 @@ func _ready() -> void:
 		return
 	_wheels.append_array(_front)
 	_wheels.append_array(_rear)
+	var driven: int = 0
 	for wheel: VehicleWheel3D in _wheels:
+		driven += 1 if wheel.use_as_traction else 0
 		_hardpoints.append(wheel.position)
 		wheel.wheel_friction_slip = 0.0
 		_visuals.append(wheel.get_node_or_null(^"Visual") as Node3D)
+	# `engine_force` is the car's whole drive, split across its driven wheels
+	# as the engine split it (`HandlingProfile.engine_force`).
+	_traction_share = 1.0 / float(maxi(driven, 1))
 	_omega.resize(_wheels.size())
 	_loads.resize(_wheels.size())
 	_slips.resize(_wheels.size())
@@ -179,7 +187,6 @@ static func usable(table: TyreProfile) -> bool:
 		"wheel_inertia_kgm2": table.wheel_inertia_kgm2,
 		"low_speed_mps": table.low_speed_mps,
 		"substeps": float(table.substeps),
-		"drive_scale": table.drive_scale,
 	}
 	return not TuningTable.any_zero(
 		table, fields, "TyreVehicleController", "the car does not drive"
@@ -420,7 +427,7 @@ func _apply_tyres(delta: float) -> void:
 		var wheel: VehicleWheel3D = _wheels[i]
 		_radius = wheel.wheel_radius
 		var drive_nm: float = (
-			_drive_n * tyre.drive_scale * drive_share * _radius if wheel.use_as_traction else 0.0
+			_drive_n * _traction_share * drive_share * _radius if wheel.use_as_traction else 0.0
 		)
 		# A limiter on the wheel, where the parent's taper is on the body: a
 		# spinning tyre must not run the wheel past top speed either.
@@ -509,8 +516,8 @@ func _apply_tyres(delta: float) -> void:
 
 ## The share of the forward drive left while traction control is armed and the
 ## fronts are turned: 1 with the wheel straight, `1 - turn_drive_cut` at the
-## lock the speed allows. The doubled drive (`drive_scale`) the slide needs
-## otherwise accelerates a full-lock corner to about 128 kph from any entry,
+## lock the speed allows. The doubled drive the slide once needed (`Q153`)
+## otherwise accelerated a full-lock corner to about 128 kph from any entry,
 ## its arc widening with no scrub, where the shipped car settles at 62-65
 ## (`Q153`). Read off the front wheels' own angle, so the catch cap and the
 ## rate limit count. Forward drive only: reversing is not the corner.

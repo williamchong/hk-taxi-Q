@@ -14,7 +14,7 @@ car before it — `taxi.tscn` on the engine's tyres, the pad's control until it 
 tables.
 
 ⚠️ `substeps`, `mu`, `slide_ratio`, `peak_slip_ratio`, `peak_slip_angle_deg`,
-`wheel_inertia_kgm2`, `low_speed_mps` and `drive_scale` are required: `tyre_profile.gd` declares no
+`wheel_inertia_kgm2` and `low_speed_mps` are required: `tyre_profile.gd` declares no
 defaults, and a zero parks the car (`TyreVehicleController.usable`). `yaw_assist_scale` (a share
 of the engine-tyre car's drift yaw torque) and `handbrake_declutch` went with that car on
 2026-10-05: both were 0 / off, the torque not rescuing the low end, the declutch only a harsh brake
@@ -28,11 +28,11 @@ stays the veto.
 
 ## `mu = 1.0`
 
-A road tyre's grip (`Q153`, the user's call 2026-10-05, with `drive_scale` and
-`handbrake_torque_nm` below). Pillar 2 asks for a car that is easy to drive, not for unrealistic
-grip: the ease is the hidden aids'. The car still carries `gravity_scale` 1.6, so the tyres hold
-about 1.6 g where a road car holds 0.9. Gravity at 1.0 or 1.3 was measured the same day and refused: with the
-handbrake at the same share of the lock, every tap spins and `corner` runs twice as wide (`Q153`).
+A road tyre's grip (`Q153`, the user's call 2026-10-05, with the drive and `handbrake_torque_nm`
+below). Pillar 2 asks for a car that is easy to drive, not for unrealistic grip: the ease is the
+hidden aids'. **A real taxi is the baseline** (the user, the same day): `gravity_scale` 1.0 and a
+Toyota Crown Comfort's drive (`HandlingProfile.engine_force` 3,840 N), so the tyres hold about
+1.0 g; a gameplay change is made on top of that, never by bending a physical number.
 
 What a road tyre gives that 2.0 could not: weight transfer moves the rear. At 2.0 a corner left
 the tyres about 3.2 g, so a lift or a feint never took the rear under what the turn asked, and no
@@ -89,13 +89,14 @@ held throttle cannot spin the car (`Q153`, the user's street report). A plain he
 is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
 (`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
 
-## `handbrake_torque_nm = 2000.0`
+## `handbrake_torque_nm = 1250.0`
 
-Over the rear wheels' lock at `mu` 1.0 (capacity ≈ 4,700 N × 0.35 m ≈ 1,650 N⋅m per wheel), so the
-button still locks them, by less than 3,000 did: about 1.2 × the lock, the gentle end of a
+About 1.2 × the rear wheels' lock at `mu` 1.0 and `gravity_scale` 1.0 (capacity ≈ 2,940 N × 0.35 m ≈
+1,030 N⋅m per wheel): the real-taxi baseline (`Q153`). At gravity 1.6 it was 2,000 (capacity ≈
+1,650), kept there on the user's call as 1.2 ×, the gentle end of a
 rally hydraulic handbrake, which is built to lock the rears at once with margin (kept on the
-user's call after asking). Swept 1,000 / 1,500 / 2,000 at `mu` 1.0 and
-`drive_scale` 1.0 (2026-10-05): the tap peaks 69 / 62 / 53° at 42 kph and 47–48° at 63 at all
+user's call after asking). Swept 1,000 / 1,500 / 2,000 at `mu` 1.0, gravity 1.6 and
+twice today's drive (2026-10-05): the tap peaks 69 / 62 / 53° at 42 kph and 47–48° at 63 at all
 three; 2,000 is the only value bringing the countersteered `turn` out inside 80–110° at both 42 and
 63 kph (100 / 96°; 158 / 70° at 1,000) and gives `hold` 3.40 / 3.12 s there. At 3,000 the tap
 spins at 63 and 86 (164 / 168°).
@@ -112,18 +113,6 @@ at rest does not read an infinite slip.
 
 The spin solve's steps a tick. At 8 the residual stays monotone (the wheel's inertia term outweighs
 the tyre's falling slope); at fewer it may not, and the safeguarded Newton then bisects.
-
-## `drive_scale = 1.0`
-
-The handling table's drive, unscaled: at `mu` 1.0 it spins the rears, which is all 2.0 was for
-(`Q153`, 2026-10-05). The pace is the old car's again — 0 to 63 kph in about 4 s, not 2 — and the
-user's call that kept the faster taxi is reversed with it. At `mu` 1.0, 1.5 spins every tap (168°)
-and the lifted flick (158–168°); 1.0 keeps `corner` at 1.5–4.2° of slip, its exit 43 / 52 / 66 kph
-from 42 / 63 / 86.
-
-At `mu` 2.0 it was 2.0, the spike's finding in one number: at 1.0 the rears could not be spun and
-no row held a slide, at 3.0 the 86 kph slide spun, and 1.5–1.75 lost the tap (`Q153`'s `liftoff`
-round). The car then ran up to 119 kph in 4 s, which `turn_drive_cut` (`P3-55`) answered.
 
 ## `rim_overspeed = 0.5`
 

@@ -5,9 +5,10 @@
 1. **It must feel like Hong Kong to a Hong Kong driver.** Recognition beats fidelity. A local should
    navigate by memory, not by minimap.
 2. **Arcade, not simulation.** Three-minute sessions, instant restart, forgiving collision,
-   easy to drive. Fun outranks accuracy whenever they conflict. The tyres grip as a road tyre does
-   (`mu` 1.0 since 2026-10-05, `Q153`); the ease comes from the hidden aids — traction control,
-   the speed-narrowed lock, the catch cap — not from unrealistic grip. **The drift is the one place
+   easy to drive. Fun outranks accuracy whenever they conflict. **The car's physics are a real
+   taxi's** — a Toyota Crown Comfort's grip, weight and drive (since 2026-10-05, `Q153`) — and the
+   ease is layered on top as hidden aids — traction control, the speed-narrowed lock, the catch
+   cap — never by bending a physical number. **The drift is the one place
    for sim-lite skill** (`Q153`): easy to start and forgiving to lose, held longer and wider by the
    player's throttle and countersteer — a low entry bar and a high ceiling.
 3. **Readable at a glance.** Two thumbs on a phone, on a bus, in daylight (`Q97`); one-handed stays

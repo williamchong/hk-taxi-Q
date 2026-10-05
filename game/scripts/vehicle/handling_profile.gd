@@ -26,9 +26,11 @@ const PATH: String = "res://tuning/handling.tres"
 @export_range(0.0, 100.0, 1.0, "suffix:km/h") var max_reverse_kph: float
 ## Drive force at full throttle, handed to `VehicleBody3D.engine_force`.
 ##
-## ⚠️ **Not per wheel.** The engine splits it across the wheels marked
-## `use_as_traction`, where the raycast model this replaced applied it at each
-## driven contact patch itself.
+## ⚠️ **Not per wheel.** It is split across the wheels marked
+## `use_as_traction` (`TyreVehicleController`), as the engine split it. 3,840 N
+## since 2026-10-05, a Toyota Crown Comfort's pull through town speeds (about
+## 81 kW: 3,900 N at 63 kph after driveline losses, `Q153`) — the real taxi is
+## the baseline, and a gameplay change is made on top of it.
 @export_range(0.0, 5000.0, 10.0) var engine_force: float
 ## Braking, handed to `VehicleBody3D.brake`.
 ##
@@ -140,8 +142,8 @@ const PATH: String = "res://tuning/handling.tres"
 ##
 ## It is NOT gravity-independent. Static sag is g_eff / (2πf)², so raising
 ## gravity_scale deepens sag and eats the bump travel that absorbs kerbs and
-## jump landings. Scale this by √gravity_scale to hold ride height: the seeded
-## 2.8 Hz is 2.2 Hz compensated for gravity_scale 1.6.
+## jump landings. Scale this by √gravity_scale to hold ride height: 2.2 Hz at
+## gravity_scale 1.0 since 2026-10-05, where it was 2.8 at 1.6 (`Q153`).
 @export_range(0.5, 5.0, 0.05, "suffix:Hz") var suspension_frequency_hz: float
 ## 1.0 is critically damped. Below 1.0 allows a little bounce, above is sluggish.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float
@@ -149,17 +151,20 @@ const PATH: String = "res://tuning/handling.tres"
 ## spring may push with.
 ##
 ## ⚠️ **Godot's default of 6000 N cannot carry this car, and the failure is
-## quiet.** Static corner load is mass × g × gravity_scale ÷ 4 = 1200 × 9.8 × 1.6
-## ÷ 4 ≈ 4704 N, so the default leaves 1.27× headroom and the spring clips on the
-## first kerb — the car sags onto its bump stops rather than reporting anything.
-## Seeded at roughly 4× static load. It scales with mass and with gravity_scale,
+## quiet.** Static corner load is mass × g × gravity_scale ÷ 4 = 1200 × 9.8 × 1.0
+## ÷ 4 ≈ 2940 N, so the default leaves 2× headroom, and at the 1.6 this once ran
+## at it left 1.27× and the spring clipped on the first kerb — the car sags onto
+## its bump stops rather than reporting anything. Seeded at roughly 4× static
+## load (11,900 N; 19,000 at 1.6). It scales with mass and with gravity_scale,
 ## so it is not portable to a heavier vehicle unchanged.
 @export_range(0.0, 60000.0, 100.0, "suffix:N") var suspension_max_force_n: float
 
 @export_group("Body")
 ## Downward offset of the centre of mass from the body origin. Lower = less roll.
 @export_range(-2.0, 2.0, 0.01, "suffix:m") var centre_of_mass_offset_y: float
-## Above 1.0 shortens air time and lands jumps flatter.
+## Above 1.0 shortens air time and lands jumps flatter. 1.0 since 2026-10-05,
+## a real taxi's weight on its tyres (`Q153`): at 1.6 every grip, lock and
+## drive number was sized to a car 1.6× as heavy as its mass.
 @export_range(0.0, 5.0, 0.05) var gravity_scale: float
 
 

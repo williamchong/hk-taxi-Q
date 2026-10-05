@@ -8849,6 +8849,43 @@ taxi (`drive_scale` 2, this Q's pace call of 2026-10-02) is reversed with it: 0�
   runs twice as wide (18 / 32 / 64 m against 10 / 17 / 29); 1.3 spins from 63. Less weight is less
   grip again, so the drive is oversized again. A probe: the suspension stayed tuned for 1.6.
 
+**A real taxi is the baseline (the user's call, 2026-10-05): gravity 1.0, the drive a Crown
+Comfort's.** "We want to use real taxi for param tuning and improve for gameplay later." The physical
+numbers are a Toyota Crown Comfort's; gameplay is layered on top as aids, never by bending one.
+Reverses the gravity refusal above, which ran the drive and suspension still sized for 1.6.
+
+- `gravity_scale` 1.6 → 1.0, `suspension_frequency_hz` 2.8 → 2.2 (√1.6 holds the sag),
+  `suspension_max_force_n` 19,000 → 11,900 (4 × static load), `handbrake_torque_nm` 2,000 → 1,250
+  (1.2 × the lock, as before), and the drive to a real taxi's.
+- **The drive:** `engine_force` is the car's whole force, split across the driven wheels as its
+  doc always said; the tyre model had applied it to each, and `drive_scale` multiplied that copy.
+  Now 3,840 N total (a Crown Comfort: about 81 kW, 1,400 kg — about 3,900 N at 63 kph after
+  driveline losses; sources disagree on the torque, 152–188 N·m), `drive_scale` removed — the same
+  1,920 N a wheel, the pad identical but for one 0.01 kph rounding.
+- **The drive was swept at gravity 1.0** (0.5 / 0.6 / 0.8 / 1.0 of the old per-wheel 3,200 N): 0.8
+  and 1.0 spin every tap and flick; 0.6, taken, is the real taxi.
+- **Before (`mu` 1.0, gravity 1.6) / after**, 42 / 63 / 86 kph, assist off (on in brackets):
+
+  | Row | gravity 1.6 | real taxi |
+  |---|---|---|
+  | `corner` radius / exit | 10 / 17 / 29 m · 43 / 52 / 66 kph | 12 / 24 / 42 m · 34 / 46 / 60 kph |
+  | `tap` peak | 53.1 / 47.5 / 73.7° | 51.4 / 42.7 / 62.3° (41.8 / 50.8 / 59.3) |
+  | `ride` longest | 0.98 / 1.42 / 1.70 s | 1.48 / 2.10 / 2.65 s (1.85 / 2.60 / 2.92) |
+  | `hold` longest | 3.40 / 3.12 / 1.95 s | 3.23 / 2.27 / 2.82 s (3.27 / 2.32 / 2.85) |
+  | `flick@lift` peak | 43.6 / 47.5 / 97.3° | 6.6 / 38.2 / 80.3° (6.6 / 50.9 / 61.5) |
+  | `turn@counter` came out | 99.8 / 95.7 / 181.0° | 114.5 / 151.8 / 156.0° |
+  | `brake`, `coast` | — | identical |
+
+- **Owed, on the baseline:** the countersteered `turn` over 110° at 42–86 kph; the flick lost at
+  42 kph; a plain tap with the assist off now PAYS at 63 / 86 kph (2.10 / 2.65 s against
+  `drift_min_s` 2.0), which `P3-53`'s bar refuses; the let-go `turn`; the user's drive; and the
+  wall tiers and `speed_min_kph`, read off a faster car.
+- **Physical numbers still not the taxi's**, the user's call to match them next: mass (1,200 kg,
+  the taxi about 1,400), `wheel_radius_m` (0.35, a 195/70R14 is 0.31), the standstill lock (24°,
+  about 30° for a 5.3 m turning radius). Arcade, not physical: the suspension's stiffness and
+  damping, the coast drag (about twice a real car's), `side_force_depth` and the low centre of mass
+  (both hold the car upright), the speed-narrowed lock.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
