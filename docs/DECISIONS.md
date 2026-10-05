@@ -9021,3 +9021,63 @@ on a step up, the mark not broken by a jump or by leaving the ground — each fa
 
 Owed: the user's look pick (rendered tiers 0–3 on the street), the user's drive, the handset's fill
 rate (`P0-3b`).
+
+## `Q155` — The car's dials are its systems: one table each, named as the system names them
+
+**Asked** by the user (2026-10-05): "can the drifting and driving dials we have been tuning be
+refactored or abstracted into actual drive assist systems existing in cars?", then "plan to
+refactor the active dials into actual car systems". **Closed** the same day on the user's three
+calls: rename to the real systems' names, one `.tres` per system, and the game's own aids grouped
+as such.
+
+**Decision.** The tyre car's 30 dials in one `tyre.tres` were the tyre, five real systems and a
+handful of aids no real car has, read in one 734-line controller where traction control's state
+machine was tangled with the flick and the side cut's latch. Now:
+
+| Table (`game/tuning/systems/`) | Real or game | What it is |
+|---|---|---|
+| `traction_control.tres` | real | the driven wheel's torque cut on wheelspin |
+| `stability_control.tres` | real (power only) | ESC's power cuts: running wide at lock, and the tail out in a slide |
+| `drift_mode.tres` | real precedent | stands the two above down for a slide the player asked for (`DriftMode`), as Ford's or AMG's drift mode does by hand |
+| `countersteer_assist.tres` | real | electric steering into opposite lock (`CountersteerAssist`; VW's DSR, Lexus's VDIM) — the player's `drift_assist` option |
+| `handbrake.tres` | real | the drift button's rear torque |
+| `rev_limiter.tres` | real | the driven rims' cut-out |
+| `arcade_aids.tres` | game | the rear side cut, the flick, the slide lock, the catch limiter (`CatchLimiter`) |
+
+`tyre.tres` is the tyre alone (grip curve, wheel, solve, `side_force_depth`). Engine, brakes and
+air stay in `handling.tres`. A system with state owns it in its class; a stateless one is its table
+and a named function on `TyreVehicleController` — traction control's test runs per wheel per
+substep inside the spin solve, where a call buys nothing. A null table parks the car;
+`verify_vehicle.gd` refuses any table but the shipped one by path (mutation-checked: the scene's
+`arcade_aids` unassigned fails it). `tools/skidpad.sh --sweep=<system>.<field>` writes a system's
+table, as `body.` writes the rigid body.
+
+**The rename map** — every earlier `Q`, `tyre.md` sweep and `PROGRESS.md` row uses the left column:
+
+| Old (`tyre.tres`) | New |
+|---|---|
+| `traction_limit` | `traction_control.wheelspin_limit` |
+| `turn_drive_cut` | `stability_control.understeer_power_cut` |
+| `slide_drive_fade_from_deg` / `_to_deg` | `stability_control.slip_power_cut_from_deg` / `_to_deg` |
+| `assist_drive_fade_from_deg` | `stability_control.assisted_slip_cut_from_deg` |
+| `traction_rearm_s` | `drift_mode.rearm_s` |
+| `rearm_on_steer_release` | `drift_mode.rearm_on_steer_release` |
+| `countersteer_assist` | `countersteer_assist.gain` |
+| `countersteer_lock_deg` | `countersteer_assist.max_lock_deg` |
+| `handbrake_torque_nm` | `handbrake.torque_nm` |
+| `rim_overspeed` | `rev_limiter.overspeed_share` |
+| `drift_side_cut*`, `flick_*`, `slide_lock_deg`, `catch_*` | `arcade_aids.` + the same name |
+| "traction control off" (`_traction_off`) | drift mode engaged (`DriftMode.engaged`) |
+| `TyreVehicleController.assist_yields` | `CountersteerAssist.yields` |
+
+**Measured.** The pad at 42 / 63 / 86 kph in both modes against the commit before: every row
+identical but an exit printed `-0.00` for `0.00` (the walls excluded, noisy as recorded). The sweep
+path writes the table: `traction_control.wheelspin_limit` 0 / 1.0 takes `corner` at 63 kph out at
+73.5 / 59.0 kph. `check.sh` passes; `verify_vehicle`'s assist and flick checks run on the new
+classes.
+
+**Not in this.** No tuning moved: the plain tap still spins at 42 / 86 kph with the assist off on
+the real taxi's power (`Q153`), owed to these tables. Single-wheel ESC braking and ABS are new
+behaviour, not a regroup, and come after.
+
+**See.** `Q152` · `Q153` · `P3-59` · `.claude/rules/handling.md`
