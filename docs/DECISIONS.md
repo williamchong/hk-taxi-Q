@@ -8997,6 +8997,34 @@ refuses; the countersteered `turn` misses 80–110° at every speed; handbrake-a
 42 / 86 kph (162.8 / 161.3°, recorded before as a big input) and the lifted flick at 42 with the
 assist on (159.5°); the user's drive.
 
+**The user's drive (2026-10-06): cornering, pace, brakes and a spun car.** "i cant even throttle
+and turn at 50kph, it just slide out"; "we need faster acceleration and braking"; "after drifting
+turns into spin … moving backwards, it can maintain the -10~30km/h speed … even if im holding full
+throttle"; "its like the rear wheel is not moving at all". Each measured on the pad first.
+
+- **The plough.** Full keyboard lock at 50 kph turned the fronts 22.9° on a road tyre peaking at
+  8° of slip: front tyres at 2.54× their grip, the car running wide at 24 m. An arcade aid,
+  `arcade_aids.steer_to_grip` 1.0, caps full input at the angle the tyres can use, and lifts in a
+  slide and while drift mode is engaged (capped through the press it changed the drift's start).
+  The radius stays the road tyre's — a real car's limit — while the car stops scrubbing.
+- **The brakes.** Bias and ABS changed nothing at `brake_force` 47: the brake, not the tyre, was
+  the limit. `brake_front_share` 0.65, ABS (`systems/anti_lock_brakes`, `slip_limit` 1.0, the
+  foot brake only) and `brake_force` 70: 9.0 / 9.3 / 9.4 m/s² from 42 / 63 / 86 kph (7.8), 15.9 m
+  from 63 (19.5).
+- **The pace.** `arcade_aids.drive_boost` 0.5, the user's pick: 0–100 in about 7 s (10). Off in
+  drift mode (unfaded, every tap spun at 162°) and faded with the steering (unfaded, the 42 kph
+  full-throttle corner's rears ran at 1.54× their grip); the road's ESC band
+  (`stability_control.armed_slip_cut_*` 3–6°) catches what is left.
+- **The spun car.** In drift mode the slip cut took all drive past 40° of slip, and a car rolling
+  backwards reads 180°: zero drive with the throttle held, and drift mode never re-armed. Both slip
+  cuts stand aside past 90° (`REVERSED_SLIP_DEG`); the assisted tap at 50 kph that spins exits at
+  +2.6 kph where it rolled backwards at −9.0.
+- **After, assist off, 42 / 50 / 63 / 86 kph:** tap 68.5 / 48.2 / 23.4 / 37.1°, `hold` 2.18 / 3.13 /
+  2.82 / 2.98 s, the corner's rears 0.65 / 0.66 / 0.72 / 0.88× their grip, the let-go `turn` 183 /
+  184 / 173 / 161° (was 194–214). Assist on: tap 91.5 / 122.7 / 69.7 / 62.2°.
+- **Owed:** the assisted tap at 50 kph rotates to 123° (it recovers now); the countersteered `turn`
+  still misses 80–110°; a plain tap pays at 63 / 86 kph; the user's drive.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

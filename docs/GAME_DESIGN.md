@@ -162,7 +162,7 @@ here. See `.claude/rules/handling.md`.
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |
-| Braking | Strong (~0.9 g, 8.75 m/s²; `brake_force` 40, a post-`Q50` unit that does not convert from newtons) and as speed-uniform as the engine allows. Must out-pull the ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests. The car must stop faster than it accelerates |
+| Braking | Strong (~0.95 g, 9.3 m/s² from 63 kph; `brake_force` 70 with a 65% front bias and ABS, a road tyre's limit, `Q153`) and as speed-uniform as the engine allows. Must out-pull the ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests. The car must stop faster than it accelerates |
 | Coasting | Sheds a similar speed per second at 5 km/h as at 50, and comes to a stop. One pedal serves brake and reverse, so coasting is the only thing that can park the car (`P0-5b/c/d`) |
 
 ### The drift as shipped
