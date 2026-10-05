@@ -9045,6 +9045,21 @@ graded once. ⚠️ The game's default was ON: a player now drives without the a
 The pad at 42 / 63 / 86 kph, before and after: every row identical but the `us/tick` cost column.
 "Whether an assisted slide pays in full" closes with it.
 
+**The systems' values reviewed the same day (the user's ask), each read against a real car's.**
+Sound: traction control and ABS at 10% slip, the 65% front bias, the handbrake at 1.08 × the rear
+lock. Not sound, owed:
+- **The road slip cut (`armed_slip_cut_*` 3–6°) reads the body's slip at the centre of mass**,
+  where a tight turn has a geometric angle with no tyre sliding. Full lock and full throttle from
+  10 / 20 / 30 kph exits after 4 s at 6.9 / 15.7 / 21.8 kph with the band and 30.9 / 35.3 / 42.5
+  with `armed_slip_cut_to_deg` 0; at 10 kph the pad reads 3.80 s over the 14° pay threshold.
+- **The drive force is power over the car's speed, not the rim's** (`_drive_force_n`), so a
+  spinning wheel is handed more power than the engine has, up to the rim limit. Read from the
+  code, not measured; `rev_limiter.overspeed_share` 0 calming the tap is consistent with it.
+- **`understeer_power_cut` keys on the steering angle**, so a full-key corner runs at half power
+  whether or not the car ploughs: `corner` exits at 51.7 / 64.8 kph from 42 / 63 with it and 55.4 /
+  74.6 without (under 42 the two cuts compound and one sweep cannot part them).
+- **The brake torque is the dial × the physics tick rate**: right at 60 Hz only.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
