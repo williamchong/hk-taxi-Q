@@ -7,7 +7,7 @@
 | | Treatment | Why |
 |---|---|---|
 | **City** | Accurate proportions, real massing, real street widths (then widened for play) | Recognition is the product; stylised proportions destroy it |
-| **Vehicles** | Choro-Q / toy proportions — short wheelbase, oversized wheels, chunky | Charm and readability. Cars are what the player looks at for hours |
+| **Vehicles** | Choro-Q / toy proportions — short wheelbase, oversized wheels, chunky. ⚠️ **Out of date for the taxi's chassis since 2026-10-05**: it runs on a Toyota Crown Comfort's real wheelbase, track and wheels as the tuning baseline (`Q153`, the user's call), and the toy look is a later art pass | Charm and readability. Cars are what the player looks at for hours |
 
 Stylise the actors, not the stage. `Q8` measured it: driving the real city was judged fun on
 recognition alone.
@@ -516,7 +516,10 @@ vertices and flat across an over-drawn width. `roads.ground_profile` closed the 
 | Windows | Flat dark colour with a fixed specular hint — no reflection probes |
 
 Proportions: shortened wheelbase, tall greenhouse, exaggerated arches. Readable from behind at
-speed.
+speed. ⚠️ The taxi's wheelbase and wheels are a real Crown Comfort's since 2026-10-05 (`Q153`): the
+physics hardpoints and the model are one set of numbers (`make_vehicle.Chassis`), and the toy
+caricature returns in a later art pass, on the body rather than the hardpoints or by the user's
+call.
 
 **Body shader** (`vehicle_body.gdshader`, `P3-11c`): "flat" means flat *albedo*. A surface marker in
 `UV.y` gives glazing, lenses and paint a clearcoat over a three-band sky gradient (zenith, horizon,

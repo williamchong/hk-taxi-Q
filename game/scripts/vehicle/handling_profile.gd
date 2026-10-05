@@ -48,7 +48,10 @@ const PATH: String = "res://tuning/handling.tres"
 ## and 40 sitting near the bottom of it is information, not a mis-scaled slider.
 ##
 ## Handed to the tyre model as a brake torque (`TyreVehicleController`), where it
-## stops the car within 2% of the engine-tyre car's stop (`Q152`).
+## stops the car within 2% of the engine-tyre car's stop (`Q152`). **47 since
+## 2026-10-05**: the same stop on the 1,400 kg real taxi (8.62 m/s² from 63 kph,
+## 2.00 s; 40 gave 7.45), because a real car's brakes are sized to its weight
+## (`Q153`). The 40 → 8.75 line above is the 1,200 kg car's.
 @export_range(0.0, 5000.0, 10.0) var brake_force: float
 
 @export_group("Steering")
@@ -151,11 +154,11 @@ const PATH: String = "res://tuning/handling.tres"
 ## spring may push with.
 ##
 ## ⚠️ **Godot's default of 6000 N cannot carry this car, and the failure is
-## quiet.** Static corner load is mass × g × gravity_scale ÷ 4 = 1200 × 9.8 × 1.0
-## ÷ 4 ≈ 2940 N, so the default leaves 2× headroom, and at the 1.6 this once ran
-## at it left 1.27× and the spring clipped on the first kerb — the car sags onto
-## its bump stops rather than reporting anything. Seeded at roughly 4× static
-## load (11,900 N; 19,000 at 1.6). It scales with mass and with gravity_scale,
+## quiet.** Static corner load is mass × g × gravity_scale ÷ 4 = 1400 × 9.8 × 1.0
+## ÷ 4 ≈ 3430 N, so the default leaves 1.75× headroom, and at 1,200 kg and the
+## 1.6 this once ran at it left 1.27× and the spring clipped on the first kerb —
+## the car sags onto its bump stops rather than reporting anything. Seeded at
+## roughly 4× static load (13,700 N; 19,000 at 1,200 kg and 1.6). It scales with mass and with gravity_scale,
 ## so it is not portable to a heavier vehicle unchanged.
 @export_range(0.0, 60000.0, 100.0, "suffix:N") var suspension_max_force_n: float
 

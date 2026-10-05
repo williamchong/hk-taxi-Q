@@ -294,10 +294,12 @@ class Chassis:
     — in that order, with the drive re-reviewed.
     """
 
-    wheelbase_m: float = 2.60  # wheel nodes at z = +/-1.30
-    track_m: float = 1.60  # wheel nodes at x = +/-0.80
-    wheel_radius_m: float = 0.35  # handling.tres, wheel_radius_m
-    suspension_rest_m: float = 0.35  # handling.tres, hub sits this far below the node
+    # A Toyota Crown Comfort's (`Q153`): wheelbase 2,785 mm, track 1,455 / 1,400 mm
+    # front / rear, taken as their mean so the wheels stay a rectangle.
+    wheelbase_m: float = 2.785  # wheel nodes at z = +/-1.3925
+    track_m: float = 1.43  # wheel nodes at x = +/-0.715
+    wheel_radius_m: float = 0.31  # handling.tres, wheel_radius_m
+    suspension_rest_m: float = 0.39  # handling.tres, hub sits this far below the node
 
     @property
     def hub_y_m(self) -> float:
@@ -325,16 +327,18 @@ class Proportions:
 
     # Lengthened from 4.00 with the cabin pulled back, which is what buys the
     # long bonnet and boot of a three-box saloon. The real car is 4.69 m on a
-    # 2.68 m wheelbase; the toy keeps the scene's 2.60 m and shortens around it.
+    # 2.785 m wheelbase; the toy has the real wheelbase since 2026-10-05 and
+    # keeps its shorter body around it.
     length_m: float = 4.30
-    # ⚠️ Flush with the tyres, which reach x 0.90 exactly. Three values were
+    # ⚠️ Flush with the tyres, which reach x 0.815 exactly on the Crown Comfort's
+    # track (0.90 on the toy's 1.60 m track before 2026-10-05). Three values were
     # tried and the two failures are worth keeping: at 0.86 the wheels were
     # sealed inside the bodywork and the car rendered with none at all; at 0.76
     # they were visible but stood *outside* the flank on a perched lip, which
     # reads as separate standing fenders — a pre-war car, not a 1990s saloon.
     # Flush bodywork with the wheel in a hole cut through it is the only
     # arrangement that is neither, and it is why `_flank` exists.
-    half_width_m: float = 0.90
+    half_width_m: float = 0.815
     # The wheel well: how far the rim turns inward, and how much bigger the
     # opening is than the tyre. The clearance has to be generous — a tight
     # opening on a flush tyre shows nothing from any angle but dead abeam.
@@ -1607,7 +1611,9 @@ def taxi_door(chassis: Chassis, shape: Proportions) -> MeshData:
     """
     side = KERB_SIDE
     z0, z1 = door_span_m(chassis, shape)
-    if shape.door_thickness_m >= shape.half_width_m - shape.cabin_half_width_m:
+    # Within a micrometre: the depth is a difference of two floats, and a leaf
+    # exactly as deep as the doorway must still be refused.
+    if shape.door_thickness_m >= shape.half_width_m - shape.cabin_half_width_m - 1e-6:
         raise ValueError(
             f"door_thickness_m={shape.door_thickness_m} does not fit the doorway's "
             f"{shape.half_width_m - shape.cabin_half_width_m:.3f} m depth"

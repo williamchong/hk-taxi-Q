@@ -21,7 +21,7 @@
 size = Vector3(1.8, 0.7, 4)
 
 [node name="Taxi" type="VehicleBody3D" unique_id=1800590424]
-mass = 1200.0
+mass = 1400.0
 script = ExtResource("1_ctrl")
 profile = ExtResource("3_handling")
 
@@ -34,7 +34,7 @@ script = ExtResource("9_lamps")
 profile = ExtResource("16_lamptune")
 
 [node name="PassengerDoor" type="Node3D" parent="." unique_id=1283577419]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, 0.315)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.815, 0, 0.315)
 script = ExtResource("10_door")
 profile = ExtResource("17_doortune")
 
@@ -79,25 +79,25 @@ script = ExtResource("7_glint")
 material = ExtResource("8_bodymat")
 
 [node name="WheelFL" type="VehicleWheel3D" parent="." unique_id=750019216]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -1.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.715, 0, -1.3925)
 use_as_steering = true
 
 [node name="Visual" parent="WheelFL" unique_id=92052752 instance=ExtResource("5_wheelmesh")]
 
 [node name="WheelFR" type="VehicleWheel3D" parent="." unique_id=1920257588]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, -1.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.715, 0, -1.3925)
 use_as_steering = true
 
 [node name="Visual" parent="WheelFR" unique_id=107837231 instance=ExtResource("5_wheelmesh")]
 
 [node name="WheelRL" type="VehicleWheel3D" parent="." unique_id=1374395292]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, 1.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.715, 0, 1.3925)
 use_as_traction = true
 
 [node name="Visual" parent="WheelRL" unique_id=1945494775 instance=ExtResource("5_wheelmesh")]
 
 [node name="WheelRR" type="VehicleWheel3D" parent="." unique_id=1367133105]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, 1.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.715, 0, 1.3925)
 use_as_traction = true
 
 [node name="Visual" parent="WheelRR" unique_id=174779688 instance=ExtResource("5_wheelmesh")]

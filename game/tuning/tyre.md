@@ -89,10 +89,11 @@ held throttle cannot spin the car (`Q153`, the user's street report). A plain he
 is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
 (`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
 
-## `handbrake_torque_nm = 1250.0`
+## `handbrake_torque_nm = 1275.0`
 
-About 1.2 × the rear wheels' lock at `mu` 1.0 and `gravity_scale` 1.0 (capacity ≈ 2,940 N × 0.35 m ≈
-1,030 N⋅m per wheel): the real-taxi baseline (`Q153`). At gravity 1.6 it was 2,000 (capacity ≈
+About 1.2 × the rear wheels' lock on the real taxi (`Q153`): 1,400 kg at `gravity_scale` 1.0 on
+0.31 m wheels, capacity ≈ 3,430 N × 0.31 m ≈ 1,060 N⋅m per wheel. It was 1,250 on the 1,200 kg car
+with 0.35 m wheels (capacity ≈ 1,030). At gravity 1.6 it was 2,000 (capacity ≈
 1,650), kept there on the user's call as 1.2 ×, the gentle end of a
 rally hydraulic handbrake, which is built to lock the rears at once with margin (kept on the
 user's call after asking). Swept 1,000 / 1,500 / 2,000 at `mu` 1.0, gravity 1.6 and

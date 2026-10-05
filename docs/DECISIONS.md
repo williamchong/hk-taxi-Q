@@ -8886,6 +8886,45 @@ Reverses the gravity refusal above, which ran the drive and suspension still siz
   damping, the coast drag (about twice a real car's), `side_force_depth` and the low centre of mass
   (both hold the car upright), the speed-narrowed lock.
 
+**The physical numbers matched to a Crown Comfort (the user's calls, 2026-10-05: "match the
+Physical ones", then track and wheelbase too, then "real everything, toy later").** Sources:
+auto-data.net and Wikipedia's Toyota Comfort — wheelbase 2,785 mm (the Crown Comfort's long one),
+track 1,455 / 1,400 mm, turning circle 10.2 m, 1,695 mm wide, 4,695 mm long, 1,280–1,410 kg.
+
+- **Mass** 1,200 → 1,400 kg (`taxi.tscn`). **Wheelbase** 2.60 → 2.785 m and **track** 1.60 →
+  1.43 m (the two axles' mean: the generator and its test want one rectangle). **Wheels** 0.35 →
+  0.31 m (a 195/70R14), `suspension_rest_length_m` 0.35 → 0.39 so the body keeps its height over
+  the road. **Lock** 24 → 32° (10.2 m turning circle). The model is regenerated from the same
+  numbers (`make_vehicle.Chassis`; body flush with the narrower track, ±0.815 m), and the door
+  hinge follows the flank.
+- **Rescaled to hold the same physics:** `handbrake_torque_nm` 1,275 (1.2 × the new lock),
+  `suspension_max_force_n` 13,700 (4 × static load), `brake_force` 40 → 47 — a real car's brakes
+  are sized to its weight, and 47 gives the old stop back (8.62 m/s² from 63 kph, 2.00 s; 40 gave
+  7.45). `engine_force` is unchanged: a heavier car on the same engine pulls slower, as it should.
+- **⚠️ The art direction's toy chassis is out of date for the taxi** (`ART_DESIGN.md` flagged):
+  the user chose the real chassis as the tuning baseline and the toy look as a later art pass.
+  `make_vehicle.Proportions` keeps its shorter body (4.30 m) around the real wheelbase.
+- **Not matched:** the body collider (1.8 × 0.7 × 4.0 m, the real car 1.695 m wide) — it is
+  mirrored into the ETL's player fence and three route tools (`CAR_WIDTH_M`), so it moves with a
+  pipeline run; it is now 8.5 cm wider than the body each side.
+- **Before (real-taxi baseline) / after**, 42 / 63 / 86 kph, assist off (on in brackets):
+
+  | Row | 1,200 kg toy chassis | Crown Comfort chassis |
+  |---|---|---|
+  | `corner` radius / exit | 12 / 24 / 42 m · 34 / 46 / 60 kph | 10 / 22 / 40 m · 29 / 40 / 55 kph |
+  | `tap` peak | 51.4 / 42.7 / 62.3° | 39.6 / 29.6 / 48.4° (44.9 / 49.5 / 59.9) |
+  | `ride` longest | 1.48 / 2.10 / 2.65 s | 1.30 / 1.95 / 2.40 s (1.62 / 2.63 / 2.85) |
+  | `hold` longest | 3.23 / 2.27 / 2.82 s | 0.53 / 1.77 / 2.58 s (0.55 / 3.13 / 2.62) |
+  | `flick@lift` peak | 6.6 / 38.2 / 80.3° | 4.7 / 2.7 / 34.4° (4.7 / 2.7 / 52.7) |
+  | `turn@counter` came out | 114.5 / 151.8 / 156.0° | 81.8 / 65.0 / 133.0° |
+  | `brake` from 63 | 2.02 s, 8.58 m/s² | 2.00 s, 8.62 m/s² |
+
+  ⚠️ `hold` at 42 kph is read with the rule's caution: its driver commands a share of the lock,
+  and the lock moved 24 → 32°, so the collapse may be the driver re-tuned rather than the car.
+- **Owed:** the flick (gone at 42 / 63), the countersteered `turn` under 80° at 63, `hold` at 42,
+  the let-go `turn`, the assisted `ride` at 42 (1.62 s, under `drift_min_s`), the collider and
+  the ETL bar, the user's drive.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires
