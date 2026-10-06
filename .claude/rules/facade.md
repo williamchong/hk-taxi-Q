@@ -10,6 +10,7 @@ paths:
   - "etl/tests/test_colour.py"
   - "game/tuning/city_facade*.{tres,md}"
   - "game/assets/shaders/city_facade*.gdshader"
+  - "game/assets/shaders/city_facade*.gdshaderinc"
   - "game/scripts/world/lighting_rig.gd"
 ---
 

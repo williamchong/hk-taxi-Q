@@ -16,6 +16,10 @@ rebuild, because all three read the same `TEXCOORD_0` payload:
   candidate `A‴` city_facade_elements  the clean look with its elements on
   candidate `B`  city_facade_warm      the measured Hong Kong window bands
 
+A fourth shader reads the same payload: `city_facade_cel.gdshader` (`P3-64`, `Q158`), this look
+under a banded sun. Trialled by pointing this file's `ext_resource` at it and adding its `cel_*`
+values; not shipped until the user picks.
+
 Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
 data, not constants — and beside `golden_hour.tres` because the sun these are
 judged under is tuned in the same directory. Loaded as **one** resource for all
