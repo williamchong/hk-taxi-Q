@@ -101,12 +101,11 @@ func _ready() -> void:
 		add_child(instance)
 		bounds = MeshContract.bounds(instance)
 		triangles = MeshContract.triangles(instance)
-	# By node name, which for a library is the mesh's own (`_place`).
-	for found: Node in find_children("*", "GeometryInstance3D", true, false):
-		if not GeneratedLayer.casts_shadow(layer, String(found.name)):
-			(found as GeometryInstance3D).cast_shadow = (
-				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			)
+		for found: Node in find_children("*", "GeometryInstance3D", true, false):
+			if not GeneratedLayer.casts_shadow(layer, String(found.name)):
+				(found as GeometryInstance3D).cast_shadow = (
+					GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				)
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
 		% [layer, triangles, MeshContract.colliders(self), bounds.size.x, bounds.size.z]
@@ -124,8 +123,9 @@ func _ready() -> void:
 
 
 ## Stands the library's meshes where the placements document puts them, one
-## `MultiMesh` per mesh, and returns the drawn extent and triangle count — or
-## `{}` after pushing what went wrong.
+## `MultiMesh` per mesh — per mesh and plan cell for a layer `prop_cells.tres`
+## names — and returns the drawn extent and triangle count, or `{}` after
+## pushing what went wrong.
 ##
 ## ⚠️ **Every library mesh must be stood at least once and every entry must
 ## name a mesh**, in both directions, and a miss is an error rather than a
@@ -150,22 +150,63 @@ func _place(library: Node3D) -> Dictionary:
 	var transforms: Dictionary[String, Array] = joined["transforms"]
 	var boxes: Array[AABB] = []
 	var triangles: int = 0
+	var cells := load(PropCellProfile.PATH) as PropCellProfile
+	if cells == null or layer not in cells.layers:
+		cells = null
+	elif cells.cell_m <= 0.0:
+		push_error("%s: %s cuts it into cells of no size" % [layer, PropCellProfile.PATH])
+		cells = null
 	for mesh_name: String in transforms:
 		var mesh: Mesh = meshes[mesh_name]
 		var batch: Array[Transform3D] = []
 		batch.assign(transforms[mesh_name])
-		add_child(PropBatch.batch(mesh, batch, mesh_name))
+		var casts: bool = GeneratedLayer.casts_shadow(layer, mesh_name)
+		for node: MultiMeshInstance3D in _batches(mesh, batch, mesh_name, cells):
+			if not casts:
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(node)
 		var local: AABB = mesh.get_aabb()
 		for at: Transform3D in batch:
 			boxes.append(at * local)
 		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
 	print(
 		(
-			"%s: %d placements over %d library meshes, %d draw calls"
-			% [layer, document.get("placements", []).size(), meshes.size(), transforms.size()]
+			"%s: %d placements over %d library meshes, %d batches"
+			% [layer, document.get("placements", []).size(), meshes.size(), get_child_count()]
 		)
 	)
 	return {"bounds": MeshContract.union(boxes), "triangles": triangles}
+
+
+## One `MultiMesh` over the whole batch, or with `cells` one per plan cell a
+## transform's origin falls in, each hidden past the profile's range.
+##
+## A region-wide `MultiMesh` is one box, so the engine draws every instance
+## from anywhere inside it and again in each shadow cascade: the lamps were
+## 129,240 of ~900,000 primitives on the throttle route, exactly 3x their
+## placed triangles (`Q135`). A cell is a box the engine can cull.
+func _batches(
+	mesh: Mesh, batch: Array[Transform3D], mesh_name: String, cells: PropCellProfile
+) -> Array[MultiMeshInstance3D]:
+	if cells == null:
+		return [PropBatch.batch(mesh, batch, mesh_name)]
+	var by_cell: Dictionary[Vector2i, Array] = {}
+	for at: Transform3D in batch:
+		var cell := Vector2i(floori(at.origin.x / cells.cell_m), floori(at.origin.z / cells.cell_m))
+		if not by_cell.has(cell):
+			by_cell[cell] = []
+		by_cell[cell].append(at)
+	var nodes: Array[MultiMeshInstance3D] = []
+	for cell: Vector2i in by_cell:
+		var part: Array[Transform3D] = []
+		part.assign(by_cell[cell])
+		var node: MultiMeshInstance3D = PropBatch.batch(
+			mesh, part, "%s_%d_%d" % [mesh_name, cell.x, cell.y]
+		)
+		node.visibility_range_end = cells.range_m
+		node.visibility_range_end_margin = cells.range_margin_m
+		nodes.append(node)
+	return nodes
 
 
 ## The library's meshes by the name the ETL gave each — the importer has

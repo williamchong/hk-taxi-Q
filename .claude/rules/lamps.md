@@ -5,6 +5,8 @@ paths:
   - "etl/tests/test_lamps.py"
   - "game/tools/verify_lamps.gd"
   - "game/tuning/lamps.{tres,md}"
+  - "game/tuning/prop_cells.{tres,md}"
+  - "game/scripts/city/prop_cell_profile.gd"
 ---
 
 # Lamp posts — before marking work done
@@ -64,3 +66,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   migrate assets that already have a sidecar, and `check.sh` cannot see a stale one. Delete the
   sidecars and re-import, then re-measure. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
   Numbers in `Q82`.
+- **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `layer_preview._batches`: the throttle route
+  and `--spawn-fare=wan_chai/f_045`, overlays, HUD and fares off, `prims` and `draws` before and
+  after, and the five fixed cameras in `Q135` `P3-67` shot twice a side** (`P3-67`). ⚠️ The lamps are a
+  `MultiMesh` per 300 m cell since then, hidden past 400 m measured to the CELL's centre, not the
+  lamp. ⚠️ `prims` baselines shift with which capture macOS stalled; compare runs whose `pos` column
+  matches. 🚫 The signs do not join the list: 23 library meshes a cell, +65 to +94 draws.

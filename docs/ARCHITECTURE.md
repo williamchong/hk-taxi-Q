@@ -1365,7 +1365,8 @@ Techniques, in order of what they buy:
    road marks stay merged because nothing in them repeats — the road by tile, the road marks by
    300 m cell, so the engine can cull them. What lies on the road casts no shadow
    (`GeneratedLayer`'s `casts_shadow`, `Q135`), and of a sign only the post does (`shadow_meshes`,
-   `P3-66`).
+   `P3-66`). A one-mesh prop layer is cut the same way at load: the lamps are a `MultiMesh` per
+   300 m cell, hidden past 400 m (`tuning/prop_cells.tres`, `P3-67`).
 4. Occlusion is largely free in dense street canyons.
 
 ---

@@ -69,6 +69,7 @@ func _init() -> void:
 	var problems: PackedStringArray = _check_documents(manifest)
 	problems.append_array(_check_shared())
 	problems.append_array(_check_layer_nodes())
+	problems.append_array(_check_prop_cells())
 	problems.append_array(_check_camera_rig())
 	for tile: Manifest.Tile in manifest.tiles:
 		var found: PackedStringArray = _check_tile(manifest, tile, tile.id)
@@ -273,6 +274,26 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"harbour water", manifest.water_path, GeneratedLayer.path(GeneratedLayer.WATER)
 			)
 		)
+	return problems
+
+
+## `prop_cells.tres` names only prop layers and carries no zero. A misspelt id
+## cuts nothing and a zero range hides nothing, and both draw a correct frame
+## at the old cost (`P3-67`).
+func _check_prop_cells() -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var cells := load(PropCellProfile.PATH) as PropCellProfile
+	if cells == null:
+		return ["no PropCellProfile at %s" % PropCellProfile.PATH]
+	for id: String in cells.layers:
+		if not GeneratedLayer.has_placements(id):
+			problems.append("%s cuts %s, which is not a prop layer" % [PropCellProfile.PATH, id])
+	if cells.cell_m <= 0.0:
+		problems.append("%s: cell_m is not positive" % PropCellProfile.PATH)
+	if cells.range_m <= 0.0:
+		problems.append("%s: range_m is not positive" % PropCellProfile.PATH)
+	if problems.is_empty():
+		print("  ok    prop cells: %s" % ", ".join(cells.layers))
 	return problems
 
 

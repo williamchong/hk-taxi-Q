@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="PropCellProfile" format=3 uid="uid://cx2uxwfbhq7s3"]
+
+[ext_resource type="Script" uid="uid://8sr4p67xfs7" path="res://scripts/city/prop_cell_profile.gd" id="1_cells"]
+
+[resource]
+script = ExtResource("1_cells")
+layers = PackedStringArray("lamps")
+cell_m = 300.0
+range_m = 400.0
+range_margin_m = 15.0

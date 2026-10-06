@@ -6807,7 +6807,7 @@ overlays, HUD and fares off, both regions resident; `prims` at t=1 s, where the 
 | Nothing casts | −21 | −13 to −20 | 0 / 500 / 0 |
 | Merged to a mesh a 300 m cell, at load | −24 | −18 to −28 | 0 / 2,694 / 24 |
 
-| Lamps: 43,080 + 14,560 triangles, one mesh — measured, **not built** | start line `prims` | `f_045` `prims` | `draws` | px over 16 |
+| Lamps: 43,080 + 14,560 triangles, one mesh — built in `P3-67` below | start line `prims` | `f_045` `prims` | `draws` | px over 16 |
 |---|---|---|---|---|
 | Shown − hidden | 129,240 = 3 x 43,080 | 172,920 = 3 x 57,640 | 2 | |
 | A `MultiMesh` a 300 m cell | −93k | −138k | +10 to +11 | 0 / 0 / 0 |
@@ -6830,9 +6830,39 @@ overlays, HUD and fares off, both regions resident; `prims` at t=1 s, where the 
 - ⚠️ `prims` baselines differ between runs by which capture macOS stalled; `draws` do not.
 - 🚫 The merge is the only one that culls a sign's triangles, and it reverses `P5-2`'s library for
   ~50k `prims`; the load-time trial also moved 2,694 px, so it is not pixel-safe as tried.
-- Open, the user's: the lamps' 300 m cells with the 400 m range. Its pop-in on a drive is untested.
 
-**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`, `P3-66`
+### Built — `P3-67`: the lamps are a `MultiMesh` per 300 m cell, hidden past 400 m
+
+The user's pick of the table above, 2026-10-07, and own cells over the road's tiles: a 150 m cell
+is +20 to +35 draws, a lamp merged into a road chunk is a second surface on each of 65 chunks and
+43k merged triangles where a 3.5 KB library stood, and the chunk carries a collider and a codec a
+lamp has neither of.
+
+- `layer_preview._batches` cuts a layer `tuning/prop_cells.tres` names (`PropCellProfile`: `layers`,
+  `cell_m` 300, `range_m` 400, `range_margin_m` 15) by the cell each placement's origin is in, and
+  sets the engine's `visibility_range_end` on each. Game side only — the placements document, the
+  library and every ETL counter are untouched; no schema bump.
+- Wan Chai 18 cells, Causeway Bay 10.
+
+| `P3-66` → `P3-67`, t=1 s | `prims` | `draws` |
+|---|---|---|
+| Start line | 881,254 → 762,374 (−118,880 of the lamps' 129,240) | 87 → 89 |
+| `--spawn-fare=wan_chai/f_045` | 753,290 → 598,570 (−154,720 of 172,920) | 121 → 125 |
+
+- `f_045` at every sample: −153k to −157k through t=4 s, −73k to −75k at t=5–6 s, where the route
+  has already left Wan Chai's shadow cascades; `draws` +2 to +4.
+- A/B, five cameras (`Q27`'s street and skyline, `188,11,40`, `f_045`'s start, the start line
+  looking east), each side shot twice at t=2.0: 0 / 0 / 0 / 1 / 0 px move by more than 16 levels;
+  the most below that is 81 px at the `f_045` camera.
+- ⚠️ The range is to the centre of a cell's box, so a lamp up to ~210 m nearer than 400 m can be
+  hidden. No fixed camera shows it. Owed: the user's drive, for the cell letting go.
+- `verify_city.gd` holds the profile: an id that is not a prop layer, or a zero cell or range. Mutation-checked:
+  `"lampz"` and `range_m = 0.0` each fail.
+- The shadow is now set where the mesh's name is known (`_place`), not read back off a node's
+  name, which a cell changes.
+- 🚫 The signs in the list (the table above). Railings and arrows: unmeasured.
+
+**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`, `P3-66`, `P3-67`
 
 ---
 
