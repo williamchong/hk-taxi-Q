@@ -9111,6 +9111,25 @@ lock. Not sound, owed:
   more than the road gives. Its sidecar's reason (the doubled drive) is stale; the value stands on
   these rows. Owed: the steering cap lifting the moment the rear passes its peak, which is the
   cascade both trials ran into.
+  **The cap's lift fixed the same day (the user's "check and fix").** Checked first, the cut at 0
+  on `--only=technique`: as the rear slip crossed the tyre's 8° the fronts went from the grip lock
+  to the table's inside half a second (to 23°, 17.5–19.7° and 14.2° at 42 / 63 /
+  86 kph) and front use to 3.5 / 3.3 / 2.9×. `steer_to_grip` stood aside for ANY slip past the
+  peak, whichever way the player steered. It lifts now only on the countersteer side of a slide
+  (`_steer_lock_rad`, the test `slide_lock_deg` already used) and in drift mode as before: a tail
+  out only adds to the fronts' slip on the turn's side, so steering INTO the turn never wants
+  more than the grip lock. After, the cut at 0: the fronts hold 16.3 / 12.4 / 10.6°, front use
+  2.6 / 2.3 / 2.1×, the yaw rate in the second second 32 → 33–34, 21 → 23–24 and 16 → 16°/s.
+  🔴 **It removes the plough, not the reason for the cut**: with the cut at 0 the rears still run
+  at 1.2–1.7× on power, so `understeer_power_cut` 0.5 stands. The shipped car, 42 / 63 / 86 kph,
+  both sides in the pad's fixed-step mode: `corner`, `drift`, `brake`, `coast`, `hold`, `lift`,
+  the walls and the 10 kph pull-away identical; the tap's exit +0.0 / +0.2 / +0.2 kph;
+  `turn@off` came out 179.5 / 164.2 / 146.3° (179.5 / 164.9 / 146.9). One row moves: the
+  held-throttle flick at 86 kph, a power slide outside drift mode, turns at 35°/s in its second
+  second where it ploughed at 28 (fronts 18.6 → 11.7°) and peaks at 28.3° of slip where it peaked
+  at 20.6 — more rotation from the same input, no spin, the armed slip cut catching it. Owed: the
+  friction-circle traction control re-tried on this cap, which is what parked the rear at the peak
+  and lost to the lift; the user's drive.
 - **The brake torque is the dial × the physics tick rate**: right at 60 Hz only.
   **Fixed the same day:** `HandlingProfile.brake_g`, the brakes' strength as a share of the car's
   weight (1.2; 70 was 1.22 g), converted once in `VehicleController._brake_per_wheel_n` and handed

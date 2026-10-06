@@ -76,6 +76,17 @@ plain tap at 42 kph to 102°. **Lifted while drift mode is engaged** (the user's
 the cap does to a drift's start): capped through the press, the tap at 42 kph read 83–85° where it
 reads 69° without the aid; lifted, every drift row is the aid-off row's to a tenth.
 
+**Lifted on the countersteer side of a slide alone since later that day** (`Q153`). It first stood
+aside for any rear slip past the tyre's peak, whichever way the player steered, so a power-on
+corner's slight slide sent the fronts from the grip lock to the table's (12.5 → 17.5–19.7° at
+63 kph with the understeer cut at 0, front use 2.2 → 3.3×) and the car ploughed — the cascade both
+closed-loop understeer trials ran into. A tail out only adds to the fronts' slip on the turn's
+side, so the cap holds there: 12.4° and 2.3× on the same row. The shipped car's pad is unmoved but
+for the held-throttle flick at 86 kph (35°/s against 28 in its second second, peak slip 28.3°
+against 20.6); 🔴 grade a change to the lift on `--only=technique` with
+`--sweep=stability_control.understeer_power_cut=0,0.5` — at 0.5 alone the rear never reaches the
+peak in `corner` and the row cannot see it.
+
 `drive_boost` 0.5, the user's pick from 0 / 0.25 / 0.5 / 1.0 (0–100 kph ≈ 10 / 7.9 / 7.1 / 6.1 s;
 69 kph after 4 s and 109 after 8 at 0.5, against 57 / 89). The launch is the rear tyres' grip
 under traction control, so past 0.25 the first seconds barely move. Unfaded it spun every tap

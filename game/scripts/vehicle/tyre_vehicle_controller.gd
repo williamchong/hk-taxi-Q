@@ -256,23 +256,30 @@ func catch_capped() -> bool:
 ## because a player's hands, unlike the driver's, scale to the wheel, and the
 ## user's own drive is the grade that could still want it. One side only: a
 ## wider lock INTO the slide at 86 kph is a spin, not a skill. No angle asked
-## for (`Q72`).
+## for (`Q72`). Anywhere else — the countersteer side of a slide and drift
+## mode apart — the lock is capped at what the tyres can use
+## (`ArcadeAidsProfile.steer_to_grip`).
 func _steer_lock_rad(speed_ratio: float) -> float:
 	var lock: float = super._steer_lock_rad(speed_ratio)
-	if _slide_beyond_peak_rad() <= 0.0:
-		# Not sliding: the lock the tyres can use (`steer_to_grip`), if it is
-		# under the table's — but never once drift mode is engaged: the button or
-		# a flick is the player asking for rotation, and a capped turn-in changed
-		# how the slide starts (the plain tap at 42 kph 69° → 83°).
+	# `steer_input` is +1 for right, and the parent negates it into Godot's
+	# positive-left angle; `_slide_toward` is in the angle's sign, so the
+	# player is countersteering when the two have opposite signs.
+	var countersteering: bool = (
+		_slide_beyond_peak_rad() > 0.0 and -steer_input * _slide_toward() > 0.0
+	)
+	if not countersteering:
+		# Not catching a slide: the lock the tyres can use (`steer_to_grip`), if
+		# it is under the table's — but never once drift mode is engaged: the
+		# button or a flick is the player asking for rotation, and a capped
+		# turn-in changed how the slide starts (the plain tap at 42 kph 69° → 83°).
+		# Held with the rear past its peak too while the player steers INTO the
+		# turn: lifted there, a power-on corner's slight slide sent the fronts to
+		# the table's lock and the car ploughed (`Q153`). A tail out only adds to
+		# the fronts' slip on that side, so they never want more than this.
 		if arcade_aids.steer_to_grip > 0.0 and not _drift_mode.engaged:
 			lock = minf(lock, arcade_aids.steer_to_grip * _grip_lock_rad())
 		return lock
 	if arcade_aids.slide_lock_deg <= 0.0:
-		return lock
-	# `steer_input` is +1 for right, and the parent negates it into Godot's
-	# positive-left angle; `_slide_toward` is in the angle's sign, so the
-	# player is countersteering when the two have opposite signs.
-	if -steer_input * _slide_toward() <= 0.0:
 		return lock
 	return maxf(lock, deg_to_rad(arcade_aids.slide_lock_deg))
 

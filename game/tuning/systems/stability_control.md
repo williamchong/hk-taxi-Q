@@ -22,7 +22,8 @@ the full-throttle corner holds 0.87–0.90 g with the rears at 0.6× their grip 
 without it the rears run at 1.2–1.8×, the fronts at 2.2–3.5× and lateral falls to 0.70–0.86 g. A
 yaw-rate deficit cannot key it (the car achieves 85–90% of the grip-limited yaw rate holding and
 70–86% ploughing), and traction control on the combined slip holds the rears at their peak, where
-the steering cap lifts and the fronts plough. What it is in a real car: Bosch's enhanced
+the steering cap lifted and the fronts ploughed (the lift is on the countersteer side alone since,
+`arcade_aids.md`; with the cut at 0 the rears still run at 1.2–1.7×, so the value stands). What it is in a real car: Bosch's enhanced
 understeer control, power off while the steering asks for more than the road gives, in open loop.
 
 The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,

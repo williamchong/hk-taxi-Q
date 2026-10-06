@@ -160,8 +160,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - 🚫 **`understeer_power_cut` is not re-keyed on a yaw-rate deficit, and traction control is not
   put on the combined slip** (`Q153`, 2026-10-06, both measured on `--only=technique` and
   withdrawn): the deficit band between holding and ploughing is 85–90% against 70–86%, and the
-  friction-circle governor parks the rear at its peak, where `steer_to_grip` lifts and the fronts
-  plough. The lever left is the cap's lift at the peak.
+  friction-circle governor parked the rear at its peak, where `steer_to_grip` lifted and the fronts
+  ploughed. ⚠️ That lift is fixed since (`Q153`, 2026-10-06): the cap stands aside only on the
+  countersteer side of a slide and in drift mode, so the governor's refusal was measured on the old
+  lift and is the one of the two worth a re-trial. Grade the lift with the cut swept `0,0.5` on
+  `--only=technique` — at 0.5 `corner`'s rear never reaches the peak and cannot see it.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target
