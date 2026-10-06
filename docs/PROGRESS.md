@@ -366,6 +366,9 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   instances `taxi_tyre.tscn`; the engine-tyre control car and its drift code dropped on the
   user's call (2026-10-05), `skidpad.tscn` grading the tyre car. `speed_min_kph` and the wall bars
   were read off the old car's pace, which `drive_scale` 1.0 restored (`Q153`).
+- `Q157` The checks and the build run side by side (user, 2026-10-06): `check.sh` 54 → 21 s
+  (`CHECK_JOBS`), `pytest -n auto` 52 → 10 s, a Wan Chai build 73 → 50 s serial and 30 s at
+  `--jobs 4`, the battery 163 → 48 s at `--jobs 4`. Every one proven against its serial self.
 
 ---
 

@@ -9426,3 +9426,43 @@ slide that is now 0.82 of the seconds it was — `hold` at 42 kph is 1.93 s.
 lifted handbrake from step 2. The four bars above, once the pace is settled.
 
 **See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `P3-62` · `P3-63` · `game/tuning/pace.md` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`
+
+---
+
+## `Q157` — The checks and the build run side by side, and each is proven against its serial self
+
+**Asked** by the user, 2026-10-06, after the skidpad's fixed step (`63a8a67`): is there more of that
+in the tests and the pipeline? Nothing else headless waits on the wall clock — every verify tool is
+CPU-bound — so the answer was parallelism and four hot loops, not a second skidpad.
+
+| Loop | Before | After | Proof |
+|---|---|---|---|
+| `tools/check.sh` | 54 s | 21 s | Log identical to `CHECK_JOBS=1` bar timing lines; three planted failures each turn it red |
+| `pytest` | 52 s | 10 s with `-n auto` | Same results three runs running |
+| `python -m pipeline --region wan_chai` | 73 s | 50 s serial, 30 s at `--jobs 4` | Both regions' bundles byte-identical bar `generated_utc` |
+| `tools/battery.py carve` | 163 s | 48 s at `--jobs 4` | Outputs identical at every `--jobs` |
+
+**Decided.**
+
+- **`check.sh` pools the warnings sweep and the per-region verify tools**, reversing "serial on
+  purpose". The old refusal was the `-I{} sh -c` form, which splices a path into a command; the pool
+  hands each script to `bash -c` as an argument. One file per job, because macOS's `PIPE_BUF` is 512
+  bytes; the files that came back are counted against the scripts, and a job with no status is a
+  FAIL. ⚠️ `verify_road_graph` runs first and alone: it is the only verify tool that reads the clock,
+  and beside 35 processes one of its maxima read 745 us for 28 us.
+- **`pytest-xdist` is a dev dependency, opt-in** (user, 2026-10-06). Never `addopts`: CI stays serial,
+  which is what shows a test leaning on another's leftovers.
+- **The pipeline's four changes move no byte**: clipped layer reads cached under `etl/.cache/layers/`
+  (keyed on the source's size and mtime; `HK_TAXI_LAYER_CACHE=0` is the off switch);
+  `inside_polygon` tests only the ring edges some ray can straddle (8.8 s of `roads`); a territory's
+  rays are cast as one row (`region._reaches`, same GEOS call per ray); each terrain cell's pack is
+  prepared once.
+- **`--jobs` starts a stage when the stages in `NEEDS` are done**, each as its own process. `NEEDS`
+  was measured — an audit hook logged every file each stage opened under `etl/out`, on both regions —
+  and no stage opened another region's directory, so two regions build as two commands.
+
+**Left alone.** `roadmarks`' 10 s: `DrawnSurface._covering` is asked 379,000 times and only 26% repeat,
+so a memo buys about a second; batching it means restructuring `sampled_pieces`. `inside_polygon`'s
+edges wholly to one side in x: droppable too, unmeasured. CI on `-n auto`: two cores.
+
+**See.** `tools/check.sh` · `etl/pipeline/__main__.py` (`NEEDS`) · `etl/pipeline/gdb.py` · `docs/ARCHITECTURE.md` "Checks"

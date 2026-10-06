@@ -117,7 +117,7 @@ Common emoji for this project:
 ## Before marking work done
 
 - **Grader batteries are a table** (`Q133`): `tools/battery.py <trigger> --region <r> --before
-  <checkout root> [--jobs 2]`; `--list` prints it. It runs this checkout against a detached
+  <checkout root> [--jobs 4]`; `--list` prints it. It runs this checkout against a detached
   worktree holding the before build, saves outputs under `build/battery/` and writes a diff per
   item. ⚠️ Its exit code says every item RAN, never that a number held — a grader that gates and
   fails (`carriageway_occupancy`, `clearance_reconcile`) still ran. ⚠️ Both sides are graded by
