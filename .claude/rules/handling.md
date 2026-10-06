@@ -162,9 +162,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   withdrawn): the deficit band between holding and ploughing is 85–90% against 70–86%, and the
   friction-circle governor parked the rear at its peak, where `steer_to_grip` lifted and the fronts
   ploughed. ⚠️ That lift is fixed since (`Q153`, 2026-10-06): the cap stands aside only on the
-  countersteer side of a slide and in drift mode, so the governor's refusal was measured on the old
-  lift and is the one of the two worth a re-trial. Grade the lift with the cut swept `0,0.5` on
-  `--only=technique` — at 0.5 `corner`'s rear never reaches the peak and cannot see it.
+  countersteer side of a slide and in drift mode. The governor was re-tried on it the same day and
+  withdrawn again: level with the cut to 42 kph, 0.82 / 0.73 / 0.63 g against 0.91 / 0.85 / 0.72
+  at 63 / 86 / 105, the pull-away 26.9 kph against 30.8 — it holds the rear AT its peak, so the
+  body sits 8° into the turn and the capped fronts run past theirs (2.2× against 1.6×). Grade the
+  lift with the cut swept `0,0.5` on `--only=technique` — at 0.5 `corner`'s rear never reaches
+  the peak and cannot see it.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target

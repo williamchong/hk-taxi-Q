@@ -9128,8 +9128,29 @@ lock. Not sound, owed:
   held-throttle flick at 86 kph, a power slide outside drift mode, turns at 35°/s in its second
   second where it ploughed at 28 (fronts 18.6 → 11.7°) and peaks at 28.3° of slip where it peaked
   at 20.6 — more rotation from the same input, no spin, the armed slip cut catching it. Owed: the
-  friction-circle traction control re-tried on this cap, which is what parked the rear at the peak
-  and lost to the lift; the user's drive.
+  user's drive.
+  **The friction-circle traction control re-tried on this cap, and withdrawn again (the user's
+  ask, the same day).** The governor on the tyre's combined slip, no new dial, in place of the
+  understeer cut, on `--only=technique` at 20 / 30 / 42 / 63 / 86 / 105 kph; `corner`'s second
+  second, the shipped cut beside it:
+
+  | | 20 | 30 | 42 | 63 | 86 | 105 kph |
+  |---|---|---|---|---|---|---|
+  | lateral, shipped | 0.87 | 0.87 | 0.89 | 0.91 | 0.85 | 0.72 g |
+  | lateral, circle | 0.89 | 0.87 | 0.89 | 0.82 | 0.73 | 0.63 g |
+  | front use, shipped | 1.60 | 1.76 | 1.64 | 1.63 | 1.80 | 2.04× |
+  | front use, circle | 1.89 | 2.30 | 2.22 | 2.18 | 2.16 | 2.26× |
+  | rear slip, circle | 8.4 | 8.3 | 8.1 | 8.6 | 8.5 | 9.3° |
+
+  The cap's fix did what it could: the fronts stay at the grip lock (13.0° at 63 kph, where they
+  went to the table's and 2.6–3.3×), and the lateral at 63 / 86 kph is 0.82 / 0.73 g against the
+  first trial's 0.71–0.79. It is level with the cut to 42 kph and still loses from 63 up, and the
+  pull-away from 10 kph is 26.9 kph after 4 s against 30.8. The reason is the governor's own: it
+  holds the rear AT its peak slip angle by design, so the body sits 8° into the turn, and the
+  fronts, capped for a body that is not, run past their peak. The open-loop cut keeps the rear at
+  0.6× and the body straight. Both together are the shipped car to 86 kph (the rear never reaches
+  the circle) and worse at 105 (0.65 g). 🚫 Not a third time without a new idea: a governor that
+  parks the rear at the peak costs the fronts whatever the steering does.
 - **The brake torque is the dial × the physics tick rate**: right at 60 Hz only.
   **Fixed the same day:** `HandlingProfile.brake_g`, the brakes' strength as a share of the car's
   weight (1.2; 70 was 1.22 g), converted once in `VehicleController._brake_per_wheel_n` and handed

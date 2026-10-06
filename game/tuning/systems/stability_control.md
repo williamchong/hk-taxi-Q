@@ -23,7 +23,9 @@ without it the rears run at 1.2–1.8×, the fronts at 2.2–3.5× and lateral f
 yaw-rate deficit cannot key it (the car achieves 85–90% of the grip-limited yaw rate holding and
 70–86% ploughing), and traction control on the combined slip holds the rears at their peak, where
 the steering cap lifted and the fronts ploughed (the lift is on the countersteer side alone since,
-`arcade_aids.md`; with the cut at 0 the rears still run at 1.2–1.7×, so the value stands). What it is in a real car: Bosch's enhanced
+`arcade_aids.md`; with the cut at 0 the rears still run at 1.2–1.7×, and the governor re-tried on
+the fixed cap still loses from 63 kph up — 0.82 / 0.73 g against 0.91 / 0.85 — so the value
+stands). What it is in a real car: Bosch's enhanced
 understeer control, power off while the steering asks for more than the road gives, in open loop.
 
 The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,
