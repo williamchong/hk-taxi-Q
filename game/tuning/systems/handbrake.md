@@ -8,9 +8,18 @@ the file as a whole. Why it lives here and not in the file: `Q119`.
 The drift button's handbrake: a torque on each rear wheel, as a real car's.
 
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
-2026-10-05); their prose keeps the names the dials had when it was written: `handbrake_torque_nm` → `torque_nm`.
+2026-10-05); their prose keeps the names the dials had when it was written: `handbrake_torque_nm` → `torque_nm` → `lock_ratio` (`Q156`).
 
-## `torque_nm = 1150.0`
+## `lock_ratio = 1.0815`
+
+**A ratio since 2026-10-06** (`Q156`): the torque on each rear wheel in multiples of what just
+locks it at rest — the tyre's `mu` on the wheel's share of the car's weight, at the wheel's radius
+(`TyreVehicleController._handbrake_torque_nm`). On the taxi 1,063 N·m, so 1.0815 is the 1,150 N·m
+below, unmoved: the drift rows at 42 / 63 / 86 kph read as before to 0.01 kph. The number now
+means the same handbrake on a car of another mass, tyre or wheel, and follows a change of gravity
+or grip by itself — hand-sized it was 3,000, 2,000, 1,275 and 1,150 across four of those.
+
+The section below is the value as newtons, `torque_nm = 1150.0`.
 
 **1,150 since 2026-10-05**, with stability control's slip cut from 10° (`stability_control.md`
 has the table): about 1.08 × the rear wheels' lock on the real taxi (≈ 1,060 N·m), so the button

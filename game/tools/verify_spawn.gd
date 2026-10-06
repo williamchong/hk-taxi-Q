@@ -32,7 +32,7 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 ## built from. Loaded rather than assumed so a retuned car moves this check with
 ## it, through the profile's own `PATH` so this and `verify_fares` cannot load
 ## two different files.
-const HandlingProfileScript = preload("res://scripts/vehicle/handling_profile.gd")
+const CarSpecScript = preload("res://scripts/vehicle/car_spec.gd")
 ## The fare loop's own numbers: the start line is held out of their hail reach.
 const FARES_PATH: String = "res://tuning/fares.tres"
 
@@ -176,9 +176,9 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var profile: HandlingProfile = load(HandlingProfileScript.PATH) as HandlingProfile
-	if profile == null:
-		printerr("  FAIL  no HandlingProfile at %s" % HandlingProfileScript.PATH)
+	var car: CarSpec = load(CarSpecScript.PATH) as CarSpec
+	if car == null:
+		printerr("  FAIL  no CarSpec at %s" % CarSpecScript.PATH)
 		quit(1)
 		return
 
@@ -187,8 +187,8 @@ func _init() -> void:
 	# grades the **guard**, on a city built for it, and has to run either way —
 	# folded into `_check` it would be skipped by exactly the broken bundle that
 	# most needs to know its checks still work.
-	var problems: PackedStringArray = _check(graph, fares, profile)
-	problems.append_array(_check_the_guard_can_fire(profile.ray_length_m()))
+	var problems: PackedStringArray = _check(graph, fares, car)
+	problems.append_array(_check_the_guard_can_fire(car.ray_length_m()))
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
@@ -196,12 +196,12 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-func _check(graph: RoadGraph, fares: Dictionary, profile: HandlingProfile) -> PackedStringArray:
+func _check(graph: RoadGraph, fares: Dictionary, car: CarSpec) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var ride: float = profile.ray_length_m()
+	var ride: float = car.ray_length_m()
 	if ride <= 0.0:
-		problems.append("the handling profile gives a wheel-ray length of %.3f m" % ride)
+		problems.append("the car spec gives a wheel-ray length of %.3f m" % ride)
 		return problems
 
 	var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(

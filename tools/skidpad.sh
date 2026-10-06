@@ -71,7 +71,7 @@
 #                                    P3-50's penalty tiers: `approach` is the
 #                                    tool's reading, `impact` the controller's
 #                                    latch, and they must agree (Q148)
-#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile or TyreProfile
+#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile, CarSpec or TyreProfile
 #                                    float, or a system's as SYSTEM.FIELD
 #                                    (traction_control.wheelspin_limit; the
 #                                    tables under tuning/systems/, Q155). A

@@ -287,7 +287,7 @@ def opening_radius_m(chassis: Chassis, shape: Proportions) -> float:
 
 @dataclass(frozen=True)
 class Chassis:
-    """The hardpoints, mirrored from `taxi.tscn` and `handling.tres`.
+    """The hardpoints, mirrored from `taxi.tscn` and `cars/crown_comfort.tres`.
 
     Nothing here may be changed to suit the model. If the car should sit
     differently, the scene and the handling profile move first and this follows
@@ -298,8 +298,8 @@ class Chassis:
     # front / rear, taken as their mean so the wheels stay a rectangle.
     wheelbase_m: float = 2.785  # wheel nodes at z = +/-1.3925
     track_m: float = 1.43  # wheel nodes at x = +/-0.715
-    wheel_radius_m: float = 0.31  # handling.tres, wheel_radius_m
-    suspension_rest_m: float = 0.39  # handling.tres, hub sits this far below the node
+    wheel_radius_m: float = 0.31  # cars/crown_comfort.tres, wheel_radius_m
+    suspension_rest_m: float = 0.39  # cars/crown_comfort.tres, hub sits this far below the node
 
     @property
     def hub_y_m(self) -> float:

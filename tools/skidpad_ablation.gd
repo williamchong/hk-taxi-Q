@@ -202,7 +202,7 @@ const DRIFT_FIELD_PREFIX: String = "drift_"
 ## silently.
 const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 
-## `HandlingProfile` fields the car pushes onto its body and wheels once, in
+## `HandlingProfile` and `CarSpec` fields the car pushes onto its body and wheels once, in
 ## `_ready`, and never reads again. 🔴 Refused by `--sweep`: set live they
 ## change nothing, and every row would come back identical under a distinct
 ## label — the published table of numbers nobody measured. The body's own
@@ -214,7 +214,8 @@ const READY_ONLY_FIELDS: PackedStringArray = [
 	"suspension_damping_ratio",
 	"suspension_rest_length_m",
 	"suspension_travel_m",
-	"suspension_max_force_n",
+	"suspension_max_load_ratio",
+	"mass_kg",
 	"wheel_radius_m",
 ]
 ## `--sweep=body.<field>=...` writes the car's rigid body rather than a table,
@@ -222,7 +223,9 @@ const READY_ONLY_FIELDS: PackedStringArray = [
 ## `center_of_mass_y` (height; the table's `centre_of_mass_offset_y`),
 ## `center_of_mass_z` (along the car, + toward the rear) and `gravity_scale`.
 ## A probe for what moves the car, never a tuning route — a value worth
-## keeping goes into `handling.tres`, where the car reads it.
+## keeping goes into the table the car reads it from (`handling.tres`, or the
+## car's own). ⚠️ A spring's ceiling is sized on the gravity once, in `_ready`,
+## so a `gravity_scale` sweep leaves it where it was.
 const BODY_SWEEP_PREFIX: String = "body."
 ## The car's systems a `<system>.<field>` sweep may name (`Q155`): only these,
 ## so `profile.` or `tyre.` cannot slip past the refusals the bare names get.
@@ -726,17 +729,20 @@ func _measure_all() -> void:
 		if profile == null:
 			_fail("a sweep needs a profile on the vehicle and there is none")
 			return
-		# The tyre model's table is swept the same way (`Q152`): a field the
-		# handling table lacks is looked for there before the run is refused.
-		var tyre: Resource = _vehicle.get("tyre") as Resource
-		# 🔴 A name in both tables is refused: resolved to the handling table,
+		# The car's own table and the tyre model's are swept the same way
+		# (`Q152`): a field is looked for in each before the run is refused.
+		# 🔴 A name in two tables is refused: resolved to the handling table,
 		# a sweep of the tyre model's roll point wrote a copy that car does not
 		# read and printed five identical rows under five labels (`Q152`).
-		if tyre != null and _sweep_field in profile and _sweep_field in tyre:
-			_fail("sweep: '%s' is in both tables; rename one" % _sweep_field)
+		var holders: Array[Resource] = []
+		for table: Resource in [profile, _vehicle.get("car"), _vehicle.get("tyre")]:
+			if table != null and _sweep_field in table:
+				holders.append(table)
+		if holders.size() > 1:
+			_fail("sweep: '%s' is in more than one table; rename one" % _sweep_field)
 			return
-		if not _sweep_field in profile and tyre != null and _sweep_field in tyre:
-			sweep_table = tyre
+		if not holders.is_empty():
+			sweep_table = holders[0]
 		# See `_sweep_field`: set() would swallow a typo or a rename and print
 		# a sweep of identical rows labelled with values it never applied.
 		if not _sweep_field in sweep_table:
@@ -751,7 +757,7 @@ func _measure_all() -> void:
 		if _sweep_field == SLIP_THRESHOLD_FIELD:
 			_fail("sweep: %s is the bar, not the knob — it is read once at boot" % _sweep_field)
 			return
-		if sweep_table == profile and String(_sweep_field) in READY_ONLY_FIELDS:
+		if String(_sweep_field) in READY_ONLY_FIELDS:
 			_fail(
 				(
 					"sweep: %s is read once, in _ready; sweep the body (%s%s) instead"
@@ -955,9 +961,9 @@ func _measure(
 	# See TOP_SPEED_TAPER: entry inside the band means the drive taper is easing
 	# engine force off during the manoeuvre, which no column reports.
 	var max_speed: float = 0.0
-	var profile: Resource = _vehicle.get("profile") as Resource
-	if profile != null and &"max_speed_kph" in profile:
-		max_speed = profile.get(&"max_speed_kph")
+	var car: Resource = _vehicle.get("car") as Resource
+	if car != null and &"max_speed_kph" in car:
+		max_speed = car.get(&"max_speed_kph")
 	if max_speed > 0.0 and result.entry_kph > max_speed * (1.0 - TOP_SPEED_TAPER):
 		print(
 			(

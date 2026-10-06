@@ -2,6 +2,8 @@
 paths:
   - "game/scripts/vehicle/vehicle_controller.gd"
   - "game/scripts/vehicle/handling_profile.gd"
+  - "game/scripts/vehicle/car_spec.gd"
+  - "game/tuning/cars/*.{tres,md}"
   - "game/tuning/handling.{tres,md}"
   - "tools/skidpad.sh"
   - "tools/skidpad_ablation.gd"
@@ -77,9 +79,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
   read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
   for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
-  the windows. 🔴 **`mu`, gravity, `engine_force` and `handbrake.torque_nm` move together** (`Q153`,
+  the windows. 🔴 **`mu`, gravity, `engine_force` and the handbrake's torque move together** (`Q153`,
   2026-10-05): the two torques are sized to what the tyre can answer, and a grip or a weight change
-  under the old torques spun every tap (168°) where no stability dial helped. 🔴 **A real taxi is
+  under the old torques spun every tap (168°) where no stability dial helped. The handbrake's
+  follows by itself since `Q156` (`handbrake.lock_ratio`); the drive's does not. 🔴 **A real taxi is
   the baseline** (the user's call): physical numbers are a Crown Comfort's, and gameplay is layered
   on top as an aid, never by bending one. `engine_force` is the car's whole drive, split across
   the driven wheels (`drive_scale`, which multiplied a per-wheel copy, is gone). The power-on corner's lever is
@@ -103,7 +106,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   as nothing on the flick — read `rear use` before blaming the dial. ⚠️ It is COMBINED slip: a
   rear over 1.0 at 2° of slip is wheelspin, not the side letting go (`Q153`'s step 2).
 - 🔴 **`--sweep` refuses a field the car reads once, in `_ready`** (`READY_ONLY_FIELDS`:
-  `gravity_scale`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`)
+  `gravity_scale`, `mass_kg`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`)
   — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
   instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
   live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
@@ -174,6 +177,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of
   the ablation's, so a change to the flattening or the 1 m/s floor is made in both.
+- 🔴 **The car's own numbers are a `CarSpec`, one table per car under `game/tuning/cars/`**
+  (`Q156`, 2026-10-06): mass, drive, brakes, lock, suspension — a maker's sheet, never a feel dial.
+  `handling.tres` keeps the game layer. 🔴 **A force the car's size decides is derived, never
+  authored**: the brake (`brake_g`), the handbrake (`handbrake.lock_ratio` × a rear wheel's lock)
+  and a spring's ceiling (`suspension_max_load_ratio` × a wheel's load at rest) — a new one goes
+  through `VehicleController._wheel_load_at_rest_n`. `--sweep` finds a bare field in the handling
+  table, the car's or the tyre's, and refuses a name in two.
 - 🔴 **The car's dials are its systems, one table each under `game/tuning/systems/`** (`Q155`):
   traction control, stability control, drift mode, the handbrake, the rev
   limiter — real cars' — and `arcade_aids`, the game's own (the side cut, the flick, the catch

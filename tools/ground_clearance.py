@@ -27,7 +27,7 @@ Two things go wrong when it pokes through, and the second is the expensive one:
   drawn *into* the pavement. `Q18` asks whether flat ground reads as ground at
   all, and it cannot be judged over a surface fighting the road.
 - **It is solid.** Since `P3-10` the ground merges into the tier-0 mesh, which
-  is named `-col`, so every lump of it collides. `handling.tres` allows
+  is named `-col`, so every lump of it collides. `cars/crown_comfort.tres` allows
   `suspension_travel_m = 0.18`, and `P1-4` has already shown once what a 0.15 m
   step in the carriageway does to a car at speed — that was a kerb in lane
   three, and it threw the car. A decimation artefact standing proud of the road
@@ -135,7 +135,7 @@ from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-# `handling.tres`'s `suspension_travel_m`, mirrored rather than read: this is a
+# `cars/crown_comfort.tres`'s `suspension_travel_m`, mirrored rather than read: this is a
 # hand-run Python tool and the `.tres` is Godot's. Quoted in the report because
 # it is what turns a drawing defect into a handling one, and it is the number
 # `P1-4`'s kerb was judged against.
@@ -172,7 +172,7 @@ class EdgeCells:
     ⚠️ **`over_m2` counts against `SUSPENSION_TRAVEL_M`, not against
     `--accept-proud-m`.** The region gates ask whether the ground is above the
     road at all; this asks whether it would throw the car, which is
-    `handling.tres`'s number and not one this tool chose.
+    the car's own number (`cars/crown_comfort.tres`) and not one this tool chose.
 
     ⚠️ **The totals are derived, never stored.** `area_m2` and `over_m2` are the
     two buckets summed, so a build that gained a third bucket cannot leave the

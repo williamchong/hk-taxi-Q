@@ -17,5 +17,5 @@ instances another.
 ## `[node name="Taxi" instance=ExtResource("1_taxi")]`
 
 `script` is `TyreVehicleController`, which extends `VehicleController` and keeps its `profile`
-(`handling.tres`, inherited from `taxi.tscn`) for steering, the speed taper, coast drag, the wall
+(`handling.tres`) and its `car` (`cars/crown_comfort.tres`), both inherited from `taxi.tscn`, for steering, the speed taper, coast drag, the wall
 response and auto-righting. `tyre` is `tuning/tyre.tres`.

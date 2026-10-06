@@ -9258,3 +9258,47 @@ the real taxi's power (`Q153`), owed to these tables. Single-wheel ESC braking a
 behaviour, not a regroup, and come after.
 
 **See.** `Q152` · `Q153` · `P3-59` · `.claude/rules/handling.md`
+
+## `Q156` — The car is a spec sheet, its forces are derived, and the game's pace is one named scale
+
+**Asked** by the user (2026-10-06): the car in `426f5a0` (`mu` 2.0 under 1.6× gravity, twice the
+drive) "is much more fun to drive, but i still dont want made up physics params shooting us in the
+foot later, and also rely on actual existing car assist system instead of always using random
+arcade god forces" — and the drift at `mu` 1.0 "is much more easy to understand although it still
+overspin". Then: a car not tuned off the real Crown would also make "more car with different
+driving characteristic" a re-tune each. The plan's five steps are this entry's sections, each
+closed as it shipped.
+
+### Step 1 — the spec sheet and the derived forces (`P3-60`, shipped 2026-10-06)
+
+**Decision.** The car's own numbers leave `handling.tres` for a `CarSpec`, one table per car
+(`tuning/cars/crown_comfort.tres`, sidecar beside it): mass (out of `taxi.tscn`), the limiter,
+launch force, power, driveline efficiency, drag area, brake g and bias, the lock at rest, the
+centre of mass's height, the wheel and the suspension. `handling.tres` keeps the game layer: the
+lock at speed, the steering and drift ramps, the drift's threshold, the coast, the wall response,
+auto-righting. Field names did not change, so every earlier `Q`'s `--sweep=<field>` still names
+its dial.
+
+**A force the car's size decides is derived, never authored.** Three were hand-sized off mass ×
+gravity × `mu` × wheel radius and re-seeded at every change of one (`Q153`: four rounds; the round
+that missed two of them spun every tap at 168°):
+
+| Was | Is | On the taxi |
+|---|---|---|
+| `brake_force` 70 | `brake_g` 1.2 of the weight (already, `Q153`) | 4,116 N a wheel |
+| `handbrake.torque_nm` 1,150 | `handbrake.lock_ratio` 1.0815 × `mu` × a wheel's load at rest × its radius | 1,150 N·m |
+| `suspension_max_force_n` 13,700 | `suspension_max_load_ratio` 4.0 × a wheel's load at rest | 13,720 N |
+
+All three go through `VehicleController._wheel_load_at_rest_n`.
+
+**Measured** on the full pad at 42 / 63 / 86 kph against the commit before. With the spring's
+ceiling at 13,700 N exactly (ratio 3.994) the walls are byte-identical; shipped at 4.0, only the
+wall clips' exits move (`wall@30` 24.3 → 23.1 / 35.8 → 31.0 / 42.4 → 49.0 kph, `wall@10` within
+0.3), the one place on the pad a spring reaches its ceiling. Every other row is identical but for
+six cells 0.01 off (the handbrake's 1,149.96 against 1,150 N·m).
+
+**Not in this.** `armed_slip_cut_*` stays in degrees: its two ends are the tyre's peak and the
+drift's threshold, but both are swept dials, and deriving them would take the sweep away for no
+row that moves.
+
+**See.** `Q153` · `Q155` · `P3-60` · `game/tuning/cars/crown_comfort.md` · `.claude/rules/handling.md`

@@ -87,6 +87,9 @@ const DRIVE_SIGN: float = -1.0
 const GROUP: StringName = &"vehicle"
 
 @export var profile: HandlingProfile
+## The car itself: its mass, drive, brakes and suspension (`CarSpec`), where
+## `profile` is how the game answers the player whatever the car.
+@export var car: CarSpec
 
 ## Where the player's intent comes from, resolved once in `_ready`.
 ##
@@ -216,13 +219,12 @@ func _ready() -> void:
 			"VehicleController found no input source at '%s'; the car has no pedals." % input_path
 		)
 	assert(profile != null, "VehicleController has no HandlingProfile assigned.")
-	# The profile deliberately ships no defaults, so an unassigned resource reads
-	# as all-zeroes. These two would fail as a dead spring and a car with no grip
-	# at all, which is worth catching here rather than in the physics.
-	assert(profile.wheel_radius_m > 0.0, "HandlingProfile.wheel_radius_m is zero.")
-	assert(
-		profile.suspension_frequency_hz > 0.0, "HandlingProfile.suspension_frequency_hz is zero."
-	)
+	assert(car != null, "VehicleController has no CarSpec assigned.")
+	# The tables deliberately ship no defaults, so an unassigned resource reads
+	# as all-zeroes. These two would fail as a wheel with no size and a dead
+	# spring, which is worth catching here rather than in the physics.
+	assert(car.wheel_radius_m > 0.0, "CarSpec.wheel_radius_m is zero.")
+	assert(car.suspension_frequency_hz > 0.0, "CarSpec.suspension_frequency_hz is zero.")
 
 	# Direct children only, and by type: a VehicleWheel3D has to be a child of the
 	# VehicleBody3D to be simulated at all, so a recursive search would collect
@@ -238,13 +240,15 @@ func _ready() -> void:
 	# file goes through _front or _rear, so a third collection of the same nodes
 	# would only be a way for them to disagree.
 	_group_axles(wheels)
+	# The body first: a spring's ceiling is sized on the weight it carries.
+	mass = car.mass_kg
+	gravity_scale = profile.gravity_scale
+	_world_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 	for wheel: VehicleWheel3D in wheels:
 		_configure(wheel)
 
-	gravity_scale = profile.gravity_scale
-	_world_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0.0, profile.centre_of_mass_offset_y, 0.0)
+	center_of_mass = Vector3(0.0, car.centre_of_mass_offset_y, 0.0)
 	_rear_axle_behind_m = _axle_z(_rear) - center_of_mass.z
 	contact_monitor = true
 	max_contacts_reported = 8
@@ -300,15 +304,15 @@ func rear_wheels() -> Array[VehicleWheel3D]:
 ## `damping_compression` — Godot inherits Bullet's convention, where the damping
 ## coefficient is `2ζ√stiffness`.
 func _configure(wheel: VehicleWheel3D) -> void:
-	wheel.wheel_radius = profile.wheel_radius_m
-	wheel.wheel_rest_length = profile.suspension_rest_length_m
-	wheel.suspension_travel = profile.suspension_travel_m
+	wheel.wheel_radius = car.wheel_radius_m
+	wheel.wheel_rest_length = car.suspension_rest_length_m
+	wheel.suspension_travel = car.suspension_travel_m
 
-	var stiffness: float = pow(TAU * profile.suspension_frequency_hz, 2.0)
+	var stiffness: float = pow(TAU * car.suspension_frequency_hz, 2.0)
 	wheel.suspension_stiffness = stiffness
-	wheel.suspension_max_force = profile.suspension_max_force_n
+	wheel.suspension_max_force = car.suspension_max_load_ratio * _wheel_load_at_rest_n()
 
-	var damping: float = 2.0 * profile.suspension_damping_ratio * sqrt(stiffness)
+	var damping: float = 2.0 * car.suspension_damping_ratio * sqrt(stiffness)
 	wheel.damping_compression = damping
 	wheel.damping_relaxation = damping * RELAXATION_OVER_COMPRESSION
 
@@ -382,7 +386,7 @@ func is_reversing() -> bool:
 ## RigidBody3D has no steering property, and that reason does not survive the
 ## switch. `steering` is now both the state and the output.
 func _update_steering(delta: float) -> void:
-	var speed_ratio: float = clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0)
+	var speed_ratio: float = clampf(absf(speed_kph) / car.max_speed_kph, 0.0, 1.0)
 	var max_angle: float = _steer_lock_rad(speed_ratio)
 	# Negated: steer_input is +1 for right, but a positive rotation about +Y
 	# turns the -Z forward vector toward -X, which is left.
@@ -405,19 +409,17 @@ func _update_steering(delta: float) -> void:
 ## subclass can widen it (`TyreVehicleController` does, while the car slides);
 ## the shipped car's table is unchanged by the seam.
 func _steer_lock_rad(speed_ratio: float) -> float:
-	return deg_to_rad(
-		lerpf(profile.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio)
-	)
+	return deg_to_rad(lerpf(car.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio))
 
 
 ## Throttle, brake and reverse, onto the two properties VehicleBody3D drives on.
 ##
-## ⚠️ **profile.engine_force does not mean here what it meant under the raycast
+## ⚠️ **car.engine_force does not mean here what it meant under the raycast
 ## model.** There it was newtons applied at a contact patch, per wheel, by this
 ## script. Here it is handed to the engine, which applies it as a drive force
 ## split across the traction wheels — so the same number produces a different
 ## acceleration, and it was re-seeded against tools/skidpad.sh rather than
-## carried across. The brake is `profile.brake_g`, sized to the car's weight.
+## carried across. The brake is `car.brake_g`, sized to the car's weight.
 ## `engine_force` is the launch force since `Q153`; `_drive_force_n` limits it
 ## by the engine's power above about 42 kph.
 ## ⚠️ Accumulated into locals and assigned **once**. `engine_force` and `brake` are
@@ -434,13 +436,13 @@ func _apply_drive() -> void:
 		# more engine force there is. Godot has no speed limiter of its own, so
 		# this is hand-written whichever vehicle class is underneath.
 		var headroom: float = (
-			(profile.max_speed_kph - speed_kph) / (profile.max_speed_kph * TOP_SPEED_TAPER)
+			(car.max_speed_kph - speed_kph) / (car.max_speed_kph * TOP_SPEED_TAPER)
 		)
 		force = DRIVE_SIGN * _drive_force_n() * throttle_input * clampf(headroom, 0.0, 1.0)
 
 	if is_braking():
 		braking = _brake_per_wheel_n() * brake_input
-	elif is_reversing() and speed_kph > -profile.max_reverse_kph:
+	elif is_reversing() and speed_kph > -car.max_reverse_kph:
 		force = -DRIVE_SIGN * _drive_force_n() * brake_input
 
 	engine_force = force
@@ -455,11 +457,18 @@ func _gravity_mps2() -> float:
 	return _world_gravity_mps2 * gravity_scale
 
 
+## One wheel's share of the car's weight, in newtons: what the forces a car's
+## size decides are sized on — the brake, the handbrake, a spring's ceiling —
+## so none of them is authored beside the mass it would have to follow.
+func _wheel_load_at_rest_n() -> float:
+	return mass * _gravity_mps2() / float(_front.size() + _rear.size())
+
+
 ## The brakes' full force at each wheel's contact, in newtons, before the bias
-## moves it between the axles: `HandlingProfile.brake_g` of the car's weight,
+## moves it between the axles: `CarSpec.brake_g` of the car's weight,
 ## over its wheels.
 func _brake_per_wheel_n() -> float:
-	return profile.brake_g * mass * _gravity_mps2() / float(_front.size() + _rear.size())
+	return car.brake_g * _wheel_load_at_rest_n()
 
 
 ## The drive the engine has at this speed: `engine_force` off the line, and
@@ -475,13 +484,11 @@ func _drive_force_n() -> float:
 ## The same envelope at `mps`, for a caller that knows the driven wheels' own
 ## speed (`TyreVehicleController`).
 func _drive_force_at(mps: float) -> float:
-	if profile.engine_power_kw <= 0.0 or profile.driveline_efficiency <= 0.0:
-		return profile.engine_force
+	if car.engine_power_kw <= 0.0 or car.driveline_efficiency <= 0.0:
+		return car.engine_force
 	# Floored so a car at rest asks for the launch force, not a division by 0.
-	var powered: float = (
-		profile.engine_power_kw * 1000.0 * profile.driveline_efficiency / maxf(mps, 0.1)
-	)
-	return minf(profile.engine_force, powered)
+	var powered: float = car.engine_power_kw * 1000.0 * car.driveline_efficiency / maxf(mps, 0.1)
+	return minf(car.engine_force, powered)
 
 
 ## The air's drag, at every speed and whatever the pedals, against the travel.
@@ -490,12 +497,10 @@ func _drive_force_at(mps: float) -> float:
 func _apply_air_drag() -> void:
 	var velocity: Vector3 = linear_velocity
 	var speed_sq: float = velocity.length_squared()
-	if is_zero_approx(speed_sq) or profile.drag_area_m2 <= 0.0:
+	if is_zero_approx(speed_sq) or car.drag_area_m2 <= 0.0:
 		return
 	# −v × |v| × ½ρCdA: the drag against the travel, one root and no normalise.
-	apply_central_force(
-		velocity * (-0.5 * AIR_DENSITY_KG_M3 * profile.drag_area_m2 * sqrt(speed_sq))
-	)
+	apply_central_force(velocity * (-0.5 * AIR_DENSITY_KG_M3 * car.drag_area_m2 * sqrt(speed_sq)))
 
 
 ## Engine braking and rolling resistance, which VehicleBody3D does not model.

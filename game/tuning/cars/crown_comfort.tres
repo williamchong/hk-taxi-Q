@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CarSpec" format=3 uid="uid://bfyloj8um1s3f"]
+
+[ext_resource type="Script" uid="uid://cqs6l2ktx44if" path="res://scripts/vehicle/car_spec.gd" id="1_car"]
+
+[resource]
+script = ExtResource("1_car")
+mass_kg = 1400.0
+centre_of_mass_offset_y = -0.35
+max_speed_kph = 140.0
+max_reverse_kph = 40.0
+engine_force = 6000.0
+engine_power_kw = 83.0
+driveline_efficiency = 0.85
+drag_area_m2 = 0.72
+brake_g = 1.2
+brake_front_share = 0.65
+steer_angle_max_deg = 32.0
+wheel_radius_m = 0.31
+suspension_rest_length_m = 0.39
+suspension_travel_m = 0.18
+suspension_frequency_hz = 2.2
+suspension_damping_ratio = 0.55
+suspension_max_load_ratio = 4.0

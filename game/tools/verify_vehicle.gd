@@ -81,8 +81,10 @@ const LAMPS_PROFILE_PATH := "res://tuning/vehicle_lamps.tres"
 const DOOR_PROFILE_PATH := "res://tuning/taxi_door.tres"
 const EMOTE_PROFILE_PATH := "res://tuning/passenger_emote.tres"
 const TYRE_PROFILE_PATH := "res://tuning/tyre.tres"
-## The car's systems' tables (`Q155`), by the controller's property for each.
+## The car's own table and its systems' (`Q155`), by the controller's property
+## for each.
 const SYSTEM_PATHS: Dictionary[String, String] = {
+	"car": "res://tuning/cars/crown_comfort.tres",
 	"traction_control": "res://tuning/systems/traction_control.tres",
 	"stability_control": "res://tuning/systems/stability_control.tres",
 	"drift_mode": "res://tuning/systems/drift_mode.tres",

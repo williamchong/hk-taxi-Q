@@ -174,7 +174,7 @@ func _stand_in_showroom() -> void:
 		RoadGraph.shared(),
 		GeneratedFares.load_fares(GeneratedFares.path(spawn_region)),
 		showroom_fare_id,
-		vehicle.profile.ray_length_m(),
+		vehicle.car.ray_length_m(),
 		spawn_region,
 		0.0
 	)
@@ -252,7 +252,7 @@ func _place_on_start_line() -> Transform3D:
 		graph,
 		GeneratedFares.load_fares(GeneratedFares.path(spawn_region)),
 		spawn_fare_id,
-		vehicle.profile.ray_length_m(),
+		vehicle.car.ray_length_m(),
 		spawn_region,
 		spawn_setback_m
 	)
@@ -394,7 +394,7 @@ func _pull_out() -> void:
 	var hit: RoadGraph.Hit = graph.nearest_edge(vehicle.global_position, heading)
 	var pose: Transform3D = _spawn
 	if hit.edge_id >= 0:
-		var lift: float = vehicle.profile.ray_length_m() + RoadSpawn.DROP_CLEARANCE_M
+		var lift: float = vehicle.car.ray_length_m() + RoadSpawn.DROP_CLEARANCE_M
 		pose = Transform3D(RoadSpawn.basis_facing(hit.forward), hit.lane_centre + Vector3.UP * lift)
 	print(
 		(

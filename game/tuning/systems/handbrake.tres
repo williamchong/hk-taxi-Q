@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_table")
-torque_nm = 1150.0
+lock_ratio = 1.0815

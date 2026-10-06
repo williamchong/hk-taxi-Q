@@ -32,7 +32,7 @@ lives in the scripts and in docs/, not here.
 `linear_damp_mode = 1` (replace) with `linear_damp` left at 0, which Godot's writer drops: the body
 has no damping of its own since 2026-10-05 (`Q153`). The project default (0.1) damped the car at a
 tenth of its speed a second with the throttle down too, about 2,900 N at 75 kph, and held the real
-taxi under 80 kph. Air drag (`HandlingProfile.drag_area_m2`) and the coast's own terms
+taxi under 80 kph. Air drag (`CarSpec.drag_area_m2`) and the coast's own terms
 (`coast_drag_per_s`, `rolling_resistance_mps2`) replace it.
 
 ## `[sub_resource type="BoxShape3D" id="BoxShape3D_body"]`
@@ -172,7 +172,7 @@ second copy of the rig's rotation. See scripts/vehicle/sun_glint.gd.
 
 ## `[node name="WheelFL" type="VehicleWheel3D" parent="."]`
 
-Suspension is written by the controller from `handling.tres` at `_ready`, and the tyre model
+Suspension is written by the controller from the car's table (`cars/crown_comfort.tres`) at `_ready`, as the body's mass is, and the tyre model
 (`TyreVehicleController`) zeroes the friction, so these four carry only what is geometry or role.
 Leaving the numbers out of the scene is deliberate: two places to author one
 spring is how a car ends up measuring its own tuning instead of the profile's.

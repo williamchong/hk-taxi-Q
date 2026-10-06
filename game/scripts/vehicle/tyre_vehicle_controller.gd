@@ -143,7 +143,7 @@ func _ready() -> void:
 		wheel.wheel_friction_slip = 0.0
 		_visuals.append(wheel.get_node_or_null(^"Visual") as Node3D)
 	# `engine_force` is the car's whole drive, split across its driven wheels
-	# as the engine split it (`HandlingProfile.engine_force`).
+	# as the engine split it (`CarSpec.engine_force`).
 	_traction_share = 1.0 / float(maxi(driven, 1))
 	_wheelbase_m = absf(_axle_z(_front) - _axle_z(_rear))
 	_omega.resize(_wheels.size())
@@ -365,7 +365,7 @@ func _apply_tyres(delta: float) -> void:
 	var nose: Vector3 = -global_basis.z
 	var up: Vector3 = global_basis.y
 	var share: float = mass / float(_wheels.size())
-	var rim_limit_mps: float = profile.max_speed_kph / 3.6 * (1.0 + rev_limiter.overspeed_share)
+	var rim_limit_mps: float = car.max_speed_kph / 3.6 * (1.0 + rev_limiter.overspeed_share)
 	var pressed: bool = _drift_mode.step(
 		drift_input,
 		steer_input,
@@ -386,11 +386,12 @@ func _apply_tyres(delta: float) -> void:
 	var wheelspin_limit: float = traction_control.wheelspin_limit
 	var lock_limit: float = anti_lock_brakes.slip_limit
 	# Each axle's share of the foot brake, so the four wheels sum to the dial.
-	var front_share: float = profile.brake_front_share
+	var front_share: float = car.brake_front_share
 	if front_share <= 0.0:
 		front_share = 0.5
 	# What the parent's drive was sized on: the engine's force at the car's speed.
 	var body_force_n: float = _drive_force_n()
+	var hand_lock_nm: float = _handbrake_torque_nm()
 	var governor: bool = wheelspin_limit > 0.0 and not _drift_mode.engaged
 	var drive_share: float = 1.0
 	if _drift_mode.engaged:
@@ -414,7 +415,7 @@ func _apply_tyres(delta: float) -> void:
 		var foot_nm: float = _brake_n * _radius * axle_share * _wheels.size() / axle_wheels
 		var hand_nm: float = 0.0
 		if drift_input and i >= _front.size():
-			hand_nm = handbrake.torque_nm
+			hand_nm = hand_lock_nm
 		var hold_nm: float = foot_nm + hand_nm
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
@@ -501,6 +502,16 @@ func _apply_tyres(delta: float) -> void:
 	_cost_ticks += 1
 
 
+## The handbrake's torque on each rear wheel: `HandbrakeProfile.lock_ratio` of
+## what locks a wheel carrying its share of the car at rest — the tyre's grip
+## on that load, at the wheel's radius. Derived, so it follows the mass, the
+## gravity, the tyre and the wheel: hand-sized, it was 3,000, 2,000, 1,275 and
+## 1,150 N·m across four changes of those, and spun every tap the one time it
+## was left behind (`Q153`).
+func _handbrake_torque_nm() -> float:
+	return handbrake.lock_ratio * tyre.mu * _wheel_load_at_rest_n() * car.wheel_radius_m
+
+
 ## Stability control's understeer cut: the share of the forward drive left
 ## while traction control is armed and the fronts are turned: 1 with the wheel
 ## straight, `1 - understeer_power_cut` at the
@@ -519,7 +530,7 @@ func _turn_drive_share() -> float:
 ## full lock: what the understeer cut and the drive boost fade on. Read off the
 ## wheels' own angle, so the catch cap and the rate limit count.
 func _steer_share() -> float:
-	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0))
+	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / car.max_speed_kph, 0.0, 1.0))
 	if lock <= 0.0:
 		return 0.0
 	return minf(absf(steering) / lock, 1.0)

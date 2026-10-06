@@ -1165,7 +1165,7 @@ uses `landmarks.json`'s transform shape, is written beside its `.glb` and is nul
 calls — unit-testable headlessly and portable.
 
 **A vehicle's drive layout is scene data.** `VehicleWheel3D.use_as_traction` is authored per wheel,
-each vehicle has its own `HandlingProfile` and `TyreProfile`, and `centre_of_mass_offset_y` plus
+each vehicle has its own `CarSpec` (`tuning/cars/`, `Q156`) and `TyreProfile`, and `centre_of_mass_offset_y` plus
 `TyreProfile.side_force_depth` cover a tall van. The roster is in `ART_DESIGN.md`.
 
 ⚠️ The drift's axle is derived from chassis geometry, not wheel role: `VehicleController._group_axles`
@@ -1211,7 +1211,7 @@ All paths under `game/`.
 | `scripts/camera/chase_camera.gd`, `chase_profile.gd` | The follow camera (`P2-5`, `Q98`); numbers in `tuning/camera.tres` |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera; bypasses `InputRouter` |
 | `scripts/input/input_router.gd`, `touch_profile.gd` | `InputRouter` and the touch travel schema (`tuning/touch.tres`) |
-| `scripts/vehicle/vehicle_controller.gd`, `handling_profile.gd` | The car and its tuning schema (`tuning/handling.tres`) |
+| `scripts/vehicle/vehicle_controller.gd`, `handling_profile.gd`, `car_spec.gd` | The car, the game layer's schema (`tuning/handling.tres`) and the car's own (`tuning/cars/<car>.tres`, `Q156`) |
 | `scripts/vehicle/tyre_vehicle_controller.gd`, `tyre_profile.gd`, `flick_watch.gd` | The per-wheel tyre model the game drives on (`Q152`), its tyre table (`tuning/tyre.tres`), and the flick read off the inputs |
 | `scripts/vehicle/systems/` | The car's systems (`Q155`), a schema each for `tuning/systems/*.tres`: traction control, stability control, drift mode (`DriftMode`), the handbrake, the rev limiter, and the game's own arcade aids (`CatchLimiter` among them) |
 | `scripts/vehicle/vehicle_lamps.gd`, `sun_glint.gd`, `beam_budget.gd`, `beam_profile.gd` | Lamp circuits written as instance uniforms (`P3-11d`), the sun direction for `vehicle_body.gdshader`, and the spot-light budget (`tuning/beams.tres`) |
