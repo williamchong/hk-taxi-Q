@@ -37,7 +37,7 @@ governed by (it is not ours to license).
 # Python
 ruff check . && ruff format --check .      # from the repo root, not etl/ — the root
                                            # ruff.toml extends the ETL rules to tools/*.py
-cd etl && pytest && cd ..
+cd etl && pytest && cd ..                   # `pytest -n auto` runs it across your cores
 
 # Godot — the only route that fails on error; the target scene must also run
 tools/check.sh

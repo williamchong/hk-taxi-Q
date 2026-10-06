@@ -127,7 +127,7 @@ Common emoji for this project:
   anything needing a frame, a drive, a sweep of a free value, or `tools/skidpad.sh`.
 - Python changes: `ruff check .` and `ruff format --check .` **from the repo root** (the root
   `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
-  `pytest` from `etl/`.
+  `pytest` from `etl/` (`pytest -n auto` is the same suite in a fifth of the time).
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
 - Godot changes: `tools/check.sh` passes, and the target scene runs. The script covers formatting,
   the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand

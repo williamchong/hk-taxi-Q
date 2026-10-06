@@ -96,10 +96,17 @@ dependencies = [
 # `dependencies`. It is *not* a step toward the terrain
 # classifier `Q18` defers — that one would put image decoding on every build's
 # critical path and into CI, which neither of these does.
+#
+# pytest-xdist, approved by the user 2026-10-06: `pytest -n auto` is 10.4 s
+# against 52 s serial on 14 cores, same 2,668 results three runs running — the
+# suite is CPU-bound with no test over 2.3 s, so there was nothing to fix in any
+# one test. ⚠️ Opt-in, never `addopts`: plain `pytest` stays serial, which is
+# what CI runs and what proves no test leans on another's leftovers.
 dev = [
     "gdtoolkit>=4.5,<5",
     "pillow>=10.0",
     "pytest>=8.0",
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
 ]
 # ⚠️ **No `survey` extra, and no API client anywhere in this repo** — `Q41`'s
