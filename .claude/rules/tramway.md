@@ -24,4 +24,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   must be **0**: `tramway.gdshader` is `cull_back`, so winding decides visibility and the normal
   attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
   everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a
-  shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q58`.
+  shader that fails to compile, so render and `grep -i "shader error"`. ⚠️ **`rails_unsnapped`
+  and `rails_trimmed` are 0 in both regions since 2026-10-06**, when rails were cut at the region's
+  rectangle; a rail going missing shows up there and as `rails_drawn_m` under `rails_m`, never in a
+  frame from one camera. Numbers in `Q58`.

@@ -764,6 +764,9 @@ primitive, one material named `tramway`, one draw call, **no collider**.
 - The class is shipped, not inferred from strip width or colour.
 - `tramway.json`: `off_gauge_stations` plus `pairs` against `tracks` is what sees a pair joined
   across two tracks; `drawn_gauge_m` is bounded by `pair_tolerance_m` by construction (`Q58`).
+- Rails are cut at the region's own rectangle, so two resident neighbours meet at the line. A strip
+  has a station at least every `height_step_m`, each on the nearest level-0 road's deck, owned or
+  foreign; a station with no road within `max_snap_m` is left out and counted in `rails_trimmed`.
 
 ### `arrows.glb` — the published turn arrows (`P3-15`, `P5-4`)
 

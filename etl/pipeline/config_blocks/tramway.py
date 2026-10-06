@@ -48,10 +48,13 @@ class Tramway(LayerSpec):
     bed_lift_m: float
     rail_lift_m: float
     # Furthest a rail station may sit from a level-0 centreline and still take
-    # its height from it. Beyond this the part is dropped rather than guessed:
-    # the reserve runs between two carriageways, so a rail with no road near it
-    # is one this region does not drive past.
+    # its height from it. Beyond this the station is left out rather than
+    # guessed: the reserve runs between two carriageways, so a rail with no road
+    # near it is one this region does not drive past.
     max_snap_m: float
+    # Furthest apart two stations of a drawn strip may be. A strip is flat
+    # between stations, so this is how closely it follows the road's profile.
+    height_step_m: float
     # Resolved through `_MaterialTable.get`, as every other material reference
     # is: that call *is* how usage gets recorded, so holding the name as a
     # string here would leave both materials looking unreferenced.
@@ -103,6 +106,10 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
             f"bed_width_m {bed_width_m}"
         )
 
+    height_step_m = float(_require(body, "height_step_m", where))
+    if height_step_m <= 0.0:
+        raise ValueError(f"{where}:height_step_m must be positive, got {height_step_m}")
+
     return Tramway(
         **_spec_header(body, where, _TRAMWAY_ROLES),
         codes=codes,
@@ -113,6 +120,7 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
         bed_lift_m=float(_require(body, "bed_lift_m", where)),
         rail_lift_m=float(_require(body, "rail_lift_m", where)),
         max_snap_m=float(_require(body, "max_snap_m", where)),
+        height_step_m=height_step_m,
         rail_material=table.get(
             str(_require(body, "rail_material", where)), f"{where}:rail_material"
         ),

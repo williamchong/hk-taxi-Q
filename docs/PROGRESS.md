@@ -471,7 +471,7 @@ Bundle, from `etl/out` (schemas: `city.json` 37, `basemap.json` 2, `roadgraph.js
 | Deck paint (`P3-37`) | lines 100 of 105 (2,497 m), `stations_off_deck` 12; arrows 18 of 20 / 4 of 4 (175 m), 0; 4 of 4 |
 | Crossings drawn | 120 of 121, 762 stripes / 16 of 17, 80 |
 | Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
-| Tramway | 126 of 132 rails (7,300 m), 55 beds, `off_gauge_stations` 53 of 1,041, `inverted` 0 |
+| Tramway | Wan Chai 132 of 132 rails (9,086 m in region), 58 beds (4,100 m), `off_gauge_stations` 53 of 1,192, `inverted` 0; Causeway Bay 34 of 34 (2,854 m), 11 beds (1,218 m), 11 of 136, 0 (2026-10-06, `Q58`) |
 | Harbour (`P3-45`) | 748,723 m² of sea, 213 triangles, 12,270 ground vertices sunk / 177,055 m², 55, 3 (its read box stops at the shore) |
 | Parks painted (`P3-47`) | 131,534 ground vertices / 86 polygons, 462,245 m² / 122,157, 57, 336,334 m² |
 | Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends (316 units) / 3 components, 6 mouths, 19 clipped ends (85 units) |

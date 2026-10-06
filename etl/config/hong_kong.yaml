@@ -1330,8 +1330,14 @@ tramway:
   # Furthest a rail station may sit from a level-0 centreline and still take its
   # height from it. The reserve runs between two carriageways a measured 6-9 m
   # from either, so this is generous by design; what it excludes is depot and
-  # siding track with no drivable road near it.
+  # siding track with no drivable road near it. A station past it is left out
+  # and the rail drawn either side, never dropped whole.
   max_snap_m: 25.0
+  # Furthest apart two stations of a drawn rail or bed may be. The source
+  # digitises a straight rail as two vertices up to 153 m apart, and a strip is
+  # flat between stations: at the source's own vertices 14.4% of Wan Chai's
+  # rail sat more than its 3 cm lift below the road beside it.
+  height_step_m: 4.0
 
   rail_material: steel_rail
   bed_material: concrete_sooty

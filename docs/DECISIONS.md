@@ -2961,6 +2961,23 @@ The tramway is geometry at its published position, not a lane-space marking on t
   (74 → 55).
 - ⚠️ Godot 16-bit vertex compression applies to this mesh (`roads.glb` escapes it only because its
   marking codes do not fit); `verify_tramway.gd` bounds must allow for it.
+- 2026-10-06, two defects the user saw as rails that vanish and rails that break up:
+  - A rail was refused whole if one station was over `max_snap_m` from a road, and a rail crossing
+    the region's edge always has one: 14 rails, every far station outside the rectangle. Drawn was
+    7,300 of 9,912 m in Wan Chai and 747 of 3,491 m in Causeway Bay (its main line gone). Now rails
+    are cut at the region's own rectangle (one owner at the seam; the four rails that cross it meet
+    within 1 mm of height), heights also read the neighbour's `foreign_edges`, and a far station
+    trims the rail instead of dropping it (`rails_trimmed`, 0 in both regions today).
+  - Heights were taken only at the source's vertices, up to 153 m apart, on a 3 cm lift: 14.4% of
+    Wan Chai's drawn rail and 11.1% of Causeway Bay's sat more than the lift below the nearest
+    centreline. `height_step_m` 4.0 adds stations: 0.9% and 1.7%, the rest where the nearest road
+    changes at a junction.
+  - After: 132 of 132 rails (9,086 m), 58 beds; 34 of 34 (2,854 m), 11 beds. `off_gauge_stations`
+    53 of 1,192 and 11 of 136, `pairs` 74 and 19, `inverted` 0. Raw `tram.glb` 274,020 → 547,520 B
+    and 9,568 → 122,852 B; the PCK was not re-measured. No schema bump: `tramway.json` gains a
+    key and the mesh contract is unchanged.
+  - ⚠️ Not addressed: a rail under the drawn ribbon where the ribbon stands above its own
+    centreline height, and the beds pairing still leaves undrawn (`pairs` above `tracks`).
 - `rail_metallic` ships 0.0: metal reflects the sky and 0.65 rendered the rails sky blue. The cue is
   `rail_roughness` 0.28 against the road's 0.95.
 - Tram stops (TD Tram Stop Location, 19 in region) ship as `poi` with no schema bump. The source

@@ -62,8 +62,8 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
-from pipeline.polyline import Segments, plan_lengths, plan_steps
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.polyline import Segments, plan_lengths, plan_steps, true_runs
+from pipeline.roads import ROADGRAPH_NAME, clip, read_graph, resample
 from pipeline.surface import boundary, dedupe, downward_facing, mitres
 
 log = logging.getLogger(__name__)
@@ -144,6 +144,9 @@ class TramwayReport:
     #   paired + unpaired                   == parts   (did it find its partner?)
     #   rails_drawn + unsnapped + too_short == parts   (was it drawn?)
     #
+    # `trimmed` is a subset of `rails_drawn`: rails drawn for part of their
+    # length, because some of their stations had no road within `max_snap_m`.
+    #
     # Rails dropped are reported rather than raised, for the reason `fares.py`
     # gives about a point in a car park: one unusable part is the publisher's
     # business and should not cost the region its tramway.
@@ -152,6 +155,7 @@ class TramwayReport:
     rails_drawn: int = 0
     rails_drawn_m: float = 0.0
     unsnapped: int = 0
+    trimmed: int = 0
     too_short: int = 0
 
     # Joined pairs, and the bed runs they produced. ⚠️ **`tracks` is not bounded
@@ -367,6 +371,15 @@ def read_rails(
     Y is zero here and is filled in by `_snap_heights`: the source carries a
     measured Z, but it is the *rail's* survey height rather than the deck this
     city drew, and mixing the two puts a tramway through the road it runs on.
+
+    ⚠️ **Cut at the region's own rectangle, not at `Config.clip_extent`.** The
+    spatial filter returns a rail whole if any of it touches the region, and a
+    rail has no ownership rule to hand its far half to a neighbour the way a
+    road does — so each region draws the rail as far as its own edge, and two
+    resident neighbours meet at the line rather than drawing the stretch twice.
+    Uncut, the far end also sat past this region's last road, and that alone
+    cost Causeway Bay its main line: 14 rails in the two regions were refused
+    whole for stations that were all outside the rectangle.
     """
     reads = source_reads(city, spec, region_id, root=sources_root)
 
@@ -388,7 +401,9 @@ def read_rails(
                 continue
             projected = np.asarray(points, dtype=np.float64)
             game_x, _, game_z = transform.to_game(projected[:, 0], projected[:, 1])
-            parts.append(dedupe(np.column_stack([game_x, np.zeros(len(game_x)), game_z])))
+            plan = np.column_stack([game_x, game_z])
+            for run in clip(plan, city.region_high(region_id), min_length_m=0.0):
+                parts.append(dedupe(np.column_stack([run[:, 0], np.zeros(len(run)), run[:, 1]])))
     return parts
 
 
@@ -561,22 +576,40 @@ def _track_centres(
     return runs, int(np.count_nonzero(~together)), len(together)
 
 
+def _stations(points: np.ndarray, step_m: float) -> np.ndarray:
+    """`points` with stations added until no two are more than `step_m` apart.
+
+    A strip is flat between its stations, and the source digitises a straight
+    rail as two vertices however long it is — 153 m at the longest here. Heights
+    taken only at those put the chord between them under any road that rises on
+    the way: 14.4% of Wan Chai's drawn rail sat more than its whole lift below
+    the road beside it, and read as a rail that sinks and resurfaces.
+
+    Y comes back zero, as `read_rails` leaves it: `_snap_heights` fills it in.
+    """
+    plan = resample(points[:, [0, 2]], step_m)
+    return np.column_stack([plan[:, 0], np.zeros(len(plan)), plan[:, 1]])
+
+
 def _snap_heights(
     points: np.ndarray, segments: Segments, max_snap_m: float, lift_m: float
-) -> np.ndarray | None:
-    """Every station put on the deck of the nearest level-0 road, or None.
+) -> list[np.ndarray]:
+    """The runs of `points` with a road beside them, put on its deck.
 
-    None where any station is further than `max_snap_m` from a road, rather than
-    a partial rail: a tramway that takes its height from a road at one end and
-    guesses at the other is drawn on a slope the city does not have.
+    A station further than `max_snap_m` from every level-0 road is left out, and
+    the rail is drawn either side of it — never across it, because a tramway
+    that takes its height from a road at one end and guesses at the other is
+    drawn on a slope the city does not have. Dropping the whole rail for one
+    such station was the first version, and it is why a siding leaving the
+    street took the street's own track with it.
     """
     lifted = points.copy()
+    near = np.zeros(len(points), dtype=bool)
     for row in range(len(points)):
         snap = segments.nearest(float(points[row, 0]), float(points[row, 2]))
-        if snap.distance_m > max_snap_m:
-            return None
+        near[row] = snap.distance_m <= max_snap_m
         lifted[row, 1] = snap.y + lift_m
-    return lifted
+    return [lifted[start:stop] for start, stop in true_runs(near) if stop - start >= 2]
 
 
 def _draw(
@@ -643,7 +676,17 @@ def build_region(
     # Level 0 only, and for the same reason `kerbside.py` restricts its join: a
     # tramway is an at-grade thing, and the nearest edge of *any* level to a
     # rail under a flyover is the flyover.
-    segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
+    #
+    # The neighbour's runs are candidates too. Inside this region's rectangle
+    # the road beside a rail can be one the neighbour owns (`Q116`), and it is
+    # still the deck the rail lies on.
+    segments = Segments.of(
+        [
+            edge
+            for edge in (*graph["edges"], *graph.get("foreign_edges", []))
+            if int(edge["elevation_level"]) == 0
+        ]
+    )
 
     builder = _Builder()
 
@@ -658,17 +701,24 @@ def build_region(
     # It is also the more honest split. The source publishes a rail; that it
     # could not be matched to its opposite number is this module's difficulty,
     # not a reason to leave a rail the estate prints out of the city.
-    rail_heights: list[np.ndarray | None] = []
+    drawn: list[bool] = []
     for part in parts:
         if _plan_length(part) < _MIN_PART_M:
             report.too_short += 1
-            rail_heights.append(None)
+            drawn.append(False)
             continue
-        head = _snap_heights(part, segments, spec.max_snap_m, spec.bed_lift_m + spec.rail_lift_m)
-        if head is None:
+        stations = _stations(part, spec.height_step_m)
+        heads = _snap_heights(
+            stations, segments, spec.max_snap_m, spec.bed_lift_m + spec.rail_lift_m
+        )
+        if not heads:
             report.unsnapped += 1
-        else:
-            report.rails_drawn += 1
+            drawn.append(False)
+            continue
+        report.rails_drawn += 1
+        if sum(len(head) for head in heads) < len(stations):
+            report.trimmed += 1
+        for head in heads:
             report.rails_drawn_m += _plan_length(head)
             _draw(
                 builder,
@@ -677,31 +727,32 @@ def build_region(
                 spec.rail_material.colour,
                 TRAMWAY_CLASS_RAIL,
             )
-        rail_heights.append(head)
+        drawn.append(True)
 
     # The bed, on the voter's own stations and only where the two rails are
     # actually running together. One pair can yield several runs, so `tracks`
     # counts drawn beds rather than joined pairs.
     for voter, partner in _pair_rails(parts, spec, report):
         report.pairs += 1
-        if rail_heights[voter] is None or rail_heights[partner] is None:
+        if not (drawn[voter] and drawn[partner]):
             continue
         runs, rejected, tested = _track_centres(parts[voter], parts[partner], spec)
         report.off_gauge += rejected
         report.pair_stations += tested
         for spine, gauges in runs:
-            length_m = _plan_length(spine)
-            if length_m < _MIN_PART_M:
+            if _plan_length(spine) < _MIN_PART_M:
                 continue
-            bed = _snap_heights(spine, segments, spec.max_snap_m, spec.bed_lift_m)
-            if bed is None:
-                continue
-            report.tracks += 1
-            # `bed` is `spine` with only its height column rewritten, so the two
-            # have the same plan length — measured once rather than twice.
-            report.tracks_m += length_m
-            report.gauges_m.extend(float(gauge) for gauge in gauges)
-            _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
+            beds = _snap_heights(
+                _stations(spine, spec.height_step_m), segments, spec.max_snap_m, spec.bed_lift_m
+            )
+            # Per spine with any bed drawn, not per drawn station: the gauge is
+            # the join's, measured before the heights could trim anything.
+            if beds:
+                report.gauges_m.extend(float(gauge) for gauge in gauges)
+            for bed in beds:
+                report.tracks += 1
+                report.tracks_m += _plan_length(bed)
+                _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
 
     mesh = builder.build(TRAMWAY_MESH_NAME)
     if mesh is not None:
@@ -743,6 +794,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Tramway
         "off_gauge_stations": report.off_gauge,
         "pair_stations": report.pair_stations,
         "rails_unsnapped": report.unsnapped,
+        "rails_trimmed": report.trimmed,
         "rails_too_short": report.too_short,
         # What the bed was actually built at, per station.
         #

@@ -27,6 +27,7 @@ from pipeline.tramway import (
     _pair_rails,
     _project,
     _snap_heights,
+    _stations,
     _track_centres,
 )
 from tests.helpers import CITY_YAML
@@ -50,6 +51,7 @@ BLOCK: dict[str, Any] = {
     "bed_lift_m": 0.02,
     "rail_lift_m": 0.01,
     "max_snap_m": 25.0,
+    "height_step_m": 4.0,
     "rail_material": "kerb",
     "bed_material": "asphalt",
 }
@@ -268,29 +270,72 @@ class TestHeights:
     """Rails take the deck height of the road beside them, or are not drawn."""
 
     class _Segments:
-        """The narrowest stand-in for `fares.Segments` this stage uses."""
+        """The narrowest stand-in for `fares.Segments` this stage uses: a road
+        whose deck height and distance from a station are each a number, or a
+        function of the station's `x`."""
 
-        def __init__(self, y: float, distance_m: float) -> None:
+        def __init__(self, y, distance_m) -> None:
             self._y, self._distance_m = y, distance_m
 
         def nearest(self, x: float, z: float):
-            return type("Snap", (), {"y": self._y, "distance_m": self._distance_m})()
+            y = self._y(x) if callable(self._y) else self._y
+            distance_m = self._distance_m(x) if callable(self._distance_m) else self._distance_m
+            return type("Snap", (), {"y": y, "distance_m": distance_m})()
 
     def test_stations_land_on_the_deck_plus_the_lift(self) -> None:
         points = rail(0.0, 20.0, 0.0)
 
-        lifted = _snap_heights(points, self._Segments(4.5, 3.0), 25.0, 0.02)
+        (lifted,) = _snap_heights(points, self._Segments(4.5, 3.0), 25.0, 0.02)
 
-        assert lifted is not None
         assert np.allclose(lifted[:, 1], 4.52)
         assert np.allclose(lifted[:, [0, 2]], points[:, [0, 2]])
 
-    def test_a_rail_with_no_road_near_it_is_dropped_whole(self) -> None:
-        """Not partially: a tramway taking its height from a road at one end and
-        guessing at the other is drawn on a slope the city does not have."""
+    def test_a_rail_with_no_road_near_it_is_not_drawn(self) -> None:
         points = rail(0.0, 20.0, 0.0)
 
-        assert _snap_heights(points, self._Segments(4.5, 99.0), 25.0, 0.02) is None
+        assert _snap_heights(points, self._Segments(4.5, 99.0), 25.0, 0.02) == []
+
+    def test_a_rail_running_on_past_the_road_is_trimmed_and_not_dropped(self) -> None:
+        """The regression: one station out of reach used to cost the whole rail,
+        and a rail crossing the region's edge always has one."""
+        points = rail(0.0, 40.0, 0.0)
+
+        road = self._Segments(4.5, lambda x: 3.0 if x <= 20.0 else 99.0)
+
+        (kept,) = _snap_heights(points, road, 25.0, 0.02)
+
+        assert kept[0, 0] == 0.0
+        assert kept[-1, 0] == 20.0
+
+    def test_a_rail_is_never_drawn_across_a_station_with_no_road(self) -> None:
+        """Two runs, not one bridged: the height in between would be a guess."""
+        points = rail(0.0, 40.0, 0.0)
+        road = self._Segments(4.5, lambda x: 99.0 if x == 20.0 else 3.0)
+
+        runs = _snap_heights(points, road, 25.0, 0.02)
+
+        assert [(run[0, 0], run[-1, 0]) for run in runs] == [(0.0, 15.0), (25.0, 40.0)]
+
+    def test_a_long_segment_gains_stations_and_keeps_its_own(self) -> None:
+        points = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [13.0, 0.0, 0.0]])
+
+        stations = _stations(points, 4.0)
+
+        assert np.diff(stations[:, 0]).max() <= 4.0
+        assert all((stations == point).all(axis=1).any() for point in points)
+        assert len(_stations(points, 50.0)) == len(points)
+
+    def test_a_two_point_rail_follows_a_road_that_climbs_and_falls(self) -> None:
+        """The regression: heights taken only at the source's own vertices put
+        the chord under any road that rises between them."""
+        points = np.array([[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+
+        crest = self._Segments(lambda x: 1.0 - abs(x - 50.0) / 50.0, 3.0)
+
+        (lifted,) = _snap_heights(_stations(points, 4.0), crest, 25.0, 0.02)
+
+        # The chord between the two source vertices alone would sit at 0.02.
+        assert lifted[:, 1].max() > 0.95
 
 
 class TestBuilder:
@@ -366,6 +411,10 @@ class TestConfig:
         # neither.
         with pytest.raises(ValueError, match="pair_tolerance_m"):
             city_with(tmp_path, {**BLOCK, "pair_tolerance_m": GAUGE_M})
+
+    def test_a_station_step_of_nothing_is_refused(self, tmp_path) -> None:
+        with pytest.raises(ValueError, match="height_step_m"):
+            city_with(tmp_path, {**BLOCK, "height_step_m": 0.0})
 
     def test_a_rail_wider_than_its_bed_is_refused(self, tmp_path) -> None:
         with pytest.raises(ValueError, match="rail_width_m"):
