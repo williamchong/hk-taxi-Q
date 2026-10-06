@@ -42,6 +42,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   the car slows inside a drift and crosses the band under it (`Q88`). Sweep the band's own dials.
   The engine-tyre car's grip-cut and yaw-torque drift (`Q84`–`Q89`) went with the control car on
   2026-10-05; those Qs keep its lessons.
+- ⚠️ **The wrapper runs `--fixed-fps 60` since 2026-10-06**: a frame is exactly one physics tick
+  and nothing waits on the wall clock, so the full pad at one entry is about 5 s (was 3:26) and a
+  table is byte-identical run to run, serial or five at once, the wall rows included — only the
+  `us/tick` cost columns move. Run 42, 63 and 86 kph at once with `&` and `wait`. Rows shift about
+  0.1 kph against a table graded in real time (entry 63.08 → 63.22, spawn height 0.959 → 1.0), so
+  re-run the before side; the run-to-run bands quoted below (`hold` ±0.3 s, `wall@30`'s exit, the
+  brush's 0.5 kph) were read in real time and are not this mode's.
 - 🔴 **`hold`'s driver commands a SHARE of the lock, so a steering-lock change re-tunes the driver,
   not the car** (`Q152`, the `slide_lock_deg` sweep in `systems/arcade_aids.md`): a wider lock while sliding read as
   a SHORTER `hold` at every speed, because three quarters of 35° is a straightening where three

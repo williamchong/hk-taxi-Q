@@ -106,6 +106,17 @@
 # Headless on purpose: nothing is captured, and the dummy rasteriser is faster
 # and works over SSH. Override GODOT= if yours is not on PATH.
 #
+# --fixed-fps on purpose: without it Godot steps the physics against the wall
+# clock, so 200 s of manoeuvres took 200 s at 15% of one core, and how many
+# ticks landed in a frame — hence the spawn pose and the entry speed — moved
+# with the machine's load. Fixed, a frame is exactly one tick and nothing waits:
+# the full pad is about 5 s, and a table is byte-identical run to run, serial or
+# several at once (the wall rows included), bar the `us/tick` cost columns,
+# which read the clock. ⚠️ Rows shift about 0.1 kph against a table graded
+# before this flag (entry 63.08 -> 63.22), so re-run the before side.
+# ⚠️ 60 is the project's physics tick rate (Godot's default; project.godot does
+# not set one) — move the two together.
+#
 # Needs an imported project: like every --script run, this one loads the
 # autoloads, and they name class_name globals that resolve only out of the
 # gitignored game/.godot/. On a fresh clone run tools/check.sh first. The failure
@@ -134,7 +145,7 @@ trap 'rm -f "$LOG"' EXIT
 # ablation itself is responsible for: anything naming the tool, and the
 # parse/compile failures, which name a file either way. (wheel_visual.gd was the
 # other one until Q50 deleted it: a VehicleWheel3D moves its own mesh.)
-"$GODOT" --headless --path "$ROOT/game" --script "$TOOL" -- "$@" 2>&1 | tee "$LOG"
+"$GODOT" --headless --fixed-fps 60 --path "$ROOT/game" --script "$TOOL" -- "$@" 2>&1 | tee "$LOG"
 status=${PIPESTATUS[0]}
 
 if grep -E "$FATAL" "$LOG" | grep -qv 'vehicle_lamps.gd'; then
