@@ -36,7 +36,7 @@ var _lamps: VehicleLamps = null
 var _door: TaxiDoor = null
 var _emote: PassengerEmote = null
 var _sparks: DriftSparks = null
-var _outline: CarOutline = null
+var _tail: LightTail = null
 
 
 func _ready() -> void:
@@ -55,8 +55,8 @@ func _ready() -> void:
 			_emote = node as PassengerEmote
 		elif node is DriftSparks and _sparks == null:
 			_sparks = node as DriftSparks
-		elif node is CarOutline and _outline == null:
-			_outline = node as CarOutline
+		elif node is LightTail and _tail == null:
+			_tail = node as LightTail
 	fares.hailed.connect(_on_hailed)
 	fares.boarded.connect(_on_boarded)
 	fares.cancelled.connect(_on_cancelled)
@@ -66,8 +66,8 @@ func _ready() -> void:
 	fares.skilled.connect(_on_skilled)
 	if _sparks != null:
 		fares.drift_tier_changed.connect(_sparks.show_tier)
-	if _outline != null:
-		fares.drift_tier_changed.connect(_outline.show_tier)
+	if _tail != null:
+		fares.drift_tier_changed.connect(_tail.show_tier)
 
 
 func _on_hailed(_fare: Fare) -> void:

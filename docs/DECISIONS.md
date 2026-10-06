@@ -9697,10 +9697,19 @@ Each answer below is the user's, from frames, and each turned a first cut round:
   ("too much"), a whole-car rim leaning to the trailing side ("only drag the end of car which moves
   most"), and the end drawn in each part's own colour ("having the whole car body as after image is
   strange … just do outline color for the car outermost rim", "skip the details").
-- **The tier's colour is deferred**: the afterimage taking the sparks' per-tier colour to show the drift
-  bonus fee's status is the user's next step.
+- **Reversed the same day, on the user's ask (`P3-70`): the afterimage is the lamps' alone — a
+  light tail.** "Instead of the whole car tail for drifting after image, what if we only drag the
+  lights? literally lighttail." The hull is gone (`car_outline.gdshader` deleted, `car_outline.tres`
+  down to `full_speed_kph`); the brake lenses are found in the body by the import's stamps and
+  streak along the arc they swing through, laid a tick at a time as the tyre marks are and faded
+  against the clock they were laid at, 0.4 s, in the lens's lit red. A hull could be dragged no
+  further than 0.15 m before it read as a second car; a streak off the lamps cannot read as a car,
+  so it is as long as a light tail is. The tier's colour, deferred above, is the table's shape
+  (`colours`, the sparks') and not the shipped answer: tier 0's cream reads as a white tube, not a
+  lamp. The look call — the life, the fade, the colour, mix or additive — is the user's, from the
+  variant sheet.
 
-**See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
+**See.** `P3-64` · `P3-65` · `P3-70` · `game/tuning/light_tail.md` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
 
 ## `Q159` — The fences and the railings collide as a box per prop
 

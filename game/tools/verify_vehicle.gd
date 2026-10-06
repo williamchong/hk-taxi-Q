@@ -75,6 +75,8 @@ const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
 const FLICK_SCRIPT := "res://scripts/vehicle/flick_watch.gd"
 const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
 const OUTLINE_SCRIPT := "res://scripts/vehicle/car_outline.gd"
+const TAIL_SCRIPT := "res://scripts/vehicle/light_tail.gd"
+const TRAIL_SCRIPT := "res://scripts/vehicle/light_trail.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
 ## grades: what is asserted is that the scene hands each node THIS resource.
@@ -98,6 +100,7 @@ const SYSTEM_PATHS: Dictionary[String, String] = {
 const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
 const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"
 const OUTLINE_PROFILE_PATH := "res://tuning/car_outline.tres"
+const TAIL_PROFILE_PATH := "res://tuning/light_tail.tres"
 
 
 ## The rigs' dials are tuning resources, and a zero key makes each rig inert
@@ -122,6 +125,7 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 		[_running(car, MARKS_SCRIPT), MARKS_PROFILE_PATH, "tyre marks", "mark_width_m"],
 		[_running(car, SPARKS_SCRIPT), SPARKS_PROFILE_PATH, "sparks", "lifetime_s"],
 		[_running(car, OUTLINE_SCRIPT), OUTLINE_PROFILE_PATH, "outline", "full_speed_kph"],
+		[_running(car, TAIL_SCRIPT), TAIL_PROFILE_PATH, "light tail", "life_s"],
 	]
 	for rig: Array in rigs:
 		var node := rig[0] as Node3D
@@ -160,7 +164,7 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 	if _failed == before:
 		print(
 			(
-				"  ok    the lamp, door, face, tyre-mark, spark and outline dials are tuning resources,"
+				"  ok    the lamp, door, face, tyre-mark, spark, outline and light-tail dials are tuning resources,"
 				+ " and a zero key makes each inert"
 			)
 		)
@@ -385,13 +389,10 @@ func _check_the_sparks_take_the_tier(car: Node3D) -> void:
 		print("  ok    the sparks take each tier's colour and are clear when no slide counts")
 
 
-## The car's outline (`P3-65`): the afterimage at no width with no slide
-## counting and at its one width on every counted tier, hung off the end moving
-## most across the car; its ease never a snap, in either
-## direction; the speed share 0 at rest, a half at half of `full_speed_kph`,
-## held at 1 above it. A table with no city line to take the colour from is
-## refused. The global it writes is `verify_settings.gd`'s.
-func _check_the_outline_takes_the_tier_and_speed(car: Node3D) -> void:
+## The city's line takes the car's speed (`P3-65`): the share 0 at rest, a
+## half at half of `full_speed_kph`, held at 1 above it. The global it writes is
+## `verify_settings.gd`'s.
+func _check_the_outline_takes_the_speed(car: Node3D) -> void:
 	var before: int = _failed
 	var outline := _running(car, OUTLINE_SCRIPT) as Node3D
 	if outline == null:
@@ -401,45 +402,144 @@ func _check_the_outline_takes_the_tier_and_speed(car: Node3D) -> void:
 	if table == null:
 		_problem("the car outline has no profile assigned in %s" % SCENE_PATH)
 		return
-	var width: float = table.get("hull_width_m")
-	if outline.width_of(-1) != 0.0:
-		_problem("the afterimage has a width with no slide counting")
-	for tier: int in 4:
-		if outline.width_of(tier) != width:
-			_problem("tier %d's afterimage is not the one hull_width_m" % tier)
-	var tick: float = 1.0 / 60.0
-	var seeped: float = outline.eased(0.0, width, tick)
-	var drained: float = outline.eased(width, 0.0, tick)
-	if not (seeped > 0.0 and seeped < width * 0.5):
-		_problem(
-			"the afterimage does not seep in: one tick took it to %.4f of %.4f" % [seeped, width]
-		)
-	if not (drained < width and drained > width * 0.5):
-		_problem(
-			"the afterimage does not drain: one tick took it to %.4f of %.4f" % [drained, width]
-		)
-	# The end that moves most ACROSS the car, not the faster one: the nose here
-	# is the quicker (10.05 m/s against 4) but mostly along the length, so the
-	# tail is the end. The axis is not a unit, as the hull's basis need not be.
-	var length := Vector3(0.0, 0.0, 3.0)
-	if outline.moving_end(Vector3(1.0, 0.0, 10.0), Vector3(4.0, 0.0, 0.0), length) != -1.0:
-		_problem("the afterimage does not hang off the end moving most across the car")
-	if outline.moving_end(Vector3(-5.0, 0.0, 1.0), Vector3(2.0, 0.0, 9.0), length) != 1.0:
-		_problem("the afterimage does not take the front when the front swings")
 	var full: float = table.get("full_speed_kph")
 	if outline.speed_share(0.0) != 0.0 or outline.speed_share(full * 2.0) != 1.0:
 		_problem("the speed share is not 0 at rest and held at 1 past full speed")
 	if not is_equal_approx(outline.speed_share(full * 0.5), 0.5):
 		_problem("the speed share is not a half at half of full_speed_kph")
-	var lineless := table.duplicate() as Resource
-	lineless.set("city_line", null)
-	outline.set("profile", lineless)
-	if outline.usable():
-		_problem("mutation missed: an outline table with no city line still reads usable")
-	outline.set("profile", table)
+	if _failed == before:
+		print("  ok    the city's line takes the car's speed")
+
+
+## The light tail (`P3-70`): the trail lays a piece from where a lamp was to
+## where it is — nothing on its first tick, nothing while not laying — stamped
+## with the clock at each end, breaks past `max_step_m` and on a stop, and wraps
+## at its capacity; the capacity holds a life of every lamp at the physics rate;
+## the colour is the tier's, clear with no slide counting; the two tail lamps
+## are found on the imported body, one each side of the centreline and both on
+## the car's tail, the high-level lamp left out; a table with no colours is
+## refused.
+func _check_the_light_tail_streaks_and_fades(car: Node3D, body: MeshInstance3D) -> void:
+	var before: int = _failed
+	var tail := _running(car, TAIL_SCRIPT) as Node3D
+	if tail == null:
+		_problem("no node in %s runs %s" % [SCENE_PATH, TAIL_SCRIPT])
+		return
+	var table := tail.get("profile") as Resource
+	if table == null:
+		_problem("the light tail has no profile assigned in %s" % SCENE_PATH)
+		return
+	var trail_script := load(TRAIL_SCRIPT) as GDScript
+	if trail_script == null:
+		_problem("%s did not load" % TRAIL_SCRIPT)
+		return
+	var reach: float = table.get("max_step_m")
+	var capacity: int = 4
+	var trail: RefCounted = trail_script.new(2, capacity, reach)
+	var corners: int = trail_script.get("CORNERS")
+	var across := Vector3(0.1, 0.0, 0.0)
+	var up := Vector3(0.0, 0.05, 0.0)
+	var at := Vector3.ZERO
+	var step := Vector3(0.0, 0.0, 0.5)
+	# Not laying, however long: nothing.
+	for tick: int in 3:
+		if trail.step(0, 0.1 * tick, at, across, up, false) != -1:
+			_problem("a lamp told not to streak laid a piece")
+		at += step
+	# Laying: the first tick starts the streak, the second lays a piece.
+	if trail.step(0, 1.0, at, across, up, true) != -1:
+		_problem("the first laying tick laid a piece with nothing to join it to")
+	var was: Vector3 = at
+	at += step
+	var slot: int = trail.step(0, 1.1, at, across, up, true)
+	if slot != 0:
+		_problem("the second laying tick did not lay the first piece (slot %d)" % slot)
+	var positions: PackedVector3Array = trail.positions()
+	var times: PackedVector2Array = trail.times()
+	var first: int = slot * corners
+	# Every corner of both quads: the across quad from the lamp's last edge to
+	# its edge now, then the up quad, each old corner stamped with the old
+	# clock and each new one with the new. Single-precision in the buffer, so
+	# the clocks approximately.
+	var expected: Array[Vector3] = [
+		was - across, was + across, at + across, at - across, was - up, was + up, at + up, at - up
+	]
+	var old_corner: Array[bool] = [true, true, false, false, true, true, false, false]
+	for k: int in corners:
+		if positions[first + k] != expected[k]:
+			_problem("corner %d of the piece is not where the lamp's edges put it" % k)
+		if not is_equal_approx(times[first + k].x, 1.0 if old_corner[k] else 1.1):
+			_problem("corner %d is not stamped with the clock it was laid at" % k)
+	# A jump past the reach breaks the streak; the next tick lays again.
+	at += Vector3(0.0, 0.0, reach + 0.1)
+	if trail.step(0, 1.2, at, across, up, true) != -1:
+		_problem("a lamp that jumped past max_step_m drew a streak across the gap")
+	at += step
+	if trail.step(0, 1.3, at, across, up, true) != 1:
+		_problem("the streak did not resume one tick after the jump")
+	# A stop breaks it too, and the other lamp has its own streak.
+	trail.step(0, 1.4, at, across, up, false)
+	if trail.step(0, 1.5, at, across, up, true) != -1:
+		_problem("a streak told to stop did not break")
+	if trail.step(1, 1.5, at, across, up, true) != -1:
+		_problem("the second lamp joined the first lamp's streak")
+	# Wrap: the ring reuses slot 0 once `capacity` pieces are down.
+	var laid_before: int = trail.laid
+	for tick: int in capacity:
+		at += step
+		trail.step(1, 2.0 + 0.1 * tick, at, across, up, true)
+	if trail.laid != laid_before + capacity:
+		_problem("%d ticks laid %d pieces, not one each" % [capacity, trail.laid - laid_before])
+	at += step
+	var oldest: int = trail.laid % capacity
+	if trail.step(1, 3.0, at, across, up, true) != oldest:
+		_problem("the ring did not wrap to its oldest slot at capacity")
+	if trail.positions()[oldest * corners + 2] != at + across:
+		_problem("the wrapped slot does not hold the newest piece")
+	var life: float = table.get("life_s")
+	var rate: int = Engine.physics_ticks_per_second
+	if tail.capacity_for(2, life) < ceili(life * rate) * 2:
+		_problem("the capacity does not hold a life of both lamps at %d Hz" % rate)
+	var colours: PackedColorArray = table.get("colours")
+	if tail.colour_of(-1).a != 0.0:
+		_problem("the streak is not clear with no slide counting")
+	for tier: int in colours.size():
+		if tail.colour_of(tier) != colours[tier]:
+			_problem("tier %d does not streak in colours[%d]" % [tier, tier])
+	if tail.colour_of(colours.size() + 3) != colours[colours.size() - 1]:
+		_problem("a tier past the table does not keep its last colour")
+	var lenses: Array = tail.lenses_of(body.mesh)
+	if lenses.size() != 2:
+		_problem(
+			"%d brake lenses found off the centreline on %s, not 2" % [lenses.size(), body.name]
+		)
+	else:
+		var neg: Vector3 = lenses[0].centre
+		var pos: Vector3 = lenses[1].centre
+		if neg.x * pos.x >= 0.0:
+			_problem("the two tail lamps are not one each side of the centreline")
+		if neg.z <= 0.0 or pos.z <= 0.0:
+			_problem("a tail lamp was found on the nose; the car's +Z is its tail")
+		# A lamp is narrow: a lens a quarter of the car wide has swallowed the
+		# high-level brake lamp between the two.
+		var quarter: float = body.mesh.get_aabb().size.x * 0.125
+		for lens: Object in lenses:
+			if lens.half_across.length() <= 0.0 or lens.half_up.length() <= 0.0:
+				_problem("a tail lamp's lens has no width or no height")
+			if lens.half_across.length() > quarter:
+				_problem("a tail lamp's lens spans over a quarter of the car's width")
+	var colourless := table.duplicate() as Resource
+	colourless.set("colours", PackedColorArray())
+	tail.set("profile", colourless)
+	if tail.usable():
+		_problem("mutation missed: a light tail table with no colours still reads usable")
+	tail.set("profile", table)
 	if _failed == before:
 		print(
-			"  ok    the afterimage seeps in, drains and hangs off the end moving most; the line takes its speed"
+			(
+				"  ok    the light tail streaks from each tail lamp, breaks, wraps and takes the tier's colour; lenses at %s and %s"
+				% [lenses[0].centre, lenses[1].centre]
+			)
 		)
 
 
@@ -526,7 +626,8 @@ func _run() -> void:
 	_check_the_flick_is_read_off_the_inputs()
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)
-	_check_the_outline_takes_the_tier_and_speed(car)
+	_check_the_outline_takes_the_speed(car)
+	_check_the_light_tail_streaks_and_fades(car, body)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)

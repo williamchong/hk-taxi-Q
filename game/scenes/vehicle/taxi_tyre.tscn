@@ -16,6 +16,8 @@
 [ext_resource type="Resource" uid="uid://dxpx52il4a36i" path="res://tuning/systems/anti_lock_brakes.tres" id="15_anti_lock_brakes"]
 [ext_resource type="Script" uid="uid://d3xbj8y81vkdc" path="res://scripts/vehicle/car_outline.gd" id="16_outline"]
 [ext_resource type="Resource" uid="uid://t0tvdkhn4oh5" path="res://tuning/car_outline.tres" id="17_outline"]
+[ext_resource type="Script" uid="uid://bgpx522eb124t" path="res://scripts/vehicle/light_tail.gd" id="18_tail"]
+[ext_resource type="Resource" uid="uid://ytcv57mytg7e" path="res://tuning/light_tail.tres" id="19_tail"]
 
 [node name="Taxi" instance=ExtResource("1_taxi")]
 script = ExtResource("2_ctrl")
@@ -39,3 +41,7 @@ profile = ExtResource("7_sparks")
 [node name="CarOutline" type="Node3D" parent="." unique_id=1129384756]
 script = ExtResource("16_outline")
 profile = ExtResource("17_outline")
+
+[node name="LightTail" type="Node3D" parent="." unique_id=1664209307]
+script = ExtResource("18_tail")
+profile = ExtResource("19_tail")
