@@ -11,8 +11,8 @@ that quietly differs from a partial one.
 
 Ordering is a real dependency chain, not a preference. `surface` reads the
 graph `roads` writes, `clearance` measures the ribbon `surface` drew against the
-tiles `buildings` wrote, `fares` snaps to the graph, `tramway` takes its heights
-from it, and `export` reconciles them.
+tiles `buildings` wrote, `fares` snaps to the graph, `tramway` lies on the road
+and the ground those two drew, and `export` reconciles them.
 Only `buildings` is independent, and it runs early because it is by far the
 longest stage — a mistake in it is worth hitting before the quick ones.
 
@@ -103,11 +103,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # committed authored prop and this stage publishes only where it stands.
     "fence": fence.main,
     "fares": fares.main,
-    # After `roads` because every rail takes its height from the nearest level-0
-    # centreline that stage published, and before `export` because `city.json`
-    # names the asset. It reads no tile and measures no ribbon, so it could sit
-    # anywhere between those two; it is here because that is where its output is
-    # wanted rather than because anything forces it.
+    # After `surface` and `buildings`, and forced: a rail lies on what is drawn
+    # under it, so this reads the road chunks and the ground out of the tiles
+    # (`Q58`, 2026-10-06). Before `export`, because `city.json` names the asset.
     "tramway": tramway.main,
     # After `surface`, and unlike `tramway` that is forced rather than tidy: it
     # reads `roadsurface.json` for the drawn half-width at each station, because
@@ -193,7 +191,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "clearance": ("carve", "landmarks", "surface"),
     "fence": ("clearance",),
     "fares": ("roads",),
-    "tramway": ("roads",),
+    "tramway": ("buildings", "surface"),
     "arrows": ("surface",),
     "boxjunctions": ("surface",),
     "crossings": ("surface",),

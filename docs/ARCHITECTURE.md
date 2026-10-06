@@ -765,8 +765,12 @@ primitive, one material named `tramway`, one draw call, **no collider**.
 - `tramway.json`: `off_gauge_stations` plus `pairs` against `tracks` is what sees a pair joined
   across two tracks; `drawn_gauge_m` is bounded by `pair_tolerance_m` by construction (`Q58`).
 - Rails are cut at the region's own rectangle, so two resident neighbours meet at the line. A strip
-  has a station at least every `height_step_m`, each on the nearest level-0 road's deck, owned or
-  foreign; a station with no road within `max_snap_m` is left out and counted in `rails_trimmed`.
+  has a station at least every `height_step_m`, and a station with no level-0 road, owned or
+  foreign, within `max_snap_m` is left out and counted in `rails_trimmed`.
+- A strip lies on what is drawn under it — the road chunks, kerb tops included, or the ground —
+  within `surface_within_m` of the nearest centreline's height, with stations added a metre apart
+  where that surface is not a plane. The stage reads `roads/*.glb` and the tiles, so it runs
+  after `surface` and `buildings`.
 
 ### `arrows.glb` — the published turn arrows (`P3-15`, `P5-4`)
 

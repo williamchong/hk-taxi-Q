@@ -1338,6 +1338,12 @@ tramway:
   # flat between stations: at the source's own vertices 14.4% of Wan Chai's
   # rail sat more than its 3 cm lift below the road beside it.
   height_step_m: 4.0
+  # A rail and its bed lie on what is drawn under them — the road mesh, kerb
+  # tops included, or the ground between two carriageways — where that stands
+  # within this of the nearest centreline's height. Wide enough for a kerb
+  # (0.15) and for the ground's worst measured rise over the reserve (0.83),
+  # and well short of the lowest deck over a tram street.
+  surface_within_m: 1.0
 
   rail_material: steel_rail
   bed_material: concrete_sooty

@@ -55,6 +55,10 @@ class Tramway(LayerSpec):
     # Furthest apart two stations of a drawn strip may be. A strip is flat
     # between stations, so this is how closely it follows the road's profile.
     height_step_m: float
+    # How far above or below the road beside it a drawn face may stand and still
+    # be what the tramway lies on: a kerb top and the ground between two
+    # carriageways are, a flyover's deck is not.
+    surface_within_m: float
     # Resolved through `_MaterialTable.get`, as every other material reference
     # is: that call *is* how usage gets recorded, so holding the name as a
     # string here would leave both materials looking unreferenced.
@@ -121,6 +125,7 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
         rail_lift_m=float(_require(body, "rail_lift_m", where)),
         max_snap_m=float(_require(body, "max_snap_m", where)),
         height_step_m=height_step_m,
+        surface_within_m=float(_require(body, "surface_within_m", where)),
         rail_material=table.get(
             str(_require(body, "rail_material", where)), f"{where}:rail_material"
         ),

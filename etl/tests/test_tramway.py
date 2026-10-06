@@ -24,6 +24,8 @@ from pipeline.tramway import (
     TramwayReport,
     _Builder,
     _draw,
+    _Faces,
+    _follow,
     _pair_rails,
     _project,
     _snap_heights,
@@ -52,6 +54,7 @@ BLOCK: dict[str, Any] = {
     "rail_lift_m": 0.01,
     "max_snap_m": 25.0,
     "height_step_m": 4.0,
+    "surface_within_m": 1.0,
     "rail_material": "kerb",
     "bed_material": "asphalt",
 }
@@ -336,6 +339,87 @@ class TestHeights:
 
         # The chord between the two source vertices alone would sit at 0.02.
         assert lifted[:, 1].max() > 0.95
+
+
+def slab(x0: float, x1: float, y: float, *, z0: float = -5.0, z1: float = 5.0) -> np.ndarray:
+    """A level rectangle as two triangles, `(2, 3, 3)`."""
+    a, b, c, d = (x0, y, z0), (x1, y, z0), (x1, y, z1), (x0, y, z1)
+    return np.array([[a, c, b], [a, d, c]], dtype=np.float64)
+
+
+class TestDrawnSurface:
+    """A strip lies on what the region draws, not on the centreline's height."""
+
+    def test_the_highest_face_at_a_point_answers(self) -> None:
+        faces = _Faces(np.concatenate([slab(0.0, 10.0, 4.0), slab(4.0, 6.0, 4.15)]))
+
+        assert faces.top(5.0, 0.0, 4.0, 1.0) == pytest.approx(4.15)
+        assert faces.top(2.0, 0.0, 4.0, 1.0) == pytest.approx(4.0)
+        assert faces.top(50.0, 0.0, 4.0, 1.0) is None
+
+    def test_ground_west_of_the_origin_is_found_in_its_own_cell(self) -> None:
+        faces = _Faces(slab(-30.0, -20.0, 4.0))
+
+        assert faces.top(-25.0, -1.0, 4.0, 1.0) == pytest.approx(4.0)
+        assert faces.top(-25.0, -1.0, 4.0, 1.0, 0.07) == pytest.approx(4.0)
+
+    def test_nothing_shipped_answers_nothing(self) -> None:
+        assert _Faces(np.zeros((0, 3, 3))).top(5.0, 0.0, 4.0, 1.0, 0.07) is None
+
+    def test_a_deck_overhead_is_outside_the_window(self) -> None:
+        faces = _Faces(np.concatenate([slab(0.0, 10.0, 4.0), slab(0.0, 10.0, 9.5)]))
+
+        assert faces.top(5.0, 0.0, 4.0, 1.0) == pytest.approx(4.0)
+
+    def test_a_wall_is_not_something_to_lie_on(self) -> None:
+        wall = np.array([[[5.0, 4.0, -5.0], [5.0, 4.0, 5.0], [5.01, 4.9, 0.0]]])
+        faces = _Faces(np.concatenate([slab(0.0, 10.0, 4.0), wall]))
+
+        assert faces.top(5.005, 0.0, 4.0, 1.0) == pytest.approx(4.0)
+
+    def test_a_strip_beside_a_kerb_edge_is_reached_by_its_width(self) -> None:
+        """The regression: a spine just clear of a lip has half its rail under it."""
+        faces = _Faces(np.concatenate([slab(0.0, 10.0, 4.0), slab(0.0, 10.0, 4.15, z0=0.05)]))
+
+        assert faces.top(5.0, 0.0, 4.0, 1.0) == pytest.approx(4.0)
+        assert faces.top(5.0, 0.0, 4.0, 1.0, 0.07) == pytest.approx(4.15)
+
+    def _road(self):
+        return TestHeights._Segments(4.0, 3.0)
+
+    def test_a_rail_crossing_a_kerb_clears_its_corner(self) -> None:
+        """The regression: stations either side of a step drew the chord
+        through it. Every point of the followed rail stands on or above what
+        is under it, and the lift stays within a short span of the kerb."""
+        faces = _Faces(np.concatenate([slab(-5.0, 45.0, 4.0), slab(17.3, 17.8, 4.15)]))
+
+        def under(x: float, z: float, road_y: float) -> float:
+            return faces.top(x, z, road_y, 1.0)
+
+        followed = _follow(rail(0.0, 40.0, 0.0, step=4.0), self._road(), under)
+
+        xs = np.arange(0.0, 40.0, 0.05)
+        drawn = np.interp(xs, followed[:, 0], followed[:, 1])
+        assert (drawn >= [under(x, 0.0, 4.0) for x in xs]).all()
+        assert (drawn[(xs < 15.0) | (xs > 20.0)] == 4.0).all()
+
+    def test_a_plane_gains_no_station(self) -> None:
+        """A gradient is not a step: the mesh grows only where the ground moves."""
+        points = rail(0.0, 40.0, 0.0, step=4.0)
+
+        followed = _follow(points, self._road(), lambda x, z, road_y: 4.0 + 0.05 * x)
+
+        assert len(followed) == len(points)
+        assert np.allclose(followed[:, 1], 4.0 + 0.05 * points[:, 0])
+
+    def test_a_followed_run_keeps_its_ends_and_takes_its_lift(self) -> None:
+        points = rail(0.0, 40.0, 0.0, step=4.0)
+
+        (run,) = _snap_heights(points, self._road(), 25.0, 0.02, lambda x, z, road_y: road_y)
+
+        assert run[0, 0] == 0.0
+        assert run[-1, 0] == 40.0
+        assert np.allclose(run[:, 1], 4.02)
 
 
 class TestBuilder:

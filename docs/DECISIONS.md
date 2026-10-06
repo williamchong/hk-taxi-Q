@@ -2976,8 +2976,26 @@ The tramway is geometry at its published position, not a lane-space marking on t
     53 of 1,192 and 11 of 136, `pairs` 74 and 19, `inverted` 0. Raw `tram.glb` 274,020 → 547,520 B
     and 9,568 → 122,852 B; the PCK was not re-measured. No schema bump: `tramway.json` gains a
     key and the mesh contract is unchanged.
-  - ⚠️ Not addressed: a rail under the drawn ribbon where the ribbon stands above its own
-    centreline height, and the beds pairing still leaves undrawn (`pairs` above `tracks`).
+  - ⚠️ Not addressed: the beds pairing still leaves undrawn (`pairs` above `tracks`).
+- 2026-10-06, rails still hidden after that, on the user's report from Causeway Bay. Measured
+  against the shipped meshes at each tram triangle's centroid: 27.2% of Causeway Bay's rail area
+  and 17.9% of Wan Chai's was under something drawn — 20.4% and 17.6% under the road mesh, every
+  face a kerb lip (class 1) 0.12 m above the rail, the 0.15 m kerb less the 3 cm lift; 8.2% and
+  0.4% under the ground between the carriageways. Not islands: no station is inside one.
+  - A strip now lies on what is drawn under it: the highest road-chunk or ground face within
+    `surface_within_m` (1.0) of the nearest centreline's height, read from `roads/*.glb` and the
+    tiles as the graders read them; the centreline's height only where nothing is drawn. A rail
+    also asks half its own width either side, and stands on its bed where one is under it, so
+    beds are drawn first.
+  - The surface is asked every 0.25 m and stations are added a metre apart where it is not a
+    plane, each span raised by what stands proud of its chord. Raising whole 4 m spans cleared
+    the same kerbs and floated a fifth of the rail over 0.10 m.
+  - After: rail area hidden 0.0% in both regions; bed 3.4% and 2.4%, its edges under kerb lips.
+    Rail over 0.10 m above everything under it: 11.1% and 15.9% — a rail beside or on a kerb
+    lip rides the lip. 16,352 and 5,362 triangles; raw `tram.glb` 835,824 and 273,556 B, PCK
+    not re-measured. Counters unchanged: 132 / 34 rails, 58 / 11 beds, `off_gauge_stations`
+    53 and 11, `inverted` 0. The stage runs in 3.6 s, from 1.
+  - ⚠️ `tramway` now depends on `surface` and `buildings`, not only `roads`.
 - `rail_metallic` ships 0.0: metal reflects the sky and 0.65 rendered the rails sky blue. The cue is
   `rail_roughness` 0.28 against the road's 0.95.
 - Tram stops (TD Tram Stop Location, 19 in region) ship as `poi` with no schema bump. The source

@@ -27,4 +27,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   shader that fails to compile, so render and `grep -i "shader error"`. ⚠️ **`rails_unsnapped`
   and `rails_trimmed` are 0 in both regions since 2026-10-06**, when rails were cut at the region's
   rectangle; a rail going missing shows up there and as `rails_drawn_m` under `rails_m`, never in a
-  frame from one camera. Numbers in `Q58`.
+  frame from one camera. ⚠️ **A rail under the road is invisible to every counter here**: a strip
+  lies on the shipped road chunks and ground since 2026-10-06, and the check is
+  `tools/paint_clearance.py --layer tramway` (reported, never gated) — its `under the HIGHEST road
+  face` line was 62.1% of Causeway Bay's tram paint area before. A change to `surface.py`'s kerb,
+  the ground's decimation or `surface_within_m` owes that line before and after. Numbers in `Q58`.

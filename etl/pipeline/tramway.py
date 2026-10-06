@@ -46,25 +46,37 @@ every drawn dimension arrive from `config/hong_kong.yaml` (hard rule 3).
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 import math
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
 from pipeline import gdb
+from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.clearance import ground_colour, tile_meshes, wears
 from pipeline.config import Config, Tramway, load_config
 from pipeline.crs import GameTransform
-from pipeline.documents import write_document
+from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
+from pipeline.gltf import MeshData, read_render, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import Segments, plan_lengths, plan_steps, true_runs
-from pipeline.roads import ROADGRAPH_NAME, clip, read_graph, resample
-from pipeline.surface import boundary, dedupe, downward_facing, mitres
+from pipeline.roads import ROADGRAPH_NAME, clip, read_graph, resample, resample_anchored
+from pipeline.surface import (
+    SURFACE_MANIFEST_NAME,
+    SURFACE_MANIFEST_SCHEMA,
+    boundary,
+    dedupe,
+    downward_facing,
+    mitres,
+    read_surface,
+)
 
 log = logging.getLogger(__name__)
 
@@ -125,6 +137,18 @@ _PAIR_AGREEMENT = 0.5
 # Below this a part carries no usable direction and is dropped rather than
 # drawn: a two-point rail whose points coincide has no normal to offset along.
 _MIN_PART_M = 1.0
+
+# How `_follow` reads the drawn surface under a strip: how often it asks, how
+# far apart the stations it adds may be, and how far from its chord a span may
+# stand and still be drawn as the chord. A kerb lip is `kerb_width_m` across —
+# half a metre — so a probe every quarter cannot step over one, and the flat bar
+# is a quarter of the smaller lift a strip stands on.
+#
+# ⚠️ **`_FLAT_M` is how far under the surface a drawn chord may sit**, so it
+# has to stay below both lifts in the city file (0.02 and 0.01 today).
+_PROBE_M = 0.25
+_FOLLOW_STEP_M = 1.0
+_FLAT_M = 0.005
 
 # The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
 
@@ -268,6 +292,81 @@ class _Rails:
         return [(float(t), int(owner)) for t, owner in zip(distances, owners, strict=True)]
 
 
+class _Faces:
+    """Shipped triangles, indexed for the height standing at a plan point.
+
+    The tramway is laid on what the region *draws*, and the centreline cannot
+    say what that is. A carriageway carries a kerb lip `kerb_height_m` above it
+    and half a metre past its edge, and the ground between two carriageways is
+    the decimated terrain, not the deck either was laid at: measured on the
+    shipped bundles, 20.4% of Causeway Bay's rail area and 17.6% of Wan Chai's
+    lay under the road mesh — every one of them a kerb, 0.12 m down, the lip
+    less the rail's own lift — and another 8.2% of Causeway Bay's under the
+    ground. So this reads the meshes themselves, as the graders do.
+
+    Walls and risers are left out: a face steeper than 60 degrees is something
+    a rail runs beside, and its height at a point is whichever end was asked.
+    """
+
+    _CELL_M = 8.0
+
+    def __init__(self, corners: np.ndarray) -> None:
+        normal = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        flat = np.abs(normal[:, 1]) > 0.5 * np.linalg.norm(normal, axis=1)
+        self.corners = corners[flat]
+        plan = self.corners[:, :, [0, 2]]
+        low = np.floor_divide(plan.min(axis=1), self._CELL_M).astype(np.intp)
+        high = np.floor_divide(plan.max(axis=1), self._CELL_M).astype(np.intp)
+        cells: dict[tuple[int, int], list[int]] = defaultdict(list)
+        for row in range(len(self.corners)):
+            for cx in range(low[row, 0], high[row, 0] + 1):
+                for cz in range(low[row, 1], high[row, 1] + 1):
+                    cells[(cx, cz)].append(row)
+        self.cells = {cell: np.asarray(rows, dtype=np.intp) for cell, rows in cells.items()}
+
+    def top(
+        self, x: float, z: float, near_y: float, within_m: float, reach_m: float = 0.0
+    ) -> float | None:
+        """The highest face over `(x, z)` within `within_m` of `near_y`, or None.
+
+        The window is what keeps a flyover's deck, and the road in the underpass
+        below, from answering for the street.
+
+        With `reach_m`, over the point or any of four more that far from it: a
+        strip has a width, and a rail whose spine runs just clear of a kerb's
+        edge has half of itself under the lip.
+        """
+        at = np.array([[x, z]])
+        if reach_m > 0.0:
+            at = at + np.array(
+                [(0.0, 0.0), (reach_m, 0.0), (-reach_m, 0.0), (0.0, reach_m), (0.0, -reach_m)]
+            )
+        # One solve for every point: a call is numpy's overhead, not its rows.
+        cells = {(int(px // self._CELL_M), int(pz // self._CELL_M)) for px, pz in at}
+        found = [rows for cell in cells if (rows := self.cells.get(cell)) is not None]
+        if not found:
+            return None
+        rows = found[0] if len(found) == 1 else np.unique(np.concatenate(found))
+        a, b, c = (self.corners[rows, corner, None] for corner in range(3))
+        ab_x, ab_z = b[..., 0] - a[..., 0], b[..., 2] - a[..., 2]
+        ac_x, ac_z = c[..., 0] - a[..., 0], c[..., 2] - a[..., 2]
+        twice_area = ab_x * ac_z - ab_z * ac_x
+        solvable = np.abs(twice_area) > 1e-12
+        safe = np.where(solvable, twice_area, 1.0)
+        dx, dz = at[:, 0] - a[..., 0], at[:, 1] - a[..., 2]
+        beta = (dx * ac_z - dz * ac_x) / safe
+        gamma = (dz * ab_x - dx * ab_z) / safe
+        height = a[..., 1] + beta * (b[..., 1] - a[..., 1]) + gamma * (c[..., 1] - a[..., 1])
+        over = (
+            solvable
+            & (beta >= 0.0)
+            & (gamma >= 0.0)
+            & (beta + gamma <= 1.0)
+            & (np.abs(height - near_y) <= within_m)
+        )
+        return float(height[over].max()) if over.any() else None
+
+
 class _Builder:
     """Accumulates flat quad strips into one vertex-coloured mesh.
 
@@ -330,6 +429,12 @@ class _Builder:
             ).astype(np.float32)
         )
         self._count += 2 * span
+
+    def corners(self) -> np.ndarray:
+        """Every triangle so far as `(n, 3, 3)`, before `build` drops any."""
+        if not self._triangles:
+            return np.zeros((0, 3, 3))
+        return np.vstack(self._positions)[np.vstack(self._triangles)]
 
     def build(self, name: str) -> MeshData | None:
         """The accumulated geometry, minus collapsed triangles, or None.
@@ -591,10 +696,87 @@ def _stations(points: np.ndarray, step_m: float) -> np.ndarray:
     return np.column_stack([plan[:, 0], np.zeros(len(plan)), plan[:, 1]])
 
 
+def _shipped_faces(city: Config, region_id: str, out_dir: Path) -> _Faces:
+    """The region's drawn road and its ground, as the bundle ships them."""
+    rebuild = f"python -m pipeline --region {region_id}"
+    surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
+    buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
+    road = read_surface(out_dir, surface["chunks"])
+    blocks = [road.positions[road.triangles].astype(np.float64)]
+    colour, jitter = ground_colour(city)
+    for path in tile_meshes(out_dir, buildings):
+        for mesh in read_render(path):
+            if mesh.colours is None or not len(mesh.triangles):
+                continue
+            ground = wears(mesh.colours, colour, jitter)
+            faces = mesh.triangles[ground[mesh.triangles].all(axis=1)]
+            blocks.append(mesh.positions[faces].astype(np.float64))
+    return _Faces(np.concatenate(blocks))
+
+
+def _follow(
+    points: np.ndarray, segments: Segments, under: Callable[[float, float, float], float]
+) -> np.ndarray:
+    """`points` with stations added wherever what lies under them is not a
+    plane, each at the height that keeps the strip clear of it.
+
+    What lies under a rail *steps* — a kerb is 0.15 m in no distance at all —
+    and a strip is flat between stations, so a station either side of a step
+    draws the rail through the kerb's corner: with every station itself standing
+    clear, 5.8% of Causeway Bay's rail area was still under the road mesh.
+
+    So the surface is asked every `_PROBE_M`, and each `_FOLLOW_STEP_M` span has
+    both ends raised by the most any probe on it stands above the chord, which
+    lifts the whole chord clear. On a plain gradient that is nothing. The short
+    span is what keeps the lift local: raising a whole `height_step_m` span for
+    one kerb floated a fifth of the rail more than 0.10 m over the road.
+
+    A span the short stations leave within `_FLAT_M` of its own chord keeps only
+    its ends, so the mesh grows where the ground moves and nowhere else.
+    """
+    plan, anchors = resample_anchored(points[:, [0, 2]], _FOLLOW_STEP_M)
+    probes, stations = resample_anchored(plan, _PROBE_M)
+    # The road is asked at every station and read off between them. Reading it
+    # off between `height_step_m` stations instead put the window a metre out
+    # wherever the nearest road changes, and 3.9% of Causeway Bay's rail went
+    # under the ground it was meant to be following.
+    road_y = [segments.nearest(float(x), float(z)).y for x, z in plan]
+    near_y = np.interp(np.arange(len(probes)), stations, road_y)
+    rests = np.array(
+        [under(float(x), float(z), float(y)) for (x, z), y in zip(probes, near_y, strict=True)]
+    )
+
+    height = rests[stations]
+    raised = np.zeros(len(plan))
+    for span in range(len(plan) - 1):
+        low, high = stations[span], stations[span + 1]
+        chord = np.linspace(height[span], height[span + 1], high - low + 1)
+        proud = float((rests[low : high + 1] - chord).max())
+        raised[span : span + 2] = np.maximum(raised[span : span + 2], proud)
+    height = height + raised
+
+    keep = np.zeros(len(plan), dtype=bool)
+    keep[anchors] = True
+    for low, high in itertools.pairwise(anchors):
+        chord = np.linspace(height[low], height[high], high - low + 1)
+        if np.abs(height[low : high + 1] - chord).max() > _FLAT_M:
+            keep[low : high + 1] = True
+    return np.column_stack([plan[keep, 0], height[keep], plan[keep, 1]])
+
+
 def _snap_heights(
-    points: np.ndarray, segments: Segments, max_snap_m: float, lift_m: float
+    points: np.ndarray,
+    segments: Segments,
+    max_snap_m: float,
+    lift_m: float,
+    under: Callable[[float, float, float], float] | None = None,
 ) -> list[np.ndarray]:
-    """The runs of `points` with a road beside them, put on its deck.
+    """The runs of `points` with a road beside them, put on what lies there.
+
+    `under(x, z, road_y)` is the height a point rests on, given the deck height
+    of the road beside it. Without one a station rests on that deck; with one
+    the run follows it, and comes back with more stations than it went in with
+    (`_follow`).
 
     A station further than `max_snap_m` from every level-0 road is left out, and
     the rail is drawn either side of it — never across it, because a tramway
@@ -603,13 +785,33 @@ def _snap_heights(
     such station was the first version, and it is why a siding leaving the
     street took the street's own track with it.
     """
-    lifted = points.copy()
-    near = np.zeros(len(points), dtype=bool)
+    road_y = np.empty(len(points))
+    near = np.empty(len(points), dtype=bool)
     for row in range(len(points)):
         snap = segments.nearest(float(points[row, 0]), float(points[row, 2]))
         near[row] = snap.distance_m <= max_snap_m
-        lifted[row, 1] = snap.y + lift_m
-    return [lifted[start:stop] for start, stop in true_runs(near) if stop - start >= 2]
+        road_y[row] = snap.y
+
+    runs = []
+    for start, stop in true_runs(near):
+        if stop - start < 2:
+            continue
+        if under is None:
+            run = points[start:stop].copy()
+            run[:, 1] = road_y[start:stop]
+        else:
+            run = _follow(points[start:stop], segments, under)
+        run[:, 1] += lift_m
+        runs.append(run)
+    return runs
+
+
+def _same_ends(run: np.ndarray, stations: np.ndarray) -> bool:
+    """Whether a drawn run starts and ends where its rail's stations do."""
+    return bool(
+        np.array_equal(run[0, [0, 2]], stations[0, [0, 2]])
+        and np.array_equal(run[-1, [0, 2]], stations[-1, [0, 2]])
+    )
 
 
 def _draw(
@@ -688,7 +890,58 @@ def build_region(
         ]
     )
 
+    shipped = _shipped_faces(city, region_id, out_dir)
+    within_m = spec.surface_within_m
+
+    def drawn_under(x: float, z: float, road_y: float) -> float:
+        top = shipped.top(x, z, road_y, within_m)
+        return road_y if top is None else top
+
     builder = _Builder()
+
+    # Which rails have a road beside them at all. Asked before anything is
+    # drawn, because a bed needs both its rails and the rails are drawn last.
+    stations: list[np.ndarray | None] = []
+    for part in parts:
+        if _plan_length(part) < _MIN_PART_M:
+            report.too_short += 1
+            stations.append(None)
+            continue
+        densified = _stations(part, spec.height_step_m)
+        if not _snap_heights(densified, segments, spec.max_snap_m, 0.0):
+            report.unsnapped += 1
+            stations.append(None)
+            continue
+        stations.append(densified)
+
+    # The bed, on the voter's own stations and only where the two rails are
+    # actually running together. One pair can yield several runs, so `tracks`
+    # counts drawn beds rather than joined pairs.
+    for voter, partner in _pair_rails(parts, spec, report):
+        report.pairs += 1
+        if stations[voter] is None or stations[partner] is None:
+            continue
+        runs, rejected, tested = _track_centres(parts[voter], parts[partner], spec)
+        report.off_gauge += rejected
+        report.pair_stations += tested
+        for spine, gauges in runs:
+            if _plan_length(spine) < _MIN_PART_M:
+                continue
+            beds = _snap_heights(
+                _stations(spine, spec.height_step_m),
+                segments,
+                spec.max_snap_m,
+                spec.bed_lift_m,
+                drawn_under,
+            )
+            # Per spine with any bed drawn, not per drawn station: the gauge is
+            # the join's, measured before the heights could trim anything.
+            if beds:
+                report.gauges_m.extend(float(gauge) for gauge in gauges)
+            for bed in beds:
+                report.tracks += 1
+                report.tracks_m += _plan_length(bed)
+                _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
 
     # ⚠️ **Every rail is drawn once, from the source's own parts, and pairing
     # has nothing to do with it.** Drawing the rails inside the pairing loop
@@ -701,22 +954,24 @@ def build_region(
     # It is also the more honest split. The source publishes a rail; that it
     # could not be matched to its opposite number is this module's difficulty,
     # not a reason to leave a rail the estate prints out of the city.
-    drawn: list[bool] = []
-    for part in parts:
-        if _plan_length(part) < _MIN_PART_M:
-            report.too_short += 1
-            drawn.append(False)
+    #
+    # After the beds, because a rail stands on its bed: a bed is one flat strip
+    # at its spine's height, so where the ground falls away across the track
+    # the bed is what lies under the rail, not the ground.
+    laid = _Faces(builder.corners())
+
+    def rail_under(x: float, z: float, road_y: float) -> float:
+        top = shipped.top(x, z, road_y, within_m, spec.rail_width_m * 0.5)
+        on_ground = (road_y if top is None else top) + spec.bed_lift_m
+        on_bed = laid.top(x, z, road_y, within_m)
+        return on_ground if on_bed is None else max(on_ground, on_bed)
+
+    for densified in stations:
+        if densified is None:
             continue
-        stations = _stations(part, spec.height_step_m)
-        heads = _snap_heights(
-            stations, segments, spec.max_snap_m, spec.bed_lift_m + spec.rail_lift_m
-        )
-        if not heads:
-            report.unsnapped += 1
-            drawn.append(False)
-            continue
+        heads = _snap_heights(densified, segments, spec.max_snap_m, spec.rail_lift_m, rail_under)
         report.rails_drawn += 1
-        if sum(len(head) for head in heads) < len(stations):
+        if len(heads) > 1 or not _same_ends(heads[0], densified):
             report.trimmed += 1
         for head in heads:
             report.rails_drawn_m += _plan_length(head)
@@ -727,32 +982,6 @@ def build_region(
                 spec.rail_material.colour,
                 TRAMWAY_CLASS_RAIL,
             )
-        drawn.append(True)
-
-    # The bed, on the voter's own stations and only where the two rails are
-    # actually running together. One pair can yield several runs, so `tracks`
-    # counts drawn beds rather than joined pairs.
-    for voter, partner in _pair_rails(parts, spec, report):
-        report.pairs += 1
-        if not (drawn[voter] and drawn[partner]):
-            continue
-        runs, rejected, tested = _track_centres(parts[voter], parts[partner], spec)
-        report.off_gauge += rejected
-        report.pair_stations += tested
-        for spine, gauges in runs:
-            if _plan_length(spine) < _MIN_PART_M:
-                continue
-            beds = _snap_heights(
-                _stations(spine, spec.height_step_m), segments, spec.max_snap_m, spec.bed_lift_m
-            )
-            # Per spine with any bed drawn, not per drawn station: the gauge is
-            # the join's, measured before the heights could trim anything.
-            if beds:
-                report.gauges_m.extend(float(gauge) for gauge in gauges)
-            for bed in beds:
-                report.tracks += 1
-                report.tracks_m += _plan_length(bed)
-                _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
 
     mesh = builder.build(TRAMWAY_MESH_NAME)
     if mesh is not None:
