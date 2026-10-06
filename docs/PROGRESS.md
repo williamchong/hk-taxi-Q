@@ -410,6 +410,10 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   must be 0; a hole in attribution, not a bar to widen (`Q123`).
 - **3 road-mark triangles under the road at a ribbon overlap** — Low. `Q125`: worst 0.0151 m. Fix
   is a crease at the overlap switch in `DrawnSurface`; never `lift_m`.
+- **`tools/collider_offset.py --sweep` crashes** — Low. Its scratch build runs the buildings stage
+  into an empty temp dir and the stage now wants `basemap.json` there first (2026-10-07, identical
+  before and after the helper-`NORMAL` change). The plain run grades; the sweep's cell prices in
+  `ARCHITECTURE.md` are the last ones it produced.
 - **`P3-11e` night path is untested** — Low. No night rig (`Q26`). A rig must dim its key light,
   never delete it; owes `sun_glint.gd` an `apply()`.
 - **Roster headlamps cap at four cars** — Low. Forward Mobile pairs 8 spots per object;
@@ -453,7 +457,7 @@ Budget
 | Resident triangles, worst camera | < 300k | `wan_chai` 112%, 144% with paint · `causeway_bay` 82%, 90% with paint (2026-09-21, `Q135`) · `sha_tin` 47% · `mong_kok` 184% (`tools/resident_budget.py`); seam camera 73% (`--pair`) |
 | Paint layers, throttle route | — | 283,044 `prims` / 18 `draws` before `Q135`; shadows off (`P3-38`) and road marks in cells (`P3-40`) leave road marks 13–17k; boxes + crossings in cells (`P3-42`) 20,642 → 9,849 at the start line, 7,469 → 496 from `f_045`, peak `draws` 102 / 132 |
 | Texture memory | < 128 MB | 131,072 px — one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
-| Bundle size (PCK) | < 200 MB | 55,955,496 B at `P5-13`; later tasks quoted deltas only — re-export before quoting |
+| Bundle size (PCK) | < 200 MB | 89,196,660 B, web, `wan_chai` + `causeway_bay` (2026-10-07, `tools/export.sh web`); was 55,955,496 B at `P5-13` — re-export before quoting |
 | Boot to drivable (web, warm) | — | 830 ms (2026-07-31; stale) |
 | Tab memory (web) | — | 307 MB (2026-07-31; stale) |
 | ETL full run, warm cache | — | not re-timed since 27 s / 19 stages; `region` alone 9.4 s |

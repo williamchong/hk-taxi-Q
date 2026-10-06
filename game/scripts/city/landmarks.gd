@@ -7,11 +7,14 @@
 ## `GeneratedLandmarks.placement_of` is the one place the bearing becomes a
 ## Godot rotation.
 ##
-## No streaming and no LOD, deliberately: two heroes are ≤8k triangles each
-## against a 300k budget, so residency is cheaper than the machinery — the
-## same argument `layer_preview.gd` makes for the carriageway. Measure
-## with `tools/frame_stats.py` before believing that sentence about a bigger
-## roster.
+## No streaming and no LOD, deliberately: residency is cheaper than the
+## machinery — the same argument `layer_preview.gd` makes for the carriageway.
+## ⚠️ That was priced when both heroes were ≤8k triangles; since the `P3-6`
+## amendment HKCEC is the repainted source mesh at 99,577 triangles against a
+## 120k budget, always resident, which `DECISIONS.md` books as a resident
+## ceiling near 380k that `P2-6` has yet to measure under it. The next
+## always-resident hero reopens that arithmetic; measure with
+## `tools/frame_stats.py` before believing this comment about a bigger roster.
 extends Node3D
 
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
