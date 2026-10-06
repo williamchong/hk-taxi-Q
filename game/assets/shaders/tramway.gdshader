@@ -60,10 +60,8 @@ group_uniforms wear;
 // so this darkens and roughens the outer part of a rail without needing a
 // second material or a texture.
 //
-// It is applied to the bed as well, and it does something different there: a
-// track bed is worn most where the wheels run, and the bed's own UV puts that
-// at its edges rather than its middle. So `flank_wear` narrows the rail and
-// widens the bed, which is why the two are separate uniforms rather than one.
+// The rail only: `fragment()` multiplies it by `is_rail`, and says why the bed
+// is left plain.
 uniform float rail_head_fraction : hint_range(0.05, 1.0) = 0.55;
 uniform float flank_darkening : hint_range(0.0, 1.0) = 0.35;
 

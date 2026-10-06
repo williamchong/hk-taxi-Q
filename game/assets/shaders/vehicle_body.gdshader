@@ -170,7 +170,7 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // roster puts an AI red taxi on the streets alongside the player's. A plain
 // uniform is a property of the *material*, so the first car to brake would brake
 // every taxi in Wan Chai. Lamp state is per car, so it goes in the per-instance
-// channel; `sun_toward` above stays a plain uniform for the mirror-image reason
+// channel; `sun_toward` below stays a plain uniform for the mirror-image reason
 // — there is one sun, and every car agrees about where it is.
 //
 // Written by `scripts/vehicle/vehicle_lamps.gd`. Unset instances keep the

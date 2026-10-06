@@ -331,13 +331,6 @@ varying float along_m;
 varying vec3 world_pos;
 varying vec3 world_n;
 
-// One repeat of `u`, antialiased against how fast `u` changes on screen.
-//
-// ⚠️ **The derivative is taken before the wrap, and that is the whole reason
-// this is a function.** `fwidth(fract(u))` spikes to ~1 at every repeat
-// boundary, so each line would render as a wide grey smear — an artefact that
-// looks like a lighting bug and is really a sampling one. `fwidth(u)` is smooth
-// across the seam because `u` is.
 // CIELAB to *linear* sRGB — the inverse of `etl/pipeline/colour.py`'s
 // `srgb_to_lab`: the same D65 white point and IEC 61966-2-1 primaries, minus
 // the transfer curve because the shader works in linear. Mirrored by hand for
@@ -385,6 +378,13 @@ vec3 linear_to_lab(vec3 rgb) {
 	return vec3(116.0 * f.y - 16.0, 500.0 * (f.x - f.y), 200.0 * (f.y - f.z));
 }
 
+// One repeat of `u`, antialiased against how fast `u` changes on screen.
+//
+// ⚠️ **The derivative is taken before the wrap, and that is the whole reason
+// this is a function.** `fwidth(fract(u))` spikes to ~1 at every repeat
+// boundary, so each line would render as a wide grey smear — an artefact that
+// looks like a lighting bug and is really a sampling one. `fwidth(u)` is smooth
+// across the seam because `u` is.
 float band(float u, float low, float high) {
 	float w = fwidth(u) * 0.5 + 1e-5;
 	float x = fract(u);
@@ -505,9 +505,11 @@ void fragment() {
 	// the ground into ~219k more vertices, about 8 MB against a 32.3 MB PCK, to
 	// buy the same lighting.
 	//
-	// ⚠️ **Computed unconditionally, not inside the branch.** Derivatives are
-	// undefined where a pixel quad straddles a non-uniform branch, and a quad on a
-	// seam straddles two triangles whose `marker` differs.
+	// ⚠️ **Computed unconditionally, not inside a branch.** Derivatives are
+	// undefined in non-uniform control flow. A branch on the `flat` `marker` alone
+	// would be safe — a pixel quad is shaded for one triangle, helper pixels
+	// included, which is what `road_markings.gdshader` relies on — but out here no
+	// later edit to the condition can make it unsafe.
 	vec3 faceted = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
 	// Oriented against the interpolated normal rather than fixed by hand. Which
 	// way the cross product points follows the winding and the projection's

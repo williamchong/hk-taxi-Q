@@ -46,10 +46,11 @@ group_uniforms lettering;
 // `generated_layer.gd` names the number and `signs.json` publishes what shipped.
 uniform sampler2D glyph_atlas : source_color, filter_linear_mipmap_anisotropic;
 // The same two surface numbers as `signs.tres`, because this quad is the same
-// painted aluminium as the plate a millimetre behind it. Split from that file
-// rather than shared so the two cannot silently drift apart in one direction:
-// a plate and its own lettering catching the light differently is exactly the
-// kind of wrong that reads as a rendering bug rather than as a data one.
+// painted aluminium as the plate a millimetre behind it. ⚠️ Two copies, in
+// `signs.tres` and `signs_text.tres`, and nothing ties them — Godot cannot share
+// a value between two `.tres`. Move one and move the other: a plate and its own
+// lettering catching the light differently reads as a rendering bug rather than
+// as a data one.
 uniform float plate_roughness : hint_range(0.0, 1.0) = 0.55;
 uniform float sheeting_glow : hint_range(0.0, 1.0) = 0.06;
 

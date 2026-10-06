@@ -1,7 +1,7 @@
 // The city's massing in a clean high-key idiom, drawn procedurally.
 //
-// A variant of `city_facade.gdshader`, reading the **same** `TEXCOORD_0` payload
-// and the same surface markers — so it is a look change, not a data change, and
+// A variant of `city_facade.gdshader`, reading the **same** `TEXCOORD_0` /
+// `TEXCOORD_1` payload and the same surface markers — so it is a look change, not a data change, and
 // swapping between the two is one `ext_resource` line in `tuning/city_facade.tres`
 // with no rebuild. The measured shader is kept beside this one for that reason.
 //
@@ -16,7 +16,7 @@
 //
 // The three renderer tricks doing the work, none of which needs a texture:
 //
-//   1. **Per-building treatment.** `fract(UV.y)` is already a stable seed
+//   1. **Per-building treatment.** `fract(UV2.x)` is already a stable seed
 //      quantised to 1/256 by the ETL. Hashed, it picks whether a building is a
 //      solid white mass, a glazed curtain wall, or an accent-banded one. Two in
 //      five buildings therefore repeat *nothing*, which is what stops a block
