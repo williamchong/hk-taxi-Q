@@ -33,7 +33,7 @@ drift apart.
 
 The ink line of the cel look (`P3-64`, `Q158`): a 2 x 2 quad that `cel_outline.gdshader` puts
 straight onto the screen, numbers in `tuning/cel_outline.tres`. In the rig because the rig is what
-every scene worth looking at instances, so one switch inks all of them. **`visible = false` is the
-switch**, and the shipped look until the user picks. `extra_cull_margin` keeps the quad from being
+every scene worth looking at instances, so one switch inks all of them. **`visible` is the switch**:
+shown since 2026-10-07, the user's pick; hidden restores the unlined look. `extra_cull_margin` keeps the quad from being
 frustum-culled at its true position (it has none), and `cast_shadow = 0` keeps it out of the shadow
 pass. Both rigs carry it alike, for the reason the `Sun` block gives.

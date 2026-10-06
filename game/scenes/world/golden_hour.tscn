@@ -23,7 +23,6 @@ directional_shadow_mode = 1
 directional_shadow_max_distance = 400.0
 
 [node name="CelOutline" type="MeshInstance3D" parent="." unique_id=1614176456]
-visible = false
 material_override = ExtResource("3_outline")
 cast_shadow = 0
 extra_cull_margin = 16384.0

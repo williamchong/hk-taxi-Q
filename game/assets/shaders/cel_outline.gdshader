@@ -20,18 +20,28 @@
 // is a ratio and means the same thing at 5 m and at 200 m.
 //
 // Every number is a uniform read from `tuning/cel_outline.tres` (CLAUDE.md hard
-// rule 4). The quad is `CelOutline` in both rig scenes, hidden: shown, it inks
-// every scene the rig lights.
+// rule 4). The quad is `CelOutline` in both rig scenes, so it inks every scene
+// the rig lights; hiding it is the off switch.
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled,
 		fog_disabled, shadows_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest, repeat_disable;
+uniform sampler2D screen_texture : hint_screen_texture, filter_nearest, repeat_disable;
 
 group_uniforms ink;
 uniform vec3 ink_colour : source_color = vec3(0.08, 0.08, 0.1);
+// How much of the line is the surface's own colour, darkened, rather than
+// `ink_colour`: 0 is flat ink, 1 is each building outlined in its own hue
+// (the user's ask, 2026-10-07). The colour is read from the NEARER side of
+// the edge, so a tower's silhouette is drawn in the tower's hue and not the
+// sky's or the building behind it.
+uniform float ink_from_surface : hint_range(0.0, 1.0) = 1.0;
+// The surface colour's scale in linear light: 0.35 keeps the hue and drops
+// the value by about half in L*.
+uniform float surface_darkness : hint_range(0.0, 1.0) = 0.5;
 // 1.0 draws the ink opaque; under it the line is a darkening.
-uniform float ink_strength : hint_range(0.0, 1.0) = 0.85;
+uniform float ink_strength : hint_range(0.0, 1.0) = 1.0;
 // How far apart the samples sit. The line is about twice this wide, because
 // both the near and the far pixel of a break test positive.
 uniform float line_width_px : hint_range(0.5, 4.0) = 1.0;
@@ -91,16 +101,28 @@ void fragment() {
 
 	float inv_centre = slope * centre + offset;
 	float laplacian = slope * (left + right + down + up - 4.0 * centre);
-	// The nearest of the five has the largest inverse depth, under either Z.
-	float inv_nearest = max(
-		inv_centre, max(max(slope * left, slope * right), max(slope * down, slope * up)) + offset
-	);
+	// The nearest of the five has the largest inverse depth, under either Z;
+	// its UV is where the surface colour is read.
+	float inv_nearest = inv_centre;
+	vec2 near_uv = SCREEN_UV;
+	vec4 taps[4] = {
+		vec4(left, -step_uv.x, 0.0, 0.0), vec4(right, step_uv.x, 0.0, 0.0),
+		vec4(down, 0.0, -step_uv.y, 0.0), vec4(up, 0.0, step_uv.y, 0.0)
+	};
+	for (int i = 0; i < 4; i++) {
+		float inv_tap = slope * taps[i].x + offset;
+		if (inv_tap > inv_nearest) {
+			inv_nearest = inv_tap;
+			near_uv = SCREEN_UV + taps[i].yz;
+		}
+	}
 	float nearest = 1.0 / inv_nearest;
 
 	float rise = edge_distance_m > 0.0 ? 1.0 + nearest / edge_distance_m : 1.0;
 	float edge = smoothstep(edge_start * rise, edge_full * rise, abs(laplacian) / inv_centre);
 	edge *= 1.0 - smoothstep(fade_start_m, fade_end_m, nearest);
 
-	ALBEDO = ink_colour;
+	vec3 surface = texture(screen_texture, near_uv).rgb * surface_darkness;
+	ALBEDO = mix(ink_colour, surface, ink_from_surface);
 	ALPHA = edge * ink_strength;
 }
