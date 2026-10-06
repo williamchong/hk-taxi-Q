@@ -398,11 +398,17 @@ void fragment() {
 		float centre_half_pitch = (centre_width + centre_gap) * 0.5;
 		// How far the pair reaches from the join, for the suppressions below.
 		float centre_reach = centre_half_pitch + centre_width * 0.5;
-		float white = separated
-			? draw_centre_line
+		// The two dials that ship at 0.0 (`Q132`) are tested as well as multiplied:
+		// a uniform is the same across the draw, so the branch is coherent, and
+		// without it every carriageway fragment pays for the pair's two coverages
+		// and the dash to be multiplied by zero — `city_facade_clean`'s
+		// `draws_detail`, on the largest surface in the frame.
+		float white = 0.0;
+		if (draw_centre_line > 0.0 && separated) {
+			white = draw_centre_line
 				* (line_coverage(u, join - centre_half_pitch, centre_width * 0.5, du)
-					+ line_coverage(u, join + centre_half_pitch, centre_width * 0.5, du))
-			: 0.0;
+					+ line_coverage(u, join + centre_half_pitch, centre_width * 0.5, du));
+		}
 
 		// Lane dividers. Only the nearest boundary can be within a line's width
 		// of this fragment, so this is one test rather than a loop over the lane
@@ -429,9 +435,9 @@ void fragment() {
 		// of clear asphalt beside the pair, which is what the window exists to
 		// prevent.
 		float k = floor(u + 0.5);
-		float divider_clear = max(CENTRE_DIVIDER_CLEARANCE_U, centre_reach + line_width * 0.5);
-		float centre_here = separated && abs(k - join) <= divider_clear ? draw_centre_line : 0.0;
-		if (k > 0.5 && k < lanes - 0.5) {
+		if (draw_lane_lines > 0.0 && k > 0.5 && k < lanes - 0.5) {
+			float divider_clear = max(CENTRE_DIVIDER_CLEARANCE_U, centre_reach + line_width * 0.5);
+			float centre_here = separated && abs(k - join) <= divider_clear ? draw_centre_line : 0.0;
 			// The dash, in metres along the road. Phase is offset half a period
 			// so the wrap lands mid-gap — otherwise the leading edge of every
 			// dash is the wrap point and steps 0 to 1 with no antialiasing.
