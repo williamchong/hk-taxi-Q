@@ -28,3 +28,12 @@ which measured them — see its header for the per-cascade primitive counts and
 the three artefacts that ruled out a single cascade. Nothing about raising the
 sun changes that argument, and re-deriving it here would only let the two rigs
 drift apart.
+
+## `[node name="CelOutline" type="MeshInstance3D" parent="."]`
+
+The ink line of the cel look (`P3-64`, `Q158`): a 2 x 2 quad that `cel_outline.gdshader` puts
+straight onto the screen, numbers in `tuning/cel_outline.tres`. In the rig because the rig is what
+every scene worth looking at instances, so one switch inks all of them. **`visible = false` is the
+switch**, and the shipped look until the user picks. `extra_cull_margin` keeps the quad from being
+frustum-culled at its true position (it has none), and `cast_shadow = 0` keeps it out of the shadow
+pass. Both rigs carry it alike, for the reason the `Sun` block gives.

@@ -52,3 +52,12 @@ shadow_bias, shadow_normal_bias, pancake_size, blur and fade_start are left at
 engine defaults — peter-panning was the artefact to expect, since Godot scales
 directional bias by cascade extent, and a matched pair with the car in open
 sun shows its shadow still attached. Shots in build/driver/. See PROGRESS.md.
+
+## `[node name="CelOutline" type="MeshInstance3D" parent="."]`
+
+The ink line of the cel look (`P3-64`, `Q158`): a 2 x 2 quad that `cel_outline.gdshader` puts
+straight onto the screen, numbers in `tuning/cel_outline.tres`. In the rig because the rig is what
+every scene worth looking at instances, so one switch inks all of them. **`visible = false` is the
+switch**, and the shipped look until the user picks. `extra_cull_margin` keeps the quad from being
+frustum-culled at its true position (it has none), and `cast_shadow = 0` keeps it out of the shadow
+pass. Both rigs carry it alike, for the reason the `Sun` block gives.

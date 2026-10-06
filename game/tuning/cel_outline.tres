@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://vxw25mm0bjdb"]
+
+[ext_resource type="Shader" uid="uid://dq3nw7o873vyx" path="res://assets/shaders/cel_outline.gdshader" id="1_outline"]
+
+[resource]
+resource_name = "cel_outline"
+render_priority = 0
+shader = ExtResource("1_outline")
+shader_parameter/ink_colour = Color(0.08, 0.08, 0.1, 1)
+shader_parameter/ink_strength = 0.85
+shader_parameter/line_width_px = 1.0
+shader_parameter/edge_start = 0.004
+shader_parameter/edge_full = 0.03
+shader_parameter/edge_distance_m = 40.0
+shader_parameter/fade_start_m = 120.0
+shader_parameter/fade_end_m = 240.0
