@@ -24,7 +24,7 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 #include "res://assets/shaders/colour.gdshaderinc"
 
 // The rig's exposure (`Q38`), multiplied in after `vertex_srgb_to_linear` and
-// nowhere else — `vertex_albedo.gdshader`'s paragraph.
+// nowhere else — `colour.gdshaderinc` has the account.
 global uniform float exposure_anchor;
 
 group_uniforms surface;

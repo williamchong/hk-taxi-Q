@@ -59,21 +59,8 @@ render_mode cull_back;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
-// The rig's exposure (`Q38`, `P5-28b`). One global shader parameter, declared in
-// `project.godot` `[shader_globals]` and set by `scripts/world/lighting_rig.gd`
-// from an export on the rig scene, so the time of day is a number in a scene
-// rather than a value baked into every vertex of every tile at build time.
-//
-// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
-// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
-// different operation and applied to a `.tres` colour it would move paint,
-// glazing and rail colour that are authored at their rendered value already.
-// Only `COLOR_0` — the ETL's `materials:` table, which is what `Q33`'s
-// `reflectance x exposure_anchor` rule is about — passes through it.
-//
-// ⚠️ **It ships at 1.0 and is inert until `P5-28c` un-bakes the ETL side.**
-// Both halves of a `reflectance x anchor` product must move in one commit or the
-// city renders at the square of the anchor, or at none of it.
+// The rig's exposure (`Q38`): `colour.gdshaderinc` has the account. After
+// `vertex_srgb_to_linear`, on `COLOR_0` only.
 global uniform float exposure_anchor;
 
 // Marker values, matching `SurfaceClass` in `etl/pipeline/config.py`. Part of

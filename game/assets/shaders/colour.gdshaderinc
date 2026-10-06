@@ -28,3 +28,25 @@
 vec3 vertex_srgb_to_linear(vec3 c) {
 	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
 }
+
+// ---------------------------------------------------------------------------
+// The rig's exposure, `exposure_anchor` (`Q38`, `P5-28b`) — the one account of
+// it; every shader that declares the global points here.
+//
+// One global shader parameter, declared in `project.godot` `[shader_globals]`
+// and set by `scripts/world/lighting_rig.gd` from an export on the rig scene, so
+// the time of day is a number in a scene rather than a value baked into every
+// vertex of every tile at build time. The project default is 1.0; both rigs set
+// 0.52 since `P5-28c` un-baked the ETL side, and a shipped colour is a
+// material's reflectance.
+//
+// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
+// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
+// different operation and applied to a `.tres` colour it would move paint,
+// glazing and rail colour that are authored at their rendered value already.
+// Only `COLOR_0` — the ETL's `materials:` table, which is what `Q33`'s
+// `reflectance x exposure_anchor` rule is about — passes through it.
+//
+// ⚠️ **The declaration stays in each shader, not here**: `vehicle_body` and
+// `signs_text` include this file and must not scale, and `signs` scales one of
+// its three layers.

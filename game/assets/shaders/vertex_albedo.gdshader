@@ -45,18 +45,8 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
-// The rig's exposure (`Q38`, `P5-28b`). One global shader parameter, declared in
-// `project.godot` `[shader_globals]` and set by `scripts/world/lighting_rig.gd`
-// from an export on the rig scene, so the time of day is a number in a scene
-// rather than a value baked into every vertex of every asset at build time.
-//
-// ⚠️ **Multiplied in AFTER `vertex_srgb_to_linear` and nowhere else.** Exposure
-// is a linear-light scale on the surface's albedo; applied to sRGB bytes it is a
-// different operation.
-//
-// ⚠️ **It ships at 1.0 and is inert until `P5-28c` un-bakes the ETL side.**
-// Both halves of a `reflectance x anchor` product must move in one commit or the
-// city renders at the square of the anchor, or at none of it.
+// The rig's exposure (`Q38`): `colour.gdshaderinc` has the account. After
+// `vertex_srgb_to_linear`, on `COLOR_0` only.
 global uniform float exposure_anchor;
 
 group_uniforms surface;

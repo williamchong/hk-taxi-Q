@@ -30,8 +30,8 @@ shader_type spatial;
 
 #include "res://assets/shaders/colour.gdshaderinc"
 
-// The rig's exposure (`Q38`, `P5-28b`), read **conditionally** — the one shader
-// here that does.
+// The rig's exposure (`Q38`, `P5-28b`; `colour.gdshaderinc` has the account),
+// read **conditionally** — the one shader here that does.
 //
 // 🔴 **Three layers share this file and only one of them is an exposed material.**
 // `lamps.tres` colours a galvanised column out of `hong_kong.yaml`'s `materials:`
