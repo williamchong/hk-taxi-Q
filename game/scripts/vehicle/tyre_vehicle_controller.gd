@@ -334,17 +334,7 @@ func _slide_toward() -> float:
 func _apply_drive() -> void:
 	super._apply_drive()
 	# The parent writes `DRIVE_SIGN × force`, so the product is forward-positive.
-	# The arcade aid's boost goes on top of the real car's drive on the road,
-	# not in a slide the player asked for (drift mode as of last tick): there
-	# the real car's power is what the drift was tuned on, and the boost spun
-	# every tap (162°).
-	# It fades with the front wheels' angle over the lock, whole straight and
-	# gone at full lock: at 0.5 a full-throttle corner put the rears at 1.5×
-	# their grip at 42 kph, which stability control alone could not hold.
-	var boost: float = 0.0 if _drift_mode.engaged else arcade_aids.drive_boost
-	if boost > 0.0:
-		boost *= 1.0 - _steer_share()
-	_drive_n = engine_force * DRIVE_SIGN * (1.0 + boost)
+	_drive_n = engine_force * DRIVE_SIGN
 	engine_force = 0.0
 	brake = 0.0
 
@@ -573,7 +563,7 @@ func _turn_drive_share() -> float:
 
 
 ## The front wheels' angle over the lock the speed allows, 0 straight to 1 at
-## full lock: what the understeer cut and the drive boost fade on. Read off the
+## full lock: what the understeer cut fades on. Read off the
 ## wheels' own angle, so the catch cap and the rate limit count.
 func _steer_share() -> float:
 	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / top_speed_kph(), 0.0, 1.0))

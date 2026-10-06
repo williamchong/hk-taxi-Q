@@ -9370,4 +9370,42 @@ A pace moves each real speed down the car's own scale (63 kph at pace 2 is the c
 low end's hard slide arrives at a higher real speed: at 2.0 the countersteered slide is lost at
 63 kph. At 1.5 every `turn` row is inside or within 2° of 80–110° and `hold` pays at 63 and 86.
 
-**See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `P3-62` · `game/tuning/pace.md` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`
+### Step 4 — the aids no car has (`P3-63`, 2026-10-06)
+
+**`drive_boost` is retired** — field, code and table row. It was the game asking to be quicker
+through one force; the pace is that, for the whole car. At pace 1.5 the car without it reaches
+80 kph in 4 s and 122 in 8, where pace 1 with it reached 68 and 108, and no drift row moves
+(0.1° of slip, 1.6° of heading), since drift mode never had the boost.
+
+**`drift_side_cut` stays, measured.** Without it the slide still starts and the countersteered
+slide at 42 kph is longer (3.15 s against 1.93), but the turn under-rotates: `turn@off` at 59 /
+78 / 146° at 42 / 63 / 86 kph against 91 / 97 / 110° with it, and no handbrake ratio from 1.08 to
+2.0 brings 42 kph past 70°. 🚫 **Deferred: a limited-slip differential** — the real part that
+belongs here. It is a joint solve of the two rear wheels' spin, new machinery in `_solve_spin`,
+and it cannot act while the handbrake holds both wheels. Not measured shut: it reopens on the
+user's ask, graded on `turn` at 42 kph with the cut at 0.
+
+What is left in `arcade_aids` is the side cut (a force) and four input filters (the flick's
+trigger, `steer_to_grip`, the catch limiter, the absent slide lock), which change what the
+player's hands ask for and put no force on the car.
+
+### Step 5 — the pace the game plays at, and the bars around it (2026-10-06, provisional)
+
+**`pace_scale` 1.5**, read off the pad and owed the user's drive (`pace.md` holds the table):
+the highest pace that keeps the countersteered slide at 63 kph, quicker with no boost than pace
+1 was with one, and the first table with every `turn` row inside 80–110° at 42, 63 and 86 kph.
+2.0 loses `hold` at 63 kph (0.83 s); 1.0 is today's car. `426f5a0`'s envelope would be a pace of
+about 3.2, past what a 60 Hz tick holds (step 3) — reaching it is a tick-rate decision first.
+
+**The game's own bars are not scaled and did not move**: they read real speeds, and each is the
+user's call. What the pace changes about them: `speed_min_kph` 80 is now about 4.0 s from rest
+(`skills.md`; already "not moved, the user's call" since `Q152`); the wall tiers (`bump_min_kph`
+20, `crash_min_kph` 60) read the speed into the wall in real kph and the wall rows' approach and
+impact still agree to the hundredth at 42 / 63 / 86 kph; `fares.par_kph` 30 prices the clock on
+the route, which a quicker car beats more easily; `drift_min_s` 2.0 s is real seconds against a
+slide that is now 0.82 of the seconds it was — `hold` at 42 kph is 1.93 s.
+
+**Owed.** The user's drive of 1.5 against 1.0 and 2.0 (`pace.tres`, one line). `turn@off` and the
+lifted handbrake from step 2. The four bars above, once the pace is settled.
+
+**See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `P3-62` · `P3-63` · `game/tuning/pace.md` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`

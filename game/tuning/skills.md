@@ -52,6 +52,9 @@ from rest. The tyre car makes it in about 2.4 s and 28 m, and is at about 117 kp
 car was at 80 (the pad's `coast --run-up=` at 1–8 s, distances by trapezoid). Which street pays
 is not re-measured. Not moved: the user's call (`Q152`).
 
+At pace 1.5 with no boost (`Q156`, 2026-10-06, provisional): 80 kph in about 4.0 s from rest,
+and 122 kph after 8 s. Still not moved, and still the user's call.
+
 ## `speed_hold_m = 200.0`
 
 The tariff's own unit (`tariff.tres` `step_m`): the speed skill pays once per 200 m driven at or

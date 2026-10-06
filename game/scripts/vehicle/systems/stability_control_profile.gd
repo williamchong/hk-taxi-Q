@@ -19,9 +19,9 @@ extends Resource
 @export_range(0.0, 90.0, 1.0, "suffix:°") var slip_power_cut_to_deg: float
 ## The rear-axle slip over which the forward drive fades out on the road — drift
 ## mode off — as a real ESC catches a tail stepping out under power: whole at
-## `armed_slip_cut_from_deg`, gone at `armed_slip_cut_to_deg`. The game's pace
-## boost (`ArcadeAidsProfile.drive_boost`) put the rears past their grip in a
-## full-throttle corner at 42–50 kph. Inert while `to` is not over `from`.
+## `armed_slip_cut_from_deg`, gone at `armed_slip_cut_to_deg`. Built against
+## the drive boost (retired for the pace, `Q156`), which put the rears past
+## their grip in a full-throttle corner at 42–50 kph. Inert while `to` is not over `from`.
 @export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_from_deg: float
 @export_range(0.0, 90.0, 0.5, "suffix:°") var armed_slip_cut_to_deg: float
 ## The yaw brake: once the rear axle's slip is past `yaw_brake_from_deg`, the

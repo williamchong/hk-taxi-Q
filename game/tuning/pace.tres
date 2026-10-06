@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_pace")
-pace_scale = 1.0
+pace_scale = 1.5

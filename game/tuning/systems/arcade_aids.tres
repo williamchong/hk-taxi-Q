@@ -11,7 +11,6 @@ flick_window_s = 0.3
 flick_feint_s = 0.2
 flick_min_kph = 30.0
 flick_input_share = 0.5
-drive_boost = 0.5
 steer_to_grip = 1.0
 catch_lock_deg = 6.0
 catch_turn_dps = 10.0

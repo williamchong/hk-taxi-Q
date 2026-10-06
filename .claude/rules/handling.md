@@ -197,6 +197,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   rows compare in the car's own terms; grade a value at REAL speeds by editing `pace.tres`.
   🔴 **60 Hz holds to pace 2.0 and not 2.5** (`pace.md`'s brake table): past it the tick is the
   limit, not a dial. The player's hands do not scale, so drift dwell falls with the pace.
+  Shipped at 1.5, provisional on the user's drive (`pace.md`): every figure in a sidecar or a `Q`
+  from before 2026-10-06 was read at pace 1, and a row from then does not compare.
+  🔥 `arcade_aids.drive_boost` is gone for it. 🚫 `drift_side_cut` was tried at 0 and kept (the
+  turn under-rotates, 59° at 42 kph; no handbrake ratio buys it back) — the part that would
+  replace it is a limited-slip differential, deferred as a joint spin solve, not measured shut.
 - 🔴 **Stability control brakes the front wheel outside a slide past 25° of rear-axle slip**
   (`stability_control.yaw_brake_*`, `Q156`, 2026-10-06), drift mode or not — the answer to a spin
   that is the car's own momentum, which no power cut reaches. Graded on `turn`'s `came out` with

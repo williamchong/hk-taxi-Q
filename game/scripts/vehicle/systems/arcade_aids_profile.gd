@@ -31,13 +31,6 @@ extends Resource
 ## The flick: the share of an input that counts — the steering past it on a
 ## side, the throttle under it as lifted.
 @export_range(0.05, 1.0, 0.05) var flick_input_share: float
-## Extra drive over the real taxi's, as a share of it: 0 is the Crown
-## Comfort's own (`HandlingProfile`'s launch force and power), 0.5 half as much
-## again at every speed. Pace for the game's sake, never by bending the car's
-## own numbers (`Q153`). Not while drift mode is engaged: a slide gets the real
-## car's power, which the drift is tuned on. It fades with the steering, whole
-## straight and gone at full lock, so a full-throttle corner is the real car's.
-@export_range(0.0, 3.0, 0.05) var drive_boost: float
 ## Steering to the grip, as a racing game's "standard steering": full input
 ## turns the front wheels no further than a share of the angle the tyres can
 ## use at this speed — the angle that holds the tyre's grip in a steady turn

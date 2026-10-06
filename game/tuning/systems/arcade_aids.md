@@ -12,6 +12,18 @@ The game's own aids, which no real car has, grouped so they are never mistaken f
 
 ## `drift_side_cut = 0.6`, `drift_side_cut_from_kph = 42.0`, `drift_side_cut_to_kph = 105.0`
 
+**Tried without it and kept (2026-10-06, `Q156`)** — the last force on the car that no car has,
+and the question was whether a road tyre's weight transfer and the handbrake now start the slide
+alone. At pace 1.5, 42 / 63 / 86 kph, cut 0 / 0.3 / 0.6: the tap still slides (peak 29.5 / 18.8 /
+18.6° at 0) and `hold` is longer at 42 (3.15 s against 1.93), but the turn under-rotates —
+`turn@off` comes out at 59 / 78 / 146° at 0 and 72 / 151 / 155° at 0.3, against 91 / 97 / 110° at
+0.6. The handbrake does not buy it back: `lock_ratio` 1.3 / 1.6 / 2.0 with the cut at 0 gives 56 /
+58 / 70° at 42 kph and scatters the faster rows (119 / 91 / 76° at 63, a 130° tap at 86 at 2.0).
+🚫 Left: a limited-slip differential, which is what a real drift car has here. It couples the two
+rear wheels' spin, so it is a joint solve in `_solve_spin` — new machinery in the model's most
+fragile part — and it does nothing while the handbrake holds both wheels, which is when the
+turn's first 45° is made.
+
 **The band ends at 105 kph since 2026-10-06** (`Q153`), with the drive sized on the rim's speed.
 The band ended at 65 because "0.6 at 63 kph spins the car"; that spin was the engine handing a
 spinning wheel more power than it has. On the engine's real power the tap at 63 kph no longer
@@ -63,7 +75,14 @@ the trail-brake — byte-identical between 0 and 0.3, in both modes:
 | 63 | 32.7 / 39.3° (5.0) | 33.9 / 39.5° (5.5) | no fire |
 | 86 | 31.1 / 38.4° (1.3) | 33.5 / 39.7° (3.3) | no fire |
 
-## `drive_boost = 0.5`, `steer_to_grip = 1.0`
+## `steer_to_grip = 1.0`
+
+🔥 **`drive_boost` is retired (2026-10-06, `Q156`)**: half as much drive again, on the road only,
+fading with the steering — a force no car has, standing in for a game that wanted to be quicker.
+The pace (`pace.tres`) is that dial now, for the whole car at once. At pace 1.5 with the boost at
+0 / 0.5: 80 / 97 kph after 4 s and 122 / 148 after 8 (pace 1 with the boost: 68 / 108), and every
+drift row within 0.1° and 1.6° of heading at 42 / 63 / 86 kph, since drift mode never had it. The
+field and its code are gone; the paragraphs below that name it are the record of why it existed.
 
 **Both since 2026-10-06, on the user's drive** ("i cant even throttle and turn at 50kph, it just
 slide out", then "we need faster acceleration"). Measured on the pad, the full-throttle full-lock
