@@ -21,13 +21,43 @@ feature on the way to `np.ndarray` anyway.
 
 from __future__ import annotations
 
+import hashlib
+import os
+import pickle
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import numpy as np
+import pyogrio
 from pyogrio.raw import read as _ogr_read
+
+# ---- the read cache ----
+#
+# A region build asks OGR for the same clipped layers over and over: `roads`
+# makes 25 reads, `region` 10, and every one re-opens a geodatabase inside its
+# zip. Measured on Wan Chai that was 5.3 s of `roads`' 23.7 s and 2.6 s of
+# `region`'s 10.5 s, for bytes that change only when `fetch` takes a new
+# snapshot. So a read that was slow enough to matter is kept under
+# `etl/.cache/layers/` (gitignored), keyed on everything that could change the
+# answer: the source file's path, size and mtime, the member, the layer, the
+# columns, the bbox, and the pyogrio and GDAL that decoded it.
+#
+# ⚠️ What is stored is OGR's own return value, untouched, and every hit is a
+# fresh unpickle — so a caller gets exactly the objects a read would have
+# handed it, and no two callers share an array.
+# ⚠️ Only reads over `_CACHE_FLOOR_S` are written. A unit test's fixture reads
+# in a millisecond and must not leave a file per temp directory behind.
+# `HK_TAXI_LAYER_CACHE=0` turns the cache off, which is how its equivalence is
+# checked: build with and without, and the bundle is byte-identical.
+_CACHE_DIR = Path(__file__).resolve().parents[1] / ".cache" / "layers"
+_CACHE_FLOOR_S = 0.05
+_CACHE_SWITCH = "HK_TAXI_LAYER_CACHE"
+# numpy is here because the arrays are pickled by it: one written under 2.x
+# does not load under 1.26, which is the floor `pyproject.toml` declares.
+_CACHE_VERSIONS = (pyogrio.__version__, pyogrio.__gdal_version_string__, np.__version__)
 
 # WKB geometry type codes (OGC 06-103r4 §8.2.3). Only the ones this pipeline
 # reads are named; anything else raises rather than being guessed at. Points
@@ -78,6 +108,45 @@ class Layer:
         return self.columns[name]
 
 
+def _read(path: Path | str, zip_member: str | None, **request: Any) -> tuple[Any, Any, Any, Any]:
+    """`_ogr_read`, through the cache described at the top of this module."""
+    vsi = _vsi_path(path, zip_member)
+    target: Path | None = None
+    if os.environ.get(_CACHE_SWITCH) != "0":
+        try:
+            stat = Path(path).stat()
+        except OSError:
+            stat = None
+        if stat is not None:
+            identity = (str(Path(path).resolve()), stat.st_size, stat.st_mtime_ns)
+            key = repr((identity, zip_member, sorted(request.items()), _CACHE_VERSIONS))
+            target = _CACHE_DIR / f"{hashlib.sha256(key.encode()).hexdigest()}.pickle"
+            try:
+                with target.open("rb") as stored:
+                    return pickle.load(stored)
+            except Exception:
+                # Absent, torn, or written by something this interpreter cannot
+                # load — a damaged pickle raises nearly anything. The source is
+                # right there, so every one of them means "read it again".
+                pass
+    began = time.perf_counter()
+    result = _ogr_read(vsi, **request)
+    if target is not None and time.perf_counter() - began >= _CACHE_FLOOR_S:
+        # Written beside and renamed over, so a build running next to this one
+        # reads either the whole file or none of it. A cache that cannot be
+        # written — a full disk, a read-only checkout — costs the next read its
+        # time and never this one its answer.
+        scratch = target.with_suffix(f".{os.getpid()}.tmp")
+        try:
+            _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            with scratch.open("wb") as out:
+                pickle.dump(result, out, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(scratch, target)
+        except OSError:
+            scratch.unlink(missing_ok=True)
+    return result
+
+
 def read_layer(
     path: Path | str,
     layer: str,
@@ -104,12 +173,8 @@ def read_layer(
     it under a directory (`sheet/sheet.gdb`) instead of zipping the `.gdb` at
     the archive root. The caller gets it from city config, never spells it.
     """
-    meta, fids, geometry, fields = _ogr_read(
-        _vsi_path(path, zip_member),
-        layer=layer,
-        columns=columns,
-        bbox=bbox,
-        return_fids=True,
+    meta, fids, geometry, fields = _read(
+        path, zip_member, layer=layer, columns=columns, bbox=bbox, return_fids=True
     )
     if expect_crs is not None and meta["crs"] and meta["crs"] != expect_crs:
         raise ValueError(
@@ -146,8 +211,8 @@ def read_table(
     no bbox, no CRS to expect, and `geometry` comes back as a list of Nones a
     caller must not try to decode. `fids` are still the table's own.
     """
-    meta, fids, geometry, fields = _ogr_read(
-        _vsi_path(path, zip_member), layer=layer, columns=columns, return_fids=True
+    meta, fids, geometry, fields = _read(
+        path, zip_member, layer=layer, columns=columns, return_fids=True
     )
     return Layer(
         name=layer,

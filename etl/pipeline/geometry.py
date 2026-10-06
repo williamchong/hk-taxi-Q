@@ -23,9 +23,20 @@ def inside_polygon(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
     the single most expensive thing the surface stage does — a Python loop here
     cost 2.2 s of a 2.5 s build.
     """
+    if not len(points):
+        return np.zeros(0, dtype=bool)
     x, z = points[:, 0][:, None], points[:, 1][:, None]
     ax, az = polygon[:, 0], polygon[:, 1]
     bx, bz = np.roll(ax, -1), np.roll(az, -1)
+    # Only the edges some point's ray can straddle. An edge wholly above every
+    # point, or wholly at-or-below every point, has `straddles` false in its
+    # whole column, so dropping the column drops no crossing and the count is
+    # the same integer. It is most of a long ring: the carriageway survey asks a
+    # 16 m corridor against polygons a street long, and this test was 8.8 s of
+    # the roads stage's 23.7 s before the columns went.
+    low, high = points[:, 1].min(), points[:, 1].max()
+    near = ~((np.minimum(az, bz) > high) | (np.maximum(az, bz) <= low))
+    ax, az, bx, bz = ax[near], az[near], bx[near], bz[near]
     rise = bz - az
     straddles = (az > z) != (bz > z)
     # `x < ax + (bx - ax) * (z - az) / rise`, cross-multiplied. A horizontal edge

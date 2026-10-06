@@ -670,7 +670,39 @@ def _station_frames(
 
 
 def _reach(start: np.ndarray, direction: np.ndarray, shape: BaseGeometry, max_m: float) -> float:
-    hit = LineString([start, start + direction * max_m]).intersection(shape)
+    return _reach_of(LineString([start, start + direction * max_m]).intersection(shape), start)
+
+
+def _reaches(
+    starts: np.ndarray, directions: np.ndarray, shape: BaseGeometry, max_m: float
+) -> np.ndarray:
+    """`_reach` for a territory's whole row of rays against one shape.
+
+    The same overlay per ray and the same reading of what comes back — only the
+    Python around GEOS is taken once per row instead of once per ray, which was
+    most of the stage: 100,000 rays spent 1.6 s in `intersection` and 5 s being
+    wrapped and unwrapped one at a time. A ray that comes back as one piece, as
+    nearly all do, is read here in bulk; anything else goes to `_reach_of`.
+    """
+    rays = shapely.linestrings(np.stack([starts, starts + directions * max_m], axis=1))
+    hits = shapely.intersection(rays, shape)
+    out = np.zeros(len(starts))
+    kinds = shapely.get_type_id(hits)
+    whole = np.flatnonzero((kinds == shapely.GeometryType.LINESTRING) & ~shapely.is_empty(hits))
+    if len(whole):
+        pieces = hits[whole]
+        touches = shapely.distance(pieces, shapely.points(starts[whole])) < 1e-6
+        coords, owner = shapely.get_coordinates(pieces, return_index=True)
+        far = np.hypot(*(coords - starts[whole[owner]]).T)
+        firsts = np.flatnonzero(np.diff(owner, prepend=-1))
+        out[whole] = np.where(touches, np.maximum.reduceat(far, firsts), 0.0)
+    for index in np.flatnonzero(kinds != shapely.GeometryType.LINESTRING):
+        out[index] = _reach_of(hits[index], starts[index])
+    return out
+
+
+def _reach_of(hit: BaseGeometry, start: np.ndarray) -> float:
+    """How far a ray from `start` runs before leaving the shape it was cut by."""
     if hit.is_empty:
         return 0.0
     # Merged first: a territory can come back from GEOS as two parts that touch,
@@ -746,17 +778,23 @@ def measure(
     if islands is not None and not islands.is_empty and not territory.shape.is_empty:
         filled = _union([territory.shape, islands])
         shapely.prepare(islands)
-    for point, normal in zip(points, left, strict=True):
+    kerbs = {sign: _reaches(points, sign * left, nearby, max_m) for sign in (1.0, -1.0)}
+    own = (
+        {}
+        if territory.shape.is_empty
+        else {sign: _reaches(points, sign * left, territory.shape, max_m) for sign in (1.0, -1.0)}
+    )
+    for station, (point, normal) in enumerate(zip(points, left, strict=True)):
         for sign, reach_out, end_out, kerb_out in (
             (1.0, territory.left_m, territory.left_end, territory.left_kerb_m),
             (-1.0, territory.right_m, territory.right_end, territory.right_kerb_m),
         ):
-            kerb_out.append(_reach(point, sign * normal, nearby, max_m))
+            kerb_out.append(float(kerbs[sign][station]))
             if territory.shape.is_empty:
                 reach_out.append(0.0)
                 end_out.append(NONE)
                 continue
-            reach = _reach(point, sign * normal, territory.shape, max_m)
+            reach = float(own[sign][station])
             # Only a ray that STOPPED on an island can be read through one — 2% of
             # the sides of a territory that touches any, and `_through` is two
             # overlays.

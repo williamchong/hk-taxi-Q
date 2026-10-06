@@ -137,3 +137,40 @@ class TestPointsInTriangles:
             ]
         )
         assert points_in_triangles(np.array([(22.0, 22.0)]), triangles).tolist() == [True]
+
+
+class TestInsidePolygonSkipsEdgesNoRayStraddles:
+    """`inside_polygon` drops the edges no point's ray can straddle before the
+    points-by-edges table is built. The answer has to be the one the whole ring
+    gives — the survey's `width_m` is read off it."""
+
+    @staticmethod
+    def _whole_ring(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+        x, z = points[:, 0][:, None], points[:, 1][:, None]
+        ax, az = polygon[:, 0], polygon[:, 1]
+        bx, bz = np.roll(ax, -1), np.roll(az, -1)
+        rise = bz - az
+        side = (x - ax) * rise - (bx - ax) * (z - az)
+        crossings = ((az > z) != (bz > z)) & np.where(rise > 0.0, side < 0.0, side > 0.0)
+        return crossings.sum(axis=1) % 2 == 1
+
+    def test_a_narrow_band_of_points_reads_a_long_ring_as_the_whole_ring_does(self) -> None:
+        rng = np.random.default_rng(7)
+        angles = np.sort(rng.uniform(0.0, 2.0 * np.pi, 400))
+        radii = rng.uniform(40.0, 100.0, 400)
+        ring = np.column_stack([radii * np.cos(angles), radii * np.sin(angles)])
+        # A band a few metres tall, so most of the ring lies wholly above or below.
+        points = np.column_stack([rng.uniform(-120.0, 120.0, 2000), rng.uniform(10.0, 14.0, 2000)])
+        got = inside_polygon(points, ring)
+        assert got.tolist() == self._whole_ring(points, ring).tolist()
+        assert got.any() and not got.all()
+
+    def test_points_level_with_a_vertex_are_not_lost_at_the_band_edge(self) -> None:
+        # Every point shares its height with a vertex, top or bottom of the band:
+        # the `>` / `<=` pair in the filter is the half-open rule `straddles` uses.
+        ring = _ring((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (8.0, 8.0), (5.0, 2.0), (0.0, 5.0))
+        points = np.array([(1.0, 0.0), (1.0, 2.0), (5.0, 2.0), (9.0, 5.0), (1.0, 5.0), (5.0, 1.0)])
+        assert inside_polygon(points, ring).tolist() == self._whole_ring(points, ring).tolist()
+
+    def test_no_points_is_no_answers(self) -> None:
+        assert inside_polygon(np.zeros((0, 2)), _square(0.0, 1.0)).tolist() == []

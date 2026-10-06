@@ -328,3 +328,32 @@ def test_a_kerb_that_crosses_far_away_is_still_a_kerb() -> None:
     ]
     _, _, owned, _ = _build([], kerbs, [_line(1, [(0, 0), (60, 0)])])
     assert owned[1].right_m[1] == pytest.approx(5.0)
+
+
+def test_a_row_of_rays_reads_as_each_ray_alone_does() -> None:
+    # `_reaches` is `_reach` with the Python taken once per row. Every way a ray
+    # can come back is here: one piece, two pieces across a courtyard, the seam
+    # between touching parts, a graze at a corner, a start outside, a clean miss.
+    from shapely.geometry import MultiPolygon
+
+    from pipeline.region import _reach, _reaches
+
+    yard = Polygon(
+        [(-5, -1), (5, -1), (5, 12), (-5, 12)], holes=[[(-2, 3), (2, 3), (2, 5), (-2, 5)]]
+    )
+    split = MultiPolygon(
+        [Polygon([(-5, -1), (5, -1), (5, 4), (-5, 4)]), Polygon([(-5, 4), (5, 4), (5, 7), (-5, 7)])]
+    )
+    starts = np.array(
+        [(0.0, 0.0), (3.5, 0.0), (0.0, 0.0), (5.0, -3.0), (0.0, -4.0), (40.0, 0.0), (-4.9, 0.25)]
+    )
+    turns = np.array(
+        [(0.0, 1.0), (0.0, 1.0), (1.0, 0.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.6, 0.8)]
+    )
+    for shape in (yard, split, split.union(yard)):
+        row = _reaches(starts, turns, shape, 16.5)
+        alone = [
+            _reach(start, turn, shape, 16.5) for start, turn in zip(starts, turns, strict=True)
+        ]
+        assert row.tolist() == alone
+    assert _reaches(starts, turns, yard, 16.5)[0] == pytest.approx(3.0)

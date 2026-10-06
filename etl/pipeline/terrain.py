@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
 import numpy as np
@@ -119,6 +119,12 @@ class HeightField:
     # costs more to build than the queries ever save.
     cell_starts: np.ndarray
     cell_triangles: np.ndarray
+    # Each cell's pack, `prepare`d the first time a point lands in it. A stage
+    # asks the same few cells again and again — `roads` puts 263,000 queries
+    # through 780 stations' worth — and gathering and preparing the pack per
+    # query was 1.6 s of that stage. Kept per cell, the floats a query reads are
+    # the ones `hits` would have derived, so no answer moves.
+    _packs: dict[int, Prepared] = field(default_factory=dict, init=False, repr=False, compare=False)
 
     @classmethod
     def from_meshes(
@@ -420,10 +426,14 @@ class HeightField:
 
     def _hits_at(self, key: int, x: float, z: float) -> np.ndarray:
         """Every surface height at `(x, z)`, from the triangles binned in `key`."""
-        candidates = self.cell_triangles[self.cell_starts[key] : self.cell_starts[key + 1]]
-        if not len(candidates):
+        key = int(key)
+        pack = self._packs.get(key)
+        if pack is None:
+            candidates = self.cell_triangles[self.cell_starts[key] : self.cell_starts[key + 1]]
+            pack = self._packs[key] = prepare(self.corners[candidates])
+        if not len(pack.ax):
             return _NO_HITS
-        return hits(self.corners[candidates], x, z)
+        return covered_prepared(pack, x, z)[1]
 
 
 def _spread(low: np.ndarray, high: np.ndarray, columns: int) -> tuple[np.ndarray, np.ndarray]:

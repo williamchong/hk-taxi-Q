@@ -444,3 +444,78 @@ class TestReadLayer:
         for member in ("../evil.gdb", "/evil.gdb", "a/../../evil.gdb"):
             with pytest.raises(ValueError, match="escapes"):
                 gdb.read_layer(tmp_path / "sheet.zip", "Building", columns=[], zip_member=member)
+
+
+class TestTheReadCache:
+    @pytest.fixture
+    def cached(self, tmp_path, monkeypatch):
+        """A layer on disk, with the cache pointed at a temp directory and its
+        floor at zero — a fixture reads in a millisecond and would never be kept."""
+        monkeypatch.setattr(gdb, "_CACHE_DIR", tmp_path / "cache")
+        monkeypatch.setattr(gdb, "_CACHE_FLOOR_S", 0.0)
+        monkeypatch.delenv(gdb._CACHE_SWITCH, raising=False)
+        path = tmp_path / "roads.gpkg"
+        write_layer(
+            path,
+            "CENTERLINE",
+            [line_wkb([(0.0, 0.0), (10.0, 0.0)]), line_wkb([(10.0, 0.0), (10.0, 10.0)])],
+            {"ELEVATION": np.array([0, 1]), "NAME": np.array(["A", "B"], dtype=object)},
+        )
+        return path
+
+    @staticmethod
+    def _refuse_ogr(monkeypatch) -> None:
+        def refuse(*_args, **_kwargs):
+            raise AssertionError("the layer was read from OGR again")
+
+        monkeypatch.setattr(gdb, "_ogr_read", refuse)
+
+    def test_a_second_read_comes_from_the_cache_and_is_the_same_layer(
+        self, cached, monkeypatch
+    ) -> None:
+        first = gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION", "NAME"])
+        self._refuse_ogr(monkeypatch)
+        again = gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION", "NAME"])
+
+        assert again.crs == first.crs
+        assert again.fids.tolist() == first.fids.tolist()
+        assert again.geometry == first.geometry
+        assert again.column("NAME").tolist() == ["A", "B"]
+
+    def test_a_different_question_is_not_answered_from_the_cache(self, cached, monkeypatch) -> None:
+        gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION", "NAME"])
+        self._refuse_ogr(monkeypatch)
+        for request in (
+            {"columns": ["ELEVATION"]},
+            {"columns": ["ELEVATION", "NAME"], "bbox": (-1.0, -1.0, 5.0, 5.0)},
+        ):
+            with pytest.raises(AssertionError, match="read from OGR again"):
+                gdb.read_layer(cached, "CENTERLINE", **request)
+
+    def test_a_source_that_changed_is_read_again(self, cached, monkeypatch) -> None:
+        gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])
+        cached.unlink()
+        write_layer(cached, "CENTERLINE", [line_wkb([(0.0, 0.0), (1.0, 0.0)])], {"ELEVATION": [7]})
+
+        assert gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"]).fids.tolist() == [1]
+        self._refuse_ogr(monkeypatch)
+        assert gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"]).fids.tolist() == [1]
+
+    def test_the_switch_turns_it_off(self, cached, monkeypatch) -> None:
+        monkeypatch.setenv(gdb._CACHE_SWITCH, "0")
+        gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])
+        assert not (cached.parent / "cache").exists()
+
+    def test_a_fast_read_is_not_kept(self, cached, monkeypatch) -> None:
+        monkeypatch.setattr(gdb, "_CACHE_FLOOR_S", 60.0)
+        gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])
+        assert not (cached.parent / "cache").exists()
+
+    def test_a_torn_cache_file_is_read_past_and_rewritten(self, cached, monkeypatch) -> None:
+        first = gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])
+        (stored,) = (cached.parent / "cache").iterdir()
+        stored.write_bytes(b"")
+
+        assert len(gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])) == len(first)
+        self._refuse_ogr(monkeypatch)
+        assert len(gdb.read_layer(cached, "CENTERLINE", columns=["ELEVATION"])) == len(first)
