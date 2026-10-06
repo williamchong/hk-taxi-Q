@@ -9566,4 +9566,23 @@ and a colour copy a frame, neither measured. The retreats, cheapest first: `ink_
 the rigs' `CelOutline` hidden. `ART_DESIGN.md`'s anti-goal on flat shading is amended: the line is
 drawn over the frame and bakes nothing.
 
+### The outline answers the car (`P3-65`, 2026-10-07)
+
+**Asked**: "can we make the car outline sensitive to drift, and all outline sensitive to speed?"
+Each answer below is the user's, from frames, and each turned a first cut round:
+
+- **Speed thins and fades the line; it never bolds it.** Built first as +1 px at full speed; the
+  user asked "logically should the outline fade/thinned when speed is faster instead of bold?" —
+  yes: speed smears edges, and a louder city at speed fights reading the road. Under a pixel the
+  line breaks into dots, so the user's follow-up set the rest line bolder (1.5 px) to leave room to
+  thin (to 1.0 px), with a 20% fade over it. The speed reaches the one quad as the `outline_speed`
+  global, which only the player's car writes.
+- **The car's drift outline is its own rim, a hull, not the screen line.** The screen pass sees
+  depth only and cannot tell the car from the road. The rim is the car's own outline colour (its
+  paint × `surface_darkness`), one width at every tier — a per-tier width read as "sudden bold" and
+  a torn liquid tail as too much — easing in and out, bolder on the trailing side as the
+  afterimage (飄移殘影), with a tail short enough "to not distract user visual control".
+- **The tier's colour is deferred**: the rim taking the sparks' per-tier colour to show the drift
+  bonus fee's status is the user's next step.
+
 **See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
