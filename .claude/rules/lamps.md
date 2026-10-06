@@ -5,6 +5,9 @@ paths:
   - "etl/tests/test_lamps.py"
   - "game/tools/verify_lamps.gd"
   - "game/tuning/lamps.{tres,md}"
+  - "game/tuning/lamp_pools.{tres,md}"
+  - "game/scripts/city/lamp_pools.gd"
+  - "game/assets/shaders/lamp_pool.gdshader"
   - "game/tuning/prop_cells.{tres,md}"
   - "game/scripts/city/prop_cell_profile.gd"
 ---
@@ -53,8 +56,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   transfer, because a lamp post is not a printed specification and is one colour. ⚠️ **A lamps change
   is also a shader change, and its shader is shared with the signs** — `check.sh`
   exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at
-  both layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
-  not chosen a look, so a glow here is wrong in every frame the project renders.
+  both layers. 🔴 **The lantern is lit AT NIGHT ONLY** (`Q160`, the user's
+  instruction, reversing `Q82`): `lantern_glow` is multiplied by the rig's `night_lights`, the ETL
+  marks the housing's luminous faces with `COLOR_0` alpha 0 (`library_lit_vertices`, 20 a kind), and
+  `lamp_pools.tres` throws the pool on the road. Do not raise `sheeting_glow` to "make the lamps
+  read" — that lights the whole column, at noon. A lamps change now owes a frame at
+  `--time-of-day=1` beside the daylight one.
   ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, and the two used to differ.** Godot
   quantises imported vertex positions over each mesh's **own AABB** — 0.025 m across `lamps.glb`'s
   1,646 m, against a 0.06 m bracket arm — until `Q82` turned compression off project-wide, at

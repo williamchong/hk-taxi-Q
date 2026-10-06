@@ -109,9 +109,12 @@ façade/ground/road subset — the config's full set (`panel_pale`, `roof_grey`,
 | Neon | Saturated magenta, cyan, gold — emissive | Sparingly; accent only |
 | Vegetation | Deep saturated green | HK street trees are dark and dense |
 
-**Time of day: golden hour by default**; night (neon-forward) is a later variant. A time of day is
-one number in one rig scene (`Q38`). What blocks night is `Q26` (look unchosen) and `Q82`'s refusal
-of the lit lantern — `lit_window_share` ships 0.0 and the emissive channel is a reserved uniform.
+**Time of day: the day runs to night as game time** (`Q160`, 2026-10-07): the drive opens at the
+clean daylight rig's noon and blends through dusk and twilight to a night that holds, on
+`tuning/day_to_night.tres`. The night is a realistic one with lit touches, on the user's calls —
+lanterns that throw a pool on the road, blocks floodlit from the street, lit road paint, a pale
+rim for the outline — and not the black sky with a neon line that was tried first.
+`lit_window_share` ships 0.0 and stays reserved; neon signage is still `P3-8`.
 
 🔴 **The table is the authored palette, not the shipped one.** The five `height_bands` honour it
 (`C*` 1.76–13.83 rendered), but `facade_hue.strength` multiplies each building's measured chroma on
@@ -606,7 +609,8 @@ old tuning.
   in daylight; measured at 0 extra draw calls and primitives.
 - **Mobile tier:** vehicle blob shadows only, no realtime shadow maps.
 - **Desktop tier:** two directional shadow cascades at 400 m, the far plane.
-- No global illumination, no SSAO on mobile. Resist adding lights.
+- No global illumination, no SSAO on mobile. Resist adding lights — which is why the street lamps'
+  light on the road is a projected pool (`lamp_pool.gdshader`, `Q160`) and not 1,077 lights.
 
 ⚠️ Two cascades, not one: one is cheaper (55% off the frame's primitives against 35%) and shows an
 artefact at every distance — cutoff at 150 m, banding at 250 m, dropped casters at 400 m.

@@ -201,6 +201,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
 | `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | ✅ Shipped 2026-10-03, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn`. Built and graded as a spike (`P3-52`). Owed, the user's call: `speed_min_kph` and the wall bars on the new pace. |
+| `Q160` | The day runs to night as game time: one blending rig, lit lanterns with pools, floodlit blocks, lit paint | ✅ Built 2026-10-07 on the user's asks (`P3-69`). Reverses "the sun does not move" and `Q82`'s unlit lantern. Handset frame time owed. |
 
 ---
 
@@ -2335,7 +2336,9 @@ Surviving, in order:
 
 Refused:
 
-- Real-time GI: the sun does not move; night is a switch between two static rigs.
+- Real-time GI: the sun does not move; night is a switch between two static rigs. ⚠️ **The reason
+  was reversed 2026-10-07 (`Q160`)** — the sun moves under a rig with a cycle. The refusal stands
+  on the renderer: the Mobile tier has no GI to give.
 - Planar reflections / SSR: absent from the Mobile renderer; `city_facade_clean.gdshader` ships the
   cheap equivalent.
 - Wet-material overlay: anti-goal; needs a material layer, UVs, textures and SSR.
@@ -3788,7 +3791,8 @@ See `Q80`, `Q67`, `Q79`, `Q62`, `Q72`.
 ## `Q82` — Lamp posts: a published vocabulary, an unlit lantern, reachable counters
 
 **Status.** Closed (`P3-26`). Night mode refused as a justification; the layer ships for the
-daylight street scene.
+daylight street scene. ⚠️ **The unlit lantern was reversed on the user's instruction, 2026-10-07
+(`Q160`)**: the lantern glows at night and throws a pool on the road. Everything else here stands.
 
 - Poles do not prepare for night mode. Night is blocked on `Q38` (`exposure_anchor` baked into
   `COLOR_0`), `Q26`, a single lighting rig and a Mobile tier without shadow maps. The lantern is
@@ -9726,3 +9730,79 @@ is far larger, so penetration resolves backward; the barrier's trimesh was 0.14 
 Breakaway stays `B3`. Owed: the user's drive into a railing and a barrier.
 
 **See.** `P3-68` · `P3-19` · `P3-29` · `Q19` · `Q60` · `game/scripts/city/prop_batch.gd` · `game/scenes/region.md`
+
+## `Q160` — The day runs to night as game time
+
+**Asked** by the user, 2026-10-07, across one session: "we will have a game mode from day to night
+as game time"; "yes light up the lamps, also we might want to light up the buildings, or its
+outlines"; "also car lamps"; and, on the frames: "should outline color and thickness changes
+according to sun?", "skip the window, just make the building glow", "we should try light up the
+road marking", "lets not glow the building so bright, maybe just sth that feel like spotlight onto
+it", "can the street light actually light up the road?", "the pitch dark version with neon light
+blue outline is too scifi", "we want a more realistic night with some light up touch", "can we
+spotlight the whole building instead of just the bottom".
+
+**Built 2026-10-07 (`P3-69`).** 🔴 **Two recorded stances are reversed, both on the user's
+instruction and neither ever measured shut**: "the sun does not move; night is a switch between
+two static rigs", and `Q82`'s "the lantern is not lit".
+
+- **One rig that blends, never two cross-fading.** `LightingRig` takes a `cycle`
+  (`tuning/day_to_night.tres`: `RigCycle` over `RigKeyframe`s) and a `time_of_day`. The day is the
+  rig scene as authored and is in no table; dusk at 0.55, twilight at 0.72 and night at 0.90 are
+  environments it blends a COPY of the day's toward, with the key light's facing, colour and
+  energy. The last keyframe holds. `changed` tells `SunGlint` and `VehicleLamps`, which cached the
+  sun, to read it again.
+- **Game time is `DayClock`'s**, in `city_drive.tscn`: seconds driven, on the physics tick, held
+  while the car is parked under the menu; 240 s to night. On by default, off from OPTIONS
+  (`Settings.day_cycle`) or `--day-cycle=off`, which `drive.sh` appends so every scripted frame
+  stays the daylight one. `--time-of-day=<0..1>` pins any scene's rig for a frame.
+- **Two shader globals.** `night_lights` (0 day, 1 night) is the one dial every lit layer
+  multiplies its own `.tres` strength by; `sky_light` multiplies the painted sky the façades'
+  glazing and the car's paint reflect, which were noon colours in a material. Defaults 0 and
+  white, pinned by `verify_settings.gd`.
+- **`exposure_anchor` does not move.** It scales `COLOR_0` alone, so darkening with it would split
+  the walls from the paint, the fences and the glass. The dark comes from the light. So
+  `tools/lighting_rig.py` and every grader that reads the rig's exposure are unchanged.
+- **The lantern** (`lamps.json` schema 3): the ETL marks a housing's luminous faces with `COLOR_0`
+  alpha 0 — every face but the lid, `library_lit_vertices` 20 a kind — and `signs.gdshader` lights
+  those by `lantern_glow`. Both regions rebuilt: nothing else in either `lamps.json` moved.
+- **The pool on the road** is not a light: 8 spots pair with a road chunk and about sixteen
+  columns stand on one. `lamp_pool.gdshader` draws a cylinder of air under each lantern, on the
+  lamps' own cells, and adds to whatever the depth buffer says stands inside it.
+- **The buildings are floodlit**, 0.6 of them, by warm cones from street level that merge into a
+  wash and carry to the roofline (`night_spot_*`). Lit windows were built and withdrawn on the
+  user's call, then an all-over glow likewise; `lit_window_share` stays 0.0 and reserved.
+- **The road paint** burns its own colour at `paint_night_glow` 0.6, one value over four `.tres`.
+- **The outline** blends from its ink to a pale rim (`night_colour` at 0.45). The first table — a
+  cyan line at 1.6 over a black sky — is the frame the user refused as science fiction; the night
+  was re-keyed lighter and bluer with a moon at 0.30.
+- **The car**: the brake lenses burn at `tail_lit` 0.35 as tail lamps while the front lamps are
+  on, and `night_energy` rose 0.05 → 0.40 so the moon still reads as night. `P3-11e`'s night path
+  ran for the first time here.
+
+Measured, 2026-10-07, desktop:
+
+| | Before | After |
+|---|---|---|
+| `street` camera by day, each side shot twice and identical | — | 38,614 of 2,073,600 px differ, by at most 2 codes |
+| the same with only the shaders reverted | — | 0 px |
+| Throttle route by day, t=1 (positions identical) | 89 `draws`, 762,374 `prims` | 91, 767,222 |
+| Throttle route at `--time-of-day=1`, t=5 | 93 `draws`, 671,430 `prims` | 111, 792,876 |
+| `lamps.json`, both regions | schema 2 | schema 3, `library_lit_vertices` 20; nothing else moved |
+| A 10 s cycle driven on `f_045` | — | 120 fps, 8.3–8.4 ms at every shot |
+
+⚠️ **The daylight frame is not byte-identical, and the cause is the compile, not a value.** The
+rig, the clock and the pools write nothing by day (0 px with the shaders reverted); the residue
+is five shaders recompiled with a branch and a multiply by 1.0 in them.
+
+Not done, and owed:
+
+- 🔴 **The handset.** Every move re-renders the sky's radiance and the pools are fill; neither is
+  measured off the desktop. The levers are `update_hz` and the pools' `radius_m`.
+- **The looks are a first table.** The user steered them from frames but has not driven a night.
+- `golden_hour.tscn` carries no cycle. Traffic does not exist, so `BeamBudget` has not been asked
+  to ration beams at night. No neon signage (`P3-8`).
+- The fare clock, the HUD and the minimap do not answer the hour.
+
+**See.** `P3-69` · `Q38` · `Q82` · `Q26` · `P3-11e` · `Q158` · `game/tuning/day_to_night.md` ·
+`game/tuning/lamp_pools.md` · `game/tools/verify_day_cycle.gd`

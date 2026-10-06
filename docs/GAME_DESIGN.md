@@ -230,8 +230,8 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 Only the livery and the tram rails are built. Neon is the highest-value gap: the common reading of
 why Sleeping Dogs' Hong Kong worked is signage density, not street accuracy — untested here, but
 `P3-9` should listen for it, because "the streets are bare" and "the streets are wrong" have
-different fixes. The night variant is blocked on `Q38` and `Q82` refused lit lanterns, so neon
-would have to be justified in the daylight rig — unpriced. Not in the slice; first thing to price
+different fixes. The day runs to night since `Q160` (2026-10-07), with lit lanterns, so neon now
+has the frame that justifies it — still unpriced. Not in the slice; first thing to price
 once `P3-9` reports.
 
 ---
@@ -285,6 +285,7 @@ region continues is never closed.
 | Mode | Status | Notes |
 |---|---|---|
 | **Arcade** | Vertical slice | The main mode. Chain fares against the clock |
+| **Day to night** | Built (`Q160`) | Not a mode beside the others but the hour of both: the drive opens at noon and reaches night in four minutes of driving, then holds. On by default; OPTIONS has ALWAYS DAY |
 | **Free roam** | Vertical slice | No timer, fare or arrow — the state `Q8` was judged in (from a dev scene), made reachable by a player. Where `P3-9` runs |
 | Time trial | Later | Fixed A→B, leaderboard |
 | Daily challenge | Later | Seeded fare sequence |

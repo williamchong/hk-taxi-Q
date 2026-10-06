@@ -208,8 +208,11 @@ read like inconsistencies and are not — "restoring consistency" is how most of
 - **No `arms_against_kerb`, "placed minus drawn" or "stations on deck after the clamp" counter** —
   each reads 0 by construction (`Q72`, `Q58`). A counter is tested by whether a reachable
   configuration moves it; mutation-check it rather than reading its value.
-- **The lantern is not lit** (`Q38`, `Q26`), a fence has **no opacity dial**, and the signal layer
-  comes back as a **port**, not a re-declared block (`Q77`) — `lamps`, `railings`, `signs`.
+- A fence has **no opacity dial**, and the signal layer comes back as a **port**, not a
+  re-declared block (`Q77`) — `railings`, `signs`. (The unlit lantern left this list on the user's
+  instruction: `Q160` lights it at night.)
+- **Night is one rig blending, never two cross-fading, and `exposure_anchor` does not move with the
+  hour** (`Q160`) — `facade`. A lit layer multiplies the rig's `night_lights`; nothing lights by day.
 - **Deliberately NOT consistent — leave them**: the two station normals (`carriageway._stations`
   right, `surface.mitres` left); the ETL-side and engine-side winding tests' opposite signs (`Q59`);
   `lamps._strut`'s unreversed ring beside `signs._draw_pole`'s reversed one; `railings.py`'s

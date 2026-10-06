@@ -92,7 +92,7 @@ Phase 3 — Build `B2`
 - `P3-11` ✅ Player taxi — reviewed; `tools/make_vehicle.py`, 1,180 triangles.
 - `P3-11c` 🟡 Body shader — awaiting review; look is a render + `grep -i "shader error"`.
 - `P3-11d` ✅ Lamp circuits — reviewed; circuits are `instance uniform`; `lamp_emission` 1.6.
-- `P3-11e` 🟡 Front lamps — awaiting review; night path has no rig to fire on (`Q26`).
+- `P3-11e` 🟡 Front lamps — awaiting review; the night path first ran under `Q160`'s cycle (2026-10-07), with tail lamps added.
 - `P3-11f` 🟡 Roof sign — awaiting review; level 0.45, not a daylight dimmer.
 - `P3-48` 🟡 Hire state on the car — sign dark with a passenger aboard; rear kerbside door swings at the hail and the drop. The user's drive owed.
 - `P3-49` 🟡 The passenger's face — grins out of the back seat on every skill, rages out of it at a bail (`tools/make_emote.py`, 160 + 212 triangles, unshaded). The user's drive owed.
@@ -144,6 +144,7 @@ Phase 3 — Build `B2`
 - `P3-66` ✅ A sign's post casts a shadow, its plates and lettering do not (`Q135`, 2026-10-07) — start line 107 → 87 `draws`, `f_045` 139 → 121; 288 px of one audit frame in three move.
 - `P3-67` 🟡 The lamps as a `MultiMesh` per 300 m cell, hidden past 400 m (`Q135`, 2026-10-07) — start line `prims` −118,880 of the lamps' 129,240, `f_045` −154,720 of 172,920; +2 to +4 `draws`; 1 px of five audit frames moves. Owed: the user's drive, for a cell letting go.
 - `P3-68` 🟡 Fences and railings collide as a box per prop (`Q159`, the user's ask, 2026-10-07) — the closure barrier's `-col` trimesh → a 2.00 x 1.40 x 0.14 m box; railings a box per panel through `layer_preview.gd`'s `collides` (5,535 / 2,158 bodies), 0 panels across a road centreline. Owed: the user's drive.
+- `P3-69` 🟡 The day runs to night as game time (`Q160`, the user's asks, 2026-10-07) — built: blending rig + `DayClock` (240 s to night, on by default, `--day-cycle=off` in `drive.sh`), lit lanterns with road pools, floodlit blocks, lit paint, tail lamps; daylight `street` frame within 2 codes on 1.9% of pixels, +2 `draws` by day. Owed: the user's night drive, the handset's frame time.
 - `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
@@ -374,6 +375,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q157` The checks and the build run side by side (user, 2026-10-06): `check.sh` 54 → 21 s
 - `Q158` The city takes an outline, not a banded sun (user, 2026-10-07): a thin line in each surface's own darkened hue, over black ink and over no line (`P3-64`). The handset's frame time is owed.
 - `Q159` The fences and the railings collide as a box per prop (user, 2026-10-07; reverses `P3-19`'s no-collider stance): the barrier's trimesh → a box over its extent; the railings a box per panel, asset still collider-free (`P3-68`).
+- `Q160` The day runs to night as game time (user, 2026-10-07; reverses "the sun does not move" and `Q82`'s unlit lantern): one blending rig, never two; `exposure_anchor` holds and the dark comes from the light (`P3-69`).
   (`CHECK_JOBS`), `pytest -n auto` 52 → 10 s, a Wan Chai build 73 → 50 s serial and 30 s at
   `--jobs 4`, the battery 163 → 48 s at `--jobs 4`. Every one proven against its serial self.
 

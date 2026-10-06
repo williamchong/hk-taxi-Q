@@ -11,7 +11,9 @@ paths:
   - "game/tuning/city_facade*.{tres,md}"
   - "game/assets/shaders/city_facade*.gdshader"
   - "game/assets/shaders/city_facade*.gdshaderinc"
-  - "game/scripts/world/lighting_rig.gd"
+  - "game/scripts/world/*.gd"
+  - "game/tuning/{day_to_night,dusk,twilight,night}.{tres,md}"
+  - "game/tools/verify_day_cycle.gd"
 ---
 
 # Façade, materials and exposure — before marking work done
@@ -51,3 +53,18 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   set, or the sweep reports every grey-padded building in the region instead of the 100 that carry
   a panel. ⚠️ `facade_lab.json` is **not committed** — it is under `etl/sources/`, which is
   gitignored — so re-publishing it is a local act and `superseded/` is the only way back.
+
+- **The day cycle — `lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd`,
+  `day_to_night.tres` or a keyframe's environment (`Q160`): `tools/check.sh` (which runs
+  `verify_day_cycle`), the `street` camera by day shot twice a side against the commit before, and
+  frames at `--time-of-day=0.55`, `0.72` and `1`.** 🔴 **The day writes nothing**: a rig at
+  `time_of_day` 0 holds the authored `Environment` object and the authored sun, and that — not a
+  re-applied copy of the day — is what keeps every scripted daylight frame. 🔴 **One rig blending,
+  never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the
+  dark comes from the light); and **night dims the key light, never deletes it** — the last
+  keyframe's energy sits under `vehicle_lamps.tres`'s `night_energy` and the two move together.
+  ⚠️ A keyframe's `.tres` is read only for what `LightingRig.BLENDED` / `BLENDED_SKY` name. ⚠️ A
+  still preview camera at a pinned hour often stalls the capture (`no frame drawn`): shoot at
+  `--seconds=2 --shots=1.0`, or from a moving drive. ⚠️ `drive.sh` appends `--day-cycle=off`; a
+  frame of the cycle itself needs `--day-cycle=on`. ⚠️ The handset's cost of a moving sky is not
+  measured; `update_hz` is the lever. Numbers in `Q160`.
