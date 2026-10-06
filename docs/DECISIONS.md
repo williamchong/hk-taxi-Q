@@ -9484,3 +9484,58 @@ so a memo buys about a second; batching it means restructuring `sampled_pieces`.
 edges wholly to one side in x: droppable too, unmeasured. CI on `-n auto`: two cores.
 
 **See.** `tools/check.sh` · `etl/pipeline/__main__.py` (`NEEDS`) · `etl/pipeline/gdb.py` · `docs/ARCHITECTURE.md` "Checks"
+
+## `Q158` — Does the city take a cel look?
+
+**Asked** by the user, 2026-10-06: can the buildings be cel shaded? Evaluated first (GO WITH
+CAVEATS): build it as a switchable trial and choose from frames, as `Q26` was chosen. **Open** on
+that pick.
+
+**What a cel look is made of here.** Two halves, each its own switch (`P3-64`):
+
+- **The ink line** — `cel_outline.gdshader`, one full-screen quad (`CelOutline`) in both rigs,
+  numbers in `tuning/cel_outline.tres`. It draws where the Laplacian of inverse depth is large:
+  zero across any plane however grazing, non-zero at a crease or a silhouette. Depth alone because
+  the Mobile renderer has no normal buffer. Not a hull per mesh: the city sits at 136–150 draw calls
+  against 150, and a hull redraws every tile.
+- **The banded sun** — `city_facade_cel.gdshader`, the clean shader's body under a stepped Lambert
+  `light()`. A sibling, not a uniform, because a `light()` replaces the engine's Burley and GGX
+  outright and no setting of it reproduces them to the byte. The body moved into
+  `city_facade_clean.gdshaderinc`, verbatim, so the two cannot drift; `light()` reads the body's
+  `marker` varying directly (a fragment-written copy was tried and rendered byte-identical).
+
+**Measured** (worktree renders, 2026-10-06, the seven audit cameras less `aerial` and `ground` for
+the variants):
+
+| | Result |
+|---|---|
+| Off path against HEAD | Byte-identical on `street`, `kerb`, `infra`; `ground` and `taxi` differ only on the animated sea (diff mask confined to it) |
+| Outline cost | +1 draw call, +2 primitives on the `taxi` drive, every second |
+| Ramp cost | +0 draws, +0 primitives |
+| Ramp alone, visible change | Little: a sunlit face lifts a step, a cast shadow's edge goes hard and shows the shadow map's texels. Flat faces under one sun were already one value each |
+| Outline, visible change | The look: every crease and silhouette inked, the car and kerbs included |
+| Compatibility (web) | Renders, no shader error; more fine striping on far flat ground than Mobile (a coarser depth buffer) |
+
+- ⚠️ **The harbour striped** at `edge_distance_m` 0: the depth buffer's rounding on a far grazing
+  plane reads as a Laplacian in rows. Raising both bars with distance (40 m) cleared it; the
+  building creases on `street` survived.
+- ⚠️ **Thin things ink solid**: a pole under about two line widths is outlined from both sides and
+  draws black. No `edge_*` value separates its outline from its fill.
+- ⚠️ The outline is screen-wide: it inks the car, the roads, the signs and the fences as well as the
+  buildings. Narrowing it to the buildings needs a stencil or a mask the Mobile renderer would have
+  to write, which is new machinery — not built.
+
+- ⚠️ **The outline's real price is likely the pass, not the taps** (from the engine's design, not
+  measured): a visible `hint_depth_texture` reader makes the Mobile renderer end its render pass,
+  resolve the 4x MSAA depth (`Q91`) and copy it, and open another — on a tile GPU a full write-out
+  and read-back a frame. The handset round measures it; the fallbacks are MSAA off while the line is
+  on, or ink drawn by the façade shader itself. And +1 draw call takes the seam line's 136–150 to
+  137–151 against the 150 budget.
+
+**Owed on a pick.** For the chosen variant only: `facade_chroma.py --shipped` before and after (the
+`facade` rule — the ramp moves rendered colour without touching `materials:`, and a drift is fixed in
+the ramp, never in the palette or the exposure), the skyline at `t=2.0`, the outline's frame time on
+the `P3-9` handset, and `ART_DESIGN.md`'s anti-goal "flat shading plus one directional light is the
+look" amended with the reason.
+
+**See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`

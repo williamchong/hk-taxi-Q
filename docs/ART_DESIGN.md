@@ -192,6 +192,16 @@ Cost:    a few instructions, zero texture memory
   Shader: `assets/shaders/city_facade.gdshader`; numbers: `tuning/city_facade_warm.tres`.
   ⚠️ `tuning/city_facade.tres` binds the *clean* shader.
 
+### The cel trial (`P3-64`, `Q158`) — built, off
+
+Two switches, each off until the user picks from rendered frames:
+
+- **Ink line**: `cel_outline.gdshader` on the `CelOutline` quad in both rigs (`visible` is the
+  switch; `tuning/cel_outline.tres`). Depth-only edges, +1 draw call. Inks everything on screen,
+  not only buildings; thin poles go solid black.
+- **Banded sun**: `city_facade_cel.gdshader`, bound by pointing `tuning/city_facade.tres` at it.
+  On flat-shaded buildings it moves little — the outline is what reads as cel.
+
 ### The clean/futuristic variant
 
 **What ships is candidate `C`** — accurate massing, flat per-building colour, no fabric (`Q26`,
