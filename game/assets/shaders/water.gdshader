@@ -72,19 +72,25 @@ void vertex() {
 	albedo = vertex_srgb_to_linear(COLOR.rgb) * exposure_anchor;
 	float bearing = radians(wave_bearing_deg);
 	vec2 first = vec2(sin(bearing), -cos(bearing));
-	float cross = radians(wave_cross_deg);
+	float cross_rad = radians(wave_cross_deg);
 	vec2 second = vec2(
-		first.x * cos(cross) - first.y * sin(cross), first.x * sin(cross) + first.y * cos(cross)
+		first.x * cos(cross_rad) - first.y * sin(cross_rad),
+		first.x * sin(cross_rad) + first.y * cos(cross_rad)
 	);
 	float k = TAU / wave_length_m;
 	// `fract` keeps the argument small over a session: `TIME` wraps at the
-	// project's rollover, and a whole cycle a wrap is what makes that seamless.
-	float phase = fract(TIME * wave_speed_hz) * TAU;
+	// project's rollover, and a whole number of cycles a wrap — of each train,
+	// `water.md` does the sum — is what makes that seamless.
+	// ⚠️ **A `fract` per train.** One wrapped phase scaled by `wave_speed_ratio`
+	// drops the second train `ratio` of a cycle at every wrap of the first — at
+	// 0.25 Hz and 0.7, a jump of 0.7 of a wavelength every 4 s.
+	float phase_a = fract(TIME * wave_speed_hz) * TAU;
+	float phase_b = fract(TIME * wave_speed_hz * wave_speed_ratio) * TAU;
 	// World plan metres, so the pattern is anchored to the harbour and not to
 	// the region node or the camera. North is -Z (`crs.py`).
 	vec2 plan = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
-	wave_a = dot(plan, first) * k - phase;
-	wave_b = dot(plan, second) * k / wave_ratio + phase * wave_speed_ratio;
+	wave_a = dot(plan, first) * k - phase_a;
+	wave_b = dot(plan, second) * k / wave_ratio + phase_b;
 	// The height field is `slope / k * (sin(a) + ratio * sin(b))`: the second
 	// train is shorter by `ratio` and lower by `ratio`, so its gradient
 	// `(k / ratio) * ratio * cos(b)` carries the same `slope` as the first —

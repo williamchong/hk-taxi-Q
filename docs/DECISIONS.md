@@ -7251,6 +7251,11 @@ is" — was built on 2026-09-25, the section at the end; it reverses the "out of
   shader, not a change to `vertex_albedo.gdshader`, whose header forbids growing it. Measured:
   73k pixels of the `ground` frame move between t=0.8 and t=2.8, all on the water; `check.sh` and
   the runs report no shader error; the drive frame's cost is unchanged (804,679 / 108).
+- 🐛 **The second train jumped every 4 s until 2026-10-07**: one wrapped phase was scaled by
+  `wave_speed_ratio`, so each wrap of the first train dropped the second 0.7 of a cycle. A `fract`
+  per train since. Measured on the `ground` camera at 0.1 s steps: two steps at 2.5× the median
+  frame-to-frame change before, none in 45 after. The hourly-rollover argument in `water.md`
+  never saw it, and neither does the rule's two-frame diff — a jump needs a series.
 - 🚫 **Not built**: draping the plane on the terrain (bumpy water), rendering it with no depth test
   (draws over the piers), flattening the terrain to a level instead of sinking it (the shore band
   is the same noise from the other side).

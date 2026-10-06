@@ -65,7 +65,9 @@ past this water and a fast wave under a fast car reads as strobing.
 never settles into a standing pattern. A look, so data here, not a constant in the shader.
 ⚠️ `TIME` wraps at the project's `time_rollover_secs` (3600 s), so a speed whose cycles a wrap
 is not a whole number jumps once an hour: 0.25 Hz is 900 cycles and the second train's 0.7 of
-it 630, both whole. A retune to 0.33 would jump.
+it 630, both whole. A retune to 0.33 would jump. Each train takes its own `fract` in the shader
+(2026-10-07): one wrapped phase scaled by this ratio dropped the second train 0.7 of a cycle
+every 4 s.
 
 ## shader_parameter/wave_slope
 
