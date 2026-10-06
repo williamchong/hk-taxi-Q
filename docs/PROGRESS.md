@@ -108,7 +108,7 @@ Phase 3 — Build `B2`
 - `P3-16` ✅ Traffic signs (`Q64`).
 - `P3-17` 🚫 Signal heads — built, dropped (`Q77`); layer removed by `P3-35a`.
 - `P3-18` ✅ Yellow box junctions (`Q92`).
-- `P3-19` ✅ Pedestrian railings — a panel library since `P5-5` (`Q60`, `Q61`, `Q112`).
+- `P3-19` ✅ Pedestrian railings — a panel library since `P5-5` (`Q60`, `Q61`, `Q112`). 🐛 2026-10-07: the shader flipped the back-face normal the engine had already flipped, so the far face seen through the gaps took the other side's light; line removed (`Q61`).
 - `P3-20` ✅ Sign faces as a texture atlas — `signs_text.png` (`Q68`, `Q70`).
 - `P3-21` ❌ Road lettering — no-go under `Q65`; data findings kept in `PLAN.md`.
 - `P3-22` ✅ Direction signs (`Q66`, `Q67`).

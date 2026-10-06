@@ -37,9 +37,12 @@
 // as a black panel in full sun. That is why the counter survives the switch to
 // `cull_disabled` rather than being retired with the culling.
 //
-// The back face is lit by negating the normal rather than by leaving it alone:
-// an unflipped back face takes its light from the wrong hemisphere, and the
-// fence on the far side of a street would darken as the sun crossed it.
+// The back face is lit from its own side, and the ENGINE does that: under
+// `cull_disabled` Godot negates the normal on a back face before `fragment()`
+// runs. ⚠️ **Do not flip `NORMAL` on `FRONT_FACING` here as well** — this file
+// did until 2026-10-07, which turned the engine's flip back and lit the inside
+// of the far face from the wrong hemisphere, the very fault the line was
+// written against.
 //
 // ⚠️ **`railings.glb` carries no `COLOR_0`**, so there is no vertex colour to
 // convert and `colour.gdshaderinc` is deliberately not included. It *does*
@@ -63,12 +66,15 @@
 // Both halves of the objection have an answer here that they did not have next
 // door:
 //
-//   - **Sorting.** Every other shader in this bundle is opaque, so there is
-//     exactly one transparent object in the scene and nothing to sort it
-//     against. It depth-tests against all opaque geometry the ordinary way, so
-//     a building in front of a fence still occludes it. What is left is the
-//     fence blending with itself where two runs overlap on screen, and
-//     `depth_prepass_alpha` is what removes that.
+//   - **Sorting.** Every other *generated layer* is opaque, so there is nothing
+//     in the city to sort the fence against. It depth-tests against all opaque
+//     geometry the ordinary way, so a building in front of a fence still
+//     occludes it. What is left is the fence blending with itself where two
+//     runs overlap on screen, and `depth_prepass_alpha` is what removes that.
+//     ⚠️ It is no longer the scene's only blended material: `cel_outline` and
+//     `car_outline` are `blend_mix` too (`P3-64`, `P3-65`). The ink line reads
+//     the depth of the opaque frame, so it is drawn for what stands BEHIND a
+//     fence and sorted against the fence by distance like any blended pair.
 //   - **Aliasing.** The scissor aliases because it *samples* a stripe. This
 //     integrates it instead — `bars()` below returns the exact average coverage
 //     over the fragment's own footprint, so a baluster is crisp when it is
@@ -241,8 +247,6 @@ void fragment() {
 	ALPHA = steel;
 	ROUGHNESS = rail_roughness;
 	METALLIC = rail_metallic;
-	// The mesh gives every vertex the normal that looks at the carriageway; the
-	// back face needs the other hemisphere or it lights as if the sun were
-	// behind the street.
-	NORMAL = FRONT_FACING ? NORMAL : -NORMAL;
+	// `NORMAL` is left alone: the engine has already turned it on a back face
+	// (see the header).
 }

@@ -3213,6 +3213,13 @@ is drawn on the kerb the ribbon actually has. No collider. `city.json` 13 → 14
   `samples*` counters stay shared; per-class `read_m` vs `drawn_m` shows a class that joins nothing.
 - Three draw calls. Collision stays `B3`: a fence moved up to 6.24 m is a cue; collidable, a wall in
   the wrong place.
+- 🐛 **The back face was lit from the wrong side until 2026-10-07.** Under `cull_disabled` Godot
+  negates the normal on a back face before `fragment()` runs, and the shader's own
+  `NORMAL = FRONT_FACING ? NORMAL : -NORMAL` turned it back — so the inside of the far face, seen
+  through every gap in the near one, took the other side's light. Line removed. Measured on the
+  `street` camera, mean sRGB of back-face against front-face pixels of one fence: shaded fence
+  178 / 119 before, 118 / 119 after; sunlit fence 126 / 175 before, 178 / 175 after. Front faces
+  did not move.
 
 **See.** `Q60` `Q59` `Q58` · `ART_DESIGN.md`
 
