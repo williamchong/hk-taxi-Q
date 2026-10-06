@@ -253,6 +253,35 @@ class TestWriting:
         indices = document["accessors"][document["meshes"][0]["primitives"][0]["indices"]]
         assert indices["componentType"] == 5125
 
+    def test_a_helper_ships_no_normal_and_reads_back_zeros(self, tmp_path) -> None:
+        """A `-colonly` or `-occonly` primitive carries positions, indices and
+        its marker and nothing the importer would drop (`P5-12`): no `NORMAL`
+        accessor in the file, zero normals on the way back in — never
+        `_face_normals`, which a shared-vertex helper would make refuse. The
+        drawn mesh beside it keeps its `NORMAL` exactly as before."""
+        drawn = self.box()
+        shared = np.array([[0, 0, 0], [10, 0, 0], [0, 0, 10], [10, 0, 10]], dtype=np.float64)
+        helper = MeshData(
+            name="tile_collision-colonly",
+            positions=shared,
+            normals=np.tile(np.array([0, 1, 0], dtype=np.float32), (4, 1)),
+            triangles=np.array([[0, 1, 2], [1, 3, 2]], dtype=np.uint32),
+            uv2=np.zeros((4, 2), dtype=np.float32),
+        )
+        occluder = replace(helper, name="tile_occluder-occonly")
+        write_glb(tmp_path / "t.glb", [drawn, helper, occluder])
+        document = self.document_of(tmp_path / "t.glb")
+        attributes = [mesh["primitives"][0]["attributes"] for mesh in document["meshes"]]
+        assert "NORMAL" in attributes[0]
+        assert "NORMAL" not in attributes[1] and "NORMAL" not in attributes[2]
+        assert "TEXCOORD_1" in attributes[1] and "TEXCOORD_1" in attributes[2]
+        read_drawn, read_helper, read_occluder = read_glb(tmp_path / "t.glb")
+        assert np.array_equal(read_drawn.normals, drawn.normals)
+        for restored in (read_helper, read_occluder):
+            assert np.array_equal(restored.positions, shared)
+            assert np.array_equal(restored.triangles, helper.triangles)
+            assert not restored.normals.any() and restored.normals.shape == (4, 3)
+
     def test_positions_carry_min_and_max(self, tmp_path) -> None:
         write_glb(tmp_path / "t.glb", [self.box()])
         document = self.document_of(tmp_path / "t.glb")

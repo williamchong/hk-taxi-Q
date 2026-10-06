@@ -539,6 +539,12 @@ with nothing. `CityStreamer` builds no shape at load.
   2 / 3 / 4 m the trimesh is 87.8 / 72.9 / 63.5% of render triangles, façade offset p90 0.47 /
   0.62 / 0.91 m.
 - Only tier 0, because the coarse tier is resident only beyond the 250 m near band.
+- A helper primitive — this collider, the occluder below and the road chunk's — ships
+  `POSITION`, indices and `TEXCOORD_1` and **no `NORMAL`** (2026-10-07): the importer keeps
+  positions and indices alone, so a normal there was 12 B a vertex the importer decoded and
+  dropped, 15 MB of Wan Chai's folder on disk and 0 B of its PCK. `gltf.read_glb` hands a helper
+  zero normals back; `TEXCOORD_1.x` stays because the carve and `tools/collider_offset.py` read
+  the class marker off it.
 - ⚠️ The suffix goes on the merged mesh, so every class in `buildings.classes` collides — the
   ground included (terrain ships in the tile since `P3-10`). `buildings.ground_sink_m` drops the
   ground under the kerb; `tools/ground_clearance.py` grades it.

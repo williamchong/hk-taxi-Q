@@ -75,6 +75,7 @@ COLLISION_ONLY_SUFFIX = "-colonly"
 # `OccluderInstance3D` carrying an `ArrayOccluder3D` and removes the mesh, so
 # the geometry is rasterised into the culling buffer and never drawn.
 OCCLUDER_ONLY_SUFFIX = "-occonly"
+_HELPER_SUFFIXES = (COLLISION_ONLY_SUFFIX, OCCLUDER_ONLY_SUFFIX)
 
 
 def is_collider(mesh: MeshData) -> bool:
@@ -89,7 +90,12 @@ def is_occluder(mesh: MeshData) -> bool:
 
 def is_helper(mesh: MeshData) -> bool:
     """A primitive the importer removes — collider or occluder — and nobody draws."""
-    return is_collider(mesh) or is_occluder(mesh)
+    return _is_helper_name(mesh.name)
+
+
+def _is_helper_name(name: str) -> bool:
+    """`is_helper` by node name alone — what the reader has before a `MeshData` exists."""
+    return name.endswith(_HELPER_SUFFIXES)
 
 
 def render_meshes(meshes: Iterable[MeshData]) -> list[MeshData]:
@@ -431,6 +437,13 @@ def _primitive(
         # inverse transpose reduces to the rotation itself.
         normals = buffers.accessor(attributes["NORMAL"]).astype(np.float64)
         normals = normalise(normals @ transform[:3, :3].T).astype(np.float32)
+    elif _is_helper_name(name):
+        # A helper ships no `NORMAL` (`_primitive_entry`): the importer removes
+        # the mesh, so nothing shades it, and its vertices are shared, so
+        # `_face_normals` would refuse. Zeros rather than a guess — a reader
+        # that wants a helper's facing (`carve` cuts one) rebuilds it from the
+        # winding, which is the only thing the file actually says.
+        normals = np.zeros((len(positions), 3), dtype=np.float32)
     else:
         normals = _face_normals(positions, triangles)
 
@@ -676,15 +689,25 @@ def write_glb(path: Path, meshes: Sequence[MeshData | MeshGroup]) -> int:
 def _primitive_entry(
     gltf: dict[str, Any], binary: bytearray, mesh: MeshData, textures: dict[int, int]
 ) -> dict[str, Any]:
-    """One primitive: the attribute accessors, the index accessor and the material."""
+    """One primitive: the attribute accessors, the index accessor and the material.
+
+    A helper (`is_helper`) ships no `NORMAL`: the importer reads a `-colonly`
+    primitive into a `ConcavePolygonShape3D` and a `-occonly` one into an
+    `ArrayOccluder3D`, positions and indices alone, so a normal there is bytes
+    the importer decodes and drops — 12 a vertex, 15 MB of Wan Chai's folder
+    on disk and 0 B of its PCK (`P5-12`). `TEXCOORD_1` stays: `carve._structure`
+    and `tools/collider_offset.py` read the class marker off it. The reader
+    (`_primitive`) hands a helper zero normals back.
+    """
     attributes = {
         "POSITION": _accessor(
             gltf, binary, mesh.positions.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
         ),
-        "NORMAL": _accessor(
-            gltf, binary, mesh.normals.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
-        ),
     }
+    if not is_helper(mesh):
+        attributes["NORMAL"] = _accessor(
+            gltf, binary, mesh.normals.astype(np.float32), "VEC3", _FLOAT, _ARRAY_BUFFER
+        )
     if mesh.colours is not None:
         # VEC4 rather than VEC3 because glTF requires each vertex attribute
         # element to start on a 4-byte boundary, and a 3-byte RGB does not.

@@ -1699,9 +1699,10 @@ def _road_collider(piece: MeshData) -> MeshData:
     """The chunk's `-colonly` collider (`P5-12`): the ribbon's triangles, bare.
 
     The same geometry the chunk draws — the kerb riser included, because kerbs
-    are mountable by design (`P2-3`) — carrying positions, normals and indices
-    and nothing else: the importer removes the mesh, so a colour or a marking
-    code here is bytes nothing reads. Its own primitive rather than the `-col`
+    are mountable by design (`P2-3`) — carrying positions and indices and
+    nothing else (`gltf.write_glb` drops a helper's normals at the file): the
+    importer removes the mesh, so a colour or a marking code here is bytes
+    nothing reads. Its own primitive rather than the `-col`
     suffix on the render mesh so the two may diverge later (`Q121`); today
     they do not, and `verify_road_surface.gd` asserts the collider stands
     beside every chunk.

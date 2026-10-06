@@ -1289,13 +1289,14 @@ def _collider(
     """The tile's `-colonly` collider (`P5-12`): the same classes, at their own cell.
 
     What it keeps is what a collider and the carve need and nothing else —
-    positions, normals, triangles, and `TEXCOORD_1.x` so `carve._structure` can
+    positions, triangles, and `TEXCOORD_1.x` so `carve._structure` can
     tell a viaduct from a wall when it cuts the collider alongside the render
-    tier. No colours, no `TEXCOORD_0`, no object table and no material: the
-    importer removes the mesh, so anything else here is bytes in the PCK that
-    nothing reads. ⚠️ **`TEXCOORD_1.y` is zero on every vertex**: the collider
-    names no object — it never passes through `_identify`, so leaving the
-    region ordinal there would ship a row that indexes no table. ⚠️ **At the
+    tier. No colours, no `TEXCOORD_0`, no object table and no material, and
+    `gltf.write_glb` writes no `NORMAL` for a helper either: the importer
+    removes the mesh, so anything else here is bytes that nothing reads.
+    ⚠️ **`TEXCOORD_1.y` is zero on every vertex**: the collider names no
+    object — it never passes through `_identify`, so leaving the region
+    ordinal there would ship a row that indexes no table. ⚠️ **At the
     finest tier's cells this is the same triangles that tier draws**, which is
     what makes a drive timeline reproducible across the change; the stated
     cell is what lets it stop being so.
@@ -1311,9 +1312,10 @@ def _collider(
 def _bare(label: str, kind: str, name: str, pieces: list[MeshData]) -> MeshData:
     """`pieces` merged as a helper primitive carrying the marker and nothing else.
 
-    Positions, normals, triangles and `TEXCOORD_1.x`; `TEXCOORD_1.y` zero because
-    a helper names no object. The collider and the occluder both ship this way
-    (`P5-12`, `P5-13`), and `_collider`'s docstring is why.
+    Positions, triangles and `TEXCOORD_1.x` (the normals in memory never reach
+    the file); `TEXCOORD_1.y` zero because a helper names no object. The
+    collider and the occluder both ship this way (`P5-12`, `P5-13`), and
+    `_collider`'s docstring is why.
     """
     merged = merge(pieces, name=name)
     if merged.uv2 is None:
