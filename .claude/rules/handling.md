@@ -150,6 +150,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   more power than the engine, and several dials were set against the spin that fed — the side
   cut's band (65 → 105 kph), `rev_limiter.overspeed_share` and `slip_power_cut_*` (neither
   re-swept). A drift row from before that day does not compare.
+- 🚫 **`understeer_power_cut` is not re-keyed on a yaw-rate deficit, and traction control is not
+  put on the combined slip** (`Q153`, 2026-10-06, both measured on `--only=technique` and
+  withdrawn): the deficit band between holding and ploughing is 85–90% against 70–86%, and the
+  friction-circle governor parks the rear at its peak, where `steer_to_grip` lifts and the fronts
+  plough. The lever left is the cap's lift at the peak.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
   `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target

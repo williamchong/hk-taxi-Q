@@ -16,6 +16,15 @@ Stability control's power cuts (a real car's ESC takes engine torque away when t
 
 ## `understeer_power_cut = 0.5`
 
+**Kept on 2026-10-06 after two closed-loop forms were measured and withdrawn** (`Q153`): the
+doubled drive below is gone, and the value stands on the technique table instead — with the cut
+the full-throttle corner holds 0.87–0.90 g with the rears at 0.6× their grip from 20 to 86 kph;
+without it the rears run at 1.2–1.8×, the fronts at 2.2–3.5× and lateral falls to 0.70–0.86 g. A
+yaw-rate deficit cannot key it (the car achieves 85–90% of the grip-limited yaw rate holding and
+70–86% ploughing), and traction control on the combined slip holds the rears at their peak, where
+the steering cap lifts and the fronts plough. What it is in a real car: Bosch's enhanced
+understeer control, power off while the steering asks for more than the road gives, in open loop.
+
 The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,
 `Q153`), for the power-on corner: at 0 a full-lock corner under the doubled drive runs to about
 128 kph from any entry and its arc widens, where the shipped car settles at 62–65. The drift button

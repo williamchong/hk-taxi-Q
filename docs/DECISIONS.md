@@ -9095,7 +9095,30 @@ lock. Not sound, owed:
 - **`understeer_power_cut` keys on the steering angle**, so a full-key corner runs at half power
   whether or not the car ploughs: `corner` exits at 51.7 / 64.8 kph from 42 / 63 with it and 55.4 /
   74.6 without (under 42 the two cuts compound and one sweep cannot part them).
+  **Measured and kept the same day (the user's "fix 4").** Two closed-loop forms were tried on
+  `--only=technique` at 20 / 30 / 42 / 63 / 86 / 105 kph, the cut at 0 beside 0.5:
+  - *The cut off altogether*, to see what a yaw-rate deficit would have to catch: the rears ran at
+    1.2–1.8× their grip and the fronts at 2.2–3.5×, lateral 0.70–0.86 g in the second second
+    against 0.85–0.90 with the cut. The car achieves 70–86% of the grip-limited yaw rate
+    ploughing and 85–90% holding — a deficit band too narrow to key a cut on without chatter.
+  - *Traction control on the tyre's combined slip* (the friction circle, no new dial, the cut
+    off): rears held at 1.01–1.16× and the rear slip at the tyre's 8° peak, which lifts the
+    steering cap (`steer_to_grip` stands aside past the peak), the fronts go to full lock at
+    2.6–3.3× their grip and lateral falls to 0.71–0.79 g at 63 / 86 kph; the pull-away from
+    10 kph 26.9 kph against 30.9. Withdrawn.
+  The steering-keyed cut holds 0.87–0.90 g with the rears at 0.6× from 20 to 86 kph, and is what
+  Bosch's enhanced understeer control does in open loop: power off while the steering asks for
+  more than the road gives. Its sidecar's reason (the doubled drive) is stale; the value stands on
+  these rows. Owed: the steering cap lifting the moment the rear passes its peak, which is the
+  cascade both trials ran into.
 - **The brake torque is the dial × the physics tick rate**: right at 60 Hz only.
+  **Fixed the same day:** `HandlingProfile.brake_g`, the brakes' strength as a share of the car's
+  weight (1.2; 70 was 1.22 g), converted once in `VehicleController._brake_per_wheel_n` and handed
+  to the tyre model in newtons (`_brake_n`), so it sizes itself to a car's mass and gravity and
+  reads the same at any tick rate. Swept 1.0–1.3 on `brake`: the stop is the tyre's from 1.1 up
+  (9.1 / 9.3 / 9.5 m/s² from 42 / 63 / 86 kph), 1.0 short of it (8.9 / 9.0 / 9.1). The pad at
+  63 kph: every row within the spawn's settle; the braked technique rows (`trailbrake`,
+  `flick@brake`) move in the second decimal for the 2% less brake.
 
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
