@@ -9618,12 +9618,16 @@ Each answer below is the user's, from frames, and each turned a first cut round:
   line breaks into dots, so the user's follow-up set the rest line bolder (1.5 px) to leave room to
   thin (to 1.0 px), with a 20% fade over it. The speed reaches the one quad as the `outline_speed`
   global, which only the player's car writes.
-- **The car's drift outline is its own rim, a hull, not the screen line.** The screen pass sees
-  depth only and cannot tell the car from the road. The rim is the car's own outline colour (its
-  paint × `surface_darkness`), one width at every tier — a per-tier width read as "sudden bold" and
-  a torn liquid tail as too much — easing in and out, bolder on the trailing side as the
-  afterimage (飄移殘影), with a tail short enough "to not distract user visual control".
-- **The tier's colour is deferred**: the rim taking the sparks' per-tier colour to show the drift
+- **The car's drift outline is an afterimage off the end moving most, a hull, not the screen
+  line.** The screen pass sees depth only and cannot tell the car from the road. The hull is the
+  car's own outline colour (its paint × `surface_darkness`) and hangs off whichever end moves
+  faster across the car's length — the tail, in a slide — fading to a ghost at its tip, easing in
+  and out — one colour, the paint darkened, so no lamp or glass carries into it. Four cuts were
+  turned round on the way: a whole-car rim widening per tier ("sudden bold"), a torn liquid tail
+  ("too much"), a whole-car rim leaning to the trailing side ("only drag the end of car which moves
+  most"), and the end drawn in each part's own colour ("having the whole car body as after image is
+  strange … just do outline color for the car outermost rim", "skip the details").
+- **The tier's colour is deferred**: the afterimage taking the sparks' per-tier colour to show the drift
   bonus fee's status is the user's next step.
 
 **See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
