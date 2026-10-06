@@ -115,9 +115,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - ⚠️ **A flick stands traction control down like the button** (`FlickWatch`, `flick_*` in
   `systems/arcade_aids.tres`, `P3-54`): a lifted or braked feint, then the steering across within
   `flick_window_s`. Never the side cut, which stays the button's. 🔴 **It fires, but on the real
-  car the tail does not come round**: `flick@lift` peaks at 3.7 / 12.3 / 9.7° at 42 / 63 / 86 kph,
-  under the threshold, since the Crown Comfort's chassis (`1876da9`). The 31–40° in P3-54's
-  commit and `arcade_aids.md`'s first table is the `mu` 2.0 car's (bisect in `arcade_aids.md`). Grade a change to it with `--sweep=arcade_aids.flick_window_s=0,<v>` on the full pad —
+  car the tail barely comes round**: `flick@lift` peaks at 3.7 / 19.2 / 9.3° at 42 / 63 / 86 kph
+  at pace 2.0, over the threshold at 63 alone (12.3° at 1.5), since the Crown Comfort's chassis
+  (`1876da9`). The 31–40° in P3-54's commit and `arcade_aids.md`'s first table is the `mu` 2.0
+  car's (bisect in `arcade_aids.md`). Grade a change to it with
+  `--sweep=arcade_aids.flick_window_s=0,<v>` on the full pad —
   0 is the car without it, so every row but the flick's must read the same at both values. 🔴
   Anything that adds a steering reversal with the throttle lifted to a pad row (a new driver, a
   lifted catch) now reaches it, unless traction control is already off there — it never fires
@@ -200,8 +202,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   rows compare in the car's own terms; grade a value at REAL speeds by editing `pace.tres`.
   🔴 **60 Hz holds to pace 2.0 and not 2.5** (`pace.md`'s brake table): past it the tick is the
   limit, not a dial. The player's hands do not scale, so drift dwell falls with the pace.
-  Shipped at 1.5, provisional on the user's drive (`pace.md`): every figure in a sidecar or a `Q`
-  from before 2026-10-06 was read at pace 1, and a row from then does not compare.
+  Shipped at 2.0 on the user's drive since 2026-10-07 (1.5 the day before, `pace.md`): every
+  figure in a sidecar or a `Q` from before 2026-10-06 was read at pace 1, and from that day to
+  2026-10-07 at 1.5. Neither compares. At 2.0 `hold` at 42 / 63 kph is under the fare's 2 s,
+  a known trade.
   🔥 `arcade_aids.drive_boost` is gone for it. 🚫 `drift_side_cut` was tried at 0 and kept (the
   turn under-rotates, 59° at 42 kph; no handbrake ratio buys it back) — the part that would
   replace it is a limited-slip differential, deferred as a joint spin solve, not measured shut.

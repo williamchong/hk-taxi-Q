@@ -55,6 +55,9 @@ is not re-measured. Not moved: the user's call (`Q152`).
 At pace 1.5 with no boost (`Q156`, 2026-10-06, provisional): 80 kph in about 4.0 s from rest,
 and 122 kph after 8 s. Still not moved, and still the user's call.
 
+At pace 2.0 (the user's drive, 2026-10-07): 80 kph in about 2.8 s from rest, and 152 kph after
+8 s. Not moved.
+
 ## `speed_hold_m = 200.0`
 
 The tariff's own unit (`tariff.tres` `step_m`): the speed skill pays once per 200 m driven at or

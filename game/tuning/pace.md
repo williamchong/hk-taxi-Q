@@ -43,7 +43,28 @@ button's ramp) run at the pace. So a slide at pace 2 is the pace-1 slide in 0.71
 with the same hands: the drift is as readable as the pace is low, and that is the trade the dial
 makes.
 
-## `pace_scale = 1.5`
+## `pace_scale = 2.0`
+
+**2.0 since 2026-10-07, on the user's drive** ("i like 2.0, keep 2.0", after a street drive at
+it). This is the 60 Hz tick's ceiling (the brake table above), so a faster pace needs a faster
+tick first. Pace graded in finer steps at REAL entry speeds of 42 / 63 / 86 kph, the full pad:
+
+| pace | speed after 4 s | `hold` longest | `turn@off` came out | brake at 63 kph |
+|---|---|---|---|---|
+| 1.5 | 80.0 kph | 1.93 / 3.53 / 3.47 s | 91 / 97 / 110° | 13.9 m/s² |
+| 1.55 | 82.3 | 1.92 / 3.55 / 3.48 | 90 / 95 / 107° | 14.3 |
+| 1.6 | 84.5 | **0.72** / 3.57 / 3.50 | 88 / 93 / 105° | 14.8 |
+| 1.7 | 88.9 | 0.70 / **2.15** / 3.52 | 86 / 88 / 101° | 15.7 |
+| **2.0** | **101.7** | 0.68 / **0.83** / 3.57 | 81 / 84 / 93° | 18.2 |
+
+What 2.0 gives up, taken knowingly: the countersteered slide at 42 and 63 kph is under the
+fare's 2 s (`drift_min_s`), so a held drift pays from about 86 kph only. It falls off a cliff
+between 1.55 and 1.6 at 42, and between 1.65 and 1.7 at 63. Every `turn` row stays inside 80–110°
+but the countersteer's (81 / 77 / 76°). The lifted flick slides again at 63 kph (19.2°, over the
+threshold; 3.7 / 9.3° at 42 / 86). The lifted handbrake still spins at 63 / 86. 80 kph from rest
+is about 2.8 s, 152 kph after 8 s, and the limiter is 198 kph (140 × √2).
+
+The section below is the value as first set, at 1.5.
 
 **1.5 since 2026-10-06, provisional until the user's drive** (`Q156`; the dial itself shipped at
 1.0, every pad row byte-identical with the car before it). Read off the pad at REAL entry speeds

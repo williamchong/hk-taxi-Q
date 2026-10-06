@@ -9526,6 +9526,17 @@ slide that is now 0.82 of the seconds it was — `hold` at 42 kph is 1.93 s.
 **Owed.** The user's drive of 1.5 against 1.0 and 2.0 (`pace.tres`, one line). `turn@off` and the
 lifted handbrake from step 2. The four bars above, once the pace is settled.
 
+**2.0, on the user's drive (2026-10-07): "i like 2.0, keep 2.0".** The pace is settled at the
+60 Hz tick's ceiling. Graded at real speeds in finer steps first (`pace.md` holds the table): the
+countersteered slide at 42 kph falls off between 1.55 and 1.6 (1.92 → 0.72 s) and at 63 between
+1.65 and 1.7, so no pace over 1.55 keeps every `hold` bar. At 2.0: 101.7 kph after 4 s and 151.6
+after 8, 80 kph from rest in about 2.8 s, braking 18.2 m/s² at 63 kph. `hold` reads
+0.68 / 0.83 / 3.57 s and `turn@off` 81 / 84 / 93°. The wall rows' approach and impact still agree
+to the hundredth at 42 / 63 / 86 kph. The lifted flick passes the threshold again at 63 kph
+(19.2°). Taken knowingly: a held drift pays from about 86 kph only. Still owed: the four bars
+above, now that the pace is settled (`drift_min_s` against the shorter slide first), and the
+lifted handbrake.
+
 **See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `P3-62` · `P3-63` · `game/tuning/pace.md` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`
 
 ---
