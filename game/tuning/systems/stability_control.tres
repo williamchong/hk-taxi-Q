@@ -9,3 +9,6 @@ slip_power_cut_from_deg = 10.0
 slip_power_cut_to_deg = 40.0
 armed_slip_cut_from_deg = 8.0
 armed_slip_cut_to_deg = 14.0
+yaw_brake_lock_ratio = 1.5
+yaw_brake_from_deg = 25.0
+yaw_brake_to_deg = 40.0

@@ -9,7 +9,7 @@ the file as a whole. Why it lives here and not in the file: `Q119`.
 `VehicleController.rear_axle_velocity`); figures written before that day were read at the centre
 of mass and do not compare.
 
-Stability control's power cuts (a real car's ESC takes engine torque away when the car runs wide or its tail swings out). Power only: a real ESC also brakes single wheels, which this does not model.
+Stability control: a real car's ESC takes engine torque away when the car runs wide or its tail swings out, and brakes one wheel to turn the car back. The power cuts are the first three sections; the yaw brake (`Q156`, 2026-10-06) is the last.
 
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
 2026-10-05); their prose keeps the names the dials had when it was written: `turn_drive_cut` → `understeer_power_cut`, `slide_drive_fade_from_deg` / `_to_deg` → `slip_power_cut_from_deg` / `_to_deg`, `assist_drive_fade_from_deg` → `assisted_slip_cut_from_deg`, which went with the drift assist on 2026-10-06 (`P3-56`; `Q153` keeps its sweeps) — "the assisted mode" below is that removed option.
@@ -91,3 +91,45 @@ which the boost's steering fade finished (`arcade_aids.md`). It also brings the 
 aside past 90° of slip (`REVERSED_SLIP_DEG`): a car rolling backwards after a spin had no drive at
 all and rolled at 10–30 kph with the throttle held (the user's report, 2026-10-06; the 50 kph
 assisted tap's exit −9.0 → +2.6 kph).
+
+## `yaw_brake_lock_ratio = 1.5`, `yaw_brake_from_deg = 25.0`, `yaw_brake_to_deg = 40.0`
+
+**The yaw brake, since 2026-10-06** (`Q156`, the user's "it still overspin"): past 25° of
+rear-axle slip the front wheel outside the slide is braked, up to 1.5× the torque that locks a
+wheel at rest by 40°. A real ESC's oversteer intervention, and what a real drift mode keeps as its
+slip ceiling (Ferrari's Side Slip Control, McLaren's Variable Drift Control), so drift mode does
+not stand it down. The force is the braked tyre's own, through the spin solve: it cannot exceed
+the grip that wheel has, where a yaw torque on the body could. In the car's unit (a wheel's lock,
+`TyreVehicleController._wheel_lock_nm`), so it follows the mass, the gravity and the tyre.
+
+Why it and not a deeper power cut: the cuts take away what FEEDS a slide, and the spin that was
+left is the car's own momentum — the plain turn let go came out at 180 / 164 / 146° with the
+power already gone at 40°. Nothing but a force on the car turns it back.
+
+Swept on the full pad, 42 / 63 / 86 kph (2026-10-06; `ride` and `hold` are `longest`):
+
+| | off | 1.5, 30–50 | 1.5, 20–35 | **1.5, 25–40** | 2.0, 25–35 |
+|---|---|---|---|---|---|
+| `turn@off` came out | 180 / 164 / 146° | (1.0:) 132 / 150 / 134° | 83 / 100 / 94° | **95 / 118 / 110°** | 78 / 106 / 101° |
+| `turn@lift` came out | 157 / 135 / 121° | (1.0:) 121 / 126 / 108° | 76 / 84 / 65° | **86 / 100 / 81°** | 74 / 89 / 68° |
+| `tap` peak | 43.3 / 26.8 / 27.2° | — | 30.5 / 24.4 / 24.5° | **34.1 / 26.5 / 26.8°** | 32.1 / 26.4 / 26.6° |
+| `ride` | 1.77 / 1.83 / 1.90 s | — | 1.02 / 1.27 / 1.30 s | **1.20 / 1.70 / 1.73 s** | 1.08 / 1.62 / 1.63 s |
+| `hold` | 3.52 / 3.35 / 3.00 s | 3.52 / 3.35 / 2.88 s | 3.52 / 2.02 / 1.72 s | **3.52 / 3.35 / 2.13 s** | 3.52 / 3.35 / 1.65 s |
+
+25–40 is the earliest band that leaves a countersteered slide alone at 42 and 63 kph (`hold`'s
+slip peaks at 22–27° there) and keeps it over the fare's 2 s at 86, where the driver runs to 34–39°
+and the brake now holds it at 34°. From 20° it cuts `hold` to 1.7 s at 86; a harder brake (2.0)
+or a shorter ramp (25–35, 25–37) does the same. 1.5 and 2.0 read alike over 25–45: the wheel is
+at its grip before the ratio is.
+
+What it leaves: `turn@off` at 63 kph comes out at 118°, 8° over `P3-53`'s 80–110° bar (164°
+before); the handbrake pressed in a turn with the throttle LIFTED still goes round at 63 and
+86 kph (peak slip 179 → 144° at 63, 179° at 86; 116 → 94° at 42), where both rears are locked and
+one front tyre is not enough. The held-throttle handbrake stops swinging on (`handbrake@held` peak
+60 / 34 / 46° → 39 / 31 / 34°). `corner`, `liftoff`, `brake`, `coast`, the flicks and the
+trail-brake never reach 25° and are byte-identical, bar the held flick at 86 kph (peak 28.3 →
+27.4°). The catch is gentler, not snappier: `yaw@hold` −13.2 → −6.2° at 42 kph.
+
+🔴 Graded on `turn`'s `came out` with `hold`'s `longest` as the guard, at all three speeds — 86 kph
+is where the band's start costs dwell. Mutation-checked: braking the INSIDE front instead brings
+`turn@off` / `@lift` out at 170 / 152° at 42 kph and 182 / 152° at 63.

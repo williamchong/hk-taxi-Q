@@ -392,6 +392,10 @@ func _apply_tyres(delta: float) -> void:
 	# What the parent's drive was sized on: the engine's force at the car's speed.
 	var body_force_n: float = _drive_force_n()
 	var hand_lock_nm: float = _handbrake_torque_nm()
+	var yaw_brake_nm: float = _yaw_brake_nm()
+	# The front wheel outside the slide: the left one with the travel left of
+	# the nose. Braked, its force turns the nose back toward the travel.
+	var yaw_brake_left: bool = _slide_toward() > 0.0
 	var governor: bool = wheelspin_limit > 0.0 and not _drift_mode.engaged
 	var drive_share: float = 1.0
 	if _drift_mode.engaged:
@@ -413,9 +417,13 @@ func _apply_tyres(delta: float) -> void:
 		var axle_share: float = front_share if on_front else 1.0 - front_share
 		var axle_wheels: int = _front.size() if on_front else _rear.size()
 		var foot_nm: float = _brake_n * _radius * axle_share * _wheels.size() / axle_wheels
+		# What ABS never releases: the handbrake, and stability control's own
+		# brake on the one wheel it picks.
 		var hand_nm: float = 0.0
-		if drift_input and i >= _front.size():
+		if drift_input and not on_front:
 			hand_nm = hand_lock_nm
+		elif yaw_brake_nm > 0.0 and on_front and (_hardpoints[i].x < 0.0) == yaw_brake_left:
+			hand_nm = yaw_brake_nm
 		var hold_nm: float = foot_nm + hand_nm
 		if not wheel.is_in_contact():
 			# No tyre force off the ground, so the spin is closed-form.
@@ -502,6 +510,25 @@ func _apply_tyres(delta: float) -> void:
 	_cost_ticks += 1
 
 
+## Stability control's yaw brake, as the torque on the front wheel outside the
+## slide this tick: none under `yaw_brake_from_deg` of rear-axle slip, rising
+## to `yaw_brake_lock_ratio` of a wheel's lock at rest by `yaw_brake_to_deg`.
+## Whatever the pedals: a lifted throttle spins the car too.
+func _yaw_brake_nm() -> float:
+	var table: StabilityControlProfile = stability_control
+	if table.yaw_brake_lock_ratio <= 0.0:
+		return 0.0
+	var over: float = _slip_over(table.yaw_brake_from_deg, table.yaw_brake_to_deg)
+	return over * table.yaw_brake_lock_ratio * _wheel_lock_nm()
+
+
+## The torque that just locks a wheel carrying its share of the car at rest:
+## the tyre's grip on that load, at the wheel's radius. What the handbrake and
+## the yaw brake are sized in, so neither is authored in newtons.
+func _wheel_lock_nm() -> float:
+	return tyre.mu * _wheel_load_at_rest_n() * car.wheel_radius_m
+
+
 ## The handbrake's torque on each rear wheel: `HandbrakeProfile.lock_ratio` of
 ## what locks a wheel carrying its share of the car at rest — the tyre's grip
 ## on that load, at the wheel's radius. Derived, so it follows the mass, the
@@ -509,7 +536,7 @@ func _apply_tyres(delta: float) -> void:
 ## 1,150 N·m across four changes of those, and spun every tap the one time it
 ## was left behind (`Q153`).
 func _handbrake_torque_nm() -> float:
-	return handbrake.lock_ratio * tyre.mu * _wheel_load_at_rest_n() * car.wheel_radius_m
+	return handbrake.lock_ratio * _wheel_lock_nm()
 
 
 ## Stability control's understeer cut: the share of the forward drive left
@@ -562,17 +589,26 @@ func _armed_slip_share() -> float:
 ## `from`), on reverse drive, and past `REVERSED_SLIP_DEG`, where the car is
 ## travelling backwards and the throttle must brake the roll.
 func _slip_cut_share(from: float, to: float) -> float:
-	if to <= from or _drive_n <= 0.0:
+	if _drive_n <= 0.0:
 		return 1.0
+	return 1.0 - _slip_over(from, to)
+
+
+## How far the rear axle's slip is through `from`–`to` degrees: 0 under `from`,
+## 1 at `to`. 0 when the band is not authored (`to` not over `from`) and past
+## `REVERSED_SLIP_DEG`.
+func _slip_over(from: float, to: float) -> float:
+	if to <= from:
+		return 0.0
 	# Under the tyre's low-speed floor the rear axle's travel is mostly the
-	# car's own rotation, near 90° of slip on a pivot: no cut, as a real ESC
+	# car's own rotation, near 90° of slip on a pivot: nothing, as a real ESC
 	# stands aside at a crawl.
 	if linear_velocity.length() < tyre.low_speed_mps:
-		return 1.0
+		return 0.0
 	var slip: float = FareSystem.slip_deg_of(rear_axle_velocity(), -global_basis.z)
 	if slip > REVERSED_SLIP_DEG:
-		return 1.0
-	return 1.0 - clampf(inverse_lerp(from, to, slip), 0.0, 1.0)
+		return 0.0
+	return clampf(inverse_lerp(from, to, slip), 0.0, 1.0)
 
 
 ## The rear side cut (an arcade aid) for a press at `kph`: `drift_side_cut` up to

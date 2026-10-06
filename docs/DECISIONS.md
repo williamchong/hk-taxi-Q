@@ -9301,4 +9301,33 @@ six cells 0.01 off (the handbrake's 1,149.96 against 1,150 N·m).
 drift's threshold, but both are swept dials, and deriving them would take the sweep away for no
 row that moves.
 
-**See.** `Q153` · `Q155` · `P3-60` · `game/tuning/cars/crown_comfort.md` · `.claude/rules/handling.md`
+### Step 2 — the overspin: stability control brakes a wheel (`P3-61`, shipped 2026-10-06)
+
+**Decision.** Stability control gains the half a real ESC has and this one lacked: past 25° of
+rear-axle slip the front wheel outside the slide is braked, up to 1.5× a wheel's lock at rest by
+40° (`stability_control.yaw_brake_*`). It runs in drift mode too, as a real drift mode's slip
+ceiling does (Ferrari's SSC, McLaren's VDC). Built at the real taxi's own scale, before the pace,
+so its band is in the car's terms.
+
+**Why a brake.** The slip cuts already took the power away by 40°, and the car still came round:
+the spin left was its own momentum. The only things that turn a car back are forces on it, and
+this one goes through a tyre in the spin solve — bounded by that wheel's grip, as a body torque
+would not be. It asks for no angle under the band; past it the car is not drifting but spinning.
+⚠️ It IS a stronger hand than "power taken away" (`Q153`'s rule for a drift lever): a ceiling,
+not a target, and one dial (`yaw_brake_lock_ratio` 0) takes it out.
+
+**Measured**, 42 / 63 / 86 kph, before → after (`stability_control.md` holds the sweep):
+
+| | before | after |
+|---|---|---|
+| `turn@off` came out (bar 80–110° at 42 / 63) | 180 / 164 / 146° | 95 / 118 / 110° |
+| `turn@lift` came out | 157 / 135 / 121° | 86 / 100 / 81° |
+| `tap` peak slip | 43.3 / 26.8 / 27.2° | 34.1 / 26.5 / 26.8° |
+| `ride` longest (novice, bar: under 2 s) | 1.77 / 1.83 / 1.90 s | 1.20 / 1.70 / 1.73 s |
+| `hold` longest (bar: 2 s at 63 / 86) | 3.52 / 3.35 / 3.00 s | 3.52 / 3.35 / 2.13 s |
+
+Rows that never reach 25° are byte-identical. **Left open:** `turn@off` at 63 kph is 8° over its
+bar; the lifted handbrake in a turn still goes round at 63 / 86 kph; `hold` at 86 gave up 0.9 s
+for the ceiling. The user's drive is owed, as for any drift value.
+
+**See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`
