@@ -37,8 +37,9 @@ uniform vec3 ink_colour : source_color = vec3(0.08, 0.08, 0.1);
 // the edge, so a tower's silhouette is drawn in the tower's hue and not the
 // sky's or the building behind it.
 uniform float ink_from_surface : hint_range(0.0, 1.0) = 1.0;
-// The surface colour's scale in linear light: 0.35 keeps the hue and drops
-// the value by about half in L*.
+// The surface colour's scale in linear light, before the tonemap: 0.5 is one
+// stop down, about 15 `L*` darker on a mid-tone wall, hue kept. A sunlit face
+// above 1.0 in the HDR buffer gives a line brighter than the same face in shade.
 uniform float surface_darkness : hint_range(0.0, 1.0) = 0.5;
 // 1.0 draws the ink opaque; under it the line is a darkening.
 uniform float ink_strength : hint_range(0.0, 1.0) = 1.0;
@@ -83,6 +84,15 @@ float ndc_z(vec2 uv) {
 #endif
 }
 
+// Unrolled rather than a loop over a local array, which an older mobile
+// compiler can spill to scratch memory.
+void keep_nearer(float inv_tap, vec2 tap_uv, inout float inv_nearest, inout vec2 near_uv) {
+	if (inv_tap > inv_nearest) {
+		inv_nearest = inv_tap;
+		near_uv = tap_uv;
+	}
+}
+
 void fragment() {
 	// Inverse view depth is a straight line in NDC z under a perspective
 	// projection: unprojected, view z is the matrix's constant `[3][2]` and view
@@ -105,24 +115,22 @@ void fragment() {
 	// its UV is where the surface colour is read.
 	float inv_nearest = inv_centre;
 	vec2 near_uv = SCREEN_UV;
-	vec4 taps[4] = {
-		vec4(left, -step_uv.x, 0.0, 0.0), vec4(right, step_uv.x, 0.0, 0.0),
-		vec4(down, 0.0, -step_uv.y, 0.0), vec4(up, 0.0, step_uv.y, 0.0)
-	};
-	for (int i = 0; i < 4; i++) {
-		float inv_tap = slope * taps[i].x + offset;
-		if (inv_tap > inv_nearest) {
-			inv_nearest = inv_tap;
-			near_uv = SCREEN_UV + taps[i].yz;
-		}
-	}
+	keep_nearer(slope * left + offset, SCREEN_UV - vec2(step_uv.x, 0.0), inv_nearest, near_uv);
+	keep_nearer(slope * right + offset, SCREEN_UV + vec2(step_uv.x, 0.0), inv_nearest, near_uv);
+	keep_nearer(slope * down + offset, SCREEN_UV - vec2(0.0, step_uv.y), inv_nearest, near_uv);
+	keep_nearer(slope * up + offset, SCREEN_UV + vec2(0.0, step_uv.y), inv_nearest, near_uv);
 	float nearest = 1.0 / inv_nearest;
 
 	float rise = edge_distance_m > 0.0 ? 1.0 + nearest / edge_distance_m : 1.0;
 	float edge = smoothstep(edge_start * rise, edge_full * rise, abs(laplacian) / inv_centre);
 	edge *= 1.0 - smoothstep(fade_start_m, fade_end_m, nearest);
 
-	vec3 surface = texture(screen_texture, near_uv).rgb * surface_darkness;
+	// Most of the frame is no edge: skip its colour fetch and its blend.
+	// `textureLod` because derivatives are undefined past a divergent branch.
+	if (edge <= 0.0) {
+		discard;
+	}
+	vec3 surface = textureLod(screen_texture, near_uv, 0.0).rgb * surface_darkness;
 	ALBEDO = mix(ink_colour, surface, ink_from_surface);
 	ALPHA = edge * ink_strength;
 }
