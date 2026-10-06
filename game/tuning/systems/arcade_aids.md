@@ -75,11 +75,12 @@ the trail-brake — byte-identical between 0 and 0.3, in both modes:
 | 63 | 32.7 / 39.3° (5.0) | 33.9 / 39.5° (5.5) | no fire |
 | 86 | 31.1 / 38.4° (1.3) | 33.5 / 39.7° (3.3) | no fire |
 
-🔴 **That table is the `mu` 2.0 car's, and the tail no longer comes round** (bisected 2026-10-07,
-`Q153`). The trigger still fires and stands traction control down, but on the real car at pace 1.5 the
-slide it frees stays under `drift_slip_threshold_deg` at 63 / 86 kph, so it pays nothing. At
-the shipped pace 2.0 it passes again at 63 kph alone. It went with
-the Crown Comfort's chassis (`1876da9`), not with a dial, and no commit since has brought it back.
+🔴 **That table is the `mu` 2.0 car's, and the tail barely comes round now** (bisected
+2026-10-07, `Q153`). The trigger still fires and stands traction control down, but on the real
+car at pace 1.5 the slide it frees stays under `drift_slip_threshold_deg` at 63 / 86 kph, so it
+pays nothing. At the shipped pace 2.0 it passes again at 63 kph alone. It went with the Crown
+Comfort's chassis (`1876da9`), not with a dial, and no commit before the pace brought any of it
+back.
 Peak slip from the turn-in, the current pad graded on each commit, 42 / 63 / 86 kph:
 
 | commit | `flick@lift` | `flick@brake` (63 / 86) |
