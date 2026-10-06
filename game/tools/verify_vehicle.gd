@@ -385,8 +385,9 @@ func _check_the_sparks_take_the_tier(car: Node3D) -> void:
 		print("  ok    the sparks take each tier's colour and are clear when no slide counts")
 
 
-## The car's outline (`P3-65`): the rim at no width with no slide counting and
-## at its one width on every counted tier; its ease never a snap, in either
+## The car's outline (`P3-65`): the afterimage at no width with no slide
+## counting and at its one width on every counted tier, hung off the end moving
+## most across the car; its ease never a snap, in either
 ## direction; the speed share 0 at rest, a half at half of `full_speed_kph`,
 ## held at 1 above it. A table with no city line to take the colour from is
 ## refused. The global it writes is `verify_settings.gd`'s.
@@ -402,17 +403,29 @@ func _check_the_outline_takes_the_tier_and_speed(car: Node3D) -> void:
 		return
 	var width: float = table.get("hull_width_m")
 	if outline.width_of(-1) != 0.0:
-		_problem("the rim has a width with no slide counting")
+		_problem("the afterimage has a width with no slide counting")
 	for tier: int in 4:
 		if outline.width_of(tier) != width:
-			_problem("tier %d's rim is not the one hull_width_m" % tier)
+			_problem("tier %d's afterimage is not the one hull_width_m" % tier)
 	var tick: float = 1.0 / 60.0
 	var seeped: float = outline.eased(0.0, width, tick)
 	var drained: float = outline.eased(width, 0.0, tick)
 	if not (seeped > 0.0 and seeped < width * 0.5):
-		_problem("the rim does not seep in: one tick took it to %.4f of %.4f" % [seeped, width])
+		_problem(
+			"the afterimage does not seep in: one tick took it to %.4f of %.4f" % [seeped, width]
+		)
 	if not (drained < width and drained > width * 0.5):
-		_problem("the rim does not drain: one tick took it to %.4f of %.4f" % [drained, width])
+		_problem(
+			"the afterimage does not drain: one tick took it to %.4f of %.4f" % [drained, width]
+		)
+	# The end that moves most ACROSS the car, not the faster one: the nose here
+	# is the quicker (10.05 m/s against 4) but mostly along the length, so the
+	# tail is the end. The axis is not a unit, as the hull's basis need not be.
+	var length := Vector3(0.0, 0.0, 3.0)
+	if outline.moving_end(Vector3(1.0, 0.0, 10.0), Vector3(4.0, 0.0, 0.0), length) != -1.0:
+		_problem("the afterimage does not hang off the end moving most across the car")
+	if outline.moving_end(Vector3(-5.0, 0.0, 1.0), Vector3(2.0, 0.0, 9.0), length) != 1.0:
+		_problem("the afterimage does not take the front when the front swings")
 	var full: float = table.get("full_speed_kph")
 	if outline.speed_share(0.0) != 0.0 or outline.speed_share(full * 2.0) != 1.0:
 		_problem("the speed share is not 0 at rest and held at 1 past full speed")
@@ -426,7 +439,7 @@ func _check_the_outline_takes_the_tier_and_speed(car: Node3D) -> void:
 	outline.set("profile", table)
 	if _failed == before:
 		print(
-			"  ok    the car's rim seeps in and drains on a counted slide, and the line takes its speed"
+			"  ok    the afterimage seeps in, drains and hangs off the end moving most; the line takes its speed"
 		)
 
 

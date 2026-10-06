@@ -6,10 +6,12 @@
 [resource]
 script = ExtResource("1_profile")
 full_speed_kph = 120.0
-hull_width_m = 0.03
-trail_width_m = 0.04
+hull_width_m = 0.06
+drag_from = 0.3
+ghost = 0.35
+rim_colour = Color(0.7764706, 0.1254902, 0.15686275, 1)
 seep_s = 0.25
 drain_s = 0.6
 smear_s = 0.04
-smear_max_m = 0.3
+smear_max_m = 0.15
 city_line = ExtResource("2_line")
