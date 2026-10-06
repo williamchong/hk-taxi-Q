@@ -9532,10 +9532,26 @@ the variants):
   on, or ink drawn by the façade shader itself. And +1 draw call takes the seam line's 136–150 to
   137–151 against the 150 budget.
 
-**Owed on a pick.** For the chosen variant only: `facade_chroma.py --shipped` before and after (the
-`facade` rule — the ramp moves rendered colour without touching `materials:`, and a drift is fixed in
-the ramp, never in the palette or the exposure), the skyline at `t=2.0`, the outline's frame time on
-the `P3-9` handset, and `ART_DESIGN.md`'s anti-goal "flat shading plus one directional light is the
-look" amended with the reason.
+**The `facade` rule's checks, taken for every variant ahead of the pick** (2026-10-06):
+
+- `facade_chroma.py --shipped` on the branch reproduces `ART_DESIGN.md`'s table to the digit
+  (strength 3.0: mean 17.97, p90 34.97, p99 64.64, 7.8% out of gamut). Neither half touches the
+  ETL's palette or the exposure, so it cannot move; the rendered half is the frame below.
+- The `skyline` camera at `t=2.0`, two runs a variant, identical to two decimals within each pair:
+
+| Variant | `L*` mean | `L*` 10–30 | `C*` mean | `C*` p90 |
+|---|---|---|---|---|
+| shipped | 60.18 | 2.09% | 14.76 | 26.76 |
+| outline (bold) | 59.76 | 2.41% | 14.72 | 26.76 |
+| ramp | 59.91 | 2.10% | 14.89 | 26.76 |
+| both | 59.49 | 2.42% | 14.85 | 26.76 |
+| both, ground and structures banded | 59.40 | 2.43% | 14.81 | 26.76 |
+
+  No colour drift to correct: the ramp moves the skyline −0.27 `L*` and +0.13 `C*`, the ink adds
+  0.3 points of dark pixels, and `C*` p90 does not move in any variant.
+
+**Owed on a pick.** The user's choice; the outline's frame time on the `P3-9` handset; and
+`ART_DESIGN.md`'s anti-goal "flat shading plus one directional light is the look" amended with the
+reason, if the pick turns either half on.
 
 **See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
