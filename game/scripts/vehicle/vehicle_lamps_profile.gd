@@ -13,7 +13,7 @@ extends Resource
 ## drifts — Godot's writer also drops any key equal to one, which is how
 ## `beams.tres` went empty (`Q119`). A missing key reads as zero, and
 ## `VehicleLamps` refuses to run on a zero where a zero would divide or never
-## flash, rather than fall back to a literal. Eight keys here may legally be
+## flash, rather than fall back to a literal. Nine keys here may legally be
 ## zero (their export floor), so a missing one of those cannot be told from a
 ## chosen one; `tuning/vehicle_lamps.md` names them.
 
@@ -36,6 +36,11 @@ const PATH: String = "res://tuning/vehicle_lamps.tres"
 @export_group("Roof sign")
 ## How hard the illuminated box on the roof burns, when `for_hire` lights it.
 @export_range(0.0, 1.0, 0.05) var sign_lit: float
+
+@export_group("Tail lamps")
+## How hard the brake lenses burn as tail lamps while the front lamps are on,
+## against the brake's own 1.0.
+@export_range(0.0, 1.0, 0.05) var tail_lit: float
 
 @export_group("Light probe")
 ## How far the shadow probe looks along the sun before calling the car sunlit.

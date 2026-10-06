@@ -77,10 +77,15 @@ const PINNED: Dictionary = {
 ## this pin protects is a scene with no rig, which is `skidpad.tscn` and the
 ## grey box: they render unexposed, which is the honest state and a visible one.
 ## `outline_speed`'s 0 is the same promise for the outline (`P3-65`): a scene with
-## no `CarOutline` draws the resting line.
+## no `CarOutline` draws the resting line. `sky_light`'s white and
+## `night_lights`' 0 are the same promise for the hour (`Q160`): a scene with no
+## rig, and a rig that never moves, draw noon — and an undeclared `sky_light`
+## resolves to zero, which blacks out every pane of glass in the city.
 const SHADER_GLOBALS: Dictionary = {
 	"exposure_anchor": {"type": "float", "value": 1.0},
 	"outline_speed": {"type": "float", "value": 0.0},
+	"sky_light": {"type": "vec3", "value": Vector3.ONE},
+	"night_lights": {"type": "float", "value": 0.0},
 }
 
 ## `[importer_defaults]` seeds every NEW `.import`; `Q82` and the importer

@@ -69,6 +69,16 @@ uniform float plate_roughness : hint_range(0.0, 1.0) = 0.55;
 // not an emissive sign, and pushing it turns every NO ENTRY into a lamp.
 uniform float sheeting_glow : hint_range(0.0, 1.0) = 0.06;
 
+group_uniforms lantern;
+// The lit lantern (`Q160`, the user's ask, reversing `Q82`'s unlit one). The
+// ETL marks a lantern's luminous faces with `COLOR_0` alpha 0 — every other
+// vertex in all three layers ships 255 — and the rig's `night_lights` brings
+// them up, so a lantern is dark at noon whatever this says. Zero on
+// `signs.tres`: a sign has no lantern and no vertex marked as one.
+global uniform float night_lights;
+uniform vec3 lantern_colour : source_color = vec3(1.0, 0.86, 0.62);
+uniform float lantern_glow : hint_range(0.0, 8.0) = 0.0;
+
 void fragment() {
 	vec3 albedo_linear = vertex_srgb_to_linear(COLOR.rgb)
 		* (apply_exposure ? exposure_anchor : 1.0);
@@ -76,5 +86,6 @@ void fragment() {
 	ROUGHNESS = plate_roughness;
 	// Tinted by the plate's own colour rather than added white, so the glow
 	// cannot desaturate the livery it is meant to lift.
-	EMISSION = albedo_linear * sheeting_glow;
+	EMISSION = albedo_linear * sheeting_glow
+		+ lantern_colour * (lantern_glow * night_lights * (1.0 - COLOR.a));
 }

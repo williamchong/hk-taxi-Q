@@ -93,6 +93,9 @@ const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
 // real, worth having, and about four points rather than the sweep first
 // claimed. Matched to the facades' values so the car and the city agree about
 // what the sky is.
+// The rig's hour (`Q160`; `city_facade_clean.gdshaderinc` has the account): the
+// three colours below are a noon sky, and this is what dims the mirror with it.
+global uniform vec3 sky_light;
 uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
 uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
 uniform vec3 ground_reflection : source_color = vec3(0.32, 0.33, 0.35);
@@ -282,7 +285,7 @@ void fragment() {
 		ground_reflection,
 		mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
 		smoothstep(-0.08, 0.08, bounced.y)
-	);
+	) * sky_light;
 
 	// Isolated from the sun alone, so it moves with heading where the sky
 	// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
@@ -302,7 +305,7 @@ void fragment() {
 	float roughness = paint_roughness;
 	if (is_glass) {
 		roughness = glass_roughness;
-		albedo += sky_horizon * glint * glint_strength;
+		albedo += sky_horizon * sky_light * glint * glint_strength;
 		albedo = mix(albedo, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel));
 	} else if (is_lamp) {
 		roughness = lamp_roughness;
@@ -351,7 +354,7 @@ void fragment() {
 			vec3 hue = albedo / max(peak, 0.001);
 			EMISSION = hue * level * lamp_emission;
 		}
-		albedo += sky_horizon * glint * glint_strength * 0.5;
+		albedo += sky_horizon * sky_light * glint * glint_strength * 0.5;
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);
 	} else {
 		// Paint and trim. `MARKER_TRIM` shares this branch rather than taking one

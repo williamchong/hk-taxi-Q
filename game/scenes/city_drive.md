@@ -119,3 +119,11 @@ far plane culls nothing at all, and a chase camera 6.5 m behind a car in a Wan
 Chai street canyon cannot see past a couple of blocks anyway. Measured: 94 draw
 calls and 2.06 M primitives at 2 km, against 48 and 1.16 M at 400 m, with
 nothing visible lost at street level.
+
+## `[node name="DayClock" type="Node" parent="."]`
+
+Game time for the rig (`Q160`): `scripts/world/day_clock.gd` counts the seconds DRIVEN and hands
+them to `Lighting` as its `time_of_day`. Here and not in the rig because what game time means is
+the level's to say: it holds while `Taxi.parked` is true, so the start menu's orbit is always
+noon. `--day-cycle=off` (which `drive.sh` appends) and the options menu's ALWAYS DAY both leave it
+idle.

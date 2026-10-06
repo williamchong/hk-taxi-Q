@@ -45,6 +45,7 @@ const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
+const LampPools = preload("res://scripts/city/lamp_pools.gd")
 
 ## Emitted once built, with the bounds of the layer, so a camera can frame it.
 signal built(low: Vector3, high: Vector3)
@@ -184,6 +185,8 @@ func _place(library: Node3D) -> Dictionary:
 			for body: StaticBody3D in PropBatch.bodies(local, batch, mesh_name + "_col"):
 				add_child(body)
 		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
+		if layer == GeneratedLayer.LAMPS:
+			batches += _stand_pools(mesh, batch, mesh_name, cells)
 	print(
 		(
 			"%s: %d placements over %d library meshes, %d batches"
@@ -222,6 +225,29 @@ func _batches(
 		node.visibility_range_end_margin = cells.range_margin_m
 		nodes.append(node)
 	return nodes
+
+
+## The pool of light under each of `columns`' lanterns (`Q160`), on the lamps'
+## own cells, and how many batches that added. Nothing — and a warning — for a
+## library mesh that marks no lantern, or with the pools' material missing.
+func _stand_pools(
+	mesh: Mesh, columns: Array[Transform3D], mesh_name: String, cells: PropCellProfile
+) -> int:
+	var material := load(LampPools.MATERIAL_PATH) as ShaderMaterial
+	var lantern: Vector3 = LampPools.lantern_of(mesh)
+	if material == null or lantern == Vector3.INF:
+		push_warning("%s: %s throws no pool of light at night" % [layer, mesh_name])
+		return 0
+	var pools: Array[Transform3D] = LampPools.stand(
+		columns, lantern, material.get_shader_parameter(&"drop_m")
+	)
+	var stood: Array[MultiMeshInstance3D] = _batches(
+		LampPools.cylinder(material), pools, mesh_name + "_pool", cells
+	)
+	for node: MultiMeshInstance3D in stood:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(node)
+	return stood.size()
 
 
 ## The library's meshes by the name the ETL gave each — the importer has

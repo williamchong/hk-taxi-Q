@@ -212,8 +212,19 @@ class ColouredBuilder:
         self._triangles: list[np.ndarray] = []
         self._count = 0
 
-    def polygon(self, points: np.ndarray, normal: np.ndarray, colour: tuple[int, int, int]) -> None:
-        """One convex polygon in world space, already wound to face `normal`."""
+    def polygon(
+        self,
+        points: np.ndarray,
+        normal: np.ndarray,
+        colour: tuple[int, int, int],
+        alpha: int = 255,
+    ) -> None:
+        """One convex polygon in world space, already wound to face `normal`.
+
+        `alpha` rides `COLOR_0`'s fourth byte. Every shader here is opaque, so
+        it is a free marker rather than an opacity: 255 is "nothing to say", and
+        `lamps.py` ships 0 on a lantern's luminous faces (`Q160`).
+        """
         span = len(points)
         if span < 3:
             return
@@ -224,7 +235,7 @@ class ColouredBuilder:
         )
         self._positions.append(points)
         self._normals.append(np.tile(normal.astype(np.float32), (span, 1)))
-        self._colours.append(np.tile(np.array([*colour, 255], dtype=np.uint8), (span, 1)))
+        self._colours.append(np.tile(np.array([*colour, alpha], dtype=np.uint8), (span, 1)))
         self._count += span
 
     def build(self, name: str) -> MeshData | None:

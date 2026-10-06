@@ -147,7 +147,14 @@ LAMPS_MANIFEST_NAME = "lamps.json"
 # the same numbers; `library_*`, `placements` and `placements_document` are new.
 # A v1 reader publishing a `city.json` with no `lamps_placements` would ship a
 # library and stand nothing on it.
-LAMPS_MANIFEST_SCHEMA = 2
+# 3 since `Q160`: a lantern's luminous faces carry `COLOR_0` alpha 0 and
+# `library_lit_vertices` counts them. A v2 bundle under the v3 game is a city
+# whose lamps never come on at night, with nothing in a daylight frame to say so
+# — `verify_lamps.gd` refuses a library with no marked vertex.
+LAMPS_MANIFEST_SCHEMA = 3
+# `COLOR_0` alpha on a lantern's luminous faces; every other vertex ships 255.
+# `signs.gdshader`'s `1.0 - COLOR.a` is the reader.
+LANTERN_LIT_ALPHA = 0
 LAMPS_PLACEMENTS_NAME = "lamps_placements.json"
 
 # The glTF material name `tools/generated_scene_import.gd` dispatches on, and the
@@ -286,6 +293,9 @@ class LampReport:
     library_meshes: int = 0
     library_triangles: int = 0
     library_vertices: int = 0
+    # `Q160`: the library vertices marked as a lantern's luminous faces. Twenty
+    # a kind — five faces of four — and 0 is a city whose lamps never light.
+    library_lit_vertices: int = 0
 
     # Reused rather than restated, the line `signs.py`, `railings.py`
     # and `boxjunctions.py` all carry: p90/p99/max beside the median
@@ -552,6 +562,13 @@ def _lantern(
             np.vstack([origin - a - b, origin + a - b, origin + a + b, origin - a + b]),
             normal / float(np.linalg.norm(normal)),
             colour,
+            # 🔴 **The lit lantern** (`Q160`, the user's ask, reversing `Q82`): the
+            # housing is the column's one colour, so the shader could not tell
+            # lantern from post. The mark is the vertex alpha — `signs.gdshader`
+            # is opaque and never read it — and it is on every face but the top,
+            # which is the housing's lid and stays dark from above. The game's
+            # rig decides WHEN it glows; this only says where.
+            alpha=255 if normal is up else LANTERN_LIT_ALPHA,
         )
 
 
@@ -748,6 +765,9 @@ def build_region(
         # still read here, as they did on the first build.
         report.facing_away = sum(facing_away(mesh) for mesh in meshes)
         library.publish(report)
+        report.library_lit_vertices = sum(
+            int(np.count_nonzero(mesh.colours[:, 3] == LANTERN_LIT_ALPHA)) for mesh in meshes
+        )
         library.require_every_stand(report.drawn, f"{report.drawn} columns")
         report.bytes = library.write(out_dir, LAMPS_NAME, LAMPS_PLACEMENTS_NAME, city.id, region_id)
 
@@ -1011,6 +1031,9 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         "library_meshes": report.library_meshes,
         "library_triangles": report.library_triangles,
         "library_vertices": report.library_vertices,
+        # 🔴 What the night's lit lantern reads (`Q160`). Reachable: marking the
+        # lid too makes it 24 a kind, and marking nothing makes it 0.
+        "library_lit_vertices": report.library_lit_vertices,
     }
     return write_document(out_dir / LAMPS_MANIFEST_NAME, document)
 

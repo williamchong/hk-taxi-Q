@@ -1,0 +1,12 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://jq75gqtss28s"]
+
+[ext_resource type="Shader" uid="uid://bahgpt4cp4mda" path="res://assets/shaders/lamp_pool.gdshader" id="1_pool"]
+
+[resource]
+render_priority = -1
+shader = ExtResource("1_pool")
+shader_parameter/pool_colour = Color(1, 0.86, 0.62, 1)
+shader_parameter/pool_gain = 6.0
+shader_parameter/pool_floor = 0.05
+shader_parameter/radius_m = 9.0
+shader_parameter/drop_m = 11.0

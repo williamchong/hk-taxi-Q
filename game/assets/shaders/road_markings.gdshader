@@ -46,6 +46,10 @@ render_mode cull_back;
 // The rig's exposure (`Q38`): `colour.gdshaderinc` has the account. After
 // `vertex_srgb_to_linear`, on `COLOR_0` only.
 global uniform float exposure_anchor;
+// The rig's hour (`Q160`): 0 by day, 1 at full night. At night the paint
+// burns its own colour at `paint_night_glow` (the user's ask) — a no-op at 0.
+global uniform float night_lights;
+uniform float paint_night_glow : hint_range(0.0, 4.0) = 0.0;
 
 // Must match the `MARKING_*` codec constants in `etl/pipeline/surface.py`.
 // ⚠️ Contract, not tuning — `docs/ARCHITECTURE.md` is the tiebreak if these and
@@ -496,5 +500,6 @@ void fragment() {
 		float painted = min(total, 1.0);
 		ALBEDO = mix(albedo_linear, paint, painted * paint_opacity);
 		ROUGHNESS = mix(road_roughness, paint_roughness, painted);
+		EMISSION = paint * (painted * paint_opacity * paint_night_glow * night_lights);
 	}
 }

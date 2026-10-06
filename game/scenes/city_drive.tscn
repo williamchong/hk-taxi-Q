@@ -15,6 +15,7 @@
 [ext_resource type="Script" uid="uid://b5nuxye5pq4do" path="res://scripts/fares/taxi_hire.gd" id="22_hire"]
 [ext_resource type="Script" uid="uid://brd5ncoahr0l1" path="res://scripts/camera/menu_orbit.gd" id="23_orbit"]
 [ext_resource type="Resource" uid="uid://d4lg7vboesfwa" path="res://tuning/menu.tres" id="24_menu"]
+[ext_resource type="Script" uid="uid://cipic2tc2pqvl" path="res://scripts/world/day_clock.gd" id="25_clock"]
 
 [node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares")]
 script = ExtResource("6_harness")
@@ -33,6 +34,11 @@ streaming = ExtResource("8_streaming")
 camera = NodePath("../CameraRig/Camera3D")
 
 [node name="Lighting" parent="." unique_id=251713311 instance=ExtResource("3_light")]
+
+[node name="DayClock" type="Node" parent="." node_paths=PackedStringArray("rig", "vehicle")]
+script = ExtResource("25_clock")
+rig = NodePath("../Lighting")
+vehicle = NodePath("../Taxi")
 
 [node name="Taxi" parent="." unique_id=1719665544 node_paths=PackedStringArray("sun") instance=ExtResource("4_taxi")]
 transform = Transform3D(0.0704, 0, -0.9975, 0, 1, 0, 0.9975, 0, 0.0704, 172.3485, 6.5796, 26.9396)

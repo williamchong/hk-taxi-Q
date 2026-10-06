@@ -9,3 +9,5 @@ shader = ExtResource("1_signs")
 shader_parameter/apply_exposure = true
 shader_parameter/plate_roughness = 0.8
 shader_parameter/sheeting_glow = 0.0
+shader_parameter/lantern_colour = Color(1, 0.86, 0.62, 1)
+shader_parameter/lantern_glow = 3.0

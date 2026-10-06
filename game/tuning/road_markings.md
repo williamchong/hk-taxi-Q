@@ -106,3 +106,12 @@ recognition round reports the markings as wrong rather than as missing.
 Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, and
 at a junction approach — the fade is what wants looking at, and the question is
 whether the lines stop where a driver expects rather than whether they stop.
+
+## `shader_parameter/paint_night_glow = 0.6`
+
+The paint lit at night (`Q160`, the user's ask: "we should try light up the road marking"): the
+marking burns its own colour at this strength times the rig's `night_lights`, 0 by day. One value
+across `road_markings.tres`, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`, for the
+reason their whites are one value — a line brighter than the arrow beside it is the first thing
+anyone would see. 0.6 reads as retroreflective paint under a headlamp; the first frames ran 1.5,
+which with the cyan outline was the look the user called too sci-fi.

@@ -11,6 +11,7 @@ extends RefCounted
 const PATH: String = "user://settings.cfg"
 const SECTION: String = "options"
 const KEY_LANGUAGE: String = "language"
+const KEY_DAY_CYCLE: String = "day_cycle"
 
 ## The file read and written: `PATH`, except under `verify_menu`, which round
 ## trips its own so a check never overwrites the player's choices.
@@ -27,6 +28,16 @@ static func language() -> String:
 ## to quit is one a crash loses.
 static func set_language(code: String) -> void:
 	_write(KEY_LANGUAGE, code)
+
+
+## Whether the day runs to night as game time passes (`Q160`). On where none
+## was ever saved: the mode is the game's, and the option is the way out.
+static func day_cycle() -> bool:
+	return bool(_read().get_value(SECTION, KEY_DAY_CYCLE, true))
+
+
+static func set_day_cycle(on: bool) -> void:
+	_write(KEY_DAY_CYCLE, on)
 
 
 ## Point every read and write at `path` and forget what was read, as a restart

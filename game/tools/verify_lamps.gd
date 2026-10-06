@@ -91,6 +91,8 @@ const LAMPS_MATERIAL: String = "res://tuning/lamps.tres"
 ## "tighter" — that would fail an ordinary authored change to the arm.
 const MIN_UPRIGHT_SHARE: float = 0.35
 
+const LampPools = preload("res://scripts/city/lamp_pools.gd")
+
 
 func _init() -> void:
 	VerifyLayer.run(self, GeneratedLayer.LAMPS, _check)
@@ -129,6 +131,20 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 					"lamps",
 					"Lamps are columns on footways",
 					MIN_UPRIGHT_SHARE
+				)
+			)
+		# 🔴 The lit lantern (`Q160`): the shader lights what `COLOR_0` alpha 0
+		# marks and the pool of light hangs from the marks' centre, so a library
+		# with none — a bundle built before `lamps.json` schema 3 — is a city
+		# whose lamps never come on, with nothing in a daylight frame to say so.
+		if LampPools.lantern_of(mesh) == Vector3.INF:
+			(
+				problems
+				. append(
+					(
+						"'%s' marks no lantern vertex (COLOR_0 alpha 0); rebuild the region — lamps.json schema 3 ships the mark"
+						% mesh_name
+					)
 				)
 			)
 	problems.append_array(

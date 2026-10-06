@@ -23,10 +23,10 @@ extends Node3D
 ## is the same failure shape `P3-11`'s chassis guard exists for, and the fix is
 ## the same: read the authority instead of copying it.
 ##
-## Runs once on ready rather than per frame. **This sun does not move** —
-## `DECISIONS.md` records night as a *switch* between two static rigs, not a
-## cycle — so a per-frame write would be the same value every frame forever.
-## Re-running it is what a rig switch owes.
+## Runs on ready and again whenever the rig says it moved, never per frame.
+## The sun stands still under a static rig and moves under one with a cycle
+## (`Q160`, reversing "night is a switch between two static rigs"), and
+## `LightingRig.changed` is the one signal for both.
 ##
 ## ⚠️ **Deliberately not `@tool`.** The material below is the *shared*, committed
 ## `vehicle_body.tres`, and `set_shader_parameter` marks a loaded resource
@@ -49,6 +49,8 @@ const PARAMETER: StringName = &"sun_toward"
 
 func _ready() -> void:
 	apply()
+	# The sun moves under a rig with a cycle (`Q160`), and the rig says when.
+	follow_rig(self, apply)
 
 
 ## Find the scene's sun and push its facing into the material.
@@ -104,3 +106,16 @@ static func rig_sun(node: Node) -> DirectionalLight3D:
 	if controller == null or controller.sun == null or not controller.sun.visible:
 		return null
 	return controller.sun
+
+
+## Call `reread` whenever the rig over `node`'s car moves (`Q160`). Beside
+## `rig_sun` and on its terms: the rig is the sun's parent, and a sun under
+## anything else — the skidpad's bare light — is a rig that never moves and has
+## nothing to follow. Shared with `vehicle_lamps.gd`, like `rig_sun`.
+static func follow_rig(node: Node, reread: Callable) -> void:
+	var sun: DirectionalLight3D = rig_sun(node)
+	if sun == null:
+		return
+	var rig := sun.get_parent() as LightingRig
+	if rig != null and not rig.changed.is_connected(reread):
+		rig.changed.connect(reread)

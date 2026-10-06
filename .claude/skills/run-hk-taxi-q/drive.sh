@@ -80,6 +80,11 @@ case " $* " in
 esac
 
 # Godot reports a failure with any of these and still exits 0.
+case " $* " in
+*" --day-cycle="*) ;;
+*) set -- "$@" --day-cycle=off ;;
+esac
+
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
 # Streamed through tee rather than captured into a variable, so the per-second

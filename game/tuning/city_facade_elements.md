@@ -50,3 +50,18 @@ gate; `A‴` (`P3-7a`, `build/driver/q26_A3_422ee16/`) added `unglazed_glassy`
 and the `pane_*` modulation and held the `Q30` chroma bar on all three audit
 cameras. All three survive `Q102` — none of them read the survey channel.
 `city_facade_warm.tres` is the third look, `B`.
+
+## `shader_parameter/night_spot_*` — the floodlights (`Q160`)
+
+At night `night_spot_share` 0.6 of the buildings are floodlit from street level, in three of the
+user's calls: "skip the window, just make the building glow"; then "not so bright, maybe just
+something that feels like a spotlight onto it"; then "spotlight the whole building instead of just
+the bottom". So `lit_window_share` and `emission_strength` stay 0.0 and reserved, the all-over
+glow that was tried is gone, and what ships is a lamp every `night_spot_spacing_m` 14 m along the
+wall throwing a warm cone (`night_spot_colour`) up it at `night_spot_strength` 0.55. The cones
+widen with `night_spot_spread` 2.5 until they merge into one wash, which dims to `night_spot_top`
+0.3 of its strength by `night_spot_reach_m` 120 m and holds to the roofline.
+
+What is lit is the wall's own finished colour, so each look keeps its palette. All of it is
+multiplied by the rig's `night_lights`: these are the values at FULL night and draw nothing at
+noon. Walls only — the branch tests `wall_normal_max`, so no roof is lit from the kerb.

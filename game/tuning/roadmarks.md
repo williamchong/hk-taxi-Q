@@ -70,3 +70,12 @@ being seen from the driving seat at the moment the sign above it is read.
 `generated_scene_import.gd`'s `SHADERS` table: they are the same white road paint, and one paint has
 one dial. A change to `paint_colour` here moves them, and `verify_crossings.gd` holds the pairing
 per kind.
+
+## `shader_parameter/paint_night_glow = 0.6`
+
+The paint lit at night (`Q160`, the user's ask: "we should try light up the road marking"): the
+marking burns its own colour at this strength times the rig's `night_lights`, 0 by day. One value
+across `road_markings.tres`, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`, for the
+reason their whites are one value — a line brighter than the arrow beside it is the first thing
+anyone would see. 0.6 reads as retroreflective paint under a headlamp; the first frames ran 1.5,
+which with the cyan outline was the look the user called too sci-fi.

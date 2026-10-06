@@ -50,7 +50,8 @@ refuses the config if the block is removed and the material left behind. It is
 and a mesh not supplying it renders white — so the vertex stream looks like the
 signs' and the *authority* for it does not.
 
-🔴 **AND THERE IS NO LIT LANTERN, WHICH IS THE THING TO RESIST CHANGING HERE.**
+🔴 **REVERSED BY `Q160` (2026-10-07) — the lantern is lit at night; see the last section. What
+follows is the record of the stance as it stood.** THERE WAS NO LIT LANTERN, AND THAT WAS THE THING TO RESIST CHANGING HERE.
 `P3-26` ships unlit geometry and buys night mode **nothing** — that is the
 honest position, not an oversight. Night was blocked on `Q38` and on `Q26`, and
 ✅ **`P5-28c` closed the first**: the exposure is a global shader parameter this
@@ -94,3 +95,17 @@ face is retroreflective and reads as slightly self-lit at dusk. A lamp column is
 weathered galvanised steel and its lantern is off: nothing here is
 retroreflective and nothing here is emitting. Any value above zero lights the city's lamps in
 daylight, which is the instruction `P3-26` deliberately refuses to give.
+
+## `shader_parameter/lantern_colour`, `shader_parameter/lantern_glow = 3.0`
+
+🔴 **The lantern is lit since `Q160`, on the user's instruction (2026-10-07: "yes light up the
+lamps"), and the paragraph above about resisting it is the stance that was reversed.** What made
+a lit lantern wrong was that it would burn "in broad daylight … in every frame this project
+currently renders". Both halves are gone: the glow is multiplied by the rig's `night_lights`, 0 by
+day, and the project renders a night. `sheeting_glow` stays 0.0 — it would still light the whole
+column, and at noon.
+
+The ETL marks the housing's luminous faces with `COLOR_0` alpha 0 (`lamps.json` schema 3,
+`library_lit_vertices` 20 a kind: every face but the lid); the shader lights only those. 3.0 is
+over the glow pass's threshold, so the lantern blooms. The light it throws on the road is
+`lamp_pools.tres`'s.

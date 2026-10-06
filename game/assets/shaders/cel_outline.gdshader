@@ -56,6 +56,16 @@ uniform float line_width_px : hint_range(0.5, 4.0) = 1.0;
 uniform float speed_thin_px : hint_range(0.0, 3.0) = 0.5;
 uniform float speed_fade : hint_range(0.0, 1.0) = 0.2;
 global uniform float outline_speed;
+// The rig's hour (`Q160`): 0 by day, 1 at full night. The line answers the sun
+// (the user's ask) — dark ink at noon, and as the light goes it turns to
+// `night_colour`, brighter than white so the glow pass picks it up, widens by
+// `night_width_px` and reaches `night_reach` times as far, because at night the
+// line is what draws the skyline. All three are no-ops at 0.
+global uniform float night_lights;
+uniform vec3 night_colour : source_color = vec3(0.35, 0.8, 1.0);
+uniform float night_glow : hint_range(0.0, 4.0) = 1.6;
+uniform float night_width_px : hint_range(0.0, 3.0) = 0.5;
+uniform float night_reach : hint_range(1.0, 8.0) = 1.0;
 const float MIN_WIDTH_PX = 1.0;
 
 group_uniforms edge;
@@ -113,7 +123,9 @@ void fragment() {
 	float slope = -inv[2][3] / inv[3][2];
 	float offset = -inv[3][3] / inv[3][2];
 
-	float width_px = max(line_width_px - speed_thin_px * outline_speed, MIN_WIDTH_PX);
+	float width_px = max(
+		line_width_px + night_width_px * night_lights - speed_thin_px * outline_speed, MIN_WIDTH_PX
+	);
 	vec2 step_uv = width_px / VIEWPORT_SIZE;
 	float centre = ndc_z(SCREEN_UV);
 	float left = ndc_z(SCREEN_UV - vec2(step_uv.x, 0.0));
@@ -135,7 +147,8 @@ void fragment() {
 
 	float rise = edge_distance_m > 0.0 ? 1.0 + nearest / edge_distance_m : 1.0;
 	float edge = smoothstep(edge_start * rise, edge_full * rise, abs(laplacian) / inv_centre);
-	edge *= 1.0 - smoothstep(fade_start_m, fade_end_m, nearest);
+	float reach = mix(1.0, night_reach, night_lights);
+	edge *= 1.0 - smoothstep(fade_start_m * reach, fade_end_m * reach, nearest);
 
 	// Most of the frame is no edge: skip its colour fetch and its blend.
 	// `textureLod` because derivatives are undefined past a divergent branch.
@@ -143,6 +156,12 @@ void fragment() {
 		discard;
 	}
 	vec3 surface = textureLod(screen_texture, near_uv, 0.0).rgb * surface_darkness;
-	ALBEDO = mix(ink_colour, surface, ink_from_surface);
+	// Squared, so the line holds its ink through dusk and turns late: at the
+	// dusk keyframe's 0.25 it is a sixteenth of the way to the glow, not a quarter.
+	ALBEDO = mix(
+		mix(ink_colour, surface, ink_from_surface),
+		night_colour * night_glow,
+		night_lights * night_lights
+	);
 	ALPHA = edge * ink_strength * (1.0 - speed_fade * outline_speed);
 }

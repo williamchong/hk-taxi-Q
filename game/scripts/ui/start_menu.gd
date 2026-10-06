@@ -174,9 +174,35 @@ func _options() -> Control:
 	_mark_current(english, _language == Locale.ENGLISH)
 	_first[Page.OPTIONS] = english if _language == Locale.CHINESE else chinese
 
+	# The hour (`Q160`): whether the day runs to night as game time passes.
+	column.add_child(_gap("GapTime", _profile.button_gap_px))
+	var time_heading: Label = _line("TimeHeading", _text.say("time", _language))
+	_size(time_heading, _profile.heading_size_zh, _profile.heading_size)
+	column.add_child(time_heading)
+	var times := HBoxContainer.new()
+	times.name = "Times"
+	times.add_theme_constant_override(&"separation", _profile.button_gap_px)
+	column.add_child(times)
+	var cycling: bool = Settings.day_cycle()
+	var cycle: Button = _button(times, "Cycle", "time_cycle", _pick_time.bind(true))
+	var day: Button = _button(times, "Day", "time_day", _pick_time.bind(false))
+	_mark_current(cycle, cycling)
+	_mark_current(day, not cycling)
+
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "Back", "back", _show.bind(Page.HOME))
 	return column
+
+
+## Save the hour's mode and redraw the page so the marker moves. `DayClock`
+## reads the saved option when the car first drives off.
+func _pick_time(cycle: bool) -> void:
+	if cycle == Settings.day_cycle():
+		return
+	Settings.set_day_cycle(cycle)
+	if not Cmdline.value(DayClock.CYCLE_ARG).is_empty():
+		push_warning("menu: --day-cycle= pins the hour this run; the choice is saved for the next")
+	_relabel.call_deferred()
 
 
 ## The credits, centred, scrolling: the data's owners, the typeface, the

@@ -19,7 +19,7 @@ is the street lamps' material and nothing to do with the car.
 so a missing key reads as zero, and the rig refuses to run at all on a zero
 `blink_hz`, `blink_duty`, `sun_probe_m`, `cover_probe_m` or `probe_hz` — every
 lens dark, no cone, no slot asked of `BeamBudget` — rather than fall back to a
-literal (`VehicleLamps.usable`). The other eight keys have an export floor of
+literal (`VehicleLamps.usable`). The other nine keys have an export floor of
 0.0, so a chosen zero is legal and a missing one cannot be told from it: they
 are required to be present and are not guarded. `verify_vehicle.gd` reads this
 file, asserts the scene hands the rig this very resource, and proves a zeroed
@@ -189,3 +189,18 @@ shipped rigs measure 1.4 and 0.9, so both clear this by a wide margin.
 
 ⚠️ A rig that deletes its `DirectionalLight3D` outright is **not** caught, and
 that is deliberate rather than an oversight — see `read_rig`.
+
+## `tail_lit = 0.35`
+
+The tail lamps (`Q160`): with the front lamps on, the brake lenses burn at this share of the
+brake's 1.0. A floor under the brake circuit rather than a lens of its own — which is what a tail
+lamp is — because a car at dusk with dark tails until it brakes reads as unlit. 0.35 x
+`lamp_emission` 1.6 is 0.56, under the glow threshold, so braking still visibly gains the bloom.
+May legally be 0.0 (no tail lamps), so it is one of the keys `usable()` cannot guard.
+
+## `night_energy = 0.4` (was 0.05)
+
+Raised with `Q160`: the night keyframe keeps a moon at 0.30 for the form it gives the blocks, and
+a bar at 0.05 would call that day and leave the car probing for the moon's shadow. 0.4 sits
+between the moon and the dusk sun's 0.80, so the main beams come on part-way down the dusk.
+`verify_day_cycle.gd` holds the last keyframe under this bar.

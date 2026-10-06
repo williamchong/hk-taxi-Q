@@ -8,3 +8,4 @@ render_priority = 0
 shader = ExtResource("1_arrows")
 shader_parameter/paint_colour = Color(0.91, 0.91, 0.87, 1)
 shader_parameter/paint_roughness = 0.7
+shader_parameter/paint_night_glow = 0.6

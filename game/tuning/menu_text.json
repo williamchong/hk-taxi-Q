@@ -50,6 +50,18 @@
       "en": "English",
       "zh": "English"
     },
+    "time": {
+      "en": "TIME OF DAY",
+      "zh": "時間"
+    },
+    "time_cycle": {
+      "en": "DAY TO NIGHT",
+      "zh": "日轉夜"
+    },
+    "time_day": {
+      "en": "ALWAYS DAY",
+      "zh": "全日白晝"
+    },
     "guide": {
       "en": "HOW TO PLAY",
       "zh": "玩法"

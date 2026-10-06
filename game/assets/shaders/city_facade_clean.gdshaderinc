@@ -8,6 +8,14 @@
 // The rig's exposure (`Q38`): `colour.gdshaderinc` has the account. After
 // `vertex_srgb_to_linear`, on `COLOR_0` only.
 global uniform float exposure_anchor;
+// The rig's hour (`Q160`; `scripts/world/lighting_rig.gd` sets both). `sky_light`
+// multiplies every painted sky reflection below — the glazing's mirror and the
+// wall's bounce are colours authored for noon, and a pane that mirrors a blue
+// sky at midnight is the tell. `night_lights` is 0 by day and 1 at full night
+// and scales the floodlights. ⚠️ The project defaults are white and 0, so a
+// scene with no rig, and a rig that never moves, draw what they always drew.
+global uniform vec3 sky_light;
+global uniform float night_lights;
 
 // ⚠️ **Read at BOTH sites `COLOR` is consumed here, and that is not a
 // convenience.** The vertex stage takes the building's colour into CIELAB to
@@ -47,6 +55,7 @@ const float DRAW_SHOP_HEIGHT = 11.0;
 const float DRAW_WARM_COOL = 12.0;
 const float DRAW_PANE_L = 13.0;
 const float DRAW_PANE_B = 14.0;
+const float DRAW_FLOODLIT = 15.0;
 
 // The CIELAB constants `lab_to_linear` and `linear_to_lab` share — D65 white,
 // the (6/29)³ knee and the 24389/27 linear-segment slope, exactly as
@@ -308,10 +317,31 @@ uniform float fade_end_m : hint_range(0.0, 800.0) = 244.0;
 
 group_uniforms night;
 // Reserved and shipped at zero, as in the sibling. `ART_DESIGN.md` calls night a
-// strong later variant and says to plan the emissive channel now.
+// strong later variant and says to plan the emissive channel now. ⚠️ Still
+// reserved after `Q160`: the user's call for night was the floodlights below,
+// not lit windows, and the shipped look draws no opening to light.
 uniform vec3 lit_window_colour : source_color = vec3(1.0, 0.85, 0.55);
 uniform float lit_window_share : hint_range(0.0, 1.0) = 0.0;
 uniform float emission_strength : hint_range(0.0, 4.0) = 0.0;
+// The floodlights (`Q160`, the user's call: not a building that burns, "something
+// that feels like a spotlight onto it"). At night `night_spot_share` of the
+// buildings are lit from street level, top to bottom (the user's second call:
+// "the whole building instead of just the bottom"): a lamp every
+// `night_spot_spacing_m` along the wall throws a cone of `night_spot_colour` up
+// it, the cones widening until they merge into one wash, which dims to
+// `night_spot_top` of its strength by `night_spot_reach_m` and holds there to
+// the roofline. What it lights is the wall's own colour, so every look keeps
+// its palette. Scaled by the rig's `night_lights`:
+// this is the look at FULL night and draws nothing at noon.
+uniform vec3 night_spot_colour : source_color = vec3(1.0, 0.86, 0.66);
+uniform float night_spot_strength : hint_range(0.0, 8.0) = 0.0;
+uniform float night_spot_share : hint_range(0.0, 1.0) = 1.0;
+uniform float night_spot_spacing_m : hint_range(2.0, 60.0) = 12.0;
+uniform float night_spot_reach_m : hint_range(2.0, 400.0) = 30.0;
+uniform float night_spot_top : hint_range(0.0, 1.0) = 0.0;
+// The cone's half-width at the top of its reach, as a fraction of the spacing.
+// Past about 1.5 the cones have merged well before the reach.
+uniform float night_spot_spread : hint_range(0.05, 4.0) = 0.45;
 
 varying float height_m;
 // ⚠️ **`flat`, and it is load-bearing** (`Q28`). Both are *per-object* values —
@@ -799,7 +829,7 @@ void fragment() {
 					ground_reflection,
 					mix(sky_horizon, sky_zenith, clamp(bowed, 0.0, 1.0)),
 					smoothstep(-0.08, 0.08, bowed)
-				);
+				) * sky_light;
 
 				// An unglazed opening is a dark reveal that keeps a little of the sky,
 				// not a mirror and not a decal. ⚠️ Not `pane` — that is the mirror's
@@ -853,7 +883,24 @@ void fragment() {
 	// it lifts the accent bands and the podium too — a white city without it
 	// reads as grey card wherever the sun is not directly on it. `fresnel` is
 	// zero off a facade, so it needs no marker test of its own.
-	albedo = mix(albedo, sky_reflection, fresnel * wall_sky_tint);
+	albedo = mix(albedo, sky_reflection * sky_light, fresnel * wall_sky_tint);
+
+	// The floodlights, last, so they light the colour the wall finished at.
+	// Uniforms decide the outer branch, so by day it is coherent and free; walls
+	// only — a lamp at the kerb does not reach a roof.
+	if (is_facade && night_lights > 0.0 && night_spot_strength > 0.0 && upness < wall_normal_max) {
+		if (draw(seed, DRAW_FLOODLIT) < night_spot_share) {
+			float climb = clamp(height_m / night_spot_reach_m, 0.0, 1.0);
+			float across = abs(fract(along_m / night_spot_spacing_m + phase) - 0.5);
+			float half_width = night_spot_spread * (0.25 + 0.75 * climb);
+			float cone = 1.0 - smoothstep(half_width * 0.35, half_width, across);
+			float fall = mix(1.0, night_spot_top, climb);
+			// Added, not assigned: the reserved lit windows above write
+			// `EMISSION` too, and a floodlit wall must not put them out.
+			EMISSION += albedo * night_spot_colour
+				* (cone * fall * night_spot_strength * night_lights);
+		}
+	}
 
 	ALBEDO = albedo;
 	METALLIC = 0.0;

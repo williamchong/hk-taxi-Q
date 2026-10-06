@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="RigCycle" format=3 uid="uid://cfov27562qp3a"]
+
+[ext_resource type="Script" uid="uid://cv4nepq60efor" path="res://scripts/world/rig_keyframe.gd" id="1_v281m"]
+[ext_resource type="Environment" uid="uid://bovdyd1dquc8b" path="res://tuning/dusk.tres" id="2_0mejh"]
+[ext_resource type="Environment" uid="uid://of6wtgfjc40d" path="res://tuning/twilight.tres" id="3_uh8me"]
+[ext_resource type="Environment" uid="uid://0yiroxil3tmk" path="res://tuning/night.tres" id="4_wlfsk"]
+[ext_resource type="Script" uid="uid://ufpc2lixxnpk" path="res://scripts/world/rig_cycle.gd" id="5_8uk6s"]
+
+[sub_resource type="Resource" id="Resource_52pmp"]
+script = ExtResource("1_v281m")
+at = 0.55
+environment = ExtResource("2_0mejh")
+sun_rotation_deg = Vector3(-8, -65.5, 0)
+sun_colour = Color(1, 0.62, 0.36, 1)
+sun_energy = 0.8
+sky_light = Color(1, 0.74, 0.58, 1)
+night_lights = 0.25
+
+[sub_resource type="Resource" id="Resource_yhufu"]
+script = ExtResource("1_v281m")
+at = 0.72
+environment = ExtResource("3_uh8me")
+sun_rotation_deg = Vector3(-1, -62, 0)
+sun_colour = Color(0.9, 0.5, 0.45, 1)
+sky_light = Color(0.3, 0.3, 0.45, 1)
+night_lights = 0.8
+
+[sub_resource type="Resource" id="Resource_shxbh"]
+script = ExtResource("1_v281m")
+at = 0.9
+environment = ExtResource("4_wlfsk")
+sun_rotation_deg = Vector3(-38, -40, 0)
+sun_colour = Color(0.62, 0.72, 1, 1)
+sun_energy = 0.3
+sky_light = Color(0.1, 0.11, 0.18, 1)
+night_lights = 1.0
+
+[resource]
+script = ExtResource("5_8uk6s")
+length_s = 240.0
+day_until = 0.25
+update_hz = 10.0
+keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh")])

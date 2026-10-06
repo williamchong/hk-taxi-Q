@@ -53,3 +53,12 @@ and are drawn there on purpose — the cap is still carriageway.
 Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, on
 **Hennessy and Johnston**, against the lane dividers `P3-12` draws beside them:
 the thing this has to survive is being seen next to the markings it matches.
+
+## `shader_parameter/paint_night_glow = 0.6`
+
+The paint lit at night (`Q160`, the user's ask: "we should try light up the road marking"): the
+marking burns its own colour at this strength times the rig's `night_lights`, 0 by day. One value
+across `road_markings.tres`, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`, for the
+reason their whites are one value — a line brighter than the arrow beside it is the first thing
+anyone would see. 0.6 reads as retroreflective paint under a headlamp; the first frames ran 1.5,
+which with the cyan outline was the look the user called too sci-fi.

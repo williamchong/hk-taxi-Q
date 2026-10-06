@@ -28,6 +28,7 @@ from pipeline.arrows import Ribbon
 from pipeline.config import _LAMP_MEASURES, load_config
 from pipeline.lamps import (
     LAMPS_MATERIAL,
+    LANTERN_LIT_ALPHA,
     LampReport,
     _draw_lamp,
     _lantern,
@@ -300,6 +301,19 @@ class TestTheMeshFacesOutward:
 
         assert mesh.triangle_count == 12
         assert facing_away(mesh) == 0
+
+    def test_the_lantern_is_marked_lit_on_every_face_but_its_lid(self, spec):
+        """`Q160`: the shader lights what alpha 0 marks, and the housing's top
+        stays dark — a lantern throws its light down, and from above it is a lid."""
+        builder = ColouredBuilder(LAMPS_MATERIAL)
+        _lantern(builder, spec, np.array([0.0, 9.0, 0.0]), np.array([1.0, 0.0, 0.0]))
+        mesh = builder.build("lantern")
+        lit = mesh.colours[:, 3] == LANTERN_LIT_ALPHA
+
+        assert int(lit.sum()) == 20
+        assert not np.any(mesh.normals[lit][:, 1] > 0.5)
+        assert np.all(mesh.colours[~lit][:, 3] == 255)
+        assert np.all(mesh.normals[~lit][:, 1] > 0.5)
 
     def test_the_lantern_faces_point_six_different_ways(self, spec):
         """A box whose faces share a normal is a box with a fold in it."""

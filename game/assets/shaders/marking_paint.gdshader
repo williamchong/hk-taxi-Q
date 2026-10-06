@@ -105,7 +105,14 @@ uniform vec4 paint_colour : source_color = vec4(0.91, 0.91, 0.87, 1.0);
 // as `road_markings.tres` sets it.
 uniform float paint_roughness : hint_range(0.0, 1.0) = 0.7;
 
+// The rig's hour (`Q160`): 0 by day, 1 at full night. At night the paint
+// burns its own colour at `paint_night_glow` (the user's ask) — a no-op at 0,
+// and the one dial `road_markings.gdshader` carries under the same name.
+global uniform float night_lights;
+uniform float paint_night_glow : hint_range(0.0, 4.0) = 0.0;
+
 void fragment() {
 	ALBEDO = paint_colour.rgb;
 	ROUGHNESS = paint_roughness;
+	EMISSION = paint_colour.rgb * (paint_night_glow * night_lights);
 }

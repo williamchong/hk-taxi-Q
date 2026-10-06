@@ -806,6 +806,19 @@ func _parse_args() -> bool:
 				if not [Locale.ENGLISH, Locale.CHINESE].has(value):
 					_fail("--lang=%s is not en or zh" % value)
 					return false
+			"--time-of-day":
+				# `lighting_rig.gd` reads this one itself (`Q160`) and holds the
+				# rig there; a value it cannot read would leave the frame at
+				# noon and labelled as some other hour.
+				if not value.is_valid_float() or value.to_float() < 0.0 or value.to_float() > 1.0:
+					_fail("--time-of-day=%s is not a number from 0 to 1" % value)
+					return false
+			"--day-cycle":
+				# `day_clock.gd` reads this one itself (`Q160`); a typo would
+				# leave the saved option deciding whether the sun moves.
+				if not ["off", "on"].has(value):
+					_fail("--day-cycle=%s is not off or on" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

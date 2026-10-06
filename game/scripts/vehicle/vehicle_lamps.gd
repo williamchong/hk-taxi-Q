@@ -115,7 +115,7 @@ var _probe_due_s: float = 0.0
 ## is no rig at all, which is not the same as night — see `read_rig`.
 var _sun_toward: Vector3 = Vector3.ZERO
 ## Whether the rig is a night one, decided once. Read `read_rig` before assuming
-## this is a per-frame fact: this sun does not move.
+## this is a per-frame fact: it moves when the rig does, at the rig's rate.
 var _night: bool = false
 ## Reused, like `VehicleController`'s. Building one per probe would allocate
 ## twice a probe for the life of the process.
@@ -191,6 +191,7 @@ func _ready() -> void:
 			_beam_ranges_m.append(beam.spot_range)
 			_beam_energies.append(beam.light_energy)
 	read_rig()
+	SunGlint.follow_rig(self, read_rig)
 	_join_budget()
 	if not _usable:
 		return
@@ -209,7 +210,7 @@ func _ready() -> void:
 ## (`sun_probe_m`, `cover_probe_m`). Loud on every call by design — a missing
 ## key is a build defect, not a state to remember quietly — and pure over
 ## `profile`, so `verify_vehicle.gd` can ask it of a car that never entered a
-## tree and again after swapping a zeroed table in. The eight keys whose export
+## tree and again after swapping a zeroed table in. The nine keys whose export
 ## floor is 0.0 are not in the table: a chosen zero there is legal, so a missing
 ## one cannot be told from it (`tuning/vehicle_lamps.md`).
 func usable() -> bool:
@@ -303,11 +304,10 @@ func _exit_tree() -> void:
 
 ## Re-read the scene's lighting rig.
 ##
-## ⚠️ **Public and called once, for the same reason `SunGlint.apply` is.** This
-## sun does not move — `DECISIONS.md` records night as a *switch between two
-## static rigs*, not a cycle — so re-reading it every tick would recompute one
-## constant for the life of the process. Whatever performs that switch owes both
-## this call and the glint's.
+## ⚠️ **Public, and called at `_ready` and again each time the rig moves**
+## (`Q160`: a `LightingRig` with a cycle emits `changed` at its own
+## `update_hz`, and `SunGlint.follow_rig` is what connects this). Never per tick — a rig
+## that stands still is one constant, and a moving one says when it moved.
 ##
 ## ⚠️ **A missing rig is "no answer", not "night", and the difference matters
 ## more than it reads.** A verify tool or an import loads the taxi with no world
@@ -371,8 +371,14 @@ func _physics_process(delta: float) -> void:
 	# speed — so at a standstill with the pedal held the *reverse* lamps light,
 	# because reverse is what the pedal is asking for. That is the controller's
 	# rule and this reads it rather than restating it.
+	# ⚠️ **The brake lens is the tail lamp too** (`Q160`): with the front lamps
+	# on it burns at `tail_lit`, a floor under the brake's 1.0 and not a second
+	# lens — which is what a tail lamp is, and a car at dusk with dark tails
+	# until it brakes is the one that reads as unlit.
+	var lamps_on: bool = _lighting != Lighting.SUN
+	var tail: float = profile.tail_lit if lamps_on else 0.0
 	var lit := Vector4(
-		1.0 if _car.is_braking() else 0.0,
+		1.0 if _car.is_braking() else tail,
 		1.0 if _car.is_reversing() else 0.0,
 		flash if indicating and side < 0 else 0.0,
 		flash if indicating and side > 0 else 0.0,
@@ -394,7 +400,7 @@ func _physics_process(delta: float) -> void:
 	# and the two states are a different pair of lamps at the same count, which
 	# reads as a flicker; stacked, the nose visibly gains a lamp.
 	var front := Vector4(
-		1.0 if _lighting != Lighting.SUN else 0.0,
+		1.0 if lamps_on else 0.0,
 		1.0 if _lighting == Lighting.DARK else 0.0,
 		profile.sign_lit if for_hire else 0.0,
 		0.0,

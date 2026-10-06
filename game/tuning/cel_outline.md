@@ -47,3 +47,16 @@ the 4x MSAA depth and copy it mid-frame, and the hue's `hint_screen_texture` is 
 copy; on a phone's tile GPU both are likely dearer than the taps (`Q158`). Owed to the `P3-9`
 handset round; the cheap retreats are `ink_from_surface` 0 (drops the colour copy) or the rig's
 `visible` off.
+
+## `shader_parameter/night_colour`, `night_glow = 0.45`, `night_width_px = 0.0`, `night_reach = 1.0`
+
+The line answers the sun (`Q160`, the user's ask: "should outline color and thickness changes
+according to sun?"). By day it is the ink above. As the rig's `night_lights` rises the colour
+blends — on the square, so it holds its ink through dusk — toward `night_colour` at `night_glow`:
+a pale moonlit rim, `(0.6, 0.66, 0.8)` at 0.45, which keeps an unlit block's edge readable against
+a dark sky.
+
+🔴 **The first table was a cyan line at 1.6, half a pixel wider and reaching 2.5 times as far, and
+the user refused it**: "the pitch dark version with neon light blue outline is too scifi". The
+width and the reach are still dials — 0.0 and 1.0 are their no-ops — and that frame is one edit
+away for anyone who wants to see why it went.
