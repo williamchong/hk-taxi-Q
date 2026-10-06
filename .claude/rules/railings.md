@@ -99,3 +99,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   the same float, and a 0.2 mm step has no direction for any backward test to read. 🚫 **Do not count "panels in the road against the kerb
   line"** — the fence is built from that line, so it reads 0 by construction (`Q58`);
   `railing_error.py`'s to-source table is the independent reading.
+  🔴 **The railings COLLIDE since `Q159` (the user's call, 2026-10-07), and the collision is the
+  PLACER's, never the asset's** — `layer_preview.gd`'s `collides` on `region.tscn`'s `Railings`
+  node stands `PropBatch.bodies`, a box over each library mesh's AABB under every placement.
+  `railings.glb` stays collider-free and `verify_railings.gd` asserts it: a `-col` would be the
+  panel's trimesh, open between its bars, under every box. ⚠️ **A change that moves a fence moves a
+  wall now**: re-run `Q159`'s count of panels across a road centreline at their own level (0 / 0)
+  — `metres_bridged` is the fence most likely to close a mouth.

@@ -38,7 +38,7 @@ chunk with the `-col` trimesh the wheels stand on — `verify_road_surface.gd`
 asserts it is there on every chunk, and `drive_harness.gd` asks the streamer
 to hold the chunks under the start line before the first tick. Every layer
 node in `region.tscn` prints its collider count for the opposite reason — there must be
-none — and each says why (`Q74`).
+none but the railings' boxes (`Q159`) — and each says why (`Q74`).
 
 ## `[node name="Taxi" parent="." instance=ExtResource("4_taxi")]`
 

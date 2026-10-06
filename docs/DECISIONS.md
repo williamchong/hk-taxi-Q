@@ -3180,7 +3180,8 @@ is drawn on the kerb the ribbon actually has. No collider. `city.json` 13 → 14
   0 (0 of 17,111). ⚠️ A quad's "two lowest corners" per triangle is its diagonal — the first version
   over-read length by 49%.
 - No collision by design (`GAME_DESIGN.md`: omit or make breakable); consistent only because the
-  fence stands on the drawn kerb and narrows nothing. Breakaway is `B3`.
+  fence stands on the drawn kerb and narrows nothing. Breakaway is `B3`. ⚠️ **Reversed by the user
+  2026-10-07 (`Q159`)**: the railings collide, as a box per panel; the asset stays collider-free.
 - Cost +255,208 B PCK (+0.611%).
 
 **See.** `Q54` `Q56` `Q58` `Q59` `Q61` `Q78` · `.claude/rules/railings.md`
@@ -9684,3 +9685,32 @@ Each answer below is the user's, from frames, and each turned a first cut round:
   bonus fee's status is the user's next step.
 
 **See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
+
+## `Q159` — The fences and the railings collide as a box per prop
+
+**Asked** by the user, 2026-10-07: "mix fences simple collider", then "also add for railing".
+
+**Closed 2026-10-07 (`P3-68`).** Every collidable prop stands a `BoxShape3D` over its own extent, one
+shape shared per prop by reference, one `StaticBody3D` per placement beside the prop's `MultiMesh`
+(`PropBatch.bodies`):
+
+- **The closure barrier** (`P3-29`) collided against its `-col` trimesh, the rails and posts face for
+  face: open air under the 0.34 m bottom rail and between the courses for a bumper to snag in. It is
+  now a 2.00 x 1.40 x 0.14 m box over that trimesh's extent. The `-col` stays the source of the
+  extent, so a prop that imports none is still refused and `verify_fence.gd` is unchanged.
+- **The railings** (`P3-19`) had no collider by design — `GAME_DESIGN.md`'s "omit or make
+  breakable", a `B3` question. ⚠️ **That stance is reversed on the user's instruction**, a design
+  call and never measured shut. `layer_preview.gd`'s `collides`, set on `region.tscn`'s `Railings`
+  node, stands a box per placement from each library mesh's AABB: `railings` 0.05 x 1.35 x 2.00 m,
+  `bollards` 0.14 x 1.10 x 1.50 m, `barriers` 0.10 x 1.15 x 3.00 m (y from −0.25 m, thickness outward
+  of the registered face, as the slab is). 5,535 bodies in Wan Chai, 2,158 in Causeway Bay. **`railings.glb` stays collider-free** and `verify_railings.gd`
+  still asserts it: the collision is the placer's, so the off switch is `collides = false`.
+- **Measured, the risk the old stance named**: no panel crosses a road centreline at its own level
+  (0 of 5,535 / 0 of 2,158, within 2.5 m of height) — the 389 m `metres_bridged` closes no mouth.
+  The measure is live: panels stretched to 8 m cross 149 times on 92 Wan Chai edges.
+
+Not done: no CCD on the car. A 50 mm box is thinner than a tick's travel at speed, but the car's hull
+is far larger, so penetration resolves backward; the barrier's trimesh was 0.14 m before it.
+Breakaway stays `B3`. Owed: the user's drive into a railing and a barrier.
+
+**See.** `P3-68` · `P3-19` · `P3-29` · `Q19` · `Q60` · `game/scripts/city/prop_batch.gd` · `game/scenes/region.md`

@@ -33,10 +33,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   region, where nobody can arrive at all. Conflated, the first run reported 13 pockets over 14
   *disjoint* components. ⚠️ The counters count **ends**, so a node shared by two fenced edges counts
   twice.
-  🔴 **The prop COLLIDES, and it is the only thing in the barrier family that does.** Every
-  generated railing class is collider-free and `verify_railings.gd` asserts that;
-  `game/tuning/barriers.tres`' "no collider" paragraph is about that *generated* class and stays
-  true. ⚠️ **Its material is `barrier_vertex`, never `barriers`** — that name dispatches the railing
+  🔴 **The prop COLLIDES, as a BOX over its `-col` extent (`Q159`), never the trimesh** — that is
+  open under and between the rails for a bumper to snag in. The generated railing classes collide
+  too since `Q159`, but through the placer; their asset stays collider-free and
+  `verify_railings.gd` asserts that. ⚠️ **Its material is `barrier_vertex`, never `barriers`** — that name dispatches the railing
   class to `tuning/barriers.tres`, and sharing it hands this prop a fence's shader and fails that
   tool while both halves render. ⚠️ **`-col`, never `_col`.**
   🔴 **The prop draws as ONE `MultiMesh` and its colliders are separate bodies — do not "simplify"

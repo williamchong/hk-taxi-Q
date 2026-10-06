@@ -143,6 +143,7 @@ Phase 3 — Build `B2`
 - `P3-42` ✅ `boxjunctions.glb` / `crossings.glb` in 300 m cells (`Q135`) — start line 20,642 a pass → 9,849, `f_045` 7,469 → 496; +1 / +0 draws. Boxes 9,411 against an 8k bar.
 - `P3-66` ✅ A sign's post casts a shadow, its plates and lettering do not (`Q135`, 2026-10-07) — start line 107 → 87 `draws`, `f_045` 139 → 121; 288 px of one audit frame in three move.
 - `P3-67` 🟡 The lamps as a `MultiMesh` per 300 m cell, hidden past 400 m (`Q135`, 2026-10-07) — start line `prims` −118,880 of the lamps' 129,240, `f_045` −154,720 of 172,920; +2 to +4 `draws`; 1 px of five audit frames moves. Owed: the user's drive, for a cell letting go.
+- `P3-68` 🟡 Fences and railings collide as a box per prop (`Q159`, the user's ask, 2026-10-07) — the closure barrier's `-col` trimesh → a 2.00 x 1.40 x 0.14 m box; railings a box per panel through `layer_preview.gd`'s `collides` (5,535 / 2,158 bodies), 0 panels across a road centreline. Owed: the user's drive.
 - `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
@@ -372,6 +373,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   were read off the old car's pace, which `drive_scale` 1.0 restored (`Q153`).
 - `Q157` The checks and the build run side by side (user, 2026-10-06): `check.sh` 54 → 21 s
 - `Q158` The city takes an outline, not a banded sun (user, 2026-10-07): a thin line in each surface's own darkened hue, over black ink and over no line (`P3-64`). The handset's frame time is owed.
+- `Q159` The fences and the railings collide as a box per prop (user, 2026-10-07; reverses `P3-19`'s no-collider stance): the barrier's trimesh → a box over its extent; the railings a box per panel, asset still collider-free (`P3-68`).
   (`CHECK_JOBS`), `pytest -n auto` 52 → 10 s, a Wan Chai build 73 → 50 s serial and 30 s at
   `--jobs 4`, the battery 163 → 48 s at `--jobs 4`. Every one proven against its serial self.
 

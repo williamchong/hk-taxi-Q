@@ -28,11 +28,11 @@ anywhere in the document (`Q60`). So this is the conservative reading, bare
 galvanised, warmer and darker than the pedestrian railing beside it; a painted
 maroon would have been the more recognisable choice and a much larger claim.
 
-⚠️ **No collider, like every class in this layer** — and this is the class
-where that will look wrong first, because a crash barrier's whole real purpose
-is to stop a vehicle. `GAME_DESIGN.md` still puts the layer under "omit or
-make breakable"; collision is a `B3` question, and `Q60` records why the
-registration has to get better before it is one.
+⚠️ **No collider in the asset, like every class in this layer** — the
+collision is the placer's since `Q159` (2026-10-07, the user's call): a box
+body under every panel, from `region.tscn`'s `Railings` node (`collides`).
+This is the class where its absence looked wrong first, because a crash
+barrier's whole real purpose is to stop a vehicle. Breakaway is still `B3`.
 
 Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table.
 

@@ -152,13 +152,10 @@ func _check_class(mesh: ArrayMesh, class_id: String) -> PackedStringArray:
 	return problems
 
 
-## Railings must **not** collide, and here that is a design decision.
-##
-## `GAME_DESIGN.md` lists pedestrian railings under "deliberately diverge on —
-## omit or make breakable", because Hong Kong's streets faithfully railed are a
-## traffic simulator with no room to be reckless. Drawing them as scenery keeps
-## the picture and keeps the divergence; a collider would quietly undo the
-## second half. Breakaway is a `B3` question.
+## The railings **asset** must not collide. The railings do since `Q159`, but
+## as a box per panel the placer stands (`layer_preview.gd`'s `collides`): a
+## `-col` import here would be the panel's trimesh, open between its bars, and
+## a second collider under every box.
 ##
 ## ⚠️ **The guard used to be one string in `railings.py` and is now a config
 ## check.** Since `Q61` a mesh is named by its class `id` in `hong_kong.yaml`, so

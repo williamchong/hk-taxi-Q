@@ -34,10 +34,11 @@
 ## streams with the tiles, and `tile_preview.gd` draws it in the preview scene.
 ## The table's `absence` sentence is kept so a required row could return.
 ##
-## The collider count is printed because for every layer here there must be
-## **none**, and each layer's reason is its own — they live in `city_drive.md`
-## and `city_preview.md` beside those scenes, under the node that would have to
-## change (`Q74`, `Q119`).
+## The collider count is printed because for every layer here but one there
+## must be **none**, and each layer's reason is its own — they live in
+## `region.md` beside the scene, under the node that would have to change
+## (`Q74`, `Q119`). The one is the railings since `Q159`: `collides` stands
+## a box body under every placement, and the asset itself stays collider-free.
 extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
@@ -56,6 +57,11 @@ signal built(low: Vector3, high: Vector3)
 ## Which synced region's copy of the layer; "" is `GeneratedRegions.selected()`.
 ## Set by `CityRegions` before the node enters the tree (`P5-9c`).
 @export var region: String = ""
+
+## Stand a box body under every placement of a prop layer, from each library
+## mesh's own extent. Off for every layer but the railings; the scene's sidecar
+## says why per node. Ignored on a layer that is not a library.
+@export var collides: bool = false
 
 ## The one figure worth printing beyond the plan extent: a column has a height
 ## and a painted arrow does not. The preview's own formatting, kept out of the
@@ -97,6 +103,8 @@ func _ready() -> void:
 		bounds = placed["bounds"]
 		triangles = int(placed["triangles"])
 	else:
+		if collides:
+			push_warning("%s: collides stands boxes under a library's props only" % layer)
 		instance.name = name
 		add_child(instance)
 		bounds = MeshContract.bounds(instance)
@@ -150,6 +158,7 @@ func _place(library: Node3D) -> Dictionary:
 	var transforms: Dictionary[String, Array] = joined["transforms"]
 	var boxes: Array[AABB] = []
 	var triangles: int = 0
+	var batches: int = 0
 	var cells := load(PropCellProfile.PATH) as PropCellProfile
 	if cells == null or layer not in cells.layers:
 		cells = null
@@ -165,14 +174,20 @@ func _place(library: Node3D) -> Dictionary:
 			if not casts:
 				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(node)
+			batches += 1
 		var local: AABB = mesh.get_aabb()
 		for at: Transform3D in batch:
 			boxes.append(at * local)
+		if collides:
+			if not local.has_volume():
+				push_error("%s: library mesh %s is flat and cannot collide" % [layer, mesh_name])
+			for body: StaticBody3D in PropBatch.bodies(local, batch, mesh_name + "_col"):
+				add_child(body)
 		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
 	print(
 		(
 			"%s: %d placements over %d library meshes, %d batches"
-			% [layer, document.get("placements", []).size(), meshes.size(), get_child_count()]
+			% [layer, document.get("placements", []).size(), meshes.size(), batches]
 		)
 	)
 	return {"bounds": MeshContract.union(boxes), "triangles": triangles}

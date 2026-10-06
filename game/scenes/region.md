@@ -90,10 +90,12 @@ them were surveyed inside it. One panel per class since `P5-5`, tiled
 along every run by `railings_placements.json`: three draw calls, as before.
 A region whose sources publish no railing layer ships none and this node
 simply stays empty.
-No collider, and here that is a design decision rather than a rendering one:
-`GAME_DESIGN.md` lists railings under "omit or make breakable" precisely
-because a solid one turns a narrow street into a corridor. Collision is a
-`B3` question.
+`collides = true`: a box body under every panel (`Q159`, the user's call,
+2026-10-07), reversing the old stance — `GAME_DESIGN.md` listed railings under
+"omit or make breakable" because a solid one turns a narrow street into a
+corridor. The box is the panel's own extent, so a bumper stops flat rather than
+snagging in the gaps, and `railings.glb` itself stays collider-free. No panel
+crosses a road centreline (0 of 5,535 in Wan Chai). `false` is the off switch.
 
 ## `[node name="Lamps" type="Node3D" parent="."]`
 

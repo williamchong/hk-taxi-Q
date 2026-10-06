@@ -33,6 +33,7 @@ layer = "roadmarks"
 [node name="Railings" type="Node3D" parent="." unique_id=92449069]
 script = ExtResource("1_layer")
 layer = "railings"
+collides = true
 
 [node name="Lamps" type="Node3D" parent="." unique_id=1040385558]
 script = ExtResource("1_layer")

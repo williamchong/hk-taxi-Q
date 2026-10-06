@@ -143,8 +143,9 @@ static func has_collision(node: Node) -> bool:
 
 
 ## How many static bodies the node's subtree carries. The previews print it
-## because every generated layer but the road surface must carry none (`Q74`),
-## and `fence.gd` prints it because its bodies are built by hand.
+## because every generated layer but the road surface and the railings must
+## carry none (`Q74`, `Q159`), and `fence.gd` because its bodies are built by
+## hand.
 static func colliders(node: Node) -> int:
 	return node.find_children("*", "StaticBody3D", true, false).size()
 

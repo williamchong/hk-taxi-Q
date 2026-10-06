@@ -22,7 +22,7 @@ Real geometry fights arcade fun, and fun wins. The open data is a skeleton, not 
 |---|---|
 | Road topology and connectivity | Road width — a minimum drawn width at grade (10.24 m; 12.48 m on ≥70 kph roads; a floor, not a multiplier, `Q95`), but authored width on structure: a widened ribbon overhangs its own deck |
 | One-way directions and turn restrictions (for AI traffic) | Player rule-breaking — always allowed |
-| Building massing and position | Pedestrian railings — drawn, no collider (`P3-19`); breakaway and collision wait for `B3` |
+| Building massing and position | Pedestrian railings — drawn, and solid since `Q159` (a box per panel, the user's call); breakaway waits for `B3` |
 | Landmark placement | Ramps, jumps, shortcuts — hand-added, sparingly |
 | Street and place names | Kerb heights — flattened for mountability |
 

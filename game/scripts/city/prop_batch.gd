@@ -23,3 +23,26 @@ static func batch(mesh: Mesh, transforms: Array[Transform3D], name: String) -> M
 	node.name = name
 	node.multimesh = multi
 	return node
+
+
+## A static body per transform, each standing one box over `extent` — the
+## prop's own frame. The `BoxShape3D` is built once and shared by reference.
+## Empty for an `extent` with no volume, which the caller refuses.
+static func bodies(
+	extent: AABB, transforms: Array[Transform3D], name: String
+) -> Array[StaticBody3D]:
+	var built: Array[StaticBody3D] = []
+	if not extent.has_volume():
+		return built
+	var shape := BoxShape3D.new()
+	shape.size = extent.size
+	for index: int in transforms.size():
+		var body := StaticBody3D.new()
+		body.name = "%s_%d" % [name, index]
+		body.transform = transforms[index]
+		var collision := CollisionShape3D.new()
+		collision.shape = shape
+		collision.position = extent.get_center()
+		body.add_child(collision)
+		built.append(body)
+	return built
