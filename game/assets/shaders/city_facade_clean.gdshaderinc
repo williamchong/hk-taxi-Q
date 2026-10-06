@@ -40,6 +40,27 @@ const float MARKER_STRUCTURE = 2.0;
 // keeps neighbouring seeds far apart in every derived decision.
 const float PHASE_STEPS = 256.0;
 
+// Which draw each per-building decision takes from `draw()`. Named so that two
+// decisions cannot share a slot unnoticed: a shared slot is one draw read twice,
+// and it would tie — say — every glazed building to the accent colour with
+// nothing in a frame to say why. ⚠️ **The numbers are the look**: renumber one
+// and every building redraws that decision. A new decision takes the next free
+// number.
+const float DRAW_GLAZED = 1.0;
+const float DRAW_ACCENTED = 2.0;
+const float DRAW_VALUE = 3.0;
+const float DRAW_ACCENT_PICK = 4.0;
+const float DRAW_GRAMMAR = 5.0;
+const float DRAW_BAY_SCALE = 6.0;
+const float DRAW_TWO_STOREY = 7.0;
+const float DRAW_PANE_TINT = 8.0;
+const float DRAW_PANE_BOW = 9.0;
+const float DRAW_SHOPFRONT = 10.0;
+const float DRAW_SHOP_HEIGHT = 11.0;
+const float DRAW_WARM_COOL = 12.0;
+const float DRAW_PANE_L = 13.0;
+const float DRAW_PANE_B = 14.0;
+
 // The CIELAB constants `lab_to_linear` and `linear_to_lab` share — D65 white,
 // the (6/29)³ knee and the 24389/27 linear-segment slope, exactly as
 // `etl/pipeline/colour.py`'s `_WHITE` / `_EPSILON` / `_KAPPA`. Named once so
@@ -440,15 +461,15 @@ void vertex() {
 	// look provable.
 	if (marker < MARKER_FACADE + 0.5) {
 		float pane_seed = floor(phase * PHASE_STEPS + 0.5);
-		float pane_tint = draw(pane_seed, 8.0);
+		float pane_tint = draw(pane_seed, DRAW_PANE_TINT);
 		fallback_pane = pane_tint < 0.34
 			? glass_colour
 			: (pane_tint < 0.67 ? glass_tint_b : glass_tint_c);
 		vec3 knobs = vec3(pane_l_jitter, pane_b_jitter, pane_hue_pull);
 		if (any(greaterThan(knobs, vec3(0.0)))) {
 			vec3 pane_lab = linear_to_lab(fallback_pane);
-			pane_lab.x += (draw(pane_seed, 13.0) - 0.5) * 2.0 * pane_l_jitter;
-			pane_lab.z += (draw(pane_seed, 14.0) - 0.5) * 2.0 * pane_b_jitter;
+			pane_lab.x += (draw(pane_seed, DRAW_PANE_L) - 0.5) * 2.0 * pane_l_jitter;
+			pane_lab.z += (draw(pane_seed, DRAW_PANE_B) - 0.5) * 2.0 * pane_b_jitter;
 			if (pane_hue_pull > 0.0) {
 				// ⚠️ A *chromaticity* pull, not a hue rotation: the full (a*, b*)
 				// vector mixes toward the building's, so against the 69% of
@@ -530,8 +551,8 @@ void fragment() {
 	if (is_facade) {
 		// Put back the per-building variation the wash just flattened, and
 		// ground the wall where it meets the pavement.
-		albedo *= 1.0 + (draw(seed, 3.0) - 0.5) * 2.0 * value_jitter;
-		float warm = (draw(seed, 12.0) - 0.5) * 2.0 * warm_cool_jitter;
+		albedo *= 1.0 + (draw(seed, DRAW_VALUE) - 0.5) * 2.0 * value_jitter;
+		float warm = (draw(seed, DRAW_WARM_COOL) - 0.5) * 2.0 * warm_cool_jitter;
 		albedo *= vec3(1.0 + warm, 1.0, 1.0 - warm);
 		albedo *= mix(
 				1.0 - grounding_darkness, 1.0, smoothstep(0.0, grounding_height_m, height_m)
@@ -573,10 +594,10 @@ void fragment() {
 			// not an artefact of the survey, so collapsing them to one float
 			// re-opens it. A future materiality source assigns `glazed` here and
 			// leaves `fenestrated` alone; that is the seam this keeps open.
-			float glazed = step(solid_share, draw(seed, 1.0));
+			float glazed = step(solid_share, draw(seed, DRAW_GLAZED));
 			float fenestrated = glazed;
-			float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
-			bool accented = draw(seed, 2.0) < accent_share;
+			float has_shop = step(1.0 - shopfront_share, draw(seed, DRAW_SHOPFRONT));
+			bool accented = draw(seed, DRAW_ACCENTED) < accent_share;
 
 			// ⚠️ **Every element below is drawn *into* the albedo, so a tuning that
 			// zeroes all of them leaves a no-op that still runs.** `city_facade.tres`
@@ -612,7 +633,7 @@ void fragment() {
 				// survive out where the surface it belongs to has gone flat.
 				float fade = 1.0 - smoothstep(fade_start_m, fade_end_m, length(VERTEX));
 
-				float which = draw(seed, 4.0);
+				float which = draw(seed, DRAW_ACCENT_PICK);
 				vec3 accent = which < 0.34 ? accent_a : (which < 0.67 ? accent_b : accent_c);
 
 				// The phase offsets the grids and the seed now *scales* them too: two
@@ -620,8 +641,8 @@ void fragment() {
 				// wallpaper. `floor_height_m` stays the measured constant of the city —
 				// what varies is the structural module and how many storeys a glazing
 				// band spans, both of which really do differ building to building.
-				float bay_scale = mix(bay_scale_min, bay_scale_max, draw(seed, 6.0));
-				float band_mult = draw(seed, 7.0) < two_storey_share ? 2.0 : 1.0;
+				float bay_scale = mix(bay_scale_min, bay_scale_max, draw(seed, DRAW_BAY_SCALE));
+				float band_mult = draw(seed, DRAW_TWO_STOREY) < two_storey_share ? 2.0 : 1.0;
 
 				float band_pitch_m = floor_height_m * band_storeys * band_mult;
 				float storey = (height_m - podium_height_m) / floor_height_m + phase;
@@ -632,7 +653,7 @@ void fragment() {
 				// Which grammar this building is built in. One grid, four sets of
 				// ratios: 0 ribbon (the default), 1 fin, 2 curtain, 3 punched.
 				// Hashed.
-				float kind = draw(seed, 5.0);
+				float kind = draw(seed, DRAW_GRAMMAR);
 				float treatment = 0.0;
 				if (kind < fin_share) {
 					treatment = 1.0;
@@ -676,7 +697,7 @@ void fragment() {
 
 				// The shopfront's height varies as well as whether it is there at
 				// all — a lobby is double height and a shop is not.
-				float shop_top = shopfront_top_m * mix(0.8, 1.5, draw(seed, 11.0));
+				float shop_top = shopfront_top_m * mix(0.8, 1.5, draw(seed, DRAW_SHOP_HEIGHT));
 				float shop = slab(height_m, shopfront_base_m, shop_top) * fade * has_shop;
 				// The plinth between the shopfront and the cornice. On an accent
 				// building it takes the colour — down here, where it is seen.
@@ -786,7 +807,7 @@ void fragment() {
 				vec2 within = vec2(fract(ribbon), fract(bay)) - 0.5;
 				float bowed = bounced.y
 					+ within.x * pane_bow
-					+ (draw(seed + dot(pane, vec2(3.0, 17.0)), 9.0) - 0.5) * pane_jitter;
+					+ (draw(seed + dot(pane, vec2(3.0, 17.0)), DRAW_PANE_BOW) - 0.5) * pane_jitter;
 				vec3 mirrored = mix(
 					ground_reflection,
 					mix(sky_horizon, sky_zenith, clamp(bowed, 0.0, 1.0)),
