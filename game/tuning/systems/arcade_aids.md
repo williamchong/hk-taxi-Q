@@ -75,6 +75,28 @@ the trail-brake — byte-identical between 0 and 0.3, in both modes:
 | 63 | 32.7 / 39.3° (5.0) | 33.9 / 39.5° (5.5) | no fire |
 | 86 | 31.1 / 38.4° (1.3) | 33.5 / 39.7° (3.3) | no fire |
 
+🔴 **That table is the `mu` 2.0 car's, and the tail no longer comes round** (bisected 2026-10-07,
+`Q153`). The trigger still fires and stands traction control down, but on the real car the slide
+it frees stays under `drift_slip_threshold_deg` at 63 / 86 kph, so it pays nothing. It went with
+the Crown Comfort's chassis (`1876da9`), not with a dial, and no commit since has brought it back.
+Peak slip from the turn-in, the current pad graded on each commit, 42 / 63 / 86 kph:
+
+| commit | `flick@lift` | `flick@brake` (63 / 86) |
+|---|---|---|
+| `47afca8`, `mu` 2.0 (the table above, re-read at the rear axle) | 41.4 / 37.5 / 34.4° | 39.5 / 37.7° |
+| `e1ffcf4`, `mu` 1.0 | 53.3 / 53.4 / 98.7° | 52.4 / 110.2° |
+| `1876da9`, the Crown Comfort's chassis | 3.6 / 5.5 / 36.5° | 6.7 / 33.1° |
+| `b8aaa56`, its power curve | 179.3 / 11.5 / 23.5° | 58.1 / 30.4° |
+| `620c4c4`, the slip cut from 10° | 51.8 / 11.5 / 17.9° | 29.9 / 18.9° |
+| `5ec326d`, the drive on each wheel's speed | 19.1 / 7.0 / 14.3° | 7.8 / 13.5° |
+| `d3eeca9`, pace 1.5 (shipped) | 3.7 / 12.3 / 9.7° | 19.1 / 10.7° |
+
+Stability control's yaw brake is not it: `--sweep=stability_control.yaw_brake_lock_ratio=0,1.5`
+leaves every flick row byte-identical. The trigger takes traction control alone, never the side
+cut (the button's), so the feint's weight transfer is all that moves the rear, and on a 1.0 g
+tyre at the real drive that is a few degrees. Open, not measured shut: whether the flick should
+be made to slide again is the user's call (`Q153`).
+
 ## `steer_to_grip = 1.0`
 
 🔥 **`drive_boost` is retired (2026-10-06, `Q156`)**: half as much drive again, on the road only,

@@ -9266,6 +9266,18 @@ lock. Not sound, owed:
   63 kph: every row within the spawn's settle; the braked technique rows (`trailbrake`,
   `flick@brake`) move in the second decimal for the 2% less brake.
 
+**The flick, bisected (2026-10-07).** The trigger's 31–40° above was the `mu` 2.0 car's. The
+current pad (`--only=technique`, fixed-step, the slip at the rear axle) graded on every car commit
+since `47afca8`: the road tyre freed the flick too far (`flick@lift` 53 / 53 / 99° at 42 / 63 /
+86 kph), the Crown Comfort's chassis (`1876da9`) took it to 3.6 / 5.5 / 36.5°, and from there it
+moved with each drive and aid change. The shipped car reads 3.7 / 12.3 / 9.7°, with
+`flick@brake` at 19.1 / 10.7° at 63 / 86, so the lifted flick pays nothing. Stability control's
+yaw brake is not it (byte-identical swept off). No dial was turned. The table is in
+`systems/arcade_aids.md`. Open, the user's call: whether the flick should slide again. One
+lever, untried: the trigger taking the side cut too, which stays the button's today. The
+lifted handbrake at 63 kph spun at every commit from `e1ffcf4` on (179°), bar `17cdafa`–`e9b17e1`
+at 144°.
+
 ## `Q154` — The drift is shown on two signals: the tyres mark the road, the tracker lights the sparks
 
 **Asked** by the user (2026-10-05): "should we add more graphics like skid mark or even sparks/fires

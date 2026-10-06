@@ -112,9 +112,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
   instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
   live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
-- ⚠️ **A flick engages drift mode like the button** (`FlickWatch`, `flick_*` in
+- ⚠️ **A flick stands traction control down like the button** (`FlickWatch`, `flick_*` in
   `systems/arcade_aids.tres`, `P3-54`): a lifted or braked feint, then the steering across within
-  `flick_window_s`. Grade a change to it with `--sweep=arcade_aids.flick_window_s=0,<v>` on the full pad —
+  `flick_window_s`. Never the side cut, which stays the button's. 🔴 **It fires, but on the real
+  car the tail does not come round**: `flick@lift` peaks at 3.7 / 12.3 / 9.7° at 42 / 63 / 86 kph,
+  under the threshold, since the Crown Comfort's chassis (`1876da9`). The 31–40° in P3-54's
+  commit and `arcade_aids.md`'s first table is the `mu` 2.0 car's (bisect in `arcade_aids.md`). Grade a change to it with `--sweep=arcade_aids.flick_window_s=0,<v>` on the full pad —
   0 is the car without it, so every row but the flick's must read the same at both values. 🔴
   Anything that adds a steering reversal with the throttle lifted to a pad row (a new driver, a
   lifted catch) now reaches it, unless traction control is already off there — it never fires
