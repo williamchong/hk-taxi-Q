@@ -192,15 +192,17 @@ Cost:    a few instructions, zero texture memory
   Shader: `assets/shaders/city_facade.gdshader`; numbers: `tuning/city_facade_warm.tres`.
   ⚠️ `tuning/city_facade.tres` binds the *clean* shader.
 
-### The cel trial (`P3-64`, `Q158`) — built, off
+### The outline (`P3-64`, `Q158`) — ships
 
-Two switches, each off until the user picks from rendered frames:
+**Every crease and silhouette carries a thin line in its own surface's hue, darkened** — the user's
+pick, 2026-10-07, over black ink and over no line. `cel_outline.gdshader` on the `CelOutline` quad
+in both rigs (`visible` is the switch; `tuning/cel_outline.tres`): depth-only edges, 1.0 px, the
+colour read from the nearer side of the edge at half its linear value. +1 draw call. It inks
+everything on screen, the car and the road furniture included, and fades out by 240 m.
 
-- **Ink line**: `cel_outline.gdshader` on the `CelOutline` quad in both rigs (`visible` is the
-  switch; `tuning/cel_outline.tres`). Depth-only edges, +1 draw call. Inks everything on screen,
-  not only buildings; thin poles go solid black.
-- **Banded sun**: `city_facade_cel.gdshader`, bound by pointing `tuning/city_facade.tres` at it.
-  On flat-shaded buildings it moves little — the outline is what reads as cel.
+- **Banded sun — built, not shipped**: `city_facade_cel.gdshader`, bound by pointing
+  `tuning/city_facade.tres` at it. On flat-shaded buildings it moves whole faces 3–6 `L*` and
+  hardens shadow edges into the shadow map's stair; it adds no cel look of its own (`Q158`).
 
 ### The clean/futuristic variant
 
@@ -595,6 +597,9 @@ old tuning.
 
 ## Lighting
 
+- The outline (`P3-64`) is not lighting: a pass over the frame, in the rig so every lit scene
+  takes it. Turning the rig's `CelOutline` off restores the unlined look.
+
 - One directional light (sun), warm, low angle, from the shared `golden_hour.tscn` rig.
 - Ambient from a simple gradient sky — no HDRI, no reflection probes.
 - Two shadowless spots per taxi, one per headlamp, switched with the front lamps (`P3-11e`), hidden
@@ -723,7 +728,8 @@ a wrong reason changes what lifting the entry would make possible.
 - **No texture atlas for buildings.** `merge` refuses textured meshes, and one primitive per tile is
   what holds draw calls (`Q16`)
 - No realistic weather or wet-road reflections in the slice
-- **No baked illumination** — flat shading plus one directional light is the look
+- **No baked illumination** — flat shading plus one directional light is the look, with an ink
+  line drawn over it (`Q158`: the line is screen-space, from depth, and bakes nothing)
 
 Reasons, stated exactly:
 

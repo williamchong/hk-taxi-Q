@@ -9485,11 +9485,18 @@ edges wholly to one side in x: droppable too, unmeasured. CI on `-n auto`: two c
 
 **See.** `tools/check.sh` · `etl/pipeline/__main__.py` (`NEEDS`) · `etl/pipeline/gdb.py` · `docs/ARCHITECTURE.md` "Checks"
 
-## `Q158` — Does the city take a cel look?
+## `Q158` — The city takes an outline in its own hue, not a banded sun
 
 **Asked** by the user, 2026-10-06: can the buildings be cel shaded? Evaluated first (GO WITH
-CAVEATS): build it as a switchable trial and choose from frames, as `Q26` was chosen. **Open** on
-that pick.
+CAVEATS): build it as a switchable trial and choose from frames, as `Q26` was chosen.
+
+**Closed 2026-10-07, the user's pick**: the outline ships, each edge in the nearer surface's own hue
+at half its linear value (`ink_from_surface` 1.0, `surface_darkness` 0.5), 1.0 px. The user asked
+for the hue ("follow the building hue, but in a darker tone") after the black-ink frames, chose
+×0.50 over ×0.20 and ×0.35 with a no-outline column beside them, then asked for the thin line. The
+banded sun is not shipped: asked "does ramp vs shipped really differ?", the answer measured was
+whole faces moved 3–6 `L*` (11–30% of pixels on `street` and `infra`) with no new edge inside a
+face — a brightness change, not a look.
 
 **What a cel look is made of here.** Two halves, each its own switch (`P3-64`):
 
@@ -9550,8 +9557,13 @@ the variants):
   No colour drift to correct: the ramp moves the skyline −0.27 `L*` and +0.13 `C*`, the ink adds
   0.3 points of dark pixels, and `C*` p90 does not move in any variant.
 
-**Owed on a pick.** The user's choice; the outline's frame time on the `P3-9` handset; and
-`ART_DESIGN.md`'s anti-goal "flat shading plus one directional light is the look" amended with the
-reason, if the pick turns either half on.
+**The hue** reads the frame (`hint_screen_texture`) at whichever of the five depth taps is nearest,
+so a tower's silhouette is drawn in the tower's colour and never the sky's. Same draw call; one more
+full-frame copy.
+
+**Owed.** The outline's frame time on the `P3-9` handset: a depth resolve and copy (`Q91`'s 4x MSAA)
+and a colour copy a frame, neither measured. The retreats, cheapest first: `ink_from_surface` 0, then
+the rigs' `CelOutline` hidden. `ART_DESIGN.md`'s anti-goal on flat shading is amended: the line is
+drawn over the frame and bakes nothing.
 
 **See.** `P3-64` · `game/assets/shaders/cel_outline.gdshader` · `game/assets/shaders/city_facade_cel.gdshader` · `game/tuning/cel_outline.md` · `game/tuning/city_facade.md` · `Q26` · `Q76`
