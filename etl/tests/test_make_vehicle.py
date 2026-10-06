@@ -85,7 +85,7 @@ from pipeline.terrain import covered
 
 ROOT = Path(__file__).resolve().parents[2]
 TAXI_SCENE = ROOT / "game" / "scenes" / "vehicle" / "taxi.tscn"
-HANDLING = ROOT / "game" / "tuning" / "handling.tres"
+CAR_SPEC = ROOT / "game" / "tuning" / "cars" / "crown_comfort.tres"
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
 # `ART_DESIGN.md`'s ceiling for one vehicle.
@@ -122,7 +122,7 @@ def _above_roof(mesh: MeshData) -> np.ndarray:
 
 def _tres_float(text: str, field: str) -> float:
     match = re.search(rf"^{field} = ([\d.]+)$", text, flags=re.MULTILINE)
-    assert match is not None, f"{field} is gone from handling.tres"
+    assert match is not None, f"{field} is gone from {CAR_SPEC.name}"
     return float(match.group(1))
 
 
@@ -166,7 +166,7 @@ def scene_chassis() -> Chassis:
     zs = sorted({round(origin[2], 4) for origin in origins.values()})
     assert len(xs) == 2 and len(zs) == 2, f"wheels are not a rectangle: {origins}"
 
-    profile = HANDLING.read_text()
+    profile = CAR_SPEC.read_text()
     return Chassis(
         wheelbase_m=zs[1] - zs[0],
         track_m=xs[1] - xs[0],
