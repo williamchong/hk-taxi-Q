@@ -49,33 +49,23 @@ const PATH: String = "res://tuning/handling.tres"
 ## saloon's Cd of about 0.36 on about 2.0 m² — typical figures, not the Crown
 ## Comfort's published ones (`Q153`). About 240 N at 80 kph.
 @export_range(0.0, 3.0, 0.01, "suffix:m²") var drag_area_m2: float
-## Braking, handed to `VehicleBody3D.brake`.
+## The brakes' strength: the deceleration they could give, in g, if the tyres
+## held — a road car's are about 1.2, a little over what its tyres can use, so
+## the tyre and ABS set the stop and not the brake. A real unit so that it sizes
+## itself to the car: the force is this × the car's weight, whatever its mass,
+## its gravity or the physics tick rate (`VehicleController._brake_per_wheel_n`).
 ##
-## ⚠️ **This is not newtons and does not convert from the value it replaced.** The
-## raycast model applied `brake_force` at each contact patch itself, and 2,400
-## there was ~8.0 m/s². Godot's `brake` is its own quantity: carried across
-## unchanged it stopped the car from 63 km/h in **0.10 s over 1.0 m at 173 m/s²**,
-## which looks like a working brake until someone reads the table. Re-seeded
-## against `tools/skidpad.sh` at **40**, which reproduces the raycast car's stop to
-## within half a percent — 8.75 m/s² over 17.0 m against 8.79 over 16.6 (`Q50`).
-##
-## Measured linear in this region: 40 → 8.75 m/s², 80 → 16.53, 120 → 24.20. So it
-## is safe to dial, and ⚠️ **the range below is deliberately far wider than the
-## shipped value** — it has to keep reaching what a heavier roster vehicle needs,
-## and 40 sitting near the bottom of it is information, not a mis-scaled slider.
-##
-## Handed to the tyre model as a brake torque (`TyreVehicleController`), where it
-## stops the car within 2% of the engine-tyre car's stop (`Q152`). **47 since
-## 2026-10-05**: the same stop on the 1,400 kg real taxi (8.62 m/s² from 63 kph,
-## 2.00 s; 40 gave 7.45), because a real car's brakes are sized to its weight
-## (`Q153`). The 40 → 8.75 line above is the 1,200 kg car's. **70 since
-## 2026-10-06**, with 65% of it on the front (`brake_front_share`) and ABS
-## holding the tyres at their limit (`AntiLockBrakesProfile`): 9.3 m/s² from 63
-## kph; at 47 the brake itself was the limit, not the tyre.
-@export_range(0.0, 5000.0, 10.0) var brake_force: float
+## It replaced `brake_force` on 2026-10-06 (`Q153`), a number in
+## `VehicleBody3D.brake`'s own unit that the tyre model multiplied by the tick
+## rate — right at 60 Hz only, and re-seeded by hand at every change of mass
+## (40 on the 1,200 kg car, 47 on the 1,400 kg one, 70 with ABS and the front
+## bias: 9.3 m/s² from 63 kph). 70 was 1.22 g on this car; swept 1.0–1.3, the
+## stop is the tyre's from 1.1 up (9.1 / 9.3 / 9.5 m/s² from 42 / 63 / 86 kph)
+## and 1.0 falls short of it (8.9 / 9.0 / 9.1), so 1.2.
+@export_range(0.0, 3.0, 0.01, "suffix:g") var brake_g: float
 ## The share of the brake on the front axle, as a real car's brake bias — the
 ## weight moves forward under braking, so the front tyres can carry more of it.
-## Spread over the axle's wheels; the total is `brake_force`'s. 0 is unauthored
+## Spread over the axle's wheels; the total is `brake_g`'s. 0 is unauthored
 ## and brakes all four wheels alike, as the car did before the bias (`Q153`).
 @export_range(0.0, 1.0, 0.01) var brake_front_share: float
 

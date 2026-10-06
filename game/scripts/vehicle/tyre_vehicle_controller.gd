@@ -97,17 +97,14 @@ var _catch: CatchLimiter = CatchLimiter.new()
 ## tracked: a slide sheds speed, and a cut that deepened as it did would feed
 ## itself (`Q89`).
 var _side_cut: float = 0.0
-## The car's whole drive force and the brake dial as the parent set them this
-## tick, before this class took them back off the engine.
+## The car's whole drive force as the parent set it this tick, before this
+## class took it back off the engine; the brake is the parent's `_brake_n`.
 var _drive_n: float = 0.0
 ## Each driven wheel's share of `_drive_n`, from the wheels marked
 ## `use_as_traction`.
 var _traction_share: float = 0.0
-## The wheelbase off the wheels' own hardpoints, and gravity as this body feels
-## it, for `_grip_lock_rad`.
+## The wheelbase off the wheels' own hardpoints, for `_grip_lock_rad`.
 var _wheelbase_m: float = 0.0
-var _gravity_mps2: float = 0.0
-var _brake_dial: float = 0.0
 ## Microseconds spent in `_apply_tyres` and the ticks that spent them, for the
 ## skidpad's cost column.
 var _cost_us: int = 0
@@ -149,7 +146,6 @@ func _ready() -> void:
 	# as the engine split it (`HandlingProfile.engine_force`).
 	_traction_share = 1.0 / float(maxi(driven, 1))
 	_wheelbase_m = absf(_axle_z(_front) - _axle_z(_rear))
-	_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity")) * gravity_scale
 	_omega.resize(_wheels.size())
 	_loads.resize(_wheels.size())
 	_slips.resize(_wheels.size())
@@ -287,7 +283,7 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 ## is held at it, so a car at rest asks for no infinite angle.
 func _grip_lock_rad() -> float:
 	var mps: float = maxf(absf(speed_kph) / 3.6, tyre.low_speed_mps)
-	var turn: float = atan(_wheelbase_m * tyre.mu * _gravity_mps2 / (mps * mps))
+	var turn: float = atan(_wheelbase_m * tyre.mu * _gravity_mps2() / (mps * mps))
 	return turn + deg_to_rad(tyre.peak_slip_angle_deg)
 
 
@@ -312,8 +308,8 @@ func _slide_toward() -> float:
 
 
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`
-## act through the friction this class has zeroed, so they are read here and
-## applied as torque in `_apply_tyres` instead.
+## act through the friction this class has zeroed, so the drive is read here
+## and both are applied as torque in `_apply_tyres` instead.
 func _apply_drive() -> void:
 	super._apply_drive()
 	# The parent writes `DRIVE_SIGN × force`, so the product is forward-positive.
@@ -328,7 +324,6 @@ func _apply_drive() -> void:
 	if boost > 0.0:
 		boost *= 1.0 - _steer_share()
 	_drive_n = engine_force * DRIVE_SIGN * (1.0 + boost)
-	_brake_dial = brake
 	engine_force = 0.0
 	brake = 0.0
 
@@ -344,7 +339,7 @@ func _apply_drift(delta: float) -> void:
 func place_at(pose: Transform3D) -> void:
 	super.place_at(pose)
 	_drive_n = 0.0
-	_brake_dial = 0.0
+	_brake_n = 0.0
 	_omega.fill(0.0)
 	_loads.fill(0.0)
 	_side_cut = 0.0
@@ -363,7 +358,6 @@ func _apply_tyres(delta: float) -> void:
 	var nose: Vector3 = -global_basis.z
 	var up: Vector3 = global_basis.y
 	var share: float = mass / float(_wheels.size())
-	var brake_nm: float = _brake_dial * float(Engine.physics_ticks_per_second)
 	var rim_limit_mps: float = profile.max_speed_kph / 3.6 * (1.0 + rev_limiter.overspeed_share)
 	var pressed: bool = _drift_mode.step(
 		drift_input,
@@ -410,7 +404,7 @@ func _apply_tyres(delta: float) -> void:
 		var on_front: bool = i < _front.size()
 		var axle_share: float = front_share if on_front else 1.0 - front_share
 		var axle_wheels: int = _front.size() if on_front else _rear.size()
-		var foot_nm: float = brake_nm * _radius * axle_share * _wheels.size() / axle_wheels
+		var foot_nm: float = _brake_n * _radius * axle_share * _wheels.size() / axle_wheels
 		var hand_nm: float = 0.0
 		if drift_input and i >= _front.size():
 			hand_nm = handbrake.torque_nm

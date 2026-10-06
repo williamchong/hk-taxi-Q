@@ -55,6 +55,9 @@ var _impact_mps: float = 0.0
 ## The velocity the car carried into this step: `linear_velocity` at the end
 ## of `_physics_process`, before the server moves anything.
 var _velocity_into_step: Vector3 = Vector3.ZERO
+## The foot brake's force at each wheel's contact this tick, in newtons, pedal
+## included: what `brake` is written from, and what the tyre model reads.
+var _brake_n: float = 0.0
 ## What the last `take_impact_mps` handed over, kept for a reader that must
 ## not drain the latch — `driver.gd`'s trace, which is how a kerb was shown
 ## to read nothing (`Q148`). Never read by the game.
@@ -115,6 +118,8 @@ var _input: Node = null
 var _rear: Array[VehicleWheel3D] = []
 ## How far behind the centre of mass the rear axle sits, in metres.
 var _rear_axle_behind_m: float = 0.0
+## The project's gravity, for `_gravity_mps2`.
+var _world_gravity_mps2: float = 0.0
 
 ## Steering as a signed fraction of the lock available at this speed: -1.0 is
 ## full left, +1.0 is full right.
@@ -237,6 +242,7 @@ func _ready() -> void:
 		_configure(wheel)
 
 	gravity_scale = profile.gravity_scale
+	_world_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = Vector3(0.0, profile.centre_of_mass_offset_y, 0.0)
 	_rear_axle_behind_m = _axle_z(_rear) - center_of_mass.z
@@ -406,13 +412,12 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 
 ## Throttle, brake and reverse, onto the two properties VehicleBody3D drives on.
 ##
-## ⚠️ **profile.engine_force and profile.brake_force do not mean here what they
-## meant under the raycast model.** There they were newtons applied at a contact
-## patch, per wheel, by this script. Here they are handed to the engine, which
-## applies engine_force as a drive force split across the traction wheels and
-## `brake` as a braking torque — so the same number produces a different
-## acceleration, and both were re-seeded against tools/skidpad.sh rather than
-## carried across. The dial names survived; their calibration did not.
+## ⚠️ **profile.engine_force does not mean here what it meant under the raycast
+## model.** There it was newtons applied at a contact patch, per wheel, by this
+## script. Here it is handed to the engine, which applies it as a drive force
+## split across the traction wheels — so the same number produces a different
+## acceleration, and it was re-seeded against tools/skidpad.sh rather than
+## carried across. The brake is `profile.brake_g`, sized to the car's weight.
 ## `engine_force` is the launch force since `Q153`; `_drive_force_n` limits it
 ## by the engine's power above about 42 kph.
 ## ⚠️ Accumulated into locals and assigned **once**. `engine_force` and `brake` are
@@ -434,12 +439,27 @@ func _apply_drive() -> void:
 		force = DRIVE_SIGN * _drive_force_n() * throttle_input * clampf(headroom, 0.0, 1.0)
 
 	if is_braking():
-		braking = profile.brake_force * brake_input
+		braking = _brake_per_wheel_n() * brake_input
 	elif is_reversing() and speed_kph > -profile.max_reverse_kph:
 		force = -DRIVE_SIGN * _drive_force_n() * brake_input
 
 	engine_force = force
-	brake = braking
+	_brake_n = braking
+	# `VehicleBody3D.brake` is a force a tick, so the tick rate divides out.
+	brake = braking / float(Engine.physics_ticks_per_second)
+
+
+## Gravity as this body feels it. Read live off `gravity_scale`, which the
+## skidpad sweeps on the body (`--sweep=body.gravity_scale`).
+func _gravity_mps2() -> float:
+	return _world_gravity_mps2 * gravity_scale
+
+
+## The brakes' full force at each wheel's contact, in newtons, before the bias
+## moves it between the axles: `HandlingProfile.brake_g` of the car's weight,
+## over its wheels.
+func _brake_per_wheel_n() -> float:
+	return profile.brake_g * mass * _gravity_mps2() / float(_front.size() + _rear.size())
 
 
 ## The drive the engine has at this speed: `engine_force` off the line, and
