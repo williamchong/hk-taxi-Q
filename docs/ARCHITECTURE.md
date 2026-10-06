@@ -135,6 +135,12 @@ Rows are in run order. 🔴 No Godot process may run above `--import`: a `class_
 from the cache the import scan writes, and the autoloads instantiated around every `--script` run
 name globals whatever the tool does (`Q119`).
 
+The warnings sweep and the per-region verify tools run `CHECK_JOBS` at a time (default: the core
+count, capped at 8; 54 s -> 21 s on 14 cores, the log identical bar timing lines). `CHECK_JOBS=1` is
+the serial run. Each job writes its own file and the results are judged and printed in the serial
+order. ⚠️ `verify_road_graph` runs first and alone (`CLOCKED_TOOLS`): it gates on microsecond
+budgets, and a tool that reads the clock must not share the machine with the pool.
+
 | Step | Covers | In CI |
 |---|---|---|
 | `instructions` | Root `CLAUDE.md` under 40,000 characters; scoped checklists live in `.claude/rules/<name>.md` | yes |
@@ -143,7 +149,7 @@ name globals whatever the tool does (`Q119`).
 | `--import` | Autoloads and what they reach; builds `game/.godot/` | yes |
 | `settings` | `tools/verify_settings.gd` — the 21 warning promotions, every pinned value, all three `[importer_defaults]` keys, read through `ProjectSettings` | yes |
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the `meshes/*` keys `[importer_defaults]` pins (`P5-16`, `Q122`; authored since `P5-20`, `Q124`). Keys are read from the project file and their count asserted. 0 sidecars checked passes — a clone has no city | yes |
-| warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`) | yes |
+| warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`). Pooled, `CHECK_JOBS` scripts at a time, one output file each; the files that came back are counted against the scripts | yes |
 | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures; the start menu's tables and the credits' licence wording in both languages (`P6-1`). None needs a built region | yes |
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |

@@ -97,17 +97,37 @@ FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
 failed=0
 
-# Runs a Godot command and fails the script if either signal says it went
-# wrong: a compile failure named in the output, or a non-zero status. Both are
-# needed. The output check catches parse failures, which exit 0. The status
+# How many Godot processes the warnings sweep and the per-region verify tools
+# run at once. CHECK_JOBS=1 is the serial run this script always was, and the
+# one to read when two tools' output must not be suspected of interleaving —
+# it cannot, each job writes its own file, but 1 is the proof. Capped at 8:
+# measured on 14 cores, the sweep is 21.6 s serial and 2.9 s at 8, and past
+# that the floor is one tool's own run time.
+#
+# Anything that is not a positive integer runs serial rather than aborting:
+# `xargs -P true` dies with a usage error, and a pool that never started is a
+# sweep that checked nothing.
+CHECK_JOBS="${CHECK_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
+if [[ ! "$CHECK_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+	CHECK_JOBS=1
+fi
+if ((CHECK_JOBS > 8)); then
+	CHECK_JOBS=8
+fi
+
+# Where the pooled jobs write. One file per job, never a shared pipe: macOS's
+# PIPE_BUF is 512 bytes, so two tools writing one pipe can split each other's
+# lines, and a split `Parse Error` is a line the greps below no longer match.
+POOL="$(mktemp -d)"
+trap 'rm -rf "$POOL"' EXIT
+
+# Judges one finished Godot run and fails the script if either signal says it
+# went wrong: a compile failure named in the output, or a non-zero status. Both
+# are needed. The output check catches parse failures, which exit 0. The status
 # check catches a verify tool that parsed fine and then found real problems,
 # which reports them through quit(1) and prints nothing matching FATAL.
-run_godot() {
-	local label="$1"
-	shift
-	local out status
-	out="$("$GODOT" "$@" 2>&1)"
-	status=$?
+judge_godot() {
+	local label="$1" out="$2" status="$3"
 	echo "$out"
 	if ((status != 0)); then
 		echo "  FAIL  $label — exit $status" >&2
@@ -121,6 +141,30 @@ run_godot() {
 	fi
 	echo "  ok    $label"
 }
+
+run_godot() {
+	local label="$1"
+	shift
+	local out status
+	out="$("$GODOT" "$@" 2>&1)"
+	status=$?
+	judge_godot "$label" "$out" "$status"
+}
+
+# One pooled job: a verify tool for a region (`-` for none), its output to
+# $POOL/verify/<n>.out and its status beside it. Invoked by xargs with the
+# job's three fields as ARGUMENTS — never interpolated into a command string,
+# which is the form the warnings step's history refuses.
+# shellcheck disable=SC2016
+VERIFY_JOB='
+	region_args=()
+	if [[ "$5" != "-" ]]; then
+		region_args=(-- "--region=$5")
+	fi
+	"$0" --headless --path "$1" --script "res://tools/$4.gd" \
+		${region_args[@]+"${region_args[@]}"} >"$2/$3.out" 2>&1
+	echo $? >"$2/$3.status"
+'
 
 # The root CLAUDE.md loads into every session whole, and it grew 12k -> 150k
 # chars in a month at a bullet per closed question until the harness refused it.
@@ -401,15 +445,20 @@ fi
 # `Parse Error` is measured at **0** across the healthy 71, which is what makes
 # it the one term that can be added.
 #
-# ⚠️ Serial on purpose, and the usual reason for that is measured FALSE — record
-# it rather than re-deriving it. `--check-only` writes nothing under `.godot/`
-# (hashed before and after, byte-identical), so concurrent runs do not race the
-# import cache, and `xargs -P 8` is 1.47 s against 10.09 s with identical output.
-# What refuses it is portability and safety, not correctness: BSD/macOS `xargs`
-# has no `-d`, and the `-I{} sh -c` form interpolates a filename into a shell
-# command. That trades ~8.6 s — noise beside CI's 76 MB engine download — for a
-# metacharacter in a path executing, in the one script whose job is not lying.
-# `find -print0 | xargs -0 -P8 -n1` is the safe form if it is ever revisited.
+# ⚠️ Pooled, CHECK_JOBS at a time, and it was serial until the sweep doubled.
+# `--check-only` writes nothing under `.godot/` (hashed before and after,
+# byte-identical), so concurrent runs do not race the import cache. What kept it
+# serial was portability and safety, not correctness: BSD/macOS `xargs` has no
+# `-d`, and the `-I{} sh -c` form interpolates a filename into a shell command —
+# a metacharacter in a path executing, in the one script whose job is not lying.
+# That traded ~8.6 s at 72 scripts; at 143 it was 21.6 s of a 54 s run, against
+# 2.9 s pooled. So this is the safe form: `xargs -0 -n 1`, the script handed to
+# `bash -c` as an ARGUMENT (`$3`), never spliced into the command text.
+#
+# 🔴 The pool brings its own false green, so the count of files that came back
+# is asserted against the count of scripts. An `xargs` that could not start
+# `bash`, or died on a bad -P, leaves no hits — and no hits is what passing
+# looks like. Each job writes its own file for the reason given at $POOL.
 #
 # ⚠️ The sweep itself takes `--path` and does NOT cd, deliberately. A second `cd`
 # here would be the same subshell-exit shape again — succeeding on line one and
@@ -423,18 +472,25 @@ if [[ -z "$scripts" ]]; then
 	echo "        checked. That is not the same as nothing being wrong." >&2
 	failed=1
 else
-	lint_hits="$(
-		while IFS= read -r script; do
-			"$GODOT" --headless --path "$ROOT/game" --check-only --script "$script" 2>&1 |
-				sed "s|^|$script: |"
-		done <<<"$scripts" | grep -E 'treated as error|Parse Error'
-	)"
-	if [[ -n "$lint_hits" ]]; then
+	mkdir "$POOL/lint"
+	# shellcheck disable=SC2016
+	tr '\n' '\0' <<<"$scripts" | xargs -0 -n 1 -P "$CHECK_JOBS" bash -c '
+		"$0" --headless --path "$1" --check-only --script "$3" 2>&1 |
+			sed "s|^|$3: |" >"$(mktemp "$2/XXXXXX")"
+	' "$GODOT" "$ROOT/game" "$POOL/lint"
+	script_count="$(grep -c . <<<"$scripts")"
+	swept="$(find "$POOL/lint" -type f | grep -c .)"
+	lint_hits="$(find "$POOL/lint" -type f -exec cat {} + | grep -E 'treated as error|Parse Error' | sort)"
+	if ((swept != script_count)); then
+		echo "  FAIL  warnings — $swept of $script_count scripts reported back, so the" >&2
+		echo "        pool did not sweep them all. Re-run with CHECK_JOBS=1." >&2
+		failed=1
+	elif [[ -n "$lint_hits" ]]; then
 		echo "$lint_hits"
 		echo "  FAIL  warnings — see above" >&2
 		failed=1
 	else
-		echo "  ok    warnings — $(grep -c . <<<"$scripts") scripts swept"
+		echo "  ok    warnings — $script_count scripts swept"
 	fi
 fi
 
@@ -449,29 +505,68 @@ done
 # lets sed read it with no JSON tool on the path. No list means a tree synced
 # before P5-9b, or none at all: the tools then run once as they always did and
 # fail with the missing-city hint where there is no city.
+#
+# Pooled, CHECK_JOBS at a time: measured, the 36 runs are ~23 s serial and
+# 4.8 s side by side, every exit 0 and the output identical bar timing lines.
+# They write nothing under `.godot/` — only Godot's own log under user://. The
+# runs are judged and printed afterwards in the order they always had, so the
+# log reads the same at any CHECK_JOBS and a failure lands under its own `==>`.
+#
+# ⚠️ CLOCKED_TOOLS run first and ALONE, one at a time. verify_road_graph gates
+# on p99 query and route budgets in microseconds, and it is the only verify tool
+# that reads the clock (`get_ticks_usec`): beside 35 other processes one of its
+# maxima read 745 us against 28 us alone. A budget that fails on a busy machine
+# teaches people to re-run until green. A new tool that times anything joins
+# this list.
+#
+# 🔴 A job with no status file did not run, and that is a FAIL, never a skip:
+# the pool dying must not read as 37 tools with nothing to say.
+CLOCKED_TOOLS=(verify_road_graph)
 if [[ "$VERIFY_GENERATED" != 0 ]]; then
 	regions="$(sed -n 's/^ *"regions": *\[\(.*\)\].*$/\1/p' "$ROOT/game/assets/generated/regions.json" 2>/dev/null |
 		tr ',' '\n' | tr -d ' "')"
 	if [[ -z "$regions" ]]; then
 		regions="-"
 	fi
-	while IFS= read -r region; do
-		region_args=()
-		label_suffix=""
-		if [[ "$region" != "-" ]]; then
-			region_args=(-- "--region=$region")
-			label_suffix=" [$region]"
+	# The work list, in print order: `<tool> <region>` a line, `-` for no region.
+	# Once, not per region, and last: verify_join, the runtime merge of the first
+	# two listed regions against pipeline/join.py's (P5-9d). It passes with SKIP
+	# on one region.
+	jobs="$(
+		while IFS= read -r region; do
+			for tool in "${VERIFY_TOOLS[@]}"; do
+				echo "$tool $region"
+			done
+		done <<<"$regions"
+		echo "verify_join -"
+	)"
+	mkdir "$POOL/verify"
+	numbered="$(grep -n . <<<"$jobs" | tr ':' ' ')"
+	clocked="$(printf ' %s \n' "${CLOCKED_TOOLS[@]}")"
+	while read -r n tool region; do
+		if grep -qF " $tool " <<<"$clocked"; then
+			bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify" "$n" "$tool" "$region"
 		fi
-		for tool in "${VERIFY_TOOLS[@]}"; do
-			echo "==> $tool$label_suffix"
-			run_godot "$tool$label_suffix" --headless --path "$ROOT/game" --script "res://tools/$tool.gd" \
-				${region_args[@]+"${region_args[@]}"}
-		done
-	done <<<"$regions"
-	# Once, not per region: the runtime merge of the first two listed regions
-	# against pipeline/join.py's (P5-9d). It passes with SKIP on one region.
-	echo "==> verify_join"
-	run_godot verify_join --headless --path "$ROOT/game" --script "res://tools/verify_join.gd"
+	done <<<"$numbered"
+	while read -r n tool region; do
+		if ! grep -qF " $tool " <<<"$clocked"; then
+			printf '%s\0%s\0%s\0' "$n" "$tool" "$region"
+		fi
+	done <<<"$numbered" |
+		xargs -0 -n 3 -P "$CHECK_JOBS" bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify"
+	while read -r n tool region; do
+		label="$tool"
+		if [[ "$region" != "-" ]]; then
+			label="$tool [$region]"
+		fi
+		echo "==> $label"
+		if [[ ! -f "$POOL/verify/$n.status" ]]; then
+			echo "  FAIL  $label — never ran; the pool lost it. Re-run with CHECK_JOBS=1." >&2
+			failed=1
+			continue
+		fi
+		judge_godot "$label" "$(cat "$POOL/verify/$n.out")" "$(cat "$POOL/verify/$n.status")"
+	done <<<"$numbered"
 else
 	echo "==> verify tools"
 	echo "  SKIP  ${VERIFY_TOOLS[*]} — VERIFY_GENERATED=0."
