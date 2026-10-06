@@ -118,3 +118,7 @@ exposure_anchor={
 "type": "float",
 "value": 1.0
 }
+outline_speed={
+"type": "float",
+"value": 0.0
+}

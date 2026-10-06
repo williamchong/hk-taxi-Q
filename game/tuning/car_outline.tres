@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CarOutlineProfile" format=3 uid="uid://t0tvdkhn4oh5"]
+
+[ext_resource type="Script" uid="uid://cg6jwlhsyjfi0" path="res://scripts/vehicle/car_outline_profile.gd" id="1_profile"]
+[ext_resource type="Material" uid="uid://vxw25mm0bjdb" path="res://tuning/cel_outline.tres" id="2_line"]
+
+[resource]
+script = ExtResource("1_profile")
+full_speed_kph = 120.0
+hull_width_m = 0.03
+trail_width_m = 0.04
+seep_s = 0.25
+drain_s = 0.6
+smear_s = 0.04
+smear_max_m = 0.3
+city_line = ExtResource("2_line")

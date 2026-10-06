@@ -46,6 +46,17 @@ uniform float ink_strength : hint_range(0.0, 1.0) = 1.0;
 // How far apart the samples sit. The line is about twice this wide, because
 // both the near and the far pixel of a break test positive.
 uniform float line_width_px : hint_range(0.5, 4.0) = 1.0;
+// What speed takes off the line (`P3-65`, the user's call: "make outline at
+// rest bolder so that we can have thinner outline on speed"): the car's
+// `CarOutline` sets `outline_speed`, 0 at rest to 1 at its `full_speed_kph`, as
+// a global so the one quad in each rig hears it without knowing the car. At full
+// speed the line is `speed_thin_px` thinner, never under `MIN_WIDTH_PX` where it
+// breaks into dots, and keeps `1 - speed_fade` of its strength. A scene with no
+// car leaves the project default, 0: the rest line.
+uniform float speed_thin_px : hint_range(0.0, 3.0) = 0.5;
+uniform float speed_fade : hint_range(0.0, 1.0) = 0.2;
+global uniform float outline_speed;
+const float MIN_WIDTH_PX = 1.0;
 
 group_uniforms edge;
 // The Laplacian ratio where the ink starts and where it is full. A crease
@@ -102,7 +113,8 @@ void fragment() {
 	float slope = -inv[2][3] / inv[3][2];
 	float offset = -inv[3][3] / inv[3][2];
 
-	vec2 step_uv = line_width_px / VIEWPORT_SIZE;
+	float width_px = max(line_width_px - speed_thin_px * outline_speed, MIN_WIDTH_PX);
+	vec2 step_uv = width_px / VIEWPORT_SIZE;
 	float centre = ndc_z(SCREEN_UV);
 	float left = ndc_z(SCREEN_UV - vec2(step_uv.x, 0.0));
 	float right = ndc_z(SCREEN_UV + vec2(step_uv.x, 0.0));
@@ -132,5 +144,5 @@ void fragment() {
 	}
 	vec3 surface = textureLod(screen_texture, near_uv, 0.0).rgb * surface_darkness;
 	ALBEDO = mix(ink_colour, surface, ink_from_surface);
-	ALPHA = edge * ink_strength;
+	ALPHA = edge * ink_strength * (1.0 - speed_fade * outline_speed);
 }

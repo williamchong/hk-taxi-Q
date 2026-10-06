@@ -14,8 +14,18 @@ What the shader does and why it reads depth alone is in its header. The numbers:
 - `ink_from_surface` 1.0 and `surface_darkness` 0.5 are the user's pick (2026-10-07) over black ink
   and over ×0.20 and ×0.35: the line is the frame's own colour on the nearer side of the edge, halved
   in linear light. ×0.20 read as ink, ×0.35 as coloured pencil, ×0.50 as a fine crease line.
-- `line_width_px` 1.0, the user's "outline thin" over the 1.5 px the hue variants were shown at. The
-  drawn line is about twice the sample step, because both sides of a break test positive.
+- `line_width_px` 1.5 at rest. The user first took 1.0 ("outline thin", 2026-10-07) over the 1.5
+  the hue variants were shown at, then asked for it bolder at rest "so that we can have thinner
+  outline on speed" the same day. The drawn line is about twice the sample step, because both sides
+  of a break test positive.
+- `speed_thin_px` 0.5 / `speed_fade` 0.2 (`P3-65`, the user's ask, "all
+  outline sensitive to speed"): at `car_outline.tres`'s `full_speed_kph` the line is 1.0 px and 80%
+  strength. Thinner and fainter, never bolder — the user's own logic: speed smears edges, and a
+  louder city at speed fights the road. The shader floors the width at 1.0 px, where it breaks into
+  dots; the fade covers what width cannot. A first cut bolded with speed (1.0 → 2.0 px) and was
+  turned round. An edge-weighted fade (0.3, plus 0.6 toward the corners) was rendered and
+  not taken; its dial was dropped rather than shipped at zero. Read through the `outline_speed` global, which the car writes; a
+  scene with no car keeps the resting line.
 - `ink_strength` 1.0: the hue already softens the line, so it is laid at full strength.
 - `edge_start` 0.004 / `edge_full` 0.03 are ratios of the Laplacian of inverse depth to the centre's
   own. A crease between two walls reads in the thousandths, a silhouette in the tenths.

@@ -74,6 +74,7 @@ const MARKS_SCRIPT := "res://scripts/vehicle/skid_marks.gd"
 const STRIP_SCRIPT := "res://scripts/vehicle/skid_strip.gd"
 const FLICK_SCRIPT := "res://scripts/vehicle/flick_watch.gd"
 const SPARKS_SCRIPT := "res://scripts/vehicle/drift_sparks.gd"
+const OUTLINE_SCRIPT := "res://scripts/vehicle/car_outline.gd"
 ## The tuning tables the three rigs read (`Q150`). Restated here rather than read
 ## off the profile scripts' `PATH`, so the tool cannot be steered by the file it
 ## grades: what is asserted is that the scene hands each node THIS resource.
@@ -96,6 +97,7 @@ const SYSTEM_PATHS: Dictionary[String, String] = {
 }
 const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
 const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"
+const OUTLINE_PROFILE_PATH := "res://tuning/car_outline.tres"
 
 
 ## The rigs' dials are tuning resources, and a zero key makes each rig inert
@@ -119,6 +121,7 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 		[_running(car, EMOTE_SCRIPT), EMOTE_PROFILE_PATH, "emote", "life_s"],
 		[_running(car, MARKS_SCRIPT), MARKS_PROFILE_PATH, "tyre marks", "mark_width_m"],
 		[_running(car, SPARKS_SCRIPT), SPARKS_PROFILE_PATH, "sparks", "lifetime_s"],
+		[_running(car, OUTLINE_SCRIPT), OUTLINE_PROFILE_PATH, "outline", "full_speed_kph"],
 	]
 	for rig: Array in rigs:
 		var node := rig[0] as Node3D
@@ -157,7 +160,7 @@ func _check_the_dials_are_data(car: Node3D) -> void:
 	if _failed == before:
 		print(
 			(
-				"  ok    the lamp, door, face, tyre-mark and spark dials are tuning resources,"
+				"  ok    the lamp, door, face, tyre-mark, spark and outline dials are tuning resources,"
 				+ " and a zero key makes each inert"
 			)
 		)
@@ -382,6 +385,51 @@ func _check_the_sparks_take_the_tier(car: Node3D) -> void:
 		print("  ok    the sparks take each tier's colour and are clear when no slide counts")
 
 
+## The car's outline (`P3-65`): the rim at no width with no slide counting and
+## at its one width on every counted tier; its ease never a snap, in either
+## direction; the speed share 0 at rest, a half at half of `full_speed_kph`,
+## held at 1 above it. A table with no city line to take the colour from is
+## refused. The global it writes is `verify_settings.gd`'s.
+func _check_the_outline_takes_the_tier_and_speed(car: Node3D) -> void:
+	var before: int = _failed
+	var outline := _running(car, OUTLINE_SCRIPT) as Node3D
+	if outline == null:
+		_problem("no node in %s runs %s" % [SCENE_PATH, OUTLINE_SCRIPT])
+		return
+	var table := outline.get("profile") as Resource
+	if table == null:
+		_problem("the car outline has no profile assigned in %s" % SCENE_PATH)
+		return
+	var width: float = table.get("hull_width_m")
+	if outline.width_of(-1) != 0.0:
+		_problem("the rim has a width with no slide counting")
+	for tier: int in 4:
+		if outline.width_of(tier) != width:
+			_problem("tier %d's rim is not the one hull_width_m" % tier)
+	var tick: float = 1.0 / 60.0
+	var seeped: float = outline.eased(0.0, width, tick)
+	var drained: float = outline.eased(width, 0.0, tick)
+	if not (seeped > 0.0 and seeped < width * 0.5):
+		_problem("the rim does not seep in: one tick took it to %.4f of %.4f" % [seeped, width])
+	if not (drained < width and drained > width * 0.5):
+		_problem("the rim does not drain: one tick took it to %.4f of %.4f" % [drained, width])
+	var full: float = table.get("full_speed_kph")
+	if outline.speed_share(0.0) != 0.0 or outline.speed_share(full * 2.0) != 1.0:
+		_problem("the speed share is not 0 at rest and held at 1 past full speed")
+	if not is_equal_approx(outline.speed_share(full * 0.5), 0.5):
+		_problem("the speed share is not a half at half of full_speed_kph")
+	var lineless := table.duplicate() as Resource
+	lineless.set("city_line", null)
+	outline.set("profile", lineless)
+	if outline.usable():
+		_problem("mutation missed: an outline table with no city line still reads usable")
+	outline.set("profile", table)
+	if _failed == before:
+		print(
+			"  ok    the car's rim seeps in and drains on a counted slide, and the line takes its speed"
+		)
+
+
 ## Where `GeometryInstance3D` publishes the instance uniforms its material
 ## declares. This is the renderer's own list — the same one
 ## `set_instance_shader_parameter` dispatches against — which is why it is asked
@@ -465,6 +513,7 @@ func _run() -> void:
 	_check_the_flick_is_read_off_the_inputs()
 	_check_the_tyre_marks_break_and_wrap()
 	_check_the_sparks_take_the_tier(car)
+	_check_the_outline_takes_the_tier_and_speed(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)

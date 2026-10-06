@@ -76,8 +76,11 @@ const PINNED: Dictionary = {
 ## `scripts/world/lighting_rig.gd` sets what a scene actually renders at. What
 ## this pin protects is a scene with no rig, which is `skidpad.tscn` and the
 ## grey box: they render unexposed, which is the honest state and a visible one.
+## `outline_speed`'s 0 is the same promise for the outline (`P3-65`): a scene with
+## no `CarOutline` draws the resting line.
 const SHADER_GLOBALS: Dictionary = {
 	"exposure_anchor": {"type": "float", "value": 1.0},
+	"outline_speed": {"type": "float", "value": 0.0},
 }
 
 ## `[importer_defaults]` seeds every NEW `.import`; `Q82` and the importer

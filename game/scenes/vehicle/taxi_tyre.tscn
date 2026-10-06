@@ -14,6 +14,8 @@
 [ext_resource type="Resource" uid="uid://d0wj2fg02maff" path="res://tuning/systems/rev_limiter.tres" id="13_rev_limiter"]
 [ext_resource type="Resource" uid="uid://bqrixp53ql6qs" path="res://tuning/systems/arcade_aids.tres" id="14_arcade_aids"]
 [ext_resource type="Resource" uid="uid://dxpx52il4a36i" path="res://tuning/systems/anti_lock_brakes.tres" id="15_anti_lock_brakes"]
+[ext_resource type="Script" uid="uid://d3xbj8y81vkdc" path="res://scripts/vehicle/car_outline.gd" id="16_outline"]
+[ext_resource type="Resource" uid="uid://t0tvdkhn4oh5" path="res://tuning/car_outline.tres" id="17_outline"]
 
 [node name="Taxi" instance=ExtResource("1_taxi")]
 script = ExtResource("2_ctrl")
@@ -33,3 +35,7 @@ profile = ExtResource("5_marks")
 [node name="DriftSparks" type="Node3D" parent="." unique_id=1919887256]
 script = ExtResource("6_sparks")
 profile = ExtResource("7_sparks")
+
+[node name="CarOutline" type="Node3D" parent="." unique_id=1129384756]
+script = ExtResource("16_outline")
+profile = ExtResource("17_outline")

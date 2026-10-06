@@ -19,3 +19,11 @@ instances another.
 `script` is `TyreVehicleController`, which extends `VehicleController` and keeps its `profile`
 (`handling.tres`) and its `car` (`cars/crown_comfort.tres`), both inherited from `taxi.tscn`, for steering, the speed taper, coast drag, the wall
 response and auto-righting. `tyre` is `tuning/tyre.tres`.
+
+## `[node name="CarOutline" type="Node3D" parent="."]`
+
+The outline's answers to the car (`P3-65`, `Q158`): it writes `outline_speed` for the city's line
+and grows a rim on the body while a slide counts, from `tuning/car_outline.tres`. Here and not in
+`taxi.tscn` because the speed global is process-wide — the player's car is the one writer, and the
+base scene is what an AI car (`B3`) would instance. `TaxiHire` wires its tier as it does the
+sparks'.
