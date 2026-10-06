@@ -9330,4 +9330,44 @@ Rows that never reach 25° are byte-identical. **Left open:** `turn@off` at 63 k
 bar; the lifted handbrake in a turn still goes round at 63 / 86 kph; `hold` at 86 gave up 0.9 s
 for the ceiling. The user's drive is owed, as for any drift value.
 
-**See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`
+### Step 3 — the pace: one scale on the world (`P3-62`, the dial shipped 2026-10-06 at 1.0)
+
+**Decision.** `tuning/pace.tres` holds `pace_scale`, and `handling.tres` no longer holds a
+`gravity_scale`. Gravity is multiplied by the pace and every force the car makes follows it:
+
+| Takes | What |
+|---|---|
+| the pace | gravity, launch force, rolling resistance — and through a wheel's load, the brake, the handbrake, the yaw brake, a spring's ceiling, `steer_to_grip`'s lock |
+| its root | the limiter and reverse limit, the spring's frequency, the coast's viscous term, the tyre's low-speed floor, every speed a system is keyed on (`_car_kph`: the side cut's band, the flick's floor), the systems' clocks (`rearm_s`, the catch limiter, the drift ramp) and the spin solve's substeps |
+| both | engine power |
+| nothing | mass, `mu`, the tyre's curve, air drag, wheel inertia, every angle, and every INPUT's seconds (`steer_attack_s`, the flick as the hand makes it) |
+
+That is Froude scaling: the car at pace k is the pace-1 car with speeds × √k and times ÷ √k, at
+the same angles and the same share of each tyre's grip. A made-up `mu` gave the same corner speed
+and took away what makes a car a car — at 3.2 g a lift never moved the rear (`Q153`) — and wanted
+every torque re-seeded; this is one named number and nothing re-seeded.
+
+**Measured.** At 1.0 the pad at 42 / 63 / 86 kph is byte-identical with the commit before. The
+scaling is exact where the tick allows it: pace 4 at 120 Hz brakes at 36.48 m/s² over 7.2 m from
+84 kph against pace 1's 9.12 over 7.2 from 42, the coast 37.5 m against 37.5, the corner's rears
+at 0.59× their grip against 0.61×. 🔴 At the project's 60 Hz it holds to pace 2.0 (brake 18.1 of
+18.2 m/s², the corner's rear use and load swing unmoved) and fails by 2.5 (19.7 of 22.8; 8.5 m to
+stop for 7.2): a pace over 2 wants a faster tick. `pace.md` holds the table.
+
+**What it costs** — the player does not scale. The pad's driver is in seconds like a hand, so at
+REAL entry speeds of 42 / 63 / 86 kph:
+
+| | pace 1.0 | pace 1.5 | pace 2.0 |
+|---|---|---|---|
+| `turn@off` came out | 95 / 118 / 110° | 91 / 97 / 112° | 81 / 84 / 93° |
+| `turn@lift` came out | 86 / 100 / 81° | 86 / 87 / 94° | 81 / 82 / 82° |
+| `hold` longest | 3.52 / 3.35 / 2.13 s | 1.93 / 3.53 / 3.47 s | 0.68 / 0.83 / 3.57 s |
+| `ride` longest | 1.20 / 1.70 / 1.73 s | 0.88 / 1.08 / 1.38 s | 0.98 / 0.87 / 0.98 s |
+| `tap` peak | 34.1 / 26.5 / 26.8° | 38.9 / 32.4 / 27.0° | 48.0 / 40.9 / 31.8° |
+| speed after 4 / 8 s, no boost | 56 / 89 kph | 80 / 122 kph | 102 / 152 kph |
+
+A pace moves each real speed down the car's own scale (63 kph at pace 2 is the car's 45), so the
+low end's hard slide arrives at a higher real speed: at 2.0 the countersteered slide is lost at
+63 kph. At 1.5 every `turn` row is inside or within 2° of 80–110° and `hold` pays at 63 and 86.
+
+**See.** `Q153` · `Q155` · `P3-60` · `P3-61` · `P3-62` · `game/tuning/pace.md` · `game/tuning/cars/crown_comfort.md` · `game/tuning/systems/stability_control.md` · `.claude/rules/handling.md`

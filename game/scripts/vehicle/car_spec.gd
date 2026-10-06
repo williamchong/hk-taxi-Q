@@ -99,10 +99,11 @@ const PATH: String = "res://tuning/cars/crown_comfort.tres"
 ## swapping in a heavier vehicle does not silently change how the car rides.
 ## Road cars sit near 1.5 Hz; arcade wants stiffer and flatter.
 ##
-## It is NOT gravity-independent. Static sag is g_eff / (2πf)², so raising
-## `HandlingProfile.gravity_scale` deepens sag and eats the bump travel that absorbs kerbs and
-## jump landings. Scale this by √gravity_scale to hold ride height: 2.2 Hz at
-## gravity_scale 1.0 since 2026-10-05, where it was 2.8 at 1.6 (`Q153`).
+## It is NOT gravity-independent. Static sag is g_eff / (2πf)², so more gravity
+## deepens sag and eats the bump travel that absorbs kerbs and jump landings.
+## The controller scales this by the root of the pace, which is the gravity's
+## scale (`PaceProfile`), to hold the ride height: authored at a real road's
+## gravity, 2.2 Hz, where it was hand-set to 2.8 at 1.6× (`Q153`).
 @export_range(0.5, 5.0, 0.05, "suffix:Hz") var suspension_frequency_hz: float
 ## 1.0 is critically damped. Below 1.0 allows a little bounce, above is sluggish.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float

@@ -15,4 +15,3 @@ rolling_resistance_mps2 = 0.8
 collision_deflection = 0.75
 collision_speed_retained = 0.35
 auto_right_delay_s = 1.0
-gravity_scale = 1.0

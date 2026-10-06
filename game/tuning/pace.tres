@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="PaceProfile" format=3 uid="uid://cgaew1muiuvhs"]
+
+[ext_resource type="Script" uid="uid://b2oqmsvuoeggt" path="res://scripts/vehicle/pace_profile.gd" id="1_pace"]
+
+[resource]
+script = ExtResource("1_pace")
+pace_scale = 1.0

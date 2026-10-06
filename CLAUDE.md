@@ -150,7 +150,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | Rule | Read it when the change touches |
 |---|---|
 | `facade` | Height ramp, façade survey, `facade_hue.strength`, `materials:` colours or `bounds:`, the rigs' `exposure_anchor`, the filler guard (`is_filler`, `MODAL_SHARE`, `MODAL_STRIDE`) |
-| `handling` | `VehicleController`'s drive model, `HandlingProfile`, `handling.tres`, a car's own table (`CarSpec`, `tuning/cars/`), the car's systems (`tuning/systems/`), any drift dial — `tools/skidpad.sh` before and after |
+| `handling` | `VehicleController`'s drive model, `HandlingProfile`, `handling.tres`, a car's own table (`CarSpec`, `tuning/cars/`), the pace (`pace.tres`), the car's systems (`tuning/systems/`), any drift dial — `tools/skidpad.sh` before and after |
 | `lanes` | `lanes`, `lanes_source`, `LANE_FLOOR`, `_ROW_MIN`, `_deck_lane_ceiling`, the drawn ribbon's width |
 | `carriageway` | `pipeline/carriageway.py`, `carriageway_area.py`, the `carriageway_survey` block, `width_m`, `surface.floor_*`, `lane_width_m`, `MIN_STATIONS` and the two-station / HyD-strip licences, `confirm_within_m`, `width_evidence.py`, a station normal, any centreline rule |
 | `clearance` | `clearance.py`, `carriageway_occupancy.py`, `clearance.LEVELS`, `ALONG_M` and the resolution constants, `surface.floor_default_m` or any widening, a disagreement between the two corridor instruments |

@@ -208,7 +208,6 @@ const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 ## label — the published table of numbers nobody measured. The body's own
 ## values are swept through `BODY_SWEEP_PREFIX` instead.
 const READY_ONLY_FIELDS: PackedStringArray = [
-	"gravity_scale",
 	"centre_of_mass_offset_y",
 	"suspension_frequency_hz",
 	"suspension_damping_ratio",
@@ -223,13 +222,19 @@ const READY_ONLY_FIELDS: PackedStringArray = [
 ## `center_of_mass_y` (height; the table's `centre_of_mass_offset_y`),
 ## `center_of_mass_z` (along the car, + toward the rear) and `gravity_scale`.
 ## A probe for what moves the car, never a tuning route — a value worth
-## keeping goes into the table the car reads it from (`handling.tres`, or the
-## car's own). ⚠️ A spring's ceiling is sized on the gravity once, in `_ready`,
-## so a `gravity_scale` sweep leaves it where it was.
+## keeping goes into the table the car reads it from. ⚠️ `gravity_scale` here is
+## the gravity ALONE, with the springs and the drive left at the pace's: the
+## game's own gravity dial is the pace (`--sweep=pace.pace_scale=`, `Q156`),
+## which re-fits the car.
 const BODY_SWEEP_PREFIX: String = "body."
-## The car's systems a `<system>.<field>` sweep may name (`Q155`): only these,
-## so `profile.` or `tyre.` cannot slip past the refusals the bare names get.
+## The pace's own sweep (`Q156`): the car is re-fitted at each value and the
+## entry speed scaled with it (`_entry_scale`).
+const PACE_FIELD: StringName = &"pace.pace_scale"
+## The car's systems a `<system>.<field>` sweep may name (`Q155`), and the
+## game's pace (`Q156`): only these, so `profile.` or `tyre.` cannot slip past
+## the refusals the bare names get.
 const SYSTEM_TABLES: PackedStringArray = [
+	"pace",
 	"traction_control",
 	"stability_control",
 	"drift_mode",
@@ -312,6 +317,11 @@ var _run_up_s: float = DEFAULT_RUN_UP_S
 ## seconds, and rows only compare at one entry. Throttle until the speed is
 ## reached, then the manoeuvre starts on that tick.
 var _entry_kph: float = 0.0
+## What `--entry-kph` is multiplied by: the root of the pace while
+## `pace.pace_scale` is swept (`Q156`), 1 otherwise. A pace is the same car on
+## a faster road, so its rows compare at the same speed in the car's own terms
+## — 63 kph at pace 1 against 89 at pace 2 — never at one speed on the clock.
+var _entry_scale: float = 1.0
 ## Both run-up flags seen, which is refused rather than one silently winning.
 var _entry_given: bool = false
 var _run_up_given: bool = false
@@ -787,6 +797,10 @@ func _measure_all() -> void:
 			_set_body(body_field, value)
 		elif not is_nan(value):
 			sweep_table.set(field, value)
+			if _sweep_field == PACE_FIELD:
+				# The pace is on the body and its springs, which the car fits once.
+				_vehicle.call("refit")
+				_entry_scale = sqrt(value)
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre and not _rides(manoeuvre):
 				continue
@@ -942,10 +956,11 @@ func _measure(
 	Input.action_press(&"accelerate")
 	if _entry_kph > 0.0:
 		var first_tick: int = Engine.get_physics_frames()
-		while _speed_kph() < _entry_kph:
+		var entry_kph: float = _entry_kph * _entry_scale
+		while _speed_kph() < entry_kph:
 			await physics_frame
 			if float(Engine.get_physics_frames() - first_tick) * _step > TO_REST_LIMIT_S:
-				_fail("%s: never reached %.1f kph" % [label, _entry_kph])
+				_fail("%s: never reached %.1f kph" % [label, entry_kph])
 				return null
 	else:
 		await _hold(_run_up_s)

@@ -53,7 +53,7 @@ func _ready() -> void:
 	top_level = true
 	_fov_full_kph = profile.fov_full_kph
 	if target is VehicleController:
-		_fov_full_kph = (target as VehicleController).car.max_speed_kph
+		_fov_full_kph = (target as VehicleController).top_speed_kph()
 	snap_to_target()
 
 

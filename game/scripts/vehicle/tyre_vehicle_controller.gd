@@ -153,6 +153,20 @@ func _ready() -> void:
 	_engine_angle.resize(_wheels.size())
 
 
+## The car's speed at its own scale: what it would be doing on a real road,
+## the world's pace taken out. What a system or an aid keyed on a speed reads
+## (the side cut's band, the flick's floor), so each table stays in the car's
+## own kph at every pace (`PaceProfile`).
+func _car_kph() -> float:
+	return speed_kph / _pace_root()
+
+
+## The tyre's low-speed floor at this pace (`TyreProfile.low_speed_mps`, a
+## speed, so it takes the pace's root).
+func _low_speed_mps() -> float:
+	return tyre.low_speed_mps * _pace_root()
+
+
 ## Whether `table` can run the model. `side_force_depth` may legally be 0 —
 ## the force at the centre of mass — so a missing one cannot be told from a
 ## chosen one and is not guarded; nor is any system's table, where a zero is
@@ -233,8 +247,8 @@ func _update_steering(delta: float) -> void:
 			steer_input,
 			_slide_toward(),
 			_slide_beyond_peak_rad(),
-			angular_velocity.y,
-			delta,
+			angular_velocity.y / _pace_root(),
+			delta * _pace_root(),
 			arcade_aids
 		)
 
@@ -289,7 +303,7 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 ## plus the tyre's peak slip angle. Under the tyre's low-speed floor the speed
 ## is held at it, so a car at rest asks for no infinite angle.
 func _grip_lock_rad() -> float:
-	var mps: float = maxf(absf(speed_kph) / 3.6, tyre.low_speed_mps)
+	var mps: float = maxf(absf(speed_kph) / 3.6, _low_speed_mps())
 	var turn: float = atan(_wheelbase_m * tyre.mu * _gravity_mps2() / (mps * mps))
 	return turn + deg_to_rad(tyre.peak_slip_angle_deg)
 
@@ -301,7 +315,7 @@ func _grip_lock_rad() -> float:
 ## lock; past 90° the car has spun anyway.
 func _slide_beyond_peak_rad() -> float:
 	var nose: Vector3 = -global_basis.z
-	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < tyre.low_speed_mps:
+	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < _low_speed_mps():
 		return 0.0
 	var slip_deg: float = FareSystem.slip_deg_of(rear_axle_velocity(), nose)
 	return maxf(deg_to_rad(slip_deg - tyre.peak_slip_angle_deg), 0.0)
@@ -339,7 +353,7 @@ func _apply_drive() -> void:
 ## the rear side cut reads it, and the tyres come last so they see this tick's
 ## pedals.
 func _apply_drift(delta: float) -> void:
-	super._apply_drift(delta)
+	super._apply_drift(delta * _pace_root())
 	_apply_tyres(delta)
 
 
@@ -356,7 +370,11 @@ func place_at(pose: Transform3D) -> void:
 
 func _apply_tyres(delta: float) -> void:
 	var started: int = Time.get_ticks_usec()
-	var steps: int = tyre.substeps
+	# More steps at a quicker pace: a wheel spins up as many times faster as the
+	# pace's root, and traction control and ABS act once a step — at pace 4 on
+	# the table's own count the brake gave 28.0 m/s² where four times pace 1's
+	# is 36.5, and the corner's rears ran at 1.4× their grip against 0.6×.
+	var steps: int = ceili(float(tyre.substeps) * _pace_root())
 	var step: float = delta / float(steps)
 	_curve_c = 2.0 - 2.0 * asin(tyre.slide_ratio) / PI
 	_curve_b = tan(PI / (2.0 * _curve_c))
@@ -365,24 +383,24 @@ func _apply_tyres(delta: float) -> void:
 	var nose: Vector3 = -global_basis.z
 	var up: Vector3 = global_basis.y
 	var share: float = mass / float(_wheels.size())
-	var rim_limit_mps: float = car.max_speed_kph / 3.6 * (1.0 + rev_limiter.overspeed_share)
+	var rim_limit_mps: float = top_speed_kph() / 3.6 * (1.0 + rev_limiter.overspeed_share)
 	var pressed: bool = _drift_mode.step(
 		drift_input,
 		steer_input,
 		throttle_input,
 		brake_input,
-		speed_kph,
+		_car_kph(),
 		rear_axle_velocity(),
 		nose,
 		profile.drift_slip_threshold_deg,
-		delta,
+		delta * _pace_root(),
 		drift_mode,
 		arcade_aids
 	)
 	if pressed:
 		# Latched, not tracked: a slide sheds speed, and a cut that deepened as
 		# it did would feed itself (`Q89`).
-		_side_cut = _side_cut_at(absf(speed_kph))
+		_side_cut = _side_cut_at(absf(_car_kph()))
 	var wheelspin_limit: float = traction_control.wheelspin_limit
 	var lock_limit: float = anti_lock_brakes.slip_limit
 	# Each axle's share of the foot brake, so the four wheels sum to the dial.
@@ -392,6 +410,7 @@ func _apply_tyres(delta: float) -> void:
 	# What the parent's drive was sized on: the engine's force at the car's speed.
 	var body_force_n: float = _drive_force_n()
 	var hand_lock_nm: float = _handbrake_torque_nm()
+	var floor_mps: float = _low_speed_mps()
 	var yaw_brake_nm: float = _yaw_brake_nm()
 	# The front wheel outside the slide: the left one with the travel left of
 	# the nose. Braked, its force turns the nose back toward the travel.
@@ -444,7 +463,7 @@ func _apply_tyres(delta: float) -> void:
 		var velocity: Vector3 = linear_velocity + angular_velocity.cross(point - com)
 		_along = velocity.dot(forward)
 		var across: float = velocity.dot(side)
-		_ground = maxf(absf(_along), tyre.low_speed_mps)
+		_ground = maxf(absf(_along), floor_mps)
 		_peak_n = tyre.mu * load
 		_slip_y = across / _ground / tan_peak
 		_per_slip = 1.0 / (_ground * tyre.peak_slip_ratio)
@@ -557,7 +576,7 @@ func _turn_drive_share() -> float:
 ## full lock: what the understeer cut and the drive boost fade on. Read off the
 ## wheels' own angle, so the catch cap and the rate limit count.
 func _steer_share() -> float:
-	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / car.max_speed_kph, 0.0, 1.0))
+	var lock: float = _steer_lock_rad(clampf(absf(speed_kph) / top_speed_kph(), 0.0, 1.0))
 	if lock <= 0.0:
 		return 0.0
 	return minf(absf(steering) / lock, 1.0)
@@ -603,7 +622,7 @@ func _slip_over(from: float, to: float) -> float:
 	# Under the tyre's low-speed floor the rear axle's travel is mostly the
 	# car's own rotation, near 90° of slip on a pivot: nothing, as a real ESC
 	# stands aside at a crawl.
-	if linear_velocity.length() < tyre.low_speed_mps:
+	if linear_velocity.length() < _low_speed_mps():
 		return 0.0
 	var slip: float = FareSystem.slip_deg_of(rear_axle_velocity(), -global_basis.z)
 	if slip > REVERSED_SLIP_DEG:

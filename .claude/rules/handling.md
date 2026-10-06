@@ -3,6 +3,8 @@ paths:
   - "game/scripts/vehicle/vehicle_controller.gd"
   - "game/scripts/vehicle/handling_profile.gd"
   - "game/scripts/vehicle/car_spec.gd"
+  - "game/scripts/vehicle/pace_profile.gd"
+  - "game/tuning/pace.{tres,md}"
   - "game/tuning/cars/*.{tres,md}"
   - "game/tuning/handling.{tres,md}"
   - "tools/skidpad.sh"
@@ -106,7 +108,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   as nothing on the flick — read `rear use` before blaming the dial. ⚠️ It is COMBINED slip: a
   rear over 1.0 at 2° of slip is wheelspin, not the side letting go (`Q153`'s step 2).
 - 🔴 **`--sweep` refuses a field the car reads once, in `_ready`** (`READY_ONLY_FIELDS`:
-  `gravity_scale`, `mass_kg`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`)
+  `mass_kg`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`)
   — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
   instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
   live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
@@ -184,6 +186,17 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   and a spring's ceiling (`suspension_max_load_ratio` × a wheel's load at rest) — a new one goes
   through `VehicleController._wheel_load_at_rest_n`. `--sweep` finds a bare field in the handling
   table, the car's or the tyre's, and refuses a name in two.
+- 🔴 **The game's pace is one scale, `pace.pace_scale` (`Q156`): the world's gravity, with every
+  force the car makes following it** — launch force and rolling resistance by the scale, speeds
+  and rates by its root, power by both; mass, `mu`, drag, every angle and every INPUT's seconds
+  by nothing. Never answer "the car feels slow" or "wants more grip" with `mu`, `engine_force` or
+  a boost: that is this dial. `handling.tres` has no `gravity_scale` any more. 🔴 **A new speed-
+  keyed dial on the car reads `_car_kph()`, a new speed floor takes `_pace_root()`, and a system's
+  clock is stepped with `delta × _pace_root()`** — or it is right at pace 1 alone. Sweep with
+  `--sweep=pace.pace_scale=1,1.5,2`: it re-fits the car and scales `--entry-kph` by the root, so
+  rows compare in the car's own terms; grade a value at REAL speeds by editing `pace.tres`.
+  🔴 **60 Hz holds to pace 2.0 and not 2.5** (`pace.md`'s brake table): past it the tick is the
+  limit, not a dial. The player's hands do not scale, so drift dwell falls with the pace.
 - 🔴 **Stability control brakes the front wheel outside a slide past 25° of rear-axle slip**
   (`stability_control.yaw_brake_*`, `Q156`, 2026-10-06), drift mode or not — the answer to a spin
   that is the car's own momentum, which no power cut reaches. Graded on `turn`'s `came out` with

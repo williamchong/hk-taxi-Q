@@ -90,6 +90,9 @@ const GROUP: StringName = &"vehicle"
 ## The car itself: its mass, drive, brakes and suspension (`CarSpec`), where
 ## `profile` is how the game answers the player whatever the car.
 @export var car: CarSpec
+## How much faster than a real road the game plays (`PaceProfile`): the world's
+## scale, the same for every car.
+@export var pace: PaceProfile
 
 ## Where the player's intent comes from, resolved once in `_ready`.
 ##
@@ -220,6 +223,8 @@ func _ready() -> void:
 		)
 	assert(profile != null, "VehicleController has no HandlingProfile assigned.")
 	assert(car != null, "VehicleController has no CarSpec assigned.")
+	assert(pace != null, "VehicleController has no PaceProfile assigned.")
+	assert(pace.pace_scale > 0.0, "PaceProfile.pace_scale is zero.")
 	# The tables deliberately ship no defaults, so an unassigned resource reads
 	# as all-zeroes. These two would fail as a wheel with no size and a dead
 	# spring, which is worth catching here rather than in the physics.
@@ -240,12 +245,8 @@ func _ready() -> void:
 	# file goes through _front or _rear, so a third collection of the same nodes
 	# would only be a way for them to disagree.
 	_group_axles(wheels)
-	# The body first: a spring's ceiling is sized on the weight it carries.
-	mass = car.mass_kg
-	gravity_scale = profile.gravity_scale
 	_world_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity"))
-	for wheel: VehicleWheel3D in wheels:
-		_configure(wheel)
+	refit()
 
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = Vector3(0.0, car.centre_of_mass_offset_y, 0.0)
@@ -253,6 +254,29 @@ func _ready() -> void:
 	contact_monitor = true
 	max_contacts_reported = 8
 	can_sleep = false
+
+
+## Pushes the car's table and the pace onto the body and its wheels: what
+## `_ready` does once. Public for a tool that changes the pace or the car under
+## a running body (`tools/skidpad.sh --sweep=pace.pace_scale=`); the game never
+## calls it again.
+func refit() -> void:
+	# The body first: a spring's ceiling is sized on the weight it carries.
+	mass = car.mass_kg
+	gravity_scale = pace.pace_scale
+	for wheel: VehicleWheel3D in _front + _rear:
+		_configure(wheel)
+
+
+## The root of the pace: what a speed or a rate is multiplied by where a force
+## takes the pace itself (`PaceProfile`).
+func _pace_root() -> float:
+	return sqrt(pace.pace_scale)
+
+
+## The limiter at this pace: the car's own top speed, as fast as the world is.
+func top_speed_kph() -> float:
+	return car.max_speed_kph * _pace_root()
 
 
 ## The mean of `wheels`' authored positions along the car.
@@ -308,7 +332,9 @@ func _configure(wheel: VehicleWheel3D) -> void:
 	wheel.wheel_rest_length = car.suspension_rest_length_m
 	wheel.suspension_travel = car.suspension_travel_m
 
-	var stiffness: float = pow(TAU * car.suspension_frequency_hz, 2.0)
+	# The frequency goes with the root of the pace, as a pendulum's with the
+	# root of gravity: the ride height then holds at every pace.
+	var stiffness: float = pow(TAU * car.suspension_frequency_hz * _pace_root(), 2.0)
 	wheel.suspension_stiffness = stiffness
 	wheel.suspension_max_force = car.suspension_max_load_ratio * _wheel_load_at_rest_n()
 
@@ -386,7 +412,7 @@ func is_reversing() -> bool:
 ## RigidBody3D has no steering property, and that reason does not survive the
 ## switch. `steering` is now both the state and the output.
 func _update_steering(delta: float) -> void:
-	var speed_ratio: float = clampf(absf(speed_kph) / car.max_speed_kph, 0.0, 1.0)
+	var speed_ratio: float = clampf(absf(speed_kph) / top_speed_kph(), 0.0, 1.0)
 	var max_angle: float = _steer_lock_rad(speed_ratio)
 	# Negated: steer_input is +1 for right, but a positive rotation about +Y
 	# turns the -Z forward vector toward -X, which is left.
@@ -421,7 +447,8 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 ## acceleration, and it was re-seeded against tools/skidpad.sh rather than
 ## carried across. The brake is `car.brake_g`, sized to the car's weight.
 ## `engine_force` is the launch force since `Q153`; `_drive_force_n` limits it
-## by the engine's power above about 42 kph.
+## by the engine's power above about 42 kph (at pace 1; the root of the pace
+## times that, `PaceProfile`).
 ## ⚠️ Accumulated into locals and assigned **once**. `engine_force` and `brake` are
 ## not plain field stores: each setter fans out over the body's wheel array to push
 ## the value onto every traction wheel, so zeroing and then overwriting walks that
@@ -435,14 +462,13 @@ func _apply_drive() -> void:
 		# full and zero tick to tick, which reads as a judder — and the louder the
 		# more engine force there is. Godot has no speed limiter of its own, so
 		# this is hand-written whichever vehicle class is underneath.
-		var headroom: float = (
-			(car.max_speed_kph - speed_kph) / (car.max_speed_kph * TOP_SPEED_TAPER)
-		)
+		var top_kph: float = top_speed_kph()
+		var headroom: float = (top_kph - speed_kph) / (top_kph * TOP_SPEED_TAPER)
 		force = DRIVE_SIGN * _drive_force_n() * throttle_input * clampf(headroom, 0.0, 1.0)
 
 	if is_braking():
 		braking = _brake_per_wheel_n() * brake_input
-	elif is_reversing() and speed_kph > -car.max_reverse_kph:
+	elif is_reversing() and speed_kph > -car.max_reverse_kph * _pace_root():
 		force = -DRIVE_SIGN * _drive_force_n() * brake_input
 
 	engine_force = force
@@ -484,11 +510,17 @@ func _drive_force_n() -> float:
 ## The same envelope at `mps`, for a caller that knows the driven wheels' own
 ## speed (`TyreVehicleController`).
 func _drive_force_at(mps: float) -> float:
+	# A force takes the pace, and a power the pace and its root: it is a force
+	# times a speed.
+	var k: float = pace.pace_scale
+	var launch_n: float = car.engine_force * k
 	if car.engine_power_kw <= 0.0 or car.driveline_efficiency <= 0.0:
-		return car.engine_force
+		return launch_n
 	# Floored so a car at rest asks for the launch force, not a division by 0.
-	var powered: float = car.engine_power_kw * 1000.0 * car.driveline_efficiency / maxf(mps, 0.1)
-	return minf(car.engine_force, powered)
+	var powered: float = (
+		car.engine_power_kw * 1000.0 * k * _pace_root() * car.driveline_efficiency / maxf(mps, 0.1)
+	)
+	return minf(launch_n, powered)
 
 
 ## The air's drag, at every speed and whatever the pedals, against the travel.
@@ -528,8 +560,10 @@ func _apply_coast_drag(delta: float) -> void:
 	# call every tick for ever to apply a zero force.
 	if is_zero_approx(rolling):
 		return
+	# A rate takes the pace's root and a deceleration the pace (`PaceProfile`).
 	var decel: float = (
-		rolling * profile.coast_drag_per_s + signf(rolling) * profile.rolling_resistance_mps2
+		rolling * profile.coast_drag_per_s * _pace_root()
+		+ signf(rolling) * profile.rolling_resistance_mps2 * pace.pace_scale
 	)
 	# ⚠️ Capped at the deceleration that lands exactly on zero this tick. The
 	# viscous term cannot overshoot; the constant one can, and an uncapped rolling

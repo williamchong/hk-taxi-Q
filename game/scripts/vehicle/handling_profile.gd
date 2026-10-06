@@ -88,9 +88,3 @@ const PATH: String = "res://tuning/handling.tres"
 @export_range(0.0, 1.0, 0.01) var collision_speed_retained: float
 ## Seconds before an upside-down car auto-rights itself.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var auto_right_delay_s: float
-
-@export_group("Body")
-## Above 1.0 shortens air time and lands jumps flatter. 1.0 since 2026-10-05,
-## a real taxi's weight on its tyres (`Q153`): at 1.6 every grip, lock and
-## drive number was sized to a car 1.6× as heavy as its mass.
-@export_range(0.0, 5.0, 0.05) var gravity_scale: float
