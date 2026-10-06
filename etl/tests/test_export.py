@@ -1088,3 +1088,128 @@ class TestOrchestrator:
             "landmarks",
             "roads",
         ]
+
+
+class TestOrchestratorSideBySide:
+    """`--jobs`: the same stages, each started when what it `NEEDS` is done."""
+
+    @staticmethod
+    def _stub(monkeypatch, failing: str | None = None) -> list[tuple[str, list[str], set[str]]]:
+        """Stub the per-stage process. Each call records the stages that had
+        already FINISHED when it started, which is the only thing the schedule
+        promises — the order two independent stages start in is not."""
+        calls: list[tuple[str, list[str], set[str]]] = []
+        finished: set[str] = set()
+
+        def run(name: str, argv: list[str]) -> tuple[int, str, float]:
+            calls.append((name, argv, set(finished)))
+            if name == failing:
+                return 1, f"{name} broke\n", 0.0
+            finished.add(name)
+            return 0, f"{name} ran\n", 0.0
+
+        monkeypatch.setattr(orchestrator, "_run_stage", run)
+        return calls
+
+    def test_every_stage_is_scheduled(self) -> None:
+        """A stage with no entry would start first and read whatever was on
+        disk; a need that comes LATER in `STAGES` would make the serial order,
+        which is the default run, a wrong one."""
+        order = list(orchestrator.STAGES)
+        assert list(orchestrator.NEEDS) == order
+        for name, needs in orchestrator.NEEDS.items():
+            assert all(order.index(need) < order.index(name) for need in needs), name
+        # `export` names the bundle, so it waits for every stage there is.
+        waited_for: set[str] = set()
+        frontier = ["export"]
+        while frontier:
+            for need in orchestrator.NEEDS[frontier.pop()]:
+                if need not in waited_for:
+                    waited_for.add(need)
+                    frontier.append(need)
+        assert waited_for == set(order) - {"export"}
+
+    def test_no_stage_starts_before_what_it_needs_has_finished(self, monkeypatch) -> None:
+        calls = self._stub(monkeypatch)
+
+        assert orchestrator.main(["--region", REGION, "--jobs", "4"]) == 0
+
+        assert sorted(name for name, _, _ in calls) == sorted(orchestrator.STAGES)
+        for name, argv, done_before in calls:
+            assert argv == ["--region", REGION]
+            assert done_before.issuperset(orchestrator.NEEDS[name]), name
+
+    def test_a_skipped_stage_counts_as_done(self, monkeypatch) -> None:
+        calls = self._stub(monkeypatch)
+
+        assert orchestrator.main(["--region", REGION, "--from", "surface", "--jobs", "4"]) == 0
+
+        order = list(orchestrator.STAGES)
+        assert sorted(name for name, _, _ in calls) == sorted(order[order.index("surface") :])
+
+    def test_force_still_reaches_fetch_alone(self, monkeypatch) -> None:
+        calls = self._stub(monkeypatch)
+
+        orchestrator.main(["--region", REGION, "--jobs", "4", "--force"])
+
+        assert [argv for name, argv, _ in calls if name == "fetch"] == [
+            ["--region", REGION, "--force"]
+        ]
+        assert all("--force" not in argv for name, argv, _ in calls if name != "fetch")
+
+    def test_nothing_that_needed_a_failed_stage_starts(self, monkeypatch, caplog) -> None:
+        calls = self._stub(monkeypatch, failing="roads")
+
+        with caplog.at_level("INFO"):
+            status = orchestrator.main(["--region", REGION, "--jobs", "4"])
+
+        assert status == 1
+        started = {name for name, _, _ in calls}
+        assert "roads" in started
+        assert started.isdisjoint({"carve", "region", "surface", "fares", "tramway", "export"})
+        assert "roads broke" in caplog.text
+        assert "complete in" not in caplog.text
+
+    def test_a_failure_starts_nothing_new_however_independent(self, monkeypatch) -> None:
+        """`landmarks` and `roads` need nothing `podiums` writes, and they still
+        must not start behind its failure: the run is over, and a stage begun
+        then is work thrown away and a log that outlives the error."""
+        import threading
+
+        broke, third = threading.Event(), threading.Event()
+        started: list[str] = []
+
+        def run(name: str, argv: list[str]) -> tuple[int, str, float]:
+            started.append(name)
+            if name == "podiums":
+                broke.set()
+                return 1, "", 0.0
+            if name == "basemap":
+                # Held until the failure is in AND has been seen: `broke` is set
+                # a moment before the failing stage's result lands, so finishing
+                # on it alone could free a slot while the run still looked
+                # healthy. A run that wrongly starts a third stage ends the hold
+                # early; a right one waits it out.
+                assert broke.wait(timeout=10.0)
+                third.wait(timeout=0.5)
+            elif name != "fetch":
+                third.set()
+            return 0, "", 0.0
+
+        monkeypatch.setattr(orchestrator, "_run_stage", run)
+
+        assert orchestrator.main(["--region", REGION, "--jobs", "2"]) == 1
+        assert sorted(started) == ["basemap", "fetch", "podiums"]
+
+    def test_the_log_is_printed_in_the_serial_order(self, monkeypatch, caplog) -> None:
+        self._stub(monkeypatch)
+
+        with caplog.at_level("INFO"):
+            orchestrator.main(["--region", REGION, "--jobs", "4"])
+
+        ran = [line.removesuffix(" ran") for line in caplog.text.splitlines() if " ran" in line]
+        assert [name.split()[-1] for name in ran] == list(orchestrator.STAGES)
+
+    def test_jobs_below_one_is_refused(self) -> None:
+        with pytest.raises(SystemExit):
+            orchestrator.main(["--region", REGION, "--jobs", "0"])

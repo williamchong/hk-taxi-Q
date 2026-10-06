@@ -18,14 +18,22 @@ longest stage — a mistake in it is worth hitting before the quick ones.
 
 `fetch` is the only stage that touches the network, and it is a cache hit after
 the first run. `--from` skips ahead when you already have what it would fetch.
+
+`--jobs N` runs stages side by side, each as the process its own documented
+command starts, a stage beginning the moment everything `NEEDS` names for it is
+done. The output is the serial run's to the byte; `--jobs 1`, the default, IS
+the serial run, in this process, as it always was.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
+import sys
 import time
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from pipeline import (
     arrows,
@@ -152,6 +160,165 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
 }
 
 
+# What each stage reads of another's output, which is all `--jobs` needs to
+# know. 🔴 **Measured, not read off the comments above**: every stage was run
+# under an audit hook that logged each file it opened below `etl/out`, on both
+# built regions, and this is that log — a stage needs the writer of every file
+# it read. The run order above is one valid order of it; this is the rest.
+#
+# Three entries say more than the log did, each on purpose:
+#   - `buildings` needs `podiums`. It opens no `podiums.json` today; `STAGES`
+#     says it will the day `R4` packs the boundary, and the order must not have
+#     to move then.
+#   - `clearance` needs `carve` and not merely `buildings`: both write `tiles/`
+#     and `buildings.json`, and the clearance is of the carved ones.
+#   - everything needs `fetch`, which writes the sources tree and nothing here.
+#
+# ⚠️ No stage opened a file under ANOTHER region's directory, on either region,
+# so two regions build side by side as two processes; `pipeline.join` is the
+# stage that reads both and it is not on this list.
+#
+# `test_every_stage_is_scheduled` holds this to `STAGES`: a new stage with no
+# entry here would otherwise start first and read whatever was on disk.
+NEEDS: dict[str, tuple[str, ...]] = {
+    "fetch": (),
+    "podiums": ("fetch",),
+    "basemap": ("fetch",),
+    "buildings": ("podiums", "basemap"),
+    "landmarks": ("fetch",),
+    "roads": ("fetch",),
+    "carve": ("buildings", "roads"),
+    "region": ("roads",),
+    "surface": ("region",),
+    "clearance": ("carve", "landmarks", "surface"),
+    "fence": ("clearance",),
+    "fares": ("roads",),
+    "tramway": ("roads",),
+    "arrows": ("surface",),
+    "boxjunctions": ("surface",),
+    "crossings": ("surface",),
+    "roadmarks": ("surface",),
+    "railings": ("surface",),
+    "signs": ("surface",),
+    "lamps": ("surface",),
+    "export": (
+        "basemap",
+        "landmarks",
+        "carve",
+        "clearance",
+        "fence",
+        "fares",
+        "tramway",
+        "arrows",
+        "boxjunctions",
+        "crossings",
+        "roadmarks",
+        "railings",
+        "signs",
+        "lamps",
+    ),
+}
+
+
+def _stage_argv(name: str, region: str, force: bool) -> list[str]:
+    stage_argv = ["--region", region]
+    if name == "fetch" and force:
+        stage_argv.append("--force")
+    return stage_argv
+
+
+def _run_stage(name: str, stage_argv: list[str]) -> tuple[int, str, float]:
+    """One stage as its own process: its status, everything it printed, and how
+    long it took. `python -m pipeline.<stage>` is the documented per-stage
+    command, so this is the code path people run by hand and not a second one."""
+    began = time.perf_counter()
+    done = subprocess.run(
+        [sys.executable, "-m", f"pipeline.{name}", *stage_argv],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    return done.returncode, done.stdout, time.perf_counter() - began
+
+
+def run_side_by_side(names: list[str], region: str, force: bool, jobs: int) -> int:
+    """`names` with up to `jobs` running at once, each started when the stages
+    it `NEEDS` are done. A stage `--from` skipped counts as done: its output is
+    on disk, which is what skipping it meant.
+
+    Each stage's log is held until it finishes and printed whole, in the serial
+    order — so the log reads as the serial run's does, and a stage's lines are
+    never threaded through another's. A failure starts nothing new: what is
+    running finishes, and nothing that needed the failed stage ever starts.
+    """
+    waiting = list(names)
+    finished: set[str] = set(STAGES) - set(names)
+    results: dict[str, tuple[int, str, float]] = {}
+    running: dict[Future[tuple[int, str, float]], str] = {}
+    printed = 0
+    status = 0
+
+    def report(name: str, heading: str) -> None:
+        code, text, took = results[name]
+        log.info("")
+        log.info("== %s ==", heading)
+        if text.strip():
+            log.info("%s", text.rstrip())
+        if code != 0:
+            log.error("%s failed (exit %d); stopping", name, code)
+        else:
+            log.info("   %s took %.1fs", name, took)
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        while waiting or running:
+            if status == 0:
+                ready = [name for name in waiting if finished.issuperset(NEEDS[name])]
+                for name in ready[: jobs - len(running)]:
+                    waiting.remove(name)
+                    running[pool.submit(_run_stage, name, _stage_argv(name, region, force))] = name
+            if not running:
+                break
+            for future in wait(running, return_when=FIRST_COMPLETED).done:
+                name = running.pop(future)
+                results[name] = future.result()
+                if results[name][0] == 0:
+                    finished.add(name)
+                else:
+                    status = status or results[name][0]
+            while printed < len(names) and names[printed] in results:
+                printed += 1
+                report(names[printed - 1], f"[{printed}/{len(names)}] {names[printed - 1]}")
+    # A stage that finished behind one that never ran: its log is the only
+    # trace of work that happened, so it is printed and not dropped.
+    for name in names[printed:]:
+        if name in results:
+            report(name, f"{name} (finished behind a stage that did not run)")
+    if status == 0 and waiting:
+        # Unreachable while `NEEDS` follows `STAGES`' order, which a test holds
+        # it to — and the one way this could report a build it did not do.
+        log.error("nothing left could start: %s", ", ".join(waiting))
+        return 1
+    return status
+
+
+def run_in_order(names: list[str], region: str, force: bool) -> int:
+    """`names` one after another, in this process."""
+    for position, name in enumerate(names, start=1):
+        log.info("")
+        log.info("== [%d/%d] %s ==", position, len(names), name)
+        began = time.perf_counter()
+        status = STAGES[name](_stage_argv(name, region, force))
+        if status != 0:
+            # Stopped rather than carried on: every later stage reads what this
+            # one writes, so continuing would build the rest of the region from
+            # whatever happened to be on disk from the previous run.
+            log.error("%s failed (exit %d); stopping", name, status)
+            return status
+        log.info("   %s took %.1fs", name, time.perf_counter() - began)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipeline", description=(__doc__ or "").splitlines()[0]
@@ -169,7 +336,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="passed to fetch: take a fresh snapshot rather than reusing the cache",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="stages to run at once, each as its own process (default 1: the serial run)",
+    )
     args = parser.parse_args(argv)
+    if args.jobs < 1:
+        parser.error("--jobs must be at least 1")
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -182,22 +357,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"--force applies to fetch, which --from {args.start} skips")
 
     started = time.perf_counter()
-    for position, name in enumerate(names, start=1):
-        stage_argv = ["--region", args.region]
-        if name == "fetch" and args.force:
-            stage_argv.append("--force")
-
-        log.info("")
-        log.info("== [%d/%d] %s ==", position, len(names), name)
-        began = time.perf_counter()
-        status = STAGES[name](stage_argv)
-        if status != 0:
-            # Stopped rather than carried on: every later stage reads what this
-            # one writes, so continuing would build the rest of the region from
-            # whatever happened to be on disk from the previous run.
-            log.error("%s failed (exit %d); stopping", name, status)
-            return status
-        log.info("   %s took %.1fs", name, time.perf_counter() - began)
+    if args.jobs > 1:
+        status = run_side_by_side(names, args.region, args.force, args.jobs)
+    else:
+        status = run_in_order(names, args.region, args.force)
+    if status != 0:
+        return status
 
     log.info("")
     log.info("%s complete in %.1fs", args.region, time.perf_counter() - started)

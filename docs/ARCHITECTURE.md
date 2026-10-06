@@ -1381,11 +1381,18 @@ Twenty stages in one chain, the list `etl/pipeline/__main__.py` owns: `fetch`, `
 ```sh
 python -m pipeline.buildings --region wan_chai
 python -m pipeline --region wan_chai --from roads   # resume mid-chain
+python -m pipeline --region wan_chai --jobs 4       # stages side by side; same bytes, 30 s for 50 s
 ```
 
 - The chain invokes each stage through the same entry point, so full and partial builds cannot
   drift. A non-zero exit stops the run. `fetch` is the only stage that touches the network;
   `--force` belongs to it and is refused with a `--from` that skips it.
+- `--jobs N` starts each stage, as its own process, when the stages in `NEEDS` (`pipeline/__main__.py`)
+  are done; the default 1 is the in-process serial run. `NEEDS` was measured — every file each stage
+  opened under `etl/out`, logged on both regions — and a new stage needs a row. No stage reads another
+  region's output, so two regions build as two commands at once. `gdb.read_layer` keeps slow clipped
+  reads under `etl/.cache/layers/`, keyed on the source's size and mtime; `HK_TAXI_LAYER_CACHE=0`
+  turns it off.
 - `export` also validates what no single stage checks — a fare node naming a missing edge, a tile
   whose GLB was never written, a document from another region, geometry outside the bounds — always
   against the source document, never the manifest. `python -m pipeline.export … --check` runs the

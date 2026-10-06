@@ -145,6 +145,14 @@ Runs all six stages in dependency order — fetch, buildings, roads, surface, fa
 stage is invoked through the same entry point its own command uses, so a full build and a partial
 one cannot drift. `--from roads` resumes mid-chain; a stage that exits non-zero stops the run.
 
+`--jobs 4` runs stages side by side, each as the process its own command starts and each begun when
+the stages it reads from are done (`NEEDS` in `pipeline/__main__.py`, measured by logging every
+file a stage opens). Wan Chai is **30 s** against 50 s serial and the bundle is byte-identical;
+past 4 the critical path — `roads`, `region`, `surface`, `roadmarks` — is all that is left. Two
+regions also build side by side as two commands: no stage reads another region's output.
+`HK_TAXI_LAYER_CACHE=0` turns off the on-disk cache of clipped layer reads (`etl/.cache/layers/`,
+safe to delete).
+
 The export stage also validates what it wrote, against the documents it was derived from rather
 than against itself:
 
