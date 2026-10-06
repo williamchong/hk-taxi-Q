@@ -103,6 +103,14 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	if not lettered:
 		print("  note  no lettering mesh; this region's faces carry no words")
 
+	# A post renamed in the ETL would leave every sign shadowless, and a frame
+	# that lost a 32 mm shadow reads as a correct one (`P3-66`).
+	for mesh_name: String in GeneratedLayer.shadow_meshes(GeneratedLayer.SIGNS):
+		if not library.has(mesh_name):
+			problems.append(
+				"signs: shadow mesh %s is not in the library, so no sign casts" % mesh_name
+			)
+
 	problems.append_array(_check_placements(library))
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems

@@ -141,6 +141,7 @@ Phase 3 — Build `B2`
 - `P3-39` ✅ Street arrows' heights off the drawn road (`Q135`) — deep burials 31 → 9 / 36 → 21.
 - `P3-40` ✅ `roadmarks.glb` in 300 m cells (`Q135`) — 72,356 a pass → 13–17k, +3 to +7 draws.
 - `P3-42` ✅ `boxjunctions.glb` / `crossings.glb` in 300 m cells (`Q135`) — start line 20,642 a pass → 9,849, `f_045` 7,469 → 496; +1 / +0 draws. Boxes 9,411 against an 8k bar.
+- `P3-66` ✅ A sign's post casts a shadow, its plates and lettering do not (`Q135`, 2026-10-07) — start line 107 → 87 `draws`, `f_045` 139 → 121; 288 px of one audit frame in three move. Lamps measured, not built: 300 m cells with a 400 m range recover ~90% of 129k–173k `prims` for +2 to +3 draws.
 - `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
 - `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
   high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.

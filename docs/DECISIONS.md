@@ -6791,7 +6791,48 @@ cell through `library_meshes`.
   two verify contracts). 🚫 A whole box routed to one cell: a piece to its centroid's cell is what
   makes the union the uncut mesh.
 
-**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`
+### Built — `P3-66`: a sign's post casts a shadow, its plates and lettering do not
+
+Opened by the user, 2026-10-06: should the paint, the tram and the props be part of the tile? The
+paint already is a mesh a cell (above); the props are one region-wide `MultiMesh` a library mesh,
+so what they cost a frame was measured with `--hide-layers` and each way of culling them trialled
+by a switch in `layer_preview.gd`, in a worktree. Throttle route and `--spawn-fare=wan_chai/f_045`,
+overlays, HUD and fares off, both regions resident; `prims` at t=1 s, where the baseline repeats.
+
+| Signs: 26,310 triangles, 23 + 21 library meshes | start line `draws` | `f_045` `draws` | px over 16 levels, 3 cameras |
+|---|---|---|---|
+| Shown − hidden | 37 of 107 | 27–37 of 119–139 | |
+| 🚫 A `MultiMesh` a 300 m cell | +65 to +94 | +16 to +46 | |
+| **Post casts, plates and lettering do not** | **−20** | **−12 to −18** | 0 / 288 / 0 |
+| Nothing casts | −21 | −13 to −20 | 0 / 500 / 0 |
+| Merged to a mesh a 300 m cell, at load | −24 | −18 to −28 | 0 / 2,694 / 24 |
+
+| Lamps: 43,080 + 14,560 triangles, one mesh — measured, **not built** | start line `prims` | `f_045` `prims` | `draws` | px over 16 |
+|---|---|---|---|---|
+| Shown − hidden | 129,240 = 3 x 43,080 | 172,920 = 3 x 57,640 | 2 | |
+| A `MultiMesh` a 300 m cell | −93k | −138k | +10 to +11 | 0 / 0 / 0 |
+| A 150 m cell | −105k | −156k | +20 to +35 | |
+| No shadow | −86k | −115k | −1 to −3 | 0 / 5,067 / 42 |
+| 300 m cell, no shadow | −123k | −159k | +1 to +2 | |
+| 300 m cell, `visibility_range_end` 400 m | −119k | −155k | +2 to +3 | 0 / 0 / 0 |
+
+- Built: `GeneratedLayer.LAYERS` gains a required `shadow_meshes` key — the library meshes a
+  casting layer's shadow is narrowed to, `["pole"]` for the signs and empty elsewhere — and
+  `casts_shadow(layer, mesh_name)` reads it; `layer_preview.gd` applies it by node name. The built
+  change reads the trial's numbers: start line 107 → 87 `draws` and `prims` −30,522 at t=1 s,
+  `f_045` 139 → 121.
+- `verify_signs.gd` holds each named mesh to the library: a post renamed in the ETL would leave
+  every sign shadowless in a frame that reads as correct. Mutation-checked: `"pole"` misspelt fails.
+- ⚠️ `Q115`'s "`prims` counts a `MultiMesh`'s base mesh once per pass" does not hold on 4.7.2: the
+  lamps read 3 x their placed triangles to the triangle.
+- ⚠️ The camera at `188,11,40` looking at `215,5,16` differs by 33,013 px of at most 4 levels
+  between two identical runs (the harbour), so its figures count pixels over 16 levels.
+- ⚠️ `prims` baselines differ between runs by which capture macOS stalled; `draws` do not.
+- 🚫 The merge is the only one that culls a sign's triangles, and it reverses `P5-2`'s library for
+  ~50k `prims`; the load-time trial also moved 2,694 px, so it is not pixel-safe as tried.
+- Open, the user's: the lamps' 300 m cells with the 400 m range. Its pop-in on a drive is untested.
+
+**See.** `Q134` · `Q115` · `Q63` · `Q132` · `Q91` · `Q120`/`Q122` · `BeamBudget` · `PLAN.md` `P3-38`–`P3-42`, `P3-66`
 
 ---
 

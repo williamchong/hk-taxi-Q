@@ -1364,7 +1364,8 @@ Techniques, in order of what they buy:
    per-scene instancing), multiplied by the shadow passes per library mesh. The road, boxes and
    road marks stay merged because nothing in them repeats — the road by tile, the road marks by
    300 m cell, so the engine can cull them. What lies on the road casts no shadow
-   (`GeneratedLayer`'s `casts_shadow`, `Q135`).
+   (`GeneratedLayer`'s `casts_shadow`, `Q135`), and of a sign only the post does (`shadow_meshes`,
+   `P3-66`).
 4. Occlusion is largely free in dense street canyons.
 
 ---

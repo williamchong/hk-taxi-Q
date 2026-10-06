@@ -101,8 +101,9 @@ func _ready() -> void:
 		add_child(instance)
 		bounds = MeshContract.bounds(instance)
 		triangles = MeshContract.triangles(instance)
-	if not GeneratedLayer.casts_shadow(layer):
-		for found: Node in find_children("*", "GeometryInstance3D", true, false):
+	# By node name, which for a library is the mesh's own (`_place`).
+	for found: Node in find_children("*", "GeometryInstance3D", true, false):
+		if not GeneratedLayer.casts_shadow(layer, String(found.name)):
 			(found as GeometryInstance3D).cast_shadow = (
 				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			)

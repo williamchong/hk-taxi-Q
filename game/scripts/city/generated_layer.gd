@@ -103,6 +103,11 @@ const WATER: String = "water"
 ## throws a shadow nobody can see: measured on the throttle route, the paint was
 ## 283,044 of ~1,000,000 primitives and exactly 3x its own triangle count, the
 ## main pass plus two cascades, because a `GeometryInstance3D` casts by default.
+## `shadow_meshes` narrows a casting layer to the library meshes named, and is
+## empty for a layer whose every mesh follows `casts_shadow`: a sign's post
+## casts and its plates and lettering do not (`P3-66`) — each library mesh is a
+## draw call a shadow pass, and 22 plates cost 12-20 of the frame's 150 for a
+## shadow 288 px of one audit frame could show.
 ## Every row carries every key, and the accessors index rather than
 ## `get`, so a row missing one fails loudly instead of defaulting.
 const LAYERS: Dictionary[String, Dictionary] = {
@@ -114,6 +119,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence": "A city whose sources publish no tramway ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 	ARROWS:
 	{
@@ -124,6 +130,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no marking symbols ships none, and that is not a failure.",
 		"placements": "arrows_placements.json",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 	BOXJUNCTIONS:
 	{
@@ -134,6 +141,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no box polygons ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 	CROSSINGS:
 	{
@@ -144,6 +152,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no crossing lines ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 	ROADMARKS:
 	{
@@ -154,6 +163,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no road markings ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 	RAILINGS:
 	{
@@ -164,6 +174,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no railing layer ships none, and that is not a failure.",
 		"placements": "railings_placements.json",
 		"casts_shadow": true,
+		"shadow_meshes": [],
 	},
 	LAMPS:
 	{
@@ -174,6 +185,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no utility point layer ships none, and that is not a failure.",
 		"placements": "lamps_placements.json",
 		"casts_shadow": true,
+		"shadow_meshes": [],
 	},
 	SIGNS:
 	{
@@ -184,6 +196,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"A city whose sources publish no shape-faced signs ships none, and that is not a failure.",
 		"placements": "signs_placements.json",
 		"casts_shadow": true,
+		"shadow_meshes": ["pole"],
 	},
 	# The harbour (2026-09-25, the user's call): the basemap's sea, flat at sea
 	# level. `casts_shadow` false for the paint's reason — a plane at the bottom
@@ -196,6 +209,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence": "A region whose frame holds no shoreline ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
 	},
 }
 
@@ -265,11 +279,22 @@ static func has_placements(layer: String) -> bool:
 	return not placements_path(layer).is_empty()
 
 
-## Whether the layer's meshes are drawn into the shadow passes. `true` for an
-## id the table does not know, which is the engine's own default.
-static func casts_shadow(layer: String) -> bool:
+## Whether the layer's mesh of that name is drawn into the shadow passes — any
+## mesh of a layer that names none in `shadow_meshes`. `true` for an id the
+## table does not know, which is the engine's own default.
+static func casts_shadow(layer: String, mesh_name: String) -> bool:
 	var row: Dictionary = _row(layer)
-	return row.is_empty() or bool(row["casts_shadow"])
+	if row.is_empty():
+		return true
+	var only: Array = row["shadow_meshes"]
+	return bool(row["casts_shadow"]) and (only.is_empty() or mesh_name in only)
+
+
+## The library meshes a casting layer's shadow is narrowed to; empty when every
+## mesh follows `casts_shadow`. `verify_signs.gd` holds each to the library.
+static func shadow_meshes(layer: String) -> PackedStringArray:
+	var row: Dictionary = _row(layer)
+	return PackedStringArray() if row.is_empty() else PackedStringArray(row["shadow_meshes"])
 
 
 ## Message for the case that reads as "there is no such layer" rather than an

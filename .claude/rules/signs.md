@@ -25,7 +25,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `gltf.placed_positions`'s, one per side** — the ETL's copy is shared by `clearance.py`, the
   occupancy grader and the signs, and was three hand-written copies before `P5-2`'s review; do not
   write another. ⚠️ Draw calls are **one per library mesh
-  and the shadow passes multiply it**: +35 on the throttle route for 24 meshes, not +22.
+  and the shadow passes multiply it**: +35 on the throttle route for 24 meshes, not +22. Since `P3-66`
+  only `pole` casts (`GeneratedLayer`'s `shadow_meshes`, −20 draws); a new library mesh that should
+  cast owes its name there, and `verify_signs.gd` fails a name the library lacks.
 - **`signs.outset_m`, `max_shift_m`, or `signs._register`: paste `signs.json`'s `drawn`,
   `poles_drawn`, `posts_kept_as_surveyed`, `posts_over_shift`, `posts_in_carriageway`,
   `posts_merged_after_shift` and `shift_m`, before and after — and A/B render one street that
