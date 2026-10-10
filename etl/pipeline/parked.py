@@ -64,6 +64,7 @@ from pipeline.config import (
     SOURCE_BAY,
     SOURCE_FILL,
     SOURCE_FRONTAGE,
+    SOURCE_LAYBY,
     SOURCE_STAND,
     SOURCE_STOP,
     SOURCES,
@@ -139,6 +140,8 @@ class ParkedReport:
     places_read: int = 0
     frontages_classified: int = 0
     frontages_too_far: int = 0
+    layby_runs: int = 0
+    layby_m: float = 0.0
     fill_slots: int = 0
     fill_kept: int = 0
     fill_night_only: int = 0
@@ -450,8 +453,9 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
     half_l = vehicle.length_m / 2.0
     # A PUBLISHED position — a bay, a stop — is where the publisher put it,
     # and stands wherever the junction trim leaves a kerb; `junction_m` and the
-    # lane-room bar are for what this stage invents.
-    published = candidate.source in (SOURCE_BAY, SOURCE_STOP)
+    # lane-room bar are for what this stage invents. A lay-by is the kerb's
+    # own widening and takes neither either.
+    published = candidate.source in (SOURCE_BAY, SOURCE_STOP, SOURCE_LAYBY)
     setback_m = 0.0 if published else clear.junction_m
     if (
         along_m - half_l < ribbon.trim_start_m + setback_m
@@ -570,6 +574,60 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
                         kind, SOURCE_FILL, edge_id, along_m / length_m, side, hours, 1.0, rows=rows
                     )
                 )
+    return candidates
+
+
+def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> list[Candidate]:
+    """Slots down every run of kerb standing a parking lane proud of its edge's
+    median kerb — a lay-by, read off `carriageway_region.json`'s kerb line
+    through `Ribbon.kerb_left_m` / `kerb_right_m` (`Laybys` says the bars)."""
+    laybys = spec.laybys
+    assert laybys is not None
+    kinds = sorted(laybys.kinds)
+    weights = [laybys.kinds[kind] for kind in kinds]
+    candidates: list[Candidate] = []
+    for edge_id in sorted(street.ribbons):
+        ribbon = street.ribbons[edge_id]
+        if ribbon.kerb_at_t is None or ribbon.kerb_left_m is None or ribbon.kerb_right_m is None:
+            continue
+        along = ribbon.kerb_at_t * ribbon.length_m
+        low_m = ribbon.trim_start_m
+        high_m = ribbon.length_m - ribbon.trim_end_m
+        for side, kerb in ((1.0, ribbon.kerb_left_m), (-1.0, ribbon.kerb_right_m)):
+            bulge = kerb - float(np.median(kerb))
+            proud = (bulge >= laybys.min_bulge_m) & (bulge <= laybys.max_bulge_m)
+            start = 0
+            while start < len(proud):
+                if not proud[start]:
+                    start += 1
+                    continue
+                stop = start
+                while stop < len(proud) and proud[stop]:
+                    stop += 1
+                run_from = float(along[start])
+                run_to = float(along[min(stop, len(along) - 1)])
+                run_m = run_to - run_from
+                inside = run_from > low_m and run_to < high_m
+                if inside and laybys.min_run_m <= run_m <= laybys.max_run_m:
+                    report.layby_runs += 1
+                    report.layby_m += run_m
+                    draw = _seeded("layby", edge_id, side, round(run_from, 1))
+                    slots = int(run_m // laybys.pitch_m)
+                    for index in range(slots):
+                        at_m = run_from + (index + 0.5) * laybys.pitch_m
+                        kind = draw.choices(kinds, weights=weights)[0]
+                        candidates.append(
+                            Candidate(
+                                kind,
+                                SOURCE_LAYBY,
+                                edge_id,
+                                at_m / ribbon.length_m,
+                                side,
+                                laybys.hours,
+                                laybys.chance,
+                            )
+                        )
+                start = stop
     return candidates
 
 
@@ -815,6 +873,8 @@ def build_region(
                     )
                 )
 
+    if spec.laybys is not None:
+        candidates.extend(_layby_candidates(street, spec, report))
     if spec.fill is not None:
         candidates.extend(_fill_candidates(street, spec, report))
 

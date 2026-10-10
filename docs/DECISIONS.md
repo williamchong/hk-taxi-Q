@@ -9887,6 +9887,18 @@ behind them. The user's drive owed, by day and at night.
   the short streets. Wan Chai 523 → 726 placed on 129 of the 359 eligible streets (11.6 of
   18.8 km, from 76 and 7.7); the rest are short stubs inside the trim plus setback, hidden kerbs
   and overlaps.
+- 🔴 **A lay-by is read off the kerb line and stands cars on any street** (the user's drive,
+  2026-10-11: "allow stopped cars on lane that suddenly widen and shrink back because those area
+  are probably for stopping cars — verify with data if possible"). Verified: `carriageway_region`'s
+  kerb line (`Ribbon.kerb_left_m` / `kerb_right_m`, the corridor, bridged across side-street
+  mouths so a mouth is not a bulge) stands 1.8–4.0 m proud of its edge's median kerb for 8–90 m
+  on 26 runs / 497 m of Wan Chai and 16 / 342 m of Causeway Bay — Gloucester Road, Victoria Park
+  Road, Hung Hing Road, Harbour Drive among them; past 4 m a bulge is a slip road or a flare. The
+  drawings' `RM1107` lay-by edge line is 0 in region, so the geometry is the evidence. `laybys:`
+  stands cars, vans and taxis down those runs at a 0.6 chance, whatever the street's class or
+  speed and on either kerb, taking neither the setback nor the lane bar — the widening IS the
+  stopping place. 23 and 15 stood; 29 and 14 refused on a kerb the ribbon hides (an opposed pair's
+  merged side), which is right.
 - Owed: the handset's frame time, and `RM1051` / `RM1052`'s meaning in the drawings.
 
 - **Why parked first.** `P3-3` owes an adjacency and the 217 turn restrictions before one car

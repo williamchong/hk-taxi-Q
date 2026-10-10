@@ -900,8 +900,10 @@ path. Each entry also carries:
 - `kind` — the roster kind (`car` draws `car_a` or `car_b` on a seeded pick).
 - `source` — `bay` (Road Network v2's `ONSTREETPARK`, one point per bay, its attribute table
   joined on the grid coordinate), `stop` (TD's bus stop and minibus terminus points), `stand`
-  (`fares.json`'s taxi stands and tram stops), `frontage` (a named footprint's vocabulary — a
-  hotel, an office tower), or `fill` (the restriction layer's complement at `fill.share`).
+  (`fares.json`'s taxi stands and tram stops), `layby` (a run of the road's kerb a parking lane
+  proud of its edge's own, read off `carriageway_region.json`), `frontage` (a named footprint's
+  vocabulary — a hotel, an office tower), or `fill` (the restriction layer's complement at
+  `fill.share`, on a slow minor street's nearside, one row keeping a lane).
 - `hours` — `[from_h, to_h]` on a 24 h clock, wrapping past midnight, or `null` for always.
 - `chance` — the share of visits the vehicle is found, `(0, 1]`.
 - `edge` — the host edge.

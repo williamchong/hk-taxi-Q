@@ -4336,6 +4336,22 @@ parked:
     hours_by_kind:
       van: [8, 19]
 
+  # A lay-by, read off the kerb line (the user's drive, 2026-10-11: "allow
+  # stopped cars on lane that suddenly widen and shrink back because those
+  # area are probably for stopping cars"): a run of kerb standing a parking
+  # lane's depth proud of the edge's median kerb. Measured on Wan Chai, 28
+  # runs of 1.8 m or more, 8–60 m long; past 4 m a bulge is a junction flare
+  # or a slip road. Stood on any street, either kerb — the widening is the
+  # stopping place — at a chance, as a stop is: a lay-by is not always taken.
+  laybys:
+    min_bulge_m: 1.8
+    max_bulge_m: 4.0
+    min_run_m: 8.0
+    max_run_m: 90.0
+    pitch_m: 7.0
+    kinds: {car: 0.5, van: 0.2, taxi: 0.3}
+    chance: 0.6
+
   # A tram stop further than this from any laid bed stands no tram.
   tram_max_track_m: 12.0
 

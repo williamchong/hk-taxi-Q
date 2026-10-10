@@ -30,6 +30,7 @@ from pipeline.parked import (
     _fill_candidates,
     _flow_heading,
     _footprint,
+    _layby_candidates,
     _on_track,
     _stand,
     _Street,
@@ -72,6 +73,15 @@ BLOCK: dict[str, Any] = {
         "kinds": {"car": 0.8, "van": 0.2},
         "single_yellow_hours": [7, 19],
         "hours_by_kind": {"van": [8, 19]},
+    },
+    "laybys": {
+        "min_bulge_m": 1.8,
+        "max_bulge_m": 4.0,
+        "min_run_m": 8.0,
+        "max_run_m": 90.0,
+        "pitch_m": 7.0,
+        "kinds": {"car": 0.7, "taxi": 0.3},
+        "chance": 0.6,
     },
     "tram_max_track_m": 12.0,
     "slow_streets": {
@@ -361,6 +371,55 @@ class TestTheFill:
         kept = _fill_candidates(street, spec, ParkedReport())
         vans = [candidate for candidate in kept if candidate.kind == "van"]
         assert vans and all(candidate.hours == (8.0, 19.0) for candidate in vans)
+
+
+class TestTheLayby:
+    """A run of kerb a parking lane proud of the street's own kerb."""
+
+    def _region(self, bulge_m: float, run: tuple[float, float]) -> dict:
+        at = np.linspace(0.0, 1.0, 41)
+        left = np.full(41, 6.0)
+        along = at * 200.0
+        left[(along >= run[0]) & (along <= run[1])] += bulge_m
+        # `carriageway_region.json`'s own shape (`test_drawnroad.py`'s `ROAD`):
+        # dense stations, every one ending at a kerb on both sides.
+        return {
+            "territories": [
+                {
+                    "edge": 7,
+                    "foreign": False,
+                    "along_m": along.tolist(),
+                    "left_m": left.tolist(),
+                    "right_m": [6.0] * 41,
+                    "left_end": ["kerb"] * 41,
+                    "right_end": ["kerb"] * 41,
+                    "left_kerb_m": left.tolist(),
+                    "right_kerb_m": [6.0] * 41,
+                }
+            ]
+        }
+
+    def _street_with(self, bulge_m: float, run: tuple[float, float], **edge) -> _Street:
+        graph = _graph(**edge)
+        surface = _surface()
+        return _Street(graph, surface, ribbons(graph, surface, self._region(bulge_m, run)))
+
+    def test_a_widening_stands_cars_whatever_the_street(self, spec) -> None:
+        street = self._street_with(2.5, (80.0, 120.0), street_class="main", speed_limit_kph=70)
+        report = ParkedReport()
+        kept = _layby_candidates(street, spec, report)
+        assert report.layby_runs == 1 and 35.0 <= report.layby_m <= 45.0
+        assert len(kept) == 5 and all(c.side > 0.0 and c.source == "layby" for c in kept)
+        assert all(80.0 < c.t * 200.0 < 120.0 for c in kept)
+        stood = _stand(street, spec, kept[0])
+        assert not isinstance(stood, str)
+        # In the bulge: 2.5 m further out than the street's own kerb.
+        assert stood.x == pytest.approx(-(8.5 - 0.25 - 0.9))
+
+    def test_a_flare_or_a_short_notch_is_not_a_layby(self, spec) -> None:
+        assert _layby_candidates(self._street_with(6.0, (80.0, 120.0)), spec, ParkedReport()) == []
+        assert _layby_candidates(self._street_with(2.5, (80.0, 85.0)), spec, ParkedReport()) == []
+        assert _layby_candidates(self._street_with(1.0, (80.0, 120.0)), spec, ParkedReport()) == []
 
 
 class TestOnTheTrack:

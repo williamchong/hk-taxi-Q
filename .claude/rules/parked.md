@@ -41,6 +41,10 @@ traffic, and the bonus for threading them.
   structure, or on the OFFSIDE of a one-way street (the fast lane — `allows_side`). A bay, a stop
   and a stand are
   the publisher's and are never gated by it. Do not loosen it to fill a quiet main road.
+- 🔴 **A lay-by is the kerb's own widening** (`laybys:`, the user's drive 2026-10-11): a run of
+  `kerb_left_m` / `kerb_right_m` 1.8–4.0 m proud of the edge's median for 8–90 m inside the trim,
+  stood on ANY street and either kerb with no setback and no lane bar. Past `max_bulge_m` it is a
+  flare or a slip road; do not raise it to catch one. `layby_runs` and `layby_m` are the counters.
 - 🔴 **The fill is a share, never a licence** (`Q161`). 57 of Wan Chai's 90 km of level-0 kerb
   carries no published restriction; `fill.share` of the slots is kept on a draw seeded by the
   slot, so a rebuild places the same cars. A single yellow joins the fill OUTSIDE

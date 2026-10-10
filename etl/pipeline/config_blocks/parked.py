@@ -35,9 +35,10 @@ ROSTER = ("car", "taxi", "minibus", "bus", "coach", "van", "tram", "motorcycle")
 SOURCE_BAY = "bay"
 SOURCE_STOP = "stop"
 SOURCE_STAND = "stand"
+SOURCE_LAYBY = "layby"
 SOURCE_FRONTAGE = "frontage"
 SOURCE_FILL = "fill"
-SOURCES = (SOURCE_BAY, SOURCE_STOP, SOURCE_STAND, SOURCE_FRONTAGE, SOURCE_FILL)
+SOURCES = (SOURCE_BAY, SOURCE_STOP, SOURCE_STAND, SOURCE_LAYBY, SOURCE_FRONTAGE, SOURCE_FILL)
 
 # A placement present through the whole day. Spelled once so a reader, the
 # stage and the engine agree on what an absent window means.
@@ -146,6 +147,27 @@ class Frontage:
 
 
 @dataclass(frozen=True)
+class Laybys:
+    """A lay-by read off the kerb line (the user's drive, 2026-10-11: "allow
+    stopped cars on lane that suddenly widen and shrink back because those
+    area are probably for stopping cars"): a run of the road's kerb standing
+    a parking lane's depth proud of the edge's own median kerb, between
+    `min_bulge_m` and `max_bulge_m` (deeper is a junction flare or a slip
+    road), `min_run_m` to `max_run_m` long, inside the edge's trim. Stood
+    whatever the street's class or speed — the widening IS the stopping
+    place — on either kerb."""
+
+    min_bulge_m: float
+    max_bulge_m: float
+    min_run_m: float
+    max_run_m: float
+    pitch_m: float
+    kinds: dict[str, float]
+    chance: float
+    hours: tuple[float, float] | None
+
+
+@dataclass(frozen=True)
 class Fill:
     """The restriction layer's complement as a density fill.
 
@@ -240,6 +262,7 @@ class Parked:
     stands: dict[str, Stand]
     frontage: Frontage | None
     fill: Fill | None
+    laybys: Laybys | None
     tram_max_track_m: float
     clearances: Clearances
     slow_streets: SlowStreets
@@ -421,6 +444,42 @@ def _frontage(body: Any, where: str) -> Frontage | None:
     )
 
 
+def _weighted_kinds(raw: Any, where: str, vehicles: dict[str, Vehicle]) -> dict[str, float]:
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"{where} must map a roster kind to its weight")
+    kinds = {_kind(kind, where): float(weight) for kind, weight in raw.items()}
+    if any(weight <= 0.0 for weight in kinds.values()):
+        raise ValueError(f"{where} weights must be positive, got {raw!r}")
+    for kind in kinds:
+        if kind not in vehicles:
+            raise ValueError(f"{where} names {kind!r}, which vehicles: does not size")
+    return kinds
+
+
+def _laybys(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Laybys | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    lengths = _measures(
+        body,
+        where,
+        ("min_bulge_m", "max_bulge_m", "min_run_m", "max_run_m", "pitch_m"),
+        positive=True,
+    )
+    if (
+        lengths["max_bulge_m"] <= lengths["min_bulge_m"]
+        or lengths["max_run_m"] <= lengths["min_run_m"]
+    ):
+        raise ValueError(f"{where}: each max must be over its min")
+    return Laybys(
+        kinds=_weighted_kinds(_require(body, "kinds", where), f"{where}:kinds", vehicles),
+        chance=_share(body.get("chance", 1.0), f"{where}:chance"),
+        hours=_hours(body.get("hours"), f"{where}:hours"),
+        **lengths,
+    )
+
+
 def _fill(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Fill | None:
     if body is None:
         return None
@@ -502,6 +561,7 @@ def _parked(body: Any, where: str) -> Parked | None:
         stands=_stands(body.get("stands"), f"{where}:stands"),
         frontage=_frontage(body.get("frontage"), f"{where}:frontage"),
         fill=_fill(body.get("fill"), f"{where}:fill", vehicles),
+        laybys=_laybys(body.get("laybys"), f"{where}:laybys", vehicles),
         clearances=_clearances(_require(body, "clearances", where), f"{where}:clearances"),
         slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
         **_measures(body, where, ("tram_max_track_m",), positive=True),
