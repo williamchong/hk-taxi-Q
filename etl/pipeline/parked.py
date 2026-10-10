@@ -185,6 +185,10 @@ class Candidate:
     # A stand placed off the kerb (a tram on its bed): the plan point itself.
     plan: tuple[float, float] | None = None
     height_m: float | None = None
+    # How many invented rows the street carries with this one: 1 for a row on
+    # one kerb, 2 where the fill takes both. Published sources are 0 — they
+    # take no lane bar.
+    rows: int = 0
 
 
 @dataclass(frozen=True)
@@ -463,7 +467,15 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
     # Across the kerb (a motorcycle), the vehicle's LENGTH is what it takes
     # off the road.
     across_m = vehicle.length_m if vehicle.across else vehicle.width_m
-    lane_room_m = road_m - across_m - clear.kerb_gap_m - lanes * clear.lane_width_m
+    # The lanes a row keeps: the fill and a frontage take one (`row_lanes`),
+    # the second row down a street's other kerb another, and a street keeps
+    # at least one. `lane_room_m` is measured against those, so the counter
+    # says what an invented row left to pass in.
+    kept = clear.lanes_kept(lanes, candidate.rows)
+    # A second row down the other kerb takes its own width too, taken as this
+    # vehicle's: the fill decides the rows a street carries from the same sum.
+    rows_m = max(1, candidate.rows) * (across_m + clear.kerb_gap_m)
+    lane_room_m = road_m - rows_m - kept * clear.lane_width_m
     if lane_room_m < 0.0 and not published:
         return TOO_NARROW
     lateral_m = middle_m + candidate.side * (half_m - clear.kerb_gap_m - across_m / 2.0)
@@ -491,23 +503,47 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
 
 
 def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> list[Candidate]:
-    """Slots `pitch_m` apart down every free kerb, `share` of them kept on a
-    seeded draw, with a kind drawn by weight and the hours its kind keeps —
-    or, on a posted-hours single yellow, the hours the restriction leaves."""
+    """Slots `pitch_m` apart down every free kerb, `share` of them kept — spread
+    evenly along the kerb from a seeded phase, so a street is parked at a
+    steady rhythm rather than in clumps (the user's drive, 2026-10-11) — with a
+    kind drawn by weight and the hours its kind keeps, or on a posted-hours
+    single yellow the hours the restriction leaves.
+
+    Which kerbs: a street wide enough to keep its lanes past two rows takes
+    both; one too narrow for that but wide enough past one row takes its
+    nearside only — Hong Kong's 6.4 m back street, parked on one side and
+    passed in the lane left. The widths are the ROAD's, kerb to kerb, read at
+    the edge's middle."""
     fill = spec.fill
     assert fill is not None
+    clear = spec.clearances
     kinds = sorted(fill.kinds)
     weights = [fill.kinds[kind] for kind in kinds]
+    widest_m = max(spec.vehicle(kind).width_m for kind in kinds) + clear.kerb_gap_m
     candidates: list[Candidate] = []
     for edge_id in sorted(street.ribbons):
-        if not spec.slow_streets.allows(street.edges[edge_id]):
+        edge = street.edges[edge_id]
+        if not spec.slow_streets.allows(edge):
             continue
         length_m = street.length_m(edge_id)
+        _middle_m, half_m = street.ribbons[edge_id].kerb_at(0.5)
+        road_m = 2.0 * half_m
+        lanes = int(edge["lanes"])
+        rows = 0
+        if road_m - 2.0 * widest_m >= clear.lanes_kept(lanes, 2) * clear.lane_width_m:
+            rows = 2
+        elif road_m - widest_m >= clear.lanes_kept(lanes, 1) * clear.lane_width_m:
+            rows = 1
+        if rows == 0:
+            continue
         for side in (1.0, -1.0):
-            if not spec.slow_streets.allows_side(street.edges[edge_id], side):
+            if side < 0.0 and rows < 2:
+                continue
+            if not spec.slow_streets.allows_side(edge, side):
                 continue
             runs = street.runs(edge_id, side)
             draw = _seeded("fill", edge_id, side)
+            phase = draw.random()
             slots = int(length_m // fill.pitch_m)
             for index in range(slots):
                 along_m = (index + 0.5) * fill.pitch_m
@@ -515,7 +551,9 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
                 restrictions = {kind for low, high, kind in runs if low <= along_m <= high}
                 if _DOUBLE in restrictions:
                     continue
-                if draw.random() > fill.share:
+                # Every `1 / share` slots, from the phase: the slot is kept
+                # where the running share crosses a whole number.
+                if int((index + phase) * fill.share) == int((index + phase - 1.0) * fill.share):
                     continue
                 kind = draw.choices(kinds, weights=weights)[0]
                 hours = fill.hours_by_kind.get(kind, ALWAYS)
@@ -528,7 +566,9 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
                     report.fill_night_only += 1
                 report.fill_kept += 1
                 candidates.append(
-                    Candidate(kind, SOURCE_FILL, edge_id, along_m / length_m, side, hours, 1.0)
+                    Candidate(
+                        kind, SOURCE_FILL, edge_id, along_m / length_m, side, hours, 1.0, rows=rows
+                    )
                 )
     return candidates
 
@@ -771,6 +811,7 @@ def build_region(
                         side,
                         klass.hours,
                         1.0,
+                        rows=1,
                     )
                 )
 

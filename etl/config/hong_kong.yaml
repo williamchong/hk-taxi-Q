@@ -4328,7 +4328,8 @@ parked:
   # the one place the night street carries more cars than the day. Vans park
   # by day only.
   fill:
-    share: 0.3
+    # Spread evenly along the kerb, every 1/share slots from a seeded phase.
+    share: 0.4
     pitch_m: 7.0
     kinds: {car: 0.8, van: 0.2}
     single_yellow_hours: [7, 19]
@@ -4357,7 +4358,10 @@ parked:
 
   clearances:
     kerb_gap_m: 0.25
-    junction_m: 10.0
+    # Past the junction trim. 10 m left Wan Chai's short back streets with no
+    # slot at all (the user's drive, 2026-10-11: cars on every street); Hong
+    # Kong parks closer to a corner than that.
+    junction_m: 7.0
     # Over `fares.hail_radius_m` (12) and `RoadSpawn.DEFAULT_SETBACK_M` (20):
     # the hail ring and the car's own start stay clear.
     fare_m: 25.0
@@ -4366,5 +4370,10 @@ parked:
     # 4.96 m median pitch for a 4.5 m car, and a wider gap drops every other bay.
     gap_m: 0.4
     # TPDM 4.3.9.8's narrow lane: a kerb whose road leaves less than this per
-    # authored lane beside the parked vehicle is refused.
+    # lane KEPT beside the parked vehicle is refused.
     lane_width_m: 3.0
+    # A parked row takes one lane off the authored count, never below one:
+    # the 6.4 m two-way back street is parked on one side and passed in the
+    # lane left (the user's drive, 2026-10-11 — 303 of Wan Chai's 359 minor
+    # streets stood nothing with both lanes demanded beside the row).
+    row_lanes: 1

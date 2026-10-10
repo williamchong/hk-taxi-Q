@@ -88,6 +88,7 @@ BLOCK: dict[str, Any] = {
         "crossing_m": 5.0,
         "gap_m": 0.4,
         "lane_width_m": 3.0,
+        "row_lanes": 1,
     },
 }
 
@@ -151,7 +152,8 @@ def _street(graph: dict, surface: dict) -> _Street:
 
 
 def _candidate(kind: str, t: float, side: float, source: str = SOURCE_BAY, **more) -> Candidate:
-    return Candidate(kind, source, 7, t, side, ALWAYS, 1.0, **more)
+    rows = 0 if source == SOURCE_BAY or source == SOURCE_STAND else 1
+    return Candidate(kind, source, 7, t, side, ALWAYS, 1.0, **({"rows": rows} | more))
 
 
 class TestTheWindow:
@@ -242,11 +244,22 @@ class TestTheRefusals:
         assert _stand(street, spec, _candidate("car", 0.05, 1.0)) == "at_junction"
 
     def test_a_narrow_road_refuses_the_fill_and_counts_the_bay(self, spec) -> None:
-        # 7 m kerb to kerb, two lanes of 3.0: 1.0 m left, less than a car.
-        street = _street(_graph(width_m=7.0), _surface(half_width_m=3.5))
+        # 4.5 m kerb to kerb, two lanes: a row keeps one 3.0 m lane, and a
+        # car plus its gap leaves 2.45 — less.
+        street = _street(_graph(width_m=4.5), _surface(half_width_m=2.25))
         assert _stand(street, spec, _candidate("car", 0.5, 1.0, SOURCE_FILL)) == "too_narrow"
         bay = _stand(street, spec, _candidate("car", 0.5, 1.0))
         assert not isinstance(bay, str) and bay.lane_room_m < 0.0
+
+    def test_a_row_keeps_one_lane_fewer_than_authored(self, spec) -> None:
+        """Hong Kong's 6.4 m two-way back street: two lanes authored, one row
+        parked, one lane left to pass in."""
+        street = _street(_graph(width_m=6.4), _surface(half_width_m=3.2))
+        one = _stand(street, spec, _candidate("car", 0.5, 1.0, SOURCE_FILL, rows=1))
+        assert not isinstance(one, str) and one.lane_room_m == pytest.approx(6.4 - 2.05 - 3.0)
+        # A second row prices the first's width too: 6.4 - 4.1 - 3.0 < 0.
+        two = _stand(street, spec, _candidate("car", 0.5, 1.0, SOURCE_FILL, rows=2))
+        assert two == "too_narrow"
 
     def test_a_hidden_kerb_stands_nothing(self, spec) -> None:
         street = _street(_graph(), _surface(kerb_hidden_m={"near": [[90.0, 110.0]], "off": []}))
@@ -276,12 +289,25 @@ class TestTheFill:
         assert first == second
         assert first, "the fixture street fills"
 
-    def test_the_fill_keeps_about_its_share(self, spec) -> None:
+    def test_the_fill_keeps_its_share_evenly(self, spec) -> None:
         street = _street(_graph(), _surface())
         report = ParkedReport()
         kept = _fill_candidates(street, spec, report)
         assert report.fill_slots == 2 * int(200.0 // 7.0)
-        assert 0.3 * report.fill_slots < len(kept) < 0.7 * report.fill_slots
+        assert abs(len(kept) - 0.5 * report.fill_slots) <= 2
+        # Evenly: every other slot on each kerb, never two in a row.
+        near = sorted(candidate.t for candidate in kept if candidate.side > 0.0)
+        gaps = {round((b - a) * 200.0 / 7.0) for a, b in zip(near, near[1:], strict=False)}
+        assert gaps == {2}
+
+    def test_a_narrow_two_way_street_fills_its_nearside_only(self, spec) -> None:
+        """6.4 m, two lanes: one row keeps a lane, two would not."""
+        street = _street(_graph(width_m=6.4), _surface(half_width_m=3.2))
+        kept = _fill_candidates(street, spec, ParkedReport())
+        assert kept and all(candidate.side > 0.0 and candidate.rows == 1 for candidate in kept)
+        wide = _fill_candidates(_street(_graph(), _surface()), spec, ParkedReport())
+        assert any(candidate.side < 0.0 for candidate in wide)
+        assert all(candidate.rows == 2 for candidate in wide)
 
     def test_a_double_yellow_takes_its_kerb_out_of_the_fill(self, spec) -> None:
         street, _ = self._spec_with_runs(

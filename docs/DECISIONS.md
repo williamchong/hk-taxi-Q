@@ -9876,6 +9876,17 @@ behind them. The user's drive owed, by day and at night.
   Chai's 70 bus stops only one snaps to a 70 km/h edge (Gloucester Road's stops sit on its 50 km/h
   side carriageways in the graph) and it stands; the stops lost are 23 inside a junction trim, 5
   on a hidden kerb and 8 overlapping. Wan Chai 863 → 523 placed, Causeway Bay 366 → 254.
+- 🔴 **A parked row takes one lane, and a two-way street parks one side** (the user's drive,
+  2026-10-11: "can more cars be distributed more evenly", then "allow 1 parked cars in a lane if
+  its a two-way"). Demanding the authored lanes BESIDE the row left 303 of Wan Chai's 359 eligible
+  minor streets empty: the 6.4 m two-way back street cannot keep two 3.0 m lanes past a car.
+  `clearances.row_lanes` 1 — a row keeps `lanes − rows`, never under one; the fill takes both
+  kerbs where the road keeps its lanes past two rows and the nearside alone where it keeps them
+  past one; a second row is priced at its own width. The slots are spread evenly (every
+  `1 / share` from a seeded phase) rather than drawn, `share` 0.3 → 0.4, `junction_m` 10 → 7 for
+  the short streets. Wan Chai 523 → 726 placed on 129 of the 359 eligible streets (11.6 of
+  18.8 km, from 76 and 7.7); the rest are short stubs inside the trim plus setback, hidden kerbs
+  and overlaps.
 - Owed: the handset's frame time, and `RM1051` / `RM1052`'s meaning in the drawings.
 
 - **Why parked first.** `P3-3` owes an adjacency and the 217 turn restrictions before one car

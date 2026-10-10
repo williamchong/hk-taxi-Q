@@ -214,10 +214,19 @@ class Clearances:
     crossing_m: float
     # Between two vehicles, nose to tail or flank to flank.
     gap_m: float
-    # A bay or a fill slot whose kerb leaves less than the authored lanes
+    # An invented row whose kerb leaves less than the lanes it must keep
     # beside the parked vehicle is refused: the road is not wide enough to
-    # park on and keep its lanes.
+    # park on and keep them.
     lane_width_m: float
+    # How many of the authored lanes a parked row takes (the user's drive,
+    # 2026-10-11): Hong Kong parks one side of a 6.4 m two-way back street and
+    # passes in the one lane left, so a row keeps `lanes - row_lanes` lanes
+    # and never fewer than one. A second row on the other kerb keeps
+    # `lanes - 2 * row_lanes`.
+    row_lanes: int
+
+    def lanes_kept(self, lanes: int, rows: int) -> int:
+        return max(1, lanes - rows * self.row_lanes)
 
 
 @dataclass(frozen=True)
@@ -445,6 +454,15 @@ def _fill(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Fill | None:
 _CLEARANCES = ("kerb_gap_m", "junction_m", "fare_m", "crossing_m", "gap_m", "lane_width_m")
 
 
+def _clearances(body: Any, where: str) -> Clearances:
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    row_lanes = int(_require(body, "row_lanes", where))
+    if row_lanes < 1:
+        raise ValueError(f"{where}:row_lanes must be at least 1, got {row_lanes}")
+    return Clearances(**_measures(body, where, _CLEARANCES), row_lanes=row_lanes)
+
+
 def _slow_streets(body: Any, where: str) -> SlowStreets:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
@@ -484,9 +502,7 @@ def _parked(body: Any, where: str) -> Parked | None:
         stands=_stands(body.get("stands"), f"{where}:stands"),
         frontage=_frontage(body.get("frontage"), f"{where}:frontage"),
         fill=_fill(body.get("fill"), f"{where}:fill", vehicles),
-        clearances=Clearances(
-            **_measures(_require(body, "clearances", where), f"{where}:clearances", _CLEARANCES)
-        ),
+        clearances=_clearances(_require(body, "clearances", where), f"{where}:clearances"),
         slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
         **_measures(body, where, ("tram_max_track_m",), positive=True),
     )
