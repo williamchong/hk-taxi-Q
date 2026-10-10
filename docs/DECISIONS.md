@@ -9871,7 +9871,11 @@ behind them. The user's drive owed, by day and at night.
   nor a bridge (`on_structure`), nor the offside of a one-way street — the fast lane ("cars dont
   park in right most lane which is fast lane in hong kong"; Expo Drive East's vans stood in it).
   A bay, a stop and a stand are the publisher's and stand where they were put: 12 bays and a stop
-  on 70 km/h edges remain. Wan Chai 863 → 523 placed, Causeway Bay 366 → 254.
+  on 70 km/h edges remain — the user's confirmation, 2026-10-11: "some main road with bus stop is
+  not 50km/h, but 70, still people park in it, at least buses and minibuses do". Measured: of Wan
+  Chai's 70 bus stops only one snaps to a 70 km/h edge (Gloucester Road's stops sit on its 50 km/h
+  side carriageways in the graph) and it stands; the stops lost are 23 inside a junction trim, 5
+  on a hidden kerb and 8 overlapping. Wan Chai 863 → 523 placed, Causeway Bay 366 → 254.
 - Owed: the handset's frame time, and `RM1051` / `RM1052`'s meaning in the drawings.
 
 - **Why parked first.** `P3-3` owes an adjacency and the 217 turn restrictions before one car
