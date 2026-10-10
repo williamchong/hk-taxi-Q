@@ -17,7 +17,7 @@
 [ext_resource type="Resource" uid="uid://d4lg7vboesfwa" path="res://tuning/menu.tres" id="24_menu"]
 [ext_resource type="Script" uid="uid://cipic2tc2pqvl" path="res://scripts/world/day_clock.gd" id="25_clock"]
 
-[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares")]
+[node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares", "clock")]
 script = ExtResource("6_harness")
 vehicle = NodePath("Taxi")
 regions = NodePath("Regions")
@@ -26,6 +26,7 @@ attract = NodePath("Attract")
 showroom_fare_id = "f_001"
 guide = NodePath("FareGuide")
 fares = NodePath("Fares")
+clock = NodePath("DayClock")
 
 [node name="Regions" type="Node3D" parent="." unique_id=254386670 node_paths=PackedStringArray("camera")]
 script = ExtResource("1_regions")

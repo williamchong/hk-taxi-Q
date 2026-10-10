@@ -23,8 +23,20 @@
       "zh": "灣仔 · 銅鑼灣"
     },
     "start": {
-      "en": "START GAME",
+      "en": "PLAY",
       "zh": "開始遊戲"
+    },
+    "shift": {
+      "en": "THE SHIFT",
+      "zh": "特更"
+    },
+    "free": {
+      "en": "FREE MODE",
+      "zh": "兜風"
+    },
+    "best": {
+      "en": "SHIFT BEST HK$",
+      "zh": "特更最高紀錄 HK$"
     },
     "options": {
       "en": "OPTIONS",
@@ -51,8 +63,8 @@
       "zh": "English"
     },
     "time": {
-      "en": "TIME OF DAY",
-      "zh": "時間"
+      "en": "FREE MODE · TIME OF DAY",
+      "zh": "兜風時間"
     },
     "time_cycle": {
       "en": "DAY TO NIGHT",
@@ -77,6 +89,26 @@
     "notices_lead": {
       "en": "The engine bundles the components below under their own terms. The text is the engine's own, in English.",
       "zh": "引擎內含以下組件，各按其本身條款發行。以下為引擎自帶的英文原文。"
+    },
+    "handover": {
+      "en": "SHIFT OVER",
+      "zh": "交更"
+    },
+    "report_fares": {
+      "en": "%d delivered · %d ran off",
+      "zh": "送達 %d 程 · 走數 %d 程"
+    },
+    "new_best": {
+      "en": "NEW BEST",
+      "zh": "新紀錄"
+    },
+    "again": {
+      "en": "AGAIN",
+      "zh": "再開一更"
+    },
+    "menu": {
+      "en": "MENU",
+      "zh": "主選單"
     }
   },
   "credits": [

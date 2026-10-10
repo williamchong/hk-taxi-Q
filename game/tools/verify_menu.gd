@@ -38,6 +38,14 @@ const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
 const KEYS: PackedStringArray = [
 	"subtitle",
 	"start",
+	"shift",
+	"free",
+	"best",
+	"handover",
+	"report_fares",
+	"new_best",
+	"again",
+	"menu",
 	"guide",
 	"options",
 	"credits",
@@ -260,6 +268,21 @@ func _check_settings() -> void:
 			"settings",
 			"the language saved %s reads %s after a restart" % [code, code]
 		)
+
+	# Free mode keeps the daylight until the option says otherwise (`Q162`).
+	_expect(not SettingsScript.day_cycle(), "settings", "free mode's day cycle is off unsaved")
+	# 特更's best: only a higher total is a record, and it survives a restart.
+	_expect(SettingsScript.best_shift_hkd() == 0.0, "records", "no best with nothing saved")
+	_expect(SettingsScript.record_shift(120.5), "records", "a first shift is a record")
+	_expect(not SettingsScript.record_shift(120.5), "records", "a tie is not a record")
+	_expect(not SettingsScript.record_shift(80.0), "records", "a lower total is not a record")
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		SettingsScript.best_shift_hkd() == 120.5 and SettingsScript.language() == "zh",
+		"records",
+		"the best reads HK$120.5 after a restart, beside the options"
+	)
+	_expect(SettingsScript.record_shift(200.0), "records", "a higher total is a record")
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
 

@@ -113,6 +113,10 @@ signal meter_changed(hkd: float, delta_hkd: float)
 ## Emitted after each graph sample, at `sample_hz`: when a readout should
 ## re-read `state`, `fare` and the counters. Never per frame.
 signal sampled
+## Emitted once after `close`, when nobody is aboard: the shift's last fare
+## delivered or walked, or none was running (`Q162`). The run's total is
+## `earned_hkd`.
+signal finished
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
@@ -193,6 +197,9 @@ var _board_accum_s: float = 0.0
 ## or a delivery at a stand that is also a pickup would hail again on the spot.
 var _armed: bool = true
 var _last_reading_hkd: float = 0.0
+## Whether `close` was called: nothing hails, nothing is marked, and the fare
+## aboard is the last.
+var _closed: bool = false
 
 
 func _ready() -> void:
@@ -314,6 +321,54 @@ func setup(
 
 func usable() -> bool:
 	return _usable
+
+
+## The shift is over (`Q162`): no hail from here on, a passenger walking to
+## the car is turned away, and one aboard rides to the end of their fare —
+## delivered or walked, `finished` follows. With nobody aboard it follows now.
+func close() -> void:
+	if _closed or not _usable:
+		return
+	_closed = true
+	if state == State.BOARDING:
+		cancellations += 1
+		state = State.IDLE
+		cancelled.emit(fare)
+	pending = null
+	withheld = PackedInt32Array()
+	if state == State.IDLE:
+		finished.emit()
+
+
+## Whether `close` was called and the loop takes no more fares.
+func closed() -> bool:
+	return _closed
+
+
+## A fresh run on the same pools (`Q162`'s restart): nothing banked, nothing
+## counted, nobody aboard, open. The reach table and the draw stay — they are
+## the city's, not the run's.
+func reset() -> void:
+	state = State.IDLE
+	fare = null
+	earned_hkd = 0.0
+	deliveries = 0
+	bails = 0
+	cancellations = 0
+	hail_refusals = 0
+	pending = null
+	withheld = PackedInt32Array()
+	skill_counts.fill(0)
+	_sample_accum_s = 0.0
+	_board_accum_s = 0.0
+	_armed = true
+	_closed = false
+	_last_reading_hkd = 0.0
+	_drift_tier = -1
+	if _tracker != null:
+		_tracker.reset()
+	if _near != null:
+		_near.reset()
 
 
 ## The stops a fare may start at, and end at.
@@ -438,6 +493,8 @@ func sample(
 
 
 func _sample_idle(position: Vector3, speed_kph: float) -> void:
+	if _closed:
+		return
 	if _armed and speed_kph >= _profile.stop_below_kph:
 		# Nothing to arm and too fast to hail: the pool scan would decide nothing.
 		return
@@ -606,6 +663,8 @@ func _deliver() -> void:
 	state = State.IDLE
 	_armed = false
 	delivered.emit(fare)
+	if _closed:
+		finished.emit()
 
 
 ## The passenger walks without paying: nothing banks, and the skills already
@@ -621,6 +680,8 @@ func _bail(position: Vector3) -> void:
 	bailed.emit(fare)
 	_rescan(position)
 	sampled.emit()
+	if _closed:
+		finished.emit()
 
 
 ## A skill paid, or a penalty docked: onto the receipt, into the tip, and
@@ -694,7 +755,7 @@ func _rescan(position: Vector3) -> void:
 ## radius and every pickup inside it withheld; not idle, neither.
 func _scan(position: Vector3) -> Scan:
 	var scan := Scan.new()
-	if state != State.IDLE:
+	if state != State.IDLE or _closed:
 		return scan
 	var best_m: float = INF
 	for index: int in _pickups.size():

@@ -187,5 +187,11 @@ the loop's own numbers in `tuning/fares.tres`.
   `.claude/rules/parked.md`; what matters here is that `setup` takes the car's plan half-extents
   (`MeshContract.bounds` in the car's frame; `verify_fares` hands in a Crown Comfort's) and
   refuses an inert detector, and `_board` resets it with the tracker.
-- 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
+- 🔴 **交更 closes the loop, it does not end a fare** (`Q162`): `close()` hails no one, scans no
+  one (`_scan` is empty, so no ring or pin), turns away a passenger still BOARDING (a cancel), and
+  lets the one CARRYING ride to delivery or bail; `finished` fires once, when nobody is aboard.
+  `reset()` is a fresh run on the same pools — the reach table and the draw are the city's.
+  `verify_fares`'s `close:` block holds every path; the last fare's `finished` is the mutation.
+  🚫 No time added by a delivery: the shift's clock is the day's (`DayClock`).
+- 🚫 **Not here**: the fare combo (`P3-2b`; the session timer is `Q162`'s shift), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

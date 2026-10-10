@@ -8,7 +8,7 @@
 
 [sub_resource type="Resource" id="Resource_52pmp"]
 script = ExtResource("1_v281m")
-at = 0.55
+at = 0.79
 environment = ExtResource("2_0mejh")
 sun_rotation_deg = Vector3(-8, -65.5, 0)
 sun_colour = Color(1, 0.62, 0.36, 1)
@@ -18,7 +18,7 @@ night_lights = 0.25
 
 [sub_resource type="Resource" id="Resource_yhufu"]
 script = ExtResource("1_v281m")
-at = 0.72
+at = 0.86
 environment = ExtResource("3_uh8me")
 sun_rotation_deg = Vector3(-1, -62, 0)
 sun_colour = Color(0.9, 0.5, 0.45, 1)
@@ -27,7 +27,7 @@ night_lights = 0.8
 
 [sub_resource type="Resource" id="Resource_shxbh"]
 script = ExtResource("1_v281m")
-at = 0.9
+at = 0.93
 environment = ExtResource("4_wlfsk")
 sun_rotation_deg = Vector3(-38, -40, 0)
 sun_colour = Color(0.62, 0.72, 1, 1)
@@ -37,7 +37,7 @@ night_lights = 1.0
 
 [resource]
 script = ExtResource("5_8uk6s")
-length_s = 240.0
-day_until = 0.25
+length_s = 300.0
+day_until = 0.71
 update_hz = 10.0
 keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh")])

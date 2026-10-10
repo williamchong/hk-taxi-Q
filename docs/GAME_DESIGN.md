@@ -55,10 +55,14 @@ demonstrably dead, and record it as a decision.
     ← ← ← ← ← back to idle ← ← ← ← ← ← ← ← ← ←
 ```
 
-The session ends when the global session timer expires; delivering fares adds time to it.
+A shift (特更, `Q162`) ends at 交更: the HUD's clock runs 07:00 → 21:00 over five minutes of
+driving, the sky with it, and the total fare is the score. The day does not stretch — a delivery
+adds money, never time. At 21:00 no new customer hails and the passenger aboard is the last fare.
 
-- **Session length:** 3–5 minutes typical; skilled play extends it.
-- **Restart:** instant, one tap. No loading screen between runs.
+- **Session length:** 5 minutes of driving (`day_to_night.tres`'s `length_s`); the clock stops
+  under the menu.
+- **Restart:** instant, one tap — AGAIN on the report restarts the level in place. No loading
+  screen between runs.
 
 ---
 
@@ -289,9 +293,10 @@ region continues is never closed.
 
 | Mode | Status | Notes |
 |---|---|---|
-| **Arcade** | Vertical slice | The main mode. Chain fares against the clock |
-| **Day to night** | Built (`Q160`) | Not a mode beside the others but the hour of both: the drive opens at noon and reaches night in four minutes of driving, then holds. On by default; OPTIONS has ALWAYS DAY |
-| **Free roam** | Vertical slice | No timer, fare or arrow — the state `Q8` was judged in (from a dev scene), made reachable by a player. Where `P3-9` runs |
+| **特更 / THE SHIFT** | Built (`Q162`, `P3-74`) | The main mode, under PLAY. Morning to night — 07:00 to 21:00 on the HUD's clock over five minutes of driving, the day always running — then 交更: the total fare against the best, which HOME shows. Replaces Arcade's session timer that deliveries extended |
+| **兜風 / FREE MODE** | Built (`Q162`, `P3-74`) | Under PLAY. Fares on, no end, daylight held unless OPTIONS picks DAY TO NIGHT (off by default since `Q162`) |
+| **Day to night** | Built (`Q160`) | Not a mode but the hour: the shift always runs it, free mode on the option. Since `Q162` the cycle is the shift's 300 s, dusk at 18:00 and night at 20:00 |
+| Free roam (dev) | Vertical slice | No fare or arrow: `--fares=off`, the state `Q8` was judged in. Where `P3-9` runs |
 | Time trial | Later | Fixed A→B, leaderboard |
 | Daily challenge | Later | Seeded fare sequence |
 

@@ -14,6 +14,9 @@
 ## - The authored `.tres` is never the one written to.
 ## - The clock reaches the last keyframe in `length_s` game seconds, holds
 ##   there, and stays at 0 with the option off.
+## - 特更 (`Q162`): in a shift the day runs with the option off, the clock reads
+##   the opening hour to the closing one over the same `length_s`, `closed`
+##   fires once at the end, and `restart` puts the clock and the rig back.
 ##
 ## No built region needed: the rig scene and its tables are committed tuning.
 extends "res://tools/verify_tool.gd"
@@ -101,6 +104,7 @@ func _run() -> void:
 	)
 
 	await _check_the_clock(rig)
+	await _check_the_shift(rig)
 	rig.queue_free()
 	_finish("verify_day_cycle")
 
@@ -132,6 +136,103 @@ func _check_the_clock(rig: LightingRig) -> void:
 		else:
 			_expect(rig.time_of_day == 0.0, "clock", "with the option off the day never moves")
 		clock.free()
+	SettingsScript.use_file(SettingsScript.PATH)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
+
+
+## 特更 over the rig: the option says ALWAYS DAY and the shift runs the day
+## anyway, reads its hours off `ShiftProfile`, closes once, and restarts.
+func _check_the_shift(rig: LightingRig) -> void:
+	var shift := load(ShiftProfile.PATH) as ShiftProfile
+	_expect(shift != null and shift.usable(), "shift", "%s is whole" % ShiftProfile.PATH)
+	if shift == null or not shift.usable():
+		return
+	# One clock (`Q160`): the parked roster reads the rig's dial as the hours
+	# the player reads on the dash.
+	var parked := load(ParkedProfile.PATH) as ParkedProfile
+	_expect(
+		(
+			parked != null
+			and parked.clock_start_h == shift.opens_h
+			and parked.clock_end_h == shift.closes_h
+		),
+		"shift",
+		"the parked roster's clock is the shift's, %s to %s" % [shift.opens_h, shift.closes_h]
+	)
+	SettingsScript.use_file(SCRATCH)
+	SettingsScript.set_day_cycle(false)
+	rig.time_of_day = 0.0
+	var clock := DayClock.new()
+	clock.rig = rig
+	clock.mode = DayClock.Mode.SHIFT
+	var closings: Array[int] = [0]
+	clock.closed.connect(func() -> void: closings[0] += 1)
+	root.add_child(clock)
+	await process_frame
+	clock.restart()
+	_expect(
+		clock.hour_now() == shift.opens_h and clock.closes_h() == shift.closes_h,
+		"shift",
+		"parked, the clock reads %s, closing at %s" % [shift.opens_h, shift.closes_h]
+	)
+
+	var to_close: int = ceili(rig.cycle.length_s / TICK_S)
+	for tick: int in floori(to_close / 2.0):
+		clock._physics_process(TICK_S)
+	var half: float = lerpf(shift.opens_h, shift.closes_h, 0.5)
+	_expect(
+		(
+			closings[0] == 0
+			and absf(clock.hour_now() - half) < 0.01
+			and clock.on_shift()
+			and rig.time_of_day > 0.0
+		),
+		"shift",
+		"halfway it is %.2f h and the day runs with the option off" % clock.hour_now()
+	)
+	for tick: int in to_close:
+		if clock.is_physics_processing():
+			clock._physics_process(TICK_S)
+	_expect(
+		(
+			closings[0] == 1
+			and clock.is_closed()
+			and is_equal_approx(clock.hour_now(), shift.closes_h)
+			and is_equal_approx(rig.time_of_day, 1.0)
+			and not clock.is_physics_processing()
+		),
+		"shift",
+		(
+			"%.0f game seconds reach 交更 at night, `closed` fires once, and the clock stops"
+			% rig.cycle.length_s
+		)
+	)
+
+	clock.restart()
+	_expect(
+		(
+			clock.hour_now() == shift.opens_h
+			and not clock.is_closed()
+			and rig.time_of_day == 0.0
+			and clock.is_physics_processing()
+		),
+		"shift",
+		"restart puts the clock and the rig back to the opening hour"
+	)
+	_expect(
+		(
+			DayClock.clock_text(7.0) == "07:00"
+			and DayClock.clock_text(14.999) == "14:59"
+			and DayClock.clock_text(20.5) == "20:30"
+			and DayClock.clock_text(24.0) == "00:00"
+		),
+		"shift",
+		"the face reads the minute begun, on a 24-hour clock"
+	)
+	clock.mode = DayClock.Mode.FREE
+	clock.restart()
+	_expect(is_nan(clock.hour_now()), "shift", "free mode has no hour on the clock")
+	clock.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 

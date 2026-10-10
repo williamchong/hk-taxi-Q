@@ -144,7 +144,14 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   wording change. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
   bundle ships no UI textures and a screenshot of the city is the generated data committed in
   another form (hard rule 7); a step names a `GuideCard.KINDS` picture and `verify_menu` refuses
-  one that does not exist. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for).
+  one that does not exist. 🔴 **Two modes behind one PLAY** (`Q162`, the user's call): HOME is PLAY, HOW TO PLAY,
+  OPTIONS, CREDITS with the shift's best over them; PLAY holds 特更 and 兜風; `started(mode)` hands
+  `Main` the pick. A shift's end opens a FRESH menu on REPORT (`StartMenu.report`), whose AGAIN is
+  the same `started` — `Main` renews the HUD and `DriveHarness.play` restarts in place. A frame of
+  either page is `--menu-page=play|report`. ⚠️ TIME OF DAY is free mode's alone; a shift always
+  runs the day. 🔴 **The shift's clock is the hour, never a countdown** (the user's call): the
+  `clock` rect top-left, "14:32" over "交更 21:00", housing ink not the meter's red; hidden outside a
+  shift, read off `DayClock` at 4 Hz. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for).
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

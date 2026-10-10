@@ -740,8 +740,15 @@ func _parse_args() -> bool:
 				# wrong sheet and report success. ⚠️ The list is `StartMenu.Page`
 				# lower-cased, kept by hand: this tool cannot preload a
 				# `class_name` script (`verify_menu.gd` says why).
-				if not ["home", "guide", "options", "credits", "notices"].has(value):
-					_fail("--menu-page=%s is not home, guide, options, credits or notices" % value)
+				if not ["home", "play", "guide", "options", "credits", "notices", "report"].has(
+					value
+				):
+					_fail(
+						(
+							"--menu-page=%s is not home, play, guide, options, credits, notices or report"
+							% value
+						)
+					)
 					return false
 			"--touch":
 				# `input_router.gd` reads this one itself, so this is validation
@@ -818,6 +825,19 @@ func _parse_args() -> bool:
 				# leave the saved option deciding whether the sun moves.
 				if not ["off", "on"].has(value):
 					_fail("--day-cycle=%s is not off or on" % value)
+					return false
+			"--mode":
+				# `day_clock.gd` reads this one itself (`Q162`) and plays free for
+				# a word it does not know, so a typo would drive a run that never
+				# ends and report success.
+				if not ["free", "shift"].has(value):
+					_fail("--mode=%s is not free or shift" % value)
+					return false
+			"--shift-s":
+				# `day_clock.gd` reads this one itself (`Q162`) and runs the full
+				# shift for a value it cannot read.
+				if not value.is_valid_float() or value.to_float() <= 0.0:
+					_fail("--shift-s=%s is not a positive number of seconds" % value)
 					return false
 			_:
 				_fail("unknown argument: %s" % arg)

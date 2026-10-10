@@ -1,7 +1,13 @@
 class_name StartMenu
 extends CanvasLayer
-## The start menu (`P6-1`, the user's ask): start, options, credits, drawn over
-## the taxi standing on the start line with the camera circling it.
+## The start menu (`P6-1`, the user's ask): the two modes, options, credits,
+## drawn over the taxi standing on the start line with the camera circling it.
+##
+## **Two ways to play** (`Q162`): 特更 / THE SHIFT, morning to night with the
+## total weighed against the best at 交更, and 兜風 / FREE MODE, the drive with
+## no end — one PLAY on HOME, the two behind it on PLAY (the user's call), and
+## the shift's best on HOME. `Main` opens a fresh one on the REPORT page when a shift ends; its
+## AGAIN is a `started` like the first.
 ##
 ## Under `GUI` beside the HUD, and it never reaches into the level: `Main` parks
 ## the level while this is up and resumes it on `started`, the same way it hands
@@ -13,8 +19,9 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
-## `--menu-page=<home|guide|options|credits|notices>` opens on that page, so a
-## frame of any sheet is one `drive.sh` run and never a click.
+## `--menu-page=<home|play|guide|options|credits|notices|report>` opens on that
+## page, so a frame of any sheet is one `drive.sh` run and never a click; the
+## report so opened is an empty shift's.
 ##
 ## ⚠️ **The first Controls in this project that take a click.** `InputRouter`
 ## never marks an event handled, so the buttons see the pointer and the touch;
@@ -22,8 +29,8 @@ extends CanvasLayer
 ## move nothing. `ui_cancel` is read here — a UI action, not a gameplay one —
 ## for the way back from a page.
 
-## The player pressed start. `Main` resumes the level and frees this.
-signal started
+## The player picked a mode. `Main` starts the level in it and frees this.
+signal started(mode: DayClock.Mode)
 ## The player picked a language; `Locale.language()` already answers it.
 signal language_changed(code: String)
 
@@ -36,7 +43,22 @@ const LAYER: int = 20
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
-enum Page { HOME, OPTIONS, CREDITS, GUIDE, NOTICES }
+enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT }
+
+
+## What a shift banked, for the REPORT page (`Q162`). Filled by `Main`.
+class Report:
+	extends RefCounted
+	var total_hkd: float = 0.0
+	var deliveries: int = 0
+	var bails: int = 0
+	## The best after this shift, this one included.
+	var best_hkd: float = 0.0
+	var new_best: bool = false
+
+
+## The shift to report, set before this enters the tree; null opens on HOME.
+var report: Report = null
 
 var _profile: MenuProfile = null
 var _style: HudStyle = null
@@ -74,6 +96,11 @@ func _ready() -> void:
 	var wanted_page: String = Cmdline.value(PAGE_ARG).to_upper()
 	if Page.has(wanted_page):
 		_page = Page[wanted_page] as Page
+	if report != null:
+		_page = Page.REPORT
+	elif _page == Page.REPORT:
+		report = Report.new()
+		report.best_hkd = Settings.best_shift_hkd()
 	_build()
 
 
@@ -99,10 +126,12 @@ func _build() -> void:
 	_pages.clear()
 	_first.clear()
 	_pages[Page.HOME] = _home()
+	_pages[Page.PLAY] = _play()
 	_pages[Page.OPTIONS] = _options()
 	_pages[Page.CREDITS] = _credits()
 	_pages[Page.GUIDE] = _guide()
 	_pages[Page.NOTICES] = _notices()
+	_pages[Page.REPORT] = _report()
 	_show(_page)
 
 
@@ -126,7 +155,7 @@ func _show(page: Page) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _page != Page.HOME and event.is_action_pressed(&"ui_cancel"):
+	if _page not in [Page.HOME, Page.REPORT] and event.is_action_pressed(&"ui_cancel"):
 		# The notices hang off the credits, so the way back is one step.
 		_show(Page.CREDITS if _page == Page.NOTICES else Page.HOME)
 		get_viewport().set_input_as_handled()
@@ -147,11 +176,31 @@ func _home() -> Control:
 	_size(subtitle, _profile.subtitle_size_zh, _profile.subtitle_size)
 	subtitle.add_theme_color_override(&"font_color", _style.chip_muted)
 	column.add_child(subtitle)
+	# The shift's high score (`Q162`, the user's ask), always shown — a zero
+	# before the first shift says there is one to set.
+	var record: Label = _line(
+		"Best", _text.say("best", _language) + FareFace.money(Settings.best_shift_hkd())
+	)
+	_size(record, _profile.body_size_zh, _profile.body_size)
+	record.add_theme_color_override(&"font_color", _style.dial_needle)
+	column.add_child(record)
 	column.add_child(_gap("Gap", _profile.button_gap_px * 2))
-	_first[Page.HOME] = _button(column, "Start", "start", _on_start)
+	_first[Page.HOME] = _button(column, "Play", "start", _show.bind(Page.PLAY))
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
 	_button(column, "Options", "options", _show.bind(Page.OPTIONS))
 	_button(column, "Credits", "credits", _show.bind(Page.CREDITS))
+	return column
+
+
+## The two ways to play (`Q162`), behind HOME's one PLAY: the shift first,
+## then free mode, and the way back.
+func _play() -> Control:
+	var column: VBoxContainer = _column("Play")
+	_heading(column, "Heading", _text.say("start", _language))
+	_first[Page.PLAY] = _button(column, "Shift", "shift", _on_start.bind(DayClock.Mode.SHIFT))
+	_button(column, "Free", "free", _on_start.bind(DayClock.Mode.FREE))
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_button(column, "Back", "back", _show.bind(Page.HOME))
 	return column
 
 
@@ -174,7 +223,8 @@ func _options() -> Control:
 	_mark_current(english, _language == Locale.ENGLISH)
 	_first[Page.OPTIONS] = english if _language == Locale.CHINESE else chinese
 
-	# The hour (`Q160`): whether the day runs to night as game time passes.
+	# The hour (`Q160`): whether the day runs to night as game time passes —
+	# in free mode; a shift always runs it (`Q162`).
 	column.add_child(_gap("GapTime", _profile.button_gap_px))
 	var time_heading: Label = _line("TimeHeading", _text.say("time", _language))
 	_size(time_heading, _profile.heading_size_zh, _profile.heading_size)
@@ -328,16 +378,53 @@ func _guide() -> Control:
 	return panel
 
 
+## 交更 (`Q162`): what the shift banked, over the best, and the way to the
+## next — a column off the corner like HOME's, so the car stays the picture.
+func _report() -> Control:
+	var column: VBoxContainer = _column("Report")
+	var shown: Report = report if report != null else Report.new()
+	var heading: Label = _line("Heading", _text.say("handover", _language))
+	_size(heading, _profile.heading_size_zh, _profile.heading_size)
+	heading.add_theme_color_override(&"font_color", _style.dial_needle)
+	column.add_child(heading)
+	var total: Label = _line("Total", "HK$" + FareFace.money(shown.total_hkd))
+	total.add_theme_font_size_override(&"font_size", _profile.title_size)
+	column.add_child(total)
+	var fares: Label = _line(
+		"Fares", _text.say("report_fares", _language) % [shown.deliveries, shown.bails]
+	)
+	_size(fares, _profile.body_size_zh, _profile.body_size)
+	fares.add_theme_color_override(&"font_color", _style.chip_muted)
+	column.add_child(fares)
+	var best: Label = _line(
+		"Best",
+		(
+			_text.say("new_best", _language)
+			if shown.new_best
+			else _text.say("best", _language) + FareFace.money(shown.best_hkd)
+		)
+	)
+	_size(best, _profile.body_size_zh, _profile.body_size)
+	best.add_theme_color_override(
+		&"font_color", _style.accent if shown.new_best else _style.dial_needle
+	)
+	column.add_child(best)
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_first[Page.REPORT] = _button(column, "Again", "again", _on_start.bind(DayClock.Mode.SHIFT))
+	_button(column, "Menu", "menu", _show.bind(Page.HOME))
+	return column
+
+
 # -------------------------------------------------------------- actions ----
 
 
-func _on_start() -> void:
+func _on_start(mode: DayClock.Mode) -> void:
 	# Released first: a `ui_accept` still held would land on whatever took the
 	# focus next, and Space is also the drift.
 	get_viewport().gui_release_focus()
 	set_process_unhandled_input(false)
 	visible = false
-	started.emit()
+	started.emit(mode)
 	queue_free()
 
 

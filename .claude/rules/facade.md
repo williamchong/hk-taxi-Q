@@ -57,7 +57,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - **The day cycle — `lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd`,
   `day_to_night.tres` or a keyframe's environment (`Q160`): `tools/check.sh` (which runs
   `verify_day_cycle`), the `street` camera by day shot twice a side against the commit before, and
-  frames at `--time-of-day=0.55`, `0.72` and `1`.** 🔴 **The day writes nothing**: a rig at
+  frames at `--time-of-day=0.79`, `0.86` and `1` (the keyframes since `Q162`).** 🔴 **The day writes nothing**: a rig at
   `time_of_day` 0 holds the authored `Environment` object and the authored sun, and that — not a
   re-applied copy of the day — is what keeps every scripted daylight frame. 🔴 **One rig blending,
   never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the

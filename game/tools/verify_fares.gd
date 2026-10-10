@@ -73,6 +73,8 @@ var _skilled: int = 0
 ## How many times `practised` fired, and the last award it carried.
 var _practised: int = 0
 var _last_practice: Fare.Award = null
+## How many times a system under `_check_close` said `finished`.
+var _closes: int = 0
 ## Every `drift_tier_changed` the system under test emitted, in order.
 var _tiers: Array[int] = []
 
@@ -110,6 +112,7 @@ func _init() -> void:
 	_check_penalties()
 	_check_sparks()
 	_check_near_miss()
+	_check_close()
 
 	_finish("verify_fares")
 
@@ -1445,6 +1448,105 @@ func _pass(
 			paid.append_array(detector.tick(at, velocity, [obstacle], TICK_S, touched, false))
 			at.origin += velocity * TICK_S
 	return paid
+
+
+## 特更's end (`Q162`): `close` takes no more fares, turns away a passenger
+## walking to the car, lets the one aboard ride to the end of their fare, and
+## says `finished` exactly once when nobody is aboard; `reset` is a fresh run.
+func _check_close() -> void:
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "close", "SKIP: no pickup on this region alone to close a shift on")
+		return
+
+	# Nobody aboard: the shift is over at once, and stays shut.
+	var idle: FareSystem = _closing_system()
+	idle.close()
+	_expect(
+		_closes == 1 and idle.closed(), "close", "closed with nobody aboard, it is over at once"
+	)
+	_tick(idle, pickup.point, CRAWL, 8)
+	_expect(
+		idle.state == FareSystem.State.IDLE and idle.fare == null and idle.pending == null,
+		"close",
+		"closed, stopping at a stand hails nobody and no customer is pointed at"
+	)
+	idle.close()
+	_expect(_closes == 1, "close", "closing twice finishes once")
+	idle.free()
+
+	# Walking to the car: turned away.
+	var boarding: FareSystem = _closing_system()
+	_tick(boarding, pickup.point, CRAWL, 1)
+	boarding.close()
+	_expect(
+		_closes == 1 and boarding.state == FareSystem.State.IDLE and boarding.cancellations == 1,
+		"close",
+		"closed while a customer boards, they are turned away and it is over"
+	)
+	boarding.free()
+
+	# Aboard: the last fare rides to the door, banks, then it is over.
+	var last: FareSystem = _closing_system()
+	_tick(last, pickup.point, CRAWL, 5)
+	_expect(last.state == FareSystem.State.CARRYING, "close", "the last fare is aboard")
+	last.close()
+	_expect(
+		_closes == 0 and last.state == FareSystem.State.CARRYING,
+		"close",
+		"closed with a passenger aboard, the fare rides on"
+	)
+	_tick(last, last.fare.destination.point, CRAWL, 1)
+	_expect(
+		_closes == 1 and last.deliveries == 1 and last.earned_hkd > 0.0,
+		"close",
+		"the last fare delivered banks HK$%.1f, then it is over" % last.earned_hkd
+	)
+
+	# A fresh run on the same system: nothing banked, open, and hailing.
+	last.reset()
+	_expect(
+		(
+			last.earned_hkd == 0.0
+			and last.deliveries == 0
+			and not last.closed()
+			and last.state == FareSystem.State.IDLE
+			and last.fare == null
+		),
+		"close",
+		"reset empties the run and opens it"
+	)
+	_tick(last, pickup.point, CRAWL, 1)
+	_expect(last.state == FareSystem.State.BOARDING, "close", "and the next run hails again")
+	last.free()
+
+	# Aboard, and walked: nothing banks, then it is over.
+	var walked: FareSystem = _closing_system()
+	_tick(walked, pickup.point, CRAWL, 5)
+	walked.close()
+	_tick(walked, FAR_AWAY, CRAWL, ceili(walked.fare.remaining_s / TICK_S) + 1)
+	_expect(
+		_closes == 1 and walked.bails == 1 and walked.earned_hkd == 0.0,
+		"close",
+		"the last fare walked banks nothing, then it is over"
+	)
+	walked.free()
+
+
+## A fresh system on the shipped tables whose `finished` counts into
+## `_closes`, zeroed.
+func _closing_system() -> FareSystem:
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_closes = 0
+	system.finished.connect(_count_close)
+	return system
+
+
+func _count_close() -> void:
+	_closes += 1
 
 
 func _count_tier(tier: int) -> void:

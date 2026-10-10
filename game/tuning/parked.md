@@ -11,18 +11,22 @@ table says only which hour the rig's `time_of_day` means and how the layer rebui
 Every key is required: `parked_profile.gd` declares no defaults, and `ParkedLayer` refuses a zero
 cell or an empty day rather than stand on a literal.
 
-## `clock_start_h = 12.0`
+## `clock_start_h = 7.0`
 
-`time_of_day` 0 is noon. The cycle (`day_to_night.tres`) holds the authored day until 0.25 and
-reaches dusk at 0.55, twilight at 0.72 and night at 0.90: on this clock that is 15:00, 18:36,
-20:38 and 22:48, which is a Hong Kong October evening within half an hour. First guess ahead
-of the user's drive; the day's start is the one number here that is a look decision.
+`time_of_day` 0 is 07:00, 特更's opening hour (`shift.tres`, `Q162`, 2026-10-11): the roster reads
+the same clock the player reads on the HUD, so a van that leaves at 19:00 leaves when the dash
+says 19:00. 🔴 **This pair must equal `shift.tres`'s `opens_h` / `closes_h`** —
+`verify_day_cycle` holds it. The cycle holds the authored day until 0.71 and reaches dusk at 0.79,
+twilight at 0.86 and night at 0.93: 17:00, 18:00, 19:00 and 20:00, a Hong Kong October evening.
+Was 12.0 against the 240 s cycle that opened at noon.
 
-## `clock_end_h = 24.0`
+## `clock_end_h = 21.0`
 
-`time_of_day` 1 is midnight, where the cycle's night holds. The metered bays' 8am-to-midnight
-and the vans' 8-19 windows both close inside this day; the single-yellow fill (19-7) opens at
-dusk, which is what makes the night street carry more cars than the day.
+`time_of_day` 1 is 21:00, 交更, where the cycle's night holds — in free mode too, whose day runs
+the same table when its option is DAY TO NIGHT. The vans' 8-19 window closes inside the day and
+the single-yellow fill (19-7) opens at twilight, which is what makes the night street carry more
+cars than the day. The metered bays' 8am-to-midnight window opens an hour in, so the first game hour
+of a shift (about 21 s) stands no metered car — the window as published.
 
 ## `cell_m = 300.0`
 
@@ -42,7 +46,7 @@ The engine's hysteresis about `range_m`, `prop_cells.tres`'s value.
 ## `poll_s = 1.0`
 
 How often the layer asks the rig's clock and walks the cells. A placement's windows are whole
-hours and an hour is 20 s of the 240 s day, so once a second is twenty chances to catch it.
+hours and an hour is about 21 s of the 300 s day, so once a second is twenty chances to catch it.
 
 ## `reroll_s = 90.0`
 

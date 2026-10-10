@@ -53,6 +53,10 @@ const STREET_HZ: float = 5.0
 ## strobes unreadably when it is redrawn at 60 Hz.
 const SPEED_HZ: float = 10.0
 
+## How often the shift's clock is read: a game minute is a third of a second
+## at the shipped length, so 4 Hz never skips one a player could notice.
+const CLOCK_HZ: float = 4.0
+
 ## The language the callout reads in (`Locale`); the plate stays bilingual.
 var _language: String = Locale.DEFAULT
 
@@ -108,6 +112,15 @@ var fares: FareSystem = null:
 		_unfollow_fares()
 		fares = value
 		_follow_fares()
+
+## The game clock, handed in by `Main` like the car (`Q162`). Read only in a
+## shift; null, or free mode, hides the clock.
+var clock: DayClock = null
+
+var _clock_panel: ChamferPanel = null
+var _clock_value: Label = null
+var _clock_caption: Label = null
+var _clock_accum_s: float = 0.0
 
 ## What the fare panels say (`fare_face.gd`); rebuilt when a system arrives.
 var _face: FareFace = null
@@ -429,6 +442,24 @@ func _build() -> void:
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
 
+	# ---- 特更's clock: the hour, and when the day ends ----
+	#
+	# The time of day and the handover beside it (`Q162`, the user's ask: when
+	# the day ends, never a countdown). The housing's ink, not the meter's red:
+	# red is the fare's (`Q139`). Hidden outside a shift.
+	_clock_panel = _housing("Clock", root, _layout.clock)
+	var clock_lines: VBoxContainer = _lines(_clock_panel, 0)
+	_clock_value = _label("Hour", _style.speed_size, _style.chip_ink)
+	clock_lines.add_child(_clock_value)
+	_clock_caption = _label(
+		"Handover",
+		_sized(_style.callout_caption_size_zh, _style.meter_label_size),
+		_style.chip_muted
+	)
+	if _language == Locale.CHINESE and _font_zh != null:
+		_clock_caption.add_theme_font_override(&"font", _font_zh)
+	clock_lines.add_child(_clock_caption)
+
 	# ---- the reserved slots ----
 	#
 	# ⚠️ Built as named, empty Controls rather than left out, and **outlined under
@@ -604,6 +635,7 @@ func _process(delta: float) -> void:
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
 	_update_tick(delta)
+	_update_clock(delta)
 	# The map and the needle, every frame and off one look at the car: both are
 	# motion, and a needle stepped at the numerals' 10 Hz ticks like a clock.
 	# Each is a transform, so nothing is redrawn (`minimap.gd`, `speed_dial.gd`).
@@ -614,6 +646,32 @@ func _process(delta: float) -> void:
 	if _minimap != null:
 		var placed: Transform3D = car.global_transform
 		_minimap.follow(placed.origin, -placed.basis.z)
+
+
+## 特更's clock onto its housing, at `CLOCK_HZ`: the hour while the shift
+## runs with the handover's hour under it, and once it has closed the closing
+## hour over the last fare. Hidden outside a shift.
+func _update_clock(delta: float) -> void:
+	_clock_accum_s += delta
+	if _clock_accum_s < 1.0 / CLOCK_HZ:
+		return
+	_clock_accum_s = 0.0
+	var hour: float = clock.hour_now() if is_instance_valid(clock) else NAN
+	var shown: bool = not is_nan(hour)
+	if _clock_panel.visible != shown:
+		_clock_panel.visible = shown
+	if not shown:
+		return
+	var value: String = DayClock.clock_text(hour)
+	var caption: String = (
+		Locale.pick("最後一程", "LAST FARE", _language)
+		if clock.is_closed()
+		else Locale.pick("交更 ", "SHIFT ENDS ", _language) + DayClock.clock_text(clock.closes_h())
+	)
+	if _clock_value.text != value:
+		_clock_value.text = value
+	if _clock_caption.text != caption:
+		_clock_caption.text = caption
 
 
 ## Drive the chip's bar from how hard the car is gaining or losing speed.

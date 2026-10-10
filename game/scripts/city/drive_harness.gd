@@ -25,6 +25,10 @@ class_name DriveHarness
 ## car.
 extends Node3D
 
+## The shift is over (`Q162`): the clock reached 交更 and nobody is aboard —
+## the last fare delivered or walked. The total is `fares.earned_hkd`.
+signal shift_over
+
 const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
@@ -112,6 +116,10 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## in the scene; its own next sample shows it again on resume.
 @export var guide: Node3D
 
+## The game clock (`Q160`, `Q162`): the hour, and in a shift its end. Assign in
+## the scene; a level without one has no shift to play.
+@export var clock: DayClock
+
 var _spawn: Transform3D
 var _floor_m: float = 0.0
 var _falls: int = 0
@@ -136,6 +144,41 @@ func _ready() -> void:
 	_load_sea()
 	_snap_camera()
 	_hold_ground()
+	if clock != null:
+		clock.closed.connect(_on_clock_closed)
+		# A run with no menu plays what the flag says; a menu's pick comes
+		# through `play`.
+		clock.mode = DayClock.mode_from_flag()
+		clock.restart()
+	if is_instance_valid(fares) and fares.usable():
+		fares.finished.connect(shift_over.emit)
+
+
+## Start a run in `mode` from its first second (`Q162`), from the menu: the
+## clock back to the opening hour, the fare loop emptied, and the car out of
+## the showroom onto the start line. The first run and every one after it go
+## through here, so AGAIN is the same start as START.
+func play(mode: DayClock.Mode) -> void:
+	if clock != null:
+		clock.mode = mode
+		clock.restart()
+	if is_instance_valid(fares) and fares.usable():
+		fares.reset()
+	if showroom_fare_id.is_empty():
+		# `resume` moves the car only out of a showroom; a run after a shift
+		# starts on the line all the same.
+		vehicle.place_at(_spawn)
+		_snap_camera()
+	resume()
+
+
+## 交更: the fare loop takes no more fares and says when the last one is out.
+## Under `--fares=off` there is no fare to wait for.
+func _on_clock_closed() -> void:
+	if is_instance_valid(fares) and fares.usable():
+		fares.close()
+	else:
+		shift_over.emit()
 
 
 ## Hold the level for the start menu (`P6-1`, `Main`'s call): the pedals read

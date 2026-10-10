@@ -8,7 +8,7 @@ description: Build, launch, drive and screenshot the hk-taxi-Q Godot game. Use w
 A Godot 4.7 arcade taxi game. The city is **build output**, not source — a fresh clone renders
 nothing until the Python ETL has run. The game boots `main.tscn` — `World` holding
 `city_drive.tscn`, `GUI` holding the HUD and the start menu (`P6-1`) — with the taxi on Expo Drive
-under HKCEC. The menu parks the car and circles it with the camera until START is pressed;
+under HKCEC. The menu parks the car and circles it with the camera until PLAY → a mode is pressed;
 `drive.sh` appends `--menu=off` so a scripted run drives at once, and `--menu=on` shoots the menu.
 
 Drive it with **`.claude/skills/run-hk-taxi-q/drive.sh`**, which launches a scene, feeds it
@@ -104,10 +104,12 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--minimap=off\|on` | the minimap alone (`P3-44`); `--hud=off` takes it with everything else. `P3-9` runs with it off |
 | `--fares=off\|on` | the fare loop (`P3-1a`). On by default — the car boots at a stand, so a stationary start hails within a second; `P3-9`'s free roam runs with it off |
 | `--lang=en\|zh` | the language the callout, the street plate and the menu read in (`Locale`, `Q142`). **`drive.sh` appends `zh`** unless a run names it: absent, the game reads the option the menu saved (`user://settings.cfg`), then the OS language, then `zh`, and a frame must not depend on this machine's pick or locale |
-| `--day-cycle=off\|on` | whether the day runs to night as the car drives (`Q160`). **`drive.sh` appends `off`** unless a run names it, so a scripted frame is the daylight one; absent, the game reads the option the menu saved, which defaults on |
-| `--time-of-day=<0..1>` | hold the lighting rig at one point of `tuning/day_to_night.tres` for the whole run, in any scene that instances the rig: 0 noon, 0.55 dusk, 0.72 twilight, 0.9 and up night. ⚠️ A still preview camera at a pinned hour often stalls the capture — shoot at `--seconds=2 --shots=1.0` |
+| `--day-cycle=off\|on` | whether the day runs to night as the car drives (`Q160`). **`drive.sh` appends `off`** unless a run names it, so a scripted frame is the daylight one; absent, the game reads the option the menu saved, which defaults off since `Q162` (free mode keeps the daylight; a shift runs the day whatever the option says) |
+| `--mode=free\|shift` | the mode a run with no menu plays (`Q162`). Absent, free: the drive as it always was, no end. `shift` is 特更, 07:00 → 21:00 on the HUD's clock, and at 交更 the car parks and the log says `shift over: HK$…`; under `--day-cycle=off` (appended) the sky holds but the shift still runs and ends |
+| `--shift-s=<seconds>` | run the whole shift in that many game seconds, for a frame of the clock or the handover without five minutes of driving (`Q162`). Needs `--mode=shift` |
+| `--time-of-day=<0..1>` | hold the lighting rig at one point of `tuning/day_to_night.tres` for the whole run, in any scene that instances the rig: 0 day, 0.79 dusk, 0.86 twilight, 0.93 and up night (`Q162`'s 18:00, 19:00 and 20:00). ⚠️ A still preview camera at a pinned hour often stalls the capture — shoot at `--seconds=2 --shots=1.0` |
 | `--menu=off\|on` | the start menu (`P6-1`). **`drive.sh` appends `off`** unless a run names it, because the menu parks the car; `on` with `--seconds=3 --shots=2` is a menu frame — the orbit keeps the frame changing, so the capture never stalls |
-| `--menu-page=home\|guide\|options\|credits\|notices` | the sheet the menu opens on, so a frame of any page is one run and never a click; needs `--menu=on`. Default `home` |
+| `--menu-page=home\|play\|guide\|options\|credits\|notices\|report` | the sheet the menu opens on (`report` is an empty shift's), so a frame of any page is one run and never a click; needs `--menu=on`. Default `home` |
 | `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 

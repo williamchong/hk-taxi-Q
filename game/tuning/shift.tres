@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="ShiftProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/world/shift_profile.gd" id="1_shift"]
+
+[resource]
+script = ExtResource("1_shift")
+opens_h = 7.0
+closes_h = 21.0

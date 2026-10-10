@@ -52,6 +52,13 @@ them — the 咪錶 top-right, the callout top-centre as they stood, and the tip
 clock moved to the middle of the frame (`Q142`) — and they stay graded against
 the thumbs as filled slots.
 
+🔴 `clock` IS 特更's HOUR, NEVER A COUNTDOWN (`Q162`, the user's call,
+2026-10-11): the time of day over the hour of 交更 ("14:32" over "交更 21:00"),
+so the player reads when the day ends the way a driver reads a dashboard
+clock. Top-left, 300 × 120 over `combo`'s 132: the corner the arcade-taxi
+reference gives its game clock, and the corner the dev overlay wins when it is
+on. Shown only in a shift; in the housing's ink, never the meter's red (`Q139`).
+
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
 missing here is a zero-size rect rather than something sensible, and
 `verify_hud.gd` refuses one.

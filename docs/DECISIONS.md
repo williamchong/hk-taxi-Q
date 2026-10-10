@@ -202,6 +202,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
 | `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | ✅ Shipped 2026-10-03, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn`. Built and graded as a spike (`P3-52`). Owed, the user's call: `speed_min_kph` and the wall bars on the new pace. |
 | `Q160` | The day runs to night as game time: one blending rig, lit lanterns with pools, floodlit blocks, lit paint | ✅ Built 2026-10-07 on the user's asks (`P3-69`). Reverses "the sun does not move" and `Q82`'s unlit lantern. Handset frame time owed. |
+| `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 
 ---
 
@@ -9935,3 +9936,59 @@ behind them. The user's drive owed, by day and at night.
   per-kind draw and primitive cost on the throttle route; the user's drive.
 
 **See.** `P3-3` · `P3-2a` · `Q54` · `Q57` · `Q135` · `Q159` · `Q160`
+
+
+## `Q162` — Two modes: 特更 to the handover, 兜風 with no end
+
+**Asked** by the user, 2026-10-11: "plan to make 2 game mode: free roaming, where day is kept as
+daylight and there is no end of game; a new mode that has time limit, starting the game from morning
+to night, then high score (total fare) is calculated at day end"; then, on the plan, "lets do 特更",
+THE SHIFT for its English, 07:00 → 21:00, fares kept in free mode, the TIME OF DAY option kept;
+"keep the name 'free mode' for easier understanding" and "think of a chinese name"; "show the time
+of day somewhere … showing when the day would end (in contrast to using a count down)"; "keep a
+simple highscore in main menu for the shift mode"; "put the 2 modes into a 2 layers menu e.g.
+behind 1 play button".
+
+**Built 2026-10-11 (`P3-74`).**
+
+- **Names.** 特更 / THE SHIFT, the user's pick: a Hong Kong taxi shift. 兜風 / FREE MODE: 兜風 is
+  the Cantonese for driving about for its own sake. Both under one PLAY (開始遊戲) on HOME.
+- **One clock** (`Q160`'s rule). `DayClock` carries the mode; in a shift it reads `shift.tres`'s
+  hours (07:00, 21:00) over `day_to_night.tres`'s `length_s`, so the HUD's clock and the sky end on
+  the same game second, and emits `closed` once. `parked.tres`'s `clock_start_h` / `clock_end_h`
+  moved 12/24 → 7/21 so the roster's hour is the dash's; `verify_day_cycle` holds the pair.
+- **The cycle is retimed to the shift**: 240 → 300 s, `day_until` 0.25 → 0.71 (17:00), dusk
+  0.55 → 0.79 (18:00), twilight 0.72 → 0.86 (19:00), night 0.90 → 0.93 (20:00). The looks are
+  untouched; most of every run is the graded daylight.
+- **Five minutes**: inside `GAME_DESIGN.md`'s three-to-five, and five to eight fares at the
+  30–90 s allowances — enough for a total to vary. Game time; the clock stops under the menu.
+- **The day does not stretch.** `P3-2b`'s "deliveries add time" timer is replaced: a delivery adds
+  money, the clock is the day's. 🚫 No countdown on screen (the user's call): the HUD's top-left
+  housing shows the hour ("14:32") over "交更 21:00", then "最後一程" / LAST FARE once closed.
+- **交更**: `FareSystem.close()` hails no one, marks no one, turns away a passenger walking to the
+  car, and lets the one aboard ride to the end of their fare; `finished` follows when nobody is
+  aboard. `DriveHarness` relays it as `shift_over`; `Main` parks the level and opens a fresh menu
+  on the REPORT page — total, delivered and walked, the best or NEW BEST, AGAIN and MENU.
+- **Restart in place**: `DriveHarness.play(mode)` is START and AGAIN alike — `DayClock.restart`,
+  `FareSystem.reset`, the car back on the line; `Main` renews the HUD after a run ends. No reload.
+- **The best** is `Settings`' `records` section, a player's only: a scripted run (`--menu=off`)
+  logs `shift over: HK$…` and writes nothing. A tie is not a record. Shown always on HOME.
+- **Free mode keeps the day**: `Settings.day_cycle()` defaults off; the option now reads
+  兜風時間 / FREE MODE · TIME OF DAY. Fares stay on.
+- Dev flags: `--mode=shift`, `--shift-s=<seconds>` (a whole shift compressed), `--menu-page=play`
+  and `report`; `driver.gd` validates them.
+
+Measured, 2026-10-11, desktop: `tools/check.sh` green; `verify_fares` `close:` fails by name with
+the last fare's `finished` removed; the default `drive.sh` run is position- and draw-identical
+before and after (139 draws, 797,024 prims at t=6); a 12 s shift (`--shift-s=12`) reads 10:32 at
+t=2 and 17:19 at dusk at t=8, then parks at night with `shift over`.
+
+Not done, and owed:
+
+- **A full shift driven by the user**, and the menu → shift → report → AGAIN path clicked through
+  (scripted runs cannot press a button).
+- The guide's pages do not yet describe the shift. No dawn keyframe: 07:00 is drawn as the day.
+- An online leaderboard is out: zero network calls at runtime.
+
+**See.** `P3-74` · `Q160` · `Q161` · `P3-2b` · `P6-1` · `game/tuning/shift.md` ·
+`game/tuning/day_to_night.md` · `game/tuning/parked.md`

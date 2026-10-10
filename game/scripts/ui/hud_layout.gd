@@ -153,6 +153,11 @@ extends Resource
 @export var award: Rect2
 ## `P3-2b`'s fare combo, under the timer: both count the session.
 @export var combo: Rect2
+## 特更's clock (`Q162`, the user's ask): the hour of the day and when the shift
+## ends, never a countdown. Top-left over the combo, the corner a game clock
+## takes in the arcade-taxi reference; the dev overlay's counter wins it when
+## the overlay is on, as it does every corner.
+@export var clock: Rect2
 
 ## ⚠️ **There is deliberately NO slot for the destination ARROW**, and that is a
 ## finding rather than an omission. Both references that have a destination put
@@ -264,6 +269,7 @@ func hud_slots() -> Dictionary[String, Rect2]:
 		"meter": meter,
 		"callout": callout,
 		"tick": tick,
+		"clock": clock,
 	}
 	slots.merge(reserved_slots())
 	return slots
