@@ -153,7 +153,7 @@ budgets, and a tool that reads the clock must not share the machine with the poo
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the `meshes/*` keys `[importer_defaults]` pins (`P5-16`, `Q122`; authored since `P5-20`, `Q124`). Keys are read from the project file and their count asserted. 0 sidecars checked passes — a clone has no city | yes |
 | warnings sweep | `--check-only` per script, grepping `treated as error\|Parse Error` — never `$FATAL`, which fires on healthy lines. An empty file list is fatal and the swept count is printed (`Q119`). Pooled, `CHECK_JOBS` scripts at a time, one output file each; the files that came back are counted against the scripts | yes |
 | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu` | Spot-light cap; the taxi's shader binding, lamp channels and beam aim; the no-texture contract; HUD layout against `hud_layout.tres` (`Q80`); the touch scheme by synthetic fingers (the only touch test, `P0-3b`); the DCC fixtures; the start menu's tables and the credits' licence wording in both languages (`P6-1`). None needs a built region | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water`, `verify_parked` | The generated-asset contracts, once per synced region (`regions.json`, `--region=`) | **no** |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py` (`P5-9d`); SKIPs on one region | **no** |
 
 ⚠️ `verify_road_graph` and `verify_join` also need `reachability.json` beside each graph they read
@@ -314,6 +314,7 @@ hk-taxi-Q/
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
 │   │   ├── lamps.py             # lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
+│   │   ├── parked.py            # the parked roster → parked_placements.json over the authored library (P3-71)
 │   │   ├── placements.py        # a prop library's stands: entry shape, pitch, totals, writer
 │   │   ├── export.py            # → city.json; assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — 20 stages, in order
@@ -415,6 +416,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "signs_placements": "signs_placements.json",
   "roadmarks": "roadmarks.glb",
   "water": "water.glb",
+  "parked_placements": "parked_placements.json",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "basemap": "basemap.json",
@@ -431,9 +433,11 @@ Keys (`etl/pipeline/export.py`):
   `barriers` list means nothing to close, a missing file means the stage never ran.
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
-  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`. Null where the estate publishes no
-  such layer, **or** where every feature failed the join — a stage names its asset from what it
-  drew.
+  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`. Null
+  where the estate publishes no such layer, **or** where every feature failed the join — a stage
+  names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
+  placements document whose library is NOT in the bundle: it stands the committed
+  `assets/authored/vehicles/parked.glb`, and the entry's `library` names that `res://` path.
 - The manifest names the other documents, it does not contain them; each is separately versioned.
   A build ships exactly what the manifest names (`shipped()`); `sync_generated.sh` copies only
   that. Bundle size is measured from the PCK (`PROGRESS.md`), never summed from these files.
@@ -885,6 +889,30 @@ arrows; the rotation is `gltf.placed_positions`.
 - ⚠️ `UtilityPoint` publishes no elevation, so a flyover lamp is drawn on the street beneath;
   `nearest_is_elevated` reports how often that is possible.
 
+### `parked_placements.json` — the parked roster (`P3-71`, `Q161`)
+
+A placements document (`P5-2`'s shape: `mesh`, `transform.pos`, `transform.rot_y_deg`) over the
+AUTHORED library `assets/authored/vehicles/parked.glb` — one mesh per roster kind (`car_a`,
+`car_b`, `taxi`, `minibus`, `bus`, `coach`, `van`, `tram`, `motorcycle`), written by
+`tools/make_parked.py` and committed under CC BY-SA. The document's `library` is that `res://`
+path. Each entry also carries:
+
+- `kind` — the roster kind (`car` draws `car_a` or `car_b` on a seeded pick).
+- `source` — `bay` (Road Network v2's `ONSTREETPARK`, one point per bay, its attribute table
+  joined on the grid coordinate), `stop` (TD's bus stop and minibus terminus points), `stand`
+  (`fares.json`'s taxi stands and tram stops), `frontage` (a named footprint's vocabulary — a
+  hotel, an office tower), or `fill` (the restriction layer's complement at `fill.share`).
+- `hours` — `[from_h, to_h]` on a 24 h clock, wrapping past midnight, or `null` for always.
+- `chance` — the share of visits the vehicle is found, `(0, 1]`.
+- `edge` — the host edge.
+
+The engine (`ParkedLayer`) stands a `MultiMesh` per kind per 300 m cell with a box body per
+vehicle, resolves `hours` and `chance` against the lighting rig's `time_of_day` on
+`tuning/parked.tres`'s clock, and rebuilds a cell only while it is hidden. Vehicles stand at the
+ROAD's kerb (`Ribbon.kerb_at`, the corridor), `kerb_gap_m` off it, nose along the flow of their
+side; a motorcycle stands across. `parked.json` is the stage's report: every count by kind,
+source and window, and `refused` by source and rule — the partition closes.
+
 ### `railings.glb` — the published street furniture (`P3-19`, `Q61`, `P5-5`)
 
 A vertical strip `height_m` tall, `outset_m` outside the drawn carriageway edge, for every run of
@@ -1162,7 +1190,8 @@ city_space = region_local + city_offset
 | `DebugHud` | Every dev readout, behind `F3` (autoload) | ✅ |
 | `BeamBudget` | Hands the renderer's spot-light slots to the cars nearest the camera (autoload) | ✅ |
 | `Fence` | Stands the authored barriers where `fence.json` places them, one `MultiMesh` (`prop_batch.gd`) | ✅ `P3-29` |
-| `TrafficSystem` | AI vehicles on road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
+| `ParkedLayer` + `parked_placements.json` | The parked roster (`Q161`): one `MultiMesh` per kind per 300 m cell over the committed `parked.glb`, a box body per vehicle, resolved by the hour and re-stood only out of view. The near miss (`NearMiss`, `P3-2a`) grades a pass against these bodies | ✅ `P3-71`–`P3-73` |
+| `TrafficSystem` | AI vehicles on road-graph splines; trams as scripted blockers — deferred behind the parked roster (`Q161`) | ⬜ `P3-3` |
 | `tram.glb` | The published tramway where iB1000 prints it — not a marking on the ribbon (`Q58`). One primitive, no collider | ✅ `P3-14` |
 | `arrows.glb` + `arrows_placements.json` | Turn arrows in the lane the ribbon has — not ribbon paint, because the junction fade blanks the approach (`Q59`). Library of one flat glyph per `RM` code; placements carry the transform plus `pitch_deg` and nothing else (`Q54`). No collider | ✅ `P3-15`, `P5-4` |
 | `crossings.glb` | Pedestrian-crossing stripes at the surveyed extent; signal yellow and zebra white, a mesh a paint a 300 m cell (`P3-42`). No collider | ✅ `P3-35g2` |
@@ -1221,6 +1250,8 @@ All paths under `game/`.
 | `scripts/city/prop_batch.gd` | One `MultiMesh` over many transforms — how every prop layer draws (`P3-29`, `Q115`) |
 | `scripts/city/generated_{road_graph,fares,landmarks,fence}.gd` | Locators for the JSON documents. `generated_fares.gd` alone knows that document's shape; `generated_landmarks.gd::placement_of` is the one place a compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd`, `scripts/city/fence.gd` | Place the heroes and the barriers; always resident |
+| `scripts/city/parked_layer.gd`, `parked_roster.gd`, `parked_profile.gd` | The parked roster (`P3-73`): the region's `parked_placements.json` over the committed library, a `MultiMesh` per kind per cell with box bodies, re-stood by the rig's hour while hidden; the pure arithmetic of windows, chance and cells; the schema of `tuning/parked.tres` |
+| `scripts/fares/near_miss.gd` | `NearMiss` (`P3-2a`): a parked body passed inside a band at speed, paid only when it was in the car's path a moment before — pure, driven by `verify_fares.gd` |
 | `scripts/city/building_index.gd` | Which source object a point of a tile belongs to, from the glTF mesh `extras` (`P5-11`) |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`; also the shader-dispatch and `TEXCOORD_1` importer-drift checks |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material for dev previews |
@@ -1268,6 +1299,7 @@ Verify tools (`game/tools/`, run by `tools/check.sh`):
 | `verify_spawn.gd` | Orientation against the edge vector, nearside-lane placement, drop height, resolved edge against the fare node, and that a car fits (`Q52`). Builds the transposed basis and five known-clearance start lines and requires each to fail or answer — nothing in the shipped city fires the guard |
 | `verify_landmarks.gd` | Assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, no tier-0 tile triangle inside an excluded footprint's core |
 | `verify_fence.gd` | `fence.json` against the prop it names and the graph it fences (`P3-29`) |
+| `verify_parked.gd` | The parked library's contract and the document's join (one way), the roster's windows and draws from both sides, the table's refusals (`P3-73`) |
 | `verify_{tramway,arrows,boxjunctions,crossings,roadmarks,railings,signs,lamps}.gd` | One per drawn layer — mesh contract, draw-call and collider claims, per-class material dispatch. ⚠️ A new railing class needs a row in `verify_railings.gd`, `generated_scene_import.gd` and the config; `check.sh` fails if they disagree |
 | `verify_beam_budget.gd` | The spot-light cap is never exceeded or under-spent, nearest cars win, a beamless rig takes no slot, a despawn hands its slot on. No built region needed |
 | `verify_hud.gd` | Thumb-rest reservation (overlapping a tap zone stays legal), light-plate/dark-chip rule, the plate's font and substitution table, the street tracker from both sides of its dwell. No built region needed |

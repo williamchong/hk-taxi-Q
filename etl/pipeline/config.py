@@ -125,6 +125,26 @@ from pipeline.config_blocks.landmarks import (  # noqa: F401
     _landmarks,
     _source_paint,
 )
+from pipeline.config_blocks.parked import (  # noqa: F401
+    ALWAYS,
+    ROSTER,
+    SOURCE_BAY,
+    SOURCE_FILL,
+    SOURCE_FRONTAGE,
+    SOURCE_STAND,
+    SOURCE_STOP,
+    SOURCES,
+    Bays,
+    Clearances,
+    Fill,
+    Frontage,
+    FrontageClass,
+    Parked,
+    Stand,
+    StopSet,
+    Vehicle,
+    _parked,
+)
 from pipeline.config_blocks.railings import (  # noqa: F401
     _RAILING_ROLES,
     RailingClass,
@@ -402,6 +422,10 @@ class Config:
     # whose estate publishes no transverse markings ships none rather than
     # painting a stop line at every junction node it found.
     road_marks: RoadMarks | None = None
+    # The stationary vehicles the streets carry, placed by `pipeline/parked.py`
+    # (`P3-71`, `Q161`). Optional on the same terms as the blocks above: a city
+    # that declares no bays, stops or fill ships an empty street.
+    parked: Parked | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -765,6 +789,7 @@ def load_config(path: Path | None = None) -> Config:
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
+        parked=_parked(document.get("parked"), f"{path}:parked"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )

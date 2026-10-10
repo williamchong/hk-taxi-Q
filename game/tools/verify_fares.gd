@@ -50,6 +50,15 @@ const SEED: int = 7
 ## Somewhere no fare node is: the pools are inside the region and this is not.
 const FAR_AWAY := Vector3(-100000.0, 0.0, -100000.0)
 
+## The car's plan half-extents handed to `setup` — a Crown Comfort's
+## (1.695 x 4.7 m), as `FareSystem._ready` reads them off the taxi's meshes.
+const CAR_HALF_M := Vector2(0.8475, 2.35)
+## A parked car's extent in its own frame, as the roster's `car_a` imports:
+## 1.8 m wide, 4.5 m long, nose at -Z, on the ground.
+const PARKED_EXTENT := AABB(Vector3(-0.9, 0.0, -2.25), Vector3(1.8, 1.42, 4.5))
+## A pass at 54 km/h, over `near_miss_min_kph`.
+const PASS_MPS: float = 15.0
+
 var _graph: RoadGraph = null
 var _region: String = ""
 var _fares: Dictionary = {}
@@ -100,6 +109,7 @@ func _init() -> void:
 	_check_practice()
 	_check_penalties()
 	_check_sparks()
+	_check_near_miss()
 
 	_finish("verify_fares")
 
@@ -572,7 +582,8 @@ func _check_skills() -> void:
 		_tariff,
 		_skills,
 		0.0,
-		RandomNumberGenerator.new()
+		RandomNumberGenerator.new(),
+		CAR_HALF_M
 	)
 	_expect(not unhandled.usable(), "skills", "and so is a zero drift threshold")
 	unhandled.free()
@@ -1258,6 +1269,184 @@ func _check_sparks() -> void:
 	system.free()
 
 
+## The near miss and the close call (`P3-2a`, `Q161`): a parked car passed
+## inside the band at speed pays only when the car was HEADING FOR it — a
+## lane pass at the same clearance pays nothing (the user's call). Driven on
+## the pure detector, then once through the system as practice.
+func _check_near_miss() -> void:
+	var zeroed: SkillProfile = _skills.duplicate()
+	zeroed.near_miss_hkd = 0.0
+	var inert: FareSystem = _system_with({"nodes": []}, _profile, zeroed, SEED)
+	_expect(
+		not inert.usable(), "near miss", "mutation caught: a zero near_miss_hkd is an inert system"
+	)
+	inert.free()
+	var folded: SkillProfile = _skills.duplicate()
+	folded.close_call_m = folded.near_miss_m
+	var flat: FareSystem = _system_with({"nodes": []}, _profile, folded, SEED)
+	_expect(
+		not flat.usable(), "near miss", "and so is a close-call band not under the near-miss band"
+	)
+	flat.free()
+	var sizeless := NearMiss.new(_skills, 0.0, CAR_HALF_M.y)
+	_expect(not sizeless.usable(), "near miss", "and so is a car of no width")
+
+	var swerve_m: float = _skills.near_miss_m - 0.1
+	var brush_m: float = _skills.close_call_m - 0.05
+	var paid: Array[Fare.Award] = _pass(swerve_m, PASS_MPS, true)
+	_expect(
+		(
+			paid.size() == 1
+			and paid[0].skill == Fare.Skill.NEAR_MISS
+			and is_equal_approx(paid[0].hkd, _skills.near_miss_hkd)
+		),
+		"near miss",
+		"a swerve round a parked car, passed inside near_miss_m at speed, pays once"
+	)
+	paid = _pass(brush_m, PASS_MPS, true)
+	_expect(
+		(
+			paid.size() == 1
+			and paid[0].skill == Fare.Skill.CLOSE_CALL
+			and is_equal_approx(paid[0].hkd, _skills.close_call_hkd)
+		),
+		"near miss",
+		"inside close_call_m it is a close call at its own price"
+	)
+	paid = _pass(_skills.close_call_m, PASS_MPS, true)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.CLOSE_CALL,
+		"near miss",
+		"the close-call bar is inclusive"
+	)
+	paid = _pass(_skills.near_miss_m, PASS_MPS, true)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.NEAR_MISS,
+		"near miss",
+		"and so is the near-miss bar"
+	)
+	paid = _pass(_skills.near_miss_m + 0.05, PASS_MPS, true)
+	_expect(paid.is_empty(), "near miss", "a hand wider than the band pays nothing")
+	paid = _pass(swerve_m, PASS_MPS, false)
+	_expect(
+		paid.is_empty(),
+		"near miss",
+		"🔴 the SAME clearance with the car never pointed at it — a lane pass — pays nothing"
+	)
+	var slow_mps: float = _skills.near_miss_min_kph / 3.6 - 0.5
+	paid = _pass(swerve_m, slow_mps, true)
+	_expect(paid.is_empty(), "near miss", "under near_miss_min_kph a swerve pays nothing")
+	paid = _pass(swerve_m, _skills.near_miss_min_kph / 3.6, true)
+	_expect(paid.size() == 1, "near miss", "on the speed bar it pays: inclusive")
+	paid = _pass(swerve_m, PASS_MPS, true, true)
+	_expect(
+		paid.is_empty(),
+		"near miss",
+		"a touch on the way past forgets the threat: a brush is not a miss"
+	)
+	paid = _pass(swerve_m, PASS_MPS, true, false, _skills.near_miss_memory_s + 1.0)
+	_expect(
+		paid.is_empty(),
+		"near miss",
+		"waiting past near_miss_memory_s after the swerve, the pass is a lane pass again"
+	)
+	paid = _pass(swerve_m, PASS_MPS, true, false, _skills.near_miss_memory_s - 1.0)
+	_expect(paid.size() == 1, "near miss", "inside the memory it still pays")
+	paid = _pass(swerve_m, PASS_MPS, true, false, 0.0, true)
+	_expect(
+		paid.size() == 2,
+		"near miss",
+		"a second pass of the same car is a second approach, paid again"
+	)
+
+	# Through the system, empty: shown as practice, paid to nobody.
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_practised = 0
+	_last_practice = null
+	system.practised.connect(_count_practised)
+	var obstacle: Dictionary = {
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -30.0)),
+		"extent": PARKED_EXTENT,
+		"id": 1,
+	}
+	var at := Transform3D.IDENTITY
+	var velocity := Vector3(0.0, 0.0, -PASS_MPS)
+	for tick: int in 40:
+		if at.origin.z <= -18.0 and at.origin.x == 0.0:
+			at.origin.x = CAR_HALF_M.x + 0.9 + swerve_m
+		system.sample(
+			FAR_AWAY,
+			PASS_MPS,
+			Vector3.FORWARD,
+			TICK_S,
+			0.0,
+			false,
+			true,
+			0.0,
+			at,
+			velocity,
+			[obstacle]
+		)
+		at.origin += velocity * TICK_S
+	_expect(
+		(
+			_practised == 1
+			and _last_practice != null
+			and _last_practice.skill == Fare.Skill.NEAR_MISS
+			and system.skill_counts[Fare.Skill.NEAR_MISS] == 1
+			and is_zero_approx(system.earned_hkd)
+		),
+		"near miss",
+		"through the system, empty, the pass is practised once and banks nothing"
+	)
+	system.free()
+
+
+## One drive past a parked car on the pure detector: the car starts 30 m
+## short of it, pointed at it when `aimed`, moves aside to `clearance_m`
+## once within 12 m (or starts aside, for a lane pass), and drives on until
+## the car is well behind. `touch` brushes a wall at the swerve; `pause_s`
+## waits, stopped, after the swerve before driving on; `twice` drives the
+## whole pass again from behind. Returns every award paid.
+func _pass(
+	clearance_m: float,
+	speed_mps: float,
+	aimed: bool,
+	touch: bool = false,
+	pause_s: float = 0.0,
+	twice: bool = false
+) -> Array[Fare.Award]:
+	var detector := NearMiss.new(_skills, CAR_HALF_M.x, CAR_HALF_M.y)
+	var aside: float = CAR_HALF_M.x + PARKED_EXTENT.size.x / 2.0 + clearance_m
+	var obstacle: Dictionary = {
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -30.0)),
+		"extent": PARKED_EXTENT,
+		"id": 7,
+	}
+	var paid: Array[Fare.Award] = []
+	var passes: int = 2 if twice else 1
+	for run: int in passes:
+		var at := Transform3D(Basis.IDENTITY, Vector3(0.0 if aimed else aside, 0.0, 0.0))
+		var velocity := Vector3(0.0, 0.0, -speed_mps)
+		var swerved: bool = not aimed
+		var ticks: int = int(ceil(60.0 / speed_mps / TICK_S)) + 4
+		for tick: int in ticks:
+			var touched: bool = false
+			if not swerved and at.origin.z <= -18.0:
+				at.origin.x = aside
+				swerved = true
+				touched = touch
+				var waited: float = 0.0
+				while waited < pause_s:
+					paid.append_array(
+						detector.tick(at, Vector3.ZERO, [obstacle], TICK_S, false, false)
+					)
+					waited += TICK_S
+			paid.append_array(detector.tick(at, velocity, [obstacle], TICK_S, touched, false))
+			at.origin += velocity * TICK_S
+	return paid
+
+
 func _count_tier(tier: int) -> void:
 	_tiers.append(tier)
 
@@ -1343,7 +1532,7 @@ func _system_with(
 	rng.seed = seed_value
 	var by_region: Dictionary[String, Dictionary] = {_region: fares}
 	var system: FareSystem = FareSystemScript.new()
-	system.setup(_graph, by_region, profile, _tariff, skills, _slip_threshold_deg, rng)
+	system.setup(_graph, by_region, profile, _tariff, skills, _slip_threshold_deg, rng, CAR_HALF_M)
 	return system
 
 

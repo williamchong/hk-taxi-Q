@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ParkedProfile" format=3 uid="uid://l5f3tra37y2s"]
+
+[ext_resource type="Script" uid="uid://cexflq0snabnv" path="res://scripts/city/parked_profile.gd" id="1_parked"]
+
+[resource]
+script = ExtResource("1_parked")
+clock_start_h = 12.0
+clock_end_h = 24.0
+cell_m = 300.0
+range_m = 400.0
+range_margin_m = 15.0
+poll_s = 1.0
+reroll_s = 90.0

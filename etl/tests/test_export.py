@@ -44,6 +44,7 @@ from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
+from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -358,6 +359,16 @@ class _Region:
                 "placements_document": None,
                 "features": 0,
                 "drawn": 0,
+            },
+            # Same shape a seventh time: `testville` declares no `parked:`
+            # block, so the stage placed nothing and says so.
+            PARKED_MANIFEST_NAME: {
+                "schema_version": PARKED_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "placements_document": None,
+                "library": None,
+                "placed": 0,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -1020,6 +1031,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
+            "parked",
             "export",
         ]
 
@@ -1059,6 +1071,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
+            "parked",
             "export",
         ]
 

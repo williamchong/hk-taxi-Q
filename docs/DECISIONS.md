@@ -9815,3 +9815,86 @@ Not done, and owed:
 
 **See.** `P3-69` · `Q38` · `Q82` · `Q26` · `P3-11e` · `Q158` · `game/tuning/day_to_night.md` ·
 `game/tuning/lamp_pools.md` · `game/tools/verify_day_cycle.gd`
+
+## `Q161` — Parked vehicles before moving traffic
+
+**Asked** by the user, 2026-10-11: "instead of traffic system, plan to place different cars of
+parked cars near road sides where parking is allowed; also consider context, like bus near bus stop,
+mini bus near mini bus stop, other taxi near taxi stop, trams on rails, and mini vans near industrial
+or commercial building"; "so that we can improve liveliness of scenario and allow bonus from
+near-miss, close-call or etc"; "also consider if placement should be time sensitive, like bus dont
+always stop at same stop, minivan is here in day but gone in night etc".
+
+**Status.** Built 2026-10-11 as `P3-71`, `P3-72`, `P3-73` and `P3-2a` in `B3`; `P3-3` deferred
+behind them. The user's drive owed, by day and at night.
+
+**What was built, and what it measured.**
+
+- `pipeline/parked.py` → `parked_placements.json` (city schema 38) over the committed
+  `assets/authored/vehicles/parked.glb`, nine kinds from `tools/make_parked.py` (256–636 triangles
+  each, real footprints, `vehicle_*` parts so the import hands each one `vehicle_body.tres` with
+  every lens dark). Wan Chai: 3,699 candidates, 863 placed — 500 cars, 177 motorcycles, 77 vans,
+  49 buses, 36 minibuses, 15 trams, 6 taxis, 3 coaches; by source 83 bays, 27 stops, 5 stands, 23
+  frontages, 367 fill. ⚠️ **Only 83 of 607 bays stand**: 266 overlap a neighbour in the bay rows
+  (car bays are published at a 4.96 m median pitch for a 4.5 m car; motorcycle bays a metre apart,
+  which is why a motorcycle stands ACROSS the kerb), 80 are inside a junction trim, 20 on a kerb the
+  ribbon hides, 16 in a fare node's ring. 103 bays lie inside a published `NSR` run — TD's two
+  layers disagreeing — counted and placed, because the bay is the positive source.
+- 🔴 **A published position takes no invented bar.** `junction_m` and the lane-room bar refuse the
+  fill, a frontage and a taxi queue; a bay or a bus stop stands wherever the trim leaves a kerb,
+  and `published_in_lane` counts the ones that leave less than the lanes (a bus at its stop is in
+  the lane in Hong Kong too). `narrowest_lane_room_m` −6.11 m on Wan Chai is such a bus.
+- 🔴 **The near miss pays for danger, not proximity** (the user's call, mid-build: "should not
+  trigger if we are just passing cars in nearby lane without real danger"). `NearMiss` pays a pass
+  inside `near_miss_m` (0.6) at or over 40 kph only when the vehicle was IN THE PATH — inside the
+  car's own width along its travel within 1.5 s of travel — no more than 2 s before the car came
+  alongside, with no touch; under 0.25 m it is a CLOSE CALL at twice the price. `verify_fares`
+  drives the same clearance aimed and unaimed and the unaimed pass pays nothing. The memory is
+  measured to the tick the car comes alongside: a bus is 12 m long, and measured to the end of the
+  pass a lazy swerve round one never paid.
+- The hour is `parked.tres`'s clock over the rig's `time_of_day` (noon to midnight: dusk 18:36,
+  night 22:48); vans keep 8–19, the single-yellow fill 19–7, a bus stands at a stop with chance
+  0.35 and a minibus at a terminus 0.8, re-rolled after 90 s while the cell is hidden. A cell is
+  rebuilt only past 400 m from the camera, so nothing pops.
+- Cost on the throttle route (`--debug-view=off --hud=off`, the document set aside for the
+  before side): `draws` 93 → 99 and `prims` 768,857 → 787,505 at t=1 (+2.4%), the car's
+  positions identical to the centimetre, `phys` inside its ±0.5 ms spread — 746 box bodies
+  resident on Wan Chai and 324 on Causeway Bay. ⚠️ Jolt's `max_bodies` is 10,240 and the
+  railings hold 7,693: a cell is freed at once on rebuild, not queued, because the first poll
+  re-stands every cell and a queued free doubled the roster's bodies past the cap.
+- Owed: the handset's frame time, and `RM1051` / `RM1052`'s meaning in the drawings.
+
+- **Why parked first.** `P3-3` owes an adjacency and the 217 turn restrictions before one car
+  moves, and a moving fleet is the hardest thing to make honest (`Q76`'s phase plan is the
+  precedent). A parked fleet is a placements document over an authored library — the shape every
+  prop layer already takes (`P5-2`, `Q115`), batched per cell (`Q135`) and collided as a box per
+  placement (`Q159`) — and it unblocks `P3-2a`: the near miss is a pass inside a band at speed,
+  which a stationary body grades exactly and a moving one only approximately.
+- **Parking is allowed where a bay is published, and a bay is a point.** `ONSTREETPARK` is one
+  point per bay (`CAPACITY` 1 on 605 of 607 in region), joined to `GISP_ON_STREET_PARKING` by
+  `X_COOR` / `Y_COOR` (606 of 607) for the vehicle class, metering and operative hours. Jaffe Road
+  holds 236 of them. 342 are motorcycle bays: a motorcycle is in the roster because the data puts
+  one on more than half the bays, not for art. ⚠️ `Q54`'s sweep called this layer "out of scope"
+  for the restriction stage; it is the positive source the parked stage needs.
+- **The `NSR` complement is a fill, never a licence.** 57 km of the region's 90 km of level-0 kerb
+  carries no published restriction, which is far more than is parked in the street; the fill takes a
+  config share of it, below bays in precedence, and only where the width leaves the lanes
+  (`width_m − vehicle ≥ lanes × 3.0 m`: 293 of 1,158 free edge sides). A single yellow is a posted
+  hours restriction, so its kerb joins the fill outside those hours — the one place the night
+  street has more cars than the day.
+- **Context is a point set each.** Bus stops (70) and GMB termini (52) publish `STOP_ID` and a
+  position, no name and no heading, exactly as the tram stops do; they snap as fare nodes do
+  (`Q15`: level 0, plan distance) and take the edge's heading and the offset's side. Taxi stands and
+  the tram stops are already in `fares.json`; the tram stands on the track centre `tramway.py`
+  computes and does not yet publish.
+- **Time is the rig's `time_of_day`** (`Q160`), never a second clock. A placement carries `hours`
+  from its source where one exists (metered bays; single yellow) and from config where none does
+  (vans by day; a bus at a stop by a seeded chance with a dwell, so the same stop is not always
+  served). The roster re-rolls a cell only past `PropCellProfile.range_m` — a visible cell never
+  changes, so nothing pops.
+- 🚫 No building-use source exists (`ART_DESIGN.md`); vans take the goods bays and the podium
+  frontage as a commercial proxy before any land-use fetch.
+- Owed: `RM1051` / `RM1052`'s meaning (the bus-stop box, if `Q57`'s count is theirs); the
+  per-kind draw and primitive cost on the throttle route; the user's drive.
+
+**See.** `P3-3` · `P3-2a` · `Q54` · `Q57` · `Q135` · `Q159` · `Q160`

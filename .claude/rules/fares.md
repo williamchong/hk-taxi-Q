@@ -181,5 +181,11 @@ the loop's own numbers in `tuning/fares.tres`.
   flight that never lands (the harness resets a fallen car) pays nothing; the drift meter refuses
   airborne ticks because a yawing car reads a slip. `verify_fares` drives `sample`'s `airborne` /
   `upright` arguments through `_fly`; mutations: a zeroed `air_hkd`, a halved one on `_air_drive`.
-- 🚫 **Not here**: near miss (a `Fare.Skill` slot — `B3`'s traffic), the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
+- 🔴 **The near miss and the close call are `NearMiss`'s** (`near_miss.gd`, `P3-2a`, `Q161`):
+  `FareSystem.sample` hands it the car's transform, its velocity and `ParkedLayer.near_all`'s
+  bodies, and its awards go through `_award` like the tracker's. The rules are in
+  `.claude/rules/parked.md`; what matters here is that `setup` takes the car's plan half-extents
+  (`MeshContract.bounds` in the car's frame; `verify_fares` hands in a Crown Comfort's) and
+  refuses an inert detector, and `_board` resets it with the tracker.
+- 🚫 **Not here**: the session timer and the fare combo (`P3-2b`), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

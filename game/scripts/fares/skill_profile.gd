@@ -64,3 +64,23 @@ const PATH: String = "res://tuning/skills.tres"
 ## same event, in seconds: one wall is one dock, however many ticks the
 ## body scrapes it.
 @export var crash_cool_s: float
+## The across-clearance, in metres, at or under which passing a parked
+## vehicle is a NEAR MISS (`P3-2a`, `Q161`) — measured flank to corner,
+## while the car is alongside, the least of it over the pass.
+@export var near_miss_m: float
+## At or under this clearance the pass is a CLOSE CALL instead, paying
+## `close_call_hkd`. Must be under `near_miss_m`.
+@export var close_call_m: float
+## The speed, in km/h, at or over which a pass counts at all — read as the
+## highest speed while alongside. A crawl past a bay row pays nothing.
+@export var near_miss_min_kph: float
+## How far ahead, in seconds of travel, a parked vehicle in the car's own
+## width counts as IN THE PATH — the danger a lane pass never has.
+@export var near_miss_look_s: float
+## How long after the vehicle was last in the path a pass still counts, in
+## seconds. Past it the swerve was long ago and the pass is a lane pass.
+@export var near_miss_memory_s: float
+## What a near miss pays into the tip, in HK$.
+@export var near_miss_hkd: float
+## What a close call pays into the tip, in HK$, instead of the near miss.
+@export var close_call_hkd: float

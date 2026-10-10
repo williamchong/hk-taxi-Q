@@ -521,6 +521,13 @@ sources:
   # `dropoff: false` explicitly — `FareCategory` defaults both to true.
   tram_stops: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638875413253_59498&format=geojson
 
+  # The two point sets the parked roster waits at (`P3-71`, `Q161`), the
+  # tram stops' shape exactly: `OBJECTID`, `STOP_ID`, a date, a position and
+  # no name. Bus Stop Location, 4,488 territory-wide (70 in Wan Chai); GMB
+  # Terminus Location, 4,776 (52) — termini, which is where a minibus queues.
+  bus_stops: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638874475129_49745&format=geojson
+  gmb_termini: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638874728005_80512&format=geojson
+
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
 # the *sheet index* — a polygon per sheet carrying that sheet's download URLs —
@@ -4214,3 +4221,133 @@ fares:
         category: STOP_ID
       categories:
         - {match: "", id: tram_stop, pickup: false, dropoff: false}
+
+# ---------------------------------------------------------------------------
+# The parked roster (`P3-71`, `Q161`, the user's ask 2026-10-11): the
+# stationary vehicles the streets carry, in place of moving traffic.
+# `pipeline/parked.py` reads this; every kind named below is sized under
+# `vehicles:` and drawn by `tools/make_parked.py` into the authored library.
+# ---------------------------------------------------------------------------
+parked:
+  library: res://assets/authored/vehicles/parked.glb
+
+  # Plan footprints, metres. ⚠️ Pinned against the library's own extents by
+  # `tests/test_make_parked.py`: the stage places by these and the engine
+  # draws the mesh. Real vehicles, not toy proportions, because a parked car
+  # sits beside the player's Crown Comfort (`Q153`) and a toy next to it reads
+  # as a toy.
+  vehicles:
+    car: {length_m: 4.5, width_m: 1.8, meshes: [car_a, car_b]}
+    taxi: {length_m: 4.7, width_m: 1.7}
+    minibus: {length_m: 7.0, width_m: 2.1}
+    bus: {length_m: 12.0, width_m: 2.5}
+    coach: {length_m: 12.0, width_m: 2.5}
+    van: {length_m: 4.7, width_m: 1.8}
+    tram: {length_m: 8.6, width_m: 2.0}
+    # Nose to the kerb, a hand apart: the published bays are a metre apart
+    # (nearest neighbour p50 0.98 m), which is a row of bikes standing across.
+    motorcycle: {length_m: 2.1, width_m: 0.8, gap_m: 0.2, across: true}
+
+  # Road Network v2's on-street parking: `ONSTREETPARK` is one point per bay
+  # (`CAPACITY` 1 on 605 of Wan Chai's 607) with nothing but an id on it, and
+  # `GISP_ON_STREET_PARKING` the attribute table beside it, joined on the grid
+  # coordinate the publisher writes into both. Measured 2026-10-11: 606 of 607
+  # join; 342 motorcycle, 220 any vehicle, 23 disabled, 17 coach, 2 goods, 2
+  # other; 237 metered (8am to midnight, mostly). ⚠️ `Q54`'s sweep called this
+  # layer "out of scope" for the RESTRICTION stage; it is the positive source
+  # this stage needs.
+  bays:
+    source: road_network_gdb
+    layer: ONSTREETPARK
+    fields: {}
+    attributes:
+      layer: GISP_ON_STREET_PARKING
+      fields:
+        x: X_COOR
+        y: Y_COOR
+        vehicle_type: VEHICLE_TYPE_DESCRIPTION_1
+        hours: OPERATIVE_HOUR_ENG
+    # The publisher's vehicle-type text, verbatim, to the roster. A text not
+    # here is counted under `bays_unknown_type`, never guessed.
+    kinds:
+      "Motor Cycles": motorcycle
+      "Any Vehicles": car
+      "Disable": car
+      "Coaches/Buses": coach
+      "Goods Vehicles": van
+      "Others": car
+    join_m: 1.0
+
+  # A bus stands at a stop a third of the time, on a seeded draw the engine
+  # re-rolls out of view — so the same stop is not always served and a drive
+  # past twice sees two streets. A minibus is at its terminus most of the time:
+  # a terminus is where the fleet queues.
+  stops:
+    - source: bus_stops
+      crs: EPSG:4326
+      kind: bus
+      chance: 0.35
+      max_snap_m: 12.0
+    - source: gmb_termini
+      crs: EPSG:4326
+      kind: minibus
+      chance: 0.8
+      max_snap_m: 12.0
+
+  # What waits at `fares.json`'s own kinds. Two red taxis queue behind a taxi
+  # stand, starting `clearances.fare_m` back so the hail ring and the
+  # passenger's kerb stay clear; a tram stands at half the tram stops, on the
+  # bed `tramway.py` laid, facing the flow of the stop's kerb.
+  stands:
+    taxi_stand: {kind: taxi, queue: 2, pitch_m: 6.5}
+    poi: {kind: tram, chance: 0.5}
+
+  # What a building's published name says about its kerb (`Q161`): no land use
+  # or building use exists in the estate (`ART_DESIGN.md`), and the name's
+  # vocabulary is the proxy — measured on the six Wan Chai sheets' 266 current
+  # names: Hotel 4, Centre / Tower / Plaza 95, Station / Pool / Hall 13.
+  # ⚠️ ORDER IS LOAD-BEARING: first hit wins, and a token an earlier class
+  # already matches is refused by the loader.
+  frontage:
+    classes:
+      hotel:
+        match: [Hotel]
+        kinds: [coach, taxi]
+      office:
+        match: [Centre, Center, Tower, Plaza, Exchange]
+        kinds: [van]
+        hours: [8, 19]
+    max_distance_m: 15.0
+    pitch_m: 14.0
+
+  # The restriction layer's complement as a density fill — a SHARE, never a
+  # licence (`Q161`): slots `pitch_m` apart down every kerb with no double
+  # yellow, `share` of them kept on a seeded draw. A single yellow is a
+  # posted-hours restriction (`NSR.TIME_ZONE` 2-5; the hours themselves are
+  # not published), so its kerb joins the fill outside `single_yellow_hours`,
+  # the one place the night street carries more cars than the day. Vans park
+  # by day only.
+  fill:
+    share: 0.3
+    pitch_m: 7.0
+    kinds: {car: 0.8, van: 0.2}
+    single_yellow_hours: [7, 19]
+    hours_by_kind:
+      van: [8, 19]
+
+  # A tram stop further than this from any laid bed stands no tram.
+  tram_max_track_m: 12.0
+
+  clearances:
+    kerb_gap_m: 0.25
+    junction_m: 10.0
+    # Over `fares.hail_radius_m` (12) and `RoadSpawn.DEFAULT_SETBACK_M` (20):
+    # the hail ring and the car's own start stay clear.
+    fare_m: 25.0
+    crossing_m: 5.0
+    # Bumper to bumper, as Hong Kong parks: the car bays are published at a
+    # 4.96 m median pitch for a 4.5 m car, and a wider gap drops every other bay.
+    gap_m: 0.4
+    # TPDM 4.3.9.8's narrow lane: a kerb whose road leaves less than this per
+    # authored lane beside the parked vehicle is refused.
+    lane_width_m: 3.0

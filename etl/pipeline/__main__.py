@@ -49,6 +49,7 @@ from pipeline import (
     fetch,
     lamps,
     landmarks,
+    parked,
     podiums,
     railings,
     region,
@@ -154,6 +155,11 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # height and the kerb side its arm reaches away from. Before `export`, which
     # names the asset.
     "lamps": lamps.main,
+    # After `fares`, `tramway`, `fence` and `surface` (`P3-71`): the stationary
+    # vehicles stand at the kerb the ribbon drew, clear of the fare nodes, on
+    # the tram beds the tramway laid, and off the fenced edges. Before
+    # `export`, which names the document.
+    "parked": parked.main,
     "export": export.main,
 }
 
@@ -199,6 +205,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "railings": ("surface",),
     "signs": ("surface",),
     "lamps": ("surface",),
+    "parked": ("surface", "fares", "tramway", "fence"),
     "export": (
         "basemap",
         "landmarks",
@@ -214,6 +221,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "railings",
         "signs",
         "lamps",
+        "parked",
     ),
 }
 

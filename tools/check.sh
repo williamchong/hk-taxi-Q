@@ -40,6 +40,7 @@ VERIFY_TOOLS=(
 	verify_city verify_tiles verify_road_surface verify_road_graph verify_city_streamer
 	verify_spawn verify_landmarks verify_fence verify_tramway verify_arrows verify_boxjunctions verify_crossings
 	verify_railings verify_signs verify_roadmarks verify_lamps verify_fares verify_water
+	verify_parked
 )
 
 # The verify tools that need no built region, so they run whatever

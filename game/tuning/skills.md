@@ -147,3 +147,47 @@ and the tip floors at zero.
 One wall is one dock. The pad shows a head-on reporting two contact ticks and a brush eighteen to
 twenty-four, all inside a second; a rebound off the same wall inside the window is the same
 event. A second wall a second later is a second dock.
+
+## `near_miss_m = 0.6`
+
+The across-clearance at or under which a pass is a near miss (`P3-2a`, `Q161`, the user's ask
+2026-10-11), flank to the parked vehicle's nearer corner, the least of it while the car is
+alongside. A Crown Comfort is 1.695 m wide in a 3.0 m lane, so a car dead-centre in its lane
+passes a bay-row car at about 0.65 m — just OUTSIDE this band, which is the point: the band
+alone must not pay a lane pass, and the path rule below is what pays a swerve. First guess
+ahead of the user's drive.
+
+## `close_call_m = 0.25`
+
+A hand's width. Under it the pass is a close call and pays `close_call_hkd` instead; at 0 the
+car touched, and a touch pays nothing (`NearMiss._judge` refuses a negative clearance, and the
+penalty block docks the hit). Must be under `near_miss_m`; `NearMiss` refuses the folded pair.
+
+## `near_miss_min_kph = 40.0`
+
+Half the drift's fade and under the speed skill's 80: Hennessy between the trams reaches it,
+a crawl along a bay row does not. Read as the highest speed while alongside, so braking into
+the pass does not forfeit it.
+
+## `near_miss_look_s = 1.5`
+
+🔴 **The rule that keeps a lane pass from paying** (the user's call: "should not trigger if we
+are just passing cars in nearby lane without real danger"). A parked vehicle is IN THE PATH when
+some part of it lies ahead within this many seconds of travel AND inside the car's own width
+along that travel — the car would hit it going straight. A car in the next lane is never inside
+the width; a car the player swerves round was, a moment before the swerve. Floored at one car
+length so a standing start can still be aimed.
+
+## `near_miss_memory_s = 2.0`
+
+How long a vehicle stays "was in the path" once it leaves it. The swerve takes well under a
+second at 40 kph; two seconds covers a lazy one and forgets a vehicle the car lined up on a
+block ago. A touch or a flight forgets every threat at once (`NearMiss.tick`).
+
+## `near_miss_hkd = 5.0`
+
+A drift's price: a pass threaded at speed is worth the same as two seconds sideways.
+
+## `close_call_hkd = 10.0`
+
+Twice the near miss, the early arrival's price: the one pass a player will remember.

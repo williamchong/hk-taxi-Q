@@ -14,8 +14,11 @@ extends RefCounted
 ## seconds and paid ON THE LANDING — `air_hkd` once the flight held `air_min_s`
 ## and again per further `air_s` — and only when the car lands upright: a roll
 ## is four wheels in the air too, and pays nothing; an early arrival pays once
-## at delivery when `early_share` of the allowance is still on the clock. Near
-## miss is the one slot left in `Fare.Skill`, waiting on `B3`'s traffic.
+## at delivery when `early_share` of the allowance is still on the clock. The
+## near miss and the close call are NOT here: `NearMiss` (`near_miss.gd`,
+## `P3-2a`) reads the car's transform and the parked bodies, which this
+## tracker never sees, and `FareSystem` routes its awards through the same
+## `_award`.
 ##
 ## ⚠️ **Air pays at the landing, never per second in the air.** A dwell that
 ## paid while airborne would pay a car falling off the world, and the roll

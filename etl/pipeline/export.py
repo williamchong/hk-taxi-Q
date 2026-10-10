@@ -63,6 +63,7 @@ from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.gltf import Bounds
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
+from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -262,7 +263,12 @@ CITY_NAME = "city.json"
 # 37 since the world's water (2026-09-25): the manifest names `water.glb`, the
 # sea drawn flat at sea level — a new shipped asset, on `P3-18`'s precedent,
 # null where the frame holds no sea. A v36 reader ships a region without it.
-CITY_SCHEMA = 37
+# 38 since `P3-71` (`Q161`): the manifest names `parked_placements.json`, the
+# stationary roster stood from an AUTHORED library (`parked.glb`, committed) —
+# the first placements document whose library is not in the bundle. A v37
+# reader would ship the document unlisted and `sync_generated.sh` would sweep
+# it; being wrong about the contents of the bundle is what this number is for.
+CITY_SCHEMA = 38
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -313,6 +319,7 @@ OPTIONAL_ASSET_KEYS = (
     "signs_placements",
     "roadmarks",
     "water",
+    "parked_placements",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -353,6 +360,7 @@ INPUTS: tuple[Input, ...] = (
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
+    Input(PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA, "parked"),
 )
 
 
@@ -434,6 +442,7 @@ def build_region(
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
+    parked = documents[PARKED_MANIFEST_NAME]
     basemap = documents[BASEMAP_NAME]
 
     tiles = [
@@ -586,6 +595,11 @@ def build_region(
         # The world's water plane, `null` where the frame held no sea — read
         # from the stage's own document on `tramway`'s terms.
         "water": basemap["asset"],
+        # Where the parked roster stands (`P3-71`, `Q161`): the library is the
+        # AUTHORED `parked.glb`, committed under `assets/authored/vehicles/`, so
+        # only the document ships. `null` where the city declares no `parked:`
+        # block or placed nothing, on `tramway`'s terms.
+        "parked_placements": parked["placements_document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

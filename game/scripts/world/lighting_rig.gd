@@ -42,6 +42,10 @@ signal changed
 ## any hour, with or without a clock.
 const TIME_ARG: String = "--time-of-day="
 
+## The group the rig joins, so a reader of the hour with no wired path — the
+## parked roster (`P3-73`) — can find the one rig in the tree.
+const GROUP: StringName = &"lighting_rig"
+
 ## The `Environment` properties a cycle blends. Everything else — the switches,
 ## the tonemapper, the glow levels — is the day's and does not move.
 const BLENDED: Array[StringName] = [
@@ -109,6 +113,7 @@ var _live: Environment = null
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	RenderingServer.global_shader_parameter_set(&"exposure_anchor", exposure_anchor)
 	# The process-wide globals outlive a scene, so a rig entering after a night
 	# one must put the day back rather than inherit the dark.

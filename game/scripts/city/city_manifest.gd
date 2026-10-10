@@ -216,7 +216,12 @@ const NOT_MEASURED: float = -1.0
 ## 37 since the world's water (2026-09-25): the manifest names `water.glb`, the
 ## sea drawn flat at sea level — optional on `tramway`'s terms, null where the
 ## frame holds no sea.
-const SCHEMA_VERSION: int = 37
+##
+## 38 since `P3-71` (`Q161`): the manifest names `parked_placements.json`, the
+## stationary roster stood from an AUTHORED library (`parked.glb`, committed)
+## — the first placements document whose library is not in the bundle. A v37
+## reader would leave the document unlisted for `sync_generated.sh` to sweep.
+const SCHEMA_VERSION: int = 38
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -451,6 +456,13 @@ var arrows_placements_path: String
 ## `railings_path`'s terms.
 var railings_placements_path: String
 
+## Where the parked roster stands (`P3-71`, `Q161`): one placement per
+## vehicle over the AUTHORED library `assets/authored/vehicles/parked.glb`,
+## each with the hours it keeps and the chance it is there. Empty where the
+## city declares no `parked:` block or placed nothing — the honest answer on
+## `tramway_path`'s terms, and `ParkedLayer` says so rather than failing.
+var parked_placements_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -613,6 +625,9 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.railings_placements_path = _resolve(
 		document.get("railings_placements"), manifest.directory
 	)
+	manifest.parked_placements_path = _resolve(
+		document.get("parked_placements"), manifest.directory
+	)
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -727,6 +742,7 @@ func shipped() -> PackedStringArray:
 		signs_placements_path,
 		roadmarks_path,
 		water_path,
+		parked_placements_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

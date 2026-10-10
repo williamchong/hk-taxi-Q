@@ -137,3 +137,18 @@ optional chrome: `RoadGraph.fits_car` refuses 14 drivable edges, and Q19
 forbids a refusal the player cannot see — round 0 of P3-9a ended with three
 drivers stopping at geometry they could not read. The prop is the only thing
 in the barrier family that collides, and that is the point of it.
+
+## `[node name="Parked" type="Node3D" parent="."]`
+
+The parked roster (`P3-71`–`P3-73`, `Q161`): the stationary vehicles the region's
+`parked_placements.json` stands from the AUTHORED library
+`assets/authored/vehicles/parked.glb`, by the hour of the lighting rig's clock
+(`Q160`). Not a `layer_preview` row, because that table's library lives in the
+bundle and this one is committed, and because that placer stands everything
+once where this one re-stands a hidden cell when the hour moves or a bus's
+chance is rolled again. A region with no `parked:` block ships none and the
+node says so.
+It COLLIDES, a box body per vehicle through `PropBatch.bodies` (`Q159`'s
+shape), because a parked bus the car drives through is the invisible refusal
+the fence exists to remove — and because the near miss (`P3-2a`) is a body
+passed, not a mesh. The asset itself stays collider-free.

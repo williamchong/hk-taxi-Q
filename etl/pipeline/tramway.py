@@ -82,7 +82,10 @@ log = logging.getLogger(__name__)
 
 TRAMWAY_NAME = "tram.glb"
 TRAMWAY_MANIFEST_NAME = "tramway.json"
-TRAMWAY_MANIFEST_SCHEMA = 1
+# 2 since `P3-71`: the manifest carries `track_lines`, every bed's centreline
+# with its heights, so a stage that stands something ON a track — the parked
+# tram at a stop — reads the join this module made rather than remaking it.
+TRAMWAY_MANIFEST_SCHEMA = 2
 
 # ⚠️ **No `-col` suffix, and that is deliberate.** The `-col` convention makes a
 # mesh a collider, and the tramway must not be one: it lies on ground that is
@@ -189,6 +192,9 @@ class TramwayReport:
     pairs: int = 0
     tracks: int = 0
     tracks_m: float = 0.0
+    # Every bed's centreline as drawn, `[x, y, z]` per station, in the order the
+    # beds were laid — published for a consumer that stands on the track.
+    track_lines: list[list[list[float]]] = field(default_factory=list)
     # Stations of a joined pair the trim rejected, and how many it tested. ⚠️
     # **This is what can see a bad join, and `gauges_m` cannot** — see
     # `_write_manifest`.
@@ -941,6 +947,9 @@ def build_region(
             for bed in beds:
                 report.tracks += 1
                 report.tracks_m += _plan_length(bed)
+                report.track_lines.append(
+                    [[round(float(v), 3) for v in station] for station in bed]
+                )
                 _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
 
     # ⚠️ **Every rail is drawn once, from the source's own parts, and pairing
@@ -1014,6 +1023,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Tramway
         "pairs": report.pairs,
         "tracks": report.tracks,
         "tracks_m": round(report.tracks_m, 3),
+        "track_lines": report.track_lines,
         # ⚠️ **This is the join's own detector, and `drawn_gauge_m` below is
         # not.** A pair joined across two *tracks* sits 2.6 m apart, which the
         # trim rejects at every station — so it shows up here as a pair whose

@@ -116,6 +116,17 @@ signal sampled
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const ParkedLayer = preload("res://scripts/city/parked_layer.gd")
+
+## How far round the car the parked roster is asked for bodies each tick
+## (`P3-2a`): the look distance at the car's speed plus a bus's half-length
+## and the car's own, never under a car length — an obstacle that is
+## alongside or ahead in the path is always inside it, so no live approach is
+## dropped — and never past the look at top speed.
+const NEAR_RADIUS_MAX_M: float = 60.0
+const NEAR_RADIUS_MIN_M: float = 12.0
+const LONGEST_PARKED_HALF_M: float = 6.0
 
 ## `--fares=off` frees this node. Read by prefix, like `--hud=`.
 const FARES_ARG: String = "--fares="
@@ -160,6 +171,8 @@ var _profile: FareProfile = null
 var _tariff: FareTariff = null
 ## The session's skills, built by `setup`, reset at every boarding.
 var _tracker: SkillTracker = null
+## The near miss and close call detector (`P3-2a`), fed the parked bodies.
+var _near: NearMiss = null
 ## The drift tier last emitted, so `drift_tier_changed` fires on a move only.
 var _drift_tier: int = -1
 var _rng: RandomNumberGenerator = null
@@ -203,6 +216,8 @@ func _ready() -> void:
 	var fares: Dictionary[String, Dictionary] = {}
 	for region: String in GeneratedRegions.resident():
 		fares[region] = GeneratedFares.load_fares(GeneratedFares.path(region))
+	# The car's own plan box, in its own frame, for the near miss's bands.
+	var box: AABB = vehicle.transform.affine_inverse() * MeshContract.bounds(vehicle)
 	setup(
 		RoadGraph.shared(),
 		fares,
@@ -210,7 +225,8 @@ func _ready() -> void:
 		load(FareTariff.PATH) as FareTariff,
 		load(SkillProfile.PATH) as SkillProfile,
 		vehicle.profile.drift_slip_threshold_deg if vehicle.profile != null else 0.0,
-		rng
+		rng,
+		Vector2(box.size.x / 2.0, box.size.z / 2.0)
 	)
 	if not _usable:
 		set_physics_process(false)
@@ -237,7 +253,8 @@ func setup(
 	tariff: FareTariff,
 	skills: SkillProfile,
 	slip_threshold_deg: float,
-	rng: RandomNumberGenerator
+	rng: RandomNumberGenerator,
+	car_half_m: Vector2
 ) -> void:
 	_usable = false
 	if graph == null or graph.is_empty():
@@ -265,6 +282,11 @@ func setup(
 	if not tracker.usable():
 		push_error("FareSystem: the SkillTracker is inert; nothing will be hailed.")
 		return
+	# And the near miss's: its bands, and the car's own extent (`P3-2a`).
+	var near := NearMiss.new(skills, car_half_m.x, car_half_m.y)
+	if not near.usable():
+		push_error("FareSystem: the NearMiss detector is inert; nothing will be hailed.")
+		return
 	var probe := FareMeter.new(tariff)
 	if not probe.usable():
 		return
@@ -278,6 +300,7 @@ func setup(
 	_rng = rng
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_tracker = tracker
+	_near = near
 	_drift_tier = -1
 	skill_counts.resize(Fare.Skill.size())
 	skill_counts.fill(0)
@@ -321,8 +344,19 @@ func _physics_process(delta: float) -> void:
 		slip_deg_of(vehicle.rear_axle_velocity(), nose),
 		vehicle.is_airborne(),
 		vehicle.is_upright(),
-		vehicle.take_impact_mps()
+		vehicle.take_impact_mps(),
+		placed,
+		velocity,
+		ParkedLayer.near_all(get_tree(), placed.origin, _near_radius_m(velocity.length()))
 	)
+
+
+## The disc the roster is asked for, at this speed.
+func _near_radius_m(speed_mps: float) -> float:
+	var look_m: float = (
+		speed_mps * _near.look_s() + LONGEST_PARKED_HALF_M + _near.car_half_length_m()
+	)
+	return clampf(look_m, NEAR_RADIUS_MIN_M, NEAR_RADIUS_MAX_M)
 
 
 ## The angle between where the car points and where `velocity` is going — the
@@ -343,7 +377,9 @@ static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
 ## `heading` with `slip_deg` between the two, `delta_s` after the last tick,
 ## `airborne` with every wheel off the ground and `upright` on its wheels
 ## rather than its roof (`P3-51`), and `impact_mps` into a wall this tick
-## (`P3-50`). The skills run every tick in every state; the odometer and
+## (`P3-50`); `car`, `velocity` and `obstacles` are the car's own transform,
+## its velocity and the parked vehicles near it, for the near miss
+## (`P3-2a`). The skills run every tick in every state; the odometer and
 ## the clock while carrying; the graph is asked once per `sample_hz`.
 func sample(
 	position: Vector3,
@@ -353,7 +389,10 @@ func sample(
 	slip_deg: float = 0.0,
 	airborne: bool = false,
 	upright: bool = true,
-	impact_mps: float = 0.0
+	impact_mps: float = 0.0,
+	car: Transform3D = Transform3D.IDENTITY,
+	velocity: Vector3 = Vector3.ZERO,
+	obstacles: Array[Dictionary] = []
 ) -> void:
 	if not _usable:
 		return
@@ -363,6 +402,10 @@ func sample(
 		_announce_reading()
 	for award: Fare.Award in _tracker.tick(
 		speed_mps, slip_deg, elapsed, airborne, upright, impact_mps
+	):
+		_award(award)
+	for award: Fare.Award in _near.tick(
+		car, velocity, obstacles, elapsed, impact_mps > 0.0, airborne
 	):
 		_award(award)
 	var tier: int = _tracker.drift_tier()
@@ -534,8 +577,10 @@ func allowance_for(kind: Fare.Kind, par_m: float) -> float:
 func _board() -> void:
 	fare.allowance_s = allowance_for(fare.kind, fare.par_m)
 	fare.remaining_s = fare.allowance_s
-	# A slide or a flight held into the hail is not the passenger's.
+	# A slide or a flight held into the hail is not the passenger's, nor an
+	# approach the car had already lined up.
 	_tracker.reset()
+	_near.reset()
 	# Nothing earned yet: the time is priced at the door, not here.
 	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0

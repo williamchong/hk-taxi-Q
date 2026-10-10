@@ -317,7 +317,11 @@ region, kerb-referenced (median 2.76 m off the nearest centreline).
   refused — a class-specific restriction is not a plain yellow line and the codec cannot say which
   class.
 - `TIME_ZONE` `1` = 24 hours → double; `2`–`5` = posted hours → single. `EFFECTIVE_DAY` and
-  `REMARKS` carry nothing. `ONSTREETPARK` carries 607 bays.
+  `REMARKS` carry nothing. `ONSTREETPARK` carries 607 bays — **in use since `P3-71`** (`Q161`) as
+  the positive "parking is allowed" source: one point per bay (`CAPACITY` 1 on 605), its attribute
+  table `GISP_ON_STREET_PARKING` joined on `X_COOR` / `Y_COOR` (606 of 607): 342 motorcycle, 220
+  any vehicle, 23 disabled, 17 coach, 2 goods, 2 other; 237 metered. Motorcycle bays are a metre
+  apart (nearest neighbour p50 0.98 m), car bays 4.96 m; 103 lie inside an `NSR` run.
 - ⚠️ The one overlay that is **not a key join**: it carries `ST_CODE_1..6`, so it is
   linear-referenced onto the graph; its M values are not a join. 33,385 m over 722 edge sides
   survive, deduped into 1 m cells.
@@ -678,8 +682,8 @@ All CSDI `file-api` GeoJSON, no key.
 | Dataset | Territory | In region | Note |
 |---|---|---|---|
 | `td_rcd_1760062901418_33580` Fleet Taxi Stopping Places | 17 | 2 | One is Expo Drive outside HKCEC. ⚠️ Names are prose, not a street code. Not in use |
-| `td_rcd_1638874475129_49745` Bus Stop Location | 4,480 | 70 | `P3-3` traffic. Not in use |
-| `td_rcd_1638874728005_80512` GMB Terminus Location | 4,760 | 52 | Not in use |
+| ✅ `td_rcd_1638874475129_49745` Bus Stop Location | 4,488 | 70 | **In use since `P3-71`** (`Q161`): a parked bus at a stop a third of the time. Same shape as the tram stops — `OBJECTID`, `STOP_ID`, a date, no name |
+| ✅ `td_rcd_1638874728005_80512` GMB Terminus Location | 4,776 | 52 | **In use since `P3-71`**: a parked minibus at a terminus. Termini only, which is where the fleet queues |
 | ✅ `td_rcd_1638875413253_59498` Tram Stop Location | 117 | **19** | Shipped by `P3-14` as the `poi` kind. ⚠️ Publishes no name (`OBJECTID`, `STOP_ID`, `LAST_UPDATE_DATE` only): `fares.json` carries `name: null`, `pickup`/`dropoff` both false |
 
 ---

@@ -167,6 +167,35 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "parked": Trigger(
+        "`pipeline/parked.py`, the `parked` config block, or any parked-vehicle change",
+        (
+            Report(
+                "parked.json",
+                (
+                    "bays_read",
+                    "bays_unjoined",
+                    "bays_unsnapped",
+                    "bays_on_restriction",
+                    "stops_read",
+                    "stands_read",
+                    "trams_no_track",
+                    "frontages_classified",
+                    "fill_slots",
+                    "fill_kept",
+                    "fill_night_only",
+                    "candidates",
+                    "placed",
+                    "by_kind",
+                    "by_source",
+                    "by_hours",
+                    "refused",
+                    "narrowest_lane_room_m",
+                    "published_in_lane",
+                ),
+            ),
+        ),
+    ),
     "arrows": Trigger(
         "`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change",
         (

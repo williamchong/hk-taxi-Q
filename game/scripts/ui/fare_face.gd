@@ -233,6 +233,8 @@ func skill_name(skill: Fare.Skill) -> String:
 			return _say("早到", "early")
 		Fare.Skill.NEAR_MISS:
 			return _say("擦身", "near miss")
+		Fare.Skill.CLOSE_CALL:
+			return _say("險過", "close call")
 		Fare.Skill.AIR:
 			return _say("飛車", "air")
 		Fare.Skill.CRASH:

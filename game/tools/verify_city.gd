@@ -19,6 +19,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
+const ParkedLayerScript = preload("res://scripts/city/parked_layer.gd")
 const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
@@ -169,6 +170,17 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document(
 				"tramway", manifest.tramway_path, GeneratedLayer.path(GeneratedLayer.TRAMWAY)
+			)
+		)
+	# Guarded on the same terms (`P3-71`): a city with no `parked:` block names
+	# none, and `verify_parked.gd` treats an absent document as a pass, so a
+	# manifest naming it with the file gone would otherwise pass every check.
+	if not manifest.parked_placements_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"parked placements",
+				manifest.parked_placements_path,
+				ParkedLayerScript.placements_path()
 			)
 		)
 	# Guarded for the same reason, and with the same thing the guard must not do:

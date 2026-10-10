@@ -110,7 +110,7 @@ the arrow disabled.
 | **Drift** | HK$ once a slide has held `drift_min_s` at or over `drift_slip_threshold_deg`, and again per `drift_s` (`P3-49`, `skills.tres`) |
 | **Sustained speed** | HK$ per `speed_hold_m` driven over `speed_min_kph` — never oftener than the meter's 200 m unit (`P3-49`) |
 | **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
-| **Near miss** | Passing traffic within ~1 m at speed — a slot until `B3` has traffic |
+| **Near miss** | HK$ for passing a PARKED vehicle inside `near_miss_m` at or over `near_miss_min_kph`, only when the car was heading for it a moment before — a lane pass at the same clearance pays nothing (`P3-2a`, `Q161`, the user's call); inside `close_call_m` it is a **close call** at twice the price |
 | **Air** | HK$ at the landing once every wheel has been off the ground for `air_min_s`, and again per `air_s` of flight — upright landings only, a roll pays nothing (`P3-51`, `Q147`) |
 
 Skills are paid during the drive and shown at once — a flash under the clock, the tip on its own
@@ -237,6 +237,11 @@ once `P3-9` reports.
 ---
 
 ## Traffic AI
+
+⚠️ **Deferred behind the parked roster (`Q161`, 2026-10-11).** The streets are populated first by
+stationary vehicles from published data — bays, bus stops, minibus termini, taxi stands, tram
+stops, named frontages and a fill of the free kerb — resolved by the hour, with the near miss
+paid against them. What follows is the moving layer that comes after.
 
 - Vehicles follow road-graph edges, respecting `direction`, `speed_limit_kph` and
   `turn_restrictions`. The AI obeys the real rules; the player does not.

@@ -491,16 +491,29 @@ the HUD beside the car.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-3` | `TrafficSystem` — AI on road-graph splines obeying direction and turn restrictions | Traffic obeys real rules; density scales by perf tier |
+| `P3-71` 🟡 | **Parked vehicles from published data** (`Q161`, the user's call 2026-10-11, in place of moving traffic) — `pipeline/parked.py` → `parked_placements.json`, a placements document over an authored vehicle library. Sources, in precedence: Road Network v2's `ONSTREETPARK` + `GISP_ON_STREET_PARKING` (607 bays in region, one bay a point, 342 motorcycle / 220 any vehicle / 23 disabled / 17 coach / 2 goods; 237 metered with operative hours); TD's Bus Stop Location (70) and GMB Terminus (52), fetched like the tram stops; `fares.json`'s 14 taxi stands and 19 tram stops; the tramway's track centres; the `NSR` complement as a density fill at a config share. Every placement carries `kind`, `source`, `hours` | Each placement joins a library mesh and stands at the kerb rail of its edge (`carriageway_region.json`), nose along travel for its side; none on a crossing, a box, a fare ring, the spawn, a blocked or fenced edge; a fill placement only where `width_m − vehicle` leaves `lanes × 3.0 m`. `tools/parked_report.py` tables counts by kind, source and hour, kerb distance p50, overlaps 0; a battery row |
+| `P3-72` 🟡 | **The parked roster** — `tools/make_vehicle.py` grows the kinds the data names: private car (2), red taxi (the body, doors shut), green minibus, double-decker bus, Hiace van, tram, motorcycle. Meshes only: no `VehicleBody3D`, tyres in the body | Each 800–2,000 triangles (tram and bus may exceed, priced), 3–5 colours, one material; `verify_mesh_contract` holds; `test_make_vehicle.py` pins the bytes |
+| `P3-73` 🟡 | **The placer, by the hour** — a `MultiMesh` per kind per prop cell (`PropCellProfile`), a `BoxShape3D` body per placement (`Q159`); a `ParkedRoster` resolves which placements stand at the rig's `time_of_day`, and re-rolls only cells past `range_m` so nothing pops in view: metered bays and vans by their hours, single-yellow kerbs filled after the posted hours, a bus present at a stop by a seeded chance with a dwell, GMB termini always queued, trams at stops | A placement with `hours` is absent outside them, measured at two hours of the clock; a visible cell never changes; `draws` and `prims` on the throttle route before and after, by day and night; the user's drive |
+| `P3-2a` 🟡 | Near-miss scoring — detection plus a live on-screen award, **against parked vehicles** (unblocked by `Q161`): a shell on the player's body, a parked body passed inside `near_miss_m` at or over `near_miss_min_kph` with no contact pays `Fare.Skill.NEAR_MISS` once per body; a tighter band is the close call | Pays on a pass, never on a touch; `skills.tres` holds the bands and the price; `verify_fares.gd` drives a straight pass at a known offset and a touch, both graded. No style chain, no banking |
+| `P3-3` | 🕐 `TrafficSystem` — AI on road-graph splines obeying direction and turn restrictions. **Deferred behind `P3-71`–`P3-73` (`Q161`)** | Traffic obeys real rules; density scales by perf tier |
 | `P3-4` | Trams on Hennessy/Johnston as scripted moving blockers | Unpassable, correctly routed, tram bell audio |
 | `P3-8` | Bus-lane penalty + red taxi livery + minibus behaviour | Penalty triggers from the `bus_lane` flag |
-| `P3-2a` | Near-miss scoring only — detection plus a live on-screen award | Passing AI traffic inside the threshold at speed awards points, shown live. No style chain, no banking |
 
-- **Deps:** `P2-2`, `B1`. `P3-4` and `P3-8` follow `P3-3`; `P3-2a` follows all three.
-- **Review:** drive the `B1` fare again with traffic | web build | **Harder in a good way, or
-  just annoying?**
-- `P3-2a` is here so the review judges traffic with an upside; prior art Burnout 3 (threshold,
-  speed gate and pop are tuned quantities).
+- **Deps:** `P2-2`, `B1`. `P3-72` and `P3-71` are independent; `P3-73` follows both; `P3-2a` follows
+  `P3-73`. `P3-4` and `P3-8` follow `P3-3`, still.
+- **Review:** drive the `B1` fare again among the parked streets, by day and at night | web build |
+  **Harder in a good way, or just annoying?** — and do the near misses pay where a player would
+  expect?
+- `P3-2a` is here so the review judges the streets with an upside; prior art Burnout 3 (threshold,
+  speed gate and pop are tuned quantities). Against stationary bodies the detector is honest and
+  testable; traffic later inherits it.
+- **Where a van belongs has no source** (`ART_DESIGN.md`: no land use, building use or ground-floor
+  attribute). `P3-71` starts from the two goods bays and the podium (`P`) frontages as the
+  commercial proxy — Wan Chai has no industrial block; the Planning Department's land utilisation
+  polygons are the fetch if the proxy reads wrong, a schema bump.
+- ⚠️ The drawings' `RM1051` / `RM1052` (79 / 82 lines in region; `Q57` counted 82 bus-stop boxes
+  under `RM1047`) are unidentified until read against the index plan — the bus bay's extent and
+  heading if they are what the count suggests.
 - Route on `RoadGraph.is_routable` (`Q51`): `city.json` publishes a clear corridor width per
   station, 24 blocked edges; `ALONG_M` is `CELL_M`. ⚠️ `nearest_edge` deliberately still resolves
   blocked edges, so the player can drive into one (`Q19`'s geometry half is open).
