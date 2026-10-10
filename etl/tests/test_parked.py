@@ -322,6 +322,14 @@ class TestTheFill:
         assert _fill_candidates(street, spec, report) == []
         assert report.fill_slots == 0
 
+    def test_a_one_way_street_fills_its_nearside_only(self, spec) -> None:
+        """The offside of a one-way street is the fast lane (the user's drive)."""
+        street = _street(_graph(direction="forward"), _surface())
+        kept = _fill_candidates(street, spec, ParkedReport())
+        assert kept and all(candidate.side > 0.0 for candidate in kept)
+        both = _fill_candidates(_street(_graph(), _surface()), spec, ParkedReport())
+        assert any(candidate.side < 0.0 for candidate in both)
+
     def test_a_van_keeps_its_own_hours_on_a_free_kerb(self, spec) -> None:
         street = _street(_graph(), _surface())
         kept = _fill_candidates(street, spec, ParkedReport())

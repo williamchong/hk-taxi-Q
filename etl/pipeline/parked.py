@@ -504,6 +504,8 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
             continue
         length_m = street.length_m(edge_id)
         for side in (1.0, -1.0):
+            if not spec.slow_streets.allows_side(street.edges[edge_id], side):
+                continue
             runs = street.runs(edge_id, side)
             draw = _seeded("fill", edge_id, side)
             slots = int(length_m // fill.pitch_m)
@@ -752,6 +754,9 @@ def build_region(
                 report.frontages_too_far += 1
                 continue
             side = street.kerb_side(snap)
+            if not spec.slow_streets.allows_side(street.edges[snap.edge], side):
+                report.refuse(SOURCE_FRONTAGE, FAST_STREET)
+                continue
             length_m = street.length_m(snap.edge)
             for rank, kind in enumerate(klass.kinds):
                 along_m = snap.t * length_m + rank * spec.frontage.pitch_m

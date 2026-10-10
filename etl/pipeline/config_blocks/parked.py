@@ -192,6 +192,14 @@ class SlowStreets:
             return False
         return self.bus_lane or not bool(edge.get("bus_lane"))
 
+    @staticmethod
+    def allows_side(edge: dict, side: float) -> bool:
+        """The nearside always; the offside only on a two-way street, where it
+        is the other flow's nearside. On a one-way street the offside is the
+        fast lane (the user's drive, 2026-10-11: "cars dont park in right most
+        lane which is fast lane in hong kong")."""
+        return side > 0.0 or str(edge.get("direction")) == "both"
+
 
 @dataclass(frozen=True)
 class Clearances:

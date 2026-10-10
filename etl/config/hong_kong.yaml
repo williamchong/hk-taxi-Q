@@ -4345,7 +4345,9 @@ parked:
   # 50 km/h, with no bus lane; Gloucester, Hennessy and the interchange stand
   # nothing invented. An edge the class join never reached stands nothing.
   # Nor a one-lane street (the user: "usually not 1 lane only roads" — parked
-  # on, it is blocked) nor a bridge or flyover (`on_structure`).
+  # on, it is blocked) nor a bridge or flyover (`on_structure`). And on a
+  # one-way street the nearside only: the offside is the fast lane ("cars
+  # dont park in right most lane which is fast lane in hong kong").
   slow_streets:
     street_classes: [minor]
     max_speed_kph: 50
