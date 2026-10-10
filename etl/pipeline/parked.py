@@ -114,6 +114,8 @@ KERB_HIDDEN = "kerb_hidden"
 TOO_NARROW = "too_narrow"
 IN_KEEP_OUT = "in_keep_out"
 OVERLAPPING = "overlapping"
+# An invented kerb on a street the stage may not invent one on.
+FAST_STREET = "fast_street"
 
 
 @dataclass
@@ -143,7 +145,9 @@ class ParkedReport:
     # Every refusal, by the source that asked and the rule that answered, in
     # the order the rules are asked: `FENCED`, `NO_RIBBON`, `AT_JUNCTION`,
     # `KERB_HIDDEN`, `TOO_NARROW`, `IN_KEEP_OUT` (a fare node or a crossing),
-    # `OVERLAPPING`. ⚠️ Partition: `candidates` = `placed` + every count here.
+    # `OVERLAPPING`, and `FAST_STREET` for a frontage on a street the stage
+    # may not invent a kerb on (the fill never draws a slot there).
+    # ⚠️ Partition: `candidates` = `placed` + every count here.
     refused: dict[str, dict[str, int]] = field(default_factory=dict)
     candidates: int = 0
     placed: int = 0
@@ -496,6 +500,8 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
     weights = [fill.kinds[kind] for kind in kinds]
     candidates: list[Candidate] = []
     for edge_id in sorted(street.ribbons):
+        if not spec.slow_streets.allows(street.edges[edge_id]):
+            continue
         length_m = street.length_m(edge_id)
         for side in (1.0, -1.0):
             runs = street.runs(edge_id, side)
@@ -737,6 +743,9 @@ def build_region(
             snap = street.segments.nearest(float(centroid.x), float(centroid.y))
             if snap.edge not in street.ribbons:
                 report.refuse(SOURCE_FRONTAGE, NO_RIBBON)
+                continue
+            if not spec.slow_streets.allows(street.edges[snap.edge]):
+                report.refuse(SOURCE_FRONTAGE, FAST_STREET)
                 continue
             foot = street.ribbons[snap.edge].foot_at(snap.t)
             if place.distance_m(float(foot[0]), float(foot[1])) > spec.frontage.max_distance_m:

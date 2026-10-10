@@ -165,6 +165,35 @@ class Fill:
 
 
 @dataclass(frozen=True)
+class SlowStreets:
+    """Where the stage may INVENT a kerb — the fill, a frontage — as against
+    where the publisher put a bay or a stop (the user's drive, 2026-10-11:
+    "cars dont park in fast lanes"). A street class the graph publishes
+    (`roads.street_class`), at or under a speed, with no bus lane; an edge the
+    class join never reached is refused too."""
+
+    street_classes: tuple[str, ...]
+    max_speed_kph: float
+    bus_lane: bool
+    # Fewer authored lanes than this stands nothing: a one-lane street parked
+    # on is a street blocked. And a bridge or a flyover (`on_structure` at any
+    # station) parks nobody.
+    min_lanes: int
+    on_structure: bool
+
+    def allows(self, edge: dict) -> bool:
+        if str(edge.get("street_class")) not in self.street_classes:
+            return False
+        if float(edge.get("speed_limit_kph", 0.0)) > self.max_speed_kph:
+            return False
+        if int(edge.get("lanes", 0)) < self.min_lanes:
+            return False
+        if not self.on_structure and any(bool(flag) for flag in edge.get("on_structure", ())):
+            return False
+        return self.bus_lane or not bool(edge.get("bus_lane"))
+
+
+@dataclass(frozen=True)
 class Clearances:
     # Between the vehicle's outer flank and the kerb.
     kerb_gap_m: float
@@ -196,6 +225,7 @@ class Parked:
     fill: Fill | None
     tram_max_track_m: float
     clearances: Clearances
+    slow_streets: SlowStreets
 
     def vehicle(self, kind: str) -> Vehicle:
         if kind not in self.vehicles:
@@ -407,6 +437,24 @@ def _fill(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Fill | None:
 _CLEARANCES = ("kerb_gap_m", "junction_m", "fare_m", "crossing_m", "gap_m", "lane_width_m")
 
 
+def _slow_streets(body: Any, where: str) -> SlowStreets:
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    raw = _require(body, "street_classes", where)
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)) or not raw:
+        raise ValueError(f"{where}:street_classes must be a non-empty list, got {raw!r}")
+    min_lanes = int(_require(body, "min_lanes", where))
+    if min_lanes < 1:
+        raise ValueError(f"{where}:min_lanes must be at least 1, got {min_lanes}")
+    return SlowStreets(
+        street_classes=tuple(str(klass) for klass in raw),
+        max_speed_kph=float(_require(body, "max_speed_kph", where)),
+        bus_lane=bool(body.get("bus_lane", False)),
+        min_lanes=min_lanes,
+        on_structure=bool(body.get("on_structure", False)),
+    )
+
+
 def _parked(body: Any, where: str) -> Parked | None:
     """The optional parked-vehicle block (`P3-71`).
 
@@ -431,6 +479,7 @@ def _parked(body: Any, where: str) -> Parked | None:
         clearances=Clearances(
             **_measures(_require(body, "clearances", where), f"{where}:clearances", _CLEARANCES)
         ),
+        slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
         **_measures(body, where, ("tram_max_track_m",), positive=True),
     )
     named: set[str] = set()

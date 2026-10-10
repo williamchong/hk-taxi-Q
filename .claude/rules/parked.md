@@ -35,6 +35,11 @@ traffic, and the bonus for threading them.
   `Snap.offset_m`'s sign (`+` nearside) and nothing else; `test_parked.py` stands a car on each
   side of a two-way fixture edge and checks the two face apart, and a one-way street's two kerbs
   face the same way. A motorcycle stands nose to the kerb (`across`), its LENGTH off the road.
+- 🔴 **An invented kerb is a slow street's** (`parked.slow_streets`, the user's drive 2026-10-11:
+  "cars dont park in fast lanes"): the fill draws no slot and a frontage is refused `FAST_STREET`
+  on a `main` edge, over 50 km/h, with a bus lane, unclassified, under `min_lanes` (2) or on a
+  structure. A bay, a stop and a stand are
+  the publisher's and are never gated by it. Do not loosen it to fill a quiet main road.
 - 🔴 **The fill is a share, never a licence** (`Q161`). 57 of Wan Chai's 90 km of level-0 kerb
   carries no published restriction; `fill.share` of the slots is kept on a draw seeded by the
   slot, so a rebuild places the same cars. A single yellow joins the fill OUTSIDE

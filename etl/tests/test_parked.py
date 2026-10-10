@@ -74,6 +74,13 @@ BLOCK: dict[str, Any] = {
         "hours_by_kind": {"van": [8, 19]},
     },
     "tram_max_track_m": 12.0,
+    "slow_streets": {
+        "street_classes": ["minor"],
+        "max_speed_kph": 50,
+        "bus_lane": False,
+        "min_lanes": 2,
+        "on_structure": False,
+    },
     "clearances": {
         "kerb_gap_m": 0.25,
         "junction_m": 10.0,
@@ -107,7 +114,7 @@ def spec(tmp_path):
 
 # A straight 200 m two-way street running north, 12 m kerb to kerb (two
 # lanes and room to park both sides), and a one-way one beside it.
-def _graph(direction: str = "both", width_m: float = 12.0, lanes: int = 2) -> dict:
+def _graph(direction: str = "both", width_m: float = 12.0, lanes: int = 2, **more) -> dict:
     return {
         "edges": [
             _edge(
@@ -119,6 +126,7 @@ def _graph(direction: str = "both", width_m: float = 12.0, lanes: int = 2) -> di
                 width_m=width_m,
                 lanes=lanes,
                 kerbside=[],
+                **({"street_class": "minor", "speed_limit_kph": 50, "bus_lane": False} | more),
             )
         ]
     }
@@ -293,6 +301,26 @@ class TestTheFill:
         assert all(candidate.hours == (19.0, 7.0) for candidate in near)
         # And never a van: a kind with hours of its own does not take the night.
         assert all(candidate.kind == "car" for candidate in near)
+
+    @pytest.mark.parametrize(
+        "fast",
+        [
+            {"street_class": "main"},
+            {"speed_limit_kph": 70},
+            {"bus_lane": True},
+            {"street_class": None},
+            {"lanes": 1},
+            {"on_structure": [False, True]},
+        ],
+    )
+    def test_the_fill_never_draws_a_slot_on_a_fast_street(self, spec, fast) -> None:
+        """The user's drive: cars do not park in fast lanes, on a bridge, or on
+        a one-lane road. A main road, a 70 km/h limit, a bus lane, an
+        unclassified edge, one lane and a structure each stand no fill."""
+        street = _street(_graph(**fast), _surface())
+        report = ParkedReport()
+        assert _fill_candidates(street, spec, report) == []
+        assert report.fill_slots == 0
 
     def test_a_van_keeps_its_own_hours_on_a_free_kerb(self, spec) -> None:
         street = _street(_graph(), _surface())

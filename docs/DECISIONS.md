@@ -9862,6 +9862,15 @@ behind them. The user's drive owed, by day and at night.
   resident on Wan Chai and 324 on Causeway Bay. ⚠️ Jolt's `max_bodies` is 10,240 and the
   railings hold 7,693: a cell is freed at once on rebuild, not queued, because the first poll
   re-stands every cell and a queued free doubled the roster's bodies past the cap.
+- 🔴 **An invented kerb is a slow street's** (the user's first drive, 2026-10-11: "cars dont park
+  in fast lanes"). The first build filled Gloucester Road (73), Hennessy (70) and the Wan Chai
+  Interchange (53) — a published `width_m` and `lanes` said there was room, and there was. The fill
+  and a frontage now take `parked.slow_streets`: `roads.street_class` `minor` only (SER, TRA, RER —
+  Lockhart, Jaffe, Harbour Road), at or under 50 km/h, no bus lane, and never an edge the class
+  join missed — nor a one-lane street ("usually not 1 lane only roads": parked on, it is blocked)
+  nor a bridge (`on_structure`). A bay, a stop and a stand are the publisher's and stand where
+  they were put: 12 bays and a stop on 70 km/h edges remain. Wan Chai 863 → 546 placed, Causeway
+  Bay 366 → 265.
 - Owed: the handset's frame time, and `RM1051` / `RM1052`'s meaning in the drawings.
 
 - **Why parked first.** `P3-3` owes an adjacency and the 217 turn restrictions before one car
