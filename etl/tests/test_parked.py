@@ -162,8 +162,7 @@ def _street(graph: dict, surface: dict) -> _Street:
 
 
 def _candidate(kind: str, t: float, side: float, source: str = SOURCE_BAY, **more) -> Candidate:
-    rows = 0 if source == SOURCE_BAY or source == SOURCE_STAND else 1
-    return Candidate(kind, source, 7, t, side, ALWAYS, 1.0, **({"rows": rows} | more))
+    return Candidate(kind, source, 7, t, side, ALWAYS, 1.0, **more)
 
 
 class TestTheWindow:
@@ -420,6 +419,16 @@ class TestTheLayby:
         assert _layby_candidates(self._street_with(6.0, (80.0, 120.0)), spec, ParkedReport()) == []
         assert _layby_candidates(self._street_with(2.5, (80.0, 85.0)), spec, ParkedReport()) == []
         assert _layby_candidates(self._street_with(1.0, (80.0, 120.0)), spec, ParkedReport()) == []
+
+    def test_a_widening_that_reaches_the_edge_end_is_a_flare(self, spec) -> None:
+        """A run touching the trim is the junction opening, not a lay-by."""
+        assert _layby_candidates(self._street_with(2.5, (160.0, 200.0)), spec, ParkedReport()) == []
+        assert _layby_candidates(self._street_with(2.5, (0.0, 40.0)), spec, ParkedReport()) == []
+
+    def test_a_missing_speed_limit_is_a_fast_street(self, spec) -> None:
+        edge = _graph()["edges"][0]
+        del edge["speed_limit_kph"]
+        assert not spec.slow_streets.allows(edge)
 
 
 class TestOnTheTrack:

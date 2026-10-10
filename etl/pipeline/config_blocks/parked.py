@@ -39,6 +39,10 @@ SOURCE_LAYBY = "layby"
 SOURCE_FRONTAGE = "frontage"
 SOURCE_FILL = "fill"
 SOURCES = (SOURCE_BAY, SOURCE_STOP, SOURCE_STAND, SOURCE_LAYBY, SOURCE_FRONTAGE, SOURCE_FILL)
+# The sources that stand a vehicle where the kerb was FOUND — a published bay or
+# stop, a lay-by read off the kerb line — and so take neither the corner
+# setback nor the lane bar the stage puts on what it invents.
+AS_FOUND = (SOURCE_BAY, SOURCE_STOP, SOURCE_LAYBY)
 
 # A placement present through the whole day. Spelled once so a reader, the
 # stage and the engine agree on what an absent window means.
@@ -204,9 +208,12 @@ class SlowStreets:
     on_structure: bool
 
     def allows(self, edge: dict) -> bool:
-        if str(edge.get("street_class")) not in self.street_classes:
+        """An edge missing its class or its limit is refused: the safe default
+        for a gate that keeps cars off fast roads."""
+        if edge.get("street_class") not in self.street_classes:
             return False
-        if float(edge.get("speed_limit_kph", 0.0)) > self.max_speed_kph:
+        speed = edge.get("speed_limit_kph")
+        if speed is None or float(speed) > self.max_speed_kph:
             return False
         if int(edge.get("lanes", 0)) < self.min_lanes:
             return False
@@ -485,15 +492,7 @@ def _fill(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Fill | None:
         return None
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
-    raw_kinds = _require(body, "kinds", where)
-    if not isinstance(raw_kinds, dict) or not raw_kinds:
-        raise ValueError(f"{where}:kinds must map a roster kind to its weight")
-    kinds = {_kind(kind, f"{where}:kinds"): float(weight) for kind, weight in raw_kinds.items()}
-    if any(weight <= 0.0 for weight in kinds.values()):
-        raise ValueError(f"{where}:kinds weights must be positive, got {raw_kinds!r}")
-    for kind in kinds:
-        if kind not in vehicles:
-            raise ValueError(f"{where}:kinds names {kind!r}, which vehicles: does not size")
+    kinds = _weighted_kinds(_require(body, "kinds", where), f"{where}:kinds", vehicles)
     raw_hours = body.get("hours_by_kind") or {}
     hours_by_kind = {
         _kind(kind, f"{where}:hours_by_kind"): _hours(window, f"{where}:hours_by_kind:{kind}")

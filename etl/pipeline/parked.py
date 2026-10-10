@@ -61,6 +61,7 @@ from shapely.strtree import STRtree
 
 from pipeline.config import (
     ALWAYS,
+    AS_FOUND,
     SOURCE_BAY,
     SOURCE_FILL,
     SOURCE_FRONTAGE,
@@ -83,7 +84,7 @@ from pipeline.gdb import points as gdb_points
 from pipeline.gdb import read_layer, read_table
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.placements import PLACEMENTS_SCHEMA, Placement, placement
-from pipeline.polyline import Segments, Snap, bearing_deg, frame, plan_lengths
+from pipeline.polyline import Segments, Snap, bearing_deg, frame, plan_lengths, true_runs
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -115,7 +116,6 @@ KERB_HIDDEN = "kerb_hidden"
 TOO_NARROW = "too_narrow"
 IN_KEEP_OUT = "in_keep_out"
 OVERLAPPING = "overlapping"
-# An invented kerb on a street the stage may not invent one on.
 FAST_STREET = "fast_street"
 
 
@@ -149,8 +149,9 @@ class ParkedReport:
     # the order the rules are asked: `FENCED`, `NO_RIBBON`, `AT_JUNCTION`,
     # `KERB_HIDDEN`, `TOO_NARROW`, `IN_KEEP_OUT` (a fare node or a crossing),
     # `OVERLAPPING`, and `FAST_STREET` for a frontage on a street the stage
-    # may not invent a kerb on (the fill never draws a slot there).
-    # ⚠️ Partition: `candidates` = `placed` + every count here.
+    # may not invent a kerb on. ⚠️ The fill draws no slot on such a street
+    # and so never counts one; the partition `candidates` = `placed` + every
+    # count here holds over what was asked.
     refused: dict[str, dict[str, int]] = field(default_factory=dict)
     candidates: int = 0
     placed: int = 0
@@ -189,9 +190,9 @@ class Candidate:
     plan: tuple[float, float] | None = None
     height_m: float | None = None
     # How many invented rows the street carries with this one: 1 for a row on
-    # one kerb, 2 where the fill takes both. Published sources are 0 — they
-    # take no lane bar.
-    rows: int = 0
+    # one kerb, 2 where the fill takes both. Read only for what the stage
+    # invents; an `AS_FOUND` source takes no lane bar.
+    rows: int = 1
 
 
 @dataclass(frozen=True)
@@ -451,12 +452,11 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
     length_m = ribbon.length_m
     along_m = candidate.t * length_m
     half_l = vehicle.length_m / 2.0
-    # A PUBLISHED position — a bay, a stop — is where the publisher put it,
-    # and stands wherever the junction trim leaves a kerb; `junction_m` and the
-    # lane-room bar are for what this stage invents. A lay-by is the kerb's
-    # own widening and takes neither either.
-    published = candidate.source in (SOURCE_BAY, SOURCE_STOP, SOURCE_LAYBY)
-    setback_m = 0.0 if published else clear.junction_m
+    # A kerb found — a published bay or stop, a lay-by the kerb line draws —
+    # stands wherever the junction trim leaves it; `junction_m` and the
+    # lane-room bar are for what this stage invents.
+    as_found = candidate.source in AS_FOUND
+    setback_m = 0.0 if as_found else clear.junction_m
     if (
         along_m - half_l < ribbon.trim_start_m + setback_m
         or along_m + half_l > length_m - ribbon.trim_end_m - setback_m
@@ -471,16 +471,13 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
     # Across the kerb (a motorcycle), the vehicle's LENGTH is what it takes
     # off the road.
     across_m = vehicle.length_m if vehicle.across else vehicle.width_m
-    # The lanes a row keeps: the fill and a frontage take one (`row_lanes`),
-    # the second row down a street's other kerb another, and a street keeps
-    # at least one. `lane_room_m` is measured against those, so the counter
-    # says what an invented row left to pass in.
+    # `lane_room_m` is what the rows left to pass in: a second row down the
+    # other kerb takes its own width too, taken as this vehicle's — the fill
+    # decides the rows a street carries from the same sum.
     kept = clear.lanes_kept(lanes, candidate.rows)
-    # A second row down the other kerb takes its own width too, taken as this
-    # vehicle's: the fill decides the rows a street carries from the same sum.
-    rows_m = max(1, candidate.rows) * (across_m + clear.kerb_gap_m)
+    rows_m = candidate.rows * (across_m + clear.kerb_gap_m)
     lane_room_m = road_m - rows_m - kept * clear.lane_width_m
-    if lane_room_m < 0.0 and not published:
+    if lane_room_m < 0.0 and not as_found:
         return TOO_NARROW
     lateral_m = middle_m + candidate.side * (half_m - clear.kerb_gap_m - across_m / 2.0)
     edge_heading = street.heading_deg(candidate.edge, candidate.t)
@@ -521,9 +518,7 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
     fill = spec.fill
     assert fill is not None
     clear = spec.clearances
-    kinds = sorted(fill.kinds)
-    weights = [fill.kinds[kind] for kind in kinds]
-    widest_m = max(spec.vehicle(kind).width_m for kind in kinds) + clear.kerb_gap_m
+    widest_m = max(spec.vehicle(kind).width_m for kind in fill.kinds) + clear.kerb_gap_m
     candidates: list[Candidate] = []
     for edge_id in sorted(street.ribbons):
         edge = street.edges[edge_id]
@@ -555,11 +550,9 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
                 restrictions = {kind for low, high, kind in runs if low <= along_m <= high}
                 if _DOUBLE in restrictions:
                     continue
-                # Every `1 / share` slots, from the phase: the slot is kept
-                # where the running share crosses a whole number.
-                if int((index + phase) * fill.share) == int((index + phase - 1.0) * fill.share):
+                if not _kept_slot(index, phase, fill.share):
                     continue
-                kind = draw.choices(kinds, weights=weights)[0]
+                kind = _pick_kind(draw, fill.kinds)
                 hours = fill.hours_by_kind.get(kind, ALWAYS)
                 if _SINGLE in restrictions:
                     # Only outside the posted hours — and a kind with hours of
@@ -577,14 +570,25 @@ def _fill_candidates(street: _Street, spec: Parked, report: ParkedReport) -> lis
     return candidates
 
 
+def _pick_kind(draw: random.Random, kinds: dict[str, float]) -> str:
+    """One kind by weight, on a seeded draw."""
+    names = sorted(kinds)
+    return draw.choices(names, weights=[kinds[name] for name in names])[0]
+
+
+def _kept_slot(index: int, phase: float, share: float) -> bool:
+    """Whether slot `index` is one of the `share` kept: every `1 / share`
+    slots from a seeded phase — a street parked at a steady rhythm rather
+    than in clumps, which is what a drive down it reads."""
+    return int((index + phase) * share) != int((index + phase - 1.0) * share)
+
+
 def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> list[Candidate]:
     """Slots down every run of kerb standing a parking lane proud of its edge's
     median kerb — a lay-by, read off `carriageway_region.json`'s kerb line
     through `Ribbon.kerb_left_m` / `kerb_right_m` (`Laybys` says the bars)."""
     laybys = spec.laybys
     assert laybys is not None
-    kinds = sorted(laybys.kinds)
-    weights = [laybys.kinds[kind] for kind in kinds]
     candidates: list[Candidate] = []
     for edge_id in sorted(street.ribbons):
         ribbon = street.ribbons[edge_id]
@@ -596,14 +600,7 @@ def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> li
         for side, kerb in ((1.0, ribbon.kerb_left_m), (-1.0, ribbon.kerb_right_m)):
             bulge = kerb - float(np.median(kerb))
             proud = (bulge >= laybys.min_bulge_m) & (bulge <= laybys.max_bulge_m)
-            start = 0
-            while start < len(proud):
-                if not proud[start]:
-                    start += 1
-                    continue
-                stop = start
-                while stop < len(proud) and proud[stop]:
-                    stop += 1
+            for start, stop in true_runs(proud):
                 run_from = float(along[start])
                 run_to = float(along[min(stop, len(along) - 1)])
                 run_m = run_to - run_from
@@ -615,10 +612,9 @@ def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> li
                     slots = int(run_m // laybys.pitch_m)
                     for index in range(slots):
                         at_m = run_from + (index + 0.5) * laybys.pitch_m
-                        kind = draw.choices(kinds, weights=weights)[0]
                         candidates.append(
                             Candidate(
-                                kind,
+                                _pick_kind(draw, laybys.kinds),
                                 SOURCE_LAYBY,
                                 edge_id,
                                 at_m / ribbon.length_m,
@@ -627,7 +623,6 @@ def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> li
                                 laybys.chance,
                             )
                         )
-                start = stop
     return candidates
 
 
