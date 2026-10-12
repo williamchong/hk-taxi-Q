@@ -54,3 +54,25 @@ A hidden cell holding a placement with a chance under 1 — a bus at a stop a th
 is drawn again this long after it was built. Longer than a lap of the region at the pace the
 fare loop drives, so the same bus is there when the player comes straight back and may be gone
 the next time round.
+
+## `liveries`
+
+What each kind's livery panels wear (`Q167`, the user's ask 2026-10-13: "some variation of colors
+instead of all same color, unless color means sth"). Keyed by library mesh, one colour drawn per
+placement on `ParkedRoster.LIVERY_ROLL`, so a colour listed twice is twice as common and a vehicle
+keeps its colour on every visit. sRGB, painted by `vehicle_body.gdshader` over the vertices
+`make_parked.py` stamps `MARKER_LIVERY` (each `Shape`'s `livery`).
+
+- **Where the colour means something, it is not listed.** The taxi stays red (the urban taxi's
+  colour is its licence; green and blue taxis cannot ply Wan Chai), the bus stays Citybus yellow
+  over blue, the tram stays green.
+- **`minibus`: the roof only, green 2 : red 1.** The colour is the licence there too, and there
+  are exactly two: green is a scheduled route, red a free-running one. Island streets carry more
+  green.
+- **`car_a`, `car_b`, `van`: mostly neutrals, as the street is.** White, silver, black and grey
+  carry 11 of the saloon's 14 draws, with one navy, one maroon and one champagne; the MPV is white
+  and black (an Alphard), the Hiace almost all white. 🔴 Kept off saturated red on purpose: the
+  player's red taxi is meant to be the one chromatic car in the frame (`ART_DESIGN.md`), and
+  `maroon` is dark enough not to compete.
+- **`coach`: the belt band** — navy 2, red, green, orange; a tour coach's body stays white.
+- **`motorcycle`: tank, fairing and fender** — red and black 2 each, white, blue.

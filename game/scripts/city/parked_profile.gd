@@ -33,3 +33,7 @@ const PATH: String = "res://tuning/parked.tres"
 ## under 1 is rolled again — a bus that was at a stop may be gone when the
 ## street is next driven.
 @export_range(0.0, 600.0, 1.0, "suffix:s") var reroll_s: float
+## What each kind's livery panels wear, by library mesh name (`Q167`): one is
+## drawn per placement, so a colour listed twice is twice as common. sRGB. A
+## kind not listed keeps its authored colour — the taxi, the bus, the tram.
+@export var liveries: Dictionary[String, PackedColorArray]

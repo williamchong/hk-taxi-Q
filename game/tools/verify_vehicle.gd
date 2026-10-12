@@ -560,7 +560,7 @@ const CHANNEL_CONSTANT_PREFIX := "PARAMETER"
 ## reads, and the last legal value, because a marker past it takes the paint
 ## branch in silence.
 const MARKER_LAMP := 2.0
-const MARKER_LAST := 3.0
+const MARKER_LAST := 4.0
 const CIRCUIT_NONE := 0.0
 
 

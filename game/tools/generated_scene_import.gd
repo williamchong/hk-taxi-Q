@@ -140,7 +140,7 @@ const TEXTURED: Dictionary = {
 ## `etl/tests/test_make_vehicle.py` binds the two tables by name.
 ##
 ## The value is `(circuit, marker)` in `UV.x`/`UV.y` order: markers 0 paint,
-## 1 glass, 2 lamp, 3 trim; circuits 1 brake, 2 reverse, 3/4 indicators, 5
+## 1 glass, 2 lamp, 3 trim, 4 livery (`Q167`); circuits 1 brake, 2 reverse, 3/4 indicators, 5
 ## sidelamp, 6 headlamp, 7 roof sign, 0 none — `vehicle_body.gdshader`'s own
 ## constants. ⚠️ A name that starts `vehicle_` and is not here is REFUSED, not
 ## guessed: the body is left as authored, unlit and unmerged, and
@@ -151,6 +151,7 @@ const VEHICLE: Dictionary = {
 	"vehicle_glass": Vector2(0.0, 1.0),
 	"vehicle_trim": Vector2(0.0, 3.0),
 	"vehicle_lamp": Vector2(0.0, 2.0),
+	"vehicle_livery": Vector2(0.0, 4.0),
 	"vehicle_lamp_brake": Vector2(1.0, 2.0),
 	"vehicle_lamp_reverse": Vector2(2.0, 2.0),
 	"vehicle_lamp_indicator_left": Vector2(3.0, 2.0),

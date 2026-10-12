@@ -62,6 +62,11 @@ traffic, and the bonus for threading them.
   in the yaml must match each kind's extent within 5 cm — the ETL places by the numbers and the
   engine draws the mesh. A proportion change is `python tools/make_parked.py`, a test run, and
   a commit of the `.glb`. The `.import` sidecar is committed beside it.
+- 🔴 **A colour that means something is never a livery** (`Q167`, the user's rule 2026-10-13):
+  the taxi, the bus and the tram carry no `livery`, and the minibus's palette is green and red
+  only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`
+  is which authored colour it repaints, and `verify_parked` fails a palette on a kind with no
+  livery panel. Keep the private cars off saturated red: the player's taxi is the red car.
 - ⚠️ **`verify_parked.gd` grades the join ONE way.** A library kind stood nowhere in a region
   (no taxi stand in Causeway Bay) is the data, printed as `info`; an entry naming no mesh fails.
   Do not swap in `GeneratedPlacements.check_join`, which fails the unstood kind.

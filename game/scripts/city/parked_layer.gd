@@ -55,6 +55,8 @@ class Entry:
 	var hours: Array = []
 	var chance: float = 1.0
 	var kind: String = ""
+	## The colour `ParkedRoster.livery` drew, clear for the authored one.
+	var livery: Color = ParkedRoster.NO_LIVERY
 	## What `near` hands out, made once: the GLOBAL transform and an id unique
 	## across regions (two layers both number from 0).
 	var obstacle: Dictionary = {}
@@ -150,6 +152,9 @@ func _ready() -> void:
 		entry.chance = clampf(float(raw.get("chance", 1.0)), 0.0, 1.0)
 		entry.kind = String(raw.get("kind", entry.mesh_name))
 		var index: int = _entries.size()
+		entry.livery = ParkedRoster.livery(
+			index, _profile.liveries.get(entry.mesh_name, PackedColorArray())
+		)
 		entry.obstacle = {
 			"transform": global_transform * entry.at,
 			"extent": _extents[entry.mesh_name],
@@ -277,15 +282,22 @@ func _build(cell: Cell) -> void:
 		_up[index] = 1
 		if not by_mesh.has(entry.mesh_name):
 			by_mesh[entry.mesh_name] = []
-		by_mesh[entry.mesh_name].append(entry.at)
+		by_mesh[entry.mesh_name].append(entry)
 	cell.built_hour = floori(hour)
 	cell.built_at_s = _clock_s
 	var node := Node3D.new()
 	node.name = "cell_%d_%d" % [cell.id.x, cell.id.y]
 	for mesh_name: String in by_mesh:
 		var batch: Array[Transform3D] = []
-		batch.assign(by_mesh[mesh_name])
-		var drawn: MultiMeshInstance3D = PropBatch.batch(_meshes[mesh_name], batch, mesh_name)
+		# Custom data only for a kind with a palette; the rest read zero, which
+		# is the authored colour anyway.
+		var worn := PackedColorArray()
+		var liveried: bool = _profile.liveries.has(mesh_name)
+		for entry: Entry in by_mesh[mesh_name]:
+			batch.append(entry.at)
+			if liveried:
+				worn.append(entry.livery)
+		var drawn: MultiMeshInstance3D = PropBatch.batch(_meshes[mesh_name], batch, mesh_name, worn)
 		drawn.visibility_range_end = _profile.range_m
 		drawn.visibility_range_end_margin = _profile.range_margin_m
 		node.add_child(drawn)

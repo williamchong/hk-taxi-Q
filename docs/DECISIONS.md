@@ -10181,3 +10181,42 @@ each turning in place at 1°/s so the capture never stalls on a still frame.
 
 Owed: the user's look (`build/driver/p375_before` against `p375_after2`, `p375_close`,
 `p375_street`) and drive.
+
+## `Q167` — A parked vehicle wears a livery drawn per placement, unless its colour means something
+
+**Asked** by the user, 2026-10-13: "can we make the park vechicle to have some variation of colors
+instead of all same color, unless color means sth? e.g. red taxi stay red, mini bus only has red
+and green".
+
+**Built 2026-10-13 (`P3-75`).**
+
+- **A fifth surface marker, not more meshes.** `make_parked.py` names one authored colour per kind
+  as its `livery`; the paint-marked vertices in that colour take `MARKER_LIVERY` (4.0, material slot
+  `vehicle_livery`, `UV.y` 4 through the vehicle door). `vehicle_body.gdshader` paints a livery
+  vertex in the instance's `INSTANCE_CUSTOM.rgb` when its alpha is set and shades it as paint, so
+  the clearcoat is unchanged. A colour variant as its own library mesh was the alternative: a
+  `MultiMesh` a variant a cell, more draws and a placements change for what is one channel.
+- **The player's taxi cannot move**: `make_vehicle.py` stamps no livery vertex, and no instance
+  sets its custom data. Taxi, bus and tram have no `livery` either (`test_make_parked.py` holds the
+  three), because their colour is their identity.
+- **The palette is data**: `parked.tres`'s `liveries`, by mesh, sRGB, a colour listed twice is
+  twice as common (`parked.md` has each kind's reasoning). `ParkedRoster.livery` draws on its own
+  roll (`LIVERY_ROLL` -1, under every visit's), so a vehicle keeps its colour across rerolls.
+  Minibus: the roof, green 2 : red 1. Private cars and the van mostly neutrals, with a dark maroon
+  as the only red, so the player's taxi stays the one saturated red car in the frame. Coach: the
+  belt band. Bike: tank, fairing and fender.
+- **Guarded**: a livery that marks no painted vertex is refused at generation, and
+  `verify_parked.gd` fails a `liveries` key that names no library mesh or one with no livery panel
+  (mutation-checked: a `tram` palette fails it), and holds the draw's arithmetic.
+
+**Measured.** Throttle route at t=1: `prims` 783,769 and `draws` 97, both as `Q166` left them;
+`use_custom_data` adds a vec4 an instance and no draw. Frames by day and night on the bay street at
+(865, 425) and the red minibus at (1100, 388) in `build/social/livery/`.
+
+⚠️ **`INSTANCE_CUSTOM` is now spent**: `rgb` the livery, `a` the switch. `Q166`'s hazard-lamp
+candidate planned that channel; it would have to share `a` (a livery's alpha is only read as
+over or under 0.5) or take `COLOR` through `use_colors`.
+
+**Not built**: the tram's advertising liveries. Real and all-over, but the green tram is the
+identity the user named as the rule's case. A `tram` palette over its whole paint would carry them
+if the user asks.

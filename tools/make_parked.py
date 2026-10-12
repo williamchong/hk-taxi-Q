@@ -57,6 +57,8 @@ from make_vehicle import (  # noqa: E402
     DARK,
     GLASS,
     LAMP,
+    MARKER_LIVERY,
+    MARKER_PAINT,
     RED,
     SILVER,
     _marked,
@@ -171,6 +173,11 @@ class Shape:
     glass_share: float = 0.72
     # One lamp centred on the dash (a tram's), or a pair.
     head_lamps: int = 2
+    # The authored colour a parked vehicle may wear another of (`Q167`): its
+    # paint-marked vertices in this colour take `MARKER_LIVERY`, and
+    # `parked.tres`'s `liveries` says what each one wears. None where the
+    # colour IS the vehicle — the red taxi, Citybus's yellow, the green tram.
+    livery: Colour | None = None
 
     def __post_init__(self) -> None:
         if self.panel_share + self.glass_share >= 1.0:
@@ -849,8 +856,27 @@ def vehicle(shape: Shape) -> MeshData:
     parts.extend(_side_fixtures(shape))
     parts.extend(DETAILS.get(shape.kind, lambda _: [])(shape))
     parts.extend(_wheels(shape) if shape.arches else [_underframe(shape)])
-    body = merge([_marked(part) for part in parts], name=shape.kind)
+    body = _liveried(merge([_marked(part) for part in parts], name=shape.kind), shape)
     return replace(body, material=BODY_MATERIAL)
+
+
+def _liveried(body: MeshData, shape: Shape) -> MeshData:
+    """Restamp the paint in the kind's livery colour as `MARKER_LIVERY`.
+
+    Only paint-marked vertices: a lens wearing the same swatch (the bike's red
+    tail lamp) keeps its lamp marker. A livery that marks nothing is refused,
+    since the palette would then repaint nothing without a word.
+    """
+    if shape.livery is None:
+        return body
+    assert body.colours is not None and body.uvs is not None
+    hit = np.all(body.colours[:, :3] == np.array(shape.livery, dtype=np.uint8), axis=1)
+    hit &= body.uvs[:, 1] == MARKER_PAINT
+    if not hit.any():
+        raise ValueError(f"{shape.kind}: livery {shape.livery} is on no painted vertex")
+    uvs = body.uvs.copy()
+    uvs[hit, 1] = MARKER_LIVERY
+    return replace(body, uvs=uvs)
 
 
 def motorcycle(shape: Shape) -> MeshData:
@@ -903,7 +929,7 @@ def motorcycle(shape: Shape) -> MeshData:
         box_at((0.14, r - 0.05, rear - 0.55), (0.04, 0.04, 0.3), STEEL, name="exhaust"),
     ]
     parts.extend(_wheels(shape))
-    body = merge([_marked(part) for part in parts], name=shape.kind)
+    body = _liveried(merge([_marked(part) for part in parts], name=shape.kind), shape)
     return replace(body, material=BODY_MATERIAL)
 
 
@@ -932,7 +958,7 @@ def _car(kind: str, paint: Colour, roof: Colour) -> Shape:
 
 
 SHAPES: tuple[Shape, ...] = (
-    _car("car_a", WHITE, WHITE),
+    replace(_car("car_a", WHITE, WHITE), livery=WHITE),
     # A people-carrier on the saloon's footprint — an Alphard, the private
     # car a Hong Kong street carries most after the saloon: tall, the cabin
     # running to the tail, three windows a side and a chrome face.
@@ -957,6 +983,7 @@ SHAPES: tuple[Shape, ...] = (
         window_bays=3,
         grille=SILVER,
         handles=True,
+        livery=NAVY,
     ),
     # The red urban taxi, parked: a Crown Comfort's footprint (`Q153`), the
     # silver above the belt and the chrome grille of the photographs.
@@ -1003,6 +1030,7 @@ SHAPES: tuple[Shape, ...] = (
         pillar=CREAM,
         window_bays=5,
         mirrors=False,
+        livery=MINIBUS_GREEN,
     ),
     # The double-decker, in Citybus yellow over its blue skirt.
     Shape(
@@ -1050,6 +1078,7 @@ SHAPES: tuple[Shape, ...] = (
         band=NAVY,
         window_bays=7,
         mirrors=False,
+        livery=NAVY,
     ),
     # The Hiace: a van's box, tall, short-nosed.
     Shape(
@@ -1071,6 +1100,7 @@ SHAPES: tuple[Shape, ...] = (
         wheel_width_m=0.2,
         axles_m=(0.95, 3.55),
         window_bays=3,
+        livery=WHITE,
     ),
     # The tram: a tall, narrow double-decker with a cream band at the belt,
     # boxy — square ends, flat sides, the roof barely drawn in — and its
@@ -1126,6 +1156,7 @@ SHAPES: tuple[Shape, ...] = (
         wheel_width_m=0.12,
         axles_m=(0.3, 1.8),
         single_track=True,
+        livery=RED,
     ),
 )
 

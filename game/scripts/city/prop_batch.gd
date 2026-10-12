@@ -8,10 +8,19 @@
 extends RefCounted
 
 
-## `transforms.size()` copies of `mesh`, as one node.
-static func batch(mesh: Mesh, transforms: Array[Transform3D], name: String) -> MultiMeshInstance3D:
+## `transforms.size()` copies of `mesh`, as one node. `custom`, when given, is
+## one `INSTANCE_CUSTOM` per transform — a parked vehicle's livery (`Q167`).
+static func batch(
+	mesh: Mesh,
+	transforms: Array[Transform3D],
+	name: String,
+	custom: PackedColorArray = PackedColorArray()
+) -> MultiMeshInstance3D:
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
+	var wears: bool = not custom.is_empty()
+	assert(not wears or custom.size() == transforms.size(), "one custom datum a transform")
+	multi.use_custom_data = wears
 	multi.mesh = mesh
 	# Set after `mesh` and `transform_format`: `instance_count` allocates the
 	# buffer, so assigning it first and the format second discards every
@@ -19,6 +28,8 @@ static func batch(mesh: Mesh, transforms: Array[Transform3D], name: String) -> M
 	multi.instance_count = transforms.size()
 	for index: int in transforms.size():
 		multi.set_instance_transform(index, transforms[index])
+		if wears:
+			multi.set_instance_custom_data(index, custom[index])
 	var node := MultiMeshInstance3D.new()
 	node.name = name
 	node.multimesh = multi

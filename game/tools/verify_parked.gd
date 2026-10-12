@@ -33,6 +33,10 @@ const BODY_MATERIAL: String = "res://tuning/vehicle_body.tres"
 const TRIANGLE_BUDGET: int = 2000
 ## A kind's underside may sit this far off the ground, in metres.
 const GROUND_SLACK_M: float = 0.02
+## `vehicle_body.gdshader`'s `MARKER_LIVERY`, read off a vertex's `UV.y`. Must
+## match it, `MARKER_LIVERY` in `tools/make_vehicle.py` and the importer's
+## `vehicle_livery` row.
+const LIVERY_MARKER: float = 4.0
 
 var _problems: PackedStringArray = []
 
@@ -58,6 +62,7 @@ func _init() -> void:
 			)
 			if not library.is_empty():
 				_check_join(document, library)
+				_check_liveries(library)
 			_check_entries(document)
 	for problem: String in _problems:
 		printerr("  FAIL  ", problem)
@@ -134,6 +139,26 @@ func _check_join(document: Dictionary, library: Dictionary[String, Mesh]) -> voi
 		print("  info  library kinds stood nowhere in this region: %s" % ", ".join(unstood))
 
 
+## Every `liveries` key names a library kind that carries livery panels
+## (`Q167`): a palette on a kind with none would repaint nothing, silently.
+func _check_liveries(library: Dictionary[String, Mesh]) -> void:
+	var profile := load(ParkedProfile.PATH) as ParkedProfile
+	if profile == null:
+		return
+	for kind: String in profile.liveries:
+		if not library.has(kind):
+			_problems.append("liveries names '%s', which the library does not carry" % kind)
+			continue
+		_expect(not profile.liveries[kind].is_empty(), "liveries '%s' is an empty palette" % kind)
+		var arrays: Array = library[kind].surface_get_arrays(0)
+		var marked: int = 0
+		for uv: Vector2 in arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array:
+			if is_equal_approx(floorf(uv.y), LIVERY_MARKER):
+				marked += 1
+		_expect(marked > 0, "liveries '%s' has a palette but the mesh has no livery panel" % kind)
+	print("  info  liveried kinds: %s" % ", ".join(PackedStringArray(profile.liveries.keys())))
+
+
 ## Every entry's `hours` is a window or null and its `chance` a share.
 func _check_entries(document: Dictionary) -> void:
 	var kinds: Dictionary[String, int] = {}
@@ -207,6 +232,24 @@ func _check_roster() -> void:
 	_expect(
 		stood > 250 and stood < 450,
 		"a chance of 0.35 stands about a third of 1,000 placements, not %d" % stood
+	)
+	_expect(
+		ParkedRoster.livery(5, PackedColorArray()).a == 0.0,
+		"an empty palette wears the authored colour"
+	)
+	var two := PackedColorArray([Color(1.0, 0.0, 0.0, 0.0), Color(0.0, 0.0, 1.0, 0.0)])
+	_expect(ParkedRoster.livery(5, two).a == 1.0, "a drawn livery is applied")
+	_expect(
+		ParkedRoster.livery(5, two) == ParkedRoster.livery(5, two),
+		"a placement wears the same colour every time"
+	)
+	var reds: int = 0
+	for index: int in 1000:
+		if ParkedRoster.livery(index, two).r > 0.5:
+			reds += 1
+	_expect(
+		reds > 400 and reds < 600,
+		"two colours share 1,000 placements about evenly, not %d to %d" % [reds, 1000 - reds]
 	)
 	_expect(
 		ParkedRoster.cell_of(Vector3(301.0, 0.0, -1.0), 300.0) == Vector2i(1, -1),

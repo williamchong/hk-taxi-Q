@@ -40,6 +40,26 @@ static func draw(index: int, roll: int) -> float:
 	return float(absi(mixed) % 100000) / 100000.0
 
 
+## The roll a livery is drawn on (`Q167`): never a visit's, which count up
+## from 0, so a vehicle keeps its colour whichever visit stands it.
+const LIVERY_ROLL: int = -1
+## The livery that keeps the authored colour: `vehicle_body.gdshader` paints
+## only where the alpha is set.
+const NO_LIVERY := Color(0.0, 0.0, 0.0, 0.0)
+
+
+## What placement `index` wears out of `palette`: a colour with alpha 1, which
+## `vehicle_body.gdshader` paints its livery panels in, or clear (alpha 0) for
+## an empty palette — the authored colour.
+static func livery(index: int, palette: PackedColorArray) -> Color:
+	if palette.is_empty():
+		return NO_LIVERY
+	var pick: int = mini(floori(draw(index, LIVERY_ROLL) * palette.size()), palette.size() - 1)
+	var worn: Color = palette[pick]
+	worn.a = 1.0
+	return worn
+
+
 ## Whether placement `index`, with `hours` and `chance`, stands at `hour` on
 ## this `roll`.
 static func present(index: int, hours: Array, chance: float, hour: float, roll: int) -> bool:

@@ -12,6 +12,7 @@ the material door every part goes through; and the winding, for the reason
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -27,11 +28,18 @@ from make_parked import (  # noqa: E402
     LIBRARY_FILE,
     SHAPES,
     _glasshouse,
+    _liveried,
     _lower,
     build_roster,
     write_roster,
 )
-from make_vehicle import LAMP, MATERIAL_OF_PAYLOAD, material_parts  # noqa: E402
+from make_vehicle import (  # noqa: E402
+    GLASS,
+    LAMP,
+    MARKER_LIVERY,
+    MATERIAL_OF_PAYLOAD,
+    material_parts,
+)
 
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 # `ART_DESIGN.md`'s upper bar per vehicle.
@@ -122,6 +130,36 @@ class TestTheBudget:
             assert names <= set(MATERIAL_OF_PAYLOAD.values()), mesh.name
             assert "vehicle_paint" in names, mesh.name
             assert any(name.startswith("vehicle_lamp") for name in names), mesh.name
+
+
+class TestLiveries:
+    """`Q167`: a kind whose colour means something carries no livery panel,
+    and every other kind's livery marks paint the palette can repaint."""
+
+    IDENTITY = frozenset({"taxi", "bus", "tram"})
+
+    def test_a_colour_that_means_something_is_not_a_livery(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        for kind in self.IDENTITY:
+            assert not np.any(by_name[kind].uvs[:, 1] == MARKER_LIVERY), kind
+
+    def test_every_livery_marks_paint(self, by_name: dict[str, MeshData]) -> None:
+        for shape in SHAPES:
+            if shape.livery is None:
+                assert shape.kind in self.IDENTITY, shape.kind
+                continue
+            mesh = by_name[shape.kind]
+            marked = mesh.uvs[:, 1] == MARKER_LIVERY
+            assert marked.any(), shape.kind
+            # Only the livery's own colour, never a lens or the glass.
+            assert np.all(mesh.colours[marked, :3] == np.array(shape.livery, dtype=np.uint8))
+
+    def test_a_livery_on_no_painted_vertex_is_refused(self, by_name: dict[str, MeshData]) -> None:
+        # The glass wears `GLASS` and is marked glass, so no paint matches it.
+        shape = replace(next(s for s in SHAPES if s.kind == "taxi"), livery=GLASS)
+        with pytest.raises(ValueError, match="no painted vertex"):
+            _liveried(by_name["taxi"], shape)
 
 
 class TestWinding:

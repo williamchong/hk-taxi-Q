@@ -56,6 +56,11 @@ render_mode cull_back;
 const float MARKER_PAINT = 0.0;
 const float MARKER_GLASS = 1.0;
 const float MARKER_LAMP = 2.0;
+// Paint a `MultiMesh` instance may repaint (`Q167`): a parked kind's livery
+// panels, shaded as paint and coloured from `INSTANCE_CUSTOM` (sRGB, `a` 1 to
+// apply; `ParkedLayer` writes it) when its alpha is set. The player's taxi
+// ships no such vertex, so it cannot be touched.
+const float MARKER_LIVERY = 4.0;
 // Must match `CIRCUIT_*` in `tools/make_vehicle.py`. Only `NONE` is named here:
 // the rest are the channels of `lamp_lit` then `lamp_front` in order, and
 // enumerating them again as constants would be a second copy of the ordering
@@ -261,6 +266,11 @@ varying vec3 world_n;
 void vertex() {
 	marker = floor(UV.y);
 	circuit = floor(UV.x);
+	// Swapped per vertex, not per fragment: a livery face is flat and every
+	// vertex of it carries the one colour, so `COLOR` interpolates to it.
+	if (abs(marker - MARKER_LIVERY) < 0.5 && INSTANCE_CUSTOM.a > 0.5) {
+		COLOR.rgb = INSTANCE_CUSTOM.rgb;
+	}
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
