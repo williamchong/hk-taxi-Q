@@ -31,10 +31,15 @@ const NEEDLE_LEN: float = 0.34
 @export var tick_px: float
 @export var ink: Color
 @export var needle: Color
+## The sweep's stroke (`Q163`): an amber arc just outside the ticks from zero to
+## the needle, the head-up display's reading of the dial. 0 draws none.
+@export var sweep_px: float
 
 var _ticks: ArrayMesh = null
 var _needle: Polygon2D = null
 var _built_for: Vector2 = Vector2.INF
+## Where the sweep ends, in degrees; redrawn only when it moves a visible step.
+var _sweep_deg: float = START_DEG
 
 
 func _ready() -> void:
@@ -50,13 +55,33 @@ func _ready() -> void:
 func _draw() -> void:
 	if _ticks != null:
 		draw_mesh(_ticks, null)
+	# `_sweep_deg` only leaves zero while `sweep_px` draws one (`show_kph`).
+	if _sweep_deg > START_DEG:
+		var placed: Vector3 = frame(size)
+		draw_arc(
+			Vector2(placed.x, placed.y),
+			placed.z + sweep_px * 1.5,
+			deg_to_rad(START_DEG),
+			deg_to_rad(_sweep_deg),
+			maxi(ceili((_sweep_deg - START_DEG) / 4.0), 2),
+			needle,
+			sweep_px,
+			true
+		)
 
 
 ## Point the needle at `kph`. Reverse reads on the same scale: a needle has no
 ## minus, and the numerals say `R`.
 func show_kph(kph: float) -> void:
-	if _needle != null:
-		_needle.rotation = deg_to_rad(angle_deg(absf(kph), full_scale_kph))
+	if _needle == null:
+		return
+	var angle: float = angle_deg(absf(kph), full_scale_kph)
+	_needle.rotation = deg_to_rad(angle)
+	# Half a degree is under a pixel of arc at this size; a steady needle
+	# redraws nothing.
+	if sweep_px > 0.0 and absf(angle - _sweep_deg) >= 0.5:
+		_sweep_deg = angle
+		queue_redraw()
 
 
 ## The needle's angle for a reading, clamped to the scale's two ends.

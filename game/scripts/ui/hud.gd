@@ -255,6 +255,10 @@ func _build() -> void:
 	# slot. Everything below anchors inside it.
 	var root: Control = HudLayout.safe_root(self)
 
+	# The glass every bare readout below sits on (`Q163`): first, so it draws
+	# under them all.
+	root.add_child(HeadUpFrame.styled(_style))
+
 	# ---- the minimap, and the street name's home ----
 	#
 	# One component with the street name (the user's call, `Q136`): the map over
@@ -274,10 +278,10 @@ func _build() -> void:
 	else:
 		# ---- the street plate, alone ----
 		#
-		# Under `--minimap=off`, and on a clone with no city: a panel in the
-		# housing's colours, cut to the name on it by `_fit_plate`.
+		# Under `--minimap=off`, and on a clone with no city: the name bare,
+		# cut to its box by `_fit_plate`.
 		# Hidden until there is a street, which without a city is never.
-		_plate = _housing("StreetPlate", root, _layout.street_plate)
+		_plate = _bare("StreetPlate", root, _layout.street_plate)
 		_plate_host = _plate
 
 	_plate_lines = _lines(_plate_host, 0)
@@ -286,11 +290,11 @@ func _build() -> void:
 	# is built and hidden, so the tracker still writes both and the language
 	# switch is one flag.
 	_language = Locale.language()
-	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
+	_plate_en = _style.shade(_label("English", _style.plate_size_en, _style.plate_ink))
 	_plate_en.visible = _language == Locale.ENGLISH
 	_plate_lines.add_child(_plate_en)
 
-	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
+	_plate_zh = _style.shade(_label("Chinese", _style.plate_size_zh, _style.plate_ink))
 	_plate_zh.visible = _language == Locale.CHINESE
 	if _font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
@@ -308,10 +312,10 @@ func _build() -> void:
 	_speed_chip = AccentBar.new()
 	_speed_chip.name = "Speed"
 	_speed_chip.chamfer_px = _style.chamfer_px
-	_speed_chip.fill = _style.chip_field
-	# The same bezel as the map's: one housing, every panel (`Q139`).
-	_speed_chip.edge = _style.plate_edge
-	_speed_chip.edge_px = _style.edge_px
+	# No housing (`Q163`): the dial and its numerals float, and the chip
+	# draws only the acceleration bar.
+	_speed_chip.fill = Color.TRANSPARENT
+	_speed_chip.edge = Color.TRANSPARENT
 	_speed_chip.accent = _style.accent
 	_speed_chip.accent_negative = _style.accent_negative
 	_speed_chip.accent_track = _style.accent_track
@@ -326,6 +330,7 @@ func _build() -> void:
 	_dial.tick_px = _style.dial_tick_px
 	_dial.ink = _style.chip_muted
 	_dial.needle = _style.dial_needle
+	_dial.sweep_px = _style.dial_sweep_px
 	_dial.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_dial.offset_left = _style.dial_inset_px
 	_dial.offset_top = _style.dial_inset_px
@@ -337,11 +342,11 @@ func _build() -> void:
 	speed_lines.alignment = BoxContainer.ALIGNMENT_END
 	speed_lines.offset_bottom = -_style.accent_px * 2.0
 
-	_speed_value = _label("Value", _style.speed_size, _style.chip_ink)
+	_speed_value = _style.shade(_label("Value", _style.speed_size, _style.chip_ink))
 	_speed_value.text = "0"
 	speed_lines.add_child(_speed_value)
 
-	var unit: Label = _label("Unit", _style.speed_unit_size, _style.chip_muted)
+	var unit: Label = _style.shade(_label("Unit", _style.speed_unit_size, _style.chip_muted))
 	unit.text = "km/h"
 	speed_lines.add_child(unit)
 
@@ -413,7 +418,7 @@ func _build() -> void:
 
 	# The place over the road (`Q142`), in one language (`Locale`).
 	var chinese: bool = _language == Locale.CHINESE
-	_callout_panel = _housing("Callout", root, _layout.callout)
+	_callout_panel = _bare("Callout", root, _layout.callout)
 	var callout_lines: VBoxContainer = _lines(
 		_callout_panel, _sized(_style.callout_line_gap_zh, _style.callout_line_gap)
 	)
@@ -422,15 +427,16 @@ func _build() -> void:
 		_sized(_style.callout_caption_size_zh, _style.callout_caption_size),
 		_style.chip_muted
 	)
+	_style.shade(_caption)
 	callout_lines.add_child(_caption)
 	_callout = _label(
 		"Place", _sized(_style.callout_size_zh, _style.callout_size_en), _style.plate_ink
 	)
-	callout_lines.add_child(_callout)
+	callout_lines.add_child(_style.shade(_callout))
 	_callout_sub = _label(
 		"Road", _sized(_style.callout_sub_size_zh, _style.callout_sub_size), _style.chip_muted
 	)
-	callout_lines.add_child(_callout_sub)
+	callout_lines.add_child(_style.shade(_callout_sub))
 	if chinese and _font_zh != null:
 		_caption.add_theme_font_override(&"font", _font_zh)
 		_callout.add_theme_font_override(&"font", _font_zh)
@@ -447,9 +453,9 @@ func _build() -> void:
 	# The time of day and the handover beside it (`Q162`, the user's ask: when
 	# the day ends, never a countdown). The housing's ink, not the meter's red:
 	# red is the fare's (`Q139`). Hidden outside a shift.
-	_clock_panel = _housing("Clock", root, _layout.clock)
+	_clock_panel = _bare("Clock", root, _layout.clock)
 	var clock_lines: VBoxContainer = _lines(_clock_panel, 0)
-	_clock_value = _label("Hour", _style.speed_size, _style.chip_ink)
+	_clock_value = _style.shade(_label("Hour", _style.speed_size, _style.chip_ink))
 	clock_lines.add_child(_clock_value)
 	_clock_caption = _label(
 		"Handover",
@@ -458,7 +464,7 @@ func _build() -> void:
 	)
 	if _language == Locale.CHINESE and _font_zh != null:
 		_clock_caption.add_theme_font_override(&"font", _font_zh)
-	clock_lines.add_child(_clock_caption)
+	clock_lines.add_child(_style.shade(_clock_caption))
 
 	# ---- the reserved slots ----
 	#
@@ -484,6 +490,15 @@ func _build() -> void:
 ## panel starts dark and `_paint_fares` shows what has something to say.
 func _housing(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
 	var panel: ChamferPanel = ChamferPanel.housing(_style, node_name)
+	panel.visible = false
+	_layout.place(root, panel, rect)
+	return panel
+
+
+## A panel with no housing (`Q163`): placed and hidden like `_housing`, drawing
+## nothing of its own — its lettering floats on the head-up frame.
+func _bare(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
+	var panel: ChamferPanel = ChamferPanel.bare(_style, node_name)
 	panel.visible = false
 	_layout.place(root, panel, rect)
 	return panel
@@ -579,7 +594,7 @@ static func _lines(panel: Control, separation: int) -> VBoxContainer:
 ## on its own, and every other name is set at the style's size.
 func _fit_plate() -> void:
 	# Both homes set a name too long for the box smaller; the strip's margin is
-	# the plate's vertical pad, because it has no chamfered ends to clear.
+	# the plate's vertical pad, the standalone plate's its horizontal one.
 	var in_strip: bool = _minimap != null
 	var pad: float = _style.plate_pad.y if in_strip else _style.plate_pad.x
 	var room: float = _layout.street_plate.size.x - pad * 2.0
@@ -638,7 +653,8 @@ func _process(delta: float) -> void:
 	_update_clock(delta)
 	# The map and the needle, every frame and off one look at the car: both are
 	# motion, and a needle stepped at the numerals' 10 Hz ticks like a clock.
-	# Each is a transform, so nothing is redrawn (`minimap.gd`, `speed_dial.gd`).
+	# Each is a transform, so nothing is redrawn (`minimap.gd`, `speed_dial.gd`)
+	# — but the dial's sweep, which redraws when it moves half a degree.
 	var car: VehicleController = _vehicle()
 	if car == null:
 		return
@@ -648,7 +664,7 @@ func _process(delta: float) -> void:
 		_minimap.follow(placed.origin, -placed.basis.z)
 
 
-## 特更's clock onto its housing, at `CLOCK_HZ`: the hour while the shift
+## 特更's clock onto its panel, at `CLOCK_HZ`: the hour while the shift
 ## runs with the handover's hour under it, and once it has closed the closing
 ## hour over the last fare. Hidden outside a shift.
 func _update_clock(delta: float) -> void:

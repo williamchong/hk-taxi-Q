@@ -49,3 +49,11 @@ const PATH: String = "res://tuning/menu.tres"
 @export var heading_size_zh: int
 @export var body_size: int
 @export var body_size_zh: int
+
+@export_group("Backdrop")
+## The blur behind the menu's text (`Q163`, the user's ask): the screen's mip
+## level it reads, how wide HOME's side panel is from the screen's left edge,
+## and where across that width it starts to fade out.
+@export var backdrop_lod: float
+@export var backdrop_width_px: float
+@export var backdrop_fade_from: float

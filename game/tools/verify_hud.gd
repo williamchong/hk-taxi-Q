@@ -67,6 +67,7 @@ const MinimapProfileScript = preload("res://scripts/ui/minimap_profile.gd")
 const MinimapProjectionScript = preload("res://scripts/ui/minimap_projection.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
 const MinimapScript = preload("res://scripts/ui/minimap.gd")
+const HeadUpFrameScript = preload("res://scripts/ui/head_up_frame.gd")
 const FareFaceScript = preload("res://scripts/ui/fare_face.gd")
 const FareScript = preload("res://scripts/fares/fare.gd")
 const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
@@ -399,6 +400,45 @@ func _check_style() -> void:
 		_fail("style", "map_beacon_px is 0 — is it missing from the .tres?")
 	if style.timer_outline_px <= 0:
 		_fail("style", "the bare timer has no outline — it would vanish on a light road")
+
+	# The head-up look (`Q163`): every bare readout casts a dark shadow, and
+	# the frame and the vignette exist — a zero here is a key missing from the
+	# .tres, and a white shadow is lettering that vanishes on the sky.
+	_expect(
+		(
+			style.float_shadow_px > 0
+			and style.float_shadow.a > 0.0
+			and style.float_shadow.get_luminance() < 0.2
+		),
+		"style",
+		"every bare readout casts a dark shadow"
+	)
+	_expect(
+		(
+			style.frame_ink.a > 0.0
+			and style.frame_px > 0.0
+			and style.frame_arm_px > 0.0
+			and style.map_fade_px > 0.0
+			and style.dial_sweep_px > 0.0
+			and style.vignette_share > 0.0
+			and style.vignette_share < 0.5
+		),
+		"style",
+		"the frame's brackets, the vignette, the scope's fade and the sweep are all drawn"
+	)
+	var box := Vector2(1920.0, 1080.0)
+	var corners: Array[PackedVector2Array] = HeadUpFrameScript.brackets(box, 16.0, 48.0)
+	_expect(
+		(
+			corners.size() == 4
+			and corners[0][1] == Vector2(16.0, 16.0)
+			and corners[0][2] == Vector2(64.0, 16.0)
+			and corners[2][1] == Vector2(1904.0, 1064.0)
+			and corners[2][0] == Vector2(1904.0, 1016.0)
+		),
+		"style",
+		"each bracket turns at its corner, inset, with its arms pointing inward"
+	)
 
 	# Ink must be readable on its own field. Two numbers, and either can be
 	# nudged past the other by someone tuning a colour they liked.
@@ -1141,10 +1181,9 @@ func _check_minimap() -> void:
 	var layout: Resource = load(HudLayoutScript.PATH)
 	if layout != null:
 		var slot: Vector2 = layout.minimap.size
-		var inset: float = style.map_beacon_px
-		var room := Rect2(Vector2(inset, inset), slot - Vector2(inset, inset) * 2.0)
+		var room: Vector3 = MinimapScript.beacon_room(slot, style)
 		_expect(
-			room.grow(-mapping.marker_px * 0.5).has_point(slot * anchor),
+			(slot * anchor).distance_to(Vector2(room.x, room.y)) + mapping.marker_px * 0.5 < room.z,
 			"map",
 			"the car stands clear inside the border arrow's room (%s in %s)" % [slot * anchor, room]
 		)
@@ -1578,31 +1617,34 @@ func _check_minimap_mesh() -> void:
 	_expect(MinimapMeshScript.simplified(wobble, 0.1).size() == 3, "map", "and kept at a 0.1 m one")
 
 
-## The target's arrow on the map's border (the user's call): down while the
-## target is on the map, on the border on the line from the car toward it
-## otherwise — never at a corner the line does not pass through.
+## The target's arrow on the scope's rim (the user's call, round since
+## `Q163`): down while the target is on the map, on the rim on the line from
+## the car toward it otherwise — the car off the disc's centre, so a beacon
+## placed along the ray from the CENTRE would fail every case.
 func _check_minimap_beacon() -> void:
-	var room := Rect2(10.0, 10.0, 200.0, 100.0)
+	var room := Vector3(110.0, 60.0, 50.0)
+	var centre := Vector2(room.x, room.y)
 	var car := Vector2(110.0, 80.0)
 	_expect(
-		not MinimapScript.beacon_point(room, car, Vector2(150.0, 30.0)).is_finite(),
+		not MinimapScript.beacon_point(room, car, Vector2(130.0, 50.0)).is_finite(),
 		"map",
 		"a target on the map takes no beacon"
 	)
 	var east: Vector2 = MinimapScript.beacon_point(room, car, Vector2(1000.0, 80.0))
 	_expect(
-		east.is_equal_approx(Vector2(210.0, 80.0)),
+		east.is_equal_approx(Vector2(110.0 + sqrt(2100.0), 80.0)),
 		"map",
-		"a target due east stands the beacon on the east edge, level with the car (%s)" % east
+		"a target due east stands the beacon on the rim, level with the car (%s)" % east
 	)
 	var ahead: Vector2 = MinimapScript.beacon_point(room, car, Vector2(170.0, -220.0))
 	_expect(
 		(
-			is_equal_approx(ahead.y, 10.0)
+			is_equal_approx(ahead.distance_to(centre), room.z)
+			and ahead.y < car.y
 			and is_zero_approx((ahead - car).cross(Vector2(170.0, -220.0) - car))
 		),
 		"map",
-		"a target ahead and right meets the top edge, on the line to it (%s)" % ahead
+		"a target ahead and right meets the rim ahead, on the line to it (%s)" % ahead
 	)
 
 

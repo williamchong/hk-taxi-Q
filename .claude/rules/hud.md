@@ -31,7 +31,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   is where the touch geometry lives, and 🔴 **`touch_steer_*` and `thumb_rest_*` are not
   interchangeable** — the HUD may overlap a tap zone and may not overlap a thumb, and the check
   asserts **both** directions so that "tightening" it back onto zones fails rather than silently
-  banning the corners every shipped reference uses (`Q80`).
+  banning the corners every shipped reference uses (`Q80`). 🔴 **One head-up display since `Q163`**
+  (the user's pick): readouts float bare with `float_shadow` on `HeadUpFrame`'s brackets and
+  vignette, the map is a round fading scope (`ScopeDisc`, the beacon on its rim), and only the
+  咪錶 keeps a box — do not put housings back on the clock, callout, speed or plate. 🚫 **No screen
+  blur in the drive**: `backdrop_blur.gdshader` is the menu's, paid only while the level is parked;
+  in the drive it would be a back-buffer copy and a mip chain every frame on a phone.
 - **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `tuning/wrong_way.tres` (the two
   bars and two dwells since `P5-26`), or the `warn_*` keys in `hud_style.tres`: `tools/check.sh` (which runs the 23 `way:` assertions), plus a drive that
   actually goes the wrong way, and the draw-call delta pasted.** 🔴 **The nose raises the sign and

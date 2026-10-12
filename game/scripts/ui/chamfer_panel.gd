@@ -2,6 +2,10 @@ class_name ChamferPanel
 extends Control
 ## A flat panel with cut corners — the HUD's one shape (`P3-24`).
 ##
+## ⚠️ **Since `Q163` only the 咪錶 is drawn in it.** The other readouts float on
+## the head-up frame in a `bare` panel, which places and hides like a housed
+## one and draws nothing; the reserved slots and `AccentBar`'s bar still use it.
+##
 ## **The UI is flat-shaded too, and this is what says so.** `ART_DESIGN.md`'s
 ## direction is "low-poly, flat-shaded" with hard normals, and a `StyleBoxFlat`
 ## with a corner radius and a thin neutral keyline is operating-system chrome
@@ -114,6 +118,12 @@ static func _corners(box: Vector2, corner: float) -> PackedVector2Array:
 ## its chamfer: the one shape the HUD, the start menu and the map all build.
 static func housing(style: HudStyle, node_name: String) -> ChamferPanel:
 	return styled(style, node_name, style.plate_field, style.plate_edge)
+
+
+## A panel that draws nothing (`Q163`): a bare readout's box, placed and shown
+## like a housed one, its lettering floating on the head-up frame.
+static func bare(style: HudStyle, node_name: String) -> ChamferPanel:
+	return styled(style, node_name, Color.TRANSPARENT, Color.TRANSPARENT)
 
 
 ## A panel at `style`'s chamfer and edge width, in `field` rimmed with `rim`.

@@ -236,8 +236,47 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## every bend.
 @export var map_route: Color
 
+# ---- the head-up look (`Q163`) ----
+
+## One display over the whole screen rather than four boxes on it (the user's
+## call): the clock, the callout, the speed and the map float over the road
+## with no housing, held together by four corner brackets and a vignette top
+## and bottom. The 咪錶 alone keeps its black box — it is a real meter, bolted
+## to the dash, not a reading projected on the glass.
+##
+## The shadow every bare readout casts, so a white numeral reads on the sky:
+## its colour, how far it spreads round the glyphs, and how far it drops.
+@export var float_shadow: Color
+@export var float_shadow_px: int
+@export var float_shadow_drop_px: int
+## The four brackets: their ink, stroke, arm length and inset from the safe area.
+@export var frame_ink: Color
+@export var frame_px: float
+@export var frame_arm_px: float
+@export var frame_inset_px: float
+## The darkening at the top and bottom edges, and how far into the frame each
+## reaches as a share of its height.
+@export var vignette: Color
+@export var vignette_share: float
+## The map is a round scope: its field fades out over this many pixels at the rim.
+@export var map_fade_px: float
+## The speedometer's amber sweep, outside its ticks, ending at the needle.
+@export var dial_sweep_px: float
+## The menu's sheets of text (credits, guide, notices): the whole screen dimmed
+## behind bare lettering, rather than a box on it.
+@export var scrim: Color
+
 # ---- dev only ----
 
 ## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.
 @export var slot_fill: Color
 @export var slot_edge: Color
+
+
+## `label` with the shadow every bare readout casts (`Q163`): the HUD's and the
+## menu's lettering alike.
+func shade(label: Label) -> Label:
+	label.add_theme_color_override(&"font_shadow_color", float_shadow)
+	label.add_theme_constant_override(&"shadow_outline_size", float_shadow_px)
+	label.add_theme_constant_override(&"shadow_offset_y", float_shadow_drop_px)
+	return label

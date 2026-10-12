@@ -3,9 +3,10 @@ extends Control
 ## The street map, bottom-left above the plate (`P3-44`, `Q136`, `Q138`).
 ##
 ## **One component with the street name** (the user's call, `Q136`): the map on
-## top, the name of the street under the car in a strip along the bottom, one
-## keyline round both — a GPS's current-road bar. `Q80` had already called the
-## two "one question". `hud.gd` owns the strip's lettering; this owns its box.
+## top, the name of the street under the car in a strip along the bottom — a
+## GPS's current-road bar, the scope and the name under it since `Q163`. `Q80`
+## had already called the two "one question". `hud.gd` owns the strip's
+## lettering; this owns where it sits.
 ##
 ## **Driving only.** The harbour and the parks under the roads (`basemap.json`),
 ## roads with the main ones apart, the car, and since `P3-5a` the fare's pins: every
@@ -16,8 +17,9 @@ extends Control
 ## call): a GPS's line over the roads, rebuilt at the fare's sample rate from
 ## wherever the car is, so a wrong turn simply re-routes.
 ##
-## The meter's housing, like every panel (`Q139`): light roads on black, and
-## the chevron in the LED's red — the one thing on the map that is the car.
+## Light roads on the meter's black (`Q139`), and the chevron in the LED's red
+## — the one thing on the map that is the car. Since `Q163` the black is a round
+## scope fading out at its rim, and the name under it floats with no strip.
 ##
 ## Built once, moved by a transform: the roads are one static mesh in plan
 ## metres (`minimap_mesh.gd`) and `follow` only re-places it, so a turning map
@@ -35,7 +37,7 @@ var _mapping: MinimapProfile = null
 ## The ONE scale: the mesh's pixel floors are baked at it and `follow` places
 ## the mesh at it, so the two cannot drift apart.
 var _px_per_m: float = 0.0
-var _field: ChamferPanel = null
+var _field: ScopeDisc = null
 var _roads: MeshInstance2D = null
 ## The route (`P3-46`): the roads' child, so it rides their transform and
 ## `follow` never touches it; rebuilt by `set_route` only when its points
@@ -60,15 +62,14 @@ var _withheld: PackedInt32Array = PackedInt32Array()
 var _beacon: Polygon2D = null
 var _beacon_plan: Vector2 = Vector2.ZERO
 var _beacon_on: bool = false
-## Where the beacon may stand: the map's slot — `map_px`, which the strip sits
-## below, not in — in from its keyline by the beacon's own size so it clears
-## the chamfered corners.
-var _beacon_room: Rect2 = Rect2()
+## Where the beacon may stand, as `(x, y, r)`: the scope's disc, in from its
+## rim by the beacon's own size and the fade, so it is drawn where the map is.
+var _beacon_room: Vector3 = Vector3.ZERO
 var _style: HudStyle = null
 
-## Where the street name goes. Hidden until `hud.gd` has a street to put in it,
-## and the map shows through until then.
-var strip: ColorRect = null
+## Where the street name goes, under the scope. Hidden until `hud.gd` has a
+## street to put in it.
+var strip: Control = null
 
 
 ## `map_px` is the layout's `minimap` size and `strip_px` its `street_plate`
@@ -81,10 +82,10 @@ func setup(
 	_style = style
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# The field clips the roads to its own cut corners. ⚠️ `clip_children` masks
-	# by the parent's drawn alpha, which is the second reason `map_field` must
-	# be opaque — see `minimap_mesh.gd` for the first.
-	_field = _panel("Field", style, style.map_field, Color.TRANSPARENT)
+	# The field clips the roads to its disc and fades them out at its rim.
+	# ⚠️ `clip_children` masks by the parent's drawn alpha, which is the second
+	# reason `map_field` must be opaque — see `minimap_mesh.gd` for the first.
+	_field = _scope("Field", style.map_field, Color.TRANSPARENT, style.map_fade_px, map_px)
 	_field.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 
 	_roads = MeshInstance2D.new()
@@ -134,31 +135,22 @@ func setup(
 	_beacon = _rimmed("Beacon", pointer, style.map_beacon_px, style.map_destination)
 	_beacon.visible = false
 	_field.move_child(_beacon, _marker.get_index())
-	var inset: float = style.map_beacon_px
-	_beacon_room = Rect2(Vector2(inset, inset), map_px - Vector2(inset * 2.0, inset * 2.0))
+	_beacon_room = beacon_room(map_px, style)
 
-	# A child of the field so the chamfer clips its two bottom corners too, and
-	# after the roads so it covers them. The rule above it is the keyline's.
-	strip = ColorRect.new()
+	# Bare, under the scope and outside its clip: the name floats like the
+	# rest of the head-up display.
+	strip = Control.new()
 	strip.name = "Strip"
-	strip.color = style.plate_field
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.visible = false
 	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	strip.offset_top = -strip_px
-	_field.add_child(strip)
-	var rule := ColorRect.new()
-	rule.name = "Rule"
-	rule.color = style.plate_edge
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rule.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	rule.offset_bottom = style.edge_px
-	strip.add_child(rule)
+	add_child(strip)
 
-	# The keyline is a sibling OVER the field, not the field's own edge: a
+	# The ring is a sibling OVER the field, not the field's own edge: a
 	# clipping parent draws before its children, so its edge would sit under the
 	# roads that reach it.
-	_panel("Frame", style, Color.TRANSPARENT, style.plate_edge)
+	_scope("Frame", Color.TRANSPARENT, style.frame_ink, style.map_fade_px, map_px)
 
 
 ## Every resident region's water and parks, each moved to its place in the
@@ -297,11 +289,25 @@ func follow(car: Vector3, forward: Vector3) -> void:
 	_place_beacon()
 
 
-func _panel(node_name: String, style: HudStyle, fill: Color, edge: Color) -> ChamferPanel:
-	var panel: ChamferPanel = ChamferPanel.styled(style, node_name, fill, edge)
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(panel)
-	return panel
+func _scope(node_name: String, fill: Color, edge: Color, fade: float, map_px: Vector2) -> ScopeDisc:
+	var disc := ScopeDisc.new()
+	disc.name = node_name
+	disc.fill = fill
+	disc.edge = edge
+	disc.edge_px = _style.frame_px
+	disc.fade_px = fade
+	disc.room = Rect2(Vector2.ZERO, map_px)
+	disc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(disc)
+	return disc
+
+
+## The disc the beacon stands on, `(x, y, r)`: the scope's, in by the beacon's
+## length and half the fade, so it never sits in the part the map has faded out.
+static func beacon_room(map_px: Vector2, style: HudStyle) -> Vector3:
+	var disc: Vector3 = ScopeDisc.circle_in(Rect2(Vector2.ZERO, map_px))
+	disc.z -= style.map_beacon_px + style.map_fade_px * 0.5
+	return disc
 
 
 ## `outline(length)` — `chevron` or `pointer` — in `fill`, rimmed in the
@@ -343,25 +349,25 @@ static func _fill(shape: Polygon2D, ink: Color) -> void:
 
 
 ## Where the border's arrow stands for a target at `at`, in slot pixels: on the
-## edge of `room`, on the line from `from` (the car, inside it) toward the
-## target — or `Vector2.INF` while the target is inside `room`, where its own
-## pin shows it.
-static func beacon_point(room: Rect2, from: Vector2, at: Vector2) -> Vector2:
-	if room.has_point(at):
+## rim of `room` — a disc, `(x, y, r)` — on the line from `from` (the car,
+## inside it) toward the target, or `Vector2.INF` while the target is inside
+## `room`, where its own pin shows it.
+static func beacon_point(room: Vector3, from: Vector2, at: Vector2) -> Vector2:
+	var centre := Vector2(room.x, room.y)
+	if at.distance_to(centre) <= room.z:
 		return Vector2.INF
+	# The ray's far crossing of the circle: |from + toward * t - centre| = r.
 	var toward: Vector2 = at - from
-	var reach: float = 1.0
-	if toward.x > 0.0:
-		reach = minf(reach, (room.end.x - from.x) / toward.x)
-	elif toward.x < 0.0:
-		reach = minf(reach, (room.position.x - from.x) / toward.x)
-	if toward.y > 0.0:
-		reach = minf(reach, (room.end.y - from.y) / toward.y)
-	elif toward.y < 0.0:
-		reach = minf(reach, (room.position.y - from.y) / toward.y)
+	var offset: Vector2 = from - centre
+	var a: float = toward.length_squared()
+	if a <= 0.0:
+		return from
+	var b: float = 2.0 * offset.dot(toward)
+	var c: float = offset.length_squared() - room.z * room.z
+	var root: float = sqrt(maxf(b * b - 4.0 * a * c, 0.0))
 	# Never behind the car: with `from` outside `room` a negative reach would
 	# stand the beacon on the far side, pointing away.
-	return from + toward * maxf(reach, 0.0)
+	return from + toward * maxf((-b + root) / (2.0 * a), 0.0)
 
 
 ## A pin: a map marker `tall` px high with its TIP at the origin — a head the

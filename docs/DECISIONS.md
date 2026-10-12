@@ -202,6 +202,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
 | `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | ✅ Shipped 2026-10-03, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn`. Built and graded as a spike (`P3-52`). Owed, the user's call: `speed_min_kph` and the wall bars on the new pace. |
 | `Q160` | The day runs to night as game time: one blending rig, lit lanterns with pools, floodlit blocks, lit paint | ✅ Built 2026-10-07 on the user's asks (`P3-69`). Reverses "the sun does not move" and `Q82`'s unlit lantern. Handset frame time owed. |
+| `Q163` | One head-up display over the whole screen: the readouts float on a bracketed frame, the map a round scope, the 咪錶 alone keeps its box; the menu on the same glass over a blurred backdrop | ✅ Built 2026-10-13 on the user's asks. Supersedes `Q139`'s one housing for every panel but the meter, and `Q142`'s panels flush on the screen's edge. The user's drive owed. |
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 
 ---
@@ -9992,3 +9993,46 @@ Not done, and owed:
 
 **See.** `P3-74` · `Q160` · `Q161` · `P3-2b` · `P6-1` · `game/tuning/shift.md` ·
 `game/tuning/day_to_night.md` · `game/tuning/parked.md`
+
+## `Q163` — One head-up display, not four boxes
+
+**Asked** by the user, 2026-10-13: "can the driver UI be more like a modern car HUD (apart from the
+real taxi meters) instead of just blocks of UI?", "like a consistent UI for whole screen"; then,
+shown three mockups over one frame (a glass cockpit of smoked panels, a head-up display with no
+panels, an instrument cluster in two bands), **picked the head-up display**; then "use same
+consistent UI style in menus", and "need some background blur/shadowing in the menu so that the
+texts are more readable".
+
+**Built 2026-10-13.**
+
+- **No housing but the meter's.** The clock, the callout, the speed and the street name float bare,
+  each with a dark shadow (`float_shadow`, `float_shadow_px`); the 咪錶 keeps its black box because
+  it is a real meter on the dash, not a reading on the glass. `Q139`'s one housing now means the
+  meter's box and the map's field — `verify_hud` still holds the three keys equal, dark and opaque.
+- **The frame is what makes it one display** (`HeadUpFrame`): an L-bracket in each corner and a
+  vignette along the top and bottom 16%, under every readout.
+- **The map is a round scope** (`ScopeDisc`): the field a disc whose rim fades out over
+  `map_fade_px`, which is also the clip, so the roads dissolve at the edge; a ring in the bracket's
+  ink. The border arrow stands on the disc's rim (`Minimap.beacon_point` now takes a circle;
+  `verify_hud`'s three cases rewritten for it). The slot is square, 280 × 280.
+- **The speed** loses its chip and gains an amber sweep from zero to the needle outside the ticks
+  (`dial_sweep_px`), redrawn only when it moves half a degree; numerals 50 → 64.
+- **Inset, not flush.** `Q142` put every housed panel on the screen's edge; with no housings the
+  brackets are the edge, so the readouts stand 32 px in. The thumb-rest contract is untouched —
+  both bottom readouts still end at y 960.
+- **The menu is on the same glass**: the brackets, bare lettering with the same shadow, a choice
+  marked by a rule down its left side (the accent when focused, the amber when current). Its text
+  sits on a **blurred, tinted backdrop** (`backdrop_blur.gdshader`: the screen read from its mips at
+  `backdrop_lod` and pulled toward `HudStyle.scrim`) — a side panel fading out toward the car on
+  HOME's columns, the whole screen behind a sheet.
+- 🚫 **No blur in the drive.** The backdrop reads the screen back, which on a phone is a copy and a
+  mip chain every frame for the whole drive; the menu pays it only while the level is parked. The
+  drive reads on the shadows and the vignette.
+
+**Cost**: the whole HUD +35 draws over `--hud=off` at the boot stand (140 / 105), against +32
+before (137 / 105); the map +19 over `--minimap=off` (+16 before). The frame is ONE mesh (bands and
+brackets; six calls as polygons and polylines), the scope's disc and fade one more, the sweep one.
+⚠️ The label shadows are an outline from a second glyph cache and may cost a call a label; not
+measured apart. The menu's blur reads the screen and its mip chain every frame it is up — capturing
+the parked frame once would save that, and needs a one-shot capture not built.
+

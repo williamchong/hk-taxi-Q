@@ -26,3 +26,6 @@ heading_size = 24
 heading_size_zh = 28
 body_size = 20
 body_size_zh = 24
+backdrop_lod = 3.5
+backdrop_width_px = 760.0
+backdrop_fade_from = 0.55

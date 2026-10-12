@@ -11,8 +11,8 @@ extends CanvasLayer
 ##
 ## Under `GUI` beside the HUD, and it never reaches into the level: `Main` parks
 ## the level while this is up and resumes it on `started`, the same way it hands
-## the HUD its car. Everything drawn is the cab's housing — `HudStyle`'s
-## colours, `ChamferPanel`'s shape (`Q139`, one voice) — and every number is
+## the HUD its car. Everything drawn is the HUD's head-up glass — `HudStyle`'s
+## colours, frame and bare lettering (`Q163`, one display) — and every number is
 ## `MenuProfile`'s. Every string is `MenuText`'s, in the one language `Locale`
 ## names, and the credits it shows are the attribution hard rule 6 and
 ## `LICENSING.md` require; `verify_menu.gd` holds their wording.
@@ -40,6 +40,10 @@ const MENU_ARG: String = "--menu="
 const PAGE_ARG: String = "--menu-page="
 ## Over the HUD (10), under the dev overlay (127).
 const LAYER: int = 20
+## The blur behind the menu's text (`Q163`).
+const BACKDROP: Shader = preload("res://assets/shaders/backdrop_blur.gdshader")
+## Where `_sheet` puts a sheet's column, for the page that fills it.
+const SHEET_COLUMN: NodePath = ^"Centre/Pad/Column"
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
@@ -73,6 +77,8 @@ var _page: Page = Page.HOME
 var _pages: Dictionary[int, Control] = {}
 ## Where the focus lands when a page opens, so a pad or the keys can drive it.
 var _first: Dictionary[int, Button] = {}
+## Each choice's rule (`_button`), for the focus and the current marker.
+var _rules: Dictionary[Button, ColorRect] = {}
 ## The notices' label, filled on the first visit: the text is the engine's and
 ## costs a build, so neither boot nor a language change pays for a page the
 ## player may never open.
@@ -125,6 +131,7 @@ func _build() -> void:
 	_root = HudLayout.safe_root(self)
 	_pages.clear()
 	_first.clear()
+	_rules.clear()
 	_pages[Page.HOME] = _home()
 	_pages[Page.PLAY] = _play()
 	_pages[Page.OPTIONS] = _options()
@@ -132,6 +139,10 @@ func _build() -> void:
 	_pages[Page.GUIDE] = _guide()
 	_pages[Page.NOTICES] = _notices()
 	_pages[Page.REPORT] = _report()
+	# The HUD's glass (`Q163`): the drive's brackets, so the menu and the drive
+	# are one display. Last, over the pages' backdrops, and unshaded — the
+	# backdrops shade the text.
+	_root.add_child(HeadUpFrame.styled(_style, false))
 	_show(_page)
 
 
@@ -259,7 +270,7 @@ func _pick_time(cycle: bool) -> void:
 ## engine, and what the code and the hand-made assets are under.
 func _credits() -> Control:
 	var panel: ChamferPanel = _sheet("Credits", _profile.credits_px)
-	var column: VBoxContainer = panel.get_node("Pad/Column")
+	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
 
 	var scroll := ScrollContainer.new()
 	scroll.name = "Scroll"
@@ -303,7 +314,7 @@ func _credits() -> Control:
 ## resize.
 func _notices() -> Control:
 	var panel: ChamferPanel = _sheet("Notices", _profile.credits_px)
-	var column: VBoxContainer = panel.get_node("Pad/Column")
+	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
 	_heading(column, "Heading", _text.say("notices_title", _language))
 	var lead: Label = _line("Lead", _text.say("notices_lead", _language))
 	_size(lead, _profile.body_size_zh, _profile.body_size)
@@ -334,7 +345,7 @@ func _notices() -> Control:
 ## (`GuideCard` says why drawn), in reading order from the table.
 func _guide() -> Control:
 	var panel: ChamferPanel = _sheet("Guide", _profile.guide_px)
-	var column: VBoxContainer = panel.get_node("Pad/Column")
+	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
 	_heading(column, "Heading", _text.say("guide", _language))
 
 	var row := HBoxContainer.new()
@@ -460,38 +471,69 @@ func _column(node_name: String) -> VBoxContainer:
 	column.offset_right = _profile.margin_px.x + _profile.button_px.x
 	column.offset_top = -_profile.margin_px.y
 	column.offset_bottom = -_profile.margin_px.y
+	# The side panel behind it, fading out toward the car: the root's child,
+	# before the column so it draws under it, shown and hidden with it — a
+	# child of the column would be laid out by it, and a top-level one drew
+	# over it.
+	var backdrop: ColorRect = _backdrop(_root, _profile.backdrop_fade_from)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	backdrop.offset_right = _profile.backdrop_width_px
+	column.visibility_changed.connect(_follow.bind(backdrop, column))
 	_root.add_child(column)
 	return column
 
 
-## The housing: the HUD's panel, its numbers.
+func _follow(backdrop: CanvasItem, page: CanvasItem) -> void:
+	backdrop.visible = page.visible
+
+
+## A panel that draws nothing of its own (`Q163`): the HUD's readouts float on
+## the glass, and so do the menu's.
 func _panel(node_name: String) -> ChamferPanel:
-	return ChamferPanel.housing(_style, node_name)
+	return ChamferPanel.bare(_style, node_name)
 
 
-## A centred sheet of `size_px`: the housing with a padded column inside it,
-## for a page with more than a column of buttons on it.
+## A sheet for a page with more than a column of buttons on it: the whole
+## screen dimmed by the scrim, and a padded column of `size_px` centred on it.
 func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	var panel: ChamferPanel = _panel(node_name)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -size_px.x * 0.5
-	panel.offset_right = size_px.x * 0.5
-	panel.offset_top = -size_px.y * 0.5
-	panel.offset_bottom = size_px.y * 0.5
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(panel)
+	_backdrop(panel, 1.0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var centre := CenterContainer.new()
+	centre.name = "Centre"
+	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(centre)
 
 	var pad := MarginContainer.new()
 	pad.name = "Pad"
-	pad.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pad.custom_minimum_size = size_px
 	for side: StringName in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
 		pad.add_theme_constant_override(side, _profile.credits_pad_px)
-	panel.add_child(pad)
+	centre.add_child(pad)
 
 	var column := VBoxContainer.new()
 	column.name = "Column"
 	column.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	pad.add_child(column)
 	return panel
+
+
+## The blurred, tinted screen behind `parent`'s text (`backdrop_blur.gdshader`),
+## fading out from `fade_from` across its width; add it before the text it is for.
+func _backdrop(parent: Control, fade_from: float) -> ColorRect:
+	var backdrop := ColorRect.new()
+	backdrop.name = "Backdrop"
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var material := ShaderMaterial.new()
+	material.shader = BACKDROP
+	material.set_shader_parameter(&"blur_lod", _profile.backdrop_lod)
+	material.set_shader_parameter(&"tint", _style.scrim)
+	material.set_shader_parameter(&"fade_from", fade_from)
+	backdrop.material = material
+	parent.add_child(backdrop)
+	return backdrop
 
 
 ## A sheet's foot: the way back to `to`, right-aligned. Returned for the focus.
@@ -509,9 +551,10 @@ func _foot_row(column: VBoxContainer) -> HBoxContainer:
 	return foot
 
 
-## A choice: the housing with a flat `Button` filling it, the keyline lit in the
-## accent while the pointer or the focus is on it. Returned for the focus and
-## the marker; the panel goes under `parent`.
+## A choice: bare lettering over a rule down its left side (`Q163`, the
+## callout's mark), the rule and the words lit in the accent while the pointer
+## or the focus is on it. Returned for the focus and the marker; the panel goes
+## under `parent`.
 func _button(parent: Control, node_name: String, key: String, pressed: Callable) -> Button:
 	var panel: ChamferPanel = _panel(node_name)
 	panel.custom_minimum_size = _profile.button_px
@@ -519,6 +562,13 @@ func _button(parent: Control, node_name: String, key: String, pressed: Callable)
 	# otherwise stretch to the row.
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(panel)
+	var rule := ColorRect.new()
+	rule.name = "Rule"
+	rule.color = _style.frame_ink
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	rule.offset_right = _style.accent_px
+	panel.add_child(rule)
 
 	var button := Button.new()
 	button.name = "Button"
@@ -526,30 +576,36 @@ func _button(parent: Control, node_name: String, key: String, pressed: Callable)
 	button.text = _text.say(key, _language)
 	button.set_anchors_preset(Control.PRESET_FULL_RECT)
 	button.focus_mode = Control.FOCUS_ALL
-	# The panel is the whole look; the theme's box would draw a second one.
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	# The rule is the whole look; the theme's box would draw a second one.
 	var empty := StyleBoxEmpty.new()
+	empty.content_margin_left = _style.plate_pad.y * 2.0
 	for state: StringName in [
 		&"normal", &"hover", &"pressed", &"focus", &"hover_pressed", &"disabled"
 	]:
 		button.add_theme_stylebox_override(state, empty)
 	button.add_theme_color_override(&"font_color", _style.plate_ink)
+	# An outline, not `HudStyle.shade`'s shadow: a `Button` has no shadow.
+	button.add_theme_color_override(&"font_outline_color", _style.float_shadow)
+	button.add_theme_constant_override(&"outline_size", _style.float_shadow_px)
 	for state: StringName in [
 		&"font_hover_color", &"font_focus_color", &"font_pressed_color", &"font_hover_pressed_color"
 	]:
 		button.add_theme_color_override(state, _style.accent)
 	_size(button, _profile.button_size_zh, _profile.button_size)
 	button.pressed.connect(pressed)
-	# Hover IS focus, so the lit keyline follows the pointer and the pad alike
+	# Hover IS focus, so the lit rule follows the pointer and the pad alike
 	# and there is one highlighted choice at a time.
 	button.mouse_entered.connect(button.grab_focus)
-	button.focus_entered.connect(_light.bind(panel, true))
-	button.focus_exited.connect(_light.bind(panel, false))
+	button.focus_entered.connect(_light.bind(rule, true))
+	button.focus_exited.connect(_light.bind(rule, false))
+	_rules[button] = rule
 	panel.add_child(button)
 	return button
 
 
-func _light(panel: ChamferPanel, lit: bool) -> void:
-	panel.edge = _style.accent if lit else _style.plate_edge
+func _light(rule: ColorRect, lit: bool) -> void:
+	rule.color = _style.accent if lit else _style.frame_ink
 
 
 ## The current option: lit in the dial's amber — not the accent, which is the
@@ -561,7 +617,7 @@ func _mark_current(button: Button, current: bool) -> void:
 	button.disabled = true
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_color_override(&"font_disabled_color", _style.dial_needle)
-	(button.get_parent() as ChamferPanel).edge = _style.dial_needle
+	_rules[button].color = _style.dial_needle
 
 
 ## A sheet's heading under `parent`: a line in the dial's amber at the heading
@@ -574,7 +630,8 @@ func _heading(parent: Control, node_name: String, text: String) -> Label:
 	return heading
 
 
-## A line of menu text in the housing's ink, wrapping inside its column.
+## A line of menu text in the plate's ink and the HUD's shadow, wrapping inside
+## its column.
 func _line(node_name: String, text: String) -> Label:
 	var label := Label.new()
 	label.name = node_name
@@ -583,7 +640,7 @@ func _line(node_name: String, text: String) -> Label:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override(&"font_color", _style.plate_ink)
-	return label
+	return _style.shade(label)
 
 
 func _gap(node_name: String, px: int) -> Control:

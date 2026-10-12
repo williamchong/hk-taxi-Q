@@ -5,6 +5,11 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
+⚠️ SINCE `Q163` ONE HEAD-UP DISPLAY (the user's call, 2026-10-13): the readouts
+float bare on a bracketed, vignetted frame and only the 咪錶 keeps its box —
+see the `float_shadow` section below. What follows is `Q139`'s, and still holds
+for the meter's box and the map's field.
+
 ONE VOICE: the cab's instruments in one black housing (`Q139`, the user's
 calls). Every panel is `plate_field` under one `plate_edge` bezel; the speed is
 the DASHBOARD's — a dial, an amber needle, printed numerals — and the 咪錶's red
@@ -173,3 +178,16 @@ Every pending customer as an amber pin on the map (`Q142`, the user's call:
 the pool, not one invented passenger). The destination is ONE pin in
 `map_destination`, the chevron's red, because the destination is the fare and
 red is the fare's.
+
+## `float_shadow = Color(0, 0, 0, 0.6)`
+
+The head-up look (`Q163`, the user's pick of three mockups): every readout but
+the meter floats with no panel, and casts this shadow — 8 px round the glyphs,
+2 px down — which is what keeps a white numeral readable on a white sky.
+`frame_*` are the four corner brackets in the plate's ink at 0.55, 48 px arms,
+16 px in from the safe area; `vignette` darkens the top and bottom 16% of the
+frame to 0.4 at the edge, under every readout. `map_fade_px` 28 is the round
+map's rim fading to nothing — also its clip. `dial_sweep_px` 6 is the amber arc
+from zero to the needle. `scrim` is the tint the menu's blurred backdrop is
+pulled toward (`menu.md`). `verify_hud` refuses a zero or a light shadow.
+

@@ -10,6 +10,11 @@ bottom-right, and the middle kept for what the player is reading now. It was
 Midtown Madness 2's mirror of this until `P3-44`. See hud_layout.gd, and Q80 for
 why the check grades `thumb_rest_*` and not `touch_zone_*`.
 
+⚠️ SINCE `Q163` THE READOUTS STAND 32 PX IN, not flush: with no housings the
+corner brackets are the screen's edge, and the minimap's slot is square
+(280 × 280) for the round scope. What follows is `Q142`'s, and its thumb-rest
+reasoning still holds — both bottom readouts end at y 960.
+
 ⚠️ EVERY HOUSED PANEL SITS ON THE SCREEN'S EDGE (`Q142`, the user's call,
 2026-09-24): the map and the speed on the side edges, the meter and the
 callout on the top edge, no margin — the safe-area inset is the only gap. The

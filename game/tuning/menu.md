@@ -63,3 +63,12 @@ The project's name, in the theme's own face whatever the language. The rest are 
 first like `FareFace._say`: the Kai sets larger than the Latin at every line (`hud_style.md`,
 `callout_*_zh`), so `button_size_zh` 32 against 28, `heading_size_zh` 28 against 24,
 `body_size_zh` 24 against 20, `subtitle_size_zh` 30 against 26.
+
+## `backdrop_lod = 3.5`
+
+The blur behind the menu's text (`Q163`, the user's ask: "background blur/shadowing in the menu so
+that the texts are more readable"), `backdrop_blur.gdshader`. The frame is read from the screen's
+mips at 3.5 — about an eleventh of the resolution, which turns the city's edges into soft fields
+— and pulled toward `HudStyle.scrim`. HOME's columns (HOME, PLAY, OPTIONS, the report) take a side
+panel `backdrop_width_px` 760 wide from the left edge, fading out from 0.55 of that width so the
+car stays the picture; a sheet takes the whole screen.
