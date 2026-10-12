@@ -130,7 +130,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   text pasted into `menu_text.json`, which would be wrong the release after a point upgrade, and
   never `Engine.get_license_text()`, which is the MIT screen alone; `verify_menu` holds every
   component named and every licence text whole. A page is shot with `--menu-page=<home|guide|
-  options|credits|notices>`. 🔴 **The
+  options|credits|notices|pause>`. 🔴 **The
   menu never reaches into the level**: `Main` parks it (`DriveHarness.park` — pedals gated by
   `VehicleController.parked`, the fare loop's tick held, the rig handed to `MenuOrbit`) and
   resumes it on `started`; a second entry to the world goes through the harness, not the menu.
@@ -157,7 +157,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   either page is `--menu-page=play|report`. ⚠️ TIME OF DAY is free mode's alone; a shift always
   runs the day. 🔴 **The shift's clock is the hour, never a countdown** (the user's call): the
   `clock` rect top-left, "14:32" over "交更 21:00", housing ink not the meter's red; hidden outside a
-  shift, read off `DayClock` at 4 Hz. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for). 🔴 **The camera follows the page** (`Q164`, the user's ask): `page_shown(shot)` → `Main` → `DriveHarness.frame_menu` → `MenuOrbit.frame`, never the menu reaching the rig; the opening page is cut to, later ones eased. A frame per page is `--menu-page=`, and a standing shot must sway or the capture stalls.
+  shift, read off `DayClock` at 4 Hz. 🔴 **The pause holds the TREE, never `DriveHarness.park`** (`Q165`, the user's ask, reversing "no pause menu"): `park` moves the car to the showroom. `Main` stays pausable (its children inherit it) and the PAUSE menu alone is `ALWAYS`; its way out writes no best, and it offers no OPTIONS, since a HUD renewed mid-fare misses the fare's signals. The HUD's `PauseButton` is its one control that takes a tap — `FOCUS_NONE`, Space being the drift — and `InputRouter` lets the thumbs go on `NOTIFICATION_PAUSED`. `--menu-page=pause` drives a second and pauses; shoot it at `--debug-view=minimal` or the held screen can stall the capture. 🔴 **The camera follows the page** (`Q164`, the user's ask): `page_shown(shot)` → `Main` → `DriveHarness.frame_menu` → `MenuOrbit.frame`, never the menu reaching the rig; the opening page is cut to, later ones eased. A frame per page is `--menu-page=`, and a standing shot must sway or the capture stalls.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

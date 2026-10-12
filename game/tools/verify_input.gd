@@ -111,6 +111,7 @@ func _run() -> void:
 	_check_override()
 	_check_deferred()
 	_check_mouse()
+	await _check_pause()
 
 	_router.queue_free()
 	_finish("verify_input")
@@ -481,6 +482,38 @@ func _mouse_move(to: Vector2) -> void:
 # `Input.parse_input_event`. That keeps the events this tool invents out of the
 # real input queue, where the autoload router — which is also in this tree —
 # would see them too, and it is what makes a finger index mean one thing.
+
+# ----------------------------------------------------------------- pause ----
+
+
+## A paused tree sends the router no input (`Q165`), so a finger lifted over
+## the pause menu is never released: both thumbs are let go as the pause
+## starts, or the car resumes on the last steer and throttle with no finger
+## down. The real tree's pause, not the notification called by hand.
+func _check_pause() -> void:
+	var steer_home: Vector2 = _zone("SteerZone").get_center()
+	var drive_home: Vector2 = _zone("DriveZone").get_center()
+	_press(FINGER_A, steer_home)
+	_press(FINGER_B, drive_home)
+	_move(FINGER_A, steer_home + Vector2(_touch.steer_travel_px, 0.0))
+	_move(FINGER_B, drive_home + Vector2(0.0, -_touch.drive_travel_px))
+	var held: bool = is_equal_approx(_steer(), 1.0) and is_equal_approx(_accelerate(), 1.0)
+	paused = true
+	await process_frame
+	paused = false
+	_tick()
+	_expect(
+		held and is_zero_approx(_steer()) and is_zero_approx(_accelerate()),
+		"pause",
+		"two thumbs held into a pause are let go by the time it resumes"
+	)
+	# The lifts the paused tree never delivered, arriving late, release nothing.
+	_lift(FINGER_A, steer_home)
+	_lift(FINGER_B, drive_home)
+	_press(FINGER_A, steer_home)
+	_move(FINGER_A, steer_home + Vector2(_touch.steer_travel_px, 0.0))
+	_expect(is_equal_approx(_steer(), 1.0), "pause", "a thumb lands afresh after the pause")
+	_lift(FINGER_A, steer_home)
 
 
 func _press(index: int, at: Vector2) -> void:

@@ -15,6 +15,19 @@ extends Node
 ## And the shift's end (`Q162`): on the level's `shift_over` the level parks,
 ## the best is recorded and a fresh menu opens on the report, whose AGAIN is a
 ## `started` like the first — the level restarts in place, never reloads.
+##
+## And the pause (`Q165`, the user's ask): Esc, the HUD's button or the app
+## losing the screen pause the TREE — not `DriveHarness.park`, which stands the
+## car in the showroom — so the car, the fare's clock, the shift's hour and
+## the parked roster hold where they are. A fresh menu on PAUSE runs alone over
+## it. RESUME unpauses; the way out parks the level and opens HOME, writing no
+## best: half a shift is not a total. This node stays pausable — its children
+## would inherit anything else — so the menu's signals are what reach it while
+## the tree is held.
+
+## How long `--menu-page=pause` drives before it pauses: the chase rig is
+## snapped onto the car at start and needs a moment to frame it.
+const PAUSE_PAGE_AFTER_S: float = 1.0
 
 ## The level in play. Assign in the scene.
 @export var level: DriveHarness
@@ -28,6 +41,8 @@ extends Node
 var _gui: Node = null
 ## Whether a run has ended, so the next start needs a fresh HUD.
 var _ended: bool = false
+## The menu over a paused drive, while one is up.
+var _pause_menu: StartMenu = null
 
 
 func _ready() -> void:
@@ -38,20 +53,90 @@ func _ready() -> void:
 	if level == null:
 		push_warning("Main has no level assigned; the HUD has no car to read.")
 		return
-	_hand_over()
-	level.shift_over.connect(_on_shift_over)
-
 	# Under `--menu=off` the menu frees itself in its own `_ready`, which is
 	# deferred to the end of this frame, so the export still points at a node
 	# that is leaving: its own queued state is the one answer, not a second
 	# read of the flag.
-	if menu == null or menu.is_queued_for_deletion():
+	var menu_up: bool = menu != null and not menu.is_queued_for_deletion()
+	if menu_up:
+		_gui = menu.get_parent()
+	_hand_over()
+	level.shift_over.connect(_on_shift_over)
+	if not menu_up:
 		return
-	_gui = menu.get_parent()
+	if Cmdline.value(StartMenu.PAGE_ARG).to_lower() == "pause":
+		# A frame of the pause is one `drive.sh` run: the drive starts as
+		# PLAY would start it and is held once the chase rig has settled.
+		menu.queue_free()
+		_on_started(DayClock.mode_from_flag())
+		# On physics time: the boot's load stalls the wall clock past a second.
+		get_tree().create_timer(PAUSE_PAGE_AFTER_S, false, true).timeout.connect(pause)
+		return
 	level.park()
 	if is_instance_valid(hud):
 		hud.visible = false
 	_follow_menu(menu)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"ui_cancel") and _can_pause():
+		get_viewport().set_input_as_handled()
+		pause()
+
+
+## The app losing the screen holds the run: a call or a notification must not
+## spend a shift. Delivered whether or not the tree is paused, and ignored
+## where there is nothing to hold.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			pause()
+
+
+## Only a drive in play pauses: never under `--menu=off` (every scripted run),
+## over a menu, or twice.
+func _can_pause() -> bool:
+	return (
+		_gui != null
+		and _pause_menu == null
+		and level != null
+		and level.vehicle != null
+		and not level.vehicle.parked
+		and not get_tree().paused
+	)
+
+
+## Hold the drive where it stands and put the pause over it.
+func pause() -> void:
+	if not _can_pause():
+		return
+	get_tree().paused = true
+	var shown := StartMenu.new()
+	shown.name = "PauseMenu"
+	shown.pausing = true
+	shown.pausing_shift = level.clock != null and level.clock.mode == DayClock.Mode.SHIFT
+	shown.resumed.connect(_release_pause)
+	shown.ended.connect(_on_run_ended)
+	_gui.add_child(shown)
+	_pause_menu = shown
+
+
+## RESUME, and the first half of the way out: the pause menu has freed itself
+## and the tree runs again.
+func _release_pause() -> void:
+	_pause_menu = null
+	get_tree().paused = false
+
+
+## Out of a paused run: the level parks under a fresh HOME as at boot, and the
+## next PLAY starts clean through `DriveHarness.play`.
+func _on_run_ended() -> void:
+	_release_pause()
+	level.park()
+	_ended = true
+	if is_instance_valid(hud):
+		hud.visible = false
+	_open_menu(null)
 
 
 func _follow_menu(shown: StartMenu) -> void:
@@ -70,6 +155,9 @@ func _hand_over() -> void:
 	hud.vehicle = level.vehicle
 	hud.fares = level.fares
 	hud.clock = level.clock
+	hud.pause_pressed.connect(pause)
+	# No menu, no pause: the button would take a tap and do nothing.
+	hud.pausable = _gui != null
 
 
 func _on_started(mode: DayClock.Mode) -> void:
@@ -103,6 +191,11 @@ func _on_shift_over() -> void:
 	report.bails = walked
 	report.new_best = Settings.record_shift(total)
 	report.best_hkd = Settings.best_shift_hkd()
+	_open_menu(report)
+
+
+## A fresh menu over the parked level: on the report, or on HOME for none.
+func _open_menu(report: StartMenu.Report) -> void:
 	var shown := StartMenu.new()
 	shown.name = "StartMenu"
 	shown.report = report

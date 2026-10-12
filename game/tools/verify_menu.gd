@@ -30,6 +30,7 @@ const MenuTextScript = preload("res://scripts/ui/menu_text.gd")
 const GuideCardScript = preload("res://scripts/ui/guide_card.gd")
 const EngineNoticesScript = preload("res://scripts/ui/engine_notices.gd")
 const SettingsScript = preload("res://scripts/core/settings.gd")
+const StartMenuScript = preload("res://scripts/ui/start_menu.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
@@ -47,6 +48,9 @@ const KEYS: PackedStringArray = [
 	"new_best",
 	"again",
 	"menu",
+	"paused",
+	"resume",
+	"end_shift",
 	"guide",
 	"options",
 	"credits",
@@ -121,7 +125,56 @@ func _init() -> void:
 	_check_text()
 	_check_notices()
 	_check_settings()
+	# The pause needs a tree, and autoloads register on the first frame.
+	_check_pause.call_deferred()
+	_start_watchdog.call_deferred("verify_menu", 30.0)
 
+
+## The menu over a paused drive (`Q165`): it runs alone over the paused tree,
+## its END names the run, HOW TO PLAY leads back to it and not HOME, and the
+## key that paused resumes — once, the menu leaving.
+func _check_pause() -> void:
+	await process_frame
+	var menu := StartMenuScript.new()
+	menu.pausing = true
+	menu.pausing_shift = true
+	var resumes: Array[int] = [0]
+	menu.resumed.connect(func() -> void: resumes[0] += 1)
+	paused = true
+	root.add_child(menu)
+	await process_frame
+	var pages: Dictionary = menu._pages
+	var page: Control = pages.get(StartMenuScript.Page.PAUSE)
+	_expect(
+		menu.process_mode == Node.PROCESS_MODE_ALWAYS and page != null and page.visible,
+		"pause",
+		"the pause opens on its page and runs over the paused tree"
+	)
+	if page == null:
+		paused = false
+		_finish("verify_menu")
+		return
+	var text := MenuTextScript.load_text()
+	var end: Button = page.get_node("End/Button")
+	_expect(
+		end.text in [text.say("end_shift", "en"), text.say("end_shift", "zh")],
+		"pause",
+		"a shift's way out is END SHIFT"
+	)
+	(page.get_node("Guide/Button") as Button).pressed.emit()
+	var guide: Control = pages.get(StartMenuScript.Page.GUIDE)
+	(guide.get_node("Centre/Pad/Column/Foot/Back/Button") as Button).pressed.emit()
+	_expect(page.visible and not guide.visible, "pause", "HOW TO PLAY's way back is the pause")
+	var cancel := InputEventAction.new()
+	cancel.action = &"ui_cancel"
+	cancel.pressed = true
+	menu._unhandled_input(cancel)
+	_expect(
+		resumes[0] == 1 and menu.is_queued_for_deletion(),
+		"pause",
+		"the key that paused resumes, and the menu leaves"
+	)
+	paused = false
 	_finish("verify_menu")
 
 

@@ -158,6 +158,11 @@ extends Resource
 ## takes in the arcade-taxi reference; the dev overlay's counter wins it when
 ## the overlay is on, as it does every corner.
 @export var clock: Rect2
+## The pause (`P6-1`, the user's ask): the HUD's one control that takes a tap,
+## since a phone has no Esc. Top-right beside the meter, far above both touch
+## zones, so a tap on it is never a thumb landing; graded against the rests
+## like every readout.
+@export var pause: Rect2
 
 ## ⚠️ **There is deliberately NO slot for the destination ARROW**, and that is a
 ## finding rather than an omission. Both references that have a destination put
@@ -186,9 +191,9 @@ extends Resource
 #
 # A touch **zone** is where a tap is detected. A **thumb** is what physically
 # covers pixels, and it is about a fingertip resting in an outer bottom corner —
-# not half the screen. Our Controls are all `MOUSE_FILTER_IGNORE`, so they
-# intercept nothing whatever they overlap; the only real constraint is
-# occlusion.
+# not half the screen. Our Controls are all `MOUSE_FILTER_IGNORE` but the
+# pause, which sits above both zones, so they intercept nothing whatever they
+# overlap; the only real constraint is occlusion.
 #
 # So the zones are recorded for `P2-4` to read, and the **rests** are what the
 # check enforces. Keeping the old rule would have permanently pushed this HUD
@@ -270,6 +275,7 @@ func hud_slots() -> Dictionary[String, Rect2]:
 		"callout": callout,
 		"tick": tick,
 		"clock": clock,
+		"pause": pause,
 	}
 	slots.merge(reserved_slots())
 	return slots

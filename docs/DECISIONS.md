@@ -10058,3 +10058,52 @@ open the car door in the start game menu state".
   drawn", and `verify_menu` refuses a shot that neither turns nor sways.
 - **The door is the fare's own `TaxiDoor`**, found under the car by type as `TaxiHire` finds it;
   it shuts on any page without `door_open` and as the car pulls away (`MenuOrbit.end`).
+
+## `Q165` — The drive pauses the tree, not the level
+
+**Asked** by the user, 2026-10-13: `P6-1`'s owed pause menu, taken from `/next` with both
+recommendations — the menu's blur kept behind it, and a touch button built now. Reverses the hud
+rule's "🚫 No pause menu, no Esc back to the menu from the drive (not asked for)": it is asked for.
+
+**Built 2026-10-13.**
+
+- **`get_tree().paused`, never `DriveHarness.park`.** `park` stands the car in the showroom and
+  `resume` puts it back on the start line, so a pause through it would teleport the car. The tree's
+  pause holds everything that ticks in `_physics_process` where it stands — the car, the fare's
+  clock, `DayClock`'s hour and sky, the parked roster, the light tail's own clock. Only
+  `water.gdshader` reads `TIME`, so the sea moves behind the menu.
+- **`Main` stays pausable.** Its children inherit its mode, so a `PROCESS_MODE_ALWAYS` on `Main`
+  would run the whole level under the pause. The pause menu sets `ALWAYS` on itself and its signals
+  reach `Main` while the tree is held.
+- **A fresh `StartMenu` on a new `PAUSE` page**, as the report is, building only PAUSE and the
+  guide — on the tap's frame, and OPTIONS left out by construction: RESUME, HOW TO PLAY (its way back
+  is the pause), and the way out — END SHIFT / 收工 in a shift, MENU in free mode. The way out parks
+  the level and opens HOME, and **writes no best**: half a shift is not a total. **No OPTIONS**: a
+  language is a new HUD, and a HUD readied mid-fare never hears the fare's signals already sent
+  (signal-driven, never polled).
+- **Three ways in**, all refused under `--menu=off`, over a menu or twice: Esc (`ui_cancel`, which
+  also resumes), the HUD's button, and the app losing the screen
+  (`NOTIFICATION_APPLICATION_PAUSED`, `APPLICATION_FOCUS_OUT`) — a call must not spend a shift.
+- **The button** (`PauseButton`, `pause` in `hud_layout.tres`, 88 × 88 at 1440, 40): two drawn bars,
+  the HUD's one control that takes a tap, above both touch zones. `FOCUS_NONE`, since Space is the
+  drift and a focused button takes `ui_accept`. **+1 draw, +8 prims** where it shows (135 / 795,342
+  against 134 / 795,334 at t=3 on the throttle route, two runs a side, the car's path identical);
+  hidden where nothing can pause (`Hud.pausable`, `Main`'s answer), so every `--menu=off` run
+  draws what it drew before.
+- **`InputRouter` lets both thumbs go on `NOTIFICATION_PAUSED`**: a paused tree sends it no input,
+  so a finger lifted over the menu would hold its last steer and throttle into the resume.
+
+**Held** by `verify_day_cycle` (the shift's hour and sky hold over 10 real paused physics frames
+and run on after), `verify_input` (two thumbs held into a pause are let go; a thumb lands afresh)
+and `verify_menu` (the pause runs over the paused tree, END SHIFT in a shift, the guide's way back,
+Esc resumes once) — each mutation-checked: the clock `ALWAYS`, the router's release skipped, the
+menu left pausable, the guide back to HOME. `--menu-page=pause` drives a second and pauses, for a
+frame (on physics time — the boot's load stalls the wall clock); shoot it with `--debug-view=minimal`, since a held screen can stall the capture.
+
+**Deferred to `P2-6`:** a paused frame still renders at full rate, the blur's screen copy and mip
+chain included — `Engine.max_fps` lowered while paused would save a phone's battery behind a still
+frame, and is a frame-pacing policy for the performance pass to set with the handsets.
+
+**Not built:** Android's back button. `application/config/quit_on_go_back` is on by default, so
+back quits the app; whether it pauses instead is `P0-3b`'s, on a handset. Owed: the user's look
+(`build/driver/pause_zh`, `pause_en`) and drive.

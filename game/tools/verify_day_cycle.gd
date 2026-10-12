@@ -17,6 +17,9 @@
 ## - 特更 (`Q162`): in a shift the day runs with the option off, the clock reads
 ##   the opening hour to the closing one over the same `length_s`, `closed`
 ##   fires once at the end, and `restart` puts the clock and the rig back.
+## - The pause (`Q165`): over a paused tree the shift's hour and the sky hold
+##   on real physics frames, and run on after it — the clock must stay
+##   pausable, or a phone call spends the shift.
 ##
 ## No built region needed: the rig scene and its tables are committed tuning.
 extends "res://tools/verify_tool.gd"
@@ -25,6 +28,8 @@ const RIG_SCENE := "res://scenes/world/clean_daylight.tscn"
 const SettingsScript = preload("res://scripts/core/settings.gd")
 const SCRATCH := "user://verify_day_cycle.cfg"
 const TICK_S: float = 1.0 / 60.0
+## Physics frames run each side of the pause.
+const PAUSE_FRAMES: int = 10
 
 
 func _init() -> void:
@@ -105,6 +110,7 @@ func _run() -> void:
 
 	await _check_the_clock(rig)
 	await _check_the_shift(rig)
+	await _check_the_pause(rig)
 	rig.queue_free()
 	_finish("verify_day_cycle")
 
@@ -235,6 +241,34 @@ func _check_the_shift(rig: LightingRig) -> void:
 	clock.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
+
+
+## The tree paused over a running shift (`Q165`): real physics frames, not
+## `_physics_process` called by hand, since a hand call ignores the pause.
+func _check_the_pause(rig: LightingRig) -> void:
+	rig.time_of_day = 0.0
+	var clock := DayClock.new()
+	clock.rig = rig
+	clock.mode = DayClock.Mode.SHIFT
+	root.add_child(clock)
+	for frame: int in PAUSE_FRAMES:
+		await physics_frame
+	var running: float = clock.elapsed_s
+	var sky: float = rig.time_of_day
+	_expect(running > 0.0 and sky > 0.0, "pause", "the shift and its sky run before the pause")
+	paused = true
+	for frame: int in PAUSE_FRAMES:
+		await physics_frame
+	var held: bool = clock.elapsed_s == running and rig.time_of_day == sky
+	paused = false
+	for frame: int in PAUSE_FRAMES:
+		await physics_frame
+	_expect(
+		held and clock.elapsed_s > running and rig.time_of_day > sky,
+		"pause",
+		"%d paused frames leave the shift at %.3f s, and it runs on after" % [PAUSE_FRAMES, running]
+	)
+	clock.free()
 
 
 func _stand_rig() -> LightingRig:

@@ -64,6 +64,14 @@ clock. Top-left, 300 × 120 over `combo`'s 132: the corner the arcade-taxi
 reference gives its game clock, and the corner the dev overlay wins when it is
 on. Shown only in a shift; in the housing's ink, never the meter's red (`Q139`).
 
+🔴 `pause` IS THE ONE SLOT THAT TAKES A TAP (`P6-1`, `Q165`, the user's ask,
+2026-10-13): a phone has no Esc, so the pause is a drawn button, 88 × 88 at
+1440, 40 — in the top band left of the meter, its centre on the meter's
+first line. Above y 480, so outside both `touch_zone_*`: a tap on it is never
+a thumb landing, and `InputRouter` ignores a finger no zone claims. 88 design
+px is about 9 mm on a 6-inch handset, over Apple's and Material's 44 pt /
+48 dp minimum; `P2-4` re-measures it with the rests.
+
 ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
 missing here is a zero-size rect rather than something sensible, and
 `verify_hud.gd` refuses one.

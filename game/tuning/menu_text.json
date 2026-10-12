@@ -109,6 +109,18 @@
     "menu": {
       "en": "MENU",
       "zh": "主選單"
+    },
+    "paused": {
+      "en": "PAUSED",
+      "zh": "暫停"
+    },
+    "resume": {
+      "en": "RESUME",
+      "zh": "繼續"
+    },
+    "end_shift": {
+      "en": "END SHIFT",
+      "zh": "收工"
     }
   },
   "credits": [

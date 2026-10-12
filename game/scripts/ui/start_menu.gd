@@ -9,6 +9,12 @@ extends CanvasLayer
 ## the shift's best on HOME. `Main` opens a fresh one on the REPORT page when a shift ends; its
 ## AGAIN is a `started` like the first.
 ##
+## **And over a paused drive** (the user's ask): `Main` opens a fresh one with
+## `pausing` set on the PAUSE page, over a tree it has paused, so this one
+## alone runs — RESUME, HOW TO PLAY, and the way out of the run. No OPTIONS:
+## a language is a new HUD (`Main._renew_hud`), and a HUD readied mid-fare
+## would never hear the fare's signals already sent.
+##
 ## Under `GUI` beside the HUD, and it never reaches into the level: `Main` parks
 ## the level while this is up and resumes it on `started`, the same way it hands
 ## the HUD its car. Everything drawn is the HUD's head-up glass — `HudStyle`'s
@@ -19,9 +25,10 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
-## `--menu-page=<home|play|guide|options|credits|notices|report>` opens on that
+## `--menu-page=<home|play|guide|options|credits|notices|report|pause>` opens on that
 ## page, so a frame of any sheet is one `drive.sh` run and never a click; the
-## report so opened is an empty shift's.
+## report so opened is an empty shift's, and the pause `Main`'s over the car on
+## the start line.
 ##
 ## ⚠️ **The first Controls in this project that take a click.** `InputRouter`
 ## never marks an event handled, so the buttons see the pointer and the touch;
@@ -35,6 +42,10 @@ signal started(mode: DayClock.Mode)
 signal language_changed(code: String)
 ## A page opened; `Main` hands `shot` to the camera round the parked car.
 signal page_shown(shot: MenuShot)
+## The pause's RESUME: `Main` unpauses the drive where it stood and frees this.
+signal resumed
+## The pause's way out: `Main` parks the level and opens a fresh menu on HOME.
+signal ended
 
 ## Chooses whether the menu is shown at all. `off` for every scripted run.
 const MENU_ARG: String = "--menu="
@@ -49,7 +60,7 @@ const SHEET_COLUMN: NodePath = ^"Centre/Pad/Column"
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
-enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT }
+enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT, PAUSE }
 
 
 ## What a shift banked, for the REPORT page (`Q162`). Filled by `Main`.
@@ -65,6 +76,12 @@ class Report:
 
 ## The shift to report, set before this enters the tree; null opens on HOME.
 var report: Report = null
+## Whether this is the pause over a running drive, set before this enters the
+## tree; it opens on PAUSE and its ways back lead there, not HOME.
+var pausing: bool = false
+## Whether the paused run is a shift: its way out is END SHIFT, a free drive's
+## MENU.
+var pausing_shift: bool = false
 
 var _profile: MenuProfile = null
 var _style: HudStyle = null
@@ -104,6 +121,14 @@ func _ready() -> void:
 	var wanted_page: String = Cmdline.value(PAGE_ARG).to_upper()
 	if Page.has(wanted_page):
 		_page = Page[wanted_page] as Page
+	if pausing:
+		# The one thing that runs over the paused tree.
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		_page = Page.PAUSE
+	elif _page == Page.PAUSE:
+		# The flag's pause is `Main`'s to open, over a drive; this boot menu is
+		# freed before it shows.
+		_page = Page.HOME
 	if report != null:
 		_page = Page.REPORT
 	elif _page == Page.REPORT:
@@ -134,13 +159,18 @@ func _build() -> void:
 	_pages.clear()
 	_first.clear()
 	_rules.clear()
-	_pages[Page.HOME] = _home()
-	_pages[Page.PLAY] = _play()
-	_pages[Page.OPTIONS] = _options()
-	_pages[Page.CREDITS] = _credits()
 	_pages[Page.GUIDE] = _guide()
-	_pages[Page.NOTICES] = _notices()
-	_pages[Page.REPORT] = _report()
+	if pausing:
+		# The two pages a pause reaches, and no more: built on the tap's frame,
+		# and OPTIONS left out by construction.
+		_pages[Page.PAUSE] = _pause()
+	else:
+		_pages[Page.HOME] = _home()
+		_pages[Page.PLAY] = _play()
+		_pages[Page.OPTIONS] = _options()
+		_pages[Page.CREDITS] = _credits()
+		_pages[Page.NOTICES] = _notices()
+		_pages[Page.REPORT] = _report()
 	# The HUD's glass (`Q163`): the drive's brackets, so the menu and the drive
 	# are one display. Last, over the pages' backdrops, and unshaded — the
 	# backdrops shade the text.
@@ -185,10 +215,21 @@ func shot() -> MenuShot:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _page not in [Page.HOME, Page.REPORT] and event.is_action_pressed(&"ui_cancel"):
-		# The notices hang off the credits, so the way back is one step.
-		_show(Page.CREDITS if _page == Page.NOTICES else Page.HOME)
+	if not event.is_action_pressed(&"ui_cancel"):
+		return
+	if _page == Page.PAUSE:
+		# The key that paused the drive resumes it.
 		get_viewport().set_input_as_handled()
+		_on_resume()
+	elif _page not in [Page.HOME, Page.REPORT]:
+		# The notices hang off the credits, so the way back is one step.
+		_show(Page.CREDITS if _page == Page.NOTICES else _home_page())
+		get_viewport().set_input_as_handled()
+
+
+## Where a way back lands: HOME, or PAUSE over a paused drive.
+func _home_page() -> Page:
+	return Page.PAUSE if pausing else Page.HOME
 
 
 # ---------------------------------------------------------------- pages ----
@@ -404,7 +445,7 @@ func _guide() -> Control:
 		body.add_theme_color_override(&"font_color", _style.chip_muted)
 		step.add_child(body)
 
-	_first[Page.GUIDE] = _foot(column)
+	_first[Page.GUIDE] = _foot(column, _home_page())
 	return panel
 
 
@@ -445,16 +486,44 @@ func _report() -> Control:
 	return column
 
 
+## The drive held (the user's ask): a column off the corner like HOME's over
+## the frozen frame — the way on, how to play, and the way out of the run, a
+## shift's END SHIFT recording no best, since half a shift is not a total.
+func _pause() -> Control:
+	var column: VBoxContainer = _column("Pause")
+	_heading(column, "Heading", _text.say("paused", _language))
+	_first[Page.PAUSE] = _button(column, "Resume", "resume", _on_resume)
+	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_button(column, "End", "end_shift" if pausing_shift else "menu", _on_end)
+	return column
+
+
 # -------------------------------------------------------------- actions ----
 
 
 func _on_start(mode: DayClock.Mode) -> void:
+	_leave()
+	started.emit(mode)
+
+
+func _on_resume() -> void:
+	_leave()
+	resumed.emit()
+
+
+func _on_end() -> void:
+	_leave()
+	ended.emit()
+
+
+## Off the screen, deaf and freed, before the signal that hands the run back.
+func _leave() -> void:
 	# Released first: a `ui_accept` still held would land on whatever took the
 	# focus next, and Space is also the drift.
 	get_viewport().gui_release_focus()
 	set_process_unhandled_input(false)
 	visible = false
-	started.emit(mode)
 	queue_free()
 
 

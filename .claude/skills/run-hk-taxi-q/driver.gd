@@ -740,12 +740,13 @@ func _parse_args() -> bool:
 				# wrong sheet and report success. ⚠️ The list is `StartMenu.Page`
 				# lower-cased, kept by hand: this tool cannot preload a
 				# `class_name` script (`verify_menu.gd` says why).
-				if not ["home", "play", "guide", "options", "credits", "notices", "report"].has(
-					value
-				):
+				var pages: PackedStringArray = [
+					"home", "play", "guide", "options", "credits", "notices", "report", "pause"
+				]
+				if not pages.has(value):
 					_fail(
 						(
-							"--menu-page=%s is not home, play, guide, options, credits, notices or report"
+							"--menu-page=%s is not home, play, guide, options, credits, notices, report or pause"
 							% value
 						)
 					)

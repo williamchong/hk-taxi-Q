@@ -155,6 +155,18 @@ func _ready() -> void:
 	_mouse_is_a_finger = Cmdline.value(TOUCH_ARG).to_lower() == "mouse"
 
 
+## A paused tree sends this no input, so a finger lifted over the pause menu
+## would never be released and the thumb would hold its last steer or throttle
+## into the resume. Both are let go as the pause starts: the player's thumbs
+## land afresh after it.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PAUSED:
+		return
+	_steer_thumb.release(_steer_thumb.index)
+	_drive_thumb.release(_drive_thumb.index)
+	_mouse_is_down = false
+
+
 ## Resolve the two touch zones onto the real screen, as Controls.
 ##
 ## 🔴 **The geometry comes from `hud_layout.tres` and is placed by

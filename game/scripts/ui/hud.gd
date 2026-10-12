@@ -29,6 +29,9 @@ extends CanvasLayer
 ## test needs to be able to switch it off. A clean frame for art review is the
 ## second reason and would not on its own have justified the flag.
 
+## The pause was tapped (`Q165`); `Main` pauses the tree and opens the menu.
+signal pause_pressed
+
 ## Chooses whether the HUD draws. `--hud=off` for `P3-9` and for art frames.
 const HUD_ARG: String = "--hud="
 
@@ -116,6 +119,14 @@ var fares: FareSystem = null:
 ## The game clock, handed in by `Main` like the car (`Q162`). Read only in a
 ## shift; null, or free mode, hides the clock.
 var clock: DayClock = null
+## Whether the drive can pause (`Main`'s answer: not under `--menu=off`), and
+## so whether the pause button shows.
+var pausable: bool = true:
+	set(value):
+		pausable = value
+		if _pause_button != null:
+			_pause_button.visible = value
+var _pause_button: PauseButton = null
 
 var _clock_panel: ChamferPanel = null
 var _clock_value: Label = null
@@ -465,6 +476,17 @@ func _build() -> void:
 	if _language == Locale.CHINESE and _font_zh != null:
 		_clock_caption.add_theme_font_override(&"font", _font_zh)
 	clock_lines.add_child(_style.shade(_clock_caption))
+
+	# ---- the pause ----
+	#
+	# The one control here that takes a tap (`Q165`): a phone has no Esc. It
+	# says it was pressed and nothing more; `Main` owns what a pause is.
+	_pause_button = PauseButton.new()
+	_pause_button.name = "Pause"
+	_pause_button.style = _style
+	_pause_button.visible = pausable
+	_pause_button.pressed.connect(pause_pressed.emit)
+	_layout.place(root, _pause_button, _layout.pause)
 
 	# ---- the reserved slots ----
 	#
