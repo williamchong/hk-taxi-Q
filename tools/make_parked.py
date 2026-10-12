@@ -162,6 +162,21 @@ class Shape:
     mirrors: bool = True
     # A handle at the belt behind each side window — on a car, each door's.
     handles: bool = False
+    # Wheels in arches. Off, the skirt runs whole to the sill and hides them,
+    # and a dark underframe stands in for the trucks (a tram's).
+    arches: bool = True
+    # Of each deck's height, belt to top: the solid panel under the side
+    # glass, and the glass. A tram's windows are a band over a tall panel.
+    panel_share: float = 0.0
+    glass_share: float = 0.72
+    # One lamp centred on the dash (a tram's), or a pair.
+    head_lamps: int = 2
+
+    def __post_init__(self) -> None:
+        if self.panel_share + self.glass_share >= 1.0:
+            raise ValueError(f"{self.kind}: the panel and the glass leave no roof rail")
+        if self.head_lamps not in (1, 2):
+            raise ValueError(f"{self.kind}: head_lamps is 1 or 2, not {self.head_lamps}")
 
     @property
     def half_width_m(self) -> float:
@@ -210,9 +225,12 @@ class Shape:
 
 @dataclass(frozen=True)
 class _Glazing:
-    """One deck's glasshouse as `_glasshouse` lofts it: three rings, belt to top."""
+    """One deck's glasshouse as `_glasshouse` lofts it: belt, the panel's top
+    where the glass starts (the belt itself unless `panel_share`), the glass's
+    top, and the roof."""
 
     belt_y: float
+    panel_y: float
     glass_y: float
     top_y: float
     # Half-widths at the belt and at the top of the glass.
@@ -228,7 +246,7 @@ class _Glazing:
 
     def end_z(self, y: float, *, rear: bool) -> float:
         """The raked windscreen's (or backlight's) z at height `y`."""
-        t = (y - self.belt_y) / (self.glass_y - self.belt_y)
+        t = (y - self.panel_y) / (self.glass_y - self.panel_y)
         return self.rear_z - self.rear_run * t if rear else self.front_z + self.front_run * t
 
     def glass_top_z(self) -> tuple[float, float]:
@@ -244,16 +262,18 @@ class _Glazing:
 
     def side_x(self, y: float) -> float:
         """The side glass's half-width at height `y` — it leans in as it rises."""
-        t = (y - self.belt_y) / (self.glass_y - self.belt_y)
+        t = (y - self.panel_y) / (self.glass_y - self.panel_y)
         return self.belt_half_w + (self.glass_half_w - self.belt_half_w) * t
 
 
 def _glazing(shape: Shape, belt_y: float, top_y: float) -> _Glazing:
-    glass_rise = (top_y - belt_y) * 0.72
+    panel_y = belt_y + (top_y - belt_y) * shape.panel_share
+    glass_rise = (top_y - belt_y) * shape.glass_share
     hw = shape.body_half_width_m
     return _Glazing(
         belt_y=belt_y,
-        glass_y=belt_y + glass_rise,
+        panel_y=panel_y,
+        glass_y=panel_y + glass_rise,
         top_y=top_y,
         belt_half_w=hw,
         glass_half_w=hw - shape.roof_inset_m * 0.6,
@@ -288,11 +308,11 @@ def _lower(shape: Shape) -> MeshData:
         [shape.skirt_colour],
         bottom=DARK,
         top=None,
-        skip_edges=flank_edges(len(rings[0])),
+        skip_edges=flank_edges(len(rings[0])) if shape.arches else (),
         name="skirt",
     )
     body = loft(rings[1:], [shape.paint], bottom=None, top=shape.paint, name="lower")
-    flanks = [_flank(shape, rings[0], side) for side in (-1.0, 1.0)]
+    flanks = [_flank(shape, rings[0], side) for side in (-1.0, 1.0)] if shape.arches else []
     return merge([skirt, body, *flanks], name="lower")
 
 
@@ -396,8 +416,14 @@ def _glasshouse(
     lower deck's drawn-in top by `roof_inset_m`.
     """
     g = _glazing(shape, belt_y, top_y)
+    panel = (
+        []
+        if shape.panel_share <= 0.0
+        else [ring(belt_y, g.belt_half_w, g.front_z, g.rear_z, g.cut)]
+    )
     rings = [
-        ring(belt_y, g.belt_half_w, g.front_z, g.rear_z, g.cut),
+        *panel,
+        ring(g.panel_y, g.belt_half_w, g.front_z, g.rear_z, g.cut),
         ring(
             g.glass_y,
             g.glass_half_w,
@@ -413,7 +439,8 @@ def _glasshouse(
             g.cut,
         ),
     ]
-    return loft(rings, [GLASS, roof], bottom=floor, top=roof if cap else None, name=name)
+    bands = [shape.paint] * len(panel) + [GLASS, roof]
+    return loft(rings, bands, bottom=floor, top=roof if cap else None, name=name)
 
 
 def _pillars(shape: Shape, belt_y: float, top_y: float, *, name: str) -> list[MeshData]:
@@ -426,15 +453,15 @@ def _pillars(shape: Shape, belt_y: float, top_y: float, *, name: str) -> list[Me
     colour = shape.pillar or shape.roof
     parts: list[MeshData] = []
     for side in (-1.0, 1.0):
-        x_low = side * (g.side_x(g.belt_y) + 0.004)
+        x_low = side * (g.side_x(g.panel_y) + 0.004)
         x_high = side * (g.side_x(g.glass_y) + 0.004)
         for k in range(1, shape.window_bays):
             z = z0 + (z1 - z0) * k / shape.window_bays
             parts.append(
                 polygon_facing(
                     [
-                        (x_low, g.belt_y, z - half),
-                        (x_low, g.belt_y, z + half),
+                        (x_low, g.panel_y, z - half),
+                        (x_low, g.panel_y, z + half),
                         (x_high, g.glass_y, z + half),
                         (x_high, g.glass_y, z - half),
                     ],
@@ -528,14 +555,15 @@ def _ends(shape: Shape) -> list[MeshData]:
         for side, side_tag in ((-1.0, "l"), (1.0, "r")):
             x = side * (hw - 0.22)
             lens_half = (0.08, 0.05) if rear else (0.11, 0.05)
-            parts.append(
-                box(
-                    (x - lens_half[0], lamp_y - lens_half[1], z_lens[0]),
-                    (x + lens_half[0], lamp_y + lens_half[1], z_lens[1]),
-                    RED if rear else LAMP,
-                    name=f"{'taillamp' if rear else 'headlamp'}_{side_tag}",
+            if rear or shape.head_lamps == 2:
+                parts.append(
+                    box(
+                        (x - lens_half[0], lamp_y - lens_half[1], z_lens[0]),
+                        (x + lens_half[0], lamp_y + lens_half[1], z_lens[1]),
+                        RED if rear else LAMP,
+                        name=f"{'taillamp' if rear else 'headlamp'}_{side_tag}",
+                    )
                 )
-            )
             # Not `indicator_l` / `indicator_r`: those are the taxi's switched
             # circuits, and a parked car's indicators are wired to nothing.
             parts.append(
@@ -544,6 +572,15 @@ def _ends(shape: Shape) -> list[MeshData]:
                     (x + 0.06, lamp_y - 0.06, z_lens[1]),
                     AMBER,
                     name=f"indicator_{tag}_{side_tag}",
+                )
+            )
+        if shape.head_lamps == 1 and not rear:
+            parts.append(
+                box(
+                    (-0.09, lamp_y - 0.09, z_lens[0]),
+                    (0.09, lamp_y + 0.09, z_lens[1]),
+                    LAMP,
+                    name="headlamp_c",
                 )
             )
         if shape.grille is not None and not rear:
@@ -653,6 +690,18 @@ def _wheels(shape: Shape) -> list[MeshData]:
     return parts
 
 
+def _underframe(shape: Shape) -> MeshData:
+    """The trucks under a whole skirt, as one dark block from the ground to
+    the sill: in shadow from any street, what reads is the gap, not wheels."""
+    axles = _axle_zs(shape)
+    # A truck's half-length either side of its axle.
+    reach = shape.wheel_radius_m * 2.5
+    hw = shape.body_half_width_m - 0.2
+    return box(
+        (-hw, 0.0, axles[0] - reach), (hw, shape.sill_y_m, axles[-1] + reach), DARK, name="trucks"
+    )
+
+
 # --------------------------------------------------------------------------
 # What makes each kind itself (`P3-75`), read off photographs of the real ones
 # --------------------------------------------------------------------------
@@ -753,7 +802,9 @@ DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
 
 def vehicle(shape: Shape) -> MeshData:
     """One kind as one marked mesh, ready for `material_parts`."""
-    parts: list[MeshData] = [_lower(shape), *_wells(shape)]
+    parts: list[MeshData] = [_lower(shape)]
+    if shape.arches:
+        parts.extend(_wells(shape))
     if shape.upper_deck:
         deck = shape.deck_y_m
         parts.append(
@@ -797,7 +848,7 @@ def vehicle(shape: Shape) -> MeshData:
     parts.extend(_ends(shape))
     parts.extend(_side_fixtures(shape))
     parts.extend(DETAILS.get(shape.kind, lambda _: [])(shape))
-    parts.extend(_wheels(shape))
+    parts.extend(_wheels(shape) if shape.arches else [_underframe(shape)])
     body = merge([_marked(part) for part in parts], name=shape.kind)
     return replace(body, material=BODY_MATERIAL)
 
@@ -1021,31 +1072,39 @@ SHAPES: tuple[Shape, ...] = (
         axles_m=(0.95, 3.55),
         window_bays=3,
     ),
-    # The tram: a tall, narrow double-decker with a cream band at the belt.
+    # The tram: a tall, narrow double-decker with a cream band at the belt,
+    # boxy — square ends, flat sides, the roof barely drawn in — and its
+    # skirt down to the rails, the trucks hidden under it (the user's call);
+    # each deck a band of nine windows over a tall panel, one lamp on the
+    # dash — checked against Commons photographs of the fleet.
     Shape(
         kind="tram",
         length_m=8.6,
         width_m=2.0,
         paint=TRAM_GREEN,
         roof=TRAM_GREEN,
-        sill_y_m=0.3,
+        sill_y_m=0.12,
         belt_y_m=1.3,
         roof_y_m=4.7,
         cabin_front_m=0.25,
         cabin_rear_m=8.35,
-        windscreen_rake_deg=4.0,
-        backlight_rake_deg=4.0,
-        corner_cut_m=0.22,
-        roof_inset_m=0.12,
+        windscreen_rake_deg=1.0,
+        backlight_rake_deg=1.0,
+        corner_cut_m=0.06,
+        roof_inset_m=0.04,
         wheel_radius_m=0.3,
         wheel_width_m=0.12,
         axles_m=(1.6, 7.0),
         upper_deck=True,
         band=TRAM_CREAM,
-        window_bays=6,
+        window_bays=9,
         bumper_m=0.04,
         grille=None,
         plates=False,
+        arches=False,
+        panel_share=0.35,
+        glass_share=0.52,
+        head_lamps=1,
         mirrors=False,
     ),
     Shape(

@@ -577,7 +577,7 @@ instance, because the body material is shared by the roster.
   the lens `L*` 2.29 → 72.72.
 - ⚠️ Indicators need a hold: half a second of held lock at 0.35 of the lock available at that speed.
 
-**Parked roster** (`P3-72`, detailed by `P3-75`): nine kinds in `parked.glb`, 672–932 triangles a lofted kind and 372 the motorcycle, detailed inside the footprint `parked.vehicles:` places by (`Q166`).
+**Parked roster** (`P3-72`, detailed by `P3-75`): nine kinds in `parked.glb`, 672–932 triangles a lofted kind (the tram 406, its trucks under a whole skirt) and 372 the motorcycle, detailed inside the footprint `parked.vehicles:` places by (`Q166`).
 
 **Roster for the slice** (only the player taxi is built — `P3-11`, 1,180 triangles; the rest are
 `B3`'s `P3-3`/`P3-4`/`P3-8`): player taxi, private car (2 variants), red taxi (AI), double-decker

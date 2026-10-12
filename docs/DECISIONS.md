@@ -10137,7 +10137,16 @@ minibuses, Citybus Enviro500 MMCs, Hong Kong Tramways, an Alphard; CC BY / BY-SA
   MPV on the saloon's footprint (an Alphard: tall, the cabin to the tail, three windows a side, a
   chrome face) where it was the saloon in navy; the minibus's route board standing on the roof's
   front edge and cream pillars; the Citybus blue skirt and the amber blind between the decks; the
-  tram's roof boards at both ends and the trolley pole lying back; the Hiace's sliding-door seam and
+  tram's roof boards at both ends and the trolley pole lying back, and — on the user's look,
+  "tram should look more boxy with no exposed wheels" — square ends and flat sides (`corner_cut_m`
+  0.06, `roof_inset_m` 0.04) over a skirt to 0.12 m off the rails, no arches (`arches=False`), the
+  trucks a dark `_underframe` block in its shadow; then, on "verify with tram images on internet",
+  checked against twelve Commons photographs of the fleet: each deck a band of nine windows over a
+  tall panel (`panel_share` 0.35, `glass_share` 0.52 of the deck) where the glass had started at
+  the deck line, and one lamp centred on the dash (`head_lamps` 1) in place of a car's pair (488 →
+  406 triangles). ⚠️ The fleet is 8.89 x 1.98 m (Tram Travels; HKU's archive rounds to 8.8 x 1.9)
+  where `parked.vehicles:` places the tram at 8.6 x 2.0 — a footprint change moves the stage's tram
+  placements, so it is held for the user's call, with the `parked` battery before and after; the Hiace's sliding-door seam and
   roof rack; the coach's luggage bays; the motorcycle a delivery bike with a fairing, screen, side
   cover and top box.
 - **Lenses stay unswitched.** New indicators are named `indicator_<end>_<side>` and the roof sign
