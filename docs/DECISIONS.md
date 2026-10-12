@@ -10144,9 +10144,12 @@ minibuses, Citybus Enviro500 MMCs, Hong Kong Tramways, an Alphard; CC BY / BY-SA
   checked against twelve Commons photographs of the fleet: each deck a band of nine windows over a
   tall panel (`panel_share` 0.35, `glass_share` 0.52 of the deck) where the glass had started at
   the deck line, and one lamp centred on the dash (`head_lamps` 1) in place of a car's pair (488 →
-  406 triangles). ⚠️ The fleet is 8.89 x 1.98 m (Tram Travels; HKU's archive rounds to 8.8 x 1.9)
-  where `parked.vehicles:` places the tram at 8.6 x 2.0 — a footprint change moves the stage's tram
-  placements, so it is held for the user's call, with the `parked` battery before and after; the Hiace's sliding-door seam and
+  406 triangles). The fleet is 8.89 x 1.98 m (Tram Travels; HKU's archive rounds to 8.8 x 1.9),
+  and `parked.vehicles:` placed the tram at 8.6 x 2.0: **8.89 m on the user's call** ("change the
+  tram footprint to 8.89 m"), the width left at 2.0 inside the library's 5 cm. Both regions rebuilt
+  on each side: every non-tram placement identical, the 15 + 3 trams stood at the same points to
+  the millimetre, and Wan Chai's `refused.stand` moves one candidate from `overlapping` (2 → 1) to
+  `in_keep_out` (5 → 6) — the longer body reaches a keep-out first; the partition still closes; the Hiace's sliding-door seam and
   roof rack; the coach's luggage bays; the motorcycle a delivery bike with a fairing, screen, side
   cover and top box.
 - **Lenses stay unswitched.** New indicators are named `indicator_<end>_<side>` and the roof sign

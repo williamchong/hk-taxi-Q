@@ -4243,7 +4243,9 @@ parked:
     bus: {length_m: 12.0, width_m: 2.5}
     coach: {length_m: 12.0, width_m: 2.5}
     van: {length_m: 4.7, width_m: 1.8}
-    tram: {length_m: 8.6, width_m: 2.0}
+    # A Hong Kong tram's published 8.89 m (`Q166`); 1.98 m wide, within the
+    # library's slack of 2.0.
+    tram: {length_m: 8.89, width_m: 2.0}
     # Nose to the kerb, a hand apart: the published bays are a metre apart
     # (nearest neighbour p50 0.98 m), which is a row of bikes standing across.
     motorcycle: {length_m: 2.1, width_m: 0.8, gap_m: 0.2, across: true}
