@@ -1,7 +1,7 @@
 class_name StartMenu
 extends CanvasLayer
 ## The start menu (`P6-1`, the user's ask): the two modes, options, credits,
-## drawn over the taxi standing on the start line with the camera circling it.
+## drawn over the taxi standing on the start line with the camera placed by the page (`Q164`).
 ##
 ## **Two ways to play** (`Q162`): 特更 / THE SHIFT, morning to night with the
 ## total weighed against the best at 交更, and 兜風 / FREE MODE, the drive with
@@ -33,6 +33,8 @@ extends CanvasLayer
 signal started(mode: DayClock.Mode)
 ## The player picked a language; `Locale.language()` already answers it.
 signal language_changed(code: String)
+## A page opened; `Main` hands `shot` to the camera round the parked car.
+signal page_shown(shot: MenuShot)
 
 ## Chooses whether the menu is shown at all. `off` for every scripted run.
 const MENU_ARG: String = "--menu="
@@ -154,15 +156,32 @@ func _relabel() -> void:
 
 
 func _show(page: Page) -> void:
+	var moved: bool = page != _page
 	_page = page
 	for key: int in _pages:
 		_pages[key].visible = key == page
+	if moved:
+		page_shown.emit(shot())
 	if page == Page.NOTICES and _notices_label.text.is_empty():
 		_notices_label.text = EngineNotices.compose()
 	if _first.has(page):
 		# Deferred: the page has just been shown and focus needs a laid-out
 		# control.
 		_first[page].grab_focus.call_deferred()
+
+
+## The camera's place round the parked car for the page up now.
+func shot() -> MenuShot:
+	match _page:
+		Page.PLAY:
+			return _profile.shot_play
+		Page.OPTIONS:
+			return _profile.shot_options
+		Page.CREDITS, Page.GUIDE, Page.NOTICES:
+			return _profile.shot_sheet
+		Page.REPORT:
+			return _profile.shot_report
+	return _profile.shot_home
 
 
 func _unhandled_input(event: InputEvent) -> void:

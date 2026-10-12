@@ -8,6 +8,7 @@ paths:
   - "game/tuning/menu.{tres,md}"
   - "game/tuning/menu_text.json"
   - "game/scripts/camera/menu_orbit.gd"
+  - "game/scripts/camera/menu_shot.gd"
   - "game/scripts/core/settings.gd"
   - "game/tools/verify_hud.gd"
   - "game/tools/verify_menu.gd"
@@ -116,7 +117,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   stand upright as the map turns; `follow` re-places it. ⚠️ **The route is the ROADS' child**
   (`P3-46`), so their transform carries it and `follow` never touches it. 🚫 No
   next-junction arrow yet (`Q138`); the options menu is `P6-1`'s (below), the layout pass `P3-5b`'s.
-- **Start menu changes — `start_menu.gd`, `menu_orbit.gd`, `menu_profile.gd`, `menu_text.gd`,
+- **Start menu changes — `start_menu.gd`, `menu_orbit.gd`, `menu_shot.gd`, `menu_profile.gd`, `menu_text.gd`,
   `tuning/menu.tres`, `tuning/menu_text.json`, `settings.gd`, `locale.gd`'s readers, or
   `main.gd`'s park / resume: `tools/check.sh` (which runs `verify_menu`), plus a frame at
   `--menu=on --seconds=3 --shots=2 --debug-view=off` in EACH language (`--lang=zh`, `--lang=en`),
@@ -156,7 +157,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   either page is `--menu-page=play|report`. ⚠️ TIME OF DAY is free mode's alone; a shift always
   runs the day. 🔴 **The shift's clock is the hour, never a countdown** (the user's call): the
   `clock` rect top-left, "14:32" over "交更 21:00", housing ink not the meter's red; hidden outside a
-  shift, read off `DayClock` at 4 Hz. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for).
+  shift, read off `DayClock` at 4 Hz. 🚫 No pause menu, no Esc back to the menu from the drive (not asked for). 🔴 **The camera follows the page** (`Q164`, the user's ask): `page_shown(shot)` → `Main` → `DriveHarness.frame_menu` → `MenuOrbit.frame`, never the menu reaching the rig; the opening page is cut to, later ones eased. A frame per page is `--menu-page=`, and a standing shot must sway or the capture stalls.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

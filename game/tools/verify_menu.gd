@@ -25,6 +25,7 @@ extends "res://tools/verify_tool.gd"
 ## `check.sh`'s exit code means anything.
 
 const MenuProfileScript = preload("res://scripts/ui/menu_profile.gd")
+const MenuShotScript = preload("res://scripts/camera/menu_shot.gd")
 const MenuTextScript = preload("res://scripts/ui/menu_text.gd")
 const GuideCardScript = preload("res://scripts/ui/guide_card.gd")
 const EngineNoticesScript = preload("res://scripts/ui/engine_notices.gd")
@@ -89,14 +90,9 @@ const REQUIRED: Dictionary = {
 	],
 }
 
-## The profile's keys that draw something and therefore may not be zero. The
-## orbit's start angle and its pitch are left out: 0 and a negative are both
-## values there.
+## The profile's keys that draw something and therefore may not be zero.
 const POSITIVE: PackedStringArray = [
-	"orbit_distance_m",
-	"orbit_height_m",
-	"orbit_period_s",
-	"orbit_fov_deg",
+	"shot_response",
 	"button_gap_px",
 	"credits_pad_px",
 	"title_size",
@@ -112,6 +108,12 @@ const POSITIVE: PackedStringArray = [
 const POSITIVE_VECTORS: PackedStringArray = [
 	"margin_px", "button_px", "credits_px", "guide_px", "guide_picture_px"
 ]
+## A camera shot per page (`MenuShot`), and its keys that may not be zero. The
+## yaw is left out: 0 is behind the car, a value.
+const SHOTS: PackedStringArray = [
+	"shot_home", "shot_play", "shot_options", "shot_sheet", "shot_report"
+]
+const SHOT_POSITIVE: PackedStringArray = ["distance_m", "height_m", "fov_deg"]
 
 
 func _init() -> void:
@@ -142,9 +144,29 @@ func _check_profile() -> void:
 			"profile",
 			"%s is %s (both > 0)" % [key, value]
 		)
+	for key: String in SHOTS:
+		_check_shot(key, profile.get(key) as Resource)
+
+
+func _check_shot(key: String, shot: Resource) -> void:
+	if shot == null or shot.get_script() != MenuShotScript:
+		_fail("profile", "%s is not a MenuShot" % key)
+		return
+	for field: String in SHOT_POSITIVE:
+		var value: float = shot.get(field)
+		_expect(value > 0.0, "profile", "%s.%s is %s (> 0)" % [key, field, value])
 	# The pitch looks down on the car — a positive would look at the sky.
-	var pitch: Variant = profile.get("orbit_pitch_deg")
-	_expect(pitch is float and float(pitch) < 0.0, "profile", "orbit_pitch_deg is %s (< 0)" % pitch)
+	var pitch: float = shot.get("pitch_deg")
+	_expect(pitch < 0.0, "profile", "%s.pitch_deg is %s (< 0)" % [key, pitch])
+	# Never a still frame: a still menu stalls a capture on "no frame drawn".
+	var turn: float = shot.get("turn_period_s")
+	var sway: float = shot.get("sway_deg")
+	var sway_period: float = shot.get("sway_period_s")
+	_expect(
+		turn > 0.0 or (sway > 0.0 and sway_period > 0.0),
+		"profile",
+		"%s turns or sways (turn %s s, sway %s deg / %s s)" % [key, turn, sway, sway_period]
+	)
 
 
 func _check_text() -> void:

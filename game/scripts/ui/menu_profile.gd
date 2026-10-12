@@ -1,6 +1,6 @@
 class_name MenuProfile
 extends Resource
-## What the start menu is made of (`P6-1`): the hero orbit round the parked
+## What the start menu is made of (`P6-1`): the hero shots round the parked
 ## taxi, the column's geometry and the type scale.
 ##
 ## Colours and the panel shape are NOT here: they are `HudStyle`'s, so the menu
@@ -15,17 +15,19 @@ extends Resource
 ## `verify_menu.gd` cannot load two different files.
 const PATH: String = "res://tuning/menu.tres"
 
-@export_group("Hero orbit")
-## The spring arm's length while the menu is up, and the pivot's height over
-## the car's origin; the chase rig's own numbers come back on start.
-@export var orbit_distance_m: float
-@export var orbit_height_m: float
-@export var orbit_pitch_deg: float
-## One full circle round the car takes this long.
-@export var orbit_period_s: float
-## Where the circle starts, in degrees from the car's own heading.
-@export var orbit_start_deg: float
-@export var orbit_fov_deg: float
+@export_group("Hero shots")
+## Where the camera stands round the parked car on each page (`MenuOrbit`):
+## HOME circles it, PLAY looks at it ready to pull away, OPTIONS stands at its
+## tail, the sheets (guide, credits, notices) look down on it from over the
+## street, and the shift's REPORT faces it head on.
+@export var shot_home: MenuShot
+@export var shot_play: MenuShot
+@export var shot_options: MenuShot
+@export var shot_sheet: MenuShot
+@export var shot_report: MenuShot
+## How fast the camera closes on a new page's shot, per second — the chase
+## rig's filter (`ChaseProfile.yaw_response`).
+@export var shot_response: float
 
 @export_group("Layout")
 ## The column's inset from the safe area's bottom-left corner.

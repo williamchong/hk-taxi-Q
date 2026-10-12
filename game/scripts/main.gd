@@ -57,6 +57,9 @@ func _ready() -> void:
 func _follow_menu(shown: StartMenu) -> void:
 	shown.started.connect(_on_started)
 	shown.language_changed.connect(_on_language_changed)
+	shown.page_shown.connect(level.frame_menu)
+	# The page it opened on was shown before anything listened; cut to it.
+	level.frame_menu(shown.shot(), true)
 
 
 ## The HUD reads the level's car and fare loop. Guarded for `--hud=off`, where

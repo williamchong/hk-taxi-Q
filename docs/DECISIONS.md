@@ -203,6 +203,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q152` | A per-wheel tyre model on `VehicleBody3D` can hold a physical slide, and costs the car its everyday cornering | ✅ Shipped 2026-10-03, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn`. Built and graded as a spike (`P3-52`). Owed, the user's call: `speed_min_kph` and the wall bars on the new pace. |
 | `Q160` | The day runs to night as game time: one blending rig, lit lanterns with pools, floodlit blocks, lit paint | ✅ Built 2026-10-07 on the user's asks (`P3-69`). Reverses "the sun does not move" and `Q82`'s unlit lantern. Handset frame time owed. |
 | `Q163` | One head-up display over the whole screen: the readouts float on a bracketed frame, the map a round scope, the 咪錶 alone keeps its box; the menu on the same glass over a blurred backdrop | ✅ Built 2026-10-13 on the user's asks. Supersedes `Q139`'s one housing for every panel but the meter, and `Q142`'s panels flush on the screen's edge. The user's drive owed. |
+| `Q164` | The menu's camera follows its page: a shot per page round the parked car, the passenger door open on PLAY | ✅ Built 2026-10-13 on the user's ask. Replaces `P6-1`'s one turntable for every page. The user's look owed. |
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 
 ---
@@ -10036,3 +10037,24 @@ brackets; six calls as polygons and polylines), the scope's disc and fade one mo
 measured apart. The menu's blur reads the screen and its mip chain every frame it is up — capturing
 the parked frame once would save that, and needs a one-shot capture not built.
 
+## `Q164` — The menu's camera follows its page
+
+**Asked** by the user, 2026-10-13: "can the background scene in main menu be sensitive to menu
+state, instead of always the same rotating taxi? e.g. clicking option goes to back of taxi (as in
+settings), clicking start moves to the side-front angle of taxi (as in ready to go)", then "also
+open the car door in the start game menu state".
+
+**Built 2026-10-13.**
+
+- **A shot per page** (`MenuShot`, five on `menu.tres`): HOME keeps the 40 s turntable; PLAY stands
+  at the kerbside front three-quarter with the rear kerbside door open (the cab ready for its fare);
+  OPTIONS at the tail; the sheets (guide, credits, notices) high over the street; the shift's
+  REPORT head on.
+- **One rig still** (`MenuOrbit`): the menu emits `page_shown(shot)`, `Main` hands it to
+  `DriveHarness.frame_menu`, and the orbit eases every term toward the shot on the chase rig's
+  first-order filter (`shot_response` 2.5 /s), so a page changed mid-swing just bends. The page the
+  menu opens on is cut to, not eased. Returning to HOME turns on from wherever the camera stands.
+- **Every standing shot sways** a few degrees: a still menu would stall a capture on "no frame
+  drawn", and `verify_menu` refuses a shot that neither turns nor sways.
+- **The door is the fare's own `TaxiDoor`**, found under the car by type as `TaxiHire` finds it;
+  it shuts on any page without `door_open` and as the car pulls away (`MenuOrbit.end`).

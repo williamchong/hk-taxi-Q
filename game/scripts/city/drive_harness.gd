@@ -99,7 +99,8 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## Assign in the scene; a scene without one skips the snap.
 @export var camera_rig: ChaseCamera
 
-## The rig's slow circle round the parked car for the start menu (`P6-1`).
+## The rig round the parked car for the start menu (`P6-1`), placed by the
+## page it shows (`Q164`).
 ## Assign in the scene; a scene without one parks the car under the chase view.
 @export var attract: MenuOrbit
 
@@ -204,6 +205,13 @@ func park() -> void:
 		camera_rig.set_physics_process(false)
 	if attract != null:
 		attract.begin()
+
+
+## Put the parked car's camera where the menu's page wants it (`Main`'s call),
+## easing there unless `snap`.
+func frame_menu(shot: MenuShot, snap: bool = false) -> void:
+	if attract != null:
+		attract.frame(shot, snap)
 
 
 ## Move the car to `showroom_fare_id`, ON the node (no setback: nobody drives

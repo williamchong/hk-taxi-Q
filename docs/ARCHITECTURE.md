@@ -1233,7 +1233,7 @@ All paths under `game/`.
 |---|---|
 | `scripts/main.gd` | Entry point (`P5-24`): holds `World` and `GUI`, hands the HUD its car through typed exports `level` and `hud`; nothing under `GUI` searches for a car. Parks the level under the start menu and resumes it on `started`; a language change retires the HUD and readies a fresh one (`P6-1`) |
 | `scripts/ui/start_menu.gd`, `menu_profile.gd`, `menu_text.gd`, `guide_card.gd` | The start menu (`P6-1`): four pages built in code (the guide's step pictures drawn, never textures) from the HUD's housing, `--menu=off`; the schema of `tuning/menu.tres` (no defaults); the reader of `tuning/menu_text.json` |
-| `scripts/camera/menu_orbit.gd` | `MenuOrbit`: the chase rig circling the parked car while the menu is up — the same rig, so the streamer keeps one camera |
+| `scripts/camera/menu_orbit.gd`, `menu_shot.gd` | `MenuOrbit`: the chase rig round the parked car while the menu is up, eased to the page's `MenuShot` (`Q164`; the door open on PLAY) — the same rig, so the streamer keeps one camera |
 | `scripts/core/settings.gd` | `Settings`, the saved options under `user://settings.cfg`; `Locale` reads it after `--lang=` |
 | `scripts/city/city_manifest.gd` | `city.json`, typed: tiles, AABBs, per-edge widths and clearances, the lane-width bar, resolved document paths |
 | `scripts/city/city_regions.gd` | `CityRegions` (`P5-9c`) |
