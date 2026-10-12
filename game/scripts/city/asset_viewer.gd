@@ -21,6 +21,14 @@ const ASSET_ARG: String = "--asset="
 ## F6 in the editor shows something and `verify_authored.gd`'s numbers can be
 ## read off the screen.
 const DEFAULT_ASSET: String = "res://assets/authored/fixtures/dcc_roundtrip.glb"
+## `--lineup=<gap metres>` stands each of the asset's top-level nodes in a row
+## along +X, that gap apart, each turning in place at `LINEUP_DEG_PER_S` rather
+## than the row on the turntable (`P3-75`): a library such as `parked.glb` puts
+## every kind at the origin, where nine vehicles read as one. Never quite still,
+## because a frame where nothing moves is never drawn and `drive.sh`'s capture
+## stalls on it.
+const LINEUP_ARG: String = "--lineup="
+const LINEUP_DEG_PER_S: float = 1.0
 
 ## Offered to the fly camera so it frames whatever was stood — the contract
 ## `tile_preview.gd` and `city_streamer.gd` offer.
@@ -31,6 +39,7 @@ signal built(low: Vector3, high: Vector3)
 @export var turntable_deg_per_s: float = 15.0
 
 var _asset: Node3D = null
+var _lined_up: bool = false
 
 
 func _ready() -> void:
@@ -52,6 +61,10 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	add_child(_asset)
+	var gap: String = Cmdline.value(LINEUP_ARG)
+	if not gap.is_empty():
+		line_up(_asset, gap.to_float())
+		_lined_up = true
 	var lines: PackedStringArray = report(path, _asset)
 	for line: String in lines:
 		print("asset: ", line)
@@ -61,8 +74,27 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _asset != null:
+	if _asset == null:
+		return
+	if not _lined_up:
 		_asset.rotate_y(deg_to_rad(turntable_deg_per_s) * delta)
+		return
+	for child: Node in _asset.get_children():
+		var item := child as Node3D
+		if item != null:
+			item.rotate_y(deg_to_rad(LINEUP_DEG_PER_S) * delta)
+
+
+## Moves each top-level node so its box starts `gap_m` past the last one's.
+static func line_up(asset: Node3D, gap_m: float) -> void:
+	var x: float = 0.0
+	for child: Node in asset.get_children():
+		var item := child as Node3D
+		if item == null:
+			continue
+		var box: AABB = MeshContract.bounds(item)
+		item.position.x += x - box.position.x
+		x += box.size.x + gap_m
 
 
 ## What the importer did, one line per fact, in the order an artist checks

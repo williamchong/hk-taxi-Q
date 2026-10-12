@@ -10107,3 +10107,65 @@ frame, and is a frame-pacing policy for the performance pass to set with the han
 **Not built:** Android's back button. `application/config/quit_on_go_back` is on by default, so
 back quits the app; whether it pauses instead is `P0-3b`'s, on a handset. Owed: the user's look
 (`build/driver/pause_zh`, `pause_en`) and drive.
+
+## `Q166` — The parked roster is detailed inside its footprint
+
+**Asked** by the user, 2026-10-13: "can we refine existing vehicles with more detailing first?", the
+plan taken with both recommendations — the player's taxi left out, a parked car's mirrors folded —
+and, mid-build, "can we search for ref image for hong kong real life vehicle?" and "why hood is
+missing for some cars". Reference photographs from Wikimedia Commons (Crown Comfort taxis, green
+minibuses, Citybus Enviro500 MMCs, Hong Kong Tramways, an Alphard; CC BY / BY-SA / CC0, credits in
+`build/reference/vehicles/CREDITS.tsv`, never committed — they are reference, not assets).
+
+**Built 2026-10-13 (`P3-75`).**
+
+- **The bonnet was open.** `_lower` lofted sill to belt with `top=None`; the glasshouse covers the
+  cabin only, so between the cabin and each end every car, the taxi and the van had no top face, and
+  back-face culling showed the road through it. Capped in the body's paint.
+- **Inside the footprint.** `parked_layer.gd` sizes each collider from the mesh's own box, and
+  `test_make_parked.py` pins that box to `parked.vehicles:` within 5 cm, so nothing stands proud: the
+  body is drawn `SKIN_M` (12 mm) inside the flanks and `bumper_m` inside the ends, and the bumpers,
+  plates, folded mirrors, handles and pillars stand in that margin. A parked car's mirrors are
+  folded, as on the street; a bus's, on stalks, are left off rather than widen the wall.
+- **Arches.** The skirt's flanks are a column per knot round each wheel (`ARCH_SEGMENTS` 8,
+  `ARCH_CLEARANCE_M` 0.05), over a dark liner and an inboard wall, so an arch shows a wheel in a well
+  rather than the body's inside. The wheels went 10 → 12 segments now they are seen, and a flank
+  wheel carries its outer face only — the inner one faces the well's wall (`_wheel`'s `faces`, the
+  player's tyre byte-identical), 144 triangles a car.
+- **Each kind's marks**, read off the photographs: the taxi silver above the belt with a chrome
+  grille, black bumpers, the roof sign over the front seats and the green 4 SEATS badge; `car_b` an
+  MPV on the saloon's footprint (an Alphard: tall, the cabin to the tail, three windows a side, a
+  chrome face) where it was the saloon in navy; the minibus's route board standing on the roof's
+  front edge and cream pillars; the Citybus blue skirt and the amber blind between the decks; the
+  tram's roof boards at both ends and the trolley pole lying back; the Hiace's sliding-door seam and
+  roof rack; the coach's luggage bays; the motorcycle a delivery bike with a fairing, screen, side
+  cover and top box.
+- **Lenses stay unswitched.** New indicators are named `indicator_<end>_<side>` and the roof sign
+  `sign_roof`, so none takes a player circuit (`LAMP_CIRCUITS` is keyed on the whole name).
+
+- **The belt band shows.** The coach's navy stripe and the tram's cream band were drawn 5 mm inside
+  the body since `P3-72` and never showed; they stand in the skin's margin now.
+
+**Measured.** 444–636 → 672–932 triangles a lofted kind (bike 256 → 372), 7–8 colours, the
+footprints unchanged. Under `P3-72`'s 800 for five kinds, knowingly: the faces dropped were never
+seen. Throttle route (`--debug-view=off --hud=off`, two runs a side, the car's path identical to
+the centimetre): `prims` 777,737 → 783,769 at t=1–4 (+0.8%), 684,129 → 688,349 at t=5–6; `draws`
+97 → 97 and 100 → 100. Well under the +40k that would have bought a far LOD, so none
+is built. `parked.py` reads the library's names only, so the placements cannot move.
+
+**Refused:** the parked taxi as the player's `taxi_body` with its door shut (`P3-72`'s wording).
+The player's body is 4.34 x 1.74 m and the stand places by a Crown Comfort's 4.70 x 1.70 m, so the
+reuse moves every taxi placement; the parked taxi keeps its own shape and borrows the look.
+
+**Candidate, not built: hazard lamps on a stopping car** (the user's question, 2026-10-13). True to
+the street for a car stopped at the kerb to load — the fill and the frontages — and not for a bay or
+a bus at its stop. It needs a lamp per instance on a `MultiMesh` (the body's switches are
+`instance uniform`s, which a `MultiMesh` cannot set per vehicle: `INSTANCE_CUSTOM` and a blink on
+the shader's clock) and a flag on the placement from the ETL — new machinery, so held for the
+user's call.
+
+**Tooling:** `asset_viewer.tscn` takes `--lineup=<gap m>`, standing a library's nodes in a row,
+each turning in place at 1°/s so the capture never stalls on a still frame.
+
+Owed: the user's look (`build/driver/p375_before` against `p375_after2`, `p375_close`,
+`p375_street`) and drive.

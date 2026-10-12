@@ -790,9 +790,9 @@ func _parse_args() -> bool:
 						)
 						return false
 					_hidden_layers.append(layer)
-			"--asset":
-				# `asset_viewer.gd` reads this one itself (`P5-22`); it is named
-				# here so the scene's one flag is not refused as unknown.
+			"--asset", "--lineup":
+				# `asset_viewer.gd` reads these itself (`P5-22`, `P3-75`); they are
+				# named here so the scene's flags are not refused as unknown.
 				pass
 			"--fares":
 				# `fare_system.gd` reads this one itself (`P3-1a`), and its

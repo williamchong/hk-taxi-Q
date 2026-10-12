@@ -88,6 +88,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 |---|---|
 | `--scene=res://…` | default `res://scenes/main.tscn` (the drive, HUD included); also `res://scenes/dev/city_preview.tscn` and `res://scenes/dev/asset_viewer.tscn` |
 | `--asset=res://…` | the `.glb` `asset_viewer.tscn` stands (`P5-22`); default the DCC fixture. Ignored by every other scene |
+| `--lineup=<gap m>` | `asset_viewer.tscn` only (`P3-75`): stand the asset's top-level nodes in a row along +X, that gap apart, each turning in place at 1°/s — `parked.glb` at `--lineup=1.5` puts car_a at x 0 and the motorcycle at x ~28.6. Without it a library's kinds stand on top of each other |
 | `--seconds=6` | how long to simulate |
 | `--shots=0.5,3,6` | sim times to capture |
 | `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |

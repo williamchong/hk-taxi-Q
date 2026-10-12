@@ -762,7 +762,13 @@ def _high_brake_lamp(shape: Proportions) -> MeshData:
 
 
 def _wheel(
-    radius: float, width: float, segments: int, *, rim_fraction: float = 0.58, name: str
+    radius: float,
+    width: float,
+    segments: int,
+    *,
+    rim_fraction: float = 0.58,
+    faces: Sequence[float] = (1.0, -1.0),
+    name: str,
 ) -> MeshData:
     """One wheel, centred on the origin and rolling about X.
 
@@ -797,7 +803,9 @@ def _wheel(
         # for exactly that.
         wy0, wz0 = y0 * rim_fraction, z0 * rim_fraction
         wy1, wz1 = y1 * rim_fraction, z1 * rim_fraction
-        for face_x in (half, -half):
+        # `faces` picks which sides get a face, by sign of x: a wheel in a
+        # walled well (`make_parked`) never shows its inner one.
+        for face_x in (half * sign for sign in faces):
             wall = [
                 (face_x, y0, z0),
                 (face_x, y1, z1),
