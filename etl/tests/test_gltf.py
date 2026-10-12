@@ -178,6 +178,15 @@ class TestWriting:
         raw = (tmp_path / "t.glb").read_bytes()
         assert struct.unpack_from("<III", raw, 0)[2] == len(raw) == size
 
+    def test_a_negative_zero_is_written_unsigned(self, tmp_path) -> None:
+        """A committed `.glb` is byte-pinned against its generator, and numpy
+        signs an exact zero differently on macOS and Linux — CI read
+        `parked.glb` as stale over sign bits alone."""
+        signed = replace(self.box(), normals=np.tile(np.float32([-0.0, 1, -0.0]), (6, 1)))
+        write_glb(tmp_path / "signed.glb", [signed])
+        write_glb(tmp_path / "unsigned.glb", [self.box()])
+        assert (tmp_path / "signed.glb").read_bytes() == (tmp_path / "unsigned.glb").read_bytes()
+
     def test_buffer_views_are_four_byte_aligned(self, tmp_path) -> None:
         """glTF requires it, and a misaligned view is the kind of thing one
         reader tolerates and the next rejects."""

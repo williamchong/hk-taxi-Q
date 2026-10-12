@@ -862,6 +862,11 @@ def _accessor(
     *,
     normalized: bool = False,
 ) -> int:
+    if component_type == _FLOAT:
+        # `-0.0 + 0.0` is `+0.0`. Whether an exact zero comes out signed is down
+        # to the platform's numpy kernels, so without this a committed `.glb`
+        # built on macOS differs by a sign bit from the same build on Linux.
+        values = values + np.float32(0.0)
     accessor: dict[str, Any] = {
         "bufferView": _buffer_view(gltf, binary, values.tobytes(), target=target),
         "componentType": component_type,
