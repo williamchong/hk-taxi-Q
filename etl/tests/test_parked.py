@@ -13,6 +13,7 @@ moves only on a real change.
 from __future__ import annotations
 
 import copy
+import itertools
 import math
 from types import MappingProxyType
 from typing import Any
@@ -306,7 +307,7 @@ class TestTheFill:
         assert abs(len(kept) - 0.5 * report.fill_slots) <= 2
         # Evenly: every other slot on each kerb, never two in a row.
         near = sorted(candidate.t for candidate in kept if candidate.side > 0.0)
-        gaps = {round((b - a) * 200.0 / 7.0) for a, b in zip(near, near[1:], strict=False)}
+        gaps = {round((b - a) * 200.0 / 7.0) for a, b in itertools.pairwise(near)}
         assert gaps == {2}
 
     def test_a_narrow_two_way_street_fills_its_nearside_only(self, spec) -> None:
