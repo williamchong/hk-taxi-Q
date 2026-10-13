@@ -130,6 +130,20 @@ uniform float rail_roughness : hint_range(0.0, 1.0) = 0.55;
 // which is a dielectric surface over metal, so 0.0 is also the truthful value.
 uniform float rail_metallic : hint_range(0.0, 1.0) = 0.0;
 
+group_uniforms mirror;
+// The paint's clearcoat sheen, from the car's painted sky (`P3-11c`) rather
+// than from `rail_metallic`: the rig dims and warms it with the hour (`Q160`),
+// so a fence at dusk catches a dusk sky. The three colours are the car's and
+// the façades' noon sky, matched by hand. Low and fresnel-led for the reason
+// above — the albedo says what the steel is; this is only how it catches light.
+global uniform vec3 sky_light;
+uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
+uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
+uniform vec3 ground_reflection : source_color = vec3(0.32, 0.33, 0.35);
+uniform float rail_reflect : hint_range(0.0, 1.0) = 0.25;
+uniform float rail_face_on : hint_range(0.0, 1.0) = 0.05;
+uniform float fresnel_power : hint_range(1.0, 8.0) = 5.0;
+
 group_uniforms fence;
 // ⚠️ **These six are what tell one class of street furniture from another, and
 // they are the whole difference.** `Q61` draws the railing layer as three
@@ -243,7 +257,17 @@ void fragment() {
 	steel = max(steel, band(up_m, bottom_rail_m.x, bottom_rail_m.y, up_span_m, up_inv));
 	steel = max(steel, below(up_m, skirt_top_m, up_inv));
 
-	ALBEDO = rail_colour.rgb;
+	// The mirror. Built in view space from the normal the engine has already
+	// turned on a back face, so the far side of a fence reflects its own sky.
+	float fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
+	vec3 bounced = mat3(INV_VIEW_MATRIX) * reflect(-VIEW, NORMAL);
+	vec3 mirrored = mix(
+		ground_reflection,
+		mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
+		smoothstep(-0.08, 0.08, bounced.y)
+	) * sky_light;
+
+	ALBEDO = mix(rail_colour.rgb, mirrored, rail_reflect * mix(rail_face_on, 1.0, fresnel));
 	ALPHA = steel;
 	ROUGHNESS = rail_roughness;
 	METALLIC = rail_metallic;

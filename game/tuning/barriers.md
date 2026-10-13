@@ -48,6 +48,11 @@ painted steel keeps a sheen.
 Bare galvanised steel is the case that most tempts 0.65, and it is the case
 that measurement was taken on.
 
+## `shader_parameter/rail_reflect = 0.25`
+
+`railings.tres`'s sheen and values, with the three sky colours above it
+(`Q168`): the car's painted sky, scaled by the hour's `sky_light`.
+
 ## `shader_parameter/baluster_pitch_m = 0.11`
 
 No balusters. A barrier is rails and posts; the gap between them is the point.

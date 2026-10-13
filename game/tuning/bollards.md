@@ -46,6 +46,11 @@ one. ⚠️ Carried the fence's unsourced green bias until it was corrected.
 0.0 for `railings.tres`'s measured reason: `P3-14` shipped the tram rails at
 0.65 and they rendered sky blue, because the only environment here is sky.
 
+## `shader_parameter/rail_reflect = 0.25`
+
+`railings.tres`'s sheen and values, with the three sky colours above it
+(`Q168`): the car's painted sky, scaled by the hour's `sky_light`.
+
 ## `shader_parameter/baluster_pitch_m = 0.11`
 
 No balusters and no rails: zero width and zero-height bands are exactly 0.0

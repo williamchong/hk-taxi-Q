@@ -40,6 +40,15 @@ reserve rather than steel. It is the one value in this file that was set by
 looking at a frame rather than by argument, and the frame is in
 `build/driver/tram_fixed`.
 
+⚠️ **The sheen the rail head lacked comes from the car's painted sky, not from
+`rail_metallic`** (`Q168`): `sky_zenith`, `sky_horizon` and `ground_reflection`
+are the car's and the façades' noon sky, and the rig's `sky_light` global dims
+and warms them with the hour, so a rail at dusk catches a dusk sky and goes dark
+at night. `rail_reflect` 0.5 is how much a head takes at a grazing angle,
+`rail_face_on` 0.05 faced squarely, `fresnel_power` 5.0 the fall between; the
+flank and the bed take none. Chosen at 0.5 over 1.0 by the user, from
+`build/driver/tram_3.png`.
+
 ⚠️ **`flank_darkening` shades the rail only.** The bed is a plain surface, and
 darkening its edges would draw two soft lines down the reserve that no source
 puts there — `Q54`'s invented marking in a place it would be much harder to

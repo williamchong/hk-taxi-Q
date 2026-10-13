@@ -378,8 +378,10 @@ shared by arrows, boxes and stop lines (`Q71`); `signs.gdshader` by signs and la
 - **Tramway** (`P3-14`): its own mesh, `tram.glb`, two rails and a bed per track at iB1000's
   position; `steel_rail`; dial `tuning/tramway.tres`. ⚠️ What makes it read is `rail_roughness`
   0.28 against the road's 0.95 — judge it at a low sun. ⚠️ `rail_metallic` ships 0.0: the only
-  environment is sky, and 0.65 rendered the rails sky blue. A lane-space rail is refused (`Q58`):
-  the published rails are on the ribbon in only 18.8% of cross-sections (1.5% on Hennessy).
+  environment is sky, and 0.65 rendered the rails sky blue. The head's sheen is the car's painted
+  sky at `rail_reflect` 0.5, dimmed with the hour by `sky_light` (`Q168`). A lane-space rail is
+  refused (`Q58`): the published rails are on the ribbon in only 18.8% of cross-sections (1.5% on
+  Hennessy).
   `tram_tracks` stays shipped in `TEXCOORD_1` and undecoded.
 - **Railings** (`P3-19`, `Q61`): `railings.glb`, one vertical quad per 2 m standing 0.6 m outside
   the drawn carriageway edge, `TEXCOORD_0` = (metres along the run, metres above the deck); the
@@ -391,6 +393,8 @@ shared by arrows, boxes and stop lines (`Q71`); `signs.gdshader` by signs and la
   - ⚠️ `ALPHA` is coverage, not translucency — there is no opacity dial and must not be one.
   - ⚠️ `railings.gdshader` is the only `cull_disabled` shader; the back face negates its normal.
   - ⚠️ `rail_metallic` 0.0, for the tramway's reason.
+  - The same painted-sky sheen at `rail_reflect` 0.25 (`Q168`); on a vertical fence it darkens a few
+    codes, since half its reflected ray lands on `ground_reflection`.
   - ⚠️ `rail_colour` has no second reading to check it against and has been wrong twice (too near
     white; then a green bias). Now 0.64/0.64/0.64, dead neutral — HK street railings are galvanised
     grey. The cool cast is the sky's and is deliberately not in the albedo (a +0.03 blue bias

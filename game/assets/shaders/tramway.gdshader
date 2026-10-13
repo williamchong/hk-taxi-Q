@@ -41,6 +41,23 @@ uniform float bed_roughness : hint_range(0.0, 1.0) = 0.9;
 // works is roughness against the road's 0.95, not metalness.
 uniform float rail_metallic : hint_range(0.0, 1.0) = 0.0;
 
+group_uniforms mirror;
+// What `rail_metallic` could not give: the car's painted sky (`P3-11c`), which
+// the rig dims and warms with the hour (`Q160`), so a rail at dusk catches a
+// dusk sky and at night goes dark with it. The three colours are the car's and
+// the façades' noon sky, matched by hand so the city agrees about what the sky
+// is. A rail lies flat and is seen from above, so its reflected ray always
+// points up — `ground_reflection` is here for a rail on a tilted deck.
+global uniform vec3 sky_light;
+uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
+uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
+uniform vec3 ground_reflection : source_color = vec3(0.32, 0.33, 0.35);
+// How much of the mirror a rail head takes at a grazing angle, and how much
+// faced squarely. The bed takes none: it is weathered concrete.
+uniform float rail_reflect : hint_range(0.0, 1.0) = 0.5;
+uniform float rail_face_on : hint_range(0.0, 1.0) = 0.05;
+uniform float fresnel_power : hint_range(1.0, 8.0) = 5.0;
+
 group_uniforms wear;
 // The head of a rail is polished by traffic and its flanks are not. `UV.x` is a
 // fraction across the strip — 0 and 1 on the two edges, 0.5 down the middle —
@@ -92,7 +109,28 @@ void fragment() {
 	// records, in a place where it would be much harder to notice.
 	float flank = smoothstep(rail_head_fraction, 1.0, across) * is_rail;
 
-	ALBEDO = albedo_linear * (1.0 - flank * flank_darkening);
+	vec3 albedo = albedo_linear * (1.0 - flank * flank_darkening);
+
+	// The mirror, on the head only — a flank is the dull part. The reflected ray
+	// is built in view space and turned into the world, so no varying is spent
+	// on a strip this thin; `bounced.y` is its elevation, as on the car.
+	//
+	// Guarded on the bed, which is most of the tramway's fragments and would
+	// discard all of it — the car's reason for guarding its glint. `is_rail` is
+	// `flat`, so the branch is coherent across a triangle.
+	if (is_rail > 0.5) {
+		float fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
+		vec3 bounced = mat3(INV_VIEW_MATRIX) * reflect(-VIEW, NORMAL);
+		vec3 mirrored = mix(
+			ground_reflection,
+			mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
+			smoothstep(-0.08, 0.08, bounced.y)
+		) * sky_light;
+		float head = 1.0 - flank;
+		albedo = mix(albedo, mirrored, head * rail_reflect * mix(rail_face_on, 1.0, fresnel));
+	}
+
+	ALBEDO = albedo;
 	// ⚠️ **This is the line that makes a rail read as a rail.** Both surfaces
 	// are shaded by the same fragment and only `is_rail` separates them; a
 	// single roughness here makes the bed as sharp as the rail and the whole

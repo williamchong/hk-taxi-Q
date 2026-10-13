@@ -10220,3 +10220,59 @@ over or under 0.5) or take `COLOR` through `use_colors`.
 **Not built**: the tram's advertising liveries. Real and all-over, but the green tram is the
 identity the user named as the rule's case. A `tram` palette over its whole paint would carry them
 if the user asks.
+
+## `Q168` — Rails and fences take the car's painted sky, never metalness
+
+**Asked** by the user, 2026-10-14: "we once decide metalic in pbr is no use since light source is
+constant, now with day night change its not true, reeval"; then "should we do ReflectionProbe.?";
+then "go give tramway.gdshader and railings.gdshader the car's sky_light-scaled gradient".
+
+**The re-evaluation.** The recorded reason was never a constant light. It was that metal reflects
+its environment, and the only environment is the sky's radiance (`P3-14`: rails at 0.65 rendered
+sky blue). The hour changes *which* sky that is — dusk orange, and at night `night.tres`'s sky
+top `(0.02, 0.03, 0.08)`, which would turn metal near-black (predicted, not rendered). The lanterns'
+pools and the floodlit fronts are shaders, not lights (`Q160`), so metal cannot pick them up
+either. `METALLIC` stays 0.0 everywhere.
+
+**Reflection probes, refused on cost.** Forward Mobile *does* support `ReflectionProbe`; the
+anti-goal's "no probes" is our choice, not the renderer's. A capture goes stale as the hour moves,
+and following the cycle means re-capturing as the rig moves, on top of the sky re-render `Q160`
+still owes a handset number for. The car moves, so street canyons need a chain of box-projected
+probes, or one on the car redrawing the scene six times per update. Revisit only if wet roads or
+neon (`P3-8`) need the city in a reflection, and measure one car-mounted probe on a handset first.
+
+**Built 2026-10-14.** `tramway.gdshader` and `railings.gdshader` take `P3-11c`'s mirror: the
+reflected ray's elevation picks between `sky_zenith`, `sky_horizon` and `ground_reflection`
+(the car's and the façades' values), times `sky_light`, mixed into the albedo by a fresnel. The
+ray is built in view space (`reflect(-VIEW, NORMAL)` turned by `INV_VIEW_MATRIX`), so neither
+shader gained a varying. On the tramway only the rail head takes it, never the flank or the bed.
+The dials are in each `.tres`: `rail_reflect` 0.5 on the rails (the user's pick over 1.0) and 0.25
+on railings, bollards and barriers, `rail_face_on` 0.05, `fresnel_power` 5.0.
+
+Measured 2026-10-14, desktop, `city_preview.tscn` at `--time-of-day` 0 / 0.79 / 0.95. Mean sRGB of
+the pixels that moved by more than 2 codes, before → after:
+
+| Camera | Hour | Moved px | Before | After | Max code |
+|---|---|---|---|---|---|
+| tram (346, 5.2, 777) | day | 54,821 | 72.7 / 98.1 / 138.7 | 76.3 / 103.1 / 146.0 | 26 |
+| tram | dusk | 33,474 | 87.1 / 61.7 / 78.2 | 91.2 / 64.9 / 81.6 | 17 |
+| tram | night | 33,400 | 37.1 / 50.7 / 95.7 | 34.5 / 48.3 / 93.0 | 14 |
+| `street` | day | 11,047 | 122.8 / 135.6 / 155.5 | 121.0 / 134.0 / 154.4 | 9 |
+| `street` | dusk | 8,637 | 105.6 / 73.7 / 75.4 | 102.7 / 71.0 / 72.6 | 9 |
+| `street` | night | 24,913 | 31.8 / 42.6 / 83.9 | 30.1 / 40.5 / 80.7 | 14 |
+
+- The rail head brightens by day and at dusk, taking the hour's colour, and darkens at night.
+- ⚠️ **A fence darkens slightly at every hour**: a vertical face's reflected ray is near level, so
+  half of it falls in `ground_reflection` 0.32, under the fence's 0.64 albedo. Shipped on the
+  user's call with that understood. A sky-only mirror on fences was the alternative offered.
+- Frames: `build/driver/metal_{before,after,loud}/`, montages `build/driver/tram_3.png` and
+  `street_3.png` (before | shipped | reflect 1.0 rails, 0.6 fences). `check.sh` passes; no
+  `SHADER ERROR` in any run.
+
+Not done: handset cost — a `pow` and a `reflect` per rail-head and fence fragment; the bed skips it
+behind a branch on the `flat` `is_rail` (byte-identical frames at all three hours). The fence's
+mirror feeds only `ALBEDO`, so the depth prepass should drop it as dead code; not verified. The
+anti-goal's wording in `ART_DESIGN.md` still says probes are missing from the renderer.
+
+**See.** `P3-11c` · `P3-14` · `Q58` · `Q61` · `Q160` · `game/tuning/tramway.md` ·
+`game/tuning/railings.md`

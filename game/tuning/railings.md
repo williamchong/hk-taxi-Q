@@ -41,6 +41,15 @@ reflects its environment, the only environment here is sky, and the mobile
 tier ships no reflection probes. Painted steel is a dielectric coat over
 metal, so 0.0 is the truthful value as well as the one that renders.
 
+⚠️ **The sheen is the car's painted sky, not metalness** (`Q168`): the three
+sky colours are the car's and the façades' noon sky, dimmed and warmed with the
+hour by the rig's `sky_light`. `rail_reflect` 0.25 at a grazing angle,
+`rail_face_on` 0.05 squarely, `fresnel_power` 5.0 between — the same three
+values in `bollards.tres` and `barriers.tres`. ⚠️ **On a fence it darkens, by a
+few codes at every hour**: a vertical face's reflected ray is near level, so
+half of it lands in `ground_reflection` (0.32), under this file's 0.64. Shipped
+on the user's call with that understood.
+
 ⚠️ **The fence's shape is now split across two files, and the split is where
 the geometry ends.** Height, station pitch, how far it stands outside the kerb
 and how far its foot sinks are *mesh* — decided by `pipeline/railings.py` from
