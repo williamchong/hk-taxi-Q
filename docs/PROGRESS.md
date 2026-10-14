@@ -30,17 +30,28 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     user's drive of both is owed.
   - `B1` ("one fare") is built: HUD chassis, wrong-way warning, the router (`P3-43`), the fare
     loop (`P3-1a`, `Q141`) and the minimal fare HUD (`P3-5a`, `Q142`); the user's drive of one
-    fare, start to finish, is `B1`'s review and is owed. Of `B4`, the skills and the receipt are
-    built ahead of the chain (`P3-49`, `Q145`). `B3`, the rest of `B4`, `P3-9` not started.
+    fare, start to finish, is `B1`'s review and is owed.
+  - The car runs a per-wheel tyre model on a spec sheet (`Q152`, `Q153`, `Q156`; pace 2.0), and
+    the day runs to night as game time (`P3-69`, `Q160`): lit lanterns, floodlit blocks, the
+    car's lamps. One head-up display over drive and menu (`Q163`). The user's drives owed.
+  - `B3`: the streets stand parked vehicles from published data in place of moving traffic
+    (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
+    (`P3-2a`). Moving traffic, trams and neon (`P3-3`, `P3-4`, `P3-8`) not started; `P3-3` is
+    deferred behind the roster.
+  - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
+    (`P3-51`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
+    (`P3-74`, `Q162`). The style chain, long haul and the layout pass (`P3-2b`, `P3-1b`,
+    `P3-5b`) and `P3-9` not started.
 - **Phase 6:** pulled forward on the user's ask — `P6-1`, the start menu (start, the language
   option, the credits and licences that discharge hard rule 6 in the build), built 2026-09-26
-  (`Q146`); the user's look owed.
+  (`Q146`); since then a camera shot per page (`Q164`) and the pause (`Q165`). The user's look
+  and drive owed.
 - **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
   measurement only. `P5-8` (content) is outline; `P5-14` not started.
-- **Knowingly missing:** no traffic, no tram vehicles, no neon (`P3-3`, `P3-4`, `P3-8`); no night
-  rig (`Q26`); no signal heads (`Q77`).
+- **Knowingly missing:** no moving traffic, no moving trams, no neon (`P3-3`, `P3-4`, `P3-8`); no
+  signal heads (`Q77`).
 
 **Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q> (public page). The
 last cut is `r5` (`build/hk-taxi-q-p39a-r5-itch.zip`, 55,511,080 B); it predates `P3-26` onward,
@@ -426,8 +437,6 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   into an empty temp dir and the stage now wants `basemap.json` there first (2026-10-07, identical
   before and after the helper-`NORMAL` change). The plain run grades; the sweep's cell prices in
   `ARCHITECTURE.md` are the last ones it produced.
-- **`P3-11e` night path is untested** — Low. No night rig (`Q26`). A rig must dim its key light,
-  never delete it; owes `sun_glint.gd` an `apply()`.
 - **Roster headlamps cap at four cars** — Low. Forward Mobile pairs 8 spots per object;
   `BeamBudget` + `verify_beam_budget.gd`. `P3-3` decides whether the player's slot is reserved.
 - **Podium floors measure the treatment band** — Medium. `Q47`: data-only pack; true fill owed.
@@ -449,7 +458,8 @@ Retired: road data lacks Z (`Q1`); a second city is a YAML file (`Q100`); real g
 `project.godot` (`Q119` — they never did; the `[importer_defaults]` loss of one recurrence is the
 one thing that does not explain); authored `.import` sidecars unpinned (`P5-20`); `sha_tin`'s
 inverted triangle (`P5-19`); `P3-7a` riders invisible (`Q102`); grade separation reachable and
-ungraded (`Q111`).
+ungraded (`Q111`); `P3-11e`'s night path untested (`Q160`'s cycle ran it; `sun_glint.gd` has its
+`apply()`).
 
 ---
 
