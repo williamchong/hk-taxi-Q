@@ -194,7 +194,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q135` | Road paint stays mesh; what it costs a frame is measured, and it casts no shadow | `P3-38`–`P3-42` built; the user's drive owed. Open: which deck, where two cross. |
 | `Q136` | The minimap is drawn from `RoadGraph`, once, and switches off on its own | 🟡 Built (`P3-44`); the user's drive and the web build's clip frame owed. Heading-up and the merged plate are the user's calls; the one-way arrows were, and are off since 2026-09-24 for a border arrow toward an off-map target. Owed the user: `span_m`. |
 | `Q140` | The harbour is a frame minus the land, and the land is north of the sheets we hold | ✅ Closed — the user's calls: on the minimap with `P3-44` (2026-09-24), in the world as a plane over sunk ground (2026-09-25) · `P3-45` |
-| `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named. The user's drive owed. |
+| `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named, closed as the data's (2026-10-15). The user's drive owed. |
 | `Q146` | A start menu over the parked taxi; the language is the flag, then the saved option, then the OS, then Chinese | ✅ Closed — the user's asks (2026-09-26), built as `P6-1`. The credits screen discharges hard rule 6 in the build. The user's look owed. |
 | `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
@@ -7324,6 +7324,17 @@ is" — was built on 2026-09-25, the section at the end; it reverses the "out of
   `f_001` (Electric Road) stays stranded: 17 pickups, 4 stranded, 25 destinations, reach 18.1 ms
   on the boot line. ⚠️ A new stranded node is a finding about the data, never a reason to lower
   the bar.
+- **The stranded four are closed as the data's** (2026-10-15). Traced forward over the merged
+  graph's level 0 with every turn ban: `f_017` (Hennessy, edge 745) reaches only its own edge,
+  one-way off the west edge at x = 0; `f_018` (Johnston, 223) reaches 16 edges and `f_020`
+  (Johnston, 39) 9, every one ending off the west or south edge (Johnston, Wan Chai Road, Tai Wo
+  Street, Stone Nullah Lane); `f_001` (Electric Road, merged 830) reaches 9, ending off the north
+  edge on Hing Fat Street or in two short two-way stubs. A turn-round at a clipped two-way end
+  (Stone Nullah Lane, edge 92, 4.2 m) frees none of them: it leads back onto the same westbound
+  one-ways. The only fixes are refused: a par route that breaks a sign at the map edge is not
+  `Q137`'s legal profile, deleting the nodes throws away correct data, and moving the west edge
+  into Central is `Q6`. Reopens with `Q6`. Nothing is lost meanwhile — the reach table drops them
+  from the pickup pool at load, so no hail is ever unreachable, and they stay destinations.
 - **The pools are the yaml's rules.** A stand is a pickup and a destination unless
   `cross_harbour` (`P3-1b`); a PUDO point is what `pickup` / `dropoff` say; a `poi` tram stop is
   neither. The kind is the destination's. Wan Chai: 19 pickups → 16, 23 destinations.

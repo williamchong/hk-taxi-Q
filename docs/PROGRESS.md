@@ -180,8 +180,8 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   reach table 14.0 ms; Causeway Bay alone 0 pickups (`f_001`, `f_002` stranded), SKIP; merged
   runtime 17 pickups (4 stranded — the join un-strands `f_002`), 25 destinations, 18.1 ms; seed-7
   fare par 1,575 m / 189 s banks HK$122.88; 7 mutations caught; driven from the Expo Drive stand,
-  aboard by 0.8 s, `build/driver/fare/`. The user's drive under `--debug-view=full` owed. Open:
-  the stranded four at clip edges.
+  aboard by 0.8 s, `build/driver/fare/`. The user's drive under `--debug-view=full` owed. The
+  stranded four are one-way exits off the map, closed as the data's (`Q141`, 2026-10-15).
 - `P3-5a` ✅ Minimal fare HUD (`Q142`) — the LED meter, the tip clock, the callout naming the destination once hailed as its building over its road (iB1000 `BUILDINGNAME` joined in the ETL: Wan Chai 47 of 48 nodes placed, furthest 24.6 m; Causeway Bay 4 of 7), the pool's pips and the destination pip on the minimap, a crow-flies guide in the world that grows and turns green as the target nears with a pulsing ring on the road at it; the callout in one language (`--lang=`) with a caption and the road distance left, the countdown bare and centred with every meter tick flashed under it, a pin on the map and a ring on the road at every pending customer while no one is aboard and at the destination once hailed, the arrow on the closest pending customer while idle; `face:` / `map:` / `digits:` / `guide:` assertions in `verify_hud`, 7 mutations caught; whole HUD +31 `draws` (was +15) at 103 → 134 on the boot stand. Frames in `build/driver/fare_hud/`. Fourth round: `99 秒` on one row, no pending mark at a drop-off the loop is disarmed on (`withheld_pickups`), and the game starts 20 m short of `f_004` so pulling forward starts it. The user's drive owed.
 - `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
@@ -243,7 +243,8 @@ and there in the same change.
 
 ### Open
 
-- `Q6` Does the region need Central? (after `P3-9`). Deferred.
+- `Q6` Does the region need Central? (after `P3-9`). Deferred. The one way `Q141`'s three
+  westbound Wan Chai pickups come back.
 - `Q13` Nothing ramps between levels in the source (`P4-*`). Level 1 open (`Q111`). Left: the 15
   bores (0 of 15 carry a corridor; `e489` lacks 0.22 m headroom) — needs a vertical instrument,
   not a wider `levels`.
@@ -295,7 +296,7 @@ and there in the same change.
 - `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
 - `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the border arrow are the user's calls; the one-way arrows are off (2026-09-24). Owed the user: a drive; `span_m`. Owed: the web frame.
-- `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. Open: four stranded pickups at clip edges on the merged graph (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`).
+- `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. The four stranded pickups (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`) are closed as the data's (2026-10-15): one-way exits off the map, reopened only by `Q6`.
 - `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
 - `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
 - `Q140` The harbour (user; `P3-45`): on the minimap with `P3-44`, in the world as a plane at sea level over ground the tile stage sinks (2026-09-25). The user's frame owed.
