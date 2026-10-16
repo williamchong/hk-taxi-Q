@@ -68,6 +68,8 @@ func _setup() -> void:
 	_first_rear = _wheels.size() - rears
 	for _k: int in rears:
 		_smoke.append(_build_smoke())
+	# Ticks only once warm: `_puff` drives `emitting`, and would end the warm-up.
+	await ParticleWarmup.warm(_smoke)
 	set_physics_process(true)
 
 

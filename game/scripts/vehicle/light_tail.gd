@@ -61,7 +61,11 @@ var _material: ShaderMaterial = null
 var _tier: int = -1
 var _clock_s: float = 0.0
 ## When the last piece was laid, so the mesh is hidden once it has faded.
-var _laid_at_s: float = -INF
+## Zero, not never: the empty ring then draws for its first `life_s`, every
+## corner at the origin and so no pixel, and the web build's renderer compiles
+## the shader at load rather than stalling the first counted slide
+## (`ParticleWarmup`'s reason).
+var _laid_at_s: float = 0.0
 
 
 func _ready() -> void:
@@ -251,7 +255,6 @@ func _build_mesh() -> bool:
 	_streak.mesh = _mesh
 	_streak.top_level = true
 	_streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_streak.visible = false
 	add_child(_streak)
 	_streak.global_transform = Transform3D.IDENTITY
 	return true

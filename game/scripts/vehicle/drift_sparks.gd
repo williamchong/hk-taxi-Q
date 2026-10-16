@@ -48,6 +48,10 @@ func _setup() -> void:
 	_wheels = car.rear_wheels()
 	for _wheel: VehicleWheel3D in _wheels:
 		_sparks.append(_build_sparks())
+	await ParticleWarmup.warm(_sparks)
+	# A tier that arrived while warming is put back up; the warm-up stops them.
+	if _tier >= 0:
+		show_tier(_tier)
 
 
 ## Whether the table is whole: a profile, at least one colour, and no zero
