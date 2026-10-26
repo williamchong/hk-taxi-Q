@@ -454,8 +454,12 @@ func _build() -> void:
 		_callout_sub.add_theme_font_override(&"font", _font_zh)
 
 	# The tick: "+HK$2.1" under the clock as a unit begins, bare like the
-	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`.
+	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`. In
+	# the plate's Kai when Chinese: a skill flashes its 黃紙 item (`Q169`), and
+	# the theme's face has no CJK glyph of its own to draw it in.
 	_tick = _outlined(_label("Tick", _style.tick_size, _style.chip_ink))
+	if chinese and _font_zh != null:
+		_tick.add_theme_font_override(&"font", _font_zh)
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
 
@@ -1018,6 +1022,9 @@ func _award_ink(award: Fare.Award) -> Color:
 ## Show `text` under the clock and start it fading.
 func _flash(text: String, ink: Color) -> void:
 	_tick.text = text
+	# Cut to the box, like the callout: "+HK$10.0 too close to other objects
+	# (serious)" is the longest thing flashed here, and the box is its bound.
+	StreetPlate.shrink_to(_tick, _style.tick_size, _layout.tick.size.x)
 	_tick.add_theme_color_override(&"font_color", ink)
 	_tick.modulate = Color.WHITE
 	_tick.visible = true

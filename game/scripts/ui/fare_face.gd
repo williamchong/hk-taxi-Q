@@ -221,27 +221,11 @@ func practice_text(award: Fare.Award) -> String:
 	return skill_name(award.skill)
 
 
-## A skill's name, in the face's language. Cantonese for the two the street
-## has words for: 甩尾 is a drift and 飆車 is speeding.
+## A skill's name, in the face's language: its item on the driving test's
+## fault sheet (`P3-76`, `Q169`, the user's ask) — 太接近其他物體 for a near
+## miss, 碰及物體 for a crash — read from `tuning/exam_sheet.json`.
 func skill_name(skill: Fare.Skill) -> String:
-	match skill:
-		Fare.Skill.DRIFT:
-			return _say("甩尾", "drift")
-		Fare.Skill.SPEED:
-			return _say("飆車", "speed")
-		Fare.Skill.EARLY:
-			return _say("早到", "early")
-		Fare.Skill.NEAR_MISS:
-			return _say("擦身", "near miss")
-		Fare.Skill.CLOSE_CALL:
-			return _say("險過", "close call")
-		Fare.Skill.AIR:
-			return _say("飛車", "air")
-		Fare.Skill.CRASH:
-			return _say("撞車", "crash")
-		Fare.Skill.BUMP:
-			return _say("碰撞", "bump")
-	return ""
+	return ExamSheet.shared().item_name(skill, _language)
 
 
 ## The delivery's sum, as one line: the meter, the time left, then each skill

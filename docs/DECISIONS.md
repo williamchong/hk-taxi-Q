@@ -10287,3 +10287,64 @@ anti-goal's wording in `ART_DESIGN.md` still says probes are missing from the re
 
 **See.** `P3-11c` · `P3-14` · `Q58` · `Q61` · `Q160` · `game/tuning/tramway.md` ·
 `game/tuning/railings.md`
+
+## `Q169` — The skills take the 黃紙's names; a 成績表 and a record follow
+
+**Asked** by the user, 2026-10-26: "can we use the checklist items on hk driving road exam for the
+bonus item as text instead for maximum hk feel? but in our case, some items are actually bonus,
+like dangerously close to object, and some are kept as penalty, like crashing into object"; and
+"plan for a 成績表 that list items that happend in a section after a shift is done, or in pause
+screen for free section. also consider a overall achievement record table in main menu".
+
+**Sources.** TD's *Guide to Private Car and Light Goods Vehicle Driving Test* (Nov 2025, both
+languages) gives the sections (駕駛操作及車速控制, 判斷車距, 危險駕駛／控制力不足, …), the
+輕微 / 嚴重 (Minor / Serious) split, faults recorded by filling boxes on TD 553, and the rule that
+three minor faults on one item make a serious one. The form itself is not published; the item
+wording is the 黃紙's as driving schools quote it (太接近其他物體, 車速不適當, 空波滑行, …), and
+the English is ours.
+
+**The names (the user's calls, 2026-10-27).**
+
+| `Fare.Skill` | Name | Was |
+|---|---|---|
+| `NEAR_MISS` | 太接近其他物體（輕微） / too close to other objects (minor) | 擦身 |
+| `CLOSE_CALL` | 太接近其他物體（嚴重） / … (serious) | 險過 |
+| `SPEED` | 車速不適當 / inappropriate speed | 飆車 |
+| `AIR` | 空波滑行 / coasting in neutral — no wheel is driving | 飛車 |
+| `BUMP` | 碰及物體（輕微） / touching an object (minor) | 碰撞 |
+| `CRASH` | 碰及物體（嚴重） / … (serious) — the user's item, over 考牌主任採取行動 | 撞車 |
+| `DRIFT` | 甩尾 / drift, unchanged | — |
+| `EARLY` | 早到 / early, unchanged: the passenger's, not the examiner's | — |
+
+- **Names only.** A bonus still pays and a penalty still docks; TD's three-minors rule is NOT
+  applied, to money or to anything else, and there is no 及格 / 不及格 line (the user's call). The
+  tier word is in the name because it is what tells two events on one item apart.
+- **The drift keeps 甩尾** (the user's pick of three): the sheet's 軚盤控制不當 opens with 軚
+  (U+8EDA), which Free HK Kai does not carry, and the web build has no system face to fall back
+  on. A one-glyph fallback font was the alternative offered.
+- **Not taken**: the wrong-way warning stays a warning, not a penalty (未有遵從交通標誌); a lane
+  item waits for moving traffic (`P3-3`).
+
+**Built 2026-10-27 (`P3-76` part 1).** `tuning/exam_sheet.json` (words beside `menu_text.json`, a
+row per `Fare.Skill` keyed by its lower-cased name, the tiers apart); `ExamSheet` reads it once;
+`FareFace.skill_name` asks it, so the flash, the practice flash and the receipt all change. The
+tick under the clock is set in the plate's Kai in Chinese — it had been in the theme's face, with
+no CJK glyph of its own — and widened 300 → 800 px (x 560–1360, y 248–308), shrunk to the box
+past that. `verify_hud` holds every name in both languages, a near miss and a close call apart by
+tier, and every glyph in the Kai; mutation-checked twice (the `bump` row deleted → `[bump]` fails;
+軚盤控制不當 put back → "the Kai has no '軚'"). Frames: `build/driver/q169_crash_{zh,en}` (a
+wall at 6.82 s from `f_004`, `--fare-seed=1`, `steer_left@3.5+0.8`), `q169_bump_en`.
+`draws` at that frame: 150 zh / 143 en against 102 at `--hud=off` (+48 / +41) — not measured on
+the same frame before the change. ⚠️ The Kai's full-width brackets set airy: 「（ 嚴重 ）」.
+
+**Planned (`P3-76` parts 2 and 3).**
+- **成績表**: a TD 553-style sheet of what happened — rows by the guide's sections, the two
+  columns 輕微 / 嚴重 with filled boxes, the HK$ each item paid or docked, and the session's bests
+  (longest slide, longest flight, closest pass, top speed). At 交更 on REPORT; in free mode on
+  PAUSE. Needs a per-skill HK$ total beside `FareSystem.skill_counts` and the bests read off
+  `SkillTracker` / `NearMiss` as each event ends.
+- **Record**: lifetime counts and HK$ per item, shifts, fares delivered and walked, and the bests,
+  in `Settings`' file under `[record]`, keyed by name rather than enum value; written at 交更, on a
+  pause and on leaving free mode (a closed web tab loses the rest). A 紀錄 / RECORD page off HOME.
+
+**See.** `Q145` · `Q148` · `Q161` · `Q162` · `game/tuning/exam_sheet.json` · `hud_layout.md`

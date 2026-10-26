@@ -1,0 +1,75 @@
+{
+  "_": [
+    "What each skill and penalty is called (P3-76, Q169, the user's ask): the",
+    "items of the driving test's fault sheet, TD 553, the 黃紙 every Hong Kong",
+    "driver took home from the test. Read by scripts/fares/exam_sheet.gd for",
+    "FareFace.skill_name — the flash under the clock and the receipt — and held",
+    "by tools/verify_hud.gd in both languages. JSON beside menu_text.json, which",
+    "hard rule 4 permits: these are words, not tuning.",
+    "",
+    "The NAMES only (the user's call): a bonus is still a bonus and a penalty a",
+    "penalty, and TD's own rule that three minor faults on one item make a",
+    "serious one is NOT applied. The tier word is what tells two events on the",
+    "same item apart — a near miss from a close call, a bump from a crash.",
+    "",
+    "Sourced: TD's Guide to Private Car and Light Goods Vehicle Driving Test",
+    "(Nov 2025, both languages) for 輕微 / 嚴重 and Minor / Serious. The item",
+    "wording is the 黃紙's as driving schools quote it — the form itself is not",
+    "published — and its English is ours: TD's English names for the items are",
+    "unverified. 早到 is the passenger's, not the examiner's, and keeps its name.",
+    "甩尾 keeps its name too (the user's call): the sheet's 軚盤控制不當 opens",
+    "with 軚 (U+8EDA), which Free HK Kai does not carry, and the web build has",
+    "no system face to fall back on.",
+    "",
+    "Keys are Fare.Skill's names, lower-cased: an entry per value, so a skill",
+    "appended to the enum without a name here fails verify_hud."
+  ],
+  "tiers": {
+    "minor": {
+      "en": "minor",
+      "zh": "輕微"
+    },
+    "serious": {
+      "en": "serious",
+      "zh": "嚴重"
+    }
+  },
+  "items": {
+    "drift": {
+      "en": "drift",
+      "zh": "甩尾"
+    },
+    "speed": {
+      "en": "inappropriate speed",
+      "zh": "車速不適當"
+    },
+    "early": {
+      "en": "early",
+      "zh": "早到"
+    },
+    "near_miss": {
+      "en": "too close to other objects",
+      "zh": "太接近其他物體",
+      "tier": "minor"
+    },
+    "close_call": {
+      "en": "too close to other objects",
+      "zh": "太接近其他物體",
+      "tier": "serious"
+    },
+    "air": {
+      "en": "coasting in neutral",
+      "zh": "空波滑行"
+    },
+    "crash": {
+      "en": "touching an object",
+      "zh": "碰及物體",
+      "tier": "serious"
+    },
+    "bump": {
+      "en": "touching an object",
+      "zh": "碰及物體",
+      "tier": "minor"
+    }
+  }
+}

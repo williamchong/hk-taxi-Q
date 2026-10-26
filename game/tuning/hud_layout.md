@@ -39,6 +39,13 @@ tick and the NO ENTRY sign follow down the same column. A countdown is what an
 arcade racer puts there, and it is only up while a fare runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
 fades; nothing else joins them.
 
+⚠️ THE TICK IS 800 WIDE, not 300 (`P3-76`, `Q169`): a skill flashes its item
+off the driving test's fault sheet, and "+HK$10.0 too close to other objects
+(serious)" is the longest line it says. Centred on the same column, it spans
+x 560–1360 at y 248–308 — above the touch zones (from y 480) and clear of the
+pause button (x 1440) — and `hud.gd` shrinks a line to the box rather than
+letting it run past.
+
 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
 reserved slots do not exist, because they do not; a slot's contents arriving
 is an edit to this file.
