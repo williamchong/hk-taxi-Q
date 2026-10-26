@@ -1187,7 +1187,7 @@ city_space = region_local + city_offset
 | `RoadGraph` | Queries over `roadgraph.json` — nearest edge, lane centre; loads the topology (`from` / `to`, turn bans, 64-bit plan length) and traverses none of it | ✅ `P2-2`, `P3-43` |
 | `RoadRouter` | Directed-edge search over `RoadGraph`: one-way, turn restrictions, U-turn ban, a bar. `Profile.legal()` (traffic, lane bar) and `Profile.player()` (rules free, car bar). One reverse search per destination (`prepare`), then `route()` is a lookup; "no route" is an answer. Diffed pair for pair against `tools/reachability.py` (`Q137`) | ✅ `P3-43`; consumed by `FareSystem` (`P3-1a`) |
 | `RoadSpawn` | Where a car starts, resolved from a fare node, and what it stands in (`Q52`) | ✅ `P2-3` |
-| `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, the drift button's ramp, collision response, auto-right. `TyreVehicleController` extends it with the per-wheel tyre model the game drives on (`Q152`) | ✅ `P0-5`/`P2-3`/`Q50`/`Q152` |
+| `VehicleController` | Player car: `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, the handbrake's ramp, collision response, auto-right. `TyreVehicleController` extends it with the per-wheel tyre model the game drives on (`Q152`) | ✅ `P0-5`/`P2-3`/`Q50`/`Q152` |
 | `InputRouter` | Touch / gamepad / keyboard into one action set (autoload) | 🟡 touch ships 3 of 5 actions; `P2-4` |
 | `DebugHud` | Every dev readout, behind `F3` (autoload) | ✅ |
 | `BeamBudget` | Hands the renderer's spot-light slots to the cars nearest the camera (autoload) | ✅ |
@@ -1322,12 +1322,12 @@ One action set; three schemes feed it and no gameplay script knows which is live
 | `steer` | `float`, −1…1 | `A` / `D`, ← / → | Left stick X (axis 0) | ✅ thumb 2, horizontal from touch origin |
 | `accelerate` | `float`, 0…1 | `W`, ↑ | RT (axis 5) | ✅ thumb 1, above touch origin |
 | `brake_reverse` | `float`, 0…1 | `S`, ↓ | LT (axis 4) | ✅ thumb 1, below touch origin |
-| `drift` | `bool` | `Space` | A / Cross (button 0) | ⬜ thumb 2, held past the drift threshold |
+| `handbrake` | `bool` | `Space` | A / Cross (button 0) | ⬜ thumb 2, held past the handbrake threshold |
 | `look_back` | `bool` | `C` | B / Circle (button 1) | ⬜ unplaced |
 
 Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`'s `[input]` map.
 
-- Touch ships three of five (`Q97`). `drift` needs a threshold and hysteresis only a handset can
+- Touch ships three of five (`Q97`). `handbrake` needs a threshold and hysteresis only a handset can
   pick (`Q83`, `P0-3b`); `look_back` is unplaced. Thumb 2's vertical axis is read and discarded, not
   lent to another control.
 - 🔴 Touch values are merged in `InputRouter`, never fed through the action map:
@@ -1344,16 +1344,16 @@ Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`
 **Keyboard** is digital on every action; `steer_attack_s` / `steer_release_s` in
 `VehicleController` do all the smoothing.
 
-**Gamepad** is analog on steer and both triggers; `drift` and `look_back` are face buttons.
-⚠️ Both triggers are spent, so `drift` stays a `bool`. Drift duration is the vehicle's job and is
-⬜ not built — the drift ends on the tick the input stops (`Q50`, `Q83`).
+**Gamepad** is analog on steer and both triggers; `handbrake` and `look_back` are face buttons.
+⚠️ Both triggers are spent, so `handbrake` stays a `bool`. The action was `drift` until `Q170`:
+the button is a handbrake, and the drift is what the car and the player make of it.
 
 **Touch** is two thumbs:
 
 | | Horizontal | Vertical |
 |---|---|---|
 | **thumb 1** (bottom **right**) | free — `look_back` candidate | `accelerate` above origin, `brake_reverse` below |
-| **thumb 2** (bottom **left**) | `steer` | `drift` while held past the threshold |
+| **thumb 2** (bottom **left**) | `steer` | `handbrake` while held past the threshold |
 
 - Left steers, right drives (`Q97`; `Q83` left it open). The side lives in
   `HudLayout.steer_zone()` / `drive_zone()`, so swapping it is one edit. The rects are
@@ -1363,7 +1363,7 @@ Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`
   rests start at y 880, so a slider collides with the HUD at 20 px of growth (`Q83`).
 - `brake_reverse` is the negative half of one longitudinal axis, matching the one-pedal
   brake-and-reverse of `P0-5b/c/d`; centre is coast.
-- ⚠️ `drift` is a held offset on thumb 2 — not a tap, an origin latch or a screen-edge zone (`Q83`).
+- ⚠️ `handbrake` is a held offset on thumb 2 — not a tap, an origin latch or a screen-edge zone (`Q83`).
   Its threshold needs hysteresis (larger to enter than to leave), and is a *distance* from the
   origin, not a horizontal line: a thumb sweeps an arc, and a straight boundary would inject
   steering into every drift entry.

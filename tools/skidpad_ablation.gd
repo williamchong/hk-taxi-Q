@@ -72,7 +72,7 @@ const SUSTAIN_MANOEUVRES: PackedStringArray = ["lift", "hold", "ride"]
 const LIFT_AT_S: float = 1.0
 const AFTER_LIFT_S: float = 0.5
 ## `liftoff`: `corner`'s input, full lock and the throttle, with the throttle
-## lifted at `LIFT_AT_S` and no drift button — whether a lift in a fast turn
+## lifted at `LIFT_AT_S` and no handbrake — whether a lift in a fast turn
 ## pivots the car. Read beside `corner`, its control, in these windows around
 ## the lift (seconds from it): a radius that falls after the lift on `liftoff`
 ## and not on `corner` is the pivot, not the speed it sheds.
@@ -85,13 +85,13 @@ const LIFTOFF_WINDOWS_S: Array[Vector2] = [
 ## `--only=technique` runs the three and their controls.
 ##
 ## `flick`: full lock LEFT for `FLICK_S` (or each of `--flick-s=`, a row per
-## feint, labelled with it), then full lock right held, no drift button — a
+## feint, labelled with it), then full lock right held, no handbrake — a
 ## feint the other way, then in. `@held` keeps the throttle down
 ## through the feint; `@lift` lifts it for the feint and puts it back at the
 ## turn-in, the Scandinavian flick `Q85` says the shipped car cannot do;
 ## `@brake` holds the brake through the feint instead, the real flick's light
 ## brake (`Q153`'s research), and the throttle on at the turn-in.
-## `handbrake`: `corner`'s input with the drift button tapped `HANDBRAKE_AT_S`
+## `handbrake`: `corner`'s input with the handbrake tapped `HANDBRAKE_AT_S`
 ## into the turn — `tap` presses it with the steering from a straight line,
 ## this with the car already turning. `@held` keeps the throttle down, `@lift`
 ## lifts it at the press. `trailbrake`: the brake and full lock right for
@@ -146,7 +146,7 @@ const HOLD_DAMPING_S: float = 0.25
 ## steers grades a car on a technique nobody drives with.
 const HOLD_LIFT_GAIN: float = 2.0
 ## What `drift`, `tap`, `lift` and `hold` press; they differ in when they let go.
-const DRIFT_ACTIONS: Array[StringName] = [&"accelerate", &"steer_right", &"drift"]
+const DRIFT_ACTIONS: Array[StringName] = [&"accelerate", &"steer_right", &"handbrake"]
 ## The wall manoeuvre's angles, in degrees between the car's travel and the
 ## wall's face: 90 is head-on, 10 a brush. `--wall-deg=` overrides; each
 ## angle is a row. What it grades is `P3-50`'s penalty tiers — the controller's
@@ -175,7 +175,7 @@ const WALL_SIZE := Vector3(240.0, 4.0, 1.0)
 const WALL_AFTER_S: float = 1.0
 
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
-## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
+## only ones such a sweep re-runs. Nothing else holds the handbrake, so nothing
 ## else reaches `VehicleController._apply_drift`.
 const DRIFT_MANOEUVRES: PackedStringArray = [
 	"drift", "tap", "lift", "hold", "catch", "turn", "handbrake"
@@ -278,7 +278,7 @@ const SETTLE_S: float = 0.5
 ## Seconds the tyre-model car stands before its rebuilt loads are read (`Q152`).
 const LOAD_SETTLE_S: float = 1.5
 
-## How long the `tap` manoeuvre holds the drift button before letting go, while
+## How long the `tap` manoeuvre holds the handbrake before letting go, while
 ## steering stays on for the full `MANOEUVRE_S`.
 ##
 ## The pair matters more than either number. `drift` holds the button for the
@@ -350,7 +350,7 @@ var _flick_s: Array[float] = [FLICK_S]
 var _flick_given: bool = false
 ## `--catch-lift`: the catch lets the throttle go as the wheel goes over —
 ## the street instinct — where the default keeps it down. With the drive on,
-## the rears are still spinning past the drift button and have little side
+## the rears are still spinning past the handbrake and have little side
 ## grip to swing the car with; lifted, they regrip, and that is the pendulum.
 var _catch_lift: bool = false
 ## `--catch-at=<s>`: countersteer at this many seconds into the manoeuvre
@@ -829,7 +829,7 @@ func _measure_all() -> void:
 				continue
 			if manoeuvre == "catch":
 				# A row per hold, and swept like the other drift rows: the catch
-				# taps the drift button, so a drift dial or a tyre field moves it.
+				# taps the handbrake, so a drift dial or a tyre field moves it.
 				for hold_s: float in _catch_s:
 					var label: String = "catch@%.1fs" % hold_s
 					if swept:
@@ -1144,7 +1144,7 @@ func _hit_wall(wall_deg: float, into: Result) -> void:
 ##
 ## `lift_at_s` lets the throttle go at that time, and records the slip there and
 ## `AFTER_LIFT_S` later. `countersteer` hands the wheel to `_countersteer` once
-## the drift button is released.
+## the handbrake is released.
 func _sample(
 	actions: Array[StringName],
 	limit_s: float,
@@ -1234,8 +1234,8 @@ func _sample(
 		into.trace_rear_use.append(rear_use)
 		into.trace_rear_swing.append(rear_swing)
 
-		if t >= drift_release_s and Input.is_action_pressed(&"drift"):
-			Input.action_release(&"drift")
+		if t >= drift_release_s and Input.is_action_pressed(&"handbrake"):
+			Input.action_release(&"handbrake")
 		if t >= lift_at_s and is_nan(into.slip_at_lift_deg):
 			Input.action_release(&"accelerate")
 			into.slip_at_lift_deg = slip_deg
@@ -1446,9 +1446,9 @@ func _switch(technique: String) -> void:
 			Input.action_press(&"steer_right")
 			Input.action_press(&"accelerate")
 		"handbrake@held":
-			Input.action_press(&"drift")
+			Input.action_press(&"handbrake")
 		"handbrake@lift":
-			Input.action_press(&"drift")
+			Input.action_press(&"handbrake")
 			Input.action_release(&"accelerate")
 		"trailbrake", "turnin":
 			Input.action_release(&"brake_reverse")
@@ -1477,7 +1477,7 @@ func _hold(seconds: float) -> void:
 
 func _release_everything() -> void:
 	for action: StringName in [
-		&"accelerate", &"brake_reverse", &"steer_left", &"steer_right", &"drift"
+		&"accelerate", &"brake_reverse", &"steer_left", &"steer_right", &"handbrake"
 	]:
 		Input.action_release(action)
 

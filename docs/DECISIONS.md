@@ -205,6 +205,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q163` | One head-up display over the whole screen: the readouts float on a bracketed frame, the map a round scope, the 咪錶 alone keeps its box; the menu on the same glass over a blurred backdrop | ✅ Built 2026-10-13 on the user's asks. Supersedes `Q139`'s one housing for every panel but the meter, and `Q142`'s panels flush on the screen's edge. The user's drive owed. |
 | `Q164` | The menu's camera follows its page: a shot per page round the parked car, the passenger door open on PLAY | ✅ Built 2026-10-13 on the user's ask. Replaces `P6-1`'s one turntable for every page. The user's look owed. |
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
+| `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
 
 ---
 
@@ -10348,3 +10349,28 @@ the same frame before the change. ⚠️ The Kai's full-width brackets set airy:
   pause and on leaving free mode (a closed web tab loses the rest). A 紀錄 / RECORD page off HOME.
 
 **See.** `Q145` · `Q148` · `Q161` · `Q162` · `game/tuning/exam_sheet.json` · `hud_layout.md`
+
+## `Q170` — Space is the handbrake
+
+**Status.** ✅ Built 2026-10-27 on the user's ask. A rename: no force on the car moves.
+
+**Asked** by the user, 2026-10-27: "should we simplify the concept and just say/design spacebar is
+handbrake"; "go" on the answer below.
+
+**The button was already a handbrake** (`Q152`, `Q156`): `handbrake.lock_ratio` 1.0815 × a rear
+wheel's lock. Only its name said drift. The action is `handbrake` in `project.godot`, the router's
+field `handbrake`, the car's `handbrake_input`, and HOW TO PLAY says "Space for the handbrake" /
+「空白鍵拉手掣」 (every glyph in the Kai). 甩尾 stays the skill's name: the drift is what the fare
+pays for, never the control's.
+
+- **Kept behind the press, unseen**: the rear side cut (`arcade_aids.drift_side_cut` 0.6) and drift
+  mode (`drift_mode.tres`). The cut was tried at 0 (`arcade_aids.md`, `Q156`): `turn@off` 59 / 78 /
+  146° against 91 / 97 / 110° at 42 / 63 / 86 kph, and no `lock_ratio` bought it back. A limited-slip
+  differential is what would replace it, still deferred. A handbrake alone is a re-tune, not a
+  simplification.
+- `GAME_DESIGN.md`'s "easy to hold, scrubs little speed" goes: `Q49` called it anti-physical for a
+  real handbrake, and `Q85` measured a drift buying line, never pace.
+- `drift_mode`, `_apply_drift`, `drift_attack_s` / `drift_release_s` and the skidpad's row names
+  keep theirs: each names the car's answer, not the input.
+
+**See.** `Q49` · `Q83` · `Q152` · `Q153` · `Q156` · `game/tuning/systems/handbrake.md`

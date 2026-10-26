@@ -30,7 +30,7 @@ understeer control, power off while the steering asks for more than the road giv
 
 The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,
 `Q153`), for the power-on corner: at 0 a full-lock corner under the doubled drive runs to about
-128 kph from any entry and its arc widens, where the shipped car settles at 62–65. The drift button
+128 kph from any entry and its arc widens, where the shipped car settles at 62–65. The handbrake
 disarms traction control, so a slide never sees it — `ride` and `hold` hold their peak and
 `longest` at every value, and only the exit after the re-arm moves. Swept 0–0.9 on `corner` at 42 /
 63 / 86 / 105 / 125 kph (`Q153` holds the table): 0.5 settles near 90 kph and pulls away from

@@ -2,7 +2,7 @@ class_name AntiLockBrakesProfile
 extends Resource
 ## ABS's numbers (`Q155`): a real car's anti-lock brakes, which release a
 ## wheel's brake as it starts to lock so the tyre stays near its peak and the
-## front wheels can still steer. The foot brake only; the drift button's
+## front wheels can still steer. The foot brake only; the handbrake's
 ## handbrake is never released. Read by `TyreVehicleController`; why the value
 ## is what it is lives in `tuning/systems/anti_lock_brakes.md`. No defaults
 ## (`Q119`): zero is the system off.

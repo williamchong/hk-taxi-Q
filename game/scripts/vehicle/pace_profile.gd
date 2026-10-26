@@ -20,7 +20,7 @@ extends Resource
 ##                       viscous term, the tyre's low-speed floor, every
 ##                       speed a system or an aid is keyed on, and the
 ##                       systems' own clocks (drift mode's re-arm, the catch
-##                       limiter, the drift button's ramp)
+##                       limiter, the handbrake's ramp)
 ##   × `pace_scale^1.5`  the engine's power (a force times a speed)
 ##   unchanged           mass, the tyre, air drag (it goes with speed squared
 ##                       by itself), every angle — and the PLAYER: the

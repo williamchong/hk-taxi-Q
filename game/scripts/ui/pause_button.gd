@@ -9,7 +9,7 @@ extends Button
 ## pointer is on them, as the menu's choices are.
 ##
 ## ⚠️ **`FOCUS_NONE`, and that is load-bearing.** A focused button takes
-## `ui_accept`, and Space is the drift: a pause that held the focus would open
+## `ui_accept`, and Space is the handbrake: a pause that held the focus would open
 ## on the first slide.
 
 ## Each bar's width, and the gap between them, as a share of the side.

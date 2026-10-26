@@ -27,7 +27,7 @@ extends "res://tools/verify_tool.gd"
 ## counter reading 0 because 0 is unreachable certifies whichever state the code
 ## produces — so the override is tested from **both** sides (the keyboard drives
 ## when no finger is down, and loses when one is), a finger outside every zone is
-## asserted to move nothing, and the deferred `drift` is asserted *absent* while
+## asserted to move nothing, and the deferred `handbrake` is asserted *absent* while
 ## the axis it will one day live on is being driven.
 ##
 ## 🔴 **This tool CAN print `verify_input: ok` having checked nothing**, exactly
@@ -401,10 +401,10 @@ func _check_override() -> void:
 # -------------------------------------------------------------- deferred ----
 
 
-## `drift` and `look_back` have no touch home, and this is what says so out loud.
+## `handbrake` and `look_back` have no touch home, and this is what says so out loud.
 ##
-## ⚠️ **Asserted absent while the axis the drift will live on is being driven.**
-## `Q83` puts the drift on thumb 2's vertical offset past a threshold with
+## ⚠️ **Asserted absent while the axis the handbrake will live on is being driven.**
+## `Q83` puts the handbrake on thumb 2's vertical offset past a threshold with
 ## hysteresis, and `Q97` defers it because the two numbers need a handset. Until
 ## then that axis is read and discarded — so a change that wires it up without
 ## the threshold fails here rather than shipping a car that slides whenever the
@@ -414,9 +414,9 @@ func _check_deferred() -> void:
 	_press(FINGER_A, home)
 	_move(FINGER_A, home + Vector2(0.0, -_zone("SteerZone").size.y * 0.5))
 	_expect(
-		not bool(_router.drift),
+		not bool(_router.handbrake),
 		"deferred",
-		"a vertical offset on the steering thumb does not drift yet"
+		"a vertical offset on the steering thumb does not pull the handbrake yet"
 	)
 	_expect(not bool(_router.look_back), "deferred", "no touch gesture looks back yet")
 	_lift(FINGER_A, home)

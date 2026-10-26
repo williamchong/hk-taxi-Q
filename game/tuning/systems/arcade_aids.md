@@ -50,7 +50,7 @@ user's second street drive ("sometimes the rear feels too spinny"), with the fad
 The flick (`P3-54`, `Q153`), read by `FlickWatch`: the steering held past `flick_input_share` to
 one side for `flick_feint_s` with the throttle under that share or the brake touched at some point
 of it, then past the share on the other side within `flick_window_s` of leaving the first, at
-`flick_min_kph` or faster. On that tick traction control stands down as the drift button's press
+`flick_min_kph` or faster. On that tick traction control stands down as the handbrake's press
 does, and comes back the same ways (the steering let go, or `traction_rearm_s` and the slip under
 the bar); it never fires while traction control is already off. `flick_window_s` 0 is no flick.
 

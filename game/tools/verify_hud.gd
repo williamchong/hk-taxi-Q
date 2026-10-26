@@ -159,7 +159,7 @@ func _check_layout() -> void:
 		return
 
 	# The shipped layout must be clean. This is the assertion that fails the day
-	# someone nudges the speed readout into the drift button.
+	# someone nudges the speed readout into the handbrake.
 	var collisions: PackedStringArray = layout.collisions()
 	if collisions.size() > 0:
 		_fail("layout", "HUD sits under a thumb: %s" % ", ".join(collisions))

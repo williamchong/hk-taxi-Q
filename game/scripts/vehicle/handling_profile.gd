@@ -47,7 +47,7 @@ const PATH: String = "res://tuning/handling.tres"
 ## same reason — the car should answer the input immediately and let go slowly.
 ## Do not collapse the two into one number to "restore consistency".
 ##
-## ⚠️ **`InputRouter.drift` stays a bool and this duration lives here** (Q83): the
+## ⚠️ **`InputRouter.handbrake` stays a bool and this duration lives here** (Q83): the
 ## router is the single source of player *intent* and the intent is binary. A ramp
 ## there would report held while nothing is held and lie about the button.
 @export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float

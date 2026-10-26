@@ -18,7 +18,7 @@ extends VehicleController
 ##   1. Each wheel carries its own spin, integrated in `TyreProfile.substeps`
 ##      steps a tick, semi-implicitly so a light wheel on a stiff curve is
 ##      stable at 60 Hz. Drive torque on the traction wheels, brake torque on
-##      all four, the drift button's handbrake on the rear.
+##      all four, the handbrake on the rear.
 ##   2. Forward slip and sideways slip angle, each over its own peak, combine
 ##      into one slip whose force comes off a Pacejka-shaped curve scaled by
 ##      the wheel's load — a friction ellipse in slip space, so a spinning or
@@ -93,7 +93,7 @@ var _engine_angle: PackedFloat32Array = PackedFloat32Array()
 var _visuals: Array[Node3D] = []
 var _drift_mode: DriftMode = DriftMode.new()
 var _catch: CatchLimiter = CatchLimiter.new()
-## The rear side cut, latched at the drift button's press. Latched, not
+## The rear side cut, latched at the handbrake's press. Latched, not
 ## tracked: a slide sheds speed, and a cut that deepened as it did would feed
 ## itself (`Q89`).
 var _side_cut: float = 0.0
@@ -339,7 +339,7 @@ func _apply_drive() -> void:
 	brake = 0.0
 
 
-## The drift button is a handbrake here: the parent's ramp still runs, because
+## The handbrake locks the rears in the tyres: the parent's ramp still runs, because
 ## the rear side cut reads it, and the tyres come last so they see this tick's
 ## pedals.
 func _apply_drift(delta: float) -> void:
@@ -375,7 +375,7 @@ func _apply_tyres(delta: float) -> void:
 	var share: float = mass / float(_wheels.size())
 	var rim_limit_mps: float = top_speed_kph() / 3.6 * (1.0 + rev_limiter.overspeed_share)
 	var pressed: bool = _drift_mode.step(
-		drift_input,
+		handbrake_input,
 		steer_input,
 		throttle_input,
 		brake_input,
@@ -429,7 +429,7 @@ func _apply_tyres(delta: float) -> void:
 		# What ABS never releases: the handbrake, and stability control's own
 		# brake on the one wheel it picks.
 		var hand_nm: float = 0.0
-		if drift_input and not on_front:
+		if handbrake_input and not on_front:
 			hand_nm = hand_lock_nm
 		elif yaw_brake_nm > 0.0 and on_front and (_hardpoints[i].x < 0.0) == yaw_brake_left:
 			hand_nm = yaw_brake_nm

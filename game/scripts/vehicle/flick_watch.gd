@@ -3,7 +3,7 @@ extends RefCounted
 ## The flick as numbers (`P3-54`, `Q153`): which tick a Scandinavian flick
 ## lands on, read off the player's own inputs — an arcade aid
 ## (`ArcadeAidsProfile`). `DriftMode` asks it every tick and, on the tick it
-## answers true, engages as the drift button's press does — the lever the pad
+## answers true, engages as the handbrake's press does — the lever the pad
 ## found holding the rear (`Q153`'s step 2), and the one a plain corner never reaches, because a plain
 ## corner never reverses the steering.
 ##

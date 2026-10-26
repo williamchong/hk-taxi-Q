@@ -168,7 +168,7 @@ here. See `.claude/rules/handling.md`.
 | Property | Target feel |
 |---|---|
 | Grip | High, forgiving. No spin-outs from small errors. ⚠️ Braking through a corner costs no cornering grip and a power-on corner accelerates — `Q49`'s one-budget coupling is lost |
-| Drift | Button-initiated, easy to hold, scrubs little speed. Partly met — see below |
+| Drift | Started with the handbrake (`Space`, `Q170`), held by the throttle and the countersteer. A real handbrake scrubs speed, so a drift buys line, never pace — see below |
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |
@@ -177,7 +177,7 @@ here. See `.claude/rules/handling.md`.
 
 ### The drift as shipped
 
-Since 2026-10-03 the game's car is the tyre car (`Q152`), and its drift is `Q153`'s: the button
+Since 2026-10-03 the game's car is the tyre car (`Q152`), and its drift is `Q153`'s: the handbrake
 breaks the tail, the throttle and the countersteer hold it, traction control comes back when the
 steering is let go. `tyre.md` holds its tables. The list below describes the car before it —
 `taxi.tscn` on the engine's tyres, kept as the skidpad's control — and none of its numbers are the
@@ -209,7 +209,7 @@ game's any more.
   car's everyday cornering changed. Owed: the speed skill's bar and the wall tiers, read off the
   old car's pace (`Q152`), and the model's cost on a handset.
 
-⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. Drift and
+⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. The handbrake and
 `look_back` stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.
 
 Driving against a one-way raises a blinking NO ENTRY disc (`Q81`, `P3-25`): raised by the car's

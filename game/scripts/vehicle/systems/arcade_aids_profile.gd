@@ -8,7 +8,7 @@ extends Resource
 ## is what it is lives in `tuning/systems/arcade_aids.md`. No defaults
 ## (`Q119`): a zero is that aid off.
 
-## Share of the rear tyres' sideways force taken away while the drift button
+## Share of the rear tyres' sideways force taken away while the handbrake
 ## is engaged, on the handling table's attack and release ramp: 0 leaves the
 ## handbrake alone. A locked rear still holds a city-speed turn, so the
 ## handbrake alone starts the slide after the corner is over (`Q153`).
@@ -22,7 +22,7 @@ extends Resource
 @export_range(0.0, 200.0, 1.0, "suffix:kph") var drift_side_cut_to_kph: float
 ## The flick (`P3-54`, `Q153`): seconds the steering may spend between the
 ## feint's side and the other before the reversal stops counting as one. 0 is
-## no flick — only the drift button engages drift mode. See `FlickWatch`.
+## no flick — only the handbrake engages drift mode. See `FlickWatch`.
 @export_range(0.0, 2.0, 0.01, "suffix:s") var flick_window_s: float
 ## The flick: seconds the steering must be held to the feint's side first.
 @export_range(0.0, 2.0, 0.01, "suffix:s") var flick_feint_s: float

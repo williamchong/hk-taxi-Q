@@ -5,7 +5,7 @@ the file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-The drift button's handbrake: a torque on each rear wheel, as a real car's.
+The handbrake (Space): a torque on each rear wheel, as a real car's.
 
 ⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
 2026-10-05); their prose keeps the names the dials had when it was written: `handbrake_torque_nm` → `torque_nm` → `lock_ratio` (`Q156`).

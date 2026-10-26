@@ -19,7 +19,7 @@ extends VehicleBody3D
 ##   1. Steering rate-limiting, and the speed-dependent lock it ramps toward.
 ##   2. The top-speed taper — Godot has no speed limiter.
 ##   3. Coast drag and rolling resistance — Godot has no engine braking.
-##   4. The drift button's ramp, which the tyre model's side cut reads.
+##   4. The handbrake's ramp, which the tyre model's side cut reads.
 ##   5. Arcade collision response, in _integrate_forces.
 ##   6. Auto-righting.
 ##
@@ -141,9 +141,9 @@ var _world_gravity_mps2: float = 0.0
 ## indicator on the wrong side of the car, which looks like a working feature.
 var steer_ratio: float = 0.0
 var _upside_down_for: float = 0.0
-## How far the drift button's ramp has engaged, 0 off to 1 fully in.
+## How far the handbrake's ramp has engaged, 0 off to 1 fully in.
 ##
-## Private, and there is no public mirror. `drift_input` is the player's intent
+## Private, and there is no public mirror. `handbrake_input` is the player's intent
 ## and this is the car's answer to it; a HUD or lamp wanting to show "drifting"
 ## wants the intent, which is already published. ⚠️ It is deliberately **not** in
 ## `InputRouter` — see `drift_release_s` in handling_profile.gd for why, kept in
@@ -169,7 +169,7 @@ var brake_input: float = 0.0
 ## handbrake, and the alternative was four duck-typed reads a tick — `InputRouter`
 ## has no `class_name`, so those cannot compile to a validated getter the way the
 ## typed `profile` reads do.
-var drift_input: bool = false
+var handbrake_input: bool = false
 ## The steering axis, sampled once per tick for the same reasons, -1 left to +1
 ## right. `steer_ratio` above is the answer; this is the ask.
 var steer_input: float = 0.0
@@ -354,12 +354,12 @@ func _physics_process(delta: float) -> void:
 		steer_input = 0.0
 		throttle_input = 0.0
 		brake_input = 0.0
-		drift_input = false
+		handbrake_input = false
 	elif _input != null:
 		steer_input = _input.steer
 		throttle_input = _input.accelerate
 		brake_input = _input.brake_reverse
-		drift_input = _input.drift
+		handbrake_input = _input.handbrake
 
 	_update_steering(delta)
 	_apply_drive()
@@ -574,12 +574,14 @@ func _apply_coast_drag(delta: float) -> void:
 	apply_central_force(forward * -mass * clampf(decel, -decel_to_rest, decel_to_rest))
 
 
-## The drift button's ramp, rate-limited rather than switched on
+## The handbrake's ramp, rate-limited rather than switched on
 ## `_update_steering`'s idiom: fast to answer, slow to let go. The tyre model
 ## (`TyreVehicleController`) reads the engagement for its rear side cut.
 func _apply_drift(delta: float) -> void:
-	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
-	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
+	var seconds: float = profile.drift_attack_s if handbrake_input else profile.drift_release_s
+	_drift_engagement = move_toward(
+		_drift_engagement, 1.0 if handbrake_input else 0.0, delta / seconds
+	)
 
 
 ## True while any wheel is on the ground.
@@ -659,7 +661,7 @@ func place_at(pose: Transform3D) -> void:
 	steer_ratio = 0.0
 	_drift_engagement = 0.0
 	_upside_down_for = 0.0
-	drift_input = false
+	handbrake_input = false
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but

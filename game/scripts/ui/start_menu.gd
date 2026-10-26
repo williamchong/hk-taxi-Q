@@ -520,7 +520,7 @@ func _on_end() -> void:
 ## Off the screen, deaf and freed, before the signal that hands the run back.
 func _leave() -> void:
 	# Released first: a `ui_accept` still held would land on whatever took the
-	# focus next, and Space is also the drift.
+	# focus next, and Space is also the handbrake.
 	get_viewport().gui_release_focus()
 	set_process_unhandled_input(false)
 	visible = false

@@ -123,7 +123,7 @@ is drawn in the frame:
 ```
 
 Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
-`steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.
+`steer_left`, `steer_right`, `handbrake`, `look_back`. An unknown one fails rather than doing nothing.
 
 ⚠️ **`--touch=mouse` is one finger, so it cannot press two thumbs.** Hold the left button in the
 lower-left of the window and drag sideways to steer; hold it in the lower-right and drag up or down
@@ -168,7 +168,7 @@ A drift through the junction east of HKCEC — the taxi ends up facing back the 
 
 ```bash
 .claude/skills/run-hk-taxi-q/drive.sh --seconds=6 --shots=4.2 \
-  --hold=accelerate@0.3+5.7 --hold=steer_right@3.0+1.5 --hold=drift@3.0+1.5 \
+  --hold=accelerate@0.3+5.7 --hold=steer_right@3.0+1.5 --hold=handbrake@3.0+1.5 \
   --out=build/driver/drift
 ```
 

@@ -2,12 +2,12 @@ class_name DriftModeProfile
 extends Resource
 ## Drift mode's numbers (`Q155`): the switch that stands traction control and
 ## stability control's understeer cut down for a slide the player asked for —
-## the drift button, or a flick (`ArcadeAidsProfile`) — and brings them back
+## the handbrake, or a flick (`ArcadeAidsProfile`) — and brings them back
 ## when it is over, as a real car's drift mode does by the driver's hand. Read
 ## by `DriftMode`; why each value is what it is lives in
 ## `tuning/systems/drift_mode.md`. No defaults (`Q119`).
 
-## How long the systems stay off after the drift button comes up, at least;
+## How long the systems stay off after the handbrake comes up, at least;
 ## after that they re-arm once the car's slip is back under
 ## `HandlingProfile.drift_slip_threshold_deg`, the bar the game scores a slide
 ## on. 0 re-arms on the slip alone.

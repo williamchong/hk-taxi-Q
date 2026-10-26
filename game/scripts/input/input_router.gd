@@ -16,7 +16,7 @@ extends Node
 ##
 ## **Touch is two relative thumbs, and three of five actions** (`Q83`, `Q97`).
 ## The left zone steers; the right zone is one bipolar longitudinal axis,
-## `accelerate` above the touch origin and `brake_reverse` below. `drift` and
+## `accelerate` above the touch origin and `brake_reverse` below. `handbrake` and
 ## `look_back` have no touch home yet, and the note above `TOUCH_ARG` says why.
 
 ## Steering, -1.0 (full left) to 1.0 (full right).
@@ -25,7 +25,7 @@ var steer: float = 0.0
 var accelerate: float = 0.0
 ## Brake / reverse, 0.0 to 1.0.
 var brake_reverse: float = 0.0
-var drift: bool = false
+var handbrake: bool = false
 var look_back: bool = false
 
 ## Forces full throttle whenever the brake is released. ⚠️ **No longer the touch
@@ -38,14 +38,14 @@ var look_back: bool = false
 var auto_accelerate: bool = false
 
 # ⬜ **What touch still does not carry, and why it is a comment rather than a
-# broken control.** `drift` is settled as a held vertical offset on thumb 2
+# broken control.** `handbrake` is settled as a held vertical offset on thumb 2
 # past a threshold with hysteresis (`Q83`), and the threshold and hysteresis
 # are numbers `Q83` says no desk can pick — `P2-4`'s review is blocked on
 # `P0-3b` for the handset. `look_back` has never been placed at all; thumb 1's
 # horizontal axis is the standing candidate.
 #
 # 🔴 **Thumb 2's vertical axis is therefore READ AND DISCARDED, deliberately.**
-# The drift lives there and nothing else may be put on it — a second control
+# The handbrake lives there and nothing else may be put on it — a second control
 # borrowing the axis now is a control that has to be taken away again, in the
 # one part of the scheme a player learns by muscle memory.
 # (A comment and not a constant: nothing would read it, and an unread array
@@ -327,5 +327,5 @@ func _physics_process(_delta: float) -> void:
 
 	# Held state, not `is_action_just_pressed`, which the engine documents as
 	# unreliable in `_physics_process`; the controller ramps from the bool (Q83).
-	drift = Input.is_action_pressed(&"drift")
+	handbrake = Input.is_action_pressed(&"handbrake")
 	look_back = Input.is_action_pressed(&"look_back")

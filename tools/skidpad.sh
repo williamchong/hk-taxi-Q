@@ -29,7 +29,7 @@
 #                                    `came out` the heading it settled on.
 #                                    liftoff is
 #                                    corner with the throttle lifted at 1 s and
-#                                    no drift button, printed beside corner in
+#                                    no handbrake, printed beside corner in
 #                                    windows around the lift (speed, yaw rate,
 #                                    radius, front wheels, slip): a radius that
 #                                    falls on liftoff and not on corner is a

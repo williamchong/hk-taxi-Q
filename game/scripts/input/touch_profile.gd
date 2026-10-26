@@ -22,8 +22,8 @@ extends Resource
 ## reasoned about as physical millimetres on a particular panel is wrong on
 ## every other panel.
 ##
-## ⬜ **The drift threshold and its hysteresis belong here and are not
-## declared.** `Q83` settles that the drift is a held offset on thumb 2 with a
+## ⬜ **The handbrake threshold and its hysteresis belong here and are not
+## declared.** `Q83` settles that the handbrake is a held offset on thumb 2 with a
 ## larger distance to enter than to leave, and `Q97` defers building it. The
 ## file is the place they land; leaving them undeclared rather than guessed
 ## keeps `Q83`'s "no desk can pick them" honest, and an unread export would read

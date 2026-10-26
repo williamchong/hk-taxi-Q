@@ -18,7 +18,7 @@ extends RefCounted
 
 ## True while the systems stand down for the player's slide.
 var engaged: bool = false
-## Seconds since the drift button came up while engaged.
+## Seconds since the handbrake came up while engaged.
 var _released_s: float = 0.0
 ## Whether the player has steered since the press, so letting the steering go
 ## can end the slide whichever of the two was pressed first.
@@ -39,7 +39,7 @@ func reset() -> void:
 ## tick a drift press starts a slide — where the rear side cut is latched
 ## (`ArcadeAidsProfile.drift_side_cut`) — and false on every other.
 func step(
-	drift_input: bool,
+	handbrake_input: bool,
 	steer: float,
 	throttle: float,
 	brake: float,
@@ -52,7 +52,7 @@ func step(
 	aids: ArcadeAidsProfile,
 ) -> bool:
 	var flicked: bool = _flick.step(steer, throttle, brake, kph, delta, aids)
-	if drift_input:
+	if handbrake_input:
 		var pressed: bool = not engaged or _released_s > 0.0
 		if pressed:
 			_slide_steered = false
