@@ -315,9 +315,10 @@ hk-taxi-Q/
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
 │   │   ├── lamps.py             # lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
 │   │   ├── parked.py            # the parked roster → parked_placements.json over the authored library (P3-71)
+│   │   ├── trees.py             # HyD's + LCSD's tree inventories → trees.glb + trees_placements.json (P3-77)
 │   │   ├── placements.py        # a prop library's stands: entry shape, pitch, totals, writer
 │   │   ├── export.py            # → city.json; assembles and validates the stage outputs
-│   │   └── __main__.py          # `python -m pipeline` — 20 stages, in order
+│   │   └── __main__.py          # `python -m pipeline` — 23 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
 │   ├── out/<region>/            # pipeline output — GITIGNORED
 │   └── tests/
@@ -417,6 +418,8 @@ The interface between ETL and game. **Versioned — change both sides together a
   "roadmarks": "roadmarks.glb",
   "water": "water.glb",
   "parked_placements": "parked_placements.json",
+  "trees": "trees.glb",
+  "trees_placements": "trees_placements.json",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "basemap": "basemap.json",
@@ -433,7 +436,8 @@ Keys (`etl/pipeline/export.py`):
   `barriers` list means nothing to close, a missing file means the stage never ran.
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
-  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`. Null
+  `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`,
+  `trees`, `trees_placements` (schema 39, `P3-77`). Null
   where the estate publishes no such layer, **or** where every feature failed the join — a stage
   names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
   placements document whose library is NOT in the bundle: it stands the committed
@@ -859,6 +863,25 @@ collider** (a stop line would be a step at every junction). `POSITION` and `NORM
   of a dual carriageway (`Q125`).
 - The import-lattice constraint, winding and reporting follow `boxjunctions.glb` and `arrows.glb`.
 
+### `trees.glb` — the published trees (`P3-77`, `Q171`)
+
+HyD's Tree and LCSD's Trees (LCSD Venues other than Major Parks), both `paged_sources`, inside the
+region's rectangle; a tree both publish within `merge_m` keeps LCSD's record, which names the
+species. A library of one mesh per kind (`broadleaf`, `palm`, `fan_palm`, `conifer`; the kind is
+the scientific name's genus, HyD's are all the default), drawn at the kind's `height_m` and stood
+with a uniform `scale` to the tree's own height: HyD's off `DBH` × `height_per_dbh_m`, clamped, and
+LCSD's the kind's, jittered on a seed of the tree's id. Refused, never pushed: inside the level-0
+carriageway region plus `kerb_clear_m`, over no ground the tiles draw, or under a deck or roof
+lower than the treetop. `trees.json` grades it; `min_kerb_clearance_m` is the invariant.
+
+| | |
+|---|---|
+| Primitives | one per library mesh — four |
+| Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no UVs, no texture |
+| `COLOR_0` | `materials:` — `tree_bark` and each kind's `crown_material` (`Q33`) |
+| Material name | `trees` → `res://tuning/trees.tres`, on `vertex_albedo.gdshader` |
+| Collider | none in the `.glb`. `trees_placements.json` carries a `trunks` table (each kind's radius and bare-trunk height), and `layer_preview` stands a `CylinderShape3D` per tree in one `StaticBody3D` per kind and prop cell — a tree is a crash, the crown is not (`Q171`) |
+
 ### `lamps.glb` — the published lamp posts (`P3-26`, `Q82`, `P5-3`)
 
 A 9 m hexagonal column `outset_m` outside the drawn carriageway edge, a bracket arm `arm_reach_m`
@@ -1202,6 +1225,7 @@ city_space = region_local + city_offset
 | `water.glb` | The harbour: the basemap's sea as one flat mesh at mean sea level, the ground beneath it sunk to the seabed by the tile stage. One primitive, no collider, no shadow | ✅ `P3-45` |
 | `signs.glb` + `signs_placements.json` | Traffic signs on the poles TD surveyed. Shape-faced signs only. Library of one mesh per face variant plus a unit pole; one placement per plate, lettering quad and pole (`scale` on the pole). No collider | ✅ `P3-16`, `P5-2` |
 | `lamps.glb` + `lamps_placements.json` | Lamp posts on the drawn kerb with a bracket arm over the carriageway; `rot_y_deg` is the arm's bearing. Unlit (`Q38`, `Q26`). Library of one mesh per drawn kind. No collider | ✅ `P3-26`, `P5-3` |
+| `trees.glb` + `trees_placements.json` | The trees HyD and LCSD survey, and nothing where neither does: Victoria Park and the roadside are bare (`Q171`). Four library meshes, a `MultiMesh` per kind per prop cell, a trunk collider per tree in a body per kind and cell. Unlit | ✅ `P3-77` |
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |
 | `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes; a reach table at load (every destination prepared once), a hail drawn from it, `route` at 5 Hz; the allowance `max(kind floor, legal route / par)`; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
 | `FareMeter` | TD's tariff in `scripts/core/`: flagfall, then a unit per 200 m or per minute past it, in cents, charged as the unit begins (`tuning/tariff.tres`, cited in `tariff.md`) | ✅ `P3-1a` |

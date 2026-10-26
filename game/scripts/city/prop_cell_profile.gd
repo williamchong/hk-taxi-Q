@@ -23,3 +23,10 @@ const PATH: String = "res://tuning/prop_cells.tres"
 @export_range(0.0, 2000.0, 5.0, "suffix:m") var range_m: float
 ## The engine's `visibility_range_end_margin`: the hysteresis about `range_m`.
 @export_range(0.0, 100.0, 1.0, "suffix:m") var range_margin_m: float
+
+
+## The plan cell `at` falls in. The one formula the draw batches, the trees'
+## trunk bodies and `verify_trees.gd` share, so the bodies cannot drift off the
+## cells the meshes are drawn in.
+func cell_of(at: Vector3) -> Vector2i:
+	return Vector2i(floori(at.x / cell_m), floori(at.z / cell_m))

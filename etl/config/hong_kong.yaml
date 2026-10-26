@@ -365,6 +365,31 @@ materials:
     source: "mown turf, luminous reflectance; green leaves 5-15% in the visible"
     bounds: [5, 15]
 
+  # The trees (`P3-77`, `Q171`). Canopies sit at the dark end of the leaf
+  # range, under the turf: a crown is leaves in their own shade. Palm fronds
+  # are the yellower, lighter green; a conifer the darkest. ART_DESIGN's
+  # "deep saturated green" is the brief.
+  tree_foliage:
+    colour: "#2e511f"
+    reflectance: 6.6
+    source: "broadleaf evergreen canopy, luminous; green leaves 5-15% in the visible"
+    bounds: [5, 15]
+  palm_frond:
+    colour: "#415d1f"
+    reflectance: 9.0
+    source: "palm fronds, luminous; green leaves 5-15% in the visible"
+    bounds: [5, 15]
+  conifer_foliage:
+    colour: "#254728"
+    reflectance: 5.0
+    source: "conifer needles, luminous; dark needle foliage 4-10% in the visible"
+    bounds: [4, 10]
+  tree_bark:
+    colour: "#725d4b"
+    reflectance: 11.9
+    source: "tree bark, luminous; 5-20% in the visible across species"
+    bounds: [5, 20]
+
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -575,6 +600,27 @@ paged_sources:
     # 🔴 Load-bearing: `pyogrio` names a GeoJSON layer after the filename stem,
     # so this is what `carriageway_survey.edges[].layer` has to spell.
     filename: INV_PG.geojson
+
+  # The two tree inventories (`P3-77`, `Q171`), on `pavement_polygon`'s terms
+  # exactly: whole territory, `outSR=2326`, a stable sort, the clip at read
+  # time out of this file. HyD's Tree is 351,868 points (118 pages) and LCSD's
+  # venue trees 99,420 (34), read 2026-10-27; `outFields` is only what
+  # `trees.publishers` names, so a page is the point and two columns.
+  # ⚠️ HyD's `SPECIES_NAME` is null on every tree in both regions, so it is not
+  # asked for; its `DBH` (mm) is the one size either publisher gives.
+  tree_hyd:
+    url: "https://portal.csdi.gov.hk/server/rest/services/common/hyd_rcd_1632210213867_60179/MapServer/0/query?where=1%3D1&outFields=TREE_ID%2CDBH&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
+    page_size: 3000
+    max_pages: 200
+    filename: VIS_INV_TREE.geojson
+  # ⚠️ "Other than Major Parks": Victoria Park's trees are in no published
+  # layer, and the park stays bare (`Q171`). `OBJECTID` is asked for because
+  # it is the only identity a tree has here; the jitter is seeded on it.
+  tree_lcsd:
+    url: "https://portal.csdi.gov.hk/server/rest/services/common/lcsd_rcd_1760154188966_59086/MapServer/0/query?where=1%3D1&outFields=OBJECTID%2CScientific_Name&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
+    page_size: 3000
+    max_pages: 60
+    filename: LCSD_TREES.geojson
 
 tiled_sources:
   buildings:
@@ -3055,6 +3101,104 @@ lamps:
   # 5 neighbour gaps over 40 m; drawn, it has 16. A widening change moves that
   # number and nothing else would show it.
   gap_report_m: 40.0
+
+# The trees (`P3-77`, `Q171`): two published per-tree inventories, each a point
+# and an identity, stood as a library of four kinds by `pipeline/trees.py`.
+# 🔴 **Only where one is surveyed** (the user's call): no fill, so Victoria
+# Park (excluded from LCSD's layer) and the streets (no roadside inventory is
+# published) stay bare. ⚠️ **Neither publisher gives a height or a crown**:
+# every size below is authored, and a HyD tree's height off its `DBH` is an
+# authored ratio, not an allometry anyone measured here.
+trees:
+  # In precedence order: a tree both publish within `merge_m` keeps the first
+  # one's record. LCSD first, because it names the species.
+  publishers:
+    - id: lcsd
+      source: tree_lcsd
+      layer: LCSD_TREES
+      fields:
+        id: OBJECTID
+        species: Scientific_Name
+    - id: hyd
+      source: tree_hyd
+      layer: VIS_INV_TREE
+      fields:
+        id: TREE_ID
+        dbh_mm: DBH
+
+  # A species' kind by its genus, the first word of the scientific name. Every
+  # genus not listed — and every HyD tree, which names none — is
+  # `default_kind`. Read off the 93 genera LCSD publishes in the two regions,
+  # 2026-10-27.
+  default_kind: broadleaf
+  genera:
+    palm: [Archontophoenix, Phoenix, Roystonea, Wodyetia, Hyophorbe, Caryota, Ravenea, Syagrus, Neodypsis, Areca, Dypsis, Cocos]
+    fan_palm: [Livistona, Washingtonia, Trachycarpus, Ravenala, Bismarckia]
+    conifer: [Juniperus, Araucaria, Podocarpus, Casuarina, Nageia, Platycladus, Pinus, Cupressus]
+
+  # The library: one mesh per kind, drawn at `height_m` and stood scaled to
+  # each tree's height. `form` picks the drawing — a faceted crown on a trunk,
+  # a feather palm's drooping fronds, a fan palm's round head, a stacked cone.
+  # `crown_base` is where the leaves start, as a share of the height.
+  # ⚠️ **The trunk is the collider** (a tree is a crash, `Q171`): the engine
+  # stands a cylinder of `trunk_radius_m` and the crown's base height under
+  # every tree, scaled with it, and nothing for the crown.
+  kinds:
+    broadleaf:
+      form: crown
+      height_m: 8.0
+      trunk_radius_m: 0.18
+      crown_base: 0.35
+      crown_radius_m: 2.8
+      crown_material: tree_foliage
+    palm:
+      form: palm
+      height_m: 9.0
+      trunk_radius_m: 0.16
+      crown_base: 0.86
+      crown_radius_m: 2.6
+      crown_material: palm_frond
+    fan_palm:
+      form: fan
+      height_m: 7.0
+      trunk_radius_m: 0.15
+      crown_base: 0.8
+      crown_radius_m: 1.8
+      crown_material: palm_frond
+    conifer:
+      form: cone
+      height_m: 7.0
+      trunk_radius_m: 0.14
+      crown_base: 0.15
+      crown_radius_m: 1.6
+      crown_material: conifer_foliage
+  bark_material: tree_bark
+  # Facets round a trunk and a crown. Six, `lamps.column_sides`' count: a
+  # broadleaf is ~70 triangles at six and the region carries ~1,300-2,600.
+  sides: 6
+
+  # A tree's height either side of its kind's, drawn by a seed on its identity
+  # so a rebuild stands the same tree. An LCSD tree's height is its kind's
+  # within this share.
+  height_jitter: 0.2
+  # A HyD tree's height off its trunk: `height_per_dbh_m` metres a millimetre
+  # of diameter, held between the two bars. ⚠️ Authored — 0.04 puts the
+  # region's p10/50/90 DBH (102 / 175 / 412 mm) at 4.1 / 7.0 / 14 m.
+  height_per_dbh_m: 0.04
+  min_height_m: 4.0
+  max_height_m: 14.0
+
+  # Two trees closer than this are one, the first publisher's.
+  merge_m: 0.5
+  # 🔴 **No trunk in the road**: a tree is refused whose trunk stands inside
+  # the level-0 carriageway (`carriageway_region.json`'s territories) or less
+  # than this outside its rail. Refused, never pushed — a published tree
+  # moved is a tree that is not where it was surveyed.
+  kerb_clear_m: 0.3
+  # A tree is refused where anything the bundle draws — a building, a podium,
+  # a deck — stands over its foot between this height and its own top: a tree
+  # inside a block, or in a podium garden the street below cannot hold.
+  overhead_clear_m: 2.5
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem

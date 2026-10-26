@@ -221,7 +221,10 @@ const NOT_MEASURED: float = -1.0
 ## stationary roster stood from an AUTHORED library (`parked.glb`, committed)
 ## — the first placements document whose library is not in the bundle. A v37
 ## reader would leave the document unlisted for `sync_generated.sh` to sweep.
-const SCHEMA_VERSION: int = 38
+##
+## 39 since `P3-77` (`Q171`): the manifest names `trees.glb` and
+## `trees_placements.json`, the published trees, on `lamps`' terms.
+const SCHEMA_VERSION: int = 39
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -463,6 +466,12 @@ var railings_placements_path: String
 ## `tramway_path`'s terms, and `ParkedLayer` says so rather than failing.
 var parked_placements_path: String
 
+## The published trees (`P3-77`, `Q171`): a library of kinds and the document
+## that stands it, with each kind's trunk collider. Empty where the city
+## declares no `trees:` block or stood none.
+var trees_path: String
+var trees_placements_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -628,6 +637,8 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.parked_placements_path = _resolve(
 		document.get("parked_placements"), manifest.directory
 	)
+	manifest.trees_path = _resolve(document.get("trees"), manifest.directory)
+	manifest.trees_placements_path = _resolve(document.get("trees_placements"), manifest.directory)
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -743,6 +754,8 @@ func shipped() -> PackedStringArray:
 		roadmarks_path,
 		water_path,
 		parked_placements_path,
+		trees_path,
+		trees_placements_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

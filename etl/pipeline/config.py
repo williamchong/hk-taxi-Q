@@ -276,6 +276,13 @@ from pipeline.config_blocks.tramway import (  # noqa: F401
     Tramway,
     _tramway,
 )
+from pipeline.config_blocks.trees import (  # noqa: F401
+    TREE_FORMS,
+    TreeKind,
+    TreePublisher,
+    Trees,
+    _trees,
+)
 from pipeline.crs import (
     GameTransform,
     GeodeticBounds,
@@ -429,6 +436,10 @@ class Config:
     # (`P3-71`, `Q161`). Optional on the same terms as the blocks above: a city
     # that declares no bays, stops or fill ships an empty street.
     parked: Parked | None = None
+    # The published trees, stood by `pipeline/trees.py` (`P3-77`, `Q171`).
+    # Optional on the same terms: absent, the region ships no trees, and there
+    # is no fill where neither inventory surveyed one.
+    trees: Trees | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -793,6 +804,7 @@ def load_config(path: Path | None = None) -> Config:
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         parked=_parked(document.get("parked"), f"{path}:parked"),
+        trees=_trees(document.get("trees"), f"{path}:trees", table),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -842,6 +854,9 @@ def load_config(path: Path | None = None) -> Config:
         _check_declared_source(city, city.road_marks, f"{path}:road_marks.source")
     if city.signs is not None:
         _check_declared_source(city, city.signs, f"{path}:signs.source")
+    if city.trees is not None:
+        for index, publisher in enumerate(city.trees.publishers):
+            _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
     _check_landmarks_lie_within_a_region(city, path)
     _check_carve_regions_are_declared(city, path)
     unread = _unread(reads)

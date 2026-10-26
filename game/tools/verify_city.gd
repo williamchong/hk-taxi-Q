@@ -232,6 +232,19 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.placements_path(GeneratedLayer.LAMPS)
 			)
 		)
+	# Guarded on the same terms (`P3-77`): a city with no `trees:` block names
+	# none, and `verify_trees.gd` treats an absent asset as a pass.
+	if not manifest.trees_path.is_empty():
+		problems.append_array(
+			_check_document("trees", manifest.trees_path, GeneratedLayer.path(GeneratedLayer.TREES))
+		)
+		problems.append_array(
+			_check_document(
+				"tree placements",
+				manifest.trees_placements_path,
+				GeneratedLayer.placements_path(GeneratedLayer.TREES)
+			)
+		)
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
 			_check_document(

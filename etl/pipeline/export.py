@@ -70,6 +70,7 @@ from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
+from pipeline.trees import TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -268,7 +269,10 @@ CITY_NAME = "city.json"
 # the first placements document whose library is not in the bundle. A v37
 # reader would ship the document unlisted and `sync_generated.sh` would sweep
 # it; being wrong about the contents of the bundle is what this number is for.
-CITY_SCHEMA = 38
+# 39 since `P3-77` (`Q171`): the manifest names `trees.glb` and
+# `trees_placements.json`, the published trees, on `lamps`' terms. A v38 reader
+# would ship both unlisted and `sync_generated.sh` would sweep them.
+CITY_SCHEMA = 39
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -320,6 +324,8 @@ OPTIONAL_ASSET_KEYS = (
     "roadmarks",
     "water",
     "parked_placements",
+    "trees",
+    "trees_placements",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -361,6 +367,7 @@ INPUTS: tuple[Input, ...] = (
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
     Input(PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA, "parked"),
+    Input(TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA, "trees"),
 )
 
 
@@ -443,6 +450,7 @@ def build_region(
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
     parked = documents[PARKED_MANIFEST_NAME]
+    trees = documents[TREES_MANIFEST_NAME]
     basemap = documents[BASEMAP_NAME]
 
     tiles = [
@@ -600,6 +608,10 @@ def build_region(
         # only the document ships. `null` where the city declares no `parked:`
         # block or placed nothing, on `tramway`'s terms.
         "parked_placements": parked["placements_document"],
+        # The published trees (`P3-77`, `Q171`), on `lamps`' terms: `null`
+        # where the city declares no `trees:` block or stood nothing.
+        "trees": trees["asset"],
+        "trees_placements": trees["placements_document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

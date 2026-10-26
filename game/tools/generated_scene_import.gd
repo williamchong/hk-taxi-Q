@@ -96,6 +96,10 @@ const SHADERS: Dictionary = {
 	# `BaseMaterial3D` draws the right blue at 0.9 roughness, matte and pale,
 	# which is why `verify_water.gd` checks the dispatch by `resource_path`.
 	"sea_water": "res://tuning/water.tres",
+	# The published trees (`P3-77`): `TREES_MATERIAL` in `etl/pipeline/trees.py`.
+	# `vertex_albedo.gdshader` on `water`'s terms, and its fallback is the same
+	# quiet one, which is why `verify_trees.gd` checks the dispatch by `resource_path`.
+	"trees": "res://tuning/trees.tres",
 }
 
 ## The one material in the bundle that arrives carrying an image (`P3-20`).

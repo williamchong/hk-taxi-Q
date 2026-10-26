@@ -206,11 +206,20 @@ class Library:
             )
 
     def write(
-        self, out_dir: Path, asset: str, placements_name: str, city_id: str, region_id: str
+        self,
+        out_dir: Path,
+        asset: str,
+        placements_name: str,
+        city_id: str,
+        region_id: str,
+        *,
+        extra: dict[str, Any] | None = None,
     ) -> int:
         """The library and its document, side by side; returns the `.glb`'s bytes."""
         written = write_glb(out_dir / asset, self.meshes)
-        write_placements(out_dir / placements_name, city_id, region_id, asset, self.stands)
+        write_placements(
+            out_dir / placements_name, city_id, region_id, asset, self.stands, extra=extra
+        )
         return written
 
 
@@ -292,16 +301,27 @@ def drawn_totals(
 
 
 def write_placements(
-    path: Path, city_id: str, region_id: str, library: str, stands: Sequence[Placement]
+    path: Path,
+    city_id: str,
+    region_id: str,
+    library: str,
+    stands: Sequence[Placement],
+    *,
+    extra: dict[str, Any] | None = None,
 ) -> int:
-    """The document, beside the library it stands."""
-    return write_document(
-        path,
-        {
-            "schema_version": PLACEMENTS_SCHEMA,
-            "city_id": city_id,
-            "region_id": region_id,
-            "library": library,
-            "placements": list(stands),
-        },
-    )
+    """The document, beside the library it stands.
+
+    `extra` is a layer's own top-level keys, beside the shared ones — the
+    trees' trunk colliders (`P3-77`). A reader that does not know a key ignores it.
+    """
+    document: dict[str, Any] = {
+        "schema_version": PLACEMENTS_SCHEMA,
+        "city_id": city_id,
+        "region_id": region_id,
+        "library": library,
+        "placements": list(stands),
+    }
+    clash = set(extra or {}) & set(document)
+    if clash:
+        raise ValueError(f"{path.name}: a layer's own keys {sorted(clash)} overwrite shared ones")
+    return write_document(path, {**document, **(extra or {})})

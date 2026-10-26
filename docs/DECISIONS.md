@@ -206,7 +206,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q164` | The menu's camera follows its page: a shot per page round the parked car, the passenger door open on PLAY | ✅ Built 2026-10-13 on the user's ask. Replaces `P6-1`'s one turntable for every page. The user's look owed. |
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 | `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
-| `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | 🟡 Decided 2026-10-27 on the user's calls; planned as `P3-77`. Reverses `Q144`'s "trees are not built". |
+| `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | ✅ Decided and built 2026-10-27 (`P3-77`): 1,061 + 2,375 trees, a trunk collider each. Reverses `Q144`'s "trees are not built". |
 
 ---
 
@@ -10380,8 +10380,8 @@ pays for, never the control's.
 ---
 ## `Q171` — Trees are built from the published inventories, and only where one is surveyed
 
-**Status.** 🟡 Decided 2026-10-27 on the user's calls; planned as `P3-77`. Reverses `Q144`'s "🚫
-Trees are not built".
+**Status.** ✅ Decided 2026-10-27 on the user's calls and built the same day as `P3-77`. Reverses
+`Q144`'s "🚫 Trees are not built".
 
 **Asked** by the user, 2026-10-27: "is there a open data for hong kong tree ids so that we can plant
 trees onto the scene", then "plan for trees in pipeline and rendering".
@@ -10420,5 +10420,39 @@ Authority's layers exist and were not downloaded; whether any adds a tree in reg
   parks.
 - A HyD tree is sized off its `DBH`; an LCSD tree, by its archetype's height range. Every size is an
   estimate the source does not publish, and the report says which way each was got.
+
+**Built** (`P3-77`, 2026-10-27), and where it parted from the plan:
+
+- **The library is the ETL's, not a committed `tools/make_trees.py`.** Four kinds drawn by
+  `pipeline/trees.py` from the `trees:` block — `broadleaf` (a faceted crown), `palm` (drooping
+  fronds), `fan_palm` (a round head), `conifer` (two stacked cones) — four draw calls a visible
+  cell, not six archetypes. Flowering and banyan stay `broadleaf`; a kind is the genus's.
+- **HyD's height is `DBH` × `height_per_dbh_m` (0.04 m/mm), clamped to 4–14 m** — an authored
+  ratio, not a cited allometric curve, because no curve for Hong Kong's street species was found.
+  Causeway Bay's p90 sits on the 14 m clamp.
+- **Three refusals**, all counted: `in_carriageway` (the level-0 carriageway region plus
+  `kerb_clear_m` 0.3 m), `no_ground` (no tile face wearing the paving or park colour under the
+  trunk) and `under_structure` (a deck or roof between `overhead_clear_m` and the treetop). The
+  planned crossing / box / fare-ring / spawn refusals were not built: the carriageway refusal
+  already clears all four, which lie on the carriageway.
+- **The clip is the region's rectangle** (`region_high`), every stage's, not `bounds_game`.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| read (LCSD + HyD) | 1,136 (1,135 + 1) | 2,458 (287 + 2,171) |
+| merged / in carriageway / no ground / under structure | 13 / 35 / 16 / 11 | 45 / 4 / 6 / 28 |
+| drawn | 1,061 | 2,375 |
+| broadleaf / palm / fan palm / conifer | 662 / 246 / 141 / 12 | 2,245 / 84 / 20 / 26 |
+| height p50 / p90 | 8.04 / 9.50 m | 7.28 / 14.0 m |
+| `min_kerb_clearance_m` | 0.3562 | 0.5006 |
+| triangles placed | 58,144 | 132,040 |
+
+`facing_away` 0. The refusal is mutation-checked: deleted, Wan Chai stands 35 more and the minimum
+falls to 0.0. The trunk is a `CylinderShape3D` per tree, scaled with it, in one `StaticBody3D` per
+kind and 300 m prop cell (34 bodies for Wan Chai's 1,061), because Jolt's `max_bodies` is 10,240
+and the railings hold 7,693. The cost, read with `--hide-layers=trees`: +4 draws / +10k prims on
+the throttle route, +9 to +13 / +24k to +59k from `wan_chai/f_045`, positions identical. The web PCK grows
++869,616 B (+0.97%), exported with and without both regions' tree files. The bundle is schema 39. Unlit at night: the crowns go dark under the city-wide outline, which draws the palms'
+fronds near-white — a look for the user to judge.
 
 **See.** `Q144` · `Q159` · `Q160` · `P3-67` · `P3-77`

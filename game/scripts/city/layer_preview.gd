@@ -64,12 +64,19 @@ signal built(low: Vector3, high: Vector3)
 ## says why per node. Ignored on a layer that is not a library.
 @export var collides: bool = false
 
+## Stand a trunk cylinder under every placement from the document's `trunks`
+## table (`P3-77`): one static body per plan cell holding a shape per tree,
+## because Jolt's 10,240 bodies already hold the railings' 7,693 and a body a
+## tree would pass it. On for the trees alone; `region.md` says why.
+@export var trunks: bool = false
+
 ## The one figure worth printing beyond the plan extent: a column has a height
 ## and a painted arrow does not. The preview's own formatting, kept out of the
 ## loader's table.
 const _HEIGHT: Dictionary[String, String] = {
 	GeneratedLayer.RAILINGS: "tall",
 	GeneratedLayer.LAMPS: "tall",
+	GeneratedLayer.TREES: "tall",
 	GeneratedLayer.SIGNS: "tops",
 }
 
@@ -157,6 +164,9 @@ func _place(library: Node3D) -> Dictionary:
 	for mesh_name: String in joined["unstood"] as PackedStringArray:
 		push_error("%s: library mesh %s is stood nowhere" % [layer, mesh_name])
 	var transforms: Dictionary[String, Array] = joined["transforms"]
+	var trunk_table: Dictionary = document.get("trunks", {}) if trunks else {}
+	if trunks and trunk_table.is_empty():
+		push_error("%s: trunks is on and the document carries no trunks table" % layer)
 	var boxes: Array[AABB] = []
 	var triangles: int = 0
 	var batches: int = 0
@@ -166,6 +176,11 @@ func _place(library: Node3D) -> Dictionary:
 	elif cells.cell_m <= 0.0:
 		push_error("%s: %s cuts it into cells of no size" % [layer, PropCellProfile.PATH])
 		cells = null
+	if trunks and cells == null:
+		# Every trunk in one body is the body cap's argument lost, not a crash.
+		push_warning(
+			"%s: trunks stand uncut, one body a kind; add it to %s" % [layer, PropCellProfile.PATH]
+		)
 	for mesh_name: String in transforms:
 		var mesh: Mesh = meshes[mesh_name]
 		var batch: Array[Transform3D] = []
@@ -183,6 +198,15 @@ func _place(library: Node3D) -> Dictionary:
 			if not local.has_volume():
 				push_error("%s: library mesh %s is flat and cannot collide" % [layer, mesh_name])
 			for body: StaticBody3D in PropBatch.bodies(local, batch, mesh_name + "_col"):
+				add_child(body)
+		if trunk_table.is_empty():
+			pass
+		elif not trunk_table.has(mesh_name):
+			push_error("%s: library mesh %s has no trunk in the document" % [layer, mesh_name])
+		else:
+			for body: StaticBody3D in _stand_trunks(
+				trunk_table[mesh_name], batch, mesh_name, cells
+			):
 				add_child(body)
 		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
 		if layer == GeneratedLayer.LAMPS:
@@ -210,7 +234,7 @@ func _batches(
 		return [PropBatch.batch(mesh, batch, mesh_name)]
 	var by_cell: Dictionary[Vector2i, Array] = {}
 	for at: Transform3D in batch:
-		var cell := Vector2i(floori(at.origin.x / cells.cell_m), floori(at.origin.z / cells.cell_m))
+		var cell: Vector2i = cells.cell_of(at.origin)
 		if not by_cell.has(cell):
 			by_cell[cell] = []
 		by_cell[cell].append(at)
@@ -225,6 +249,39 @@ func _batches(
 		node.visibility_range_end_margin = cells.range_margin_m
 		nodes.append(node)
 	return nodes
+
+
+## A trunk cylinder under each of `batch`'s trees, one static body per plan
+## cell (or one for the batch without `cells`). `trunk` is the kind's radius
+## and height in the library's frame; each tree's stand scales both, and the
+## shape stands upright whatever the tree's bearing.
+func _stand_trunks(
+	trunk: Dictionary, batch: Array[Transform3D], mesh_name: String, cells: PropCellProfile
+) -> Array[StaticBody3D]:
+	var radius_m: float = float(trunk.get("radius_m", 0.0))
+	var height_m: float = float(trunk.get("height_m", 0.0))
+	var bodies: Array[StaticBody3D] = []
+	if radius_m <= 0.0 or height_m <= 0.0:
+		push_error("%s: %s's trunk has no size" % [layer, mesh_name])
+		return bodies
+	var by_cell: Dictionary[Vector2i, StaticBody3D] = {}
+	for at: Transform3D in batch:
+		var cell: Vector2i = Vector2i.ZERO if cells == null else cells.cell_of(at.origin)
+		if not by_cell.has(cell):
+			var body := StaticBody3D.new()
+			body.name = "%s_trunks_%d_%d" % [mesh_name, cell.x, cell.y]
+			by_cell[cell] = body
+			bodies.append(body)
+		# Uniform: `trees.py` stands every tree at (s, s, s), so one axis is both.
+		var grown: float = at.basis.get_scale().y
+		var shape := CylinderShape3D.new()
+		shape.radius = radius_m * grown
+		shape.height = height_m * grown
+		var collision := CollisionShape3D.new()
+		collision.shape = shape
+		collision.position = at.origin + Vector3(0.0, shape.height * 0.5, 0.0)
+		by_cell[cell].add_child(collision)
+	return bodies
 
 
 ## The pool of light under each of `columns`' lanterns (`Q160`), on the lamps'

@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_cells")
-layers = PackedStringArray("lamps")
+layers = PackedStringArray("lamps", "trees")
 cell_m = 300.0
 range_m = 400.0
 range_margin_m = 15.0

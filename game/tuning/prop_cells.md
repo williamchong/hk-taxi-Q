@@ -12,10 +12,15 @@ anywhere inside it, and again in each shadow cascade.
 ⚠️ EVERY KEY BELOW IS REQUIRED. `prop_cell_profile.gd` declares no defaults; `layer_preview.gd`
 refuses a zero cell and `verify_city.gd` refuses a zero cell or range, or an unknown layer, by name.
 
-## layers = PackedStringArray("lamps")
+## layers = PackedStringArray("lamps", "trees")
 
-The lamps alone. One library mesh, so a cell costs one draw call a pass: 129,240 of ~900,000
+The lamps: one library mesh, so a cell costs one draw call a pass: 129,240 of ~900,000
 primitives on the throttle route came back to ~10,000 for +2 draw calls.
+
+The trees (`P3-77`): four library meshes, so up to four draw calls a visible cell a pass, against
+58,144 / 132,040 placed triangles on Wan Chai / Causeway Bay that a region-wide `MultiMesh` would
+draw from anywhere, three times over with the shadow cascades. Their trunk bodies are cut on the
+same cells (`layer_preview._stand_trunks`).
 
 🚫 **Not the signs.** 23 library meshes a region is 23 draw calls a visible cell: +65 to +94 on the
 throttle route, measured. Their cost is draw calls, answered by `shadow_meshes` (`P3-66`).

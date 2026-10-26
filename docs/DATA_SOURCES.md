@@ -20,8 +20,8 @@ restate the terms here.
 
 ### Required credits-screen text (draft)
 
-> Contains geospatial data from the Lands Department, the Transport Department and the Highways
-> Department of the Government
+> Contains geospatial data from the Lands Department, the Transport Department, the Highways
+> Department and the Leisure and Cultural Services Department of the Government
 > of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial
 > Data Infrastructure (CSDI) Portal. **The Government of the HKSAR and the relevant organisations own
 > the intellectual property rights in that data.** Used under the DATA.GOV.HK and CSDI Portal Terms
@@ -687,6 +687,38 @@ All CSDI `file-api` GeoJSON, no key.
 | ✅ `td_rcd_1638875413253_59498` Tram Stop Location | 117 | **19** | Shipped by `P3-14` as the `poi` kind. ⚠️ Publishes no name (`OBJECTID`, `STOP_ID`, `LAST_UPDATE_DATE` only): `fares.json` carries `name: null`, `pickup`/`dropoff` both false |
 
 ---
+
+## Trees (`P3-77`, `Q171`)
+
+Two inventories, both points, both paged off the CSDI REST service like the pavement polygons:
+`MapServer/0/query` at `outSR=2326`, 3,000 a page. Fetched 2026-10-27, 62.6 MB together. 🔴 **Only
+what they survey is drawn**: no major-parks layer (Victoria Park) and no roadside inventory was
+found, so those stay bare.
+
+### ✅ USE — HyD Tree
+
+**`hyd_rcd_1632210213867_60179`** · Highways Department · CSDI Portal · `csdi:VIS_INV_TREE`,
+**native EPSG:2326** · 351,868 points territory-wide.
+
+- **Fetch:** `paged_sources.tree_hyd`, `outFields` `TREE_ID,DBH`, `max_pages` 200.
+- `DBH` is the trunk's diameter in mm, the one measurement either source gives; `height_per_dbh_m`
+  turns it into a height, an authored ratio. ⚠️ `SPECIES_NAME` is null on every tree in both
+  regions, so every HyD tree is the default kind.
+- In the regions' rectangles: Wan Chai 1, Causeway Bay 2,171 — mostly the Tai Hang Road and Yee
+  King Road slopes, which the user chose to include.
+
+### ✅ USE — LCSD Trees (LCSD Venues other than Major Parks)
+
+**`lcsd_rcd_1760154188966_59086`** · Leisure and Cultural Services Department · DATA.GOV.HK and
+CSDI · 99,420 points.
+
+- **Fetch:** `paged_sources.tree_lcsd`, `outFields` `OBJECTID,Scientific_Name`, `max_pages` 60.
+- `Scientific_Name`'s genus picks the kind (`trees.genera`). It also carries the venue and Chinese
+  name, which are not read.
+- In the regions' rectangles: Wan Chai 1,135, Causeway Bay 287. ⚠️ The plan's 1,285 / 317 was
+  counted inside `bounds_game`, which overhangs the rectangle; the trees outside it are the
+  neighbour's.
+- ⚠️ **Attribution:** LCSD joins the credits (both languages) with this dataset.
 
 ## Coordinate systems
 

@@ -113,6 +113,20 @@ one mid-drift is a worse failure than passing through it. `B3` revisits it;
 breakaway poles are the genre's answer, and that is an effect rather than a
 shape.
 
+## `[node name="Trees" type="Node3D" parent="."]`
+
+The published trees (`P3-77`, `Q171`): HyD's and LCSD's inventories, stood as
+four library kinds scaled to each tree's height, only where one is surveyed. A
+city whose config declares no `trees:` block ships none and this node simply
+stays empty.
+`trunks = true`: a tree is a crash (the user's call, 2026-10-27). A cylinder of
+the kind's trunk radius up to the crown's base, scaled with the tree, and
+nothing for the crown — a car passes under a canopy. **One static body per
+plan cell**, each holding a shape per tree, never a body per tree: Jolt's
+`max_bodies` is 10,240 and the railings hold 7,693 of it, and the two regions'
+3,436 trees would pass the cap. `collides` stays off: its box is the whole
+tree's extent, crown and all. `false` is the off switch.
+
 ## `[node name="Signs" type="Node3D" parent="."]`
 
 The published traffic signs (`P3-16`), one mesh for the whole region, standing

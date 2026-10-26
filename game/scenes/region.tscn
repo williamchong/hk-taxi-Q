@@ -40,6 +40,11 @@ collides = true
 script = ExtResource("1_layer")
 layer = "lamps"
 
+[node name="Trees" type="Node3D" parent="." unique_id=1779342917]
+script = ExtResource("1_layer")
+layer = "trees"
+trunks = true
+
 [node name="Signs" type="Node3D" parent="." unique_id=637669317]
 script = ExtResource("1_layer")
 layer = "signs"

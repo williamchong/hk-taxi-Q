@@ -92,6 +92,7 @@ const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
 const SIGNS: String = "signs"
 const WATER: String = "water"
+const TREES: String = "trees"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
@@ -209,6 +210,19 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence": "A region whose frame holds no shoreline ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
+	},
+	# The published trees (`P3-77`, `Q171`): a library of kinds, a crown and a
+	# trunk each. They cast: a canopy's shadow is most of what reads as shade
+	# on a street.
+	TREES:
+	{
+		"file": "trees.glb",
+		"noun": "trees",
+		"module": "trees",
+		"absence": "A city that declares no tree inventory ships none, and that is not a failure.",
+		"placements": "trees_placements.json",
+		"casts_shadow": true,
 		"shadow_meshes": [],
 	},
 }

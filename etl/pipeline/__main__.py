@@ -58,6 +58,7 @@ from pipeline import (
     signs,
     surface,
     tramway,
+    trees,
 )
 
 log = logging.getLogger(__name__)
@@ -160,6 +161,11 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # the tram beds the tramway laid, and off the fenced edges. Before
     # `export`, which names the document.
     "parked": parked.main,
+    # After `carve` and `surface`, and forced: a tree stands on the ground the
+    # carved tiles draw and is refused inside the carriageway region and under
+    # anything the bundle draws over its foot (`P3-77`). Before `export`, which
+    # names the asset.
+    "trees": trees.main,
     "export": export.main,
 }
 
@@ -206,6 +212,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "signs": ("surface",),
     "lamps": ("surface",),
     "parked": ("surface", "fares", "tramway", "fence"),
+    "trees": ("carve", "surface"),
     "export": (
         "basemap",
         "landmarks",
@@ -222,6 +229,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "signs",
         "lamps",
         "parked",
+        "trees",
     ),
 }
 
