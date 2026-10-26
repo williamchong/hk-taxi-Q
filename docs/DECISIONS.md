@@ -206,6 +206,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q164` | The menu's camera follows its page: a shot per page round the parked car, the passenger door open on PLAY | ✅ Built 2026-10-13 on the user's ask. Replaces `P6-1`'s one turntable for every page. The user's look owed. |
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 | `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
+| `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | 🟡 Decided 2026-10-27 on the user's calls; planned as `P3-77`. Reverses `Q144`'s "trees are not built". |
 
 ---
 
@@ -7547,7 +7548,8 @@ paint them green". The harbour went map → world as `P3-45`; this is the same m
   so no draw call, no prim, no collider change, and nothing to z-fight. `Q18` / `Q36` had already
   named vector land-use polygons as the only admissible vegetation source; these are they. 🚫 Trees
   are not built: the sheets survey no canopy (`Tree` is 9 Old and Valuable Trees), so any placement
-  would be invented. Left to `B3`'s "what stands on the ground".
+  would be invented. Left to `B3`'s "what stands on the ground". ⚠️ **Reversed by `Q171`**
+  (2026-10-27): HyD and LCSD publish tree inventories, so trees are built where one is surveyed.
 - **Every open-space code — `PAR`, `PLA`, `SOA`, `SGR`, `PRO` — the user's pick over `PAR` alone.**
   A sitting-out area and the promenade are paving on the street and grass here; the map and the
   world now agree. Narrowing it is a user question, not a correction.
@@ -10374,3 +10376,49 @@ pays for, never the control's.
   keep theirs: each names the car's answer, not the input.
 
 **See.** `Q49` · `Q83` · `Q152` · `Q153` · `Q156` · `game/tuning/systems/handbrake.md`
+
+---
+## `Q171` — Trees are built from the published inventories, and only where one is surveyed
+
+**Status.** 🟡 Decided 2026-10-27 on the user's calls; planned as `P3-77`. Reverses `Q144`'s "🚫
+Trees are not built".
+
+**Asked** by the user, 2026-10-27: "is there a open data for hong kong tree ids so that we can plant
+trees onto the scene", then "plan for trees in pipeline and rendering".
+
+**`Q144`'s premise is gone.** It refused trees because the topographic sheets survey no canopy —
+`Tree` is 9 Old and Valuable Trees — so any placement would be invented. Two departments publish
+per-tree inventories on CSDI, both downloaded whole 2026-10-27 (the `file-api`) and counted inside
+each bundle's `bounds_game` off the records' own HK1980 fields; both also page through the REST
+service in EPSG:2326 at 3,000 a request, which is what the stage fetches:
+
+| Dataset | Territory | Wan Chai | Causeway Bay | Carries |
+|---|---|---|---|---|
+| HyD, Tree (`VIS_INV_TREE`, `hyd_rcd_1632210213867_60179`) | 351,868 | 2 | 2,297 | `TREE_ID`, E/N, `DBH` (p10/50/90 102 / 175 / 412 mm in Causeway Bay), `ROAD_NAME`, `OVT_ID`. `SPECIES_NAME` empty on every tree in region |
+| LCSD, Trees (LCSD Venues other than Major Parks) (`lcsd_rcd_1760154188966_59086`) | 99,420 | 1,285 | 317 | Venue (en / zh), scientific and Chinese name (76 / 45 species), X/Y |
+
+Neither publishes a height or a crown. DEVB's OVT and Stonewall Trees, DSD's, CEDD's and the Housing
+Authority's layers exist and were not downloaded; whether any adds a tree in region is unmeasured.
+
+**The user's calls:**
+
+1. **Reopen `Q144`** — trees are built.
+2. **Where nothing is surveyed, nothing stands, for now.** The LCSD layer excludes major parks, so
+   Victoria Park (one `PAR` of 188,001 m²) stays bare grass, and no roadside inventory
+   is published, so Hennessy Road's trees are absent. A fill would be `Q144`'s invention; reopening
+   that is a separate call.
+3. **HyD's slopes are included** — 2,297 trees on the Tai Hang Road / Yee King Road hillside, mostly
+   off the driven streets, which frame the map's escarpment edge.
+4. **A tree is a crash**: a trunk collider per tree, as a parked car has its box (`Q159`).
+
+**What the data owes the stage** (measured 2026-10-27 against the shipped bundles):
+
+- 27 LCSD trees in Wan Chai lie inside `carriageway_region.json`'s territories, 20 over 1 m in —
+  gardens on tunnel approaches and road islands, or the territory overreaching. They are **refused,
+  never pushed**, and the count is published; which of the two it is gets read off a frame.
+- 733 of Wan Chai's 1,285 LCSD trees and 211 of Causeway Bay's 317 stand inside `basemap.json`'s
+  parks.
+- A HyD tree is sized off its `DBH`; an LCSD tree, by its archetype's height range. Every size is an
+  estimate the source does not publish, and the report says which way each was got.
+
+**See.** `Q144` · `Q159` · `Q160` · `P3-67` · `P3-77`
