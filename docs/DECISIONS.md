@@ -10455,4 +10455,11 @@ the throttle route, +9 to +13 / +24k to +59k from `wan_chai/f_045`, positions id
 +869,616 B (+0.97%), exported with and without both regions' tree files. The bundle is schema 39. Unlit at night: the crowns go dark under the city-wide outline, which draws the palms'
 fronds near-white — a look for the user to judge.
 
+**Greener, the user's pick** (2026-10-28, "can the tree look greener or fresher at least in day
+light?"): four renders at two fixed cameras, all inside the 5–15% leaf range — the authored 6.6% /
+9.0%, 9.9 / 12.1, 13.6 / 14.6 and 13.9 / 14.8 more saturated. The user took the last:
+`tree_foliage` `#3b7612` (13.93%) and `palm_frond` `#517612` (14.75%), near the range's top, so
+there is little room left to lighten within `Q33`. Conifer and bark unchanged. ART_DESIGN's
+"deep saturated green… dark and dense" row is rewritten with it.
+
 **See.** `Q144` · `Q159` · `Q160` · `P3-67` · `P3-77`

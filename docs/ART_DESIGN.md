@@ -107,7 +107,7 @@ façade/ground/road subset — the config's full set (`panel_pale`, `roof_grey`,
 | Minibus | Cream body, **green** roof | Green minibus |
 | Tram | Green and white | Instantly recognisable silhouette |
 | Neon | Saturated magenta, cyan, gold — emissive | Sparingly; accent only |
-| Vegetation | Deep saturated green | HK street trees are dark and dense |
+| Vegetation | Saturated leaf green at the top of the 5–15% leaf range — trees `#3b7612` / palms `#517612` (`Q171`, the user's pick, 2026-10-28); the park turf stays the deeper `#416227` | A dark canopy read near-black in its own shade |
 
 **Time of day: the day runs to night as game time** (`Q160`, 2026-10-07): the drive opens at the
 clean daylight rig's noon and blends through dusk and twilight to a night that holds, on

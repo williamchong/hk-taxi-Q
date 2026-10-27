@@ -365,18 +365,18 @@ materials:
     source: "mown turf, luminous reflectance; green leaves 5-15% in the visible"
     bounds: [5, 15]
 
-  # The trees (`P3-77`, `Q171`). Canopies sit at the dark end of the leaf
-  # range, under the turf: a crown is leaves in their own shade. Palm fronds
-  # are the yellower, lighter green; a conifer the darkest. ART_DESIGN's
-  # "deep saturated green" is the brief.
+  # The trees (`P3-77`, `Q171`). Canopies at the top of the leaf range, the
+  # user's pick from four renders (2026-10-28) for a fresher green by day: the
+  # authored 6.6% dark end read near-black in shade. Palm fronds the yellower
+  # green; a conifer stays the darkest.
   tree_foliage:
-    colour: "#2e511f"
-    reflectance: 6.6
+    colour: "#3b7612"
+    reflectance: 13.93
     source: "broadleaf evergreen canopy, luminous; green leaves 5-15% in the visible"
     bounds: [5, 15]
   palm_frond:
-    colour: "#415d1f"
-    reflectance: 9.0
+    colour: "#517612"
+    reflectance: 14.75
     source: "palm fronds, luminous; green leaves 5-15% in the visible"
     bounds: [5, 15]
   conifer_foliage:
