@@ -36,4 +36,7 @@ paths:
   near-white under it. That is the outline's look, not a lit tree. ⚠️ **`prop_cells.tres` cuts the
   trees**, so their cost is per visible cell: +4 draws / +10k prims on the throttle route, +9 to
   +13 / +24k to +59k from `--spawn-fare=wan_chai/f_045`, measured with `--hide-layers=trees`
-  2026-10-27. A change to the library's mesh count is a draw-call change.
+  2026-10-27. A change to the library's mesh count is a draw-call change. 🔴 **A tint only
+  darkens** (`tint_of`, `Q171`): the canopy colour sits near the top of `Q33`'s leaf range, so
+  a channel over 1 is a tree brighter than the material the bounds grade. ⚠️ **The variation
+  draws come after the yaw and the height** — reorder them and every tree turns and resizes.

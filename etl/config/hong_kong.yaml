@@ -3181,6 +3181,16 @@ trees:
   # so a rebuild stands the same tree. An LCSD tree's height is its kind's
   # within this share.
   height_jitter: 0.2
+  # Two trees of a kind are not one tree resized (the user's ask, 2026-10-28).
+  # The crown's width against its height, either way within this share; the
+  # trunk's collider widens with it.
+  width_jitter: 0.2
+  # A tint on each tree, multiplied into its vertex colour by the instance:
+  # darker by up to `tint_darken` (never lighter — the canopy colour sits at
+  # the top of `Q33`'s leaf range), and its red against its blue by up to
+  # `tint_warmth` either way, a yellower or a bluer green.
+  tint_darken: 0.25
+  tint_warmth: 0.12
   # A HyD tree's height off its trunk: `height_per_dbh_m` metres a millimetre
   # of diameter, held between the two bars. ⚠️ Authored — 0.04 puts the
   # region's p10/50/90 DBH (102 / 175 / 412 mm) at 4.1 / 7.0 / 14 m.

@@ -14,13 +14,19 @@ static func batch(
 	mesh: Mesh,
 	transforms: Array[Transform3D],
 	name: String,
-	custom: PackedColorArray = PackedColorArray()
+	custom: PackedColorArray = PackedColorArray(),
+	colours: PackedColorArray = PackedColorArray()
 ) -> MultiMeshInstance3D:
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	var wears: bool = not custom.is_empty()
 	assert(not wears or custom.size() == transforms.size(), "one custom datum a transform")
 	multi.use_custom_data = wears
+	# The engine multiplies an instance's colour into `COLOR` before the shader
+	# reads it, so a tint needs nothing of the material (`P3-77`).
+	var tinted: bool = not colours.is_empty()
+	assert(not tinted or colours.size() == transforms.size(), "one colour a transform")
+	multi.use_colors = tinted
 	multi.mesh = mesh
 	# Set after `mesh` and `transform_format`: `instance_count` allocates the
 	# buffer, so assigning it first and the format second discards every
@@ -30,6 +36,8 @@ static func batch(
 		multi.set_instance_transform(index, transforms[index])
 		if wears:
 			multi.set_instance_custom_data(index, custom[index])
+		if tinted:
+			multi.set_instance_color(index, colours[index])
 	var node := MultiMeshInstance3D.new()
 	node.name = name
 	node.multimesh = multi

@@ -123,9 +123,9 @@ func _check_first_trunk(
 ) -> PackedStringArray:
 	var at: Transform3D = GeneratedPlacements.placement_of(entry)
 	var trunk: Dictionary = table[String(entry.get("mesh", ""))]
-	var grown: float = at.basis.get_scale().y
-	var radius: float = float(trunk["radius_m"]) * grown
-	var height: float = float(trunk["height_m"]) * grown
+	var grown: Vector3 = at.basis.get_scale()
+	var radius: float = float(trunk["radius_m"]) * grown.x
+	var height: float = float(trunk["height_m"]) * grown.y
 	var centre: Vector3 = at.origin + Vector3(0.0, height * 0.5, 0.0)
 	for collision: CollisionShape3D in shapes:
 		var shape := collision.shape as CylinderShape3D

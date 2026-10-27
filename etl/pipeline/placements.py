@@ -51,6 +51,7 @@ def placement(
     rot_y_deg: float,
     scale: Sequence[float] | None = None,
     pitch_deg: float | None = None,
+    tint: Sequence[float] | None = None,
 ) -> Placement:
     """One placements entry, in `landmarks.json`'s transform shape.
 
@@ -69,6 +70,10 @@ def placement(
     entry: Placement = {"mesh": mesh, "transform": transform}
     if scale is not None:
         entry["scale"] = [_rounded(value) for value in scale]
+    if tint is not None:
+        # An RGB multiplier on the instance's vertex colour, each in (0, 1]
+        # (`P3-77`); absent, the colour the library was drawn in.
+        entry["tint"] = [_rounded(value) for value in tint]
     return entry
 
 

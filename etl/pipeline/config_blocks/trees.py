@@ -80,6 +80,12 @@ class Trees:
     bark_material: Material
     sides: int
     height_jitter: float
+    # Per tree, on its seed: the crown's width against its height, and a tint
+    # on the instance — darker by up to `tint_darken`, warmer or cooler by up
+    # to `tint_warmth`. Shares; 0 stands every tree of a kind alike.
+    width_jitter: float
+    tint_darken: float
+    tint_warmth: float
     height_per_dbh_m: float
     min_height_m: float
     max_height_m: float
@@ -101,6 +107,8 @@ _TREE_MEASURES = (
     "kerb_clear_m",
     "overhead_clear_m",
 )
+# Shares in [0, 1): a jitter or a tint's reach either way.
+_TREE_SHARES = ("height_jitter", "width_jitter", "tint_darken", "tint_warmth")
 _KIND_MEASURES = ("height_m", "trunk_radius_m", "crown_base", "crown_radius_m")
 
 
@@ -182,9 +190,10 @@ def _trees(body: Any, where: str, table: _MaterialTable) -> Trees | None:
     sides = int(_require(body, "sides", where))
     if sides < 3:
         raise ValueError(f"{where}:sides must be at least 3")
-    jitter = float(_require(body, "height_jitter", where))
-    if not 0.0 <= jitter < 1.0:
-        raise ValueError(f"{where}:height_jitter {jitter} must be in [0, 1)")
+    shares = {name: float(_require(body, name, where)) for name in _TREE_SHARES}
+    for name, share in shares.items():
+        if not 0.0 <= share < 1.0:
+            raise ValueError(f"{where}:{name} {share} must be in [0, 1)")
     lengths = _measures(body, where, _TREE_MEASURES, positive=True)
     if lengths["min_height_m"] >= lengths["max_height_m"]:
         raise ValueError(f"{where}:min_height_m is not under max_height_m")
@@ -198,6 +207,6 @@ def _trees(body: Any, where: str, table: _MaterialTable) -> Trees | None:
             str(_require(body, "bark_material", where)), f"{where}:bark_material"
         ),
         sides=sides,
-        height_jitter=jitter,
+        **shares,
         **lengths,
     )

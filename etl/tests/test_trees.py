@@ -26,6 +26,7 @@ from pipeline.trees import (
     draw_kind,
     height_of,
     merge,
+    tint_of,
     trunks,
 )
 
@@ -82,6 +83,8 @@ def test_kind_is_read_off_the_genus(hong_kong, species: str | None, kind: str) -
         (lambda b: b["kinds"]["palm"].update(trunk_radius_m=3.0), "trunk_radius_m"),
         (lambda b: b.update(min_height_m=20.0), "min_height_m"),
         (lambda b: b.update(height_jitter=1.0), "height_jitter"),
+        (lambda b: b.update(width_jitter=-0.1), "width_jitter"),
+        (lambda b: b.update(tint_darken=1.0), "tint_darken"),
         (lambda b: b["publishers"].append(dict(b["publishers"][0])), "repeats an id"),
     ],
 )
@@ -176,3 +179,25 @@ def test_trunk_collider_is_the_bare_trunk(hong_kong) -> None:
     for name, kind in spec.kinds.items():
         assert table[name]["radius_m"] == kind.trunk_radius_m
         assert table[name]["height_m"] == pytest.approx(kind.crown_base * kind.height_m, abs=1e-4)
+
+
+# --------------------------------------------------------------------------
+# Variation
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("darken", [0.0, 0.5, 1.0])
+@pytest.mark.parametrize("warmth", [-1.0, 0.0, 1.0])
+def test_tint_only_darkens(hong_kong, darken: float, warmth: float) -> None:
+    # No channel over 1: no tree lighter than the colour `Q33` grades.
+    spec = hong_kong.trees
+    red, green, blue = tint_of(spec, darken, warmth)
+    assert max(red, green, blue) <= 1.0
+    assert green == pytest.approx(1.0 - spec.tint_darken * darken, abs=1e-3)
+    # Warm takes blue, cool takes red; never both.
+    assert (red < green) == (warmth < 0.0)
+    assert (blue < green) == (warmth > 0.0)
+
+
+def test_untinted_at_rest(hong_kong) -> None:
+    assert tint_of(hong_kong.trees, 0.0, 0.0) == (1.0, 1.0, 1.0)

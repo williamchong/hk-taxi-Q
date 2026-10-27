@@ -10462,4 +10462,13 @@ light?"): four renders at two fixed cameras, all inside the 5–15% leaf range �
 there is little room left to lighten within `Q33`. Conifer and bark unchanged. ART_DESIGN's
 "deep saturated green… dark and dense" row is rewritten with it.
 
+**No two trees alike, the user's pick** (2026-10-28, "do we need randomized tree"): each stand
+draws, after its yaw and height so no tree moved, a crown width (`width_jitter` 0.2, the scale
+`(across, up, across)`) and a tint (`tint_darken` 0.25, `tint_warmth` 0.12) written as the entry's
+`tint` and set as the `MultiMesh` instance colour, which the engine multiplies into `COLOR` — so
+`vertex_albedo.gdshader` is untouched and the cost is 0 draws, 0 triangles. The tint only darkens:
+D sits near the top of the leaf range, so a lighter tree would leave `Q33`'s bounds; the mean
+canopy is 12.5% darker than D. Picked over a louder setting (0.3 / 0.4 / 0.2, darker overall) from
+renders at two fixed cameras. The trunk collider takes the across-scale for its radius.
+
 **See.** `Q144` · `Q159` · `Q160` · `P3-67` · `P3-77`

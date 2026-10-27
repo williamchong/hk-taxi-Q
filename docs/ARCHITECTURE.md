@@ -870,7 +870,9 @@ region's rectangle; a tree both publish within `merge_m` keeps LCSD's record, wh
 species. A library of one mesh per kind (`broadleaf`, `palm`, `fan_palm`, `conifer`; the kind is
 the scientific name's genus, HyD's are all the default), drawn at the kind's `height_m` and stood
 with a uniform `scale` to the tree's own height: HyD's off `DBH` × `height_per_dbh_m`, clamped, and
-LCSD's the kind's, jittered on a seed of the tree's id. Refused, never pushed: inside the level-0
+LCSD's the kind's, jittered on a seed of the tree's id. The same seed widens or narrows the crown
+(`scale` is `(across, up, across)`) and writes a `tint`, an RGB multiplier of at most 1 a channel
+that `layer_preview` sets as the instance colour (`PropBatch.batch`'s `colours`). Refused, never pushed: inside the level-0
 carriageway region plus `kerb_clear_m`, over no ground the tiles draw, or under a deck or roof
 lower than the treetop. `trees.json` grades it; `min_kerb_clearance_m` is the invariant.
 

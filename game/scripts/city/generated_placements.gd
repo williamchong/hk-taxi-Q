@@ -74,14 +74,26 @@ static func placement_of(entry: Dictionary) -> Variant:
 	return Transform3D(at.basis.scaled_local(factors), at.origin)
 
 
+## An entry's `tint` (`P3-77`): an RGB multiplier on the instance's vertex
+## colour, or null where the entry carries none or a malformed one.
+static func tint_of(entry: Dictionary) -> Variant:
+	var tint: Array = entry.get("tint") if entry.get("tint") is Array else []
+	if tint.size() != 3:
+		return null
+	return Color(float(tint[0]), float(tint[1]), float(tint[2]))
+
+
 ## The join between a library and its document, both ways.
 ##
-## Returns `transforms` (mesh name -> `Array[Transform3D]`), `no_mesh` (entries
+## Returns `transforms` (mesh name -> `Array[Transform3D]`), `tints` (mesh name
+## -> `PackedColorArray` beside its transforms, present only for a mesh some
+## entry tints; an untinted entry there is white), `no_mesh` (entries
 ## naming a mesh the library lacks), `no_transform` (entries `placement_of`
 ## refused) and `unstood` (library meshes no entry names). The two readers
 ## decide what to do with the counts; neither recomputes them.
 static func group(document: Dictionary, library: Dictionary[String, Mesh]) -> Dictionary:
 	var transforms: Dictionary[String, Array] = {}
+	var tints: Dictionary[String, PackedColorArray] = {}
 	var no_mesh: int = 0
 	var no_transform: int = 0
 	for entry: Dictionary in document.get("placements", []) as Array:
@@ -97,12 +109,22 @@ static func group(document: Dictionary, library: Dictionary[String, Mesh]) -> Di
 			var batch: Array[Transform3D] = []
 			transforms[mesh_name] = batch
 		transforms[mesh_name].append(placed as Transform3D)
+		var tint: Variant = tint_of(entry)
+		if tint != null and not tints.has(mesh_name):
+			# Back-fill white for the entries before the first tinted one.
+			var earlier := PackedColorArray()
+			earlier.resize(transforms[mesh_name].size() - 1)
+			earlier.fill(Color.WHITE)
+			tints[mesh_name] = earlier
+		if tints.has(mesh_name):
+			tints[mesh_name].append(Color.WHITE if tint == null else tint as Color)
 	var unstood: PackedStringArray = []
 	for mesh_name: String in library:
 		if not transforms.has(mesh_name):
 			unstood.append(mesh_name)
 	return {
 		"transforms": transforms,
+		"tints": tints,
 		"no_mesh": no_mesh,
 		"no_transform": no_transform,
 		"unstood": unstood,

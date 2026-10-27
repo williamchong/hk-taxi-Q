@@ -255,6 +255,18 @@ def height_of(spec: Trees, tree: Tree, kind: TreeKind, jitter: float) -> tuple[f
     return kind.height_m * (1.0 + spec.height_jitter * jitter), False
 
 
+def tint_of(spec: Trees, darken: float, warmth: float) -> tuple[float, float, float]:
+    """An instance's RGB multiplier: `darken` in [0, 1], `warmth` in [-1, 1].
+
+    Every channel is at most 1 — a tint only darkens — so no tree is lighter
+    than the `materials:` colour `Q33` grades.
+    """
+    shade = 1.0 - spec.tint_darken * darken
+    red = shade * (1.0 - spec.tint_warmth * max(-warmth, 0.0))
+    blue = shade * (1.0 - spec.tint_warmth * max(warmth, 0.0))
+    return (round(red, 3), round(shade, 3), round(blue, 3))
+
+
 # --------------------------------------------------------------------------
 # The library
 # --------------------------------------------------------------------------
@@ -485,8 +497,23 @@ def build_region(
         if ((over > foot + spec.overhead_clear_m) & (over < foot + height)).any():
             report.under_structure += 1
             continue
+        # After the yaw and the height: a new draw before them turns and resizes every tree.
+        width, darken, warmth = (
+            rng.uniform(-1.0, 1.0),
+            rng.uniform(0.0, 1.0),
+            rng.uniform(-1.0, 1.0),
+        )
         scale = round(height / kind.height_m, 4)
-        stands.append(placement(name, (tree.x, foot, tree.z), yaw, scale=(scale, scale, scale)))
+        across = round(scale * (1.0 + spec.width_jitter * width), 4)
+        stands.append(
+            placement(
+                name,
+                (tree.x, foot, tree.z),
+                yaw,
+                scale=(across, scale, across),
+                tint=tint_of(spec, float(darken), float(warmth)),
+            )
+        )
         report.drawn += 1
         report.drawn_by_publisher[tree.publisher] = (
             report.drawn_by_publisher.get(tree.publisher, 0) + 1
