@@ -128,11 +128,11 @@ delivery's callout is a receipt: the meter, the time left and each skill by name
 so the tip is never a number that appeared (`Q145`). A passenger whose clock runs out walks
 without paying, and the receipt says what walked out with them.
 
-**Every skill and penalty is named off the 黃紙** (`Q169`, the user's ask), the driving test's
-fault sheet every Hong Kong driver took home: a near miss is 太接近其他物體（輕微）, a close call
-（嚴重）, the speed run 車速不適當, a flight 空波滑行, a bump and a crash 碰及物體（輕微／嚴重）;
-甩尾 and 早到 keep their names. The examiner's faults are the passenger's tips — names only, so
-no three-minors rule and no pass or fail. The words are `tuning/exam_sheet.json`.
+**Every skill and penalty speaks the driving test's register** (`Q169`, the user's ask): a bump
+and a crash are the 黃紙's own 碰及物體（輕微／嚴重）, the fault sheet every Hong Kong driver took
+home, while a bonus is a feat with no fault word in it — a near miss 貼身而過, a close call
+險過剃頭, the speed run 高速行駛, a flight 凌空飛躍, the early arrival 走得快好世界; 甩尾 keeps its name. Names only,
+so no three-minors rule and no pass or fail. The words are `tuning/exam_sheet.json`.
 
 ⚠️ **Flat money per event** (the user's call, `Q145`), not the *style chain* this section first
 sketched — a multiplier that a hard crash resets — because a pop the player can read beats a

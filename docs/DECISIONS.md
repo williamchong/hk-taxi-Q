@@ -10350,6 +10350,27 @@ the same frame before the change. ⚠️ The Kai's full-width brackets set airy:
   in `Settings`' file under `[record]`, keyed by name rather than enum value; written at 交更, on a
   pause and on leaving free mode (a closed web tab loses the rest). A 紀錄 / RECORD page off HOME.
 
+**Amended 2026-10-28: a bonus is not a fault.** Asked by the user: "now the bonus text feels
+discouraging since they were fail items in original context. can we tune the text a bit so that
+they look more neutral/bonus like?" Of three directions offered (keep the item with a cheeky tag
+in place of the tier; keep the item with one 考官冇睇到 tag on every bonus; rewrite each bonus as an
+exam-register feat), the user picked the rewrite. The bonuses lose the sheet's wording and the
+tier; the penalties keep both. HOW TO PLAY's 「甩尾、飆車和早到都會加小費」 describes the
+mechanics and is left as it was.
+
+| `Fare.Skill` | Name | Was (above) |
+|---|---|---|
+| `NEAR_MISS` | 貼身而過 / close pass | 太接近其他物體（輕微） |
+| `CLOSE_CALL` | 險過剃頭 / hair's-breadth pass | 太接近其他物體（嚴重） |
+| `SPEED` | 高速行駛 / high speed | 車速不適當 |
+| `AIR` | 凌空飛躍 / airborne — the user's "also change 空波滑行" | 空波滑行 / coasting in neutral |
+| `EARLY` | 走得快好世界 / early — the user's saying, Chinese only | 早到 |
+| `BUMP`, `CRASH`, `DRIFT` | unchanged | — |
+
+The longest flash is now "−HK$5.0 touching an object (serious)"; the tick stays 800 px wide.
+⚠️ The planned 成績表's 輕微 / 嚴重 boxes are the penalties' alone now — a bonus has no tier to
+fill one with.
+
 **See.** `Q145` · `Q148` · `Q161` · `Q162` · `game/tuning/exam_sheet.json` · `hud_layout.md`
 
 ## `Q170` — Space is the handbrake

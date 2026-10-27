@@ -1944,10 +1944,7 @@ func _check_fare_face() -> void:
 		(
 			face.caption == "DELIVERED · TIP HK$27.5"
 			and face.callout == "HK$122.9"
-			and (
-				face.callout_sub
-				== "meter 31.1 + time 12.5 + drift ×2 10.0 + inappropriate speed 5.0"
-			)
+			and (face.callout_sub == "meter 31.1 + time 12.5 + drift ×2 10.0 + high speed 5.0")
 		),
 		"face",
 		"delivered: the callout holds what was banked over the receipt (%s)" % face.callout_sub
@@ -1957,7 +1954,7 @@ func _check_fare_face() -> void:
 	_expect(
 		(
 			zh.caption == "已送達 · 小費 HK$27.5"
-			and zh.callout_sub == "咪錶 31.1 + 時間 12.5 + 甩尾 ×2 10.0 + 車速不適當 5.0"
+			and zh.callout_sub == "咪錶 31.1 + 時間 12.5 + 甩尾 ×2 10.0 + 高速行駛 5.0"
 		),
 		"face",
 		"and in Chinese (%s)" % zh.callout_sub
@@ -1965,25 +1962,19 @@ func _check_fare_face() -> void:
 	_expect(
 		(
 			face.award_text(fare.awards[0]) == "+HK$5.0 drift"
-			and zh.award_text(fare.awards[1]) == "+HK$5.0 車速不適當"
+			and zh.award_text(fare.awards[1]) == "+HK$5.0 高速行駛"
 		),
 		"face",
 		"a skill flashes as its money and its name"
 	)
 	var flight: RefCounted = FareScript.Award.new(FareScript.Skill.AIR, 5.0)
 	_expect(
-		(
-			face.award_text(flight) == "+HK$5.0 coasting in neutral"
-			and zh.award_text(flight) == "+HK$5.0 空波滑行"
-		),
+		face.award_text(flight) == "+HK$5.0 airborne" and zh.award_text(flight) == "+HK$5.0 凌空飛躍",
 		"face",
-		"a flight flashes as coasting in neutral / 空波滑行 (`P3-51`, `Q169`)"
+		"a flight flashes as airborne / 凌空飛躍 (`P3-51`, `Q169`)"
 	)
 	_expect(
-		(
-			face.practice_text(flight) == "coasting in neutral"
-			and zh.practice_text(fare.awards[0]) == "甩尾"
-		),
+		face.practice_text(flight) == "airborne" and zh.practice_text(fare.awards[0]) == "甩尾",
 		"face",
 		"a skill with no passenger aboard flashes its name alone, no money"
 	)
@@ -2010,7 +2001,9 @@ func _check_fare_face() -> void:
 	zh.on_ended(early_fare, true)
 	zh.on_sampled(idle, early_fare, stand, 10.0, 122.88)
 	_expect(
-		zh.caption == "已送達 · +HK$10.0 早到 · 小費 HK$22.5", "face", "and in Chinese (%s)" % zh.caption
+		zh.caption == "已送達 · +HK$10.0 走得快好世界 · 小費 HK$22.5",
+		"face",
+		"and in Chinese (%s)" % zh.caption
 	)
 	var bare: RefCounted = FareScript.new()
 	bare.pickup = stand
@@ -2052,7 +2045,7 @@ func _check_fare_face() -> void:
 		(
 			face.caption == "RAN OFF WITHOUT PAYING"
 			and face.callout == "HK$0.0"
-			and face.callout_sub == "meter 31.1 + drift ×2 10.0 + inappropriate speed 5.0 lost"
+			and face.callout_sub == "meter 31.1 + drift ×2 10.0 + high speed 5.0 lost"
 		),
 		"face",
 		"bailed says so, over what was lost (%s)" % face.callout_sub
@@ -2060,7 +2053,7 @@ func _check_fare_face() -> void:
 	zh.on_ended(fare, false)
 	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
-		zh.caption == "乘客走數" and zh.callout_sub == "咪錶 31.1 + 甩尾 ×2 10.0 + 車速不適當 5.0 冇收",
+		zh.caption == "乘客走數" and zh.callout_sub == "咪錶 31.1 + 甩尾 ×2 10.0 + 高速行駛 5.0 冇收",
 		"face",
 		"and in Chinese (%s)" % zh.callout_sub
 	)
@@ -2087,7 +2080,7 @@ func _check_fare_face() -> void:
 		"face",
 		"a penalty is docked on the receipt and flashed as a deduction (%s)" % face.receipt(bare)
 	)
-	# Every skill is named off the 黃紙 (`P3-76`, `Q169`) in both languages: a
+	# Every skill is named in `exam_sheet.json` (`P3-76`, `Q169`) in both languages: a
 	# value appended to `Fare.Skill` with no row in `exam_sheet.json` reads as
 	# its key in brackets, and fails here rather than flashing "[skill]". And
 	# the Kai draws every Chinese one: the tick sets them in the plate's face,
@@ -2103,7 +2096,7 @@ func _check_fare_face() -> void:
 			_expect(
 				not said.is_empty() and not said.begins_with("["),
 				"face",
-				"skill %d has a fault-sheet name (%s)" % [skill, said]
+				"skill %d has a name (%s)" % [skill, said]
 			)
 		if kai == null:
 			continue
@@ -2113,16 +2106,14 @@ func _check_fare_face() -> void:
 				_fail("face", "the Kai has no '%s' for %s" % [chinese[index], chinese])
 	_expect(
 		(
-			zh.skill_name(FareScript.Skill.NEAR_MISS) == "太接近其他物體（輕微）"
-			and zh.skill_name(FareScript.Skill.CLOSE_CALL) == "太接近其他物體（嚴重）"
-			and (
-				face.skill_name(FareScript.Skill.CLOSE_CALL)
-				== "too close to other objects (serious)"
-			)
-			and zh.skill_name(FareScript.Skill.EARLY) == "早到"
+			zh.skill_name(FareScript.Skill.NEAR_MISS) == "貼身而過"
+			and zh.skill_name(FareScript.Skill.CLOSE_CALL) == "險過剃頭"
+			and face.skill_name(FareScript.Skill.CLOSE_CALL) == "hair's-breadth pass"
+			and zh.skill_name(FareScript.Skill.SPEED) == "高速行駛"
+			and zh.skill_name(FareScript.Skill.EARLY) == "走得快好世界"
 		),
 		"face",
-		"a near miss and a close call share an item and differ by tier; 早到 keeps its name"
+		"a bonus reads as a feat, never a fault with a tier (Q169)"
 	)
 	# The tip, live, under the meter while carrying and nowhere else: digits
 	# for the LED, the chip beside them.

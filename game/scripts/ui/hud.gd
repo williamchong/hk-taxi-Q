@@ -1022,8 +1022,8 @@ func _award_ink(award: Fare.Award) -> Color:
 ## Show `text` under the clock and start it fading.
 func _flash(text: String, ink: Color) -> void:
 	_tick.text = text
-	# Cut to the box, like the callout: "+HK$10.0 too close to other objects
-	# (serious)" is the longest thing flashed here, and the box is its bound.
+	# Cut to the box, like the callout: "−HK$5.0 touching an object (serious)"
+	# is the longest thing flashed here, and the box is its bound.
 	StreetPlate.shrink_to(_tick, _style.tick_size, _layout.tick.size.x)
 	_tick.add_theme_color_override(&"font_color", ink)
 	_tick.modulate = Color.WHITE

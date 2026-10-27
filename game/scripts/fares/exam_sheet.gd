@@ -1,14 +1,15 @@
 class_name ExamSheet
 extends RefCounted
-## What each `Fare.Skill` is called (`P3-76`, `Q169`, the user's ask): the
-## items of the driving test's fault sheet, the 黃紙, read from
-## `tuning/exam_sheet.json` — 太接近其他物體 for a near miss, 碰及物體 for a
-## crash. Names only: a bonus still pays and a penalty still docks, and TD's
+## What each `Fare.Skill` is called (`P3-76`, `Q169`, the user's ask), read
+## from `tuning/exam_sheet.json`: a penalty is its item on the driving test's
+## fault sheet, the 黃紙 — 碰及物體 for a crash — and a bonus an exam-register
+## feat with no fault word in it — 貼身而過 for a near miss. Names only: TD's
 ## three-minors-make-a-serious rule is not applied (the user's call).
 ##
-## **The tier is part of the name.** Two events share an item — a near miss
-## and a close call are both 太接近其他物體 — and the sheet's own 輕微 / 嚴重
-## is what tells them apart on the flash and the receipt, so `name` appends it.
+## **The tier is part of the name.** A bump and a crash are both 碰及物體,
+## and the sheet's own 輕微 / 嚴重 is what tells them apart on the flash and
+## the receipt, so `name` appends it. A bonus has none: a fault grade beside
+## money paid read as a telling-off.
 ##
 ## Read once and kept: `FareFace` asks on every award and every receipt line.
 
@@ -51,7 +52,7 @@ static func _key_of(skill: Fare.Skill) -> String:
 
 
 ## `skill`'s item in `language`, with its tier where it has one —
-## "太接近其他物體（輕微）", "too close to other objects (minor)". A skill with
+## "碰及物體（輕微）", "touching an object (minor)". A skill with
 ## no row reads as its key in brackets, so a missing name is seen on screen
 ## rather than flashed as nothing.
 func item_name(skill: Fare.Skill, language: String) -> String:

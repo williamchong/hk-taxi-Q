@@ -221,9 +221,9 @@ func practice_text(award: Fare.Award) -> String:
 	return skill_name(award.skill)
 
 
-## A skill's name, in the face's language: its item on the driving test's
-## fault sheet (`P3-76`, `Q169`, the user's ask) — 太接近其他物體 for a near
-## miss, 碰及物體 for a crash — read from `tuning/exam_sheet.json`.
+## A skill's name, in the face's language (`P3-76`, `Q169`, the user's ask) —
+## 貼身而過 for a near miss, 碰及物體（嚴重） for a crash, a penalty's off the
+## driving test's fault sheet — read from `tuning/exam_sheet.json`.
 func skill_name(skill: Fare.Skill) -> String:
 	return ExamSheet.shared().item_name(skill, _language)
 

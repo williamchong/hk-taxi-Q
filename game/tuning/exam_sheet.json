@@ -10,13 +10,19 @@
     "The NAMES only (the user's call): a bonus is still a bonus and a penalty a",
     "penalty, and TD's own rule that three minor faults on one item make a",
     "serious one is NOT applied. The tier word is what tells two events on the",
-    "same item apart — a near miss from a close call, a bump from a crash.",
+    "same item apart — a bump from a crash.",
+    "",
+    "A BONUS IS NOT A FAULT (the user's pick, 2026-10-28): the sheet's items",
+    "read as fail marks beside money paid, 嚴重 most of all, so a bonus takes",
+    "a feat with no fault word and no tier — 貼身而過, 險過剃頭, 高速行駛,",
+    "凌空飛躍, and the early arrival the saying 走得快好世界 — and only the",
+    "penalties keep the sheet's wording.",
     "",
     "Sourced: TD's Guide to Private Car and Light Goods Vehicle Driving Test",
     "(Nov 2025, both languages) for 輕微 / 嚴重 and Minor / Serious. The item",
     "wording is the 黃紙's as driving schools quote it — the form itself is not",
     "published — and its English is ours: TD's English names for the items are",
-    "unverified. 早到 is the passenger's, not the examiner's, and keeps its name.",
+    "unverified.",
     "甩尾 keeps its name too (the user's call): the sheet's 軚盤控制不當 opens",
     "with 軚 (U+8EDA), which Free HK Kai does not carry, and the web build has",
     "no system face to fall back on.",
@@ -40,26 +46,24 @@
       "zh": "甩尾"
     },
     "speed": {
-      "en": "inappropriate speed",
-      "zh": "車速不適當"
+      "en": "high speed",
+      "zh": "高速行駛"
     },
     "early": {
       "en": "early",
-      "zh": "早到"
+      "zh": "走得快好世界"
     },
     "near_miss": {
-      "en": "too close to other objects",
-      "zh": "太接近其他物體",
-      "tier": "minor"
+      "en": "close pass",
+      "zh": "貼身而過"
     },
     "close_call": {
-      "en": "too close to other objects",
-      "zh": "太接近其他物體",
-      "tier": "serious"
+      "en": "hair's-breadth pass",
+      "zh": "險過剃頭"
     },
     "air": {
-      "en": "coasting in neutral",
-      "zh": "空波滑行"
+      "en": "airborne",
+      "zh": "凌空飛躍"
     },
     "crash": {
       "en": "touching an object",
