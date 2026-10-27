@@ -166,7 +166,12 @@ func tick(
 	var touched: bool = impact_mps > 0.0
 	_dwell(
 		_drift,
-		slip_deg >= _slip_threshold_deg and not airborne and not touched,
+		(
+			slip_deg >= _slip_threshold_deg
+			and slip_deg <= FareSystem.REVERSED_SLIP_DEG
+			and not airborne
+			and not touched
+		),
 		elapsed,
 		_profile.drift_min_s,
 		_profile.drift_s,

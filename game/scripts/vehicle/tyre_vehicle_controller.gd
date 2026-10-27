@@ -52,13 +52,6 @@ const SOLVE_ITERATIONS: int = 12
 ## Normal-to-ray alignment under which Godot stops trusting the contact and
 ## pins its damper — `vehicle_body_3d.cpp`'s own -0.1, restated for `_load_n`.
 const CONTACT_DOT_FLOOR: float = -0.1
-## Body slip past which the car is travelling backwards, not sliding: stability
-## control's slip cuts stand aside there, so the throttle drives the wheels and
-## brakes the backward roll as a real car's does. Cut at every slip, a car spun
-## round in drift mode had no drive at all and rolled backwards at 10–30 kph
-## with the throttle held (the user's report, 2026-10-06). A geometric fact —
-## 90° is the travel crossing the axle — not a dial.
-const REVERSED_SLIP_DEG: float = 90.0
 
 @export var tyre: TyreProfile
 @export var traction_control: TractionControlProfile
@@ -595,7 +588,7 @@ func _armed_slip_share() -> float:
 
 ## The forward drive left by a slip cut over `from`–`to` degrees of rear-axle slip:
 ## 1 under `from`, none at `to`. 1 when the band is not authored (`to` not over
-## `from`), on reverse drive, and past `REVERSED_SLIP_DEG`, where the car is
+## `from`), on reverse drive, and past `FareSystem.REVERSED_SLIP_DEG`, where the car is
 ## travelling backwards and the throttle must brake the roll.
 func _slip_cut_share(from: float, to: float) -> float:
 	if _drive_n <= 0.0:
@@ -605,7 +598,11 @@ func _slip_cut_share(from: float, to: float) -> float:
 
 ## How far the rear axle's slip is through `from`–`to` degrees: 0 under `from`,
 ## 1 at `to`. 0 when the band is not authored (`to` not over `from`) and past
-## `REVERSED_SLIP_DEG`.
+## `FareSystem.REVERSED_SLIP_DEG`: stability control's slip cuts stand aside
+## there, so the throttle drives the wheels and brakes the backward roll as a
+## real car's does. Cut at every slip, a car spun round in drift mode had no
+## drive at all and rolled backwards at 10–30 kph with the throttle held (the
+## user's report, 2026-10-06).
 func _slip_over(from: float, to: float) -> float:
 	if to <= from:
 		return 0.0
@@ -615,7 +612,7 @@ func _slip_over(from: float, to: float) -> float:
 	if linear_velocity.length() < _low_speed_mps():
 		return 0.0
 	var slip: float = FareSystem.slip_deg_of(rear_axle_velocity(), -global_basis.z)
-	if slip > REVERSED_SLIP_DEG:
+	if slip > FareSystem.REVERSED_SLIP_DEG:
 		return 0.0
 	return clampf(inverse_lerp(from, to, slip), 0.0, 1.0)
 

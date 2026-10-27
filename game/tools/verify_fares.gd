@@ -639,6 +639,23 @@ func _check_skills() -> void:
 		"skills",
 		"a degree under the threshold, however long, is not a drift"
 	)
+	_slide(system, FAST, 180.0, drift_ticks * 3)
+	_slide(system, FAST, FareSystem.REVERSED_SLIP_DEG + 1.0, drift_ticks * 3)
+	_expect(
+		system.fare.awards.is_empty() and _skilled == 0,
+		"skills",
+		"reversing, straight or turning, reads over 90° of slip and is not a drift"
+	)
+	# A tracker of its own, so the award it pays shifts none of the counts below.
+	var sideways := SkillTracker.new(_skills, threshold)
+	var sideways_paid: int = 0
+	for _tick_index: int in drift_ticks:
+		sideways_paid += sideways.tick(FAST, FareSystem.REVERSED_SLIP_DEG, TICK_S).size()
+	_expect(
+		sideways_paid == 1,
+		"skills",
+		"a slide at 90° of slip, the car square to its travel, is still a drift and pays"
+	)
 	if repeat_ticks < drift_ticks:
 		_slide(system, FAST, threshold, repeat_ticks)
 		_slide(system, FAST, 0.0, 1)

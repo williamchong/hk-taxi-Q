@@ -122,7 +122,8 @@ the loop's own numbers in `tuning/fares.tres`.
   held `drift_min_s` (0.5 s since `Q172` — at 2 s only a countersteered slide at 86 kph ever
   counted on the pace-2.0 car) and pays again every `drift_s`, each award `drift_step_hkd` over
   the last in the same slide, so its total grows with the square of its length; a new slide starts
-  again at `drift_hkd`. 🚫 Not a fare-wide chain: the step is one slide's (`P3-2b` is the chain); a run at or over `speed_min_kph` pays every `speed_hold_m`
+  again at `drift_hkd`. ⚠️ Slip past `FareSystem.REVERSED_SLIP_DEG` (90°) is reversing, not
+  a drift — a reverse reads ~180° and paid at 0.5 s. 🚫 Not a fare-wide chain: the step is one slide's (`P3-2b` is the chain); a run at or over `speed_min_kph` pays every `speed_hold_m`
   DRIVEN, and `verify_fares` refuses `speed_hold_m` under `tariff.step_m` so the skill can never
   tick faster than the meter's 200 m unit. 🚫 No `speed_hold_s`: time at speed is what the clock
   already pays. The drift's bar is seconds because `Q84` grades drift on dwell.

@@ -10544,4 +10544,13 @@ inert system, and a halved step banking less (113.37 against 113.87 on the same 
 mutation that multiplies the step by 0 fails four checks by name. On the empty-cab drive the
 first 甩尾 now flashes at t=3.80, 0.5 s into the slide (was 5.30), with HK$1 then HK$2.
 
+**Reversing is not a drift** (the user's report, 2026-10-28: "i can keep spamming drifting bonus
+just by pressing back and turn at the same time"). The slip is the angle between the nose and the
+rear axle's travel, so a reverse reads about 180°, over the 14° threshold; the 2 s bar had hidden
+it, and at 0.5 s a short reverse paid HK$1, again and again. `FareSystem.REVERSED_SLIP_DEG` (90°,
+the tyre car's stability control's own) now stops the drift meter past a right angle — geometry, not
+a tuning value, so it is a constant and not a `skills.tres` key. `slip_deg_of` is unchanged, so the
+skidpad's duplicate is untouched. `verify_fares`'s `skills:` block holds a 180° and a 91° slide
+paying nothing and a 90° one paying; the mutation that drops the guard fails it by name.
+
 **See.** `Q84` · `Q145` · `Q153` · `Q156` · `P3-49` · `P3-53` · `P3-58` · `game/tuning/skills.md`

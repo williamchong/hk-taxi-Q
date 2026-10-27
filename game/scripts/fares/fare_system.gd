@@ -141,6 +141,11 @@ const SEED_ARG: String = "--fare-seed="
 ## a nearly stationary car has a velocity vector pointing anywhere at all.
 ## `skidpad_ablation.gd`'s `SLIP_FLOOR_MPS`, restated on purpose (see above).
 const SLIP_FLOOR_MPS: float = 1.0
+## The slip past which the car is travelling backwards, not sliding: the
+## tyre car's stability control stands aside there, and the drift meter does
+## not run (a reverse reads about 180°, and under `Q172`'s 0.5 s bar it paid).
+## A geometric fact — 90° is the travel crossing the axle — not a dial.
+const REVERSED_SLIP_DEG: float = 90.0
 
 enum State { IDLE, BOARDING, CARRYING }
 
