@@ -22,8 +22,12 @@ const PATH: String = "res://tuning/skills.tres"
 ## Once a slide has counted, how much longer it must hold before it pays
 ## again, in seconds.
 @export var drift_s: float
-## What a slide pays into the tip when it counts, and again each `drift_s`, in HK$.
+## What a slide's first award pays into the tip when it counts, in HK$.
 @export var drift_hkd: float
+## How much more each further award of the same slide pays than the one
+## before it, in HK$: the n-th pays `drift_hkd + (n - 1) * drift_step_hkd`,
+## so a slide's total grows with the square of its length.
+@export var drift_step_hkd: float
 ## The speed the sustained-speed skill starts counting at, in km/h.
 @export var speed_min_kph: float
 ## How far the car must drive at or over that speed before it pays, in metres

@@ -58,7 +58,8 @@ tick first. Pace graded in finer steps at REAL entry speeds of 42 / 63 / 86 kph,
 | **2.0** | **101.7** | 0.68 / **0.83** / 3.57 | 81 / 84 / 93° | 18.2 |
 
 What 2.0 gives up, taken knowingly: the countersteered slide at 42 and 63 kph is under the
-fare's 2 s (`drift_min_s`), so a held drift pays from about 86 kph only. It falls off a cliff
+fare's 2 s (`drift_min_s`), so a held drift pays from about 86 kph only. (Since `Q172`,
+2026-10-28, `drift_min_s` is 0.5 s and every row here pays; the dwell is what it was.) It falls off a cliff
 between 1.55 and 1.6 at 42, and between 1.65 and 1.7 at 63. Every `turn` row stays inside 80–110°
 but the countersteer's (81 / 77 / 76°). The lifted flick slides again at 63 kph (19.2°, over the
 threshold; 3.7 / 9.3° at 42 / 86). The lifted handbrake still spins at 63 / 86. 80 kph from rest

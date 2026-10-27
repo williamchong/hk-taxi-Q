@@ -179,7 +179,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   lift with the cut swept `0,0.5` on `--only=technique` — at 0.5 `corner`'s rear never reaches
   the peak and cannot see it.
 - ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
-  `SkillProfile.drift_hkd` per `drift_s` the slip holds at or over it past `drift_min_s` (`Q145`), so the number the
+  `SkillProfile.drift_hkd`, rising `drift_step_hkd` per `drift_s`, while the slip holds at or over it past `drift_min_s` (`Q145`, `Q172`), so the number the
   skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target
   (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
   the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of

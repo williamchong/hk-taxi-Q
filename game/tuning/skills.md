@@ -19,27 +19,39 @@ restating it.
 zero, and `FareSystem` refuses to run on a zero dwell, bar or price rather than fall back to a
 literal.
 
-## `drift_min_s = 2.0`
+## `drift_min_s = 0.5`
 
-A slide must hold at or over the threshold for two seconds before it counts at all; a shorter
-one pays nothing. The first table paid at one second, and on the user's drive that paid a flick
-through a junction (2026-09-25, the user's call: a drift only counts when it is longer than a
-threshold). The skidpad's shipped drift dwells 0.57–0.85 s (`Q84`, `Q86`), so a tap is well
-under this, and a slide held through a corner on Hennessy is over it. Seconds, not metres,
-because `Q84` grades the drift dial on dwell in seconds, and a distance bar would pay a fast
-slide over a slow one for the same control — which is the speed skill's job.
+A slide must hold at or over the threshold for half a second before it counts at all; a shorter
+one pays nothing (`Q172`, the user's call, 2026-10-28: lower the bar and scale the bonus to
+time). It was 2.0 (2026-09-25, over a first 1.0 that paid a flick through a junction), and on
+the shipped car at pace 2.0 that paid almost nothing: the skidpad's dwells at 42 / 63 / 86 kph
+(2026-10-28) are `tap` and `ride` 1.00 / 0.87 / 0.98 s and the countersteered `hold`
+0.68 / 0.83 / 3.57 s, so only a countersteered slide at 86 kph ever counted. At 0.5 every one of
+those rows counts. A flick still pays almost nothing, which is the step's job below, not the
+bar's. Seconds, not metres, because `Q84` grades the drift dial on dwell in seconds, and a
+distance bar would pay a fast slide over a slow one for the same control — which is the speed
+skill's job.
 
 ## `drift_s = 1.0`
 
-Once a slide has counted, it pays again each further second held — `GAME_DESIGN.md`'s "points
-per second" as money. The first payment lands at `drift_min_s`, the second at
-`drift_min_s + drift_s`, and so on; releasing the slide forfeits the part not yet paid.
+Once a slide has counted, it pays again each further second held. The first payment lands at
+`drift_min_s`, the second at `drift_min_s + drift_s`, and so on; releasing the slide forfeits the
+part not yet paid. Also the sparks' cadence (`drift_sparks.md`): blue at 0.5 s, orange at 1.5,
+purple at 2.5.
 
-## `drift_hkd = 5.0`
+## `drift_hkd = 1.0`
 
-Ten seconds of the time tip. A two-second slide is worth a block driven fast; a five-second one
-pays four times and is worth a short hop's allowance, which is what makes the corner worth
-taking sideways.
+The first award of a slide: what a flick that just reaches `drift_min_s` is worth, two seconds
+of the time tip. Small on purpose, since every tap on the pad reaches it.
+
+## `drift_step_hkd = 1.0`
+
+How much more each further award of the same slide pays than the one before (`Q172`): the n-th
+pays `drift_hkd + (n − 1) × drift_step_hkd`, so at 1.0 / 1.0 a slide paid n times has banked
+n(n + 1) / 2 — HK$1 at 0.5 s, 3 at 1.5, 6 at 2.5, 10 at 3.5, 15 at 4.5. The flat table it
+replaced paid 5 at 2 s, 10 at 3, 20 at 5: the two cross at about three and a half seconds, so a
+slide through one corner pays what it did and a long one pays more. A new slide starts again at
+`drift_hkd`. Required like every key: a flat drift is the old shape, and is not this table.
 
 ## `speed_min_kph = 80.0`
 

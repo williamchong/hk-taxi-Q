@@ -102,7 +102,7 @@ the loop's own numbers in `tuning/fares.tres`.
   for `verify_fares`, which asserts the fields agree with them at the delivery. A reader never
   rescans the pool from the car's position.
 - 🔴 **The skills are flat money per event, paid as they happen** (`P3-49`, `Q145`, the user's
-  call over the style chain): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
+  call over the style chain) — but for the drift, whose awards rise within one slide (`Q172`): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
   slip by `sample()` in every state, `tuning/skills.tres` prices them (sidecar `skills.md`), and
   while carrying each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and
   out on `skilled`. `time_hkd` is the seconds left priced at the door; `tip = time + skills`.
@@ -117,9 +117,12 @@ the loop's own numbers in `tuning/fares.tres`.
   the empty drift and crash, the boarding seam, and the reset as a named mutation. 🚫 No money
   for practice, in any form — the chain (`P3-2b`) is where it becomes money. `--fares=off` still
   frees the node, so free roam shows nothing.
-- 🔴 **A drift must qualify, and the speed skill is paid by the metre** (the user's calls,
-  2026-09-25, `Q145`): a slide counts once it has held `drift_min_s` (2 s, over the 1 s that paid a
-  tap) and pays again every `drift_s`; a run at or over `speed_min_kph` pays every `speed_hold_m`
+- 🔴 **A drift must qualify, its money grows with its length, and the speed skill is paid by the
+  metre** (the user's calls, 2026-09-25, `Q145`; 2026-10-28, `Q172`): a slide counts once it has
+  held `drift_min_s` (0.5 s since `Q172` — at 2 s only a countersteered slide at 86 kph ever
+  counted on the pace-2.0 car) and pays again every `drift_s`, each award `drift_step_hkd` over
+  the last in the same slide, so its total grows with the square of its length; a new slide starts
+  again at `drift_hkd`. 🚫 Not a fare-wide chain: the step is one slide's (`P3-2b` is the chain); a run at or over `speed_min_kph` pays every `speed_hold_m`
   DRIVEN, and `verify_fares` refuses `speed_hold_m` under `tariff.step_m` so the skill can never
   tick faster than the meter's 200 m unit. 🚫 No `speed_hold_s`: time at speed is what the clock
   already pays. The drift's bar is seconds because `Q84` grades drift on dwell.
@@ -134,7 +137,10 @@ the loop's own numbers in `tuning/fares.tres`.
   speed pays in half the ticks (distance, not time); a degree under the threshold never pays; a
   slide or run that ends forfeits its unpaid part (two short ones are not one long one); the share
   a tick under and on. Mutations:
-  a zeroed `drift_hkd` and a zero threshold are inert systems, named; half the price banks less.
+  a zeroed `drift_hkd` or `drift_step_hkd` and a zero threshold are inert systems, named; half the
+  price and half the step each bank less; the second and third awards of a slide pay one and two
+  steps more, and the next slide's first pays `drift_hkd`. Mutation (`Q172`): the step multiplied
+  by 0 fails four checks by name.
   ⚠️ Arriving with the clock nearly full IS an early arrival, so the loop's own delivery check
   expects `time + early_hkd`.
 - 🔴 **The live tip is the skills alone, floored at zero; the time joins it at the door** (the

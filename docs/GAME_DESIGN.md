@@ -111,7 +111,7 @@ the arrow disabled.
 | Base fare | The meter's reading at delivery (`Q141`) |
 | **Tip** (小費) | Everything below, in HK$, banked with the meter as one sum |
 | Time bonus | Remaining seconds × HK$0.5, priced at the door — pays a shortcut and a fast run alike (`P3-1a`); never in the live tip (`Q145`) |
-| **Drift** | HK$ once a slide has held `drift_min_s` at or over `drift_slip_threshold_deg`, and again per `drift_s` (`P3-49`, `skills.tres`) |
+| **Drift** | HK$ once a slide has held `drift_min_s` at or over `drift_slip_threshold_deg`, and again per `drift_s`, each award `drift_step_hkd` more than the last, so a long slide pays the square of its length (`P3-49`, `Q172`, `skills.tres`) |
 | **Sustained speed** | HK$ per `speed_hold_m` driven over `speed_min_kph` — never oftener than the meter's 200 m unit (`P3-49`) |
 | **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
 | **Near miss** | HK$ for passing a PARKED vehicle inside `near_miss_m` at or over `near_miss_min_kph`, only when the car was heading for it a moment before — a lane pass at the same clearance pays nothing (`P3-2a`, `Q161`, the user's call); inside `close_call_m` it is a **close call** at twice the price |

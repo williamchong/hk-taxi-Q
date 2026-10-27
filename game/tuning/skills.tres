@@ -4,9 +4,10 @@
 
 [resource]
 script = ExtResource("1_skills")
-drift_min_s = 2.0
+drift_min_s = 0.5
 drift_s = 1.0
-drift_hkd = 5.0
+drift_hkd = 1.0
+drift_step_hkd = 1.0
 speed_min_kph = 80.0
 speed_hold_m = 200.0
 speed_hkd = 5.0

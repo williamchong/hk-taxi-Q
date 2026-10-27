@@ -577,6 +577,11 @@ func _check_skills() -> void:
 	var inert: FareSystem = _system_with({"nodes": []}, _profile, zeroed, SEED)
 	_expect(not inert.usable(), "skills", "mutation caught: a zero drift_hkd is an inert system")
 	inert.free()
+	var flat: SkillProfile = _skills.duplicate()
+	flat.drift_step_hkd = 0.0
+	var unstepped: FareSystem = _system_with({"nodes": []}, _profile, flat, SEED)
+	_expect(not unstepped.usable(), "skills", "and so is a zero drift_step_hkd")
+	unstepped.free()
 	var unhandled: FareSystem = FareSystemScript.new()
 	unhandled.setup(
 		_graph,
@@ -672,18 +677,47 @@ func _check_skills() -> void:
 		"skills",
 		"a penalty docks the tip and floors it at zero, never below"
 	)
-	_slide(system, FAST, threshold + 20.0, repeat_ticks)
+	_slide(system, FAST, threshold + 20.0, repeat_ticks - 1)
+	_expect(system.fare.awards.size() == 1, "skills", "one tick short of drift_s, still once")
+	_slide(system, FAST, threshold + 20.0, 1)
 	_expect(
-		system.fare.awards.size() == 2 and _skilled == 2,
+		(
+			system.fare.awards.size() == 2
+			and _skilled == 2
+			and is_equal_approx(
+				system.fare.awards[1].hkd, _skills.drift_hkd + _skills.drift_step_hkd
+			)
+		),
 		"skills",
-		"held another drift_s, the same slide pays again"
+		"held another drift_s, the same slide pays again, drift_step_hkd more than the first"
+	)
+	_slide(system, FAST, threshold, repeat_ticks)
+	_expect(
+		(
+			system.fare.awards.size() == 3
+			and is_equal_approx(
+				system.fare.awards[2].hkd, _skills.drift_hkd + 2.0 * _skills.drift_step_hkd
+			)
+		),
+		"skills",
+		"and the third pays a step more again: the slide's money grows faster than its length"
+	)
+	_slide(system, FAST, 0.0, 1)
+	_slide(system, FAST, threshold, drift_ticks)
+	_expect(
+		(
+			system.fare.awards.size() == 4
+			and is_equal_approx(system.fare.awards[3].hkd, _skills.drift_hkd)
+		),
+		"skills",
+		"a new slide starts again at drift_hkd: the step is one slide's, never carried over"
 	)
 	_slide(system, FAST, 0.0, 1)
 	_slide(system, FAST, threshold, drift_ticks - 1)
 	_slide(system, FAST, 0.0, 1)
 	_slide(system, FAST, threshold, drift_ticks - 1)
 	_expect(
-		system.fare.awards.size() == 2,
+		system.fare.awards.size() == 4,
 		"skills",
 		"a slide that ends forfeits its unpaid dwell: two short slides are not one long one"
 	)
@@ -705,10 +739,10 @@ func _check_skills() -> void:
 	_expect(system.deliveries == 1, "skills", "delivered")
 	_expect(
 		(
-			system.fare.awards.size() == 3
-			and system.fare.awards[2].skill == Fare.Skill.EARLY
+			system.fare.awards.size() == 5
+			and system.fare.awards[4].skill == Fare.Skill.EARLY
 			and is_equal_approx(system.fare.skills_hkd, skills_before + _skills.early_hkd)
-			and _skilled == 3
+			and _skilled == 5
 		),
 		"skills",
 		"the early arrival is paid at the door, last, and announced"
@@ -967,8 +1001,22 @@ func _check_skills() -> void:
 			% [mutated.fare.banked_hkd, priced.fare.banked_hkd]
 		)
 	)
+	# And half the step: the same drive's second award is what it moves.
+	var shallow: SkillProfile = _skills.duplicate()
+	shallow.drift_step_hkd = _skills.drift_step_hkd * 0.5
+	var stepped: FareSystem = _system_with(_fares, _profile, shallow, SEED)
+	_drift_drive(stepped, pickup, threshold, drift_ticks, repeat_ticks)
+	_expect(
+		stepped.deliveries == 1 and stepped.fare.banked_hkd < priced.fare.banked_hkd,
+		"skills",
+		(
+			"mutation caught: half the drift step banks HK$%.2f against HK$%.2f"
+			% [stepped.fare.banked_hkd, priced.fare.banked_hkd]
+		)
+	)
 	priced.free()
 	mutated.free()
+	stepped.free()
 
 
 ## Practice (the user's call, 2026-09-26): the skills run with no passenger
@@ -1090,33 +1138,46 @@ func _check_penalties() -> void:
 	_tick(system, pickup.point, CRAWL, 5)
 	var threshold: float = _slip_threshold_deg
 	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var repeat_ticks: int = int(ceil(_skills.drift_s / TICK_S))
 	var cool_ticks: int = int(ceil(_skills.crash_cool_s / TICK_S))
-	_slide(system, FAST, threshold, drift_ticks)
+	# Three awards of one slide, so the tip holds more than two bumps and the
+	# docks below are seen before the floor.
+	var slid: int = 3
+	_slide(system, FAST, threshold, drift_ticks + (slid - 1) * repeat_ticks)
 	_slide(system, FAST, 0.0, 1)
 	var live: float = system.fare.tip_hkd
-	_expect(is_equal_approx(live, _skills.drift_hkd), "penalty", "a drift in the tip to dock")
+	var drifted: float = slid * _skills.drift_hkd + slid * (slid - 1) / 2.0 * _skills.drift_step_hkd
+	_expect(
+		(
+			system.fare.awards.size() == slid
+			and is_equal_approx(live, drifted)
+			and live > 2.0 * _skills.bump_hkd
+		),
+		"penalty",
+		"a drift in the tip to dock, over two bumps (HK$%.1f)" % live
+	)
 
 	_hit(system, _skills.bump_min_kph - 1.0)
 	_expect(
-		system.fare.awards.size() == 1 and is_equal_approx(system.fare.tip_hkd, live),
+		system.fare.awards.size() == 3 and is_equal_approx(system.fare.tip_hkd, live),
 		"penalty",
 		"a kph under bump_min_kph is a touch: nothing docked, nothing said"
 	)
 	_hit(system, _skills.bump_min_kph)
 	_expect(
 		(
-			system.fare.awards.size() == 2
-			and system.fare.awards[1].skill == Fare.Skill.BUMP
-			and is_equal_approx(system.fare.awards[1].hkd, -_skills.bump_hkd)
+			system.fare.awards.size() == 4
+			and system.fare.awards[3].skill == Fare.Skill.BUMP
+			and is_equal_approx(system.fare.awards[3].hkd, -_skills.bump_hkd)
 			and is_equal_approx(system.fare.tip_hkd, live - _skills.bump_hkd)
-			and _skilled == 2
+			and _skilled == 4
 		),
 		"penalty",
 		"AT bump_min_kph a collision docks bump_hkd from the live tip and is announced"
 	)
 	_hit(system, _skills.crash_min_kph)
 	_expect(
-		system.fare.awards.size() == 2,
+		system.fare.awards.size() == 4,
 		"penalty",
 		"a crash on the next tick is the same wall: inside crash_cool_s nothing more is docked"
 	)
@@ -1124,12 +1185,12 @@ func _check_penalties() -> void:
 	# minus that tick, minus this probe.
 	_tick(system, FAR_AWAY, FAST, cool_ticks - 3)
 	_hit(system, _skills.crash_min_kph)
-	_expect(system.fare.awards.size() == 2, "penalty", "one tick short of crash_cool_s, still")
+	_expect(system.fare.awards.size() == 4, "penalty", "one tick short of crash_cool_s, still")
 	_hit(system, _skills.crash_min_kph - 1.0)
 	_expect(
 		(
-			system.fare.awards.size() == 3
-			and system.fare.awards[2].skill == Fare.Skill.BUMP
+			system.fare.awards.size() == 5
+			and system.fare.awards[4].skill == Fare.Skill.BUMP
 			and is_equal_approx(system.fare.tip_hkd, live - 2.0 * _skills.bump_hkd)
 		),
 		"penalty",
@@ -1137,12 +1198,12 @@ func _check_penalties() -> void:
 	)
 	_tick(system, FAR_AWAY, FAST, cool_ticks - 1)
 	_hit(system, _skills.crash_min_kph)
-	var owed: float = _skills.drift_hkd - 2.0 * _skills.bump_hkd - _skills.crash_hkd
+	var owed: float = drifted - 2.0 * _skills.bump_hkd - _skills.crash_hkd
 	_expect(
 		(
-			system.fare.awards.size() == 4
-			and system.fare.awards[3].skill == Fare.Skill.CRASH
-			and is_equal_approx(system.fare.awards[3].hkd, -_skills.crash_hkd)
+			system.fare.awards.size() == 6
+			and system.fare.awards[5].skill == Fare.Skill.CRASH
+			and is_equal_approx(system.fare.awards[5].hkd, -_skills.crash_hkd)
 			and is_equal_approx(system.fare.skills_hkd, owed)
 			and is_equal_approx(system.fare.tip_hkd, FareSystem.tip_of(0.0, owed))
 			and system.fare.count_of(Fare.Skill.CRASH) == 1

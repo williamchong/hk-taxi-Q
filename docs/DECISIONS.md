@@ -10472,3 +10472,55 @@ canopy is 12.5% darker than D. Picked over a louder setting (0.3 / 0.4 / 0.2, da
 renders at two fixed cameras. The trunk collider takes the across-scale for its radius.
 
 **See.** `Q144` · `Q159` · `Q160` · `P3-67` · `P3-77`
+
+---
+
+## `Q172` — A drift counts at half a second, and its money grows with its length
+
+**Status.** ✅ Built 2026-10-28 on the user's ask. Amends `Q145`'s drift: the bar and the price,
+not the angle.
+
+**Asked** by the user, 2026-10-28: "why seems i cant trigger drifting bonus in test drive?", then
+"it should still show the drifting text", then "lower drift min s but scale the bonus to time (non
+linearly?)".
+
+**Why nothing showed.** The practice flash worked (甩尾, `hud.gd`'s `_on_fare_practised`, seen in a
+frame of an empty-cab drive), but the 2 s bar was out of reach of the pace-2.0 car (`Q156`). The
+skidpad on 2026-10-28, dwell at or over 14° at 42 / 63 / 86 kph:
+
+| Row | Dwell |
+|---|---|
+| `tap` | 1.00 / 0.87 / 0.98 s |
+| `ride` (plain input) | 1.00 / 0.87 / 0.98 s |
+| `hold` (countersteered) | 0.68 / 0.83 / 3.57 s |
+
+Only a countersteered slide at 86 kph reached 2 s. The scripted handbrake drive through the
+junction east of HKCEC reached it only once the car was spinning on the spot at under 5 kph.
+
+**Decided.**
+
+- `drift_min_s` 2.0 → **0.5**: every row above counts.
+- **A rising price within one slide.** A new key, `drift_step_hkd`: the n-th award of a slide pays
+  `drift_hkd + (n − 1) × drift_step_hkd`, so the slide's total grows with the square of its length.
+  At `drift_hkd` 1.0 / `drift_step_hkd` 1.0 / `drift_s` 1.0 that is HK$1 at 0.5 s, 3 at 1.5, 6 at
+  2.5, 10 at 3.5 and 15 at 4.5, against the flat table's 5 at 2 s, 10 at 3 and 20 at 5. A flick
+  is worth HK$1, and the two tables cross at about 3.5 s.
+- Arithmetic, not geometric: a doubling price makes a ten-second slide worth more than every fare
+  in the shift, and a single `drift_step_hkd` keeps the curve a dial.
+- The step is one slide's own. A new slide starts again at `drift_hkd`, and a slide that ends
+  forfeits its unpaid part as before. 🚫 Not the fare-wide chain: that is still `P3-2b`'s.
+- `drift_s` stays 1.0, so the sparks still step once a second (blue at 0.5 s, orange 1.5,
+  purple 2.5).
+
+**What it moves.** `P3-53`'s bar that a novice's plain input "stays under `drift_min_s`" no longer
+holds: at 0.5 s every `ride` row pays its first HK$1. That is the user's call here, and the step
+is what keeps a plain input cheap. `pace.md`'s "a held drift pays from about 86 kph only" is
+history.
+
+**Verified.** `verify_fares`'s `skills:` block now holds the second and third awards of a slide at
+one and two steps over the first, a fresh slide back at `drift_hkd`, a zero `drift_step_hkd` as an
+inert system, and a halved step banking less (113.37 against 113.87 on the same drive). The
+mutation that multiplies the step by 0 fails four checks by name. On the empty-cab drive the
+first 甩尾 now flashes at t=3.80, 0.5 s into the slide (was 5.30), with HK$1 then HK$2.
+
+**See.** `Q84` · `Q145` · `Q153` · `Q156` · `P3-49` · `P3-53` · `P3-58` · `game/tuning/skills.md`

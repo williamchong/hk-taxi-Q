@@ -52,7 +52,8 @@ extends Node
 ## **The skills pay as they happen** (`P3-49`, `Q145`). While a passenger is
 ## aboard a `SkillTracker` reads every tick's speed and slip: a slide held at
 ## or over `HandlingProfile.drift_slip_threshold_deg` for `SkillProfile.drift_min_s`
-## pays `drift_hkd` and again every further `drift_s`, a run at or over
+## pays `drift_hkd` and again every further `drift_s`, each award
+## `drift_step_hkd` over the last, a run at or over
 ## `speed_min_kph` pays `speed_hkd` every `speed_hold_m` driven, a flight
 ## with every wheel off the ground for `air_min_s` pays `air_hkd` on an
 ## upright landing and again per further `air_s` (`P3-51`), and an

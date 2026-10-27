@@ -1,16 +1,17 @@
 class_name SkillTracker
 extends RefCounted
 ## The skills one fare earns while it runs (`P3-49`, `Q145`): a Forza-style
-## per-event bonus, each one a flat HK$ into `Fare.tip_hkd` the moment it is
-## earned, and a receipt line at the end.
+## per-event bonus, each one HK$ into `Fare.tip_hkd` the moment it is earned
+## — flat, but for a slide's rising step — and a receipt line at the end.
 ##
 ## **Two skills tick, one pays at the landing, one is judged at the door.** A
 ## drift counts once the slip has held at or over the threshold for
 ## `drift_min_s` — a shorter slide is a tap and pays nothing (the user's call)
-## — and pays again every further `drift_s`; sustained speed pays every
-## `speed_hold_m` DRIVEN at or over `speed_min_kph`, distance rather than time
-## so it can never tick faster than the meter's own 200 m unit (the user's
-## call); air (`P3-51`, `Q147`) is every wheel off the ground, metered in
+## — and pays again every further `drift_s`, each award `drift_step_hkd` over
+## the last, so a slide's money grows with the square of its length (the
+## user's call, `Q172`); sustained speed pays every `speed_hold_m` DRIVEN at
+## or over `speed_min_kph`, distance rather than time so it can never tick
+## faster than the meter's own 200 m unit (the user's call); air (`P3-51`, `Q147`) is every wheel off the ground, metered in
 ## seconds and paid ON THE LANDING — `air_hkd` once the flight held `air_min_s`
 ## and again per further `air_s` — and only when the car lands upright: a roll
 ## is four wheels in the air too, and pays nothing; an early arrival pays once
@@ -92,6 +93,7 @@ func _init(profile: SkillProfile, slip_threshold_deg: float) -> void:
 		"drift_min_s": profile.drift_min_s,
 		"drift_s": profile.drift_s,
 		"drift_hkd": profile.drift_hkd,
+		"drift_step_hkd": profile.drift_step_hkd,
 		"speed_min_kph": profile.speed_min_kph,
 		"speed_hold_m": profile.speed_hold_m,
 		"speed_hkd": profile.speed_hkd,
@@ -169,7 +171,8 @@ func tick(
 		_profile.drift_min_s,
 		_profile.drift_s,
 		Fare.Skill.DRIFT,
-		_profile.drift_hkd
+		_profile.drift_hkd,
+		_profile.drift_step_hkd
 	)
 	_dwell(
 		_speed,
@@ -219,7 +222,8 @@ func _flight(airborne: bool, upright: bool, elapsed: float) -> void:
 
 
 ## One dwell meter: `meter.total` grows by `amount` while `held`, pays `hkd`
-## as `skill` once it reaches `first_bar` and again each `bar` after that.
+## as `skill` once it reaches `first_bar` and again each `bar` after that,
+## each award `step_hkd` more than the one before it in the same event.
 ## Dropping the hold ends the event and forfeits the part not yet paid: a
 ## slide is one event, and two short ones are not one long one.
 func _dwell(
@@ -229,15 +233,16 @@ func _dwell(
 	first_bar: float,
 	bar: float,
 	skill: Fare.Skill,
-	hkd: float
+	hkd: float,
+	step_hkd: float = 0.0
 ) -> void:
 	if not held:
 		meter.reset()
 		return
 	meter.total += amount
 	while meter.total >= first_bar + meter.paid * bar:
+		_earned.append(Fare.Award.new(skill, hkd + meter.paid * step_hkd))
 		meter.paid += 1
-		_earned.append(Fare.Award.new(skill, hkd))
 
 
 ## At the door: the early arrival, or null. `remaining_s` over `allowance_s`
