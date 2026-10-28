@@ -193,6 +193,29 @@ func is_admitted(edge_id: int) -> bool:
 	return _states_of.has(edge_id)
 
 
+## The moves this profile allows out of driving `edge_id` its `along` way, each
+## `Vector2i(onward edge, 1 along its vertex order or 0 against)` — the arcs a
+## search walks, for a caller that drives them one at a time (`P3-3c`'s
+## traffic). Empty where the state is not in the network or leads nowhere.
+func moves_from(edge_id: int, along: bool) -> Array[Vector2i]:
+	var moves: Array[Vector2i] = []
+	for state: int in _states_of.get(edge_id, PackedInt32Array()):
+		if (_state_forward[state] == 1) != along:
+			continue
+		for arc: int in range(_succ_start[state], _succ_start[state + 1]):
+			var next: int = _succ[arc]
+			moves.append(Vector2i(_state_edge[next], _state_forward[next]))
+	return moves
+
+
+## Whether this profile may drive `edge_id` its `along` way at all.
+func admits_way(edge_id: int, along: bool) -> bool:
+	for state: int in _states_of.get(edge_id, PackedInt32Array()):
+		if (_state_forward[state] == 1) == along:
+			return true
+	return false
+
+
 ## Search from a destination point once, so that `route` to it is a lookup.
 ##
 ## False when the edge is not in this profile's network. A prepared tree is

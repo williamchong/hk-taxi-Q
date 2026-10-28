@@ -8,9 +8,13 @@ paths:
   - "game/scripts/traffic/signal_plan_profile.gd"
   - "game/tools/verify_signals.gd"
   - "game/tuning/signal_plan.tres"
+  - "game/scripts/traffic/traffic_system.gd"
+  - "game/scripts/traffic/traffic_profile.gd"
+  - "game/tools/verify_traffic.gd"
+  - "game/tuning/traffic.tres"
 ---
 
-# The signal plan and its controller — before marking work done
+# The signal plan, its controller and the traffic — before marking work done
 
 - **`pipeline/signals.py`, the `signals` block, `surface.py`'s `junctions` key, or
   `roadmarks.transverse_host`: paste the stage's `signals:` line for BOTH regions, before and
@@ -36,3 +40,15 @@ paths:
   fail it by name (2026-10-29). ⚠️ `CONFLICT_DEG` (45) checks the ETL's result and is not its
   tolerance; do not tie the two. ⚠️ **Every timing is authored** (`signal_plan.md`): TD publishes
   none, and red-and-amber 2 s / amber 3 s are the British values, TD's own unread.
+- **`traffic_system.gd`, `traffic.tres` or `verify_traffic.gd`: run `tools/check.sh`, paste
+  `verify_traffic`'s three `lights:` lines and its `lane:` line, and a throttle-route `draws` /
+  `phys` with and without `--traffic=off`** (`P3-3c`; 24 cars: +7 draws, ~+1 ms). 🔴 **A car moves
+  only by `RoadRouter.moves_from` under `Profile.legal()`** — never a second successor rule.
+  🔴 **Amber is judged at `brake_max_mps2`, TO THE LINE** (`to_stop + STOP_SHORT_M`): at the planned
+  rate a braking car rode its own judgement into the red, and to the aim point a crawling car met
+  the red a hair short (seed 4, which `SEEDS` keeps). Mutation-check rather than reading a pass:
+  red never stopping, no path reading and an illegal move each fail by name (2026-10-29).
+  ⚠️ Cars pass THROUGH each other at an unsignalled crossing on purpose — a car that waited for a
+  crossing car could wait for one waiting for it; a give-way rule owes its own deadlock argument.
+  ⚠️ `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre`; the `lane:` line holds them
+  together.

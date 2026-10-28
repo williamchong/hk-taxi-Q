@@ -801,6 +801,13 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--fares=%s is not off or on" % value)
 					return false
+			"--traffic":
+				# `traffic_system.gd` reads this one itself (`P3-3c`); its
+				# fallback is traffic ON, so a typo would put cars in a frame
+				# meant to be without them.
+				if not ["off", "on"].has(value):
+					_fail("--traffic=%s is not off or on" % value)
+					return false
 			"--fare-seed":
 				# `fare_system.gd` reads this one itself; a seed that is not an
 				# int would silently randomise, and two "A/B" drives would draw

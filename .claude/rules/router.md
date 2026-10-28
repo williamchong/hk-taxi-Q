@@ -67,7 +67,8 @@ paths:
 - ⚠️ **One consumer is wired: `FareSystem`** (`P3-1a`, `fares.md`). It pays `prepare` at the hail,
   one per candidate destination, and `route` at its own 5 Hz sample from the car's `Hit`; its par
   is `Profile.legal()` (`Q141`). The minimap draws that same `Route` (`P3-46`, `hud.md`) off the
-  fare, never a second search; `fare_preview.gd` still does not call it.
+  fare, never a second search; `fare_preview.gd` still does not call it. `TrafficSystem` (`P3-3c`) builds its own
+  `Profile.legal()` router and walks `moves_from` one arc at a time — never `prepare` or `route`.
 - ⚠️ **`route(..., facing)` seeds one direction of the source edge** (`P3-46`): `Facing.ALONG`,
   `AGAINST`, or `EITHER` — the default, and every table pin and the tables themselves use it. A
   direction the profile has no state for falls back to either. `verify_road_graph.gd`'s same-edge check pins

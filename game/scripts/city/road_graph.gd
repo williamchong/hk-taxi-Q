@@ -571,6 +571,31 @@ func point_at(edge_id: int, t: float) -> Vector3:
 	return points[step].lerp(points[step + 1], clampf(fraction, 0.0, 1.0))
 
 
+## The nearside lane's centre `distance_m` along an edge by plan length from its
+## START, for travel `along` its vertex order or against it — where a car
+## driving it belongs (`P3-3c`), by the same expression `Hit.lane_centre` is.
+## `Vector3.ZERO` for an unknown id.
+func lane_at(edge_id: int, distance_m: float, along: bool) -> Vector3:
+	if not _by_id.has(edge_id):
+		return Vector3.ZERO
+	var slot: int = _by_id[edge_id]
+	var points: PackedVector3Array = _polylines[slot]
+	var lengths: PackedFloat32Array = _prefix[slot]
+	var target: float = clampf(distance_m, 0.0, lengths[lengths.size() - 1])
+	var step: int = 0
+	while step < lengths.size() - 2 and lengths[step + 1] < target:
+		step += 1
+	var span_m: float = lengths[step + 1] - lengths[step]
+	var fraction: float = (
+		clampf((target - lengths[step]) / span_m, 0.0, 1.0) if span_m > 0.0 else 0.0
+	)
+	var point: Vector3 = points[step].lerp(points[step + 1], fraction)
+	var edge_dir: Vector3 = points[step + 1] - points[step]
+	edge_dir.y = 0.0
+	edge_dir = edge_dir.normalized() if edge_dir.length_squared() > 0.0 else Vector3.FORWARD
+	return _lane_centre(slot, step, fraction, point, edge_dir, edge_dir if along else -edge_dir)
+
+
 ## The street width the graph publishes — not what is drawn.
 ##
 ## ⚠️ **No longer always authored** (`Q95`): on the edges two publishers span,
@@ -1257,9 +1282,9 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	# A two-way edge has no travel direction of its own, so it takes the asker's.
 	# Facing the wrong way down a one-way street is a fact about the car and must
 	# survive into the overlay rather than being quietly corrected here.
-	# The edge's own left, taken BEFORE the asker can turn `along` round: the
-	# ribbon is drawn `offset` to that side whichever way the car faces it.
-	var edge_left: Vector3 = left_of(along)
+	# The edge's own direction, taken BEFORE the asker can turn `along` round:
+	# the ribbon is drawn `offset` to its left whichever way the car faces it.
+	var edge_dir: Vector3 = along
 	var flat_heading := Vector3(heading.x, 0.0, heading.z)
 	hit.along = true
 	if not hit.one_way and flat_heading.length_squared() > 0.0 and along.dot(flat_heading) < 0.0:
@@ -1278,11 +1303,19 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	# reach a spawn transform as a NaN rather than as an error.
 	var span_m: float = lengths[step + 1] - lengths[step]
 	var fraction: float = offset_m / span_m if span_m > 0.0 else 0.0
-	var half: float = _half_at(slot, step, fraction)
-	# 🔴 **About the MIDDLE OF THE DRAWN ROAD, not the centreline** (`P3-35h`).
-	var middle: Vector3 = point + edge_left * _offset_at(slot, step, fraction)
-	hit.lane_centre = middle + left_of(along) * lane_offset(half * 2.0, _lanes[slot])
+	hit.lane_centre = _lane_centre(slot, step, fraction, point, edge_dir, along)
 	hit.clear_width_m = _clear_at(slot, step)
+
+
+## The nearside lane's centre beside `point` on segment `step` of `slot`, for an
+## edge running `edge_dir` and travel running `travel`. 🔴 **About the MIDDLE OF
+## THE DRAWN ROAD, not the centreline** (`P3-35h`).
+func _lane_centre(
+	slot: int, step: int, fraction: float, point: Vector3, edge_dir: Vector3, travel: Vector3
+) -> Vector3:
+	var half: float = _half_at(slot, step, fraction)
+	var middle: Vector3 = point + left_of(edge_dir) * _offset_at(slot, step, fraction)
+	return middle + left_of(travel) * lane_offset(half * 2.0, _lanes[slot])
 
 
 ## Drawn half-width `fraction` of the way from station `step` to the next.

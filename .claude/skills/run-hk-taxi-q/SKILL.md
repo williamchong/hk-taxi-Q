@@ -111,6 +111,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--time-of-day=<0..1>` | hold the lighting rig at one point of `tuning/day_to_night.tres` for the whole run, in any scene that instances the rig: 0 day, 0.79 dusk, 0.86 twilight, 0.93 and up night (`Q162`'s 18:00, 19:00 and 20:00). ⚠️ A still preview camera at a pinned hour often stalls the capture — shoot at `--seconds=2 --shots=1.0` |
 | `--menu=off\|on` | the start menu (`P6-1`). **`drive.sh` appends `off`** unless a run names it, because the menu parks the car; `on` with `--seconds=3 --shots=2` is a menu frame — the orbit keeps the frame changing, so the capture never stalls |
 | `--menu-page=home\|play\|guide\|options\|credits\|notices\|report\|pause` | the sheet the menu opens on (`report` is an empty shift's; `pause` drives 1 s in `--mode`'s run, then pauses — shoot it after 1 s at `--debug-view=minimal`, since a held screen can stall the capture, `Q165`), so a frame of any page is one run and never a click; needs `--menu=on`. Default `home` |
+| `--traffic=off\|on` | the moving traffic and its signals (`P3-3c`). On by default; a frame or a drive meant to be without cars takes it off |
 | `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 

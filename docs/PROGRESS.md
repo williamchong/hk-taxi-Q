@@ -37,8 +37,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   - `B3`: the streets stand parked vehicles from published data in place of moving traffic
     (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
     (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
-    signalled junctions and a checked controller are built (`P3-3a`, `P3-3b`); the cars, the
-    player's red and the lit heads follow (`P3-3c`–`P3-3e`). Trams and neon (`P3-4`, `P3-8`) not
+    signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`); the
+    player's red and the lit heads follow (`P3-3d`, `P3-3e`). Trams and neon (`P3-4`, `P3-8`) not
     started.
   - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
     (`P3-51`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
@@ -198,7 +198,22 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   axes lit together, a green each cycle, the British sequence, every approach on its edge and
   heading — with the checker graded on a junction built to fail it; two mutations caught. Roads
   meshes byte-identical across the surface change. Owed: `P3-3c`–`P3-3e`.
-- `P3-3c`–`P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
+- `P3-3c` 🟡 The AI cars (`Q173`, 2026-10-29) — `TrafficSystem` in `city_drive.tscn`: 24 cars
+  (`traffic.tres`) round the player in a 60–220 m ring, retired past 260 m, drawn from `parked.glb`
+  (one `MultiMesh` per kind, a livery each off `parked.tres`'s palettes) with an `AnimatableBody3D`
+  box apiece; every move one of `RoadRouter.moves_from` under `Profile.legal()`, the nearside lane
+  by the new `RoadGraph.lane_at` (`Hit.lane_centre`'s own expression, agreeing to 0.3 mm on 1,150
+  ways), a quadratic curve through each node, the car ahead read on its own path, at a merge and in
+  a plan cone, red and red-and-amber stopping it at the approach's stop point and amber judged at
+  the HARD rate to the line. `verify_traffic`: three seeds × 90 s round the signalled junctions —
+  ~60 stop crossings each, 0 on red, every move legal, no car inside the one ahead; it found three
+  faults on the way (a turn's control point solved with the wrong sign, a braking car riding its
+  own amber judgement into the red, a car crawling at its aim behind a slow leader meeting the red
+  a hair short — seed 4), each mutation-checked. 300 s headless: 17–23 of 24 moving at every 20 s
+  sample, longest standstill 27.4 s (a signal wait). Throttle route: +7 `draws`, `phys` ~2.8 against
+  ~1.8 ms with `--traffic=off`. Cars pass through each other at an unsignalled crossing (no
+  give-way), no lane change, no lamps at night, not near-missed. Owed: the user's drive.
+- `P3-3d`–`P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.

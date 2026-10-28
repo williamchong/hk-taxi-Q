@@ -16,6 +16,7 @@
 [ext_resource type="Script" uid="uid://brd5ncoahr0l1" path="res://scripts/camera/menu_orbit.gd" id="23_orbit"]
 [ext_resource type="Resource" uid="uid://d4lg7vboesfwa" path="res://tuning/menu.tres" id="24_menu"]
 [ext_resource type="Script" uid="uid://cipic2tc2pqvl" path="res://scripts/world/day_clock.gd" id="25_clock"]
+[ext_resource type="Script" uid="uid://cr7bi74yl4y4a" path="res://scripts/traffic/traffic_system.gd" id="26_traffic"]
 
 [node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares", "clock")]
 script = ExtResource("6_harness")
@@ -47,6 +48,10 @@ sun = NodePath("../Lighting/Sun")
 
 [node name="GraphOverlay" type="Node3D" parent="." unique_id=16740415 node_paths=PackedStringArray("vehicle")]
 script = ExtResource("7_graph")
+vehicle = NodePath("../Taxi")
+
+[node name="Traffic" type="Node3D" parent="." node_paths=PackedStringArray("vehicle")]
+script = ExtResource("26_traffic")
 vehicle = NodePath("../Taxi")
 
 [node name="Fares" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
