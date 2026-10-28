@@ -67,6 +67,7 @@ from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -272,7 +273,11 @@ CITY_NAME = "city.json"
 # 39 since `P3-77` (`Q171`): the manifest names `trees.glb` and
 # `trees_placements.json`, the published trees, on `lamps`' terms. A v38 reader
 # would ship both unlisted and `sync_generated.sh` would sweep them.
-CITY_SCHEMA = 39
+# 40 since `P3-3a` (`Q173`): the manifest names `signals_plan.json`, the
+# signalled junctions and their stages — a new shipped document, null where the
+# city declares no `signals:` block or stages nothing. A v39 reader would ship
+# it unlisted and `sync_generated.sh` would sweep it.
+CITY_SCHEMA = 40
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -326,6 +331,7 @@ OPTIONAL_ASSET_KEYS = (
     "parked_placements",
     "trees",
     "trees_placements",
+    "signals_plan",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -368,6 +374,7 @@ INPUTS: tuple[Input, ...] = (
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
     Input(PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA, "parked"),
     Input(TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA, "trees"),
+    Input(SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA, "signals"),
 )
 
 
@@ -451,6 +458,7 @@ def build_region(
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
     parked = documents[PARKED_MANIFEST_NAME]
     trees = documents[TREES_MANIFEST_NAME]
+    signals = documents[SIGNALS_MANIFEST_NAME]
     basemap = documents[BASEMAP_NAME]
 
     tiles = [
@@ -612,6 +620,9 @@ def build_region(
         # where the city declares no `trees:` block or stood nothing.
         "trees": trees["asset"],
         "trees_placements": trees["placements_document"],
+        # The signalled junctions and their authored stages (`P3-3a`, `Q173`):
+        # `null` where the city declares no `signals:` block or staged nothing.
+        "signals_plan": signals["plan_document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

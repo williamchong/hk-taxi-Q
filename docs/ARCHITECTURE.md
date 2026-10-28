@@ -316,6 +316,7 @@ hk-taxi-Q/
 │   │   ├── lamps.py             # lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
 │   │   ├── parked.py            # the parked roster → parked_placements.json over the authored library (P3-71)
 │   │   ├── trees.py             # HyD's + LCSD's tree inventories → trees.glb + trees_placements.json (P3-77)
+│   │   ├── signals.py           # signalled junctions + authored stages → signals_plan.json (P3-3a, Q173)
 │   │   ├── placements.py        # a prop library's stands: entry shape, pitch, totals, writer
 │   │   ├── export.py            # → city.json; assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — 23 stages, in order
@@ -420,6 +421,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "parked_placements": "parked_placements.json",
   "trees": "trees.glb",
   "trees_placements": "trees_placements.json",
+  "signals_plan": "signals_plan.json",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "basemap": "basemap.json",
@@ -437,7 +439,7 @@ Keys (`etl/pipeline/export.py`):
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
   `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`,
-  `trees`, `trees_placements` (schema 39, `P3-77`). Null
+  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`). Null
   where the estate publishes no such layer, **or** where every feature failed the join — a stage
   names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
   placements document whose library is NOT in the bundle: it stands the committed
@@ -1026,9 +1028,32 @@ decision pending `P2-6`; breakaway is `B3`.
   exists for `shipped()`. Null where no signs ship, or none are lettered.
 - `signs.json`'s `bytes` is `signs.glb` alone; the atlas is `text_atlas_bytes`.
 
+### `signals_plan.json` — the signalled junctions (`P3-3a`, `Q173`)
+
+Written by `pipeline/signals.py`; read by `SignalPlan` (`scripts/traffic/signal_plan.gd`), which
+maps each region's edge ids into the merged graph and its positions into the frame. Schema 1:
+
+```json
+{"schema_version": 1, "city_id": "hong_kong", "region_id": "wan_chai",
+ "junctions": [{"id": 2, "nodes": [2, 5], "pos": [x, y, z], "stop_lines": 3, "stages": 2, "crossing": false,
+   "approaches": [{"edge": 74, "along": true, "stop_m": 41.2, "heading_deg": 182.4, "stage": 0}]}]}
+```
+
+- `id` is the junction's lowest node in its own region's numbering; `nodes` its stub cluster
+  (`roadsurface.json`'s `junctions`) or the node alone.
+- An approach is a level-0 edge entering the junction from outside; `along` is true where travel
+  runs the edge's vertex order. `stop_m` is the stop point's plan distance from the edge's START —
+  its drawn mouth, `trim_m` at the end it enters by. `heading_deg` is travel's game heading along
+  the edge's segment at the end it enters by (`polyline.bearing_deg`: 0 is −z).
+- 🔴 `stage` is AUTHORED (`signals.axis_tolerance_deg`); `stages` counts the vehicle stages, and
+  `crossing` is true where every approach shares one axis — the controller then runs an all-red
+  stage for the crossing after them.
+- Absent (and `signals_plan` null) where the city declares no `signals:` block or stages nothing.
+  The stage's manifest `signals.json` (schema 2) carries the partitions.
+
 ### `signals.glb` — removed (`P3-17`, `Q77`, `P3-35a`)
 
-🚫 Not in the bundle and not in the code. `Q77` dropped the layer — an unlit head asserts a signal
+🚫 Not in the bundle and not in the code (until `P3-3e` ports the heads, lit, `Q173`). `Q77` dropped the layer — an unlit head asserts a signal
 out of service, and a lit one cannot be derived from anything published — and `P3-35a` (`Q133`)
 removed the stage, config block, material, verify tool, preview node and tests on the user's call.
 `city.json` lost the `signals` key at schema 34. Record: `DECISIONS.md` `Q76`/`Q77`. ⚠️ Its return
@@ -1218,7 +1243,8 @@ city_space = region_local + city_offset
 | `BeamBudget` | Hands the renderer's spot-light slots to the cars nearest the camera (autoload) | ✅ |
 | `Fence` | Stands the authored barriers where `fence.json` places them, one `MultiMesh` (`prop_batch.gd`) | ✅ `P3-29` |
 | `ParkedLayer` + `parked_placements.json` | The parked roster (`Q161`): one `MultiMesh` per kind per 300 m cell over the committed `parked.glb`, a box body per vehicle, resolved by the hour and re-stood only out of view. The near miss (`NearMiss`, `P3-2a`) grades a pass against these bodies | ✅ `P3-71`–`P3-73` |
-| `TrafficSystem` | AI vehicles on road-graph splines; trams as scripted blockers — deferred behind the parked roster (`Q161`) | ⬜ `P3-3` |
+| `SignalController` + `signals_plan.json` | Runs every signalled junction's authored stages on the physics clock (`tuning/signal_plan.tres`); `state_of(edge, along)` is the one read. The timeline is a pure function of the clock (`light_at`), walked whole by `verify_signals.gd` (`Q173`) | 🟡 `P3-3a`/`P3-3b` |
+| `TrafficSystem` | AI vehicles on road-graph splines, stopping at `SignalController`'s reds; trams as scripted blockers | ⬜ `P3-3c` |
 | `tram.glb` | The published tramway where iB1000 prints it — not a marking on the ribbon (`Q58`). One primitive, no collider | ✅ `P3-14` |
 | `arrows.glb` + `arrows_placements.json` | Turn arrows in the lane the ribbon has — not ribbon paint, because the junction fade blanks the approach (`Q59`). Library of one flat glyph per `RM` code; placements carry the transform plus `pitch_deg` and nothing else (`Q54`). No collider | ✅ `P3-15`, `P5-4` |
 | `crossings.glb` | Pedestrian-crossing stripes at the surveyed extent; signal yellow and zebra white, a mesh a paint a 300 m cell (`P3-42`). No collider | ✅ `P3-35g2` |

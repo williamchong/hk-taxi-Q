@@ -94,7 +94,7 @@ from pipeline.lamps import LampReport, read_lamps  # noqa: E402
 from pipeline.podiums import decode_blocks  # noqa: E402
 from pipeline.polyline import Segments, axis_residual_deg, plan_lengths  # noqa: E402
 from pipeline.railings import RailingReport, read_lines  # noqa: E402
-from pipeline.roadmarks import Network, RoadMarkReport, _host, read_markings  # noqa: E402
+from pipeline.roadmarks import Network, RoadMarkReport, read_markings, transverse_host  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 from pipeline.signs import _read_poles  # noqa: E402
 from pipeline.surface import SURFACE_MANIFEST_NAME  # noqa: E402
@@ -381,7 +381,7 @@ def read_stop_lines(
 ) -> StopLines:
     """Every at-grade transverse marking, hosted by `roadmarks.py`'s own transverse pick.
 
-    ⚠️ **The host is the stage's `_host`, deliberately**: a stop line sits at a
+    ⚠️ **The host is the stage's `transverse_host`, deliberately**: a stop line sits at a
     junction mouth a metre off the major road's kerb, so proximity hands it the
     road it is parallel to on 43% of the layer (`Q69`). The drawn width that
     `Network` carries is passed empty, because nothing here may read the floor.
@@ -404,7 +404,7 @@ def read_stop_lines(
         if not marking.mark.transverse:
             continue
         found.read += 1
-        host = _host(network, marking, spec)
+        host = transverse_host(network, marking, spec)
         if host is None:
             found.no_host += 1
             continue
@@ -1305,7 +1305,7 @@ def main(argv: list[str] | None = None) -> int:
         # about the data.** `arrows` imports `roads` imports `carriageway`, so a
         # width published by the survey stage can be confirmed only by a reading
         # that stage can reach: the arrow rows it already clusters for itself,
-        # and the graph it already holds. The stop line needs `roadmarks._host`,
+        # and the graph it already holds. The stop line needs `roadmarks.transverse_host`,
         # which is two imports the other way round. Grading the cascade without
         # it is what says whether the reachable voters are enough to build.
         help="which independent readings may confirm, comma-separated: " + ", ".join(_VOTERS),

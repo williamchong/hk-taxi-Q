@@ -55,6 +55,7 @@ from pipeline import (
     region,
     roadmarks,
     roads,
+    signals,
     signs,
     surface,
     tramway,
@@ -166,6 +167,10 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # anything the bundle draws over its foot (`P3-77`). Before `export`, which
     # names the asset.
     "trees": trees.main,
+    # After `surface`: a junction is one of its stub clusters and an approach
+    # stops at its drawn mouth (`P3-3a`, `Q173`). Before `export`, which names
+    # the plan.
+    "signals": signals.main,
     "export": export.main,
 }
 
@@ -213,6 +218,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "lamps": ("surface",),
     "parked": ("surface", "fares", "tramway", "fence"),
     "trees": ("carve", "surface"),
+    "signals": ("surface",),
     "export": (
         "basemap",
         "landmarks",
@@ -230,6 +236,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "lamps",
         "parked",
         "trees",
+        "signals",
     ),
 }
 

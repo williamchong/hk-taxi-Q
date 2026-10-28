@@ -32,7 +32,6 @@ from pipeline.roadmarks import (
     _cuts,
     _deck_runs,
     _gaps_between,
-    _host,
     _on_its_own_carriageway,
     _place,
     _place_on_deck,
@@ -41,6 +40,7 @@ from pipeline.roadmarks import (
     draw_decks,
     draw_opposed_joins,
     opposed_joins,
+    transverse_host,
 )
 from pipeline.surface import downward_facing, mitres
 from tests.helpers import CITY_YAML, ribbon_of
@@ -376,7 +376,7 @@ class TestTheHostIsPickedByTransversality:
         assert junction.edge_id[int(np.argmin(distances))] == 1
 
     def test_the_host_is_the_edge_the_bar_is_drawn_across(self, junction, bar, spec):
-        host = _host(junction, bar, spec)
+        host = transverse_host(junction, bar, spec)
         assert junction.edge_id[host.segment] == 2
         assert host.residual_deg == pytest.approx(0.0, abs=1e-9)
 
@@ -384,11 +384,11 @@ class TestTheHostIsPickedByTransversality:
         # `host_disagreement` is the counter that can see this rule regress —
         # `axis_residual_deg` cannot, because it grades a rule that optimises
         # the very thing it reports (`Q58`'s `drawn_gauge_m` trap).
-        assert _host(junction, bar, spec).disagrees is True
+        assert transverse_host(junction, bar, spec).disagrees is True
 
     def test_no_disagreement_where_proximity_already_agrees(self, junction, spec):
         across = marking(spec, "RM1011", [[10.0, -3.2], [10.0, 3.2]])
-        host = _host(junction, across, spec)
+        host = transverse_host(junction, across, spec)
         assert junction.edge_id[host.segment] == 1
         assert host.disagrees is False
 
@@ -403,7 +403,7 @@ class TestTheHostIsPickedByTransversality:
         # That is the correct answer and it is why this needs its own fixture.
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         along = marking(spec, "RM1011", [[-16.0, 1.0], [16.0, 1.0]])
-        host = _host(straight, along, spec)
+        host = transverse_host(straight, along, spec)
         assert host is not None
         assert host.residual_deg == pytest.approx(90.0)
         assert host.residual_deg > spec.bearing_tolerance_deg
@@ -413,7 +413,7 @@ class TestTheHostIsPickedByTransversality:
         # purpose: one says the marking is off the network, the other says it is
         # on it and is not a transverse bar.
         far = marking(spec, "RM1011", [[500.0, 500.0], [503.2, 500.0]])
-        assert _host(junction, far, spec) is None
+        assert transverse_host(junction, far, spec) is None
 
     def test_a_longitudinal_marking_hosts_to_the_road_it_runs_ALONG(self, junction, spec):
         """🔴 **The same angle, scored the other way up.**
@@ -426,7 +426,7 @@ class TestTheHostIsPickedByTransversality:
         bar, with every partition still closing.
         """
         along = marking(spec, "RM1001", [[-16.0, 1.0], [16.0, 1.0]])
-        host = _host(junction, along, spec)
+        host = transverse_host(junction, along, spec)
         assert junction.edge_id[host.segment] == 1
         assert host.residual_deg == pytest.approx(0.0, abs=1e-9)
 
@@ -441,8 +441,8 @@ class TestTheHostIsPickedByTransversality:
         """
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         line = [[-16.0, 1.0], [16.0, 1.0]]
-        longitudinal = _host(straight, marking(spec, "RM1001", line), spec)
-        transverse = _host(straight, marking(spec, "RM1011", line), spec)
+        longitudinal = transverse_host(straight, marking(spec, "RM1001", line), spec)
+        transverse = transverse_host(straight, marking(spec, "RM1011", line), spec)
         assert longitudinal.residual_deg == pytest.approx(0.0, abs=1e-9)
         assert longitudinal.residual_deg <= spec.bearing_tolerance_deg
         assert transverse.residual_deg == pytest.approx(90.0)
@@ -455,19 +455,19 @@ class TestTheHostIsPickedByTransversality:
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         stripe = [[-1.0, -1.0], [1.0, 1.0]]
         for code in ("RM1001", "RM1011"):
-            refused = _host(straight, marking(spec, code, stripe), spec)
+            refused = transverse_host(straight, marking(spec, code, stripe), spec)
             assert refused.residual_deg == pytest.approx(45.0)
             assert refused.residual_deg > spec.bearing_tolerance_deg
-        hatch = _host(straight, marking(spec, "RM1037", stripe), spec)
+        hatch = transverse_host(straight, marking(spec, "RM1037", stripe), spec)
         assert hatch.residual_deg == 0.0
 
     def test_an_oblique_marking_is_hosted_by_the_road_it_lies_on(self, junction, spec):
         """With no angle to score, the pick is the road under the paint — never
         whichever road in range happens to run across the stripe."""
         on_the_minor = marking(spec, "RM1037", [[-1.0, 20.0], [1.0, 22.0]])
-        assert _host(junction, on_the_minor, spec).edge_id == 2
+        assert transverse_host(junction, on_the_minor, spec).edge_id == 2
         on_the_major = marking(spec, "RM1037", [[-21.0, -1.0], [-19.0, 1.0]])
-        assert _host(junction, on_the_major, spec).edge_id == 1
+        assert transverse_host(junction, on_the_major, spec).edge_id == 1
 
     def test_an_oblique_marking_prefers_the_road_wide_enough_to_hold_it(self, spec):
         """🔴 Proximity alone picks the nearest centreline, and beside a wide road
@@ -479,7 +479,7 @@ class TestTheHostIsPickedByTransversality:
         ]
         widths = Network.of(Segments.of(edges), {1: 16.0, 2: 4.0})
         stripe = marking(spec, "RM1037", [[-1.0, 4.0], [1.0, 6.0]])
-        host = _host(widths, stripe, spec)
+        host = transverse_host(widths, stripe, spec)
         assert host.edge_id == 1
         assert host.disagrees
         assert _on_its_own_carriageway(stripe, host) is True
@@ -489,9 +489,9 @@ class TestTheHostIsPickedByTransversality:
         road must not be drawn on the strength of being near it."""
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         beside = marking(spec, "RM1037", [[-1.0, 8.0], [1.0, 10.0]])
-        assert _on_its_own_carriageway(beside, _host(straight, beside, spec)) is False
+        assert _on_its_own_carriageway(beside, transverse_host(straight, beside, spec)) is False
         on = marking(spec, "RM1037", [[-1.0, 1.0], [1.0, 3.0]])
-        assert _on_its_own_carriageway(on, _host(straight, on, spec)) is True
+        assert _on_its_own_carriageway(on, transverse_host(straight, on, spec)) is True
 
     def test_a_longitudinal_marking_off_its_host_ribbon_is_refused(self, spec):
         """🔴 **The refusal that keeps paint out of the road it is not on.**
@@ -507,8 +507,8 @@ class TestTheHostIsPickedByTransversality:
         # 10.24 m drawn ribbon, so the bar is 5.12 m from the centreline.
         on = marking(spec, "RM1001", [[-16.0, 4.0], [16.0, 4.0]])
         off = marking(spec, "RM1001", [[-16.0, 9.0], [16.0, 9.0]])
-        assert _on_its_own_carriageway(on, _host(straight, on, spec)) is True
-        assert _on_its_own_carriageway(off, _host(straight, off, spec)) is False
+        assert _on_its_own_carriageway(on, transverse_host(straight, on, spec)) is True
+        assert _on_its_own_carriageway(off, transverse_host(straight, off, spec)) is False
 
     def test_a_longitudinal_marking_is_hosted_by_the_road_it_lies_ON(self, spec):
         """🔴 **`Q132`: angle alone handed a lane line to the carriageway next door.**
@@ -517,12 +517,12 @@ class TestTheHostIsPickedByTransversality:
         more parallel to the line. Scored on angle the far one wins and
         `_on_its_own_carriageway` then refuses the line for standing beside it —
         55 of 201 `RM1101` parts in Wan Chai. Mutation: drop the `on` preference
-        in `_host` and this picks edge 2.
+        in `transverse_host` and this picks edge 2.
         """
         near = edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 1.0]])
         far = edge(2, [[-50.0, 0.0, 14.0], [50.0, 0.0, 14.0]])
         line = marking(spec, "RM1101", [[-16.0, 2.0], [16.0, 2.0]])
-        host = _host(network([near, far]), line, spec)
+        host = transverse_host(network([near, far]), line, spec)
         assert host.edge_id == 1
         assert _on_its_own_carriageway(line, host) is True
 
@@ -531,7 +531,7 @@ class TestTheHostIsPickedByTransversality:
         angle pick stands, so the refusal still has something to refuse."""
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         off = marking(spec, "RM1101", [[-16.0, 9.0], [16.0, 9.0]])
-        host = _host(straight, off, spec)
+        host = transverse_host(straight, off, spec)
         assert host.edge_id == 1
         assert _on_its_own_carriageway(off, host) is False
 
@@ -542,7 +542,7 @@ class TestTheHostIsPickedByTransversality:
         markings `P3-23` exists to draw."""
         straight = network([edge(1, [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]])])
         far = marking(spec, "RM1011", [[-3.2, 9.0], [3.2, 9.0]])
-        host = _host(straight, far, spec)
+        host = transverse_host(straight, far, spec)
         assert host.distance_m > 0.5 * host.width_m
         assert _on_its_own_carriageway(far, host) is True
 
@@ -563,7 +563,7 @@ class TestTheHostIsPickedByTransversality:
         # carriageway check however wrong its axis is. Square to the road and
         # 8 m clear of it, against a 5.12 m drawn half-width.
         both_wrong = marking(spec, "RM1001", [[0.0, 7.0], [0.0, 9.0]])
-        host = _host(straight, both_wrong, spec)
+        host = transverse_host(straight, both_wrong, spec)
         assert host.residual_deg > spec.bearing_tolerance_deg
         assert _on_its_own_carriageway(both_wrong, host) is False
 
@@ -579,7 +579,7 @@ class TestTheHostIsPickedByTransversality:
             ]
         )
         bar = marking(spec, "RM1011", [[-3.2, 0.0], [3.2, 0.0]])
-        assert two.edge_id[_host(two, bar, spec).segment] == 1
+        assert two.edge_id[transverse_host(two, bar, spec).segment] == 1
 
 
 class TestTheGeometry:

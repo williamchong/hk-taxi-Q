@@ -227,6 +227,10 @@ from pipeline.config_blocks.roads import (  # noqa: F401
     _touchdown_levels,
     _width_bounds,
 )
+from pipeline.config_blocks.signals import (
+    Signals,
+    _signals,
+)
 from pipeline.config_blocks.signs import (  # noqa: F401
     _SIGN_POLE_ROLES,
     _SIGN_ROLES,
@@ -440,6 +444,10 @@ class Config:
     # Optional on the same terms: absent, the region ships no trees, and there
     # is no fill where neither inventory surveyed one.
     trees: Trees | None = None
+    # The signalled junctions and their authored stages, by
+    # `pipeline/signals.py` (`P3-3a`, `Q173`). Optional: absent, the region
+    # ships no signal plan and no car stops for a light.
+    signals: Signals | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -805,6 +813,7 @@ def load_config(path: Path | None = None) -> Config:
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         parked=_parked(document.get("parked"), f"{path}:parked"),
         trees=_trees(document.get("trees"), f"{path}:trees", table),
+        signals=_signals(document.get("signals"), f"{path}:signals"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )

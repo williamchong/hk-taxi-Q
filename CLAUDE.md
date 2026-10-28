@@ -176,6 +176,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `router` | `road_router.gd`, `RoadGraph`'s `from` / `to` / turn bans / `plan_length_of`, `tools/reachability.py`, a profile's rules or bar, anything that consumes a route |
 | `tiles` | Colliders (`collision_cell_m`, `_collider`, `_road_collider`) and occluders (`occluder_cell_m`, `use_occlusion_culling`), any tile reader |
 | `parked` | `pipeline/parked.py`, the `parked` block, `tools/make_parked.py` and the committed `parked.glb`, `parked_layer.gd` / `parked_roster.gd`, `parked.tres`, `near_miss.gd` and the near-miss bars in `skills.tres` |
+| `signals` | `pipeline/signals.py`, the `signals` block, `surface.py`'s `junctions` key, `roadmarks.transverse_host`, `signal_controller.gd` / `signal_plan.gd`, `signal_plan.tres`, `verify_signals.gd` |
 | `basemap` | `pipeline/basemap.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `water_material`, `park_material`), `buildings.sink_sea` and `paint_parks`, `water.tres`, the `Water` node |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any

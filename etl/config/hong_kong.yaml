@@ -2399,6 +2399,42 @@ crossings:
 #
 # The route that can be honest is B3: P3-3's traffic needs a phase plan to stop
 # at, and the lights then render something real instead of inventing it. See Q77.
+#
+# ✅ **That route is taken (Q173, the user's instruction, 2026-10-29)**: the block
+# below is the plan, not the heads. P3-3e brings the heads back lit by it.
+
+# ---------------------------------------------------------------------------
+# Signalled junctions and their stages (P3-3a, Q173)
+# ---------------------------------------------------------------------------
+#
+# 🔴 **RM1011 IS THE SIGNAL STOP LINE, measured rather than read off a sheet.**
+# Wan Chai, nearest DTAD_TRAFFIC_LIGHT_PT head (P/S codes) to each at-grade bar:
+#
+#   code     bars   p50 m   within 15 m
+#   RM1011    120     3.9   115
+#   RM1012      6    51.9     1
+#   RM1013     83    45.7    11
+#
+# Causeway Bay: RM1011 13 of 15 within 15 m, RM1013 p50 53.4 m. So a junction is
+# signalled when one of these is hosted at it — the road_marks: host, so the bar
+# a car stops at is the bar the paint stage drew — and the heads decide only
+# where a lamp stands (P3-3e).
+signals:
+  stop_line_codes: [RM1011]
+
+  # 🔴 **AUTHORED: TD publishes no stage plan.** Approaches whose travel axes
+  # (heading mod 180) lie within this of each other share a green — the same
+  # way or opposed. road_marks.bearing_tolerance_deg's 30 for the same reason:
+  # degrees off the axis a thing is meant to lie on. Swept on Wan Chai, stage
+  # counts over its 41 junctions:
+  #
+  #   tolerance   1 axis   2 axes   3 axes   4 axes
+  #   20            12       20       7        2
+  #   30            12       23       5        1
+  #   45            14       25       2        0
+  #
+  # A one-axis junction takes an all-red stage for the crossing it serves.
+  axis_tolerance_deg: 30.0
 
 road_marks:
   source: traffic_aids_drawings_gdb

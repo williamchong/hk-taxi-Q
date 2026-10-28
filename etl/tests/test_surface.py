@@ -2915,6 +2915,13 @@ class TestStubClusters:
             "nodes": 2,
             "corridors": 0,
         }
+        # The cluster's members, published for `signals.py` (`Q173`): the stub's
+        # two nodes, one junction.
+        (junction,) = _manifest(tmp_path)["junctions"]
+        graph = json.loads((tmp_path / "out" / "middle" / ROADGRAPH_NAME).read_text())
+        ends = [sorted((edge["from"], edge["to"])) for edge in graph["edges"]]
+        assert junction["level"] == 0
+        assert sorted(junction["nodes"]) in ends
 
     def test_a_looser_ceiling_dissolves_the_cluster(self, stubville, tmp_path) -> None:
         """At 49% of 14 m the ceiling is 6.86 m, past the 6 m radius, so neither
@@ -2934,6 +2941,7 @@ class TestStubClusters:
         assert report.stub_edges == 0
         assert report.clusters == 0
         assert report.junctions == 2
+        assert _manifest(tmp_path)["junctions"] == []
         corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
         assert not _covered(self.VOID, corners).any()
 

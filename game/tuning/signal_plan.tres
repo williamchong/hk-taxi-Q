@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="SignalPlanProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/traffic/signal_plan_profile.gd" id="1_signal_plan"]
+
+[resource]
+script = ExtResource("1_signal_plan")
+red_amber_s = 2.0
+green_s = 15.0
+amber_s = 3.0
+all_red_s = 2.0
+crossing_s = 10.0

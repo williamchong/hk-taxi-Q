@@ -461,6 +461,11 @@ class SurfaceReport:
     # included, so a second derivation in a marking stage would disagree near
     # the caps and tell nobody which answer was right.
     cap_rings: list[tuple[int, np.ndarray]] = field(default_factory=list)
+    # Every stub cluster (`P3-31`) as `(level, node ids)`, two nodes or more, at
+    # every level — published for `signals.py` (`Q173`), which reads a junction
+    # as one of these or a lone node: a grouping by distance would be a free
+    # radius (`Q72`), and these are the two trim decisions already made.
+    junction_clusters: list[tuple[int, list[int]]] = field(default_factory=list)
     # Every drawn carriageway strip's two rails, as `(edge id, level, (rail,
     # rail))` with the rails **in the order `_Builder.strip` received them**
     # (`P3-32`'s residue). Recorded where `_draw_edge` lifts them, so the
@@ -1560,6 +1565,9 @@ def build_region(
         report,
         owned=lambda node: owner_of(np.asarray(node_plan[node])) == region_id,
     )
+    report.junction_clusters = [
+        (keys[0][1], [node for node, _ in keys]) for keys in clusters if len(keys) >= 2
+    ]
     for keys in clusters:
         groups = [ends[key] for key in keys]
         (node, level) = keys[0]
@@ -3840,6 +3848,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
             "caps": [
                 {"level": level, "ring": [round_position(tuple(corner)) for corner in ring]}
                 for level, ring in report.cap_rings
+            ],
+            # The stub clusters, one junction each (`P3-31`), for `signals.py`
+            # (`Q173`). A node in none is a junction of its own.
+            "junctions": [
+                {"level": level, "nodes": nodes} for level, nodes in report.junction_clusters
             ],
             # The level-0 carriageway outside every ribbon (`P3-33c`), as the
             # triangles drawn. Empty for a city that builds no region.

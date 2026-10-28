@@ -36,8 +36,10 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     car's lamps. One head-up display over drive and menu (`Q163`). The user's drives owed.
   - `B3`: the streets stand parked vehicles from published data in place of moving traffic
     (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
-    (`P3-2a`). Moving traffic, trams and neon (`P3-3`, `P3-4`, `P3-8`) not started; `P3-3` is
-    deferred behind the roster.
+    (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
+    signalled junctions and a checked controller are built (`P3-3a`, `P3-3b`); the cars, the
+    player's red and the lit heads follow (`P3-3c`–`P3-3e`). Trams and neon (`P3-4`, `P3-8`) not
+    started.
   - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
     (`P3-51`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
     (`P3-74`, `Q162`). The style chain, long haul and the layout pass (`P3-2b`, `P3-1b`,
@@ -185,7 +187,18 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   aboard by 0.8 s, `build/driver/fare/`. The user's drive under `--debug-view=full` owed. The
   stranded four are one-way exits off the map, closed as the data's (`Q141`, 2026-10-15).
 - `P3-5a` ✅ Minimal fare HUD (`Q142`) — the LED meter, the tip clock, the callout naming the destination once hailed as its building over its road (iB1000 `BUILDINGNAME` joined in the ETL: Wan Chai 47 of 48 nodes placed, furthest 24.6 m; Causeway Bay 4 of 7), the pool's pips and the destination pip on the minimap, a crow-flies guide in the world that grows and turns green as the target nears with a pulsing ring on the road at it; the callout in one language (`--lang=`) with a caption and the road distance left, the countdown bare and centred with every meter tick flashed under it, a pin on the map and a ring on the road at every pending customer while no one is aboard and at the destination once hailed, the arrow on the closest pending customer while idle; `face:` / `map:` / `digits:` / `guide:` assertions in `verify_hud`, 7 mutations caught; whole HUD +31 `draws` (was +15) at 103 → 134 on the boot stand. Frames in `build/driver/fare_hud/`. Fourth round: `99 秒` on one row, no pending mark at a drop-off the loop is disarmed on (`withheld_pickups`), and the game starts 20 m short of `f_004` so pulling forward starts it. The user's drive owed.
-- `P3-3` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
+- `P3-3a` / `P3-3b` 🟡 Signalled junctions and the phase controller (`Q173`, the user's call,
+  2026-10-29) — `pipeline/signals.py` → `signals_plan.json` (city schema 40): a junction is
+  `surface.py`'s stub cluster (now published as `roadsurface.json`'s `junctions`) or a lone node
+  that an `RM1011` is hosted at; its approaches every level-0 edge entering it, stopped at the drawn
+  mouth; stages by travel axis within 30° (authored). Wan Chai 120 stop lines (1 no host, 5 off
+  axis, 2 at a dead end) → 41 junctions, 40 staged (19 clusters, 1 at the seam), 98 approaches;
+  Causeway Bay 15 → 8, 16. `SignalController` runs them off `signal_plan.tres` (red-and-amber 2,
+  green 15, amber 3, all red 2, crossing 10 s); `verify_signals` walks every cycle — no crossing
+  axes lit together, a green each cycle, the British sequence, every approach on its edge and
+  heading — with the checker graded on a junction built to fail it; two mutations caught. Roads
+  meshes byte-identical across the surface change. Owed: `P3-3c`–`P3-3e`.
+- `P3-3c`–`P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
@@ -403,6 +416,10 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q169` The skills take the 黃紙's names (user, 2026-10-26/27; bonuses reworded as feats 2026-10-28): names only — a bonus pays, a penalty docks, no three-minors rule, no verdict; 碰及物體 for the crash (the user's item); 甩尾 kept, the Kai lacks 軚. A 成績表 and a lifetime record planned as `P3-76` parts 2 and 3.
 - `Q170` Space is the handbrake (user, 2026-10-27): the `drift` action renamed `handbrake`, HOW TO PLAY says so in both languages; the side cut and drift mode stay behind the press, since a handbrake alone under-rotates the turn. No force moves.
 - `Q171` Trees from HyD's and LCSD's inventories, only where surveyed (user, 2026-10-27; built as `P3-77` the same day): reverses `Q144`'s "trees are not built"; Victoria Park and the streets bare for now; HyD's Tai Hang slopes included; a tree is a crash.
+- `Q173` Signals return as an authored, checked phase plan (user, 2026-10-29): reverses `Q77`;
+  a junction is signalled where an `RM1011` is hosted (115 of 120 within 15 m of a head), grouped
+  by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`); the
+  player's red counted, never paid or docked, until the user decides.
 - `Q172` A drift counts at 0.5 s and pays more each second of one slide (user, 2026-10-28): `drift_min_s` 2.0 → 0.5, a new `drift_step_hkd` (1.0), HK$1 / 3 / 6 / 10 at 0.5 / 1.5 / 2.5 / 3.5 s; at 2 s only a countersteered slide at 86 kph had ever counted on the pace-2.0 car. A reverse read ~180° of slip and paid at the new bar; slip past 90° (`FareSystem.REVERSED_SLIP_DEG`) is now not a drift.
 - `Q162` Two modes: 特更 to the handover, 兜風 with no end (user, 2026-10-11): one PLAY over both, the shift 07:00 → 21:00 on one clock with the sky, the total fare against a best kept locally, the day never stretched by a delivery; free mode keeps the daylight (`P3-74`, 2026-10-11). The user's full shift owed.
 - `Q161` Parked vehicles before moving traffic (user, 2026-10-11): a placements document over an authored roster from the 607 published bays, the bus / GMB / taxi / tram stops and the `NSR` complement, resolved by the rig's hour; `P3-3` deferred, `P3-2a` built against the stationary bodies, paying for danger (in the path) and never a lane pass (`P3-71`–`P3-73`, 2026-10-11). The user's drive owed.

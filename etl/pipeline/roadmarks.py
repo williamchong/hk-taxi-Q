@@ -17,7 +17,7 @@ Three things differ from box junctions, and each is recorded where it bites:
 
 - 🔴 **The host is chosen by transversality, not by proximity**, which is the
   one place this stage departs from every other consumer of this geodatabase.
-  See `_host` for the measurement — the nearest-edge join is wrong on 44% of
+  See `transverse_host` for the measurement — the nearest-edge join is wrong on 44% of
   stop lines and 43% of give-way lines, because a bar across a minor road's
   mouth lies a metre off the *major* road's kerb.
 - **The width is convention and the extent is published**, so the bar is drawn
@@ -702,7 +702,7 @@ class Network:
         )[1]
 
 
-def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
+def transverse_host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
     """The level-0 edge this marking belongs to, or None if none is in range.
 
     🔴 **Chosen by transversality, not by proximity, and this is the one place
@@ -1570,7 +1570,7 @@ def build_region(
             else:
                 high = report.outline_sharpest_deg
                 report.outline_sharpest_deg = turn if high is None else max(high, turn)
-        host = _host(network, marking, spec)
+        host = transverse_host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1
             continue
@@ -1708,7 +1708,7 @@ def draw_decks(
     structure" and not which, so the level is the HOST's, and the surface the
     paint stands on is `DrawnSurface.of(surface, level=that)`.
 
-    ⚠️ **Every bar is the street's own** — `_host`, `bearing_tolerance_deg`,
+    ⚠️ **Every bar is the street's own** — `transverse_host`, `bearing_tolerance_deg`,
     `_on_its_own_carriageway` against the drawn width — so there is no deck
     knob. The deck stays a ceiling on paint (`Q103`): `_place_on_deck` refuses
     whatever the deck's drawn surface does not cover. ⚠️ **Levels above the
@@ -1726,7 +1726,7 @@ def draw_decks(
 
     builder = CellBuilder(ROADMARKS_MATERIAL, spec.cell_m)
     for marking in markings:
-        host = _host(network, marking, spec)
+        host = transverse_host(network, marking, spec)
         if host is None:
             report.no_edge_in_range += 1
             continue

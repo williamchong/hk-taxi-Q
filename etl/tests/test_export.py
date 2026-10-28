@@ -48,6 +48,7 @@ from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_DIR, SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -379,6 +380,14 @@ class _Region:
                 "asset": None,
                 "placements_document": None,
                 "drawn": 0,
+            },
+            # And a ninth: `testville` declares no `signals:` block.
+            SIGNALS_MANIFEST_NAME: {
+                "schema_version": SIGNALS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "plan_document": None,
+                "staged": 0,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -1043,6 +1052,7 @@ class TestOrchestrator:
             "lamps",
             "parked",
             "trees",
+            "signals",
             "export",
         ]
 
@@ -1084,6 +1094,7 @@ class TestOrchestrator:
             "lamps",
             "parked",
             "trees",
+            "signals",
             "export",
         ]
 

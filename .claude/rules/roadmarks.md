@@ -50,7 +50,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   with no centre line (nothing within 1.5 m of the middle on 94% / 84% of silent stations), and
   where the middle *is* occupied it is by hatching, zigzags or a yellow box an invented line would
   run through. **`road_marks.more_layers`, a `marks:` row, `broken_line`, `divides_flows` or
-  `_host`'s `on` preference: paste `roadmarks.json`'s `drawn_by_id` / `drawn_m_by_id`,
+  `transverse_host`'s `on` preference: paste `roadmarks.json`'s `drawn_by_id` / `drawn_m_by_id`,
   `host_off_carriageway`, `host_disagreement`, the `join` block and `slivers_dropped` before and
   after, both regions, and run `tools/paint_clearance.py --layer roadmarks`.**
   🔴 **TD files ONE family across sister layers** — `RM1001` in `DTAD_RD_MARK_LINE`, the broken half

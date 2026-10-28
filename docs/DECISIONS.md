@@ -132,7 +132,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q75` | A setting that is no longer set cannot fail | Closed. The grep-count guard is superseded by `Q119` (`verify_settings.gd`). |
 | `Q76` | The web build runs Compatibility; the product runs Forward Mobile | Closed, as a decision to proceed with the limitation recorded. |
 | `P3-17` / `Q76` | Signal heads: a vocabulary nothing publishes, one head per assembly | Removed — dropped from the bundle by `Q77`, code deleted by `P3-35a` (`Q133`). What a |
-| `Q77` | A dark signal asserts "out of service", and a lit one cannot be derived | Closed — layer dropped on the user's instruction; code since removed (`P3-35a`, |
+| `Q77` | A dark signal asserts "out of service", and a lit one cannot be derived | Superseded by `Q173`. Closed — layer dropped on the user's instruction; code since removed (`P3-35a`, |
 | `Q78` | Sign registration is a one-way correction | Closed. `signs.json` schema 3 → 4. |
 | `Q79` | The street plate's typeface: Free HK Kai, shipped whole | Closed (`P3-24`). Full font as an authored asset, on the user's call over an |
 | `Q80` | HUD layout: a touch zone is not a thumb | Closed — `P3-24` passed the user's review 2026-09-06. |
@@ -207,6 +207,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 | `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
 | `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | ✅ Decided and built 2026-10-27 (`P3-77`): 1,061 + 2,375 trees, a trunk collider each. Reverses `Q144`'s "trees are not built". |
+| `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
 
 ---
 
@@ -3635,6 +3636,8 @@ See `Q54`, `Q56`, `Q60`, `Q62`, `Q69`, `Q77`.
 
 **Status.** Closed — layer dropped on the user's instruction; code since removed (`P3-35a`,
 `Q133`). Bringing it back is a port (`.claude/rules/signs.md`), not a re-declared block.
+**Superseded by** `Q173` (2026-10-29, the user's instruction): heads return lit by an authored,
+checked phase plan, and still as a port.
 
 - Dark is not neutral: a real head is always lit, so 415 unlit heads claim the signals are off.
 - A lit one needs what nothing publishes — which heads share a green, stage order, timings,
@@ -10563,3 +10566,46 @@ tap `Q145` ruled out. `verify_vehicle` holds tier 0 clear and tier 1 laid; `PAID
 by name.
 
 **See.** `Q84` · `Q145` · `Q153` · `Q156` · `P3-49` · `P3-53` · `P3-58` · `game/tuning/skills.md`
+
+## `Q173` — Signals return as a phase plan we author and can check, and heads show only what it runs
+
+**Status.** 🟡 Decided 2026-10-29 on the user's instruction; built as `P3-3a`–`P3-3e`. Reverses
+`Q77`'s closure. `Q76`'s findings about `DTAD_TRAFFIC_LIGHT_PT` stand.
+
+**Asked** by the user, 2026-10-29: "should we make traffic light real with actual viable traffic
+logic before making traffic system and cars on road", then, asked whether to reverse `Q77`: "yes
+show them when we need them and when they have actual lights and logic"; on red lights and the
+player: "lets just do ai cars, keep player detection so that we can decide if it would be a bonus
+or penalty later".
+
+**What `Q77` refused, and what changes.** `Q77` refused heads that are dark (out of service) and
+heads lit by a plan derived from the heads alone (opposable at 18 of 107 junctions). Neither comes
+back. The plan is now AUTHORED and says so: stages grouped by approach bearing, timings in a
+`.tres`. A tool checks it. Heads ship after the controller, lit by it, and only at junctions it
+runs.
+
+**The junction model, and why not the heads or a radius.**
+
+- 🔴 **`RM1011` is the signal stop line, measured**: in Wan Chai 115 of 120 lie within 15 m of a
+  head (p50 3.9 m). `RM1012` (6) and `RM1013` (83) sit p50 51.9 / 45.7 m from the nearest head.
+  Causeway Bay reads the same (13 of 15; RM1013 p50 53.4 m). So a junction is signalled when an
+  `RM1011` is hosted at it, and the heads only decide where a lamp stands.
+- 🔴 **A junction is several graph nodes, and grouping them by distance is a free radius**
+  (`Q72`). Road Network v2 draws each carriageway apart (676 of Wan Chai's 792 edges are one-way);
+  junction nodes linked within 15 / 25 / 35 m give 297 / 240 / 202 junctions, so no radius
+  plateaus. The grouping is `surface.py`'s stub clusters (`P3-31`): two trim decisions read
+  together, no knob.
+- 🔴 **A stop line's centreline crossing is not the approach**: 68 of Wan Chai's 120 `RM1011`
+  cross no level-0 centreline (the graph and the paint part at the mouth), and the transverse host
+  `roadmarks.py` draws on is often the edge LEAVING the junction (its projection clamped at the
+  start node). The host fixes the JUNCTION (its nearer node), never the approach. The approaches
+  are every drivable level-0 edge entering the junction from outside it, and each stops at its
+  drawn mouth (`carriageway[].trim_m`).
+- ⚠️ **Stages are authored**: approaches whose travel axes lie within a tolerance of each other
+  (same way or opposed) share a green; a junction with one axis gets an all-red stage for the
+  crossing it serves. TD's real stage order and timings are not published.
+
+**The player.** A red is for the AI cars. The player's crossing on red is DETECTED and counted, and
+nothing pays or docks for it until the user decides which it is.
+
+**See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
