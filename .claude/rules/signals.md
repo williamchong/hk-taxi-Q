@@ -52,3 +52,8 @@ paths:
   crossing car could wait for one waiting for it; a give-way rule owes its own deadlock argument.
   ⚠️ `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre`; the `lane:` line holds them
   together.
+- **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
+  never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
+  `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
+  has not run the red. ⚠️ The line is `width_of` (published) wide, not the drawn ribbon. Mutations:
+  counting green, and crossing either way, fail `watch:` by name (2026-10-29).

@@ -59,6 +59,9 @@ const ADVANCE_STEPS: int = 16
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
+## The scene's signals, which the cars stop at; where none is set the system
+## runs its own (a verify tool's).
+@export var signals: SignalController
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
 enum Held { NONE, LIGHT, CAR }
@@ -102,7 +105,6 @@ class Car:
 
 
 var profile: TrafficProfile
-var signals: SignalController
 var graph: RoadGraph
 var router: RoadRouter
 var cars: Array[Car] = []
@@ -147,10 +149,14 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		return false
 	if not _load_library():
 		return false
-	var plan_table := load(SignalPlanProfile.PATH) as SignalPlanProfile
-	signals = SignalController.create(PlanScript.resident(graph), plan_table)
-	if signals != null:
-		add_child(signals)
+	if signals != null and signals.plan == null:
+		# The scene's controller refused its table and runs nothing.
+		signals = null
+	elif signals == null:
+		var plan_table := load(SignalPlanProfile.PATH) as SignalPlanProfile
+		signals = SignalController.create(PlanScript.resident(graph), plan_table)
+		if signals != null:
+			add_child(signals)
 	for index: int in profile.cars:
 		var car := Car.new()
 		car.kind = _pick_kind()

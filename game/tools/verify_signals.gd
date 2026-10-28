@@ -8,6 +8,9 @@
 ## - Every approach gets a green each cycle, and its lights run red, red and
 ##   amber, green, amber, red in that order and no other.
 ## - A crossing holds every approach red for `crossing_s`.
+## - **The player's red** (`P3-3d`): a stop line is crossed only its way of
+##   travel, within the street, on its own level; the taxi crossing one at red
+##   or red-and-amber is counted once, and at green or backwards not at all.
 ## - Every approach stands on the graph: its edge is there, its stop point on
 ##   the edge, and its published heading the edge's own at the mouth — an id
 ##   mapped wrong in the merge, or a direction flipped, fails here by name.
@@ -43,6 +46,7 @@ func _run() -> void:
 		return
 	_expect(ControllerScript.usable(table), "table", "every timing is positive")
 	_check_the_checker(table)
+	_check_a_line()
 
 	var graph: RoadGraph = RoadGraph.shared()
 	var plan: SignalPlan = PlanScript.resident(graph)
@@ -61,6 +65,7 @@ func _run() -> void:
 		"plan",
 		"%d junctions, %d approaches, every cycle walked" % [plan.junctions.size(), approaches]
 	)
+	_check_the_watch(graph, plan, table)
 	_finish("verify_signals")
 
 
@@ -212,3 +217,79 @@ func _check_on_graph(graph: RoadGraph, plan: SignalPlan, junction: SignalPlan.Ju
 					% [where, approach.edge, heading, approach.heading_deg]
 				)
 			)
+
+
+## One stop line across +x at the origin, travel -z (north): crossed northward
+## within the street only.
+func _check_a_line() -> void:
+	var line := ControllerScript.StopLine.new()
+	line.centre = Vector3.ZERO
+	line.travel = Vector3(0, 0, -1)
+	line.half_m = 4.0
+	_expect(
+		line.crossed_by(Vector3(1, 0, 1), Vector3(1, 0, -1)), "watch", "crossed its way: counted"
+	)
+	_expect(
+		not line.crossed_by(Vector3(1, 0, -1), Vector3(1, 0, 1)), "watch", "crossed backwards: not"
+	)
+	_expect(
+		not line.crossed_by(Vector3(5, 0, 1), Vector3(5, 0, -1)),
+		"watch",
+		"crossed off the street: not"
+	)
+	_expect(
+		not line.crossed_by(Vector3(1, 5, 1), Vector3(1, 5, -1)),
+		"watch",
+		"crossed on a deck above: not"
+	)
+	_expect(
+		not line.crossed_by(Vector3(1, 0, -0.5), Vector3(1, 0, -1)), "watch", "already past: not"
+	)
+
+
+## The shipped plan's first approach driven over at red, red-and-amber and
+## green: two counted, one not; and every approach has a line on the street.
+func _check_the_watch(graph: RoadGraph, plan: SignalPlan, table: SignalPlanProfile) -> void:
+	var controller: SignalController = ControllerScript.create(plan, table)
+	controller.build_lines(graph)
+	var count: int = 0
+	for junction: SignalPlan.Junction in plan.junctions:
+		count += junction.approaches.size()
+	var flat: int = 0
+	for line: ControllerScript.StopLine in controller.lines():
+		if line.half_m <= 0.0:
+			flat += 1
+	_expect(
+		controller.lines().size() == count and flat == 0,
+		"watch",
+		"a stop line for each of %d approaches, none of zero width" % count
+	)
+	var line: ControllerScript.StopLine = controller.lines()[0]
+	var junction: SignalPlan.Junction = plan.junctions[line.approach.junction]
+	var cycle: float = ControllerScript.cycle_s(junction, table)
+	var counted: Dictionary[int, int] = {}
+	for light: int in [
+		ControllerScript.Light.RED, ControllerScript.Light.RED_AMBER, ControllerScript.Light.GREEN
+	]:
+		var clock: float = 0.0
+		while (
+			clock < cycle
+			and ControllerScript.light_at(junction, line.approach, clock, table) != light
+		):
+			clock += STEP_S
+		controller.clock_s = clock
+		var before: int = controller.ran_red_count
+		controller.observe(line.centre - line.travel)
+		controller.observe(line.centre + line.travel)
+		controller.observe(Vector3.INF)
+		counted[light] = controller.ran_red_count - before
+	_expect(
+		(
+			counted[ControllerScript.Light.RED] == 1
+			and counted[ControllerScript.Light.RED_AMBER] == 1
+			and counted[ControllerScript.Light.GREEN] == 0
+		),
+		"watch",
+		"over the line at red, red-and-amber, green: counted %s" % [counted.values()]
+	)
+	controller.free()

@@ -213,7 +213,15 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   sample, longest standstill 27.4 s (a signal wait). Throttle route: +7 `draws`, `phys` ~2.8 against
   ~1.8 ms with `--traffic=off`. Cars pass through each other at an unsignalled crossing (no
   give-way), no lane change, no lamps at night, not near-missed. Owed: the user's drive.
-- `P3-3d`–`P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
+- `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
+  own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
+  approach's stop line is the street's published width across its stop point, and the taxi's middle
+  crossing one its way at red or red-and-amber is `ran_red_count` and the `ran_red` signal —
+  neither paid nor docked. `verify_signals` `watch:` crosses a synthetic line both ways, off the
+  street and a level above, and the first real approach at red / red-and-amber / green (1 / 1 / 0);
+  two mutations caught. `drive.sh` prints `red:` lines: 3 of 4 throttle starts ran one. Owed: the
+  user's call, bonus or penalty.
+- `P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.

@@ -232,7 +232,19 @@ func _boot() -> Node:
 	for node: Node in instance.find_children("*", "Node", true, false):
 		if node.has_signal("skilled"):
 			node.connect("skilled", _on_skilled)
+		# The player's red (`P3-3d`): counted, neither paid nor docked.
+		if node.has_signal("ran_red"):
+			node.connect("ran_red", _on_ran_red)
 	return instance
+
+
+func _on_ran_red(edge: int, light: int) -> void:
+	print(
+		(
+			"red:     t=%5.2f  edge %d  light %d"
+			% [float(_trace_tick_index()) / Engine.physics_ticks_per_second, edge, light]
+		)
+	)
 
 
 func _on_skilled(_fare: RefCounted, award: RefCounted) -> void:

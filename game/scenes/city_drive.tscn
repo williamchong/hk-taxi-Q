@@ -17,6 +17,7 @@
 [ext_resource type="Resource" uid="uid://d4lg7vboesfwa" path="res://tuning/menu.tres" id="24_menu"]
 [ext_resource type="Script" uid="uid://cipic2tc2pqvl" path="res://scripts/world/day_clock.gd" id="25_clock"]
 [ext_resource type="Script" uid="uid://cr7bi74yl4y4a" path="res://scripts/traffic/traffic_system.gd" id="26_traffic"]
+[ext_resource type="Script" uid="uid://d1gf36j2js6mk" path="res://scripts/traffic/signal_controller.gd" id="27_signals"]
 
 [node name="CityDrive" type="Node3D" unique_id=1089602218 node_paths=PackedStringArray("vehicle", "regions", "camera_rig", "attract", "guide", "fares", "clock")]
 script = ExtResource("6_harness")
@@ -50,9 +51,14 @@ sun = NodePath("../Lighting/Sun")
 script = ExtResource("7_graph")
 vehicle = NodePath("../Taxi")
 
-[node name="Traffic" type="Node3D" parent="." node_paths=PackedStringArray("vehicle")]
+[node name="Signals" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
+script = ExtResource("27_signals")
+vehicle = NodePath("../Taxi")
+
+[node name="Traffic" type="Node3D" parent="." node_paths=PackedStringArray("vehicle", "signals")]
 script = ExtResource("26_traffic")
 vehicle = NodePath("../Taxi")
+signals = NodePath("../Signals")
 
 [node name="Fares" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
 script = ExtResource("19_fares")
