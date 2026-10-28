@@ -5,7 +5,7 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-The light tail (`P3-70`, `Q158` reversed on the user's ask, 2026-10-07): while a slide counts,
+The light tail (`P3-70`, `Q158` reversed on the user's ask, 2026-10-07): once a slide has paid,
 each tail lamp leaves a streak along the arc it swings through, fading with age; the body carries
 only the city's line. "Instead of the whole car tail for drifting after image, what if we only drag
 the lights? literally lighttail" — the user, turning round `P3-65`'s afterimage, a hull off the end
@@ -15,7 +15,11 @@ A streak off the lamps alone cannot read as a car, so it can be as long as a lig
 `LightTail` (`scripts/vehicle/light_tail.gd`) finds the two brake lenses in the body mesh by the
 import's stamps and `LightTrail` lays the streak as a ring of pieces, `SkidStrip`'s shape in the
 air; `light_tail.gdshader` fades each corner against the clock it was laid at. The tier is the same
-`SkillTracker.drift_tier` the sparks and the receipt take, so a streak is always a counted slide.
+`SkillTracker.drift_tier` the sparks and the receipt take, and the tail lays from `PAID_TIER`, the
+slide's first award, so a streak is always a paid one: the user's call, 2026-10-28, "sync drifting
+bonus detection with light tail appearance". Before, it lit the moment the slip reached the
+threshold, and a slide that ended inside `drift_min_s` streaked and paid nothing. The sparks still
+show the counting tier in their own warm white.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `light_tail_profile.gd` declares no defaults, so a missing key reads
 as zero, and the rig refuses to run on a zero (`LightTail.usable`). `verify_vehicle.gd` asserts the
@@ -32,7 +36,7 @@ Provisional: set by eye on the street, the user's look call to come (`P3-70`).
 One entry, so every tier streaks the same: the brake lens's lit red — `make_vehicle.py`'s `RED`
 hue-normalised to a peak of 1, as `vehicle_body.gdshader` lights the lens. The tail is the lamps,
 so it is the lamps' colour; `drift_sparks.tres` carries the tier's colour for the bonus's status.
-The table takes the sparks' shape — a colour per tier, the last past the end — so the user can try
+The table takes the sparks' shape — a colour per tier from `PAID_TIER`, the last past the end — so the user can try
 the tier's colours here by listing them, with no code moved.
 
 ## `life_s = 0.4`

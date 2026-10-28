@@ -415,7 +415,7 @@ func _check_the_outline_takes_the_speed(car: Node3D) -> void:
 ## where it is — nothing on its first tick, nothing while not laying — stamped
 ## with the clock at each end, breaks past `max_step_m` and on a stop, and wraps
 ## at its capacity; the capacity holds a life of every lamp at the physics rate;
-## the colour is the tier's, clear with no slide counting; the two tail lamps
+## the colour is the tier's, clear until the slide has paid; the two tail lamps
 ## are found on the imported body, one each side of the centreline and both on
 ## the car's tail, the high-level lamp left out; a table with no colours is
 ## refused.
@@ -501,12 +501,17 @@ func _check_the_light_tail_streaks_and_fades(car: Node3D, body: MeshInstance3D) 
 	if tail.capacity_for(2, life) < ceili(life * rate) * 2:
 		_problem("the capacity does not hold a life of both lamps at %d Hz" % rate)
 	var colours: PackedColorArray = table.get("colours")
-	if tail.colour_of(-1).a != 0.0:
+	var paid_tier: int = int(_constant(TAIL_SCRIPT, "PAID_TIER"))
+	if tail.colour_of(-1).a != 0.0 or tail.lays(-1):
 		_problem("the streak is not clear with no slide counting")
-	for tier: int in colours.size():
-		if tail.colour_of(tier) != colours[tier]:
-			_problem("tier %d does not streak in colours[%d]" % [tier, tier])
-	if tail.colour_of(colours.size() + 3) != colours[colours.size() - 1]:
+	if tail.colour_of(0).a != 0.0 or tail.lays(0):
+		_problem("a slide still short of drift_min_s streaks: the tail is for a paid slide")
+	if not tail.lays(1):
+		_problem("a slide's first award lays no streak")
+	for k: int in colours.size():
+		if tail.colour_of(paid_tier + k) != colours[k]:
+			_problem("tier %d does not streak in colours[%d]" % [paid_tier + k, k])
+	if tail.colour_of(paid_tier + colours.size() + 3) != colours[colours.size() - 1]:
 		_problem("a tier past the table does not keep its last colour")
 	var lenses: Array = tail.lenses_of(body.mesh)
 	if lenses.size() != 2:

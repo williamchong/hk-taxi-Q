@@ -1,12 +1,14 @@
 class_name LightTail
 extends Node3D
 ## The light tail (`P3-70`, `Q158` reversed on the user's ask, 2026-10-07):
-## while a slide counts, each tail lamp leaves a streak along the arc it swings
+## once a slide has paid, each tail lamp leaves a streak along the arc it swings
 ## through, fading over `life_s`; the body carries only the city's line. The
 ## tier is `SkillTracker.drift_tier`, the SAME meter that pays, handed in by
 ## `TaxiHire` off `FareSystem`'s `drift_tier_changed` as the sparks take it —
-## a slide the tracker is not counting lights nothing. Under `--fares=off`
-## nothing calls `show_tier` and no streak shows.
+## a slide the tracker is not counting lights nothing, and nor does one still
+## short of `drift_min_s` (`PAID_TIER`, the user's call, 2026-10-28: a streak
+## is a bonus earned). Under `--fares=off` nothing calls `show_tier` and no
+## streak shows.
 ##
 ## The lamps are found in the body mesh, not named: the import stamps every
 ## lens with `MARKER_LAMP` in `UV.y` and its circuit in `UV.x`
@@ -25,6 +27,10 @@ extends Node3D
 ## after the car's own, so a piece is laid where the tick left the lamp.
 
 const SHADER: Shader = preload("res://assets/shaders/light_tail.gdshader")
+## The first tier the tail lays at: the slide's first award. Tier 0 is a slide
+## counting toward `drift_min_s`, which may yet end unpaid; the sparks show it
+## in their own colour, the tail waits for the money.
+const PAID_TIER: int = 1
 ## `generated_scene_import.gd`'s stamps: the lamp marker in `UV.y`, the brake
 ## circuit in `UV.x`. Restated, because the import script is editor-side;
 ## `verify_vehicle.gd` holds the circuit to the imported body by finding the
@@ -124,21 +130,27 @@ func usable() -> bool:
 	return not TuningTable.any_zero(profile, required, "LightTail", "no streak will show")
 
 
-## The tier the tail shows: `SkillTracker.drift_tier`'s -1 stops the streak,
-## which then fades on its own; 0 and up lay it in `colours[tier]`, the last
+## The tier the tail shows: under `PAID_TIER` the streak stops and fades on
+## its own; from it the streak lays in `colours[tier - PAID_TIER]`, the last
 ## colour past the end. One colour for the whole ring, so a step up recolours
 ## the streak already laid — as the sparks already up take the new colour.
 func show_tier(tier: int) -> void:
 	_tier = tier
-	if _material != null and tier >= 0:
+	if _material != null and lays(tier):
 		_material.set_shader_parameter(&"colour", colour_of(tier))
 
 
-## The colour a tier streaks in; clear at -1, so a lit streak is a counted slide.
+## Whether a tier lays streak: a slide that has paid.
+static func lays(tier: int) -> bool:
+	return tier >= PAID_TIER
+
+
+## The colour a tier streaks in; clear under `PAID_TIER`, so a lit streak is a
+## paid slide.
 func colour_of(tier: int) -> Color:
-	if tier < 0 or profile == null or profile.colours.is_empty():
+	if not lays(tier) or profile == null or profile.colours.is_empty():
 		return Color(0.0, 0.0, 0.0, 0.0)
-	return profile.colours[mini(tier, profile.colours.size() - 1)]
+	return profile.colours[mini(tier - PAID_TIER, profile.colours.size() - 1)]
 
 
 ## How many pieces of streak have been laid since the car was built.
@@ -204,7 +216,7 @@ func _physics_process(delta: float) -> void:
 			frame * lens.centre,
 			frame.basis * lens.half_across * profile.width_scale,
 			frame.basis * lens.half_up * profile.width_scale,
-			_tier >= 0
+			lays(_tier)
 		)
 		if slot >= 0:
 			_upload(slot)
@@ -248,7 +260,7 @@ func _build_mesh() -> bool:
 	_material.shader = SHADER
 	_material.set_shader_parameter(&"life_s", profile.life_s)
 	_material.set_shader_parameter(&"fade_power", profile.fade_power)
-	_material.set_shader_parameter(&"colour", colour_of(maxi(_tier, 0)))
+	_material.set_shader_parameter(&"colour", colour_of(maxi(_tier, PAID_TIER)))
 	_mesh.surface_set_material(0, _material)
 	_streak = MeshInstance3D.new()
 	_streak.name = "Streak"

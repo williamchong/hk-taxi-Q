@@ -10553,4 +10553,13 @@ a tuning value, so it is a constant and not a `skills.tres` key. `slip_deg_of` i
 skidpad's duplicate is untouched. `verify_fares`'s `skills:` block holds a 180° and a 91° slide
 paying nothing and a 90° one paying; the mutation that drops the guard fails it by name.
 
+**The light tail waits for the money** (the user, 2026-10-28: "can we sync drifting bonus detection
+with light tail apperance for easier ux?", then "try light tail appear only once a slide has started
+paying"). The tail read the same meter but lit at tier 0, the moment the slip reached 14°, so a
+slide that ended inside `drift_min_s` streaked and paid nothing. It lays from
+`LightTail.PAID_TIER` (1), the slide's first award; the sparks keep the counting tier in warm
+white. Refused: paying from the threshold (`drift_min_s` 0) — every twitch over 14° would pay, the
+tap `Q145` ruled out. `verify_vehicle` holds tier 0 clear and tier 1 laid; `PAID_TIER` 0 fails it
+by name.
+
 **See.** `Q84` · `Q145` · `Q153` · `Q156` · `P3-49` · `P3-53` · `P3-58` · `game/tuning/skills.md`
