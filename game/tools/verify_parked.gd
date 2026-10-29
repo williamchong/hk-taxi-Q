@@ -162,6 +162,7 @@ func _check_liveries(library: Dictionary[String, Mesh]) -> void:
 ## Every entry's `hours` is a window or null and its `chance` a share.
 func _check_entries(document: Dictionary) -> void:
 	var kinds: Dictionary[String, int] = {}
+	var sources: Dictionary[String, int] = {}
 	var bad_hours: int = 0
 	var bad_chance: int = 0
 	for entry: Dictionary in document.get("placements", []) as Array:
@@ -173,9 +174,27 @@ func _check_entries(document: Dictionary) -> void:
 			bad_chance += 1
 		var kind: String = String(entry.get("kind", ""))
 		kinds[kind] = kinds.get(kind, 0) + 1
+		var source: String = String(entry.get("source", ""))
+		sources[source] = sources.get(source, 0) + 1
 	_expect(bad_hours == 0, "%d placements carry hours that are not [from_h, to_h]" % bad_hours)
 	_expect(bad_chance == 0, "%d placements carry a chance outside (0, 1]" % bad_chance)
 	print("  info  parked kinds: %s" % JSON.stringify(kinds))
+	var profile := load(ParkedProfile.PATH) as ParkedProfile
+	if profile != null:
+		var lit: int = 0
+		for source: String in profile.hazard_sources:
+			lit += sources.get(source, 0)
+		print(
+			(
+				"  info  hazards on: %d of %d placements (%s; sources %s)"
+				% [
+					lit,
+					sources.values().reduce(func(a: int, b: int) -> int: return a + b, 0),
+					", ".join(profile.hazard_sources),
+					JSON.stringify(sources)
+				]
+			)
+		)
 
 
 ## The table and its bars, through `ParkedLayer`'s own refusal.
@@ -239,6 +258,19 @@ func _check_roster() -> void:
 	)
 	var two := PackedColorArray([Color(1.0, 0.0, 0.0, 0.0), Color(0.0, 0.0, 1.0, 0.0)])
 	_expect(ParkedRoster.livery(5, two).a == 1.0, "a drawn livery is applied")
+	var hazards := PackedStringArray(["layby"])
+	var worn: Color = ParkedRoster.livery(5, two)
+	_expect(
+		ParkedLayerScript.datum_of(worn, "layby", hazards) == Color(worn.r, worn.g, worn.b, 25.0),
+		"a stopping car keeps its livery and lights both indicators (a = 1 + 8 + 16)"
+	)
+	_expect(
+		ParkedLayerScript.datum_of(ParkedRoster.NO_LIVERY, "layby", hazards).a == 24.0,
+		"and a kind with no palette lights them over its authored colour"
+	)
+	_expect(
+		ParkedLayerScript.datum_of(worn, "bay", hazards) == worn, "a parked car stays switched off"
+	)
 	_expect(
 		ParkedRoster.livery(5, two) == ParkedRoster.livery(5, two),
 		"a placement wears the same colour every time"

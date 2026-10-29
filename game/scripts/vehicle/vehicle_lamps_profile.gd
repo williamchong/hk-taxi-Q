@@ -61,3 +61,20 @@ const PATH: String = "res://tuning/vehicle_lamps.tres"
 @export_range(0.0, 1.0, 0.01) var sidelamp_beam: float
 ## Key-light energy at or below which the rig counts as night.
 @export_range(0.0, 1.0, 0.01) var night_energy: float
+
+
+## Put the indicator beat on every surface of `meshes` that runs
+## `vehicle_body.gdshader` (`P3-3f`): the vehicle library's material carries no
+## beat of its own, so the traffic, the parked layer and the taxi read this one
+## table. A no-op on a surface without the uniforms.
+static func wire_blink(meshes: Array[Mesh]) -> void:
+	var lamps := load(PATH) as VehicleLampsProfile
+	if lamps == null:
+		push_warning("VehicleLampsProfile: %s did not load; no indicator flashes" % PATH)
+		return
+	for mesh: Mesh in meshes:
+		for surface: int in mesh.get_surface_count():
+			var material := mesh.surface_get_material(surface) as ShaderMaterial
+			if material != null:
+				material.set_shader_parameter("traffic_blink_hz", lamps.blink_hz)
+				material.set_shader_parameter("traffic_blink_duty", lamps.blink_duty)

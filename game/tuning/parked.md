@@ -76,3 +76,17 @@ keeps its colour on every visit. sRGB, painted by `vehicle_body.gdshader` over t
   `maroon` is dark enough not to compete.
 - **`coach`: the belt band** — navy 2, red, green, orange; a tour coach's body stays white.
 - **`motorcycle`: tank, fairing and fender** — red and black 2 each, white, blue.
+
+## `hazard_sources = ["layby", "frontage"]`
+
+Which published sources stand with their hazards on (`P3-3f`, the user's drive 2026-10-29: parked
+cars split into the switched-off and the stopping). Both indicators flash at the taxi's own beat
+(`vehicle_lamps.tres`); the head lamps and tails stay dark.
+
+- **`layby`**: a lay-by is a place to stop, not to park — a car setting down, a taxi waiting for
+  a fare, a van loading. In Hong Kong a vehicle there sits on its hazards.
+- **`frontage`**: the vans and coaches a building's name puts at its kerb (a goods entrance, a
+  hotel's coach) are loading.
+- **Not `stop` or `stand`**: a bus at its stop and a taxi on a rank wait with their hazards off;
+  the stop and the rank are what licence them to stand.
+- **Not `bay` or `fill`**: a metered or invented kerb car is parked, switched off.

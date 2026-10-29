@@ -243,11 +243,16 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. **`P3-3f2` indicators** (2026-10-30): the library's indicator
   lenses are on the taxi's `CIRCUIT_INDICATOR_L/R` (`make_parked.py`), `INSTANCE_CUSTOM.a` carries
   8 left / 16 right, and `vehicle_body.gdshader` flashes them at `vehicle_lamps.tres`' beat
-  (`TrafficSystem.wire_blink`, no second copy), each car on a phase off its position. A car winks
+  (`VehicleLampsProfile.wire_blink`, no second copy), each car on a phase off its position. A car winks
   its turn's side from `lane_change_m` before the mouth through the turn, else the side it is
   changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
   before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. Day and
-  night frames, 0 shader errors. Owed: `P3-3f3` hazards, the user's drive.
+  night frames, 0 shader errors. **`P3-3f3` hazards** (2026-10-30): `parked.tres`'
+  `hazard_sources` (`layby`, `frontage`) stand on both indicators, the batch writing custom data for
+  any kind that carries one; a bay, the fill, a stop and a rank stay switched off. Wan Chai 55 of
+  754 placements. The beat is wired by the parked layer too (`VehicleLampsProfile.wire_blink`), so
+  it flashes under `--traffic=off`. A dusk frame of a frontage van on its hazards, lens lit at 0.9 s
+  and dark at 1.2 s; 0 shader errors. Owed: the user's drive.
 - `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
   own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
   approach's stop line is the street's published width across its stop point, and the taxi's middle

@@ -30,6 +30,10 @@ const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd"
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const ParkedRoster = preload("res://scripts/city/parked_roster.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
+## Both indicators in `vehicle_body.gdshader`'s `INSTANCE_CUSTOM.a`: 8 left
+## and 16 right, `TrafficSystem.lamp_bits`' hazards. No running bit: the head
+## lamps and tails stay dark.
+const HAZARD_BITS: float = 24.0
 
 ## The document's name in a region's bundle. Mirrors `PARKED_PLACEMENTS_NAME`
 ## in `etl/pipeline/parked.py`.
@@ -138,6 +142,9 @@ func _ready() -> void:
 			_meshes[String(found.name)] = found.mesh
 			_extents[String(found.name)] = found.mesh.get_aabb()
 	library.free()
+	var wired: Array[Mesh] = []
+	wired.assign(_meshes.values())
+	VehicleLampsProfile.wire_blink(wired)
 
 	var no_mesh: int = 0
 	var no_transform: int = 0
@@ -296,14 +303,18 @@ func _build(cell: Cell) -> void:
 	node.name = "cell_%d_%d" % [cell.id.x, cell.id.y]
 	for mesh_name: String in by_mesh:
 		var batch: Array[Transform3D] = []
-		# Custom data only for a kind with a palette; the rest read zero, which
-		# is the authored colour anyway.
+		# Custom data only where something reads it — a kind with a palette, a
+		# vehicle with its hazards on; the rest read zero, the authored colour
+		# with every lamp dark. `a` is `vehicle_body.gdshader`'s bits: the
+		# livery's alpha, then both indicators.
 		var worn := PackedColorArray()
-		var liveried: bool = _profile.liveries.has(mesh_name)
+		var wears: bool = _profile.liveries.has(mesh_name)
+		for entry: Entry in by_mesh[mesh_name]:
+			wears = wears or entry.source in _profile.hazard_sources
 		for entry: Entry in by_mesh[mesh_name]:
 			batch.append(entry.at)
-			if liveried:
-				worn.append(entry.livery)
+			if wears:
+				worn.append(datum_of(entry.livery, entry.source, _profile.hazard_sources))
 		var drawn: MultiMeshInstance3D = PropBatch.batch(_meshes[mesh_name], batch, mesh_name, worn)
 		drawn.visibility_range_end = _profile.range_m
 		drawn.visibility_range_end_margin = _profile.range_margin_m
@@ -358,6 +369,15 @@ func entry_count() -> int:
 ## Placement `index`'s road, by the region's own edge id, or -1.
 func edge_of(index: int) -> int:
 	return _entries[index].edge
+
+
+## The instance datum a placement wears: its livery (alpha 1 when drawn), with
+## both indicators added to `a` when its source stands on its hazards.
+static func datum_of(livery: Color, source: String, hazard_sources: PackedStringArray) -> Color:
+	var datum: Color = livery
+	if source in hazard_sources:
+		datum.a += HAZARD_BITS
+	return datum
 
 
 ## Placement `index`'s published source: `bay`, `fill`, `stop`, `layby`, …

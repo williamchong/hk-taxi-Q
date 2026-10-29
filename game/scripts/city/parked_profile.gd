@@ -37,3 +37,7 @@ const PATH: String = "res://tuning/parked.tres"
 ## drawn per placement, so a colour listed twice is twice as common. sRGB. A
 ## kind not listed keeps its authored colour — the taxi, the bus, the tram.
 @export var liveries: Dictionary[String, PackedColorArray]
+## The published sources (`parked_placements.json`'s `source`) whose vehicles
+## stand with their hazards on (`P3-3f`): a stop to load or set down, not a
+## park. A source not listed is switched off.
+@export var hazard_sources: PackedStringArray

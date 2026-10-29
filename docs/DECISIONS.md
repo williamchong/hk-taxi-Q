@@ -10656,11 +10656,19 @@ Kong's kerbside takes the nearside lane, so passing is the common case, not a co
 **The indicators (`P3-3f2`, 2026-10-30).** The parked library's lenses go on the taxi's own
 indicator circuits rather than new ones, so one shader channel serves the player's car and the
 fleet. The beat is the taxi's (`vehicle_lamps.tres` `blink_hz` / `blink_duty`), written onto the
-library's material by `TrafficSystem.wire_blink` — the shader's uniforms default to 0, so an unwired
+library's material by `VehicleLampsProfile.wire_blink` — the shader's uniforms default to 0, so an unwired
 material stays dark rather than flash at a second copy of the number. Each car takes a phase off its
 position: a queue blinking in step reads as one machine. A car winks its turn's side from
 `lane_change_m` before the mouth — the distance it already uses to settle into the turn's lane —
 and otherwise the side it is moving across the lanes to, a pass included; straight on, nothing.
+
+**The hazards (`P3-3f3`, 2026-10-30).** Which parked vehicles are stopping rather than parked is
+decided by the source that placed them, not by kind: `parked.tres`' `hazard_sources` is the
+lay-by (a place to set down, wait and load) and the frontage (a building's goods van or hotel
+coach). A bus at its stop and a taxi on its rank keep theirs off — the stop and the rank are what
+licence them to stand — and a bay or fill car is parked. The beat is wired by the parked layer as
+well as the traffic (`VehicleLampsProfile.wire_blink`), so the street flashes under
+`--traffic=off`; the layer writes no running bit, so the head lamps and tails stay dark.
 
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 

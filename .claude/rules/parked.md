@@ -63,7 +63,10 @@ traffic, and the bonus for threading them.
   engine draws the mesh. A proportion change is `python tools/make_parked.py`, a test run, and
   a commit of the `.glb`. The `.import` sidecar is committed beside it. ⚠️ The rear lens is
   `taillamp_{side}_brake` (the brake circuit) and the head lens `headlamp_{side}`: the moving cars
-  light them through `INSTANCE_CUSTOM.a` and a parked car writes 0 — dark.
+  light them through `INSTANCE_CUSTOM.a` and a parked car writes 0 — dark. The indicator lenses
+  are the taxi's `indicator_{side}` / `taillamp_{side}_indicator` (`P3-3f2`). A placement whose
+  source is in `parked.tres`' `hazard_sources` writes both indicator bits (`datum_of`, held by
+  `verify_parked`; its `hazards on:` line is the share) — by source, never by kind.
 - 🔴 **A colour that means something is never a livery** (`Q167`, the user's rule 2026-10-13):
   the taxi, the bus and the tram carry no `livery`, and the minibus's palette is green and red
   only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`

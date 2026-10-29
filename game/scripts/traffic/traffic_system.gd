@@ -369,7 +369,7 @@ func _load_library() -> bool:
 	if _kinds.is_empty():
 		push_error("TrafficSystem: none of %s is in %s" % [profile.kinds.keys(), LIBRARY_PATH])
 		return false
-	wire_blink(_meshes)
+	VehicleLampsProfile.wire_blink(_meshes)
 	for extent: AABB in _extents:
 		_reach_m = maxf(_reach_m, extent.size.z * 0.5)
 	# `instance_count` allocates the buffer and clears it, so it is grown car by
@@ -1382,24 +1382,6 @@ static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 	if wink == -1 or wink == HAZARDS:
 		bits += 16
 	return bits
-
-
-## Put the taxi's indicator beat (`vehicle_lamps.tres`) on every surface of
-## `meshes` that runs `vehicle_body.gdshader`: the library's material carries
-## no beat of its own, so the traffic and the parked layer read one table.
-static func wire_blink(meshes: Array[Mesh]) -> void:
-	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
-	if lamps == null:
-		push_warning(
-			"TrafficSystem: %s did not load; no indicator flashes" % VehicleLampsProfile.PATH
-		)
-		return
-	for mesh: Mesh in meshes:
-		for surface: int in mesh.get_surface_count():
-			var material := mesh.surface_get_material(surface) as ShaderMaterial
-			if material != null:
-				material.set_shader_parameter("traffic_blink_hz", lamps.blink_hz)
-				material.set_shader_parameter("traffic_blink_duty", lamps.blink_duty)
 
 
 ## The indicator `car` shows: its turn's side from `lane_change_m` before the

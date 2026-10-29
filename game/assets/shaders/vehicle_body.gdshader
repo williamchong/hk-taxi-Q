@@ -184,7 +184,7 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // full, day or night.
 uniform float traffic_day_lamps : hint_range(0.0, 1.0) = 0.5;
 uniform float traffic_tail_lit : hint_range(0.0, 1.0) = 0.35;
-// Set on the library's material from `vehicle_lamps.tres` (`TrafficSystem.
+// Set on the library's material from `vehicle_lamps.tres` (`VehicleLampsProfile.
 // wire_blink`), the taxi's own beat: no second copy here, so an unwired
 // material's indicators stay dark rather than flash at a guess.
 uniform float traffic_blink_hz : hint_range(0.0, 4.0) = 0.0;
