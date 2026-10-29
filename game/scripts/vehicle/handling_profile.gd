@@ -25,8 +25,16 @@ const PATH: String = "res://tuning/handling.tres"
 ## Steering angle at the car's `max_speed_kph`; its lock at rest is the car's
 ## (`CarSpec.steer_angle_max_deg`). Lower keeps the car stable at speed.
 @export_range(0.0, 60.0, 0.5, "suffix:°") var steer_angle_at_top_deg: float
-## Seconds to reach full lock from centre.
+## Seconds to reach full lock from centre at rest.
 @export_range(0.01, 1.0, 0.01, "suffix:s") var steer_attack_s: float
+## Seconds to reach full lock from centre at the car's limiter; `steer_attack_s`
+## holds at rest, and the two blend on the SQUARE of the share of the limiter,
+## because the yaw a swing of the wheels puts into the car grows with the speed
+## squared. A key or a thumb steers all or nothing: at 0.2 s everywhere a
+## full-lock lane change spun the car at 110 kph (20.8° of rear slip, 30° at
+## 120) where a real taxi changes lane all day. `TyreVehicleController` keeps
+## the quick ramp in drift mode and on the countersteer side of a slide.
+@export_range(0.01, 5.0, 0.01, "suffix:s") var steer_attack_at_top_s: float
 ## Seconds to return to centre when input is released.
 @export_range(0.01, 1.0, 0.01, "suffix:s") var steer_release_s: float
 

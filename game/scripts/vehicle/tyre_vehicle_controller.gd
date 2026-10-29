@@ -268,13 +268,7 @@ func catch_capped() -> bool:
 ## (`ArcadeAidsProfile.steer_to_grip`).
 func _steer_lock_rad(speed_ratio: float) -> float:
 	var lock: float = super._steer_lock_rad(speed_ratio)
-	# `steer_input` is +1 for right, and the parent negates it into Godot's
-	# positive-left angle; `_slide_toward` is in the angle's sign, so the
-	# player is countersteering when the two have opposite signs.
-	var countersteering: bool = (
-		_slide_beyond_peak_rad() > 0.0 and -steer_input * _slide_toward() > 0.0
-	)
-	if not countersteering:
+	if not _countersteering():
 		# Not catching a slide: the lock the tyres can use (`steer_to_grip`), if
 		# it is under the table's — but never once drift mode is engaged: the
 		# button or a flick is the player asking for rotation, and a capped
@@ -289,6 +283,24 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 	if arcade_aids.slide_lock_deg <= 0.0:
 		return lock
 	return maxf(lock, deg_to_rad(arcade_aids.slide_lock_deg))
+
+
+## Whether the player steers against a slide past the tyre's peak.
+## `steer_input` is +1 for right, and the parent negates it into Godot's
+## positive-left angle; `_slide_toward` is in the angle's sign, so the player is
+## countersteering when the two have opposite signs.
+func _countersteering() -> bool:
+	return _slide_beyond_peak_rad() > 0.0 and -steer_input * _slide_toward() > 0.0
+
+
+## The parent's speed-eased ramp to lock, but the quick one at rest
+## (`steer_attack_s`) whenever the player asks for rotation or catches it: in
+## drift mode, and on the countersteer side of a slide, where a slow catch would
+## be the spin the slow ramp is there to prevent.
+func _steer_attack_s(speed_ratio: float) -> float:
+	if _drift_mode.engaged or _countersteering():
+		return profile.steer_attack_s
+	return super._steer_attack_s(speed_ratio)
 
 
 ## The front wheels' angle that holds the tyres' grip in a steady turn at this

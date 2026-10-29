@@ -78,6 +78,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `+0.5 s` do not compare with a table from before 2026-09-30. ⚠️ A countersteer latch keyed on
   the slip alone takes a turn-in plough for a slide: latch on tail out (yaw and countersteer sign
   disagree), and grade a latch change on the tap at 42 kph.
+- 🔴 **`steer_attack_at_top_s` is graded on `--only=flick`'s `flick@held` at 95, 110 and 120 kph**
+  (`Q174`): the full-lock swap with the throttle held, a lane change, and the street's high-speed
+  slide with no button pressed. The 42 / 63 / 86 kph pad is its guard and only `corner` and `tap`
+  move there; drift mode and a countersteer keep `steer_attack_s`.
 - ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
   read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
   for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on

@@ -1396,7 +1396,8 @@ Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`
 ### The three schemes
 
 **Keyboard** is digital on every action; `steer_attack_s` / `steer_release_s` in
-`VehicleController` do all the smoothing.
+`VehicleController` do all the smoothing, the attack slowing with speed to
+`steer_attack_at_top_s` (`Q174`).
 
 **Gamepad** is analog on steer and both triggers; `handbrake` and `look_back` are face buttons.
 ⚠️ Both triggers are spent, so `handbrake` stays a `bool`. The action was `drift` until `Q170`:

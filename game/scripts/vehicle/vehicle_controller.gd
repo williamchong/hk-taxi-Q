@@ -420,7 +420,7 @@ func _update_steering(delta: float) -> void:
 	# Returning to centre is quicker than reaching lock, so the car feels like it
 	# wants to straighten. Rate is expressed as full-lock-per-second.
 	var seconds: float = (
-		profile.steer_attack_s if absf(target) > absf(steering) else profile.steer_release_s
+		_steer_attack_s(speed_ratio) if absf(target) > absf(steering) else profile.steer_release_s
 	)
 	steering = move_toward(steering, target, (max_angle / seconds) * delta)
 	# Guarded because max_angle is a profile value and an unassigned resource
@@ -428,6 +428,13 @@ func _update_steering(delta: float) -> void:
 	# that would fail loudly. This one would only ever produce a NAN in a lamp, so
 	# it is handled rather than asserted.
 	steer_ratio = -steering / max_angle if max_angle > 0.0 else 0.0
+
+
+## Seconds to full lock at this share of the limiter: `steer_attack_s` at rest,
+## easing to `steer_attack_at_top_s` on the share's square. A method so the tyre
+## car can keep the quick ramp while the player asks for a slide.
+func _steer_attack_s(speed_ratio: float) -> float:
+	return lerpf(profile.steer_attack_s, profile.steer_attack_at_top_s, speed_ratio * speed_ratio)
 
 
 ## The lock available at this share of the limiter: `steer_angle_max_deg` at

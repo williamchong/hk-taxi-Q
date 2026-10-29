@@ -10609,3 +10609,44 @@ runs.
 nothing pays or docks for it until the user decides which it is.
 
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
+
+
+## `Q174` — The wheel goes to lock slower at speed, and a slide keeps the quick ramp
+
+**Status.** ✅ Built 2026-10-29 on the user's report. Reopens nothing measured shut: the lock
+(`steer_to_grip`) and the tyre are untouched.
+
+**Asked** by the user, 2026-10-29: "taxi cant steer properly at highspeed (>60 <120) and start
+sliding, even without pressing drift", and "110km/h is the lantau road speed limit where taxi runs
+wild everyday" — a real taxi does not slide in a lane change there.
+
+**Measured** on `skidpad.tscn` (`--only=flick`, which carries the full-lock left-to-right swap with
+the throttle held as `flick@held`; the flick never fires on it, byte-identical at
+`flick_window_s` 0 and 0.3). A plain held corner never slides (peak 4.2 / 5.0 / 5.9 / 6.7° at
+63 / 86 / 105 / 120 kph). The swap does, from about 95 kph:
+
+| Entry | `flick@held` peak slip, ramp 0.2 s | at `steer_attack_at_top_s` 2.0 |
+|---|---|---|
+| 95 kph | 9.7° | 5.9° |
+| 110 kph | **20.8°**, 22 kph shed | 6.3°, 8 kph gained |
+| 120 kph | **29.8°**, 30 kph shed | 6.5° |
+
+**Not the levers**, each swept: `steer_to_grip` 0.6 still slid to 25.6° at 120 kph with the
+fronts at 6.5° (the rear is at its peak in a plain corner there, `rear use` 0.89); an earlier
+yaw brake (`yaw_brake_from_deg` 8–12) only took 120 kph to 19–22°, the slip being built inside half
+a second; `steer_release_s` 0.08–0.4 moved nothing (a reversal runs on the attack ramp the whole
+way, `Q152`'s timing round).
+
+**Decided.** `HandlingProfile.steer_attack_at_top_s` **2.0**: the seconds to full lock blend from
+`steer_attack_s` (0.2) at rest to it at the limiter on the SQUARE of the share of the limiter, as
+the yaw a swing of the wheels puts in grows with v² — 0.28 s at 42 kph, 0.38 at 63, 0.54 at 86,
+0.75 at 110 on the pace-2.0 limiter of 198 kph. `TyreVehicleController` keeps the 0.2 s ramp in
+drift mode and on the countersteer side of a slide, so the button's turn-in and every catch are
+the player's as before.
+
+**Guard**, the full pad at 42 / 63 / 86 kph, 0.2 against 2.0: `drift`, `brake`, `coast` identical;
+`hold`'s `longest` 0.68 / 0.83 / 3.57 s unchanged; `turn`'s `came out` within 1.3° on every row;
+`catch` `yaw@hold` within 1.3°; `tap` peak 0.3–0.5° lower; `corner` exits 1–2 kph faster at the same
+yaw. Owed: the user's drive, the veto.
+
+**See.** `Q152` · `Q153` · `Q156`
