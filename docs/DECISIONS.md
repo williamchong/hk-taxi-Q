@@ -10653,6 +10653,15 @@ Kong's kerbside takes the nearside lane, so passing is the common case, not a co
   a polyline vertex, which the lanes cannot follow — a limit of the pose, not of the parked read,
   and the boxes are the meshes' bounds.
 
+**The indicators (`P3-3f2`, 2026-10-30).** The parked library's lenses go on the taxi's own
+indicator circuits rather than new ones, so one shader channel serves the player's car and the
+fleet. The beat is the taxi's (`vehicle_lamps.tres` `blink_hz` / `blink_duty`), written onto the
+library's material by `TrafficSystem.wire_blink` — the shader's uniforms default to 0, so an unwired
+material stays dark rather than flash at a second copy of the number. Each car takes a phase off its
+position: a queue blinking in step reads as one machine. A car winks its turn's side from
+`lane_change_m` before the mouth — the distance it already uses to settle into the turn's lane —
+and otherwise the side it is moving across the lanes to, a pass included; straight on, nothing.
+
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 
 

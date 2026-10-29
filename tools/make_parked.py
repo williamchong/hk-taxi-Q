@@ -575,14 +575,15 @@ def _ends(shape: Shape) -> list[MeshData]:
                         name=f"taillamp_{side_tag}_brake" if rear else f"headlamp_{side_tag}",
                     )
                 )
-            # Not `indicator_l` / `indicator_r`: those are the taxi's switched
-            # circuits, and a parked car's indicators are wired to nothing.
+            # On the taxi's indicator circuits, a side each: lit only where a
+            # moving car winks or a stopping one flashes its hazards (`P3-3f`) —
+            # a switched-off car's instance data leaves them dark.
             parts.append(
                 box(
                     (x - 0.06, lamp_y - 0.105, z_lens[0]),
                     (x + 0.06, lamp_y - 0.06, z_lens[1]),
                     AMBER,
-                    name=f"indicator_{tag}_{side_tag}",
+                    name=f"taillamp_{side_tag}_indicator" if rear else f"indicator_{side_tag}",
                 )
             )
         if shape.head_lamps == 1 and not rear:

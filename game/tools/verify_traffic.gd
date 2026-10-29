@@ -27,6 +27,9 @@
 ##   two cars on one road, opposite ways, off the turn, never overlap in plan.
 ##   The free drive need not meet that case (Wan Chai's alone never does), so
 ##   `give way:` stages it: two cars on a back street, the rule held each way.
+## - 🔴 **A car winks before every turn and never straight on** (`P3-3f`): at
+##   the last tick of a car's straight run its lamp bits carry the turn's side
+##   and not the other, and a straight-on move carries neither as it starts.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -194,6 +197,9 @@ class Seen:
 	var front_m: float = 0.0
 	var live: bool = false
 	var lives: int = 0
+	var turning: bool = false
+	## The lamp bits it showed: a turn is judged by the last tick before it.
+	var written: int = 0
 
 
 ## Two-way roads with one lane each way that traffic drives both ways: where a
@@ -314,6 +320,8 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	var passing: int = 0
 	var inside_parked: int = 0
 	var head_on: int = 0
+	var winked: int = 0
+	var bad_wink: int = 0
 	var over_centre: int = 0
 	var longest_wait: Array[int] = []
 	var waited: Array[int] = []
@@ -408,6 +416,21 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 								]
 							)
 						)
+			if before.live and car.turning and not before.turning:
+				if _winks_right(
+					car.turn_side, before.written if car.turn_side != 0 else car.written
+				):
+					winked += 1 if car.turn_side != 0 else 0
+				else:
+					bad_wink += 1
+					_problem(
+						(
+							"tick %d: car %d turns %d with lamp bits %d"
+							% [tick, index, car.turn_side, car.written]
+						)
+					)
+			before.turning = car.turning
+			before.written = car.written
 			before.live = true
 			before.edge = car.edge
 			before.along = car.along
@@ -449,6 +472,14 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 		)
 	)
 	_expect(
+		bad_wink == 0 and winked > 0,
+		"wink",
+		(
+			"every turn winked its own side, none straight on (%d turns winked, %d wrong)"
+			% [winked, bad_wink]
+		)
+	)
+	_expect(
 		head_on == 0,
 		"parked",
 		(
@@ -473,6 +504,19 @@ func _inside_parked(system: TrafficSystem, car: TrafficSystem.Car) -> Node:
 			if _overlap(mine, theirs) > INSIDE_M:
 				return parked.layer
 	return null
+
+
+## Whether lamp `bits` show a turn's indicator (`side` 1 left, -1 right) and not
+## the other — or neither for straight on.
+static func _winks_right(side: int, bits: int) -> bool:
+	var left: bool = bits & 8 != 0
+	var right: bool = bits & 16 != 0
+	match side:
+		1:
+			return left and not right
+		-1:
+			return right and not left
+	return not left and not right
 
 
 ## Pairs of cars on one edge, opposite ways, off the turn, whose plan boxes

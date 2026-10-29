@@ -65,7 +65,9 @@ paths:
   (the user's report, 2026-10-29). 🔴 **The lane is the turn's** (left nearside, right offside),
   and a lane change looks first: two cars side by side are passed, not queued, and a change into a
   car beside fails `queue:` (seed 7). ⚠️ The lamp bits ride `INSTANCE_CUSTOM.a` above the livery
-  bit; a shader change owes a day and a night frame and the `shader error` grep.
+  bit; a shader change owes a day and a night frame and the `shader error` grep. 8 / 16 are the
+  indicators (`P3-3f2`): paste `wink:`; the beat is `vehicle_lamps.tres`' via `wire_blink`, never
+  a shader default.
 - **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
   never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over

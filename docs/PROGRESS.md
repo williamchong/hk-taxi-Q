@@ -240,8 +240,14 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   (`parked.py`), a finding for `P3-71`. Throttle route, two runs each: `phys` 2.6–3.2 ms against
   1.6–1.8 with `--traffic=off` (P3-3c's own +1 ms and the parked reads), `draws` unchanged (+6).
   A turning car now also reads the next road's stop line through the curve: a minibus turning onto
-  edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. Owed: `P3-3f2` indicators,
-  `P3-3f3` hazards, the user's drive.
+  edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. **`P3-3f2` indicators** (2026-10-30): the library's indicator
+  lenses are on the taxi's `CIRCUIT_INDICATOR_L/R` (`make_parked.py`), `INSTANCE_CUSTOM.a` carries
+  8 left / 16 right, and `vehicle_body.gdshader` flashes them at `vehicle_lamps.tres`' beat
+  (`TrafficSystem.wire_blink`, no second copy), each car on a phase off its position. A car winks
+  its turn's side from `lane_change_m` before the mouth through the turn, else the side it is
+  changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
+  before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. Day and
+  night frames, 0 shader errors. Owed: `P3-3f3` hazards, the user's drive.
 - `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
   own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
   approach's stop line is the street's published width across its stop point, and the taxi's middle

@@ -84,6 +84,8 @@ const PARKED_READS_PER_TICK: int = 16
 ## What an edge with nothing parked on it answers: one shared empty list, not a
 ## fresh one a call.
 const NO_PARKED: Array = []
+## `lamp_bits`' `wink` for both indicators at once.
+const HAZARDS: int = 2
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -133,8 +135,13 @@ class Car:
 	var over_centre: bool = false
 	## Whether the car has re-picked its move on this edge for want of a gap.
 	var replanned: bool = false
-	## The sine of the angle the next turn turns through.
+	## The sine of the angle the next turn turns through, and which way it turns
+	## (`turn_side`: 1 left, -1 right, 0 straight on).
 	var turn_sin: float = 0.0
+	var turn_side: int = 0
+	## The way it is moving across the lanes this tick: 1 toward the nearside
+	## (left), -1 toward the offside, 0 not — its indicator.
+	var shift: int = 0
 	## Whether the road the next move joins has a lane clear of parked
 	## vehicles at its mouth.
 	var join_clear: bool = true
@@ -362,6 +369,7 @@ func _load_library() -> bool:
 	if _kinds.is_empty():
 		push_error("TrafficSystem: none of %s is in %s" % [profile.kinds.keys(), LIBRARY_PATH])
 		return false
+	wire_blink(_meshes)
 	for extent: AABB in _extents:
 		_reach_m = maxf(_reach_m, extent.size.z * 0.5)
 	# `instance_count` allocates the buffer and clears it, so it is grown car by
@@ -545,7 +553,7 @@ func step(delta: float) -> void:
 		if car.live:
 			car.body.global_transform = car.pose
 			_batches[car.kind].set_instance_transform(car.slot, car.pose)
-			_write_lamps(car, lamp_bits(true, car.braking))
+			_write_lamps(car, lamp_bits(true, car.braking, _winking(car)))
 
 
 func _idle_car() -> Car:
@@ -635,6 +643,7 @@ func _plan_move(car: Car) -> void:
 func _plan_one_move(car: Car) -> void:
 	car.via.clear()
 	car.join_clear = true
+	car.turn_side = 0
 	car.lane_out = car.lane
 	var move: Vector2i = _pick_move(car.edge, car.along)
 	# Through the junction's inside roads to the road out, a bounded walk.
@@ -686,6 +695,7 @@ func _pick_lanes(car: Car) -> void:
 	var there: int = graph.lanes_each_way(car.next_edge)
 	var side: int = turn_side(into, out, profile.straight_deg)
 	car.turn_sin = absf(into.cross(out).y)
+	car.turn_side = side
 	if side > 0:
 		car.lane_out = 0.0
 		car.next_lane = 0.0
@@ -744,7 +754,10 @@ func _replan_for_lane(car: Car) -> void:
 		car.leave_m,
 		car.join_m,
 		car.lane_out,
-		car.next_lane
+		car.next_lane,
+		car.turn_side,
+		car.turn_sin,
+		car.join_clear
 	]
 	for _try: int in REPLAN_TRIES:
 		_plan_move(car)
@@ -758,6 +771,9 @@ func _replan_for_lane(car: Car) -> void:
 	car.join_m = kept[4]
 	car.lane_out = kept[5]
 	car.next_lane = kept[6]
+	car.turn_side = kept[7]
+	car.turn_sin = kept[8]
+	car.join_clear = kept[9]
 
 
 ## 1 for a left turn, -1 for a right, 0 for straight on within `straight_deg`.
@@ -777,9 +793,11 @@ static func turn_side(into: Vector3, out: Vector3, straight_deg: float) -> int:
 ## across as far as it goes, and the turn starts from where the car is.
 func _change_lane(car: Car, metres: float) -> void:
 	if car.turning:
+		car.shift = 0
 		return
 	var goal: float = _lane_goal(car)
 	car.passing = goal != car.lane_out
+	car.shift = 0 if is_equal_approx(car.lane, goal) else (1 if goal < car.lane else -1)
 	car.over_centre = (
 		not graph.is_one_way(car.edge)
 		and car.lane > float(graph.lanes_each_way(car.edge) - 1) + 0.01
@@ -1354,9 +1372,45 @@ func _retire(car: Car) -> void:
 
 
 ## `INSTANCE_CUSTOM.a` above the livery's bit, `vehicle_body.gdshader`'s
-## encoding: 2 for a running car, 4 more while it brakes. 0 is a parked car.
-static func lamp_bits(running: bool, braking: bool) -> int:
-	return (2 if running else 0) + (4 if running and braking else 0)
+## encoding: 2 for a running car, 4 more while it brakes, 8 for the left
+## indicator and 16 for the right — `wink` 1 left, -1 right, `HAZARDS` both,
+## the stopping parked car's (`P3-3f`). 0 is a switched-off car.
+static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
+	var bits: int = (2 if running else 0) + (4 if running and braking else 0)
+	if wink == 1 or wink == HAZARDS:
+		bits += 8
+	if wink == -1 or wink == HAZARDS:
+		bits += 16
+	return bits
+
+
+## Put the taxi's indicator beat (`vehicle_lamps.tres`) on every surface of
+## `meshes` that runs `vehicle_body.gdshader`: the library's material carries
+## no beat of its own, so the traffic and the parked layer read one table.
+static func wire_blink(meshes: Array[Mesh]) -> void:
+	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
+	if lamps == null:
+		push_warning(
+			"TrafficSystem: %s did not load; no indicator flashes" % VehicleLampsProfile.PATH
+		)
+		return
+	for mesh: Mesh in meshes:
+		for surface: int in mesh.get_surface_count():
+			var material := mesh.surface_get_material(surface) as ShaderMaterial
+			if material != null:
+				material.set_shader_parameter("traffic_blink_hz", lamps.blink_hz)
+				material.set_shader_parameter("traffic_blink_duty", lamps.blink_duty)
+
+
+## The indicator `car` shows: its turn's side from `lane_change_m` before the
+## mouth until it has joined (left 1, right -1), else the side it is changing
+## lane to, else none — never for straight on.
+func _winking(car: Car) -> int:
+	if car.turning:
+		return car.turn_side
+	if car.turn_side != 0 and car.next_edge >= 0 and car.leave_m - car.s < profile.lane_change_m:
+		return car.turn_side
+	return car.shift
 
 
 func _write_lamps(car: Car, bits: int) -> void:
