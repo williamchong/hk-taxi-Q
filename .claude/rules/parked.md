@@ -78,6 +78,10 @@ traffic, and the bonus for threading them.
   touch. `verify_fares.gd`'s `near miss:` block drives the SAME clearance twice, aimed and not,
   and the unaimed pass must pay nothing; every bar is held from both sides. The memory is
   measured to the tick the car comes alongside, not to the end of the pass — a bus is 12 m long.
+  ⚠️ **Down a row, only the cars inside `near_miss_look_s` at the swerve pay** (2 of 6 at
+  54 kph); the rest are a lane pass by the same rule. `verify_fares`'s row checks hold that, and
+  that a second row past a gap pays again; dropping the in-path width test fails both (6 of 6,
+  12 of 4).
 - ⚠️ **The car's extent comes off its meshes** (`FareSystem._ready`: `MeshContract.bounds` in
   the car's frame) and `verify_fares` hands in a Crown Comfort's; a car of no width is an inert
   detector, named. `NearMiss` refuses a close-call band not under the near-miss band.

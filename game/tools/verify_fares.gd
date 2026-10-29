@@ -58,6 +58,12 @@ const CAR_HALF_M := Vector2(0.8475, 2.35)
 const PARKED_EXTENT := AABB(Vector3(-0.9, 0.0, -2.25), Vector3(1.8, 1.42, 4.5))
 ## A pass at 54 km/h, over `near_miss_min_kph`.
 const PASS_MPS: float = 15.0
+## A row of parked cars nose to tail: `PARKED_EXTENT`'s 4.5 m and a 1.5 m gap,
+## more of them than `near_miss_look_s` reaches at `PASS_MPS`, and the gap
+## between two rows long enough to pull back into line and swerve again.
+const ROW_PITCH_M: float = 6.0
+const ROW_CARS: int = 6
+const ROW_GAP_M: float = 30.0
 
 var _graph: RoadGraph = null
 var _region: String = ""
@@ -1439,6 +1445,36 @@ func _check_near_miss() -> void:
 		"near miss",
 		"a second pass of the same car is a second approach, paid again"
 	)
+	var reached: Array[int] = []
+	paid = _pass_rows(1, swerve_m, reached)
+	_expect(
+		(
+			paid.size() == reached.size()
+			and reached.size() >= 2
+			and reached.size() < ROW_CARS
+			and paid.all(
+				func(award: Fare.Award) -> bool: return award.skill == Fare.Skill.NEAR_MISS
+			)
+		),
+		"near miss",
+		(
+			"down a row, the %d of %d cars in reach as the car swerved out pay, the rest are a lane pass (%d paid)"
+			% [reached.size(), ROW_CARS, paid.size()]
+		)
+	)
+	reached.clear()
+	paid = _pass_rows(2, swerve_m, reached)
+	_expect(
+		(
+			paid.size() == reached.size()
+			and reached.any(func(index: int) -> bool: return index >= ROW_CARS)
+		),
+		"near miss",
+		(
+			"back in line past a gap, the next row's first cars pay again: a series passed does not blind it (%d of %d paid)"
+			% [paid.size(), reached.size()]
+		)
+	)
 
 	# Through the system, empty: shown as practice, paid to nobody.
 	var system: FareSystem = _system(_fares, _profile, SEED)
@@ -1525,6 +1561,52 @@ func _pass(
 					waited += TICK_S
 			paid.append_array(detector.tick(at, velocity, [obstacle], TICK_S, touched, false))
 			at.origin += velocity * TICK_S
+	return paid
+
+
+## A drive down `rows` rows of `ROW_CARS` parked cars on the pure detector,
+## each row `ROW_GAP_M` past the last: in the row's line, the car moves aside
+## to `clearance_m` 12 m short of a row's first car, as `_pass` does, and back
+## into line once its last car is behind the tail. Every car whose near end
+## lay within `near_miss_look_s` ahead on an aimed tick — the cars the swerve
+## dodged — goes into `reached` by index. Returns every award paid.
+func _pass_rows(rows: int, clearance_m: float, reached: Array[int]) -> Array[Fare.Award]:
+	var detector := NearMiss.new(_skills, CAR_HALF_M.x, CAR_HALF_M.y)
+	var aside: float = CAR_HALF_M.x + PARKED_EXTENT.size.x / 2.0 + clearance_m
+	var row_m: float = ROW_CARS * ROW_PITCH_M + ROW_GAP_M
+	var obstacles: Array[Dictionary] = []
+	var near_ends := PackedFloat32Array()
+	for row: int in rows:
+		for car: int in ROW_CARS:
+			var z: float = -30.0 - row * row_m - car * ROW_PITCH_M
+			near_ends.append(z + PARKED_EXTENT.end.z)
+			var obstacle: Dictionary = {
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, z)),
+				"extent": PARKED_EXTENT,
+				"id": 100 + obstacles.size(),
+			}
+			obstacles.append(obstacle)
+	var look_m: float = PASS_MPS * _skills.near_miss_look_s
+	var at := Transform3D.IDENTITY
+	var velocity := Vector3(0.0, 0.0, -PASS_MPS)
+	var paid: Array[Fare.Award] = []
+	var ticks: int = int(ceil((60.0 + rows * row_m) / PASS_MPS / TICK_S))
+	for tick: int in ticks:
+		var aimed: bool = true
+		for row: int in rows:
+			var first_z: float = -30.0 - row * row_m
+			var last_z: float = first_z - (ROW_CARS - 1) * ROW_PITCH_M
+			var behind_z: float = last_z + PARKED_EXTENT.position.z - CAR_HALF_M.y
+			if at.origin.z <= first_z + 12.0 and at.origin.z >= behind_z:
+				aimed = false
+		at.origin.x = 0.0 if aimed else aside
+		if aimed:
+			for index: int in near_ends.size():
+				var ahead_m: float = at.origin.z - near_ends[index]
+				if ahead_m > CAR_HALF_M.y and ahead_m <= look_m and not reached.has(index):
+					reached.append(index)
+		paid.append_array(detector.tick(at, velocity, obstacles, TICK_S, false, false))
+		at.origin += velocity * TICK_S
 	return paid
 
 
