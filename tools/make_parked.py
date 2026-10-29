@@ -568,7 +568,11 @@ def _ends(shape: Shape) -> list[MeshData]:
                         (x - lens_half[0], lamp_y - lens_half[1], z_lens[0]),
                         (x + lens_half[0], lamp_y + lens_half[1], z_lens[1]),
                         RED if rear else LAMP,
-                        name=f"{'taillamp' if rear else 'headlamp'}_{side_tag}",
+                        # The tail lens on the taxi's BRAKE circuit, the head
+                        # lens on its head lamps: lit only where a moving car
+                        # writes them (`TrafficSystem`, `P3-3c`) — a parked
+                        # car's instance data leaves every circuit dark.
+                        name=f"taillamp_{side_tag}_brake" if rear else f"headlamp_{side_tag}",
                     )
                 )
             # Not `indicator_l` / `indicator_r`: those are the taxi's switched

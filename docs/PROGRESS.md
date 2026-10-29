@@ -212,7 +212,12 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   a hair short — seed 4), each mutation-checked. 300 s headless: 17–23 of 24 moving at every 20 s
   sample, longest standstill 27.4 s (a signal wait). Throttle route: +7 `draws`, `phys` ~2.8 against
   ~1.8 ms with `--traffic=off`. Cars pass through each other at an unsignalled crossing (no
-  give-way), no lane change, no lamps at night, not near-missed. Owed: the user's drive.
+  give-way), and are not near-missed. **After the user's first look**: a turn runs mouth to mouth
+  (`trim_m`, city schema 41) across a junction's stub edges in one curve, from the turn's own lane
+  (left nearside, right offside; `straight_deg` 30) with a lane change that looks first
+  (`lane_change_m` 25); moving cars lit (head lamps by day, tails at night, brakes), parked ones
+  dark. `verify_traffic` adds no car on a stub (0) and lane-aware following; 0 on red on all
+  three seeds. Owed: the user's drive, `P3-3f` (indicators, hazards, parked cars in the lane).
 - `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
   own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
   approach's stop line is the street's published width across its stop point, and the taxi's middle

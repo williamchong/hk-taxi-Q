@@ -51,7 +51,12 @@ paths:
   ⚠️ Cars pass THROUGH each other at an unsignalled crossing on purpose — a car that waited for a
   crossing car could wait for one waiting for it; a give-way rule owes its own deadlock argument.
   ⚠️ `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre`; the `lane:` line holds them
-  together.
+  together. 🔴 **A turn runs mouth to mouth** (`trim_m`, city schema 41) and a stub is crossed,
+  never driven — `verify_traffic`'s `graph:` stub line; do not go back to a span round the node
+  (the user's report, 2026-10-29). 🔴 **The lane is the turn's** (left nearside, right offside),
+  and a lane change looks first: two cars side by side are passed, not queued, and a change into a
+  car beside fails `queue:` (seed 7). ⚠️ The lamp bits ride `INSTANCE_CUSTOM.a` above the livery
+  bit; a shader change owes a day and a night frame and the `shader error` grep.
 - **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
   never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over

@@ -18,6 +18,8 @@ gap_m = 2.0
 look_m = 45.0
 follow_heading_deg = 45.0
 turn_span_m = 6.0
+lane_change_m = 25.0
+straight_deg = 30.0
 kinds = Dictionary[String, float]({
 "car_a": 4.0,
 "car_b": 3.0,

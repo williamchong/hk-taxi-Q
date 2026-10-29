@@ -399,7 +399,8 @@ The interface between ETL and game. **Versioned — change both sides together a
     { "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2],
       "clear_width_m": [-1.0, 10.24, 8.5, 0.0],
       "corridor_half_width_m": [7.4, 7.4, 7.1, 6.9],
-      "corridor_offset_m": [2.1, 2.1, 1.8, 1.6], "lanes_painted": 2 }
+      "corridor_offset_m": [2.1, 2.1, 1.8, 1.6], "lanes_painted": 2,
+      "trim_m": [5.4, 6.1], "stub": false }
   ],
   "lane_width_m": 3.2,
   "car_width_m": 1.8,
@@ -465,6 +466,10 @@ polyline and the same length (schema 4: a road becomes a bridge partway along an
   ribbons from their territory's rails (`Q129`). ⚠️ The drawn width can equal `width_m` (`Q95`);
   assert "not narrower", never "wider". `RoadGraph` warns and falls back to the authored width
   where the table is missing; `verify_road_graph.gd` treats absence as an error.
+- Since schema 41 (`P3-3c`) every row carries `trim_m` — `[start, end]`, where each end's ribbon
+  meets its junction cap, the stop line's own point — and `stub`, true where both ends lie in one of
+  `roadsurface.json`'s `junctions` clusters: road inside a junction. The traffic turns mouth to
+  mouth across them and never drives a stub; a v40 reader would turn from the junction's middle.
 - 🔴 Since schema 32 (`Q129`, `P3-33c`) a level-0 row is the edge's **territory** — its share of a
   carriageway several centrelines may share — not the road kerb to kerb. Three keys on those rows
   only: `corridor_half_width_m`, half the kerb-to-kerb corridor `clear_width_m` is measured
@@ -1167,6 +1172,7 @@ the same names; `etl/tests/test_make_vehicle.py` binds the two tables.
 | Colour | the slot's base colour, baked into `COLOR_0` as sRGB (`Q27`); a slot already carrying `COLOR_0` keeps it, sRGB-encoded |
 | Geometry | one object, transforms applied, origin at the ground centre, `y = 0` at the base, nose toward `-z`. Flat-shaded; no vertex shared between parts |
 | Refusal | an unknown `vehicle_…` slot is refused, not guessed: `push_error`, body left as authored, and `verify_authored.gd` fails it as "not one surface" |
+| Instances | a `MultiMesh` car (`TrafficSystem`, `ParkedLayer`) carries no instance uniforms; its `INSTANCE_CUSTOM` is the livery in `rgb` and a packed `a`: bit 0 apply the livery, bit 1 running (head lamps at `traffic_day_lamps` by day, full at night, tail lamps at `traffic_tail_lit` × night), bit 2 braking. A parked car writes 0 and stays dark |
 | Fixture | `assets/authored/fixtures/dcc_vehicle.glb` from `tools/make_dcc_fixture.py --vehicle`; `verify_authored.gd` classifies every vertex by the box it lies in. The misspelt variant (`--vehicle <out> vehicle_lamp_break`) is the mutation |
 
 ### Not part of the contract

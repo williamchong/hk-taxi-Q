@@ -10608,6 +10608,25 @@ runs.
 **The player.** A red is for the AI cars. The player's crossing on red is DETECTED and counted, and
 nothing pays or docks for it until the user decides which it is.
 
+**The user's first look at the cars (2026-10-29)** moved three things, each the user's report:
+
+- **A car turned from the junction's middle, from the wrong lane.** The curve had run `turn_span_m`
+  either side of the node, and a crossroad that is a cluster of nodes was driven down its stub
+  edges, turning again at each. Now a turn runs mouth to mouth — `roadsurface.json`'s `trim_m`,
+  where the ribbon meets the cap and the stop line already stands — across every stub (`stub`, both
+  ends in one cluster) in one curve, legal arc by legal arc. Exported at city schema 41.
+- **The lane is the turn's**: left from the nearside into the nearside, right from the offside into
+  the offside, straight on keeping its lane (`straight_deg` 30). A car moves over one lane per
+  `lane_change_m` and only while the lane beside it is clear; following and the merge read the
+  car's own lane, so a car in the next lane is passed, not queued behind. Shown by
+  `verify_traffic` seed 7: a car swept across into one braking beside it until the look went in.
+- **A moving car must read apart from a parked one**: lit — head lamps at half by day and full at
+  night, tail lamps at night, brake lamps slowing or stopped — through `INSTANCE_CUSTOM.a`'s bits;
+  a parked car stays dark. The parked library's rear lens is now on the brake circuit.
+
+Asked and not yet built (`P3-3f`): indicators before a turn, a stopping car's hazards beside a
+switched-off one, and a moving car that sees a parked car in its lane.
+
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 
 

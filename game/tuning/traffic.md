@@ -77,8 +77,22 @@ path (its edge and the edge it turns into) is read first and has no angle bar.
 
 ## `turn_span_m = 6.0`
 
-How far either side of a node the turn's curve reaches, at most; 40% of a short edge, and never
-short of the stop point.
+The fallback only, since city schema 41: a turn runs from the junction mouth the bundle publishes
+(`trim_m`, where the stop line stands) to the next road's, and this reaches either side of a node
+whose ribbon met no cap. 40% of a short edge, and never short of the stop point.
+
+## `lane_change_m = 25.0`
+
+Travel to move one lane over, a three-second change at 30 kph. A car moves toward its turn's lane
+from the moment it joins the road and only while the lane beside it is clear for both cars' lengths
+and `gap_m`; one that never got across turns from where it is. Shorter reads as a swerve.
+
+## `straight_deg = 30.0`
+
+Under this between the way in and the way out a move is straight on and keeps its lane; over it a
+left turn is taken from the nearside lane into the nearside, a right from the offside into the
+offside (the user's drive, 2026-10-29: cars turned right from the left lane). A staggered crossroad's
+dog-leg reads straight at 30°.
 
 ## `kinds = {car_a 4, car_b 3, minibus 1.5, van 1.5}`
 

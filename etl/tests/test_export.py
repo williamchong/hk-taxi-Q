@@ -35,6 +35,7 @@ from pipeline.export import (
     CITY_SCHEMA,
     LANDMARKS_NAME,
     LANDMARKS_SCHEMA,
+    _is_stub,
     build_region,
     read_manifest,
     shipped,
@@ -156,6 +157,8 @@ class _Region:
                         "aabb": [[150.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
                     },
                 ],
+                # The junction clusters `stub` is read against (`P3-3c`).
+                "junctions": [],
                 # The drawn half-width per edge, which `export.py` carries into
                 # `city.json` so the game can place a car in the nearside lane.
                 "carriageway": [
@@ -554,16 +557,19 @@ class TestAssembly:
             edge["id"] for edge in region.documents[ROADGRAPH_NAME]["edges"]
         }
 
-    def test_the_clearances_join_the_widths_and_the_trims_do_not(self, region) -> None:
+    def test_the_clearances_join_the_widths_and_the_trims_travel(self, region) -> None:
         """`Q51`. Two stages measured this table and neither could have measured
-        both, so the join is here. `trim_m` is how a ribbon met its junction
-        caps — an intermediate, and a question the game never asks."""
+        both, so the join is here. `trim_m` travels since `P3-3c` (schema 41):
+        where a moving car's turn begins and ends."""
         region.build()
         clearance = region.documents[CLEARANCE_NAME]
+        surface = {e["edge"]: e for e in region.documents[SURFACE_MANIFEST_NAME]["carriageway"]}
         table = {entry["edge"]: entry for entry in region.manifest()["carriageway"]}
         for entry in clearance["clearance"]:
             assert table[entry["edge"]]["clear_width_m"] == entry["clear_width_m"]
-        assert all("trim_m" not in entry for entry in table.values())
+        for edge, entry in table.items():
+            assert entry["trim_m"] == surface[edge]["trim_m"]
+            assert isinstance(entry["stub"], bool)
         assert region.manifest()["lane_width_m"] == region.city.roads.lane_width_m
 
     def test_a_corridor_travels_with_where_it_is(self, region) -> None:
@@ -1249,3 +1255,18 @@ class TestOrchestratorSideBySide:
     def test_jobs_below_one_is_refused(self) -> None:
         with pytest.raises(SystemExit):
             orchestrator.main(["--region", REGION, "--jobs", "0"])
+
+
+class TestStub:
+    """`stub` (`P3-3c`): road inside one junction cluster, crossed and never driven."""
+
+    def test_both_ends_in_one_cluster_is_a_stub(self) -> None:
+        assert _is_stub((1, 2), {1: 0, 2: 0})
+
+    def test_ends_in_two_clusters_or_one_outside_are_not(self) -> None:
+        assert not _is_stub((1, 2), {1: 0, 2: 1})
+        assert not _is_stub((1, 3), {1: 0, 2: 0})
+        assert not _is_stub((3, 4), {})
+
+    def test_an_edge_the_graph_does_not_hold_is_not(self) -> None:
+        assert not _is_stub(None, {1: 0})

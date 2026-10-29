@@ -38,8 +38,14 @@ const PATH: String = "res://tuning/traffic.tres"
 ## A car ahead is followed only within this many degrees of the same heading;
 ## past it the two are crossing, not queueing.
 @export var follow_heading_deg: float
-## How far either side of a node the turn curve reaches into each edge, at most,
-## in metres.
+## How far either side of a node the turn curve reaches into an edge whose
+## bundle publishes no junction mouth (`trim_m`), in metres.
 @export var turn_span_m: float
+## How far along its edge a car takes to move from one lane to the next, in
+## metres.
+@export var lane_change_m: float
+## Under this many degrees between the way in and the way out a move is straight
+## on; past it a turn, taken from the nearside lane (left) or the offside (right).
+@export var straight_deg: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]

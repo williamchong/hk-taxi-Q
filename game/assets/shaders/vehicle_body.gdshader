@@ -101,6 +101,8 @@ const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
 // The rig's hour (`Q160`; `city_facade_clean.gdshaderinc` has the account): the
 // three colours below are a noon sky, and this is what dims the mirror with it.
 global uniform vec3 sky_light;
+// 0 by day, 1 at full night (`Q160`): a moving car's tail and head lamps.
+global uniform float night_lights;
 uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
 uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
 uniform vec3 ground_reflection : source_color = vec3(0.32, 0.33, 0.35);
@@ -167,6 +169,22 @@ uniform float lamp_reflect : hint_range(0.0, 1.0) = 0.06;
 // is normalised: the level a lens is authored at no longer sets how hard it
 // burns, so a near-black strip and a cream reverse lamp can share this dial.
 uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
+
+// A MOVING car's lamps, for a `MultiMesh` instance (`P3-3c`). An `instance
+// uniform` is one per node, so a fleet in one `MultiMesh` cannot use
+// `lamp_lit`; `TrafficSystem` writes its state into `INSTANCE_CUSTOM.a` above
+// the livery's bit instead: `a = livery + 2 * running + 4 * braking`, small
+// integers a half float carries exactly. A parked car writes 0 or 1 and every
+// circuit stays dark — the difference the user asked to see (2026-10-29).
+// Running: the head lamps at `traffic_day_lamps` by day, full at night, and the
+// brake lens at `traffic_tail_lit` scaled by the night; braking: the brake lens
+// full, day or night.
+uniform float traffic_day_lamps : hint_range(0.0, 1.0) = 0.5;
+uniform float traffic_tail_lit : hint_range(0.0, 1.0) = 0.35;
+// Must match `CIRCUIT_BRAKE` and `CIRCUIT_HEADLAMP` in `tools/make_vehicle.py`,
+// less one, as `channel` below counts them.
+const int CHANNEL_BRAKE = 0;
+const int CHANNEL_HEADLAMP = 5;
 
 // Which circuits are live this frame, in `CIRCUIT_*` order less one:
 // x brake, y reverse, z indicator left, w indicator right, then on into
@@ -262,15 +280,21 @@ varying flat float circuit;
 // and the whole point of the three bands above is lost.
 varying vec3 world_pos;
 varying vec3 world_n;
+// What `INSTANCE_CUSTOM.a` says above the livery bit: 0 or 1 each.
+varying flat float running;
+varying flat float braking;
 
 void vertex() {
 	marker = floor(UV.y);
 	circuit = floor(UV.x);
 	// Swapped per vertex, not per fragment: a livery face is flat and every
 	// vertex of it carries the one colour, so `COLOR` interpolates to it.
-	if (abs(marker - MARKER_LIVERY) < 0.5 && INSTANCE_CUSTOM.a > 0.5) {
+	float bits = floor(INSTANCE_CUSTOM.a + 0.5);
+	if (abs(marker - MARKER_LIVERY) < 0.5 && mod(bits, 2.0) > 0.5) {
 		COLOR.rgb = INSTANCE_CUSTOM.rgb;
 	}
+	running = mod(floor(bits / 2.0), 2.0);
+	braking = mod(floor(bits / 4.0), 2.0);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
@@ -357,6 +381,11 @@ void fragment() {
 			// whichever way the driver compiles this.
 			int slot = channel & (CIRCUIT_SEAM - 1);
 			float level = channel < CIRCUIT_SEAM ? lamp_lit[slot] : lamp_front[slot];
+			if (channel == CHANNEL_BRAKE) {
+				level = max(level, max(braking, running * traffic_tail_lit * night_lights));
+			} else if (channel == CHANNEL_HEADLAMP) {
+				level = max(level, running * max(traffic_day_lamps, night_lights));
+			}
 			// The guard is for a black lens, which is not authored today and is
 			// one swatch away from being: it would divide by zero and emit NaN,
 			// which the Mobile renderer resolves as a white hole in the car.

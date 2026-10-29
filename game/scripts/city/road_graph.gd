@@ -228,6 +228,9 @@ var _clear: Array[PackedFloat32Array] = []
 # Half the kerb-to-kerb corridor per station, EMPTY for an edge that publishes
 # none (`Q129`): every off-grade edge, and every edge of a bundle with no region.
 var _corridor_half: Array[PackedFloat32Array] = []
+## `trim_m` and `stub` by edge id (`P3-3c`); empty on a bundle that carries none.
+var _trims: Dictionary[int, Vector2] = {}
+var _stubs: Dictionary[int, bool] = {}
 ## 1 where `_clear` holds at least one measured station, 0 where it holds none.
 ##
 ## Derived once rather than scanned per call. ⚠️ **The saving is smaller than it
@@ -379,6 +382,8 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 					tables.carriageway_corridor_half_width_m,
 					other.carriageway_corridor_half_width_m,
 				],
+				[tables.carriageway_trim_m, other.carriageway_trim_m],
+				[tables.carriageway_stub, other.carriageway_stub],
 			]:
 				if (pair[1] as Dictionary).has(local):
 					(pair[0] as Dictionary)[id] = (pair[1] as Dictionary)[local]
@@ -430,6 +435,8 @@ static func _copy_tables(manifest: CityManifest) -> CityManifest:
 	copy.carriageway_corridor_half_width_m = (
 		manifest.carriageway_corridor_half_width_m.duplicate()
 	)
+	copy.carriageway_trim_m = manifest.carriageway_trim_m.duplicate()
+	copy.carriageway_stub = manifest.carriageway_stub.duplicate()
 	return copy
 
 
@@ -571,11 +578,33 @@ func point_at(edge_id: int, t: float) -> Vector3:
 	return points[step].lerp(points[step + 1], clampf(fraction, 0.0, 1.0))
 
 
-## The nearside lane's centre `distance_m` along an edge by plan length from its
-## START, for travel `along` its vertex order or against it — where a car
-## driving it belongs (`P3-3c`), by the same expression `Hit.lane_centre` is.
-## `Vector3.ZERO` for an unknown id.
-func lane_at(edge_id: int, distance_m: float, along: bool) -> Vector3:
+## Where each end's ribbon meets its junction cap, `(start, end)` in metres
+## along the edge (`P3-3c`); zero where the bundle published none.
+func trim_of(edge_id: int) -> Vector2:
+	return _trims.get(edge_id, Vector2.ZERO)
+
+
+## True on road inside a junction: both ends in one of `surface.py`'s clusters.
+func is_stub(edge_id: int) -> bool:
+	return _stubs.has(edge_id)
+
+
+## The lanes one way of travel has: all of a one-way edge's, half a two-way
+## edge's, each over `LANE_FLOOR`'s divisor and never under one.
+func lanes_each_way(edge_id: int) -> int:
+	if not _by_id.has(edge_id):
+		return 1
+	var slot: int = _by_id[edge_id]
+	var count: int = maxi(_lanes[slot], LANE_FLOOR)
+	return count if _one_way[slot] == 1 else maxi(floori(count / 2.0), 1)
+
+
+## Lane `lane`'s centre (0 the nearside, counting out; fractional between two)
+## `distance_m` along an edge by plan length from its START, for travel `along`
+## its vertex order or against it — where a car driving it belongs (`P3-3c`),
+## lane 0 by the same expression `Hit.lane_centre` is. `Vector3.ZERO` for an
+## unknown id.
+func lane_at(edge_id: int, distance_m: float, along: bool, lane: float = 0.0) -> Vector3:
 	if not _by_id.has(edge_id):
 		return Vector3.ZERO
 	var slot: int = _by_id[edge_id]
@@ -593,7 +622,9 @@ func lane_at(edge_id: int, distance_m: float, along: bool) -> Vector3:
 	var edge_dir: Vector3 = points[step + 1] - points[step]
 	edge_dir.y = 0.0
 	edge_dir = edge_dir.normalized() if edge_dir.length_squared() > 0.0 else Vector3.FORWARD
-	return _lane_centre(slot, step, fraction, point, edge_dir, edge_dir if along else -edge_dir)
+	return _lane_centre(
+		slot, step, fraction, point, edge_dir, edge_dir if along else -edge_dir, lane
+	)
 
 
 ## The street width the graph publishes — not what is drawn.
@@ -850,9 +881,12 @@ func turn_restriction_count() -> int:
 ## suspension ray finds two coplanar triangles centimetres apart and hunts
 ## between them. `P0-5`'s car crept at 0.8 m/s on 3 of 4 wheels until it moved
 ## off it.
-static func lane_offset(width_m: float, lanes: int) -> float:
+##
+## `lane` counts out from the nearside (`P3-3c`'s traffic, a right turn from
+## the offside): each lane further is one lane width nearer the far kerb.
+static func lane_offset(width_m: float, lanes: int, lane: float = 0.0) -> float:
 	var count: int = maxi(lanes, LANE_FLOOR)
-	return maxf(width_m, 0.0) * float(count - 1) / (2.0 * float(count))
+	return maxf(width_m, 0.0) * (float(count - 1) - 2.0 * lane) / (2.0 * float(count))
 
 
 ## The kerb side of a travel direction — left, because Hong Kong drives on it.
@@ -945,6 +979,11 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		offsets = manifest.carriageway_offset_m
 		clearances = manifest.carriageway_clear_width_m
 		corridors = manifest.carriageway_corridor_half_width_m
+		for id: int in manifest.carriageway_trim_m:
+			var pair: PackedFloat32Array = manifest.carriageway_trim_m[id]
+			if pair.size() == 2:
+				_trims[id] = Vector2(pair[0], pair[1])
+		_stubs = manifest.carriageway_stub.duplicate()
 		_lane_width_m = manifest.lane_width_m
 		# No second table: `fits_car` reads the same `clearances` against its own
 		# bar, so there is nothing here that can fall out of step with the widths.
@@ -1311,11 +1350,17 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 ## edge running `edge_dir` and travel running `travel`. 🔴 **About the MIDDLE OF
 ## THE DRAWN ROAD, not the centreline** (`P3-35h`).
 func _lane_centre(
-	slot: int, step: int, fraction: float, point: Vector3, edge_dir: Vector3, travel: Vector3
+	slot: int,
+	step: int,
+	fraction: float,
+	point: Vector3,
+	edge_dir: Vector3,
+	travel: Vector3,
+	lane: float = 0.0
 ) -> Vector3:
 	var half: float = _half_at(slot, step, fraction)
 	var middle: Vector3 = point + left_of(edge_dir) * _offset_at(slot, step, fraction)
-	return middle + left_of(travel) * lane_offset(half * 2.0, _lanes[slot])
+	return middle + left_of(travel) * lane_offset(half * 2.0, _lanes[slot], lane)
 
 
 ## Drawn half-width `fraction` of the way from station `step` to the next.

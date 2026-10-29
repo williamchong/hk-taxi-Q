@@ -7,9 +7,13 @@
 ##   could not stop goes through.
 ## - 🔴 **Every move is a legal arc**: each change of edge is one of
 ##   `RoadRouter.moves_from` from the edge left, and every way driven is one the
-##   legal profile admits.
+##   legal profile admits. A turn that crossed a road inside the junction
+##   (`RoadGraph.is_stub`) is that chain of arcs, each legal.
+## - 🔴 **No car drives along a road inside a junction**: a stub is crossed in
+##   the turn's curve, never stood on (the user's drive, 2026-10-29).
 ## - **No car runs into the one ahead in its own lane**: two cars on one edge,
-##   one way, off the turn, never stand closer than their half-lengths.
+##   one way, in one lane (`TrafficSystem.same_lane`), off the turn, never
+##   stand closer than their half-lengths.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -105,6 +109,16 @@ func _check_rules() -> void:
 		Vector3.ZERO, Vector3(0, 0, -1), Vector3(0, 0, -10), Vector3(0, 0, -1)
 	)
 	_expect(straight.is_equal_approx(Vector3(0, 0, -5)), "rules", "straight on takes the chord")
+	var north := Vector3(0, 0, -1)
+	_expect(
+		(
+			TrafficScript.turn_side(north, Vector3(-1, 0, 0), 30.0) == 1
+			and TrafficScript.turn_side(north, Vector3(1, 0, 0), 30.0) == -1
+			and TrafficScript.turn_side(north, Vector3(0.2, 0, -1).normalized(), 30.0) == 0
+		),
+		"rules",
+		"north to west is a left turn, to east a right, a 11° bend straight on"
+	)
 
 
 ## The mean of the signalled junctions: where the lights are, so the ring holds
@@ -134,6 +148,7 @@ func _drive(system: TrafficSystem) -> void:
 	var ran_red: int = 0
 	var bad_move: int = 0
 	var bad_way: int = 0
+	var on_stub: int = 0
 	var rear_end: int = 0
 	var too_fast: int = 0
 	var held_light: int = 0
@@ -161,13 +176,18 @@ func _drive(system: TrafficSystem) -> void:
 				_problem(
 					"tick %d: car %d drives edge %d a way it may not" % [tick, index, car.edge]
 				)
+			if not car.turning and system.graph.is_stub(car.edge):
+				on_stub += 1
 			var front: float = car.s + car.half_length
 			if before.lives != car.lives:
 				# Respawned this tick: a new car, nothing to compare.
 				before.live = false
 				before.lives = car.lives
 			if before.live and (before.edge != car.edge or before.along != car.along):
-				if not system.router.moves_from(before.edge, before.along).has(
+				if not _legal_chain(
+					system.router,
+					Vector2i(before.edge, 1 if before.along else 0),
+					car.crossed,
 					Vector2i(car.edge, 1 if car.along else 0)
 				):
 					bad_move += 1
@@ -219,8 +239,22 @@ func _drive(system: TrafficSystem) -> void:
 	_expect(held_light > 0, "lights", "some car was held by a light (%d car-ticks)" % held_light)
 	_expect(held_car > 0, "queue", "some car was held by the car ahead (%d car-ticks)" % held_car)
 	_expect(bad_move == 0 and bad_way == 0, "graph", "every move a legal arc, every way admitted")
+	_expect(on_stub == 0, "graph", "no car drove a road inside a junction (%d car-ticks)" % on_stub)
 	_expect(rear_end == 0, "queue", "no car stood inside the one ahead (%d car-ticks)" % rear_end)
 	_expect(too_fast == 0, "speed", "no car over its cruise (%d car-ticks)" % too_fast)
+
+
+## Whether `from`, through each of `via` in turn, to `to` is a chain of legal
+## arcs.
+static func _legal_chain(
+	router: RoadRouter, from: Vector2i, via: Array[Vector2i], to: Vector2i
+) -> bool:
+	var here: Vector2i = from
+	for step: Vector2i in via + [to]:
+		if not router.moves_from(here.x, here.y == 1).has(step):
+			return false
+		here = step
+	return true
 
 
 ## Pairs of cars on one edge one way, off the turn, closer than their
@@ -236,6 +270,8 @@ static func _rear_ends(system: TrafficSystem) -> int:
 			var one: TrafficSystem.Car = live[a]
 			var two: TrafficSystem.Car = live[b]
 			if one.edge != two.edge or one.along != two.along:
+				continue
+			if not TrafficSystem.same_lane(one.lane, two.lane):
 				continue
 			if absf(one.s - two.s) < one.half_length + two.half_length:
 				found += 1

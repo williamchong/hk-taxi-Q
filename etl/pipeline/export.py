@@ -277,7 +277,10 @@ CITY_NAME = "city.json"
 # signalled junctions and their stages — a new shipped document, null where the
 # city declares no `signals:` block or stages nothing. A v39 reader would ship
 # it unlisted and `sync_generated.sh` would sweep it.
-CITY_SCHEMA = 40
+# 41 since `P3-3c`: `carriageway[]` carries `trim_m` and `stub`, where a moving
+# car's turn begins and ends; a v40 bundle has neither, and the traffic would
+# turn from the junction's middle again.
+CITY_SCHEMA = 41
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -535,7 +538,7 @@ def build_region(
         # lane instead of on the ribbon seam. Same category as `tiles[].aabb`:
         # geometry the runtime cannot derive, measured once by the stage that
         # drew it.
-        "carriageway": _carriageway(surface, clearance),
+        "carriageway": _carriageway(surface, clearance, graph),
         # The bar `clear_width_m` is read against, published once rather than
         # left to the game to re-derive. ⚠️ `roadgraph.json` cannot stand in for
         # it: `width_m` is a *measured* carriageway where two publishers span the
@@ -666,14 +669,21 @@ def _size(path: Path) -> int:
         return 0
 
 
-def _carriageway(surface: dict, clearance: dict) -> list[dict]:
+def _carriageway(surface: dict, clearance: dict, graph: dict) -> list[dict]:
     """The per-station carriageway table the game reads.
 
     Two stages measured this and neither could have measured both — `surface.py`
     knows how wide it drew the ribbon, `clearance.py` knows what stands in it —
     so the join happens here, where every other reconciliation of the stage
-    outputs already does. `trim_m` does not travel: it is how a ribbon met its
-    junction caps, which is a question the game never asks.
+    outputs already does.
+
+    `trim_m` travels since `P3-3c` (city schema 41): where each end's ribbon met
+    its junction cap, which is where a moving car's turn begins and ends — the
+    traffic asked it after the user watched cars drive into a crossroad's middle
+    before turning (2026-10-29). And `stub`, true on an edge whose two ends lie
+    in one of `surface.py`'s junction clusters: road INSIDE a junction, which a
+    turn crosses rather than a car drives along. The cluster is the surface's
+    measurement (`junctions`); nothing here decides one.
 
     Refused rather than padded when the two disagree about an edge. `P2-2` warns
     and falls back on a short half-width array because a lane centre off the
@@ -682,6 +692,12 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
     then believe is clear.
     """
     measured = {int(entry["edge"]): entry["clear_width_m"] for entry in clearance["clearance"]}
+    cluster_of = {
+        int(node): index
+        for index, junction in enumerate(surface["junctions"])
+        for node in junction["nodes"]
+    }
+    ends = {int(edge["id"]): (int(edge["from"]), int(edge["to"])) for edge in graph["edges"]}
     table = []
     for entry in surface["carriageway"]:
         edge_id = int(entry["edge"])
@@ -708,6 +724,8 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
                 # four were wrong about the whole off-grade network.
                 "offset_m": entry["offset_m"],
                 "clear_width_m": clear,
+                "trim_m": entry["trim_m"],
+                "stub": _is_stub(ends.get(edge_id), cluster_of),
                 # Present on a level-0 territory edge only (`Q129`, `P3-33c`): the
                 # lane count the ribbon is PAINTED with, which a share narrower
                 # than its graph count cuts. Additive — `RoadGraph`'s driving line
@@ -733,6 +751,14 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
             }
         )
     return table
+
+
+def _is_stub(ends: tuple[int, int] | None, cluster_of: dict[int, int]) -> bool:
+    """Whether both ends of an edge lie in one junction cluster."""
+    if ends is None:
+        return False
+    start, end = (cluster_of.get(node) for node in ends)
+    return start is not None and start == end
 
 
 def _landmarks_document(

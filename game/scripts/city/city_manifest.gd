@@ -227,7 +227,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 40 since `P3-3a` (`Q173`): the manifest names `signals_plan.json`, the
 ## signalled junctions and their authored stages.
-const SCHEMA_VERSION: int = 40
+##
+## 41 since `P3-3c`: `carriageway[]` carries `trim_m` and `stub` — where a
+## moving car's turn begins and ends, and the road inside a junction it crosses.
+const SCHEMA_VERSION: int = 41
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -516,6 +519,14 @@ var carriageway_half_width_m: Dictionary[int, PackedFloat32Array] = {}
 ## and is plumbed so that it will not have to be discovered again when it does.
 var carriageway_offset_m: Dictionary[int, PackedFloat32Array] = {}
 
+## Where each end's ribbon meets its junction cap, `[start, end]` in metres
+## along the edge (`P3-3c`, schema 41): a moving car's turn spans from one
+## edge's mouth to the next's.
+var carriageway_trim_m: Dictionary[int, PackedFloat32Array] = {}
+## The edges both of whose ends lie in one of `surface.py`'s junction clusters:
+## road inside a junction, crossed in a turn and never driven along.
+var carriageway_stub: Dictionary[int, bool] = {}
+
 ## Half the KERB-TO-KERB corridor at each station, for the rows that publish one
 ## (`Q129`, schema 32): the level-0 edges whose ribbon is their territory. Absent
 ## for every other row, where the corridor is the ribbon — so a reader asks
@@ -653,6 +664,9 @@ static func load_manifest(region: String = "") -> CityManifest:
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
 		manifest.carriageway_offset_m[edge] = _floats(entry, "offset_m")
 		manifest.carriageway_clear_width_m[edge] = _floats(entry, "clear_width_m")
+		manifest.carriageway_trim_m[edge] = _floats(entry, "trim_m")
+		if bool(entry.get("stub", false)):
+			manifest.carriageway_stub[edge] = true
 		if entry.has("corridor_half_width_m"):
 			manifest.carriageway_corridor_half_width_m[edge] = _floats(
 				entry, "corridor_half_width_m"

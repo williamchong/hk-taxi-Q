@@ -61,7 +61,9 @@ traffic, and the bonus for threading them.
   `tools/make_parked.py` writes it, `test_make_parked.py` pins the bytes, and `parked.vehicles:`
   in the yaml must match each kind's extent within 5 cm — the ETL places by the numbers and the
   engine draws the mesh. A proportion change is `python tools/make_parked.py`, a test run, and
-  a commit of the `.glb`. The `.import` sidecar is committed beside it.
+  a commit of the `.glb`. The `.import` sidecar is committed beside it. ⚠️ The rear lens is
+  `taillamp_{side}_brake` (the brake circuit) and the head lens `headlamp_{side}`: the moving cars
+  light them through `INSTANCE_CUSTOM.a` and a parked car writes 0 — dark.
 - 🔴 **A colour that means something is never a livery** (`Q167`, the user's rule 2026-10-13):
   the taxi, the bus and the tram carry no `livery`, and the minibus's palette is green and red
   only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`
