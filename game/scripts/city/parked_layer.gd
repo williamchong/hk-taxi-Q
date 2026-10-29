@@ -55,6 +55,10 @@ class Entry:
 	var hours: Array = []
 	var chance: float = 1.0
 	var kind: String = ""
+	## The published source (`bay`, `fill`, `stop`, …) and the road it stands
+	## on, by the region's own edge id (-1 where none was published).
+	var source: String = ""
+	var edge: int = -1
 	## The colour `ParkedRoster.livery` drew, clear for the authored one.
 	var livery: Color = ParkedRoster.NO_LIVERY
 	## What `near` hands out, made once: the GLOBAL transform and an id unique
@@ -151,6 +155,9 @@ func _ready() -> void:
 		entry.hours = raw.get("hours") if raw.get("hours") is Array else []
 		entry.chance = clampf(float(raw.get("chance", 1.0)), 0.0, 1.0)
 		entry.kind = String(raw.get("kind", entry.mesh_name))
+		entry.source = String(raw.get("source", ""))
+		var edge: Variant = raw.get("edge")
+		entry.edge = int(edge) if edge != null else -1
 		var index: int = _entries.size()
 		entry.livery = ParkedRoster.livery(
 			index, _profile.liveries.get(entry.mesh_name, PackedColorArray())
@@ -336,6 +343,38 @@ func near(point: Vector3, radius_m: float) -> Array[Dictionary]:
 					continue
 				found.append(_entries[index].obstacle)
 	return found
+
+
+## The region this layer stands, resolved as `CityManifest` resolves it.
+func resolved_region() -> String:
+	return region if not region.is_empty() else GeneratedRegions.selected()
+
+
+## How many placements the layer holds — standing or not.
+func entry_count() -> int:
+	return _entries.size()
+
+
+## Placement `index`'s road, by the region's own edge id, or -1.
+func edge_of(index: int) -> int:
+	return _entries[index].edge
+
+
+## Placement `index`'s published source: `bay`, `fill`, `stop`, `layby`, …
+func source_of(index: int) -> String:
+	return _entries[index].source
+
+
+## Placement `index` as `near` hands it out: its global transform, its mesh's
+## extent and its id.
+func obstacle_of(index: int) -> Dictionary:
+	return _entries[index].obstacle
+
+
+## Whether placement `index` stands this hour and roll — what the traffic reads
+## each tick (`P3-3f`), so a car never waits behind a van gone home.
+func is_standing(index: int) -> bool:
+	return _up[index] == 1
 
 
 ## Every region's layer asked at once — the one call `FareSystem` makes.

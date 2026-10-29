@@ -84,6 +84,12 @@ traffic, and the bonus for threading them.
   54 kph); the rest are a lane pass by the same rule. `verify_fares`'s row checks hold that, and
   that a second row past a gap pays again; dropping the in-path width test fails both (6 of 6,
   12 of 4).
+- 🔴 **The moving traffic reads this layer** (`P3-3f1`): `TrafficSystem` indexes every placement
+  by its `edge` (`edge_of`, `obstacle_of`, `source_of`) and asks `is_standing` each tick. A change
+  to `edge`, the footprint or what stands when moves the traffic too: run `tools/check.sh` and paste
+  `verify_traffic`'s `parked:` table. ⚠️ The table is a reading of the roster in the LANES — 759 of
+  1,081 in lane 0 on 2026-10-30 — and the fill's lane-room bar counts fill rows only, so a fill
+  car across from a published bay can pinch a back street below a car's width (a `P3-71` finding).
 - ⚠️ **The car's extent comes off its meshes** (`FareSystem._ready`: `MeshContract.bounds` in
   the car's frame) and `verify_fares` hands in a Crown Comfort's; a car of no width is an inert
   detector, named. `NearMiss` refuses a close-call band not under the near-miss band.

@@ -594,9 +594,16 @@ func is_stub(edge_id: int) -> bool:
 func lanes_each_way(edge_id: int) -> int:
 	if not _by_id.has(edge_id):
 		return 1
-	var slot: int = _by_id[edge_id]
-	var count: int = maxi(_lanes[slot], LANE_FLOOR)
-	return count if _one_way[slot] == 1 else maxi(floori(count / 2.0), 1)
+	var count: int = lane_positions(edge_id)
+	return count if _one_way[_by_id[edge_id]] == 1 else maxi(floori(count / 2.0), 1)
+
+
+## How many lane widths the carriageway is divided into, both ways together:
+## the published count, floored at `LANE_FLOOR` as `lane_offset` floors it.
+func lane_positions(edge_id: int) -> int:
+	if not _by_id.has(edge_id):
+		return LANE_FLOOR
+	return maxi(_lanes[_by_id[edge_id]], LANE_FLOOR)
 
 
 ## Lane `lane`'s centre (0 the nearside, counting out; fractional between two)
@@ -625,6 +632,34 @@ func lane_at(edge_id: int, distance_m: float, along: bool, lane: float = 0.0) ->
 	return _lane_centre(
 		slot, step, fraction, point, edge_dir, edge_dir if along else -edge_dir, lane
 	)
+
+
+## Where `point` falls along an edge, in plan metres from its START: the foot of
+## the perpendicular on the nearest segment (`P3-3f`, a parked car's place on
+## the road it was published on). -1 for an unknown id.
+func distance_along(edge_id: int, point: Vector3) -> float:
+	if not _by_id.has(edge_id):
+		return -1.0
+	var slot: int = _by_id[edge_id]
+	var points: PackedVector3Array = _polylines[slot]
+	var lengths: PackedFloat32Array = _prefix[slot]
+	var best: float = INF
+	var found: float = 0.0
+	var at := Vector2(point.x, point.z)
+	for step: int in points.size() - 1:
+		var a := Vector2(points[step].x, points[step].z)
+		var b := Vector2(points[step + 1].x, points[step + 1].z)
+		var span: Vector2 = b - a
+		var fraction: float = (
+			clampf((at - a).dot(span) / span.length_squared(), 0.0, 1.0)
+			if span.length_squared() > 0.0
+			else 0.0
+		)
+		var apart: float = at.distance_squared_to(a + span * fraction)
+		if apart < best:
+			best = apart
+			found = lerpf(lengths[step], lengths[step + 1], fraction)
+	return found
 
 
 ## The street width the graph publishes — not what is drawn.

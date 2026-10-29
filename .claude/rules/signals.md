@@ -51,7 +51,16 @@ paths:
   ⚠️ Cars pass THROUGH each other at an unsignalled crossing on purpose — a car that waited for a
   crossing car could wait for one waiting for it; a give-way rule owes its own deadlock argument.
   ⚠️ `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre`; the `lane:` line holds them
-  together. 🔴 **A turn runs mouth to mouth** (`trim_m`, city schema 41) and a stub is crossed,
+  together. 🔴 **A parked vehicle is a car ahead that never moves** (`P3-3f1`), read off each
+  region's `ParkedLayer` (`is_standing`, never a second roster) — paste `verify_traffic`'s `parked:`
+  table and its per-drive `parked:` lines, and mutation-check by switching `_nearest_parked`'s
+  match off (2,429–4,811 car-ticks inside). ⚠️ **Over the centre line only on a give-way**: the free
+  drive need not meet it (Wan Chai's alone never does), so `give way:` STAGES it — removing
+  `_oncoming_clear` or `_coming_over` each fails it by name. ⚠️ The overlap tolerance (`INSIDE_M`
+  0.15) is measured on one right-angle corner (0.086 / 0.13 m, a car's heading snapping at a vertex); do not raise it to clear a new overlap — probe
+  the car's lane, the footprint's corners and the bend. ⚠️ A long stand behind a parked vehicle is
+  the roster's pinch (a car honestly too wide); `side_clear_m` is not lowered to clear one.
+  🔴 **A turn runs mouth to mouth** (`trim_m`, city schema 41) and a stub is crossed,
   never driven — `verify_traffic`'s `graph:` stub line; do not go back to a span round the node
   (the user's report, 2026-10-29). 🔴 **The lane is the turn's** (left nearside, right offside),
   and a lane change looks first: two cars side by side are passed, not queued, and a change into a

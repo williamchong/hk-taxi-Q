@@ -12,7 +12,8 @@ city's traffic. `traffic_system.gd` says what each rule does; this says why each
 ⚠️ EVERY KEY BELOW IS REQUIRED. `traffic_profile.gd` declares no defaults, so a missing key reads
 as zero, and `TrafficSystem` refuses to run on a zero. Three are held as DIFFERENCES — `spawn_max_m`
 over `spawn_min_m`, `retire_m` over `spawn_max_m`, `brake_max_mps2` over `brake_mps2` — so a table
-that inverts one is refused too. `verify_traffic.gd` drives this file, three seeds × 90 s.
+that inverts one is refused too. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
+streets, with each region's parked roster resident.
 
 ## `cars = 24`
 
@@ -93,6 +94,25 @@ Under this between the way in and the way out a move is straight on and keeps it
 left turn is taken from the nearside lane into the nearside, a right from the offside into the
 offside (the user's drive, 2026-10-29: cars turned right from the left lane). A staggered crossroad's
 dog-leg reads straight at 30°.
+
+## `pass_look_m = 40.0`
+
+How far ahead a parked vehicle in a car's lane makes it move out to pass (`P3-3f`, the user's drive
+2026-10-29: cars drove through parked ones). The roster puts most of its vehicles IN lane 0 — a bay
+or a fill car at the kerb takes the nearside lane, which is Hong Kong's kerbside, and
+`verify_traffic`'s `parked:` table counts it (Wan Chai + Causeway Bay, 2026-10-29: of the 1,081
+placements on roads traffic drives, 759 stand in lane 0 and 247 in a lane past it only). 40 m at 30 kph is five seconds: room for a `lane_change_m` change
+before the car meets it, and short enough that a car does not leave the nearside for a van a block
+away.
+
+## `side_clear_m = 0.3`
+
+The room a moving car keeps from a parked vehicle's flank: closer, the vehicle is in its lane. Kept
+from the vehicle only — a car edging out may run its flank to the far kerb, because the published
+width is kerb to kerb and a back street is "parked on one side and passed in the lane left"
+(`parked.py`). It decides which pinches are passable: a minibus behind a bus at its stop on a 4.6 m
+one-way street (edge 349) has 2.32 m beside the bus and needs 2.38 (its 2.08 m and this), so it waits — that wait is the
+`parked:` "longest stand" line, and lowering this to clear it would put a car's mirror on a bus.
 
 ## `kinds = {car_a 4, car_b 3, minibus 1.5, van 1.5}`
 

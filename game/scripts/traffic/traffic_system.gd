@@ -37,6 +37,15 @@ extends Node3D
 ## braking at the planned rate rides exactly on that judgement's line, and a
 ## float's wobble tipped one over it into the red (`verify_traffic`, 2026-10-29).
 ##
+## **Parked vehicles are cars ahead that never move** (`P3-3f`, the user's drive
+## 2026-10-29: cars drove through them). Each region's `ParkedLayer` is read once
+## into `Parked` footprints by the road they were published on, and whether one
+## stands is asked each tick. A car brakes for one in its lane as for a car, moves
+## out a lane to pass it within `pass_look_m`, and where no whole lane is clear
+## edges out just past it — across the centre line of a two-way back street only
+## while nothing comes the other way, and a car coming stops for one already out.
+## Where even that does not fit, it waits: the roster's pinches are its own.
+##
 ## 🚫 **Not here yet**: a car giving way at an unsignalled
 ## junction, a car near-missed (`P3-2a` reads parked cars alone), the player's
 ## red light (`P3-3d`), the heads (`P3-3e`). `--traffic=off` takes it away.
@@ -45,6 +54,7 @@ const RoadRouterScript = preload("res://scripts/city/road_router.gd")
 const ParkedRoster = preload("res://scripts/city/parked_roster.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
+const ParkedLayer = preload("res://scripts/city/parked_layer.gd")
 
 const ARG: String = "--traffic="
 ## The authored vehicle library the parked layer draws from too.
@@ -68,6 +78,12 @@ const SAME_LANE: float = 0.75
 ## Moves a car blocked out of its turn's lane tries before it turns from where
 ## it is.
 const REPLAN_TRIES: int = 6
+## Parked placements read into the index a tick until the roster is in: about
+## 0.6 ms, the roster over about a second.
+const PARKED_READS_PER_TICK: int = 16
+## What an edge with nothing parked on it answers: one shared empty list, not a
+## fresh one a call.
+const NO_PARKED: Array = []
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -76,13 +92,16 @@ const REPLAN_TRIES: int = 6
 @export var signals: SignalController
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
-enum Held { NONE, LIGHT, CAR }
+enum Held { NONE, LIGHT, CAR, PARKED }
 
 
 ## One car.
 class Car:
 	extends RefCounted
 
+	## Its place in the fleet: the earlier of two cars waiting on each other
+	## goes first.
+	var id: int = 0
 	var live: bool = false
 	## Spawns this car has had, so a reader can tell a respawn from a move.
 	var lives: int = 0
@@ -107,8 +126,18 @@ class Car:
 	var lane: float = 0.0
 	var lane_out: float = 0.0
 	var next_lane: float = 0.0
+	## Whether the car is out of its turn's lane to pass a parked vehicle.
+	var passing: bool = false
+	## Whether it stands out past its own lanes on a two-way road, toward or
+	## over the centre line, so a car coming the other way stops for it.
+	var over_centre: bool = false
 	## Whether the car has re-picked its move on this edge for want of a gap.
 	var replanned: bool = false
+	## The sine of the angle the next turn turns through.
+	var turn_sin: float = 0.0
+	## Whether the road the next move joins has a lane clear of parked
+	## vehicles at its mouth.
+	var join_clear: bool = true
 	## Where the straight run ends and the turn begins, in travel metres.
 	var leave_m: float = 0.0
 	## Travel metres into the next edge the turn ends at.
@@ -133,6 +162,46 @@ class Car:
 	var shape: CollisionShape3D
 
 
+## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
+## (`P3-3f`): its footprint along the edge and across each way's lanes.
+class Parked:
+	extends RefCounted
+
+	var layer: ParkedLayer
+	var index: int = 0
+	## The footprint's extent along the edge, in metres from its START.
+	var s_from: float = 0.0
+	var s_to: float = 0.0
+	## Across the lanes, in lane widths from lane 0's centre toward the offside,
+	## for travel along the edge (`x` the near side of the footprint, `y` the
+	## far) and against it — each corner read at its own point on the road, so
+	## a taper toward a junction moves the lanes under it.
+	var across_along: Vector2 = Vector2.ZERO
+	var across_against: Vector2 = Vector2.ZERO
+	## One lane's width at its middle, lane centre to lane centre.
+	var lane_m: float = 0.0
+	## The sine of the most the road turns within a car's length of the
+	## footprint: a car's box keeps its own heading while the lanes bend under
+	## its corners, so its half-length times this is added to its half-width.
+	var bend: float = 0.0
+	var source: String = ""
+
+	func standing() -> bool:
+		return layer.is_standing(index)
+
+	## Travel metres the footprint spans for a car driving `along` an edge
+	## `length_m` long: `x` its near end, `y` its far.
+	func span(along: bool, length_m: float) -> Vector2:
+		return Vector2(s_from, s_to) if along else Vector2(length_m - s_to, length_m - s_from)
+
+	## Whether a car `half_width` wide in lane position `lane`, driving `along`,
+	## comes within `clear_m` of the footprint's flank.
+	func in_lane(along: bool, lane: float, half_width: float, clear_m: float) -> bool:
+		var across: Vector2 = across_along if along else across_against
+		var room: float = (half_width + clear_m) / lane_m
+		return lane + room > across.x and lane - room < across.y
+
+
 var profile: TrafficProfile
 var graph: RoadGraph
 var router: RoadRouter
@@ -150,6 +219,20 @@ var _weights: PackedFloat32Array = []
 var _admitted: PackedInt32Array = []
 ## Where the ring is centred when there is no vehicle: the verify tool's.
 var centre: Vector3 = Vector3.ZERO
+## The parked vehicles by the merged edge they stand on (`P3-3f`), and whether
+## the scene's layers have been read yet.
+var _parked: Dictionary[int, Array] = {}
+var _parked_read: bool = false
+var _parked_layers: Array[Node] = []
+## The library's longest half-length: how far past a footprint a car's box can
+## reach, for the bend it reads.
+var _reach_m: float = 0.0
+## The next placement to read: `x` the layer, `y` its entry.
+var _parked_next: Vector2i = Vector2i.ZERO
+## What `read_parked` found, by source: in lane 0 of a way traffic drives, in a
+## lane past it only, clear of every lane, and of those in a lane, how many
+## stand on a road with one lane its way — where a car can only wait.
+var parked_report: Dictionary[String, Vector4i] = {}
 
 
 func _ready() -> void:
@@ -209,7 +292,8 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		car.half_length = extent.size.z * 0.5
 		car.half_width = extent.size.x * 0.5
 		car.body = AnimatableBody3D.new()
-		car.body.name = "car_%d" % cars.find(car)
+		car.id = cars.find(car)
+		car.body.name = "car_%d" % car.id
 		car.shape = CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = extent.size
@@ -243,6 +327,8 @@ static func usable(table: TrafficProfile) -> bool:
 		"turn_span_m": table.turn_span_m,
 		"lane_change_m": table.lane_change_m,
 		"straight_deg": table.straight_deg,
+		"pass_look_m": table.pass_look_m,
+		"side_clear_m": table.side_clear_m,
 		"kinds": float(table.kinds.size()),
 	}
 	return not TuningTable.any_zero(table, required, "TrafficSystem", "no traffic will run")
@@ -276,9 +362,157 @@ func _load_library() -> bool:
 	if _kinds.is_empty():
 		push_error("TrafficSystem: none of %s is in %s" % [profile.kinds.keys(), LIBRARY_PATH])
 		return false
+	for extent: AABB in _extents:
+		_reach_m = maxf(_reach_m, extent.size.z * 0.5)
 	# `instance_count` allocates the buffer and clears it, so it is grown car by
 	# car in `setup` before any transform or livery is written.
 	return true
+
+
+## Index every parked vehicle in `layers` by the merged edge it was published
+## on, its footprint measured along the edge and across each way's lanes. Read
+## once; whether one stands is asked each tick.
+func read_parked(layers: Array[Node]) -> void:
+	_queue_parked(layers)
+	_read_parked_some(1 << 30)
+
+
+## Start reading `layers` afresh: what `_read_parked_some` works through.
+func _queue_parked(layers: Array[Node]) -> void:
+	_parked_read = true
+	_parked.clear()
+	parked_report.clear()
+	_parked_layers = layers
+	_parked_next = Vector2i.ZERO
+
+
+## Read up to `budget` more placements: a footprint is a few dozen projections,
+## and the whole roster in one tick was a 43 ms hitch at the start of a drive.
+func _read_parked_some(budget: int) -> void:
+	var read: int = 0
+	while _parked_next.x < _parked_layers.size() and read < budget:
+		var layer: ParkedLayer = _parked_layers[_parked_next.x]
+		if _parked_next.y >= layer.entry_count():
+			_parked_next = Vector2i(_parked_next.x + 1, 0)
+			continue
+		_read_one_parked(layer, _parked_next.y)
+		_parked_next.y += 1
+		read += 1
+
+
+func _read_one_parked(layer: ParkedLayer, index: int) -> void:
+	var local: int = layer.edge_of(index)
+	if local < 0:
+		return
+	var edge: int = graph.edge_id_in(layer.resolved_region(), local)
+	if edge < 0 or not router.admits_way(edge, true) and not router.admits_way(edge, false):
+		return
+	var parked: Parked = _measure_parked(edge, layer.obstacle_of(index))
+	parked.layer = layer
+	parked.index = index
+	parked.source = layer.source_of(index)
+	if not _parked.has(edge):
+		_parked[edge] = []
+	_parked[edge].append(parked)
+	var typical: float = _extents[0].size.x * 0.5
+	var row: Vector4i = parked_report.get(parked.source, Vector4i.ZERO)
+	var near: bool = false
+	var far: bool = false
+	var waits: bool = false
+	for along: bool in [true, false]:
+		if not router.admits_way(edge, along):
+			continue
+		var lanes: int = graph.lanes_each_way(edge)
+		for lane: int in lanes:
+			if parked.in_lane(along, lane, typical, profile.side_clear_m):
+				near = near or lane == 0
+				far = far or lane > 0
+				waits = waits or lanes == 1
+	if near:
+		row.x += 1
+	elif far:
+		row.y += 1
+	else:
+		row.z += 1
+	if waits:
+		row.w += 1
+	parked_report[parked.source] = row
+
+
+## A parked vehicle's footprint, its `obstacle` corners projected on `edge`.
+func _measure_parked(edge: int, obstacle: Dictionary) -> Parked:
+	var at: Transform3D = obstacle["transform"]
+	var extent: AABB = obstacle["extent"]
+	var corners: Array[Vector3] = []
+	for corner: int in 4:
+		var local := Vector3(
+			extent.position.x + (extent.size.x if corner & 1 else 0.0),
+			0.0,
+			extent.position.z + (extent.size.z if corner & 2 else 0.0)
+		)
+		corners.append(at * local)
+	var middle: Vector3 = at * extent.get_center()
+	var s: float = graph.distance_along(edge, middle)
+	var parked := Parked.new()
+	parked.lane_m = _plan_distance(
+		graph.lane_at(edge, s, true, 0.0), graph.lane_at(edge, s, true, 1.0)
+	)
+	parked.s_from = INF
+	parked.s_to = -INF
+	parked.across_along = Vector2(INF, -INF)
+	parked.across_against = Vector2(INF, -INF)
+	for corner: Vector3 in corners:
+		var here: float = graph.distance_along(edge, corner)
+		parked.s_from = minf(parked.s_from, here)
+		parked.s_to = maxf(parked.s_to, here)
+		for along: bool in [true, false]:
+			var lane0: Vector3 = graph.lane_at(edge, here, along, 0.0)
+			var across := Vector3(graph.lane_at(edge, here, along, 1.0) - lane0)
+			across.y = 0.0
+			var off := Vector3(corner.x - lane0.x, 0.0, corner.z - lane0.z)
+			var lanes: float = off.dot(across) / across.length_squared()
+			if along:
+				parked.across_along = Vector2(
+					minf(parked.across_along.x, lanes), maxf(parked.across_along.y, lanes)
+				)
+			else:
+				parked.across_against = Vector2(
+					minf(parked.across_against.x, lanes), maxf(parked.across_against.y, lanes)
+				)
+	var length_m: float = graph.plan_length_of(edge)
+	var reach_m: float = _reach_m
+	var first: Vector3 = _travel_dir(edge, maxf(parked.s_from - reach_m, 0.0), length_m, true)
+	var last: Vector3 = _travel_dir(edge, minf(parked.s_to + reach_m, length_m), length_m, true)
+	var middle_dir: Vector3 = _travel_dir(edge, s, length_m, true)
+	var turned: float = maxf(
+		maxf(first.angle_to(last), first.angle_to(middle_dir)), middle_dir.angle_to(last)
+	)
+	parked.bend = sin(minf(turned, PI * 0.5))
+	return parked
+
+
+## Every parked vehicle published on `edge`, standing or not.
+func parked_on(edge: int) -> Array:
+	return _parked.get(edge, NO_PARKED)
+
+
+## The near end, in travel metres, of the nearest parked vehicle standing on
+## `edge` in lane position `lane` of `car` driving `along` it, among those whose
+## footprint reaches past `from_m` and starts before `to_m`; INF for none. The
+## window is tested first and nothing is allocated: every car asks this every
+## tick.
+func _nearest_parked(
+	edge: int, along: bool, length_m: float, lane: float, car: Car, from_m: float, to_m: float
+) -> float:
+	var nearest: float = INF
+	for parked: Parked in _parked.get(edge, NO_PARKED):
+		var span: Vector2 = parked.span(along, length_m)
+		if span.y <= from_m or span.x >= to_m or span.x >= nearest:
+			continue
+		var reach: float = car.half_width + car.half_length * parked.bend
+		if parked.in_lane(along, lane, reach, profile.side_clear_m) and parked.standing():
+			nearest = span.x
+	return nearest
 
 
 func _pick_kind() -> int:
@@ -291,6 +525,9 @@ func _physics_process(delta: float) -> void:
 
 ## One tick: spawn into the ring, drive every car, retire what left it.
 func step(delta: float) -> void:
+	if not _parked_read and is_inside_tree():
+		_queue_parked(get_tree().get_nodes_in_group(ParkedLayer.GROUP))
+	_read_parked_some(PARKED_READS_PER_TICK)
 	var here: Vector3 = vehicle.global_position if is_instance_valid(vehicle) else centre
 	for car: Car in cars:
 		if not car.live:
@@ -339,6 +576,22 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	for other: Car in cars:
 		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
 			return
+	var lane: float = float(_rng.randi_range(0, graph.lanes_each_way(edge) - 1))
+	var half_length: float = _extents[car.kind].size.z * 0.5
+	var room: float = (cruise * 0.5) ** 2 / profile.brake_mps2 + profile.look_m * 0.25
+	if (
+		_nearest_parked(
+			edge,
+			along,
+			length_m,
+			lane,
+			car,
+			s - half_length - profile.gap_m,
+			s + half_length + room
+		)
+		< INF
+	):
+		return
 	car.live = true
 	car.lives += 1
 	car.edge = edge
@@ -346,7 +599,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	car.s = s
 	car.turning = false
 	car.crossed.clear()
-	car.lane = float(_rng.randi_range(0, graph.lanes_each_way(edge) - 1))
+	car.lane = lane
 	_enter(car)
 	car.speed = car.cruise_mps * 0.5
 	car.pose = _pose_on_edge(car)
@@ -360,6 +613,8 @@ func _enter(car: Car) -> void:
 	car.length_m = graph.plan_length_of(car.edge)
 	car.cruise_mps = _cruise_of(car.edge)
 	car.replanned = false
+	car.passing = false
+	car.over_centre = false
 	_plan_move(car)
 
 
@@ -368,9 +623,18 @@ func _cruise_of(edge: int) -> float:
 
 
 ## Pick the car's next move, through the junction's inside roads, and where and
-## in which lane it leaves for it.
+## in which lane it leaves for it — another where parked vehicles block every
+## lane of the road it would join at the mouth, up to `REPLAN_TRIES`.
 func _plan_move(car: Car) -> void:
+	for _try: int in REPLAN_TRIES:
+		_plan_one_move(car)
+		if car.next_edge < 0 or car.join_clear:
+			return
+
+
+func _plan_one_move(car: Car) -> void:
 	car.via.clear()
+	car.join_clear = true
 	car.lane_out = car.lane
 	var move: Vector2i = _pick_move(car.edge, car.along)
 	# Through the junction's inside roads to the road out, a bounded walk.
@@ -421,6 +685,7 @@ func _pick_lanes(car: Car) -> void:
 	var here: int = graph.lanes_each_way(car.edge)
 	var there: int = graph.lanes_each_way(car.next_edge)
 	var side: int = turn_side(into, out, profile.straight_deg)
+	car.turn_sin = absf(into.cross(out).y)
 	if side > 0:
 		car.lane_out = 0.0
 		car.next_lane = 0.0
@@ -430,6 +695,43 @@ func _pick_lanes(car: Car) -> void:
 	else:
 		car.lane_out = minf(car.lane, float(here - 1))
 		car.next_lane = minf(car.lane_out, float(there - 1))
+	var join: float = _join_lane(car, there)
+	if join < 0.0 and side == 0:
+		# Straight on into a mouth blocked in this lane: across to one that is
+		# clear before the junction.
+		for lane: int in mini(here, there):
+			if not _join_blocked(car, float(lane), float(lane)):
+				car.lane_out = float(lane)
+				join = float(lane)
+				break
+	car.join_clear = join >= 0.0
+	car.next_lane = join if car.join_clear else car.next_lane
+
+
+## The lane nearest `car.next_lane` the next road has clear of parked vehicles
+## from the turn's lane across to it, for `lane_change_m` past the join, or -1
+## where none is.
+func _join_lane(car: Car, lanes: int) -> float:
+	var best: float = -1.0
+	var nearest: float = INF
+	for lane: int in lanes:
+		var off: float = absf(float(lane) - car.next_lane)
+		if off < nearest and not _join_blocked(car, car.lane_out, float(lane)):
+			nearest = off
+			best = float(lane)
+	return best
+
+
+## Whether a parked vehicle stands within `lane_change_m` past the join
+## anywhere between lane positions `from` and `to` of the next road: a turn
+## moving across lanes passes every position between, half a lane at a time.
+func _join_blocked(car: Car, from: float, to: float) -> bool:
+	var steps: int = ceili(absf(to - from) * 2.0)
+	for at: int in steps + 1:
+		var lane: float = lerpf(from, to, float(at) / maxf(float(steps), 1.0))
+		if _nearest_past_join(car, lane, car.join_m + profile.lane_change_m) < INF:
+			return true
+	return false
 
 
 ## Up to `REPLAN_TRIES` other moves, the first whose lane the car is already in
@@ -474,11 +776,21 @@ static func turn_side(into: Vector3, out: Vector3, straight_deg: float) -> int:
 ## turn across the car beside it. A short road with nobody beside is changed
 ## across as far as it goes, and the turn starts from where the car is.
 func _change_lane(car: Car, metres: float) -> void:
-	if car.turning or is_equal_approx(car.lane, car.lane_out):
+	if car.turning:
 		return
-	var toward: float = move_toward(car.lane, car.lane_out, metres / profile.lane_change_m)
+	var goal: float = _lane_goal(car)
+	car.passing = goal != car.lane_out
+	car.over_centre = (
+		not graph.is_one_way(car.edge)
+		and car.lane > float(graph.lanes_each_way(car.edge) - 1) + 0.01
+	)
+	if is_equal_approx(car.lane, goal):
+		return
+	var toward: float = move_toward(car.lane, goal, metres / profile.lane_change_m)
 	if not _lane_blocked(car, toward):
 		car.lane = toward
+		return
+	if goal != car.lane_out:
 		return
 	var needed: float = absf(car.lane_out - car.lane) * profile.lane_change_m
 	if not car.replanned and car.leave_m - car.s < needed:
@@ -486,9 +798,144 @@ func _change_lane(car: Car, metres: float) -> void:
 		_replan_for_lane(car)
 
 
+## The lane `car` makes for: its turn's, unless a parked vehicle stands in
+## that lane within `pass_look_m` ahead — then the clear lane nearest it, to
+## pass and come back (`P3-3f`). With no clear lane, the turn's: it waits.
+func _lane_goal(car: Car) -> float:
+	if not _parked.has(car.edge) or not _parked_ahead(car, car.lane_out):
+		return car.lane_out
+	var best: float = -1.0
+	var nearest: float = INF
+	for lane: int in graph.lanes_each_way(car.edge):
+		var off: float = absf(float(lane) - car.lane_out)
+		if off < nearest and not _parked_ahead(car, float(lane)):
+			nearest = off
+			best = float(lane)
+	if best >= 0.0:
+		return best
+	var out: float = _edge_out(car)
+	return out if out >= 0.0 else car.lane_out
+
+
+## No whole lane clear: the lane position nearest the turn's lane that keeps
+## `side_clear_m` from every parked vehicle in the way and the flank inside the
+## kerbs — between two rows, against the near kerb, or across the centre line
+## on a two-way road, which a car starts only while nothing comes the other way
+## (`parked.py`'s back street, "parked on one side and passed in the lane
+## left"). -1 where there is none.
+func _edge_out(car: Car) -> float:
+	var blocks: Array[Vector2] = []
+	var lane_m: float = 0.0
+	var until_m: float = car.s
+	for parked: Parked in parked_on(car.edge):
+		var span: Vector2 = parked.span(car.along, car.length_m)
+		if (
+			not parked.standing()
+			or span.y <= car.s - car.half_length - profile.gap_m
+			or span.x >= car.s + car.half_length + profile.pass_look_m
+		):
+			continue
+		var across: Vector2 = parked.across_along if car.along else parked.across_against
+		var room: float = (
+			(car.half_width + car.half_length * parked.bend + profile.side_clear_m) / parked.lane_m
+		)
+		blocks.append(Vector2(across.x - room, across.y + room))
+		lane_m = parked.lane_m
+		until_m = maxf(until_m, span.y)
+	if lane_m <= 0.0:
+		return -1.0
+	# The flank may reach either kerb: the published width runs kerb to kerb,
+	# and the room is kept from the parked vehicles, not from a kerb face.
+	var low: float = -0.5 + car.half_width / lane_m
+	var high: float = float(graph.lane_positions(car.edge)) - 0.5 - car.half_width / lane_m
+	var candidates: Array[float] = [low, high]
+	for block: Vector2 in blocks:
+		# A centimetre past each: exactly on a block's edge reads as inside it.
+		candidates.append(block.x - 0.01 / lane_m)
+		candidates.append(block.y + 0.01 / lane_m)
+	var out: float = -1.0
+	var nearest: float = INF
+	for at: float in candidates:
+		if at < low or at > high or absf(at - car.lane_out) >= nearest:
+			continue
+		var clear: bool = true
+		for block: Vector2 in blocks:
+			if block.x < at and at < block.y:
+				clear = false
+				break
+		if clear:
+			nearest = absf(at - car.lane_out)
+			out = at
+	if nearest == INF:
+		return -1.0
+	var lanes: int = graph.lanes_each_way(car.edge)
+	var crosses: bool = not graph.is_one_way(car.edge) and out > float(lanes - 1)
+	if crosses and not car.over_centre and not _oncoming_clear(car, until_m):
+		return -1.0
+	return out
+
+
+## Whether no car coming the other way on `car`'s road, or turning into it that
+## way, is between `car` and `pass_look_m` past `until_m`. Two cars each
+## waiting at a parked vehicle for the other: the earlier in the fleet goes.
+func _oncoming_clear(car: Car, until_m: float) -> bool:
+	for other: Car in cars:
+		if other == car or not other.live:
+			continue
+		var at: float
+		if not other.turning and other.edge == car.edge and other.along != car.along:
+			at = car.length_m - other.s
+		elif other.turning and other.next_edge == car.edge and other.next_along != car.along:
+			at = car.length_m - other.join_m
+		else:
+			continue
+		if at < car.s - car.half_length - other.half_length or at > until_m + profile.pass_look_m:
+			continue
+		if (
+			car.held == Held.PARKED
+			and other.held == Held.PARKED
+			and other.speed < STOPPED_MPS
+			and car.id < other.id
+		):
+			continue
+		return false
+	return true
+
+
+## Whether a parked vehicle stands in lane `lane` from `car`'s tail to
+## `pass_look_m` past its nose.
+func _parked_ahead(car: Car, lane: float) -> bool:
+	return (
+		_nearest_parked(
+			car.edge,
+			car.along,
+			car.length_m,
+			lane,
+			car,
+			car.s - car.half_length - profile.gap_m,
+			car.s + car.half_length + profile.pass_look_m
+		)
+		< INF
+	)
+
+
 ## Whether a car on `car`'s road, its way, stands beside it in the lane
-## position `toward`.
+## position `toward`, or a parked vehicle beside it does on the side it moves to.
 func _lane_blocked(car: Car, toward: float) -> bool:
+	for parked: Parked in _parked.get(car.edge, NO_PARKED):
+		var span: Vector2 = parked.span(car.along, car.length_m)
+		if span.x >= car.s + car.half_length or span.y <= car.s - car.half_length - profile.gap_m:
+			continue
+		var reach: float = car.half_width + car.half_length * parked.bend
+		if not parked.in_lane(car.along, toward, reach, profile.side_clear_m):
+			continue
+		if not parked.standing():
+			continue
+		# Beside it: only a move AWAY from its side is free.
+		var across: Vector2 = parked.across_along if car.along else parked.across_against
+		var side: float = (across.x + across.y) * 0.5 - car.lane
+		if side * (toward - car.lane) > 0.0:
+			return true
 	for other: Car in cars:
 		if (
 			other == car
@@ -523,29 +970,54 @@ func _stop_along_m(edge: int, along: bool, length_m: float) -> float:
 func _drive(car: Car, delta: float) -> void:
 	var target: float = minf(car.cruise_mps, profile.turn_mps) if car.turning else car.cruise_mps
 	car.held = Held.NONE
+	var to_stop: float = INF
+	var light: SignalController.Light = SignalController.Light.GREEN
 	if not car.turning:
 		var stop: float = stop_travel_m(car)
 		if stop >= 0.0:
-			var to_stop: float = stop - car.s - car.half_length - STOP_SHORT_M
-			var light: SignalController.Light = signals.state_of(car.edge, car.along)
-			# Only a car whose front is not yet over the line: past it, it goes.
-			if (
-				to_stop >= -STOP_SHORT_M
-				# Judged to the LINE, not the aim short of it: a car crawling at its
-				# aim behind a slow leader would read "cannot stop" there, creep on
-				# through the amber and meet the red a hair short (seed 4).
-				and must_stop(light, to_stop + STOP_SHORT_M, car.speed, profile.brake_max_mps2)
-			):
-				var limit: float = stopping_speed(to_stop, profile.brake_mps2)
-				if limit < target:
-					target = limit
-					car.held = Held.LIGHT
+			to_stop = stop - car.s - car.half_length - STOP_SHORT_M
+			light = signals.state_of(car.edge, car.along)
+	elif car.next_edge >= 0:
+		# Through the curve to the next road's line: a short approach's stands a
+		# few metres past the join, too near to stop for once the turn has ended
+		# (edge 203, a minibus over it at 3.7 m/s, 2026-10-30).
+		var next_length: float = graph.plan_length_of(car.next_edge)
+		var next_stop: float = _stop_along_m(car.next_edge, car.next_along, next_length)
+		if next_stop >= 0.0:
+			to_stop = (
+				car.turn_len - car.turn_u + next_stop - car.join_m - car.half_length - STOP_SHORT_M
+			)
+			light = signals.state_of(car.next_edge, car.next_along)
+	# Only a car whose front is not yet over the line: past it, it goes.
+	if (
+		to_stop < INF
+		and to_stop >= -STOP_SHORT_M
+		# Judged to the LINE, not the aim short of it: a car crawling at its aim
+		# behind a slow leader would read "cannot stop" there, creep on through
+		# the amber and meet the red a hair short (seed 4).
+		and must_stop(light, to_stop + STOP_SHORT_M, car.speed, profile.brake_max_mps2)
+	):
+		var limit: float = stopping_speed(to_stop, profile.brake_mps2)
+		if limit < target:
+			target = limit
+			car.held = Held.LIGHT
 	var gap: float = _gap_ahead(car)
 	if gap < INF:
 		var limit: float = stopping_speed(gap - profile.gap_m, profile.brake_mps2)
 		if limit < target:
 			target = limit
 			car.held = Held.CAR
+	var parked_gap: float = _parked_gap(car)
+	if parked_gap < INF:
+		var limit: float = stopping_speed(parked_gap - profile.gap_m, profile.brake_mps2)
+		if limit < target:
+			target = limit
+			car.held = Held.PARKED
+	if car.held == Held.PARKED:
+		# Pulling out from behind it at the turning pace, standing or not: a car
+		# that changed lane only with the metres it drove would never leave.
+		# Topped up to the turning pace: `_advance` moves it by what it drove.
+		_change_lane(car, maxf(profile.turn_mps - car.speed, 0.0) * delta)
 	car.braking = target < car.speed or car.speed < STOPPED_MPS
 	if car.speed < target:
 		car.speed = minf(target, car.speed + profile.accel_mps2 * delta)
@@ -594,7 +1066,7 @@ func _gap_ahead(car: Car) -> float:
 		var apart: float = _plan_distance(origin, other.pose.origin)
 		if apart > profile.look_m + other.half_length + car.half_length:
 			continue
-		if _on_path(car, other):
+		if _on_path(car, other) or _coming_over(car, other):
 			best = minf(best, apart - car.half_length - other.half_length)
 			continue
 		if _merging(car, other):
@@ -624,6 +1096,55 @@ func _gap_ahead(car: Car) -> float:
 	return best
 
 
+## Bumper to the nearest parked vehicle standing in `car`'s lane ahead within
+## `look_m`, on its edge or the one its turn joins, or INF. On the next edge it
+## is measured as if the turn were straight: never longer than the road.
+func _parked_gap(car: Car) -> float:
+	var best: float = INF
+	var front: float = car.s + car.half_length
+	if not car.turning:
+		var near: float = _nearest_parked(
+			car.edge,
+			car.along,
+			car.length_m,
+			car.lane,
+			car,
+			car.s - car.half_length,
+			front + profile.look_m
+		)
+		if near < INF:
+			best = maxf(near - front, 0.0)
+	if car.next_edge < 0:
+		return best
+	var to_join: float = car.turn_len - car.turn_u if car.turning else car.leave_m - front
+	if to_join > profile.look_m:
+		return best
+	var past: float = _nearest_past_join(car, car.next_lane, car.join_m + profile.look_m)
+	if past < INF:
+		# Negative where it reaches back past the join: the car stops short of
+		# the turn rather than turning into it.
+		best = minf(best, maxf(to_join + past - car.join_m, 0.0))
+	return best
+
+
+## `_nearest_parked` on the road `car`'s turn joins, past the join, before
+## `to_m`. Within two car-lengths of the join the car's box still lies across
+## the lanes as it comes out of the turn, so its reach there is its half-length
+## times the turn's sine more.
+func _nearest_past_join(car: Car, lane: float, to_m: float) -> float:
+	var nearest: float = INF
+	var next_length: float = graph.plan_length_of(car.next_edge)
+	for parked: Parked in _parked.get(car.next_edge, NO_PARKED):
+		var span: Vector2 = parked.span(car.next_along, next_length)
+		if span.y <= car.join_m or span.x >= to_m or span.x >= nearest:
+			continue
+		var swing: float = car.turn_sin if span.x < car.join_m + 4.0 * car.half_length else 0.0
+		var reach: float = car.half_width + car.half_length * maxf(swing, parked.bend)
+		if parked.in_lane(car.next_along, lane, reach, profile.side_clear_m) and parked.standing():
+			nearest = span.x
+	return nearest
+
+
 ## Whether `other` is ahead of `car` in the lane `car` will drive: a car in the
 ## next lane over is passed, not followed.
 static func _on_path(car: Car, other: Car) -> bool:
@@ -644,6 +1165,19 @@ static func _on_path(car: Car, other: Car) -> bool:
 		and other.next_along == car.next_along
 		and same_lane(car.next_lane, other.next_lane)
 		and other.turn_len - other.turn_u < car.turn_len - car.turn_u
+	)
+
+
+## Whether `other` comes the other way down `car`'s road, out over the centre
+## line round a parked vehicle, ahead of it: `car` stops short and lets it by.
+static func _coming_over(car: Car, other: Car) -> bool:
+	return (
+		other.over_centre
+		and not car.turning
+		and not other.turning
+		and other.edge == car.edge
+		and other.along != car.along
+		and car.length_m - other.s > car.s
 	)
 
 
@@ -840,6 +1374,11 @@ func _hide(car: Car) -> void:
 	_batches[car.kind].set_instance_transform(
 		car.slot, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
 	)
+
+
+## The mesh box `car` is drawn and collides as, in its own frame.
+func extent_of(car: Car) -> AABB:
+	return _extents[car.kind]
 
 
 static func _plan_distance(a: Vector3, b: Vector3) -> float:

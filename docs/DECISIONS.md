@@ -10627,6 +10627,32 @@ nothing pays or docks for it until the user decides which it is.
 Asked and not yet built (`P3-3f`): indicators before a turn, a stopping car's hazards beside a
 switched-off one, and a moving car that sees a parked car in its lane.
 
+**The parked cars, read (`P3-3f1`, 2026-10-30).** A parked vehicle is a car ahead that never
+moves, read off the layer that stands it — never a second roster — so a van gone home at its hour
+is gone for the traffic too. Measured first, by `verify_traffic`'s `parked:` table: of 1,081
+placements on roads traffic drives, 759 stand in lane 0 and 247 in a lane past it only — Hong
+Kong's kerbside takes the nearside lane, so passing is the common case, not a corner. Three calls:
+
+- **Edging over the centre line, not waiting.** The plan said a car on a road with one lane its
+  way would wait. The table put 168 placements there, and `parked.py`'s own fill rule is "parked on
+  one side and passed in the lane left": a car that waited stood the whole 90 s. So a car with no
+  whole lane clear edges out just far enough, over a two-way road's centre line only while nothing
+  comes the other way, and a car coming stops for one already out; two each waiting at a parked
+  vehicle for the other let the earlier in the fleet go. `give way:` stages it, since Wan Chai's
+  free drive never meets it.
+- **Kept from the vehicle, not the kerb.** `side_clear_m` is the room from a parked flank; a car's
+  own flank may reach the far kerb, the published width being kerb to kerb. Where even that does
+  not fit the car waits: a minibus behind a bus at its stop on a 4.6 m one-way street has 2.32 m
+  and needs 2.38. Those waits are the roster's pinches, printed as the longest stand (71–88 s),
+  and one of them is a finding for `P3-71`: an invented fill car stands across a back street from
+  a published bay, because the fill's lane-room bar counts rows of fill only.
+- **The verify tolerance is 0.15 m, measured.** Lanes are read per footprint corner at its own
+  station and widened by the road's bend under a car's length, and a turning car's swing past the
+  join by the turn's sine. One right-angle corner at a junction mouth still reads 0.086 / 0.13 m
+  into a parked box (Wan Chai's edge 904, Causeway Bay's 110, one road): a car's heading snaps at
+  a polyline vertex, which the lanes cannot follow — a limit of the pose, not of the parked read,
+  and the boxes are the meshes' bounds.
+
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 
 

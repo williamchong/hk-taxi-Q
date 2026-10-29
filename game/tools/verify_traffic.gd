@@ -1,5 +1,7 @@
 ## The traffic (`P3-3c`, `Q173`), headless: the fleet driven for `RUN_S` with
-## no player, the ring centred on the signalled junctions, every tick checked.
+## no player, the ring centred on the signalled junctions, every tick checked —
+## three seeds there, then the first again centred on the back streets, where
+## the parked vehicles stand in a road's only lane.
 ##
 ## - 🔴 **No car crosses its stop point on red or red-and-amber.** The front
 ##   bumper's travel past the stop is watched tick by tick; a crossing while
@@ -14,6 +16,17 @@
 ## - **No car runs into the one ahead in its own lane**: two cars on one edge,
 ##   one way, in one lane (`TrafficSystem.same_lane`), off the turn, never
 ##   stand closer than their half-lengths.
+## - 🔴 **No car stands inside a parked vehicle** (`P3-3f`, the user's drive
+##   2026-10-29: cars drove through them). Each region's `ParkedLayer` is
+##   resident at its clock's first hour, and every live car's plan box is
+##   tested against every standing vehicle on its road and the road it joins.
+##   Some car must have moved out to pass one.
+##   The `parked:` table is what the roster puts in the lanes, by source.
+## - **No two cars meet head on**: a car edging out over the centre line round a
+##   parked vehicle waits for the way to clear, and one coming stops for it, so
+##   two cars on one road, opposite ways, off the turn, never overlap in plan.
+##   The free drive need not meet that case (Wan Chai's alone never does), so
+##   `give way:` stages it: two cars on a back street, the rule held each way.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -26,6 +39,8 @@ extends "res://tools/verify_tool.gd"
 
 const TrafficScript = preload("res://scripts/traffic/traffic_system.gd")
 const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
+const ParkedLayerScript = preload("res://scripts/city/parked_layer.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 const TICK_S: float = 1.0 / 60.0
 const RUN_S: float = 90.0
@@ -33,6 +48,12 @@ const SPEED_SLACK_MPS: float = 1e-3
 ## Three fleets, each its own rolls. 4 is the seed that found the car creeping
 ## over the line at amber behind a slow leader (2026-10-29); 7 and 23 two more.
 const SEEDS: Array[int] = [7, 4, 23]
+## A car this far into a parked vehicle's box is inside it. Not zero: a car's
+## heading snaps at a polyline vertex, and on one right-angle corner at a
+## junction mouth (Wan Chai's edge 904, Causeway Bay's 110: one road) its box
+## swings 0.086 / 0.13 m into a parked car's that the lanes say it clears
+## (2026-10-30) — a box that is itself the mesh's bound, not its shape.
+const INSIDE_M: float = 0.15
 
 
 func _init() -> void:
@@ -53,7 +74,12 @@ func _run() -> void:
 		_finish("verify_traffic")
 		return
 	_check_lane(graph)
-	for seed: int in SEEDS:
+	var layers: Array[Node] = _stand_parked(graph)
+	# The three fleets round the signals, then the first again on the back
+	# streets, where a car can only pass a parked one over the centre line.
+	for run: int in SEEDS.size() + 1:
+		var seed: int = SEEDS[run % SEEDS.size()]
+		var back_street: bool = run == SEEDS.size()
 		var system: TrafficSystem = TrafficScript.new()
 		if not system.setup(graph, table, seed):
 			_fail("setup", "the shipped table and city carry no traffic")
@@ -64,11 +90,41 @@ func _run() -> void:
 			_fail("setup", "no signal plan resident; the stop check would read nothing")
 			system.queue_free()
 			break
-		print("  seed %d:" % seed)
-		system.centre = _signal_centre(system.signals.plan)
-		_drive(system)
+		print("  seed %d%s:" % [seed, " on the back streets" if back_street else ""])
+		system.read_parked(layers)
+		if run == 0:
+			_print_parked(system)
+		system.centre = (
+			_back_street_centre(system) if back_street else _signal_centre(system.signals.plan)
+		)
+		if back_street:
+			_check_give_way(system)
+		_drive(system, not back_street)
 		system.queue_free()
 	_finish("verify_traffic")
+
+
+## Each resident region's parked roster, stood where the scene stands it.
+func _stand_parked(graph: RoadGraph) -> Array[Node]:
+	var layers: Array[Node] = []
+	for region: String in GeneratedRegions.resident():
+		var holder := Node3D.new()
+		holder.position = graph.region_offset(region)
+		var layer: Node3D = ParkedLayerScript.new()
+		layer.region = region
+		holder.add_child(layer)
+		root.add_child(holder)
+		if layer.entry_count() > 0:
+			layers.append(layer)
+	_expect(not layers.is_empty(), "parked", "a parked roster is resident to drive past")
+	return layers
+
+
+func _print_parked(system: TrafficSystem) -> void:
+	print("  parked:   source     lane 0  lane 1+  clear  one-lane")
+	for source: String in system.parked_report:
+		var row: Vector4i = system.parked_report[source]
+		print("            %-9s %7d %8d %6d %9d" % [source, row.x, row.y, row.z, row.w])
 
 
 ## The static rules, off a scene: the amber judgement, the stopping speed and
@@ -140,7 +196,108 @@ class Seen:
 	var lives: int = 0
 
 
-func _drive(system: TrafficSystem) -> void:
+## Two-way roads with one lane each way that traffic drives both ways: where a
+## car can only pass a parked vehicle over the centre line.
+static func _back_streets(system: TrafficSystem) -> Array[int]:
+	var found: Array[int] = []
+	for edge: int in system.graph.edge_ids():
+		if system.graph.is_one_way(edge) or system.graph.lanes_each_way(edge) != 1:
+			continue
+		if system.router.admits_way(edge, true) and system.router.admits_way(edge, false):
+			found.append(edge)
+	return found
+
+
+## The parked vehicle with the most others within `spawn_max_m` that stand in
+## the one lane of a two-way road its way: where the ring meets them.
+func _back_street_centre(system: TrafficSystem) -> Vector3:
+	var blocking: Array[Vector3] = []
+	var typical: float = system.extent_of(system.cars[0]).size.x * 0.5
+	for edge: int in _back_streets(system):
+		for parked: TrafficSystem.Parked in system.parked_on(edge):
+			for along: bool in [true, false]:
+				if parked.standing() and parked.in_lane(along, 0.0, typical, 0.0):
+					blocking.append(parked.layer.obstacle_of(parked.index)["transform"].origin)
+					break
+	var best: Vector3 = Vector3.ZERO
+	var most: int = -1
+	for here: Vector3 in blocking:
+		var near: int = 0
+		for there: Vector3 in blocking:
+			if RoadGraph.plan_distance(here, there) < system.profile.spawn_max_m:
+				near += 1
+		if near > most:
+			most = near
+			best = here
+	print("  centre:   %d blocking parked vehicles within reach" % most)
+	return best
+
+
+## Two cars staged on a back street before the drive: one behind a parked
+## vehicle in its only lane, one coming the other way. While the second is in
+## reach the first keeps its lane; gone, it makes for the centre line; and once
+## the first is out over it, the second stops for it.
+func _check_give_way(system: TrafficSystem) -> void:
+	var passer: TrafficSystem.Car = system.cars[0]
+	var coming: TrafficSystem.Car = system.cars[1]
+	var staged: bool = false
+	for edge: int in _back_streets(system):
+		if staged:
+			break
+		for parked: TrafficSystem.Parked in system.parked_on(edge):
+			var length_m: float = system.graph.plan_length_of(edge)
+			var span: Vector2 = parked.span(true, length_m)
+			if not parked.standing() or span.x < 15.0 or span.y > length_m - 40.0:
+				continue
+			_stage(system, passer, edge, true, span.x - passer.half_length - 3.0)
+			coming.live = false
+			if system._lane_goal(passer) <= 0.0:
+				continue
+			_stage(system, coming, edge, false, length_m - span.y - 10.0)
+			staged = true
+			_expect(
+				system._lane_goal(passer) == 0.0,
+				"give way",
+				"a car behind a parked vehicle on edge %d keeps its lane while one comes" % edge
+			)
+			passer.lane = system._lane_goal(passer)
+			passer.over_centre = true
+			coming.live = false
+			_expect(
+				system._lane_goal(passer) > 0.0,
+				"give way",
+				"and makes for the centre line once the way is clear"
+			)
+			coming.live = true
+			_expect(
+				system._gap_ahead(coming) < INF,
+				"give way",
+				"and the car coming stops for it once it is out"
+			)
+			break
+	_expect(staged, "give way", "a back street with a parked vehicle to stage it on")
+	passer.live = false
+	coming.live = false
+
+
+static func _stage(
+	system: TrafficSystem, car: TrafficSystem.Car, edge: int, along: bool, s: float
+) -> void:
+	car.live = true
+	car.edge = edge
+	car.along = along
+	car.s = s
+	car.lane = 0.0
+	car.turning = false
+	car.held = TrafficSystem.Held.NONE
+	car.over_centre = false
+	system._enter(car)
+	car.pose = system._pose_on_edge(car)
+
+
+## Drive `system` for `RUN_S`, every check on every tick; `at_signals` adds the
+## checks that the lights were met at all.
+func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
@@ -153,6 +310,17 @@ func _drive(system: TrafficSystem) -> void:
 	var too_fast: int = 0
 	var held_light: int = 0
 	var held_car: int = 0
+	var held_parked: int = 0
+	var passing: int = 0
+	var inside_parked: int = 0
+	var head_on: int = 0
+	var over_centre: int = 0
+	var longest_wait: Array[int] = []
+	var waited: Array[int] = []
+	longest_wait.resize(system.cars.size())
+	longest_wait.fill(0)
+	waited.resize(system.cars.size())
+	waited.fill(0)
 	var crossed: int = 0
 	var driven_m: float = 0.0
 	for tick: int in ticks:
@@ -171,6 +339,27 @@ func _drive(system: TrafficSystem) -> void:
 				held_light += 1
 			elif car.held == TrafficSystem.Held.CAR:
 				held_car += 1
+			elif car.held == TrafficSystem.Held.PARKED:
+				held_parked += 1
+			if car.passing:
+				passing += 1
+			if car.over_centre:
+				over_centre += 1
+			waited[index] = (
+				waited[index] + 1
+				if car.held == TrafficSystem.Held.PARKED and car.speed < TrafficSystem.STOPPED_MPS
+				else 0
+			)
+			longest_wait[index] = maxi(longest_wait[index], waited[index])
+			var inside: Node = _inside_parked(system, car)
+			if inside != null:
+				inside_parked += 1
+				_problem(
+					(
+						"tick %d: car %d stands inside a parked vehicle on edge %d"
+						% [tick, index, car.edge]
+					)
+				)
 			if not system.router.admits_way(car.edge, car.along):
 				bad_way += 1
 				_problem(
@@ -224,6 +413,7 @@ func _drive(system: TrafficSystem) -> void:
 			before.along = car.along
 			before.front_m = front
 		rear_end += _rear_ends(system)
+		head_on += _head_ons(system)
 	_expect(
 		system.spawned > 0,
 		"drive",
@@ -235,13 +425,96 @@ func _drive(system: TrafficSystem) -> void:
 		"lights",
 		"no stop crossed on red: %d crossings, %d on red" % [crossed, ran_red]
 	)
-	_expect(crossed > 0, "lights", "some car crossed a stop line at all")
-	_expect(held_light > 0, "lights", "some car was held by a light (%d car-ticks)" % held_light)
+	if at_signals:
+		_expect(crossed > 0, "lights", "some car crossed a stop line at all")
+		_expect(
+			held_light > 0, "lights", "some car was held by a light (%d car-ticks)" % held_light
+		)
 	_expect(held_car > 0, "queue", "some car was held by the car ahead (%d car-ticks)" % held_car)
 	_expect(bad_move == 0 and bad_way == 0, "graph", "every move a legal arc, every way admitted")
 	_expect(on_stub == 0, "graph", "no car drove a road inside a junction (%d car-ticks)" % on_stub)
 	_expect(rear_end == 0, "queue", "no car stood inside the one ahead (%d car-ticks)" % rear_end)
 	_expect(too_fast == 0, "speed", "no car over its cruise (%d car-ticks)" % too_fast)
+	_expect(
+		inside_parked == 0,
+		"parked",
+		"no car stood inside a parked vehicle (%d car-ticks)" % inside_parked
+	)
+	_expect(
+		passing > 0,
+		"parked",
+		(
+			"some car moved out to pass a parked vehicle (%d car-ticks; %d held behind one)"
+			% [passing, held_parked]
+		)
+	)
+	_expect(
+		head_on == 0,
+		"parked",
+		(
+			"no two cars met head on (%d car-ticks; %d out over the centre line)"
+			% [head_on, over_centre]
+		)
+	)
+	print("  parked:   the longest stand behind one %.1f s" % (longest_wait.max() * TICK_S))
+
+
+## The parked vehicle standing on `car`'s road or the road its turn joins whose
+## plan box `car`'s overlaps by more than `INSIDE_M`, or null.
+func _inside_parked(system: TrafficSystem, car: TrafficSystem.Car) -> Node:
+	var extent: AABB = system.extent_of(car)
+	var mine: Array[Vector2] = _plan_box(car.pose, extent)
+	for edge: int in [car.edge, car.next_edge]:
+		for parked: TrafficSystem.Parked in system.parked_on(edge):
+			if not parked.standing():
+				continue
+			var obstacle: Dictionary = parked.layer.obstacle_of(parked.index)
+			var theirs: Array[Vector2] = _plan_box(obstacle["transform"], obstacle["extent"])
+			if _overlap(mine, theirs) > INSIDE_M:
+				return parked.layer
+	return null
+
+
+## Pairs of cars on one edge, opposite ways, off the turn, whose plan boxes
+## overlap.
+static func _head_ons(system: TrafficSystem) -> int:
+	var found: int = 0
+	var live: Array[TrafficSystem.Car] = []
+	for car: TrafficSystem.Car in system.cars:
+		if car.live and not car.turning:
+			live.append(car)
+	for a: int in live.size():
+		for b: int in range(a + 1, live.size()):
+			var one: TrafficSystem.Car = live[a]
+			var two: TrafficSystem.Car = live[b]
+			if one.edge != two.edge or one.along == two.along:
+				continue
+			var mine: Array[Vector2] = _plan_box(one.pose, system.extent_of(one))
+			var theirs: Array[Vector2] = _plan_box(two.pose, system.extent_of(two))
+			if _overlap(mine, theirs) > INSIDE_M:
+				found += 1
+	return found
+
+
+## A box's plan rectangle: its centre, then its two half-axes.
+static func _plan_box(at: Transform3D, extent: AABB) -> Array[Vector2]:
+	var centre: Vector3 = at * extent.get_center()
+	var x: Vector3 = at.basis.x * extent.size.x * 0.5
+	var z: Vector3 = at.basis.z * extent.size.z * 0.5
+	return [Vector2(centre.x, centre.z), Vector2(x.x, x.z), Vector2(z.x, z.z)]
+
+
+## How far two plan rectangles interpenetrate along their least-separating
+## axis (separating axes), or a negative number where they are apart.
+static func _overlap(a: Array[Vector2], b: Array[Vector2]) -> float:
+	var least: float = INF
+	for axis: Vector2 in [a[1], a[2], b[1], b[2]]:
+		var unit: Vector2 = axis.normalized()
+		var reach_a: float = absf(a[1].dot(unit)) + absf(a[2].dot(unit))
+		var reach_b: float = absf(b[1].dot(unit)) + absf(b[2].dot(unit))
+		var apart: float = absf((b[0] - a[0]).dot(unit))
+		least = minf(least, reach_a + reach_b - apart)
+	return least
 
 
 ## Whether `from`, through each of `via` in turn, to `to` is a chain of legal

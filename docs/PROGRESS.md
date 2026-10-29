@@ -37,8 +37,9 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   - `B3`: the streets stand parked vehicles from published data in place of moving traffic
     (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
     (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
-    signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`); the
-    player's red and the lit heads follow (`P3-3d`, `P3-3e`). Trams and neon (`P3-4`, `P3-8`) not
+    signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`), and the
+    cars pass the parked ones (`P3-3f1`); the player's red is counted (`P3-3d`), the lit heads
+    and the cars' indicators and hazards follow (`P3-3e`, `P3-3f`). Trams and neon (`P3-4`, `P3-8`) not
     started.
   - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
     (`P3-51`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
@@ -217,7 +218,30 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   (left nearside, right offside; `straight_deg` 30) with a lane change that looks first
   (`lane_change_m` 25); moving cars lit (head lamps by day, tails at night, brakes), parked ones
   dark. `verify_traffic` adds no car on a stub (0) and lane-aware following; 0 on red on all
-  three seeds. Owed: the user's drive, `P3-3f` (indicators, hazards, parked cars in the lane).
+  three seeds. Owed: the user's drive, `P3-3f` (indicators, hazards; the parked cars built as `P3-3f1`).
+- `P3-3f` 🟡 The cars see the parked ones (`Q173`, the user's drive 2026-10-29: "moving car crash
+  into parked car without collision") — `P3-3f1` built 2026-10-30. `TrafficSystem` reads every
+  region's `ParkedLayer` into footprints by the edge they were published on (16 a tick, the roster
+  in about a second; whole, it was a 43 ms hitch), each corner read across the lanes at its own
+  station and widened by the road's bend under a car's length. A standing vehicle in a car's lane is
+  a car ahead that never moves; within `pass_look_m` (40) the car moves a lane over to pass it, and
+  with no whole lane clear edges out to the nearest position `side_clear_m` (0.3) off every flank —
+  between two rows, against a kerb, or over a two-way back street's centre line only while nothing
+  comes the other way, a car coming stopping for one already out. A join blocked at the mouth is
+  re-picked, and a straight-on car changes lane before it. `verify_traffic`'s `parked:` table
+  (both regions): of 1,081 placements on roads traffic drives, 759 stand in lane 0 and 247 in a
+  lane past it only. Four drives (three seeds at the signals, one on the back streets) — 0 car-ticks
+  inside a parked box (tolerance 0.15 m: a car's heading snaps at a right-angle vertex at one junction mouth, and its box swings 0.086 / 0.13 m into a parked one there), 0 head on,
+  12,420 car-ticks over the centre line; `give way:` stages the rule both ways. Mutations: no parked
+  read 2,429–4,811 car-ticks inside; no give-way and no stop-for-it each fail `give way:` by name.
+  Longest stand behind one 71–88 s: pinches the roster makes — a minibus behind a bus at its stop
+  on a 4.6 m one-way street (2.32 m left, 2.38 needed), a published bay across from an invented
+  fill car on a back street — the fill's lane-room bar does not count a bay on the far kerb
+  (`parked.py`), a finding for `P3-71`. Throttle route, two runs each: `phys` 2.6–3.2 ms against
+  1.6–1.8 with `--traffic=off` (P3-3c's own +1 ms and the parked reads), `draws` unchanged (+6).
+  A turning car now also reads the next road's stop line through the curve: a minibus turning onto
+  edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. Owed: `P3-3f2` indicators,
+  `P3-3f3` hazards, the user's drive.
 - `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
   own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
   approach's stop line is the street's published width across its stop point, and the taxi's middle

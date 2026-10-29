@@ -47,5 +47,11 @@ const PATH: String = "res://tuning/traffic.tres"
 ## Under this many degrees between the way in and the way out a move is straight
 ## on; past it a turn, taken from the nearside lane (left) or the offside (right).
 @export var straight_deg: float
+## How far ahead a parked vehicle in the car's lane makes it move out a lane to
+## pass, in metres (`P3-3f`).
+@export var pass_look_m: float
+## Room kept between a moving car's flank and a parked vehicle it passes, in
+## metres: closer than this, the parked vehicle is in its lane.
+@export var side_clear_m: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]
