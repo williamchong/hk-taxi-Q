@@ -417,10 +417,11 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 							)
 						)
 			if before.live and car.turning and not before.turning:
-				if _winks_right(
-					car.turn_side, before.written if car.turn_side != 0 else car.written
-				):
-					winked += 1 if car.turn_side != 0 else 0
+				# A turn is judged on its approach's last tick; straight on, as it
+				# starts, since the approach may have winked for a lane change.
+				var bits: int = before.written if car.turn_side != 0 else car.written
+				if _winks_side(car.turn_side, bits):
+					winked += absi(car.turn_side)
 				else:
 					bad_wink += 1
 					_problem(
@@ -508,9 +509,9 @@ func _inside_parked(system: TrafficSystem, car: TrafficSystem.Car) -> Node:
 
 ## Whether lamp `bits` show a turn's indicator (`side` 1 left, -1 right) and not
 ## the other — or neither for straight on.
-static func _winks_right(side: int, bits: int) -> bool:
-	var left: bool = bits & 8 != 0
-	var right: bool = bits & 16 != 0
+static func _winks_side(side: int, bits: int) -> bool:
+	var left: bool = bits & TrafficSystem.LAMP_LEFT != 0
+	var right: bool = bits & TrafficSystem.LAMP_RIGHT != 0
 	match side:
 		1:
 			return left and not right

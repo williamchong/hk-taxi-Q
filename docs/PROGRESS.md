@@ -243,7 +243,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. **`P3-3f2` indicators** (2026-10-30): the library's indicator
   lenses are on the taxi's `CIRCUIT_INDICATOR_L/R` (`make_parked.py`), `INSTANCE_CUSTOM.a` carries
   8 left / 16 right, and `vehicle_body.gdshader` flashes them at `vehicle_lamps.tres`' beat
-  (`VehicleLampsProfile.wire_blink`, no second copy), each car on a phase off its position. A car winks
+  (`VehicleLampsProfile.wire_blink`, no second copy), each car on a phase off its MultiMesh slot. A car winks
   its turn's side from `lane_change_m` before the mouth through the turn, else the side it is
   changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
   before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. Day and

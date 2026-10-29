@@ -10658,7 +10658,8 @@ indicator circuits rather than new ones, so one shader channel serves the player
 fleet. The beat is the taxi's (`vehicle_lamps.tres` `blink_hz` / `blink_duty`), written onto the
 library's material by `VehicleLampsProfile.wire_blink` — the shader's uniforms default to 0, so an unwired
 material stays dark rather than flash at a second copy of the number. Each car takes a phase off its
-position: a queue blinking in step reads as one machine. A car winks its turn's side from
+MultiMesh slot (`INSTANCE_ID`): a queue blinking in step reads as one machine. Not off its
+position, which the first build did — a moving car's drew a new phase every frame and flickered. A car winks its turn's side from
 `lane_change_m` before the mouth — the distance it already uses to settle into the turn's lane —
 and otherwise the side it is moving across the lanes to, a pass included; straight on, nothing.
 

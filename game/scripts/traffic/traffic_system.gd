@@ -86,6 +86,10 @@ const PARKED_READS_PER_TICK: int = 16
 const NO_PARKED: Array = []
 ## `lamp_bits`' `wink` for both indicators at once.
 const HAZARDS: int = 2
+## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
+## `winking`): the one spelling the parked layer and the verify tools read.
+const LAMP_LEFT: int = 8
+const LAMP_RIGHT: int = 16
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -139,8 +143,9 @@ class Car:
 	## (`turn_side`: 1 left, -1 right, 0 straight on).
 	var turn_sin: float = 0.0
 	var turn_side: int = 0
-	## The way it is moving across the lanes this tick: 1 toward the nearside
-	## (left), -1 toward the offside, 0 not — its indicator.
+	## The way it is moving across the lanes: 1 toward the nearside (left), -1
+	## toward the offside, 0 not — its indicator. Off the goal, not the move, so
+	## a car waiting to pull out shows where it is going.
 	var shift: int = 0
 	## Whether the road the next move joins has a lane clear of parked
 	## vehicles at its mouth.
@@ -622,6 +627,7 @@ func _enter(car: Car) -> void:
 	car.cruise_mps = _cruise_of(car.edge)
 	car.replanned = false
 	car.passing = false
+	car.shift = 0
 	car.over_centre = false
 	_plan_move(car)
 
@@ -1378,9 +1384,9 @@ func _retire(car: Car) -> void:
 static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 	var bits: int = (2 if running else 0) + (4 if running and braking else 0)
 	if wink == 1 or wink == HAZARDS:
-		bits += 8
+		bits += LAMP_LEFT
 	if wink == -1 or wink == HAZARDS:
-		bits += 16
+		bits += LAMP_RIGHT
 	return bits
 
 

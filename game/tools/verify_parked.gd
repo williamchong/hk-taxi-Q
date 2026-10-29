@@ -184,6 +184,10 @@ func _check_entries(document: Dictionary) -> void:
 		var lit: int = 0
 		for source: String in profile.hazard_sources:
 			lit += sources.get(source, 0)
+		# Both regions stand some; none would be a source renamed under the table.
+		_expect(
+			lit > 0, "no placement stands on its hazards (%s)" % ", ".join(profile.hazard_sources)
+		)
 		print(
 			(
 				"  info  hazards on: %d of %d placements (%s; sources %s)"
@@ -261,11 +265,17 @@ func _check_roster() -> void:
 	var hazards := PackedStringArray(["layby"])
 	var worn: Color = ParkedRoster.livery(5, two)
 	_expect(
-		ParkedLayerScript.datum_of(worn, "layby", hazards) == Color(worn.r, worn.g, worn.b, 25.0),
-		"a stopping car keeps its livery and lights both indicators (a = 1 + 8 + 16)"
+		(
+			ParkedLayerScript.datum_of(worn, "layby", hazards)
+			== Color(worn.r, worn.g, worn.b, 1.0 + ParkedLayerScript.HAZARD_BITS)
+		),
+		"a stopping car keeps its livery and lights both indicators (a = 1 + both indicator bits)"
 	)
 	_expect(
-		ParkedLayerScript.datum_of(ParkedRoster.NO_LIVERY, "layby", hazards).a == 24.0,
+		(
+			ParkedLayerScript.datum_of(ParkedRoster.NO_LIVERY, "layby", hazards).a
+			== ParkedLayerScript.HAZARD_BITS
+		),
 		"and a kind with no palette lights them over its authored colour"
 	)
 	_expect(

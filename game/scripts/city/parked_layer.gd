@@ -33,7 +33,7 @@ const PropBatch = preload("res://scripts/city/prop_batch.gd")
 ## Both indicators in `vehicle_body.gdshader`'s `INSTANCE_CUSTOM.a`: 8 left
 ## and 16 right, `TrafficSystem.lamp_bits`' hazards. No running bit: the head
 ## lamps and tails stay dark.
-const HAZARD_BITS: float = 24.0
+const HAZARD_BITS: float = TrafficSystem.LAMP_LEFT + TrafficSystem.LAMP_RIGHT
 
 ## The document's name in a region's bundle. Mirrors `PARKED_PLACEMENTS_NAME`
 ## in `etl/pipeline/parked.py`.
@@ -308,9 +308,12 @@ func _build(cell: Cell) -> void:
 		# with every lamp dark. `a` is `vehicle_body.gdshader`'s bits: the
 		# livery's alpha, then both indicators.
 		var worn := PackedColorArray()
-		var wears: bool = _profile.liveries.has(mesh_name)
-		for entry: Entry in by_mesh[mesh_name]:
-			wears = wears or entry.source in _profile.hazard_sources
+		var wears: bool = (
+			_profile.liveries.has(mesh_name)
+			or by_mesh[mesh_name].any(
+				func(entry: Entry) -> bool: return entry.source in _profile.hazard_sources
+			)
+		)
 		for entry: Entry in by_mesh[mesh_name]:
 			batch.append(entry.at)
 			if wears:

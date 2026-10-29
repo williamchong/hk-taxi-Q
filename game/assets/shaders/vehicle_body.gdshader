@@ -174,11 +174,11 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // uniform` is one per node, so a fleet in one `MultiMesh` cannot use
 // `lamp_lit`; `TrafficSystem` writes its state into `INSTANCE_CUSTOM.a` above
 // the livery's bit instead: `a = livery + 2 * running + 4 * braking + 8 * left
-// + 16 * right`, small integers a half float carries exactly. A parked car
-// writes 0 or 1 and every circuit stays dark — the difference the user asked to
-// see (2026-10-29). Left and right are the indicators (`P3-3f`), both at once a
+// + 16 * right`, small integers a half float carries exactly. A switched-off
+// parked car writes 0 or 1 and every circuit stays dark — the difference the
+// user asked to see (2026-10-29). Left and right are the indicators (`P3-3f`), both at once a
 // stopping car's hazards; they flash at `traffic_blink_hz` for
-// `traffic_blink_duty` of each beat, each car on its own phase.
+// `traffic_blink_duty` of each beat, each instance on its own phase.
 // Running: the head lamps at `traffic_day_lamps` by day, full at night, and the
 // brake lens at `traffic_tail_lit` scaled by the night; braking: the brake lens
 // full, day or night.
@@ -308,9 +308,10 @@ void vertex() {
 	}
 	running = mod(floor(bits / 2.0), 2.0);
 	braking = mod(floor(bits / 4.0), 2.0);
-	// A phase off where the car stands, so a street of hazards does not flash
-	// as one; the instance's origin is the same for all its vertices.
-	float phase = fract(sin(dot(MODEL_MATRIX[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
+	// A phase off the instance's slot, so a street of hazards does not flash as
+	// one. Not off its position: a moving car's would draw a new phase every
+	// frame and flicker. A traffic car keeps its slot for life.
+	float phase = fract(float(INSTANCE_ID) * 0.618034);
 	float lit = step(fract(TIME * traffic_blink_hz + phase), traffic_blink_duty);
 	winking = vec2(mod(floor(bits / 8.0), 2.0), mod(floor(bits / 16.0), 2.0)) * lit;
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
