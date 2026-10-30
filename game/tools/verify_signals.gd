@@ -14,12 +14,20 @@
 ## - Every approach stands on the graph: its edge is there, its stop point on
 ##   the edge, and its published heading the edge's own at the mouth — an id
 ##   mapped wrong in the merge, or a direction flipped, fails here by name.
+## - **The heads** (`P3-3e`): every placement resolves to an approach the plan
+##   holds at its own junction and stage (never a dark head, `Q77`), the library
+##   draws on `signal_heads.tres`, and over the longest cycle each head's
+##   WRITTEN datum — what the shader reads — is `light_at` for its approach on
+##   every tick, and runs through red, red-and-amber, green and amber.
 ##
 ##     godot --headless --path game --script res://tools/verify_signals.gd
 extends "res://tools/verify_tool.gd"
 
 const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
 const ControllerScript = preload("res://scripts/traffic/signal_controller.gd")
+const HeadsScript = preload("res://scripts/traffic/signal_heads.gd")
+## `generated_scene_import.gd`'s row for the library's material.
+const HEADS_MATERIAL: String = "res://tuning/signal_heads.tres"
 
 ## Seconds between two samples of a cycle: a tenth of the shortest timing a
 ## table could sensibly carry.
@@ -66,6 +74,7 @@ func _run() -> void:
 		"%d junctions, %d approaches, every cycle walked" % [plan.junctions.size(), approaches]
 	)
 	_check_the_watch(graph, plan, table)
+	_check_the_heads(graph, plan, table)
 	_finish("verify_signals")
 
 
@@ -292,4 +301,95 @@ func _check_the_watch(graph: RoadGraph, plan: SignalPlan, table: SignalPlanProfi
 		"watch",
 		"over the line at red, red-and-amber, green: counted %s" % [counted.values()]
 	)
+	controller.free()
+
+
+## The heads stood over the shipped plan, each lamp walked against its approach.
+func _check_the_heads(graph: RoadGraph, plan: SignalPlan, table: SignalPlanProfile) -> void:
+	var controller: SignalController = ControllerScript.create(plan, table)
+	var heads: SignalHeads = HeadsScript.new()
+	heads.controller = controller
+	heads.build(graph)
+	var by_region: Dictionary[String, int] = {}
+	for head: HeadsScript.Head in heads.heads:
+		by_region[head.junction.region] = by_region.get(head.junction.region, 0) + 1
+	_expect(
+		not heads.heads.is_empty() and heads.unresolved.is_empty(),
+		"heads",
+		(
+			"%s stood, every one on an approach the plan holds; unresolved %s"
+			% [by_region, heads.unresolved]
+		)
+	)
+	if heads.heads.is_empty():
+		heads.free()
+		controller.free()
+		return
+	var mesh: Mesh = heads.heads[0].multimesh.mesh
+	var material: Material = mesh.surface_get_material(0)
+	_expect(
+		material != null and material.resource_path == HEADS_MATERIAL,
+		"heads",
+		"the library draws on %s" % HEADS_MATERIAL
+	)
+	var longest: float = 0.0
+	for junction: SignalPlan.Junction in plan.junctions:
+		longest = maxf(longest, ControllerScript.cycle_s(junction, table))
+	var wrong: int = 0
+	var first: String = ""
+	var seen: Array[int] = []
+	seen.resize(heads.heads.size())
+	seen.fill(0)
+	var ticks: int = ceili(longest / STEP_S)
+	for tick: int in ticks:
+		controller.clock_s = tick * STEP_S
+		heads.refresh()
+		for index: int in heads.heads.size():
+			var head: HeadsScript.Head = heads.heads[index]
+			var want: int = ControllerScript.light_at(
+				head.junction, head.approach, controller.clock_s, table
+			)
+			var shown: int = heads.light_of(index)
+			seen[index] |= 1 << shown
+			if shown != want:
+				wrong += 1
+				if first.is_empty():
+					first = (
+						"%s/%d edge %d at %.2f s: %s, the approach %s"
+						% [
+							head.junction.region,
+							head.junction.id,
+							head.approach.edge,
+							controller.clock_s,
+							_name(shown),
+							_name(want),
+						]
+					)
+	_expect(
+		wrong == 0,
+		"heads",
+		(
+			"%d ticks over %.1f s, every head's datum its approach's light%s"
+			% [ticks, longest, "" if wrong == 0 else " — %d wrong, first %s" % [wrong, first]]
+		)
+	)
+	var every: int = (
+		(1 << ControllerScript.Light.RED)
+		| (1 << ControllerScript.Light.RED_AMBER)
+		| (1 << ControllerScript.Light.GREEN)
+		| (1 << ControllerScript.Light.AMBER)
+	)
+	var short: int = 0
+	for mask: int in seen:
+		if mask != every:
+			short += 1
+	_expect(
+		short == 0,
+		"heads",
+		(
+			"every head runs red, red-and-amber, green and amber, and never shows none (%d short)"
+			% short
+		)
+	)
+	heads.free()
 	controller.free()
