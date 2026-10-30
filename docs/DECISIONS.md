@@ -10732,6 +10732,31 @@ nothing): the host edge's nearer node, as its stub cluster. `signals.heads` read
   a drawn mouth 3.2–15.7 m short of the node, as at any junction. Whether that mouth is the
   crossing's own line is not measured.
 
+**Where the cars stop, against the paint (2026-10-30, measured, nothing changed).** For each
+approach of the widened plan, the stop point (`stop_m`, the drawn mouth) against the nearest
+transverse `RM1011` (within 20° of square) and the near edge of the nearest light-signal crossing
+(`crossings.line_types`), both within a window along and across the approach. Positive means the
+stop is short of the line.
+
+| window (along / across) | approaches matched | over the line | short > 6 m | within 0–6 m |
+|---|---|---|---|---|
+| Wan Chai, 40 / 8 m | 119 of 167 | 57 | 35 | 27 |
+| Wan Chai, 15 / 4 m | 80 of 167 | **53** | 10 | 17 |
+| Causeway Bay, 15 / 4 m | 10 of 32 | 3 | 4 | 3 |
+
+- 🔴 **The drawn mouth is past the painted stop at two thirds of Wan Chai's matched approaches**,
+  and that holds as the window tightens (57 → 53 while the matches fall 119 → 80). At 15 / 4 m
+  the overshoot is p50 6.3 m past a bar and 5.1 m into a crossing. The mouth is where the ribbon
+  meets the junction's cap, and the cap starts past the crossing the bar stands before. So a car
+  held at red stands on the crossing. This is `P3-3a`'s rule, not the heads': the 40 junctions
+  staged before the widening are in the baseline.
+- **The mid-block crossings are no worse**: of Wan Chai's 11, 2 over, 2 short over 6 m, 1 within,
+  and **6 with no bar or crossing within 40 m**. That last is the heads' own limit: a head's
+  junction is its host edge's nearer node, which on a long block can be far from the crossing it
+  stands at. Causeway Bay's 9: 2 over, 0 short, 2 within, 5 neither.
+- Not decided: whether an approach should stop at its own measured line where one is in reach.
+  That reopens "stopped at the drawn mouth" above, and is the user's call.
+
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 
 
