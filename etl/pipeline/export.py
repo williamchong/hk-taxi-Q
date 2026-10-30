@@ -280,7 +280,11 @@ CITY_NAME = "city.json"
 # 41 since `P3-3c`: `carriageway[]` carries `trim_m` and `stub`, where a moving
 # car's turn begins and ends; a v40 bundle has neither, and the traffic would
 # turn from the junction's middle again.
-CITY_SCHEMA = 41
+# 42 since `P3-3e` (`Q173`): the manifest names `signal_heads_placements.json`,
+# the published heads bound to the approach whose light each shows, stood from
+# the AUTHORED `heads.glb` (`parked`'s terms). A v41 reader would ship it
+# unlisted and `sync_generated.sh` would sweep it.
+CITY_SCHEMA = 42
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -335,6 +339,7 @@ OPTIONAL_ASSET_KEYS = (
     "trees",
     "trees_placements",
     "signals_plan",
+    "signal_heads_placements",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -626,6 +631,9 @@ def build_region(
         # The signalled junctions and their authored stages (`P3-3a`, `Q173`):
         # `null` where the city declares no `signals:` block or staged nothing.
         "signals_plan": signals["plan_document"],
+        # Where the lit heads stand (`P3-3e`): the library is the AUTHORED
+        # `heads.glb`, so only the document ships, on `parked_placements`' terms.
+        "signal_heads_placements": signals["heads_document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

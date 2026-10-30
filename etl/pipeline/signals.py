@@ -48,11 +48,14 @@ from pipeline import gdb
 from pipeline.config import Config, SignalHeads, load_config
 from pipeline.crossings import CrossingReport, read_crossings
 from pipeline.documents import read_document, write_document
+from pipeline.drawnroad import Ribbon, kerbed_ribbons
 from pipeline.fetch import source_reads
+from pipeline.placements import placement, write_placements
 from pipeline.polyline import (
     Segments,
     axis_residual_deg,
     bearing_deg,
+    directed_residual_deg,
     plan_lengths_2d,
     plan_projections,
     plan_steps_2d,
@@ -72,10 +75,15 @@ log = logging.getLogger(__name__)
 
 SIGNALS_MANIFEST_NAME = "signals.json"
 # 2 since `Q173`: the plan, where 1 was `P3-17`'s heads (`Q77`). A v1 reader
-# would look for a mesh and find a junction table.
-SIGNALS_MANIFEST_SCHEMA = 2
+# would look for a mesh and find a junction table. 3 since `P3-3e`: the manifest
+# names `heads_document`, which a v2 reader would never ship.
+SIGNALS_MANIFEST_SCHEMA = 3
 SIGNALS_PLAN_NAME = "signals_plan.json"
 SIGNALS_PLAN_SCHEMA = 1
+# Where each bound head stands (`P3-3e`), beside the authored library it stands.
+SIGNAL_HEADS_PLACEMENTS_NAME = "signal_heads_placements.json"
+# The one mesh in the library: every admitted code draws the same head (`Q76`).
+SIGNAL_HEAD_MESH = "head"
 
 
 @dataclass
@@ -137,6 +145,26 @@ class SignalReport:
     # and how far back from its mouth each moved stop came, in metres.
     stops_by_source: dict[str, int] = field(default_factory=dict)
     stop_moved_m: list[float] = field(default_factory=list)
+
+    # Each post bound to the approach it shows (`bind_heads`, `P3-3e`):
+    #     head_posts == bound_primary + bound_secondary + every bind_* refusal
+    bound_primary: int = 0
+    bound_secondary: int = 0
+    bind_no_host: int = 0
+    bind_no_ribbon: int = 0
+    bind_over_shift: int = 0
+    bind_in_carriageway: int = 0
+    bind_on_stub: int = 0
+    bind_unstaged: int = 0
+    bind_no_straight: int = 0
+    bind_ambiguous: int = 0
+    # Posts carrying a `P` code / only `S` codes, by role: `P` and `S` describe
+    # nothing (`Q76`), and this is where that stays checkable.
+    bound_by_code: dict[str, int] = field(default_factory=dict)
+    # How far each BOUND head moved out to the kerb; 0.0 where it was kept.
+    head_shift_m: list[float] = field(default_factory=list)
+    # Staged junctions with a head for every one of their stages.
+    stages_shown: int = 0
 
 
 @dataclass(frozen=True)
@@ -405,6 +433,159 @@ def _stopped(
     return replace(approach, stop_m=stop if approach.along else length - stop)
 
 
+@dataclass(frozen=True)
+class Bound:
+    """A post bound to the approach it shows, standing where it is drawn."""
+
+    x: float
+    y: float
+    z: float
+    # The compass way the head looks: back at its approach's traffic.
+    facing_deg: float
+    junction: int
+    # The approach, in the plan's own terms.
+    edge: int
+    along: bool
+    stage: int
+    primary: bool
+
+
+def bind_heads(
+    posts: list[Post],
+    segments: Segments,
+    by_id: dict[int, dict[str, Any]],
+    drawn: dict[int, Ribbon],
+    junction_of: dict[int, int],
+    junctions: list[dict[str, Any]],
+    spec: SignalHeads,
+    tolerance_deg: float,
+    report: SignalReport,
+) -> list[Bound]:
+    """Each post bound to the approach whose light it shows, or refused and counted.
+
+    🔴 **Nothing publishes a head's facing or its approach** (`Q76`), so both
+    come from where it stands, by the signs' rule (`signs.facing_from_side`):
+    a post addresses the traffic on its kerb's side — the edge's own on a one-way
+    road; on a two-way road, the flow along the edge from the nearside and
+    against it from the offside (drive on the left).
+
+    - **Primary**: the post stands on the half of its edge that traffic ends
+      at, and that travel is a staged approach.
+    - **Secondary** (across the junction): it stands on the half traffic
+      starts from, out of a staged junction, and that junction's approaches
+      running straight on to it — within `axis_tolerance_deg`, same way — are
+      ONE stage. `light_at` reads only the stage, so the nearest-heading one
+      stands for them.
+
+    Never a dark head (`Q77`): everything else is refused and counted. The
+    head looks back along its approach, so a lamp and its facing cannot
+    disagree. The post is registered to the kerb as the signs are (`Q60`,
+    outward only since `Q78`), and refused where that leaves it in a road.
+    """
+    approach_of: dict[tuple[int, bool], tuple[dict[str, Any], dict[str, Any]]] = {}
+    staged: dict[int, dict[str, Any]] = {}
+    for junction in junctions:
+        staged[int(junction["id"])] = junction
+        for approach in junction["approaches"]:
+            approach_of[(int(approach["edge"]), bool(approach["along"]))] = (junction, approach)
+
+    bound: list[Bound] = []
+    shown: dict[int, set[int]] = defaultdict(set)
+    for post in posts:
+        snap = segments.nearest(post.x, post.z)
+        if snap.distance_m > spec.max_offset_m:
+            report.bind_no_host += 1
+            continue
+        ribbon = drawn.get(snap.edge)
+        if ribbon is None:
+            report.bind_no_ribbon += 1
+            continue
+        side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
+        shift_m = 0.0
+        if ribbon.past_kerb_m(snap) > spec.outset_m:
+            # Already clear of the kerb: TD's point stands (`Q78`).
+            placed = np.array([post.x, post.z])
+        else:
+            shift_m = abs(target_m - snap.offset_m)
+            if shift_m > spec.max_shift_m:
+                report.bind_over_shift += 1
+                continue
+        settled = segments.nearest(float(placed[0]), float(placed[1]))
+        settled_ribbon = drawn.get(settled.edge)
+        if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
+            # Moved onto its own kerb and standing in another road: a junction
+            # mouth where ribbons overlap. Refused, never pushed again (`P3-17`).
+            report.bind_in_carriageway += 1
+            continue
+
+        edge_id = snap.edge
+        start, end = int(by_id[edge_id]["from"]), int(by_id[edge_id]["to"])
+        if junction_of.get(start, start) == junction_of.get(end, end):
+            report.bind_on_stub += 1
+            continue
+        # `signs.facing_from_side`'s rule as a direction rather than a heading.
+        along = ribbon.one_way or side > 0.0
+        towards_end = (snap.t if along else 1.0 - snap.t) >= 0.5
+        if towards_end:
+            hit = approach_of.get((edge_id, along))
+            if hit is None:
+                report.bind_unstaged += 1
+                continue
+            junction, approach = hit
+            primary = True
+        else:
+            origin = start if along else end
+            junction = staged.get(junction_of.get(origin, origin))
+            if junction is None:
+                report.bind_unstaged += 1
+                continue
+            travel = (snap.heading_deg if along else snap.heading_deg + 180.0) % 360.0
+            ahead = [
+                one
+                for one in junction["approaches"]
+                if directed_residual_deg(float(one["heading_deg"]), travel) <= tolerance_deg
+            ]
+            if not ahead:
+                report.bind_no_straight += 1
+                continue
+            if len({int(one["stage"]) for one in ahead}) > 1:
+                report.bind_ambiguous += 1
+                continue
+            approach = min(
+                ahead, key=lambda one: directed_residual_deg(float(one["heading_deg"]), travel)
+            )
+            primary = False
+
+        role = "primary" if primary else "secondary"
+        if primary:
+            report.bound_primary += 1
+        else:
+            report.bound_secondary += 1
+        letter = "P" if any(code.startswith("P") for code in post.codes) else "S"
+        key = f"{letter}_{role}"
+        report.bound_by_code[key] = report.bound_by_code.get(key, 0) + 1
+        shown[int(junction["id"])].add(int(approach["stage"]))
+        report.head_shift_m.append(round(shift_m, 3))
+        bound.append(
+            Bound(
+                x=float(placed[0]),
+                y=snap.y,
+                z=float(placed[1]),
+                facing_deg=(float(approach["heading_deg"]) + 180.0) % 360.0,
+                junction=int(junction["id"]),
+                edge=int(approach["edge"]),
+                along=bool(approach["along"]),
+                stage=int(approach["stage"]),
+                primary=primary,
+            )
+        )
+    report.bound_by_code = dict(sorted(report.bound_by_code.items()))
+    report.stages_shown = sum(
+        1 for one in junctions if shown.get(int(one["id"]), set()) >= set(range(one["stages"]))
+    )
+    return bound
+
+
 def stages_of(headings: list[float], tolerance_deg: float) -> list[int]:
     """The stage each approach takes: one per run of travel axes `tolerance_deg` wide.
 
@@ -554,6 +735,7 @@ def build_region(
         hosts.add(host.edge_id)
 
     heads_at: dict[int, int] = {}
+    posts: list[Post] = []
     if spec.heads is not None:
         heads = read_heads(city, spec.heads, region_id, report, sources_root=sources_root)
         posts = assemble(heads, spec.heads.assembly_merge_m)
@@ -636,6 +818,19 @@ def build_region(
     report.heads_only_by_posts = dict(
         sorted(report.heads_only_by_posts.items(), key=lambda item: int(item[0]))
     )
+    bound: list[Bound] = []
+    if spec.heads is not None and posts:
+        bound = bind_heads(
+            posts,
+            segments,
+            by_id,
+            kerbed_ribbons(city, out_dir, region_id, graph, surface),
+            junction,
+            junctions,
+            spec.heads,
+            spec.axis_tolerance_deg,
+            report,
+        )
     if junctions:
         write_document(
             out_dir / SIGNALS_PLAN_NAME,
@@ -646,8 +841,37 @@ def build_region(
                 "junctions": junctions,
             },
         )
+    if bound:
+        assert spec.heads is not None
+        write_placements(
+            out_dir / SIGNAL_HEADS_PLACEMENTS_NAME,
+            city.id,
+            region_id,
+            spec.heads.library,
+            [_stand(head) for head in bound],
+        )
+    else:
+        (out_dir / SIGNAL_HEADS_PLACEMENTS_NAME).unlink(missing_ok=True)
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def _stand(head: Bound) -> dict[str, Any]:
+    """One placements entry: the head, and the approach whose light it shows.
+
+    The approach is the plan's own key (`edge` in region numbering, `along`), so
+    the engine resolves it through `SignalPlan.approach_on` as the cars do; the
+    junction and stage ride beside it for a reader to check against the plan.
+    """
+    entry = placement(SIGNAL_HEAD_MESH, (head.x, head.y, head.z), head.facing_deg)
+    entry.update(
+        junction=head.junction,
+        edge=head.edge,
+        along=head.along,
+        stage=head.stage,
+        primary=head.primary,
+    )
+    return entry
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignalReport) -> int:
@@ -656,6 +880,9 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignalR
         "city_id": city.id,
         "region_id": region_id,
         "plan_document": SIGNALS_PLAN_NAME if report.staged else None,
+        "heads_document": SIGNAL_HEADS_PLACEMENTS_NAME
+        if report.bound_primary + report.bound_secondary
+        else None,
     }
     document.update(vars(report))
     return write_document(out_dir / SIGNALS_MANIFEST_NAME, document)
@@ -677,7 +904,10 @@ def main(argv: list[str] | None = None) -> int:
         "%d approaches (%d with their own stop line) %s, stages %s, %d crossing stages; "
         "heads %d features (%d refused, %d on structure, %d empty) -> %d posts "
         "(%d no host, %d at a dead end, %d hosted); junctions by stop line %d, heads %d, "
-        "both %d; heads-only by posts %s; stops by source %s, moved back p50 %.1f max %.1f m",
+        "both %d; heads-only by posts %s; stops by source %s, moved back p50 %.1f max %.1f m; "
+        "bound %d primary + %d secondary (%d no host, %d no ribbon, %d over shift, "
+        "%d in a carriageway, %d on a stub, %d unstaged, %d no straight, %d ambiguous) %s, "
+        "shift p90 %.2f max %.2f m, every stage shown at %d of %d",
         report.stop_lines,
         report.no_host,
         report.off_axis,
@@ -708,6 +938,21 @@ def main(argv: list[str] | None = None) -> int:
         dict(sorted(report.stops_by_source.items())),
         float(np.median(report.stop_moved_m)) if report.stop_moved_m else 0.0,
         max(report.stop_moved_m, default=0.0),
+        report.bound_primary,
+        report.bound_secondary,
+        report.bind_no_host,
+        report.bind_no_ribbon,
+        report.bind_over_shift,
+        report.bind_in_carriageway,
+        report.bind_on_stub,
+        report.bind_unstaged,
+        report.bind_no_straight,
+        report.bind_ambiguous,
+        report.bound_by_code,
+        float(np.percentile(report.head_shift_m, 90)) if report.head_shift_m else 0.0,
+        max(report.head_shift_m, default=0.0),
+        report.stages_shown,
+        report.staged,
     )
     return 0
 

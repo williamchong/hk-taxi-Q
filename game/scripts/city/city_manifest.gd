@@ -230,7 +230,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 41 since `P3-3c`: `carriageway[]` carries `trim_m` and `stub` — where a
 ## moving car's turn begins and ends, and the road inside a junction it crosses.
-const SCHEMA_VERSION: int = 41
+##
+## 42 since `P3-3e` (`Q173`): the manifest names `signal_heads_placements.json`,
+## the published heads, each bound to the approach whose light it shows.
+const SCHEMA_VERSION: int = 42
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -482,6 +485,9 @@ var trees_placements_path: String
 ## `SignalPlan`. Empty where the city declares no `signals:` block or staged
 ## nothing: no car stops for a light.
 var signals_plan_path: String
+## Where the lit signal heads stand (`P3-3e`), from the authored `heads.glb`;
+## empty where the region bound none.
+var signal_heads_placements_path: String
 
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
@@ -659,6 +665,9 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.trees_path = _resolve(document.get("trees"), manifest.directory)
 	manifest.trees_placements_path = _resolve(document.get("trees_placements"), manifest.directory)
 	manifest.signals_plan_path = _resolve(document.get("signals_plan"), manifest.directory)
+	manifest.signal_heads_placements_path = _resolve(
+		document.get("signal_heads_placements"), manifest.directory
+	)
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -780,6 +789,7 @@ func shipped() -> PackedStringArray:
 		trees_path,
 		trees_placements_path,
 		signals_plan_path,
+		signal_heads_placements_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

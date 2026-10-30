@@ -390,6 +390,7 @@ class _Region:
                 "city_id": city.id,
                 "region_id": REGION,
                 "plan_document": None,
+                "heads_document": None,
                 "staged": 0,
             },
             # Written even when empty by the landmarks stage, so export's

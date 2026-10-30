@@ -2468,6 +2468,40 @@ signals:
     # 470 of 913 points sit within 0.05 m of another; at 1 m, 553 posts of 1-5
     # aspects. Two posts at opposite kerbs are metres apart and never merge.
     assembly_merge_m: 1.0
+    # P3-17's registration: 72.7% of Wan Chai's head points are surveyed inside
+    # the drawn ribbon (a median 1.48 m past the kerb), so a post in the road is
+    # moved out to outset_m past the kerb (Q60), never pulled in (Q78), and
+    # refused past max_shift_m. P3-17's values; a head's post stands nearer
+    # the kerb than a sign's (signs.outset_m 0.6).
+    outset_m: 0.45
+    max_shift_m: 6.0
+    # One head for every admitted code (Q76: the code describes nothing), drawn
+    # by tools/make_signal_heads.py and committed.
+    library: res://assets/authored/signals/heads.glb
+    # The head tools/make_signal_heads.py draws: P3-17's three-aspect box on a
+    # post, the head IN FRONT of the post (its defect was the reverse). TD
+    # publishes no head dimension; these read as a UK-pattern head at 2.4 m.
+    drawing:
+      mount_height_m: 2.40
+      post_radius_m: 0.06
+      post_sides: 8
+      # The post stands this far above the head's top, so it reads as the
+      # head's own support rather than ending flush.
+      post_headroom_m: 0.15
+      head_width_m: 0.42
+      head_height_m: 1.10
+      head_depth_m: 0.30
+      lens_diameter_m: 0.30
+      lens_segments: 12
+      # Clear of the housing's face along its normal: coplanar faces z-fight.
+      lens_lift_m: 0.012
+      # The unlit glass; the lit colour is signal_heads.tres'. A printed
+      # specification, exempt from Q33's palette as signs.colours is.
+      colours:
+        body: "#2b2f33"
+        red: "#4a1416"
+        amber: "#4d3510"
+        green: "#0f3a24"
 
 road_marks:
   source: traffic_aids_drawings_gdb

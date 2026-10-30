@@ -1613,6 +1613,11 @@ class TestPaletteExposure:
 
         So the exemption is narrow, by prefix, and deliberately not a general
         escape: any *other* new key authoring a colour still fails.
+
+        ⚠️ **`signals.heads.drawing.colours` is the same argument at a second
+        layer** (`P3-17`'s `.signals.colours.` until `P3-35a` removed the stage,
+        restored by its port, `P3-3e`): a head is four colours in one draw call,
+        and a lens's glass is a lamp's specification, not a reflectance.
         """
         document = yaml.safe_load((CONFIG_PATH).read_text(encoding="utf-8"))
         declared = {entry["colour"] for entry in document["materials"].values()}
@@ -1630,7 +1635,10 @@ class TestPaletteExposure:
         outside = {
             path: value
             for path, value in hex_colours(document, "")
-            if not any(path.startswith(prefix) for prefix in (".materials.", ".signs.colours."))
+            if not any(
+                path.startswith(prefix)
+                for prefix in (".materials.", ".signs.colours.", ".signals.heads.drawing.colours.")
+            )
         }
         assert not outside, (
             f"colour(s) authored outside materials: {outside}. Every colour the city "

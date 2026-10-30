@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import ClassVar
 
 import numpy as np
 import pytest
 
-from pipeline.config_blocks.signals import _signals, is_signal_head
+from pipeline.config_blocks.base import SourceLayer
+from pipeline.config_blocks.signals import SignalHeads, _drawing, _signals, is_signal_head
+from pipeline.drawnroad import Ribbon
 from pipeline.polyline import Segments
 from pipeline.signals import (
     Approach,
@@ -19,10 +22,26 @@ from pipeline.signals import (
     _stopped,
     approaches_into,
     assemble,
+    bind_heads,
     host_heads,
     own_stop,
     stages_of,
 )
+
+# `hong_kong.yaml`'s `signals.heads.drawing:`, the values `P3-17` drew.
+DRAWING: dict = {
+    "mount_height_m": 2.40,
+    "post_radius_m": 0.06,
+    "post_sides": 8,
+    "post_headroom_m": 0.15,
+    "head_width_m": 0.42,
+    "head_height_m": 1.10,
+    "head_depth_m": 0.30,
+    "lens_diameter_m": 0.30,
+    "lens_segments": 12,
+    "lens_lift_m": 0.012,
+    "colours": {"body": "#2b2f33", "red": "#4a1416", "amber": "#4d3510", "green": "#0f3a24"},
+}
 
 
 class TestStages:
@@ -151,6 +170,10 @@ class TestHeadsBlock:
         "head_prefixes": ["P", "S"],
         "max_offset_m": 25.0,
         "assembly_merge_m": 1.0,
+        "outset_m": 0.45,
+        "max_shift_m": 6.0,
+        "library": "res://heads.glb",
+        "drawing": copy.deepcopy(DRAWING),
     }
 
     def _block(self, **heads: object) -> dict:
@@ -180,6 +203,23 @@ class TestHeadsBlock:
     def test_a_refuse_code_the_spelling_already_refuses_is_dead_config(self) -> None:
         with pytest.raises(ValueError):
             _signals(self._block(refuse_codes=["PBUTT"]), "x")
+
+    def test_the_drawing_reads_its_colours_as_rgb(self) -> None:
+        spec = _signals(self._block(), "x")
+        assert spec is not None and spec.heads is not None
+        assert spec.heads.drawing.colours["red"] == (0x4A, 0x14, 0x16)
+        assert spec.heads.drawing.lens_segments == 12
+
+    def test_a_drawing_missing_a_lens_colour_is_refused(self) -> None:
+        drawing = copy.deepcopy(DRAWING)
+        del drawing["colours"]["amber"]
+        with pytest.raises(ValueError, match="colours"):
+            _signals(self._block(drawing=drawing), "x")
+
+    def test_a_lens_wider_than_its_share_of_the_face_is_refused(self) -> None:
+        # 1.10 m over three lenses is 0.367 m each.
+        with pytest.raises(ValueError, match="lens_diameter_m"):
+            _signals(self._block(drawing={**DRAWING, "lens_diameter_m": 0.40}), "x")
 
 
 class TestAssemble:
@@ -348,3 +388,157 @@ class TestStopped:
         report = SignalReport()
         assert _stopped(approach, self.EDGE, {}, [], 30.0, report) is approach
         assert report.stops_by_source == {"no_width": 1}
+
+
+def _ribbon(plan: list[tuple[float, float]], one_way: bool) -> Ribbon:
+    return Ribbon(
+        lanes=2,
+        carriageway_m=10.0,
+        one_way=one_way,
+        at=np.array([0.0, 1.0]),
+        half_width_m=np.array([5.0, 5.0]),
+        offset_m=np.zeros(2),
+        plan=np.array(plan),
+        height_m=np.zeros(2),
+        trim_start_m=0.0,
+        trim_end_m=0.0,
+        length_m=100.0,
+    )
+
+
+class TestBindHeads:
+    """`bind_heads`: the approach a head shows, from where it stands (`P3-3e`)."""
+
+    # Junction 1 at the origin. 20 runs east into it from node 9 (two-way); 21
+    # runs east out of it to node 8 (two-way); 22 runs south into it from node 7
+    # (one-way); 23 runs north-east out of it to node 6 (one-way). Headings: east
+    # 90, west 270, south 180, north-east 45 (+z is south: heading 0 is -z).
+    # The east-west axis is stage 0, south stage 1.
+    EDGES: ClassVar[list[dict]] = [
+        _edge(20, 9, 1, [(-100.0, 0.0), (0.0, 0.0)], "both"),
+        _edge(21, 1, 8, [(0.0, 0.0), (100.0, 0.0)], "both"),
+        _edge(22, 7, 1, [(0.0, -100.0), (0.0, 0.0)], "forward"),
+        _edge(23, 1, 6, [(0.0, 0.0), (70.0, -70.0)], "forward"),
+    ]
+    JUNCTIONS: ClassVar[list[dict]] = [
+        {
+            "id": 1,
+            "stages": 2,
+            "approaches": [
+                {"edge": 20, "along": True, "heading_deg": 90.0, "stage": 0},
+                {"edge": 21, "along": False, "heading_deg": 270.0, "stage": 0},
+                {"edge": 22, "along": True, "heading_deg": 180.0, "stage": 1},
+            ],
+        }
+    ]
+
+    def _bind(
+        self,
+        posts: list[Post],
+        *,
+        junction_of: dict[int, int] | None = None,
+        junctions: list[dict] | None = None,
+        max_shift_m: float = 6.0,
+    ) -> tuple[list, SignalReport]:
+        spec = SignalHeads(
+            source="s",
+            member=None,
+            layer=SourceLayer("L", {"code": "C", "level": "E"}),
+            head_prefixes=("P", "S"),
+            refuse_codes=(),
+            max_offset_m=25.0,
+            assembly_merge_m=1.0,
+            outset_m=0.45,
+            max_shift_m=max_shift_m,
+            library="res://heads.glb",
+            drawing=_drawing(DRAWING, "x"),
+        )
+        drawn = {
+            int(edge["id"]): _ribbon(
+                [(p[0], p[2]) for p in edge["polyline"]], edge["direction"] != "both"
+            )
+            for edge in self.EDGES
+        }
+        report = SignalReport()
+        bound = bind_heads(
+            posts,
+            Segments.of(self.EDGES),
+            {int(edge["id"]): edge for edge in self.EDGES},
+            drawn,
+            junction_of or {},
+            junctions if junctions is not None else self.JUNCTIONS,
+            spec,
+            30.0,
+            report,
+        )
+        return bound, report
+
+    def test_a_nearside_head_before_the_junction_is_its_approachs_primary(self) -> None:
+        # Eastbound on 20: the nearside (left of travel) is -z.
+        (head,), report = self._bind([Post(-10.0, -7.0, ("P01",))])
+        assert (head.edge, head.along, head.primary) == (20, True, True)
+        # It looks back west, at the traffic coming.
+        assert head.facing_deg == pytest.approx(270.0)
+        assert report.bound_by_code == {"P_primary": 1}
+
+    def test_an_offside_head_on_a_two_way_road_shows_the_other_flow(self) -> None:
+        # Offside of 20 is the westbound flow, which LEAVES junction 1 here:
+        # the far-side head for the traffic coming west along 21.
+        (head,), _ = self._bind([Post(-10.0, 7.0, ("S01",))])
+        assert (head.edge, head.along, head.stage, head.primary) == (21, False, 0, False)
+        assert head.facing_deg == pytest.approx(90.0)
+
+    def test_a_one_way_head_shows_its_own_flow_from_either_kerb(self) -> None:
+        (near,), _ = self._bind([Post(-7.0, -40.0, ("P01",))])
+        (far,), _ = self._bind([Post(7.0, -40.0, ("P01",))])
+        assert (near.edge, near.stage) == (far.edge, far.stage) == (22, 1)
+
+    def test_a_head_out_of_a_junction_with_no_approach_straight_on_is_refused(self) -> None:
+        # North-east out along 23, 6 m off it: nothing enters heading north-east.
+        bound, report = self._bind([Post(9.8, -18.2, ("P01",))])
+        assert bound == []
+        assert report.bind_no_straight == 1
+
+    def test_two_stages_straight_on_is_ambiguous(self) -> None:
+        junctions = [
+            {
+                **self.JUNCTIONS[0],
+                "approaches": [
+                    *self.JUNCTIONS[0]["approaches"],
+                    {"edge": 99, "along": True, "heading_deg": 100.0, "stage": 1},
+                ],
+            }
+        ]
+        bound, report = self._bind([Post(40.0, -7.0, ("P01",))], junctions=junctions)
+        assert bound == []
+        assert report.bind_ambiguous == 1
+
+    def test_the_far_end_of_an_edge_is_another_junctions(self) -> None:
+        bound, report = self._bind([Post(-90.0, -7.0, ("P01",))])
+        assert bound == []
+        assert report.bind_unstaged == 1
+
+    def test_a_stub_inside_one_junction_shows_nothing(self) -> None:
+        bound, report = self._bind([Post(-10.0, -7.0, ("P01",))], junction_of={9: 1, 1: 1})
+        assert bound == []
+        assert report.bind_on_stub == 1
+
+    def test_a_post_in_the_road_is_moved_out_past_the_kerb(self) -> None:
+        (head,), report = self._bind([Post(-10.0, -2.0, ("P01",))])
+        assert head.z == pytest.approx(-5.45)
+        assert report.head_shift_m == [pytest.approx(3.45)]
+
+    def test_a_post_clear_of_the_kerb_keeps_its_surveyed_point(self) -> None:
+        (head,), report = self._bind([Post(-10.0, -7.0, ("P01",))])
+        assert head.z == pytest.approx(-7.0)
+        assert report.head_shift_m == [0.0]
+
+    def test_a_move_past_max_shift_is_refused(self) -> None:
+        bound, report = self._bind([Post(-10.0, -2.0, ("P01",))], max_shift_m=1.0)
+        assert bound == []
+        assert report.bind_over_shift == 1
+
+    def test_every_stage_shown_counts_the_junction(self) -> None:
+        _, one = self._bind([Post(-10.0, -7.0, ("P01",))])
+        _, both = self._bind([Post(-10.0, -7.0, ("P01",)), Post(-7.0, -40.0, ("P02",))])
+        assert (one.stages_shown, both.stages_shown) == (0, 1)

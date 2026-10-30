@@ -12,10 +12,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from pipeline.config_blocks.base import LayerSpec, _measures, _require, _spec_header
+from pipeline.config_blocks.base import (
+    LayerSpec,
+    _measures,
+    _parse_hex,
+    _require,
+    _spec_header,
+)
 
 # The roles `heads:` maps onto the publisher's columns.
 _HEAD_ROLES = ("code", "level")
+# The head's four colours: the housing, and each lens's dark glass. The lit
+# colour is the shader's (`signal_heads.tres`); the vertex carries the unlit.
+HEAD_COLOURS = ("body", "red", "amber", "green")
+# The lens order down the face, top to bottom, which is also each lens's
+# circuit: `UV.x` is `index + 1` (`tools/make_signal_heads.py`).
+HEAD_LENSES = ("red", "amber", "green")
 
 
 def is_signal_head(code: str, prefixes: tuple[str, ...], refused: tuple[str, ...]) -> bool:
@@ -41,6 +53,70 @@ def is_signal_head(code: str, prefixes: tuple[str, ...], refused: tuple[str, ...
 
 
 @dataclass(frozen=True)
+class HeadDrawing:
+    """The one head the library draws (`tools/make_signal_heads.py`, `P3-3e`).
+
+    🔴 **One head for every admitted code** (`Q76`): nothing published says a
+    `P` from an `S`, or how many aspects a head carries, so the drawing is
+    authored and every post stands the same one. Values are `P3-17`'s.
+    """
+
+    mount_height_m: float
+    post_radius_m: float
+    post_headroom_m: float
+    head_width_m: float
+    head_height_m: float
+    head_depth_m: float
+    lens_diameter_m: float
+    lens_lift_m: float
+    post_sides: int
+    lens_segments: int
+    # sRGB, `HEAD_COLOURS` exactly. A printed specification, exempt from `Q33`'s
+    # palette as `signs.colours` is: a red lens is TD's, not a reflectance.
+    colours: dict[str, tuple[int, int, int]]
+
+
+def _drawing(body: Any, where: str) -> HeadDrawing:
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    counts: dict[str, int] = {}
+    for name in ("post_sides", "lens_segments"):
+        counts[name] = int(_require(body, name, where))
+        if counts[name] < 3:
+            raise ValueError(f"{where}:{name} must be at least 3, got {counts[name]}")
+    raw = _require(body, "colours", where)
+    if not isinstance(raw, dict) or set(raw) != set(HEAD_COLOURS):
+        raise ValueError(f"{where}:colours must name exactly {list(HEAD_COLOURS)}")
+    measures = _measures(
+        body,
+        where,
+        (
+            "mount_height_m",
+            "post_radius_m",
+            "post_headroom_m",
+            "head_width_m",
+            "head_height_m",
+            "head_depth_m",
+            "lens_diameter_m",
+            "lens_lift_m",
+        ),
+        positive=True,
+    )
+    pitch = measures["head_height_m"] / len(HEAD_LENSES)
+    if measures["lens_diameter_m"] > min(pitch, measures["head_width_m"]):
+        # A lens wider than its share of the face overlaps its neighbour or
+        # hangs off the housing.
+        raise ValueError(f"{where}:lens_diameter_m does not fit the head's face")
+    return HeadDrawing(
+        **measures,
+        **counts,
+        colours={
+            name: _parse_hex(str(raw[name]), f"{where}:colours.{name}") for name in HEAD_COLOURS
+        },
+    )
+
+
+@dataclass(frozen=True)
 class SignalHeads(LayerSpec):
     """The published signal heads (`P3-3a`, `P3-3e`, `Q173`): where a lamp
     stands, and a second witness to which junctions are signalled.
@@ -57,6 +133,15 @@ class SignalHeads(LayerSpec):
     # Two points closer than this are one post: 470 of Wan Chai's 913 sit within
     # 0.05 m of another, the stack of aspects one surveyed post carries (`Q76`).
     assembly_merge_m: float
+    # The registration (`Q60`, `Q78`): a post surveyed inside the drawn road is
+    # moved out to `outset_m` past the kerb, never pulled in, and refused past
+    # `max_shift_m`.
+    outset_m: float
+    max_shift_m: float
+    # The AUTHORED head library the placements stand (`tools/make_signal_heads.py`,
+    # committed): a `res://` path, as `parked.library` is.
+    library: str
+    drawing: HeadDrawing
 
     def is_head(self, code: str) -> bool:
         return is_signal_head(code, self.head_prefixes, self.refuse_codes)
@@ -88,7 +173,14 @@ def _heads(body: Any, where: str) -> SignalHeads | None:
         **_spec_header(body, where, _HEAD_ROLES),
         head_prefixes=prefixes,
         refuse_codes=refused,
-        **_measures(body, where, ("max_offset_m", "assembly_merge_m"), positive=True),
+        library=str(_require(body, "library", where)),
+        drawing=_drawing(_require(body, "drawing", where), f"{where}:drawing"),
+        **_measures(
+            body,
+            where,
+            ("max_offset_m", "assembly_merge_m", "outset_m", "max_shift_m"),
+            positive=True,
+        ),
     )
 
 
