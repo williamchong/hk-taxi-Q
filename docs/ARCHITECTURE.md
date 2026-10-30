@@ -1324,7 +1324,7 @@ All paths under `game/`.
 | `scripts/city/generated_{road_graph,fares,landmarks,fence}.gd` | Locators for the JSON documents. `generated_fares.gd` alone knows that document's shape; `generated_landmarks.gd::placement_of` is the one place a compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd`, `scripts/city/fence.gd` | Place the heroes and the barriers; always resident |
 | `scripts/city/parked_layer.gd`, `parked_roster.gd`, `parked_profile.gd` | The parked roster (`P3-73`): the region's `parked_placements.json` over the committed library, a `MultiMesh` per kind per cell with box bodies, re-stood by the rig's hour while hidden; the pure arithmetic of windows, chance and cells; the schema of `tuning/parked.tres` |
-| `scripts/fares/near_miss.gd` | `NearMiss` (`P3-2a`): a parked body passed inside a band at speed, paid only when it was in the car's path a moment before — pure, driven by `verify_fares.gd` |
+| `scripts/fares/near_miss.gd` | `NearMiss` (`P3-2a`, `Q175`): a parked or moving body passed inside a band at speed, paid only when it was in the car's path a moment before, the look on the closing speed — pure, driven by `verify_fares.gd` |
 | `scripts/city/building_index.gd` | Which source object a point of a tile belongs to, from the glTF mesh `extras` (`P5-11`) |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`; also the shader-dispatch and `TEXCOORD_1` importer-drift checks |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material for dev previews |

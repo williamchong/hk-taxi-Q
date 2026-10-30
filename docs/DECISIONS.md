@@ -10854,3 +10854,70 @@ the player's as before.
 yaw. Owed: the user's drive, the veto.
 
 **See.** `Q152` · `Q153` · `Q156`
+
+## `Q175` — A hit on a moving car reads the closing speed, and the near miss looks at moving cars
+
+**Status.** ✅ Built 2026-10-30 from the `/next` survey's pick, the user's "complete plan" on it. Extends
+`P3-2a` and `P3-50`; the bars and the prices do not move. Owed: the user's drive.
+
+**Why.** `P3-3c` gave each car a box body "so the near miss and the crash read them", and neither
+did. `NearMiss` read `ParkedLayer` alone, and the latch read the taxi's own speed into the contact.
+
+**Measured first**, on a new pad row (`tools/skidpad.sh --only=traffic`): a car-sized
+`AnimatableBody3D` moved each tick as `TrafficSystem` moves one. `approach` is the tool's own closing
+speed the tick before the touch; `impact` the latch. kph, at 42 / 63 / 86 kph entries:
+
+| Row | `approach` | `impact` before | exit before | `impact` after | exit after |
+|---|---|---|---|---|---|
+| `tail5`, into a car ahead, closing at 5 | 5.00 | **100.3 / 112.1 / 126.1** | **0 / 0 / 0** | 5.00 | 72.2 / 81.7 / 92.9 |
+| `tail20`, closing at 20 | 20.00 | 61.7 / 79.2 / 98.3 | 0 / 0 / 0 | 20.00 | 28.9 / 43.2 / 58.7 |
+| `head50`, a car coming at 50 | 124.8 / 136.8 / 152.2 | **74.8 / 86.8 / 102.2** | −50 | 124.8 / 136.8 / 152.2 | −50 |
+| `rear40`, hit from behind at rest at 40 | 40.00 | 0 | 40 | 0 | 40 |
+| `back20`, hit from behind under way, closing at 20 | 20.00 | not run | not run | 0 | 82.7 / 99.9 / 118.6 |
+
+- 🔴 **A 5 kph tap on a slower car read as a crash and stopped the taxi dead**: HK$5, a dead stop,
+  and every near-miss threat in flight forgotten. The body carries 100 kph here because the row's
+  8 m start leaves the throttle time to climb; the reading is the taxi's whole speed, whatever it is.
+- **A head-on read the taxi's share alone**: 50 + 50 would have read 50, a bump.
+
+**The rule.** The latch and the slide both work in the collider's frame, off
+`get_contact_collider_velocity_at_position`, which Jolt answers for a body moved through
+`global_transform`. The impact stays one number, the closing speed, **and only when the taxi is itself
+moving into the contact**: a car running into the back of it is not its hit (`back20` reads 20 with
+that test removed, so the row holds it; `rear40` is under the 1 m/s floor and cannot). The slide leaves
+the taxi the car's pace plus what it had across the contact. ⚠️ A taxi at 20 kph into a car coming
+at 40 now reads 60 and is a crash: that is the closing speed, on purpose, and the bars stand.
+
+**Static walls do not move**: their velocity is zero. `--only=wall` at 4 / 6 / 8 s is byte-identical
+and the whole pad at 42 / 63 / 86 kph is identical bar the cost column.
+
+**The near miss.** An obstacle may carry a `velocity`; none is a parked one's zero.
+
+- **The look runs on the closing speed**, `max(closing × near_miss_look_s, 2 × half-length)`: a car
+  barely slower is no threat at 25 m, one coming the other way is from further off.
+- **A car pulling away is no threat** (`closing >= 0`), and **a car drawn level that pulls clear ahead
+  starts a fresh approach** (`restart`), where a parked car can only fall behind.
+- **`near_miss_min_kph` stays on the taxi's own speed**: a car rushing past a taxi crawling is not the
+  taxi's skill. A lane pass still pays nothing: the path test is untouched, the user's call of
+  2026-10-11.
+- `TrafficSystem.near_cars` hands in live cars, a dictionary each made once like a parked one's, out
+  to the disc plus `speed × look_s`, because the disc is sized for a parked car. `FareSystem` finds it
+  by `TrafficSystem.GROUP`; `--traffic=off` frees it before it joins, and leaves none.
+
+**Graded.** `verify_fares` `near miss moving:` and `verify_traffic` `near:`. Mutations caught by name:
+the look on the taxi's own speed; a threat while pulling away; no pull-clear restart; the velocity
+flipped; no look on the disc; `FareSystem` never asking the traffic. On the pad, the moving-into test
+removed.
+
+**Cost** (throttle route, two runs each, traffic on and off): `draws` +6, `phys` 2.0–3.7 ms against
+1.3–2.4, `P3-3f1`'s own; the car's speed column identical.
+
+⚠️ **Not shown: a near miss PAID on a real car on a real street.** Six scripted drives at 40 s, a
+temporary print in `_judge`: 30 passes of live moving cars reached the detector, real cars raised
+threats (ages 0.02 and 0.43 s), and none paid, the nearest eligible at 1.92 m against the 0.6 m band.
+A scripted hold does not swerve round a car. The payout is held on the pure detector and the wiring
+by `verify_traffic`; the street is the user's drive. **Nor was a hit on a car on the street
+attributed**: the wall and contact readings on those drives do not say which body was struck, so the
+closing speed is the pad's.
+
+**See.** `P3-2a` · `P3-3c` · `P3-50` · `Q148` · `Q151` · `Q161` · `Q173`
