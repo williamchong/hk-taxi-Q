@@ -87,6 +87,11 @@ traffic, and the bonus for threading them.
   54 kph); the rest are a lane pass by the same rule. `verify_fares`'s row checks hold that, and
   that a second row past a gap pays again; dropping the in-path width test fails both (6 of 6,
   12 of 4).
+- 🔴 **A moving car is the same detector on the closing speed** (`Q175`): an obstacle's optional
+  `velocity`, a parked one's zero, so every parked row holds byte for byte. The look runs on the
+  closing speed, a car pulling away is no threat, one drawn level that pulls clear is a fresh
+  approach, and `near_miss_min_kph` stays on the taxi's own speed. `verify_fares`' `near miss moving:`
+  holds it; each of the three is a named mutation. 🚫 A lane pass still pays nothing.
 - 🔴 **The moving traffic reads this layer** (`P3-3f1`): `TrafficSystem` indexes every placement
   by its `edge` (`edge_of`, `obstacle_of`, `source_of`) and asks `is_standing` each tick. A change
   to `edge`, the footprint or what stands when moves the traffic too: run `tools/check.sh` and paste

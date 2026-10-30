@@ -169,7 +169,9 @@ the loop's own numbers in `tuning/fares.tres`.
   from both sides, the touch that ends a slide, the tip floored, the meter unmoved, a zero price
   and the folded bars as inert systems, and a halved price docking less. ⚠️ **Latched against
   `_velocity_into_step`, never the state's velocity**: by `_integrate_forces` the solver has
-  taken the normal velocity out, and a 69.5 kph head-on read 1.6 off the state. 🚫 No speed-loss
+  taken the normal velocity out, and a 69.5 kph head-on read 1.6 off the state. ⚠️ **On a moving car it is the
+  closing speed, and only when the taxi is moving into the contact** (`Q175`): a 5 kph tap on a
+  slower car read 100+ kph. Graded on `--only=traffic`. 🚫 No speed-loss
   detector (braking and `place_at` look like walls), no contact impulse (it measures the solve,
   not the hit), no second wall list — the kerb riser is 0.15 m and the body clears it.
   The face: a penalty pops the HURT emote (`emote_hurt.glb`, `taxi_hire.gd` on `hkd < 0`).
@@ -189,8 +191,8 @@ the loop's own numbers in `tuning/fares.tres`.
   airborne ticks because a yawing car reads a slip. `verify_fares` drives `sample`'s `airborne` /
   `upright` arguments through `_fly`; mutations: a zeroed `air_hkd`, a halved one on `_air_drive`.
 - 🔴 **The near miss and the close call are `NearMiss`'s** (`near_miss.gd`, `P3-2a`, `Q161`):
-  `FareSystem.sample` hands it the car's transform, its velocity and `ParkedLayer.near_all`'s
-  bodies, and its awards go through `_award` like the tracker's. The rules are in
+  `FareSystem.sample` hands it the car's transform, its velocity and `FareSystem.obstacles_near`,
+  `ParkedLayer.near_all`'s bodies and `TrafficSystem.near_cars`' (`Q175`), and its awards go through `_award` like the tracker's. The rules are in
   `.claude/rules/parked.md`; what matters here is that `setup` takes the car's plan half-extents
   (`MeshContract.bounds` in the car's frame; `verify_fares` hands in a Crown Comfort's) and
   refuses an inert detector, and `_board` resets it with the tracker.

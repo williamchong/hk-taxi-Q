@@ -88,6 +88,9 @@ paths:
   0.15) is measured on one right-angle corner (0.086 / 0.13 m, a car's heading snapping at a vertex); do not raise it to clear a new overlap — probe
   the car's lane, the footprint's corners and the bend. ⚠️ A long stand behind a parked vehicle is
   the roster's pinch (a car honestly too wide); `side_clear_m` is not lowered to clear one.
+  🔴 **`near_cars` is what the near miss reads** (`Q175`): a live car's own pose and real velocity,
+  out to the disc plus `speed × look_s`; `verify_traffic`'s `near:` lines. ⚠️ `FareSystem` finds the
+  system by `GROUP`, joined at the end of `setup`, so `--traffic=off` leaves none.
   🔴 **A turn runs mouth to mouth** (`trim_m`, city schema 41) and a stub is crossed,
   never driven — `verify_traffic`'s `graph:` stub line; do not go back to a span round the node
   (the user's report, 2026-10-29). 🔴 **The lane is the turn's** (left nearside, right offside),

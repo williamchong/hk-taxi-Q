@@ -521,6 +521,59 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 		)
 	)
 	print("  parked:   the longest stand behind one %.1f s" % (longest_wait.max() * TICK_S))
+	_check_near(system)
+
+
+## What the near miss is handed (`Q175`): a live car on its own pose with the
+## velocity it really moves at, reached further by what it covers in the look,
+## and no two the same id.
+func _check_near(system: TrafficSystem) -> void:
+	var car: TrafficSystem.Car = null
+	for candidate: TrafficSystem.Car in system.cars:
+		if candidate.live and not candidate.turning and candidate.speed > 2.0:
+			car = candidate
+			break
+	if car == null:
+		_expect(false, "near", "no car under way to hand the near miss")
+		return
+	var found: Array[Dictionary] = system.near_cars(car.pose.origin, 1.0, 0.0)
+	var mine: Dictionary = {}
+	for obstacle: Dictionary in found:
+		if obstacle["transform"] == car.pose:
+			mine = obstacle
+	_expect(not mine.is_empty(), "near", "a live car is handed in on its own pose")
+	if mine.is_empty():
+		return
+	# The earlier runs' fleets stand until the frame ends: the first run's is the
+	# one the group answers with.
+	if get_first_node_in_group(TrafficSystem.GROUP) == system:
+		_expect(
+			FareSystem.obstacles_near(self, car.pose.origin, 1.0, 0.0).has(mine),
+			"near",
+			"FareSystem finds it by the group, beside the parked ones"
+		)
+	var off := Vector3(car.speed * 2.0 + 4.0, 0.0, 0.0)
+	var reached: bool = system.near_cars(car.pose.origin + off, 5.0, 2.0).has(mine)
+	var short: bool = system.near_cars(car.pose.origin + off, 5.0, 0.0).has(mine)
+	_expect(reached and not short, "near", "the look widens the disc by what the car covers")
+	var ids: Dictionary[int, bool] = {}
+	for obstacle: Dictionary in system.near_cars(car.pose.origin, 1e6, 0.0):
+		ids[int(obstacle["id"])] = true
+	_expect(
+		ids.size() == system.near_cars(car.pose.origin, 1e6, 0.0).size(),
+		"near",
+		"no two cars share an id (%d live)" % ids.size()
+	)
+	var velocity: Vector3 = mine["velocity"]
+	var was: Vector3 = car.pose.origin
+	var speed: float = car.speed
+	system.step(TICK_S)
+	var moved: Vector3 = car.pose.origin - was
+	_expect(
+		moved.dot(velocity) > 0.0 and is_equal_approx(velocity.length(), speed),
+		"near",
+		"its velocity is the way it moves, at its speed (%.1f m/s)" % speed
+	)
 
 
 ## The parked vehicle standing on `car`'s road or the road its turn joins whose

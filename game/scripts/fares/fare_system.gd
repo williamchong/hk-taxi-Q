@@ -408,8 +408,20 @@ func _physics_process(delta: float) -> void:
 		vehicle.take_impact_mps(),
 		placed,
 		velocity,
-		ParkedLayer.near_all(get_tree(), placed.origin, _near_radius_m(velocity.length()))
+		obstacles_near(get_tree(), placed.origin, _near_radius_m(velocity.length()), _near.look_s())
 	)
+
+
+## What the near miss looks at: the parked vehicles round `point`, and the moving
+## ones (`Q175`), which `--traffic=off` leaves none of.
+static func obstacles_near(
+	tree: SceneTree, point: Vector3, radius_m: float, look_s: float
+) -> Array[Dictionary]:
+	var found: Array[Dictionary] = ParkedLayer.near_all(tree, point, radius_m)
+	var traffic := tree.get_first_node_in_group(TrafficSystem.GROUP) as TrafficSystem
+	if traffic != null:
+		found.append_array(traffic.near_cars(point, radius_m, look_s))
+	return found
 
 
 ## The disc the roster is asked for, at this speed.
@@ -439,7 +451,7 @@ static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
 ## `airborne` with every wheel off the ground and `upright` on its wheels
 ## rather than its roof (`P3-51`), and `impact_mps` into a wall this tick
 ## (`P3-50`); `car`, `velocity` and `obstacles` are the car's own transform,
-## its velocity and the parked vehicles near it, for the near miss
+## its velocity and the vehicles near it, for the near miss
 ## (`P3-2a`). The skills run every tick in every state; the odometer and
 ## the clock while carrying; the graph is asked once per `sample_hz`.
 func sample(

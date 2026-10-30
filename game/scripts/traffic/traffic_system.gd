@@ -47,7 +47,7 @@ extends Node3D
 ## Where even that does not fit, it waits: the roster's pinches are its own.
 ##
 ## 🚫 **Not here yet**: a car giving way at an unsignalled
-## junction, a car near-missed (`P3-2a` reads parked cars alone), the player's
+## junction, the player's
 ## red light (`P3-3d`), the heads (`P3-3e`). `--traffic=off` takes it away.
 
 const RoadRouterScript = preload("res://scripts/city/road_router.gd")
@@ -90,6 +90,9 @@ const HAZARDS: int = 2
 ## `winking`): the one spelling the parked layer and the verify tools read.
 const LAMP_LEFT: int = 8
 const LAMP_RIGHT: int = 16
+
+## What `FareSystem` finds the moving cars by, for the near miss.
+const GROUP: StringName = &"traffic_system"
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -176,6 +179,8 @@ class Car:
 	var written: int = -1
 	var body: AnimatableBody3D
 	var shape: CollisionShape3D
+	## What `near_cars` hands the near miss, made once like a parked one's (`Q175`).
+	var obstacle: Dictionary
 
 
 ## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
@@ -320,7 +325,14 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		add_child(car.body)
 		var palette: PackedColorArray = palettes.get(_kinds[car.kind], PackedColorArray())
 		car.livery = ParkedRoster.livery(_rng.randi() & 0xFFFF, palette)
+		car.obstacle = {
+			"transform": Transform3D.IDENTITY,
+			"extent": extent,
+			"id": hash(Vector2i(int(get_instance_id() & 0x7FFFFFFF), car.id)),
+			"velocity": Vector3.ZERO,
+		}
 		_hide(car)
+	add_to_group(GROUP)
 	return true
 
 
@@ -1432,6 +1444,27 @@ func _hide(car: Car) -> void:
 	_batches[car.kind].set_instance_transform(
 		car.slot, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
 	)
+
+
+## The moving cars the near miss should look at, as `ParkedLayer.near` hands out
+## its own with each one's `velocity` added (`Q175`): within `radius_m` of a
+## global point, or as much further as the car covers in `look_s`, since the
+## disc is sized for a parked car and one may be coming the other way.
+func near_cars(point: Vector3, radius_m: float, look_s: float) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	for car: Car in cars:
+		if not car.live:
+			continue
+		var pose: Transform3D = car.pose
+		var far_x: float = pose.origin.x - point.x
+		var far_z: float = pose.origin.z - point.z
+		var reach_m: float = radius_m + car.speed * look_s
+		if far_x * far_x + far_z * far_z > reach_m * reach_m:
+			continue
+		car.obstacle["transform"] = pose
+		car.obstacle["velocity"] = -pose.basis.z * car.speed
+		found.append(car.obstacle)
+	return found
 
 
 ## The mesh box `car` is drawn and collides as, in its own frame.

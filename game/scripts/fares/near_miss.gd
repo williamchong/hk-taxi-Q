@@ -29,6 +29,14 @@ extends RefCounted
 ## touched this tick; `FareSystem` is the only caller. A touch forgets every
 ## threat in flight: a brush is not a miss.
 ##
+## **What moves** (`Q175`): an obstacle may carry a `velocity`, a moving car's,
+## and none is a parked one's zero. The look runs on the CLOSING speed, so a car
+## barely slower than the taxi is no threat at 25 m and one coming the other way
+## is from further off; one pulling away is none at all. Having drawn level and
+## pulled clear ahead it starts a fresh approach, where a parked car can only fall
+## behind. `near_miss_min_kph` stays on the taxi's own speed: a car rushing past
+## a taxi crawling is not the taxi's skill.
+##
 ## 🚫 No award while airborne, no award on a touch, no chain. The price is a
 ## flat HK$ per event, as every skill is (`Q145`).
 
@@ -139,7 +147,7 @@ func reset() -> void:
 
 
 ## One tick: what it earned, usually nothing. `obstacles` are
-## `ParkedLayer.near`'s dictionaries; `touched` is a wall contact this tick;
+## `ParkedLayer.near`'s and `TrafficSystem.near_cars`'s dictionaries; `touched` is a wall contact this tick;
 ## `airborne` is every wheel off the ground. ⚠️ The array is reused: read it
 ## before the next `tick`.
 func tick(
@@ -161,7 +169,6 @@ func tick(
 	if along.is_zero_approx():
 		return _earned
 	var across := Vector3(-along.z, 0.0, along.x)
-	var look_m: float = maxf(speed * _profile.near_miss_look_s, 2.0 * _half_length_m)
 	_tick += 1
 
 	for obstacle: Dictionary in obstacles:
@@ -175,10 +182,18 @@ func tick(
 		_span(car, along, across, obstacle)
 
 		if _s_min > _half_length_m:
-			# Ahead: a fresh approach once it has been passed and judged.
-			if track.judged:
+			var closing: float = speed - along.dot(obstacle.get("velocity", Vector3.ZERO))
+			# Ahead: a fresh approach once it has been passed and judged, or has
+			# drawn level and is pulling away.
+			if track.judged or (track.alongside and closing < 0.0):
 				track.restart()
-			if _s_min <= look_m and _t_max >= -_half_width_m and _t_min <= _half_width_m:
+			var look_m: float = maxf(closing * _profile.near_miss_look_s, 2.0 * _half_length_m)
+			if (
+				closing >= 0.0
+				and _s_min <= look_m
+				and _t_max >= -_half_width_m
+				and _t_min <= _half_width_m
+			):
 				track.threat_age_s = 0.0
 		if touched or airborne:
 			track.threat_age_s = INF

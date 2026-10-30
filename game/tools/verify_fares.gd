@@ -1517,6 +1517,127 @@ func _check_near_miss() -> void:
 		"through the system, empty, the pass is practised once and banks nothing"
 	)
 	system.free()
+	_check_near_miss_moving(swerve_m, brush_m)
+
+
+## The near miss on a moving car (`Q175`), the look on the closing speed and every
+## row its own mutation. Each `_pass_moving` is one drive; see there for the plan.
+func _check_near_miss_moving(swerve_m: float, brush_m: float) -> void:
+	var slower: Array[Vector2] = [Vector2(INF, 8.0)]
+	var paid: Array[Fare.Award] = _pass_moving(swerve_m, PASS_MPS, slower, true)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.NEAR_MISS,
+		"near miss moving",
+		"a slower car swerved round pays once"
+	)
+	paid = _pass_moving(brush_m, PASS_MPS, slower, true)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.CLOSE_CALL,
+		"near miss moving",
+		"and inside close_call_m is the close call"
+	)
+	paid = _pass_moving(swerve_m, PASS_MPS, slower, false)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"the same pass in the next lane, never aimed, pays nothing"
+	)
+	paid = _pass_moving(swerve_m + 0.2, PASS_MPS, slower, true)
+	_expect(paid.is_empty(), "near miss moving", "a hand wider than the band pays nothing")
+	var coming: Array[Vector2] = [Vector2(INF, -14.0)]
+	paid = _pass_moving(swerve_m, PASS_MPS, coming, true)
+	_expect(paid.size() == 1, "near miss moving", "a car coming the other way, swerved round, pays")
+	paid = _pass_moving(swerve_m, PASS_MPS, coming, false)
+	_expect(
+		paid.is_empty(), "near miss moving", "and in its own lane, never aimed at, pays nothing"
+	)
+	var crawl_mps: float = _skills.near_miss_min_kph / 3.6 - 1.0
+	paid = _pass_moving(swerve_m, crawl_mps, coming, true)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"under near_miss_min_kph on the taxi's own speed a car rushing past pays nothing"
+	)
+
+	# The look runs on the closing speed. Closing at 2 m/s, swerved with its near
+	# end just past the look's floor: a car told it stands still is a threat, a
+	# moving one is not yet.
+	var barely: Array[Vector2] = [Vector2(INF, PASS_MPS - 2.0)]
+	paid = _pass_moving(swerve_m, PASS_MPS, barely, true, 7.25)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"a car barely slower, swerved at 7 m, was no threat yet"
+	)
+	paid = _pass_moving(swerve_m, PASS_MPS, barely, true, 7.25, false)
+	_expect(
+		paid.size() == 1,
+		"near miss moving",
+		"mutation caught: the same drive with the velocity left out reads as parked and pays"
+	)
+	# Drawn level, pulled clear, then passed long after: the first approach's
+	# threat does not pay for the second.
+	var clear: Array[Vector2] = [Vector2(2.0, 10.0), Vector2(5.0, 25.0), Vector2(INF, 5.0)]
+	paid = _pass_moving(swerve_m, PASS_MPS, clear, true, 8.0, true, 14.0)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"a car drawn level that pulls clear is a fresh approach, unaimed when next passed"
+	)
+	# Right behind a car going away, in its path, aside as it brakes: a car
+	# pulling away was never a threat.
+	var braking: Array[Vector2] = [Vector2(0.5, 20.0), Vector2(INF, 5.0)]
+	paid = _pass_moving(swerve_m, PASS_MPS, braking, true, 0.0, true, 5.0, 0.5)
+	_expect(paid.is_empty(), "near miss moving", "a car pulling away in the path is no threat")
+
+
+## One drive past a moving car on the pure detector, along -z: the car starts
+## `start_m` ahead at the `plan`'s speeds, each `Vector2(until_s, mps)`, negative
+## coming the other way. The taxi is in its line when `aimed` and moves aside to
+## `clearance_m` once the car is `ahead_m` off, centre to centre, or at
+## `swerve_at_s` (or starts aside, for a lane pass), and drives on for the minute. `carried` hands the detector the car's velocity; false reads it
+## as a parked car wherever it stands. Returns every award paid.
+func _pass_moving(
+	clearance_m: float,
+	speed_mps: float,
+	plan: Array[Vector2],
+	aimed: bool,
+	ahead_m: float = 12.0,
+	carried: bool = true,
+	start_m: float = 30.0,
+	swerve_at_s: float = INF
+) -> Array[Fare.Award]:
+	var detector := NearMiss.new(_skills, CAR_HALF_M.x, CAR_HALF_M.y)
+	var aside: float = CAR_HALF_M.x + PARKED_EXTENT.size.x / 2.0 + clearance_m
+	var obstacle: Dictionary = {
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -start_m)),
+		"extent": PARKED_EXTENT,
+		"id": 7,
+	}
+	var at := Transform3D(Basis.IDENTITY, Vector3(0.0 if aimed else aside, 0.0, 0.0))
+	var velocity := Vector3(0.0, 0.0, -speed_mps)
+	var paid: Array[Fare.Award] = []
+	var t: float = 0.0
+	# Long enough for the barely slower car to come and go.
+	while t < 60.0:
+		var car_mps: float = plan[-1].y
+		for leg: Vector2 in plan:
+			if t < leg.x:
+				car_mps = leg.y
+				break
+		var moving := Vector3(0.0, 0.0, -car_mps)
+		if carried:
+			obstacle["velocity"] = moving
+		var obstacle_at: Transform3D = obstacle["transform"]
+		var gap_m: float = at.origin.z - obstacle_at.origin.z
+		if at.origin.x == 0.0 and (gap_m <= ahead_m or t >= swerve_at_s):
+			at.origin.x = aside
+		paid.append_array(detector.tick(at, velocity, [obstacle], TICK_S, false, false))
+		at.origin += velocity * TICK_S
+		obstacle_at.origin += moving * TICK_S
+		obstacle["transform"] = obstacle_at
+		t += TICK_S
+	return paid
 
 
 ## One drive past a parked car on the pure detector: the car starts 30 m
