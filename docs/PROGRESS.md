@@ -53,8 +53,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
   measurement only. `P5-8` (content) is outline; `P5-14` not started.
-- **Knowingly missing:** no moving traffic, no moving trams, no neon (`P3-3`, `P3-4`, `P3-8`); no
-  signal heads (`Q77`).
+- **Knowingly missing:** no moving trams, no neon (`P3-4`, `P3-8`); no signal heads drawn
+  (`P3-3e`: the plan runs them, nothing stands them yet).
 
 **Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q> (public page). The
 last cut is `r5` (`build/hk-taxi-q-p39a-r5-itch.zip`, 55,511,080 B); it predates `P3-26` onward,
@@ -191,10 +191,12 @@ Phase 3 — Builds `B1`, `B3`, `B4`
 - `P3-3a` / `P3-3b` 🟡 Signalled junctions and the phase controller (`Q173`, the user's call,
   2026-10-29) — `pipeline/signals.py` → `signals_plan.json` (city schema 40): a junction is
   `surface.py`'s stub cluster (now published as `roadsurface.json`'s `junctions`) or a lone node
-  that an `RM1011` is hosted at; its approaches every level-0 edge entering it, stopped at the drawn
-  mouth; stages by travel axis within 30° (authored). Wan Chai 120 stop lines (1 no host, 5 off
-  axis, 2 at a dead end) → 41 junctions, 40 staged (19 clusters, 1 at the seam), 98 approaches;
-  Causeway Bay 15 → 8, 16. `SignalController` runs them off `signal_plan.tres` (red-and-amber 2,
+  that an `RM1011` or (since 2026-10-30) a published signal head is hosted at; its approaches every
+  level-0 edge entering it, stopped at the drawn mouth; stages by travel axis within 30° (authored).
+  Wan Chai 120 stop lines + 514 head posts → 73 junctions (3 by a stop line alone, 32 by heads
+  alone, 38 both), 72 staged (36 clusters, 1 at the seam), 178 approaches; Causeway Bay 15 + 89 →
+  22, 21 staged, 41. Before the heads: 41 / 40 / 98 and 8 / 16 — TD's `RM1011` survey is about
+  half its light estate (`Q173`). `SignalController` runs them off `signal_plan.tres` (red-and-amber 2,
   green 15, amber 3, all red 2, crossing 10 s); `verify_signals` walks every cycle — no crossing
   axes lit together, a green each cycle, the British sequence, every approach on its edge and
   heading — with the checker graded on a junction built to fail it; two mutations caught. Roads

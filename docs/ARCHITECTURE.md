@@ -1040,12 +1040,15 @@ maps each region's edge ids into the merged graph and its positions into the fra
 
 ```json
 {"schema_version": 1, "city_id": "hong_kong", "region_id": "wan_chai",
- "junctions": [{"id": 2, "nodes": [2, 5], "pos": [x, y, z], "stop_lines": 3, "stages": 2, "crossing": false,
+ "junctions": [{"id": 2, "nodes": [2, 5], "pos": [x, y, z], "stop_lines": 3, "heads": 4, "stages": 2, "crossing": false,
    "approaches": [{"edge": 74, "along": true, "stop_m": 41.2, "heading_deg": 182.4, "stage": 0}]}]}
 ```
 
 - `id` is the junction's lowest node in its own region's numbering; `nodes` its stub cluster
   (`roadsurface.json`'s `junctions`) or the node alone.
+- `stop_lines` and `heads` are the two witnesses that signalled it: the `RM1011` bars and the
+  published head posts hosted there (`signals.heads`, `Q173`). Either alone stages a junction;
+  nothing in the engine reads them.
 - An approach is a level-0 edge entering the junction from outside; `along` is true where travel
   runs the edge's vertex order. `stop_m` is the stop point's plan distance from the edge's START —
   its drawn mouth, `trim_m` at the end it enters by. `heading_deg` is travel's game heading along

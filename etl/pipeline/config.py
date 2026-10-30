@@ -227,9 +227,11 @@ from pipeline.config_blocks.roads import (  # noqa: F401
     _touchdown_levels,
     _width_bounds,
 )
-from pipeline.config_blocks.signals import (
+from pipeline.config_blocks.signals import (  # noqa: F401
+    SignalHeads,
     Signals,
     _signals,
+    is_signal_head,
 )
 from pipeline.config_blocks.signs import (  # noqa: F401
     _SIGN_POLE_ROLES,
@@ -863,6 +865,8 @@ def load_config(path: Path | None = None) -> Config:
         _check_declared_source(city, city.road_marks, f"{path}:road_marks.source")
     if city.signs is not None:
         _check_declared_source(city, city.signs, f"{path}:signs.source")
+    if city.signals is not None and city.signals.heads is not None:
+        _check_declared_source(city, city.signals.heads, f"{path}:signals.heads.source")
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")

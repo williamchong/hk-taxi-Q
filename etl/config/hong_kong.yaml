@@ -2436,6 +2436,39 @@ signals:
   # A one-axis junction takes an all-red stage for the crossing it serves.
   axis_tolerance_deg: 30.0
 
+  # 🔴 **The heads are a SECOND WITNESS to which junctions are signalled** (Q173,
+  # the P3-3e gate, 2026-10-30, the user's call). TD's RM1011 survey covers about
+  # half of what its own light estate signals. Junctions (degree >= 3, by stub
+  # cluster) carrying two or more heads within 30 m:
+  #
+  #   region         carry heads   RM1011 hosted   no RM1011   no head, has RM1011
+  #   wan_chai            63            29              34          4 of 198
+  #   causeway_bay        16             6              10          0 of 52
+  #
+  # So a junction is signalled when a stop line OR a head is hosted at it, by the
+  # one host rule: the nearest level-0 edge's nearer node.
+  heads:
+    source: traffic_aids_drawings_gdb
+    layer: DTAD_TRAFFIC_LIGHT_PT
+    fields:
+      code: REFNAME
+      # The structure column every dTAD layer carries; null is the ground, and
+      # it is the NORMAL value here (906 of Wan Chai's 913).
+      level: ELEVATION
+    # 🔴 **The gate, and nothing published defines it** (Q76): REFNAME has no
+    # domain and no Index Plan sheet. A code is a head when it is one of these
+    # letters, digits, and an optional L/R. 70 of Wan Chai's 913 are refused: 51
+    # are not heads (KLBOLL, KRBOLL, WIGWAG, TRAML never match; PBUTT, PBOLL leave
+    # letters; PTR01, PTR02, STR02 leave digits behind a letter), and 19 M<n> all
+    # within 2.57 m of a head are left out as a judgement.
+    head_prefixes: [P, S]
+    refuse_codes: []
+    # P3-17's value: past it a head addresses no street the graph draws.
+    max_offset_m: 25.0
+    # 470 of 913 points sit within 0.05 m of another; at 1 m, 553 posts of 1-5
+    # aspects. Two posts at opposite kerbs are metres apart and never merge.
+    assembly_merge_m: 1.0
+
 road_marks:
   source: traffic_aids_drawings_gdb
   layer: DTAD_RD_MARK_LINE

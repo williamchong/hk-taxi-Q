@@ -10674,6 +10674,64 @@ licence them to stand — and a bay or fill car is parked. The beat is wired by 
 well as the traffic (`VehicleLampsProfile.wire_blink`), so the street flashes under
 `--traffic=off`; the layer writes no running bit, so the head lamps and tails stay dark.
 
+**The heads against the plan (`P3-3e`'s gate, 2026-10-30).** Measured before any head was
+ported, by a scratch reader of `DTAD_TRAFFIC_LIGHT_PT` against the shipped `signals_plan.json`:
+`P`/`S` codes at grade, one head per 1 m assembly (`Q76`), the nearest level-0 edge as the host,
+and the kerb side giving the travel the head addresses. A head binds to an approach as a PRIMARY
+(the travel it faces is a plan approach, the head in that travel's far half of the edge) or a
+SECONDARY (the travel leaves a staged junction, and the junction's approaches straight onto it,
+within `axis_tolerance_deg`, are one stage, which is the only thing `light_at` reads).
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| posts (admitted features) | 514 (836) | 89 (150) |
+| primary / secondary | 151 / 47 | 15 / 11 |
+| at an end no plan junction holds | 232 | 54 |
+| on a stub / no straight approach / ambiguous / no host | 36 / 41 / 4 / 3 | 5 / 4 / 0 / 0 |
+| staged junctions with a head for every stage | 30 of 40 | 5 of 8 |
+
+- 🔴 **The plan misses signalled junctions; the heads do not over-claim.** Of the 232 Wan Chai
+  posts at an unheld end, 190 stand at a junction of three or more edges over 40 m from any staged
+  one. By junction (degree ≥ 3, by stub cluster, two or more heads within 30 m — a diagnostic
+  radius, not a rule): **63 carry heads, 29 staged and 34 not**; Causeway Bay 16, 6 and 10. Of
+  the 198 Wan Chai junctions with no head, 4 have an `RM1011` and 1 a crossing within 30 m. The
+  heads and the paint agree on where there are no signals.
+- **The 34 are unstaged because no `RM1011` is surveyed there**, not because the survey is thin:
+  33 carry other paint within 30 m (box junctions `RM1038`, warning lines, edge lines), but only 6
+  an `RM1011`. 19 have a light-signal crossing within 30 m (Wan Chai's 120 crossings are all
+  light-signal), and 11 have neither a stop line nor a crossing. Causeway Bay: 3 with an `RM1011`,
+  2 with a crossing, 6 neither. So `P3-3a`'s "signalled when an `RM1011` is hosted at it" is a
+  correct rule on an incomplete source. TD's stop-line survey covers about half the junctions its
+  own light estate signals.
+- `P` / `S` is **not** primary / secondary: `P` binds 131 / 33, `S` 20 / 14. `Q76`'s gate stands:
+  the code admits, never describes.
+- ⚠️ Not yet explained: 11 of Wan Chai's 40 staged junctions have no head within 30 m, and 6 of
+  the 34 have an `RM1011` within 30 m but no plan junction. Both may be the diagnostic radius
+  against a large stub cluster; read them before building on either. **Read**: by the host rule
+  below, 38 of the 41 stop-line junctions host a head, so the 11 were the 30 m radius.
+
+**The heads signal junctions too (2026-10-30, the user's call on the table above).** The stop
+point never came from the bar: an approach stops at its drawn mouth (`trim_m`), so the `RM1011`
+only ever decided WHICH junctions are signalled. A published head now decides it as well, by the
+bar's own rule with the nearest level-0 edge for the transverse host (a head is drawn across
+nothing): the host edge's nearer node, as its stub cluster. `signals.heads` reads
+`DTAD_TRAFFIC_LIGHT_PT` through `Q76`'s gate, one post per 1 m assembly.
+
+| | Wan Chai before → after | Causeway Bay before → after |
+|---|---|---|
+| junctions (by bar / heads / both) | 41 → 73 (3 / 32 / 38) | 8 → 22 (1 / 14 / 7) |
+| staged, approaches | 40, 98 → 72, 178 | 8, 16 → 21, 41 |
+| head posts (no host / dead end / hosted) | — → 514 (0 / 1 / 513) | — → 89 (0 / 2 / 87) |
+| `verify_traffic`, 4 seeds: crossings / on red | 30, 23, 22, 38 / 0 → 54, 58, 48, 46 / 0 | 5, 9, 7, 5 / 0 → 16, 24, 19, 14 / 0 |
+
+- A lone head signals a junction as a lone bar does: the heads-only junctions by posts are
+  `{1: 3, 2: 3, 3: 2, 4: 5, …, 20: 1}` in Wan Chai, `{1: 2, 2: 2, 4: 6, 5: 2, 6: 2}` in Causeway
+  Bay. No count floor: it would be a free value with nothing to plateau on.
+- Lone-node "junctions" of two edges are mid-block light crossings, already staged by the bar (7
+  in Wan Chai before); the heads add 4 and 6. Each of Wan Chai's 11 has one approach, stopping at
+  a drawn mouth 3.2–15.7 m short of the node, as at any junction. Whether that mouth is the
+  crossing's own line is not measured.
+
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 
 

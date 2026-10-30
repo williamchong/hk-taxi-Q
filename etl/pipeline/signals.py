@@ -10,6 +10,13 @@ halves, and only the first is read:
   node, read as `surface.py`'s stub cluster (`P3-31`) or alone. Grouping nodes
   by distance would be a free radius (`Q72`): 15 / 25 / 35 m give 297 / 240 /
   202 junctions on Wan Chai and nothing plateaus.
+- 🔴 **Or when a published HEAD is hosted at it** (`signals.heads`, `Q173`'s
+  `P3-3e` gate): the stop-line survey is about half the light estate — 34 of
+  Wan Chai's 63 head-carrying junctions have no `RM1011` — and the two agree
+  where there is no signal (4 of 198 head-less junctions have a bar). A head's
+  host is its nearest level-0 edge and its junction that edge's nearer node:
+  the stop line's rule, with the nearest edge for the transverse host, since a
+  head is not drawn across anything.
 - 🔴 **Which approaches share a green is ours.** TD publishes no stage plan.
   Approaches whose travel axes lie within `axis_tolerance_deg` share a stage;
   a one-axis junction gets an all-red stage for the crossing it serves.
@@ -37,9 +44,12 @@ from typing import Any
 
 import numpy as np
 
-from pipeline.config import Config, load_config
+from pipeline import gdb
+from pipeline.config import Config, SignalHeads, load_config
 from pipeline.documents import read_document, write_document
+from pipeline.fetch import source_reads
 from pipeline.polyline import Segments, bearing_deg, plan_lengths_2d
+from pipeline.railings import AT_GRADE
 from pipeline.roadmarks import (
     Network,
     RoadMarkReport,
@@ -92,6 +102,29 @@ class SignalReport:
     # One-axis junctions, given an all-red stage for their crossing.
     crossing_stages: int = 0
 
+    # The heads (`signals.heads`). Features over the gate:
+    #     head_features == head_refused + head_on_structure + head_empty + head_admitted
+    # and posts (one per assembly) over the host:
+    #     head_posts == head_no_host + head_dead_end + head_hosted
+    head_features: int = 0
+    head_refused: int = 0
+    head_on_structure: int = 0
+    head_empty: int = 0
+    head_admitted: int = 0
+    head_posts: int = 0
+    head_no_host: int = 0
+    head_dead_end: int = 0
+    head_hosted: int = 0
+    head_refused_by_code: dict[str, int] = field(default_factory=dict)
+    # How many features each post stands for; the collapse made visible (`Q76`).
+    head_assembly_size: dict[str, int] = field(default_factory=dict)
+    # Which witness signalled each junction counted in `junctions`.
+    junctions_by_stop_line: int = 0
+    junctions_by_heads: int = 0
+    junctions_by_both: int = 0
+    # Junctions the heads alone signal, by how many posts stand at them.
+    heads_only_by_posts: dict[str, int] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class Approach:
@@ -104,6 +137,145 @@ class Approach:
     stop_m: float
     # Game heading of travel at the mouth, degrees in [0, 360): 0 is -z.
     heading_deg: float
+
+
+@dataclass(frozen=True)
+class Head:
+    """One published signal head feature, at its surveyed point in game plan space."""
+
+    code: str
+    x: float
+    z: float
+
+
+@dataclass(frozen=True)
+class Post:
+    """One assembly: the coincident heads one surveyed post carries (`Q76`)."""
+
+    x: float
+    z: float
+    codes: tuple[str, ...]
+
+
+def read_heads(
+    city: Config,
+    spec: SignalHeads,
+    region_id: str,
+    report: SignalReport,
+    *,
+    sources_root: Path | None,
+) -> list[Head]:
+    """Every head the gate admits, at grade, at its published position."""
+    transform = city.game_transform(region_id)
+    heads: list[Head] = []
+    for path, member in source_reads(city, spec, region_id, root=sources_root):
+        layer = gdb.read_layer(
+            path,
+            spec.layer.layer,
+            columns=spec.layer.columns,
+            bbox=city.projected_bounds(region_id).bbox,
+            zip_member=member,
+            expect_crs=city.projected_crs,
+        )
+        codes = layer.column(spec.layer.field("code"))
+        levels = layer.column(spec.layer.field("level"))
+        owners, plan = gdb.points(layer)
+        if len(owners) == 0:
+            continue
+        game_x, _, game_z = transform.to_game(plan[:, 0], plan[:, 1])
+        for row, owner in enumerate(owners):
+            report.head_features += 1
+            code = str(codes[owner])
+            if not spec.is_head(code):
+                report.head_refused += 1
+                report.head_refused_by_code[code] = report.head_refused_by_code.get(code, 0) + 1
+                continue
+            if str(levels[owner]).strip().lower() not in AT_GRADE:
+                # On a structure: the level-0 edge nearest it is the street below.
+                report.head_on_structure += 1
+                continue
+            x, z = float(game_x[row]), float(game_z[row])
+            if not (math.isfinite(x) and math.isfinite(z)):
+                # `POINT EMPTY` reads as NaN through `gdb.points`.
+                report.head_empty += 1
+                continue
+            report.head_admitted += 1
+            heads.append(Head(code, x, z))
+    report.head_refused_by_code = dict(sorted(report.head_refused_by_code.items()))
+    return heads
+
+
+def assemble(heads: list[Head], merge_m: float) -> list[Post]:
+    """Coincident heads grouped, single-linkage at `merge_m`, into the posts they stand on.
+
+    🔴 **Derived, not read**: the layer carries no `GG_NAME`, only coincidence.
+    One post per assembly — `P3-17` stacked them and drew 8.53 m masts (`Q76`).
+    The post stands at its members' centroid, and the posts are sorted, so two
+    builds of one input agree. O(n²) over a region's ~850 heads; a cell hash is
+    the exact fix if a region ever grows past a few thousand.
+    """
+    if not heads:
+        return []
+    points = np.array([[head.x, head.z] for head in heads])
+    close = (
+        np.hypot(points[:, None, 0] - points[None, :, 0], points[:, None, 1] - points[None, :, 1])
+        <= merge_m
+    )
+    seen: set[int] = set()
+    posts: list[Post] = []
+    for index in range(len(heads)):
+        if index in seen:
+            continue
+        stack, members = [index], []
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            members.append(current)
+            stack.extend(int(other) for other in np.nonzero(close[current])[0])
+        centre = points[members].mean(axis=0)
+        codes = tuple(sorted(heads[member].code for member in members))
+        posts.append(Post(float(centre[0]), float(centre[1]), codes))
+    posts.sort(key=lambda post: (post.x, post.z))
+    return posts
+
+
+def host_heads(
+    posts: list[Post],
+    segments: Segments,
+    by_id: dict[int, dict[str, Any]],
+    ends: dict[int, int],
+    junction: dict[int, int],
+    max_offset_m: float,
+    report: SignalReport,
+) -> dict[int, int]:
+    """Junction root -> how many posts are hosted at it.
+
+    The stop line's rule, with the nearest level-0 edge for the transverse host
+    (a head is drawn across nothing): the host edge's nearer node — by arc length
+    along it, where the bar's is by straight distance to each end, since a point
+    has a foot on the edge and a line need not — read as its stub cluster. A node
+    only one edge reaches is the map's edge or a cul-de-sac.
+    """
+    found: dict[int, int] = defaultdict(int)
+    sizes: dict[str, int] = defaultdict(int)
+    for post in posts:
+        report.head_posts += 1
+        sizes[str(len(post.codes))] += 1
+        snap = segments.nearest(post.x, post.z)
+        if snap.distance_m > max_offset_m:
+            report.head_no_host += 1
+            continue
+        edge = by_id[snap.edge]
+        node = int(edge["from"] if snap.t <= 0.5 else edge["to"])
+        if ends.get(node, 0) < 2:
+            report.head_dead_end += 1
+            continue
+        report.head_hosted += 1
+        found[junction.get(node, node)] += 1
+    report.head_assembly_size = dict(sorted(sizes.items(), key=lambda item: int(item[0])))
+    return dict(found)
 
 
 def stages_of(headings: list[float], tolerance_deg: float) -> list[int]:
@@ -193,7 +365,8 @@ def build_region(
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --region {region_id}",
     )
-    network = Network.of(Segments.of(edges), _drawn_widths(surface))
+    segments = Segments.of(edges)
+    network = Network.of(segments, _drawn_widths(surface))
     by_id = {int(edge["id"]): edge for edge in edges}
     ends: dict[int, int] = defaultdict(int)
     for edge in edges:
@@ -235,6 +408,14 @@ def build_region(
         stop_lines[junction.get(node, node)] += 1
         hosts.add(host.edge_id)
 
+    heads_at: dict[int, int] = {}
+    if spec.heads is not None:
+        heads = read_heads(city, spec.heads, region_id, report, sources_root=sources_root)
+        posts = assemble(heads, spec.heads.assembly_merge_m)
+        heads_at = host_heads(
+            posts, segments, by_id, ends, junction, spec.heads.max_offset_m, report
+        )
+
     members: dict[int, set[int]] = defaultdict(set)
     for node, root in junction.items():
         members[root].add(node)
@@ -246,8 +427,16 @@ def build_region(
     trims = {int(row["edge"]): row["trim_m"] for row in surface["carriageway"]}
 
     junctions: list[dict[str, Any]] = []
-    for root in sorted(stop_lines):
+    for root in sorted(set(stop_lines) | set(heads_at)):
         report.junctions += 1
+        if root in stop_lines and root in heads_at:
+            report.junctions_by_both += 1
+        elif root in stop_lines:
+            report.junctions_by_stop_line += 1
+        else:
+            report.junctions_by_heads += 1
+            key = str(heads_at[root])
+            report.heads_only_by_posts[key] = report.heads_only_by_posts.get(key, 0) + 1
         nodes = members.get(root) or {root}
         if nodes & foreign:
             report.at_seam += 1
@@ -278,7 +467,8 @@ def build_region(
                 "id": root,
                 "nodes": sorted(nodes),
                 "pos": [round(float(value), 3) for value in centre],
-                "stop_lines": stop_lines[root],
+                "stop_lines": stop_lines.get(root, 0),
+                "heads": heads_at.get(root, 0),
                 # Vehicle stages; a crossing adds one all-red stage after them.
                 "stages": stages,
                 "crossing": crossing,
@@ -295,6 +485,9 @@ def build_region(
             }
         )
 
+    report.heads_only_by_posts = dict(
+        sorted(report.heads_only_by_posts.items(), key=lambda item: int(item[0]))
+    )
     if junctions:
         write_document(
             out_dir / SIGNALS_PLAN_NAME,
@@ -333,7 +526,10 @@ def main(argv: list[str] | None = None) -> int:
     log.info(
         "signals: %d stop lines (%d no host, %d off axis, %d at a dead end) -> %d junctions, "
         "%d staged (%d clusters; %d at the seam, %d not owned, %d no approach), "
-        "%d approaches (%d with their own stop line) %s, stages %s, %d crossing stages",
+        "%d approaches (%d with their own stop line) %s, stages %s, %d crossing stages; "
+        "heads %d features (%d refused, %d on structure, %d empty) -> %d posts "
+        "(%d no host, %d at a dead end, %d hosted); junctions by stop line %d, heads %d, "
+        "both %d; heads-only by posts %s",
         report.stop_lines,
         report.no_host,
         report.off_axis,
@@ -349,6 +545,18 @@ def main(argv: list[str] | None = None) -> int:
         report.approaches_by_junction,
         report.stages_by_junction,
         report.crossing_stages,
+        report.head_features,
+        report.head_refused,
+        report.head_on_structure,
+        report.head_empty,
+        report.head_posts,
+        report.head_no_host,
+        report.head_dead_end,
+        report.head_hosted,
+        report.junctions_by_stop_line,
+        report.junctions_by_heads,
+        report.junctions_by_both,
+        report.heads_only_by_posts,
     )
     return 0
 

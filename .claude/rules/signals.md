@@ -20,8 +20,13 @@ paths:
   `roadmarks.transverse_host`: paste the stage's `signals:` line for BOTH regions, before and
   after** (`P3-3a`, `Q173`) — the two partitions (stop lines → no host / off axis / dead end /
   hosted; junctions → staged / at the seam / not owned / no approach), the approaches with their own
-  stop line, and the stages histogram. Wan Chai 120 → 40 staged of 41, 98 approaches; Causeway Bay
-  15 → 8, 16. 🔴 **`RM1011` is the signal stop line BY MEASUREMENT** (115 of 120 within 15 m of a
+  stop line, and the stages histogram — and the heads' two partitions (features → refused / on
+  structure / empty / admitted; posts → no host / dead end / hosted) with the junctions by witness
+  (bar / heads / both). Wan Chai 120 bars + 514 head posts → 72 staged of 73, 178 approaches;
+  Causeway Bay 15 + 89 → 21 of 22, 41. 🔴 **A head is a second witness, not a second rule**
+  (`Q173`, 2026-10-30): it signals a junction by the bar's own host rule (the nearest level-0
+  edge's nearer node, as its cluster) — TD's `RM1011` survey is about half its light estate. Do
+  not add a posts floor or a radius to "clean up" lone-head junctions. 🔴 **`RM1011` is the signal stop line BY MEASUREMENT** (115 of 120 within 15 m of a
   head; `RM1012` / `RM1013` p50 52 / 46 m): do not add a give-way or STOP-sign code to
   `stop_line_codes`. 🔴 **The junction is `surface.py`'s stub cluster or a lone node — no radius**
   (`Q72`: 15 / 25 / 35 m give 297 / 240 / 202 junctions, no plateau). 🔴 **The host fixes the
