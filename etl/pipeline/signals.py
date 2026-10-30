@@ -38,7 +38,7 @@ import argparse
 import logging
 import math
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -46,9 +46,17 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.config import Config, SignalHeads, load_config
+from pipeline.crossings import CrossingReport, read_crossings
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.polyline import Segments, bearing_deg, plan_lengths_2d
+from pipeline.polyline import (
+    Segments,
+    axis_residual_deg,
+    bearing_deg,
+    plan_lengths_2d,
+    plan_projections,
+    plan_steps_2d,
+)
 from pipeline.railings import AT_GRADE
 from pipeline.roadmarks import (
     Network,
@@ -124,6 +132,11 @@ class SignalReport:
     junctions_by_both: int = 0
     # Junctions the heads alone signal, by how many posts stand at them.
     heads_only_by_posts: dict[str, int] = field(default_factory=dict)
+
+    # Where the approaches stop (`own_stop`): `approaches == sum(stops_by_source)`,
+    # and how far back from its mouth each moved stop came, in metres.
+    stops_by_source: dict[str, int] = field(default_factory=dict)
+    stop_moved_m: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -278,6 +291,120 @@ def host_heads(
     return dict(found)
 
 
+@dataclass(frozen=True)
+class Line:
+    """A painted line an approach may stop at: a stop bar or a crossing, in game plan."""
+
+    # `(n, 2)` vertices: the bar's run, or every vertex of a crossing's stripes.
+    points: np.ndarray
+    # A bar must lie square across its approach; a crossing's stripes run along it.
+    bar: bool
+
+
+def own_stop(
+    plan: np.ndarray,
+    mouth_m: float,
+    half_width_m: float,
+    two_way: bool,
+    lines: list[Line],
+    tolerance_deg: float,
+) -> tuple[float, str]:
+    """Where an approach stops: its own painted line where one is in reach, else its mouth.
+
+    `plan` runs in the direction of travel, `mouth_m` along it. Returns the stop in
+    the same terms and which source set it (`bar`, `crossing`, `mouth`).
+
+    🔴 **Back from the mouth only, never forward** (`Q173`, 2026-10-30, the user's
+    call): the mouth is where the ribbon meets the junction's cap, and the cap
+    starts past the crossing the bar stands before — 53 of Wan Chai's 80 approaches
+    with a line within 15 m stopped past it, a car held at red standing on the
+    crossing. A line past the mouth is in the junction; the mouth already holds.
+
+    The reach is the approach's own, with no new bar: inside the drawn corridor
+    (`half_width_m`) and on the mouth's half of the edge — the far half is the
+    other end's. A bar must also lie square to travel within
+    `road_marks.bearing_tolerance_deg` (the axis test `transverse_host` scores)
+    and, on a two-way road, on the nearside half: the other half's is the other
+    flow's. A crossing spans both halves, so only its near edge is read. A bar
+    wins over a crossing; nearest the mouth wins among each.
+    """
+    starts, steps = plan[:-1], np.diff(plan, axis=0)
+    lengths = plan_steps_2d(plan)
+    before = plan_lengths_2d(plan)
+    floor_m = 0.5 * float(before[-1])
+
+    def project(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Each point's along, signed nearside offset (`Snap.offset_m`'s sign), and segment."""
+        fraction, distance = plan_projections(points[:, None, :], starts[None], steps)
+        nearest = np.argmin(distance, axis=1)
+        index = np.arange(len(points))
+        along = before[nearest] + np.clip(fraction[index, nearest], 0.0, 1.0) * lengths[nearest]
+        step = steps[nearest]
+        left = np.column_stack([step[:, 1], -step[:, 0]]) / np.maximum(
+            lengths[nearest, None], 1e-12
+        )
+        lateral = np.einsum("nk,nk->n", points - starts[nearest], left)
+        return along, lateral, nearest
+
+    found: dict[str, float] = {}
+    for line in lines:
+        if line.bar:
+            (along,), (lateral,), (segment,) = project(line.points.mean(axis=0)[None])
+            if abs(lateral) > half_width_m or (two_way and lateral <= 0.0):
+                continue
+            run = line.points[-1] - line.points[0]
+            square = 90.0 - axis_residual_deg(bearing_deg(run), bearing_deg(steps[segment]))
+            if square > tolerance_deg:
+                continue
+            stop = float(along)
+        else:
+            along, lateral, _ = project(line.points)
+            band = np.abs(lateral) <= half_width_m
+            if not band.any():
+                continue
+            stop = float(along[band].min())
+        if floor_m <= stop <= mouth_m:
+            source = "bar" if line.bar else "crossing"
+            found[source] = max(found.get(source, -math.inf), stop)
+    for source in ("bar", "crossing"):
+        if source in found:
+            return found[source], source
+    return mouth_m, "mouth"
+
+
+def _stopped(
+    approach: Approach,
+    edge: dict[str, Any],
+    widths: dict[int, float],
+    lines: list[Line],
+    tolerance_deg: float,
+    report: SignalReport,
+) -> Approach:
+    """`approach` with its stop moved back to its own painted line, where `own_stop` finds one."""
+    plan = np.asarray(edge["polyline"], dtype=np.float64)[:, [0, 2]]
+    length = float(plan_lengths_2d(plan)[-1])
+    if not approach.along:
+        plan = plan[::-1]
+    mouth = approach.stop_m if approach.along else length - approach.stop_m
+    if approach.edge not in widths:
+        # No drawn corridor to read a line inside; counted, not hidden in `mouth`.
+        report.stops_by_source["no_width"] = report.stops_by_source.get("no_width", 0) + 1
+        return approach
+    stop, source = own_stop(
+        plan,
+        mouth,
+        0.5 * widths[approach.edge],
+        edge["direction"] == "both",
+        lines,
+        tolerance_deg,
+    )
+    report.stops_by_source[source] = report.stops_by_source.get(source, 0) + 1
+    if source == "mouth":
+        return approach
+    report.stop_moved_m.append(round(mouth - stop, 3))
+    return replace(approach, stop_m=stop if approach.along else length - stop)
+
+
 def stages_of(headings: list[float], tolerance_deg: float) -> list[int]:
     """The stage each approach takes: one per run of travel axes `tolerance_deg` wide.
 
@@ -366,7 +493,8 @@ def build_region(
         f"python -m pipeline.surface --region {region_id}",
     )
     segments = Segments.of(edges)
-    network = Network.of(segments, _drawn_widths(surface))
+    widths = _drawn_widths(surface)
+    network = Network.of(segments, widths)
     by_id = {int(edge["id"]): edge for edge in edges}
     ends: dict[int, int] = defaultdict(int)
     for edge in edges:
@@ -383,6 +511,23 @@ def build_region(
         RoadMarkReport(),
         sources_root=sources_root,
     )
+    lines = [
+        Line(points=marking.line, bar=True)
+        for marking in markings
+        if marking.code in spec.stop_line_codes
+    ]
+    if city.crossings is not None:
+        lines += [
+            Line(points=np.vstack(crossing.lines), bar=False)
+            for crossing in read_crossings(
+                city,
+                city.crossings,
+                region_id,
+                city.game_transform(region_id),
+                CrossingReport(),
+                sources_root=sources_root,
+            )
+        ]
     stop_lines: dict[int, int] = defaultdict(int)
     hosts: set[int] = set()
     for marking in markings:
@@ -445,7 +590,10 @@ def build_region(
         if owner_of(np.array([pos[0], pos[2]])) != region_id:
             report.not_owned += 1
             continue
-        approaches = approaches_into(nodes, edges, trims)
+        approaches = [
+            _stopped(one, by_id[one.edge], widths, lines, marks.bearing_tolerance_deg, report)
+            for one in approaches_into(nodes, edges, trims)
+        ]
         if not approaches:
             report.no_approach += 1
             continue
@@ -529,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
         "%d approaches (%d with their own stop line) %s, stages %s, %d crossing stages; "
         "heads %d features (%d refused, %d on structure, %d empty) -> %d posts "
         "(%d no host, %d at a dead end, %d hosted); junctions by stop line %d, heads %d, "
-        "both %d; heads-only by posts %s",
+        "both %d; heads-only by posts %s; stops by source %s, moved back p50 %.1f max %.1f m",
         report.stop_lines,
         report.no_host,
         report.off_axis,
@@ -557,6 +705,9 @@ def main(argv: list[str] | None = None) -> int:
         report.junctions_by_heads,
         report.junctions_by_both,
         report.heads_only_by_posts,
+        dict(sorted(report.stops_by_source.items())),
+        float(np.median(report.stop_moved_m)) if report.stop_moved_m else 0.0,
+        max(report.stop_moved_m, default=0.0),
     )
     return 0
 

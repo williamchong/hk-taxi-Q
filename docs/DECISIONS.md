@@ -10755,7 +10755,18 @@ stop is short of the line.
   junction is its host edge's nearer node, which on a long block can be far from the crossing it
   stands at. Causeway Bay's 9: 2 over, 0 short, 2 within, 5 neither.
 - Not decided: whether an approach should stop at its own measured line where one is in reach.
-  That reopens "stopped at the drawn mouth" above, and is the user's call.
+  That reopens "stopped at the drawn mouth" above, and is the user's call. **Decided the same
+  day, the user's call: it does** (below).
+
+**An approach stops at its own line (2026-10-30, the user's call).** `own_stop` moves the stop
+BACK from the drawn mouth to the nearest painted line in the approach's own reach, never forward:
+a stop bar square to travel within `road_marks.bearing_tolerance_deg`, else a crossing's near
+edge. The reach takes no new bar: inside the drawn corridor (`_drawn_widths`), on the nearside
+half of a two-way road, and on the mouth's half of the edge. Wan Chai: 33 approaches stop at a
+bar, 27 at a crossing, 118 at the mouth; moved back p50 6.3 m, max 33.2 m (edge 599, a one-way
+approach's own set-back bar). Causeway Bay: 5 at a bar, 36 at the mouth, p50 3.5 m.
+`verify_traffic` still crosses 0 stops on red over every seed. The junction, the approaches and
+the stages do not move; only `stop_m` does, and the player's red-light line moves with it.
 
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 

@@ -1051,7 +1051,8 @@ maps each region's edge ids into the merged graph and its positions into the fra
   nothing in the engine reads them.
 - An approach is a level-0 edge entering the junction from outside; `along` is true where travel
   runs the edge's vertex order. `stop_m` is the stop point's plan distance from the edge's START —
-  its drawn mouth, `trim_m` at the end it enters by. `heading_deg` is travel's game heading along
+  its own painted stop bar or crossing where one is in reach, else its drawn mouth (`trim_m` at
+  the end it enters by), and never past the mouth (`Q173`). `heading_deg` is travel's game heading along
   the edge's segment at the end it enters by (`polyline.bearing_deg`: 0 is −z).
 - 🔴 `stage` is AUTHORED (`signals.axis_tolerance_deg`); `stages` counts the vehicle stages, and
   `crossing` is true where every approach shares one axis — the controller then runs an all-red

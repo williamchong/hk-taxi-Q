@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+import math
 from typing import ClassVar
 
+import numpy as np
 import pytest
 
 from pipeline.config_blocks.signals import _signals, is_signal_head
 from pipeline.polyline import Segments
 from pipeline.signals import (
+    Approach,
     Head,
+    Line,
     Post,
     SignalReport,
+    _stopped,
     approaches_into,
     assemble,
     host_heads,
+    own_stop,
     stages_of,
 )
 
@@ -251,3 +257,94 @@ class TestHostHeads:
         _, report = self._host(posts)
         assert report.head_posts == report.head_no_host + report.head_dead_end + report.head_hosted
         assert report.head_assembly_size == {"1": 2, "2": 1}
+
+
+class TestOwnStop:
+    """`own_stop`: back to the approach's own painted line, never forward past its mouth."""
+
+    # Travel runs +x from 0 to 100; the mouth is at 90. Left of travel (the
+    # nearside, `Snap.offset_m`'s sign) is -z under `(step_z, -step_x)`.
+    PLAN: ClassVar[np.ndarray] = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+    @staticmethod
+    def _bar(x: float, z0: float, z1: float) -> Line:
+        return Line(np.array([[x, z0], [x, z1]]), True)
+
+    def _stop(self, lines: list[Line], *, two_way: bool = False) -> tuple[float, str]:
+        return own_stop(self.PLAN, 90.0, 5.0, two_way, lines, 30.0)
+
+    def test_no_line_keeps_the_mouth(self) -> None:
+        assert self._stop([]) == (90.0, "mouth")
+
+    def test_a_square_bar_before_the_mouth_moves_the_stop_back(self) -> None:
+        assert self._stop([self._bar(83.0, -4.0, 4.0)]) == (pytest.approx(83.0), "bar")
+
+    def test_a_bar_past_the_mouth_moves_nothing(self) -> None:
+        assert self._stop([self._bar(95.0, -4.0, 4.0)]) == (90.0, "mouth")
+
+    def test_a_bar_on_the_far_half_is_the_other_ends(self) -> None:
+        assert self._stop([self._bar(30.0, -4.0, 4.0)]) == (90.0, "mouth")
+
+    def test_a_bar_along_the_road_is_not_a_stop_line(self) -> None:
+        assert self._stop([Line(np.array([[80.0, -2.0], [86.0, -2.0]]), True)])[1] == "mouth"
+
+    def test_a_bar_outside_the_corridor_is_another_roads(self) -> None:
+        assert self._stop([self._bar(83.0, -9.0, -7.0)])[1] == "mouth"
+
+    def test_on_a_two_way_road_only_the_nearside_bar_is_this_flows(self) -> None:
+        assert self._stop([self._bar(83.0, 0.5, 4.0)], two_way=True)[1] == "mouth"
+        assert self._stop([self._bar(83.0, -4.0, -0.5)], two_way=True) == (
+            pytest.approx(83.0),
+            "bar",
+        )
+
+    def test_a_crossing_stops_at_its_near_edge(self) -> None:
+        stripes = Line(np.array([[84.0, -3.0], [88.0, -3.0], [84.0, 3.0], [88.0, 3.0]]), False)
+        assert self._stop([stripes]) == (pytest.approx(84.0), "crossing")
+
+    def test_a_bar_wins_over_a_crossing(self) -> None:
+        stripes = Line(np.array([[85.0, -3.0], [89.0, -3.0]]), False)
+        assert self._stop([stripes, self._bar(83.0, -4.0, 4.0)])[1] == "bar"
+
+    def test_the_bar_nearest_the_mouth_wins(self) -> None:
+        bars = [self._bar(70.0, -4.0, 4.0), self._bar(86.0, -4.0, 4.0)]
+        assert self._stop(bars) == (pytest.approx(86.0), "bar")
+
+    def test_a_crossing_outside_the_corridor_is_another_roads(self) -> None:
+        stripes = Line(np.array([[84.0, 7.0], [88.0, 9.0]]), False)
+        assert self._stop([stripes])[1] == "mouth"
+
+    def test_a_crossing_past_the_mouth_moves_nothing(self) -> None:
+        stripes = Line(np.array([[92.0, -3.0], [96.0, 3.0]]), False)
+        assert self._stop([stripes])[1] == "mouth"
+
+    def test_a_bar_just_inside_the_tolerance_counts(self) -> None:
+        # 25 degrees off square, inside the 30 the stage takes.
+        tilt = 4.0 * math.tan(math.radians(25.0))
+        assert (
+            self._stop([Line(np.array([[83.0 - tilt, -4.0], [83.0 + tilt, 4.0]]), True)])[1]
+            == "bar"
+        )
+
+
+class TestStopped:
+    """`_stopped`: the travel-direction flip, and its counters."""
+
+    EDGE: ClassVar[dict] = _edge(7, 1, 2, [(0.0, 0.0), (100.0, 0.0)], "both")
+
+    def test_against_travel_converts_back_to_the_edges_start(self) -> None:
+        # Entering at `from` (x 0) against the edge: mouth 10 m from the start,
+        # a nearside bar (travel -x, so nearside is +z) at x 17.
+        approach = Approach(7, False, 10.0, 270.0)
+        bar = Line(np.array([[17.0, 0.5], [17.0, 4.0]]), True)
+        report = SignalReport()
+        moved = _stopped(approach, self.EDGE, {7: 10.0}, [bar], 30.0, report)
+        assert moved.stop_m == pytest.approx(17.0)
+        assert report.stops_by_source == {"bar": 1}
+        assert report.stop_moved_m == [pytest.approx(7.0)]
+
+    def test_no_drawn_width_is_counted_not_hidden(self) -> None:
+        approach = Approach(7, True, 90.0, 90.0)
+        report = SignalReport()
+        assert _stopped(approach, self.EDGE, {}, [], 30.0, report) is approach
+        assert report.stops_by_source == {"no_width": 1}

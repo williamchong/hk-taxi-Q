@@ -32,7 +32,11 @@ paths:
   (`Q72`: 15 / 25 / 35 m give 297 / 240 / 202 junctions, no plateau). 🔴 **The host fixes the
   JUNCTION, never the approach**: 68 of 120 stop lines cross no centreline and the host is often
   the edge LEAVING the junction, so the approaches are every level-0 edge entering it, stopped at
-  `trim_m`. Do not "fix" an approach to the host edge. ⚠️ **`axis_tolerance_deg` is the one free
+  `trim_m`. Do not "fix" an approach to the host edge. 🔴 **The stop moves BACK only** (`own_stop`,
+  `Q173`): to the approach's own square bar, else a crossing's near edge, within its corridor, its
+  nearside half and the mouth's half of the edge — paste `stops by source` and `moved back` for
+  both regions. Mutations caught by name: either side on a two-way road, no squareness, no floor,
+  no mouth cap, a crossing beating a bar, the farthest line winning. ⚠️ **`axis_tolerance_deg` is the one free
   value and it is authored** — sweep it and paste the stages table (`hong_kong.yaml` has 20 / 30 /
   45). ⚠️ A junction a neighbour's edge reaches is refused (`at_seam`, 1 on Wan Chai): its
   approaches are split across two bundles.

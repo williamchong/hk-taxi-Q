@@ -192,7 +192,9 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   2026-10-29) — `pipeline/signals.py` → `signals_plan.json` (city schema 40): a junction is
   `surface.py`'s stub cluster (now published as `roadsurface.json`'s `junctions`) or a lone node
   that an `RM1011` or (since 2026-10-30) a published signal head is hosted at; its approaches every
-  level-0 edge entering it, stopped at the drawn mouth; stages by travel axis within 30° (authored).
+  level-0 edge entering it, stopped at its own painted bar or crossing where one is in reach
+  (since 2026-10-30: Wan Chai 33 + 27 of 178, Causeway Bay 5 of 41), else at the drawn mouth;
+  stages by travel axis within 30° (authored).
   Wan Chai 120 stop lines + 514 head posts → 73 junctions (3 by a stop line alone, 32 by heads
   alone, 38 both), 72 staged (36 clusters, 1 at the seam), 178 approaches; Causeway Bay 15 + 89 →
   22, 21 staged, 41. Before the heads: 41 / 40 / 98 and 8 / 16 — TD's `RM1011` survey is about
