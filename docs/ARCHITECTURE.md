@@ -423,6 +423,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "trees": "trees.glb",
   "trees_placements": "trees_placements.json",
   "signals_plan": "signals_plan.json",
+  "signal_heads_placements": "signal_heads_placements.json",
   "landmarks": "landmarks.json",
   "fence": "fence.json",
   "basemap": "basemap.json",
@@ -440,11 +441,12 @@ Keys (`etl/pipeline/export.py`):
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
   `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`,
-  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`). Null
+  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`), `signal_heads_placements` (schema 42, `P3-3e`). Null
   where the estate publishes no such layer, **or** where every feature failed the join — a stage
   names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
   placements document whose library is NOT in the bundle: it stands the committed
   `assets/authored/vehicles/parked.glb`, and the entry's `library` names that `res://` path.
+  `signal_heads_placements` (`P3-3e`) is the second: it stands `assets/authored/signals/heads.glb`.
 - The manifest names the other documents, it does not contain them; each is separately versioned.
   A build ships exactly what the manifest names (`shipped()`); `sync_generated.sh` copies only
   that. Bundle size is measured from the PCK (`PROGRESS.md`), never summed from these files.
@@ -1058,15 +1060,21 @@ maps each region's edge ids into the merged graph and its positions into the fra
   `crossing` is true where every approach shares one axis — the controller then runs an all-red
   stage for the crossing after them.
 - Absent (and `signals_plan` null) where the city declares no `signals:` block or stages nothing.
-  The stage's manifest `signals.json` (schema 2) carries the partitions.
+  The stage's manifest `signals.json` (schema 3) carries the partitions.
 
-### `signals.glb` — removed (`P3-17`, `Q77`, `P3-35a`)
+### `signal_heads_placements.json` — the heads, lit (`P3-3e`, `Q173`)
 
-🚫 Not in the bundle and not in the code (until `P3-3e` ports the heads, lit, `Q173`). `Q77` dropped the layer — an unlit head asserts a signal
-out of service, and a lit one cannot be derived from anything published — and `P3-35a` (`Q133`)
-removed the stage, config block, material, verify tool, preview node and tests on the user's call.
-`city.json` lost the `signals` key at schema 34. Record: `DECISIONS.md` `Q76`/`Q77`. ⚠️ Its return
-is a port to a library + placements (`P5-2`'s shape), not a re-declared block.
+`placements.py`'s document (`library`: `res://assets/authored/signals/heads.glb`, committed,
+`tools/make_signal_heads.py`), one entry a bound post: `mesh` `head`, `transform` (`pos` at the
+footway, `rot_y_deg` the way the head looks — its approach's `heading_deg + 180`), and the
+approach it shows in the plan's own terms: `junction`, `edge` (region numbering), `along`,
+`stage`, and `primary` (on its approach's own edge, or across the junction). `SignalHeads`
+resolves each through `SignalPlan.approach_on` and refuses an entry the plan does not hold at that
+junction and stage — never a dark head. The library's one mesh carries the lens circuit on
+`UV.x` (0 housing, 1 red, 2 amber, 3 green), never `COLOR_0` alpha (the Compatibility renderer
+reads it as 0). Null in the manifest where nothing bound. `signals.json` (schema 3) names it as
+`heads_document` and carries the binding partition. `P3-17`'s `signals.glb` (`Q77`, removed by
+`P3-35a`) is not coming back: this is its port to a library + placements.
 
 ### `basemap.json` — the harbour and the parks (2026-09-24, world water 2026-09-25)
 
@@ -1254,6 +1262,7 @@ city_space = region_local + city_offset
 | `Fence` | Stands the authored barriers where `fence.json` places them, one `MultiMesh` (`prop_batch.gd`) | ✅ `P3-29` |
 | `ParkedLayer` + `parked_placements.json` | The parked roster (`Q161`): one `MultiMesh` per kind per 300 m cell over the committed `parked.glb`, a box body per vehicle, resolved by the hour and re-stood only out of view. The near miss (`NearMiss`, `P3-2a`) grades a pass against these bodies | ✅ `P3-71`–`P3-73` |
 | `SignalController` + `signals_plan.json` | Runs every signalled junction's authored stages on the physics clock (`tuning/signal_plan.tres`); `state_of(edge, along)` is the one read. The timeline is a pure function of the clock (`light_at`), walked whole by `verify_signals.gd` (`Q173`). A node of its own in `city_drive.tscn` (`Signals`), which the traffic reads; it watches the taxi's middle cross each approach's stop line and counts a red or red-and-amber in `ran_red_count` / `ran_red` — never paid or docked (`P3-3d`) | 🟡 `P3-3a`/`P3-3b`/`P3-3d` |
+| `SignalHeads` + `signal_heads_placements.json` | The published heads, a child of `Signals`: one `MultiMesh` per `prop_cells.tres` cell, no colliders (`Q76`); each junction stage's light asked of `light_at` once a tick and written into its heads' `INSTANCE_CUSTOM.a` only on a change; `signal_head.gdshader` lights the lens on `UV.x`'s circuit, by day, raised at night (`signal_heads.tres`) | ✅ `P3-3e` |
 | `TrafficSystem` | Cars on the router's legal arcs round the player (`tuning/traffic.tres`): the nearside lane by `RoadGraph.lane_at`, a curve through each junction, the car ahead on its own path and in a plan cone, the stop at `SignalController`'s red and red-and-amber, amber judged at the hard rate. Kinematic: an `AnimatableBody3D` each, one `MultiMesh` per kind off `parked.glb`. `--traffic=off`. `verify_traffic.gd` drives three seeds × 90 s (`Q173`). Trams as scripted blockers still owed | 🟡 `P3-3c` |
 | `tram.glb` | The published tramway where iB1000 prints it — not a marking on the ribbon (`Q58`). One primitive, no collider | ✅ `P3-14` |
 | `arrows.glb` + `arrows_placements.json` | Turn arrows in the lane the ribbon has — not ribbon paint, because the junction fade blanks the approach (`Q59`). Library of one flat glyph per `RM` code; placements carry the transform plus `pitch_deg` and nothing else (`Q54`). No collider | ✅ `P3-15`, `P5-4` |

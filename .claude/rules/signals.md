@@ -5,6 +5,10 @@ paths:
   - "etl/tests/test_signals.py"
   - "game/scripts/traffic/signal_plan.gd"
   - "game/scripts/traffic/signal_controller.gd"
+  - "game/scripts/traffic/signal_heads.gd"
+  - "game/assets/shaders/signal_head.gdshader"
+  - "game/tuning/signal_heads.tres"
+  - "tools/make_signal_heads.py"
   - "game/scripts/traffic/signal_plan_profile.gd"
   - "game/tools/verify_signals.gd"
   - "game/tuning/signal_plan.tres"
@@ -40,6 +44,21 @@ paths:
   value and it is authored** — sweep it and paste the stages table (`hong_kong.yaml` has 20 / 30 /
   45). ⚠️ A junction a neighbour's edge reaches is refused (`at_seam`, 1 on Wan Chai): its
   approaches are split across two bundles.
+- **The heads (`P3-3e`): `bind_heads`, `signals.heads` (`outset_m`, `max_shift_m`, `library`,
+  `drawing`), `make_signal_heads.py`, `signal_heads.gd`, `signal_head.gdshader`,
+  `signal_heads.tres`: paste the stage's `bound` clause for both regions, and `verify_signals`'
+  `heads:` lines** (Wan Chai 276 + 92 bound, every stage shown at 56 of 72; Causeway Bay 40 + 24,
+  14 of 21). 🔴 **The binding is the kerb's side, never `ANGLE` or the code** (`Q76`): one-way or
+  nearside means along the edge, `signs.facing_from_side`'s rule. 🔴 **Never a dark head**: an
+  entry the plan does not hold at its own junction and stage is refused and counted, never drawn.
+  🔴 **The circuit is `UV.x`** — the Compatibility renderer reads `COLOR_0` alpha as 0; a shader
+  change owes a frame on BOTH renderers (`GODOT=` a wrapper adding `--rendering-method
+  gl_compatibility`) and the `shader error` grep. ⚠️ Lit by day: the emission does not multiply
+  `night_lights`. ⚠️ A drawing change is `python tools/make_signal_heads.py`,
+  `test_make_signal_heads.py` (byte-identical), and a forced reimport before any frame. Mutations
+  caught by name (2026-10-30): the side flipped, no stage check, the half flipped, no stub refusal,
+  always registering, the facing unturned; and in the layer, no write on change, a clamped datum,
+  the stage check inverted, grouping without the stage.
 - **`signal_controller.gd`, `signal_plan.gd`, `signal_plan.tres` or `verify_signals.gd`: run
   `tools/check.sh` and paste `verify_signals`' `plan:` line for both regions.** 🔴 **The timeline is
   a pure function of the clock** (`light_at`): no state may depend on what was asked before, or

@@ -207,7 +207,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q162` | Two modes behind PLAY: 特更 runs 07:00 → 21:00 and scores the total fare; 兜風 has no end and keeps the day | ✅ Built 2026-10-11 on the user's asks (`P3-74`). Replaces `P3-2b`'s extendable session timer; the cycle retimed to 300 s; free mode's day cycle off by default. A full shift driven by the user owed. |
 | `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
 | `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | ✅ Decided and built 2026-10-27 (`P3-77`): 1,061 + 2,375 trees, a trunk collider each. Reverses `Q144`'s "trees are not built". |
-| `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
+| `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`; the heads lit 2026-10-30). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
 
 ---
 
@@ -10767,6 +10767,46 @@ bar, 27 at a crossing, 118 at the mouth; moved back p50 6.3 m, max 33.2 m (edge 
 approach's own set-back bar). Causeway Bay: 5 at a bar, 36 at the mouth, p50 3.5 m.
 `verify_traffic` still crosses 0 stops on red over every seed. The junction, the approaches and
 the stages do not move; only `stop_m` does, and the player's red-light line moves with it.
+
+**The heads, lit (`P3-3e`, built 2026-10-30).** `bind_heads` binds each assembled post to the
+approach whose light it shows, on the gate's rule above, and registers it to the drawn kerb as the
+signs do (`kerb_target`, outward only, `Q78`; `outset_m` 0.45, `max_shift_m` 6.0, `P3-17`'s). The
+head looks back along its approach (`heading_deg + 180`), so a lamp and its facing cannot disagree.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| posts | 514 | 89 |
+| bound primary / secondary | 276 / 92 | 40 / 24 |
+| over shift / in a carriageway | 12 / 7 | 3 / 1 |
+| on a stub / unstaged / no straight / ambiguous | 60 / 1 / 61 / 5 | 5 / 5 / 5 / 6 |
+| by code (`P` / `S`, primary + secondary) | 239+60 / 37+32 | 33+13 / 7+11 |
+| bound heads moved out to the kerb, p90 / max | 0.43 / 5.03 m | 1.48 / 5.59 m |
+| staged junctions with a head for every stage | 56 of 72 | 14 of 21 |
+
+- **One authored head for every code** (`tools/make_signal_heads.py` → the committed
+  `assets/authored/signals/heads.glb`, 64 triangles): `P3-17`'s post and three-aspect box, the head
+  IN FRONT of the post, dimensions and the unlit glass in `signals.heads.drawing` (exempt from
+  `Q33`'s palette as `P3-17`'s colours were). `signal_heads_placements.json` stands it, carrying
+  each head's junction, approach and stage; city schema 42.
+- 🔴 **Lit from the controller, by day.** `SignalHeads` (a child of `Signals`) asks
+  `SignalController.light_at` once per junction stage per tick and writes the light into each
+  head's `INSTANCE_CUSTOM.a` only when it changes; `signal_head.gdshader` lights the lens whose
+  circuit (`UV.x`: 1 red, 2 amber, 3 green) the light names. The emission does not multiply
+  `night_lights` (the brake lens's precedent); the night only raises it (`lamp_night_gain`).
+- ⚠️ **The circuit is `UV.x`, not `COLOR_0` alpha** — measured 2026-10-30: the Compatibility
+  renderer (the web build) reads vertex alpha as 0 on every vertex of this mesh, so the first
+  build's alpha-coded lenses were all dark there while Mobile lit them. `lamps.py`'s lantern
+  marker (`Q160`) rides that same channel and has not been checked on Compatibility.
+- **Graded**: `verify_signals` `heads:` — every placement on an approach the plan holds at its own
+  junction and stage (none dark), the library on `signal_heads.tres`, and over the longest cycle
+  each head's written datum equal to `light_at` on every 0.05 s tick, red, red-and-amber, green
+  and amber each shown. Mutations caught: no write on change, a clamped datum, stage refused,
+  grouped without the stage. Headless, the written datum is graded, not a readback (the dummy
+  renderer returns `Color()`); the frames grade the shader.
+- **Cost** (throttle route, two runs each): +2 `draws`, +512 `prims`, `phys` +0.1–0.2 ms inside
+  the ±0.5 ms noise after the per-stage grouping (+0.3 ms asking per head). Web PCK
+  91,143,708 B against 91,020,208 B with the library and both regions' placements left out:
+  **+123.5 KB**.
 
 **See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
 

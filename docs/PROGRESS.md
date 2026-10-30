@@ -38,8 +38,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
     (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
     signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`), and the
-    cars pass the parked ones (`P3-3f1`); the player's red is counted (`P3-3d`), the lit heads
-    and the cars' indicators and hazards follow (`P3-3e`, `P3-3f`). Trams and neon (`P3-4`, `P3-8`) not
+    cars pass the parked ones (`P3-3f1`); the player's red is counted (`P3-3d`), the heads stand lit
+    by it (`P3-3e`), and the cars' indicators and hazards follow (`P3-3f`). Trams and neon (`P3-4`, `P3-8`) not
     started.
   - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
     (`P3-51`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
@@ -53,8 +53,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
   measurement only. `P5-8` (content) is outline; `P5-14` not started.
-- **Knowingly missing:** no moving trams, no neon (`P3-4`, `P3-8`); no signal heads drawn
-  (`P3-3e`: the plan runs them, nothing stands them yet).
+- **Knowingly missing:** no moving trams, no neon (`P3-4`, `P3-8`); signal heads at 16 of Wan
+  Chai's 72 staged junctions and 7 of Causeway Bay's 21 do not show every stage (`P3-3e`).
 
 **Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q> (public page). The
 last cut is `r5` (`build/hk-taxi-q-p39a-r5-itch.zip`, 55,511,080 B); it predates `P3-26` onward,
@@ -265,7 +265,14 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   street and a level above, and the first real approach at red / red-and-amber / green (1 / 1 / 0);
   two mutations caught. `drive.sh` prints `red:` lines: 3 of 4 throttle starts ran one. Owed: the
   user's call, bonus or penalty.
-- `P3-3e` / `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
+- `P3-3e` ✅ The heads, lit (`Q173`, 2026-10-30): 368 + 64 published posts bound to the approach
+  they show and stood from the committed `heads.glb` (city schema 42); `signal_head.gdshader`
+  lights each lens off `SignalController.light_at`, by day and brighter at night, on both
+  renderers (the circuit on `UV.x` — vertex alpha reads 0 on Compatibility). `verify_signals`
+  `heads:` holds every datum to its approach over the longest cycle; 4 + 3 mutations caught.
+  +2 `draws`, `phys` in the noise, +123.5 KB web PCK. Owed: the user's look and drive; whether
+  `lamps.py`'s alpha lantern marker (`Q160`) also reads 0 on Compatibility.
+- `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
@@ -485,7 +492,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q171` Trees from HyD's and LCSD's inventories, only where surveyed (user, 2026-10-27; built as `P3-77` the same day): reverses `Q144`'s "trees are not built"; Victoria Park and the streets bare for now; HyD's Tai Hang slopes included; a tree is a crash.
 - `Q173` Signals return as an authored, checked phase plan (user, 2026-10-29): reverses `Q77`;
   a junction is signalled where an `RM1011` is hosted (115 of 120 within 15 m of a head), grouped
-  by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`); the
+  by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`, built 2026-10-30); the
   player's red counted, never paid or docked, until the user decides.
 - `Q174` The wheel goes to lock slower at speed (user, 2026-10-29): a full-lock lane change with the throttle held slid to 20.8° / 29.8° at 110 / 120 kph; `steer_attack_at_top_s` 2.0 blends the 0.2 s ramp on the speed share's square (0.75 s at 110), 6.3 / 6.5° now; drift mode and a countersteer keep 0.2 s, every drift row unmoved. Owed: the user's drive.
 - `Q172` A drift counts at 0.5 s and pays more each second of one slide (user, 2026-10-28): `drift_min_s` 2.0 → 0.5, a new `drift_step_hkd` (1.0), HK$1 / 3 / 6 / 10 at 0.5 / 1.5 / 2.5 / 3.5 s; at 2 s only a countersteered slide at 86 kph had ever counted on the pace-2.0 car. A reverse read ~180° of slip and paid at the new bar; slip past 90° (`FareSystem.REVERSED_SLIP_DEG`) is now not a drift.

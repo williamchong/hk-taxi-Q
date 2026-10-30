@@ -391,7 +391,7 @@ FGDB `dTAD_IRNP.gdb.zip`, **218 MB**, 51 layers · added by `Q56`
 | `DTAD_RD_MARK_ANNO` | 274 | **Road text** (`CENTRAL`, `九龍`). Geometry is a `MultiPolygon` rotated rectangle, so position, angle and extent are all read (`Q54`). Some strings carry `<FNT …>` markup; 67 distinct fragments. Not in use — `P3-21` |
 | `DTAD_TS_ABV_PT` / `DTAD_TS_POLE_PT` | 3,276 signs / 2,227 poles | **Traffic signs** — `pipeline/signs.py` → `signs.glb` (`P3-16`); `TS102`/`TS101` carry baked lettering (`P3-20`). See notes below |
 | `DTAD_RAILING_LINE` | 1,753 features / 1,763 parts / 20,273 m | **Railings, bollards, barriers** — `pipeline/railings.py` → `railings.glb` (`P3-19`, `Q61`). See notes below |
-| `DTAD_TRAFFIC_LIGHT_PT` | 913 points | Signal estate; 51 are not heads (bollards, `PBUTT`, `WIGWAG`). 🔴 `REFNAME` has **no published domain** (`Q76`). `ANGLE` is not a facing; no `GG_NAME`; `ELEVATION` null on 906. Read by `pipeline/signals.py` (`P3-17`) but **not shipped** (`Q77`) |
+| `DTAD_TRAFFIC_LIGHT_PT` | 913 points | Signal estate; 51 are not heads (bollards, `PBUTT`, `WIGWAG`). 🔴 `REFNAME` has **no published domain** (`Q76`). `ANGLE` is not a facing; no `GG_NAME`; `ELEVATION` null on 906. Read by `pipeline/signals.py`: a second witness to the signalled junctions (`P3-3a`) and, bound to the approach each shows, the lit heads (`P3-3e`, `Q173`); 368 of Wan Chai's 514 posts stand |
 | `DTAD_TY_BAR_LINE`, `DTAD_RD_MARK_SYM_LINE`, `DTAD_DROP_KERB_LINE` | 4 / 173 / 738 | Yellow bars; bus-stop boxes, KEEP CLEAR, taxi PU/DF `RM1176` ×5; dropped kerbs. Not in use |
 | ⚠️ `DTAD_TW_STRIP_LINE` | 778, `REFNAME = TACW` | **Not tramway** — tactile warning strips. The tramway is in iB1000 |
 
