@@ -34,6 +34,7 @@ const MANOEUVRES: PackedStringArray = [
 	"brake",
 	"coast",
 	"wall",
+	"traffic",
 	"lift",
 	"hold",
 	"catch",
@@ -173,6 +174,22 @@ const WALL_SIZE := Vector3(240.0, 4.0, 1.0)
 ## Seconds sampled after the first contact, so `exit kph` is what the arcade
 ## response left and not the tick of the hit.
 const WALL_AFTER_S: float = 1.0
+## `traffic` (`Q175`): a body the size of a car, moved each tick as
+## `TrafficSystem` moves one, met five ways, each row's closing speed in kph.
+## `start_m` is where it starts, centre from the taxi's centre, and `sign` the way
+## it moves along the taxi's travel. A `tracks` row holds that speed on the taxi's
+## own until they touch: a car ahead going the taxi's way, or one coming up behind.
+## The others are that speed outright: a car coming the other way, and one running
+## into the back of a taxi `at_rest`. The obstacle the wall rows cannot grade: one
+## whose own speed is in the contact.
+const TRAFFIC_ROWS: Dictionary[String, Dictionary] = {
+	"tail5": {"kph": 5.0, "start_m": 8.0, "sign": -1.0, "tracks": true},
+	"tail20": {"kph": 20.0, "start_m": 8.0, "sign": -1.0, "tracks": true},
+	"head50": {"kph": 50.0, "start_m": 40.0, "sign": -1.0},
+	"rear40": {"kph": 40.0, "start_m": -15.0, "sign": 1.0, "at_rest": true},
+	"back20": {"kph": 20.0, "start_m": -8.0, "sign": 1.0, "tracks": true},
+}
+const TRAFFIC_SIZE := Vector3(1.8, 1.5, 4.5)
 
 ## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
 ## only ones such a sweep re-runs. Nothing else holds the handbrake, so nothing
@@ -815,6 +832,18 @@ func _measure_all() -> void:
 						return
 					results.append(hit)
 				continue
+			if manoeuvre == "traffic":
+				# As the wall: never swept.
+				if not is_nan(value) and value != values[0]:
+					continue
+				for row: String in TRAFFIC_ROWS:
+					var met: Result = await _measure(
+						manoeuvre, "traffic@%s" % row, 90.0, 0.0, "", row
+					)
+					if met == null:
+						return
+					results.append(met)
+				continue
 			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
 			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
 			# For such a field the other three never
@@ -896,7 +925,7 @@ func _measure_all() -> void:
 			continue
 		if manoeuvre == "turnin" or manoeuvre in TECHNIQUES:
 			continue
-		if manoeuvre == "wall":
+		if manoeuvre == "wall" or manoeuvre == "traffic":
 			walls.append(result)
 		elif manoeuvre == "catch":
 			catches.append(result)
@@ -953,8 +982,10 @@ func _measure(
 	# manoeuvre two from being measured against manoeuvre one's suspension.
 	await _hold(SETTLE_S)
 
-	Input.action_press(&"accelerate")
-	if _entry_kph > 0.0:
+	var at_rest: bool = manoeuvre == "traffic" and TRAFFIC_ROWS[variant].get("at_rest", false)
+	if not at_rest:
+		Input.action_press(&"accelerate")
+	if not at_rest and _entry_kph > 0.0:
 		var first_tick: int = Engine.get_physics_frames()
 		var entry_kph: float = _entry_kph * _entry_scale
 		while _speed_kph() < entry_kph:
@@ -962,7 +993,7 @@ func _measure(
 			if float(Engine.get_physics_frames() - first_tick) * _step > TO_REST_LIMIT_S:
 				_fail("%s: never reached %.1f kph" % [label, entry_kph])
 				return null
-	else:
+	elif not at_rest:
 		await _hold(_run_up_s)
 
 	var result := Result.new()
@@ -1007,6 +1038,8 @@ func _measure(
 			await _sample([], TO_REST_LIMIT_S, true, result)
 		"wall":
 			await _hit_wall(wall_deg, result)
+		"traffic":
+			await _meet_traffic(variant, result)
 		"lift":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, LIFT_AT_S)
 		"hold":
@@ -1085,15 +1118,12 @@ func _hit_wall(wall_deg: float, into: Result) -> void:
 	# The slab's base a metre under the spawn, so it stands in the ground
 	# rather than on it and no sill is left for a wheel to climb.
 	centre.y = _spawn.origin.y + WALL_SIZE.y * 0.5 - 1.0
-	_wall = StaticBody3D.new()
-	_wall.name = "Wall"
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = WALL_SIZE
-	shape.shape = box
-	_wall.add_child(shape)
-	root.add_child(_wall)
-	_wall.global_transform = Transform3D(Basis.looking_at(-normal, Vector3.UP), centre)
+	_stand_slab(
+		StaticBody3D.new(),
+		"Wall",
+		WALL_SIZE,
+		Transform3D(Basis.looking_at(-normal, Vector3.UP), centre)
+	)
 	# Drained: a hit from an earlier row must not be read as this one's.
 	_vehicle.call("take_impact_mps")
 
@@ -1125,6 +1155,72 @@ func _hit_wall(wall_deg: float, into: Result) -> void:
 	into.seconds = t
 	if is_inf(hit_at):
 		_fail("%s: the wall was never hit in %.0f s" % [into.name, MANOEUVRE_S])
+
+
+## `body` into the scene as the slab this row meets, a box of `size` at `placed`.
+func _stand_slab(body: StaticBody3D, label: String, size: Vector3, placed: Transform3D) -> void:
+	_wall = body
+	_wall.name = label
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	_wall.add_child(shape)
+	root.add_child(_wall)
+	_wall.global_transform = placed
+
+
+## Meets a car-sized body moved each tick, `TRAFFIC_ROWS`' `row`, with the
+## throttle let go at the touch so the row reads the hit and not a push. Approach
+## is this tool's closing speed the tick before the touch, impact the latch.
+## The touch is the body's contact, not the latch, which reads 0 on a hit it
+## does not count.
+func _meet_traffic(row: String, into: Result) -> void:
+	var plan: Dictionary = TRAFFIC_ROWS[row]
+	var mps: float = float(plan["sign"]) * float(plan["kph"]) / 3.6
+	var tracks: bool = plan.get("tracks", false)
+	var along: Vector3 = _vehicle.linear_velocity
+	along.y = 0.0
+	if along.length() < SLIP_FLOOR_MPS:
+		along = -_vehicle.global_basis.z
+		along.y = 0.0
+	along = along.normalized()
+	var at: Vector3 = _vehicle.global_position + along * float(plan["start_m"])
+	at.y = _spawn.origin.y + TRAFFIC_SIZE.y * 0.5 - 1.0
+	var turned := Basis.looking_at(along, Vector3.UP)
+	var body := AnimatableBody3D.new()
+	_stand_slab(body, "Traffic", TRAFFIC_SIZE, Transform3D(turned, at))
+	_vehicle.call("take_impact_mps")
+
+	var body_mps: float = mps
+	var first_tick: int = Engine.get_physics_frames()
+	var t: float = 0.0
+	var hit_at: float = INF
+	var last_position: Vector3 = _vehicle.global_position
+	var last_approach: float = 0.0
+	while t < MANOEUVRE_S and t < hit_at + WALL_AFTER_S:
+		var own_mps: float = _vehicle.linear_velocity.dot(along)
+		if tracks and is_inf(hit_at):
+			body_mps = own_mps + mps
+		at += along * body_mps * _step
+		body.global_transform = Transform3D(turned, at)
+		last_approach = absf(own_mps - body_mps)
+		await physics_frame
+		t = float(Engine.get_physics_frames() - first_tick) * _step
+		var position: Vector3 = _vehicle.global_position
+		into.distance_m += last_position.distance_to(position)
+		last_position = position
+		var impact: float = float(_vehicle.call("take_impact_mps"))
+		if impact > 0.0:
+			into.impact_ticks += 1
+			into.impact_kph = maxf(into.impact_kph, impact * 3.6)
+		if is_inf(hit_at) and (impact > 0.0 or _vehicle.get_colliding_bodies().has(body)):
+			hit_at = t
+			into.approach_kph = last_approach * 3.6
+			Input.action_release(&"accelerate")
+	into.seconds = t
+	if is_inf(hit_at):
+		_fail("%s: the body was never met in %.0f s" % [into.name, MANOEUVRE_S])
 
 
 ## Holds a set of actions and samples the car every tick, until the clock runs

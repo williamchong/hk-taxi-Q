@@ -5,9 +5,9 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all fifteen
+#   --only=drift                     one manoeuvre instead of all sixteen
 #                                    (corner, liftoff, drift, tap, brake, coast,
-#                                    wall, lift, hold, catch, turn, turnin,
+#                                    wall, traffic, lift, hold, catch, turn, turnin,
 #                                    flick, trailbrake, handbrake).
 #                                    --only=technique runs the three P3-54
 #                                    techniques with their controls, printed
@@ -70,7 +70,12 @@
 #                                    manoeuvre stands its own slab and grades
 #                                    P3-50's penalty tiers: `approach` is the
 #                                    tool's reading, `impact` the controller's
-#                                    latch, and they must agree (Q148)
+#                                    latch, and they must agree (Q148).
+#                                    --only=traffic does the same against a
+#                                    moving car-sized body (Q175): into a car
+#                                    ahead closing at 5 / 20 kph, a car coming
+#                                    at 50, hit from behind at rest at 40 and
+#                                    under way closing at 20
 #   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile, CarSpec or TyreProfile
 #                                    float, or a system's as SYSTEM.FIELD
 #                                    (traction_control.wheelspin_limit; the

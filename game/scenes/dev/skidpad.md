@@ -7,9 +7,9 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 A measuring instrument, not a place to play: the greybox ground with the car
 parked well clear of every building, so a handling number is not cut short by
-a wall. The one manoeuvre that wants a wall (`--only=wall`, `P3-50`) stands
-its own slab from the tool and frees it after the row, so nothing here
-changes for it.
+a wall. The two manoeuvres that want one (`--only=wall`, `P3-50`, and
+`--only=traffic`, `Q175`, a car-sized body that moves) stand it from the tool
+and free it after the row, so nothing here changes for them.
 
 ⚠️ **The spawn is the whole point of this file.** `greybox.tscn` starts the car
 at (-250, -150), which is inside the road network — `greybox_wanchai.json`'s
