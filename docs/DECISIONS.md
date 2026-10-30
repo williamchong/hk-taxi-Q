@@ -10796,7 +10796,11 @@ head looks back along its approach (`heading_deg + 180`), so a lamp and its faci
 - ⚠️ **The circuit is `UV.x`, not `COLOR_0` alpha** — measured 2026-10-30: the Compatibility
   renderer (the web build) reads vertex alpha as 0 on every vertex of this mesh, so the first
   build's alpha-coded lenses were all dark there while Mobile lit them. `lamps.py`'s lantern
-  marker (`Q160`) rides that same channel and has not been checked on Compatibility.
+  marker (`Q160`) rides that same channel and **survives** there: painting `COLOR.a` into
+  `signs.gdshader` on Hennessy Road's street viewpoint reads the column 1 and the lantern 0 on
+  both renderers, and a Compatibility night frame lights the lanterns alone (2026-10-30). Why the
+  heads lost it is not established; the one difference measured is that their `MultiMesh`
+  carries `INSTANCE_CUSTOM` and the lamps' does not.
 - **Graded**: `verify_signals` `heads:` — every placement on an approach the plan holds at its own
   junction and stage (none dark), the library on `signal_heads.tres`, and over the longest cycle
   each head's written datum equal to `light_at` on every 0.05 s tick, red, red-and-amber, green

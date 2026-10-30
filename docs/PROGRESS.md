@@ -270,8 +270,9 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   lights each lens off `SignalController.light_at`, by day and brighter at night, on both
   renderers (the circuit on `UV.x` — vertex alpha reads 0 on Compatibility). `verify_signals`
   `heads:` holds every datum to its approach over the longest cycle; 4 + 3 mutations caught.
-  +2 `draws`, `phys` in the noise, +123.5 KB web PCK. Owed: the user's look and drive; whether
-  `lamps.py`'s alpha lantern marker (`Q160`) also reads 0 on Compatibility.
+  +2 `draws`, `phys` in the noise, +123.5 KB web PCK. Owed: the user's look and drive.
+  `lamps.py`'s alpha lantern marker (`Q160`) checked on Compatibility the same day: it survives,
+  and the lanterns alone light at night.
 - `P3-4` / `P3-8` / `P3-2a` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
