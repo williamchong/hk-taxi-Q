@@ -147,6 +147,10 @@ class Car:
 	## toward the offside, 0 not — its indicator. Off the goal, not the move, so
 	## a car waiting to pull out shows where it is going.
 	var shift: int = 0
+	## The side of the turn just finished, still winked until the car is
+	## `held_until_m` travel metres into the road it joined (`wink_hold_m`).
+	var held_side: int = 0
+	var held_until_m: float = 0.0
 	## Whether the road the next move joins has a lane clear of parked
 	## vehicles at its mouth.
 	var join_clear: bool = true
@@ -613,6 +617,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	car.turning = false
 	car.crossed.clear()
 	car.lane = lane
+	car.held_side = 0
 	_enter(car)
 	car.speed = car.cruise_mps * 0.5
 	car.pose = _pose_on_edge(car)
@@ -1261,6 +1266,8 @@ func _advance(car: Car, metres: float) -> void:
 			car.turning = false
 			car.crossed = car.via.duplicate()
 			car.lane = car.next_lane
+			car.held_side = car.turn_side
+			car.held_until_m = car.join_m + car.half_length + profile.wink_hold_m
 			_enter(car)
 			continue
 		var room: float = car.leave_m - car.s
@@ -1391,14 +1398,23 @@ static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 
 
 ## The indicator `car` shows: its turn's side from `lane_change_m` before the
-## mouth until it has joined (left 1, right -1), else the side it is changing
+## mouth until its tail is `wink_hold_m` past the mouth it joined by (left 1,
+## right -1) — the next turn's approach first — else the side it is changing
 ## lane to, else none — never for straight on.
 func _winking(car: Car) -> int:
 	if car.turning:
 		return car.turn_side
-	if car.turn_side != 0 and car.next_edge >= 0 and car.leave_m - car.s < profile.lane_change_m:
+	if approaching_turn(car):
 		return car.turn_side
+	if car.held_side != 0 and car.s < car.held_until_m:
+		return car.held_side
 	return car.shift
+
+
+## Whether `car` is within `lane_change_m` of a turn's mouth: its indicator is
+## that turn's.
+func approaching_turn(car: Car) -> bool:
+	return car.turn_side != 0 and car.next_edge >= 0 and car.leave_m - car.s < profile.lane_change_m
 
 
 func _write_lamps(car: Car, bits: int) -> void:

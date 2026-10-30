@@ -44,6 +44,9 @@ const PATH: String = "res://tuning/traffic.tres"
 ## How far along its edge a car takes to move from one lane to the next, in
 ## metres.
 @export var lane_change_m: float
+## How far past the mouth a car's tail runs before the indicator of the turn it
+## finished goes off, in metres.
+@export var wink_hold_m: float
 ## Under this many degrees between the way in and the way out a move is straight
 ## on; past it a turn, taken from the nearside lane (left) or the offside (right).
 @export var straight_deg: float

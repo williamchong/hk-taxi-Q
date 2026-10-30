@@ -244,9 +244,9 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   lenses are on the taxi's `CIRCUIT_INDICATOR_L/R` (`make_parked.py`), `INSTANCE_CUSTOM.a` carries
   8 left / 16 right, and `vehicle_body.gdshader` flashes them at `vehicle_lamps.tres`' beat
   (`VehicleLampsProfile.wire_blink`, no second copy), each car on a phase off its MultiMesh slot. A car winks
-  its turn's side from `lane_change_m` before the mouth through the turn, else the side it is
-  changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
-  before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. Day and
+  its turn's side from `lane_change_m` before the mouth through the turn and on until its tail is
+  `wink_hold_m` past the mouth it joined by, else the side it is changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
+  before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. The second `wink:` line, still winking as a turn joins: Wan Chai 76 / 75 / 88 / 95 held, Causeway Bay 58 / 54 / 47 / 41, 0 dropped; a car that drops it at the join fails it by name. Day and
   night frames, 0 shader errors. **`P3-3f3` hazards** (2026-10-30): `parked.tres`'
   `hazard_sources` (`layby`, `frontage`) stand on both indicators, the batch writing custom data for
   any kind that carries one; a bay, the fill, a stop and a rank stay switched off. Wan Chai 55 of

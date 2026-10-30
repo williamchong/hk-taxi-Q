@@ -88,6 +88,13 @@ Travel to move one lane over, a three-second change at 30 kph. A car moves towar
 from the moment it joins the road and only while the lane beside it is clear for both cars' lengths
 and `gap_m`; one that never got across turns from where it is. Shorter reads as a swerve.
 
+## `wink_hold_m = 5.0`
+
+How far the car's tail runs past the mouth it joined by before the indicator of the turn it finished
+goes off — a driver's stalk cancels as the wheel comes straight, not as the nose meets the new road.
+Off at the join, the wink stopped while the car still sat across the junction (the user's report,
+2026-10-30). The next turn's approach takes the indicator over; a lane change waits for it.
+
 ## `straight_deg = 30.0`
 
 Under this between the way in and the way out a move is straight on and keeps its lane; over it a

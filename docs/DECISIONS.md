@@ -10662,6 +10662,9 @@ MultiMesh slot (`INSTANCE_ID`): a queue blinking in step reads as one machine. N
 position, which the first build did — a moving car's drew a new phase every frame and flickered. A car winks its turn's side from
 `lane_change_m` before the mouth — the distance it already uses to settle into the turn's lane —
 and otherwise the side it is moving across the lanes to, a pass included; straight on, nothing.
+The turn's wink holds past the join until the car's tail is `wink_hold_m` (5 m) into the new road —
+off at the join it stopped with the car still across the junction (the user's report, 2026-10-30);
+the next turn's approach takes the indicator over before it, a lane change after it.
 
 **The hazards (`P3-3f3`, 2026-10-30).** Which parked vehicles are stopping rather than parked is
 decided by the source that placed them, not by kind: `parked.tres`' `hazard_sources` is the

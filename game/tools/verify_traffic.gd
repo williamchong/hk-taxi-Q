@@ -29,7 +29,8 @@
 ##   `give way:` stages it: two cars on a back street, the rule held each way.
 ## - 🔴 **A car winks before every turn and never straight on** (`P3-3f`): at
 ##   the last tick of a car's straight run its lamp bits carry the turn's side
-##   and not the other, and a straight-on move carries neither as it starts.
+##   and not the other, and a straight-on move carries neither as it starts;
+##   as a turn joins its road the car still winks its side (`wink_hold_m`).
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -198,6 +199,7 @@ class Seen:
 	var live: bool = false
 	var lives: int = 0
 	var turning: bool = false
+	var turn_side: int = 0
 	## The lamp bits it showed: a turn is judged by the last tick before it.
 	var written: int = 0
 
@@ -322,6 +324,8 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	var head_on: int = 0
 	var winked: int = 0
 	var bad_wink: int = 0
+	var held_wink: int = 0
+	var bad_hold: int = 0
 	var over_centre: int = 0
 	var longest_wait: Array[int] = []
 	var waited: Array[int] = []
@@ -430,7 +434,27 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 							% [tick, index, car.turn_side, car.written]
 						)
 					)
+			# Still winking the finished turn's side as it joins, unless the next
+			# turn's approach already took the indicator over.
+			if (
+				before.live
+				and before.turning
+				and not car.turning
+				and before.turn_side != 0
+				and not system.approaching_turn(car)
+			):
+				if _winks_side(before.turn_side, car.written):
+					held_wink += 1
+				else:
+					bad_hold += 1
+					_problem(
+						(
+							"tick %d: car %d joined from a %d turn with lamp bits %d"
+							% [tick, index, before.turn_side, car.written]
+						)
+					)
 			before.turning = car.turning
+			before.turn_side = car.turn_side
 			before.written = car.written
 			before.live = true
 			before.edge = car.edge
@@ -478,6 +502,14 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 		(
 			"every turn winked its own side, none straight on (%d turns winked, %d wrong)"
 			% [winked, bad_wink]
+		)
+	)
+	_expect(
+		bad_hold == 0 and held_wink > 0,
+		"wink",
+		(
+			"every turn still winked its side as it joined (%d held, %d dropped)"
+			% [held_wink, bad_hold]
 		)
 	)
 	_expect(

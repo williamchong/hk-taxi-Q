@@ -19,6 +19,7 @@ look_m = 45.0
 follow_heading_deg = 45.0
 turn_span_m = 6.0
 lane_change_m = 25.0
+wink_hold_m = 5.0
 straight_deg = 30.0
 pass_look_m = 40.0
 side_clear_m = 0.3
