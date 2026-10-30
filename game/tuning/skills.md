@@ -119,6 +119,9 @@ biggest single line under the time itself.
 
 ## `bump_min_kph = 20.0`
 
+On a moving car the number is the closing speed, and only when the taxi is moving into it (`Q175`,
+`--only=traffic`): the bars are not re-read, since a static wall reads as it did.
+
 The penalties (`P3-50`, `Q148`) read ONE number off the car: the speed into the wall on the tick
 of the hit, `VehicleController.take_impact_mps`, the pre-step velocity's component along the
 contact normal. Two bars on it make three tiers. Under this one a contact is a touch — free, no

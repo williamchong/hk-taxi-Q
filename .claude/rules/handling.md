@@ -159,6 +159,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   🚫 Left: the scrub after a clip — on the street a 40 kph clip still rests within a second with
   the nose on the face. The lever is a yaw-away or a tyre-grip term while a wall contact is live,
   graded on the clip rows and the drive; `collision_deflection` scales only the first tick.
+- 🔴 **`--only=traffic` grades the latch and the slide against a MOVING body** (`Q175`): `tail5`,
+  `tail20`, `head50`, `rear40`, `back20`, at 42, 63 and 86 kph, `impact` against the tool's own
+  `approach`. Both read the collider's frame in `_integrate_forces`; a static wall's velocity is
+  zero, so `--only=wall` must stay byte-identical. `back20` reading above 0 means the "moving into
+  the contact" test has gone; `rear40` is under the 1 m/s floor and cannot see it.
 - 🔴 **The slip is the REAR AXLE's since 2026-10-06** (`Q153`): `VehicleController.rear_axle_velocity`
   against the nose, in the fare, drift mode, stability control's cuts and the pad's own copy
   (`_slide_velocity`). At the centre of mass a gripping full-lock turn carried 15° by geometry

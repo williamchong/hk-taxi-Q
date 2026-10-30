@@ -39,7 +39,8 @@ const RIGHTING_LIFT_M: float = 1.5
 const SCRAPE_SPIN_RETAINED: float = 0.5
 ## The hardest wall contact since the last `take_impact_mps`, as the speed
 ## INTO the wall in m/s — the pre-slide velocity's component along the
-## contact normal, the one number the tiers of `P3-50`'s penalty are read off.
+## contact normal, less the wall's own (`Q175`), the one number the tiers of
+## `P3-50`'s penalty are read off.
 ## Read before the slide rewrites the velocity, so it is the hit and not what
 ## the arcade response left of it. 0 between contacts; a contact under the
 ## 1 m/s floor in `_integrate_forces` never sets it, so a car pushing on a
@@ -689,6 +690,13 @@ func place_at(pose: Transform3D) -> void:
 ## never depends on the order the contacts arrive in; the slid velocity is
 ## chained through the loop so a second contact on the same slab sees what
 ## the first left, and the spin is halved once per tick.
+##
+## 🔴 **A wall may be moving** (`Q175`): the moving traffic's bodies. Both the
+## latch and the slide work in the collider's frame, so a tap on a slower car
+## reads the closing speed and leaves the taxi the car's pace, where the bare
+## velocity read 100 kph for a 5 kph tap and stopped it dead. The latch still
+## asks the taxi to be moving INTO the contact: a car running into the back of it
+## is not its hit. A static wall's velocity is zero and the two read as before.
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var velocity: Vector3 = _velocity_into_step
 	var struck: bool = false
@@ -696,15 +704,19 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var normal: Vector3 = state.get_contact_local_normal(i)
 		if absf(normal.y) > WALL_NORMAL_Y:
 			continue  # road surface, handled by the suspension
-		if _velocity_into_step.length() >= 1.0:
-			_impact_mps = maxf(_impact_mps, -_velocity_into_step.dot(normal))
-		if velocity.length() < 1.0:
+		var moving: Vector3 = state.get_contact_collider_velocity_at_position(i)
+		if _velocity_into_step.length() >= 1.0 and _velocity_into_step.dot(normal) < 0.0:
+			_impact_mps = maxf(_impact_mps, -(_velocity_into_step - moving).dot(normal))
+		var relative: Vector3 = velocity - moving
+		if relative.length() < 1.0:
 			continue
-		var into_wall: float = velocity.normalized().dot(normal)
+		var into_wall: float = relative.normalized().dot(normal)
 		if into_wall >= 0.0:
 			continue  # already moving away
 		var retained: float = lerpf(1.0, profile.collision_speed_retained, absf(into_wall))
-		velocity = velocity.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
+		velocity = (
+			moving + relative.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
+		)
 		struck = true
 	if struck:
 		state.linear_velocity = velocity
