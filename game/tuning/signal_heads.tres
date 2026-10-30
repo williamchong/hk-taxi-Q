@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://8rh8vkjvhj16"]
+
+[ext_resource type="Shader" uid="uid://ny1prjev5003" path="res://assets/shaders/signal_head.gdshader" id="1_head"]
+
+[resource]
+resource_name = "signal_heads"
+render_priority = 0
+shader = ExtResource("1_head")
+shader_parameter/body_roughness = 0.7
+shader_parameter/lamp_red = Color(1, 0.1, 0.06, 1)
+shader_parameter/lamp_amber = Color(1, 0.55, 0.05, 1)
+shader_parameter/lamp_green = Color(0.1, 1, 0.55, 1)
+shader_parameter/lamp_emission = 3.0
+shader_parameter/lamp_night_gain = 2.0

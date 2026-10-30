@@ -100,6 +100,13 @@ const SHADERS: Dictionary = {
 	# `vertex_albedo.gdshader` on `water`'s terms, and its fallback is the same
 	# quiet one, which is why `verify_trees.gd` checks the dispatch by `resource_path`.
 	"trees": "res://tuning/trees.tres",
+	# The lit signal heads (`P3-3e`): `MATERIAL` in `tools/make_signal_heads.py`,
+	# on the AUTHORED `heads.glb`. Its own shader, because the lamp is read from
+	# `INSTANCE_CUSTOM` (`SignalController`'s light) against the lens circuit on
+	# `UV.x`. ⚠️ Its fallback failure is the quiet one: a head left on
+	# its `BaseMaterial3D` draws the right box with every lens dark, so
+	# `verify_signals.gd` checks the dispatch by `resource_path`.
+	"signal_heads": "res://tuning/signal_heads.tres",
 }
 
 ## The one material in the bundle that arrives carrying an image (`P3-20`).
