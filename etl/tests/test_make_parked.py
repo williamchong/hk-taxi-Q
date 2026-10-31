@@ -34,10 +34,17 @@ from make_parked import (  # noqa: E402
     write_roster,
 )
 from make_vehicle import (  # noqa: E402
+    CIRCUIT_HEADLAMP,
+    CIRCUIT_SIDELAMP,
     GLASS,
     LAMP,
+    MARKER_CABIN,
+    MARKER_CABIN_DIM,
+    MARKER_GLASS,
+    MARKER_LAMP,
     MARKER_LIVERY,
     MATERIAL_OF_PAYLOAD,
+    RED,
     material_parts,
 )
 
@@ -160,6 +167,55 @@ class TestLiveries:
         shape = replace(next(s for s in SHAPES if s.kind == "taxi"), livery=GLASS)
         with pytest.raises(ValueError, match="no painted vertex"):
             _liveried(by_name["taxi"], shape)
+
+
+# The kinds whose windows light at night, and at which level.
+LIT_CABINS = {"minibus": MARKER_CABIN_DIM, "bus": MARKER_CABIN, "tram": MARKER_CABIN}
+
+
+class TestCabins:
+    """The windows that light at night are public transport's, all of them."""
+
+    def test_only_public_transport_lights(self, by_name: dict[str, MeshData]) -> None:
+        for kind, mesh in by_name.items():
+            markers = set(mesh.uvs[:, 1].tolist()) & {MARKER_CABIN, MARKER_CABIN_DIM}
+            assert markers == ({LIT_CABINS[kind]} if kind in LIT_CABINS else set()), kind
+
+    def test_a_lit_cabin_leaves_no_dark_glass(self, by_name: dict[str, MeshData]) -> None:
+        for kind in LIT_CABINS:
+            mesh = by_name[kind]
+            marked = mesh.uvs[:, 1] == LIT_CABINS[kind]
+            assert not np.any(mesh.uvs[:, 1] == MARKER_GLASS), kind
+            # The glass and nothing but: not a pillar or a blind on it.
+            assert np.all(mesh.colours[marked, :3] == np.array(GLASS, dtype=np.uint8)), kind
+
+
+def test_the_trams_one_head_lamp_is_on_the_circuit(by_name: dict[str, MeshData]) -> None:
+    mesh = by_name["tram"]
+    lit = mesh.uvs[:, 0] == CIRCUIT_HEADLAMP
+    assert lit.any()
+    assert np.all(mesh.uvs[lit, 1] == MARKER_LAMP)
+    # On the dash's centreline, at the nose, where `_ends` stands it.
+    low, high = mesh.positions[lit].min(axis=0), mesh.positions[lit].max(axis=0)
+    assert low[0] == pytest.approx(-high[0])
+    assert high[2] < 0.0
+
+
+def test_the_trams_side_lamps_are_white_ahead_and_red_behind(
+    by_name: dict[str, MeshData],
+) -> None:
+    mesh = by_name["tram"]
+    lit = mesh.uvs[:, 0] == CIRCUIT_SIDELAMP
+    assert np.all(mesh.uvs[lit, 1] == MARKER_LAMP)
+    ahead, behind = lit & (mesh.positions[:, 2] < 0.0), lit & (mesh.positions[:, 2] > 0.0)
+    assert np.all(mesh.colours[ahead, :3] == np.array(LAMP, dtype=np.uint8))
+    assert np.all(mesh.colours[behind, :3] == np.array(RED, dtype=np.uint8))
+    for end in (ahead, behind):
+        assert {bool(x > 0.0) for x in mesh.positions[end, 0]} == {False, True}
+    # No other kind has a side lamp to light.
+    for kind, other in by_name.items():
+        if kind != "tram":
+            assert not np.any(other.uvs[:, 0] == CIRCUIT_SIDELAMP), kind
 
 
 class TestWinding:

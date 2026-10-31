@@ -37,6 +37,12 @@ const GROUND_SLACK_M: float = 0.02
 ## match it, `MARKER_LIVERY` in `tools/make_vehicle.py` and the importer's
 ## `vehicle_livery` row.
 const LIVERY_MARKER: float = 4.0
+## Its `MARKER_CABIN` and `MARKER_CABIN_DIM`, likewise, by the kinds that wear them.
+const CABIN_MARKER: float = 5.0
+const CABIN_DIM_MARKER: float = 6.0
+const LIT_CABINS: Dictionary[String, float] = {
+	"minibus": CABIN_DIM_MARKER, "bus": CABIN_MARKER, "tram": CABIN_MARKER
+}
 
 var _problems: PackedStringArray = []
 
@@ -63,6 +69,7 @@ func _init() -> void:
 			if not library.is_empty():
 				_check_join(document, library)
 				_check_liveries(library)
+				_check_cabins(library)
 			_check_entries(document)
 	for problem: String in _problems:
 		printerr("  FAIL  ", problem)
@@ -157,6 +164,25 @@ func _check_liveries(library: Dictionary[String, Mesh]) -> void:
 				marked += 1
 		_expect(marked > 0, "liveries '%s' has a palette but the mesh has no livery panel" % kind)
 	print("  info  liveried kinds: %s" % ", ".join(PackedStringArray(profile.liveries.keys())))
+
+
+## The public transport's glass came through the import as lit cabin, and no
+## other kind's did: a lost marker is a dark window at night and no error.
+func _check_cabins(library: Dictionary[String, Mesh]) -> void:
+	for kind: String in library:
+		var arrays: Array = library[kind].surface_get_arrays(0)
+		var marked: Dictionary[float, bool] = {}
+		for uv: Vector2 in arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array:
+			var marker: float = floorf(uv.y)
+			if is_equal_approx(marker, CABIN_MARKER) or is_equal_approx(marker, CABIN_DIM_MARKER):
+				marked[marker] = true
+		var wanted: Array[float] = []
+		if LIT_CABINS.has(kind):
+			wanted.append(LIT_CABINS[kind])
+		_expect(
+			marked.keys() == wanted,
+			"'%s' carries cabin markers %s, and should carry %s" % [kind, marked.keys(), wanted]
+		)
 
 
 ## Every entry's `hours` is a window or null and its `chance` a share.

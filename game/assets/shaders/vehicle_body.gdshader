@@ -61,6 +61,13 @@ const float MARKER_LAMP = 2.0;
 // apply; `ParkedLayer` writes it) when its alpha is set. The player's taxi
 // ships no such vertex, so it cannot be touched.
 const float MARKER_LIVERY = 4.0;
+// Glass with a saloon lit behind it (`tools/make_parked.py`'s `Shape.cabin`): the
+// glazing by day, and at night it burns `cabin_light` by `night_lights`. No
+// per-instance state: a bus at its stop and a tram in service both have their
+// lights on, and neither is ever a switched-off car.
+const float MARKER_CABIN = 5.0;
+// The same at `cabin_glow_dim`: a minibus's saloon is dimmer than a bus's.
+const float MARKER_CABIN_DIM = 6.0;
 // Must match `CIRCUIT_*` in `tools/make_vehicle.py`. Only `NONE` is named here:
 // the rest are the channels of `lamp_lit` then `lamp_front` in order, and
 // enumerating them again as constants would be a second copy of the ordering
@@ -180,10 +187,13 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // stopping car's hazards; they flash at `traffic_blink_hz` for
 // `traffic_blink_duty` of each beat, each instance on its own phase.
 // Running: the head lamps at `traffic_day_lamps` by day, full at night, and the
-// brake lens at `traffic_tail_lit` scaled by the night; braking: the brake lens
-// full, day or night.
+// brake lens at `traffic_tail_lit` scaled by the night, and a tram's side lamps
+// at `traffic_side_lit`; braking: the brake lens full, day or night.
 uniform float traffic_day_lamps : hint_range(0.0, 1.0) = 0.5;
 uniform float traffic_tail_lit : hint_range(0.0, 1.0) = 0.35;
+// A tram's side lamps while it runs, day or night. 0.75 of `lamp_emission` is the
+// 1.2 of the table above: at full 1.6 the red lens reads salmon.
+uniform float traffic_side_lit : hint_range(0.0, 1.0) = 0.75;
 // Set on the library's material from `vehicle_lamps.tres` (`VehicleLampsProfile.
 // wire_blink`), the taxi's own beat: no second copy here, so an unwired
 // material's indicators stay dark rather than flash at a guess.
@@ -193,6 +203,8 @@ uniform float traffic_blink_duty : hint_range(0.0, 1.0) = 0.0;
 // less one, as `channel` below counts them.
 const int CHANNEL_BRAKE = 0;
 const int CHANNEL_HEADLAMP = 5;
+// `CIRCUIT_SIDELAMP`, less one: a tram's small lamps.
+const int CHANNEL_SIDELAMP = 4;
 // `CIRCUIT_INDICATOR_L` and `_R`, less one.
 const int CHANNEL_INDICATOR_L = 2;
 const int CHANNEL_INDICATOR_R = 3;
@@ -237,6 +249,14 @@ instance uniform vec4 lamp_lit = vec4(0.0);
 // Godot caps instance uniforms per shader, and a third vector spends a slot on
 // a car that has run out of lenses to light long before it runs out of channels.
 instance uniform vec4 lamp_front = vec4(0.0);
+
+group_uniforms cabin;
+
+// A saloon's lights seen through its windows at full night (`Q177`). Under the
+// 1.0 glow threshold on purpose: a lit room, not a lamp.
+uniform vec3 cabin_light : source_color = vec3(1.0, 0.84, 0.56);
+uniform float cabin_glow : hint_range(0.0, 4.0) = 0.25;
+uniform float cabin_glow_dim : hint_range(0.0, 4.0) = 0.12;
 
 group_uniforms paint;
 
@@ -321,7 +341,9 @@ void vertex() {
 void fragment() {
 	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
 
-	bool is_glass = abs(marker - MARKER_GLASS) < 0.5;
+	bool is_cabin = abs(marker - MARKER_CABIN) < 0.5;
+	bool is_cabin_dim = abs(marker - MARKER_CABIN_DIM) < 0.5;
+	bool is_glass = is_cabin || is_cabin_dim || abs(marker - MARKER_GLASS) < 0.5;
 	bool is_lamp = abs(marker - MARKER_LAMP) < 0.5;
 
 	// One fresnel serves both reflective markers; the marker chooses how much of
@@ -360,6 +382,9 @@ void fragment() {
 		roughness = glass_roughness;
 		albedo += sky_horizon * sky_light * glint * glint_strength;
 		albedo = mix(albedo, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel));
+		if (is_cabin || is_cabin_dim) {
+			EMISSION = cabin_light * (is_cabin ? cabin_glow : cabin_glow_dim) * night_lights;
+		}
 	} else if (is_lamp) {
 		roughness = lamp_roughness;
 		// The lens glows *its own* colour, taken before the reflection is mixed
@@ -404,6 +429,8 @@ void fragment() {
 				level = max(level, max(braking, running * traffic_tail_lit * night_lights));
 			} else if (channel == CHANNEL_HEADLAMP) {
 				level = max(level, running * max(traffic_day_lamps, night_lights));
+			} else if (channel == CHANNEL_SIDELAMP) {
+				level = max(level, running * traffic_side_lit);
 			} else if (channel == CHANNEL_INDICATOR_L) {
 				level = max(level, winking.x);
 			} else if (channel == CHANNEL_INDICATOR_R) {

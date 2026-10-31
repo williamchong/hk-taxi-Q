@@ -62,3 +62,11 @@ vehicle and one car braking must not brake the rest of the roster.
 
 Judged on the two `taxi` audit frames — `t01.20` in shade, `t04.50` in sun —
 per `ART_DESIGN.md`'s viewpoint table.
+
+## cabin_light, cabin_glow, cabin_glow_dim
+
+A saloon lit behind its windows at night (`Q177`), multiplied by the rig's `night_lights`, so it is
+the plain glazing by day. `cabin_glow` 0.25 is the bus and the tram, `cabin_glow_dim` 0.12 the
+minibus, whose saloon is dimmer on the street (the user, 2026-11-01). Both sit well under the 1.0
+glow threshold: a lit room, not a lamp. 0.9 and 0.4 were shot first and refused as too bright, and
+the first colour, `(1, 0.93, 0.76)`, read as a cream panel rather than a light.

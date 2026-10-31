@@ -57,6 +57,9 @@ from make_vehicle import (  # noqa: E402
     DARK,
     GLASS,
     LAMP,
+    MARKER_CABIN,
+    MARKER_CABIN_DIM,
+    MARKER_GLASS,
     MARKER_LIVERY,
     MARKER_PAINT,
     RED,
@@ -113,6 +116,10 @@ ARCH_CLEARANCE_M = 0.05
 ARCH_SEGMENTS = 8
 # How deep a wheel well runs in, past the tyre's inner face.
 WELL_SPARE_M = 0.06
+# A tram's side lamp: its half-size, and how far a rear one stands inboard of
+# the tail lens, on the row of the indicator under it.
+SIDE_LAMP_HALF_M = (0.06, 0.05)
+SIDE_LAMP_INBOARD_M = 0.2
 # Space left above an arch's crown before the waist ring.
 WAIST_OVER_ARCH_M = 0.06
 
@@ -178,6 +185,11 @@ class Shape:
     # `parked.tres`'s `liveries` says what each one wears. None where the
     # colour IS the vehicle — the red taxi, Citybus's yellow, the green tram.
     livery: Colour | None = None
+    # The small lamps a tram runs with lit, on the side-lamp circuit: white
+    # beside the head lamp, red inboard of each tail lens.
+    side_lamps: bool = False
+    # A saloon lit behind every window at night: the marker its glass takes.
+    cabin: float | None = None
 
     def __post_init__(self) -> None:
         if self.panel_share + self.glass_share >= 1.0:
@@ -586,13 +598,29 @@ def _ends(shape: Shape) -> list[MeshData]:
                     name=f"taillamp_{side_tag}_indicator" if rear else f"indicator_{side_tag}",
                 )
             )
+            if shape.side_lamps:
+                x_lamp, y_lamp = x, lamp_y
+                if rear:
+                    x_lamp -= side * SIDE_LAMP_INBOARD_M
+                    y_lamp -= 0.0825
+                half_x, half_y = SIDE_LAMP_HALF_M
+                parts.append(
+                    box(
+                        (x_lamp - half_x, y_lamp - half_y, z_lens[0]),
+                        (x_lamp + half_x, y_lamp + half_y, z_lens[1]),
+                        RED if rear else LAMP,
+                        name=f"foglamp_{side_tag}",
+                    )
+                )
         if shape.head_lamps == 1 and not rear:
             parts.append(
                 box(
                     (-0.09, lamp_y - 0.09, z_lens[0]),
                     (0.09, lamp_y + 0.09, z_lens[1]),
                     LAMP,
-                    name="headlamp_c",
+                    # The head-lamp circuit's name, so a running tram lights it;
+                    # the motorcycle's `headlamp_c` is on no circuit.
+                    name="headlamp_l",
                 )
             )
         if shape.grille is not None and not rear:
@@ -862,7 +890,7 @@ def vehicle(shape: Shape) -> MeshData:
     parts.extend(DETAILS.get(shape.kind, lambda _: [])(shape))
     parts.extend(_wheels(shape) if shape.arches else [_underframe(shape)])
     body = _liveried(merge([_marked(part) for part in parts], name=shape.kind), shape)
-    return replace(body, material=BODY_MATERIAL)
+    return replace(_cabin_lit(body, shape), material=BODY_MATERIAL)
 
 
 def _liveried(body: MeshData, shape: Shape) -> MeshData:
@@ -881,6 +909,16 @@ def _liveried(body: MeshData, shape: Shape) -> MeshData:
         raise ValueError(f"{shape.kind}: livery {shape.livery} is on no painted vertex")
     uvs = body.uvs.copy()
     uvs[hit, 1] = MARKER_LIVERY
+    return replace(body, uvs=uvs)
+
+
+def _cabin_lit(body: MeshData, shape: Shape) -> MeshData:
+    """Restamp a lit saloon's glass as its cabin marker, the whole of it."""
+    if shape.cabin is None:
+        return body
+    assert body.uvs is not None
+    uvs = body.uvs.copy()
+    uvs[uvs[:, 1] == MARKER_GLASS, 1] = shape.cabin
     return replace(body, uvs=uvs)
 
 
@@ -1036,6 +1074,7 @@ SHAPES: tuple[Shape, ...] = (
         window_bays=5,
         mirrors=False,
         livery=MINIBUS_GREEN,
+        cabin=MARKER_CABIN_DIM,
     ),
     # The double-decker, in Citybus yellow over its blue skirt.
     Shape(
@@ -1060,6 +1099,7 @@ SHAPES: tuple[Shape, ...] = (
         skirt=CITYBUS_BLUE,
         window_bays=6,
         mirrors=False,
+        cabin=MARKER_CABIN,
     ),
     # A tour coach: single deck, high floor, white.
     Shape(
@@ -1141,6 +1181,8 @@ SHAPES: tuple[Shape, ...] = (
         glass_share=0.52,
         head_lamps=1,
         mirrors=False,
+        side_lamps=True,
+        cabin=MARKER_CABIN,
     ),
     Shape(
         kind="motorcycle",

@@ -155,6 +155,12 @@ MARKER_TRIM = 3.0
 # Paint a `MultiMesh` instance may repaint (`Q167`): the parked roster's panels
 # in a kind's livery colour, shaded as paint. The player's taxi carries none.
 MARKER_LIVERY = 4.0
+# Glass with a saloon lit behind it, which burns at night: public transport's,
+# whose lights stay on where a private car's are off. The player's taxi carries
+# none.
+MARKER_CABIN = 5.0
+# The same at a lower level: a minibus's saloon is dimmer than a bus's.
+MARKER_CABIN_DIM = 6.0
 
 # Which marker each authored colour earns — per *vertex*, because the greenhouse
 # is one lofted part carrying both `GLASS` and `SILVER` and no per-part rule
@@ -1132,6 +1138,8 @@ MATERIAL_OF_PAYLOAD: dict[tuple[float, float], str] = {
     (CIRCUIT_NONE, MARKER_TRIM): "vehicle_trim",
     (CIRCUIT_NONE, MARKER_LAMP): "vehicle_lamp",
     (CIRCUIT_NONE, MARKER_LIVERY): "vehicle_livery",
+    (CIRCUIT_NONE, MARKER_CABIN): "vehicle_cabin",
+    (CIRCUIT_NONE, MARKER_CABIN_DIM): "vehicle_cabin_dim",
     (CIRCUIT_BRAKE, MARKER_LAMP): "vehicle_lamp_brake",
     (CIRCUIT_REVERSE, MARKER_LAMP): "vehicle_lamp_reverse",
     (CIRCUIT_INDICATOR_L, MARKER_LAMP): "vehicle_lamp_indicator_left",
