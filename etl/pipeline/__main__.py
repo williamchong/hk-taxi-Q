@@ -58,6 +58,7 @@ from pipeline import (
     signals,
     signs,
     surface,
+    tramlines,
     tramway,
     trees,
 )
@@ -157,11 +158,6 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # height and the kerb side its arm reaches away from. Before `export`, which
     # names the asset.
     "lamps": lamps.main,
-    # After `fares`, `tramway`, `fence` and `surface` (`P3-71`): the stationary
-    # vehicles stand at the kerb the ribbon drew, clear of the fare nodes, on
-    # the tram beds the tramway laid, and off the fenced edges. Before
-    # `export`, which names the document.
-    "parked": parked.main,
     # After `carve` and `surface`, and forced: a tree stands on the ground the
     # carved tiles draw and is refused inside the carriageway region and under
     # anything the bundle draws over its foot (`P3-77`). Before `export`, which
@@ -171,6 +167,14 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # stops at its drawn mouth (`P3-3a`, `Q173`). Before `export`, which names
     # the plan.
     "signals": signals.main,
+    # After `tramway`, `fares` and `signals` (`P3-4`): the lines a tram runs, off
+    # the beds, the stops and the stop lines.
+    "tramlines": tramlines.main,
+    # After `fares`, `tramlines`, `fence` and `surface` (`P3-71`): the stationary
+    # vehicles stand at the kerb the ribbon drew, clear of the fare nodes, out of
+    # a tram's path, and off the fenced edges. Before `export`, which names the
+    # document.
+    "parked": parked.main,
     "export": export.main,
 }
 
@@ -216,9 +220,10 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "railings": ("surface",),
     "signs": ("surface",),
     "lamps": ("surface",),
-    "parked": ("surface", "fares", "tramway", "fence"),
     "trees": ("carve", "surface"),
     "signals": ("surface",),
+    "tramlines": ("tramway", "fares", "signals", "railings", "signs", "lamps", "trees"),
+    "parked": ("surface", "fares", "tramlines", "fence"),
     "export": (
         "basemap",
         "landmarks",
@@ -234,9 +239,10 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "railings",
         "signs",
         "lamps",
-        "parked",
         "trees",
         "signals",
+        "tramlines",
+        "parked",
     ),
 }
 

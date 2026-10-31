@@ -57,6 +57,20 @@ BLOCK: dict[str, Any] = {
     "surface_within_m": 1.0,
     "rail_material": "kerb",
     "bed_material": "asphalt",
+    "lines": {
+        "separation_min_m": 1.8,
+        "separation_max_m": 3.6,
+        "flow_reach_m": 12.0,
+        "min_flow_m": 30.0,
+        "touch_m": 6.0,
+        "join_m": 25.0,
+        "join_heading_deg": 40.0,
+        "open_end_m": 25.0,
+        "stop_max_track_m": 12.0,
+        "signal_reach_m": 15.0,
+        "signal_heading_deg": 30.0,
+        "tram_path_m": 1.3,
+    },
 }
 
 
@@ -516,3 +530,18 @@ class TestConfig:
         """A city with no tramway in its estate declares none and builds as
         before — the same defaulted-is-the-contract rule as `podiums`."""
         assert city_with(tmp_path, None).tramway is None
+
+
+class TestABedIsTestedAtStations:
+    def test_a_long_span_past_its_partner_keeps_the_stretch_beside_it(self) -> None:
+        """🔴 The source digitises a straight rail as two vertices. One end past its
+        partner rejected the whole span at those vertices: Johnston Road lost 150 m
+        of bed with both rails drawn (`P3-4`)."""
+        city_spec = type("Spec", (), {"gauge_m": GAUGE_M, "pair_tolerance_m": TOLERANCE_M})()
+        voter = np.array([[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+        partner = np.array([[0.0, 0.0, GAUGE_M], [60.0, 0.0, GAUGE_M]])
+        assert _track_centres(voter, partner, city_spec)[0] == []
+        runs, rejected, _ = _track_centres(_stations(voter, 4.0), partner, city_spec)
+        assert len(runs) == 1
+        assert runs[0][0][-1, 0] == pytest.approx(60.0)
+        assert rejected > 0

@@ -279,6 +279,7 @@ from pipeline.config_blocks.sources import (
 )
 from pipeline.config_blocks.tramway import (  # noqa: F401
     _TRAMWAY_ROLES,
+    TramLines,
     Tramway,
     _tramway,
 )

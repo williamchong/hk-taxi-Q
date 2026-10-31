@@ -52,6 +52,7 @@ from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_DIR, SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
+from pipeline.tramlines import TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 from pipeline.trees import TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA
 
@@ -392,6 +393,13 @@ class _Region:
                 "plan_document": None,
                 "heads_document": None,
                 "staged": 0,
+            },
+            # And a tenth: `testville` draws no tram line.
+            TRAMLINES_MANIFEST_NAME: {
+                "schema_version": TRAMLINES_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "document": None,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -1057,9 +1065,10 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
-            "parked",
             "trees",
             "signals",
+            "tramlines",
+            "parked",
             "export",
         ]
 
@@ -1099,9 +1108,10 @@ class TestOrchestrator:
             "railings",
             "signs",
             "lamps",
-            "parked",
             "trees",
             "signals",
+            "tramlines",
+            "parked",
             "export",
         ]
 

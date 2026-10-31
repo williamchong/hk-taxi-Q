@@ -20,9 +20,11 @@ from typing import Any
 
 import numpy as np
 import pytest
+import shapely
 import yaml
 
-from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, SOURCE_STAND, load_config
+from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, load_config
+from pipeline.documents import write_document
 from pipeline.drawnroad import ribbons
 from pipeline.parked import (
     Candidate,
@@ -32,10 +34,16 @@ from pipeline.parked import (
     _flow_heading,
     _footprint,
     _layby_candidates,
-    _on_track,
     _stand,
     _Street,
+    _tram_path,
     in_window,
+)
+from pipeline.tramlines import (
+    TRAM_LINES_NAME,
+    TRAM_LINES_SCHEMA,
+    TRAMLINES_MANIFEST_NAME,
+    TRAMLINES_MANIFEST_SCHEMA,
 )
 from tests.helpers import CITY_YAML
 from tests.test_surface import _edge
@@ -59,7 +67,7 @@ BLOCK: dict[str, Any] = {
             "max_snap_m": 12.0,
         }
     ],
-    "stands": {"taxi_stand": {"kind": "taxi", "queue": 2, "pitch_m": 6.5}, "poi": {"kind": "tram"}},
+    "stands": {"taxi_stand": {"kind": "taxi", "queue": 2, "pitch_m": 6.5}},
     "frontage": {
         "classes": {
             "hotel": {"match": ["Hotel"], "kinds": ["taxi"]},
@@ -84,7 +92,6 @@ BLOCK: dict[str, Any] = {
         "kinds": {"car": 0.7, "taxi": 0.3},
         "chance": 0.6,
     },
-    "tram_max_track_m": 12.0,
     "slow_streets": {
         "street_classes": ["minor"],
         "max_speed_kph": 50,
@@ -276,15 +283,6 @@ class TestTheRefusals:
         assert _stand(street, spec, _candidate("car", 0.5, 1.0)) == "kerb_hidden"
         assert not isinstance(_stand(street, spec, _candidate("car", 0.5, -1.0)), str)
 
-    def test_a_tram_stands_on_its_bed_and_skips_the_kerb_rules(self, spec) -> None:
-        street = _street(_graph(width_m=7.0), _surface(half_width_m=3.5))
-        on_bed = _candidate(
-            "tram", 0.5, 1.0, SOURCE_STAND, heading_deg=0.0, plan=(0.0, -100.0), height_m=3.0
-        )
-        stood = _stand(street, spec, on_bed)
-        assert not isinstance(stood, str)
-        assert (stood.x, stood.y, stood.z) == (0.0, 3.0, -100.0)
-
 
 class TestTheFill:
     def _spec_with_runs(self, spec, runs: list[dict]) -> tuple[_Street, Any]:
@@ -432,15 +430,29 @@ class TestTheLayby:
         assert not spec.slow_streets.allows(edge)
 
 
-class TestOnTheTrack:
-    def test_a_fraction_along_a_bed_gives_its_point_and_bearing(self) -> None:
-        bed = np.array([[0.0, 3.0, 0.0], [0.0, 3.0, -100.0], [50.0, 3.0, -100.0]])
-        x, y, z, bearing = _on_track(bed, 0.25)
-        assert (x, y, z) == pytest.approx((0.0, 3.0, -37.5))
-        assert bearing == pytest.approx(0.0)
-        x, y, z, bearing = _on_track(bed, 0.8)
-        assert (x, z) == pytest.approx((20.0, -100.0))
-        assert bearing == pytest.approx(90.0)
+class TestTheTramPath:
+    def test_the_path_is_the_swept_width_of_every_line(self, tmp_path) -> None:
+        write_document(
+            tmp_path / TRAM_LINES_NAME,
+            {
+                "schema_version": TRAM_LINES_SCHEMA,
+                "tracks": [{"points": [[0.0, 4.0, 0.0], [100.0, 4.0, 0.0]]}],
+            },
+        )
+        write_document(
+            tmp_path / TRAMLINES_MANIFEST_NAME,
+            {"schema_version": TRAMLINES_MANIFEST_SCHEMA, "document": TRAM_LINES_NAME},
+        )
+        path = _tram_path(tmp_path, 1.3)
+        assert path.contains(shapely.Point(50.0, 1.2))
+        assert not path.contains(shapely.Point(50.0, 1.4))
+
+    def test_no_line_is_no_path(self, tmp_path) -> None:
+        write_document(
+            tmp_path / TRAMLINES_MANIFEST_NAME,
+            {"schema_version": TRAMLINES_MANIFEST_SCHEMA, "document": None},
+        )
+        assert _tram_path(tmp_path, 1.3) is None
 
 
 class TestTheBlock:

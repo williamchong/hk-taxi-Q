@@ -13,6 +13,39 @@ from pipeline.config_blocks.base import LayerSpec, Material, _MaterialTable, _re
 
 
 @dataclass(frozen=True)
+class TramLines:
+    """How `pipeline/tramlines.py` reads the beds as lines a tram runs (`P3-4`).
+
+    Every value is a bar on a measurement of the beds; the numbers' evidence is in
+    `hong_kong.yaml`.
+    """
+
+    # How far off another track's station may stand and be the other track.
+    separation_min_m: float
+    separation_max_m: float
+    # How far from a bed the nearest one-way road may run and speak for it, and
+    # the metres of bed it must speak for.
+    flow_reach_m: float
+    min_flow_m: float
+    # How near a fragment's end must touch a directed bed to take its way.
+    touch_m: float
+    # The longest chord a tram crosses between two beds, and the most it may
+    # turn from either.
+    join_m: float
+    join_heading_deg: float
+    # How near the region's rectangle a bed's end leaves the region.
+    open_end_m: float
+    # A tram stop further than this from any kept track binds to none.
+    stop_max_track_m: float
+    # How far from an approach's stop point a track may cross its plane and obey
+    # it, and the most the two may differ in heading.
+    signal_reach_m: float
+    signal_heading_deg: float
+    # Half the plan a tram sweeps, for what `in_tram_path` counts.
+    tram_path_m: float
+
+
+@dataclass(frozen=True)
 class Tramway(LayerSpec):
     """The published tramway, and how `P3-14` draws it (`Q58`).
 
@@ -64,6 +97,7 @@ class Tramway(LayerSpec):
     # string here would leave both materials looking unreferenced.
     rail_material: Material
     bed_material: Material
+    lines: TramLines
 
 
 _TRAMWAY_ROLES = ("line_type",)
@@ -114,6 +148,20 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
     if height_step_m <= 0.0:
         raise ValueError(f"{where}:height_step_m must be positive, got {height_step_m}")
 
+    lines_body = _require(body, "lines", where)
+    lines_where = f"{where}:lines"
+    lines = TramLines(
+        **{
+            name: float(_require(lines_body, name, lines_where))
+            for name in TramLines.__dataclass_fields__
+        }
+    )
+    if not 0.0 < lines.separation_min_m < lines.separation_max_m:
+        raise ValueError(f"{lines_where}: separation_min_m must be under separation_max_m")
+    for name in TramLines.__dataclass_fields__:
+        if getattr(lines, name) <= 0.0:
+            raise ValueError(f"{lines_where}:{name} must be positive")
+
     return Tramway(
         **_spec_header(body, where, _TRAMWAY_ROLES),
         codes=codes,
@@ -130,4 +178,5 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
             str(_require(body, "rail_material", where)), f"{where}:rail_material"
         ),
         bed_material=table.get(str(_require(body, "bed_material", where)), f"{where}:bed_material"),
+        lines=lines,
     )

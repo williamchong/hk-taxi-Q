@@ -113,7 +113,7 @@ class StopSet:
 @dataclass(frozen=True)
 class Stand:
     """What waits at one of `fares.json`'s own kinds: a queue of taxis behind a
-    stand, a tram at a tram stop."""
+    stand."""
 
     kind: str
     queue: int
@@ -270,7 +270,6 @@ class Parked:
     frontage: Frontage | None
     fill: Fill | None
     laybys: Laybys | None
-    tram_max_track_m: float
     clearances: Clearances
     slow_streets: SlowStreets
 
@@ -563,7 +562,6 @@ def _parked(body: Any, where: str) -> Parked | None:
         laybys=_laybys(body.get("laybys"), f"{where}:laybys", vehicles),
         clearances=_clearances(_require(body, "clearances", where), f"{where}:clearances"),
         slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
-        **_measures(body, where, ("tram_max_track_m",), positive=True),
     )
     named: set[str] = set()
     if parked.bays is not None:

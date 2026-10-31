@@ -927,7 +927,14 @@ def build_region(
         report.pairs += 1
         if stations[voter] is None or stations[partner] is None:
             continue
-        runs, rejected, tested = _track_centres(parts[voter], parts[partner], spec)
+        # ⚠️ **Tested at the voter's stations, not its source vertices.** The source
+        # digitises a straight rail as two vertices up to 153 m apart, so one end
+        # past its partner rejected the whole span: Wan Chai's beds stopped 150 m
+        # short down Johnston Road with both rails drawn, and a tram has to run on
+        # what this joins (`P3-4`).
+        runs, rejected, tested = _track_centres(
+            _stations(parts[voter], spec.height_step_m), parts[partner], spec
+        )
         report.off_gauge += rejected
         report.pair_stations += tested
         for spine, gauges in runs:

@@ -70,6 +70,7 @@ from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
+from pipeline.tramlines import TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 from pipeline.trees import TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA
 
@@ -284,7 +285,10 @@ CITY_NAME = "city.json"
 # the published heads bound to the approach whose light each shows, stood from
 # the AUTHORED `heads.glb` (`parked`'s terms). A v41 reader would ship it
 # unlisted and `sync_generated.sh` would sweep it.
-CITY_SCHEMA = 42
+# 43 since `P3-4` (`Q176`): the manifest names `tram_lines.json`, the directed
+# tracks a tram runs with their stops and stop lines, and the parked roster stands
+# no tram. A v42 reader would ship the document unlisted and stand no tram at all.
+CITY_SCHEMA = 43
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -340,6 +344,7 @@ OPTIONAL_ASSET_KEYS = (
     "trees_placements",
     "signals_plan",
     "signal_heads_placements",
+    "tram_lines",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -383,6 +388,7 @@ INPUTS: tuple[Input, ...] = (
     Input(PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA, "parked"),
     Input(TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA, "trees"),
     Input(SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA, "signals"),
+    Input(TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA, "tramlines"),
 )
 
 
@@ -467,6 +473,7 @@ def build_region(
     parked = documents[PARKED_MANIFEST_NAME]
     trees = documents[TREES_MANIFEST_NAME]
     signals = documents[SIGNALS_MANIFEST_NAME]
+    tramlines = documents[TRAMLINES_MANIFEST_NAME]
     basemap = documents[BASEMAP_NAME]
 
     tiles = [
@@ -634,6 +641,9 @@ def build_region(
         # Where the lit heads stand (`P3-3e`): the library is the AUTHORED
         # `heads.glb`, so only the document ships, on `parked_placements`' terms.
         "signal_heads_placements": signals["heads_document"],
+        # The lines a tram runs (`P3-4`, `Q176`): `null` where the city declares no
+        # tramway or nothing joined into a line.
+        "tram_lines": tramlines["document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

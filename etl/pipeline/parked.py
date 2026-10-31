@@ -14,7 +14,7 @@ vehicles are hand-authored assets under CC BY-SA, not build output.
    and a stop id, snapped as a fare node is (`Q15`: level 0, plan distance),
    with a bus present by a seeded CHANCE so the same stop is not always served.
 3. **A stand** — `fares.json`'s own kinds: a queue of taxis behind a taxi
-   stand, a tram at a tram stop on the bed `tramway.py` laid.
+   stand. A tram stop stands nothing: the trams run (`P3-4`, `Q176`).
 4. **A frontage** — what a building's published name says about its kerb: a
    coach and a taxi at a hotel, a van at an office. The proxy for a land use
    the estate does not publish (`ART_DESIGN.md`).
@@ -84,10 +84,15 @@ from pipeline.gdb import points as gdb_points
 from pipeline.gdb import read_layer, read_table
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.placements import PLACEMENTS_SCHEMA, Placement, placement
-from pipeline.polyline import Segments, Snap, bearing_deg, frame, plan_lengths, true_runs
+from pipeline.polyline import Segments, Snap, bearing_deg, frame, true_runs
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
-from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
+from pipeline.tramlines import (
+    TRAM_LINES_SCHEMA,
+    TRAMLINES_MANIFEST_NAME,
+    TRAMLINES_MANIFEST_SCHEMA,
+    tram_path,
+)
 
 log = logging.getLogger(__name__)
 
@@ -99,9 +104,8 @@ PARKED_MANIFEST_SCHEMA = 1
 # stand over a frontage over the fill.
 _PRIORITY = {source: rank for rank, source in enumerate(SOURCES)}
 
-# `fares.json`'s kinds this stage furnishes. The tram stop is a `poi`.
+# `fares.json`'s kind this stage furnishes.
 _FARE_TAXI_STAND = "taxi_stand"
-_FARE_TRAM_STOP = "poi"
 
 # A kerbside run's kinds, as `roadgraph.json` publishes them (`P3-13`).
 _DOUBLE = "double"
@@ -117,6 +121,7 @@ TOO_NARROW = "too_narrow"
 IN_KEEP_OUT = "in_keep_out"
 OVERLAPPING = "overlapping"
 FAST_STREET = "fast_street"
+ON_TRAM_LINE = "on_tram_line"
 
 
 @dataclass
@@ -136,7 +141,6 @@ class ParkedReport:
     stops_outside: int = 0
     stops_unsnapped: int = 0
     stands_read: int = 0
-    trams_no_track: int = 0
     places_read: int = 0
     frontages_classified: int = 0
     frontages_too_far: int = 0
@@ -148,7 +152,8 @@ class ParkedReport:
     # Every refusal, by the source that asked and the rule that answered, in
     # the order the rules are asked: `FENCED`, `NO_RIBBON`, `AT_JUNCTION`,
     # `KERB_HIDDEN`, `TOO_NARROW`, `IN_KEEP_OUT` (a fare node or a crossing),
-    # `OVERLAPPING`, and `FAST_STREET` for a frontage on a street the stage
+    # `ON_TRAM_LINE` for anything in a tram's path, `OVERLAPPING`,
+    # and `FAST_STREET` for a frontage on a street the stage
     # may not invent a kerb on. ⚠️ The fill draws no slot on such a street
     # and so never counts one; the partition `candidates` = `placed` + every
     # count here holds over what was asked.
@@ -183,12 +188,6 @@ class Candidate:
     side: float
     hours: tuple[float, float] | None
     chance: float
-    # A stand told to face a bearing of its own (a tram on its bed) rather
-    # than its kerb's flow.
-    heading_deg: float | None = None
-    # A stand placed off the kerb (a tram on its bed): the plan point itself.
-    plan: tuple[float, float] | None = None
-    height_m: float | None = None
     # How many invented rows the street carries with this one: 1 for a row on
     # one kerb, 2 where the fill takes both. Read only for what the stage
     # invents; an `AS_FOUND` source takes no lane bar.
@@ -432,20 +431,6 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
     """One candidate stood, or the name of the refusal that stopped it."""
     vehicle = spec.vehicle(candidate.kind)
     clear = spec.clearances
-    if candidate.plan is not None:
-        # Placed off the kerb — a tram on its bed — so the kerb rules do not
-        # apply; the overlap test still does.
-        assert candidate.heading_deg is not None and candidate.height_m is not None
-        x, z = candidate.plan
-        return Stood(
-            candidate,
-            x,
-            candidate.height_m,
-            z,
-            candidate.heading_deg,
-            _footprint(x, z, candidate.heading_deg, vehicle.length_m, vehicle.width_m),
-            math.inf,
-        )
     ribbon = street.ribbons.get(candidate.edge)
     if ribbon is None:
         return NO_RIBBON
@@ -481,9 +466,7 @@ def _stand(street: _Street, spec: Parked, candidate: Candidate) -> Stood | str:
         return TOO_NARROW
     lateral_m = middle_m + candidate.side * (half_m - clear.kerb_gap_m - across_m / 2.0)
     edge_heading = street.heading_deg(candidate.edge, candidate.t)
-    if candidate.heading_deg is not None:
-        heading = candidate.heading_deg
-    elif vehicle.across:
+    if vehicle.across:
         # Nose to the kerb: the bearing of the vector from the centreline to
         # this side's kerb.
         heading = bearing_deg(candidate.side * nearside(edge_heading))
@@ -626,31 +609,15 @@ def _layby_candidates(street: _Street, spec: Parked, report: ParkedReport) -> li
     return candidates
 
 
-def _nearest_track(
-    tracks: list[np.ndarray], x: float, z: float, max_m: float
-) -> tuple[np.ndarray, float] | None:
-    """The bed nearest a point and the fraction along it, within `max_m`."""
-    best: tuple[np.ndarray, float, float] | None = None
-    for bed in tracks:
-        if len(bed) < 2:
-            continue
-        line = shapely.LineString(bed[:, [0, 2]])
-        distance = line.distance(shapely.Point(x, z))
-        if distance <= max_m and (best is None or distance < best[2]):
-            best = (bed, float(line.project(shapely.Point(x, z), normalized=True)), distance)
-    return None if best is None else (best[0], best[1])
-
-
-def _on_track(bed: np.ndarray, fraction: float) -> tuple[float, float, float, float]:
-    """`(x, y, z, bearing_deg)` at a fraction along a bed."""
-    along = plan_lengths(bed)
-    at_m = fraction * float(along[-1])
-    index = int(np.clip(np.searchsorted(along, at_m) - 1, 0, len(along) - 2))
-    span = along[index + 1] - along[index]
-    f = 0.0 if span <= 0.0 else float((at_m - along[index]) / span)
-    point = bed[index] + f * (bed[index + 1] - bed[index])
-    step = bed[index + 1] - bed[index]
-    return float(point[0]), float(point[1]), float(point[2]), bearing_deg(step[[0, 2]])
+def _tram_path(out_dir: Path, half_width_m: float) -> shapely.Geometry | None:
+    """The plan a tram sweeps down every kept line, or None where none runs."""
+    rebuild = "python -m pipeline.tramlines"
+    manifest = read_document(out_dir / TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA, rebuild)
+    if not manifest.get("document"):
+        return None
+    lines = read_document(out_dir / str(manifest["document"]), TRAM_LINES_SCHEMA, rebuild)
+    plans = [np.asarray(track["points"], dtype=np.float64)[:, [0, 2]] for track in lines["tracks"]]
+    return tram_path(plans, half_width_m)
 
 
 def build_region(
@@ -686,7 +653,7 @@ def build_region(
     for node in fares.get("nodes", ()):
         x, _, z = (float(v) for v in node["pos"])
         # A node a passenger stands at keeps its ring clear; a `poi` tram stop
-        # is neither a pickup nor a drop-off, and the tram stands AT it.
+        # is neither a pickup nor a drop-off.
         if bool(node.get("pickup")) or bool(node.get("dropoff")):
             keep_out.append(shapely.Point(x, z).buffer(clear.fare_m))
         fare_points.append(
@@ -756,47 +723,12 @@ def build_region(
             candidates.append(candidate)
     keep_out_tree = STRtree(keep_out) if keep_out else None
 
-    tracks: list[np.ndarray] = []
-    if _FARE_TRAM_STOP in spec.stands:
-        tramway = read_document(
-            out_dir / TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "python -m pipeline.tramway"
-        )
-        tracks = [np.asarray(line, dtype=np.float64) for line in tramway.get("track_lines", ())]
     for x, z, t, edge, kind in fare_points:
         stand = spec.stands.get(kind)
         if stand is None:
             continue
         report.stands_read += 1
         edge_id = int(edge)
-        if kind == _FARE_TRAM_STOP:
-            found = _nearest_track(tracks, x, z, spec.tram_max_track_m)
-            if found is None:
-                report.trams_no_track += 1
-                continue
-            bed, fraction = found
-            tx, ty, tz, bearing = _on_track(bed, fraction)
-            if edge_id in street.ribbons:
-                # Face the flow of the kerb the stop is on: a tram runs on the
-                # left too.
-                snap = street.segments.nearest(x, z)
-                flow = _flow_heading(street, edge_id, snap.t, street.kerb_side(snap))
-                if math.cos(math.radians(flow - bearing)) < 0.0:
-                    bearing = (bearing + 180.0) % 360.0
-            candidates.append(
-                Candidate(
-                    stand.kind,
-                    SOURCE_STAND,
-                    edge_id,
-                    fraction,
-                    1.0,
-                    stand.hours,
-                    stand.chance,
-                    heading_deg=bearing,
-                    plan=(tx, tz),
-                    height_m=ty,
-                )
-            )
-            continue
         if edge_id not in street.ribbons:
             report.refuse(SOURCE_STAND, NO_RIBBON)
             continue
@@ -873,6 +805,8 @@ def build_region(
     if spec.fill is not None:
         candidates.extend(_fill_candidates(street, spec, report))
 
+    swept = None if city.tramway is None else _tram_path(out_dir, city.tramway.lines.tram_path_m)
+
     # ---- the shared refusals, in precedence ----
     candidates.sort(key=lambda c: (_PRIORITY[c.source], c.edge, c.t, c.side))
     report.candidates = len(candidates)
@@ -895,6 +829,11 @@ def build_region(
             and len(keep_out_tree.query(placed.footprint, predicate="intersects")) > 0
         ):
             report.refuse(candidate.source, IN_KEEP_OUT)
+            continue
+        # 🔴 Every source, published too (`P3-4`, `Q176`): a bus in the lane is Hong
+        # Kong, and a minibus a tram drives through is not. Its stop still stands.
+        if swept is not None and shapely.intersects(swept, placed.footprint):
+            report.refuse(candidate.source, ON_TRAM_LINE)
             continue
         gap_m = spec.vehicle(candidate.kind).gap_m
         spaced = placed.footprint.buffer((clear.gap_m if gap_m is None else gap_m) / 2.0)
