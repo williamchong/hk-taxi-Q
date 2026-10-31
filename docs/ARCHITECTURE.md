@@ -304,6 +304,7 @@ hk-taxi-Q/
 │   │   ├── basemap.py           # iB1000 shoreline + parks → basemap.json (the minimap's ground) + water.glb (the world's sea)
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fares.json
 │   │   ├── tramway.py           # tram rails → tram.glb (P3-14)
+│   │   ├── tramlines.py         # tram beds → directed tracks, tram_lines.json (P3-4)
 │   │   ├── arrows.py            # turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
 │   │   ├── boxsource.py         # the box reader boxjunctions.py and surface.py share (P3-32)
 │   │   ├── boxjunctions.py      # box junctions → boxjunctions.glb (P3-18)
@@ -349,7 +350,7 @@ hk-taxi-Q/
 
 Stage order: `fetch`, `podiums`, `buildings`, `landmarks`, `roads`, `carve`, `region`, `surface`,
 `clearance`, `fence`, `fares`, `tramway`, `arrows`, `boxjunctions`, `crossings`, `roadmarks`,
-`railings`, `signs`, `lamps`, `export`.
+`railings`, `signs`, `lamps`, … `signals`, `tramlines`, `parked`, `export` (`__main__.py`'s `STAGES` is the whole list).
 
 ⚠️ `scenes/dev/` is not shipped. `run/main_scene` is `scenes/main.tscn`: `Main` with a `World` that
 instances `city_drive.tscn` and a `GUI` holding the HUD, so a level change swaps `World`'s children
@@ -441,7 +442,7 @@ Keys (`etl/pipeline/export.py`):
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
   `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`,
-  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`), `signal_heads_placements` (schema 42, `P3-3e`). Null
+  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`), `signal_heads_placements` (schema 42, `P3-3e`), `tram_lines` (schema 43, `P3-4`). Null
   where the estate publishes no such layer, **or** where every feature failed the join — a stage
   names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
   placements document whose library is NOT in the bundle: it stands the committed
@@ -767,6 +768,34 @@ never culled or streamed — `Q115`, `Q120`).
   street's height (`Q15`).
 - A quarter of published PUDO points are drop-off only (66 of 275 territory-wide); honour
   `pickup`.
+
+### `tram_lines.json` — the tracks a tram runs (`P3-4`, `Q176`)
+
+```json
+{
+  "schema_version": 1,
+  "city_id": "...",
+  "region_id": "...",
+  "tracks": [
+    {
+      "id": 0,
+      "points": [[1107.9, 3.6, 448.9]],
+      "next": [1],
+      "open_start": false,
+      "open_end": false,
+      "stops": [{"id": "f_043", "s_m": 29.019}],
+      "signals": [{"edge": 333, "along": true, "s_m": 199.28}]
+    }
+  ]
+}
+```
+
+Each `points` runs in travel order. `next` is the tracks a tram may join, by index; a fork has more
+than one. `open_*` means the track reaches the region's rectangle with nothing to run on to: the
+runtime joins it to a neighbour's where one is resident, else a tram appears or leaves there. `stops`
+and `signals` are metres along this track; a `signals` entry past its length stands in the chord to
+`next`. `edge` is the region's own id: `TramLines` re-keys it through `RoadGraph.edge_id_in`. The
+stage's report is `tramlines.json`.
 
 ### `tram.glb` — the published tramway (`P3-14`)
 

@@ -160,6 +160,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `ground_clearance` | `ground_clearance.py`'s structure half, `structure_class`, `BUMPER_LOW_M` / `BUMPER_HIGH_M`, anything that carves |
 | `kerbside` | `pipeline/kerbside.py`, the `NSR` block, `painted_vehicle_types`, `kinds` |
 | `tramway` | `pipeline/tramway.py`, the `tramway` block |
+| `trams` | `pipeline/tramlines.py`, `tramway.lines`, `tram_lines.gd`, `tram_system.gd`, `trams.tres`, `verify_trams.gd`, the bell (`make_tram_bell.py`) |
 | `railings` | `pipeline/railings.py`, the `railings` block, `railings.gdshader`, a railing class's `.tres` |
 | `signs` | `pipeline/signs.py`, `sign_text.py`, the `signs` block (`outset_m`, `max_shift_m`, `faces`, `faces_against_traffic`, `colours`, `text*`), the signs atlas, and the removed `P3-17` signal layer |
 | `arrows` | `pipeline/arrows.py`, the `arrows` block, the glyph table, `marking_paint.gdshader` |

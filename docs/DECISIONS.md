@@ -10956,3 +10956,67 @@ attributed**: the wall and contact readings on those drives do not say which bod
 closing speed is the pad's.
 
 **See.** `P3-2a` · `P3-3c` · `P3-50` · `Q148` · `Q151` · `Q161` · `Q173`
+
+## `Q176` — The trams run the published rails as walls that never push
+
+**Status.** 🟡 Built 2026-11-01 from the `/next` survey's option 2, the user's "plan for option 2" and
+"complete plan". `P3-4`. Owed: the user's drive and ears, and the handset's cost, unmeasured.
+
+**Which way a track runs is read, not authored.** Nothing published says, and a bed renders the same
+either way. Three witnesses, in order: the other track on the right of travel (trams run on the
+left); the flow of a one-way street beside it; what it continues. Unresolved is refused and counted.
+Wan Chai 63 beds → 60 kept (4393 m), 0 refused, 3 pruned (15 m), by touching bed 44, other track 15,
+one-way road 4. Causeway Bay 15 → 13 kept (1371 m), 2 refused, 0 pruned, by touching 7, other track 6.
+It is graded by its partition and by reading the plan, not by a timetable: 3433 + 1137 m run with the
+street and 799 + 234 m against it, reported and not gated. Three traps, each with a test: a fragment's
+vote (a turnout read as double track cost the Happy Valley branch), the other track's end read as a
+continuation (2.6 m abeam and parallel, kept out by the chord's own heading), and a track near the
+rectangle read as leaving when it joins on.
+
+**A real bug on the way.** Beds were tested at the source's vertices, so a two-vertex rail running
+past its partner rejected the whole span. At metre stations Wan Chai's tracks go 58 → 63 and 4100 →
+4408 m, Causeway Bay's 11 → 15 and 1218 → 1397 m; `off_gauge` 53/1192 → 62/1978 and 11/136 → 11/433,
+`inverted` 0, `pairs` 74 and 19 unchanged.
+
+**Separate from `TrafficSystem`, not a `Car` variant.** A tram has no edge or lane; it is a number
+along a route, its fork settled at the start. The whole fleet of 16 runs always, not in a ring: an
+8.9 m tram appearing up a straight street would be seen doing it. It sets out 30 m past a line's end.
+
+**The seam is joined at runtime**, because which regions are resident is a fact about the run: 2 joins,
+18 routes, 9 through both regions, longest 3431 m.
+
+**It stops for what is down the rails, not in a cone.** A cone from the nose missed a taxi on a curve
+until the tram stood on it: 0.1 m centre to centre, 10.7 m once it read the rails. It ignores a car
+crossing, for `TrafficSystem`'s deadlock reason. A car behind a tram waits, and does not pass it. In
+the scene, on 70 trams for the frame only, a tram stops 3 m short of the taxi, and the taxi at full
+throttle into one stands at 0 kph without moving it.
+
+**Moving trams replace the parked ones, and nothing stands in their path.** Parked trams 15 + 3 → 0.
+Placed 754 → 736 and 351 → 346. 🔴 Published sources are refused too, against the rule that a published
+bay stands, because a tram drives through what it cannot stop for: 3 minibus stops on Wan Chai, 2
+laybys on Causeway Bay. Furniture in a tram's 1.3 m half-path is reported in `in_tram_path`, never
+moved, because each layer is the publisher's: lamps 4 + 0, railings 52 + 15, signs 5 + 0, trees 0,
+signal heads 8 + 2. 🔴 A tram draws through those: a known visual fault, left for the user's look.
+
+**The bell** is synthesised (`tools/make_tram_bell.py`), the game's first sound, ringing as a tram
+leaves a stop and at a taxi in the way. No ear has graded it.
+
+**A bug it exposed.** While the trams came off the roster seed 4 stood one car inside another: a car
+changing lanes did not see one coming out of its turn beside it (`_lane_blocked`). A real bug,
+exposed rather than caused, fixed in its own commit.
+
+**Measured.** `verify_trams`, seeds 7 and 4 over 240 s: 74 and 71 stop lines passed, 0 on red; 54 and 55
+stops dwelt at, 0 skipped. Throttle route, twice each, 16 trams against `--trams=off`: +2 `draws`,
++12,992 prims, `phys` 3.1–3.9 against 2.5–3.5 ms. At the same spot with 70 trams in view: +1 `draws`.
+Web PCK +326 KB, by exporting with and without the documents and the bell: the scripts are in both
+sides. `tools/paint_clearance.py --layer tramway`, after only: under the highest road face 5.7% and
+22.7% of paint area. `tools/skidpad.sh` not run: no file in its rule moved, and only `city_drive.tscn`
+holds the node. No shader moved; the day and night frames gave no `shader error`.
+
+**Mutations caught by name:** red ignored, stops ignored, the taxi ignored, the tram ahead ignored, the
+cone in place of the rails, no seam, both offset drops, a car ignoring a tram. ⚠️ **Not caught:** taking
+`seam_heading_deg` off changes nothing on the shipped ends (still 2 joins), since an open end only meets
+the other region's open start, so that bar is a guard no data tests. `no route doubles back` (worst 27
+deg) was added for it and has not been seen to fail.
+
+**Not done.** `P3-8`'s bus lanes are out of scope, and a tram does not stop for a car crossing it.

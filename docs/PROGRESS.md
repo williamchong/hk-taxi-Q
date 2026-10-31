@@ -39,8 +39,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
     (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
     signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`), and the
     cars pass the parked ones (`P3-3f1`), and a hit or a near miss reads them (`Q175`); the player's red is counted (`P3-3d`), the heads stand lit
-    by it (`P3-3e`), and the cars' indicators and hazards follow (`P3-3f`). Trams and neon (`P3-4`, `P3-8`) not
-    started.
+    by it (`P3-3e`), and the cars' indicators and hazards follow (`P3-3f`). The trams run (`P3-4`, `Q176`, owed the
+    user's drive); neon (`P3-8`) not started.
   - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
     (`P3-51`), the 成績表 and lifetime record (`P3-76`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
     (`P3-74`, `Q162`). The style chain, long haul and the layout pass (`P3-2b`, `P3-1b`,
@@ -53,7 +53,7 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 - **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
   holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
   measurement only. `P5-8` (content) is outline; `P5-14` not started.
-- **Knowingly missing:** no moving trams, no neon (`P3-4`, `P3-8`); signal heads at 16 of Wan
+- **Knowingly missing:** no neon (`P3-8`); signal heads at 16 of Wan
   Chai's 72 staged junctions and 7 of Causeway Bay's 21 do not show every stage (`P3-3e`).
 
 **Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q> (public page). The
@@ -274,7 +274,12 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   `lamps.py`'s alpha lantern marker (`Q160`) checked on Compatibility the same day: it survives,
   and the lanterns alone light at night.
 - `P3-2a` moving cars (`Q175`, 2026-10-30) — the near miss looks at them on the closing speed, and a hit reads the closing speed: a 5 kph tap on a slower car read 100+ kph and stopped the taxi dead. Static walls and the pad byte-identical; `verify_fares` `near miss moving:`, `verify_traffic` `near:`, 7 mutations caught; +6 `draws`, `phys` unmoved. Owed: the user's drive (no scripted drive swerved into a paying pass).
-- `P3-4` / `P3-8` ⬜ `B3` — `is_routable` exists (`Q51`) and
+- `P3-4` 🟡 Trams (`Q176`, 2026-11-01) — 60 + 13 directed tracks (4393 + 1371 m), 18 routes, longest
+  3431 m, both tracks over the seam, 19 + 5 stops and 26 + 6 stop lines bound. Parked trams 15 + 3 → 0;
+  3 + 2 published vehicles refused in a tram's path. 16 trams: +2 `draws`, ~+0.5 ms `phys` on the
+  throttle route, +326 KB web PCK for the documents and the bell. Owed: the user's drive and ears,
+  the handset's cost.
+- `P3-8` ⬜ `B3` — `is_routable` exists (`Q51`) and
   `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
   `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
 - `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
@@ -496,6 +501,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   a junction is signalled where an `RM1011` is hosted (115 of 120 within 15 m of a head), grouped
   by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`, built 2026-10-30); the
   player's red counted, never paid or docked, until the user decides.
+- `Q176` The trams run the published rails as walls that never push (2026-11-01): direction read off the other track, a one-way street or what a bed continues, unresolved refused; a separate `TramSystem`, whole fleet always; moving trams replace the parked ones, and nothing stands in a tram's path.
 - `Q175` A hit on a moving car reads the closing speed, only when the taxi is moving into it, and the near miss looks at moving cars on the closing speed (2026-10-30). Bars and prices unchanged; the user's drive owed.
 - `Q174` The wheel goes to lock slower at speed (user, 2026-10-29): a full-lock lane change with the throttle held slid to 20.8° / 29.8° at 110 / 120 kph; `steer_attack_at_top_s` 2.0 blends the 0.2 s ramp on the speed share's square (0.75 s at 110), 6.3 / 6.5° now; drift mode and a countersteer keep 0.2 s, every drift row unmoved. Owed: the user's drive.
 - `Q172` A drift counts at 0.5 s and pays more each second of one slide (user, 2026-10-28): `drift_min_s` 2.0 → 0.5, a new `drift_step_hkd` (1.0), HK$1 / 3 / 6 / 10 at 0.5 / 1.5 / 2.5 / 3.5 s; at 2 s only a countersteered slide at 86 kph had ever counted on the pace-2.0 car. A reverse read ~180° of slip and paid at the new bar; slip past 90° (`FareSystem.REVERSED_SLIP_DEG`) is now not a drift.

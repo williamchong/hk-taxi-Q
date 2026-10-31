@@ -226,7 +226,7 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 |---|---|---|
 | **Bilingual destination callouts** | Trivial | `fares.json` |
 | **Red urban taxi livery** | Trivial | ✅ Shipped (`P3-11`): red, silver roof. HK Island = red; green or blue reads as wrong |
-| **Trams as moving walls** | Low | Rails are published data (`P3-14`, `tram.glb`); the moving vehicle is outstanding (`P3-4`), its route no longer hand-authored |
+| **Trams as moving walls** | Low | 🟡 Built (`P3-4`, `Q176`): on the published rails (`P3-14`, `tram_lines.json`), both ways, stopping at the published stops and the reds. Solid, and a tram never pushes; the near miss reads them. Owed: the user's drive |
 | **Bus lanes as penalty zones** | Low | `bus_lane` in `roadgraph.json` |
 | Double-decker buses as sight blockers | Low | Traffic AI vehicle type |
 | Bamboo scaffolding on buildings | Low | Prop instancing |
