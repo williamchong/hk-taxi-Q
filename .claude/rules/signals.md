@@ -105,3 +105,8 @@ paths:
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
   has not run the red. ⚠️ The line is `width_of` (published) wide, not the drawn ribbon. Mutations:
   counting green, and crossing either way, fail `watch:` by name (2026-10-29).
+- **The horn** (`Q178`): `verify_traffic`'s `horn:` lines, and `tools/make_car_horn.py` is byte-identical
+  (`test_make_sounds.py`). 🔴 **A red does not count towards the wait.** 🔴 **Silent while the taxi is
+  `parked`**: `verify_traffic` cannot see this, so a change near it owes a `--menu=on` run. ⚠️ A car's
+  pitch comes from its id: a roll would move every later car on the seeded RNG. ⚠️ The taxi's gap is
+  `_taxi_gap`, apart from `_gap_ahead` only so that `Held.TAXI` can name it.

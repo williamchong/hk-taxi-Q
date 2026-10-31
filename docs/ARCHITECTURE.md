@@ -1310,6 +1310,8 @@ city_space = region_local + city_offset
 | `HUD` | Speed, the bilingual street plate and the wrong-way sign (`P3-25`) and the minimap (`P3-44`: `RoadGraph` as one static mesh moved by a transform, one panel with the street plate as its name strip, an arrow on its border toward an off-map target, main roads apart and the harbour and parks under the roads, +5 draw calls and 14.7k primitives over `--minimap=off` carrying; the one-way arrows are off) ship; timer and meter are reserved, empty, checked slots. Flat chamfered polygons. `--hud=off` for `P3-9` and art frames; `--minimap=off` takes the map alone, which `P3-9` also needs (`Q136`) | 🟡 `P3-24`, `P3-44`; meter, timer and the world-space destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
+The sounds so far play without it, each from the system that decides them: the tram bell (`Q176`), a car's horn and the meter's beep (`Q178`), every one on the `Master` bus at the level its file was synthesised at.
+
 Every library layer draws one call per library mesh through a `MultiMesh`; each placements document
 uses `landmarks.json`'s transform shape, is written beside its `.glb` and is null on its terms.
 

@@ -203,5 +203,8 @@ the loop's own numbers in `tuning/fares.tres`.
   `reset()` is a fresh run on the same pools — the reach table and the draw are the city's.
   `verify_fares`'s `close:` block holds every path; the last fare's `finished` is the mutation.
   🚫 No time added by a delivery: the shift's clock is the day's (`DayClock`).
+- ⚠️ **The meter's beep is `TaxiHire`'s, on `meter_changed`** (`Q178`): `verify_fares`' `beep:` lines hold one
+  per unit and one at the boarding. It is rare because the 2 km flagfall charges nothing: 🚫 not a
+  reason to beep on anything but the reading. `tools/make_meter_beep.py` is byte-identical.
 - 🚫 **Not here**: the fare combo (`P3-2b`; the session timer is `Q162`'s shift), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

@@ -35,7 +35,7 @@ paths:
   for `TrafficSystem`'s deadlock reason. ⚠️ Mutations are in `Q176`; a GDScript mutation must still
   compile, since Godot hangs on an unused variable.
 - **The bell** is `tools/make_tram_bell.py`, byte-identical each run
-  (`test_make_tram_bell.py`). It is the game's first sound, so nothing has graded a level.
+  (`test_make_tram_bell.py`). It was the game's first sound, and nothing has graded a level for it or for the horn and the beep (`Q178`).
 - **A tram's lamps are the running bit** (`Q177`): the head lamp on `headlamp_l` (⚠️ `headlamp_c` is on no
   circuit, so the lens goes dark without a word) and the side lamps on `foglamp_{side}`. They burn by day
   too, on the user's "always". A close tram cannot be re-shot on demand: placement moves with `--shots`.

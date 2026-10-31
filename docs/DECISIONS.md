@@ -11068,3 +11068,48 @@ the viewer, the tram's and the minibus's on the street as well.
 generator's side, the head lamp's circuit and the side lamps' colours.
 
 **See.** `Q160` · `Q167` · `Q176` · `P3-4` · `P3-11d` · `game/tuning/vehicle_body.md`
+
+## `Q178` — Cars sound their horns at the taxi, and the meter beeps when the reading moves
+
+**Status.** 🟡 Built 2026-11-01 on the user's ask: "now that tram dings, can cars honk and taxi meter
+beeps when it tick?" No ear has graded either sound. Owed: the user's drive, and the level.
+
+**The horn** is `tools/make_car_horn.py`, a twin-note press of 0.42 s, on three pooled voices as the
+bell has. A car sounds it only at the taxi, never at another car, on one of two bars
+(`TrafficSystem.wants_horn`):
+
+- **Cut up**: the taxi leaves it `horn_cut_mps` over the speed it can still stop from. This is the
+  horn a moving taxi hears: pulling out in front, or coming the wrong way down the lane.
+- **Stood**: `horn_after_s` behind the taxi with nothing else holding it. 🔴 **A red does not count**:
+  a taxi first in the queue at a light is not in anybody's way, so the wait starts at the green.
+
+To know who is in the way the taxi's reading moved out of `_gap_ahead` to `_taxi_gap` and has its own
+`Held.TAXI`. The least of the gaps still wins, so no car drives differently. Each car's pitch is
+fixed from its id, not rolled: one more draw on the seeded RNG would move every later car.
+
+🔴 **Silent while the taxi is parked.** The menu's showroom stands it on a real road, and a car behind
+it honked through the start menu in the first live run (6.5 m, stood 2.0 s). `_sound_horn` reads
+`VehicleController.parked`. Nothing in `verify_traffic` can hold that (its taxi is a bare `Node3D`):
+the reading is a 40 s `--menu=on` run, one horn before and none after.
+
+**The beep** is `tools/make_meter_beep.py`, a 90 ms pip. `TaxiHire` plays it on the existing
+`FareSystem.meter_changed`, so the flagfall at boarding beeps, and then each unit. In the cab, so not
+a 3D voice, and the file's peak (0.3) is its level.
+
+⚠️ **The tariff decides how often it beeps, and the tariff stays** (`Q141`): no unit is charged inside
+the 2 km flagfall. 61 of the 332 pickup-to-destination routes on the merged runtime (18%) are over
+2 km, mean 1,451 m, longest 3,290 m. Most fares beep at the boarding and not again unless the driver
+wanders. A beep on some invented shorter unit would be a meter that lies.
+
+**Measured.** Live, parked at `wan_chai/f_004` for 20 s: the boarding beep at HK$29, a cut-up horn from
+a car at 11.1 m/s, then two from a car stood behind the taxi. `verify_fares`: 7 units, 8 beeps, and
+none while waiting on the flagfall.
+
+**Mutations caught by name:** the red not excused, a creeping car counted as stood, the cut-up bar
+off, the beep unwired. ⚠️ The bell's range gate has no copy here: a car sees the taxi within `look_m`
+(45 m), so a gate at `horn_range_m` (110 m) could not fire. That value is the voice's fade alone.
+
+🚫 **Not built**: a horn for the player (needs an input action and a touch button), horns between
+traffic cars, `AudioDirector` and its buses (Phase 5), so no volume setting yet.
+
+**See.** `Q176` · `Q141` · `Q173` · `game/tuning/traffic.md`
