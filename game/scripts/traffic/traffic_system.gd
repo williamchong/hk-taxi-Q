@@ -978,11 +978,23 @@ func _lane_blocked(car: Car, toward: float) -> bool:
 		if side * (toward - car.lane) > 0.0:
 			return true
 	for other: Car in cars:
+		if other == car or not other.live:
+			continue
+		# Coming out of its turn beside this one: it stands at its join in the lane it
+		# joins, and a change across it ended up inside it (seed 4).
+		if other.turning:
+			if (
+				other.next_edge == car.edge
+				and other.next_along == car.along
+				and (
+					absf(other.join_m - car.s) < car.half_length + other.half_length + profile.gap_m
+				)
+				and absf(other.next_lane - toward) < 1.0
+			):
+				return true
+			continue
 		if (
-			other == car
-			or not other.live
-			or other.turning
-			or other.edge != car.edge
+			other.edge != car.edge
 			or other.along != car.along
 			or is_equal_approx(other.lane, car.lane)
 		):
