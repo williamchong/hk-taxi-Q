@@ -134,6 +134,11 @@ func _print_parked(system: TrafficSystem) -> void:
 ## The static rules, off a scene: the amber judgement, the stopping speed and
 ## the turn's control point.
 func _check_rules() -> void:
+	# The horn's two bars, each from both sides.
+	_expect(TrafficScript.wants_horn(10.0, 7.0, 0.0, 3.0, 2.0), "rules", "cut up at the bar")
+	_expect(not TrafficScript.wants_horn(10.0, 7.5, 0.0, 3.0, 2.0), "rules", "just under it, not")
+	_expect(TrafficScript.wants_horn(0.0, 0.0, 2.0, 3.0, 2.0), "rules", "stood the wait")
+	_expect(not TrafficScript.wants_horn(0.0, 0.0, 1.9, 3.0, 2.0), "rules", "just short of it, not")
 	var red := SignalController.Light.RED
 	var amber := SignalController.Light.AMBER
 	_expect(TrafficScript.must_stop(red, 100.0, 0.0, 3.0), "rules", "red stops a car")
@@ -522,6 +527,87 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	)
 	print("  parked:   the longest stand behind one %.1f s" % (longest_wait.max() * TICK_S))
 	_check_near(system)
+	_check_horn(system)
+
+
+func _step_for(system: TrafficSystem, seconds: float) -> void:
+	for _tick: int in int(seconds / TICK_S):
+		system.step(TICK_S)
+
+
+## The horn (`Q178`): a car on no signal's approach, the taxi stood in front of it.
+func _check_horn(system: TrafficSystem) -> void:
+	var car: TrafficSystem.Car = null
+	for candidate: TrafficSystem.Car in system.cars:
+		if (
+			candidate.live
+			and not candidate.turning
+			and candidate.held == TrafficSystem.Held.NONE
+			and candidate.speed > 2.0
+			and system.stop_travel_m(candidate) < 0.0
+		):
+			car = candidate
+			break
+	if car == null:
+		_expect(false, "horn", "no car under way off a signal's approach to stage the horn on")
+		return
+	for other: TrafficSystem.Car in system.cars:
+		if other != car:
+			other.live = false
+	var table: TrafficProfile = system.profile
+	var taxi := Node3D.new()
+	root.add_child(taxi)
+	system.vehicle = taxi
+	# Pulled out on it at the car's own speed, close enough to be a cut-up.
+	car.speed = maxf(car.speed, 10.0)
+	car.horn_wait = 0.0
+	var horns: int = system.horns
+	taxi.global_position = car.pose.origin - car.pose.basis.z * 12.0
+	system.step(TICK_S)
+	_expect(car.held == TrafficSystem.Held.TAXI, "horn", "the taxi holds the car")
+	_expect(system.horns == horns + 1, "horn", "cut up, it sounds its horn on the tick")
+	# Stood right up behind it: a car left to brake could run on round a bend, off the
+	# taxi's line (seed 23).
+	car.speed = 0.0
+	taxi.global_position = car.pose.origin - car.pose.basis.z * 6.0
+	system.step(TICK_S)
+	_expect(car.speed < TrafficSystem.STOPPED_MPS, "horn", "and stands behind the taxi")
+	# The wait, from both sides: nothing short of it, the horn on it, then the repeat.
+	car.horn_wait = 0.0
+	car.taxi_stood_s = 0.0
+	horns = system.horns
+	_step_for(system, table.horn_after_s - 0.1)
+	_expect(system.horns == horns, "horn", "not before horn_after_s")
+	_step_for(system, 0.2)
+	_expect(system.horns == horns + 1, "horn", "stood horn_after_s, it sounds")
+	_step_for(system, table.horn_repeat_s - 0.1)
+	_expect(system.horns == horns + 1, "horn", "not again before horn_repeat_s")
+	_step_for(system, 0.2)
+	_expect(system.horns == horns + 2, "horn", "and again after it")
+	# Creeping up behind the taxi is not standing behind it.
+	car.horn_wait = 0.0
+	car.taxi_stood_s = 0.0
+	horns = system.horns
+	car.held = TrafficSystem.Held.TAXI
+	car.speed = 1.0
+	for _tick: int in int(table.horn_after_s * 2.0 / TICK_S):
+		system._mind_horn(car, 1.0, false, TICK_S)
+	_expect(system.horns == horns, "horn", "a car still creeping has not stood")
+	car.speed = 0.0
+	# A queue at a red is quiet: the wait starts when the light stops being the reason.
+	car.horn_wait = 0.0
+	car.taxi_stood_s = 0.0
+	horns = system.horns
+	car.held = TrafficSystem.Held.TAXI
+	for _tick: int in int(table.horn_after_s * 2.0 / TICK_S):
+		system._mind_horn(car, 0.0, true, TICK_S)
+	_expect(system.horns == horns, "horn", "a car at a red with the taxi ahead stays quiet")
+	for _tick: int in int((table.horn_after_s + 0.1) / TICK_S):
+		system._mind_horn(car, 0.0, false, TICK_S)
+	_expect(system.horns == horns + 1, "horn", "and sounds once the light has gone")
+	print("  horn: %d sounded" % system.horns)
+	system.vehicle = null
+	taxi.free()
 
 
 ## What the near miss is handed (`Q175`): a live car on its own pose with the

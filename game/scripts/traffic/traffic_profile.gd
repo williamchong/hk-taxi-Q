@@ -56,5 +56,19 @@ const PATH: String = "res://tuning/traffic.tres"
 ## Room kept between a moving car's flank and a parked vehicle it passes, in
 ## metres: closer than this, the parked vehicle is in its lane.
 @export var side_clear_m: float
+## Voices of the horn at once (`Q178`).
+@export var horn_voices: int
+## Where a horn fades to nothing, in metres: a voice's `max_distance`.
+@export var horn_range_m: float
+## A car does not sound its horn again for this long, in seconds.
+@export var horn_repeat_s: float
+## How long a car stands behind the taxi, with no red to wait for, before it
+## sounds its horn, in seconds.
+@export var horn_after_s: float
+## A car sounds its horn at once when the taxi leaves it this far over the speed
+## it could still stop from, in m/s: it has been cut up.
+@export var horn_cut_mps: float
+## Each car's horn is pitched up to this fraction either side of the file's.
+@export var horn_pitch_spread: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]

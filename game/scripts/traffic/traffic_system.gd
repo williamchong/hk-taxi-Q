@@ -9,6 +9,9 @@ extends Node3D
 ## the lane bar — so traffic is never on an edge or a way the player's own
 ## wrong-way monitor would flag. `verify_traffic.gd` holds it.
 ##
+## **The horn** (`Q178`) is for the taxi alone: cut up, or stood behind it with no
+## red to wait for. `wants_horn` is the rule; a parked taxi hears nothing.
+##
 ## 🔴 **Kinematic, not simulated.** A car is a position along its edge and a
 ## speed; its body is an `AnimatableBody3D` moved to where it is each tick, so
 ## the taxi meets a solid box and the car is never pushed off its lane. Cars
@@ -93,6 +96,10 @@ const LAMP_RIGHT: int = 16
 
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
+const HORN_PATH: String = "res://assets/authored/audio/car_horn.wav"
+## Spreads the fleet's ids over the horn's pitch range: not a roll, since one more
+## draw on the seeded RNG would move every later car.
+const PITCH_STIR: float = 2.4
 
 ## The trams (`P3-4`): a car follows one as it follows a car, and waits behind one
 ## at its stop. A car does not pass a tram: on Hennessy Road nothing lawfully does.
@@ -105,7 +112,7 @@ var trams: TramSystem
 @export var signals: SignalController
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
-enum Held { NONE, LIGHT, CAR, PARKED }
+enum Held { NONE, LIGHT, CAR, PARKED, TAXI }
 
 
 ## One car.
@@ -177,6 +184,10 @@ class Car:
 	var held: Held = Held.NONE
 	## Slowing or standing: the brake lamps (`vehicle_body.gdshader`).
 	var braking: bool = false
+	## Seconds until this car may sound its horn again.
+	var horn_wait: float = 0.0
+	## Seconds it has stood behind the taxi with no light to wait for.
+	var taxi_stood_s: float = 0.0
 	## The livery `ParkedRoster` drew, alpha 1 to apply or 0 for none.
 	var livery: Color
 	## The lamp bits last written, so a car is written only when they change.
@@ -234,7 +245,11 @@ var cars: Array[Car] = []
 ## Spawns and retirements since the start, for the verify tool.
 var spawned: int = 0
 var retired: int = 0
+## Horns sounded (`Q178`), for the verify tool.
+var horns: int = 0
 
+var _horn_voices: Array[AudioStreamPlayer3D] = []
+var _next_horn: int = 0
 var _rng := RandomNumberGenerator.new()
 var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
@@ -336,6 +351,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			"velocity": Vector3.ZERO,
 		}
 		_hide(car)
+	_load_horn()
 	add_to_group(GROUP)
 	return true
 
@@ -361,9 +377,28 @@ static func usable(table: TrafficProfile) -> bool:
 		"straight_deg": table.straight_deg,
 		"pass_look_m": table.pass_look_m,
 		"side_clear_m": table.side_clear_m,
+		"horn_voices": float(table.horn_voices),
+		"horn_range_m": table.horn_range_m,
+		"horn_repeat_s": table.horn_repeat_s,
+		"horn_after_s": table.horn_after_s,
+		"horn_cut_mps": table.horn_cut_mps,
+		"horn_pitch_spread": table.horn_pitch_spread,
 		"kinds": float(table.kinds.size()),
 	}
 	return not TuningTable.any_zero(table, required, "TrafficSystem", "no traffic will run")
+
+
+func _load_horn() -> void:
+	var stream := load(HORN_PATH) as AudioStream
+	if stream == null:
+		push_warning("TrafficSystem: %s did not load; the cars are silent" % HORN_PATH)
+		return
+	for _voice: int in profile.horn_voices:
+		var voice := AudioStreamPlayer3D.new()
+		voice.stream = stream
+		voice.max_distance = profile.horn_range_m
+		add_child(voice)
+		_horn_voices.append(voice)
 
 
 func _load_library() -> bool:
@@ -1031,6 +1066,7 @@ func _drive(car: Car, delta: float) -> void:
 	car.held = Held.NONE
 	var to_stop: float = INF
 	var light: SignalController.Light = SignalController.Light.GREEN
+	var for_light: bool = false
 	if not car.turning:
 		var stop: float = stop_travel_m(car)
 		if stop >= 0.0:
@@ -1056,6 +1092,7 @@ func _drive(car: Car, delta: float) -> void:
 		# the amber and meet the red a hair short (seed 4).
 		and must_stop(light, to_stop + STOP_SHORT_M, car.speed, profile.brake_max_mps2)
 	):
+		for_light = true
 		var limit: float = stopping_speed(to_stop, profile.brake_mps2)
 		if limit < target:
 			target = limit
@@ -1066,6 +1103,12 @@ func _drive(car: Car, delta: float) -> void:
 		if limit < target:
 			target = limit
 			car.held = Held.CAR
+	var taxi_gap: float = _taxi_gap(car)
+	if taxi_gap < INF:
+		var limit: float = stopping_speed(taxi_gap - profile.gap_m, profile.brake_mps2)
+		if limit < target:
+			target = limit
+			car.held = Held.TAXI
 	var parked_gap: float = _parked_gap(car)
 	if parked_gap < INF:
 		var limit: float = stopping_speed(parked_gap - profile.gap_m, profile.brake_mps2)
@@ -1077,12 +1120,52 @@ func _drive(car: Car, delta: float) -> void:
 		# that changed lane only with the metres it drove would never leave.
 		# Topped up to the turning pace: `_advance` moves it by what it drove.
 		_change_lane(car, maxf(profile.turn_mps - car.speed, 0.0) * delta)
+	_mind_horn(car, target, for_light, delta)
 	car.braking = target < car.speed or car.speed < STOPPED_MPS
 	if car.speed < target:
 		car.speed = minf(target, car.speed + profile.accel_mps2 * delta)
 	else:
 		car.speed = maxf(target, car.speed - profile.brake_max_mps2 * delta)
 	_advance(car, car.speed * delta)
+
+
+## Whether a car the taxi holds sounds its horn (`Q178`): at once when the taxi has
+## left it `cut_mps` over the speed it could still stop from, or once it has stood
+## `after_s`. `stood_s` is held at zero while the car moves or a light holds it.
+static func wants_horn(
+	speed: float, stop_from: float, stood_s: float, cut_mps: float, after_s: float
+) -> bool:
+	return speed - stop_from >= cut_mps or stood_s >= after_s
+
+
+func _mind_horn(car: Car, target: float, for_light: bool, delta: float) -> void:
+	car.horn_wait = maxf(car.horn_wait - delta, 0.0)
+	if car.held != Held.TAXI:
+		car.taxi_stood_s = 0.0
+		return
+	car.taxi_stood_s = (0.0 if for_light or car.speed >= STOPPED_MPS else car.taxi_stood_s + delta)
+	if car.horn_wait > 0.0:
+		return
+	if wants_horn(car.speed, target, car.taxi_stood_s, profile.horn_cut_mps, profile.horn_after_s):
+		_sound_horn(car)
+
+
+func _sound_horn(car: Car) -> void:
+	car.horn_wait = profile.horn_repeat_s
+	# The taxi in the menu's showroom stands on a road, and nobody is driving it.
+	var controller := vehicle as VehicleController
+	if controller != null and controller.parked:
+		return
+	horns += 1
+	if _horn_voices.is_empty():
+		return
+	var voice: AudioStreamPlayer3D = _horn_voices[_next_horn]
+	_next_horn = (_next_horn + 1) % _horn_voices.size()
+	if not voice.is_inside_tree():
+		return
+	voice.global_position = car.pose.origin
+	voice.pitch_scale = 1.0 + profile.horn_pitch_spread * sin(float(car.id) * PITCH_STIR)
+	voice.play()
 
 
 ## The speed a car can still stop from in `distance_m` at `brake_mps2`.
@@ -1113,7 +1196,7 @@ static func must_stop(
 ## - **At the mouth**: a car already turning into the same edge holds this one
 ##   at the end of its straight run until it is through — the merge.
 ## - **In the plan cone** — another car within `follow_heading_deg` of its
-##   heading and its width of its line, or the player whatever its heading.
+##   heading and its width of its line. The player is `_taxi_gap`'s.
 func _gap_ahead(car: Car) -> float:
 	var forward: Vector3 = -car.pose.basis.z
 	var origin: Vector3 = car.pose.origin
@@ -1149,21 +1232,24 @@ func _gap_ahead(car: Car) -> float:
 				best,
 				_gap_to(origin, forward, car, tram.pose.origin, trams.half_length, trams.half_width)
 			)
-	if is_instance_valid(vehicle):
-		# The taxi measured as the library's first kind: a saloon either way.
-		var player: AABB = _extents[0]
-		best = minf(
-			best,
-			_gap_to(
-				origin,
-				forward,
-				car,
-				vehicle.global_position,
-				player.size.z * 0.5,
-				player.size.x * 0.5
-			)
-		)
 	return best
+
+
+## Bumper to the taxi in `car`'s cone, whatever its heading, or INF. Apart from
+## `_gap_ahead` only so that the horn knows who is in the way.
+func _taxi_gap(car: Car) -> float:
+	if not is_instance_valid(vehicle):
+		return INF
+	# The taxi measured as the library's first kind: a saloon either way.
+	var player: AABB = _extents[0]
+	return _gap_to(
+		car.pose.origin,
+		-car.pose.basis.z,
+		car,
+		vehicle.global_position,
+		player.size.z * 0.5,
+		player.size.x * 0.5
+	)
 
 
 ## Bumper to the nearest parked vehicle standing in `car`'s lane ahead within

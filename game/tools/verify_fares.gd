@@ -28,6 +28,7 @@ const RoadGraphScript = preload("res://scripts/city/road_graph.gd")
 const RouterScript = preload("res://scripts/city/road_router.gd")
 const CityManifestScript = preload("res://scripts/city/city_manifest.gd")
 const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
+const TaxiHireScript = preload("res://scripts/fares/taxi_hire.gd")
 const FareMeterScript = preload("res://scripts/core/fare_meter.gd")
 const FareProfileScript = preload("res://scripts/fares/fare_profile.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
@@ -113,6 +114,7 @@ func _init() -> void:
 	_check_reach()
 	_check_allowance()
 	_check_loop()
+	_check_beep()
 	_check_skills()
 	_check_practice()
 	_check_penalties()
@@ -572,6 +574,42 @@ func _check_loop() -> void:
 		"the meter ran while the clock did (HK$%.1f)" % late.fare.meter.reading_hkd()
 	)
 	late.free()
+
+
+## The meter's beep (`Q178`): one at the boarding, then one for every unit charged.
+func _check_beep() -> void:
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	scout.free()
+	if pickup == null:
+		_expect(true, "beep", "SKIP: no pickup on this region alone to board at")
+		return
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	var hire: TaxiHire = TaxiHireScript.new()
+	var car := Node3D.new()
+	hire.fares = system
+	hire.vehicle = car
+	# Called by hand: this tool runs from `_init`, before the root has entered the tree,
+	# so no `_ready` would come until the run is over.
+	hire._ready()
+	# The hail's tick and the 1.0 s dwell, as `_check_loop` walks them.
+	_tick(system, pickup.point, CRAWL, 5)
+	_expect(system.state == FareSystem.State.CARRYING, "beep", "the passenger is aboard")
+	_expect(hire.beeps == 1, "beep", "the flagfall beeps once (%d)" % hire.beeps)
+	# Waiting on the flagfall moves no reading, so nothing beeps.
+	_tick(system, pickup.point, 0.0, 8)
+	_expect(hire.beeps == 1, "beep", "waiting on the flagfall is silent (%d)" % hire.beeps)
+	# 100 m a tick at the pickup, far from the destination: 3.4 km on the odometer.
+	_tick(system, pickup.point, 400.0, 34)
+	if system.state == FareSystem.State.CARRYING:
+		var steps: int = system.fare.meter.steps
+		_expect(steps > 1, "beep", "the drive charged units (%d)" % steps)
+		_expect(hire.beeps == steps + 1, "beep", "%d units, %d beeps" % [steps, hire.beeps])
+	else:
+		_expect(false, "beep", "the staged drive ended the fare before it charged a unit")
+	hire.free()
+	car.free()
+	system.free()
 
 
 ## The skills (`P3-49`): each dwell from both sides, a slide that ends

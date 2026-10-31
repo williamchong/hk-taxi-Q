@@ -121,6 +121,27 @@ width is kerb to kerb and a back street is "parked on one side and passed in the
 one-way street (edge 349) has 2.32 m beside the bus and needs 2.38 (its 2.08 m and this), so it waits — that wait is the
 `parked:` "longest stand" line, and lowering this to clear it would put a car's mirror on a bus.
 
+## `horn_voices = 3`, `horn_range_m = 110.0`, `horn_repeat_s = 4.0`
+
+The tram bell's numbers (`trams.md`), for the same reasons: three at once is a busy street, and four
+seconds is impatient without being a car alarm. ⚠️ `horn_range_m` is only the fade: a car sees the taxi
+within `look_m`, so no horn sounds from past about 46 m, where this leaves it at around 0.6.
+
+## `horn_after_s = 2.0`
+
+Hong Kong patience behind a taxi that has stopped in the lane. A red does not count: the wait starts
+when nothing but the taxi holds the car, so the queue at a light stays quiet until it goes green.
+
+## `horn_cut_mps = 3.0`
+
+About 11 kph over the speed the car could still stop from. A car closing on the taxi normally rides
+that speed down at `brake_mps2`, so it reads near nothing; being cut up or met head-on reads far past
+this on the tick it happens. This is the horn a moving taxi hears: it rarely stands in front of anyone.
+
+## `horn_pitch_spread = 0.08`
+
+A semitone or so either side, so that two cars do not sound like one car twice. Fixed per car.
+
 ## `kinds = {car_a 4, car_b 3, minibus 1.5, van 1.5}`
 
 The parked library's road vehicles, weighted toward saloons. No coach (too long for the turn curve

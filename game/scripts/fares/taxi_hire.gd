@@ -14,6 +14,8 @@ extends Node
 ##   without paying — the door swinging open beside it.
 ## - **The sparks** (`P3-58`): the drift's tier off the rear wheels, empty car
 ##   or not — a practised slide shows as a paid one does.
+## - **The meter's beep** (`Q178`): each time the reading moves — the flagfall at
+##   the boarding, then every unit. In the cab with the player, so not a 3D voice.
 ##
 ## ⚠️ **Listens, and never polls.** Every change here is a `FareSystem` signal,
 ## so nothing runs per frame and the system stays pure enough for
@@ -27,11 +29,17 @@ extends Node
 ## as the car was authored: sign lit, door shut — free roam is a taxi plying for
 ## hire.
 
+const BEEP_PATH: String = "res://assets/authored/audio/meter_beep.wav"
+
 ## The loop to follow. Assign in the scene.
 @export var fares: FareSystem
 ## The car whose sign and door this switches.
 @export var vehicle: Node3D
 
+## Beeps asked for, for the verify tool.
+var beeps: int = 0
+
+var _beep: AudioStreamPlayer = null
 var _lamps: VehicleLamps = null
 var _door: TaxiDoor = null
 var _emote: PassengerEmote = null
@@ -64,10 +72,24 @@ func _ready() -> void:
 	fares.bailed.connect(_on_alighted)
 	fares.bailed.connect(_on_bailed)
 	fares.skilled.connect(_on_skilled)
+	var stream := load(BEEP_PATH) as AudioStream
+	if stream == null:
+		push_warning("TaxiHire: %s did not load; the meter is silent" % BEEP_PATH)
+	else:
+		_beep = AudioStreamPlayer.new()
+		_beep.stream = stream
+		add_child(_beep)
+	fares.meter_changed.connect(_on_meter_changed)
 	if _sparks != null:
 		fares.drift_tier_changed.connect(_sparks.show_tier)
 	if _tail != null:
 		fares.drift_tier_changed.connect(_tail.show_tier)
+
+
+func _on_meter_changed(_hkd: float, _delta_hkd: float) -> void:
+	beeps += 1
+	if _beep != null and _beep.is_inside_tree():
+		_beep.play()
 
 
 func _on_hailed(_fare: Fare) -> void:
