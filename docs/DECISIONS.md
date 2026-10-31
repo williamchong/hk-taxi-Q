@@ -10988,8 +10988,8 @@ along a route, its fork settled at the start. The whole fleet of 16 runs always,
 **It stops for what is down the rails, not in a cone.** A cone from the nose missed a taxi on a curve
 until the tram stood on it: 0.1 m centre to centre, 10.7 m once it read the rails. It ignores a car
 crossing, for `TrafficSystem`'s deadlock reason. A car behind a tram waits, and does not pass it. In
-the scene, on 70 trams for the frame only, a tram stops 3 m short of the taxi, and the taxi at full
-throttle into one stands at 0 kph without moving it.
+the scene, on 70 trams for that frame only, a tram stops 3 m short of the taxi, and the taxi at full
+throttle into one stands at 0 kph without moving it; the shipped 16 show the taxi held behind one.
 
 **Moving trams replace the parked ones, and nothing stands in their path.** Parked trams 15 + 3 → 0.
 Placed 754 → 736 and 351 → 346. 🔴 Published sources are refused too, against the rule that a published
@@ -11010,8 +11010,10 @@ stops dwelt at, 0 skipped. Throttle route, twice each, 16 trams against `--trams
 +12,992 prims, `phys` 3.1–3.9 against 2.5–3.5 ms. At the same spot with 70 trams in view: +1 `draws`.
 Web PCK +326 KB, by exporting with and without the documents and the bell: the scripts are in both
 sides. `tools/paint_clearance.py --layer tramway`, after only: under the highest road face 5.7% and
-22.7% of paint area. `tools/skidpad.sh` not run: no file in its rule moved, and only `city_drive.tscn`
-holds the node. No shader moved; the day and night frames gave no `shader error`.
+22.7% of paint area. `tools/skidpad.sh` against a detached worktree at the commit before: every speed, slip,
+decay and yaw identical; only `distance` on `ride`, `lift` and `hold` moves, and it moves as much run
+to run on one side (`ride` 89.8 and 76.7 before, 73.0 and 72.4 after). No shader moved; day and night
+frames on the shipped 16 trams, spawned behind one on Hennessy Road, gave no `shader error`.
 
 **Mutations caught by name:** red ignored, stops ignored, the taxi ignored, the tram ahead ignored, the
 cone in place of the rails, no seam, both offset drops, a car ignoring a tram. ⚠️ **Not caught:** taking
