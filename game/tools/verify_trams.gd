@@ -27,6 +27,9 @@ const JUMP_SLACK_M: float = 0.02
 ## Beyond a tram's middle, how far to stand the taxi.
 const TAXI_AHEAD_M: float = 20.0
 const STAGED_S: float = 12.0
+## A rail bends; a join onto the other track, running the other way, turns this far.
+const DOUBLES_BACK_DEG: float = 120.0
+const TURN_SPAN_M: float = 5.0
 
 
 func _init() -> void:
@@ -81,6 +84,14 @@ func _check_lines(lines: TramLines) -> void:
 	_expect(lines.lines_dropped == 0, "lines", "every stop line's edge is in the graph")
 	_expect(total_stops > 0, "lines", "routes carry stops")
 	_expect(total_lines > 0, "lines", "routes carry stop lines")
+	var worst_turn: float = 0.0
+	for route: TramLines.Route in lines.routes:
+		worst_turn = maxf(worst_turn, _worst_turn_deg(route))
+	_expect(
+		worst_turn < DOUBLES_BACK_DEG,
+		"lines",
+		"no route doubles back (worst %.0f deg)" % worst_turn
+	)
 	var resident: int = GeneratedRegions.resident().size()
 	if resident > 1:
 		_expect(lines.seam_joins >= 2, "seam", "both tracks cross the seam")
@@ -324,3 +335,18 @@ static func _longest(lines: TramLines) -> TramLines.Route:
 		if route.length_m() > best.length_m():
 			best = route
 	return best
+
+
+## The sharpest turn between a route's steps, over `TURN_SPAN_M` so a digitising jitter
+## between two close stations does not read as one.
+static func _worst_turn_deg(route: TramLines.Route) -> float:
+	var worst: float = 0.0
+	var s_m: float = TURN_SPAN_M
+	while s_m < route.length_m() - TURN_SPAN_M:
+		var here: Vector3 = route.at(s_m)
+		var before: Vector3 = here - route.at(s_m - TURN_SPAN_M)
+		var after: Vector3 = route.at(s_m + TURN_SPAN_M) - here
+		var turn: float = Vector2(before.x, before.z).angle_to(Vector2(after.x, after.z))
+		worst = maxf(worst, rad_to_deg(absf(turn)))
+		s_m += TURN_SPAN_M
+	return worst
