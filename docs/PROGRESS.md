@@ -501,6 +501,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   a junction is signalled where an `RM1011` is hosted (115 of 120 within 15 m of a head), grouped
   by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`, built 2026-10-30); the
   player's red counted, never paid or docked, until the user decides.
+- `Q177` Public transport's windows light at night (user, 2026-11-01): bus and tram at `cabin_glow` 0.25, minibus 0.12, the coach dark; the tram's head lamp, on no circuit until now, lights, and two white side lamps ahead and two red behind burn while it runs, day and night. Owed: the user's drive.
 - `Q176` The trams run the published rails as walls that never push (2026-11-01): direction read off the other track, a one-way street or what a bed continues, unresolved refused; a separate `TramSystem`, whole fleet always; moving trams replace the parked ones, and nothing stands in a tram's path.
 - `Q175` A hit on a moving car reads the closing speed, only when the taxi is moving into it, and the near miss looks at moving cars on the closing speed (2026-10-30). Bars and prices unchanged; the user's drive owed.
 - `Q174` The wheel goes to lock slower at speed (user, 2026-10-29): a full-lock lane change with the throttle held slid to 20.8° / 29.8° at 110 / 120 kph; `steer_attack_at_top_s` 2.0 blends the 0.2 s ramp on the speed share's square (0.75 s at 110), 6.3 / 6.5° now; drift mode and a countersteer keep 0.2 s, every drift row unmoved. Owed: the user's drive.

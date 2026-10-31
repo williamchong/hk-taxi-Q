@@ -1209,7 +1209,7 @@ the same names; `etl/tests/test_make_vehicle.py` binds the two tables.
 
 | Rule | What happens |
 |---|---|
-| Slots | one slot per part: `vehicle_paint`, `vehicle_glass`, `vehicle_trim`, `vehicle_lamp` (unswitched), and per circuit `vehicle_lamp_brake`, `_reverse`, `_indicator_left`, `_indicator_right`, `_sidelamp`, `_headlamp`, `_roofsign`. The importer stamps `UV = (circuit, marker)` and merges every slot into **one** `vehicle_body` surface on `tuning/vehicle_body.tres` |
+| Slots | one slot per part: `vehicle_paint`, `vehicle_glass`, `vehicle_trim`, `vehicle_cabin` and `vehicle_cabin_dim` (`Q177`), `vehicle_lamp` (unswitched), and per circuit `vehicle_lamp_brake`, `_reverse`, `_indicator_left`, `_indicator_right`, `_sidelamp`, `_headlamp`, `_roofsign`. The importer stamps `UV = (circuit, marker)` and merges every slot into **one** `vehicle_body` surface on `tuning/vehicle_body.tres` |
 | Colour | the slot's base colour, baked into `COLOR_0` as sRGB (`Q27`); a slot already carrying `COLOR_0` keeps it, sRGB-encoded |
 | Geometry | one object, transforms applied, origin at the ground centre, `y = 0` at the base, nose toward `-z`. Flat-shaded; no vertex shared between parts |
 | Refusal | an unknown `vehicle_…` slot is refused, not guessed: `push_error`, body left as authored, and `verify_authored.gd` fails it as "not one surface" |

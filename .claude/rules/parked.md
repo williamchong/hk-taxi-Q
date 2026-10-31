@@ -108,3 +108,7 @@ traffic, and the bonus for threading them.
   `refused`, published sources included (3 stops on Wan Chai, 2 laybys on Causeway Bay), by
   `tramway.lines.tram_path_m`. Do not exempt a published bay: the tram drives through it. `parked` now
   runs after `tramlines`.
+- **Public transport's windows light at night** (`Q177`): `Shape.cabin` is `MARKER_CABIN` on the bus and
+  the tram and `MARKER_CABIN_DIM` on the minibus. The coach stays dark because it only ever parks; do not
+  "complete the set". A new cabin marker is four places: `make_vehicle.py`, the importer's `VEHICLE`,
+  the shader and `verify_parked`'s `LIT_CABINS`. A shader change owes a render and `grep -i "shader error"`.

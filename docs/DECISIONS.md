@@ -11026,3 +11026,45 @@ the other region's open start, so that bar is a guard no data tests. `no route d
 deg) was added for it and has not been seen to fail.
 
 **Not done.** `P3-8`'s bus lanes are out of scope, and a tram does not stop for a car crossing it.
+
+## `Q177` — Public transport's windows light at night, and a tram runs with its side lamps on
+
+**Status.** 🟡 Built 2026-11-01 on the user's asks, across one session: "tram and bus's window should
+light up at night"; "light up but not too bright i guess, it is just because public transport unlike
+private cars, are almost always lit indoor"; "seems mini bus often has dimmer light in real life";
+"tram head light should light up at night"; and, on two photographs of Hong Kong trams at night,
+"also the 2 little white side light light up in front", "red side light always lit on back". Owed:
+the user's drive.
+
+- **Two markers, not a per-instance bit.** `MARKER_CABIN` (5, bus and tram) and `MARKER_CABIN_DIM`
+  (6, minibus) take a kind's whole glass, `Shape.cabin`. `vehicle_body.gdshader` shades them as the
+  glazing and adds `cabin_light * level * night_lights`, so nothing lights by day. No instance state:
+  a bus at its stop and a minibus in traffic both have their lights on. The player's taxi carries no
+  such vertex.
+- **The coach stays dark**, on the data rather than taste: it stands only in `bay` and `frontage`
+  placements, parked, and the user's reason was public transport in service. The bus and minibus are
+  at `stop`s or moving. A red taxi is public transport too and is not lit indoors.
+- **The head lamp was wired to nothing.** The tram's lens was `headlamp_c`, which is on no circuit,
+  so `P3-4`'s running bit never reached it; it is `headlamp_l` now. `LAMP_CIRCUITS` could not take
+  the old name, because `_check_wiring` requires every key on the taxi. The motorcycle's `headlamp_c`
+  stays on no circuit: it only ever parks.
+- **The side lamps** are the `sidelamp` circuit, which no other roster kind has: white beside the
+  head lamp and red inboard of each tail lens, as the photographs have them, `foglamp_{side}` for the
+  name the taxi's circuit table knows. `traffic_side_lit` 0.75 while `running`, because at full level
+  the red reads salmon (`lamp_emission`'s table). 🔴 **Lit by day as well: a deliberate reading of
+  "always", beside the head lamp's `traffic_day_lamps`.** It is one multiply by `night_lights` to
+  undo. A tail lens still brakes.
+
+Measured, 2026-11-01, desktop. The parked fleet in `asset_viewer` by day, against `HEAD`, each side
+shot twice and byte-identical: about 1,200 of 330,000 px in the crop differ by over 3 codes, thin edge
+speckle on every vehicle plus the tram's new lenses; no window face moved. Why an unchanged kind's
+edges moved is not established. ⚠️ Tram placement differs between runs with different `--shots`, so a
+close tram cannot be re-shot on demand; the close-ups of both ends forced `running` in a temporary
+copy of the shader. ⚠️ No parked bus was framed close on a street: the bus's windows are graded in
+the viewer, the tram's and the minibus's on the street as well.
+
+`verify_parked`'s `_check_cabins` holds the markers through the import; a wrong table fails by name
+(`'minibus' carries cabin markers [6.0], and should carry [5.0]`). `test_make_parked.py` holds the
+generator's side, the head lamp's circuit and the side lamps' colours.
+
+**See.** `Q160` · `Q167` · `Q176` · `P3-4` · `P3-11d` · `game/tuning/vehicle_body.md`
