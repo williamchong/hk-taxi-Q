@@ -94,6 +94,10 @@ const LAMP_RIGHT: int = 16
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
 
+## The trams (`P3-4`): a car follows one as it follows a car, and waits behind one
+## at its stop. A car does not pass a tram: on Hennessy Road nothing lawfully does.
+var trams: TramSystem
+
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
 ## The scene's signals, which the cars stop at; where none is set the system
@@ -554,6 +558,8 @@ func _physics_process(delta: float) -> void:
 
 ## One tick: spawn into the ring, drive every car, retire what left it.
 func step(delta: float) -> void:
+	if trams == null and is_inside_tree():
+		trams = get_tree().get_first_node_in_group(TramSystem.GROUP) as TramSystem
 	if not _parked_read and is_inside_tree():
 		_queue_parked(get_tree().get_nodes_in_group(ParkedLayer.GROUP))
 	_read_parked_some(PARKED_READS_PER_TICK)
@@ -1132,6 +1138,17 @@ func _gap_ahead(car: Car) -> float:
 			origin, forward, car, other.pose.origin, other.half_length, other.half_width
 		)
 		best = minf(best, gap)
+	if is_instance_valid(trams):
+		for tram: TramSystem.Tram in trams.trams:
+			if not tram.live:
+				continue
+			var heading: Vector3 = -tram.pose.basis.z
+			if forward.x * heading.x + forward.z * heading.z < follow_cos:
+				continue
+			best = minf(
+				best,
+				_gap_to(origin, forward, car, tram.pose.origin, trams.half_length, trams.half_width)
+			)
 	if is_instance_valid(vehicle):
 		# The taxi measured as the library's first kind: a saloon either way.
 		var player: AABB = _extents[0]

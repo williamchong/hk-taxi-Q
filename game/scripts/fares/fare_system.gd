@@ -417,7 +417,7 @@ func _physics_process(delta: float) -> void:
 
 
 ## What the near miss looks at: the parked vehicles round `point`, and the moving
-## ones (`Q175`), which `--traffic=off` leaves none of.
+## ones (`Q175`), which `--traffic=off` leaves none of; and the trams (`P3-4`).
 static func obstacles_near(
 	tree: SceneTree, point: Vector3, radius_m: float, look_s: float
 ) -> Array[Dictionary]:
@@ -425,6 +425,9 @@ static func obstacles_near(
 	var traffic := tree.get_first_node_in_group(TrafficSystem.GROUP) as TrafficSystem
 	if traffic != null:
 		found.append_array(traffic.near_cars(point, radius_m, look_s))
+	var running := tree.get_first_node_in_group(TramSystem.GROUP) as TramSystem
+	if running != null:
+		found.append_array(running.near_cars(point, radius_m, look_s))
 	return found
 
 

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="TramProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/traffic/tram_profile.gd" id="1_trams"]
+
+[resource]
+script = ExtResource("1_trams")
+trams = 16
+cruise_mps = 7.0
+accel_mps2 = 0.9
+brake_mps2 = 1.2
+brake_max_mps2 = 3.5
+dwell_s = 10.0
+gap_m = 3.0
+look_m = 35.0
+follow_heading_deg = 45.0
+start_clear_m = 25.0
+run_off_m = 30.0
+bogie_m = 2.7
+taxi_half_m = 2.3
+seam_join_m = 30.0
+seam_heading_deg = 40.0
+bell_voices = 3
+bell_range_m = 110.0
+bell_repeat_s = 4.0

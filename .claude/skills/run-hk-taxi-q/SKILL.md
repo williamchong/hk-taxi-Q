@@ -113,6 +113,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--menu=off\|on` | the start menu (`P6-1`). **`drive.sh` appends `off`** unless a run names it, because the menu parks the car; `on` with `--seconds=3 --shots=2` is a menu frame — the orbit keeps the frame changing, so the capture never stalls |
 | `--menu-page=home\|play\|guide\|options\|credits\|notices\|report\|record\|pause` | the sheet the menu opens on (`report` is an empty shift's; `pause` drives 1 s in `--mode`'s run, then pauses — shoot it after 1 s at `--debug-view=minimal`, since a held screen can stall the capture, `Q165`), so a frame of any page is one run and never a click; needs `--menu=on`. Default `home` `--menu-sample=on` fills its 成績表 with a made-up sheet and saves no record. |
 | `--traffic=off\|on` | the moving traffic and its signals (`P3-3c`). On by default; a frame or a drive meant to be without cars takes it off |
+| `--trams=off\|on` | the moving trams (`P3-4`, `Q176`). On by default; the rails are drawn either way |
 | `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
 | `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 
