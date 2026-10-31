@@ -25,10 +25,11 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
-## `--menu-page=<home|play|guide|options|credits|notices|report|pause>` opens on that
-## page, so a frame of any sheet is one `drive.sh` run and never a click; the
+## `--menu-page=<home|play|guide|options|credits|notices|report|record|pause>` opens on
+## that page, so a frame of any sheet is one `drive.sh` run and never a click; the
 ## report so opened is an empty shift's, and the pause `Main`'s over the car on
-## the start line.
+## the start line. `--menu-sample=on` fills the 成績表 on any of them for a frame,
+## and a run naming either flag saves nothing to the record (`Main`).
 ##
 ## ⚠️ **The first Controls in this project that take a click.** `InputRouter`
 ## never marks an event handled, so the buttons see the pointer and the touch;
@@ -51,6 +52,8 @@ signal ended
 const MENU_ARG: String = "--menu="
 ## The page the menu opens on; absent or unknown, the home page.
 const PAGE_ARG: String = "--menu-page="
+## `on` fills the 成績表 with `SessionTally.sample`, for a frame.
+const SAMPLE_ARG: String = "--menu-sample="
 ## Over the HUD (10), under the dev overlay (127).
 const LAYER: int = 20
 ## The blur behind the menu's text (`Q163`).
@@ -60,7 +63,7 @@ const SHEET_COLUMN: NodePath = ^"Centre/Pad/Column"
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
-enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT, PAUSE }
+enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT, PAUSE, RECORD }
 
 
 ## What a shift banked, for the REPORT page (`Q162`). Filled by `Main`.
@@ -72,10 +75,15 @@ class Report:
 	## The best after this shift, this one included.
 	var best_hkd: float = 0.0
 	var new_best: bool = false
+	## The shift's books, for the 成績表 beside the total.
+	var tally: SessionTally = SessionTally.new()
 
 
 ## The shift to report, set before this enters the tree; null opens on HOME.
 var report: Report = null
+## The free drive's books, for the 成績表 on its PAUSE (`Q169`); null on a shift's
+## PAUSE, which has only the way on and the way out.
+var pause_tally: SessionTally = null
 ## Whether this is the pause over a running drive, set before this enters the
 ## tree; it opens on PAUSE and its ways back lead there, not HOME.
 var pausing: bool = false
@@ -134,6 +142,10 @@ func _ready() -> void:
 	elif _page == Page.REPORT:
 		report = Report.new()
 		report.best_hkd = Settings.best_shift_hkd()
+		var shown: SessionTally = _shown_tally(report.tally)
+		report.total_hkd = shown.total_hkd()
+		report.deliveries = shown.deliveries
+		report.bails = shown.bails
 	_build()
 
 
@@ -171,6 +183,7 @@ func _build() -> void:
 		_pages[Page.CREDITS] = _credits()
 		_pages[Page.NOTICES] = _notices()
 		_pages[Page.REPORT] = _report()
+		_pages[Page.RECORD] = _record()
 	# The HUD's glass (`Q163`): the drive's brackets, so the menu and the drive
 	# are one display. Last, over the pages' backdrops, and unshaded — the
 	# backdrops shade the text.
@@ -207,7 +220,7 @@ func shot() -> MenuShot:
 			return _profile.shot_play
 		Page.OPTIONS:
 			return _profile.shot_options
-		Page.CREDITS, Page.GUIDE, Page.NOTICES:
+		Page.CREDITS, Page.GUIDE, Page.NOTICES, Page.RECORD:
 			return _profile.shot_sheet
 		Page.REPORT:
 			return _profile.shot_report
@@ -257,6 +270,7 @@ func _home() -> Control:
 	column.add_child(record)
 	column.add_child(_gap("Gap", _profile.button_gap_px * 2))
 	_first[Page.HOME] = _button(column, "Play", "start", _show.bind(Page.PLAY))
+	_button(column, "Record", "record", _show.bind(Page.RECORD))
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
 	_button(column, "Options", "options", _show.bind(Page.OPTIONS))
 	_button(column, "Credits", "credits", _show.bind(Page.CREDITS))
@@ -483,6 +497,9 @@ func _report() -> Control:
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_first[Page.REPORT] = _button(column, "Again", "again", _on_start.bind(DayClock.Mode.SHIFT))
 	_button(column, "Menu", "menu", _show.bind(Page.HOME))
+	# Only a real report: every other menu builds this page and never shows it.
+	if report != null:
+		_beside(column, report.tally)
 	return column
 
 
@@ -496,7 +513,76 @@ func _pause() -> Control:
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "End", "end_shift" if pausing_shift else "menu", _on_end)
+	if pause_tally != null:
+		_beside(column, pause_tally)
 	return column
+
+
+## The lifetime record (`P3-76`, `Q169`), off HOME: the 成績表's form on every run
+## added up, over the shifts and the fares.
+func _record() -> Control:
+	var panel: ChamferPanel = _sheet("Record", _profile.ledger_px)
+	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
+	_heading(column, "Heading", _text.say("record", _language))
+	var tally: SessionTally = _shown_tally(Settings.lifetime())
+	_note(
+		column,
+		"Runs",
+		(
+			_text.say("record_runs", _language)
+			% [Settings.shifts_finished(), tally.deliveries, tally.bails]
+		),
+		_style.chip_muted
+	)
+	_note(
+		column,
+		"Best",
+		_text.say("best", _language) + FareFace.money(Settings.best_shift_hkd()),
+		_style.dial_needle
+	)
+	column.add_child(_ledger(tally))
+	_first[Page.RECORD] = _foot(column)
+	return panel
+
+
+## The 成績表 under a page's column, off the safe area's right edge on its own
+## blurred ground, shown and hidden with `page`.
+func _beside(page: Control, tally: SessionTally) -> void:
+	var panel: ChamferPanel = _panel("Ledger")
+	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	panel.offset_left = -_profile.margin_px.x / 2.0 - _profile.ledger_px.x
+	panel.offset_right = -_profile.margin_px.x / 2.0
+	panel.offset_top = -_profile.ledger_px.y / 2.0
+	panel.offset_bottom = _profile.ledger_px.y / 2.0
+	_root.add_child(panel)
+	_backdrop(panel, 1.0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	pad.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side: StringName in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
+		pad.add_theme_constant_override(side, _profile.credits_pad_px)
+	panel.add_child(pad)
+	var column := VBoxContainer.new()
+	column.name = "Column"
+	column.add_theme_constant_override(&"separation", _profile.button_gap_px)
+	pad.add_child(column)
+	_heading(column, "Heading", _text.say("sheet_title", _language))
+	column.add_child(_ledger(_shown_tally(tally)))
+	# A lambda, not `_follow.bind`: the column's backdrop already holds that
+	# connection, and two binds of one method are one connection to Godot.
+	page.visibility_changed.connect(func() -> void: panel.visible = page.visible)
+
+
+func _ledger(tally: SessionTally) -> LedgerCard:
+	var card := LedgerCard.new()
+	card.name = "Card"
+	card.build(tally, _text, _profile, _style, _language, _font_zh)
+	return card
+
+
+## What a 成績表 shows: `tally`, or a filled sheet under `SAMPLE_ARG`.
+func _shown_tally(tally: SessionTally) -> SessionTally:
+	return SessionTally.sample() if Cmdline.value(SAMPLE_ARG) == "on" else tally
 
 
 # -------------------------------------------------------------- actions ----
@@ -729,6 +815,14 @@ func _line(node_name: String, text: String) -> Label:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override(&"font_color", _style.plate_ink)
 	return _style.shade(label)
+
+
+## A line of body text under `parent`, in `ink`.
+func _note(parent: Control, node_name: String, said: String, ink: Color) -> void:
+	var note: Label = _line(node_name, said)
+	_size(note, _profile.body_size_zh, _profile.body_size)
+	note.add_theme_color_override(&"font_color", ink)
+	parent.add_child(note)
 
 
 func _gap(node_name: String, px: int) -> Control:

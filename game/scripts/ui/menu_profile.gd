@@ -40,6 +40,16 @@ const PATH: String = "res://tuning/menu.tres"
 ## The guide sheet, centred, and each step's drawn picture.
 @export var guide_px: Vector2
 @export var guide_picture_px: Vector2
+## The 成績表 (`LedgerCard`): the sheet beside a column, a row's height and a
+## ruled line's, the two number columns, the gutter between tables and the gap
+## between the tables and the books under them.
+@export var ledger_px: Vector2
+@export var ledger_row_px: int
+@export var ledger_rule_px: int
+@export var ledger_count_px: int
+@export var ledger_money_px: int
+@export var ledger_gutter_px: int
+@export var ledger_gap_px: int
 
 @export_group("Type")
 @export var title_size: int

@@ -753,15 +753,29 @@ func _parse_args() -> bool:
 				# lower-cased, kept by hand: this tool cannot preload a
 				# `class_name` script (`verify_menu.gd` says why).
 				var pages: PackedStringArray = [
-					"home", "play", "guide", "options", "credits", "notices", "report", "pause"
+					"home",
+					"play",
+					"guide",
+					"options",
+					"credits",
+					"notices",
+					"report",
+					"record",
+					"pause"
 				]
 				if not pages.has(value):
 					_fail(
 						(
-							"--menu-page=%s is not home, play, guide, options, credits, notices, report or pause"
+							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record or pause"
 							% value
 						)
 					)
+					return false
+			"--menu-sample":
+				# `start_menu.gd` shows a filled 成績表 only on `on`, so a typo
+				# would shoot an empty sheet and report success.
+				if value != "on":
+					_fail("--menu-sample=%s is not on" % value)
 					return false
 			"--touch":
 				# `input_router.gd` reads this one itself, so this is validation

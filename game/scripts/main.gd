@@ -21,7 +21,8 @@ extends Node
 ## car in the showroom — so the car, the fare's clock, the shift's hour and
 ## the parked roster hold where they are. A fresh menu on PAUSE runs alone over
 ## it. RESUME unpauses; the way out parks the level and opens HOME, writing no
-## best: half a shift is not a total. This node stays pausable — its children
+## best: half a shift is not a total, though what it did joins the lifetime
+## record, saved as the pause opens. This node stays pausable — its children
 ## would inherit anything else — so the menu's signals are what reach it while
 ## the tree is held.
 
@@ -91,6 +92,8 @@ func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
 			pause()
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			_bank_tally(false)
 
 
 ## Only a drive in play pauses: never under `--menu=off` (every scripted run),
@@ -111,10 +114,15 @@ func pause() -> void:
 	if not _can_pause():
 		return
 	get_tree().paused = true
+	# Before anything can end the app: this is also the way out of a run, and
+	# nothing moves while the tree is held, so END needs no second save.
+	_bank_tally(false)
 	var shown := StartMenu.new()
 	shown.name = "PauseMenu"
 	shown.pausing = true
 	shown.pausing_shift = level.clock != null and level.clock.mode == DayClock.Mode.SHIFT
+	if not shown.pausing_shift and is_instance_valid(level.fares):
+		shown.pause_tally = level.fares.tally
 	shown.resumed.connect(_release_pause)
 	shown.ended.connect(_on_run_ended)
 	_gui.add_child(shown)
@@ -191,7 +199,24 @@ func _on_shift_over() -> void:
 	report.bails = walked
 	report.new_best = Settings.record_shift(total)
 	report.best_hkd = Settings.best_shift_hkd()
+	if fares != null:
+		report.tally = fares.tally
+	_bank_tally(true)
 	_open_menu(report)
+
+
+## What the run has done since the last save, into the lifetime record (`P3-76`,
+## `Q169`). `shift_finished` is 交更's alone. Only a player's run: no menu is a
+## scripted one, and a run naming a menu page or the sample is taking a frame.
+func _bank_tally(shift_finished: bool) -> void:
+	if (
+		_gui == null
+		or not is_instance_valid(level.fares)
+		or not Cmdline.value(StartMenu.PAGE_ARG).is_empty()
+		or not Cmdline.value(StartMenu.SAMPLE_ARG).is_empty()
+	):
+		return
+	Settings.bank_tally(level.fares.tally, shift_finished)
 
 
 ## A fresh menu over the parked level: on the report, or on HOME for none.

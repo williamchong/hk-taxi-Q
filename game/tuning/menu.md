@@ -100,3 +100,20 @@ mips at 3.5 — about an eleventh of the resolution, which turns the city's edge
 — and pulled toward `HudStyle.scrim`. HOME's columns (HOME, PLAY, OPTIONS, the report) take a side
 panel `backdrop_width_px` 760 wide from the left edge, fading out from 0.55 of that width so the
 car stays the picture; a sheet takes the whole screen.
+
+## `ledger_px`
+
+The 成績表 (`LedgerCard`, `P3-76`), beside REPORT's and PAUSE's column and inside RECORD's sheet. 1120 wide fills
+what the 760 px column leaves on a 1920 canvas. 770 tall holds a full sheet with both optional lines, floor and
+walked: 640 left the total hanging under the panel, which nothing but a frame shows. A row added to
+`SessionTally.BONUSES` needs more height here.
+
+## `ledger_row_px`
+
+40 px a row carries the Kai at `body_size_zh` 24 with air, and is what a thumb can read on a phone in a paused car.
+`ledger_rule_px` 2 is `frame_ink`'s ruled line: what makes the two tables a sheet rather than two lists.
+
+## `ledger_count_px`
+
+The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
+digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.

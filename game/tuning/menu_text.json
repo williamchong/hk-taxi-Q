@@ -121,6 +121,70 @@
     "end_shift": {
       "en": "END SHIFT",
       "zh": "收工"
+    },
+    "record": {
+      "en": "RECORD",
+      "zh": "紀錄"
+    },
+    "record_runs": {
+      "en": "%d shifts · %d delivered · %d ran off",
+      "zh": "特更 %d 更 · 送達 %d 程 · 走數 %d 程"
+    },
+    "sheet_title": {
+      "en": "SCORE SHEET",
+      "zh": "成績表"
+    },
+    "sheet_bonus": {
+      "en": "BONUS",
+      "zh": "加分"
+    },
+    "sheet_penalty": {
+      "en": "PENALTY",
+      "zh": "扣分"
+    },
+    "sheet_count": {
+      "en": "NO.",
+      "zh": "次數"
+    },
+    "sheet_subtotal": {
+      "en": "SUBTOTAL",
+      "zh": "小計"
+    },
+    "sheet_meter": {
+      "en": "METER",
+      "zh": "咪錶"
+    },
+    "sheet_time": {
+      "en": "TIME TIP",
+      "zh": "時間小費"
+    },
+    "sheet_floored": {
+      "en": "TIP FLOOR",
+      "zh": "小費扣清"
+    },
+    "sheet_total": {
+      "en": "TOTAL HK$",
+      "zh": "合計 HK$"
+    },
+    "sheet_walked": {
+      "en": "RAN OFF WITH HK$",
+      "zh": "走數損失 HK$"
+    },
+    "sheet_best_slide": {
+      "en": "LONGEST DRIFT",
+      "zh": "最長甩尾"
+    },
+    "sheet_best_flight": {
+      "en": "LONGEST FLIGHT",
+      "zh": "最長飛躍"
+    },
+    "sheet_best_pass": {
+      "en": "CLOSEST PASS",
+      "zh": "最貼近"
+    },
+    "sheet_best_speed": {
+      "en": "TOP SPEED",
+      "zh": "最高車速"
     }
   },
   "credits": [

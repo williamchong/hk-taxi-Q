@@ -31,6 +31,10 @@ const GuideCardScript = preload("res://scripts/ui/guide_card.gd")
 const EngineNoticesScript = preload("res://scripts/ui/engine_notices.gd")
 const SettingsScript = preload("res://scripts/core/settings.gd")
 const StartMenuScript = preload("res://scripts/ui/start_menu.gd")
+const SessionTallyScript = preload("res://scripts/fares/session_tally.gd")
+const ExamSheetScript = preload("res://scripts/fares/exam_sheet.gd")
+const FareScript = preload("res://scripts/fares/fare.gd")
+const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
@@ -51,6 +55,22 @@ const KEYS: PackedStringArray = [
 	"paused",
 	"resume",
 	"end_shift",
+	"record",
+	"record_runs",
+	"sheet_title",
+	"sheet_bonus",
+	"sheet_penalty",
+	"sheet_count",
+	"sheet_subtotal",
+	"sheet_meter",
+	"sheet_time",
+	"sheet_floored",
+	"sheet_total",
+	"sheet_walked",
+	"sheet_best_slide",
+	"sheet_best_flight",
+	"sheet_best_pass",
+	"sheet_best_speed",
 	"guide",
 	"options",
 	"credits",
@@ -101,6 +121,12 @@ const POSITIVE: PackedStringArray = [
 	"shot_response",
 	"button_gap_px",
 	"credits_pad_px",
+	"ledger_row_px",
+	"ledger_rule_px",
+	"ledger_count_px",
+	"ledger_money_px",
+	"ledger_gutter_px",
+	"ledger_gap_px",
 	"title_size",
 	"subtitle_size",
 	"subtitle_size_zh",
@@ -112,7 +138,7 @@ const POSITIVE: PackedStringArray = [
 	"body_size_zh",
 ]
 const POSITIVE_VECTORS: PackedStringArray = [
-	"margin_px", "button_px", "credits_px", "guide_px", "guide_picture_px"
+	"margin_px", "button_px", "credits_px", "guide_px", "guide_picture_px", "ledger_px"
 ]
 ## A camera shot per page (`MenuShot`), and its keys that may not be zero. The
 ## yaw is left out: 0 is behind the car, a value.
@@ -127,6 +153,7 @@ func _init() -> void:
 	_check_text()
 	_check_notices()
 	_check_settings()
+	_check_record()
 	# The pause needs a tree, and autoloads register on the first frame.
 	_check_pause.call_deferred()
 	_start_watchdog.call_deferred("verify_menu", 30.0)
@@ -177,7 +204,112 @@ func _check_pause() -> void:
 		"the key that paused resumes, and the menu leaves"
 	)
 	paused = false
+	await _check_sheet()
 	_finish("verify_menu")
+
+
+## The 成績表 (`P3-76`): two tables, every row reading the tally's numbers, on
+## REPORT, a free drive's PAUSE and RECORD, and none on a shift's PAUSE; every
+## word on it in the Kai.
+func _check_sheet() -> void:
+	var tally: SessionTallyScript = SessionTallyScript.sample()
+	var text := MenuTextScript.load_text()
+
+	var report := StartMenuScript.new()
+	report.report = StartMenuScript.Report.new()
+	report.report.tally = tally
+	root.add_child(report)
+	await process_frame
+	var page: Control = report._pages.get(StartMenuScript.Page.REPORT)
+	var ledger: Node = report._root.get_node_or_null("Ledger")
+	if ledger == null or page == null or not page.visible:
+		_fail("sheet", "REPORT has no ledger beside its column")
+		report.queue_free()
+		return
+	var card: Node = ledger.get_node("Pad/Column/Card")
+	for skill: int in SessionTallyScript.BONUSES:
+		var row: Node = card.get_node("Tables/Bonus/%s" % ExamSheetScript.key_of(skill))
+		_expect(
+			(row.get_node("Count") as Label).text == str(tally.counts[skill]),
+			"sheet",
+			"%s's count reads the tally" % ExamSheetScript.key_of(skill)
+		)
+		_expect(
+			(row.get_node("Money") as Label).text == "+" + "%.1f" % tally.banked[skill],
+			"sheet",
+			"%s's money reads the tally, signed" % ExamSheetScript.key_of(skill)
+		)
+	for skill: int in SessionTallyScript.PENALTIES:
+		var row: Node = card.get_node("Tables/Penalty/%s" % ExamSheetScript.key_of(skill))
+		_expect(
+			(row.get_node("Money") as Label).text == "−" + "%.1f" % -tally.banked[skill],
+			"sheet",
+			"%s docks with a proper minus" % ExamSheetScript.key_of(skill)
+		)
+	_expect(
+		(card.get_node("Books/Sums/Total/Value") as Label).text == "%.1f" % tally.total_hkd(),
+		"sheet",
+		"the total is the books' sum"
+	)
+	_expect(
+		card.get_node_or_null("Books/Sums/Floored") != null, "sheet", "a floored tip has its line"
+	)
+	_expect(
+		(card.get_node("Books/Bests/Pass/Value") as Label).text == "0.18 m",
+		"sheet",
+		"the closest pass reads in metres"
+	)
+	report._show(StartMenuScript.Page.HOME)
+	await process_frame
+	_expect(not (ledger as CanvasItem).visible, "sheet", "the ledger leaves with its page")
+	report._show(StartMenuScript.Page.REPORT)
+	await process_frame
+	_expect((ledger as CanvasItem).visible, "sheet", "and comes back with it")
+	report.queue_free()
+
+	var fresh := StartMenuScript.new()
+	fresh.report = StartMenuScript.Report.new()
+	root.add_child(fresh)
+	await process_frame
+	var empty: Node = fresh._root.get_node("Ledger/Pad/Column/Card")
+	_expect(
+		(
+			(empty.get_node("Books/Bests/Slide/Value") as Label).text == "—"
+			and empty.get_node_or_null("Books/Sums/Floored") == null
+			and empty.get_node_or_null("Books/Sums/Walked") == null
+		),
+		"sheet",
+		"an empty run has no best, no floor line and no loss line"
+	)
+	_expect(fresh._pages.has(StartMenuScript.Page.RECORD), "sheet", "RECORD is a page off HOME")
+	fresh.queue_free()
+
+	for pausing_free: bool in [true, false]:
+		var over := StartMenuScript.new()
+		over.pausing = true
+		over.pausing_shift = not pausing_free
+		if pausing_free:
+			over.pause_tally = tally
+		root.add_child(over)
+		await process_frame
+		_expect(
+			(over._root.get_node_or_null("Ledger") != null) == pausing_free,
+			"sheet",
+			"a free drive's PAUSE has the sheet; a shift's has not"
+		)
+		over.queue_free()
+
+	var kai: Font = load(str(StreetPlateScript.load_tuning().get("font_zh", ""))) as Font
+	_expect(kai != null, "sheet", "the Kai loads")
+	if kai == null:
+		return
+	for key: String in KEYS:
+		if not key.begins_with("sheet_") and not key.begins_with("record"):
+			continue
+		var said: String = text.say(key, "zh")
+		for index: int in said.length():
+			if said.unicode_at(index) > 0x2FFF and not kai.has_char(said.unicode_at(index)):
+				_fail("sheet", "the Kai has no '%s' for %s" % [said[index], key])
 
 
 func _check_profile() -> void:
@@ -360,6 +492,105 @@ func _check_settings() -> void:
 		"the best reads HK$120.5 after a restart, beside the options"
 	)
 	_expect(SettingsScript.record_shift(200.0), "records", "a higher total is a record")
+	_forget_settings_file()
+	SettingsScript.use_file(SettingsScript.PATH)
+
+
+## The lifetime record (`P3-76`, `Q169`): saved, restarted and summed; a run saved
+## at every pause counts each event once; an older file keeps its best and starts
+## its books at nothing; a count is keyed by the skill's name, not its value.
+func _check_record() -> void:
+	var probe: SessionTallyScript = SessionTallyScript.new()
+	for field: String in SessionTallyScript.SUMS + SessionTallyScript.BESTS:
+		_expect(probe.get(field) != null, "record", "%s is a field of the tally" % field)
+	_forget_settings_file()
+	SettingsScript.use_file(SETTINGS_PATH)
+	# A file from before the record: the best and nothing else.
+	SettingsScript.record_shift(99.0)
+	var old: SessionTallyScript = SettingsScript.lifetime()
+	_expect(
+		old.is_empty() and is_zero_approx(old.total_hkd()),
+		"record",
+		"an older file reads as empty books"
+	)
+
+	var run: SessionTallyScript = SessionTallyScript.new()
+	SettingsScript.bank_tally(run, false)
+	var disk := ConfigFile.new()
+	disk.load(SETTINGS_PATH)
+	_expect(
+		not disk.has_section_key(SettingsScript.RECORDS, "drift_count"),
+		"record",
+		"an empty run writes nothing"
+	)
+
+	run.counts[FareScript.Skill.DRIFT] = 3
+	run.banked[FareScript.Skill.DRIFT] = 6.0
+	run.counts[FareScript.Skill.CRASH] = 1
+	run.banked[FareScript.Skill.CRASH] = -5.0
+	run.meter_hkd = 40.0
+	run.deliveries = 1
+	run.longest_slide_s = 2.0
+	run.closest_pass_m = 0.5
+	SettingsScript.bank_tally(run, false)
+	SettingsScript.bank_tally(run, false)
+	SettingsScript.use_file(SETTINGS_PATH)
+	var saved: SessionTallyScript = SettingsScript.lifetime()
+	_expect(
+		(
+			saved.counts[FareScript.Skill.DRIFT] == 3
+			and is_equal_approx(saved.banked[FareScript.Skill.CRASH], -5.0)
+			and is_equal_approx(saved.meter_hkd, 40.0)
+			and saved.deliveries == 1
+		),
+		"record",
+		"mutation caught: saved twice with nothing new, a restart reads each event once"
+	)
+	_expect(
+		is_equal_approx(saved.closest_pass_m, 0.5) and is_equal_approx(saved.longest_slide_s, 2.0),
+		"record",
+		"the bests survive a restart"
+	)
+
+	run.counts[FareScript.Skill.DRIFT] = 5
+	run.meter_hkd = 70.0
+	run.longest_slide_s = 1.0
+	SettingsScript.bank_tally(run, true)
+	SettingsScript.use_file(SETTINGS_PATH)
+	saved = SettingsScript.lifetime()
+	_expect(
+		saved.counts[FareScript.Skill.DRIFT] == 5 and is_equal_approx(saved.meter_hkd, 70.0),
+		"record",
+		"a later save adds only what is new"
+	)
+	_expect(is_equal_approx(saved.longest_slide_s, 2.0), "record", "a shorter slide keeps the best")
+	_expect(SettingsScript.shifts_finished() == 1, "record", "交更 counts a shift")
+
+	# A second run on the same books adds, and a tighter pass is the new best.
+	var next: SessionTallyScript = SessionTallyScript.new()
+	next.counts[FareScript.Skill.DRIFT] = 2
+	next.closest_pass_m = 0.2
+	SettingsScript.bank_tally(next, false)
+	saved = SettingsScript.lifetime()
+	_expect(
+		(
+			saved.counts[FareScript.Skill.DRIFT] == 7
+			and is_equal_approx(saved.closest_pass_m, 0.2)
+			and SettingsScript.shifts_finished() == 1
+		),
+		"record",
+		"a new run adds to the lifetime, its pass the tighter, and END SHIFT is no shift"
+	)
+	_expect(
+		is_equal_approx(SettingsScript.best_shift_hkd(), 99.0), "record", "the shift's best is kept"
+	)
+	disk = ConfigFile.new()
+	disk.load(SETTINGS_PATH)
+	_expect(
+		disk.get_value(SettingsScript.RECORDS, "drift_count", -1) == 7,
+		"record",
+		"the file keys a count by the skill's name"
+	)
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
 
