@@ -82,6 +82,8 @@ var _half_length_m: float = 0.0
 var _usable: bool = false
 var _tracks: Dictionary[int, Track] = {}
 var _earned: Array[Fare.Award] = []
+## The tightest pass that paid on the last `tick`; INF on a tick with none.
+var _paid_clear_m: float = INF
 ## The tick counter, for `Track.last_seen`.
 var _tick: int = 0
 ## The last obstacle's span in the car's frame, written by `_span` into
@@ -141,6 +143,12 @@ func car_half_length_m() -> float:
 	return _half_length_m
 
 
+## The clearance of the tightest pass the last `tick` paid (`P3-76`'s bests), or
+## INF.
+func paid_clear_m() -> float:
+	return _paid_clear_m
+
+
 ## Forget every approach in flight — at a boarding, as the tracker does.
 func reset() -> void:
 	_tracks.clear()
@@ -159,6 +167,7 @@ func tick(
 	airborne: bool = false
 ) -> Array[Fare.Award]:
 	_earned.clear()
+	_paid_clear_m = INF
 	if not _usable:
 		return _earned
 	var elapsed: float = maxf(delta_s, 0.0)
@@ -234,6 +243,7 @@ func _judge(track: Track) -> void:
 		return
 	if track.age_at_alongside_s > _profile.near_miss_memory_s + SLACK:
 		return
+	_paid_clear_m = minf(_paid_clear_m, track.min_clear_m)
 	if track.min_clear_m <= _profile.close_call_m + SLACK:
 		_earned.append(Fare.Award.new(Fare.Skill.CLOSE_CALL, _profile.close_call_hkd))
 	else:

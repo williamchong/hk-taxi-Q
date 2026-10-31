@@ -157,9 +157,15 @@ var state: State = State.IDLE
 var fare: Fare = null
 ## Everything banked this session, in HK$.
 var earned_hkd: float = 0.0
+## This run's ledger (`P3-76`): a fresh one at every `reset`.
+var tally: SessionTally = SessionTally.new()
 ## The counters a drive is checked against.
-var deliveries: int = 0
-var bails: int = 0
+var deliveries: int:
+	get:
+		return tally.deliveries
+var bails: int:
+	get:
+		return tally.bails
 var cancellations: int = 0
 var hail_refusals: int = 0
 ## The pickups `setup` dropped for reaching no destination, in document order.
@@ -175,7 +181,9 @@ var withheld: PackedInt32Array = []
 ## How many times each `Fare.Skill` was performed this session, paid or
 ## not, indexed by the skill: every award and every practice run, so an
 ## achievement reads one number here rather than each fare's receipt.
-var skill_counts: PackedInt32Array = []
+var skill_counts: PackedInt32Array:
+	get:
+		return tally.counts
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
@@ -315,8 +323,6 @@ func setup(
 	_tracker = tracker
 	_near = near
 	_drift_tier = -1
-	skill_counts.resize(Fare.Skill.size())
-	skill_counts.fill(0)
 	_pickups.clear()
 	_dropoffs.clear()
 	for region: String in fares_by_region:
@@ -358,13 +364,11 @@ func reset() -> void:
 	state = State.IDLE
 	fare = null
 	earned_hkd = 0.0
-	deliveries = 0
-	bails = 0
+	tally = SessionTally.new()
 	cancellations = 0
 	hail_refusals = 0
 	pending = null
 	withheld = PackedInt32Array()
-	skill_counts.fill(0)
 	_sample_accum_s = 0.0
 	_board_accum_s = 0.0
 	_armed = true
@@ -481,6 +485,13 @@ func sample(
 		car, velocity, obstacles, elapsed, impact_mps > 0.0, airborne
 	):
 		_award(award)
+	tally.note_tick(
+		maxf(speed_mps, 0.0) * 3.6,
+		airborne,
+		_tracker.paid_slide_s(),
+		_tracker.landed_flight_s(),
+		_near.paid_clear_m()
+	)
 	var tier: int = _tracker.drift_tier()
 	if tier != _drift_tier:
 		_drift_tier = tier
@@ -677,7 +688,7 @@ func _deliver() -> void:
 		_award(early)
 	fare.banked_hkd = fare.meter.reading_hkd() + fare.tip_hkd
 	earned_hkd += fare.banked_hkd
-	deliveries += 1
+	tally.note_delivered(fare)
 	state = State.IDLE
 	_armed = false
 	delivered.emit(fare)
@@ -692,7 +703,7 @@ func _bail(position: Vector3) -> void:
 	fare.time_hkd = 0.0
 	fare.tip_hkd = 0.0
 	fare.banked_hkd = 0.0
-	bails += 1
+	tally.note_bailed(fare)
 	state = State.IDLE
 	_armed = false
 	bailed.emit(fare)
@@ -706,7 +717,7 @@ func _bail(position: Vector3) -> void:
 ## announced. With no passenger aboard it is practice — counted and shown,
 ## on no fare and in no tip (the user's call).
 func _award(award: Fare.Award) -> void:
-	skill_counts[award.skill] += 1
+	tally.note_award(award)
 	if state != State.CARRYING:
 		practised.emit(award)
 		return

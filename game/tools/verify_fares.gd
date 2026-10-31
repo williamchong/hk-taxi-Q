@@ -119,6 +119,7 @@ func _init() -> void:
 	_check_sparks()
 	_check_near_miss()
 	_check_close()
+	_check_tally()
 
 	_finish("verify_fares")
 
@@ -1841,6 +1842,230 @@ func _count_skilled(_fare: Fare, _award: Fare.Award) -> void:
 func _count_practised(award: Fare.Award) -> void:
 	_practised += 1
 	_last_practice = award
+
+
+## The ledger (`P3-76`): every skill in one table, the page's sum equal to what
+## banked through a delivery, a floored tip and a walked fare, practice in the
+## counts and out of the money, and bests that outlive the boarding.
+func _check_tally() -> void:
+	var seen: Array[Fare.Skill] = []
+	seen.append_array(SessionTally.BONUSES)
+	seen.append_array(SessionTally.PENALTIES)
+	for value: int in Fare.Skill.values():
+		_expect(
+			seen.count(value as Fare.Skill) == 1,
+			"tally",
+			"%s is in exactly one table" % Fare.Skill.find_key(value)
+		)
+
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "tally", "SKIP: no pickup on this region alone to drive from")
+		return
+
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var cool_ticks: int = int(ceil(_skills.crash_cool_s / TICK_S))
+
+	# Empty: counted, never in the money, and the bests start here.
+	_slide(system, FAST, threshold, drift_ticks + 2)
+	_slide(system, FAST, 0.0, 1)
+	_hit(system, _skills.crash_min_kph)
+	var tally: SessionTally = system.tally
+	_expect(
+		(
+			tally.counts[Fare.Skill.DRIFT] > 0
+			and tally.counts[Fare.Skill.CRASH] == 1
+			and is_zero_approx(tally.total_hkd())
+			and is_zero_approx(tally.bonus_hkd())
+			and is_zero_approx(tally.penalty_hkd())
+		),
+		"tally",
+		"practice is on the count and in no money"
+	)
+	var practice_slide: float = tally.longest_slide_s
+	_expect(
+		is_equal_approx(practice_slide, (drift_ticks + 2) * TICK_S),
+		"tally",
+		"the longest slide is the paid slide's whole length (%.2f s)" % practice_slide
+	)
+	# One tick short of a paying slide moves no best.
+	var short: FareSystem = _system(_fares, _profile, SEED)
+	_slide(short, FAST, threshold, drift_ticks - 1)
+	_expect(
+		is_zero_approx(short.tally.longest_slide_s) and is_inf(short.tally.closest_pass_m),
+		"tally",
+		"a slide one tick short of paying is no best"
+	)
+	short.free()
+	_tick(system, FAR_AWAY, FAST, cool_ticks)
+
+	# A slide held through the boarding: the tracker forgets it, the best keeps it.
+	_slide(system, FAST, threshold, drift_ticks + 6)
+	var held: float = tally.longest_slide_s
+	for tick: int in 5:
+		system.sample(pickup.point, CRAWL, Vector3.FORWARD, TICK_S, threshold)
+	_expect(
+		system.state == FareSystem.State.CARRYING and tally.longest_slide_s >= held,
+		"tally",
+		"mutation caught: the best outlives the boarding's reset"
+	)
+	_expect(held > practice_slide, "tally", "and a longer slide is a longer best")
+
+	# A delivered fare, with a bonus and a penalty on it.
+	_slide(system, FAST, 0.0, 1)
+	_slide(system, FAST, threshold, drift_ticks)
+	_slide(system, FAST, 0.0, 1)
+	_tick(system, FAR_AWAY, FAST, cool_ticks)
+	_hit(system, _skills.bump_min_kph)
+	var awards: Array[Fare.Award] = system.fare.awards.duplicate()
+	_tick(system, system.fare.destination.point, CRAWL, 1)
+	_expect(system.deliveries == 1, "tally", "delivered")
+	var awarded: float = 0.0
+	for award: Fare.Award in system.fare.awards:
+		awarded += award.hkd
+	_expect(awards.size() >= 2, "tally", "a bonus and a penalty are on the fare")
+	_expect(
+		(
+			is_equal_approx(tally.bonus_hkd() + tally.penalty_hkd(), awarded)
+			and is_equal_approx(tally.penalty_hkd(), -_skills.bump_hkd)
+		),
+		"tally",
+		"the two tables hold the delivered fare's awards, HK$%.1f" % awarded
+	)
+	_expect(
+		is_equal_approx(tally.total_hkd(), system.earned_hkd),
+		"tally",
+		"the page's sum is what banked (HK$%.2f)" % system.earned_hkd
+	)
+
+	# The floor: a debt bigger than the time. The page still closes.
+	_armed_again(system, pickup)
+	for crash: int in 3:
+		_hit(system, _skills.crash_min_kph)
+		_tick(system, FAR_AWAY, FAST, cool_ticks)
+	# A second on the clock, so the time cannot cover the debt or earn the early.
+	system.fare.remaining_s = 1.0
+	_tick(system, system.fare.destination.point, CRAWL, 1)
+	_expect(
+		system.deliveries == 2 and tally.floored_hkd > 0.0,
+		"tally",
+		"a debt past the tip is floored (HK$%.2f given back)" % tally.floored_hkd
+	)
+	_expect(
+		is_equal_approx(tally.total_hkd(), system.earned_hkd),
+		"tally",
+		"mutation caught: the page closes over the floor (HK$%.2f)" % system.earned_hkd
+	)
+
+	# A walked fare: on the count, off the money, its loss on its own line.
+	var before_bonus: float = tally.bonus_hkd()
+	var before_earned: float = system.earned_hkd
+	_armed_again(system, pickup)
+	_slide(system, FAST, threshold, drift_ticks)
+	_slide(system, FAST, 0.0, 1)
+	var lost: float = system.fare.meter.reading_hkd() + maxf(system.fare.skills_hkd, 0.0)
+	system.fare.remaining_s = TICK_S
+	_tick(system, FAR_AWAY, FAST, 1)
+	_expect(system.bails == 1, "tally", "walked")
+	_expect(
+		(
+			is_equal_approx(tally.bonus_hkd(), before_bonus)
+			and is_equal_approx(system.earned_hkd, before_earned)
+			and is_equal_approx(tally.total_hkd(), system.earned_hkd)
+		),
+		"tally",
+		"mutation caught: a walked fare's awards never reach the tables"
+	)
+	_expect(
+		tally.forfeited_hkd >= lost, "tally", "its loss is said (HK$%.2f)" % tally.forfeited_hkd
+	)
+
+	# Air: only an upright landing counts, and the top speed is the ground's.
+	var flyer: FareSystem = _system(_fares, _profile, SEED)
+	var air_ticks: int = int(ceil(_skills.air_min_s / TICK_S))
+	_fly(flyer, FAST * 5.0, air_ticks, true, true)
+	_expect(
+		is_zero_approx(flyer.tally.top_speed_kph),
+		"tally",
+		"mutation caught: speed in the air is no record"
+	)
+	_fly(flyer, FAST, 1, false, false)
+	_expect(is_zero_approx(flyer.tally.longest_flight_s), "tally", "a roof landing is no flight")
+	_fly(flyer, FAST, air_ticks, true, true)
+	_fly(flyer, FAST, 1, false, true)
+	_expect(
+		(
+			is_equal_approx(flyer.tally.longest_flight_s, air_ticks * TICK_S)
+			and is_equal_approx(flyer.tally.top_speed_kph, FAST * 3.6)
+		),
+		"tally",
+		(
+			"an upright landing is the flight (%.2f s), and the ground's speed is the top"
+			% flyer.tally.longest_flight_s
+		)
+	)
+	flyer.free()
+
+	# The closest pass: read off a paid pass on the system's own near miss.
+	var passer: FareSystem = _system(_fares, _profile, SEED)
+	var clearance: float = _skills.close_call_m / 2.0
+	_pass_on(passer, clearance, PASS_MPS)
+	_expect(
+		absf(passer.tally.closest_pass_m - clearance) < 1e-3,
+		"tally",
+		"the closest pass is the paid pass's clearance (%.3f m)" % passer.tally.closest_pass_m
+	)
+	passer.free()
+
+	system.reset()
+	_expect(
+		system.tally != tally and system.tally.is_empty() and system.deliveries == 0,
+		"tally",
+		"a fresh run is a fresh ledger"
+	)
+	system.free()
+
+
+## Clear of the last stop and back to `pickup`, boarded again.
+static func _armed_again(system: FareSystem, pickup: Fare.Stop) -> void:
+	_tick(system, FAR_AWAY, CRAWL, 2)
+	_tick(system, pickup.point, CRAWL, 5)
+
+
+## `_pass`'s swerve at `clearance_m`, through `system.sample` so the tally sees it.
+func _pass_on(system: FareSystem, clearance_m: float, speed_mps: float) -> void:
+	var aside: float = CAR_HALF_M.x + PARKED_EXTENT.size.x / 2.0 + clearance_m
+	var obstacle: Dictionary = {
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -30.0)),
+		"extent": PARKED_EXTENT,
+		"id": 7,
+	}
+	var at := Transform3D(Basis.IDENTITY, Vector3.ZERO)
+	var velocity := Vector3(0.0, 0.0, -speed_mps)
+	var swerved: bool = false
+	for tick: int in int(ceil(60.0 / speed_mps / TICK_S)) + 4:
+		if not swerved and at.origin.z <= -18.0:
+			at.origin.x = aside
+			swerved = true
+		system.sample(
+			FAR_AWAY,
+			speed_mps,
+			Vector3.FORWARD,
+			TICK_S,
+			0.0,
+			false,
+			true,
+			0.0,
+			at,
+			velocity,
+			[obstacle]
+		)
+		at.origin += velocity * TICK_S
 
 
 ## One sample far from every stop with a wall hit of `impact_kph` into it.

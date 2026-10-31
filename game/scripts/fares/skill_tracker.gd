@@ -75,6 +75,8 @@ var _usable: bool = false
 var _drift: Dwell = Dwell.new()
 var _speed: Dwell = Dwell.new()
 var _air: Dwell = Dwell.new()
+## The flight that paid on this tick, in seconds; 0 on any other.
+var _landed_s: float = 0.0
 ## Seconds left in which a further contact is the last dock's event.
 var _cool_s: float = 0.0
 ## What the last `tick` earned. One array, cleared each tick rather than
@@ -147,6 +149,16 @@ func drift_tier() -> int:
 	return _drift.paid if _drift.total > 0.0 else -1
 
 
+## How long the slide in progress has held, once it has paid (`P3-76`'s bests).
+func paid_slide_s() -> float:
+	return _drift.total if _drift.paid > 0 else 0.0
+
+
+## The flight that paid on the last `tick`, in seconds, or 0.
+func landed_flight_s() -> float:
+	return _landed_s
+
+
 ## One tick of the drive: what it earned, in the order it was earned. Usually
 ## nothing. `airborne` is every wheel off the ground this tick; `upright` is
 ## the body's up still up — read on the landing tick, the one that decides;
@@ -161,6 +173,7 @@ func tick(
 	impact_mps: float = 0.0
 ) -> Array[Fare.Award]:
 	_earned.clear()
+	_landed_s = 0.0
 	var elapsed: float = maxf(delta_s, 0.0)
 	var speed: float = maxf(speed_mps, 0.0)
 	var touched: bool = impact_mps > 0.0
@@ -220,6 +233,7 @@ func _flight(airborne: bool, upright: bool, elapsed: float) -> void:
 		_air.total += elapsed
 		return
 	if _air.total > 0.0 and upright and _air.total >= _profile.air_min_s:
+		_landed_s = _air.total
 		var paid: int = 1 + int(floor((_air.total - _profile.air_min_s) / _profile.air_s))
 		for _count: int in paid:
 			_earned.append(Fare.Award.new(Fare.Skill.AIR, _profile.air_hkd))

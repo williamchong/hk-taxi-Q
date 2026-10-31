@@ -46,8 +46,10 @@ func _read() -> void:
 		tiers = table["tiers"]
 
 
-## The key `skill` is filed under: its enum name, lower-cased.
-static func _key_of(skill: Fare.Skill) -> String:
+## The key `skill` is filed under: its enum name, lower-cased, so an enum
+## reordered later cannot move a row, or a saved count (`Settings`), onto another
+## skill.
+static func key_of(skill: Fare.Skill) -> String:
 	return str(Fare.Skill.find_key(skill)).to_lower()
 
 
@@ -56,7 +58,7 @@ static func _key_of(skill: Fare.Skill) -> String:
 ## no row reads as its key in brackets, so a missing name is seen on screen
 ## rather than flashed as nothing.
 func item_name(skill: Fare.Skill, language: String) -> String:
-	var key: String = _key_of(skill)
+	var key: String = key_of(skill)
 	var row: Variant = items.get(key)
 	var item: String = Locale.from_row(row, language, "")
 	if item.is_empty():
