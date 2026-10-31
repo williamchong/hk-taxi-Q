@@ -10960,7 +10960,8 @@ closing speed is the pad's.
 ## `Q176` — The trams run the published rails as walls that never push
 
 **Status.** 🟡 Built 2026-11-01 from the `/next` survey's option 2, the user's "plan for option 2" and
-"complete plan". `P3-4`. Owed: the user's drive and ears, and the handset's cost, unmeasured.
+"complete plan". `P3-4`. Owed: the user's drive and ears, and the handset's cost, which waits on
+`P0-3b` (no signing identity, so no handset build exists).
 
 **Which way a track runs is read, not authored.** Nothing published says, and a bed renders the same
 either way. Three witnesses, in order: the other track on the right of travel (trams run on the
@@ -10989,7 +10990,10 @@ along a route, its fork settled at the start. The whole fleet of 16 runs always,
 until the tram stood on it: 0.1 m centre to centre, 10.7 m once it read the rails. It ignores a car
 crossing, for `TrafficSystem`'s deadlock reason. A car behind a tram waits, and does not pass it. In
 the scene, on 70 trams for that frame only, a tram stops 3 m short of the taxi, and the taxi at full
-throttle into one stands at 0 kph without moving it; the shipped 16 show the taxi held behind one.
+throttle into one stands at 0 kph without moving it; the shipped 16 show the taxi held behind one. A scripted crash on the shipped 16, with the
+fares on: 110.7 → 12.9 kph in one tick, and the latch reads `hit 294 27.19` m/s, the closing speed
+(`Q175`); the same run with `--trams=off` carries on past 140 kph. ⚠️ `--fares=off` writes no `hit`
+line: `last_impact_mps` only moves when `FareSystem` takes the latch.
 
 **Moving trams replace the parked ones, and nothing stands in their path.** Parked trams 15 + 3 → 0.
 Placed 754 → 736 and 351 → 346. 🔴 Published sources are refused too, against the rule that a published
