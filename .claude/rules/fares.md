@@ -175,6 +175,7 @@ the loop's own numbers in `tuning/fares.tres`.
   detector (braking and `place_at` look like walls), no contact impulse (it measures the solve,
   not the hit), no second wall list — the kerb riser is 0.15 m and the body clears it.
   The face: a penalty pops the HURT emote (`emote_hurt.glb`, `taxi_hire.gd` on `hkd < 0`).
+- 🔴 **The books are `SessionTally`'s** (`P3-76`, `Q169`): `FareSystem.tally`, a fresh one at `reset`, which `skill_counts`, `deliveries` and `bails` read. An award goes on `counts`; its HK$ joins `banked` only at the door. `total_hkd()` must equal `earned_hkd` through a floor and a walk, and `verify_fares`' `tally:` holds it. A new `Fare.Skill` goes in `BONUSES` or `PENALTIES` (checked) and needs a row's height (`menu.md`).
 - 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,
   `awards` and `skills_hkd` stay on the fare so `FareFace.forfeit` can say what walked out.
 - ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;

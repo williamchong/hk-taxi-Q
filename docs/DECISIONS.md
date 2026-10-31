@@ -10374,7 +10374,42 @@ The longest flash is now "−HK$5.0 touching an object (serious)"; the tick stay
 ⚠️ The planned 成績表's 輕微 / 嚴重 boxes are the penalties' alone now — a bonus has no tier to
 fill one with.
 
-**See.** `Q145` · `Q148` · `Q161` · `Q162` · `game/tuning/exam_sheet.json` · `hud_layout.md`
+**Built 2026-11-01 (`P3-76` parts 2 and 3), from the `/next` survey's pick.** The user's two calls on the
+plan: "2 tables, bonus and penalty, like a accouting sheet that driver record and reads", and the red light
+"off". So the planned TD 553 form did not get built: no 輕微 / 嚴重 boxes (each penalty's tier is already its
+own row) and no section headings, which would have read as fault marks over bonuses, the 2026-10-28
+complaint again, over one penalty item that could not fill a section anyway. 🚫 No 衝紅燈 row until `P3-3d` is
+decided: a row would read as a fault first.
+
+- **`SessionTally`** (`scripts/fares/`): a run's books, written by `FareSystem`, `deliveries`, `bails` and
+  `skill_counts` now reading it. **An award is not money banked**: a walked fare forfeits, the tip floors, practice
+  pays nothing. So `counts` holds every award and `banked` only what a delivery kept, summed at the end of
+  `_deliver`, after the early arrival. A row's count and money therefore do not divide: 14 drifts may hold
+  practice and a walked fare's. The page closes: `meter + time + bonus + penalty + floored == earned_hkd`.
+- **The bests** read every tick, so `SkillTracker.reset` at a boarding cannot lose them: a slide once it has paid,
+  a flight on an upright landing, a pass as it pays, top speed on the ground only, so one physics glitch in the
+  air cannot sit in a lifetime record for good. Practised alike.
+- **`LedgerCard`** (`scripts/ui/`): the one form for REPORT, free mode's PAUSE and RECORD. A shift's PAUSE has none,
+  as asked. `--menu-sample=on` fills it for a frame.
+- **The record** is in `Settings`' existing `[records]` section, not `Q169`'s planned `[record]`, so a saved best
+  stays where it is. Keyed by the skill's name. A tally hands over only what is new since its last save
+  (`take_unsaved`), so a run saved at every pause counts each event once. Saved at 交更, as a pause opens (END
+  needs no second save, the tree being held) and on the window's close request. END SHIFT's part-shift joins the
+  books but is no finished shift and no best (`Q162`). Scripted runs, `--menu-page=` and `--menu-sample=` save nothing.
+
+**Measured.** `verify_fares` `tally:` and `verify_menu` `record:` / `sheet:`; eleven mutations, all caught by name: no
+snapshot taken (double count), a delta that ignores what was banked, no floor line, speed read in the air, a walked fare's awards banked, the best zeroed at
+boarding, an unpaid slide as a best, a doubled flight, a wrong clearance, END SHIFT as a shift, a sheet on a shift's
+PAUSE. `verify_menu` also caught a real bug before any frame: `_follow.bind` twice on one signal is one connection to
+Godot, so the ledger stayed up on HOME; the card connects a lambda. Frames caught what no check can: 640 px of panel left
+TOTAL hanging under it, now 770. A real run driven 5 s to the pause (the page guard and the focus pause lifted in a
+scratch edit) read `top_speed_kph=97.56` on disk and 98 km/h on the sheet. ⚠️ An unattended window has no focus, so
+`--menu-page=pause` pauses at once on `FOCUS_OUT`: the 1 s it promises is a focused window's. No draws delta: the sheet
+shows only on a held or parked frame.
+
+Owed: the user's look, and a whole shift to 交更 played by hand; no scripted run reaches `_on_shift_over` with a menu up.
+
+**See.** `Q145` · `Q148` · `Q161` · `Q162` · `P3-3d` · `game/tuning/exam_sheet.json` · `hud_layout.md` · `menu.md`
 
 ## `Q170` — Space is the handbrake
 

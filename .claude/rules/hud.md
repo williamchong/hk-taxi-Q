@@ -130,7 +130,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   text pasted into `menu_text.json`, which would be wrong the release after a point upgrade, and
   never `Engine.get_license_text()`, which is the MIT screen alone; `verify_menu` holds every
   component named and every licence text whole. A page is shot with `--menu-page=<home|guide|
-  options|credits|notices|pause>`. 🔴 **The
+  options|credits|notices|record|pause>`; `--menu-sample=on` fills its 成績表. 🔴 **The
   menu never reaches into the level**: `Main` parks it (`DriveHarness.park` — pedals gated by
   `VehicleController.parked`, the fare loop's tick held, the rig handed to `MenuOrbit`) and
   resumes it on `started`; a second entry to the world goes through the harness, not the menu.
@@ -150,7 +150,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   wording change. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
   bundle ships no UI textures and a screenshot of the city is the generated data committed in
   another form (hard rule 7); a step names a `GuideCard.KINDS` picture and `verify_menu` refuses
-  one that does not exist. 🔴 **Two modes behind one PLAY** (`Q162`, the user's call): HOME is PLAY, HOW TO PLAY,
+  one that does not exist. 🔴 **The 成績表 is the driver's books, two tables, not TD's form** (`P3-76`, `Q169`, the user's call): `LedgerCard` on REPORT, free mode's PAUSE and RECORD; no tick-boxes, no section headings, no red-light row until `P3-3d`. ⚠️ Two `_follow.bind` on one signal are ONE connection to Godot: a second follower of a page connects a lambda. ⚠️ `menu.tres`'s `ledger_px` is read off a frame: a row more needs height, and nothing but a frame shows the total under the panel. A run naming `--menu-page=` or `--menu-sample=` saves no record. 🔴 **Two modes behind one PLAY** (`Q162`, the user's call): HOME is PLAY, RECORD, HOW TO PLAY,
   OPTIONS, CREDITS with the shift's best over them; PLAY holds 特更 and 兜風; `started(mode)` hands
   `Main` the pick. A shift's end opens a FRESH menu on REPORT (`StartMenu.report`), whose AGAIN is
   the same `started` — `Main` renews the HUD and `DriveHarness.play` restarts in place. A frame of
