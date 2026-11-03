@@ -1439,6 +1439,11 @@ func _check_near_miss() -> void:
 		"near miss",
 		"inside close_call_m it is a close call at its own price"
 	)
+	_expect(
+		paid.size() == 1 and int(paid[0].passed.get("id", -1)) == 7,
+		"near miss",
+		"and it names the obstacle it passed, for that car's horn (Q178)"
+	)
 	paid = _pass(_skills.close_call_m, PASS_MPS, true)
 	_expect(
 		paid.size() == 1 and paid[0].skill == Fare.Skill.CLOSE_CALL,

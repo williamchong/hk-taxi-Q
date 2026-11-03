@@ -215,7 +215,7 @@ func tick(
 			track.speed_mps = maxf(track.speed_mps, speed)
 		if _s_max < -_half_length_m and track.alongside and not track.judged:
 			track.judged = true
-			_judge(track)
+			_judge(track, obstacle)
 
 	for id: int in _tracks.keys():
 		if _tick - _tracks[id].last_seen > FORGET_TICKS:
@@ -236,7 +236,7 @@ func _clear_across() -> float:
 ## The pass as a whole, on the tick the obstacle falls behind the tail.
 ## Every bar inclusive, with a hair of slack so a clearance built from the
 ## bar's own number lands on it rather than a bit past it.
-func _judge(track: Track) -> void:
+func _judge(track: Track, obstacle: Dictionary) -> void:
 	if track.min_clear_m < 0.0 or track.min_clear_m > _profile.near_miss_m + SLACK:
 		return
 	if track.speed_mps * 3.6 < _profile.near_miss_min_kph - SLACK:
@@ -244,10 +244,13 @@ func _judge(track: Track) -> void:
 	if track.age_at_alongside_s > _profile.near_miss_memory_s + SLACK:
 		return
 	_paid_clear_m = minf(_paid_clear_m, track.min_clear_m)
+	var award: Fare.Award
 	if track.min_clear_m <= _profile.close_call_m + SLACK:
-		_earned.append(Fare.Award.new(Fare.Skill.CLOSE_CALL, _profile.close_call_hkd))
+		award = Fare.Award.new(Fare.Skill.CLOSE_CALL, _profile.close_call_hkd)
 	else:
-		_earned.append(Fare.Award.new(Fare.Skill.NEAR_MISS, _profile.near_miss_hkd))
+		award = Fare.Award.new(Fare.Skill.NEAR_MISS, _profile.near_miss_hkd)
+	award.passed = obstacle
+	_earned.append(award)
 
 
 ## The obstacle's four plan corners in the car's frame, into `_s_min`,

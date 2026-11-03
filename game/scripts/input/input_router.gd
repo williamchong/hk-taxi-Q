@@ -17,7 +17,8 @@ extends Node
 ## **Touch is two relative thumbs, and three of five actions** (`Q83`, `Q97`).
 ## The left zone steers; the right zone is one bipolar longitudinal axis,
 ## `accelerate` above the touch origin and `brake_reverse` below. `handbrake` and
-## `look_back` have no touch home yet, and the note above `TOUCH_ARG` says why.
+## `look_back` have no touch home yet, and the note above `TOUCH_ARG` says why;
+## nor has `horn` (`Q178`), for the same reason: the handset prices the gesture.
 
 ## Steering, -1.0 (full left) to 1.0 (full right).
 var steer: float = 0.0
@@ -27,6 +28,8 @@ var accelerate: float = 0.0
 var brake_reverse: float = 0.0
 var handbrake: bool = false
 var look_back: bool = false
+## The taxi's horn (`Q178`): held, so `TaxiHorn` sounds it on the press.
+var horn: bool = false
 
 ## Forces full throttle whenever the brake is released. ⚠️ **No longer the touch
 ## default — `Q83` reversed it.** Touch drives the throttle for real, on the
@@ -329,3 +332,4 @@ func _physics_process(_delta: float) -> void:
 	# unreliable in `_physics_process`; the controller ramps from the bool (Q83).
 	handbrake = Input.is_action_pressed(&"handbrake")
 	look_back = Input.is_action_pressed(&"look_back")
+	horn = Input.is_action_pressed(&"horn")

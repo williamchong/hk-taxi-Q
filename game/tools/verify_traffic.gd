@@ -43,6 +43,7 @@ extends "res://tools/verify_tool.gd"
 
 const TrafficScript = preload("res://scripts/traffic/traffic_system.gd")
 const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
+const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 const ParkedLayerScript = preload("res://scripts/city/parked_layer.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
@@ -530,6 +531,50 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	_check_horn(system)
 
 
+## The horns the loop's awards draw: the car close-called, and on a docked hit the
+## car with the taxi in its path or the car struck; a car's own wait does not hold
+## them. `car` stands with `taxi` 6 m ahead of it.
+func _check_reactions(system: TrafficSystem, car: TrafficSystem.Car, taxi: Node3D) -> void:
+	# The steps before spawned new cars round the taxi, and each would answer too.
+	for other: TrafficSystem.Car in system.cars:
+		if other != car:
+			other.live = false
+	var cases: Array[Array] = [
+		[Fare.Skill.CLOSE_CALL, car.obstacle, 1, "the car close-called sounds its horn"],
+		[Fare.Skill.CLOSE_CALL, {}, 0, "a close call on something else does not"],
+		[Fare.Skill.NEAR_MISS, car.obstacle, 0, "nor does a near miss"],
+		[Fare.Skill.CRASH, {}, 1, "a crash with the taxi in its path does"],
+		[Fare.Skill.BUMP, {}, 1, "and so does a collision"],
+		[Fare.Skill.DRIFT, {}, 0, "a drift does not"],
+	]
+	for case: Array in cases:
+		var award := Fare.Award.new(case[0], 1.0)
+		award.passed = case[1]
+		car.horn_wait = 99.0
+		var before: int = system.horns
+		system.react_to(award)
+		_expect(system.horns == before + int(case[2]), "react", case[3])
+	var crash := Fare.Award.new(Fare.Skill.CRASH, -5.0)
+	var forward: Vector3 = -car.pose.basis.z
+	taxi.global_position = car.pose.origin - forward * 20.0
+	var horns: int = system.horns
+	system.react_to(crash)
+	_expect(system.horns == horns, "react", "a crash 20 m behind it does not")
+	taxi.global_position = car.pose.origin + car.pose.basis.x * 2.5
+	system.react_to(crash)
+	_expect(system.horns == horns + 1, "react", "a crash into its flank does")
+	# Heard off the loop's own signals, paid and practised alike.
+	var loop: FareSystem = FareSystemScript.new()
+	system._listen(loop)
+	horns = system.horns
+	loop.practised.emit(crash)
+	loop.skilled.emit(null, crash)
+	_expect(system.horns == horns + 2, "react", "the loop's awards reach it, empty or carrying")
+	system.fares = null
+	loop.free()
+	taxi.global_position = car.pose.origin + forward * 6.0
+
+
 func _step_for(system: TrafficSystem, seconds: float) -> void:
 	for _tick: int in int(seconds / TICK_S):
 		system.step(TICK_S)
@@ -605,6 +650,7 @@ func _check_horn(system: TrafficSystem) -> void:
 	for _tick: int in int((table.horn_after_s + 0.1) / TICK_S):
 		system._mind_horn(car, 0.0, false, TICK_S)
 	_expect(system.horns == horns + 1, "horn", "and sounds once the light has gone")
+	_check_reactions(system, car, taxi)
 	print("  horn: %d sounded" % system.horns)
 	system.vehicle = null
 	taxi.free()

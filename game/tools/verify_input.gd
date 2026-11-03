@@ -47,6 +47,7 @@ extends "res://tools/verify_tool.gd"
 const RouterScript = preload("res://scripts/input/input_router.gd")
 const TouchProfileScript = preload("res://scripts/input/touch_profile.gd")
 const HudLayoutScript = preload("res://scripts/ui/hud_layout.gd")
+const TaxiHornScript = preload("res://scripts/vehicle/taxi_horn.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -111,6 +112,7 @@ func _run() -> void:
 	_check_override()
 	_check_deferred()
 	_check_mouse()
+	_check_horn()
 	await _check_pause()
 
 	_router.queue_free()
@@ -419,7 +421,24 @@ func _check_deferred() -> void:
 		"a vertical offset on the steering thumb does not pull the handbrake yet"
 	)
 	_expect(not bool(_router.look_back), "deferred", "no touch gesture looks back yet")
+	_expect(not bool(_router.horn), "deferred", "no touch gesture sounds the horn yet")
 	_lift(FINGER_A, home)
+
+
+## The taxi's horn (`Q178`): the action reaches the router, and `TaxiHorn` sounds
+## once per press, however long it is held.
+func _check_horn() -> void:
+	Input.action_press(&"horn")
+	_tick()
+	_expect(bool(_router.horn), "horn", "the horn action reaches the router")
+	Input.action_release(&"horn")
+	_tick()
+	_expect(not bool(_router.horn), "horn", "and lets go with it")
+	var horn: TaxiHorn = TaxiHornScript.new()
+	for down: bool in [true, true, true, false, true]:
+		horn.hold(down)
+	_expect(horn.presses == 2, "horn", "two presses, one held, sound twice (%d)" % horn.presses)
+	horn.free()
 
 
 # ----------------------------------------------------------------- mouse ----

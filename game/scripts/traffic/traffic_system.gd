@@ -10,7 +10,9 @@ extends Node3D
 ## wrong-way monitor would flag. `verify_traffic.gd` holds it.
 ##
 ## **The horn** (`Q178`) is for the taxi alone: cut up, or stood behind it with no
-## red to wait for. `wants_horn` is the rule; a parked taxi hears nothing.
+## red to wait for (`wants_horn`); and on the loop's awards, the car the taxi
+## close-called, and on a docked hit every car that had the taxi ahead or was the
+## one struck (`react_to`). A parked taxi hears nothing.
 ##
 ## 🔴 **Kinematic, not simulated.** A car is a position along its edge and a
 ## speed; its body is an `AnimatableBody3D` moved to where it is each tick, so
@@ -97,6 +99,9 @@ const LAMP_RIGHT: int = 16
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
 const HORN_PATH: String = "res://assets/authored/audio/car_horn.wav"
+## Centre to centre past touching a car is still the car struck, in plan metres:
+## the box is the mesh's bound, and the contact a tick old.
+const STRUCK_SLACK_M: float = 0.5
 ## Spreads the fleet's ids over the horn's pitch range: not a roll, since one more
 ## draw on the seeded RNG would move every later car.
 const PITCH_STIR: float = 2.4
@@ -247,6 +252,9 @@ var spawned: int = 0
 var retired: int = 0
 ## Horns sounded (`Q178`), for the verify tool.
 var horns: int = 0
+## The fare loop whose awards the horns answer, found by its group: none under
+## `--fares=off`.
+var fares: FareSystem = null
 
 var _horn_voices: Array[AudioStreamPlayer3D] = []
 var _next_horn: int = 0
@@ -595,6 +603,8 @@ func _physics_process(delta: float) -> void:
 func step(delta: float) -> void:
 	if trams == null and is_inside_tree():
 		trams = get_tree().get_first_node_in_group(TramSystem.GROUP) as TramSystem
+	if not is_instance_valid(fares) and is_inside_tree():
+		_listen(get_tree().get_first_node_in_group(FareSystem.GROUP) as FareSystem)
 	if not _parked_read and is_inside_tree():
 		_queue_parked(get_tree().get_nodes_in_group(ParkedLayer.GROUP))
 	_read_parked_some(PARKED_READS_PER_TICK)
@@ -1148,6 +1158,43 @@ func _mind_horn(car: Car, target: float, for_light: bool, delta: float) -> void:
 		return
 	if wants_horn(car.speed, target, car.taxi_stood_s, profile.horn_cut_mps, profile.horn_after_s):
 		_sound_horn(car)
+
+
+## Hear `loop`'s awards, paid and practised alike: an empty cab is cut up as rudely.
+func _listen(loop: FareSystem) -> void:
+	if loop == null:
+		return
+	fares = loop
+	fares.skilled.connect(_on_skilled)
+	fares.practised.connect(react_to)
+
+
+func _on_skilled(_fare: Fare, award: Fare.Award) -> void:
+	react_to(award)
+
+
+## The horns an award draws (`Q178`), whatever the car's own wait: each is one
+## event, and the loop already spaces them (`crash_cool_s`, one award a pass).
+## A close call: the car passed. A docked hit: every car with the taxi in its
+## path, and the car struck. A near miss passes at a distance nobody honks at.
+func react_to(award: Fare.Award) -> void:
+	match award.skill:
+		Fare.Skill.CLOSE_CALL:
+			for car: Car in cars:
+				if car.live and is_same(car.obstacle, award.passed):
+					_sound_horn(car)
+		Fare.Skill.BUMP, Fare.Skill.CRASH:
+			for car: Car in cars:
+				if car.live and (_struck(car) or _taxi_gap(car) < INF):
+					_sound_horn(car)
+
+
+## Whether `car` is near enough the taxi to be what it hit.
+func _struck(car: Car) -> bool:
+	if not is_instance_valid(vehicle):
+		return false
+	var reach: float = car.half_length + _extents[0].size.z * 0.5 + STRUCK_SLACK_M
+	return _plan_distance(car.pose.origin, vehicle.global_position) <= reach
 
 
 func _sound_horn(car: Car) -> void:

@@ -37,6 +37,10 @@ class Award:
 	extends RefCounted
 	var skill: Skill = Skill.DRIFT
 	var hkd: float = 0.0
+	## The obstacle a near miss or a close call passed, as `NearMiss` was handed
+	## it; empty for every other skill. `TrafficSystem` finds the car by it, by
+	## reference, to sound its horn (`Q178`).
+	var passed: Dictionary = {}
 
 	func _init(paid_skill: Skill, paid_hkd: float) -> void:
 		skill = paid_skill

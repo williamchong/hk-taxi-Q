@@ -119,6 +119,8 @@ signal sampled
 ## `earned_hkd`.
 signal finished
 
+## What `TrafficSystem` finds the loop by, to hear its awards (`Q178`).
+const GROUP: StringName = &"fare_system"
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
@@ -329,6 +331,7 @@ func setup(
 		_add_stops(region, fares_by_region[region])
 	_build_reach()
 	_usable = true
+	add_to_group(GROUP)
 
 
 func usable() -> bool:
