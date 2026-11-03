@@ -1394,8 +1394,50 @@ func _lane_centre(
 	lane: float = 0.0
 ) -> Vector3:
 	var half: float = _half_at(slot, step, fraction)
-	var middle: Vector3 = point + left_of(edge_dir) * _offset_at(slot, step, fraction)
-	return middle + left_of(travel) * lane_offset(half * 2.0, _lanes[slot], lane)
+	var offset: float = _offset_at(slot, step, fraction)
+	var across: float = lane_offset(half * 2.0, _lanes[slot], lane)
+	var bent: Vector3 = _bent_dir(slot, step, fraction, edge_dir, absf(offset) + absf(across))
+	var sign: float = 1.0 if travel.dot(edge_dir) >= 0.0 else -1.0
+	return point + left_of(bent) * (offset + sign * across)
+
+
+## `edge_dir` turned toward the bisector of an interior vertex within `reach_m`
+## of it, all the way at the vertex: the lane rounds the corner on a radius of
+## its own offset. Off a segment's perpendicular alone, a lane offset `o` jumps
+## `o·√2` across a right-angle vertex — 4.64 m in a 0.05 m step on edge 904,
+## which put a minibus through a parked car (2026-11-04). A vertex's reach is
+## held to half the shorter segment beside it, so two vertices' bends never meet
+## and both sides of one agree. Unchanged past it, and at the edge's own ends,
+## where the turn curves take over.
+func _bent_dir(slot: int, step: int, fraction: float, edge_dir: Vector3, reach_m: float) -> Vector3:
+	if reach_m <= 0.0:
+		return edge_dir
+	var points: PackedVector3Array = _polylines[slot]
+	var lengths: PackedFloat32Array = _prefix[slot]
+	var span_m: float = lengths[step + 1] - lengths[step]
+	var into_m: float = fraction * span_m
+	if step > 0:
+		var reach: float = minf(reach_m, minf(span_m, lengths[step] - lengths[step - 1]) * 0.5)
+		if into_m < reach:
+			return _toward_bisector(edge_dir, points[step] - points[step - 1], 1.0 - into_m / reach)
+	if step + 2 < points.size():
+		var reach: float = minf(reach_m, minf(span_m, lengths[step + 2] - lengths[step + 1]) * 0.5)
+		if span_m - into_m < reach:
+			return _toward_bisector(
+				edge_dir, points[step + 2] - points[step + 1], 1.0 - (span_m - into_m) / reach
+			)
+	return edge_dir
+
+
+## `edge_dir` turned `weight` of the way to the bisector of it and `neighbour`.
+static func _toward_bisector(edge_dir: Vector3, neighbour: Vector3, weight: float) -> Vector3:
+	neighbour.y = 0.0
+	if neighbour.length_squared() <= 0.0:
+		return edge_dir
+	var bisector: Vector3 = edge_dir + neighbour.normalized()
+	if bisector.length_squared() <= 1e-6:
+		return edge_dir
+	return edge_dir.lerp(bisector.normalized(), weight).normalized()
 
 
 ## Drawn half-width `fraction` of the way from station `step` to the next.
