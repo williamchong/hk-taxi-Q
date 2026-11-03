@@ -11135,3 +11135,59 @@ front of them, or close call them".**
 `AudioDirector` and its buses (Phase 5), so no volume setting yet.
 
 **See.** `Q176` · `Q141` · `Q173` · `game/tuning/traffic.md`
+
+## `Q179` — A drift can be held for thirty seconds on the pad and not for two on the street, so it is not capped
+
+**Status.** 🟡 Measured 2026-11-04, after the user asked whether a fan site's notes on the genre's
+tip system held anything for ours. Its expert players "run up fares by making very long … skids",
+and our drift's price grows with the slide (`Q172`) with no cap in `skills.tres`. Owed: the user's
+own attempt to hold one on a street.
+
+**The bar.** The 8th award of one slide lands at 7.5 s, which takes it to HK$36: past a HK$29
+flagfall, for about HK$3.75 of time bonus. A slide that can be held that long earns more than a trip
+pays.
+
+**The pad could not see it.** `skidpad_ablation.gd` measured every drift row for `MANOEUVRE_S`, 4 s,
+and `longest` counts from the slide's onset, so it could never read past the window less that onset:
+`skills.md`'s `hold` at 86 kph, 3.57 s, was the window. `--manoeuvre-s=` now runs `drift`, `tap`,
+`lift` and `hold` for longer (`catch` keeps 4 s: its `snap` is a running peak, so a longer window
+would read a later slide as the snap), and
+`--hold-target-deg=` moves `hold`'s driver's aim (a probe; the graded tables keep 20°). At the
+defaults the three `hold` tables are byte-identical to `HEAD`'s apart from `us/tick`, and a zero is
+refused with exit 1.
+
+**On the pad, it holds.** 30 s, entries 20 / 42 / 63 / 76 / 86 / 95 kph:
+
+| Row | 20 | 42 | 63 | 76 | 86 | 95 |
+|---|---|---|---|---|---|---|
+| `ride` (tap the handbrake, then hold throttle and full lock) | **28.60** | 1.00 | 0.87 | 0.90 | 1.00 | 1.07 |
+| `hold` aiming at 17° | **28.27** | 0.67 | 0.82 | 0.78 | 0.78 | 0.85 |
+| `hold` aiming at 20° | **28.45** | 0.68 | 0.83 | **29.57** | **29.57** | **29.55** |
+| `hold` aiming at 25° | **28.55** | 0.72 | 0.87 | **29.57** | 1.40 | 1.37 |
+
+`longest`, seconds. From 20 kph the plain input settles into a powered circle at about 36 kph and
+28° of slip, about 6.5 m in radius; `hold` from 76 kph and up settles at 52 kph, about 12 m. From
+42 and 63 kph every row grips into a circle that finishes at 91 kph. One 28.6 s slide pays 29
+awards, HK$435.
+
+**On the street, it does not.** Scripted from rest with the same input through a scratch copy of
+`driver.gd` that also prints `boarded` and `practised` (not committed):
+- Six stands, `--spawn-fare=wan_chai/f_001` / `003` / `004` / `009` / `012` / `015`, moving off
+  at 9 s. Four boarded at 1.65 s; `f_001` and `f_009` never hailed in 44 s. The longest paid
+  slide was 1.5 s (`f_004`, +HK$1 then +HK$2), and every circle ended on a kerb, a railing or a
+  parked car.
+- The eight widest level-0 junctions (ranked by the two widest edges meeting: 274, 225, 334, 35,
+  407, 75, 359, 129), each steering left and right, traffic and trams off. All sixteen runs: no
+  slide reached its second award. Thirteen ended pinned at rest; the two on Gloucester Road at 359
+  kept moving at 35–43 kph and still broke.
+
+**Decision: no cap.** The pad says the car can do it, but no street lets it, and the drive is the
+veto (`.claude/rules/handling.md`). **This reopens** on the user's own attempt; on any open drivable
+space (a car park, a forecourt, a plaza); on a kerb, railing or fence change that opens a junction;
+or on a drift or tyre change. Re-run with
+`tools/skidpad.sh --only=ride --entry-kph=20 --manoeuvre-s=30` and `--only=hold` at 76–95 kph. If it
+ever holds, the fix is a required per-slide HK$ total in `skills.tres`, because a plateau on the
+price still out-pays the clock at HK$5 a second. A floor on speed fits only if the slow circle alone
+holds.
+
+**See.** `Q172` · `Q84` · `Q86` · `game/tuning/skills.md`

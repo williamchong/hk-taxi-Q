@@ -53,6 +53,11 @@ replaced paid 5 at 2 s, 10 at 3, 20 at 5: the two cross at about three and a hal
 slide through one corner pays what it did and a long one pays more. A new slide starts again at
 `drift_hkd`. Required like every key: a flat drift is the old shape, and is not this table.
 
+⚠️ **No cap, measured (`Q179`, 2026-11-04).** On the pad a slide can last for 30 s: `ride` from
+20 kph holds 28.6 s and pays HK$435, and `hold` from 76–95 kph holds 29.6 s. The 3.57 s above was
+the tool's 4 s window, not the car. No street lets it: at six stands and the eight widest junctions
+no slide got past 1.5 s. Re-measure before any open space ships.
+
 ## `speed_min_kph = 80.0`
 
 Above the drift's fade (`drift_fade_from_kph` 65) and well under `max_speed_kph` 140: Gloucester

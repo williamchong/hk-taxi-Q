@@ -244,7 +244,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (`Q155`); a drift_* field sweeps only the drift rows.
   🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
   cars get the same one. `longest` is the unbroken dwell the fare's drift pays on (`drift_min_s`);
-  `secs>thr` sums every run. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
+  `secs>thr` sums every run. 🔴 **`longest` cannot read past the 4 s window** (`Q179`): a
+  sustained slide reads the window less its onset, 3.57 s at 86 kph. A drift or tyre change re-reads `--only=ride --entry-kph=20`
+  and `--only=hold` at 76–95 kph with `--manoeuvre-s=30`, because on the pad both hold a slide for
+  30 s, and only the street stops it paying HK$435. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
   configuration (`Q152`; three serial runs were byte-identical on 2026-10-02, `Q153` — run the
   repeats anyway). 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
   wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
