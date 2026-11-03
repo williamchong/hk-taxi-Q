@@ -93,6 +93,11 @@
 #   --entry-kph=63                   run up to a speed instead of for a time
 #                                    (Q152): a car with another drive reaches
 #                                    another speed in the same seconds
+#   --manoeuvre-s=30                 seconds drift, tap, lift and hold run,
+#                                    default 4: `longest` cannot read past it
+#                                    (Q179). catch keeps 4: its snap is a peak
+#   --hold-target-deg=17             the slip hold's driver aims at, default 20;
+#                                    a probe, never a graded table's driver
 #
 # Run it before AND after any change to VehicleController's drive model,
 # HandlingProfile or handling.tres, and paste both tables (CLAUDE.md).

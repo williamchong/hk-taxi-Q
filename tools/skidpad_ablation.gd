@@ -296,7 +296,7 @@ const SETTLE_S: float = 0.5
 const LOAD_SETTLE_S: float = 1.5
 
 ## How long the `tap` manoeuvre holds the handbrake before letting go, while
-## steering stays on for the full `MANOEUVRE_S`.
+## steering stays on for the whole window (`_manoeuvre_s`).
 ##
 ## The pair matters more than either number. `drift` holds the button for the
 ## whole corner, which is what the *design* promises a player can do; `tap` uses
@@ -342,6 +342,16 @@ var _entry_scale: float = 1.0
 ## Both run-up flags seen, which is refused rather than one silently winning.
 var _entry_given: bool = false
 var _run_up_given: bool = false
+## `--manoeuvre-s=`: seconds `drift`, `tap`, `lift` and `hold` are held and
+## measured, `MANOEUVRE_S` unless asked. ⚠️ `longest` counts from the slide's
+## onset, so a slide that outlasts the window reads as the window less its
+## onset, not as the car (`Q179`). `catch` keeps `MANOEUVRE_S`: its `snap` is
+## a running peak, and a longer window would read a later slide as the snap.
+var _manoeuvre_s: float = MANOEUVRE_S
+## `--hold-target-deg=`: the slip `hold`'s driver aims at, `HOLD_TARGET_DEG`
+## unless asked. A probe for the best dwell a player could find; the default
+## is the driver every graded table used.
+var _hold_target_deg: float = HOLD_TARGET_DEG
 ## Values to sweep `_sweep_field` over, or empty for whatever `handling.tres`
 ## ships. Set live on the loaded resource rather than by editing the file:
 ## nothing caches it, so it takes effect on the next tick, and a sweep that
@@ -423,8 +433,9 @@ class Result:
 	var name: String = ""
 	var entry_kph: float = 0.0
 	var exit_kph: float = 0.0
-	## Seconds the measured phase actually ran, which is `MANOEUVRE_S` for the
-	## held manoeuvres and however long it took for the to-rest ones.
+	## Seconds the measured phase actually ran: the window for the held
+	## manoeuvres (`_manoeuvre_s` on the drift rows), and however long it took
+	## for the to-rest ones.
 	var seconds: float = 0.0
 	## Exponential speed decay, per second: `ln(entry / exit) / seconds`. The
 	## same shape the coast and drag figures in `docs/PROGRESS.md` use, because
@@ -577,6 +588,14 @@ func _parse_args() -> bool:
 					return false
 				_entry_kph = bits[1].to_float()
 				_entry_given = true
+			"--manoeuvre-s", "--hold-target-deg":
+				if not bits[1].is_valid_float() or bits[1].to_float() <= 0.0:
+					_fail("%s wants a positive number, got '%s'" % [bits[0], bits[1]])
+					return false
+				if bits[0] == "--manoeuvre-s":
+					_manoeuvre_s = bits[1].to_float()
+				else:
+					_hold_target_deg = bits[1].to_float()
 			"--wall-deg":
 				var angles: Array[float] = []
 				for text: String in bits[1].split(","):
@@ -1029,9 +1048,9 @@ func _measure(
 				[&"accelerate", &"steer_right"], MANOEUVRE_S, false, result, INF, LIFT_AT_S
 			)
 		"drift":
-			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result)
+			await _sample(DRIFT_ACTIONS, _manoeuvre_s, false, result)
 		"tap":
-			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S)
+			await _sample(DRIFT_ACTIONS, _manoeuvre_s, false, result, TAP_S)
 		"brake":
 			await _sample([&"brake_reverse"], TO_REST_LIMIT_S, true, result)
 		"coast":
@@ -1041,9 +1060,9 @@ func _measure(
 		"traffic":
 			await _meet_traffic(variant, result)
 		"lift":
-			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, LIFT_AT_S)
+			await _sample(DRIFT_ACTIONS, _manoeuvre_s, false, result, TAP_S, LIFT_AT_S)
 		"hold":
-			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, true)
+			await _sample(DRIFT_ACTIONS, _manoeuvre_s, false, result, TAP_S, INF, true)
 		"catch":
 			await _sample(DRIFT_ACTIONS, MANOEUVRE_S, false, result, TAP_S, INF, false, catch_s)
 		"turn":
@@ -1512,12 +1531,12 @@ func _slip_sign() -> float:
 
 
 ## `hold`'s driver, one tick: steer into the corner while the slip is under
-## `HOLD_TARGET_DEG`, against it while over, damped by how fast the slip is
+## `_hold_target_deg`, against it while over, damped by how fast the slip is
 ## moving, and feathering the throttle past the target. Pressed at a strength,
 ## which `InputRouter` reads as an analogue axis.
 func _countersteer(slip_deg: float, slip_rate_dps: float) -> void:
-	var error: float = (HOLD_TARGET_DEG - slip_deg) / HOLD_TARGET_DEG
-	var damping: float = HOLD_DAMPING_S * slip_rate_dps / HOLD_TARGET_DEG
+	var error: float = (_hold_target_deg - slip_deg) / _hold_target_deg
+	var damping: float = HOLD_DAMPING_S * slip_rate_dps / _hold_target_deg
 	var steer: float = clampf(HOLD_GAIN * error - damping, -1.0, 1.0)
 	var throttle: float = clampf(1.0 + HOLD_LIFT_GAIN * error, 0.0, 1.0)
 	Input.action_release(&"accelerate")
