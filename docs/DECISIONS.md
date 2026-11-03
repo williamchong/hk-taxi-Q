@@ -10847,7 +10847,69 @@ head looks back along its approach (`heading_deg + 180`), so a lamp and its faci
   91,143,708 B against 91,020,208 B with the library and both regions' placements left out:
   **+123.5 KB**.
 
-**See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3`
+**A car gives way at its line (built 2026-11-04, the user's ask: "cars drive through each other at
+crossroads without lights").** Replaces the pass-through, which was a choice made for want of a
+deadlock argument. Lights were not the answer: half of Wan Chai's level-0 junctions carry no
+`RM1011` bar and no head, and inventing a plan for them would be the authored-signal problem `Q77`
+closed. `TrafficSystem._give_way_gap` holds a car within `give_way_look_m` (30) of its line that
+cannot stop short of it at `brake_max_mps2`, in three cases:
+
+- **Keep clear** (`_queued_past_join`): a held car stands on the road and lane it joins within its
+  mouth plus two car lengths and `gap_m`, or is held turning into that lane. The box-junction rule.
+- **A car in the junction crosses its path**: turning, or its tail still inside the last junction
+  (`joined_until_m`), or past stopping for its own line. Paths are the turn curves, carried two car
+  lengths past the far mouth, and cross when two segments at `straight_deg` or more pass within the
+  two half-widths and `side_clear_m`; side by side, within the half-widths alone.
+- **A free car is coming and goes first**: held by nothing, within `give_way_look_m` of its own
+  line, not stopping for a light, and ahead in a total order — straight on, then left, then right,
+  then the lower fleet id. With or without a light: a right turn on green filters through the
+  oncoming flow.
+
+🔴 **Why it cannot deadlock.** A car in the junction never gives way. A keep-clear wait points down
+the road ahead, never back into the junction. A wait on a coming car is only on one held by
+nothing, and waits between cars at their lines follow one strict order, so no cycle closes. ⚠️ A
+car clearing the last junction is NOT excused its next line by that (`_past_stopping`, not
+`committed`): on Causeway Bay's 8 m back-street link a minibus is clearing one junction for nearly
+the whole road and turned into the next one blind (4,231 car-ticks inside another car).
+
+**Graded** (`verify_traffic`, four drives each region): `crossing:` counts live pairs on one level
+(`LEVEL_APART_M`), one at least turning, plan boxes in each other by more than `INSIDE_M`, split
+signalled (a turning car's approach has a stop) and unsignalled. Signalled is gated at 0, and some
+car must give way; unsignalled is printed, not gated, for the gaps below.
+
+| 2026-11-04 | Wan Chai (seeds 7 / 4 / 23 / back streets) | Causeway Bay |
+|---|---|---|
+| signalled crossings | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| unsignalled car-ticks (meetings) | 3 (1) / 0 / 0 / 0 | 61 (1) / 110 (2) / 55 (1) / 0 |
+| given way, car-ticks | 1,613 / 1,908 / 2,695 / 4,235 | 24,303 / 16,633 / 22,965 / 30,143 |
+| longest stand | 8.8 / 8.9 / 15.0 / 7.0 s | 80.3 / 53.0 / 73.6 / 77.1 s |
+| driven in 90 s | 14,941 / 11,642 / 10,357 / 11,832 m | 5,647 / 8,442 / 7,045 / 5,957 m |
+
+⚠️ **Causeway Bay pays in throughput**: 5,647–8,442 m against 6,370–9,731 m with the rule off,
+−3% to −20%. Every long stand probed (each 20 s, every seed) is a keep-clear wait in a chain that
+ends at a car held by a parked vehicle or by the car ahead — the roster's pinches (edge 197 on every
+seed), which already stood cars 81–88 s with the rule off. The rule stops the queue backing over
+the junction; it does not make the pinch. Mutations caught by name: the rule off ("some car gave
+way"), `committed` without the just-joined tail (signalled gate, 63 car-ticks).
+
+**Known gaps, not graded:** a turn curve sweeping over a road outside its junction (Wan Chai seed 7,
+cars 4 / 23 on the flyover approach; a road crossing another with no shared node); a long
+straight-through curve cutting across another approach's stop line; and two cars committing on one
+tick (a very short turn, or a blocker that let go that tick). Not here yet: priority off TD's
+give-way lines and plates, and giving way to the taxi or a tram.
+
+**The lane rounds a vertex (found on the way).** `RoadGraph._lane_centre` offset each point off its
+own segment's perpendicular, so a lane offset `o` jumped `o·√2` across a right-angle vertex — 4.64 m
+in a 0.05 m step on edge 904 (Causeway Bay's 110, the same road), a minibus through a parked car.
+`_bent_dir` turns the perpendicular toward the vertex bisector over `|offset| + |lane offset|`
+either side, held to half the shorter segment. Every edge, lanes 0 and 1, both ways: the largest
+move over a 0.05 m step 9.83 m (1,933 edge-ways over 0.2 m) before, 0.31 m (4) after. `Hit.lane_centre`
+shares the expression; the `lane:` line still agrees, worst 0.0001 m.
+
+**Cost** (throttle route, two runs each): `draws` +6 with traffic, as before; `phys` 3.4–4.6 ms,
+HEAD's 3.1–4.6, `--traffic=off` 1.8–2.7. Inside the ±0.5 ms noise.
+
+**See.** `Q76` · `Q77` · `Q72` · `Q161` · `P3-31` · `P3-23` · `P3-17` · `P3-3` · `P3-3f1`
 
 
 ## `Q174` — The wheel goes to lock slower at speed, and a slide keeps the quick ramp

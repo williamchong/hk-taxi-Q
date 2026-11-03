@@ -76,8 +76,17 @@ paths:
   rate a braking car rode its own judgement into the red, and to the aim point a crawling car met
   the red a hair short (seed 4, which `SEEDS` keeps). Mutation-check rather than reading a pass:
   red never stopping, no path reading and an illegal move each fail by name (2026-10-29).
-  ⚠️ Cars pass THROUGH each other at an unsignalled crossing on purpose — a car that waited for a
-  crossing car could wait for one waiting for it; a give-way rule owes its own deadlock argument.
+  🔴 **A car gives way at its line** (`_give_way_gap`, `Q173` 2026-11-04): keep clear, then a car in
+  the junction, then a free car coming that ranks first (straight, left, right, then id). Its
+  deadlock argument is in `Q173` — a car in the junction never gives way, and a wait on a coming
+  car is only on one held by nothing; keep both. Paste the `crossing:` and `give way:` lines for
+  both regions: signalled is gated at 0, unsignalled is printed (curve sweeps over a road outside
+  the junction, simultaneous commits). ⚠️ A car clearing the last junction is NOT excused its next
+  line (`_past_stopping`, not `committed`). Mutations: the rule off, and `committed` without the
+  just-joined tail, each fail by name. ⚠️ A long Causeway Bay stand is a keep-clear chain ending at
+  a parked pinch; do not shorten `give_way_look_m` or the keep-clear room to clear it.
+  ⚠️ `_lane_centre` rounds an interior vertex (`_bent_dir`): off the segment perpendicular alone a
+  lane jumps `o·√2` there (4.64 m on edge 904) — the probe is the largest move over a 0.05 m step.
   ⚠️ `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre`; the `lane:` line holds them
   together. 🔴 **A parked vehicle is a car ahead that never moves** (`P3-3f1`), read off each
   region's `ParkedLayer` (`is_standing`, never a second roster) — paste `verify_traffic`'s `parked:`

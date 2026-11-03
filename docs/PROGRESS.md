@@ -216,8 +216,8 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   own amber judgement into the red, a car crawling at its aim behind a slow leader meeting the red
   a hair short — seed 4), each mutation-checked. 300 s headless: 17–23 of 24 moving at every 20 s
   sample, longest standstill 27.4 s (a signal wait). Throttle route: +7 `draws`, `phys` ~2.8 against
-  ~1.8 ms with `--traffic=off`. Cars pass through each other at an unsignalled crossing (no
-  give-way), and are not near-missed. **After the user's first look**: a turn runs mouth to mouth
+  ~1.8 ms with `--traffic=off`. Cars give way at their lines since 2026-11-04 (`Q173`: keep clear, the
+  car in the junction first, then straight / left / right), and are not near-missed. **After the user's first look**: a turn runs mouth to mouth
   (`trim_m`, city schema 41) across a junction's stub edges in one curve, from the turn's own lane
   (left nearside, right offside; `straight_deg` 30) with a lane change that looks first
   (`lane_change_m` 25); moving cars lit (head lamps by day, tails at night, brakes), parked ones
