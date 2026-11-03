@@ -23,6 +23,7 @@ wink_hold_m = 5.0
 straight_deg = 30.0
 pass_look_m = 40.0
 side_clear_m = 0.3
+give_way_look_m = 30.0
 horn_voices = 3
 horn_range_m = 110.0
 horn_repeat_s = 4.0

@@ -16,10 +16,12 @@ extends Node3D
 ##
 ## 🔴 **Kinematic, not simulated.** A car is a position along its edge and a
 ## speed; its body is an `AnimatableBody3D` moved to where it is each tick, so
-## the taxi meets a solid box and the car is never pushed off its lane. Cars
-## pass THROUGH each other at a junction without a signal: they follow a car
-## ahead within `follow_heading_deg` and see nothing crossing (a car that
-## waited for a crossing car could wait for one waiting for it).
+## the taxi meets a solid box and the car is never pushed off its lane.
+##
+## **A car gives way at its line** (`_give_way_gap`) to a car in the junction whose
+## turn crosses its own, and to one still coming that goes first — straight on
+## before left before right, then the earlier in the fleet — with or without a
+## light: a right turn on green filters through the oncoming flow.
 ##
 ## **A turn is a curve, not a jump, mouth to mouth.** A car leaves its edge where
 ## the drawn ribbon meets the junction (`trim_m`, the stop line's own point;
@@ -51,9 +53,9 @@ extends Node3D
 ## while nothing comes the other way, and a car coming stops for one already out.
 ## Where even that does not fit, it waits: the roster's pinches are its own.
 ##
-## 🚫 **Not here yet**: a car giving way at an unsignalled
-## junction, the player's
-## red light (`P3-3d`), the heads (`P3-3e`). `--traffic=off` takes it away.
+## 🚫 **Not here yet**: priority off TD's give-way lines and plates — the order is
+## the turn's, not the road's — and giving way to the taxi or a tram crossing.
+## `--traffic=off` takes it away.
 
 const RoadRouterScript = preload("res://scripts/city/road_router.gd")
 const ParkedRoster = preload("res://scripts/city/parked_roster.gd")
@@ -117,7 +119,7 @@ var trams: TramSystem
 @export var signals: SignalController
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
-enum Held { NONE, LIGHT, CAR, PARKED, TAXI }
+enum Held { NONE, LIGHT, CAR, PARKED, TAXI, GIVE_WAY }
 
 
 ## One car.
@@ -201,6 +203,13 @@ class Car:
 	var shape: CollisionShape3D
 	## What `near_cars` hands the near miss, made once like a parked one's (`Q175`).
 	var obstacle: Dictionary
+	## Travel metres on the road it joined by until its tail is a length past
+	## the join — its path's reach — and out of the junction: until then it is
+	## still in it, on its last turn's curve.
+	var joined_until_m: float = 0.0
+	## Its turn through the junction in plan points, and the tick it was read on.
+	var path: PackedVector3Array = []
+	var path_tick: int = -1
 
 
 ## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
@@ -256,6 +265,8 @@ var horns: int = 0
 ## `--fares=off`.
 var fares: FareSystem = null
 
+## Ticks run, so a car's turn path is read once a tick.
+var _tick: int = 0
 var _horn_voices: Array[AudioStreamPlayer3D] = []
 var _next_horn: int = 0
 var _rng := RandomNumberGenerator.new()
@@ -385,6 +396,7 @@ static func usable(table: TrafficProfile) -> bool:
 		"straight_deg": table.straight_deg,
 		"pass_look_m": table.pass_look_m,
 		"side_clear_m": table.side_clear_m,
+		"give_way_look_m": table.give_way_look_m,
 		"horn_voices": float(table.horn_voices),
 		"horn_range_m": table.horn_range_m,
 		"horn_repeat_s": table.horn_repeat_s,
@@ -601,6 +613,7 @@ func _physics_process(delta: float) -> void:
 
 ## One tick: spawn into the ring, drive every car, retire what left it.
 func step(delta: float) -> void:
+	_tick += 1
 	if trams == null and is_inside_tree():
 		trams = get_tree().get_first_node_in_group(TramSystem.GROUP) as TramSystem
 	if not is_instance_valid(fares) and is_inside_tree():
@@ -678,6 +691,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	car.along = along
 	car.s = s
 	car.turning = false
+	car.joined_until_m = 0.0
 	car.crossed.clear()
 	car.lane = lane
 	car.held_side = 0
@@ -1107,6 +1121,12 @@ func _drive(car: Car, delta: float) -> void:
 		if limit < target:
 			target = limit
 			car.held = Held.LIGHT
+	var give_way: float = _give_way_gap(car)
+	if give_way < INF:
+		var limit: float = stopping_speed(give_way - STOP_SHORT_M, profile.brake_mps2)
+		if limit < target:
+			target = limit
+			car.held = Held.GIVE_WAY
 	var gap: float = _gap_ahead(car)
 	if gap < INF:
 		var limit: float = stopping_speed(gap - profile.gap_m, profile.brake_mps2)
@@ -1259,7 +1279,7 @@ func _gap_ahead(car: Car) -> float:
 			best = minf(best, apart - car.half_length - other.half_length)
 			continue
 		if _merging(car, other):
-			best = minf(best, car.leave_m - car.s - car.half_length + profile.gap_m)
+			best = minf(best, to_give_way_m(car) + profile.gap_m)
 			continue
 		var heading: Vector3 = -other.pose.basis.z
 		if forward.x * heading.x + forward.z * heading.z < follow_cos:
@@ -1398,6 +1418,269 @@ static func _merging(car: Car, other: Car) -> bool:
 	)
 
 
+## Travel metres from `car`'s front to the line it gives way at — where its
+## turn begins — negative once its front is past it.
+static func to_give_way_m(car: Car) -> float:
+	return car.leave_m - car.s - car.half_length
+
+
+## Whether `car` is in the junction as far as giving way goes: turning, its
+## tail not yet out of the turn it finished (seeds 4 and 7: a car crossed the
+## mouth a car had just joined by), or too near its line to stop for it even
+## braking hard (the amber's own judgement).
+func committed(car: Car) -> bool:
+	return car.turning or car.s < car.joined_until_m or _past_stopping(car)
+
+
+## Whether `car` is too near its next line to stop for it even braking hard. A
+## car still clearing the last junction is not excused its next line by that:
+## on a short link a 7 m minibus is clearing the one for nearly the whole road
+## (Causeway Bay's back streets: an 8 m link, and it turned into a merge blind).
+func _past_stopping(car: Car) -> bool:
+	if car.next_edge < 0:
+		return false
+	return not must_stop(
+		SignalController.Light.AMBER, to_give_way_m(car), car.speed, profile.brake_max_mps2
+	)
+
+
+## 0 for straight on, 1 a left turn, 2 a right — the turn across the oncoming
+## flow in left-hand traffic.
+static func turn_rank(side: int) -> int:
+	return 0 if side == 0 else (1 if side > 0 else 2)
+
+
+## Whether, of two cars each at their line with crossing turns, the first goes:
+## straight on before a left turn before a right, then the earlier in the fleet.
+## A strict order, so no two cars at their lines can each wait for the other.
+static func goes_first(side: int, id: int, other_side: int, other_id: int) -> bool:
+	var rank: int = turn_rank(side)
+	var other_rank: int = turn_rank(other_side)
+	return rank < other_rank or (rank == other_rank and id < other_id)
+
+
+## Whether `car` must stop for its own light now: such a car is going nowhere,
+## and a car crossing on green does not give way to it.
+func _stopping_for_light(car: Car) -> bool:
+	if car.turning:
+		return false
+	var stop: float = stop_travel_m(car)
+	if stop < 0.0:
+		return false
+	return must_stop(
+		signals.state_of(car.edge, car.along),
+		stop - car.s - car.half_length,
+		car.speed,
+		profile.brake_max_mps2
+	)
+
+
+## Metres `car`'s front may run before it gives way at its line, or INF where
+## nothing it must give way to crosses its turn (`Q173`, the user's drive
+## 2026-11-04: cars drove through each other at junctions without lights). A
+## car within `give_way_look_m` of its line, and still able to stop for it,
+## waits for any car whose turn crosses its own that is:
+##
+## - **in the junction** (`committed`): turning, or past stopping for its line;
+## - **or coming, and goes first** (`_coming_first`): running free toward its
+##   own line within `give_way_look_m` — held by nothing, not stopping for a light;
+## - **or, whatever crosses, the road it joins has no room past the join** (`_queued_past_join`):
+##   it would stand in the junction behind the queue, across everyone else's
+##   turn — the box junction's rule (the back streets, seed 7: a queue behind a
+##   parked vehicle's pinch backed into junctions and held the cross traffic
+##   for a minute).
+##
+## 🔴 **No two cars wait on each other.** A car in the junction never gives
+## way, so a wait on one ends when it is through. A wait for room is on a car
+## on the road ahead, which waits only down that road. A wait on a car still coming
+## is on one held by nothing — not waiting — and among cars at their lines the
+## waits run one way down `goes_first`'s strict order. Its own approach is the
+## queue's (`_queues_with`, `_gap_ahead`).
+func _give_way_gap(car: Car) -> float:
+	if car.turning or car.next_edge < 0:
+		return INF
+	var to_line: float = to_give_way_m(car)
+	if to_line > profile.give_way_look_m or _past_stopping(car):
+		return INF
+	if _queued_past_join(car) != null:
+		return maxf(to_line, 0.0)
+	var mine: PackedVector3Array = []
+	# Two cars each up to `give_way_look_m` short of their lines, the lines a
+	# junction's width (at most a `look_m`) apart.
+	var near_m: float = profile.give_way_look_m * 2.0 + profile.look_m
+	var min_sin: float = sin(deg_to_rad(profile.straight_deg))
+	for other: Car in cars:
+		if other == car or not other.live:
+			continue
+		if absf(car.pose.origin.y - other.pose.origin.y) > LEVEL_APART_M:
+			continue
+		if _plan_distance(car.pose.origin, other.pose.origin) > near_m:
+			continue
+		if _queues_with(car, other):
+			continue
+		if not committed(other) and not _coming_first(car, other):
+			continue
+		if mine.is_empty():
+			mine = _turn_path(car)
+		var touch_m: float = car.half_width + other.half_width
+		if paths_cross(mine, _turn_path(other), touch_m + profile.side_clear_m, touch_m, min_sin):
+			return maxf(to_line, 0.0)
+	return INF
+
+
+## Whether `other` is ahead of `car` in its own queue, which `_gap_ahead`
+## keeps: on its approach in its lane — a car in the lane beside is passed or
+## merged with, not queued behind (Causeway Bay's back streets: two cars side by
+## side on a two-lane road went straight on together into a one-lane road and
+## stood in each other behind its queue) — and not in the junction on a turn to
+## another road (the back streets, seed 7: a car turned into one stopped in its
+## turn).
+func _queues_with(car: Car, other: Car) -> bool:
+	if other.edge != car.edge or other.along != car.along:
+		return false
+	if not same_lane(other.lane, car.lane):
+		return false
+	if not committed(other):
+		return true
+	return other.next_edge == car.next_edge and other.next_along == car.next_along
+
+
+## Whether `other`, not yet in the junction, is coming and goes first: running
+## free toward its own line within `give_way_look_m` — held by nothing, not
+## stopping for a light — and first in `goes_first`'s order. The light is read
+## last: it is the one check that asks the controller.
+func _coming_first(car: Car, other: Car) -> bool:
+	return (
+		other.held == Held.NONE
+		and other.next_edge >= 0
+		and goes_first(other.turn_side, other.id, car.turn_side, car.id)
+		and to_give_way_m(other) <= profile.give_way_look_m
+		and not _stopping_for_light(other)
+	)
+
+
+## The held car on the road `car`'s turn joins, its way and in the lane it
+## joins, whose tail stands within the car's length and `gap_m` of the join —
+## or held in its own turn into that lane — or null: a car that turned now
+## would stop with its tail in the junction (Causeway Bay, seed 4: a car
+## followed one stopped part way through its turn and stood in it for 15 s).
+func _queued_past_join(car: Car) -> Car:
+	var room: float = car.join_m + car.half_length * 2.0 + profile.gap_m
+	for other: Car in cars:
+		if other == car or not other.live or other.held == Held.NONE:
+			continue
+		# Where it stands or is turning into: the join's road and lane either way.
+		var edge: int = other.next_edge if other.turning else other.edge
+		var along: bool = other.next_along if other.turning else other.along
+		var lane: float = other.next_lane if other.turning else other.lane
+		if edge != car.next_edge or along != car.next_along or not same_lane(lane, car.next_lane):
+			continue
+		if other.turning or other.s - other.half_length < room:
+			return other
+	return null
+
+
+## `car`'s turn through the junction in plan points, read once a tick, out to
+## its length past the curve's end, where its nose is when its tail joins (a
+## road's mouth can lie inside another turn's sweep, seeds 4 and 7): the curve it
+## drives from half its length back, where its body still lies; the end of the
+## one it finished while its tail is still in the junction; or for a car not
+## yet turning the curve it will drive from its turn's lane.
+func _turn_path(car: Car) -> PackedVector3Array:
+	if car.path_tick == _tick:
+		return car.path
+	car.path_tick = _tick
+	var points: PackedVector3Array = [car.p0, car.p1, car.p2]
+	var from_u: float = 0.0
+	if car.turning:
+		if car.turn_len > 0.0:
+			from_u = maxf(car.turn_u - car.half_length, 0.0) / car.turn_len
+	elif car.s < car.joined_until_m:
+		if car.turn_len > 0.0:
+			# Its tail's way back along the curve, from where it joined.
+			var joined_m: float = car.joined_until_m - car.half_length * 2.0
+			var behind: float = car.half_length - (car.s - joined_m)
+			from_u = clampf(1.0 - behind / car.turn_len, 0.0, 1.0)
+	else:
+		points = _turn_points(car, car.lane_out)
+	car.path.resize(CURVE_SAMPLES + 2)
+	for index: int in CURVE_SAMPLES + 1:
+		car.path[index] = curve_point(
+			points[0], points[1], points[2], lerpf(from_u, 1.0, float(index) / CURVE_SAMPLES)
+		)
+	var last: Vector3 = car.path[CURVE_SAMPLES - 1]
+	var out := Vector3(points[2].x - last.x, 0.0, points[2].z - last.z)
+	car.path[CURVE_SAMPLES + 1] = (
+		points[2] + out.normalized() * car.half_length * 2.0
+		if out.length_squared() > 0.0
+		else points[2]
+	)
+	return car.path
+
+
+## Whether two turn paths meet in plan: a stretch of each within `reach_m` of
+## the other at more than the angle whose sine is `min_sin`, or within `touch_m`
+## at any angle. Under the angle the two run side by side or head to head, and
+## meet only where their bodies would (seeds 4 and 7: a car joining a road ran
+## alongside one crossing its mouth, nearer than its width).
+static func paths_cross(
+	a: PackedVector3Array, b: PackedVector3Array, reach_m: float, touch_m: float, min_sin: float
+) -> bool:
+	var a_plan: PackedVector2Array = _plan_points(a)
+	var b_plan: PackedVector2Array = _plan_points(b)
+	var reach: float = maxf(reach_m, touch_m)
+	if not _plan_bounds(a_plan).grow(reach).intersects(_plan_bounds(b_plan)):
+		return false
+	var b_dirs: PackedVector2Array = []
+	b_dirs.resize(b_plan.size() - 1)
+	for j: int in b_dirs.size():
+		b_dirs[j] = (b_plan[j + 1] - b_plan[j]).normalized()
+	for i: int in a_plan.size() - 1:
+		var a0: Vector2 = a_plan[i]
+		var a1: Vector2 = a_plan[i + 1]
+		if a0.is_equal_approx(a1):
+			continue
+		var a_dir: Vector2 = (a1 - a0).normalized()
+		for j: int in b_dirs.size():
+			if b_dirs[j] == Vector2.ZERO:
+				continue
+			var crossing: bool = absf(a_dir.cross(b_dirs[j])) >= min_sin
+			if segment_gap(a0, a1, b_plan[j], b_plan[j + 1]) < (reach_m if crossing else touch_m):
+				return true
+	return false
+
+
+static func _plan_points(path: PackedVector3Array) -> PackedVector2Array:
+	var plan: PackedVector2Array = []
+	plan.resize(path.size())
+	for index: int in path.size():
+		plan[index] = Vector2(path[index].x, path[index].z)
+	return plan
+
+
+static func _plan_bounds(plan: PackedVector2Array) -> Rect2:
+	var bounds := Rect2(plan[0], Vector2.ZERO)
+	for point: Vector2 in plan:
+		bounds = bounds.expand(point)
+	return bounds
+
+
+## The least plan distance between two segments: 0 where they cross.
+static func segment_gap(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> float:
+	if Geometry2D.segment_intersects_segment(a0, a1, b0, b1) != null:
+		return 0.0
+	return minf(
+		minf(
+			a0.distance_to(Geometry2D.get_closest_point_to_segment(a0, b0, b1)),
+			a1.distance_to(Geometry2D.get_closest_point_to_segment(a1, b0, b1))
+		),
+		minf(
+			b0.distance_to(Geometry2D.get_closest_point_to_segment(b0, a0, a1)),
+			b1.distance_to(Geometry2D.get_closest_point_to_segment(b1, a0, a1))
+		)
+	)
+
+
 ## Two lane positions close enough that one car is behind the other: under
 ## `SAME_LANE`, so a car part way through a change is in both.
 static func same_lane(one: float, two: float) -> bool:
@@ -1442,6 +1725,7 @@ func _advance(car: Car, metres: float) -> void:
 			car.lane = car.next_lane
 			car.held_side = car.turn_side
 			car.held_until_m = car.join_m + car.half_length + profile.wink_hold_m
+			car.joined_until_m = car.join_m + car.half_length * 2.0
 			_enter(car)
 			continue
 		var room: float = car.leave_m - car.s
@@ -1461,11 +1745,24 @@ func _advance(car: Car, metres: float) -> void:
 
 
 func _start_turn(car: Car) -> void:
+	var points: PackedVector3Array = _turn_points(car, car.lane)
+	car.p0 = points[0]
+	car.p1 = points[1]
+	car.p2 = points[2]
+	car.turn_len = curve_length(car.p0, car.p1, car.p2)
+	car.turn_u = 0.0
+	car.turning = true
+
+
+## The three points of the curve `car`'s next move drives, leaving its road at
+## lane position `lane` — where it is as the turn starts, or the turn's lane
+## when read ahead of it — and joining the next in its join lane.
+func _turn_points(car: Car, lane: float) -> PackedVector3Array:
 	var next_length: float = graph.plan_length_of(car.next_edge)
-	car.p0 = graph.lane_at(
-		car.edge, _edge_m(car.leave_m, car.length_m, car.along), car.along, car.lane
+	var p0: Vector3 = graph.lane_at(
+		car.edge, _edge_m(car.leave_m, car.length_m, car.along), car.along, lane
 	)
-	car.p2 = graph.lane_at(
+	var p2: Vector3 = graph.lane_at(
 		car.next_edge,
 		_edge_m(car.join_m, next_length, car.next_along),
 		car.next_along,
@@ -1473,10 +1770,7 @@ func _start_turn(car: Car) -> void:
 	)
 	var into: Vector3 = _travel_dir(car.edge, car.leave_m, car.length_m, car.along)
 	var out: Vector3 = _travel_dir(car.next_edge, car.join_m, next_length, car.next_along)
-	car.p1 = turn_control(car.p0, into, car.p2, out)
-	car.turn_len = curve_length(car.p0, car.p1, car.p2)
-	car.turn_u = 0.0
-	car.turning = true
+	return [p0, turn_control(p0, into, p2, out), p2]
 
 
 ## The curve's middle control point: where the line in along `into` meets the

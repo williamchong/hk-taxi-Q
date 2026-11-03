@@ -56,6 +56,9 @@ const PATH: String = "res://tuning/traffic.tres"
 ## Room kept between a moving car's flank and a parked vehicle it passes, in
 ## metres: closer than this, the parked vehicle is in its lane.
 @export var side_clear_m: float
+## How far short of its line a car looks for one whose turn crosses its own,
+## and how near its own line a car coming must be to be given way to, in metres.
+@export var give_way_look_m: float
 ## Voices of the horn at once (`Q178`).
 @export var horn_voices: int
 ## Where a horn fades to nothing, in metres: a voice's `max_distance`.

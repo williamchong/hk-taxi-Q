@@ -31,6 +31,12 @@
 ##   the last tick of a car's straight run its lamp bits carry the turn's side
 ##   and not the other, and a straight-on move carries neither as it starts;
 ##   as a turn joins its road the car still winks its side (`wink_hold_m`).
+## - 🔴 **A car gives way at its line** (`Q173`, the user's drive 2026-11-04: cars
+##   drove through each other at junctions without lights): some car is held
+##   by it, and no two cars meet in a signalled junction. The `crossing:` lines
+##   count two cars in one another with one at least in its turn, by whether
+##   either turns off a signalled approach; the unsignalled line is printed,
+##   not gated — seed 4 meets one pair where two roads cross with no node.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -59,6 +65,8 @@ const SEEDS: Array[int] = [7, 4, 23]
 ## swings 0.086 / 0.13 m into a parked car's that the lanes say it clears
 ## (2026-10-30) — a box that is itself the mesh's bound, not its shape.
 const INSIDE_M: float = 0.15
+## How long the drive runs on for a car to stage the horn on.
+const HORN_SEARCH_S: float = 30.0
 
 
 func _init() -> void:
@@ -175,6 +183,32 @@ func _check_rules() -> void:
 		Vector3.ZERO, Vector3(0, 0, -1), Vector3(0, 0, -10), Vector3(0, 0, -1)
 	)
 	_expect(straight.is_equal_approx(Vector3(0, 0, -5)), "rules", "straight on takes the chord")
+	# The give-way's order: straight on, then left, then right, then the fleet.
+	_expect(
+		(
+			TrafficScript.goes_first(0, 5, 1, 1)
+			and TrafficScript.goes_first(1, 5, -1, 1)
+			and TrafficScript.goes_first(-1, 2, -1, 3)
+			and not TrafficScript.goes_first(-1, 3, -1, 2)
+		),
+		"rules",
+		"straight on gives way to nobody turning, a left before a right, then the earlier car"
+	)
+	# Its path test: an X crosses; two ways a lane apart, head to head, do not;
+	# the same two nearer than their width do.
+	var east := PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(10, 0, 0)])
+	var cross := PackedVector3Array([Vector3(5, 0, -5), Vector3(5, 0, 5)])
+	var lane_over := PackedVector3Array([Vector3(10, 0, 3), Vector3(0, 0, 3)])
+	var too_near := PackedVector3Array([Vector3(10, 0, 1.5), Vector3(0, 0, 1.5)])
+	_expect(
+		(
+			TrafficScript.paths_cross(east, cross, 2.3, 2.0, 0.5)
+			and not TrafficScript.paths_cross(east, lane_over, 2.3, 2.0, 0.5)
+			and TrafficScript.paths_cross(east, too_near, 2.3, 2.0, 0.5)
+		),
+		"rules",
+		"turns that cross meet, a lane apart head to head do not, nearer than a car's width do"
+	)
 	var north := Vector3(0, 0, -1)
 	_expect(
 		(
@@ -325,6 +359,9 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	var held_light: int = 0
 	var held_car: int = 0
 	var held_parked: int = 0
+	var held_give_way: int = 0
+	var give_way_wait: Array[int] = []
+	var longest_give_way: int = 0
 	var passing: int = 0
 	var inside_parked: int = 0
 	var head_on: int = 0
@@ -339,8 +376,15 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	longest_wait.fill(0)
 	waited.resize(system.cars.size())
 	waited.fill(0)
+	give_way_wait.resize(system.cars.size())
+	give_way_wait.fill(0)
 	var crossed: int = 0
 	var driven_m: float = 0.0
+	# Two cars in one another at a junction, by where: car-ticks then meetings.
+	var crossings: Dictionary[String, Vector2i] = {
+		"signalled": Vector2i.ZERO, "unsignalled": Vector2i.ZERO
+	}
+	var overlapping: Dictionary[int, bool] = {}
 	for tick: int in ticks:
 		system.signals.clock_s += TICK_S
 		system.step(TICK_S)
@@ -359,6 +403,14 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 				held_car += 1
 			elif car.held == TrafficSystem.Held.PARKED:
 				held_parked += 1
+			elif car.held == TrafficSystem.Held.GIVE_WAY:
+				held_give_way += 1
+			give_way_wait[index] = (
+				give_way_wait[index] + 1
+				if car.held == TrafficSystem.Held.GIVE_WAY and car.speed < TrafficSystem.STOPPED_MPS
+				else 0
+			)
+			longest_give_way = maxi(longest_give_way, give_way_wait[index])
 			if car.passing:
 				passing += 1
 			if car.over_centre:
@@ -468,6 +520,7 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 			before.front_m = front
 		rear_end += _rear_ends(system)
 		head_on += _head_ons(system)
+		_count_crossings(system, crossings, overlapping)
 	_expect(
 		system.spawned > 0,
 		"drive",
@@ -485,6 +538,11 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 			held_light > 0, "lights", "some car was held by a light (%d car-ticks)" % held_light
 		)
 	_expect(held_car > 0, "queue", "some car was held by the car ahead (%d car-ticks)" % held_car)
+	_expect(
+		held_give_way > 0,
+		"give way",
+		"some car gave way at its line (%d car-ticks)" % held_give_way
+	)
 	_expect(bad_move == 0 and bad_way == 0, "graph", "every move a legal arc, every way admitted")
 	_expect(on_stub == 0, "graph", "no car drove a road inside a junction (%d car-ticks)" % on_stub)
 	_expect(rear_end == 0, "queue", "no car stood inside the one ahead (%d car-ticks)" % rear_end)
@@ -527,6 +585,26 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 		)
 	)
 	print("  parked:   the longest stand behind one %.1f s" % (longest_wait.max() * TICK_S))
+	# Gated where the lights and the give-way both hold; without a light one pair
+	# in seed 4 meets where two roads cross with no junction between them.
+	_expect(
+		crossings["signalled"].x == 0,
+		"give way",
+		"no two cars met in a signalled junction (%d car-ticks)" % crossings["signalled"].x
+	)
+	for where: String in crossings:
+		print(
+			(
+				"  crossing: %-11s %d car-ticks in another car, %d meetings"
+				% [where, crossings[where].x, crossings[where].y]
+			)
+		)
+	print(
+		(
+			"  give way: %d car-ticks held, the longest stand %.1f s"
+			% [held_give_way, longest_give_way * TICK_S]
+		)
+	)
 	_check_near(system)
 	_check_horn(system)
 
@@ -581,18 +659,25 @@ func _step_for(system: TrafficSystem, seconds: float) -> void:
 
 
 ## The horn (`Q178`): a car on no signal's approach, the taxi stood in front of it.
+## The drive is run on until one is under way and held by nothing: at its last
+## tick every such car may be slowing for a give-way.
 func _check_horn(system: TrafficSystem) -> void:
 	var car: TrafficSystem.Car = null
-	for candidate: TrafficSystem.Car in system.cars:
-		if (
-			candidate.live
-			and not candidate.turning
-			and candidate.held == TrafficSystem.Held.NONE
-			and candidate.speed > 2.0
-			and system.stop_travel_m(candidate) < 0.0
-		):
-			car = candidate
+	for _searched: int in roundi(HORN_SEARCH_S / TICK_S):
+		for candidate: TrafficSystem.Car in system.cars:
+			if (
+				candidate.live
+				and not candidate.turning
+				and candidate.held == TrafficSystem.Held.NONE
+				and candidate.speed > 2.0
+				and system.stop_travel_m(candidate) < 0.0
+			):
+				car = candidate
+				break
+		if car != null:
 			break
+		system.signals.clock_s += TICK_S
+		system.step(TICK_S)
 	if car == null:
 		_expect(false, "horn", "no car under way off a signal's approach to stage the horn on")
 		return
@@ -756,6 +841,41 @@ static func _head_ons(system: TrafficSystem) -> int:
 			if _overlap(mine, theirs) > INSIDE_M:
 				found += 1
 	return found
+
+
+## Pairs of live cars on one level, one at least in its turn, whose plan boxes
+## overlap — two cars in one another in a junction — into `found` by whether either turns off
+## a signalled approach: `x` car-ticks, `y` meetings (a pair's first tick in).
+## `overlapping` carries the pairs in one another between ticks.
+static func _count_crossings(
+	system: TrafficSystem, found: Dictionary[String, Vector2i], overlapping: Dictionary[int, bool]
+) -> void:
+	var now: Dictionary[int, bool] = {}
+	var cars: Array[TrafficSystem.Car] = system.cars
+	for a: int in cars.size():
+		var one: TrafficSystem.Car = cars[a]
+		if not one.live:
+			continue
+		var mine: Array[Vector2] = _plan_box(one.pose, system.extent_of(one))
+		for b: int in range(a + 1, cars.size()):
+			var two: TrafficSystem.Car = cars[b]
+			if not two.live or not (one.turning or two.turning):
+				continue
+			# One on a deck over the other is not a meeting (seeds 4 and 7, Wan Chai alone).
+			if absf(one.pose.origin.y - two.pose.origin.y) > TrafficSystem.LEVEL_APART_M:
+				continue
+			var theirs: Array[Vector2] = _plan_box(two.pose, system.extent_of(two))
+			if _overlap(mine, theirs) <= INSIDE_M:
+				continue
+			var signalled: bool = false
+			for car: TrafficSystem.Car in [one, two]:
+				if car.turning and system.stop_travel_m(car) >= 0.0:
+					signalled = true
+			var where: String = "signalled" if signalled else "unsignalled"
+			var key: int = a * cars.size() + b
+			now[key] = true
+			found[where] += Vector2i(1, 0 if overlapping.has(key) else 1)
+	overlapping.assign(now)
 
 
 ## A box's plan rectangle: its centre, then its two half-axes.

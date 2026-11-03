@@ -121,6 +121,17 @@ width is kerb to kerb and a back street is "parked on one side and passed in the
 one-way street (edge 349) has 2.32 m beside the bus and needs 2.38 (its 2.08 m and this), so it waits — that wait is the
 `parked:` "longest stand" line, and lowering this to clear it would put a car's mirror on a bus.
 
+## `give_way_look_m = 30.0`
+
+How far short of its line a car starts giving way (`Q173`, the user's drive 2026-11-04: cars drove
+through each other at junctions without lights), and how near its own line a car coming must be
+to be given way to. 30 m is the planned stop from 40 kph (21 m at `brake_mps2`) with room: a car
+nearer its line than it can stop for at `brake_max_mps2` is in the junction and is given way to
+whatever this says. Longer holds a side-road car for a main-road car still half a block off; shorter
+than the planned stop and a car brakes hard for every crossing. The rule's angle bar is
+`straight_deg` (two paths under it run side by side or head to head) and its clearance
+`side_clear_m` (bodies apart by it, as a flank from a parked vehicle) — not values of their own.
+
 ## `horn_voices = 3`, `horn_range_m = 110.0`, `horn_repeat_s = 4.0`
 
 The tram bell's numbers (`trams.md`), for the same reasons: three at once is a busy street, and four
