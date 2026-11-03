@@ -209,8 +209,8 @@ game's any more.
   car's everyday cornering changed. Owed: the speed skill's bar and the wall tiers, read off the
   old car's pace (`Q152`), and the model's cost on a handset.
 
-⚠️ Touch carries three of five actions (`Q97`): steer, accelerate, brake/reverse. The handbrake and
-`look_back` stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.
+⚠️ Touch carries three of six actions (`Q97`): steer, accelerate, brake/reverse. The handbrake,
+`look_back` and the horn (`Q178`) stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.
 
 Driving against a one-way raises a blinking NO ENTRY disc (`Q81`, `P3-25`): raised by the car's
 nose (velocity may only withhold it), a 120° bar and dwells against false alarms in a region 93.5%

@@ -206,5 +206,7 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **The meter's beep is `TaxiHire`'s, on `meter_changed`** (`Q178`): `verify_fares`' `beep:` lines hold one
   per unit and one at the boarding. It is rare because the 2 km flagfall charges nothing: 🚫 not a
   reason to beep on anything but the reading. `tools/make_meter_beep.py` is byte-identical.
+  ⚠️ A near miss or close call names its obstacle in `Award.passed`, which `TrafficSystem.react_to` reads
+  to sound that car's horn; `verify_fares` checks it on the close call.
 - 🚫 **Not here**: the fare combo (`P3-2b`; the session timer is `Q162`'s shift), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

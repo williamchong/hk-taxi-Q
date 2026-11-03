@@ -109,4 +109,7 @@ paths:
   (`test_make_sounds.py`). 🔴 **A red does not count towards the wait.** 🔴 **Silent while the taxi is
   `parked`**: `verify_traffic` cannot see this, so a change near it owes a `--menu=on` run. ⚠️ A car's
   pitch comes from its id: a roll would move every later car on the seeded RNG. ⚠️ The taxi's gap is
-  `_taxi_gap`, apart from `_gap_ahead` only so that `Held.TAXI` can name it.
+  `_taxi_gap`, apart from `_gap_ahead` only so that `Held.TAXI` can name it. 🔴 **`react_to` answers the
+  loop's awards whatever the car's wait**: a close call by `Award.passed` (by reference, never by id), a
+  docked hit by `_taxi_gap` and `_struck`; `verify_traffic`'s `react:` lines. The loop is found by
+  `FareSystem.GROUP`, so `--fares=off` draws none.

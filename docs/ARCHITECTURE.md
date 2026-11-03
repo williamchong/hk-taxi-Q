@@ -1429,10 +1429,11 @@ One action set; three schemes feed it and no gameplay script knows which is live
 | `brake_reverse` | `float`, 0…1 | `S`, ↓ | LT (axis 4) | ✅ thumb 1, below touch origin |
 | `handbrake` | `bool` | `Space` | A / Cross (button 0) | ⬜ thumb 2, held past the handbrake threshold |
 | `look_back` | `bool` | `C` | B / Circle (button 1) | ⬜ unplaced |
+| `horn` | `bool` | `H` | X / Square (button 2) | ⬜ unplaced (`Q178`) |
 
 Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`'s `[input]` map.
 
-- Touch ships three of five (`Q97`). `handbrake` needs a threshold and hysteresis only a handset can
+- Touch ships three of six (`Q97`; `horn` joined in `Q178` with no touch home, for the same reason). `handbrake` needs a threshold and hysteresis only a handset can
   pick (`Q83`, `P0-3b`); `look_back` is unplaced. Thumb 2's vertical axis is read and discarded, not
   lent to another control.
 - 🔴 Touch values are merged in `InputRouter`, never fed through the action map:

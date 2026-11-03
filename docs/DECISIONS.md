@@ -11069,7 +11069,7 @@ generator's side, the head lamp's circuit and the side lamps' colours.
 
 **See.** `Q160` · `Q167` · `Q176` · `P3-4` · `P3-11d` · `game/tuning/vehicle_body.md`
 
-## `Q178` — Cars sound their horns at the taxi, and the meter beeps when the reading moves
+## `Q178` — Cars sound their horns at the taxi, the taxi has its own, and the meter beeps when the reading moves
 
 **Status.** 🟡 Built 2026-11-01 on the user's ask: "now that tram dings, can cars honk and taxi meter
 beeps when it tick?" No ear has graded either sound. Owed: the user's drive, and the level.
@@ -11109,7 +11109,29 @@ none while waiting on the flagfall.
 off, the beep unwired. ⚠️ The bell's range gate has no copy here: a car sees the taxi within `look_m`
 (45 m), so a gate at `horn_range_m` (110 m) could not fire. That value is the voice's fade alone.
 
-🚫 **Not built**: a horn for the player (needs an input action and a touch button), horns between
-traffic cars, `AudioDirector` and its buses (Phase 5), so no volume setting yet.
+**Round two (2026-11-04), on the user's ask: "add a horn for the taxi, and other cars when we crash in
+front of them, or close call them".**
+
+- **The taxi's horn** is a `horn` action, `H` and the gamepad's X / Square (button 2), read by
+  `InputRouter` and sounded by `TaxiHorn` beside the camera rig: the traffic's file, from the car,
+  once per press, silent while `parked`. 🚫 **No touch home**: the handbrake and `look_back` wait on
+  `P0-3b`'s handset to price a gesture (`Q83`, `Q97`), and a horn button in a thumb zone is the same
+  question. Touch now carries three of six.
+- **A car answers the loop's awards** (`TrafficSystem.react_to`), paid and practised alike, whatever
+  its own wait: a CLOSE_CALL sounds the car passed, found by reference through the new
+  `Fare.Award.passed` that `NearMiss` fills; a BUMP or CRASH sounds every car with the taxi in its
+  path (`_taxi_gap`) and the car struck (centres within both half-lengths and `STRUCK_SLACK_M`). A near
+  miss does not: it passes at a distance nobody honks at, and the user named the close call. The loop
+  is found by its new `FareSystem.GROUP`, so `--fares=off` (free roam) draws none of these.
+- **Measured.** Live, `wan_chai/f_004`: two presses of `horn`, one held 1.5 s, sound twice; under
+  `--menu=on` a press sounds nothing. Four scripted crashes delivered BUMP and CRASH to `react_to`
+  live, each with no car in its path or touching, so no horn, as the rule says. ⚠️ No live crash has
+  yet happened in front of a car: that case is `verify_traffic`'s `react:` lines alone.
+- **Mutations caught by name:** the collision dropped from the reaction, a close call answered by any
+  car, nothing struck, practice unheard, the award not naming its obstacle (`verify_fares`), a held
+  press repeating (`verify_input`).
+
+🚫 **Not built**: a touch horn, horns between traffic cars, a tram's bell at a close call,
+`AudioDirector` and its buses (Phase 5), so no volume setting yet.
 
 **See.** `Q176` · `Q141` · `Q173` · `game/tuning/traffic.md`
