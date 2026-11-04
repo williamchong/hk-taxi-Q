@@ -697,9 +697,18 @@ func place_at(pose: Transform3D) -> void:
 ## velocity read 100 kph for a 5 kph tap and stopped it dead. The latch still
 ## asks the taxi to be moving INTO the contact: a car running into the back of it
 ## is not its hit. A static wall's velocity is zero and the two read as before.
+##
+## 🔴 **A car or a tram gives by its mass** (`Q180`): a body its owner marked
+## `Pushable` takes an impulse along the contact off the two masses and
+## `collision_restitution`, handed to the owner, and the taxi keeps the rest of
+## its momentum where a wall would have taken it all. The slide along the face is
+## the wall's. A second contact on the same body that tick reads the body's
+## velocity after the push, so one hit is one exchange. The latch is not touched:
+## the penalty stays the closing speed. An unmarked body is a wall, as before.
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var velocity: Vector3 = _velocity_into_step
 	var struck: bool = false
+	var pushed: Dictionary[int, Vector3] = {}
 	for i: int in state.get_contact_count():
 		var normal: Vector3 = state.get_contact_local_normal(i)
 		if absf(normal.y) > WALL_NORMAL_Y:
@@ -707,6 +716,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var moving: Vector3 = state.get_contact_collider_velocity_at_position(i)
 		if _velocity_into_step.length() >= 1.0 and _velocity_into_step.dot(normal) < 0.0:
 			_impact_mps = maxf(_impact_mps, -(_velocity_into_step - moving).dot(normal))
+		var collider_id: int = state.get_contact_collider_id(i)
+		moving = pushed.get(collider_id, moving)
 		var relative: Vector3 = velocity - moving
 		if relative.length() < 1.0:
 			continue
@@ -714,10 +725,36 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		if into_wall >= 0.0:
 			continue  # already moving away
 		var retained: float = lerpf(1.0, profile.collision_speed_retained, absf(into_wall))
-		velocity = (
-			moving + relative.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
+		var slid: Vector3 = (
+			relative.slide(normal) * lerpf(retained, 1.0, profile.collision_deflection)
 		)
+		var collider: Object = state.get_contact_collider_object(i)
+		var pusher: Object = Pushable.owner_of(collider)
+		if pusher == null:
+			velocity = moving + slid
+		else:
+			var at: Vector3 = _contact_middle(state, collider_id)
+			var gives: float = pusher.push_inverse_mass(collider, normal, at)
+			var closing: float = -relative.dot(normal)
+			var impulse: float = (
+				(1.0 + profile.collision_restitution) * closing / (1.0 / mass + gives)
+			)
+			pusher.take_push(collider, -normal * impulse, at)
+			pushed[collider_id] = moving - normal * (impulse * gives)
+			velocity = moving + slid + normal * (impulse / mass - closing)
 		struck = true
 	if struck:
 		state.linear_velocity = velocity
 		state.angular_velocity *= SCRAPE_SPIN_RETAINED
+
+
+## The middle of every point this tick's contacts touch `collider_id` at: a body
+## met square touches at both corners, and a push at either one would turn it.
+static func _contact_middle(state: PhysicsDirectBodyState3D, collider_id: int) -> Vector3:
+	var sum := Vector3.ZERO
+	var count: int = 0
+	for i: int in state.get_contact_count():
+		if state.get_contact_collider_id(i) == collider_id:
+			sum += state.get_contact_collider_position(i)
+			count += 1
+	return sum / float(count)

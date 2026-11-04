@@ -841,6 +841,12 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--trams=%s is not off or on" % value)
 					return false
+			"--push":
+				# `Pushable` reads this one itself (`Q180`); its fallback is pushing
+				# ON, so a typo would knock cars in a drive meant to meet walls.
+				if not ["off", "on"].has(value):
+					_fail("--push=%s is not off or on" % value)
+					return false
 			"--fare-seed":
 				# `fare_system.gd` reads this one itself; a seed that is not an
 				# int would silently randomise, and two "A/B" drives would draw

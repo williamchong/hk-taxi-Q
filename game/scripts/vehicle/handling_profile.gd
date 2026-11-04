@@ -94,5 +94,10 @@ const PATH: String = "res://tuning/handling.tres"
 @export_range(0.0, 1.0, 0.01) var collision_deflection: float
 ## Fraction of speed retained after a head-on impact.
 @export_range(0.0, 1.0, 0.01) var collision_speed_retained: float
+## How much of the closing speed a hit on a moving car or a tram gives back
+## (`Q180`): the coefficient of restitution, 0 a crash that sticks, 1 a bounce
+## that loses nothing. Crash reconstruction's, cited in `Q180`; a wall never reads
+## it — it stays the arcade response above.
+@export_range(0.0, 1.0, 0.01) var collision_restitution: float
 ## Seconds before an upside-down car auto-rights itself.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var auto_right_delay_s: float

@@ -37,6 +37,14 @@
 ##   count two cars in one another with one at least in its turn, by whether
 ##   either turns off a signalled approach; the unsignalled line is printed,
 ##   not gated — seed 4 meets one pair where two roads cross with no node.
+## - 🔴 **A knocked car slides, stands and drives on** (`Q180`), staged by hand
+##   on a two-lane one-way road with nothing parked: every moving kind carries a
+##   mass; a car pushed square across its lane slides into the next one, on its
+##   hazards, as far as the road tyre's grip at the pace's gravity takes it
+##   (`v² / 2 μ g`), without turning, and settles; a car coming in that lane stops
+##   for it there — where its own lane says it is in the other — and never runs
+##   into it; then the knocked car rejoins its nearside lane on its road, a way it
+##   may drive. One pushed off its middle turns; one turned round stands.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -67,6 +75,14 @@ const SEEDS: Array[int] = [7, 4, 23]
 const INSIDE_M: float = 0.15
 ## How long the drive runs on for a car to stage the horn on.
 const HORN_SEARCH_S: float = 30.0
+## The knock (`Q180`): the road at least this long, the car this far down it and the
+## one coming this far behind, and how long it has to slide, stand and drive on.
+const KNOCK_ROAD_M: float = 100.0
+const KNOCK_AT_M: float = 40.0
+const KNOCK_BEHIND_M: float = 25.0
+const KNOCK_CLOSE_M: float = 12.0
+const KNOCK_AGAIN_MPS: float = 4.0
+const KNOCK_RUN_S: float = 40.0
 
 
 func _init() -> void:
@@ -88,6 +104,7 @@ func _run() -> void:
 		return
 	_check_lane(graph)
 	var layers: Array[Node] = _stand_parked(graph)
+	_check_knock(graph, table, layers)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
 	for run: int in SEEDS.size() + 1:
@@ -115,6 +132,220 @@ func _run() -> void:
 		_drive(system, not back_street)
 		system.queue_free()
 	_finish("verify_traffic")
+
+
+## A car knocked by hand (`Q180`) on a long two-lane one-way road with nothing
+## parked on it: across into the offside lane, then three more knocks. Two cars:
+## the one knocked and one coming in the offside lane.
+func _check_knock(graph: RoadGraph, table: TrafficProfile, layers: Array[Node]) -> void:
+	var system: TrafficSystem = TrafficScript.new()
+	if not system.setup(graph, table, SEEDS[0]):
+		_fail("knock", "the shipped table and city carry no traffic")
+		system.free()
+		return
+	root.add_child(system)
+	system.read_parked(layers)
+	var masses: Dictionary[String, float] = (load(ParkedProfile.PATH) as ParkedProfile).masses_kg
+	for kind: String in table.kinds:
+		_expect(masses.get(kind, 0.0) > 0.0, "knock", "%s carries a kerb mass" % kind)
+	var grip: float = TrafficScript.grip_mps2()
+	_expect(grip > 0.0, "knock", "a knocked car has the road tyre's grip (%.1f m/s²)" % grip)
+	var found: Vector2i = _knock_road(system)
+	_expect(found.x >= 0, "knock", "a long two-lane one-way road with nothing parked")
+	if found.x < 0 or grip <= 0.0:
+		_drop(system)
+		return
+	var edge: int = found.x
+	var along: bool = found.y == 1
+	var struck: TrafficSystem.Car = system.cars[0]
+	var coming: TrafficSystem.Car = system.cars[1]
+	system.cars.resize(2)
+	_stage(system, struck, edge, along, KNOCK_AT_M)
+	_stage(system, coming, edge, along, KNOCK_AT_M - KNOCK_BEHIND_M)
+	coming.lane = 1.0
+	system._enter(coming)
+	coming.pose = system._pose_on_edge(coming)
+	struck.speed = 0.0
+	coming.speed = coming.cruise_mps * 0.5
+	system.centre = struck.pose.origin
+	_expect(
+		struck.body.has_meta(Pushable.OWNER_META), "knock", "a car's body is the taxi's to push"
+	)
+	# Square across into the offside lane's middle: v² = 2 a d.
+	var forward: Vector3 = -struck.pose.basis.z
+	var offside: Vector3 = -RoadGraph.left_of(forward)
+	var at_m: float = TrafficScript._edge_m(KNOCK_AT_M, struck.length_m, along)
+	var lane_m: float = (
+		(
+			system.graph.lane_at(edge, at_m, along, 1.0)
+			- system.graph.lane_at(edge, at_m, along, 0.0)
+		)
+		. length()
+	)
+	var across_mps: float = sqrt(2.0 * grip * lane_m)
+	var start: Vector3 = struck.pose.origin
+	system.take_push(struck.body, offside * struck.mass_kg * across_mps, system._centre_of(struck))
+	_expect(struck.knocked and system.knocks == 1, "knock", "a push knocks it off its lane")
+	_expect(is_zero_approx(struck.spin), "knock", "pushed through its middle it does not turn")
+	_expect(system._winking(struck) == TrafficSystem.HAZARDS, "knock", "it stands on its hazards")
+	var deepest: float = 0.0
+	var held: bool = false
+	var settled_s: float = INF
+	var recovered_s: float = INF
+	# Where it set out to rejoin, `(edge, along, lane)`, read as it drives on.
+	var rejoins := Vector3(-1.0, 0.0, -1.0)
+	var t: float = 0.0
+	while t < KNOCK_RUN_S and is_inf(recovered_s):
+		system.step(TICK_S)
+		t += TICK_S
+		if struck.knocked and struck.slide == Vector3.ZERO and is_inf(settled_s):
+			settled_s = t
+			var moved: Vector3 = struck.pose.origin - start
+			var expected: float = across_mps * across_mps / (2.0 * grip)
+			_expect(
+				absf(moved.dot(offside) - expected) < across_mps * TICK_S * 2.0,
+				"knock",
+				(
+					"it slides %.2f m across, as the grip takes it (%.2f m), in %.2f s"
+					% [moved.dot(offside), expected, t]
+				)
+			)
+			_expect(absf(moved.dot(forward)) < 0.01, "knock", "and not along")
+		held = held or coming.held == TrafficSystem.Held.CAR
+		if struck.knocked:
+			deepest = maxf(
+				deepest,
+				_overlap(
+					_plan_box(struck.pose, system.extent_of(struck)),
+					_plan_box(coming.pose, system.extent_of(coming))
+				)
+			)
+		elif rejoins.x < 0.0:
+			rejoins = Vector3(struck.next_edge, 1.0 if struck.next_along else 0.0, struck.next_lane)
+		if not struck.knocked and not struck.turning:
+			recovered_s = t
+	_expect(not is_inf(settled_s), "knock", "it comes to rest")
+	_expect(held, "knock", "the car coming in that lane stops for it")
+	_expect(deepest <= INSIDE_M, "knock", "and never runs into it (%.2f m)" % deepest)
+	_expect(
+		not is_inf(recovered_s) and system.recovered == 1,
+		"knock",
+		"it drives on again (%.1f s after it settled)" % (recovered_s - settled_s)
+	)
+	_expect(
+		rejoins == Vector3(edge, 1.0 if along else 0.0, 0.0),
+		"knock",
+		"for its nearside lane, on its road, the way it was going"
+	)
+	_expect(
+		struck.edge == edge and TrafficSystem.same_lane(struck.lane, 0.0),
+		"knock",
+		"and is in it as its way back ends"
+	)
+	# Knocked across the offside lane and still moving — its own lane still says the
+	# nearside, its heading is no queue's and it has not settled to stand as parked —
+	# it is in the way of a car coming in that lane.
+	_stage(system, struck, edge, along, KNOCK_AT_M)
+	_stage(system, coming, edge, along, KNOCK_AT_M - KNOCK_CLOSE_M)
+	coming.lane = 1.0
+	system._enter(coming)
+	coming.pose = system._pose_on_edge(coming)
+	var offside_lane: Vector3 = system.graph.lane_at(edge, at_m, along, 1.0)
+	struck.pose = Transform3D(
+		struck.pose.basis.rotated(Vector3.UP, PI * 0.5),
+		Vector3(offside_lane.x, struck.pose.origin.y, offside_lane.z)
+	)
+	system.take_push(struck.body, -struck.pose.basis.z * struck.mass_kg, system._centre_of(struck))
+	_expect(
+		system._gap_ahead(coming) < INF,
+		"knock",
+		"knocked across the lane of a car coming, still moving, it is in that car's way"
+	)
+	# Pushed square across at its front corner, it turns.
+	_stage(system, struck, edge, along, KNOCK_AT_M)
+	coming.live = false
+	var front: Vector3 = system._centre_of(struck) + forward * struck.half_length
+	system.take_push(struck.body, offside * struck.mass_kg * across_mps, front)
+	_expect(
+		struck.spin * Pushable.yaw_moment(forward, offside) > 0.0,
+		"knock",
+		"pushed at its front corner it turns, nose first (%.2f rad/s)" % struck.spin
+	)
+	_step_for(system, KNOCK_RUN_S * 0.25)
+	# Turned round on a one-way road it does not reverse: it stands.
+	_stage(system, struck, edge, along, KNOCK_AT_M)
+	struck.pose.basis = struck.pose.basis.rotated(Vector3.UP, PI)
+	system.take_push(struck.body, offside * struck.mass_kg, system._centre_of(struck))
+	var before: int = system.recovered
+	_step_for(system, table.recover_after_s * 4.0)
+	_expect(
+		struck.knocked and system.recovered == before,
+		"knock",
+		"turned round on a one-way road, it stands"
+	)
+	# Pushed again where it stands, it slides on and stands where it settles.
+	var was: Vector2 = _wreck_span(system, struck, edge)
+	system.take_push(
+		struck.body,
+		-struck.pose.basis.z * struck.mass_kg * KNOCK_AGAIN_MPS,
+		system._centre_of(struck)
+	)
+	_step_for(system, table.react_s + KNOCK_RUN_S * 0.25)
+	var now: Vector2 = _wreck_span(system, struck, edge)
+	_expect(
+		(
+			was.x >= 0.0
+			and now.x >= 0.0
+			and absf(now.x - was.x) > KNOCK_AGAIN_MPS * table.react_s * 0.5
+		),
+		"knock",
+		(
+			"pushed again, it stands where it settles, not where it stood (%.1f → %.1f m)"
+			% [was.x, now.x]
+		)
+	)
+	print(
+		(
+			"  knock:    %d knocks, %d drove on, settled at %.2f s, on its way %.1f s later"
+			% [system.knocks, system.recovered, settled_s, recovered_s - settled_s]
+		)
+	)
+	_drop(system)
+
+
+## Where `car`'s one footprint stands on `edge`, as its near end and its count, or
+## `x` -1 where it has none or more than one.
+static func _wreck_span(system: TrafficSystem, car: TrafficSystem.Car, edge: int) -> Vector2:
+	var found: Array[float] = []
+	for parked: TrafficSystem.Parked in system.parked_on(edge):
+		if parked.wreck == car:
+			found.append(parked.s_from)
+	return Vector2(found[0], 1.0) if found.size() == 1 else Vector2(-1.0, found.size())
+
+
+## A level-0 one-way road with two lanes, `KNOCK_ROAD_M` long and nothing parked
+## on it, as `(edge, along)`, or `x` -1.
+## Out of the tree at once, not at the frame's end: the drives after it find
+## their own system first in `TrafficSystem.GROUP`, and a script runs in one frame.
+func _drop(system: TrafficSystem) -> void:
+	root.remove_child(system)
+	system.free()
+
+
+static func _knock_road(system: TrafficSystem) -> Vector2i:
+	for edge: int in system._admitted:
+		var forward: bool = system.router.admits_way(edge, true)
+		if forward == system.router.admits_way(edge, false):
+			continue
+		if (
+			system.graph.level_of(edge) != 0
+			or system.graph.lanes_each_way(edge) < 2
+			or system.graph.plan_length_of(edge) < KNOCK_ROAD_M
+			or not system.parked_on(edge).is_empty()
+		):
+			continue
+		return Vector2i(edge, 1 if forward else 0)
+	return Vector2i(-1, 0)
 
 
 ## Each resident region's parked roster, stood where the scene stands it.
@@ -339,6 +570,10 @@ static func _stage(
 	car.turning = false
 	car.held = TrafficSystem.Held.NONE
 	car.over_centre = false
+	car.knocked = false
+	car.slide = Vector3.ZERO
+	car.spin = 0.0
+	system._unwreck(car)
 	system._enter(car)
 	car.pose = system._pose_on_edge(car)
 

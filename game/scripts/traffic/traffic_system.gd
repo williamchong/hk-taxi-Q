@@ -14,9 +14,20 @@ extends Node3D
 ## close-called, and on a docked hit every car that had the taxi ahead or was the
 ## one struck (`react_to`). A parked taxi hears nothing.
 ##
-## 🔴 **Kinematic, not simulated.** A car is a position along its edge and a
-## speed; its body is an `AnimatableBody3D` moved to where it is each tick, so
-## the taxi meets a solid box and the car is never pushed off its lane.
+## 🔴 **Kinematic, not simulated — until the taxi hits it.** A car is a position
+## along its edge and a speed; its body is an `AnimatableBody3D` moved to where it
+## is each tick. Nothing else pushes it off its lane: not another car, not a tram.
+##
+## **The taxi knocks a car by its mass** (`Q180`, reversing the line above on the
+## user's ask, 2026-11-04). The body is `Pushable`: the taxi's contact hands the
+## impulse its mass gives to `take_push`, and the car leaves its lane — sliding on
+## its tyres (`_slide`: across them at the road tyre's grip, along them coasting
+## for `react_s` and then braking), turning if it was hit off its centre, stopped
+## by what it meets, on its hazards. The others stop for it as for a car whatever
+## its heading, and pass it once it has settled as a parked vehicle. Then it tries
+## to drive on (`_try_recover`): back into its nearside lane on the road it stands
+## by, in one curve, if it faces a way it may drive and the way is clear; where it
+## cannot it stands until the ring takes it. `--push=off` leaves every car a wall.
 ##
 ## **A car gives way at its line** (`_give_way_gap`) to a car in the junction whose
 ## turn crosses its own, and to one still coming that goes first — straight on
@@ -107,6 +118,16 @@ const STRUCK_SLACK_M: float = 0.5
 ## Spreads the fleet's ids over the horn's pitch range: not a roll, since one more
 ## draw on the seeded RNG would move every later car.
 const PITCH_STIR: float = 2.4
+## A knocked car's sweep is tested this far above the road, so the road it
+## slides on is not what stops it.
+const SWEEP_LIFT_M: float = 0.3
+## Under this spin, in rad/s, a knocked car under `STOPPED_MPS` has settled.
+const STILL_SPIN: float = 0.05
+## Pieces a knocked car's way back to its lane is tested in.
+const RECOVER_SAMPLES: int = 6
+## Under this many metres to one side of where it stands, a rejoin is straight on
+## and winks nothing.
+const RECOVER_STRAIGHT_M: float = 0.5
 
 ## The trams (`P3-4`): a car follows one as it follows a car, and waits behind one
 ## at its stop. A car does not pass a tram: on Hennessy Road nothing lawfully does.
@@ -210,6 +231,20 @@ class Car:
 	## Its turn through the junction in plan points, and the tick it was read on.
 	var path: PackedVector3Array = []
 	var path_tick: int = -1
+	## Its kind's kerb mass (`parked.tres` `masses_kg`): 0 is a car the taxi
+	## cannot push.
+	var mass_kg: float = 0.0
+	## Knocked by the taxi (`Q180`): off its lane, moved by `_slide` and not
+	## `_drive`, at its own plan velocity and spin (rad/s about up).
+	var knocked: bool = false
+	var slide: Vector3 = Vector3.ZERO
+	var spin: float = 0.0
+	## Seconds since the knock, for its driver's reaction; seconds stood still.
+	var knocked_s: float = 0.0
+	var still_s: float = 0.0
+	## The edge its footprint stands on as a parked vehicle once it has settled,
+	## or -1.
+	var wreck_edge: int = -1
 
 
 ## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
@@ -235,8 +270,13 @@ class Parked:
 	## its corners, so its half-length times this is added to its half-width.
 	var bend: float = 0.0
 	var source: String = ""
+	## A knocked car standing here (`Q180`): it stands while that car is knocked,
+	## and `_unwreck` takes it off on a push, a recovery or a retire.
+	var wreck: Car = null
 
 	func standing() -> bool:
+		if wreck != null:
+			return wreck.live and wreck.knocked
 		return layer.is_standing(index)
 
 	## Travel metres the footprint spans for a car driving `along` an edge
@@ -261,6 +301,9 @@ var spawned: int = 0
 var retired: int = 0
 ## Horns sounded (`Q178`), for the verify tool.
 var horns: int = 0
+## Cars the taxi knocked, and knocked cars that drove on again (`Q180`).
+var knocks: int = 0
+var recovered: int = 0
 ## The fare loop whose awards the horns answer, found by its group: none under
 ## `--fares=off`.
 var fares: FareSystem = null
@@ -270,6 +313,13 @@ var _tick: int = 0
 var _horn_voices: Array[AudioStreamPlayer3D] = []
 var _next_horn: int = 0
 var _rng := RandomNumberGenerator.new()
+## The cars by their body's instance id, for `take_push`.
+var _by_body: Dictionary[int, Car] = {}
+## What a knocked car's tyres hold across them, in m/s²: the road tyre's `mu`
+## times the world's gravity, the pace's (`Q156`) — the taxi's own grip.
+var _grip_mps2: float = 0.0
+## What a knocked car's sweep met, reused: `test_move` fills it every slide tick.
+var _met := KinematicCollision3D.new()
 var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
 var _extents: Array[AABB] = []
@@ -369,7 +419,12 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			"id": hash(Vector2i(int(get_instance_id() & 0x7FFFFFFF), car.id)),
 			"velocity": Vector3.ZERO,
 		}
+		car.mass_kg = parked.masses_kg.get(_kinds[car.kind], 0.0) if parked != null else 0.0
+		if car.mass_kg > 0.0:
+			Pushable.mark(car.body, self)
+			_by_body[car.body.get_instance_id()] = car
 		_hide(car)
+	_grip_mps2 = grip_mps2()
 	_load_horn()
 	add_to_group(GROUP)
 	return true
@@ -404,6 +459,12 @@ static func usable(table: TrafficProfile) -> bool:
 		"horn_cut_mps": table.horn_cut_mps,
 		"horn_pitch_spread": table.horn_pitch_spread,
 		"kinds": float(table.kinds.size()),
+		"react_s": table.react_s,
+		"recover_after_s": table.recover_after_s,
+		"recover_radius_m": table.recover_radius_m,
+		"recover_heading_deg": table.recover_heading_deg,
+		"recover_ahead_m": table.recover_ahead_m,
+		"recover_clear_m": table.recover_clear_m,
 	}
 	return not TuningTable.any_zero(table, required, "TrafficSystem", "no traffic will run")
 
@@ -469,6 +530,8 @@ func read_parked(layers: Array[Node]) -> void:
 func _queue_parked(layers: Array[Node]) -> void:
 	_parked_read = true
 	_parked.clear()
+	for car: Car in cars:
+		car.wreck_edge = -1  # its footprint went with the rest; it stands again on settling
 	parked_report.clear()
 	_parked_layers = layers
 	_parked_next = Vector2i.ZERO
@@ -628,7 +691,10 @@ func step(delta: float) -> void:
 		if _plan_distance(car.pose.origin, here) > profile.retire_m:
 			_retire(car)
 			continue
-		_drive(car, delta)
+		if car.knocked:
+			_slide(car, delta)
+		else:
+			_drive(car, delta)
 	for _try: int in SPAWN_TRIES:
 		var idle: Car = _idle_car()
 		if idle == null:
@@ -986,7 +1052,7 @@ func _edge_out(car: Car) -> float:
 ## waiting at a parked vehicle for the other: the earlier in the fleet goes.
 func _oncoming_clear(car: Car, until_m: float) -> bool:
 	for other: Car in cars:
-		if other == car or not other.live:
+		if other == car or not other.live or other.knocked:
 			continue
 		var at: float
 		if not other.turning and other.edge == car.edge and other.along != car.along:
@@ -1043,7 +1109,7 @@ func _lane_blocked(car: Car, toward: float) -> bool:
 		if side * (toward - car.lane) > 0.0:
 			return true
 	for other: Car in cars:
-		if other == car or not other.live:
+		if other == car or not other.live or other.knocked:
 			continue
 		# Coming out of its turn beside this one: it stands at its join in the lane it
 		# joins, and a change across it ended up inside it (seed 4).
@@ -1235,6 +1301,233 @@ func _sound_horn(car: Car) -> void:
 	voice.play()
 
 
+## What a knocked car's tyres hold across them, in m/s²: `tyre.tres`' `mu` times
+## the world's gravity at `pace.tres`' scale — the taxi's own road and tyre.
+static func grip_mps2() -> float:
+	var tyre := load(TyreProfile.PATH) as TyreProfile
+	var pace := load(PaceProfile.PATH) as PaceProfile
+	if tyre == null or pace == null:
+		return 0.0
+	return (
+		tyre.mu * float(ProjectSettings.get_setting("physics/3d/default_gravity")) * pace.pace_scale
+	)
+
+
+## `Pushable`: how readily the car behind `body` gives along `normal` at `at`.
+func push_inverse_mass(body: Object, normal: Vector3, at: Vector3) -> float:
+	var car: Car = _by_body.get(body.get_instance_id())
+	if car == null or not car.live:
+		return 0.0
+	return Pushable.box_inverse_mass(
+		car.mass_kg, car.half_length, car.half_width, _centre_of(car), normal, at
+	)
+
+
+## `Pushable`: the taxi put `impulse` into the car behind `body` at `at`. It is
+## knocked off its lane, if it was not already, and takes the impulse as its mass
+## and its box answer it.
+func take_push(body: Object, impulse: Vector3, at: Vector3) -> void:
+	var car: Car = _by_body.get(body.get_instance_id())
+	if car == null or not car.live:
+		return
+	# A wreck pushed again slides on, and is measured afresh where it settles.
+	_unwreck(car)
+	if not car.knocked:
+		_knock(car)
+	var push := Vector3(impulse.x, 0.0, impulse.z)
+	var middle: Vector3 = _centre_of(car)
+	car.slide += push / car.mass_kg
+	car.spin += (
+		Pushable.yaw_moment(Vector3(at.x - middle.x, 0.0, at.z - middle.z), push)
+		/ Pushable.yaw_inertia(car.mass_kg, car.half_length, car.half_width)
+	)
+	car.knocked_s = 0.0
+	car.still_s = 0.0
+
+
+## Off its lane at the speed it was driving: from here `_slide` moves it.
+func _knock(car: Car) -> void:
+	car.knocked = true
+	var forward: Vector3 = -car.pose.basis.z
+	car.slide = Vector3(forward.x, 0.0, forward.z) * car.speed
+	car.speed = 0.0
+	car.spin = 0.0
+	car.turning = false
+	car.passing = false
+	car.over_centre = false
+	car.held = Held.NONE
+	knocks += 1
+
+
+## The middle of `car`'s box in the world.
+func _centre_of(car: Car) -> Vector3:
+	return car.pose * _extents[car.kind].get_center()
+
+
+## One tick of a knocked car: across its tyres it scrubs at `_grip_mps2`, along
+## them it coasts for `react_s` and then brakes at `brake_max_mps2`, and its spin
+## dies on the same grip over its box — a box on four tyres turning about its
+## middle feels about `3 μ g L / (L² + W²)` of angular braking. It stops against
+## what it meets. Settled, it stands as a parked vehicle for the others to pass,
+## and after `recover_after_s` tries to drive on.
+func _slide(car: Car, delta: float) -> void:
+	car.knocked_s += delta
+	car.braking = true
+	var forward: Vector3 = -car.pose.basis.z
+	forward = Vector3(forward.x, 0.0, forward.z).normalized()
+	var side := Vector3(-forward.z, 0.0, forward.x)
+	var along: float = car.slide.dot(forward)
+	if car.knocked_s >= profile.react_s:
+		along = move_toward(along, 0.0, profile.brake_max_mps2 * delta)
+	var across: float = move_toward(car.slide.dot(side), 0.0, _grip_mps2 * delta)
+	car.slide = forward * along + side * across
+	var length: float = car.half_length * 2.0
+	var width: float = car.half_width * 2.0
+	var spin_brake: float = 3.0 * _grip_mps2 * length / (length * length + width * width)
+	car.spin = move_toward(car.spin, 0.0, spin_brake * delta)
+	var motion: Vector3 = car.slide * delta
+	if motion.length_squared() > 0.0:
+		var from: Transform3D = car.pose
+		from.origin.y += SWEEP_LIFT_M
+		if car.body.test_move(from, motion, _met):
+			motion = _met.get_travel()
+			motion.y = 0.0
+			var normal: Vector3 = _met.get_normal()
+			normal = Vector3(normal.x, 0.0, normal.z)
+			if normal.length_squared() > 0.0:
+				normal = normal.normalized()
+				var into: float = car.slide.dot(normal)
+				if into < 0.0:
+					car.slide -= normal * into
+	var turned: Basis = (Basis(Vector3.UP, car.spin * delta) * car.pose.basis).orthonormalized()
+	car.pose = Transform3D(turned, car.pose.origin + motion)
+	if car.slide.length() >= STOPPED_MPS or absf(car.spin) >= STILL_SPIN:
+		car.still_s = 0.0
+		return
+	car.slide = Vector3.ZERO
+	car.spin = 0.0
+	# Once as it settles and once each time it tries to drive on, not every tick:
+	# off any road it may drive it has no footprint to stand.
+	if car.still_s == 0.0 and car.wreck_edge < 0:
+		_stand_wreck(car)
+	car.still_s += delta
+	if car.still_s >= profile.recover_after_s:
+		car.still_s = 0.0
+		_try_recover(car)
+
+
+## A settled knocked car's footprint on the road it stands by, read as a parked
+## vehicle's (`_measure_parked`), so the others pass it as they pass one.
+func _stand_wreck(car: Car) -> void:
+	var hit: RoadGraph.Hit = graph.nearest_edge(
+		car.pose.origin, Vector3.ZERO, profile.recover_radius_m
+	)
+	if hit.edge_id < 0 or graph.is_stub(hit.edge_id):
+		return
+	if not router.admits_way(hit.edge_id, true) and not router.admits_way(hit.edge_id, false):
+		return
+	car.obstacle["transform"] = car.pose
+	var parked: Parked = _measure_parked(hit.edge_id, car.obstacle)
+	parked.wreck = car
+	parked.source = "knocked"
+	if not _parked.has(hit.edge_id):
+		_parked[hit.edge_id] = []
+	_parked[hit.edge_id].append(parked)
+	car.wreck_edge = hit.edge_id
+
+
+## Take `car`'s footprint off the road it stood on.
+func _unwreck(car: Car) -> void:
+	if car.wreck_edge < 0:
+		return
+	var kept: Array = []
+	for parked: Parked in _parked.get(car.wreck_edge, NO_PARKED):
+		if parked.wreck != car:
+			kept.append(parked)
+	if _parked.has(car.wreck_edge):
+		_parked[car.wreck_edge] = kept
+	car.wreck_edge = -1
+
+
+## Drive a settled knocked car on, if it can: back into the nearside lane of the
+## road it stands by, `recover_ahead_m` down it, in one curve as a turn is driven
+## — where that road is within `recover_radius_m`, one traffic drives, a way the
+## car faces within `recover_heading_deg` of (it does not reverse), long enough to
+## rejoin, with no car under way within `recover_clear_m` of the join or the
+## curve's middle, and nothing standing in the curve. False where it stays put.
+func _try_recover(car: Car) -> bool:
+	var forward: Vector3 = -car.pose.basis.z
+	forward = Vector3(forward.x, 0.0, forward.z).normalized()
+	var hit: RoadGraph.Hit = graph.nearest_edge(car.pose.origin, forward, profile.recover_radius_m)
+	if hit.edge_id < 0 or hit.distance > profile.recover_radius_m:
+		return false
+	var edge: int = hit.edge_id
+	var along: bool = hit.along
+	if not _admitted.has(edge) or not router.admits_way(edge, along):
+		return false
+	if forward.dot(hit.forward) < cos(deg_to_rad(profile.recover_heading_deg)):
+		return false
+	var length_m: float = graph.plan_length_of(edge)
+	var here: float = _edge_m(hit.t * length_m, length_m, along)
+	var join: float = here + profile.recover_ahead_m
+	if join > length_m - car.half_length:
+		return false
+	var p0: Vector3 = car.pose.origin
+	var p2: Vector3 = graph.lane_at(edge, _edge_m(join, length_m, along), along, 0.0)
+	var out: Vector3 = _travel_dir(edge, join, length_m, along)
+	var p1: Vector3 = turn_control(p0, forward, p2, out)
+	var middle: Vector3 = curve_point(p0, p1, p2, 0.5)
+	for other: Car in cars:
+		# A car under way is looked for; one standing — queued behind the wreck for
+		# it to move, which a look would wait on for ever — is in the sweep below
+		# only if it stands in the way.
+		if other == car or not other.live or other.knocked or other.speed < STOPPED_MPS:
+			continue
+		if (
+			_plan_distance(other.pose.origin, p2) < profile.recover_clear_m
+			or _plan_distance(other.pose.origin, middle) < profile.recover_clear_m
+		):
+			return false
+	var from: Transform3D = car.pose
+	from.origin.y += SWEEP_LIFT_M
+	for piece: int in RECOVER_SAMPLES:
+		var a: Vector3 = curve_point(p0, p1, p2, float(piece) / RECOVER_SAMPLES)
+		var b: Vector3 = curve_point(p0, p1, p2, float(piece + 1) / RECOVER_SAMPLES)
+		from.origin = Vector3(a.x, car.pose.origin.y + SWEEP_LIFT_M, a.z)
+		if car.body.test_move(from, Vector3(b.x - a.x, 0.0, b.z - a.z)):
+			return false
+	_unwreck(car)
+	car.knocked = false
+	car.slide = Vector3.ZERO
+	car.spin = 0.0
+	car.edge = edge
+	car.along = along
+	car.length_m = length_m
+	car.s = here
+	car.lane = 0.0
+	car.lane_out = 0.0
+	car.next_edge = edge
+	car.next_along = along
+	car.next_lane = 0.0
+	car.join_m = join
+	car.via.clear()
+	car.crossed.clear()
+	car.held_side = 0
+	car.joined_until_m = 0.0
+	var aside: float = (p2 - p0).dot(RoadGraph.left_of(forward))
+	car.turn_side = 0 if absf(aside) < RECOVER_STRAIGHT_M else (1 if aside > 0.0 else -1)
+	car.p0 = p0
+	car.p1 = p1
+	car.p2 = p2
+	car.turn_len = curve_length(p0, p1, p2)
+	car.turn_u = 0.0
+	car.turning = true
+	car.speed = 0.0
+	car.cruise_mps = _cruise_of(edge)
+	recovered += 1
+	return true
+
+
 ## The speed a car can still stop from in `distance_m` at `brake_mps2`.
 static func stopping_speed(distance_m: float, brake_mps2: float) -> float:
 	return sqrt(2.0 * brake_mps2 * maxf(distance_m, 0.0))
@@ -1274,6 +1567,16 @@ func _gap_ahead(car: Car) -> float:
 			continue
 		var apart: float = _plan_distance(origin, other.pose.origin)
 		if apart > profile.look_m + other.half_length + car.half_length:
+			continue
+		if other.knocked:
+			# Off its lane at any heading: in the way wherever it stands across the
+			# car's path, as the taxi is.
+			best = minf(
+				best,
+				_gap_to(
+					origin, forward, car, other.pose.origin, other.half_length, other.half_width
+				)
+			)
 			continue
 		if _on_path(car, other) or _coming_over(car, other):
 			best = minf(best, apart - car.half_length - other.half_length)
@@ -1510,7 +1813,7 @@ func _give_way_gap(car: Car) -> float:
 	var near_m: float = profile.give_way_look_m * 2.0 + profile.look_m
 	var min_sin: float = sin(deg_to_rad(profile.straight_deg))
 	for other: Car in cars:
-		if other == car or not other.live:
+		if other == car or not other.live or other.knocked:
 			continue
 		if absf(car.pose.origin.y - other.pose.origin.y) > LEVEL_APART_M:
 			continue
@@ -1567,7 +1870,7 @@ func _coming_first(car: Car, other: Car) -> bool:
 func _queued_past_join(car: Car) -> Car:
 	var room: float = car.join_m + car.half_length * 2.0 + profile.gap_m
 	for other: Car in cars:
-		if other == car or not other.live or other.held == Held.NONE:
+		if other == car or not other.live or other.knocked or other.held == Held.NONE:
 			continue
 		# Where it stands or is turning into: the join's road and lane either way.
 		var edge: int = other.next_edge if other.turning else other.edge
@@ -1848,6 +2151,8 @@ static func _facing(forward: Vector3) -> Basis:
 
 func _retire(car: Car) -> void:
 	car.live = false
+	_unwreck(car)
+	car.knocked = false
 	retired += 1
 	_hide(car)
 
@@ -1870,6 +2175,8 @@ static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 ## right -1) — the next turn's approach first — else the side it is changing
 ## lane to, else none — never for straight on.
 func _winking(car: Car) -> int:
+	if car.knocked:
+		return HAZARDS
 	if car.turning:
 		return car.turn_side
 	if approaching_turn(car):
@@ -1918,7 +2225,7 @@ func near_cars(point: Vector3, radius_m: float, look_s: float) -> Array[Dictiona
 		if far_x * far_x + far_z * far_z > reach_m * reach_m:
 			continue
 		car.obstacle["transform"] = pose
-		car.obstacle["velocity"] = -pose.basis.z * car.speed
+		car.obstacle["velocity"] = car.slide if car.knocked else -pose.basis.z * car.speed
 		found.append(car.obstacle)
 	return found
 

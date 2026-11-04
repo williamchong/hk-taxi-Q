@@ -41,3 +41,7 @@ const PATH: String = "res://tuning/parked.tres"
 ## stand with their hazards on (`P3-3f`): a stop to load or set down, not a
 ## park. A source not listed is switched off.
 @export var hazard_sources: PackedStringArray
+## Each moving kind's kerb mass, by library mesh name (`Q180`): what a car or a
+## tram gives when the taxi pushes it. The maker's sheet or the operator's own
+## figure, cited in `parked.md`; empty, not loaded. A kind not listed is a wall.
+@export var masses_kg: Dictionary[String, float]

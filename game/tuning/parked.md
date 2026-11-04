@@ -90,3 +90,23 @@ cars split into the switched-off and the stopping). Both indicators flash at the
 - **Not `stop` or `stand`**: a bus at its stop and a taxi on a rank wait with their hazards off;
   the stop and the rank are what licence them to stand.
 - **Not `bay` or `fill`**: a metered or invented kerb car is parked, switched off.
+
+## `masses_kg` — each moving kind's kerb mass (`Q180`)
+
+What a car or a tram gives when the taxi pushes it, against the taxi's own 1,400 kg
+(`cars/crown_comfort.tres`). **Kerb, not loaded** (the user's call, 2026-11-04): the one figure
+every maker and the tram's operator publish, empty, so all five sit on one footing. Only the kinds
+something moves are listed; a parked vehicle stands as a wall in this version (`Q180`), so the bus,
+the coach, the taxi and the motorcycle carry none, and a kind not listed is a wall.
+
+| Kind | kg | Read off |
+|---|---|---|
+| `car_a`, the 4.5 m saloon | 1,600 | Toyota Camry 2.5 Hybrid, 1,570–1,670 kg by generation and standard (autotijd.be, cars-data.com) |
+| `car_b`, the Alphard | 2,100 | Alphard IV, 2,060 kg (2.5 petrol) to 2,290 kg (hybrid E-Four) (auto-data.net) |
+| `van`, the Hiace | 2,200 | Hiace H300 long-wheelbase van, 2,175–2,225 kg (carsales.com.au) |
+| `minibus`, the Coaster | 3,500 | export Coasters 3,100–3,450 kg (UNICEF supply listing, Toyota GIB); no figure for the Hong Kong LPG light bus, bounded by TD's gross cap of 5.5 t until July 2020 — 19 aboard leaves under about 4.2 t |
+| `tram` | 12,500 | Hong Kong Tramways' own post, 2020-10-27: "the tramcar alone weighs 12 to 13 tons; when it is full of passengers, there might be an extra 5 tons". A fan page's 27.0 t is not used |
+
+⚠️ What a mass changes is the share: a pushed body takes `m_taxi / (m_taxi + m)` of the change
+in speed, so a few hundred kilograms either way barely moves a hit. The tram, on its rails alone,
+takes about a tenth.

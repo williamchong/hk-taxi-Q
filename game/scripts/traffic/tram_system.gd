@@ -4,8 +4,15 @@ extends Node3D
 ## the tram stops and obey the signals. `TramLines` says where they go.
 ##
 ## 🔴 **Kinematic, as the cars are.** A tram is a number along its route and a speed;
-## its body is an `AnimatableBody3D` moved to where it is each tick, so the taxi meets
-## a solid box it cannot push, and the hit reads the closing speed (`Q175`).
+## its body is an `AnimatableBody3D` moved to where it is each tick, and the hit reads
+## the closing speed (`Q175`).
+##
+## 🔴 **The taxi pushes a tram along its rails, never off them** (`Q180`, the user's
+## ask, 2026-11-04: "tram should never be derailed"). The body is `Pushable`: it gives
+## only along its rails, `(normal · rails)² / m`, so the taxi's push changes its speed
+## along the route and nothing else — it has no sideways to be moved in. Pushed on, or
+## back, it brakes at `brake_max_mps2` to its own pace; at a stop it rolls to rest
+## again before the doors' clock runs on. At 12.5 t it takes about a tenth of a hit.
 ##
 ## 🔴 **The whole fleet runs all the time.** Cars spawn in a ring round the player, and
 ## an 8.9 m tram appearing 60 m up a straight street would be seen doing it. A tram
@@ -77,6 +84,8 @@ class Tram:
 	var written: int = -1
 	## Whether `pose` changed since it was last written: a tram at a stop is not rewritten.
 	var moved: bool = false
+	## Its kerb mass (`parked.tres` `masses_kg`), 0 for a tram the taxi cannot push.
+	var mass_kg: float = 0.0
 
 
 var profile: TramProfile
@@ -91,6 +100,10 @@ var rings: int = 0
 ## Trams that set out and that left, for the verify tool.
 var set_out: int = 0
 var left: int = 0
+## Pushes the taxi gave a tram (`Q180`), for the verify tool.
+var pushes: int = 0
+## The trams by their body's instance id, for `take_push`.
+var _by_body: Dictionary[int, Tram] = {}
 
 var _rng := RandomNumberGenerator.new()
 var _batch: MultiMesh
@@ -131,6 +144,8 @@ func setup(with_lines: TramLines, table: TramProfile, rolls: int) -> bool:
 	_batch.instance_count = table.trams
 	var box := BoxShape3D.new()
 	box.size = _extent.size
+	var parked := load(ParkedProfile.PATH) as ParkedProfile
+	var mass_kg: float = parked.masses_kg.get(KIND, 0.0) if parked != null else 0.0
 	for index: int in table.trams:
 		var tram := Tram.new()
 		tram.id = index
@@ -148,6 +163,10 @@ func setup(with_lines: TramLines, table: TramProfile, rolls: int) -> bool:
 			"id": hash(Vector2i(int(get_instance_id() & 0x7FFFFFFF), index)),
 			"velocity": Vector3.ZERO,
 		}
+		tram.mass_kg = mass_kg
+		if mass_kg > 0.0:
+			Pushable.mark(tram.body, self)
+			_by_body[tram.body.get_instance_id()] = tram
 		trams.append(tram)
 		_hide(tram)
 	_load_bell()
@@ -302,6 +321,10 @@ func _try_set_out(tram: Tram) -> void:
 
 func _run(tram: Tram, delta: float) -> void:
 	tram.bell_wait = maxf(tram.bell_wait - delta, 0.0)
+	if tram.speed < 0.0 or (tram.dwell_left > 0.0 and tram.speed > 0.0):
+		# Pushed back, or on from its stop: it brakes to rest first.
+		_roll(tram, move_toward(tram.speed, 0.0, profile.brake_max_mps2 * delta), delta)
+		return
 	if tram.dwell_left > 0.0:
 		tram.dwell_left -= delta
 		tram.held = Held.STOP
@@ -346,13 +369,40 @@ func _run(tram: Tram, delta: float) -> void:
 		tram.speed = minf(target, tram.speed + profile.accel_mps2 * delta)
 	else:
 		tram.speed = maxf(target, tram.speed - profile.brake_max_mps2 * delta)
-	tram.s += tram.speed * delta
-	if tram.s >= route.length_m():
+	_roll(tram, tram.speed, delta)
+
+
+## Move `tram` down its rails at `speed` for a tick: past the route's end it leaves.
+func _roll(tram: Tram, speed: float, delta: float) -> void:
+	tram.speed = speed
+	tram.braking = tram.braking or speed < 0.0
+	tram.s = maxf(tram.s + speed * delta, 0.0)
+	if tram.s >= tram.route.length_m():
 		_leave(tram)
 		return
-	if tram.speed > 0.0:
-		tram.pose = _pose_at(route, tram.s)
+	if speed != 0.0:
+		tram.pose = _pose_at(tram.route, tram.s)
 		tram.moved = true
+
+
+## `Pushable`: how readily the tram behind `body` gives along `normal` — along its
+## rails alone, so a push square across them moves nothing.
+func push_inverse_mass(body: Object, normal: Vector3, _at: Vector3) -> float:
+	var tram: Tram = _by_body.get(body.get_instance_id())
+	if tram == null or not tram.live:
+		return 0.0
+	return Pushable.rails_inverse_mass(tram.mass_kg, -tram.pose.basis.z, normal)
+
+
+## `Pushable`: the taxi put `impulse` into the tram behind `body`. Its speed down the
+## rails takes the part along them; the rest is the rails'.
+func take_push(body: Object, impulse: Vector3, _at: Vector3) -> void:
+	var tram: Tram = _by_body.get(body.get_instance_id())
+	if tram == null or not tram.live:
+		return
+	var rails: Vector3 = -tram.pose.basis.z
+	tram.speed += (impulse.x * rails.x + impulse.z * rails.z) / tram.mass_kg
+	pushes += 1
 
 
 ## `target` or the speed the tram can still stop from in `distance_m`, the lesser, and
@@ -379,10 +429,12 @@ func _follow(tram: Tram, target: float) -> float:
 	if is_instance_valid(_traffic):
 		for car: TrafficSystem.Car in _traffic.cars:
 			if car.live:
+				# A car knocked across the rails stands in the way at any heading.
+				var heading_cos: float = ANY_HEADING if car.knocked else follow_cos
 				limited = _hold(
 					tram,
 					limited,
-					_gap_on_route(tram, car.pose, follow_cos, car.half_length, car.half_width),
+					_gap_on_route(tram, car.pose, heading_cos, car.half_length, car.half_width),
 					Held.CAR
 				)
 	if is_instance_valid(vehicle):

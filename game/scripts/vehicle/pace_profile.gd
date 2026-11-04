@@ -34,4 +34,8 @@ extends Resource
 
 ## 1.0 is a real road. Above it the game is quicker and a slide is shorter in
 ## seconds; below it, slower. 0 is unauthored and parks the car.
+## Path to the shipped table, for a reader with no car to ask: the traffic's
+## knocked cars slide on the world's gravity (`Q180`).
+const PATH: String = "res://tuning/pace.tres"
+
 @export_range(0.0, 5.0, 0.05) var pace_scale: float

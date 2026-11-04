@@ -182,12 +182,24 @@ const WALL_AFTER_S: float = 1.0
 ## The others are that speed outright: a car coming the other way, and one running
 ## into the back of a taxi `at_rest`. The obstacle the wall rows cannot grade: one
 ## whose own speed is in the contact.
+## A `push` row's body is `Pushable` (`Q180`) at that kind's kerb mass off
+## `parked.tres`, and gives as the game's does — a car as a free box, a `rails`
+## one along its travel alone, the tram's — so the taxi keeps what a wall took;
+## the body's own change of pace prints in the push table. The rows without one
+## are walls, and must read as they did.
 const TRAFFIC_ROWS: Dictionary[String, Dictionary] = {
 	"tail5": {"kph": 5.0, "start_m": 8.0, "sign": -1.0, "tracks": true},
 	"tail20": {"kph": 20.0, "start_m": 8.0, "sign": -1.0, "tracks": true},
 	"head50": {"kph": 50.0, "start_m": 40.0, "sign": -1.0},
 	"rear40": {"kph": 40.0, "start_m": -15.0, "sign": 1.0, "at_rest": true},
 	"back20": {"kph": 20.0, "start_m": -8.0, "sign": 1.0, "tracks": true},
+	"tail20_car": {"kph": 20.0, "start_m": 8.0, "sign": -1.0, "tracks": true, "push": "car_a"},
+	"head50_car": {"kph": 50.0, "start_m": 40.0, "sign": -1.0, "push": "car_a"},
+	"rear40_car": {"kph": 40.0, "start_m": -15.0, "sign": 1.0, "at_rest": true, "push": "car_a"},
+	"tail20_van": {"kph": 20.0, "start_m": 8.0, "sign": -1.0, "tracks": true, "push": "van"},
+	"tail20_tram":
+	{"kph": 20.0, "start_m": 8.0, "sign": -1.0, "tracks": true, "push": "tram", "rails": true},
+	"head50_tram": {"kph": 50.0, "start_m": 40.0, "sign": -1.0, "push": "tram", "rails": true},
 }
 const TRAFFIC_SIZE := Vector3(1.8, 1.5, 4.5)
 
@@ -389,6 +401,13 @@ var _catch_at_s: float = 0.0
 var _catch_late_s: float = 0.0
 ## The slab the wall manoeuvre stood last, freed before the next row.
 var _wall: StaticBody3D = null
+## The `push` row's body under test (`Q180`): its mass, whether it gives along its
+## travel alone, the direction it travels, and the pace the pushes added since the
+## row last read it, m/s along that direction.
+var _push_kg: float = 0.0
+var _push_rails: bool = false
+var _push_along: Vector3 = Vector3.ZERO
+var _pushed_mps: float = 0.0
 ## Slip angle `seconds_above_deg` counts against, read off the profile at boot.
 ## INF when the profile does not publish one, which makes the column read 0.00
 ## everywhere rather than inventing a bar this project never authored.
@@ -468,6 +487,12 @@ class Result:
 	var impact_kph: float = 0.0
 	## Ticks on which the latch read a hit: one wall should be one.
 	var impact_ticks: int = 0
+	## A `push` row's body (`Q180`): its kind and mass, its pace along the taxi's
+	## travel the tick before the touch, and what the pushes added to it.
+	var pushed_kind: String = ""
+	var pushed_kg: float = 0.0
+	var body_kph: float = NAN
+	var pushed_kph: float = 0.0
 	## The longest unbroken run at or above the threshold, in seconds — the
 	## dwell `SkillTracker` pays on, where `seconds_above_deg` sums every run.
 	var longest_above_s: float = 0.0
@@ -962,6 +987,7 @@ func _measure_all() -> void:
 		_print_table(handling)
 	if not walls.is_empty():
 		_print_wall_table(walls)
+		_print_push_table(walls)
 	if not catches.is_empty():
 		_print_catch_table(catches)
 	if not sustained.is_empty():
@@ -1210,6 +1236,19 @@ func _meet_traffic(row: String, into: Result) -> void:
 	var body := AnimatableBody3D.new()
 	_stand_slab(body, "Traffic", TRAFFIC_SIZE, Transform3D(turned, at))
 	_vehicle.call("take_impact_mps")
+	_push_kg = 0.0
+	_pushed_mps = 0.0
+	_push_along = along
+	_push_rails = plan.get("rails", false)
+	if plan.has("push"):
+		var parked := load(ParkedProfile.PATH) as ParkedProfile
+		into.pushed_kind = plan["push"]
+		_push_kg = parked.masses_kg.get(into.pushed_kind, 0.0) if parked != null else 0.0
+		into.pushed_kg = _push_kg
+		if _push_kg <= 0.0:
+			_fail("%s: no kerb mass for %s in parked.tres" % [into.name, into.pushed_kind])
+			return
+		Pushable.mark(body, self)
 
 	var body_mps: float = mps
 	var first_tick: int = Engine.get_physics_frames()
@@ -1221,6 +1260,9 @@ func _meet_traffic(row: String, into: Result) -> void:
 		var own_mps: float = _vehicle.linear_velocity.dot(along)
 		if tracks and is_inf(hit_at):
 			body_mps = own_mps + mps
+		body_mps += _pushed_mps
+		into.pushed_kph += _pushed_mps * 3.6
+		_pushed_mps = 0.0
 		at += along * body_mps * _step
 		body.global_transform = Transform3D(turned, at)
 		last_approach = absf(own_mps - body_mps)
@@ -1236,10 +1278,34 @@ func _meet_traffic(row: String, into: Result) -> void:
 		if is_inf(hit_at) and (impact > 0.0 or _vehicle.get_colliding_bodies().has(body)):
 			hit_at = t
 			into.approach_kph = last_approach * 3.6
+			into.body_kph = body_mps * 3.6
 			Input.action_release(&"accelerate")
 	into.seconds = t
 	if is_inf(hit_at):
 		_fail("%s: the body was never met in %.0f s" % [into.name, MANOEUVRE_S])
+
+
+## `Pushable` for a `push` row's body (`Q180`): a car as a free box of its kind's
+## mass, centred where the tool stood it; a `rails` one along its travel alone.
+func push_inverse_mass(body: Object, normal: Vector3, at: Vector3) -> float:
+	if _push_kg <= 0.0:
+		return 0.0
+	if _push_rails:
+		return Pushable.rails_inverse_mass(_push_kg, _push_along, normal)
+	return Pushable.box_inverse_mass(
+		_push_kg,
+		TRAFFIC_SIZE.z * 0.5,
+		TRAFFIC_SIZE.x * 0.5,
+		(body as Node3D).global_position,
+		normal,
+		at
+	)
+
+
+## `Pushable`: the row's body takes the part of `impulse` along its travel. The
+## pad body neither slides sideways nor turns: its rows meet it square.
+func take_push(_body: Object, impulse: Vector3, _at: Vector3) -> void:
+	_pushed_mps += impulse.dot(_push_along) / _push_kg
 
 
 ## Holds a set of actions and samples the car every tick, until the clock runs
@@ -1669,6 +1735,39 @@ func _print_wall_table(results: Array[Result]) -> void:
 					result.exit_kph,
 					result.impact_ticks,
 					result.distance_m,
+				]
+			)
+		)
+
+
+## The `push` rows again (`Q180`): the body's kind and mass, its pace along the
+## taxi's travel the tick before the touch and after the pushes, beside the taxi's
+## exit. A wall row is not printed.
+func _print_push_table(results: Array[Result]) -> void:
+	var pushed: Array[Result] = results.filter(
+		func(r: Result) -> bool: return not r.pushed_kind.is_empty()
+	)
+	if pushed.is_empty():
+		return
+	var width: int = _column_width(pushed)
+	var row_format: String = "%%-%ds %%8s %%7s %%9s %%9s %%9s %%9s" % width
+	var data_format: String = "%%-%ds %%8s %%7.0f %%9.2f %%9.2f %%9.2f %%9.2f" % width
+	print("")
+	print(row_format % ["run", "pushed", "mass", "approach", "exit", "body", "body"])
+	print(row_format % ["", "kind", "kg", "kph", "kph", "before", "after"])
+	for result: Result in pushed:
+		_printed_rows += 1
+		print(
+			(
+				data_format
+				% [
+					result.name,
+					result.pushed_kind,
+					result.pushed_kg,
+					result.approach_kph,
+					result.exit_kph,
+					result.body_kph,
+					result.body_kph + result.pushed_kph,
 				]
 			)
 		)

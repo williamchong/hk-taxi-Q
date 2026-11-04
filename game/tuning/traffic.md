@@ -157,3 +157,52 @@ A semitone or so either side, so that two cars do not sound like one car twice. 
 
 The parked library's road vehicles, weighted toward saloons. No coach (too long for the turn curve
 the cars take) and no motorcycle (a box under it would read as a car).
+
+## Knocked by the taxi (`Q180`, the user's calls, 2026-11-04)
+
+A car the taxi hits takes the impulse its mass gives (`parked.tres` `masses_kg`,
+`handling.tres` `collision_restitution`) and leaves its lane. It slides on its tyres: across them
+at the road tyre's grip times the world's gravity (`tyre.tres` `mu` × `pace.tres`' scale — the
+taxi's own, never a second grip), along them coasting until its driver reacts, then braking at
+`brake_max_mps2`; its spin dies on the same grip over its box. It stands on its hazards, the
+traffic stops for it and, once it has settled, passes it as a parked car. Then it tries to drive
+on; where it cannot, it stays until the ring takes it away. A car is not damaged yet, so every
+knocked car tries.
+
+## `react_s = 0.9`
+
+TD's own thinking time: the Road Users' Code, chapter 5, "Stopping Distance", draws 10 / 15 / 20 m
+of thinking distance at 40 / 60 / 80 km/h — 0.90 s at every speed, for "an alert driver" on a dry
+road, the shortest it gives. A driver who has just been hit is no quicker. Over it the car loses
+almost nothing: rolling resistance takes about 0.1 m/s in 0.9 s, so it is not modelled.
+
+## `recover_after_s = 2.0`
+
+The pause a driver takes before pulling away again, and the wait between tries when the way back
+is not clear. Authored; nothing publishes it.
+
+## `recover_radius_m = 6.0`
+
+About a lane and a half from the centreline it rejoins: a car shoved onto the footway or into a
+side street's mouth drives back; one put further off — over a central reserve, into a building's
+recess — stands. Authored.
+
+## `recover_heading_deg = 45.0`
+
+A knocked car does not reverse. Facing within 45° of a way it may drive, it turns back into the
+lane in one curve, as a turn does; turned further round — across the road, or backwards on a
+one-way street — it stands until the ring takes it. Authored.
+
+## `recover_ahead_m = 12.0`
+
+Where it rejoins its nearside lane, down the road from where it stands: a little under three car
+lengths, so the curve back is a lane change, not a turn on the spot.
+
+## `recover_clear_m = 15.0`
+
+It looks first: no other car under way within this of where it rejoins or the middle of its way
+there. A car standing is not looked for — one queued behind the wreck waiting for it to move would
+hold it for ever — but the way back is swept against every body, so one standing in it still stops
+it. Over
+a lane change's own `lane_change_m` this is a gap a car coming at 50 km/h closes in about a second;
+a car that cannot see one waits `recover_after_s` and looks again.

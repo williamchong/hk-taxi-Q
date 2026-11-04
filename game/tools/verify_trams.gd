@@ -10,7 +10,11 @@
 ##   tick than its speed takes it, across every bed's gap and across the seam.
 ## - **No tram stands inside another** on one route.
 ## - **The taxi is stopped for, and rung at**, and a tram clear of it runs on.
-## - **A car behind a tram waits** and `near_cars` hands the trams to the near miss.
+## - **A car behind a tram waits** and `near_cars` hands the trams to the near miss; a
+##   car knocked across the rails holds a tram whatever its heading (`Q180`).
+## - 🔴 **The taxi pushes a tram along its rails, never off them** (`Q180`): it gives
+##   along its travel alone, by its mass; a push across the rails moves nothing; pushed
+##   on or back it stays on its route, brakes to rest at `brake_max_mps2` and runs on.
 ## - **Something happened**: trams moved, some were held by a light and some left.
 ##
 ##     godot --headless --path game --script res://tools/verify_trams.gd
@@ -30,6 +34,8 @@ const STAGED_S: float = 12.0
 ## A rail bends; a join onto the other track, running the other way, turns this far.
 const DOUBLES_BACK_DEG: float = 120.0
 const TURN_SPAN_M: float = 5.0
+## A knocked car stood across the rails this far down them from a tram's middle.
+const KNOCKED_AHEAD_M: float = 20.0
 
 
 func _init() -> void:
@@ -58,6 +64,7 @@ func _run() -> void:
 		print("  seed %d:" % rolls)
 		_drive(lines, table, controller, rolls)
 	_check_taxi(lines, table)
+	_check_push(lines, table)
 	_check_cars_wait(graph, lines, table)
 	controller.queue_free()
 	_finish("verify_trams")
@@ -301,6 +308,70 @@ func _check_taxi(lines: TramLines, table: TramProfile) -> void:
 	system.free()
 
 
+## One tram pushed by hand (`Q180`): along its rails, across them, and back.
+func _check_push(lines: TramLines, table: TramProfile) -> void:
+	var system: TramSystem = TramSystem.new()
+	system.setup(lines, table, 1)
+	root.add_child(system)
+	var tram: TramSystem.Tram = system.trams[0]
+	system.trams.resize(1)
+	var route: TramLines.Route = _longest(lines)
+	tram.route = route
+	tram.s = route.length_m() * 0.5
+	tram.next_stop = route.stops.size()
+	tram.next_line = route.lines.size()
+	tram.speed = table.cruise_mps
+	tram.dwell_left = 0.0
+	tram.live = true
+	tram.pose = system._pose_at(route, tram.s)
+	system.step(TICK_S)
+	_expect(tram.mass_kg > 0.0, "push", "the tram carries a kerb mass (%.0f kg)" % tram.mass_kg)
+	_expect(tram.body.has_meta(Pushable.OWNER_META), "push", "and its body is the taxi's to push")
+	var rails: Vector3 = -tram.pose.basis.z
+	var across := Vector3(-rails.z, 0.0, rails.x)
+	_expect(
+		is_zero_approx(system.push_inverse_mass(tram.body, across, tram.pose.origin)),
+		"push",
+		"square across its rails it does not give"
+	)
+	_expect(
+		is_equal_approx(
+			system.push_inverse_mass(tram.body, rails, tram.pose.origin), 1.0 / tram.mass_kg
+		),
+		"push",
+		"along them it gives as its mass"
+	)
+	var origin: Vector3 = tram.pose.origin
+	var before: float = tram.speed
+	system.take_push(tram.body, across * 20000.0, origin)
+	_expect(is_equal_approx(tram.speed, before), "push", "a push across the rails moves nothing")
+	# Head on, hard: 3 m/s back past rest.
+	var back: float = (before + 3.0) * tram.mass_kg
+	system.take_push(tram.body, -rails * back, origin)
+	_expect(is_equal_approx(tram.speed, -3.0), "push", "a push down the rails is its speed's")
+	var least_s: float = tram.s
+	var off_rails: float = 0.0
+	var rested: bool = false
+	for _tick: int in int(STAGED_S / TICK_S):
+		system.step(TICK_S)
+		least_s = minf(least_s, tram.s)
+		var on: Vector3 = route.at(tram.s)
+		off_rails = maxf(
+			off_rails, Vector2(on.x - tram.pose.origin.x, on.z - tram.pose.origin.z).length()
+		)
+		rested = rested or is_zero_approx(tram.speed)
+	_expect(least_s < route.length_m() * 0.5, "push", "pushed back, it rolls back")
+	_expect(rested, "push", "and brakes to rest")
+	_expect(tram.speed > 0.0, "push", "then runs on (%.1f m/s)" % tram.speed)
+	_expect(
+		off_rails < table.bogie_m,
+		"push",
+		"never further off its rails than its bogies sit (%.2f m)" % off_rails
+	)
+	_expect(system.pushes == 2, "push", "both pushes counted (%d)" % system.pushes)
+	system.free()
+
+
 ## A car stood behind a tram at its stop waits; a tram gone frees it.
 func _check_cars_wait(graph: RoadGraph, lines: TramLines, table: TramProfile) -> void:
 	var traffic_table := load(TrafficProfile.PATH) as TrafficProfile
@@ -325,6 +396,24 @@ func _check_cars_wait(graph: RoadGraph, lines: TramLines, table: TramProfile) ->
 	var other: bool = tram.live
 	tram.live = false
 	_expect(other and traffic._gap_ahead(car) > gap, "cars", "and not once it has gone")
+	# A car knocked across the rails ahead (`Q180`) is in a tram's way at any heading.
+	tram.live = true
+	system._traffic = traffic
+	car.live = true
+	car.knocked = true
+	car.pose = Transform3D(
+		tram.pose.basis.rotated(Vector3.UP, PI * 0.5),
+		tram.pose.origin - tram.pose.basis.z * KNOCKED_AHEAD_M
+	)
+	tram.held = TramSystem.Held.NONE
+	_expect(
+		(
+			system._follow(tram, table.cruise_mps) < table.cruise_mps
+			and tram.held == TramSystem.Held.CAR
+		),
+		"cars",
+		"a car knocked across its rails ahead holds a tram"
+	)
 	traffic.free()
 	system.free()
 

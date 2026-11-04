@@ -36,3 +36,9 @@ kinds = Dictionary[String, float]({
 "minibus": 1.5,
 "van": 1.5
 })
+react_s = 0.9
+recover_after_s = 2.0
+recover_radius_m = 6.0
+recover_heading_deg = 45.0
+recover_ahead_m = 12.0
+recover_clear_m = 15.0

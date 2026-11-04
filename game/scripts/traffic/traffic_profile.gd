@@ -75,3 +75,20 @@ const PATH: String = "res://tuning/traffic.tres"
 @export var horn_pitch_spread: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]
+## A car the taxi knocks (`Q180`) coasts on its wheels for this long before its
+## driver brakes, in seconds: TD's thinking time.
+@export var react_s: float
+## A knocked car that has come to rest waits this long before it tries to drive
+## on, and as long again between tries, in seconds.
+@export var recover_after_s: float
+## A knocked car drives on only from within this far of a road it may drive, in
+## plan metres; further off it stands.
+@export var recover_radius_m: float
+## ...and only facing within this many degrees of a way it may drive: it does not
+## reverse, so a car turned round on a one-way street stands.
+@export var recover_heading_deg: float
+## How far down the road a knocked car rejoins its nearside lane, in metres.
+@export var recover_ahead_m: float
+## A knocked car drives on only with no other car this near where it rejoins or
+## the middle of its way there, in plan metres: it looks first.
+@export var recover_clear_m: float
