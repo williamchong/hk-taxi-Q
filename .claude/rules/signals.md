@@ -109,6 +109,17 @@ paths:
   indicators (`P3-3f2`): paste both `wink:` lines (the second: still winking as a turn joins,
   `wink_hold_m`); the beat is `vehicle_lamps.tres`' via `wire_blink`, never
   a shader default.
+- **The taxis** (`Q183`): `verify_traffic`'s `licence:` lines — paste them. 🔴 **A taxi's licence
+  and roof sign come off its id and spawn count, never `_rng`**: one more roll moves every later
+  car and every seed's staged case. 🔴 **One slot per licence per taxi, the rest hidden** — a
+  `MultiMesh`'s `instance_count` clears its buffer, so a taxi cannot be moved between batches after
+  `setup`. The roof sign is bit 32 (`ROOF_SIGN`) at `vehicle_lamps.tres`' `sign_lit` through
+  `wire_blink`; a shader change owes a day and a night frame and the `shader error` grep. ⚠️ The
+  `taxi` weight is TD's census share (`traffic.md`); do not retune it for the look without the
+  user's call.
+  ⚠️ A car still clearing the last junction within `give_way_look_m` of its next line carries BOTH
+  turns in `_turn_path` (`Q183`): seed 7's minibus on a short link turned right across a left turn
+  when it carried only the turn behind it.
 - **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
   never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over

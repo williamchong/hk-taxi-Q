@@ -11395,3 +11395,59 @@ wandering with the cars.
 
 **See.** `Q161` · `Q173` · `Q176` · `P3-73` · `P3-78`
 
+## `Q183` — Taxis join the traffic at TD's measured share, each wearing a licence its region's stands name
+
+**Status.** 🟡 Built 2026-11-05 on the user's asks ("plan for adding taxi according to region to
+traffic"; "real share, render options, random roof sign, go ahead"). Owed: the user's look at the
+frames and a drive.
+
+**Decision.**
+- **Share.** A moving taxi is `traffic.tres` `kinds` `taxi` 2.02 of 12.02, which is 16.8%. That is
+  the taxis' share of the 16-hour weekday flow across the harbour in TD's *Annual Traffic Census
+  2023* (§5.4). The Cross Harbour Tunnel's south portal is in Causeway Bay. The census's Wan Chai
+  station pages are drawn, not text, so no road's own share was read. ⚠️ The same table reads
+  23–31% after 20:00; the share does not follow the hour.
+- **One mesh per licence.** `parked.glb` carries `taxi` (red, silver roof), `taxi_nt` (green,
+  white roof) and `taxi_lantau` (blue, white roof), the same Crown Comfort. The colour IS the
+  licence, so it is never a livery (`Q167`).
+- **Which licence where.** It is read off TD's Taxi Stands, never authored per region.
+  - A stand's `Status_EN` category names the licences it serves (`parked.licences.by_category`).
+  - A region's mix is every stand in the districts (`District_EN`) its own stands lie in, each
+    counted by its category's shares. `parked.py` writes it to `parked.json` and `city.json`'s
+    `taxi_licences` (city schema 44).
+  - A parked taxi at a stand wears its stand's category; any other taxi, parked or moving, draws on
+    the region's mix. A region holding no stand wears red.
+  - Measured: Wan Chai and Causeway Bay read 100% red (Wan Chai district's 23 stands: urban and
+    cross-harbour). Mong Kok reads 100% red (61 stands in three districts). Sha Tin reads 76% red
+    and 24% green (52 stands; its box alone holds three, all urban).
+- **A moving taxi re-dresses at each spawn.** It owns a slot in every resident licence's batch,
+  shows the one its spawn road's region draws and hides the rest. The licence and the roof sign
+  are drawn off the car's id and spawn count, never the seeded RNG, which would move every later
+  car.
+- **The roof sign** is lit for hire on `taxi_for_hire` 0.5 of spawns (not measured: TD publishes no
+  vacancy rate), at the player's own `sign_lit`. It is bit 32 of `INSTANCE_CUSTOM.a`. The parked
+  library's sign became the `sign` circuit; a parked taxi writes 0 and stays dark.
+- **Mass.** A taxi carries the player's 1,400 kg (`parked.tres` `masses_kg`), every licence alike.
+
+**Unchanged.** With only red resident, the shipped game draws no green or blue batch. Both
+regions' `parked_placements.json` are byte-identical: the red-only draw returns the mesh the stage
+always wrote.
+
+**Checks.**
+- `test_parked.py` `TestTheLicences`: the district mix, no mix, a stand's own category, the seeded
+  draw, and a licence outside the meshes refused.
+- `verify_traffic` `licence:` prints each region's mix. It stages a fleet of taxis on half green
+  in the frame and blue in the neighbour, and checks every spawn's licence against its road's
+  region, the one shown slot, the roof sign's bit and its share.
+
+**Found on the way: a hole in `Q173`'s give-way.** Adding the taxi weight re-drew seed 7's fleet,
+and `verify_traffic` failed `give way:` on Wan Chai: one meeting in a signalled junction, 68
+car-ticks. A minibus on a short link was still clearing the junction behind it (`s <
+joined_until_m`) when its light went green at the next one. `_turn_path` drew only the turn it had
+finished, so neither it nor a car turning left from the other side saw the right turn ahead. Now a
+car in that state, within `give_way_look_m` of its next line, carries both turns. With the fix all
+four seeds read 0 signalled meetings on both regions; with the taxi weight at 0, the old code
+already read 0.
+
+**See.** `Q167` · `Q173` · `Q180` · `Q181` · `P3-8` · `game/tuning/traffic.md` · `game/tuning/parked.md`
+

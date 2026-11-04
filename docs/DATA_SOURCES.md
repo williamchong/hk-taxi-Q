@@ -646,6 +646,22 @@ Matching is **first-hit-wins over substrings**, so rule order is load-bearing: `
 `NT Taxi Stand` before `Urban`. `load_config` refuses a shadowing table and `test_config.py` pins
 all sixteen spellings. `Q14`: operating-time restrictions are discarded — no contract field.
 
+**`District_EN`** (18 districts) is read by `parked.py` for the taxi licences (`Q183`): a region's
+mix is every stand in the districts its own stands lie in. Wan Chai holds 23 (urban 15 + 1,
+cross-harbour 7), Sha Tin 52 (urban 38, NT 11, both 3). A region's box alone is too few: Sha Tin's
+holds three, all urban.
+
+### ✅ USE — Annual Traffic Census (one number)
+
+- **Publisher:** TD, *The Annual Traffic Census 2023*,
+  https://www.td.gov.hk/filemanager/en/content_5267/Annual%20Traffic%20Census%202023.pdf (4.4 MB).
+- **Used:** §5.4 "Cross Harbour Vehicular Trips Characteristics", 16-hour weekday proportion of
+  vehicles: taxi **16.8%** (private car 54.2, light goods 16.3) — `traffic.tres`' `taxi` weight
+  (`Q183`). Hourly: 12.6–18.4% by day, 22.8 / 26.0 / 30.9% from 20:00 to 23:00.
+- ⚠️ The per-station appendix pages (Hennessy Road 1029, Gloucester Road 1028) are drawn, not text;
+  `pdftotext` reads the station list and AADTs but no vehicle mix. A station's own share needs
+  those pages read by eye.
+
 ### ✅ USE — Taxi Pick-up & Drop-off Points
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-td-tis_38-taxi-pick-up-drop-off-points

@@ -72,6 +72,14 @@ traffic, and the bonus for threading them.
   only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`
   is which authored colour it repaints, and `verify_parked` fails a palette on a kind with no
   livery panel. Keep the private cars off saturated red: the player's taxi is the red car.
+- 🔴 **A taxi's licence is the stands', never authored per region** (`Q183`): `taxi`, `taxi_nt`,
+  `taxi_lantau` are three meshes of one kind, never a livery. A stand's taxi wears its category's
+  shares (`licences.by_category`); every other taxi draws on the region's mix, which is every stand
+  in the DISTRICTS (`District_EN`) the region's own stands lie in. Do not narrow it to the box
+  (Sha Tin's holds three urban stands of 52), and do not hand-write a region's colour. Paste
+  `parked.json`'s `taxi_licences`, `taxi_licence_districts`, `taxi_licence_stands` and `by_licence`
+  for both regions. ⚠️ With only red resident the placements are byte-identical; a change that
+  moves them moved the draw.
 - ⚠️ **`verify_parked.gd` grades the join ONE way.** A library kind stood nowhere in a region
   (no taxi stand in Causeway Bay) is the data, printed as `info`; an entry naming no mesh fails.
   Do not swap in `GeneratedPlacements.check_join`, which fails the unstood kind.

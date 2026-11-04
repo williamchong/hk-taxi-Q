@@ -448,6 +448,9 @@ Keys (`etl/pipeline/export.py`):
   placements document whose library is NOT in the bundle: it stands the committed
   `assets/authored/vehicles/parked.glb`, and the entry's `library` names that `res://` path.
   `signal_heads_placements` (`P3-3e`) is the second: it stands `assets/authored/signals/heads.glb`.
+- `taxi_licences` (schema 44, `Q183`): each taxi licence's mesh in `parked.glb` to its share of the
+  region's taxis, off TD's stands (`parked.py`); `{}` where no stand lies in the region. Always
+  present, never null. `TrafficSystem` draws a moving taxi's licence from its spawn road's region.
 - The manifest names the other documents, it does not contain them; each is separately versioned.
   A build ships exactly what the manifest names (`shipped()`); `sync_generated.sh` copies only
   that. Bundle size is measured from the PCK (`PROGRESS.md`), never summed from these files.
