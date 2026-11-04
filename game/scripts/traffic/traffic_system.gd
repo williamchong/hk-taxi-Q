@@ -64,6 +64,16 @@ extends Node3D
 ## while nothing comes the other way, and a car coming stops for one already out.
 ## Where even that does not fit, it waits: the roster's pinches are its own.
 ##
+## **Buses and green minibuses keep to their published routes** (`P3-78`, `Q182`).
+## `buses` more slots than `cars` spawn only on a `BusRoutes` route, at one of its
+## stops, picked by the route's departures in the game hour, and drive from stop to
+## stop by `RoadRouter.goal_tree` — a search over the same legal arcs a wandering
+## car picks from, toward the way of the edge the stop's kerb flows — standing
+## `dwell_s` at each in the nearside lane. Past its run's last stop a vehicle
+## wanders; knocked by the taxi it leaves its route and drives on as any car. A
+## minibus without a route wears `wander_liveries` (red), one on a route
+## `route_liveries` (green): the colour is the licence (`Q167`).
+##
 ## 🚫 **Not here yet**: priority off TD's give-way lines and plates — the order is
 ## the turn's, not the road's — and giving way to the taxi or a tram crossing.
 ## `--traffic=off` takes it away.
@@ -137,6 +147,18 @@ const RECOVER_STRAIGHT_M: float = 0.5
 ## at its stop. A car does not pass a tram: on Hennessy Road nothing lawfully does.
 var trams: TramSystem
 
+## The routes the routed fleet keeps to (`P3-78`): read at `setup` unless a caller
+## set them first.
+var bus_routes: BusRoutes = null
+## The hour the routed fleet spawns by; NAN reads the lighting rig's.
+var hour_override: float = NAN
+## For the verify tool: stops a routed vehicle stood at, drove past, could not
+## route to, and routed vehicles placed.
+var stops_served: int = 0
+var stops_missed: int = 0
+var stops_unreachable: int = 0
+var routed_spawned: int = 0
+
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
 ## The scene's signals, which the cars stop at; where none is set the system
@@ -144,7 +166,7 @@ var trams: TramSystem
 @export var signals: SignalController
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
-enum Held { NONE, LIGHT, CAR, PARKED, TAXI, GIVE_WAY }
+enum Held { NONE, LIGHT, CAR, PARKED, TAXI, GIVE_WAY, DWELL }
 
 
 ## One car.
@@ -256,6 +278,19 @@ class Car:
 	## The edge its footprint stands on as a parked vehicle once it has settled,
 	## or -1.
 	var wreck_edge: int = -1
+	## A slot of the routed fleet (`P3-78`): it spawns only on a route, as the
+	## route's kind, from its slot in each routed kind's `MultiMesh` by kind index.
+	var routed: bool = false
+	var kind_slots: Dictionary[int, int] = {}
+	## The route it keeps to and the index of the stop it is bound for or stands
+	## at; null once it has left its route, when it wanders.
+	var route: BusRoutes.Route = null
+	var stop_index: int = -1
+	## The search toward that stop; null once it has none left, or when it was
+	## placed standing at one.
+	var goal: RoadRouter.GoalTree = null
+	## Seconds left standing at its stop.
+	var dwell_left: float = 0.0
 
 
 ## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
@@ -358,6 +393,16 @@ var _parked_next: Vector2i = Vector2i.ZERO
 ## lane past it only, clear of every lane, and of those in a lane, how many
 ## stand on a road with one lane its way — where a car can only wait.
 var parked_report: Dictionary[String, Vector4i] = {}
+## The routed fleet's own rolls, so the wandering cars draw what they always drew.
+var _route_rng := RandomNumberGenerator.new()
+## Each route kind's index in `_kinds`.
+var _routed_kinds: Dictionary[String, int] = {}
+## Where a routed vehicle may be placed this hour, `(route, stop)`, and the weight
+## of each: its route's departures in the hour.
+var _spawn_pool: Array[Vector2i] = []
+var _spawn_weights: PackedFloat32Array = []
+var _spawn_hour: int = -1
+var _parked_profile: ParkedProfile = null
 
 
 func _ready() -> void:
@@ -379,6 +424,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	graph = with_graph
 	profile = table
 	_rng.seed = seed
+	_route_rng.seed = seed * 7919 + 1
 	router = RoadRouterScript.new(graph, RoadRouterScript.Profile.legal())
 	_admitted = PackedInt32Array()
 	for edge: int in router.admitted_edge_ids():
@@ -392,6 +438,8 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			var manifest: CityManifest = CityManifest.shared(region)
 			if manifest != null and not manifest.taxi_licences.is_empty():
 				licence_mixes[region] = manifest.taxi_licences
+	if bus_routes == null:
+		bus_routes = BusRoutes.resident(graph)
 	if not _load_library():
 		return false
 	if signals != null and signals.plan == null:
@@ -415,6 +463,16 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			car.slot = _batches[car.kind].instance_count
 			_batches[car.kind].instance_count += 1
 		cars.append(car)
+	if not _routed_kinds.is_empty():
+		for _index: int in profile.buses:
+			var car := Car.new()
+			car.routed = true
+			for kind: int in _routed_kinds.values():
+				car.kind_slots[kind] = _batches[kind].instance_count
+				_batches[kind].instance_count += 1
+			car.kind = _routed_kinds.values()[0]
+			car.slot = car.kind_slots[car.kind]
+			cars.append(car)
 	for kind: int in _kinds.size():
 		var drawn := MultiMeshInstance3D.new()
 		drawn.name = _kinds[kind]
@@ -422,6 +480,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		add_child(drawn)
 	var palettes: Dictionary = {}
 	var parked := load(ParkedProfile.PATH) as ParkedProfile
+	_parked_profile = parked
 	if parked != null:
 		palettes = parked.liveries
 	for car: Car in cars:
@@ -439,8 +498,11 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		car.shape.disabled = true
 		car.body.add_child(car.shape)
 		add_child(car.body)
-		var palette: PackedColorArray = palettes.get(_kinds[car.kind], PackedColorArray())
-		car.livery = ParkedRoster.livery(_rng.randi() & 0xFFFF, palette)
+		if not car.routed:
+			var palette: PackedColorArray = profile.wander_liveries.get(
+				_kinds[car.kind], palettes.get(_kinds[car.kind], PackedColorArray())
+			)
+			car.livery = ParkedRoster.livery(_rng.randi() & 0xFFFF, palette)
 		car.obstacle = {
 			"transform": Transform3D.IDENTITY,
 			"extent": extent,
@@ -453,6 +515,8 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			_by_body[car.body.get_instance_id()] = car
 		for kind: int in car.licence_slots:
 			_batches[kind].set_instance_transform(car.licence_slots[kind], HIDDEN)
+		for kind: int in car.kind_slots:
+			_batches[kind].set_instance_transform(car.kind_slots[kind], HIDDEN)
 		_hide(car)
 	_grip_mps2 = grip_mps2()
 	_load_horn()
@@ -496,6 +560,9 @@ static func usable(table: TrafficProfile) -> bool:
 		"recover_heading_deg": table.recover_heading_deg,
 		"recover_ahead_m": table.recover_ahead_m,
 		"recover_clear_m": table.recover_clear_m,
+		"buses": float(table.buses),
+		"dwell_s": table.dwell_s,
+		"dwell_reach_m": table.dwell_reach_m,
 	}
 	return not TuningTable.any_zero(table, required, "TrafficSystem", "no traffic will run")
 
@@ -545,6 +612,18 @@ func _load_library() -> bool:
 					continue
 				# Never drawn by `_pick_kind`: only a taxi's spawn region wears it.
 				_licence_kinds[mesh] = _add_kind(mesh, found[mesh], 0.0)
+	if bus_routes != null:
+		for route: BusRoutes.Route in bus_routes.routes:
+			if _routed_kinds.has(route.kind):
+				continue
+			if not found.has(route.kind):
+				push_warning("TrafficSystem: no route mesh %s in %s" % [route.kind, LIBRARY_PATH])
+				continue
+			var known: int = _kinds.find(route.kind)
+			# Weight 0: `_pick_kind` never draws a kind only a route runs.
+			_routed_kinds[route.kind] = (
+				known if known >= 0 else _add_kind(route.kind, found[route.kind], 0.0)
+			)
 	VehicleLampsProfile.wire_blink(_meshes)
 	for extent: AABB in _extents:
 		_reach_m = maxf(_reach_m, extent.size.z * 0.5)
@@ -764,6 +843,207 @@ func _nearest_parked(
 	return nearest
 
 
+## Place an idle routed slot at a stop in the ring, mid-dwell, on a route drawn by
+## its departures this hour (`P3-78`).
+func _try_spawn_routed(car: Car, here: Vector3) -> void:
+	if _spawn_pool.is_empty():
+		return
+	var pick: Vector2i = _spawn_pool[_route_rng.rand_weighted(_spawn_weights)]
+	var route: BusRoutes.Route = bus_routes.routes[pick.x]
+	var stop: BusRoutes.Stop = route.stops[pick.y]
+	var kind: int = _routed_kinds.get(route.kind, -1)
+	if kind < 0 or not router.admits_way(stop.edge, stop.along):
+		return
+	var length_m: float = graph.plan_length_of(stop.edge)
+	var half_length: float = _extents[kind].size.z * 0.5
+	var s: float = clampf(stop.travel_m - half_length, 0.0, length_m)
+	var at: Vector3 = graph.lane_at(stop.edge, _edge_m(s, length_m, stop.along), stop.along)
+	var away: float = _plan_distance(at, here)
+	if away < profile.spawn_min_m or away > profile.spawn_max_m:
+		return
+	for other: Car in cars:
+		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
+			return
+	_wear_kind(car, kind, route)
+	if (
+		_nearest_parked(
+			stop.edge,
+			stop.along,
+			length_m,
+			0.0,
+			car,
+			s - half_length - profile.gap_m,
+			s + half_length + profile.gap_m
+		)
+		< INF
+	):
+		return
+	car.live = true
+	car.lives += 1
+	car.edge = stop.edge
+	car.along = stop.along
+	car.s = s
+	car.turning = false
+	car.joined_until_m = 0.0
+	car.crossed.clear()
+	car.lane = 0.0
+	car.held_side = 0
+	car.route = route
+	car.stop_index = pick.y
+	car.goal = null
+	# Found part-way through its dwell, as a bus is.
+	car.dwell_left = _route_rng.randf_range(0.2, 1.0) * profile.dwell_s
+	_enter(car)
+	car.speed = 0.0
+	car.pose = _pose_on_edge(car)
+	car.shape.disabled = false
+	spawned += 1
+	routed_spawned += 1
+
+
+## Show `car` as `kind`, from that kind's slot, at that kind's size and mass, in
+## the route's colours.
+func _wear_kind(car: Car, kind: int, route: BusRoutes.Route) -> void:
+	if kind != car.kind:
+		_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
+		car.kind = kind
+		car.slot = car.kind_slots[kind]
+	var extent: AABB = _extents[kind]
+	car.half_length = extent.size.z * 0.5
+	car.half_width = extent.size.x * 0.5
+	(car.shape.shape as BoxShape3D).size = extent.size
+	car.shape.position = extent.get_center()
+	car.obstacle["extent"] = extent
+	if _parked_profile != null:
+		car.mass_kg = _parked_profile.masses_kg.get(_kinds[kind], car.mass_kg)
+	var palette: PackedColorArray = profile.route_liveries.get(
+		route.kind,
+		(
+			_parked_profile.liveries.get(route.kind, PackedColorArray())
+			if _parked_profile != null
+			else PackedColorArray()
+		)
+	)
+	car.livery = ParkedRoster.livery(_route_rng.randi() & 0xFFFF, palette)
+	car.written = -1
+
+
+## Rebuild where a routed vehicle may be placed when the hour has moved: every stop
+## on a road with one after it, weighted by its route's departures this hour.
+func _refresh_spawn_pool() -> void:
+	if bus_routes == null:
+		return
+	var hour: int = _hour_now()
+	if hour == _spawn_hour:
+		return
+	_spawn_hour = hour
+	_spawn_pool.clear()
+	_spawn_weights.clear()
+	for index: int in bus_routes.routes.size():
+		var route: BusRoutes.Route = bus_routes.routes[index]
+		var departures: float = float(route.per_hour[hour])
+		if departures <= 0.0 or not _routed_kinds.has(route.kind):
+			continue
+		for stop: int in route.stops.size() - 1:
+			if route.stops[stop].edge >= 0:
+				_spawn_pool.append(Vector2i(index, stop))
+				_spawn_weights.append(departures)
+
+
+## The game hour: `hour_override`, else the rig's on the parked roster's clock.
+func _hour_now() -> int:
+	if not is_nan(hour_override):
+		return posmod(int(hour_override), BusRoutes.HOURS)
+	var time_of_day: float = 0.0
+	if is_inside_tree():
+		var rig := get_tree().get_first_node_in_group(LightingRig.GROUP) as LightingRig
+		if rig != null:
+			time_of_day = rig.time_of_day
+	if _parked_profile == null:
+		return 0
+	var hour: float = ParkedRoster.hour_of(
+		time_of_day, _parked_profile.clock_start_h, _parked_profile.clock_end_h
+	)
+	return posmod(int(hour), BusRoutes.HOURS)
+
+
+## Whether `edge` driven its `along` way is where `car`'s next stop stands.
+func _is_goal_way(car: Car, edge: int, along: bool) -> bool:
+	return (
+		car.goal != null
+		and car.goal.edge_id == edge
+		and car.route.stops[car.stop_index].along == along
+	)
+
+
+## The speed a routed vehicle may drive at for its stop: it brakes to its front at
+## the pole, stands `dwell_s` there, then sets off for the next. INF where its stop
+## is not ahead on this road.
+func _stop_limit(car: Car, delta: float) -> float:
+	if car.dwell_left > 0.0:
+		car.dwell_left -= delta
+		if car.dwell_left > 0.0:
+			return 0.0
+		_depart(car)
+		return INF
+	if car.goal == null or car.turning or not _is_goal_way(car, car.edge, car.along):
+		return INF
+	var to_pole: float = _to_pole(car, car.route.stops[car.stop_index])
+	if to_pole < -profile.dwell_reach_m:
+		# Past it: placed beyond it, or carried by when it could not stop.
+		stops_missed += 1
+		_depart(car)
+		return INF
+	if car.speed < STOPPED_MPS and to_pole < profile.dwell_reach_m:
+		car.dwell_left = profile.dwell_s
+		stops_served += 1
+		return 0.0
+	return stopping_speed(to_pole, profile.brake_mps2)
+
+
+## How far `car`'s front is short of `stop`'s pole along its road.
+func _to_pole(car: Car, stop: BusRoutes.Stop) -> float:
+	return stop.travel_m - car.s - car.half_length
+
+
+## Done at a stop: aim for the next one it can reach and plan the move toward it.
+func _depart(car: Car) -> void:
+	car.dwell_left = 0.0
+	car.stop_index += 1
+	_aim(car)
+	_plan_move(car)
+
+
+## Search toward `car`'s stop at `stop_index`, or the first after it that it can
+## drive to from where it stands; past its run's last stop it leaves its route.
+func _aim(car: Car) -> void:
+	car.goal = null
+	while car.route != null and car.stop_index < car.route.stops.size():
+		var stop: BusRoutes.Stop = car.route.stops[car.stop_index]
+		if stop.edge >= 0:
+			car.goal = router.goal_tree(stop.edge, stop.t, stop.along)
+			if car.goal != null:
+				var ahead: bool = (
+					_to_pole(car, stop) > -profile.dwell_reach_m
+					if _is_goal_way(car, car.edge, car.along)
+					else router.next_toward(car.goal, car.edge, car.along).x >= 0
+				)
+				if ahead:
+					return
+			stops_unreachable += 1
+			car.goal = null
+		car.stop_index += 1
+	_leave_route(car)
+
+
+## Off its route for good: from here it wanders as any car.
+func _leave_route(car: Car) -> void:
+	car.route = null
+	car.goal = null
+	car.stop_index = -1
+	car.dwell_left = 0.0
+
+
 func _pick_kind() -> int:
 	return _rng.rand_weighted(_weights)
 
@@ -794,10 +1074,16 @@ func step(delta: float) -> void:
 		else:
 			_drive(car, delta)
 	for _try: int in SPAWN_TRIES:
-		var idle: Car = _idle_car()
+		var idle: Car = _idle_car(false)
 		if idle == null:
 			break
 		_try_spawn(idle, here)
+	_refresh_spawn_pool()
+	for _try: int in SPAWN_TRIES:
+		var idle: Car = _idle_car(true)
+		if idle == null:
+			break
+		_try_spawn_routed(idle, here)
 	for car: Car in cars:
 		if car.live:
 			car.body.global_transform = car.pose
@@ -805,9 +1091,9 @@ func step(delta: float) -> void:
 			_write_lamps(car, lamp_bits(true, car.braking, _winking(car)))
 
 
-func _idle_car() -> Car:
+func _idle_car(routed: bool) -> Car:
 	for car: Car in cars:
-		if not car.live:
+		if not car.live and car.routed == routed:
 			return car
 	return null
 
@@ -889,7 +1175,8 @@ func _cruise_of(edge: int) -> float:
 func _plan_move(car: Car) -> void:
 	for _try: int in REPLAN_TRIES:
 		_plan_one_move(car)
-		if car.next_edge < 0 or car.join_clear:
+		# A routed vehicle's move is its search's: another try picks the same one.
+		if car.next_edge < 0 or car.join_clear or car.route != null:
 			return
 
 
@@ -898,14 +1185,17 @@ func _plan_one_move(car: Car) -> void:
 	car.join_clear = true
 	car.turn_side = 0
 	car.lane_out = car.lane
-	var move: Vector2i = _pick_move(car.edge, car.along)
+	var move: Vector2i = _pick_move(car, car.edge, car.along)
 	# Through the junction's inside roads to the road out, a bounded walk.
 	while move.x >= 0 and graph.is_stub(move.x) and car.via.size() < ADVANCE_STEPS:
 		car.via.append(move)
-		move = _pick_move(move.x, move.y == 1)
+		move = _pick_move(car, move.x, move.y == 1)
 	if move.x < 0:
 		car.next_edge = -1
 		car.leave_m = car.length_m
+		if car.route != null:
+			# Its stop is on this road: in to the kerb's lane for it.
+			car.lane_out = 0.0
 		return
 	car.next_edge = move.x
 	car.next_along = move.y == 1
@@ -918,8 +1208,18 @@ func _plan_one_move(car: Car) -> void:
 	_pick_lanes(car)
 
 
-## One of the legal moves off a way at random, or `(-1, 0)` at a dead end.
-func _pick_move(edge: int, along: bool) -> Vector2i:
+## One of the legal moves off a way at random, or `(-1, 0)` at a dead end. A
+## routed vehicle takes its goal's move instead, and `(-1, 0)` on the way its stop
+## stands on or while it stands at one; off its route it wanders from here.
+func _pick_move(car: Car, edge: int, along: bool) -> Vector2i:
+	if car.route != null:
+		if car.goal == null:
+			return Vector2i(-1, 0)
+		var toward: Vector2i = router.next_toward(car.goal, edge, along)
+		if toward.x >= 0 or _is_goal_way(car, edge, along):
+			return toward
+		stops_unreachable += 1
+		_leave_route(car)
 	var moves: Array[Vector2i] = router.moves_from(edge, along)
 	if moves.is_empty():
 		return Vector2i(-1, 0)
@@ -1286,6 +1586,11 @@ func _drive(car: Car, delta: float) -> void:
 		if limit < target:
 			target = limit
 			car.held = Held.LIGHT
+	if car.route != null:
+		var at_stop: float = _stop_limit(car, delta)
+		if at_stop < target:
+			target = at_stop
+			car.held = Held.DWELL
 	var give_way: float = _give_way_gap(car)
 	if give_way < INF:
 		var limit: float = stopping_speed(give_way - STOP_SHORT_M, profile.brake_mps2)
@@ -1455,6 +1760,7 @@ func _knock(car: Car) -> void:
 	car.passing = false
 	car.over_centre = false
 	car.held = Held.NONE
+	_leave_route(car)
 	knocks += 1
 
 
@@ -2267,6 +2573,7 @@ static func _facing(forward: Vector3) -> Basis:
 
 func _retire(car: Car) -> void:
 	car.live = false
+	_leave_route(car)
 	_unwreck(car)
 	car.knocked = false
 	retired += 1

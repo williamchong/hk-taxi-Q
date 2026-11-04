@@ -45,3 +45,12 @@ recover_radius_m = 6.0
 recover_heading_deg = 45.0
 recover_ahead_m = 12.0
 recover_clear_m = 15.0
+buses = 6
+dwell_s = 12.0
+dwell_reach_m = 1.5
+wander_liveries = Dictionary[String, PackedColorArray]({
+"minibus": PackedColorArray(0.76862746, 0.11764706, 0.14117648, 1)
+})
+route_liveries = Dictionary[String, PackedColorArray]({
+"minibus": PackedColorArray(0.09411765, 0.47843137, 0.28235295, 1)
+})

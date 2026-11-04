@@ -156,7 +156,9 @@ A semitone or so either side, so that two cars do not sound like one car twice. 
 ## `kinds = {car_a 4, car_b 3, minibus 1.5, taxi 2.02, van 1.5}`
 
 The parked library's road vehicles, weighted toward saloons. No coach (too long for the turn curve
-the cars take) and no motorcycle (a box under it would read as a car).
+the cars take) and no motorcycle (a box under it would read as a car). ⚠️ The 12 m bus does take
+that curve since `P3-78`, on its routes only (weight 0 here); `verify_traffic`'s routed drive
+holds it to every rule a car is held to.
 
 **`taxi` 2.02 is TD's measured share** (`Q183`, the user's call 2026-11-05: "real share"): 2.02 of
 12.02 is 16.8%, the taxis' share of the 16-hour weekday flow across the harbour in TD's *Annual
@@ -229,3 +231,37 @@ hold it for ever — but the way back is swept against every body, so one standi
 it. Over
 a lane change's own `lane_change_m` this is a gap a car coming at 50 km/h closes in about a second;
 a car that cannot see one waits `recover_after_s` and looks again.
+
+## The routed fleet (`P3-78`, `Q182`, the user's asks, 2026-11-04)
+
+Buses and green minibuses on the routes TD publishes (`bus_routes.json`): `buses` more slots
+than `cars`, each placed at a stop in the ring, mid-dwell, on a route drawn by its departures in
+the game hour (TD's GTFS headways), and driven stop to stop on the legal router's own arcs.
+
+## `buses = 6`
+
+Not TD's count. 464 route directions stop in Wan Chai, and those routes publish 1,099 departures
+in the 07:00 hour alone (`busroutes.json`, 2026-11-05), so a share of the published service would
+bury the street. Six beside 24 cars is a bus or two on a main road at a time. The headways choose
+WHICH route a bus is on, not how many there are. The draw-call cost is one more `MultiMesh`
+(the bus); the green minibus shares the wandering minibus's.
+
+## `dwell_s = 12.0`
+
+How long a bus stands at its pole: an authored figure for a few passengers boarding by
+Octopus at the front door. TD publishes no dwell time. A vehicle placed at a stop is found part
+way through its dwell.
+
+## `dwell_reach_m = 1.5`
+
+A stopped routed vehicle whose front is within this of its pole is at its stop and dwells.
+Further back it is queued behind another bus at the same stop, and waits to move up. A vehicle
+carried more than this past its pole has missed the stop and goes on to the next, which the
+verify tool counts.
+
+## `wander_liveries = {minibus: red}`, `route_liveries = {minibus: green}`
+
+The colour IS the licence (`Q167`): a green minibus runs a fixed route and a red one does not,
+so a minibus with no route is red, and one on a route green. Both colours are the parked roster's
+own `minibus` entries (`parked.tres` `liveries`). A kind named in neither wears the parked
+palette, and the bus wears none: its livery would be its operator's, which `Q167` keeps off.

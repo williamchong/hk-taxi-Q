@@ -21,6 +21,7 @@ liveries = Dictionary[String, PackedColorArray]({
 })
 hazard_sources = PackedStringArray("layby", "frontage")
 masses_kg = Dictionary[String, float]({
+"bus": 15000.0,
 "car_a": 1600.0,
 "car_b": 2100.0,
 "minibus": 3500.0,

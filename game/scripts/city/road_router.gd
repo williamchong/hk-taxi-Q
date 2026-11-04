@@ -216,6 +216,40 @@ func admits_way(edge_id: int, along: bool) -> bool:
 	return false
 
 
+## A search toward one way of one edge (`P3-78`): a bus stop stands on one kerb,
+## so the way a bus arrives is part of its goal. The other way is never seeded, so
+## a bus on the far side of a two-way street goes round rather than stopping on
+## the wrong kerb. Null where the profile cannot drive that way at all.
+##
+## Not kept in the prepared cache: each bus holds its own until it is at the stop,
+## and a fare's trees are not evicted by the fleet.
+func goal_tree(edge_id: int, t: float, along: bool) -> GoalTree:
+	if not admits_way(edge_id, along):
+		return null
+	var clamped: float = clampf(t, 0.0, 1.0)
+	var length_m: float = _graph.plan_length_of(edge_id)
+	var tree: GoalTree = _search(
+		edge_id, clamped * length_m if along else INF, INF if along else (1.0 - clamped) * length_m
+	)
+	tree.t = clamped
+	return tree
+
+
+## The move out of driving `edge_id` its `along` way that `tree`'s route takes:
+## one of `moves_from`'s arcs, since the tree is searched over the same ones.
+## `(-1, 0)` where the goal cannot be reached from here or this is the goal's own
+## way, which the caller drives to the point rather than leaves.
+func next_toward(tree: GoalTree, edge_id: int, along: bool) -> Vector2i:
+	for state: int in _states_of.get(edge_id, PackedInt32Array()):
+		if (_state_forward[state] == 1) != along:
+			continue
+		var next: int = tree.next[state]
+		if next < 0 or tree.to_goal[state] == INF:
+			return Vector2i(-1, 0)
+		return Vector2i(_state_edge[next], _state_forward[next])
+	return Vector2i(-1, 0)
+
+
 ## Search from a destination point once, so that `route` to it is a lookup.
 ##
 ## False when the edge is not in this profile's network. A prepared tree is
@@ -438,6 +472,9 @@ func _search(edge_id: int, seed_forward: float, seed_backward: float) -> GoalTre
 	_heap_size = 0
 	for state: int in _states_of[edge_id]:
 		var seed: float = seed_forward if _state_forward[state] == 1 else seed_backward
+		# An unseeded way (`goal_tree`) is not a goal: it is reached like any state.
+		if seed == INF:
+			continue
 		tree.to_goal[state] = seed
 		_push(seed, state)
 	while _heap_size > 0:

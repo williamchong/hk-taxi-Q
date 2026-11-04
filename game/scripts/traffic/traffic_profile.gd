@@ -97,3 +97,17 @@ const PATH: String = "res://tuning/traffic.tres"
 ## A knocked car drives on only with no other car this near where it rejoins or
 ## the middle of its way there, in plan metres: it looks first.
 @export var recover_clear_m: float
+## The fleet that keeps to a published route (`P3-78`, `Q182`), over and above
+## `cars`: buses and green minibuses, each on a route that stops near it.
+@export var buses: int
+## How long a routed vehicle stands at its stop, in seconds.
+@export var dwell_s: float
+## Under this many metres short of its pole a stopped routed vehicle is at its
+## stop and dwells; further back it is queued behind another.
+@export var dwell_reach_m: float
+## The colours a kind wears while it wanders (`Q167`: a colour that means
+## something is never a livery). A minibus without a route is a red one; a kind
+## not named here wears the parked roster's palette.
+@export var wander_liveries: Dictionary[String, PackedColorArray]
+## The colours a kind wears on a route: a minibus on one is a green one.
+@export var route_liveries: Dictionary[String, PackedColorArray]

@@ -51,6 +51,14 @@
 ##   neighbour wears, at every spawn, a licence its spawn road's region names, in
 ##   that licence's slot, with the green and the lit roof signs near their
 ##   shares, and the lit ones writing the roof sign's bit.
+## - 🔴 **A bus keeps to its route and stands at its stops** (`P3-78`, `Q182`):
+##   the three seeds above drive the wandering fleet alone, as they were measured;
+##   a fourth drive adds the routed fleet at 08:00, holds every check above but the
+##   signalled meeting — printed, since seeds 1, 2 and 8 of the wandering fleet
+##   alone already meet at two merges (e114 / e216 into e333, e618's fork) — and
+##   holds that a routed vehicle's planned move is always its stop's search's,
+##   that it stands still and at its stop's pole while it dwells, that some
+##   stop was served, and that a routed minibus wears green and a wandering one red.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -89,11 +97,16 @@ const KNOCK_BEHIND_M: float = 25.0
 const KNOCK_CLOSE_M: float = 12.0
 const KNOCK_AGAIN_MPS: float = 4.0
 const KNOCK_RUN_S: float = 40.0
+## The hour the routed fleet is driven at: the morning peak, TD's busiest.
+const ROUTED_HOUR: float = 8.0
+## A dwelling vehicle's front this much past `dwell_reach_m` from its pole is not
+## at its stop: a tick's travel at the turning pace.
+const DWELL_SLACK_M: float = 0.15
 
 
 func _init() -> void:
 	_run.call_deferred()
-	_start_watchdog.call_deferred("verify_traffic", 240.0)
+	_start_watchdog.call_deferred("verify_traffic", 360.0)
 
 
 func _run() -> void:
@@ -114,10 +127,17 @@ func _run() -> void:
 	_check_licences(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
-	for run: int in SEEDS.size() + 1:
+	for run: int in SEEDS.size() + 2:
 		var seed: int = SEEDS[run % SEEDS.size()]
 		var back_street: bool = run == SEEDS.size()
+		var routed: bool = run == SEEDS.size() + 1
 		var system: TrafficSystem = TrafficScript.new()
+		if routed:
+			system.hour_override = ROUTED_HOUR
+		else:
+			# The wandering fleet alone, what the seeds were measured on: an empty
+			# set, since `setup` reads the resident routes only into a null one.
+			system.bus_routes = BusRoutes.new()
 		if not system.setup(graph, table, seed):
 			_fail("setup", "the shipped table and city carry no traffic")
 			system.free()
@@ -127,7 +147,23 @@ func _run() -> void:
 			_fail("setup", "no signal plan resident; the stop check would read nothing")
 			system.queue_free()
 			break
-		print("  seed %d%s:" % [seed, " on the back streets" if back_street else ""])
+		if routed and system.bus_routes.is_empty():
+			print("  no bus route resident; the routed fleet is not driven")
+			system.queue_free()
+			break
+		print(
+			(
+				"  seed %d%s:"
+				% [
+					seed,
+					(
+						" on the back streets"
+						if back_street
+						else (" with the routed fleet at %02d:00" % ROUTED_HOUR if routed else "")
+					)
+				]
+			)
+		)
 		system.read_parked(layers)
 		if run == 0:
 			_print_parked(system)
@@ -136,7 +172,7 @@ func _run() -> void:
 		)
 		if back_street:
 			_check_give_way(system)
-		_drive(system, not back_street)
+		_drive(system, not back_street, routed)
 		system.queue_free()
 	_finish("verify_traffic")
 
@@ -379,7 +415,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	for _tick: int in roundi(RUN_S / TICK_S):
 		system.step(TICK_S)
 		for car: TrafficSystem.Car in system.cars:
-			if not car.live or lives.get(car.id, 0) == car.lives:
+			if not car.live or car.routed or lives.get(car.id, 0) == car.lives:
 				continue
 			lives[car.id] = car.lives
 			spawns += 1
@@ -690,7 +726,11 @@ static func _stage(
 
 ## Drive `system` for `RUN_S`, every check on every tick; `at_signals` adds the
 ## checks that the lights were met at all.
-func _drive(system: TrafficSystem, at_signals: bool) -> void:
+func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> void:
+	var off_route: int = 0
+	var dwelling: int = 0
+	var dwell_moving: int = 0
+	var dwell_away: int = 0
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
@@ -740,6 +780,41 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 				before.live = false
 				continue
 			driven_m += car.speed * TICK_S
+			if car.route != null:
+				# Its planned move off this road is the one its goal's tree takes.
+				if (
+					car.goal != null
+					and not car.turning
+					and not system._is_goal_way(car, car.edge, car.along)
+				):
+					var planned: Vector2i = (
+						car.via[0]
+						if not car.via.is_empty()
+						else Vector2i(
+							car.next_edge, int(car.next_along) if car.next_edge >= 0 else 0
+						)
+					)
+					if planned != system.router.next_toward(car.goal, car.edge, car.along):
+						off_route += 1
+				if car.dwell_left > 0.0:
+					dwelling += 1
+					if car.speed >= TrafficSystem.STOPPED_MPS:
+						dwell_moving += 1
+					var stop: BusRoutes.Stop = car.route.stops[car.stop_index]
+					# A pole nearer the road's start than half the vehicle stands it
+					# at the start: placed, not driven to.
+					if (
+						stop.travel_m >= car.half_length
+						and (
+							car.edge != stop.edge
+							or car.along != stop.along
+							or (
+								absf(system._to_pole(car, stop))
+								> system.profile.dwell_reach_m + DWELL_SLACK_M
+							)
+						)
+					):
+						dwell_away += 1
 			if car.speed > car.cruise_mps + SPEED_SLACK_MPS:
 				too_fast += 1
 			if car.held == TrafficSystem.Held.LIGHT:
@@ -932,11 +1007,14 @@ func _drive(system: TrafficSystem, at_signals: bool) -> void:
 	print("  parked:   the longest stand behind one %.1f s" % (longest_wait.max() * TICK_S))
 	# Gated where the lights and the give-way both hold; without a light one pair
 	# in seed 4 meets where two roads cross with no junction between them.
-	_expect(
-		crossings["signalled"].x == 0,
-		"give way",
-		"no two cars met in a signalled junction (%d car-ticks)" % crossings["signalled"].x
-	)
+	if not routed:
+		_expect(
+			crossings["signalled"].x == 0,
+			"give way",
+			"no two cars met in a signalled junction (%d car-ticks)" % crossings["signalled"].x
+		)
+	else:
+		_check_routed(system, off_route, dwelling, dwell_moving, dwell_away)
 	for where: String in crossings:
 		print(
 			(
@@ -1221,6 +1299,67 @@ static func _count_crossings(
 			now[key] = true
 			found[where] += Vector2i(1, 0 if overlapping.has(key) else 1)
 	overlapping.assign(now)
+
+
+## The routed fleet's own checks, after a drive with it (`P3-78`).
+func _check_routed(
+	system: TrafficSystem, off_route: int, dwelling: int, dwell_moving: int, dwell_away: int
+) -> void:
+	print(
+		(
+			"  route: %d routes resident, %d placed; stops %d served, %d driven past, %d unreachable"
+			% [
+				system.bus_routes.routes.size(),
+				system.routed_spawned,
+				system.stops_served,
+				system.stops_missed,
+				system.stops_unreachable,
+			]
+		)
+	)
+	_expect(system.routed_spawned > 0, "route", "the routed fleet was placed on its routes")
+	_expect(system.stops_served > 0, "route", "some routed vehicle drove to its stop and stood")
+	_expect(
+		off_route == 0,
+		"route",
+		"a routed vehicle plans the move its stop's search takes (%d car-ticks off)" % off_route
+	)
+	_expect(
+		dwelling > 0 and dwell_moving == 0,
+		"route",
+		(
+			"a dwelling vehicle stands still (%d car-ticks dwelling, %d moving)"
+			% [dwelling, dwell_moving]
+		)
+	)
+	_expect(
+		dwell_away == 0,
+		"route",
+		(
+			"a dwelling vehicle stands with its front at its stop's pole (%d car-ticks away)"
+			% dwell_away
+		)
+	)
+	var minibus: int = system._kinds.find("minibus")
+	var green: Color = system.profile.route_liveries["minibus"][0]
+	var red: Color = system.profile.wander_liveries["minibus"][0]
+	var wrong: int = 0
+	var looked: int = 0
+	for car: TrafficSystem.Car in system.cars:
+		if car.lives == 0 or car.kind != minibus:
+			continue
+		looked += 1
+		var wanted: Color = green if car.routed else red
+		if not car.livery.is_equal_approx(Color(wanted, 1.0)):
+			wrong += 1
+	_expect(
+		looked > 0 and wrong == 0,
+		"route",
+		(
+			"a routed minibus wears green and a wandering one red (%d looked at, %d wrong)"
+			% [looked, wrong]
+		)
+	)
 
 
 ## A box's plan rectangle: its centre, then its two half-axes.

@@ -98,10 +98,12 @@ What a car or a tram gives when the taxi pushes it, against the taxi's own 1,400
 every maker and the tram's operator publish, empty, so all five sit on one footing. Only the kinds
 something moves are listed; a parked vehicle stands as a wall in this version (`Q180`), so the bus,
 the coach and the motorcycle carry none, and a kind not listed is a wall. The taxi moves since
-`Q183`, and every licence's taxi carries the one mass: they are one car.
+`Q183`, and every licence's taxi carries the one mass: they are one car. The bus moves since
+`P3-78` (`Q182`), on its routes.
 
 | Kind | kg | Read off |
 |---|---|---|
+| `bus`, the 12 m three-axle double-decker | 15,000 | Alexander Dennis Enviro500 MMC, 15,300 kg unladen (ADL's Mexico sheet; the Hong Kong sheet publishes no weight) |
 | `car_a`, the 4.5 m saloon | 1,600 | Toyota Camry 2.5 Hybrid, 1,570–1,670 kg by generation and standard (autotijd.be, cars-data.com) |
 | `car_b`, the Alphard | 2,100 | Alphard IV, 2,060 kg (2.5 petrol) to 2,290 kg (hybrid E-Four) (auto-data.net) |
 | `van`, the Hiace | 2,200 | Hiace H300 long-wheelbase van, 2,175–2,225 kg (carsales.com.au) |
