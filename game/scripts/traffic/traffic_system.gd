@@ -1888,37 +1888,54 @@ func _queued_past_join(car: Car) -> Car:
 ## road's mouth can lie inside another turn's sweep, seeds 4 and 7): the curve it
 ## drives from half its length back, where its body still lies; the end of the
 ## one it finished while its tail is still in the junction; or for a car not
-## yet turning the curve it will drive from its turn's lane.
+## yet turning the curve it will drive from its turn's lane. A car still
+## clearing the last junction within `give_way_look_m` of its next line carries
+## the next turn too (Wan Chai, seed 7: a minibus on a short link pulled off on
+## green with its tail in the last junction, read as that turn alone, and
+## turned across a car turning left from the other side).
 func _turn_path(car: Car) -> PackedVector3Array:
 	if car.path_tick == _tick:
 		return car.path
 	car.path_tick = _tick
-	var points: PackedVector3Array = [car.p0, car.p1, car.p2]
 	var from_u: float = 0.0
-	if car.turning:
-		if car.turn_len > 0.0:
-			from_u = maxf(car.turn_u - car.half_length, 0.0) / car.turn_len
-	elif car.s < car.joined_until_m:
-		if car.turn_len > 0.0:
-			# Its tail's way back along the curve, from where it joined.
-			var joined_m: float = car.joined_until_m - car.half_length * 2.0
-			var behind: float = car.half_length - (car.s - joined_m)
-			from_u = clampf(1.0 - behind / car.turn_len, 0.0, 1.0)
-	else:
-		points = _turn_points(car, car.lane_out)
-	car.path.resize(CURVE_SAMPLES + 2)
+	if car.turning and car.turn_len > 0.0:
+		from_u = maxf(car.turn_u - car.half_length, 0.0) / car.turn_len
+	elif car.s < car.joined_until_m and car.turn_len > 0.0:
+		# Its tail's way back along the curve, from where it joined.
+		var joined_m: float = car.joined_until_m - car.half_length * 2.0
+		var behind: float = car.half_length - (car.s - joined_m)
+		from_u = clampf(1.0 - behind / car.turn_len, 0.0, 1.0)
+	var behind_it: bool = car.turning or car.s < car.joined_until_m
+	var ahead: bool = (
+		not car.turning
+		and (not behind_it or car.next_edge >= 0 and to_give_way_m(car) <= profile.give_way_look_m)
+	)
+	car.path.resize((CURVE_SAMPLES + 2) * (int(behind_it) + int(ahead)))
+	var at: int = 0
+	if behind_it:
+		at = _write_curve(car.path, at, [car.p0, car.p1, car.p2], from_u, car.half_length)
+	if ahead:
+		_write_curve(car.path, at, _turn_points(car, car.lane_out), 0.0, car.half_length)
+	return car.path
+
+
+## The curve through `points` from `from_u` into `path` from `at`, and a point a
+## car's length past its end along the way out; where the next curve starts.
+static func _write_curve(
+	path: PackedVector3Array, at: int, points: PackedVector3Array, from_u: float, half_length: float
+) -> int:
 	for index: int in CURVE_SAMPLES + 1:
-		car.path[index] = curve_point(
+		path[at + index] = curve_point(
 			points[0], points[1], points[2], lerpf(from_u, 1.0, float(index) / CURVE_SAMPLES)
 		)
-	var last: Vector3 = car.path[CURVE_SAMPLES - 1]
+	var last: Vector3 = path[at + CURVE_SAMPLES - 1]
 	var out := Vector3(points[2].x - last.x, 0.0, points[2].z - last.z)
-	car.path[CURVE_SAMPLES + 1] = (
-		points[2] + out.normalized() * car.half_length * 2.0
+	path[at + CURVE_SAMPLES + 1] = (
+		points[2] + out.normalized() * half_length * 2.0
 		if out.length_squared() > 0.0
 		else points[2]
 	)
-	return car.path
+	return at + CURVE_SAMPLES + 2
 
 
 ## Whether two turn paths meet in plan: a stretch of each within `reach_m` of
