@@ -283,6 +283,10 @@ static var _shared: WeakRef = null
 var _edge_maps: Dictionary = {}
 var _offsets: Dictionary = {}
 var _join_report: Dictionary = {}
+## The region that owns each merged edge id (`Q183`); empty for one region, where
+## every edge is `_frame`'s.
+var _owners: Dictionary[int, String] = {}
+var _frame: String = ""
 ## Built from a merge, where a duplicate edge id is an error rather than a warning.
 var _merged: bool = false
 
@@ -310,6 +314,8 @@ static func resident(regions: PackedStringArray) -> RoadGraph:
 	live._edge_maps = inputs["edge_maps"]
 	live._offsets = inputs["offsets"]
 	live._join_report = inputs["report"]
+	live._owners = inputs["owners"]
+	live._frame = regions[0] if not regions.is_empty() else ""
 	live._merged = regions.size() > 1 and not inputs.has("error")
 	live._build(inputs["document"], inputs["manifest"])
 	return live
@@ -318,19 +324,22 @@ static func resident(regions: PackedStringArray) -> RoadGraph:
 ## What `resident` builds from, exposed so `verify_join.gd` can diff the merged
 ## document and tables against `pipeline/join.py`'s: `document`, `manifest` (the
 ## frame's, its three per-station tables re-keyed to merged ids), `edge_maps`
-## (region to its ids' merged ids), `offsets` (region to its place in the frame)
-## and `report`, plus `error` where a pair would not merge.
+## (region to its ids' merged ids), `offsets` (region to its place in the frame),
+## `owners` (merged id to the region that owns it) and `report`, plus `error`
+## where a pair would not merge.
 static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 	var frame: String = regions[0] if not regions.is_empty() else ""
 	var manifest: CityManifest = CityManifest.shared(frame)
 	var document: Dictionary = GeneratedRoadGraph.load_graph(
 		manifest.road_graph_path if manifest != null else ""
 	)
+	var owners: Dictionary[int, String] = {}
 	var inputs: Dictionary = {
 		"document": document,
 		"manifest": manifest,
 		"edge_maps": {},
 		"offsets": {frame: Vector3.ZERO},
+		"owners": owners,
 		"report": {},
 	}
 	if regions.size() < 2 or manifest == null or document.is_empty():
@@ -339,6 +348,7 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 	# The frame's map starts as identity over every id its documents may name,
 	# owned and foreign, and each fold re-points its foreign ids at their owners.
 	var maps: Dictionary = {}
+	var owned_ids: Dictionary = {frame: _owned_ids(document)}
 	var frame_map: Dictionary[int, int] = {}
 	for key: String in ["edges", "foreign_edges"]:
 		for edge: Dictionary in document.get(key, []):
@@ -369,6 +379,7 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 			for local: int in map:
 				map[local] = of_a.get(map[local], map[local])
 		maps[region] = of_b
+		owned_ids[region] = _owned_ids(graph)
 		inputs["offsets"][region] = delta
 		# Owned rows only: `city.json` publishes no carriageway for a foreign copy.
 		for owned: Dictionary in graph.get("edges", []):
@@ -395,7 +406,19 @@ static func merged_inputs(regions: PackedStringArray) -> Dictionary:
 	inputs["document"] = merged
 	inputs["manifest"] = tables
 	inputs["edge_maps"] = maps
+	for region: String in owned_ids:
+		var map: Dictionary[int, int] = maps[region]
+		for local: int in owned_ids[region]:
+			owners[map[local]] = region
 	return inputs
+
+
+## The ids of the edges `document` owns, not its foreign copies.
+static func _owned_ids(document: Dictionary) -> PackedInt32Array:
+	var ids := PackedInt32Array()
+	for edge: Dictionary in document.get("edges", []):
+		ids.append(int(edge["id"]))
+	return ids
 
 
 ## The merged id of `local_id` as `region`'s own documents name it — a fare's
@@ -406,6 +429,21 @@ func edge_id_in(region: String, local_id: int) -> int:
 		return local_id
 	var map: Dictionary[int, int] = _edge_maps[region]
 	return map.get(local_id, -1)
+
+
+## The region that owns `edge_id` (`Q183`): the frame's for one region, and for
+## an id no region published.
+func region_of(edge_id: int) -> String:
+	return _owners.get(edge_id, _frame)
+
+
+## Every region this graph holds, the frame first.
+func resident_regions() -> PackedStringArray:
+	return (
+		PackedStringArray(_offsets.keys())
+		if not _offsets.is_empty()
+		else PackedStringArray([_frame])
+	)
 
 
 ## Where `region` stands in this graph's frame; zero for the frame and for a
@@ -443,6 +481,7 @@ static func _copy_tables(manifest: CityManifest) -> CityManifest:
 ## Parse a document directly, for tools that hold their own copy.
 static func from_document(document: Dictionary, manifest: CityManifest = null) -> RoadGraph:
 	var graph := RoadGraph.new()
+	graph._frame = manifest.region_id if manifest != null else ""
 	graph._build(document, manifest)
 	return graph
 

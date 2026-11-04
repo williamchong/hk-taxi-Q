@@ -78,3 +78,5 @@ static func wire_blink(meshes: Array[Mesh]) -> void:
 			if material != null:
 				material.set_shader_parameter("traffic_blink_hz", lamps.blink_hz)
 				material.set_shader_parameter("traffic_blink_duty", lamps.blink_duty)
+				# A moving taxi's roof sign for hire (`Q183`) burns at the player's.
+				material.set_shader_parameter("traffic_sign_lit", lamps.sign_lit)

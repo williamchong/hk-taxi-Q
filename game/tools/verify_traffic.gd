@@ -45,6 +45,12 @@
 ##   for it there — where its own lane says it is in the other — and never runs
 ##   into it; then the knocked car rejoins its nearside lane on its road, a way it
 ##   may drive. One pushed off its middle turns; one turned round stands.
+## - 🔴 **A taxi wears the licence its spawn region draws** (`Q183`): each region's
+##   `taxi_licences` is printed, every mesh it names is in the library, and a
+##   staged fleet of taxis on a mix of red and green in the frame and blue in its
+##   neighbour wears, at every spawn, a licence its spawn road's region names, in
+##   that licence's slot, with the green and the lit roof signs near their
+##   shares, and the lit ones writing the roof sign's bit.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -105,6 +111,7 @@ func _run() -> void:
 	_check_lane(graph)
 	var layers: Array[Node] = _stand_parked(graph)
 	_check_knock(graph, table, layers)
+	_check_licences(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
 	for run: int in SEEDS.size() + 1:
@@ -321,6 +328,109 @@ static func _wreck_span(system: TrafficSystem, car: TrafficSystem.Car, edge: int
 		if parked.wreck == car:
 			found.append(parked.s_from)
 	return Vector2(found[0], 1.0) if found.size() == 1 else Vector2(-1.0, found.size())
+
+
+## The licences (`Q183`): the shipped mixes, then a fleet of taxis on a staged
+## mix, every spawn's licence and roof sign read off its batches.
+func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
+	var shipped: TrafficSystem = TrafficScript.new()
+	if not shipped.setup(graph, table, SEEDS[0]):
+		_fail("licence", "the shipped table and city carry no traffic")
+		shipped.free()
+		return
+	for region: String in graph.resident_regions():
+		var mix: Dictionary = shipped.licence_mixes.get(region, {})
+		print("  licence: %s %s" % [region, str(mix) if not mix.is_empty() else "none (red)"])
+		for mesh: String in mix:
+			_expect(
+				shipped._licence_kinds.has(mesh),
+				"licence",
+				"%s's %s is in the library" % [region, mesh]
+			)
+	shipped.free()
+
+	var regions: PackedStringArray = graph.resident_regions()
+	var staged_table := table.duplicate() as TrafficProfile
+	staged_table.kinds = {table.taxi_kind: 1.0}
+	var system: TrafficSystem = TrafficScript.new()
+	system.licence_mixes[regions[0]] = {"taxi": 0.5, "taxi_nt": 0.5}
+	if regions.size() > 1:
+		system.licence_mixes[regions[1]] = {"taxi_lantau": 1.0}
+	if not system.setup(graph, staged_table, SEEDS[0]):
+		_fail("licence", "a fleet of taxis does not set up")
+		system.free()
+		return
+	root.add_child(system)
+	_expect(
+		system._licence_kinds.size() == system.licence_mixes.size() + 1,
+		"licence",
+		"every staged licence is a drawn kind (%d)" % system._licence_kinds.size()
+	)
+	system.centre = _signal_centre(system.signals.plan)
+	var lives: Dictionary[int, int] = {}
+	var worn: Dictionary[String, int] = {}
+	var spawns: int = 0
+	var lit: int = 0
+	var wrong: int = 0
+	var shown_wrong: int = 0
+	var bit_wrong: int = 0
+	var in_frame: int = 0
+	var green_in_frame: int = 0
+	for _tick: int in roundi(RUN_S / TICK_S):
+		system.step(TICK_S)
+		for car: TrafficSystem.Car in system.cars:
+			if not car.live or lives.get(car.id, 0) == car.lives:
+				continue
+			lives[car.id] = car.lives
+			spawns += 1
+			var region: String = graph.region_of(car.edge)
+			var mesh: String = system.kind_name(car)
+			worn[mesh] = worn.get(mesh, 0) + 1
+			if not (system.licence_mixes.get(region, {}) as Dictionary).has(mesh):
+				wrong += 1
+			if region == regions[0]:
+				in_frame += 1
+				if mesh == "taxi_nt":
+					green_in_frame += 1
+			# Read off the system's own record: headless, the dummy renderer keeps
+			# no `MultiMesh` buffer to read a transform or a datum back from.
+			if car.licence_slots.get(car.kind, -1) != car.slot:
+				shown_wrong += 1
+			if ((car.written & TrafficSystem.ROOF_SIGN) != 0) != car.for_hire:
+				bit_wrong += 1
+			if car.for_hire:
+				lit += 1
+	print("  licence: %d spawns of a fleet of taxis wore %s, %d lit for hire" % [spawns, worn, lit])
+	_expect(spawns >= 24, "licence", "the fleet spawned at least once each (%d)" % spawns)
+	_expect(wrong == 0, "licence", "no taxi wears a licence its spawn region does not name")
+	_expect(
+		in_frame > 0 and absf(float(green_in_frame) / maxf(in_frame, 1) - 0.5) < 0.2,
+		"licence",
+		"the frame's staged half green wears green (%d of %d)" % [green_in_frame, in_frame]
+	)
+	_expect(shown_wrong == 0, "licence", "a taxi stands in its own licence's slot")
+	_expect(bit_wrong == 0, "licence", "a lit roof sign writes the bit, a dark one not")
+	_expect(
+		absf(float(lit) / maxf(spawns, 1) - table.taxi_for_hire) < 0.2,
+		"licence",
+		"the lit roof signs are near their share (%d of %d)" % [lit, spawns]
+	)
+	# The draw itself, over a thousand ids: near each share.
+	var green: int = 0
+	for id: int in 1000:
+		if system.licence_of(regions[0], id, 1) == "taxi_nt":
+			green += 1
+	_expect(
+		absf(green / 1000.0 - 0.5) < 0.05,
+		"licence",
+		"the staged half green draws %d of 1000 green" % green
+	)
+	_expect(
+		system.licence_of("nowhere", 3, 1) == table.taxi_kind,
+		"licence",
+		"a region with no mix wears the red urban taxi"
+	)
+	_drop(system)
 
 
 ## A level-0 one-way road with two lanes, `KNOCK_ROAD_M` long and nothing parked

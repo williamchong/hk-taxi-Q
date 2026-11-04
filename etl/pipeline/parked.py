@@ -170,6 +170,17 @@ class ParkedReport:
     # never does: it is refused as `too_narrow`.
     narrowest_lane_room_m: float = math.inf
     published_in_lane: int = 0
+    # The region's taxi licences (`Q183`): each mesh's share of the stands in
+    # the districts the region's own stands lie in, what a taxi stood anywhere
+    # but a stand is drawn on; empty where no stand lies inside the region.
+    taxi_licences: dict[str, float] = field(default_factory=dict)
+    taxi_licence_districts: list[str] = field(default_factory=list)
+    taxi_licence_stands: int = 0
+    # Stands in those districts whose category `licences.by_category` names
+    # no licence for: read and not counted.
+    taxi_licence_unlicensed: int = 0
+    # The placed licensed vehicles, by the mesh each was drawn as.
+    by_licence: dict[str, int] = field(default_factory=dict)
 
     def refuse(self, source: str, reason: str) -> None:
         by_reason = self.refused.setdefault(source, {})
@@ -192,6 +203,8 @@ class Candidate:
     # one kerb, 2 where the fill takes both. Read only for what the stage
     # invents; an `AS_FOUND` source takes no lane bar.
     rows: int = 1
+    # A stand's published category (`Q183`): which licences queue there.
+    category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -302,6 +315,84 @@ def in_window(hour: float, hours: tuple[float, float] | None) -> bool:
 def _complement(hours: tuple[float, float]) -> tuple[float, float]:
     """The window a posted-hours restriction leaves free."""
     return (hours[1], hours[0])
+
+
+def _licence(shares: dict[str, float], fallback: str, candidate: Candidate) -> str:
+    """The licence a taxi stood at `candidate` wears: a draw on `shares`,
+    seeded by the slot so a rebuild stands the same taxi, else `fallback`."""
+    if not shares:
+        return fallback
+    draw = _seeded("licence", candidate.edge, candidate.side, candidate.t).random()
+    total = sum(shares.values())
+    for mesh, share in shares.items():
+        draw -= share / total
+        if draw < 0.0:
+            return mesh
+    return next(reversed(shares))
+
+
+def _region_licences(
+    city: Config,
+    spec: Parked,
+    region_id: str,
+    transform: GameTransform,
+    report: ParkedReport,
+    *,
+    sources_root: Path | None,
+) -> None:
+    """Fill `report`'s taxi licence mix (`Q183`) from the published stands.
+
+    A region's box holds too few stands to say much (Sha Tin's holds three,
+    all urban, in a district of 52), so the mix is every stand in the
+    districts the box's own stands lie in, each counted by its category's
+    shares. The district is the publisher's field, never a polygon we draw.
+    """
+    licences = spec.licences
+    if licences is None or city.fares is None:
+        return
+    groups = [group for group in city.fares.groups if group.kind == licences.fare_kind]
+    if not groups:
+        raise ValueError(f"parked:licences:fare_kind {licences.fare_kind!r} names no fare group")
+    group = groups[0]
+    district_field = group.optional_field("district")
+    if district_field is None:
+        raise ValueError(f"fare group {group.kind!r} names no district field for the licences")
+    features = read_feature_collection(
+        cached_source(city, group.source, root=sources_root), f"fare group '{group.kind}'"
+    )["features"]
+    to_projected = transformer(group.crs, city.projected_crs)
+    far_x, far_z = city.region_high(region_id)
+    read: list[tuple[str, str]] = []
+    inside: set[str] = set()
+    for feature in features:
+        properties = feature.get("properties") or {}
+        district = str(properties.get(district_field) or "").strip()
+        category = group.categorise(str(properties.get(group.field("category")) or "")).id
+        read.append((district, category))
+        geometry = feature.get("geometry") or {}
+        if geometry.get("type") != "Point" or not district:
+            continue
+        easting, northing = to_projected.transform(*geometry["coordinates"][:2])
+        x, _, z = transform.to_game(easting, northing)
+        if 0.0 <= x <= far_x and 0.0 <= z <= far_z:
+            inside.add(district)
+    mix: dict[str, float] = {}
+    for district, category in read:
+        if district not in inside:
+            continue
+        shares = licences.by_category.get(category)
+        if shares is None:
+            report.taxi_licence_unlicensed += 1
+            continue
+        report.taxi_licence_stands += 1
+        total = sum(shares.values())
+        for mesh, share in shares.items():
+            mix[mesh] = mix.get(mesh, 0.0) + share / total
+    counted = sum(mix.values())
+    report.taxi_licences = {
+        mesh: round(mix[mesh] / counted, 4) for mesh in sorted(mix) if counted > 0.0
+    }
+    report.taxi_licence_districts = sorted(inside)
 
 
 def _seeded(*parts: Any) -> random.Random:
@@ -649,7 +740,7 @@ def build_region(
 
     # ---- the zones nothing parks in ----
     keep_out: list[shapely.Geometry] = []
-    fare_points: list[tuple[float, float, float, float, str]] = []
+    fare_points: list[tuple[float, float, float, float, str, str | None]] = []
     for node in fares.get("nodes", ()):
         x, _, z = (float(v) for v in node["pos"])
         # A node a passenger stands at keeps its ring clear; a `poi` tram stop
@@ -663,6 +754,7 @@ def build_region(
                 float(node.get("edge_t", 0.0)),
                 float(node.get("nearest_edge", -1)),
                 node["kind"],
+                node.get("stand_category"),
             )
         )
     if city.crossings is not None:
@@ -723,7 +815,7 @@ def build_region(
             candidates.append(candidate)
     keep_out_tree = STRtree(keep_out) if keep_out else None
 
-    for x, z, t, edge, kind in fare_points:
+    for x, z, t, edge, kind, category in fare_points:
         stand = spec.stands.get(kind)
         if stand is None:
             continue
@@ -752,6 +844,7 @@ def build_region(
                     side,
                     stand.hours,
                     stand.chance,
+                    category=category,
                 )
             )
 
@@ -847,14 +940,20 @@ def build_region(
         stood.append(placed)
         taken.setdefault(cell, []).append(spaced)
 
+    licences = spec.licences
+    if licences is not None:
+        _region_licences(city, spec, region_id, transform, report, sources_root=sources_root)
     stands: list[Placement] = []
     for placed in stood:
-        meshes = spec.vehicle(placed.candidate.kind).library_meshes
+        candidate = placed.candidate
+        meshes = spec.vehicle(candidate.kind).library_meshes
         mesh = meshes[0]
-        if len(meshes) > 1:
-            mesh = _seeded(
-                "mesh", placed.candidate.edge, placed.candidate.side, placed.candidate.t
-            ).choice(meshes)
+        if licences is not None and candidate.kind == licences.kind:
+            shares = licences.by_category.get(candidate.category or "", report.taxi_licences)
+            mesh = _licence(shares, meshes[0], candidate)
+            report.by_licence[mesh] = report.by_licence.get(mesh, 0) + 1
+        elif len(meshes) > 1:
+            mesh = _seeded("mesh", candidate.edge, candidate.side, candidate.t).choice(meshes)
         entry = placement(mesh, (placed.x, placed.y, placed.z), placed.rot_y_deg)
         entry["kind"] = placed.candidate.kind
         entry["source"] = placed.candidate.source

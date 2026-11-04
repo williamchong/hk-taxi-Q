@@ -142,6 +142,7 @@ from pipeline.config_blocks.parked import (  # noqa: F401
     Frontage,
     FrontageClass,
     Laybys,
+    Licences,
     Parked,
     Stand,
     StopSet,

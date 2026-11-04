@@ -94,6 +94,10 @@ NAVY = (38, 56, 104)
 CREAM = (240, 232, 200)
 MINIBUS_GREEN = (24, 122, 72)
 CITYBUS_YELLOW = (238, 194, 44)
+# The licence colours of the two non-urban taxis (`Q183`), read off
+# photographs: the New Territories' leaf green, Lantau's sky blue.
+NT_TAXI_GREEN = (46, 150, 66)
+LANTAU_TAXI_BLUE = (78, 160, 218)
 # Citybus's lower skirt, under the yellow.
 CITYBUS_BLUE = (30, 70, 150)
 TRAM_GREEN = (22, 108, 60)
@@ -753,9 +757,9 @@ def _taxi(shape: Shape) -> list[MeshData]:
     face = shape.body_front_z_m
     sign_z = _glazing(shape, shape.belt_y_m, shape.roof_y_m).roof_end_z(rear=False) + 0.15
     return [
-        # Named `sign_…`, so `_marked` takes it for a lens. Not the player's
-        # `sign` circuit: nothing lights a parked taxi's.
-        box_at((0.0, shape.roof_y_m + 0.08, sign_z), (0.24, 0.08, 0.09), LAMP, name="sign_roof"),
+        # Named `sign`, the player's roof-sign circuit: a moving taxi lights it
+        # for hire through `INSTANCE_CUSTOM.a` (`Q183`); a parked one writes 0.
+        box_at((0.0, shape.roof_y_m + 0.08, sign_z), (0.24, 0.08, 0.09), LAMP, name="sign"),
         box(
             (hw - 0.34, shape.sill_y_m + shape.bumper_height_m + 0.01, face - FIXTURE_PROUD_M),
             (hw - 0.18, shape.sill_y_m + shape.bumper_height_m + 0.09, face + 0.01),
@@ -832,6 +836,8 @@ def _coach(shape: Shape) -> list[MeshData]:
 
 DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
     "taxi": _taxi,
+    "taxi_nt": _taxi,
+    "taxi_lantau": _taxi,
     "minibus": _minibus,
     "bus": _bus,
     "tram": _tram,
@@ -1000,6 +1006,31 @@ def _car(kind: str, paint: Colour, roof: Colour) -> Shape:
     )
 
 
+# The red urban taxi, parked: a Crown Comfort's footprint (`Q153`), the
+# silver above the belt and the chrome grille of the photographs.
+_URBAN_TAXI = Shape(
+    kind="taxi",
+    length_m=4.7,
+    width_m=1.7,
+    paint=RED,
+    roof=SILVER,
+    sill_y_m=0.22,
+    belt_y_m=0.8,
+    roof_y_m=1.46,
+    cabin_front_m=1.45,
+    cabin_rear_m=3.9,
+    windscreen_rake_deg=35.0,
+    backlight_rake_deg=30.0,
+    corner_cut_m=0.16,
+    roof_inset_m=0.13,
+    wheel_radius_m=0.31,
+    wheel_width_m=0.2,
+    axles_m=(0.95, 3.75),
+    grille=SILVER,
+    handles=True,
+)
+
+
 SHAPES: tuple[Shape, ...] = (
     replace(_car("car_a", WHITE, WHITE), livery=WHITE),
     # A people-carrier on the saloon's footprint — an Alphard, the private
@@ -1028,29 +1059,11 @@ SHAPES: tuple[Shape, ...] = (
         handles=True,
         livery=NAVY,
     ),
-    # The red urban taxi, parked: a Crown Comfort's footprint (`Q153`), the
-    # silver above the belt and the chrome grille of the photographs.
-    Shape(
-        kind="taxi",
-        length_m=4.7,
-        width_m=1.7,
-        paint=RED,
-        roof=SILVER,
-        sill_y_m=0.22,
-        belt_y_m=0.8,
-        roof_y_m=1.46,
-        cabin_front_m=1.45,
-        cabin_rear_m=3.9,
-        windscreen_rake_deg=35.0,
-        backlight_rake_deg=30.0,
-        corner_cut_m=0.16,
-        roof_inset_m=0.13,
-        wheel_radius_m=0.31,
-        wheel_width_m=0.2,
-        axles_m=(0.95, 3.75),
-        grille=SILVER,
-        handles=True,
-    ),
+    _URBAN_TAXI,
+    # The New Territories' and Lantau's licences (`Q183`): the same Crown
+    # Comfort, green or blue under a white roof.
+    replace(_URBAN_TAXI, kind="taxi_nt", paint=NT_TAXI_GREEN, roof=WHITE),
+    replace(_URBAN_TAXI, kind="taxi_lantau", paint=LANTAU_TAXI_BLUE, roof=WHITE),
     # The green minibus: a Toyota Coaster, cream with the green roof.
     Shape(
         kind="minibus",

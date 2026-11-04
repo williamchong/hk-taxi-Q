@@ -125,10 +125,13 @@ class TestTheBudget:
 
     def test_each_kind_is_within_a_few_flat_colours(self, meshes: list[MeshData]) -> None:
         """`ART_DESIGN.md`'s 3 to 5, plus the three lens colours every vehicle
-        carries, is the standing exception the taxi already holds."""
+        carries, is the standing exception the taxi already holds. A green or
+        blue licence (`Q183`) holds one more: the red taxi's tail lens is its
+        paint, and theirs is not."""
         for mesh in meshes:
             colours = {tuple(int(v) for v in row[:3]) for row in mesh.colours}
-            assert 3 <= len(colours) <= 8, f"{mesh.name} carries {len(colours)} colours"
+            ceiling = 9 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
+            assert 3 <= len(colours) <= ceiling, f"{mesh.name} carries {len(colours)} colours"
 
     def test_every_part_goes_through_the_material_door(self, meshes: list[MeshData]) -> None:
         for mesh in meshes:
@@ -143,7 +146,7 @@ class TestLiveries:
     """`Q167`: a kind whose colour means something carries no livery panel,
     and every other kind's livery marks paint the palette can repaint."""
 
-    IDENTITY = frozenset({"taxi", "bus", "tram"})
+    IDENTITY = frozenset({"taxi", "taxi_nt", "taxi_lantau", "bus", "tram"})
 
     def test_a_colour_that_means_something_is_not_a_livery(
         self, by_name: dict[str, MeshData]

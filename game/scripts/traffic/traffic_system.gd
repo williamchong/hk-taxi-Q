@@ -108,6 +108,10 @@ const HAZARDS: int = 2
 ## `winking`): the one spelling the parked layer and the verify tools read.
 const LAMP_LEFT: int = 8
 const LAMP_RIGHT: int = 16
+## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
+const ROOF_SIGN: int = 32
+## Where a hidden instance stands: nowhere, at no size.
+const HIDDEN := Transform3D(Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO), Vector3.ZERO)
 
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
@@ -156,6 +160,13 @@ class Car:
 	var kind: int = 0
 	## Its index in its kind's `MultiMesh`.
 	var slot: int = 0
+	## A taxi's slot in every licence's `MultiMesh`, by kind index (`Q183`): it
+	## shows the one its spawn region draws and hides the rest. Empty for any
+	## other car, and for a taxi where only one licence is resident.
+	var licence_slots: Dictionary[int, int] = {}
+	## Whether it is a taxi, and whether its roof sign is lit for hire.
+	var taxi: bool = false
+	var for_hire: bool = false
 	var edge: int = -1
 	var along: bool = true
 	var length_m: float = 0.0
@@ -326,6 +337,11 @@ var _extents: Array[AABB] = []
 var _batches: Array[MultiMesh] = []
 var _weights: PackedFloat32Array = []
 var _admitted: PackedInt32Array = []
+## Each resident region's taxi licences (`Q183`), mesh name to share, off its
+## `CityManifest`; read at `setup` unless a verify tool set it first.
+var licence_mixes: Dictionary[String, Dictionary] = {}
+## The kind index of each licence mesh a taxi may wear, the profile's own first.
+var _licence_kinds: Dictionary[String, int] = {}
 ## Where the ring is centred when there is no vehicle: the verify tool's.
 var centre: Vector3 = Vector3.ZERO
 ## The parked vehicles by the merged edge they stand on (`P3-3f`), and whether
@@ -371,6 +387,11 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	if _admitted.is_empty():
 		push_warning("TrafficSystem: no edge admits traffic; none will run")
 		return false
+	if licence_mixes.is_empty():
+		for region: String in graph.resident_regions():
+			var manifest: CityManifest = CityManifest.shared(region)
+			if manifest != null and not manifest.taxi_licences.is_empty():
+				licence_mixes[region] = manifest.taxi_licences
 	if not _load_library():
 		return false
 	if signals != null and signals.plan == null:
@@ -384,8 +405,15 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	for index: int in profile.cars:
 		var car := Car.new()
 		car.kind = _pick_kind()
-		car.slot = _batches[car.kind].instance_count
-		_batches[car.kind].instance_count += 1
+		car.taxi = _kinds[car.kind] == profile.taxi_kind
+		if car.taxi and _licence_kinds.size() > 1:
+			for kind: int in _licence_kinds.values():
+				car.licence_slots[kind] = _batches[kind].instance_count
+				_batches[kind].instance_count += 1
+			car.slot = car.licence_slots[car.kind]
+		else:
+			car.slot = _batches[car.kind].instance_count
+			_batches[car.kind].instance_count += 1
 		cars.append(car)
 	for kind: int in _kinds.size():
 		var drawn := MultiMeshInstance3D.new()
@@ -423,6 +451,8 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		if car.mass_kg > 0.0:
 			Pushable.mark(car.body, self)
 			_by_body[car.body.get_instance_id()] = car
+		for kind: int in car.licence_slots:
+			_batches[kind].set_instance_transform(car.licence_slots[kind], HIDDEN)
 		_hide(car)
 	_grip_mps2 = grip_mps2()
 	_load_horn()
@@ -459,6 +489,7 @@ static func usable(table: TrafficProfile) -> bool:
 		"horn_cut_mps": table.horn_cut_mps,
 		"horn_pitch_spread": table.horn_pitch_spread,
 		"kinds": float(table.kinds.size()),
+		"taxi_for_hire": table.taxi_for_hire,
 		"react_s": table.react_s,
 		"recover_after_s": table.recover_after_s,
 		"recover_radius_m": table.recover_radius_m,
@@ -498,24 +529,91 @@ func _load_library() -> bool:
 		if not found.has(kind) or profile.kinds[kind] <= 0.0:
 			push_warning("TrafficSystem: no mesh %s in %s; skipped" % [kind, LIBRARY_PATH])
 			continue
-		_kinds.append(kind)
-		_meshes.append(found[kind])
-		_extents.append(found[kind].get_aabb())
-		_weights.append(profile.kinds[kind])
-		var multi := MultiMesh.new()
-		multi.transform_format = MultiMesh.TRANSFORM_3D
-		multi.use_custom_data = true
-		multi.mesh = found[kind]
-		_batches.append(multi)
+		_add_kind(kind, found[kind], profile.kinds[kind])
 	if _kinds.is_empty():
 		push_error("TrafficSystem: none of %s is in %s" % [profile.kinds.keys(), LIBRARY_PATH])
 		return false
+	var taxi: int = _kinds.find(profile.taxi_kind)
+	if taxi >= 0:
+		_licence_kinds[profile.taxi_kind] = taxi
+		for region: String in licence_mixes:
+			for mesh: String in licence_mixes[region]:
+				if _licence_kinds.has(mesh):
+					continue
+				if not found.has(mesh):
+					push_warning("TrafficSystem: no licence mesh %s in %s" % [mesh, LIBRARY_PATH])
+					continue
+				# Never drawn by `_pick_kind`: only a taxi's spawn region wears it.
+				_licence_kinds[mesh] = _add_kind(mesh, found[mesh], 0.0)
 	VehicleLampsProfile.wire_blink(_meshes)
 	for extent: AABB in _extents:
 		_reach_m = maxf(_reach_m, extent.size.z * 0.5)
 	# `instance_count` allocates the buffer and clears it, so it is grown car by
 	# car in `setup` before any transform or livery is written.
 	return true
+
+
+## One drawn kind and its batch; its index.
+func _add_kind(kind: String, mesh: Mesh, weight: float) -> int:
+	_kinds.append(kind)
+	_meshes.append(mesh)
+	_extents.append(mesh.get_aabb())
+	_weights.append(weight)
+	var multi := MultiMesh.new()
+	multi.transform_format = MultiMesh.TRANSFORM_3D
+	multi.use_custom_data = true
+	multi.mesh = mesh
+	_batches.append(multi)
+	return _kinds.size() - 1
+
+
+## The licence a taxi wears for its `lives`th spawn in `region` (`Q183`): a draw
+## on the region's mix off the car's id and lives, never the seeded RNG, which
+## would move every later car. The profile's taxi where the region has no mix.
+func licence_of(region: String, id: int, lives: int) -> String:
+	var mix: Dictionary = licence_mixes.get(region, {})
+	var total: float = 0.0
+	for share: float in mix.values():
+		total += share
+	if total <= 0.0:
+		return profile.taxi_kind
+	var draw: float = fposmod(float(id) * 0.618034 + float(lives) * 0.754878, 1.0) * total
+	var meshes: Array = mix.keys()
+	meshes.sort()
+	for mesh: String in meshes:
+		draw -= float(mix[mesh])
+		if draw < 0.0:
+			return mesh
+	return meshes[-1]
+
+
+## Whether a taxi's `lives`th spawn is for hire, on the same terms as its licence.
+func for_hire_of(id: int, lives: int) -> bool:
+	return fposmod(float(id) * 0.381966 + float(lives) * 0.569840, 1.0) < profile.taxi_for_hire
+
+
+## Light the roof sign or not for this spawn, show the licence `car`'s spawn
+## region draws, and hide the one it wore.
+func _wear_licence(car: Car) -> void:
+	if not car.taxi:
+		return
+	car.for_hire = for_hire_of(car.id, car.lives)
+	# The sign may have changed with the lamps not: write the datum afresh.
+	car.written = -1
+	if car.licence_slots.is_empty():
+		return
+	var mesh: String = licence_of(graph.region_of(car.edge), car.id, car.lives)
+	var kind: int = _licence_kinds.get(mesh, _licence_kinds[profile.taxi_kind])
+	if kind == car.kind:
+		return
+	_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
+	car.kind = kind
+	car.slot = car.licence_slots[kind]
+
+
+## Which licence `car` wears, by mesh name.
+func kind_name(car: Car) -> String:
+	return _kinds[car.kind]
 
 
 ## Index every parked vehicle in `layers` by the merged edge it was published
@@ -765,6 +863,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	car.speed = car.cruise_mps * 0.5
 	car.pose = _pose_on_edge(car)
 	car.shape.disabled = false
+	_wear_licence(car)
 	spawned += 1
 
 
@@ -2210,6 +2309,8 @@ func approaching_turn(car: Car) -> bool:
 
 
 func _write_lamps(car: Car, bits: int) -> void:
+	if car.for_hire:
+		bits |= ROOF_SIGN
 	if bits == car.written:
 		return
 	car.written = bits
@@ -2221,9 +2322,7 @@ func _write_lamps(car: Car, bits: int) -> void:
 func _hide(car: Car) -> void:
 	_write_lamps(car, lamp_bits(false, false))
 	car.shape.disabled = true
-	_batches[car.kind].set_instance_transform(
-		car.slot, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
-	)
+	_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
 
 
 ## The moving cars the near miss should look at, as `ParkedLayer.near` hands out

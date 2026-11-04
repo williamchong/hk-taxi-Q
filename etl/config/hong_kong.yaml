@@ -4449,6 +4449,7 @@ fares:
         name_en: Location_EN
         name_zh: Location_TC
         category: Status_EN
+        district: District_EN
 
       # ⚠️ ORDER IS LOAD-BEARING. Matching is first-hit-wins over substrings,
       # because `Status_EN` is free text carrying an operating-time note after
@@ -4529,7 +4530,9 @@ parked:
   # as a toy.
   vehicles:
     car: {length_m: 4.5, width_m: 1.8, meshes: [car_a, car_b]}
-    taxi: {length_m: 4.7, width_m: 1.7}
+    # One mesh per licence (`Q183`): the colour IS the licence, so it is never
+    # a livery (`Q167`); `licences:` below says which one stands where.
+    taxi: {length_m: 4.7, width_m: 1.7, meshes: [taxi, taxi_nt, taxi_lantau]}
     minibus: {length_m: 7.0, width_m: 2.1}
     bus: {length_m: 12.0, width_m: 2.5}
     coach: {length_m: 12.0, width_m: 2.5}
@@ -4592,6 +4595,24 @@ parked:
   # passenger's kerb stay clear. No tram stands: they run (`P3-4`, `tramlines.py`).
   stands:
     taxi_stand: {kind: taxi, queue: 2, pitch_m: 6.5}
+
+  # Which taxi a licence colour is (`Q183`). Hong Kong has three: red urban,
+  # green New Territories, blue Lantau. A stand is served by the licences its
+  # published category names (TD's Taxi Stands, `Status_EN`, filed by the
+  # `fares:` group's `categories:`), so a taxi queued there wears one of them.
+  # Anywhere else a region's taxi is drawn on the REGION's mix: every stand in
+  # the districts (`District_EN`) the region's own stands lie in, each counted
+  # by its category's weights. A region with no stand inside it has no mix and
+  # draws the vehicle's first mesh.
+  licences:
+    kind: taxi
+    fare_kind: taxi_stand
+    by_category:
+      urban: {taxi: 1.0}
+      cross_harbour: {taxi: 1.0}
+      urban_and_nt: {taxi: 0.5, taxi_nt: 0.5}
+      nt: {taxi_nt: 1.0}
+      lantau: {taxi_lantau: 1.0}
 
   # What a building's published name says about its kerb (`Q161`): no land use
   # or building use exists in the estate (`ART_DESIGN.md`), and the name's

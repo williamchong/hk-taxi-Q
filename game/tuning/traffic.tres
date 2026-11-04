@@ -34,8 +34,11 @@ kinds = Dictionary[String, float]({
 "car_a": 4.0,
 "car_b": 3.0,
 "minibus": 1.5,
+"taxi": 2.02,
 "van": 1.5
 })
+taxi_kind = "taxi"
+taxi_for_hire = 0.5
 react_s = 0.9
 recover_after_s = 2.0
 recover_radius_m = 6.0

@@ -51,7 +51,10 @@ FARE_KINDS = (TAXI_STAND, PUDO, POI)
 _FARE_ROLES = ("category",)
 
 
-_FARE_OPTIONAL_ROLES = ("name_en", "name_zh")
+# `district` is the publisher's administrative district, read by `parked.py`
+# to say which licences of taxi serve a region (`Q183`); `fares.json` does not
+# carry it.
+_FARE_OPTIONAL_ROLES = ("name_en", "name_zh", "district")
 
 
 @dataclass(frozen=True)

@@ -181,7 +181,7 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // uniform` is one per node, so a fleet in one `MultiMesh` cannot use
 // `lamp_lit`; `TrafficSystem` writes its state into `INSTANCE_CUSTOM.a` above
 // the livery's bit instead: `a = livery + 2 * running + 4 * braking + 8 * left
-// + 16 * right`, small integers a half float carries exactly. A switched-off
+// + 16 * right + 32 * for hire`, small integers a half float carries exactly. A switched-off
 // parked car writes 0 or 1 and every circuit stays dark — the difference the
 // user asked to see (2026-10-29). Left and right are the indicators (`P3-3f`), both at once a
 // stopping car's hazards; they flash at `traffic_blink_hz` for
@@ -199,6 +199,10 @@ uniform float traffic_side_lit : hint_range(0.0, 1.0) = 0.75;
 // material's indicators stay dark rather than flash at a guess.
 uniform float traffic_blink_hz : hint_range(0.0, 4.0) = 0.0;
 uniform float traffic_blink_duty : hint_range(0.0, 1.0) = 0.0;
+// A moving taxi's roof sign while it is for hire (`Q183`): bit 32 above the
+// livery's, at the player's `sign_lit`, set with the beat by `wire_blink`. 0 on an
+// unwired material, so a sign stays dark rather than burn at a guess.
+uniform float traffic_sign_lit : hint_range(0.0, 1.0) = 0.0;
 // Must match `CIRCUIT_BRAKE` and `CIRCUIT_HEADLAMP` in `tools/make_vehicle.py`,
 // less one, as `channel` below counts them.
 const int CHANNEL_BRAKE = 0;
@@ -208,6 +212,8 @@ const int CHANNEL_SIDELAMP = 4;
 // `CIRCUIT_INDICATOR_L` and `_R`, less one.
 const int CHANNEL_INDICATOR_L = 2;
 const int CHANNEL_INDICATOR_R = 3;
+// `CIRCUIT_ROOFSIGN`, less one.
+const int CHANNEL_ROOFSIGN = 6;
 
 // Which circuits are live this frame, in `CIRCUIT_*` order less one:
 // x brake, y reverse, z indicator left, w indicator right, then on into
@@ -316,6 +322,8 @@ varying flat float running;
 varying flat float braking;
 // The indicators this frame, left and right, the blink already applied.
 varying flat vec2 winking;
+// Whether a moving taxi's roof sign is lit for hire: 0 or 1.
+varying flat float for_hire;
 
 void vertex() {
 	marker = floor(UV.y);
@@ -334,6 +342,7 @@ void vertex() {
 	float phase = fract(float(INSTANCE_ID) * 0.618034);
 	float lit = step(fract(TIME * traffic_blink_hz + phase), traffic_blink_duty);
 	winking = vec2(mod(floor(bits / 8.0), 2.0), mod(floor(bits / 16.0), 2.0)) * lit;
+	for_hire = mod(floor(bits / 32.0), 2.0);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
@@ -435,6 +444,8 @@ void fragment() {
 				level = max(level, winking.x);
 			} else if (channel == CHANNEL_INDICATOR_R) {
 				level = max(level, winking.y);
+			} else if (channel == CHANNEL_ROOFSIGN) {
+				level = max(level, for_hire * traffic_sign_lit);
 			}
 			// The guard is for a black lens, which is not authored today and is
 			// one swatch away from being: it would divide by zero and emit NaN,

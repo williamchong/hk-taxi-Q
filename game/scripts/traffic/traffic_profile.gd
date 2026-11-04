@@ -75,6 +75,11 @@ const PATH: String = "res://tuning/traffic.tres"
 @export var horn_pitch_spread: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]
+## The kind among `kinds` that is a taxi (`Q183`): it wears the licence its spawn
+## region's `taxi_licences` draws, and lights its roof sign when for hire.
+@export var taxi_kind: String
+## The share of the moving taxis whose roof sign is lit, for hire, at each spawn.
+@export var taxi_for_hire: float
 ## A car the taxi knocks (`Q180`) coasts on its wheels for this long before its
 ## driver brakes, in seconds: TD's thinking time.
 @export var react_s: float

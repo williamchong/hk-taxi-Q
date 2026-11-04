@@ -288,7 +288,10 @@ CITY_NAME = "city.json"
 # 43 since `P3-4` (`Q176`): the manifest names `tram_lines.json`, the directed
 # tracks a tram runs with their stops and stop lines, and the parked roster stands
 # no tram. A v42 reader would ship the document unlisted and stand no tram at all.
-CITY_SCHEMA = 43
+# 44 since `Q183`: the manifest carries `taxi_licences`, the share of each taxi
+# licence's mesh a region's moving taxis are drawn on. A v43 reader would run
+# every region's taxis red, which is wrong in the New Territories.
+CITY_SCHEMA = 44
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -631,6 +634,10 @@ def build_region(
         # only the document ships. `null` where the city declares no `parked:`
         # block or placed nothing, on `tramway`'s terms.
         "parked_placements": parked["placements_document"],
+        # Each taxi licence's share of the region's taxis (`Q183`), mesh name to
+        # share, read off the published stands by `parked.py`. Empty where the
+        # region holds no stand: the moving taxis then wear the first licence.
+        "taxi_licences": parked.get("taxi_licences", {}),
         # The published trees (`P3-77`, `Q171`), on `lamps`' terms: `null`
         # where the city declares no `trees:` block or stood nothing.
         "trees": trees["asset"],

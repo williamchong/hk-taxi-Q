@@ -259,6 +259,20 @@ class Clearances:
 
 
 @dataclass(frozen=True)
+class Licences:
+    """Which of a kind's meshes a licence category is (`Q183`).
+
+    `kind` is the roster kind whose meshes are licences, `fare_kind` the fare
+    group whose published category says which licences serve a stand, and
+    `by_category` the share of each mesh a category stands for.
+    """
+
+    kind: str
+    fare_kind: str
+    by_category: dict[str, dict[str, float]]
+
+
+@dataclass(frozen=True)
 class Parked:
     """The stationary roster (`P3-71`, `Q161`) — see each part."""
 
@@ -272,6 +286,7 @@ class Parked:
     laybys: Laybys | None
     clearances: Clearances
     slow_streets: SlowStreets
+    licences: Licences | None = None
 
     def vehicle(self, kind: str) -> Vehicle:
         if kind not in self.vehicles:
@@ -404,6 +419,37 @@ def _stands(body: Any, where: str) -> dict[str, Stand]:
         if queue > 1 and stands[str(fare_kind)].pitch_m <= 0.0:
             raise ValueError(f"{entry_where}: a queue of {queue} needs a positive pitch_m")
     return stands
+
+
+def _licences(body: Any, where: str, vehicles: dict[str, Vehicle]) -> Licences | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    kind = _kind(_require(body, "kind", where), f"{where}:kind")
+    if kind not in vehicles:
+        raise ValueError(f"{where}:kind {kind!r} is not sized under vehicles:")
+    meshes = set(vehicles[kind].library_meshes)
+    raw = _require(body, "by_category", where)
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"{where}:by_category must map a category to mesh shares, got {raw!r}")
+    by_category: dict[str, dict[str, float]] = {}
+    for category, shares in raw.items():
+        entry_where = f"{where}:by_category:{category}"
+        if not isinstance(shares, dict) or not shares:
+            raise ValueError(f"{entry_where} must map a mesh to a share, got {shares!r}")
+        unknown = sorted(set(shares) - meshes)
+        if unknown:
+            raise ValueError(f"{entry_where} names {unknown}, not among {kind}'s meshes")
+        weights = {
+            str(mesh): _share(share, f"{entry_where}:{mesh}") for mesh, share in shares.items()
+        }
+        if sum(weights.values()) <= 0.0:
+            raise ValueError(f"{entry_where} must share out something")
+        by_category[str(category)] = weights
+    return Licences(
+        kind=kind, fare_kind=str(_require(body, "fare_kind", where)), by_category=by_category
+    )
 
 
 def _frontage(body: Any, where: str) -> Frontage | None:
@@ -562,6 +608,7 @@ def _parked(body: Any, where: str) -> Parked | None:
         laybys=_laybys(body.get("laybys"), f"{where}:laybys", vehicles),
         clearances=_clearances(_require(body, "clearances", where), f"{where}:clearances"),
         slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
+        licences=_licences(body.get("licences"), f"{where}:licences", vehicles),
     )
     named: set[str] = set()
     if parked.bays is not None:

@@ -24,6 +24,7 @@ masses_kg = Dictionary[String, float]({
 "car_a": 1600.0,
 "car_b": 2100.0,
 "minibus": 3500.0,
+"taxi": 1400.0,
 "tram": 12500.0,
 "van": 2200.0
 })

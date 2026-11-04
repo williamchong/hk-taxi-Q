@@ -236,7 +236,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 43 since `P3-4` (`Q176`): the manifest names `tram_lines.json`, the directed
 ## tracks a tram runs, and the parked roster stands no tram.
-const SCHEMA_VERSION: int = 43
+##
+## 44 since `Q183`: the manifest carries `taxi_licences`, the share of each taxi
+## licence's mesh the region's moving taxis are drawn on.
+const SCHEMA_VERSION: int = 44
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -494,6 +497,10 @@ var signal_heads_placements_path: String
 ## The directed tracks a tram runs (`P3-4`, `Q176`), read by `TramLines`. Empty
 ## where the city declares no tramway or nothing joined into a line.
 var tram_lines_path: String
+## Each taxi licence's share of the region's taxis (`Q183`), the library mesh's
+## name to its share, read off the published stands. Empty where the region holds
+## no stand: a moving taxi there wears the library's red urban one.
+var taxi_licences: Dictionary[String, float] = {}
 
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
@@ -675,6 +682,10 @@ static func load_manifest(region: String = "") -> CityManifest:
 		document.get("signal_heads_placements"), manifest.directory
 	)
 	manifest.tram_lines_path = _resolve(document.get("tram_lines"), manifest.directory)
+	var licences: Variant = document.get("taxi_licences", {})
+	if licences is Dictionary:
+		for mesh: Variant in licences:
+			manifest.taxi_licences[String(mesh)] = float(licences[mesh])
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")

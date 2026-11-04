@@ -153,10 +153,33 @@ this on the tick it happens. This is the horn a moving taxi hears: it rarely sta
 
 A semitone or so either side, so that two cars do not sound like one car twice. Fixed per car.
 
-## `kinds = {car_a 4, car_b 3, minibus 1.5, van 1.5}`
+## `kinds = {car_a 4, car_b 3, minibus 1.5, taxi 2.02, van 1.5}`
 
 The parked library's road vehicles, weighted toward saloons. No coach (too long for the turn curve
 the cars take) and no motorcycle (a box under it would read as a car).
+
+**`taxi` 2.02 is TD's measured share** (`Q183`, the user's call 2026-11-05: "real share"): 2.02 of
+12.02 is 16.8%, the taxis' share of the 16-hour weekday flow across the harbour in TD's *Annual
+Traffic Census 2023* (§5.4, "Cross Harbour Vehicular Trips Characteristics", the Cross Harbour
+Tunnel, whose south portal is in Causeway Bay, among the four crossings counted). The census's
+station pages for Wan Chai's own roads (Hennessy Road 1029, Gloucester Road 1028) are drawn, not
+text, so this is the nearest published share. ⚠️ It is the taxis' share of every vehicle; the other
+four weights are not TD's and are unchanged, so the taxi is 16.8% of THIS roster, not of the
+census's. ⚠️ The same table reads 23–31% from 20:00 to 23:00; the share does not follow the hour
+here.
+
+## `taxi_kind = "taxi"`
+
+The kind that wears a licence (`Q183`): at each spawn a taxi takes the mesh its road's region draws
+from `city.json`'s `taxi_licences` (TD's stands, read by `parked.py`), so a green New Territories
+taxi runs only where the stands say green taxis are. Off the car's id and its spawn count, never
+the seeded RNG: one more roll would move every later car.
+
+## `taxi_for_hire = 0.5`
+
+The share of the moving taxis whose roof sign is lit at each spawn (the user's call 2026-11-05:
+"random roof sign"), at the player's own `sign_lit` (`vehicle_lamps.tres`). Not measured: TD
+publishes no vacancy rate for the street. A half, so that both read.
 
 ## Knocked by the taxi (`Q180`, the user's calls, 2026-11-04)
 

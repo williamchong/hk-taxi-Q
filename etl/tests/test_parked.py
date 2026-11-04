@@ -16,13 +16,14 @@ import copy
 import itertools
 import math
 from types import MappingProxyType
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pytest
 import shapely
 import yaml
 
+from pipeline import parked as parked_stage
 from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, load_config
 from pipeline.documents import write_document
 from pipeline.drawnroad import ribbons
@@ -34,6 +35,8 @@ from pipeline.parked import (
     _flow_heading,
     _footprint,
     _layby_candidates,
+    _licence,
+    _region_licences,
     _stand,
     _Street,
     _tram_path,
@@ -517,3 +520,99 @@ class TestTheBlock:
     def test_the_read_only_view_of_kinds(self, spec) -> None:
         assert MappingProxyType(spec.fill.kinds)["car"] == 0.8
         assert math.isclose(sum(spec.fill.kinds.values()), 1.0)
+
+
+class TestTheLicences:
+    """`Q183`: a taxi wears the licence its stand's category names, and anywhere
+    else its region's mix, read off every stand in the districts the region's
+    own stands lie in."""
+
+    LICENSED: ClassVar[dict[str, Any]] = {
+        "kind": "taxi",
+        "fare_kind": "taxi_stand",
+        "by_category": {
+            "urban": {"taxi": 1.0},
+            "cross_harbour": {"taxi": 1.0},
+            "nt": {"taxi_nt": 1.0},
+        },
+    }
+    INSIDE = (114.175, 22.279)
+    OUTSIDE = (114.25, 22.30)
+
+    def _city(self, tmp_path, licences: dict[str, Any] | None = None):
+        document = yaml.safe_load(CITY_YAML)
+        group = document["fares"]["groups"][0]
+        group["fields"]["district"] = "DISTRICT"
+        group["categories"].append({"match": "NT Taxi", "id": "nt"})
+        block = copy.deepcopy(BLOCK)
+        block["vehicles"]["taxi"]["meshes"] = ["taxi", "taxi_nt"]
+        block["licences"] = licences if licences is not None else self.LICENSED
+        document["parked"] = block
+        path = tmp_path / "testville.yaml"
+        path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+        return load_config(path)
+
+    @staticmethod
+    def _stand(at: tuple[float, float], status: str, district: str) -> dict[str, Any]:
+        return {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": list(at)},
+            "properties": {"STATUS": status, "DISTRICT": district},
+        }
+
+    def _mix(self, tmp_path, monkeypatch, features: list[dict[str, Any]]) -> ParkedReport:
+        city = self._city(tmp_path)
+        monkeypatch.setattr(parked_stage, "cached_source", lambda *_, **__: None)
+        monkeypatch.setattr(
+            parked_stage, "read_feature_collection", lambda *_: {"features": features}
+        )
+        report = ParkedReport()
+        region = next(iter(city.regions))
+        _region_licences(
+            city, city.parked, region, city.game_transform(region), report, sources_root=None
+        )
+        return report
+
+    def test_the_mix_is_every_stand_in_the_districts_inside(self, tmp_path, monkeypatch) -> None:
+        report = self._mix(
+            tmp_path,
+            monkeypatch,
+            [
+                self._stand(self.INSIDE, "Urban Taxi Stand", "Here"),
+                # Outside the box, in a district the box holds: counted.
+                self._stand(self.OUTSIDE, "NT Taxi Stand", "Here"),
+                self._stand(self.OUTSIDE, "NT Taxi Stand", "Here"),
+                self._stand(self.OUTSIDE, "Urban Taxi Stand", "Here"),
+                # A district no stand inside the box lies in: not counted.
+                self._stand(self.OUTSIDE, "NT Taxi Stand", "Elsewhere"),
+            ],
+        )
+        assert report.taxi_licences == {"taxi": 0.5, "taxi_nt": 0.5}
+        assert report.taxi_licence_districts == ["Here"]
+        assert report.taxi_licence_stands == 4
+
+    def test_no_stand_inside_is_no_mix(self, tmp_path, monkeypatch) -> None:
+        report = self._mix(
+            tmp_path, monkeypatch, [self._stand(self.OUTSIDE, "NT Taxi Stand", "Elsewhere")]
+        )
+        assert report.taxi_licences == {}
+        assert _licence(report.taxi_licences, "taxi", _candidate("taxi", 0.5, 1.0)) == "taxi"
+
+    def test_a_stand_wears_its_own_category(self, tmp_path) -> None:
+        licences = self._city(tmp_path).parked.licences
+        for t in (0.1, 0.4, 0.7):
+            stand = _candidate("taxi", t, 1.0, category="nt")
+            assert _licence(licences.by_category["nt"], "taxi", stand) == "taxi_nt"
+
+    def test_the_draw_is_seeded_by_the_slot(self) -> None:
+        shares = {"taxi": 0.5, "taxi_nt": 0.5}
+        drawn = [_licence(shares, "taxi", _candidate("taxi", t / 100, 1.0)) for t in range(100)]
+        again = [_licence(shares, "taxi", _candidate("taxi", t / 100, 1.0)) for t in range(100)]
+        assert drawn == again
+        assert 30 < drawn.count("taxi_nt") < 70
+
+    def test_a_licence_not_among_the_meshes_is_refused(self, tmp_path) -> None:
+        licences = copy.deepcopy(self.LICENSED)
+        licences["by_category"]["lantau"] = {"taxi_lantau": 1.0}
+        with pytest.raises(ValueError, match="not among taxi's meshes"):
+            self._city(tmp_path, licences)
