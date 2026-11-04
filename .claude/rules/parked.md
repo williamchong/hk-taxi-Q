@@ -113,7 +113,7 @@ traffic, and the bonus for threading them.
   gone, the single-yellow fill in, the buses re-rolled past 400 m. The frame time with the
   colliders resident is owed (`P4-5`).
 - **`masses_kg` is the push's** (`Q180`): kerb weight per kind, cited in `parked.md`, read by
-  `TrafficSystem` and `TramSystem`. 🔴 A parked vehicle is NOT pushed in v1 (a scope cut); a kind
+  `TrafficSystem` and `TramSystem`. The bus carries one since `P3-78` (it moves on its routes). 🔴 A parked vehicle is NOT pushed in v1 (a scope cut); a kind
   that moves needs a mass, which `verify_traffic` checks.
 - **A tram no longer stands, and nothing stands in a tram's path** (`P3-4`, `Q176`): `on_tram_line` in
   `refused`, published sources included (3 stops on Wan Chai, 2 laybys on Causeway Bay), by

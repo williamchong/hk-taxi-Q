@@ -109,6 +109,9 @@ paths:
   indicators (`P3-3f2`): paste both `wink:` lines (the second: still winking as a turn joins,
   `wink_hold_m`); the beat is `vehicle_lamps.tres`' via `wire_blink`, never
   a shader default.
+- **The routed fleet** (`P3-78`): the three seeds drive the wandering cars alone and a fourth drive
+  adds the buses — its rules are `busroutes.md`'s. ⚠️ The wandering fleet alone meets in a
+  signalled junction on seeds 1, 2 and 8 (two merges, `Q182`); the gate holds on 7 / 4 / 23 only.
 - **The taxis** (`Q183`): `verify_traffic`'s `licence:` lines — paste them. 🔴 **A taxi's licence
   and roof sign come off its id and spawn count, never `_rng`**: one more roll moves every later
   car and every seed's staged case. 🔴 **One slot per licence per taxi, the rest hidden** — a

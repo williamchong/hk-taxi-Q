@@ -442,7 +442,7 @@ Keys (`etl/pipeline/export.py`):
 - `OPTIONAL_ASSET_KEYS`, each optional and nullable: `tramway`, `arrows`, `arrows_placements`,
   `boxjunctions`, `crossings`, `lamps`, `lamps_placements`, `railings`, `railings_placements`,
   `signs`, `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`,
-  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`), `signal_heads_placements` (schema 42, `P3-3e`), `tram_lines` (schema 43, `P3-4`). Null
+  `trees`, `trees_placements` (schema 39, `P3-77`), `signals_plan` (schema 40, `P3-3a`), `signal_heads_placements` (schema 42, `P3-3e`), `tram_lines` (schema 43, `P3-4`), `bus_routes` (schema 45, `P3-78`). Null
   where the estate publishes no such layer, **or** where every feature failed the join — a stage
   names its asset from what it drew. ⚠️ `parked_placements` (schema 38, `P3-71`) is the one
   placements document whose library is NOT in the bundle: it stands the committed
@@ -799,6 +799,41 @@ runtime joins it to a neighbour's where one is resident, else a tram appears or 
 and `signals` are metres along this track; a `signals` entry past its length stands in the chord to
 `next`. `edge` is the region's own id: `TramLines` re-keys it through `RoadGraph.edge_id_in`. The
 stage's report is `tramlines.json`.
+
+### `bus_routes.json` — the stops a bus or green minibus keeps to (`P3-78`, `Q182`)
+
+```json
+{
+  "schema_version": 1,
+  "city_id": "...",
+  "region_id": "...",
+  "service_day": "wednesday",
+  "routes": [
+    {
+      "key": "1003-1",
+      "route_id": "1003",
+      "bound": 1,
+      "kind": "bus",
+      "name": "10",
+      "operator": "CTB",
+      "per_hour": [0, 0, 0, 0, 0, 1, 4, 6, "... 24 counts"],
+      "stops": [
+        {"seq": 7, "stop_id": "1234", "plan": [1107.9, 448.9], "edge": 333, "t": 0.41,
+         "along": true, "side": 1}
+      ]
+    }
+  ]
+}
+```
+
+One row per route direction with a departure on the configured `service_day`, holding only the
+stops inside this region, in `seq` order. `per_hour` is that day's departures from the terminus in
+each hour (GTFS `frequencies.txt`, or a `trips.txt` trip's own `HHMM`). `edge` is the region's own
+id, or -1 for a stop no road lies within `max_snap_m` of; `along` is the way a bus at the stop
+drives the edge (its kerb's flow), `side` +1 nearside, -1 offside. `BusRoutes` re-keys `edge`
+through `RoadGraph.edge_id_in`, re-measures the pole on the merged edge from `plan`, and joins the
+regions' rows by `key`, cutting a route into runs where a `seq` is missing. The path between stops
+is not here: the game finds it with `RoadRouter.goal_tree`. The stage's report is `busroutes.json`.
 
 ### `tram.glb` — the published tramway (`P3-14`)
 

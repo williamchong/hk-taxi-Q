@@ -69,6 +69,9 @@ paths:
   is `Profile.legal()` (`Q141`). The minimap draws that same `Route` (`P3-46`, `hud.md`) off the
   fare, never a second search; `fare_preview.gd` still does not call it. `TrafficSystem` (`P3-3c`) builds its own
   `Profile.legal()` router and walks `moves_from` one arc at a time — never `prepare` or `route`.
+  Its routed fleet (`P3-78`) searches with `goal_tree` (a goal on ONE way of an edge, the other
+  left unseeded) and steps with `next_toward`, over the same arcs; neither touches the prepared
+  cache. `_search` skips an `INF` seed, which no other caller passes (`busroutes.md`).
 - ⚠️ **`route(..., facing)` seeds one direction of the source edge** (`P3-46`): `Facing.ALONG`,
   `AGAINST`, or `EITHER` — the default, and every table pin and the tables themselves use it. A
   direction the profile has no state for falls back to either. `verify_road_graph.gd`'s same-edge check pins

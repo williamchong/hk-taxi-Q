@@ -662,6 +662,26 @@ holds three, all urban.
   `pdftotext` reads the station list and AADTs but no vehicle mix. A station's own share needs
   those pages read by eye.
 
+### ✅ USE — Routes and Fares of Public Transport (`P3-78`, `Q182`)
+
+- **Publisher:** TD, via DATA.GOV.HK. `JSON_BUS.json` (78 MB) and `JSON_GMB.json` (21 MB) under
+  `static.data.gov.hk/td/routes-fares-geojson/`: one GeoJSON point per stop of each route direction
+  (`routeId`, `routeSeq` the bound, `stopSeq`, `stopId`, `routeNameE`, `companyCode`), WGS84, with a
+  UTF-8 byte-order mark. `stopId` is the bus-stop layer's `STOP_ID`.
+- **Used:** each direction's stops in order, snapped to the road graph (`pipeline/busroutes.py`).
+  Wan Chai keeps 464 directions, Causeway Bay 241 (2026-11-05).
+- ⚠️ The line between stops is NOT published: GTFS `shapes.txt` answers 403. The game finds the
+  path itself (`RoadRouter.goal_tree`) and `tools/bus_legs.py` grades it against the straight gap.
+
+### ✅ USE — Public Transport Headways (GTFS)
+
+- **Publisher:** TD, via DATA.GOV.HK, `static.data.gov.hk/td/pt-headway-en/`: `trips.txt`,
+  `frequencies.txt`, `calendar.txt`. CRLF, byte-order mark.
+- **Used:** departures per route direction per hour of one service day (`bus_routes.service_day`,
+  Wednesday): the routed fleet's spawn weights. The direction is spelled only in `trip_id`
+  (`<route_id>-<bound>-<service_id>-<HHMM>`); 6,149 of 82,692 trips have no `frequencies.txt` row
+  and depart once at their `HHMM`. A `frequencies` end is exclusive.
+
 ### ✅ USE — Taxi Pick-up & Drop-off Points
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-td-tis_38-taxi-pick-up-drop-off-points

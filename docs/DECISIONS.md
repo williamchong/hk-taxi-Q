@@ -11369,10 +11369,10 @@ livery and the minibus behaviour.
 
 ## `Q182` — Buses and green minibuses run their published routes, and stop at their stops
 
-**Status.** ⬜ Decided 2026-11-04 on the user's asks ("can we make bus and minibus appear in roads
+**Status.** 🟡 Decided 2026-11-04 on the user's asks ("can we make bus and minibus appear in roads
 where there is actual bus and minibus route passing through", "we should allow bus and minibus
 moving in these routes", "moving bus should stop and bus stop, bus appear either moving or stopped
-randomly"). To be built as `P3-78`.
+randomly"). Built 2026-11-05 as `P3-78`. Owed: a drive, and the frame cost with the bus batch.
 
 **Decision.** A moving bus or green minibus keeps to a route TD publishes and dwells at that
 route's stops. A bus standing at a stop may be a moving one dwelling there or a parked one, which
@@ -11393,7 +11393,46 @@ wandering with the cars.
 - Headways come from TD's GTFS (`static.data.gov.hk/td/pt-headway-en/frequencies.txt`), per trip
   and by hour.
 
-**See.** `Q161` · `Q173` · `Q176` · `P3-73` · `P3-78`
+**Built (2026-11-05).**
+- **The ETL publishes stops, not paths.** `pipeline/busroutes.py` writes `bus_routes.json` per
+  region (city schema 45): each kept direction's stops in `seq` order, each snapped to an edge
+  within `max_snap_m` (12 m) and given the way its kerb flows (`parked._flow_heading`'s rule), and
+  its departures in each hour of a Wednesday's service (`calendar.txt`, `frequencies.txt` and
+  `trips.txt` — 6,149 of 82,692 trips have no headway row and depart once at their `HHMM`). A
+  direction with no departure that day is dropped and counted.
+  - Wan Chai: 486 directions → 464 kept (405 bus, 59 minibus), 22 no headway; 1,395 stops → 1,355
+    snapped, 40 not; peak 1,099 departures at 07:00.
+  - Causeway Bay: 251 → 241 (229, 12), 10; 531 → 527, 4; 528 at 07:00.
+- **The path is found at runtime, not in the ETL** (the plan said the ETL). `TrafficSystem` already
+  moves only by `RoadRouter.moves_from` under `Profile.legal()`, and the seam is joined only at
+  runtime, so a path baked per region would cut at the seam and be a second successor rule. A
+  routed vehicle carries a `RoadRouter.goal_tree` toward ONE way of its next stop's edge and takes
+  `next_toward`'s move at each junction. No bus profile: the legal one is the cars', and bus lanes
+  are not enforced (`Q181`).
+- **The grader is `tools/bus_legs.py`** on `reachability.py`'s search (level 0, the lane bar, turn
+  bans, no U-turn), path length over the straight gap per leg:
+  - Wan Chai: 862 legs → 830 reached, 32 unreachable; p50 1.02, p90 1.32, p99 3.86, max 5.34; 21
+    over 2× (routes 10 / 31 / 10P / N31 / 31X, 337 m for 63 m; 690 / N691, 1,540 m for 293 m).
+  - Causeway Bay: 252 → 189, 63 unreachable; p50 1.17, max 7.96 (81A, 980 m for 123 m).
+  - ⚠️ Level 0 only: an unreachable leg may be driven in the game over a measured level-1 edge.
+- **The fleet.** `traffic.tres` `buses` = 6 slots beyond `cars`, placed at a stop in the ring
+  mid-dwell, on a route drawn by its departures in the game hour; they dwell `dwell_s` (12 s) with
+  the front within `dwell_reach_m` of the pole, in the nearside lane. Past a run's last stop, or
+  when knocked, a vehicle leaves its route and wanders. A minibus with no route is red
+  (`wander_liveries`), one on a route green (`route_liveries`): the colour is the licence (`Q167`).
+  The bus takes the cars' turn curve; its mass is `parked.tres`' 15,000 kg.
+- **`verify_traffic`**: a fourth drive at 08:00 with the fleet. On seed 4, 13 placed, 3 stops
+  served, none driven past or unreachable; no routed vehicle off a legal path to its stop; 6,919
+  car-ticks dwelling, none moving and none away from the pole; 4 minibuses, every one in its
+  licence's colour.
+- ⚠️ **A latent meeting, found here.** The wandering fleet ALONE, with no bus, meets in a
+  signalled junction on seeds 1, 2 and 8: cars turning from e114 into e333 overlap a car held at
+  e216's line by 0.20 m, and two turning off e618 to e341 and e46 by 0.18–0.23 m. The gated seeds
+  7 / 4 / 23 miss it by timing; the buses moved seed 7 into it. The three gated seeds therefore
+  drive the wandering fleet alone, and the routed drive's meetings (3, all e114 / e216) are
+  printed, not gated. The merge is open, not a bar to retune.
+
+**See.** `Q161` · `Q167` · `Q173` · `Q176` · `Q181` · `P3-73` · `P3-78`
 
 ## `Q183` — Taxis join the traffic at TD's measured share, each wearing a licence its region's stands name
 
