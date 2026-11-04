@@ -11346,3 +11346,52 @@ is graded on level-0 roads. Nothing pushes a parked vehicle (v2).
 against about 1.8 ms with `--traffic=off`. `draws` is unchanged.
 
 **See.** `Q175` · `Q176` · `Q84` · `game/tuning/parked.md` · `game/tuning/traffic.md`
+
+## `Q181` — No traffic-law penalty until something in the game enforces it
+
+**Status.** ✅ Decided 2026-11-04 on the user's instruction ("drop Bus-lane penalty until we have
+something like policeman catching red lights, double yellow, and bus lane/stop").
+
+**Decision.** `P3-8` no longer docks for driving in a bus lane. A breach of the road's law is paid
+for only when something in the world catches it. The four breaches the user named come back
+together behind that mechanic, never one at a time as a flag read off the road graph:
+- a red the player runs (`P3-3d` counts it as `ran_red_count`, and it stays counted, never docked);
+- stopping on a double yellow (`NSR`, `Q54`);
+- a bus lane (`bus_lane` on the road graph);
+- a bus stop.
+
+The enforcer is "something like a policeman". There is no task or design for it yet.
+
+**Unchanged.** `bus_lane` stays in the road graph and the router's rules. `P3-8` keeps the red taxi
+livery and the minibus behaviour.
+
+**See.** `Q173` · `P3-3d` · `P3-8`
+
+## `Q182` — Buses and green minibuses run their published routes, and stop at their stops
+
+**Status.** ⬜ Decided 2026-11-04 on the user's asks ("can we make bus and minibus appear in roads
+where there is actual bus and minibus route passing through", "we should allow bus and minibus
+moving in these routes", "moving bus should stop and bus stop, bus appear either moving or stopped
+randomly"). To be built as `P3-78`.
+
+**Decision.** A moving bus or green minibus keeps to a route TD publishes and dwells at that
+route's stops. A bus standing at a stop may be a moving one dwelling there or a parked one, which
+`P3-73` places by a seeded chance; both kinds stay. Red minibuses publish no route, so they keep
+wandering with the cars.
+
+**Data (2026-11-04).**
+- TD's Routes and Fares of Public Transport (`static.data.gov.hk/td/routes-fares-geojson/`):
+  `JSON_BUS.json` (78 MB) and `JSON_GMB.json` (21 MB). Each record is one stop of one route
+  direction (`routeId`, `routeSeq`, `stopSeq`, `stopId`), with a point. `stopId` is our
+  `bus_stops` / `gmb_termini` `STOP_ID`.
+- 451 bus route directions (213 routes; Citybus 240, KMB+Citybus 137, KMB 69) and 61 GMB directions
+  (32 routes) stop inside `wan_chai` ∪ `causeway_bay`. 350 and 50 of them stop there at least twice.
+- The line between stops is not published: GTFS `shapes.txt` answers 403. The straight gap between
+  consecutive stops is 368 m at p50 and 1,522 m at p90, so the path is inferred by the legal
+  router. ⚠️ A long leg is where an inferred path can pick the wrong street, so it is graded, not
+  trusted.
+- Headways come from TD's GTFS (`static.data.gov.hk/td/pt-headway-en/frequencies.txt`), per trip
+  and by hour.
+
+**See.** `Q161` · `Q173` · `Q176` · `P3-73` · `P3-78`
+
