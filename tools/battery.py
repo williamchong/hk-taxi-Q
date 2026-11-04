@@ -167,6 +167,28 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "busroutes": Trigger(
+        "`pipeline/busroutes.py`, the `bus_routes` block",
+        (
+            Report(
+                "busroutes.json",
+                (
+                    "directions",
+                    "kept",
+                    "no_headway",
+                    "by_kind",
+                    "two_or_more",
+                    "stops",
+                    "snapped",
+                    "unsnapped",
+                    "offside_one_way",
+                    "peak_hour",
+                    "peak_departures",
+                ),
+            ),
+            Tool("bus_legs.py", (*_REGION, *_OUT)),
+        ),
+    ),
     "parked": Trigger(
         "`pipeline/parked.py`, the `parked` config block, or any parked-vehicle change",
         (
