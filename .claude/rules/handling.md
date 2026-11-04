@@ -164,6 +164,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `approach`. Both read the collider's frame in `_integrate_forces`; a static wall's velocity is
   zero, so `--only=wall` must stay byte-identical. `back20` reading above 0 means the "moving into
   the contact" test has gone; `rear40` is under the 1 m/s floor and cannot see it.
+  ⚠️ **Six push rows follow (`Q180`)**: `tail20_car`, `head50_car`, `rear40_car`, `tail20_van`,
+  `tail20_tram`, `head50_tram`, with the body's speed before and after. They must match the
+  analytic exchange `J = (1 + e) · closing / (1/m + gives)`; the five rows above are unmarked and
+  stay byte-identical. 🔴 The push goes in at the MIDDLE of the contact patch
+  (`_contact_middle`): at the first corner a square hit read a spurious turn. A
+  `collision_restitution` change re-reads these rows and nothing else.
 - 🔴 **The slip is the REAR AXLE's since 2026-10-06** (`Q153`): `VehicleController.rear_axle_velocity`
   against the nose, in the fare, drift mode, stability control's cuts and the pad's own copy
   (`_slide_velocity`). At the centre of mass a gripping full-lock turn carried 15° by geometry

@@ -34,6 +34,11 @@ paths:
   one placed short of a red could not stop (seed 4). ⚠️ A tram does not stop for a car crossing,
   for `TrafficSystem`'s deadlock reason. ⚠️ Mutations are in `Q176`; a GDScript mutation must still
   compile, since Godot hangs on an unused variable.
+- **The push** (`Q180`): `verify_trams`' `push:` lines. 🔴 **A tram gives only along its rails**:
+  `push_inverse_mass` is `(n · rails)² / m`, so a push square across moves nothing and a tram cannot
+  be derailed — never add a free-body term. A tram pushed back rolls back (`_roll`) and brakes to
+  rest before it runs on. 🔴 A knocked car holds a tram at any heading (`_follow`'s `ANY_HEADING`).
+  The mass is `parked.tres`' `masses_kg["tram"]`, HKT's own figure.
 - **The bell** is `tools/make_tram_bell.py`, byte-identical each run
   (`test_make_tram_bell.py`). It was the game's first sound, and nothing has graded a level for it or for the horn and the beep (`Q178`).
 - **A tram's lamps are the running bit** (`Q177`): the head lamp on `headlamp_l` (⚠️ `headlamp_c` is on no

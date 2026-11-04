@@ -122,3 +122,11 @@ paths:
   loop's awards whatever the car's wait**: a close call by `Award.passed` (by reference, never by id), a
   docked hit by `_taxi_gap` and `_struck`; `verify_traffic`'s `react:` lines. The loop is found by
   `FareSystem.GROUP`, so `--fares=off` draws none.
+- **The knock** (`Q180`): `verify_traffic`'s `knock:` lines, in both regions. 🔴 **A knocked car is
+  an obstacle at any heading** in `_gap_ahead` and is skipped by every rule that reads a car's lane
+  (`_oncoming_clear`, `_lane_blocked`, `_give_way_gap`, `_queued_past_join`): its lane is where it
+  WAS. Once still it is a `Parked` footprint (`_stand_wreck`), which the pass-a-parked rules read.
+  🔴 **It never reverses to recover** (`recover_heading_deg`), and it looks only for cars under
+  way — one queued behind it would hold it for ever; the swept curve stops it on any body. ⚠️ A
+  staged `TrafficSystem` in a verify tool leaves the tree with `free()`, not `queue_free()`: a
+  script runs in one frame and a later check finds the first system in `GROUP`.

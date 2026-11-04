@@ -104,6 +104,9 @@ traffic, and the bonus for threading them.
 - ⚠️ A parked-vehicle change owes a drive by day and at night (`--time-of-day=0.9`): the vans
   gone, the single-yellow fill in, the buses re-rolled past 400 m. The frame time with the
   colliders resident is owed (`P4-5`).
+- **`masses_kg` is the push's** (`Q180`): kerb weight per kind, cited in `parked.md`, read by
+  `TrafficSystem` and `TramSystem`. 🔴 A parked vehicle is NOT pushed in v1 (a scope cut); a kind
+  that moves needs a mass, which `verify_traffic` checks.
 - **A tram no longer stands, and nothing stands in a tram's path** (`P3-4`, `Q176`): `on_tram_line` in
   `refused`, published sources included (3 stops on Wan Chai, 2 laybys on Causeway Bay), by
   `tramway.lines.tram_path_m`. Do not exempt a published bay: the tram drives through it. `parked` now

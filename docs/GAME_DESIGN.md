@@ -226,7 +226,7 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 |---|---|---|
 | **Bilingual destination callouts** | Trivial | `fares.json` |
 | **Red urban taxi livery** | Trivial | ✅ Shipped (`P3-11`): red, silver roof. HK Island = red; green or blue reads as wrong |
-| **Trams as moving walls** | Low | 🟡 Built (`P3-4`, `Q176`): on the published rails (`P3-14`, `tram_lines.json`), both ways, stopping at the published stops and the reds. Solid, and a tram never pushes; the near miss reads them. Owed: the user's drive |
+| **Trams as moving walls** | Low | 🟡 Built (`P3-4`, `Q176`): on the published rails (`P3-14`, `tram_lines.json`), both ways, stopping at the published stops and the reds. Solid; the taxi pushes one along its rails by its mass, never off them (`Q180`), and a car knocked across them holds it; the near miss reads them. Owed: the user's drive |
 | **Bus lanes as penalty zones** | Low | `bus_lane` in `roadgraph.json` |
 | Double-decker buses as sight blockers | Low | Traffic AI vehicle type |
 | Bamboo scaffolding on buildings | Low | Prop instancing |
@@ -259,6 +259,10 @@ paid against them. What follows is the moving layer that comes after.
 - Vehicle mix: private cars, red taxis, double-deckers, minibuses, trams (scripted, fixed routes),
   delivery trucks.
 - AI reacts to the player minimally — braking for imminent collision. Traffic, not opponents.
+- A car the taxi hits is knocked by momentum, by the two kerb masses (`Q180`): it slides and
+  spins on its tyres' grip, stands on its hazards, and drives on if it can rejoin a lane it may
+  drive, or stays a wreck the others pass. Parked vehicles stay fixed for now. The crash costs
+  the closing speed alone, whatever the mass.
 
 ⚠️ One turn restriction in the region excludes taxis and `roadgraph.json` has no field for that, so
 the graph forbids a turn a real red taxi may make. Adding it is a schema change on both sides.

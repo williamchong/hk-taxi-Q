@@ -11253,3 +11253,96 @@ price still out-pays the clock at HK$5 a second. A floor on speed fits only if t
 holds.
 
 **See.** `Q172` · `Q84` · `Q86` · `game/tuning/skills.md`
+
+## `Q180` — The taxi knocks moving cars and pushes trams by momentum, and a tram never leaves its rails
+
+**Status.** 🟡 Built 2026-11-04 on the user's ask ("can other cars and trams be pushed according
+to momentum and car direction, mass vs speed when crashed into. tram should never be derailed").
+Owed: the user's drive.
+
+**Decision.** A hit on a moving car or a tram exchanges momentum along the contact
+(`VehicleController._integrate_forces`, `Pushable`): impulse `J = (1 + e) · closing / (1/m_taxi +
+gives)`, where `gives` is the struck body's inverse mass at the contact. A car is a free box in plan,
+`1/m + (r × n)² / I` with `I = m (l² + w²) / 12`, so a push off its middle turns it. A tram is
+`(n · rails)² / m`: square across its rails it does not give at all, so it can never be derailed,
+and along them it rolls back or on as its mass says. Walls, kerbs, railings, trees and parked
+vehicles are unmarked and keep the arcade response byte for byte. `--push=off` marks nothing and
+restores the walls everywhere (`drive.sh` accepts it).
+
+**Masses: kerb weight, cited in `parked.md`.** car_a 1,600 kg (Camry 2.5 Hybrid 1,570–1,670), car_b
+2,100 (Alphard 2,060–2,290), van 2,200 (Hiace H300 LWB 2,175–2,225), minibus 3,500 (Coaster PLB
+export 3,100–3,450), tram 12,500 (Hong Kong Tramways' own post, 2020-10-27: 12–13 t empty, +5 t
+full; a fan site's 27 t is wrong). The taxi is its `CarSpec`'s 1,400 kg. Kept in
+`parked.tres`' `masses_kg`, which both systems read.
+
+**Restitution 0.15** (`handling.tres` `collision_restitution`). TD publishes none. Crash
+reconstruction's: Tanner et al. (SAE) read 0.1–0.2 at higher closing speeds, and Monson & Germane
+(SAE 1999-01-0097) show it falling with speed. A wall never reads it. ⚠️ So the taxi bounces harder
+off a tram than off a plastic wall: head-on into a tram coming at 50 kph it leaves at −35 kph, where
+a wall stops it.
+
+**A knocked car** turns its speed into a slide and its push into a slide and a spin. It loses the
+slide to the road tyre's grip (`tyre.tres` `mu` × gravity × `pace_scale`) sideways at once. Along
+its heading it rolls for `react_s` 0.9 s, then brakes at `brake_max_mps2`. The 0.9 s is TD's: the
+Road Users' Code's stopping-distance table is 10 / 15 / 20 m of thinking at 40 / 60 / 80 km/h.
+TD's braking figures (6.2–6.9 m/s²) were not taken: `brake_max_mps2` 8.0 stays (the user's call).
+It hits walls by `test_move`, stands on its hazards, and once still is a parked footprint that the
+others pass. After `recover_after_s` it tries to drive on. It needs a road within `recover_radius_m`
+that it may drive, facing within `recover_heading_deg` of the road's way (it never reverses), and no
+car under way near the join. It rejoins the nearside lane along a curve swept clear. Otherwise it
+stays a wreck until it retires. A car standing is not looked for (one queued behind the wreck would
+wait on it for ever), but the sweep stops it on any body in the way.
+
+**Parked vehicles stay fixed in v1.** This is a scope cut, not physics: P locks only the wheels. v2
+pushes them on locked-wheel grip.
+
+**The penalty stays on the closing speed alone** (the user's call): a heavier target costs no more.
+
+**Pad.** `--only=traffic` adds six rows, the body's speed before and after (kph):
+
+| Row | 42 exit | body | 63 exit | body | 86 exit | body |
+|---|---|---|---|---|---|---|
+| `tail20_car` (1,600 kg) | 35.49 | 41.74 → 52.47 | 49.61 | 59.22 → 69.95 | 65.01 | 78.34 → 89.07 |
+| `head50_car` | −0.00 | −50 → 16.96 | 0.00 | −50 → 23.40 | 4.90 | −50 → 31.70 |
+| `rear40_car` | 14.23 | 40 → 18.53 | 14.23 | 40 → 18.53 | 14.23 | 40 → 18.53 |
+| `tail20_van` (2,200 kg) | 34.09 | 41.74 → 50.68 | 48.21 | 59.22 → 68.16 | 63.62 | 78.34 → 87.29 |
+| `tail20_tram` (12,500 kg) | 28.92 | 41.74 → 44.05 | 43.05 | 59.22 → 61.54 | 58.47 | 78.34 → 80.66 |
+| `head50_tram` | −35.32 | −50 → −35.55 | −35.29 | −50 → −34.16 | −35.26 | −50 → −32.37 |
+
+They match the analytic exchange to the hundredth once the push is applied at the middle of the
+contact patch (`_contact_middle`). At the first contact corner it read a spurious turn and latched
+over several ticks. Every other row at 42 / 63 / 86 kph (wall, the five `Q175` traffic rows, drift)
+is byte-identical to `HEAD`'s apart from `us/tick`.
+
+**Checks.** `verify_traffic` `knock:` lines stage a broadside on a two-lane one-way road in both
+regions:
+- it slides `v² / 2μg` across (2.41 of 2.49 m) without turning;
+- it stands on its hazards;
+- the car coming in that lane stops for it, with 0.00 m of overlap;
+- it drives on into its nearside lane 8.1 s after settling;
+- an off-centre push turns it;
+- turned round on a one-way road, it stands;
+- pushed again, its footprint moves to where it settles (20.3 → 15.9 m).
+
+`verify_trams` `push:` lines:
+- across the rails, nothing moves;
+- along them, the tram takes its speed, rolls back, brakes to rest and runs on, never more than its
+  bogies off its rails;
+- a car knocked across the rails holds a tram whatever its heading.
+
+The free drives' lines are identical to `HEAD`'s. Seven mutations caught:
+- no grip;
+- no heading check;
+- `_gap_ahead` blind to a knocked car;
+- the tram's inverse mass without the rails;
+- the tram's heading test for knocked cars;
+- the knock system left in the traffic group, which skipped a `near:` check silently;
+- a wreck pushed again keeping its old footprint.
+
+**Left.** A knocked car keeps its height while it slides, so on a ramp it slides level; the knock
+is graded on level-0 roads. Nothing pushes a parked vehicle (v2).
+
+**Cost.** On the throttle route, `phys` is about 3.5 ms with push on and off alike (two runs each),
+against about 1.8 ms with `--traffic=off`. `draws` is unchanged.
+
+**See.** `Q175` · `Q176` · `Q84` · `game/tuning/parked.md` · `game/tuning/traffic.md`
