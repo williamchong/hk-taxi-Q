@@ -48,6 +48,7 @@ from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.busroutes import BUSROUTES_MANIFEST_NAME, BUSROUTES_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED
 from pipeline.config import (
     LANDMARK_ASSET_ROOT,
@@ -291,7 +292,10 @@ CITY_NAME = "city.json"
 # 44 since `Q183`: the manifest carries `taxi_licences`, the share of each taxi
 # licence's mesh a region's moving taxis are drawn on. A v43 reader would run
 # every region's taxis red, which is wrong in the New Territories.
-CITY_SCHEMA = 44
+# 45 since `P3-78` (`Q182`): the manifest names `bus_routes.json`, each bus and
+# green-minibus route's stops in order. A v44 reader would ship the document
+# unlisted and run every bus and minibus wandering.
+CITY_SCHEMA = 45
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -348,6 +352,7 @@ OPTIONAL_ASSET_KEYS = (
     "signals_plan",
     "signal_heads_placements",
     "tram_lines",
+    "bus_routes",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "road_surface", "landmark_assets", "bounds_game")
 
@@ -392,6 +397,7 @@ INPUTS: tuple[Input, ...] = (
     Input(TREES_MANIFEST_NAME, TREES_MANIFEST_SCHEMA, "trees"),
     Input(SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA, "signals"),
     Input(TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA, "tramlines"),
+    Input(BUSROUTES_MANIFEST_NAME, BUSROUTES_MANIFEST_SCHEMA, "busroutes"),
 )
 
 
@@ -477,6 +483,7 @@ def build_region(
     trees = documents[TREES_MANIFEST_NAME]
     signals = documents[SIGNALS_MANIFEST_NAME]
     tramlines = documents[TRAMLINES_MANIFEST_NAME]
+    busroutes = documents[BUSROUTES_MANIFEST_NAME]
     basemap = documents[BASEMAP_NAME]
 
     tiles = [
@@ -651,6 +658,9 @@ def build_region(
         # The lines a tram runs (`P3-4`, `Q176`): `null` where the city declares no
         # tramway or nothing joined into a line.
         "tram_lines": tramlines["document"],
+        # The bus and green-minibus routes (`P3-78`, `Q182`): `null` where the
+        # city declares no `bus_routes:` block or no route stops in the region.
+        "bus_routes": busroutes["document"],
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

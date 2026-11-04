@@ -40,6 +40,7 @@ from pipeline import (
     basemap,
     boxjunctions,
     buildings,
+    busroutes,
     carve,
     clearance,
     crossings,
@@ -175,6 +176,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # a tram's path, and off the fenced edges. Before `export`, which names the
     # document.
     "parked": parked.main,
+    # After `surface` (`P3-78`): a route's stops are snapped to the drawn kerb.
+    # Before `export`, which names the document.
+    "busroutes": busroutes.main,
     "export": export.main,
 }
 
@@ -224,6 +228,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "signals": ("surface",),
     "tramlines": ("tramway", "fares", "signals", "railings", "signs", "lamps", "trees"),
     "parked": ("surface", "fares", "tramlines", "fence"),
+    "busroutes": ("surface",),
     "export": (
         "basemap",
         "landmarks",
@@ -243,6 +248,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "signals",
         "tramlines",
         "parked",
+        "busroutes",
     ),
 }
 

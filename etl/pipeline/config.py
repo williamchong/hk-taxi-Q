@@ -89,6 +89,11 @@ from pipeline.config_blocks.buildings import (  # noqa: F401
     _reflectance,
     _scale,
 )
+from pipeline.config_blocks.busroutes import (  # noqa: F401
+    BusRoutes,
+    RouteSet,
+    _bus_routes,
+)
 from pipeline.config_blocks.crossings import (  # noqa: F401
     Crossings,
     ZebraEvidence,
@@ -452,6 +457,10 @@ class Config:
     # `pipeline/signals.py` (`P3-3a`, `Q173`). Optional: absent, the region
     # ships no signal plan and no car stops for a light.
     signals: Signals | None = None
+    # The published bus and green-minibus routes, read by `pipeline/busroutes.py`
+    # (`P3-78`, `Q182`). Optional: absent, the region ships no routes and every
+    # moving vehicle wanders.
+    bus_routes: BusRoutes | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -818,6 +827,7 @@ def load_config(path: Path | None = None) -> Config:
         parked=_parked(document.get("parked"), f"{path}:parked"),
         trees=_trees(document.get("trees"), f"{path}:trees", table),
         signals=_signals(document.get("signals"), f"{path}:signals"),
+        bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -872,6 +882,12 @@ def load_config(path: Path | None = None) -> Config:
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
+    if city.bus_routes is not None:
+        for index, route_set in enumerate(city.bus_routes.sets):
+            _check_source_exists(city, route_set.source, f"{path}:bus_routes.sets[{index}].source")
+        _check_source_exists(city, city.bus_routes.trips, f"{path}:bus_routes.trips")
+        _check_source_exists(city, city.bus_routes.frequencies, f"{path}:bus_routes.frequencies")
+        _check_source_exists(city, city.bus_routes.calendar, f"{path}:bus_routes.calendar")
     _check_landmarks_lie_within_a_region(city, path)
     _check_carve_regions_are_declared(city, path)
     unread = _unread(reads)

@@ -553,6 +553,21 @@ sources:
   bus_stops: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638874475129_49745&format=geojson
   gmb_termini: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638874728005_80512&format=geojson
 
+  # The bus and green-minibus routes (`P3-78`, `Q182`): TD's Routes and Fares of
+  # Public Transport, one Point per stop of each route direction (`routeId`,
+  # `routeSeq`, `stopSeq`, `stopId`), with a UTF-8 byte-order mark. 78 MB and
+  # 21 MB; the line between stops is not published (GTFS `shapes.txt` answers
+  # 403), so the game routes it.
+  bus_routes: https://static.data.gov.hk/td/routes-fares-geojson/JSON_BUS.json
+  gmb_routes: https://static.data.gov.hk/td/routes-fares-geojson/JSON_GMB.json
+  # TD's GTFS headways. A `trip_id` is `<route_id>-<bound>-<service_id>-<HHMM>`,
+  # the one place the direction is spelled; `calendar.txt` says which days a
+  # `service_id` runs. 6,149 of 82,692 trips have no `frequencies.txt` row: one
+  # departure, at the `HHMM` its id spells. CRLF line ends.
+  pt_trips: https://static.data.gov.hk/td/pt-headway-en/trips.txt
+  pt_frequencies: https://static.data.gov.hk/td/pt-headway-en/frequencies.txt
+  pt_calendar: https://static.data.gov.hk/td/pt-headway-en/calendar.txt
+
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
 # the *sheet index* — a polygon per sheet carrying that sheet's download URLs —
@@ -4520,6 +4535,36 @@ fares:
 # `pipeline/parked.py` reads this; every kind named below is sized under
 # `vehicles:` and drawn by `tools/make_parked.py` into the authored library.
 # ---------------------------------------------------------------------------
+# The routes a moving bus or green minibus keeps to (`P3-78`, `Q182`). Read by
+# `pipeline/busroutes.py`: each route direction's stops inside the region, in
+# order, snapped to the level-0 road, with its departures per hour off TD's
+# GTFS headways. The path between two stops is the game's legal router's.
+bus_routes:
+  sets:
+    - source: bus_routes
+      kind: bus
+    # A green minibus: the red ones publish no route and keep wandering.
+    - source: gmb_routes
+      kind: minibus
+  crs: EPSG:4326
+  fields:
+    route: routeId
+    bound: routeSeq
+    seq: stopSeq
+    stop: stopId
+    name: routeNameE
+    operator: companyCode
+  trips: pt_trips
+  frequencies: pt_frequencies
+  calendar: pt_calendar
+  # A school-day weekday: the headways' busiest service, and the one a free
+  # drive is most like.
+  service_day: wednesday
+  # `parked.stops`' own snap: a stop pole stands at the kerb, so a point further
+  # than this from any level-0 centreline is on a deck, in a terminus off the
+  # street, or in another region's road.
+  max_snap_m: 12.0
+
 parked:
   library: res://assets/authored/vehicles/parked.glb
 

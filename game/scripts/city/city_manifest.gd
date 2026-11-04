@@ -239,7 +239,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 44 since `Q183`: the manifest carries `taxi_licences`, the share of each taxi
 ## licence's mesh the region's moving taxis are drawn on.
-const SCHEMA_VERSION: int = 44
+##
+## 45 since `P3-78` (`Q182`): the manifest names `bus_routes.json`, each bus and
+## green-minibus route's stops in order.
+const SCHEMA_VERSION: int = 45
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -497,6 +500,9 @@ var signal_heads_placements_path: String
 ## The directed tracks a tram runs (`P3-4`, `Q176`), read by `TramLines`. Empty
 ## where the city declares no tramway or nothing joined into a line.
 var tram_lines_path: String
+## The bus and green-minibus routes (`P3-78`, `Q182`), read by `BusRoutes`. Empty
+## where the city declares no routes or none stops in the region.
+var bus_routes_path: String
 ## Each taxi licence's share of the region's taxis (`Q183`), the library mesh's
 ## name to its share, read off the published stands. Empty where the region holds
 ## no stand: a moving taxi there wears the library's red urban one.
@@ -682,6 +688,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 		document.get("signal_heads_placements"), manifest.directory
 	)
 	manifest.tram_lines_path = _resolve(document.get("tram_lines"), manifest.directory)
+	manifest.bus_routes_path = _resolve(document.get("bus_routes"), manifest.directory)
 	var licences: Variant = document.get("taxi_licences", {})
 	if licences is Dictionary:
 		for mesh: Variant in licences:
@@ -809,6 +816,7 @@ func shipped() -> PackedStringArray:
 		signals_plan_path,
 		signal_heads_placements_path,
 		tram_lines_path,
+		bus_routes_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

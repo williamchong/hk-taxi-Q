@@ -27,6 +27,7 @@ from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.busroutes import BUSROUTES_MANIFEST_NAME, BUSROUTES_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
 from pipeline.crossings import CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA
@@ -397,6 +398,13 @@ class _Region:
             # And a tenth: `testville` draws no tram line.
             TRAMLINES_MANIFEST_NAME: {
                 "schema_version": TRAMLINES_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "document": None,
+            },
+            # And an eleventh: no bus route stops in `testville`.
+            BUSROUTES_MANIFEST_NAME: {
+                "schema_version": BUSROUTES_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": REGION,
                 "document": None,
@@ -1069,6 +1077,7 @@ class TestOrchestrator:
             "signals",
             "tramlines",
             "parked",
+            "busroutes",
             "export",
         ]
 
@@ -1112,6 +1121,7 @@ class TestOrchestrator:
             "signals",
             "tramlines",
             "parked",
+            "busroutes",
             "export",
         ]
 
