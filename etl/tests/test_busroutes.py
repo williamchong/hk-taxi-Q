@@ -177,3 +177,59 @@ class TestTheManifest:
         assert not stale.exists()
         manifest = json.loads((tmp_path / BUSROUTES_MANIFEST_NAME).read_text(encoding="utf-8"))
         assert manifest["document"] is None
+
+
+class TestTheStage:
+    """`build_region` over stubbed readers: the partitions close and the peak is
+    the busiest hour across every kept direction (`busroutes.md`)."""
+
+    @staticmethod
+    def _built(city, tmp_path, monkeypatch):
+        import pipeline.busroutes as stage
+
+        def direction(route_id: str, kind: str, stops: int) -> stage.Direction:
+            found = stage.Direction(route_id, 1, kind, route_id, "KMB")
+            found.stops = [stage.Stop(seq, f"{route_id}-{seq}", 0.0, 0.0) for seq in range(stops)]
+            return found
+
+        directions = [
+            direction("1", "bus", 3),
+            direction("2", "minibus", 1),
+            direction("3", "bus", 2),
+        ]
+        hours = {"1-1": [0] * HOURS, "2-1": [0] * HOURS}
+        hours["1-1"][8] = 6
+        hours["2-1"][8] = 2
+        hours["2-1"][9] = 9
+        # Route 3 has no headway at all; route 2's one stop does not snap.
+        monkeypatch.setattr(stage, "read_graph", lambda *_a, **_k: {"edges": []})
+        monkeypatch.setattr(stage, "read_document", lambda *_a, **_k: {})
+        monkeypatch.setattr(stage, "kerbed_ribbons", lambda *_a, **_k: {})
+        monkeypatch.setattr(stage.Segments, "of", staticmethod(lambda _edges: None))
+        monkeypatch.setattr(stage, "departures_per_hour", lambda *_a, **_k: hours)
+        monkeypatch.setattr(stage, "read_directions", lambda *_a, **_k: iter(directions))
+        # A stop's plan z is its route's number, so the snap can tell them apart.
+        monkeypatch.setattr(
+            stage,
+            "_inside",
+            lambda found, *_a: [
+                (stop, (float(stop.seq), float(found.route_id))) for stop in found.stops
+            ],
+        )
+        snapped = {"edge": 7, "t": 0.5, "side": 1.0, "along": True}
+        monkeypatch.setattr(stage, "snap_stop", lambda *a: None if a[4] == 2.0 else dict(snapped))
+        out_root = tmp_path / "out"
+        (out_root / "wan_chai").mkdir(parents=True)
+        return stage.build_region(city, "wan_chai", out_root=out_root)
+
+    def test_the_partitions_close_and_the_peak_is_the_busiest_hour(
+        self, city, tmp_path, monkeypatch
+    ) -> None:
+        report = self._built(city, tmp_path, monkeypatch)
+        assert report.directions == 3
+        assert (report.kept, report.no_headway) == (2, 1)
+        assert report.directions == report.kept + report.no_headway
+        assert report.by_kind == {"bus": 1, "minibus": 1}
+        assert report.stops == report.snapped + report.unsnapped == 4
+        assert report.two_or_more == 1
+        assert (report.peak_hour, report.peak_departures) == (9, 9)

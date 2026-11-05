@@ -472,6 +472,10 @@ class TestAssembly:
             },
         ]
         assert manifest["fares"] == FARES_NAME
+        # `testville` declares no `bus_routes:` and its stands name no licence:
+        # both keys still ship, so a reader never defaults them (`Q183`, `Q182`).
+        assert manifest["bus_routes"] is None
+        assert manifest["taxi_licences"] == {}
         assert report.tiles == 2
         assert report.lod_files == 3
 

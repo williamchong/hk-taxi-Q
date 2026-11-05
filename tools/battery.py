@@ -187,6 +187,19 @@ TRIGGERS: dict[str, Trigger] = {
                 ),
             ),
             Tool("bus_legs.py", (*_REGION, *_OUT)),
+            # `parked` lays buses over at each route's terminus off this stage's
+            # routes (`busroutes.md`), so a route change moves its termini.
+            Report(
+                "parked.json",
+                (
+                    "terminals_read",
+                    "terminal_routes",
+                    "terminals_resnapped",
+                    "terminals_unsnapped",
+                    "terminal_off_edge",
+                    "terminal_windows",
+                ),
+            ),
         ),
     ),
     "parked": Trigger(
@@ -214,6 +227,18 @@ TRIGGERS: dict[str, Trigger] = {
                     "refused",
                     "narrowest_lane_room_m",
                     "published_in_lane",
+                    # The termini (`Q187`) and the taxi licences (`Q183`): the
+                    # counters `parked.md` asks to be pasted.
+                    "terminals_read",
+                    "terminal_routes",
+                    "terminals_resnapped",
+                    "terminals_unsnapped",
+                    "terminal_off_edge",
+                    "terminal_windows",
+                    "taxi_licences",
+                    "taxi_licence_districts",
+                    "taxi_licence_stands",
+                    "by_licence",
                 ),
             ),
         ),
