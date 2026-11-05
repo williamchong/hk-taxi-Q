@@ -120,7 +120,7 @@ digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `le
 
 ## `sheet_image_scale`
 
-SAVE IMAGE's picture of the 成績表 (`SheetImage`, `P3-80`, `Q188`): laid out at the sheet's own size on screen
+SAVE RESULT's picture of the 成績表 (`SheetImage`, `P3-80`, `Q188`): laid out at the sheet's own size on screen
 (REPORT's 1120 × 770, `ledger_px`; RECORD's taller, its runs and best over the tables) and drawn 2.0 times over, so the type stays sharp when a phone or a chat app scales the picture down.
 The text is drawn at the scale, never stretched from a 1× picture.
 

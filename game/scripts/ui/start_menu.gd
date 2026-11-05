@@ -45,7 +45,8 @@ signal language_changed(code: String)
 signal page_shown(shot: MenuShot)
 ## The pause's RESUME: `Main` unpauses the drive where it stood and frees this.
 signal resumed
-## The pause's way out: `Main` parks the level and opens a fresh menu on HOME.
+## The pause's way out: `Main` parks the level and opens a fresh menu, on a
+## free drive's REPORT or on HOME.
 signal ended
 
 ## Chooses whether the menu is shown at all. `off` for every scripted run.
@@ -66,16 +67,21 @@ const SHEET_COLUMN: NodePath = ^"Centre/Pad/Column"
 enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT, PAUSE, RECORD }
 
 
-## What a shift banked, for the REPORT page (`Q162`). Filled by `Main`.
+## What a run banked, for the REPORT page (`Q162`). Filled by `Main`: at a
+## shift's 交更, or when a free drive ends from its PAUSE (the user's ask), which
+## reads the time driven where a shift reads its best.
 class Report:
 	extends RefCounted
+	## The run reported, and the one AGAIN starts.
+	var mode: DayClock.Mode = DayClock.Mode.SHIFT
 	var total_hkd: float = 0.0
 	var deliveries: int = 0
 	var bails: int = 0
 	## The best after this shift, this one included.
 	var best_hkd: float = 0.0
 	var new_best: bool = false
-	## The shift's books, for the 成績表 beside the total.
+	## The run's books, for the 成績表 beside the total; its `driven_s` is a
+	## free drive's length.
 	var tally: SessionTally = SessionTally.new()
 
 
@@ -88,7 +94,7 @@ var pause_tally: SessionTally = null
 ## tree; it opens on PAUSE and its ways back lead there, not HOME.
 var pausing: bool = false
 ## Whether the paused run is a shift: its way out is END SHIFT, a free drive's
-## MENU.
+## END DRIVE, which `Main` follows with the drive's REPORT.
 var pausing_shift: bool = false
 
 var _profile: MenuProfile = null
@@ -141,8 +147,12 @@ func _ready() -> void:
 		_page = Page.REPORT
 	elif _page == Page.REPORT:
 		report = Report.new()
+		# `--mode=free` shoots a free drive's report; anything else a shift's.
+		if Cmdline.value(DayClock.MODE_ARG).to_lower() == "free":
+			report.mode = DayClock.Mode.FREE
 		report.best_hkd = Settings.best_shift_hkd()
 		var shown: SessionTally = _shown_tally(report.tally)
+		report.tally = shown
 		report.total_hkd = shown.total_hkd()
 		report.deliveries = shown.deliveries
 		report.bails = shown.bails
@@ -465,10 +475,13 @@ func _guide() -> Control:
 
 ## 交更 (`Q162`): what the shift banked, over the best, and the way to the
 ## next — a column off the corner like HOME's, so the car stays the picture.
+## A free drive's has its name for a heading and the time driven for the best:
+## a drive with no end has no total to weigh.
 func _report() -> Control:
 	var column: VBoxContainer = _column("Report")
 	var shown: Report = report if report != null else Report.new()
-	var heading: Label = _line("Heading", _text.say("handover", _language))
+	var free: bool = shown.mode == DayClock.Mode.FREE
+	var heading: Label = _line("Heading", _text.say("free" if free else "handover", _language))
 	_size(heading, _profile.heading_size_zh, _profile.heading_size)
 	heading.add_theme_color_override(&"font_color", _style.dial_needle)
 	column.add_child(heading)
@@ -481,21 +494,27 @@ func _report() -> Control:
 	_size(fares, _profile.body_size_zh, _profile.body_size)
 	fares.add_theme_color_override(&"font_color", _style.chip_muted)
 	column.add_child(fares)
-	var best: Label = _line(
-		"Best",
-		(
-			_text.say("new_best", _language)
-			if shown.new_best
-			else _text.say("best", _language) + FareFace.money(shown.best_hkd)
+	var best: Label
+	if free:
+		best = _line("Driven", _text.say("driven", _language) % duration_text(shown.tally.driven_s))
+	else:
+		best = _line(
+			"Best",
+			(
+				_text.say("new_best", _language)
+				if shown.new_best
+				else _text.say("best", _language) + FareFace.money(shown.best_hkd)
+			)
 		)
-	)
 	_size(best, _profile.body_size_zh, _profile.body_size)
 	best.add_theme_color_override(
 		&"font_color", _style.accent if shown.new_best else _style.dial_needle
 	)
 	column.add_child(best)
 	column.add_child(_gap("Gap", _profile.button_gap_px))
-	_first[Page.REPORT] = _button(column, "Again", "again", _on_start.bind(DayClock.Mode.SHIFT))
+	_first[Page.REPORT] = _button(
+		column, "Again", "again_free" if free else "again", _on_start.bind(shown.mode)
+	)
 	_button(column, "Menu", "menu", _show.bind(Page.HOME))
 	# Only a real report: every other menu builds this page and never shows it.
 	if report != null:
@@ -505,7 +524,8 @@ func _report() -> Control:
 
 ## The drive held (the user's ask): a column off the corner like HOME's over
 ## the frozen frame — the way on, how to play, and the way out of the run, a
-## shift's END SHIFT recording no best, since half a shift is not a total.
+## shift's END SHIFT recording no best, since half a shift is not a total, and
+## a free drive's END DRIVE leading to its REPORT.
 func _pause() -> Control:
 	var column: VBoxContainer = _column("Pause")
 	_heading(column, "Heading", _text.say("paused", _language))
@@ -514,7 +534,7 @@ func _pause() -> Control:
 	if pause_tally != null:
 		_save_button(column, _beside(column, pause_tally))
 	column.add_child(_gap("Gap", _profile.button_gap_px))
-	_button(column, "End", "end_shift" if pausing_shift else "menu", _on_end)
+	_button(column, "End", "end_shift" if pausing_shift else "end_drive", _on_end)
 	return column
 
 
@@ -573,7 +593,7 @@ func _beside(page: Control, tally: SessionTally) -> VBoxContainer:
 	return column
 
 
-## SAVE IMAGE under `parent`, for `sheet`'s column (`SheetImage`, `P3-80`); none
+## SAVE RESULT under `parent`, for `sheet`'s column (`SheetImage`, `P3-80`); none
 ## on a phone.
 func _save_button(parent: Control, sheet: Control) -> void:
 	if not SheetImage.offered():
@@ -603,6 +623,17 @@ func _ledger(tally: SessionTally) -> LedgerCard:
 	card.name = "Card"
 	card.build(tally, _text, _profile, _style, _language, _font_zh)
 	return card
+
+
+## `seconds` on a stopwatch, to the second begun: "4:05" under the hour,
+## "1:02:09" over it.
+static func duration_text(seconds: float) -> String:
+	var whole: int = floori(maxf(seconds, 0.0))
+	var hours: int = floori(whole / 3600.0)
+	var minutes: int = floori(whole / 60.0) % 60
+	if hours > 0:
+		return "%d:%02d:%02d" % [hours, minutes, whole % 60]
+	return "%d:%02d" % [minutes, whole % 60]
 
 
 ## What a 成績表 shows: `tally`, or a filled sheet under `SAMPLE_ARG`.

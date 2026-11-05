@@ -55,6 +55,10 @@ var longest_flight_s: float = 0.0
 ## INF until a pass has paid.
 var closest_pass_m: float = INF
 var top_speed_kph: float = 0.0
+## Game seconds driven this run, the pause and the menu not counted: free
+## mode's REPORT shows it. Neither a sum nor a best — the lifetime record keeps
+## no driving time — so it is in neither list and the record never reads it.
+var driven_s: float = 0.0
 
 ## What the last `take_unsaved` handed over, so a run saved at every pause adds
 ## each event to the record once.
@@ -190,6 +194,7 @@ static func sample() -> SessionTally:
 	tally.longest_flight_s = 1.5
 	tally.closest_pass_m = 0.18
 	tally.top_speed_kph = 142.0
+	tally.driven_s = 1834.0
 	return tally
 
 

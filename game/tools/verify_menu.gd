@@ -36,6 +36,7 @@ const ExamSheetScript = preload("res://scripts/fares/exam_sheet.gd")
 const FareScript = preload("res://scripts/fares/fare.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 const SheetImageScript = preload("res://scripts/ui/sheet_image.gd")
+const DayClockScript = preload("res://scripts/world/day_clock.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
@@ -56,6 +57,9 @@ const KEYS: PackedStringArray = [
 	"paused",
 	"resume",
 	"end_shift",
+	"end_drive",
+	"driven",
+	"again_free",
 	"record",
 	"record_runs",
 	"sheet_title",
@@ -302,7 +306,7 @@ func _check_sheet() -> void:
 	_expect(
 		record_column.get_node_or_null("Foot/Save/Button") != null,
 		"image",
-		"RECORD offers SAVE IMAGE beside BACK"
+		"RECORD offers SAVE RESULT beside BACK"
 	)
 	var staged: SubViewport = SheetImageScript.stage(record_column, fresh._profile, fresh._style)
 	var foot: Control = record_column.get_node("Foot")
@@ -341,9 +345,20 @@ func _check_sheet() -> void:
 				== pausing_free
 			),
 			"image",
-			"SAVE IMAGE is where the sheet is, on a free drive's PAUSE alone"
+			"SAVE RESULT is where the sheet is, on a free drive's PAUSE alone"
+		)
+		var end_key: String = "end_drive" if pausing_free else "end_shift"
+		_expect(
+			(
+				(over._pages[StartMenuScript.Page.PAUSE].get_node("End/Button") as Button).text
+				in [text.say(end_key, "en"), text.say(end_key, "zh")]
+			),
+			"free",
+			"a free drive's way out is END DRIVE, a shift's END SHIFT"
 		)
 		over.queue_free()
+
+	await _check_free_report(tally, text)
 
 	var kai: Font = load(str(StreetPlateScript.load_tuning().get("font_zh", ""))) as Font
 	_expect(kai != null, "sheet", "the Kai loads")
@@ -356,6 +371,45 @@ func _check_sheet() -> void:
 		for index: int in said.length():
 			if said.unicode_at(index) > 0x2FFF and not kai.has_char(said.unicode_at(index)):
 				_fail("sheet", "the Kai has no '%s' for %s" % [said[index], key])
+
+
+## A free drive's REPORT (the user's ask): its name for the heading, the time
+## driven where a shift has its best, and AGAIN a free drive, not a shift.
+func _check_free_report(tally: SessionTallyScript, text: MenuTextScript) -> void:
+	for case: Array in [[0.0, "0:00"], [65.9, "1:05"], [3599.0, "59:59"], [3729.0, "1:02:09"]]:
+		_expect(
+			StartMenuScript.duration_text(case[0]) == case[1],
+			"free",
+			"%.1f s reads %s" % [case[0], case[1]]
+		)
+	var menu := StartMenuScript.new()
+	menu.report = StartMenuScript.Report.new()
+	menu.report.mode = DayClockScript.Mode.FREE
+	menu.report.tally = tally
+	var modes: Array[int] = []
+	menu.started.connect(func(mode: int) -> void: modes.append(mode))
+	root.add_child(menu)
+	await process_frame
+	var page: Control = menu._pages.get(StartMenuScript.Page.REPORT)
+	var language: String = menu._language
+	var driven: Label = page.get_node_or_null("Driven") as Label
+	_expect(
+		(
+			driven != null
+			and (
+				driven.text
+				== text.say("driven", language) % StartMenuScript.duration_text(tally.driven_s)
+			)
+			and page.get_node_or_null("Best") == null
+			and (page.get_node("Heading") as Label).text == text.say("free", language)
+		),
+		"free",
+		"a free drive's REPORT reads its time driven under its name, and no best"
+	)
+	(page.get_node("Again/Button") as Button).pressed.emit()
+	_expect(
+		modes == [DayClockScript.Mode.FREE], "free", "its AGAIN starts a free drive, not a shift"
+	)
 
 
 func _check_profile() -> void:
@@ -651,7 +705,7 @@ func _check_image_of(
 	column: Node,
 	tally: SessionTallyScript
 ) -> void:
-	_expect(page.get_node_or_null("Save/Button") != null, "image", "REPORT offers SAVE IMAGE")
+	_expect(page.get_node_or_null("Save/Button") != null, "image", "REPORT offers SAVE RESULT")
 	for phone: String in ["mobile", "web_android", "web_ios"]:
 		_expect(
 			SheetImageScript.is_phone(func(feature: String) -> bool: return feature == phone),

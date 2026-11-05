@@ -399,6 +399,9 @@ func armed() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	# Held with this tick: `park` stops it and so does the paused tree, so the
+	# books count driving time alone.
+	tally.driven_s += delta
 	var placed: Transform3D = vehicle.global_transform
 	var velocity: Vector3 = vehicle.linear_velocity
 	var nose: Vector3 = -placed.basis.z

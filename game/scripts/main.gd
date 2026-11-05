@@ -22,9 +22,10 @@ extends Node
 ## the parked roster hold where they are. A fresh menu on PAUSE runs alone over
 ## it. RESUME unpauses; the way out parks the level and opens HOME, writing no
 ## best: half a shift is not a total, though what it did joins the lifetime
-## record, saved as the pause opens. This node stays pausable — its children
-## would inherit anything else — so the menu's signals are what reach it while
-## the tree is held.
+## record, saved as the pause opens. A free drive's way out opens its REPORT
+## instead (`Q189`): what it banked and how long it drove. This node stays
+## pausable — its children would inherit anything else — so the menu's signals
+## are what reach it while the tree is held.
 
 ## How long `--menu-page=pause` drives before it pauses: the chase rig is
 ## snapped onto the car at start and needs a moment to frame it.
@@ -121,7 +122,7 @@ func pause() -> void:
 	var shown := StartMenu.new()
 	shown.name = "PauseMenu"
 	shown.pausing = true
-	shown.pausing_shift = level.clock != null and level.clock.mode == DayClock.Mode.SHIFT
+	shown.pausing_shift = _in_shift()
 	if not shown.pausing_shift and is_instance_valid(level.fares):
 		shown.pause_tally = level.fares.tally
 	shown.resumed.connect(_release_pause)
@@ -137,15 +138,43 @@ func _release_pause() -> void:
 	get_tree().paused = false
 
 
-## Out of a paused run: the level parks under a fresh HOME as at boot, and the
-## next PLAY starts clean through `DriveHarness.play`.
+## Out of a paused run: the level parks under a fresh HOME as at boot, or a
+## free drive's REPORT, and the next PLAY starts clean through
+## `DriveHarness.play`. Read before the park: nothing resets the books but
+## `play`, and the tally was banked as the pause opened.
 func _on_run_ended() -> void:
+	var report: StartMenu.Report = _free_report()
 	_release_pause()
 	level.park()
 	_ended = true
 	if is_instance_valid(hud):
 		hud.visible = false
-	_open_menu(null)
+	_open_menu(report)
+
+
+## A free drive's books for its REPORT, or null for a shift ended early, which
+## goes HOME: half a shift is not a total.
+func _free_report() -> StartMenu.Report:
+	if _in_shift():
+		return null
+	var report: StartMenu.Report = _report_of_run()
+	report.mode = DayClock.Mode.FREE
+	return report
+
+
+func _in_shift() -> bool:
+	return level.clock != null and level.clock.mode == DayClock.Mode.SHIFT
+
+
+## The run's books in a REPORT: blank under `--fares=off`, which frees the loop.
+func _report_of_run() -> StartMenu.Report:
+	var report := StartMenu.Report.new()
+	if is_instance_valid(level.fares):
+		report.tally = level.fares.tally
+		report.total_hkd = level.fares.earned_hkd
+		report.deliveries = level.fares.deliveries
+		report.bails = level.fares.bails
+	return report
 
 
 ## The boot's shaders compiled under a cover (`ShaderWarmup`): the menu takes
@@ -199,25 +228,21 @@ func _on_started(mode: DayClock.Mode) -> void:
 ## weighed against the best. A run with no menu — every scripted one — says
 ## the total on the log, parks, and writes no record: the best is a player's.
 func _on_shift_over() -> void:
-	var fares: FareSystem = level.fares if is_instance_valid(level.fares) else null
-	var total: float = fares.earned_hkd if fares != null else 0.0
-	var delivered: int = fares.deliveries if fares != null else 0
-	var walked: int = fares.bails if fares != null else 0
-	print("shift over: HK$%.1f, %d delivered, %d walked" % [total, delivered, walked])
+	var report: StartMenu.Report = _report_of_run()
+	print(
+		(
+			"shift over: HK$%.1f, %d delivered, %d walked"
+			% [report.total_hkd, report.deliveries, report.bails]
+		)
+	)
 	level.park()
 	_ended = true
 	if is_instance_valid(hud):
 		hud.visible = false
 	if _gui == null:
 		return
-	var report := StartMenu.Report.new()
-	report.total_hkd = total
-	report.deliveries = delivered
-	report.bails = walked
-	report.new_best = Settings.record_shift(total)
+	report.new_best = Settings.record_shift(report.total_hkd)
 	report.best_hkd = Settings.best_shift_hkd()
-	if fares != null:
-		report.tally = fares.tally
 	_bank_tally(true)
 	_open_menu(report)
 

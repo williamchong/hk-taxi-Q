@@ -122,6 +122,18 @@
       "en": "END SHIFT",
       "zh": "收工"
     },
+    "end_drive": {
+      "en": "END DRIVE",
+      "zh": "收車"
+    },
+    "driven": {
+      "en": "TIME DRIVEN %s",
+      "zh": "行車時間 %s"
+    },
+    "again_free": {
+      "en": "DRIVE AGAIN",
+      "zh": "再兜一轉"
+    },
     "record": {
       "en": "RECORD",
       "zh": "紀錄"
@@ -187,12 +199,12 @@
       "zh": "最高車速"
     },
     "sheet_save": {
-      "en": "SAVE IMAGE",
-      "zh": "儲存圖片"
+      "en": "SAVE RESULT",
+      "zh": "儲存成績"
     },
     "sheet_saved": {
-      "en": "IMAGE SAVED",
-      "zh": "圖片已儲存"
+      "en": "RESULT SAVED",
+      "zh": "成績已儲存"
     },
     "sheet_save_failed": {
       "en": "NOT SAVED",
