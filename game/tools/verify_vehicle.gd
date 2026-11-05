@@ -139,7 +139,6 @@ const AUDIO_SHOTS: PackedStringArray = [
 	"door_open",
 	"door_shut",
 	"indicator",
-	"wrong_way",
 	"octopus",
 	"coin",
 	"meter_beep",

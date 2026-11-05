@@ -358,12 +358,6 @@ def indicator() -> np.ndarray:
     return _fade(relay + _modes(t, ((1100.0, 0.8, 200.0),)), release_s=0.005)
 
 
-def wrong_way() -> np.ndarray:
-    t = _time(0.5)
-    buzz = np.tanh(4.0 * np.sin(TAU * 220.0 * t)) * ((t < 0.18) | ((t > 0.26) & (t < 0.44)))
-    return _fade(np.convolve(buzz, np.ones(4) / 4.0, mode="same"))
-
-
 def octopus() -> np.ndarray:
     """The card reader's double beep at the delivery: lower and softer than the meter's pip."""
     t = _time(0.3)
@@ -407,7 +401,6 @@ SHOTS: dict[str, tuple[Callable[[], np.ndarray], float]] = {
     "door_open": (door_open, 0.4),
     "door_shut": (door_shut, 0.6),
     "indicator": (indicator, 0.25),
-    "wrong_way": (wrong_way, 0.3),
     "octopus": (octopus, 0.3),
     "coin": (coin, 0.3),
 }

@@ -11580,7 +11580,7 @@ like engine, steer/skid, the classic motor sound when the passenger flag goes up
 and "not sure how bonus should be sounded". No ear has graded any of it but the engine's first
 draft. `P3-79`.
 
-**Every file is `tools/make_vehicle_sounds.py`'s** (36 files, 22,050 Hz mono, replacing
+**Every file is `tools/make_vehicle_sounds.py`'s** (35 files, 22,050 Hz mono, replacing
 `make_car_horn.py`): authored, no attribution, byte-identical per run on seeded noise. A loop is
 exactly periodic — every tone on the loop's own frequency grid, every noise drawn through `irfft` —
 and carries a `smpl` chunk, which Godot's importer reads as the loop, so no `.import` is edited by
@@ -11614,8 +11614,7 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
   the card reader's double beep, then a coin per HK$2 of tip, at most 15. Nothing sounds like the
   meter's 2 kHz pip, which stays the only flat electronic beep.
 - **Small ones**: the door's latch and thud (`TaxiDoor`, as it leaves shut and lands shut), the
-  indicator relay off `VehicleLamps.indicator_lit`, the landing, and the
-  wrong-way buzzer once per raise (`hud.gd`).
+  indicator relay off `VehicleLamps.indicator_lit` and the landing.
 - **Three buses** under `Master` (`default_bus_layout.tres`, a light compressor on `Master`): `SFX`,
   `Engine`, `Cabin`. `AudioDirector` and a volume setting stay Phase 5.
 
@@ -11643,6 +11642,9 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
   then the squeal followed the slip (the angle) alone. Now it also follows the speed: 30% of the
   level at a crawl, full by 60 kph, and the pitch ±10% across that range (`skid_full_kph`,
   `skid_slow_share`, `skid_speed_pitch`).
+
+- "drop wrong way sound effect": the buzzer and its file are gone; the sign is silent again, as it
+  was before `P3-79`.
 
 **Also from the `/simplify` pass.**
 - A tap's cooldown no longer swallows a harder hit a tick behind it.
