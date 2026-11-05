@@ -128,3 +128,11 @@ traffic, and the bonus for threading them.
   the tram and `MARKER_CABIN_DIM` on the minibus. The coach stays dark because it only ever parks; do not
   "complete the set". A new cabin marker is four places: `make_vehicle.py`, the importer's `VEHICLE`,
   the shader and `verify_parked`'s `LIT_CABINS`. A shader change owes a render and `grep -i "shader error"`.
+- 🔴 **No bus stands at a stop; a terminus is filled by the timetable** (`Q187`, reversing
+  `Q182`'s parked bus): `terminals` queues `ceil(departures × layover_min / 60)` buses (≤ `queue`)
+  behind each bus route's first stop, a rank per run of hours (`hour_windows`), re-snapped within
+  `max_snap_m` where `busroutes` left it. Paste `terminals_read`, `terminal_routes`,
+  `terminals_resnapped`, `terminals_unsnapped`, `terminal_off_edge`, `terminal_windows` for both
+  regions. A rank off the edge's end is counted under `terminal`'s `at_junction` AND in
+  `candidates`. ⚠️ The partition reads `candidates` − `placed` − refused = −99 (Wan Chai) and −16
+  (Causeway Bay) at HEAD before `Q187` too: a pre-existing hole, not this block's.

@@ -11729,3 +11729,58 @@ across a shift.
   checks), no redraw at a respawn, a routed minibus in the wandering red, a wandering one in the
   route's green.
 
+
+## `Q187` — A bus parks only at its terminus, on the timetable; the routed fleet and the kerb-stopping kinds signal like their drivers
+
+**Status.** 🟡 Built 2026-11-06 on the user's calls, one after another: "bus dont park at street,
+they only stop at bus stop on street"; "when bus stop, show brake light and left blinker. when
+they start to move again, show right blinker"; "minibus do park at street sometime"; "1 exception
+case: buses park at bus terminal before they launch according to timetable … fill bus terminal
+with bus according to time"; "if minibus is stopped for minibus stop, do similar blinker logic";
+"minibus can stop and onboarding or alight passenger in arbitary road that is not double
+yellow/no stopping area"; "similar for stop logic for taxi"; "for red minibus and all kinds of
+taxi, give a random chance that they will disobey traffic rule and stop arbitarily in double
+yellow". `P3-78`. **Reverses `Q182`'s "a bus at a stop may be moving or parked, at random"**: a
+parked bus at a stop is gone. Owed: the user's drive by day and at night.
+
+**Decision.**
+- **No parked bus at a stop.** `parked.stops` keeps the minibus termini only (`gmb_termini`,
+  chance 0.8: a minibus does stand at the kerb). `bus_stops` stays a fetched source and stands
+  nothing.
+- **A terminus is filled by the timetable** (`parked.terminals`, source `terminal`). A terminus
+  is a bus route direction's FIRST stop in `bus_routes.json`, so `busroutes` now runs before
+  `parked`. Each clock hour, `ceil(departures × layover_min / 60)` buses queue behind the pole, at
+  most `queue` (4), `pitch_m` (13.5) apart, the first one's front at the pole; rank `k` stands in
+  every hour that keeps more than `k` there, published as one placement per run of hours
+  (`hour_windows`, a run through midnight one wrapping window). `layover_min` 10 is authored: TD
+  publishes no layover. A terminus is `AS_FOUND` (no corner setback, no lane bar) but keeps the
+  fare-node keep-out. ⚠️ A terminus `busroutes` left unsnapped is snapped again within
+  `terminals.max_snap_m` (15): Wan Chai Ferry Pier's interchange, 19 directions, stands 12.3 m off
+  its access road, past the routes' own 12 m. Causeway Bay's 936 terminus (21.8 m, at the road's
+  very end) stays out. On 2026-11-06: Wan Chai 5 termini of 27 directions, 1 re-snapped, 3 buses
+  placed (2 ranks off the edge's end, 2 at a fare node, 2 at a junction); Causeway Bay 8 of 40, 1
+  unsnapped, 7 placed (1 rank in two windows), 8 at a junction.
+- **The signals at a stop.** A routed vehicle winks left from `lane_change_m` short of its pole and
+  while it stands, with its brake lamps lit from the first tick (one placed mid-dwell has not
+  braked), and right for `pull_out_m` (15) as it pulls away — `held_side`, the turn's own hold. A
+  turn's indicator takes over inside it.
+- **The kerbside stop** (`kerb_stop_kinds`: minibus, taxi). On joining a road such a car pulls up
+  at the nearside kerb at a chance of the usable length over `kerb_stop_every_m` (500), on its own
+  `_kerb_rng` so the wandering fleet's draw is untouched: `lane_change_m` clear of where it joined
+  and of the far mouth, on level 0, beside no parked vehicle, never before a right turn, never on
+  its own route's stop road, and on no published restriction run (`RoadGraph.no_stopping`, which
+  now reads `roadgraph.json`'s `kerbside`). ⚠️ The single yellow counts as no-stopping too: a run's
+  hours are not carried to the graph. It moves over to the nearside lane, stands `kerb_dwell_s` (8)
+  and signals as a bus does.
+- **The rule broken.** `kerb_unlawful_share` (0.25) of a red minibus's or a taxi's stops ignore the
+  line (`kerb_unlawful_kinds`). Only a wandering vehicle: a routed minibus is a green one and keeps
+  the rule. The draw is made on every pick, so whether a car may break the rule moves no later draw.
+- ⚠️ **`verify_traffic`**: the routed drive runs 180 s (`ROUTED_RUNS`), not 90: with the stop buses
+  gone the routed fleet spawns elsewhere, and in Causeway Bay HEAD's own code served 0 stops in
+  90 s — every bus still at its first stop or queued. The knock is staged on a road with no bus
+  stop: a parked stop bus once kept it off them, and Causeway Bay's Tai Hang Road (edge 14, one lane
+  floored to two) holds a wreck and a queued car side by side with no way back. New lines: a
+  dwelling vehicle shows brake and left, a departure winks right, some kerbside stop was stood at,
+  and only a red minibus or a taxi stood on a no-stopping line. The kerbside stops are rare —
+  1–2 in the 180 s drive — because the short edges and the restriction runs leave little kerb;
+  `kerb_stop_every_m` is the dial.

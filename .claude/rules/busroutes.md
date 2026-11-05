@@ -59,3 +59,10 @@ the ETL snaps the stops (`pipeline/busroutes.py`), the game drives the legs on t
   routed one `route_liveries` (green); the bus wears none. `verify_traffic`'s `route:` livery line.
 - ⚠️ **A knocked bus leaves its route** and wanders (`_leave_route` in `_knock`); its mass is
   `parked.tres` `masses_kg["bus"]`, cited in `parked.md`.
+- 🔴 **A bus parks only at a terminus** (`Q187`): `parked.terminals` reads THIS stage's
+  `bus_routes.json` (a direction's first stop), so `busroutes` runs before `parked` and a change
+  here moves the parked roster — paste `parked.json`'s `terminal*` counters too.
+- **The stop signals** (`Q187`): brake + left from `lane_change_m` short of the pole and while it
+  stands, right for `pull_out_m` as it leaves; `verify_traffic`'s `route:` lamp lines. The kerbside
+  stop (`kerb_stop_kinds`, `_kerb_rng`, `RoadGraph.no_stopping`) shares them; 🔴 a routed vehicle
+  never stops on a restriction run (`_may_stop_unlawfully`), only a red minibus or a taxi.
