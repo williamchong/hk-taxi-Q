@@ -11835,3 +11835,38 @@ file to `~/Pictures` and relabelled the button IMAGE SAVED (the file deleted aft
 Owed: the user's look, and a press on the web build.
 
 **See.** `Q169` · `Q162` · `P3-76` · `game/scripts/ui/sheet_image.gd` · `menu.md`
+
+## `Q189` — A free drive ends from its PAUSE on a REPORT of its own, with the time driven
+
+**Asked** by the user, 2026-11-06: "allow user to end a free roaming session in pause menu, and show a
+result screen like the shift does, but with current session length shown". Then, mid-build: "instead
+of 'save image' maybe 'save result'".
+
+**Decided.**
+- **Free mode's PAUSE ends on END DRIVE / 收車**, where it read MENU, and `Main` opens a fresh menu
+  on REPORT for it (`Main._free_report`), not HOME. A shift's END SHIFT still goes HOME: half a shift
+  is not a total (`Q165`).
+- **The same REPORT page, two readings** (`StartMenu.Report.mode`): a free drive's heading is its
+  mode's name (兜風 / FREE MODE), and the line a shift spends on its best is the time driven,
+  行車時間 / TIME DRIVEN, on a stopwatch (`StartMenu.duration_text`: "4:05", "1:02:09"). No best: a
+  drive with no end has no total to weigh, and nothing is written but the lifetime books the pause
+  already banked. Its AGAIN (再兜一轉 / DRIVE AGAIN) starts a free drive.
+- **The time driven is `SessionTally.driven_s`**, added on `FareSystem`'s physics tick, so `park`
+  and the paused tree both stop it: the menu and the pause are not driving. It is in neither
+  `SUMS` nor `BESTS`, so the lifetime record keeps no driving time. Not `DayClock.elapsed_s`: free
+  mode with the day held turns that clock's tick off, and `verify_day_cycle` holds it off.
+- **SAVE IMAGE is SAVE RESULT / 儲存成績**, and its answer RESULT SAVED / 成績已儲存 (`Q188`'s
+  button, renamed on the user's word).
+
+**Built 2026-11-06 (`P3-81`).** `start_menu.gd`, `main.gd`, `session_tally.gd`, `fare_system.gd`;
+five strings in `menu_text.json`, every new glyph in the Kai (`font_coverage.read_cmap`).
+`--menu-page=report --mode=free` shoots the page.
+
+**Measured.** `verify_menu` `free:` (8 lines): END DRIVE on a free PAUSE and END SHIFT on a shift's,
+four stopwatch readings, the page reading its time driven under its name with no best, and AGAIN
+starting a free drive. Mutation: AGAIN bound back to a shift fails by name. Frames of the free REPORT
+in both languages, the free PAUSE and the shift's REPORT (unchanged) read by eye.
+
+Owed: the user's look, and a real drive ended from the pause (the frames are of the sample sheet).
+
+**See.** `Q165` · `Q162` · `Q169` · `Q188` · `P3-81`
