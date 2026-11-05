@@ -651,16 +651,35 @@ mix is every stand in the districts its own stands lie in. Wan Chai holds 23 (ur
 cross-harbour 7), Sha Tin 52 (urban 38, NT 11, both 3). A region's box alone is too few: Sha Tin's
 holds three, all urban.
 
-### ✅ USE — Annual Traffic Census (one number)
+### ✅ USE — Annual Traffic Census
 
-- **Publisher:** TD, *The Annual Traffic Census 2023*,
-  https://www.td.gov.hk/filemanager/en/content_5267/Annual%20Traffic%20Census%202023.pdf (4.4 MB).
-- **Used:** §5.4 "Cross Harbour Vehicular Trips Characteristics", 16-hour weekday proportion of
-  vehicles: taxi **16.8%** (private car 54.2, light goods 16.3) — `traffic.tres`' `taxi` weight
-  (`Q183`). Hourly: 12.6–18.4% by day, 22.8 / 26.0 / 30.9% from 20:00 to 23:00.
-- ⚠️ The per-station appendix pages (Hennessy Road 1029, Gloucester Road 1028) are drawn, not text;
-  `pdftotext` reads the station list and AADTs but no vehicle mix. A station's own share needs
-  those pages read by eye.
+- **Publisher:** TD, *The Annual Traffic Census*. Two ways in:
+  - the 2023 report as a PDF,
+    https://www.td.gov.hk/filemanager/en/content_5267/Annual%20Traffic%20Census%202023.pdf (4.4 MB),
+    whose Appendix A1–A3 are index pages only: the station data forms are NOT in it;
+  - **the census's interactive site, https://atc.td.gov.hk/, which serves the 2025 census** and
+    every station's data form as JSON: `POST https://atc.td.gov.hk/api/analysis` with
+    `{"req_station": "1029", "req_month": "0", "req_direction": 0, "req_vco_date": "Wed",
+    "req_vco_time": "8"}` (the site's own AADT Analysis call). `api/excel/list` lists the stations,
+    `api/search?q=1029&f=json` places one (WGS84). Its user guide:
+    https://atc.td.gov.hk/pdf/Users_Guide.pdf.
+- **Used** (`Q186`, `tools/traffic_census.py`, cached under `build/census/`):
+  - `Hourly_Var`'s `M-F` row — the weekday share of the day by clock hour, 24 entries — at the
+    seven stations inside Wan Chai and Causeway Bay: 1002, 1020, 1024, 1028, 1029, 1107, 2214. →
+    `traffic.tres` `fleet_by_hour`.
+  - `VCO`'s `Veh` row — vehicles counted by class, ten classes (`M/C`, `P/C`, `Taxi`, `Priv.LB`,
+    `PLB`, `L/G`, `H/G`, `Coach`, `B/SD`, `B/DD`) — for each hour from `req_vco_time` − 1 to
+    `req_vco_time`, 8 to 23 (07:00–23:00), at the three of those with a survey: 1002, 1107, 2214. →
+    `traffic.tres` `kinds`.
+  - Superseded: §5.4 of the 2023 PDF, "Cross Harbour Vehicular Trips Characteristics", taxi 16.8% of
+    the 16-hour weekday flow — `traffic.tres`' `taxi` weight under `Q183` until `Q186`.
+- ⚠️ **A station on no cordon or screenline (Appendix A2: 1020, 1024, 1028, 1029) has no VCO**: its
+  row is ten `-`. The tool reads that as unsurveyed, never as zeros.
+- ⚠️ **The VCO is one survey day**: `req_vco_date` changes nothing — every weekday answers the same
+  row. `req_month` and `req_direction` move only `Hourly_Flow`. `Excel` reads `missing` on some
+  stations; nothing here reads it.
+- ⚠️ A survey's sample is small on a local road: 1107 Tung Lo Wan Road classified ~20 vehicles an
+  hour against 1,500–3,000 at 1002 and 2214. Pool by count, never average the percentages.
 
 ### ✅ USE — Routes and Fares of Public Transport (`P3-78`, `Q182`)
 

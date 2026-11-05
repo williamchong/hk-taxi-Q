@@ -11456,7 +11456,8 @@ traffic"; "real share, render options, random roof sign, go ahead"). Owed: the u
 frames and a drive.
 
 **Decision.**
-- **Share.** A moving taxi is `traffic.tres` `kinds` `taxi` 2.02 of 12.02, which is 16.8%. That is
+- **Share.** **Superseded by `Q186`**: the share now follows the hour, off the census's own
+  surveys on these streets. As first built: a moving taxi was `traffic.tres` `kinds` `taxi` 2.02 of 12.02, which is 16.8%. That is
   the taxis' share of the 16-hour weekday flow across the harbour in TD's *Annual Traffic Census
   2023* (§5.4). The Cross Harbour Tunnel's south portal is in Causeway Bay. The census's Wan Chai
   station pages are drawn, not text, so no road's own share was read. ⚠️ The same table reads
@@ -11682,3 +11683,49 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
   rule), owed.
 
 **See.** `Q178` · `Q176` · `Q148` · `Q175` · `game/tuning/taxi_audio.md` · `game/tuning/traffic.md`
+
+
+## `Q186` — The traffic's mix and size follow the clock hour, off TD's census on these streets
+
+**Status.** 🟡 Built 2026-11-06 on the user's ask: "can road car type and density change according
+to time of day?", then "fetch the TD census first, then build it". `P3-3g`. Owed: the user's drive
+across a shift.
+
+**Decision.**
+- **What moves.** `traffic.tres` `kinds` is a weight per kind per clock hour (24 entries), and
+  `fleet_by_hour` the share of `cars` alive in each. The hour is the one the routed fleet already
+  spawns by (`_hour_now`: the rig's `time_of_day` on the parked roster's 07:00–21:00 clock).
+- **The source.** TD's *Annual Traffic Census 2025*, through the census site's own JSON
+  (`atc.td.gov.hk/api/analysis`, `DATA_SOURCES.md`): the mix is the vehicle classification surveys
+  at 1002 Victoria Park Rd, 2214 Causeway Rd and 1107 Tung Lo Wan Rd, POOLED by vehicles counted;
+  the fleet is the weekday hourly variation at seven stations inside the regions, a mean of shapes
+  over its busiest hour. `tools/traffic_census.py` prints both; the numbers are never edited by
+  hand. The 2023 PDF, the only census read before, carries no station data form.
+- **What it reads.** Taxis are 24–42% of the drawn traffic by hour (42% at 20:00), not `Q183`'s
+  16.8%, which was the cross-harbour share. Vans 10–18% by day, 2–4% after 18:00. Red minibuses
+  0–2%. The fleet opens the shift at 19 of 24, is whole from 08:00 to 19:00 within a car, and
+  thins to 16 by 22:00: daytime Wan Chai is flat, 08:00–19:00 within 7% of the busiest hour.
+- **How a car changes.** 🔴 **A spawn's kind comes off the car's id and lives, never `_rng`**, as a
+  taxi's licence does (`Q183`): one more roll moves every later car and every seed's staged case.
+  The first life keeps the kind `setup` drew on `_rng`, so that roll is unchanged. Each wandering
+  car holds a slot in every kind the hours draw and every licence, the rest hidden: a
+  `MultiMesh`'s `instance_count` clears its buffer, so a car cannot change batch after `setup`.
+  Draw calls are unchanged — one batch per kind as before.
+- **How the fleet changes.** 🔴 **Only by the ring**: a car is not placed while the wandering fleet
+  stands at its hour's size, and nothing is removed for the hour. It thins as cars drive out of the
+  ring and fills as the ring places them, so no car pops in view. `cars` is the busiest hour's
+  fleet and the ceiling, so no hour costs more than the 24 measured under `P3-3c`.
+- ⚠️ **Authored inside the census:** the 4 : 3 split of private cars between `car_a` and `car_b`
+  (the census has one class), and which classes are drawn — motorcycles, heavy goods, coaches,
+  private light buses and franchised buses are left out and the four kept renormalised. Hours
+  outside the VCO's 07:00–23:00 hold the nearest surveyed hour.
+- ⚠️ **`verify_traffic`'s seeds drive at 12:00** (`PEAK_HOUR`), the whole fleet they were measured
+  on; the routed drive stays at 08:00. `hours:` checks four hours' fleet and draws, and a 20:00
+  drive switched to 04:00 with the ring moved: no car placed into a full fleet, the small hours'
+  three, a respawn redrawn into its own slot at its size, and a staged half-minibus fleet whose
+  redrawn minibuses wear red and nothing else does. ⚠️ The routed drive's colour check reads every
+  tick, not the last: at 08:00 the census draws a wandering minibus 0.35% of the time, and Causeway
+  Bay alone ended its drive with none standing. Mutations caught by name: the fleet cap off (three
+  checks), no redraw at a respawn, a routed minibus in the wandering red, a wandering one in the
+  route's green.
+

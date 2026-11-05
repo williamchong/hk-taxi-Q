@@ -117,12 +117,19 @@ paths:
   car and every seed's staged case. 🔴 **One slot per licence per taxi, the rest hidden** — a
   `MultiMesh`'s `instance_count` clears its buffer, so a taxi cannot be moved between batches after
   `setup`. The roof sign is bit 32 (`ROOF_SIGN`) at `vehicle_lamps.tres`' `sign_lit` through
-  `wire_blink`; a shader change owes a day and a night frame and the `shader error` grep. ⚠️ The
-  `taxi` weight is TD's census share (`traffic.md`); do not retune it for the look without the
-  user's call.
+  `wire_blink`; a shader change owes a day and a night frame and the `shader error` grep.
   ⚠️ A car still clearing the last junction within `give_way_look_m` of its next line carries BOTH
   turns in `_turn_path` (`Q183`): seed 7's minibus on a short link turned right across a left turn
   when it carried only the turn behind it.
+- **The hours** (`Q186`): `kinds` by clock hour and `fleet_by_hour` are TD's census, printed by
+  `tools/traffic_census.py` — 🔴 **never edited by hand, never retuned for the look without the
+  user's call**: rerun the tool. Paste `verify_traffic`'s `hours:` lines. 🔴 **A respawn's kind
+  comes off its id and lives (`kind_for`), never `_rng`**; the first life keeps `setup`'s draw so
+  that roll is unchanged. 🔴 **The fleet changes only by the ring**: nothing is removed for the
+  hour, so no car pops in view; `cars` is the busiest hour's fleet and the ceiling. ⚠️ Every
+  wandering car holds a slot in every kind the hours draw and every licence: a kind added to
+  `kinds` adds a hidden instance per car to every batch. ⚠️ The seeds drive at `PEAK_HOUR` 12:00,
+  the whole fleet; at 07:00 they would drive 19 cars and every staged case would move.
 - **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
   never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
