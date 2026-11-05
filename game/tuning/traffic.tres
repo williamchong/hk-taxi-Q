@@ -70,6 +70,12 @@ recover_clear_m = 15.0
 buses = 6
 dwell_s = 12.0
 dwell_reach_m = 1.5
+pull_out_m = 15.0
+kerb_stop_kinds = PackedStringArray("minibus", "taxi")
+kerb_stop_every_m = 500.0
+kerb_dwell_s = 8.0
+kerb_unlawful_kinds = PackedStringArray("minibus", "taxi")
+kerb_unlawful_share = 0.25
 wander_liveries = Dictionary[String, PackedColorArray]({
 "minibus": PackedColorArray(0.76862746, 0.11764706, 0.14117648, 1)
 })

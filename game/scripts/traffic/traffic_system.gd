@@ -118,6 +118,7 @@ const NO_PARKED: Array = []
 const HAZARDS: int = 2
 ## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
 ## `winking`): the one spelling the parked layer and the verify tools read.
+const LAMP_BRAKE: int = 4
 const LAMP_LEFT: int = 8
 const LAMP_RIGHT: int = 16
 ## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
@@ -167,6 +168,11 @@ var stops_served: int = 0
 var stops_missed: int = 0
 var stops_unreachable: int = 0
 var routed_spawned: int = 0
+## For the verify tool: kerbside stops picked, stood at, and driven past.
+var kerb_picked: int = 0
+var kerb_served: int = 0
+var kerb_missed: int = 0
+var kerb_unlawful: int = 0
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -324,6 +330,11 @@ class Car:
 	var goal: RoadRouter.GoalTree = null
 	## Seconds left standing at its stop.
 	var dwell_left: float = 0.0
+	## A kerbside stop for a passenger (`kerb_stop_kinds`, the user's call
+	## 2026-11-06): where on this road its front pulls up, in travel metres, INF
+	## for none, and seconds left standing there.
+	var kerb_m: float = INF
+	var kerb_left: float = 0.0
 
 
 ## One parked vehicle on a road a car can drive, read off its `ParkedLayer`
@@ -449,6 +460,8 @@ var _parked_next: Vector2i = Vector2i.ZERO
 var parked_report: Dictionary[String, Vector4i] = {}
 ## The routed fleet's own rolls, so the wandering cars draw what they always drew.
 var _route_rng := RandomNumberGenerator.new()
+## The kerbside stops' own draw, so the wandering cars draw what they always drew.
+var _kerb_rng := RandomNumberGenerator.new()
 ## Each route kind's index in `_kinds`.
 var _routed_kinds: Dictionary[String, int] = {}
 ## Where a routed vehicle may be placed this hour, `(route, stop)`, and the weight
@@ -480,6 +493,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	_rng.seed = seed
 	_route_rng.seed = seed * 7919 + 1
 	_horn_rng.seed = seed * 104729 + 3
+	_kerb_rng.seed = seed * 15485863 + 5
 	router = RoadRouterScript.new(graph, RoadRouterScript.Profile.legal())
 	_admitted = PackedInt32Array()
 	for edge: int in router.admitted_edge_ids():
@@ -615,6 +629,10 @@ static func usable(table: TrafficProfile) -> bool:
 		"buses": float(table.buses),
 		"dwell_s": table.dwell_s,
 		"dwell_reach_m": table.dwell_reach_m,
+		"pull_out_m": table.pull_out_m,
+		"kerb_stop_every_m": table.kerb_stop_every_m,
+		"kerb_dwell_s": table.kerb_dwell_s,
+		"kerb_unlawful_share": table.kerb_unlawful_share,
 	}
 	var hourly: Array[PackedFloat32Array] = [table.fleet_by_hour]
 	hourly.append_array(table.kinds.values())
@@ -1134,6 +1152,7 @@ func _stop_limit(car: Car, delta: float) -> float:
 		car.dwell_left -= delta
 		if car.dwell_left > 0.0:
 			return 0.0
+		_pull_out(car)
 		_depart(car)
 		return INF
 	if car.goal == null or car.turning or not _is_goal_way(car, car.edge, car.along):
@@ -1151,9 +1170,110 @@ func _stop_limit(car: Car, delta: float) -> float:
 	return stopping_speed(to_pole, profile.brake_mps2)
 
 
+## Standing at a stop or the kerb for a passenger: brake lamps and the left indicator.
+static func standing(car: Car) -> bool:
+	return car.dwell_left > 0.0 or car.kerb_left > 0.0
+
+
+## Pulling away from a stop: the offside indicator until it is `pull_out_m` on.
+func _pull_out(car: Car) -> void:
+	car.held_side = -1
+	car.held_until_m = car.s + profile.pull_out_m
+
+
 ## How far `car`'s front is short of `stop`'s pole along its road.
 func _to_pole(car: Car, stop: BusRoutes.Stop) -> float:
 	return stop.travel_m - car.s - car.half_length
+
+
+## On joining a road, whether a kerb-stopping kind (`kerb_stop_kinds`) pulls up
+## on it for a passenger, and where: on `_kerb_rng`, at a chance of the road's
+## usable length over `kerb_stop_every_m`, on the nearside kerb, at least
+## `lane_change_m` clear of where it joined and of the road's far mouth, on no
+## published no-stopping run (`RoadGraph.no_stopping`: a double or single yellow
+## line), beside no parked vehicle, and never before a turn taken from the
+## offside lane — it moves over to the nearside lane for it. A red minibus or a
+## taxi may stop on the line anyway (`kerb_unlawful_share`). Never on its own
+## route's stop's road and way.
+func _pick_kerb_stop(car: Car) -> void:
+	car.kerb_m = INF
+	car.kerb_left = 0.0
+	if (
+		car.knocked
+		or car.dwell_left > 0.0
+		or not profile.kerb_stop_kinds.has(_kinds[car.kind])
+		or car.turn_side == -1
+		or graph.level_of(car.edge) != 0
+		or _is_goal_way(car, car.edge, car.along)
+	):
+		return
+	var length_m: float = car.length_m
+	var trim: Vector2 = graph.trim_of(car.edge)
+	var far_trim: float = trim.y if car.along else trim.x
+	var start: float = car.s + profile.lane_change_m + car.half_length * 2.0
+	var end: float = length_m - far_trim - profile.lane_change_m
+	if end <= start:
+		return
+	var chance: float = 1.0 - exp(-(end - start) / profile.kerb_stop_every_m)
+	if _kerb_rng.randf() >= chance:
+		return
+	var front: float = _kerb_rng.randf_range(start, end)
+	var back: float = front - car.half_length * 2.0
+	var a: float = _edge_m(back, length_m, car.along)
+	var b: float = _edge_m(front, length_m, car.along)
+	# Drawn every time, so whether this car may break the rule moves no later draw.
+	var reckless: bool = _kerb_rng.randf() < profile.kerb_unlawful_share
+	var restricted: bool = graph.no_stopping(car.edge, car.along, minf(a, b), maxf(a, b))
+	if restricted and not (reckless and _may_stop_unlawfully(car)):
+		return
+	if (
+		_nearest_parked(
+			car.edge, car.along, length_m, 0.0, car, back - profile.gap_m, front + profile.gap_m
+		)
+		< INF
+	):
+		return
+	car.kerb_m = front
+	# Over to the nearside lane for it: a straight on or a left leaves from any lane.
+	car.lane_out = 0.0
+	kerb_picked += 1
+	if restricted:
+		kerb_unlawful += 1
+
+
+## Whether `car` is a kind that stops on a no-stopping line now and then
+## (`kerb_unlawful_kinds`: the red minibus and every taxi, the user's call
+## 2026-11-06) — never a routed vehicle, so never a green minibus.
+func _may_stop_unlawfully(car: Car) -> bool:
+	return car.route == null and profile.kerb_unlawful_kinds.has(_kinds[car.kind])
+
+
+## The speed a kerb-stopping car may drive at for its kerbside stop: it brakes to
+## its front at the spot, stands `kerb_dwell_s` there, then pulls out winking
+## right for `pull_out_m`. Off the nearside lane when it gets there, it drives on.
+func _kerb_limit(car: Car, delta: float) -> float:
+	if car.kerb_left > 0.0:
+		car.kerb_left -= delta
+		if car.kerb_left > 0.0:
+			return 0.0
+		_pull_out(car)
+		return INF
+	if car.turning:
+		return INF
+	var to_kerb: float = car.kerb_m - car.s - car.half_length
+	if to_kerb < -profile.dwell_reach_m:
+		car.kerb_m = INF
+		kerb_missed += 1
+		return INF
+	if car.speed < STOPPED_MPS and to_kerb < profile.dwell_reach_m:
+		car.kerb_m = INF
+		if not same_lane(car.lane, 0.0):
+			kerb_missed += 1
+			return INF
+		car.kerb_left = profile.kerb_dwell_s
+		kerb_served += 1
+		return 0.0
+	return stopping_speed(to_kerb, profile.brake_mps2)
 
 
 ## Done at a stop: aim for the next one it can reach and plan the move toward it.
@@ -1246,7 +1366,9 @@ func step(delta: float) -> void:
 		if car.live:
 			car.body.global_transform = car.pose
 			_batches[car.kind].set_instance_transform(car.slot, car.pose)
-			_write_lamps(car, lamp_bits(true, car.braking, _winking(car)))
+			# Standing for a passenger, it shows its brake lamps from the first tick:
+			# one placed mid-dwell has not braked yet.
+			_write_lamps(car, lamp_bits(true, car.braking or standing(car), _winking(car)))
 
 
 func _idle_car(routed: bool) -> Car:
@@ -1337,6 +1459,7 @@ func _enter(car: Car) -> void:
 	car.shift = 0
 	car.over_centre = false
 	_plan_move(car)
+	_pick_kerb_stop(car)
 
 
 func _cruise_of(edge: int) -> float:
@@ -1765,6 +1888,11 @@ func _drive(car: Car, delta: float) -> void:
 		if at_stop < target:
 			target = at_stop
 			car.held = Held.DWELL
+	if car.kerb_m < INF or car.kerb_left > 0.0:
+		var at_kerb: float = _kerb_limit(car, delta)
+		if at_kerb < target:
+			target = at_kerb
+			car.held = Held.DWELL
 	var give_way: float = _give_way_gap(car)
 	if give_way < INF:
 		var limit: float = stopping_speed(give_way - STOP_SHORT_M, profile.brake_mps2)
@@ -2029,6 +2157,8 @@ func _knock(car: Car) -> void:
 	car.passing = false
 	car.over_centre = false
 	car.held = Held.NONE
+	car.kerb_m = INF
+	car.kerb_left = 0.0
 	_leave_route(car)
 	knocks += 1
 
@@ -2854,7 +2984,7 @@ func _retire(car: Car) -> void:
 ## indicator and 16 for the right — `wink` 1 left, -1 right, `HAZARDS` both,
 ## the stopping parked car's (`P3-3f`). 0 is a switched-off car.
 static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
-	var bits: int = (2 if running else 0) + (4 if running and braking else 0)
+	var bits: int = (2 if running else 0) + (LAMP_BRAKE if running and braking else 0)
 	if wink == 1 or wink == HAZARDS:
 		bits += LAMP_LEFT
 	if wink == -1 or wink == HAZARDS:
@@ -2865,17 +2995,35 @@ static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 ## The indicator `car` shows: its turn's side from `lane_change_m` before the
 ## mouth until its tail is `wink_hold_m` past the mouth it joined by (left 1,
 ## right -1) — the next turn's approach first — else the side it is changing
-## lane to, else none — never for straight on.
+## lane to, else none — never for straight on. A routed vehicle winks the kerb
+## (left) from `lane_change_m` short of its stop and while it stands there, and
+## the offside (right) for `pull_out_m` as it pulls away, as a bus driver does.
 func _winking(car: Car) -> int:
 	if car.knocked:
 		return HAZARDS
 	if car.turning:
 		return car.turn_side
+	if standing(car) or pulling_in(car):
+		return 1
 	if approaching_turn(car):
 		return car.turn_side
 	if car.held_side != 0 and car.s < car.held_until_m:
 		return car.held_side
 	return car.shift
+
+
+## Whether `car` is within `lane_change_m` of its kerbside stop, or routed and of
+## its stop's pole on the stop's own road and way, and not yet past it: it winks
+## the kerb.
+func pulling_in(car: Car) -> bool:
+	if car.kerb_m < INF and not car.turning:
+		var to_kerb: float = car.kerb_m - car.s - car.half_length
+		if to_kerb > -profile.dwell_reach_m and to_kerb < profile.lane_change_m:
+			return true
+	if car.goal == null or not _is_goal_way(car, car.edge, car.along):
+		return false
+	var to_pole: float = _to_pole(car, car.route.stops[car.stop_index])
+	return to_pole > -profile.dwell_reach_m and to_pole < profile.lane_change_m
 
 
 ## Whether `car` is within `lane_change_m` of a turn's mouth: its indicator is

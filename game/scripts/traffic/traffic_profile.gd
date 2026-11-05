@@ -124,6 +124,21 @@ const HOURS: int = 24
 ## Under this many metres short of its pole a stopped routed vehicle is at its
 ## stop and dwells; further back it is queued behind another.
 @export var dwell_reach_m: float
+## How far a routed vehicle drives on from its stop with its offside indicator
+## on, pulling out into the lane, in metres.
+@export var pull_out_m: float
+## The kinds that pull up at the kerb anywhere it is not restricted, to take or
+## set down a passenger: the minibus and the taxi.
+@export var kerb_stop_kinds: PackedStringArray
+## The mean usable road length between two kerbside stops, in metres.
+@export var kerb_stop_every_m: float
+## How long a kerbside stop stands, in seconds.
+@export var kerb_dwell_s: float
+## The kinds that now and then stop on a no-stopping line anyway (a wandering
+## vehicle only: a routed one, the green minibus, keeps the rule).
+@export var kerb_unlawful_kinds: PackedStringArray
+## The share of their kerbside stops that ignore the line.
+@export var kerb_unlawful_share: float
 ## The colours a kind wears while it wanders (`Q167`: a colour that means
 ## something is never a livery). A minibus without a route is a red one; a kind
 ## not named here wears the parked roster's palette.

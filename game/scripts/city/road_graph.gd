@@ -196,6 +196,9 @@ var _banned: Dictionary[Vector3i, bool] = {}
 var _widths: PackedFloat32Array = PackedFloat32Array()
 var _lanes: PackedInt32Array = PackedInt32Array()
 var _speed_limits: PackedInt32Array = PackedInt32Array()
+# Each edge's published no-stopping runs (`kerbside`, `P3-13`), flat: side (1 the
+# edge's nearside, -1 its offside), from_m, to_m along `polyline`, per run.
+var _kerbside: Array[PackedFloat32Array] = []
 var _names: PackedStringArray = PackedStringArray()
 # The same names in Chinese. A second array rather than a joined string:
 # the plate draws them as two lines in two different typefaces, which is
@@ -914,6 +917,20 @@ func speed_limit_of(edge_id: int) -> int:
 	return _speed_limits[_by_id[edge_id]] if _by_id.has(edge_id) else 0
 
 
+## Whether a published no-stopping run (`kerbside`: a double or a single yellow
+## line) covers any of `from_m`..`to_m` along `edge_id` on its nearside (`near`)
+## or offside kerb. An edge the graph does not hold is all restricted.
+func no_stopping(edge_id: int, near: bool, from_m: float, to_m: float) -> bool:
+	if not _by_id.has(edge_id):
+		return true
+	var runs: PackedFloat32Array = _kerbside[_by_id[edge_id]]
+	var side: float = 1.0 if near else -1.0
+	for index: int in range(0, runs.size(), 3):
+		if runs[index] == side and runs[index + 1] < to_m and runs[index + 2] > from_m:
+			return true
+	return false
+
+
 # Carried so a consumer that only wants to report the graph's size does not have
 # to hold the parsed document alive to count them.
 func node_count() -> int:
@@ -1142,6 +1159,12 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		_widths.append(float(edge.get("width_m", 6.0)))
 		_lanes.append(int(edge.get("lanes", 2)))
 		_speed_limits.append(int(edge.get("speed_limit_kph", 50)))
+		var runs := PackedFloat32Array()
+		for run: Dictionary in edge.get("kerbside", []):
+			runs.append(1.0 if str(run.get("side", "")) == "near" else -1.0)
+			runs.append(float(run.get("from_m", 0.0)))
+			runs.append(float(run.get("to_m", 0.0)))
+		_kerbside.append(runs)
 		# 74 of Wan Chai's 797 edges publish `{"en": null}` — the key is present
 		# and the value is not a string. `str(null)` is the literal "<null>", so
 		# taking it unchecked puts that in front of a player rather than an

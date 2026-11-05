@@ -64,6 +64,9 @@
 ##   holds that a routed vehicle's planned move is always its stop's search's,
 ##   that it stands still and at its stop's pole while it dwells, that some
 ##   stop was served, and that a routed minibus wears green and a wandering one red.
+##   A dwelling vehicle shows its brake lamps and its left indicator alone, and
+##   one pulling away from its stop its right — a bus driver's signals — and a
+##   minibus or taxi at a kerbside stop the same; some kerbside stop was stood at.
 ## - No car runs over its cruise.
 ## - `RoadGraph.lane_at` puts a car where `Hit.lane_centre` would, both ways,
 ##   at the middle of every edge the query resolves to itself.
@@ -104,6 +107,8 @@ const KNOCK_AGAIN_MPS: float = 4.0
 const KNOCK_RUN_S: float = 40.0
 ## The hour the routed fleet is driven at: the morning peak, TD's busiest.
 const ROUTED_HOUR: float = 8.0
+## How many `RUN_S` the routed drive runs.
+const ROUTED_RUNS: float = 2.0
 ## The hour the wandering seeds are driven at (`Q186`): the census's busiest, at
 ## which the whole of `cars` is out — the fleet the seeds were measured on.
 const PEAK_HOUR: float = 12.0
@@ -680,8 +685,11 @@ func _far_centre(system: TrafficSystem) -> Vector3:
 	return system.centre
 
 
-## A level-0 one-way road with two lanes, `KNOCK_ROAD_M` long and nothing parked
-## on it, as `(edge, along)`, or `x` -1.
+## A level-0 one-way road with two lanes, `KNOCK_ROAD_M` long, nothing parked
+## and no bus stop on it — a parked bus once stood at each stop and kept the
+## knock off those roads (Tai Hang Road, edge 14 in Causeway Bay, is one lane
+## floored to two, and a car queued beside the wreck blocks its way back),
+## as `(edge, along)`, or `x` -1.
 ## Out of the tree at once, not at the frame's end: the drives after it find
 ## their own system first in `TrafficSystem.GROUP`, and a script runs in one frame.
 func _drop(system: TrafficSystem) -> void:
@@ -690,6 +698,10 @@ func _drop(system: TrafficSystem) -> void:
 
 
 static func _knock_road(system: TrafficSystem) -> Vector2i:
+	var stops: Dictionary[int, bool] = {}
+	for route: BusRoutes.Route in system.bus_routes.routes:
+		for stop: BusRoutes.Stop in route.stops:
+			stops[stop.edge] = true
 	for edge: int in system._admitted:
 		var forward: bool = system.router.admits_way(edge, true)
 		if forward == system.router.admits_way(edge, false):
@@ -697,6 +709,7 @@ static func _knock_road(system: TrafficSystem) -> Vector2i:
 		if (
 			system.graph.level_of(edge) != 0
 			or system.graph.lanes_each_way(edge) < 2
+			or stops.has(edge)
 			or system.graph.plan_length_of(edge) < KNOCK_ROAD_M
 			or not system.parked_on(edge).is_empty()
 		):
@@ -831,6 +844,8 @@ class Seen:
 	var turn_side: int = 0
 	## The lamp bits it showed: a turn is judged by the last tick before it.
 	var written: int = 0
+	## Whether it stood dwelling at its stop.
+	var dwelling: bool = false
 
 
 ## Two-way roads with one lane each way that traffic drives both ways: where a
@@ -943,6 +958,12 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	var dwelling: int = 0
 	var dwell_moving: int = 0
 	var dwell_away: int = 0
+	# Car-ticks dwelling with the stop's lamps (brake, left) and without; departures
+	# from a stop winking right and not.
+	var stop_lamps: Vector2i = Vector2i.ZERO
+	var pull_out: Vector2i = Vector2i.ZERO
+	# Kerbside stops stood on a no-stopping run: by a kind allowed to, and not.
+	var on_line: Vector2i = Vector2i.ZERO
 	# Car-ticks a minibus was looked at for its colour, and wore the wrong one.
 	var minibus_looked: int = 0
 	var minibus_wrong: int = 0
@@ -950,7 +971,9 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
-	var ticks: int = roundi(RUN_S / TICK_S)
+	# The routed drive runs twice as long: a bus is found mid-dwell, and in 90 s a
+	# departure may not yet have reached its next stop (Causeway Bay, 2026-11-06).
+	var ticks: int = roundi(RUN_S * (ROUTED_RUNS if routed else 1.0) / TICK_S)
 	var ran_red: int = 0
 	var bad_move: int = 0
 	var bad_way: int = 0
@@ -994,8 +1017,50 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 			var before: Seen = seen[index]
 			if not car.live:
 				before.live = false
+				before.dwelling = false
 				continue
 			driven_m += car.speed * TICK_S
+			var dwells: bool = TrafficSystem.standing(car)
+			if car.kerb_left > 0.0 and not before.dwelling:
+				# Inside its footprint by `dwell_reach_m` each end: it stops that
+				# short of, or past, the spot it picked clear of the line.
+				var reach: float = car.half_length - system.profile.dwell_reach_m
+				var a: float = TrafficScript._edge_m(car.s - reach, car.length_m, car.along)
+				var b: float = TrafficScript._edge_m(car.s + reach, car.length_m, car.along)
+				if system.graph.no_stopping(car.edge, car.along, minf(a, b), maxf(a, b)):
+					if system._may_stop_unlawfully(car):
+						on_line.x += 1
+					else:
+						on_line.y += 1
+						_problem("tick %d: car %d stood on a no-stopping line" % [tick, index])
+			if dwells:
+				if car.written & TrafficSystem.LAMP_BRAKE != 0 and _winks_side(1, car.written):
+					stop_lamps.x += 1
+				else:
+					stop_lamps.y += 1
+					_problem(
+						"tick %d: car %d dwells with lamp bits %d" % [tick, index, car.written]
+					)
+			elif (
+				before.live
+				and before.dwelling
+				and before.lives == car.lives
+				and not car.knocked
+				and not car.turning
+				and not system.approaching_turn(car)
+				and not system.pulling_in(car)
+			):
+				if _winks_side(-1, car.written):
+					pull_out.x += 1
+				else:
+					pull_out.y += 1
+					_problem(
+						(
+							"tick %d: car %d left its stop with lamp bits %d"
+							% [tick, index, car.written]
+						)
+					)
+			before.dwelling = dwells
 			if car.route != null:
 				# Its planned move off this road is the one its goal's tree takes.
 				if (
@@ -1240,7 +1305,16 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 		)
 	else:
 		_check_routed(
-			system, off_route, dwelling, dwell_moving, dwell_away, minibus_looked, minibus_wrong
+			system,
+			off_route,
+			dwelling,
+			dwell_moving,
+			dwell_away,
+			minibus_looked,
+			minibus_wrong,
+			stop_lamps,
+			pull_out,
+			on_line
 		)
 	for where: String in crossings:
 		print(
@@ -1602,6 +1676,9 @@ func _check_routed(
 	dwell_away: int,
 	minibus_looked: int,
 	minibus_wrong: int,
+	stop_lamps: Vector2i,
+	pull_out: Vector2i,
+	on_line: Vector2i,
 ) -> void:
 	print(
 		(
@@ -1636,6 +1713,40 @@ func _check_routed(
 		(
 			"a dwelling vehicle stands with its front at its stop's pole (%d car-ticks away)"
 			% dwell_away
+		)
+	)
+	_expect(
+		stop_lamps.x > 0 and stop_lamps.y == 0,
+		"route",
+		(
+			"a dwelling vehicle shows its brake lamps and left indicator (%d car-ticks, %d wrong)"
+			% [stop_lamps.x, stop_lamps.y]
+		)
+	)
+	print(
+		(
+			(
+				"  kerb: %d kerbside stops picked (%d on a no-stopping line), %d stood at, "
+				+ "%d driven past"
+			)
+			% [system.kerb_picked, system.kerb_unlawful, system.kerb_served, system.kerb_missed]
+		)
+	)
+	_expect(
+		on_line.y == 0,
+		"route",
+		(
+			"only a red minibus or a taxi stops on a no-stopping line (%d did, %d others)"
+			% [on_line.x, on_line.y]
+		)
+	)
+	_expect(system.kerb_served > 0, "route", "some minibus or taxi stood at a kerbside stop")
+	_expect(
+		pull_out.x > 0 and pull_out.y == 0,
+		"route",
+		(
+			"a vehicle pulling away from its stop winks right (%d departures, %d wrong)"
+			% [pull_out.x, pull_out.y]
 		)
 	)
 	# Every tick of the drive, not its last: the census draws a wandering minibus

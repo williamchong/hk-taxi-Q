@@ -331,6 +331,35 @@ Further back it is queued behind another bus at the same stop, and waits to move
 carried more than this past its pole has missed the stop and goes on to the next, which the
 verify tool counts.
 
+## `pull_out_m = 15.0`
+
+How far a routed vehicle drives on from its stop with its right indicator on (the user's call,
+2026-11-06: "just like the real life protocol of bus/minibus driver"). It winks left over the last
+`lane_change_m` to its pole and while it stands there with its brake lamps lit, and right as it pulls
+back out. Fifteen metres is a bus's length and a little more: its tail is clear of the pole and it is
+back in the lane. A turn's indicator takes over inside it. Authored; TD publishes no such figure.
+
+## `kerb_stop_kinds = [minibus, taxi]`, `kerb_stop_every_m = 500.0`, `kerb_dwell_s = 8.0`
+
+The user's call, 2026-11-06: "minibus can stop and onboarding or alight passenger in arbitary road
+that is not double yellow/no stopping area ... similar for stop logic for taxi". On joining a road a
+minibus or a taxi pulls up at its nearside kerb at a chance of the road's usable length over
+`kerb_stop_every_m`, on `_kerb_rng` so the wandering fleet's own draw is untouched. Never on a
+published restriction run (`RoadGraph.no_stopping`: both the double and the single yellow line,
+since a run's hours are not carried to the graph), beside a parked vehicle, within `lane_change_m`
+of either mouth, off level 0, or before a turn taken from the offside lane. It winks left on the
+approach and while it stands with its brake lamps lit, and right for `pull_out_m` as it leaves.
+Five hundred metres is a stop every minute or so at 30 kph; eight seconds is a passenger in or out
+and the fare paid. Authored, TD publishes neither. A car turning right from the offside lane makes
+no stop on that road; any other moves over to the nearside lane for it.
+
+## `kerb_unlawful_kinds = [minibus, taxi]`, `kerb_unlawful_share = 0.25`
+
+The user's call, 2026-11-06: "for red minibus and all kinds of taxi, give a random chance that they
+will disobey traffic rule and stop arbitarily in double yellow". A quarter of their kerbside stops
+ignore the restriction run. Only a wandering vehicle: a routed minibus is a green one, which keeps
+the rule, and every taxi licence is the one kind `taxi`. Authored.
+
 ## `wander_liveries = {minibus: red}`, `route_liveries = {minibus: green}`
 
 The colour IS the licence (`Q167`): a green minibus runs a fixed route and a red one does not,
