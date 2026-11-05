@@ -121,6 +121,9 @@ const HOURS: int = 24
 @export var buses: int
 ## How long a routed vehicle stands at its stop, in seconds.
 @export var dwell_s: float
+## The least share of `dwell_s` a routed vehicle placed at a stop has left: what
+## it has left is drawn between this and the whole.
+@export_range(0.0, 1.0, 0.01) var placed_dwell_left: float
 ## Under this many metres short of its pole a stopped routed vehicle is at its
 ## stop and dwells; further back it is queued behind another.
 @export var dwell_reach_m: float

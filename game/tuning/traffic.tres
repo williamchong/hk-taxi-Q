@@ -69,6 +69,7 @@ recover_ahead_m = 12.0
 recover_clear_m = 15.0
 buses = 6
 dwell_s = 12.0
+placed_dwell_left = 0.2
 dwell_reach_m = 1.5
 pull_out_m = 15.0
 kerb_stop_kinds = PackedStringArray("minibus", "taxi")

@@ -324,6 +324,12 @@ How long a bus stands at its pole: an authored figure for a few passengers board
 Octopus at the front door. TD publishes no dwell time. A vehicle placed at a stop is found part
 way through its dwell.
 
+## `placed_dwell_left = 0.2`
+
+How much of its dwell a routed vehicle placed at a stop has left: between 20% and the whole of
+`dwell_s`, so a ring of buses placed together does not pull out together.
+Was the code's `0.2`–`1.0` until the review of 2026-11-06 moved it here; the draw is unchanged.
+
 ## `dwell_reach_m = 1.5`
 
 A stopped routed vehicle whose front is within this of its pole is at its stop and dwells.

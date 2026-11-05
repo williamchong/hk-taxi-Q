@@ -472,6 +472,8 @@ var _spawn_pool: Array[Vector2i] = []
 var _spawn_weights: PackedFloat32Array = []
 var _spawn_hour: int = -1
 var _parked_profile: ParkedProfile = null
+## The lighting rig the hour is read off, found once it is in the tree.
+var _rig: LightingRig = null
 
 
 func _ready() -> void:
@@ -522,7 +524,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		if signals != null:
 			add_child(signals)
 	_parked_profile = load(ParkedProfile.PATH) as ParkedProfile
-	_read_hour()
+	_read_hour(_hour_now())
 	var licences: Array[int] = _licence_kinds.values()
 	for index: int in profile.cars:
 		var car := Car.new()
@@ -911,7 +913,7 @@ func _measure_parked(edge: int, obstacle: Dictionary) -> Parked:
 	var middle: Vector3 = at * extent.get_center()
 	var s: float = graph.distance_along(edge, middle)
 	var parked := Parked.new()
-	parked.lane_m = _plan_distance(
+	parked.lane_m = RoadGraph.plan_distance(
 		graph.lane_at(edge, s, true, 0.0), graph.lane_at(edge, s, true, 1.0)
 	)
 	parked.s_from = INF
@@ -987,11 +989,11 @@ func _try_spawn_routed(car: Car, here: Vector3) -> void:
 	var half_length: float = _extents[kind].size.z * 0.5
 	var s: float = clampf(stop.travel_m - half_length, 0.0, length_m)
 	var at: Vector3 = graph.lane_at(stop.edge, _edge_m(s, length_m, stop.along), stop.along)
-	var away: float = _plan_distance(at, here)
+	var away: float = RoadGraph.plan_distance(at, here)
 	if away < profile.spawn_min_m or away > profile.spawn_max_m:
 		return
 	for other: Car in cars:
-		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
+		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
 			return
 	var palette: PackedColorArray = _palette(profile.route_liveries, route.kind)
 	_wear_kind(car, kind, ParkedRoster.livery(_route_rng.randi() & 0xFFFF, palette))
@@ -1022,7 +1024,7 @@ func _try_spawn_routed(car: Car, here: Vector3) -> void:
 	car.stop_index = pick.y
 	car.goal = null
 	# Found part-way through its dwell, as a bus is.
-	car.dwell_left = _route_rng.randf_range(0.2, 1.0) * profile.dwell_s
+	car.dwell_left = _route_rng.randf_range(profile.placed_dwell_left, 1.0) * profile.dwell_s
 	_enter(car)
 	car.speed = 0.0
 	car.pose = _pose_on_edge(car)
@@ -1082,8 +1084,7 @@ func _pick_last() -> int:
 
 
 ## Read this hour's kind weights and fleet size when the hour has moved.
-func _read_hour() -> void:
-	var hour: int = _hour_now()
+func _read_hour(hour: int) -> void:
 	if hour == _weights_hour:
 		return
 	_weights_hour = hour
@@ -1110,10 +1111,9 @@ func live_wandering() -> int:
 
 ## Rebuild where a routed vehicle may be placed when the hour has moved: every stop
 ## on a road with one after it, weighted by its route's departures this hour.
-func _refresh_spawn_pool() -> void:
+func _refresh_spawn_pool(hour: int) -> void:
 	if bus_routes == null:
 		return
-	var hour: int = _hour_now()
 	if hour == _spawn_hour:
 		return
 	_spawn_hour = hour
@@ -1135,10 +1135,10 @@ func _hour_now() -> int:
 	if not is_nan(hour_override):
 		return posmod(int(hour_override), BusRoutes.HOURS)
 	var time_of_day: float = 0.0
-	if is_inside_tree():
-		var rig := get_tree().get_first_node_in_group(LightingRig.GROUP) as LightingRig
-		if rig != null:
-			time_of_day = rig.time_of_day
+	if not is_instance_valid(_rig) and is_inside_tree():
+		_rig = get_tree().get_first_node_in_group(LightingRig.GROUP) as LightingRig
+	if is_instance_valid(_rig):
+		time_of_day = _rig.time_of_day
 	if _parked_profile == null:
 		return 0
 	var hour: float = ParkedRoster.hour_of(
@@ -1356,14 +1356,16 @@ func step(delta: float) -> void:
 	for car: Car in cars:
 		if not car.live:
 			continue
-		if _plan_distance(car.pose.origin, here) > profile.retire_m:
+		if RoadGraph.plan_distance(car.pose.origin, here) > profile.retire_m:
 			_retire(car)
 			continue
 		if car.knocked:
 			_slide(car, delta)
 		else:
 			_drive(car, delta)
-	_read_hour()
+	# Once a tick for both readers: the rig is a tree search away.
+	var hour: int = _hour_now()
+	_read_hour(hour)
 	var wandering: int = live_wandering()
 	for _try: int in SPAWN_TRIES:
 		if wandering >= _fleet_now:
@@ -1374,7 +1376,7 @@ func step(delta: float) -> void:
 		_try_spawn(idle, here)
 		if idle.live:
 			wandering += 1
-	_refresh_spawn_pool()
+	_refresh_spawn_pool(hour)
 	for _try: int in SPAWN_TRIES:
 		var idle: Car = _idle_car(true)
 		if idle == null:
@@ -1406,7 +1408,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 		return
 	var s: float = _rng.randf_range(0.2, 0.6) * length_m
 	var at: Vector3 = graph.lane_at(edge, s if along else length_m - s, along)
-	var away: float = _plan_distance(at, here)
+	var away: float = RoadGraph.plan_distance(at, here)
 	if away < profile.spawn_min_m or away > profile.spawn_max_m:
 		return
 	# Never where a red ahead could not be stopped for from the spawn speed.
@@ -1415,7 +1417,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	if stop >= 0.0 and stop - s < (cruise * 0.5) ** 2 / profile.brake_mps2 + profile.look_m * 0.25:
 		return
 	for other: Car in cars:
-		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
+		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
 			return
 	var lane: float = float(_rng.randi_range(0, graph.lanes_each_way(edge) - 1))
 	if car.lives > 0:
@@ -2019,7 +2021,7 @@ func _struck(car: Car) -> bool:
 	if not is_instance_valid(vehicle):
 		return false
 	var reach: float = car.half_length + _extents[0].size.z * 0.5 + STRUCK_SLACK_M
-	return _plan_distance(car.pose.origin, vehicle.global_position) <= reach
+	return RoadGraph.plan_distance(car.pose.origin, vehicle.global_position) <= reach
 
 
 func _sound_horn(car: Car, reason: String) -> void:
@@ -2306,8 +2308,8 @@ func _try_recover(car: Car) -> bool:
 		if other == car or not other.live or other.knocked or other.speed < STOPPED_MPS:
 			continue
 		if (
-			_plan_distance(other.pose.origin, p2) < profile.recover_clear_m
-			or _plan_distance(other.pose.origin, middle) < profile.recover_clear_m
+			RoadGraph.plan_distance(other.pose.origin, p2) < profile.recover_clear_m
+			or RoadGraph.plan_distance(other.pose.origin, middle) < profile.recover_clear_m
 		):
 			return false
 	var from: Transform3D = car.pose
@@ -2387,7 +2389,7 @@ func _gap_ahead(car: Car) -> float:
 	for other: Car in cars:
 		if other == car or not other.live:
 			continue
-		var apart: float = _plan_distance(origin, other.pose.origin)
+		var apart: float = RoadGraph.plan_distance(origin, other.pose.origin)
 		if apart > profile.look_m + other.half_length + car.half_length:
 			continue
 		if other.knocked:
@@ -2639,7 +2641,7 @@ func _give_way_gap(car: Car) -> float:
 			continue
 		if absf(car.pose.origin.y - other.pose.origin.y) > LEVEL_APART_M:
 			continue
-		if _plan_distance(car.pose.origin, other.pose.origin) > near_m:
+		if RoadGraph.plan_distance(car.pose.origin, other.pose.origin) > near_m:
 			continue
 		if _queues_with(car, other):
 			continue
@@ -3091,7 +3093,3 @@ func near_cars(point: Vector3, radius_m: float, look_s: float) -> Array[Dictiona
 ## The mesh box `car` is drawn and collides as, in its own frame.
 func extent_of(car: Car) -> AABB:
 	return _extents[car.kind]
-
-
-static func _plan_distance(a: Vector3, b: Vector3) -> float:
-	return Vector2(a.x - b.x, a.z - b.z).length()
