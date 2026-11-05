@@ -50,6 +50,9 @@ const PATH: String = "res://tuning/menu.tres"
 @export var ledger_money_px: int
 @export var ledger_gutter_px: int
 @export var ledger_gap_px: int
+## The 成績表 saved as a picture (`SheetImage`, `P3-80`): drawn this many times
+## over `ledger_px`, so the picture is sharper than the screen it came from.
+@export var sheet_image_scale: float
 
 @export_group("Type")
 @export var title_size: int

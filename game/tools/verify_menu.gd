@@ -35,6 +35,7 @@ const SessionTallyScript = preload("res://scripts/fares/session_tally.gd")
 const ExamSheetScript = preload("res://scripts/fares/exam_sheet.gd")
 const FareScript = preload("res://scripts/fares/fare.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
+const SheetImageScript = preload("res://scripts/ui/sheet_image.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
@@ -71,6 +72,9 @@ const KEYS: PackedStringArray = [
 	"sheet_best_flight",
 	"sheet_best_pass",
 	"sheet_best_speed",
+	"sheet_save",
+	"sheet_saved",
+	"sheet_save_failed",
 	"guide",
 	"options",
 	"credits",
@@ -127,6 +131,7 @@ const POSITIVE: PackedStringArray = [
 	"ledger_money_px",
 	"ledger_gutter_px",
 	"ledger_gap_px",
+	"sheet_image_scale",
 	"title_size",
 	"subtitle_size",
 	"subtitle_size_zh",
@@ -265,6 +270,7 @@ func _check_sheet() -> void:
 		"sheet",
 		"the closest pass reads in metres"
 	)
+	_check_image_of(report._profile, report._style, page, ledger.get_node("Pad/Column"), tally)
 	report._show(StartMenuScript.Page.HOME)
 	await process_frame
 	_expect(not (ledger as CanvasItem).visible, "sheet", "the ledger leaves with its page")
@@ -288,6 +294,32 @@ func _check_sheet() -> void:
 		"an empty run has no best, no floor line and no loss line"
 	)
 	_expect(fresh._pages.has(StartMenuScript.Page.RECORD), "sheet", "RECORD is a page off HOME")
+	var record: Control = fresh._pages[StartMenuScript.Page.RECORD]
+	# Shown, so its containers have laid it out: the picture is sized off it.
+	fresh._show(StartMenuScript.Page.RECORD)
+	await process_frame
+	var record_column: Node = record.get_node("Centre/Pad/Column")
+	_expect(
+		record_column.get_node_or_null("Foot/Save/Button") != null,
+		"image",
+		"RECORD offers SAVE IMAGE beside BACK"
+	)
+	var staged: SubViewport = SheetImageScript.stage(record_column, fresh._profile, fresh._style)
+	var foot: Control = record_column.get_node("Foot")
+	_expect(
+		(
+			staged.get_node_or_null("Pad/Column/Foot") == null
+			and staged.get_node_or_null("Pad/Column/Heading") != null
+			and (
+				staged.size_2d_override.y
+				< (record_column as Control).size.y + 2 * fresh._profile.credits_pad_px
+			)
+			and staged.size_2d_override.y > (record_column as Control).size.y - foot.size.y
+		),
+		"image",
+		"RECORD's picture has its heading and none of its buttons, nor their room"
+	)
+	staged.free()
 	fresh.queue_free()
 
 	for pausing_free: bool in [true, false]:
@@ -302,6 +334,14 @@ func _check_sheet() -> void:
 			(over._root.get_node_or_null("Ledger") != null) == pausing_free,
 			"sheet",
 			"a free drive's PAUSE has the sheet; a shift's has not"
+		)
+		_expect(
+			(
+				(over._pages[StartMenuScript.Page.PAUSE].get_node_or_null("Save") != null)
+				== pausing_free
+			),
+			"image",
+			"SAVE IMAGE is where the sheet is, on a free drive's PAUSE alone"
 		)
 		over.queue_free()
 
@@ -599,6 +639,53 @@ func _check_record() -> void:
 	)
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
+
+
+## The 成績表 as a picture (`P3-80`, `Q188`): offered beside the sheet but never
+## on a phone, and staged as a copy of the sheet the player reads. The pixels
+## need a renderer this headless run has not got; a frame is their check.
+func _check_image_of(
+	profile: MenuProfileScript,
+	style: Resource,
+	page: Control,
+	column: Node,
+	tally: SessionTallyScript
+) -> void:
+	_expect(page.get_node_or_null("Save/Button") != null, "image", "REPORT offers SAVE IMAGE")
+	for phone: String in ["mobile", "web_android", "web_ios"]:
+		_expect(
+			SheetImageScript.is_phone(func(feature: String) -> bool: return feature == phone),
+			"image",
+			"%s is a phone, and gets no button" % phone
+		)
+	_expect(
+		not SheetImageScript.is_phone(
+			func(feature: String) -> bool: return feature in ["web", "macos", "pc"]
+		),
+		"image",
+		"a desktop browser is not a phone"
+	)
+	var staged: SubViewport = SheetImageScript.stage(column, profile, style)
+	var total: Label = staged.get_node_or_null("Pad/Column/Card/Books/Sums/Total/Value")
+	_expect(
+		total != null and total.text == "%.1f" % tally.total_hkd(),
+		"image",
+		"the picture is a copy of the sheet, its total and all"
+	)
+	_expect(
+		(
+			staged.size_2d_override.x >= (column as Control).size.x
+			and staged.size_2d_override.y >= (column as Control).size.y
+			and (
+				staged.size
+				== Vector2i((Vector2(staged.size_2d_override) * profile.sheet_image_scale).round())
+			)
+			and not staged.transparent_bg
+		),
+		"image",
+		"laid out round the whole sheet on an opaque field, drawn sheet_image_scale times over"
+	)
+	staged.free()
 
 
 ## A missing file is the state wanted, so the error is not read.

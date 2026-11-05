@@ -75,6 +75,7 @@ ledger_count_px = 64
 ledger_money_px = 104
 ledger_gutter_px = 40
 ledger_gap_px = 28
+sheet_image_scale = 2.0
 title_size = 72
 subtitle_size = 26
 subtitle_size_zh = 30

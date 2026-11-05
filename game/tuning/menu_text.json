@@ -185,6 +185,18 @@
     "sheet_best_speed": {
       "en": "TOP SPEED",
       "zh": "最高車速"
+    },
+    "sheet_save": {
+      "en": "SAVE IMAGE",
+      "zh": "儲存圖片"
+    },
+    "sheet_saved": {
+      "en": "IMAGE SAVED",
+      "zh": "圖片已儲存"
+    },
+    "sheet_save_failed": {
+      "en": "NOT SAVED",
+      "zh": "儲存失敗"
     }
   },
   "credits": [

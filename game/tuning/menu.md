@@ -118,6 +118,12 @@ walked: 640 left the total hanging under the panel, which nothing but a frame sh
 The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
 digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.
 
+## `sheet_image_scale`
+
+SAVE IMAGE's picture of the 成績表 (`SheetImage`, `P3-80`, `Q188`): laid out at the sheet's own size on screen
+(REPORT's 1120 × 770, `ledger_px`; RECORD's taller, its runs and best over the tables) and drawn 2.0 times over, so the type stays sharp when a phone or a chat app scales the picture down.
+The text is drawn at the scale, never stretched from a 1× picture.
+
 ## The boot cover — `cover_*`, `warm_*`
 
 The opaque cover `ShaderWarmup` holds over the menu's first seconds, so the web build compiles its

@@ -499,7 +499,7 @@ func _report() -> Control:
 	_button(column, "Menu", "menu", _show.bind(Page.HOME))
 	# Only a real report: every other menu builds this page and never shows it.
 	if report != null:
-		_beside(column, report.tally)
+		_save_button(column, _beside(column, report.tally))
 	return column
 
 
@@ -511,10 +511,10 @@ func _pause() -> Control:
 	_heading(column, "Heading", _text.say("paused", _language))
 	_first[Page.PAUSE] = _button(column, "Resume", "resume", _on_resume)
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
+	if pause_tally != null:
+		_save_button(column, _beside(column, pause_tally))
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "End", "end_shift" if pausing_shift else "menu", _on_end)
-	if pause_tally != null:
-		_beside(column, pause_tally)
 	return column
 
 
@@ -541,13 +541,15 @@ func _record() -> Control:
 		_style.dial_needle
 	)
 	column.add_child(_ledger(tally))
-	_first[Page.RECORD] = _foot(column)
+	var foot: HBoxContainer = _foot_row(column)
+	_save_button(foot, column)
+	_first[Page.RECORD] = _button(foot, "Back", "back", _show.bind(Page.HOME))
 	return panel
 
 
 ## The 成績表 under a page's column, off the safe area's right edge on its own
-## blurred ground, shown and hidden with `page`.
-func _beside(page: Control, tally: SessionTally) -> void:
+## blurred ground, shown and hidden with `page`. Returns the sheet's column.
+func _beside(page: Control, tally: SessionTally) -> VBoxContainer:
 	var panel: ChamferPanel = _panel("Ledger")
 	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 	panel.offset_left = -_profile.margin_px.x / 2.0 - _profile.ledger_px.x
@@ -556,11 +558,8 @@ func _beside(page: Control, tally: SessionTally) -> void:
 	panel.offset_bottom = _profile.ledger_px.y / 2.0
 	_root.add_child(panel)
 	_backdrop(panel, 1.0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var pad := MarginContainer.new()
-	pad.name = "Pad"
+	var pad: MarginContainer = padded(_profile.credits_pad_px)
 	pad.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side: StringName in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
-		pad.add_theme_constant_override(side, _profile.credits_pad_px)
 	panel.add_child(pad)
 	var column := VBoxContainer.new()
 	column.name = "Column"
@@ -571,6 +570,32 @@ func _beside(page: Control, tally: SessionTally) -> void:
 	# A lambda, not `_follow.bind`: the column's backdrop already holds that
 	# connection, and two binds of one method are one connection to Godot.
 	page.visibility_changed.connect(func() -> void: panel.visible = page.visible)
+	return column
+
+
+## SAVE IMAGE under `parent`, for `sheet`'s column (`SheetImage`, `P3-80`); none
+## on a phone.
+func _save_button(parent: Control, sheet: Control) -> void:
+	if not SheetImage.offered():
+		return
+	var button: Button = _button(parent, "Save", "sheet_save")
+	button.pressed.connect(_save_sheet.bind(sheet, button))
+
+
+## The press: the sheet drawn and saved, and the button saying which. The
+## focus goes back where it was: disabling the button dropped it.
+func _save_sheet(sheet: Control, button: Button) -> void:
+	var focused: bool = button.has_focus()
+	button.disabled = true
+	var image: Image = await SheetImage.shoot(self, sheet, _profile, _style)
+	# The two frames it waited are enough for AGAIN or RESUME to take the menu.
+	if not is_instance_valid(button):
+		return
+	var saved: bool = not SheetImage.save(image).is_empty()
+	button.text = _text.say("sheet_saved" if saved else "sheet_save_failed", _language)
+	button.disabled = false
+	if focused:
+		button.grab_focus()
 
 
 func _ledger(tally: SessionTally) -> LedgerCard:
@@ -680,11 +705,8 @@ func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(centre)
 
-	var pad := MarginContainer.new()
-	pad.name = "Pad"
+	var pad: MarginContainer = padded(_profile.credits_pad_px)
 	pad.custom_minimum_size = size_px
-	for side: StringName in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
-		pad.add_theme_constant_override(side, _profile.credits_pad_px)
 	centre.add_child(pad)
 
 	var column := VBoxContainer.new()
@@ -692,6 +714,15 @@ func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	column.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	pad.add_child(column)
 	return panel
+
+
+## A sheet's padding, `px` on every side: the panels', and `SheetImage`'s.
+static func padded(px: int) -> MarginContainer:
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	for side: StringName in [&"margin_left", &"margin_top", &"margin_right", &"margin_bottom"]:
+		pad.add_theme_constant_override(side, px)
+	return pad
 
 
 ## The blurred, tinted screen behind `parent`'s text (`backdrop_blur.gdshader`),
@@ -718,7 +749,7 @@ func _foot(column: VBoxContainer, to: Page = Page.HOME) -> Button:
 ## The foot's row, for a sheet with more than the way back in it.
 func _foot_row(column: VBoxContainer) -> HBoxContainer:
 	var foot := HBoxContainer.new()
-	foot.name = "Foot"
+	foot.name = SheetImage.FOOT
 	foot.alignment = BoxContainer.ALIGNMENT_END
 	foot.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	column.add_child(foot)
@@ -729,7 +760,9 @@ func _foot_row(column: VBoxContainer) -> HBoxContainer:
 ## callout's mark), the rule and the words lit in the accent while the pointer
 ## or the focus is on it. Returned for the focus and the marker; the panel goes
 ## under `parent`.
-func _button(parent: Control, node_name: String, key: String, pressed: Callable) -> Button:
+func _button(
+	parent: Control, node_name: String, key: String, pressed: Callable = Callable()
+) -> Button:
 	var panel: ChamferPanel = _panel(node_name)
 	panel.custom_minimum_size = _profile.button_px
 	# Its own width in any container: a lone BACK under a row of two would
@@ -767,7 +800,8 @@ func _button(parent: Control, node_name: String, key: String, pressed: Callable)
 	]:
 		button.add_theme_color_override(state, _style.accent)
 	_size(button, _profile.button_size_zh, _profile.button_size)
-	button.pressed.connect(pressed)
+	if pressed.is_valid():
+		button.pressed.connect(pressed)
 	# Hover IS focus, so the lit rule follows the pointer and the pad alike
 	# and there is one highlighted choice at a time.
 	button.mouse_entered.connect(button.grab_focus)
