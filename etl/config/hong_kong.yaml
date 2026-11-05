@@ -546,7 +546,8 @@ sources:
   # `dropoff: false` explicitly — `FareCategory` defaults both to true.
   tram_stops: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638875413253_59498&format=geojson
 
-  # The two point sets the parked roster waits at (`P3-71`, `Q161`), the
+  # The two point sets the parked roster once waited at (`P3-71`, `Q161`; the
+  # bus stops stand nothing since 2026-11-06, see `parked.stops`), the
   # tram stops' shape exactly: `OBJECTID`, `STOP_ID`, a date, a position and
   # no name. Bus Stop Location, 4,488 territory-wide (70 in Wan Chai); GMB
   # Terminus Location, 4,776 (52) — termini, which is where a minibus queues.
@@ -4619,21 +4620,34 @@ parked:
       "Others": car
     join_m: 1.0
 
-  # A bus stands at a stop a third of the time, on a seeded draw the engine
-  # re-rolls out of view — so the same stop is not always served and a drive
-  # past twice sees two streets. A minibus is at its terminus most of the time:
-  # a terminus is where the fleet queues.
+  # A minibus is at its terminus most of the time: a terminus is where the
+  # fleet queues, and a minibus does stand at the kerb. A bus never parks on
+  # the street (the user's call, 2026-11-06): it only stops at its stop, and
+  # the routed fleet drives it there (`P3-78`), so `bus_stops` stands nothing.
   stops:
-    - source: bus_stops
-      crs: EPSG:4326
-      kind: bus
-      chance: 0.35
-      max_snap_m: 12.0
     - source: gmb_termini
       crs: EPSG:4326
       kind: minibus
       chance: 0.8
       max_snap_m: 12.0
+
+  # The buses laid over at a terminus before they leave on the timetable (the
+  # user's call, 2026-11-06: "buses park at bus terminal before they launch
+  # according to timetable ... fill bus terminal with bus according to time").
+  # A terminus is a bus route direction's first stop (`bus_routes.json`); each
+  # clock hour `ceil(departures x layover_min / 60)` buses queue behind its pole,
+  # at most `queue`. `layover_min` is authored: TD publishes no layover. Ten
+  # minutes is a driver's break between runs; a route every 10 minutes keeps two
+  # buses there, a route an hour one, an hour with no departure none.
+  terminals:
+    kind: bus
+    layover_min: 10.0
+    queue: 4
+    pitch_m: 13.5
+    # `busroutes`' own snap is 12 m; Wan Chai Ferry Pier's interchange, where 19
+    # route directions start, stands 12.3 m off its access road. Fifteen takes it
+    # and leaves Causeway Bay's 936 terminus (21.8 m, the road's very end) out.
+    max_snap_m: 15.0
 
   # What waits at `fares.json`'s own kinds. Two red taxis queue behind a taxi
   # stand, starting `clearances.fare_m` back so the hail ring and the

@@ -1076,8 +1076,8 @@ class TestOrchestrator:
             "trees",
             "signals",
             "tramlines",
-            "parked",
             "busroutes",
+            "parked",
             "export",
         ]
 
@@ -1120,8 +1120,8 @@ class TestOrchestrator:
             "trees",
             "signals",
             "tramlines",
-            "parked",
             "busroutes",
+            "parked",
             "export",
         ]
 

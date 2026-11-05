@@ -11,6 +11,7 @@ length and share below arrive from `config/hong_kong.yaml` (hard rule 3).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,15 +35,24 @@ ROSTER = ("car", "taxi", "minibus", "bus", "coach", "van", "tram", "motorcycle")
 # restriction layer is a FILL, never a licence).
 SOURCE_BAY = "bay"
 SOURCE_STOP = "stop"
+SOURCE_TERMINAL = "terminal"
 SOURCE_STAND = "stand"
 SOURCE_LAYBY = "layby"
 SOURCE_FRONTAGE = "frontage"
 SOURCE_FILL = "fill"
-SOURCES = (SOURCE_BAY, SOURCE_STOP, SOURCE_STAND, SOURCE_LAYBY, SOURCE_FRONTAGE, SOURCE_FILL)
+SOURCES = (
+    SOURCE_BAY,
+    SOURCE_STOP,
+    SOURCE_TERMINAL,
+    SOURCE_STAND,
+    SOURCE_LAYBY,
+    SOURCE_FRONTAGE,
+    SOURCE_FILL,
+)
 # The sources that stand a vehicle where the kerb was FOUND — a published bay or
-# stop, a lay-by read off the kerb line — and so take neither the corner
-# setback nor the lane bar the stage puts on what it invents.
-AS_FOUND = (SOURCE_BAY, SOURCE_STOP, SOURCE_LAYBY)
+# stop, a route's terminus, a lay-by read off the kerb line — and so take neither
+# the corner setback nor the lane bar the stage puts on what it invents.
+AS_FOUND = (SOURCE_BAY, SOURCE_STOP, SOURCE_TERMINAL, SOURCE_LAYBY)
 
 # A placement present through the whole day. Spelled once so a reader, the
 # stage and the engine agree on what an absent window means.
@@ -108,6 +118,27 @@ class StopSet:
     # vehicle stands on the road beside it; the point is snapped as a fare node
     # is, and refused past this.
     max_snap_m: float
+
+
+@dataclass(frozen=True)
+class Terminals:
+    """The buses laid over at a route's terminus before they leave on the
+    timetable (the user's call, 2026-11-06: "fill bus terminal with bus according
+    to time"). A terminus is a route direction's FIRST stop, read off
+    `bus_routes.json`; in each clock hour `ceil(departures x layover_min / 60)`
+    buses queue behind its pole, at most `queue`, `pitch_m` apart. A terminus
+    `busroutes` left unsnapped (an interchange laid back off the carriageway) is
+    snapped again here within `max_snap_m`."""
+
+    kind: str
+    layover_min: float
+    queue: int
+    pitch_m: float
+    max_snap_m: float
+
+    def waiting(self, departures: int) -> int:
+        """How many buses stand at a terminus in an hour of `departures`."""
+        return min(self.queue, math.ceil(departures * self.layover_min / 60.0))
 
 
 @dataclass(frozen=True)
@@ -287,6 +318,7 @@ class Parked:
     clearances: Clearances
     slow_streets: SlowStreets
     licences: Licences | None = None
+    terminals: Terminals | None = None
 
     def vehicle(self, kind: str) -> Vehicle:
         if kind not in self.vehicles:
@@ -394,6 +426,21 @@ def _stops(body: Any, where: str) -> tuple[StopSet, ...]:
             )
         )
     return tuple(stops)
+
+
+def _terminals(body: Any, where: str) -> Terminals | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    queue = int(_require(body, "queue", where))
+    if queue < 1:
+        raise ValueError(f"{where}:queue must be at least 1, got {queue}")
+    return Terminals(
+        kind=_kind(_require(body, "kind", where), f"{where}:kind"),
+        queue=queue,
+        **_measures(body, where, ("layover_min", "pitch_m", "max_snap_m"), positive=True),
+    )
 
 
 def _stands(body: Any, where: str) -> dict[str, Stand]:
@@ -609,12 +656,15 @@ def _parked(body: Any, where: str) -> Parked | None:
         clearances=_clearances(_require(body, "clearances", where), f"{where}:clearances"),
         slow_streets=_slow_streets(_require(body, "slow_streets", where), f"{where}:slow_streets"),
         licences=_licences(body.get("licences"), f"{where}:licences", vehicles),
+        terminals=_terminals(body.get("terminals"), f"{where}:terminals"),
     )
     named: set[str] = set()
     if parked.bays is not None:
         named.update(parked.bays.kinds.values())
     named.update(stop.kind for stop in parked.stops)
     named.update(stand.kind for stand in parked.stands.values())
+    if parked.terminals is not None:
+        named.add(parked.terminals.kind)
     if parked.frontage is not None:
         for klass in parked.frontage.classes:
             named.update(klass.kinds)

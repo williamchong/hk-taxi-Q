@@ -24,7 +24,7 @@ import shapely
 import yaml
 
 from pipeline import parked as parked_stage
-from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, load_config
+from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, Terminals, load_config
 from pipeline.documents import write_document
 from pipeline.drawnroad import ribbons
 from pipeline.parked import (
@@ -40,6 +40,7 @@ from pipeline.parked import (
     _stand,
     _Street,
     _tram_path,
+    hour_windows,
     in_window,
 )
 from pipeline.tramlines import (
@@ -193,6 +194,34 @@ class TestTheWindow:
         assert night == (19.0, 7.0)
         assert in_window(23.0, night) and in_window(0.0, night) and in_window(3.0, night)
         assert not in_window(12.0, night)
+
+
+class TestTheTerminus:
+    """A bus terminus's queue follows its departures (the user's call 2026-11-06)."""
+
+    TERMINALS = Terminals(kind="bus", layover_min=10.0, queue=4, pitch_m=13.5, max_snap_m=15.0)
+
+    def test_the_queue_is_departures_times_the_layover_capped(self) -> None:
+        waiting = self.TERMINALS.waiting
+        assert waiting(0) == 0
+        assert waiting(1) == 1
+        assert waiting(6) == 1
+        assert waiting(7) == 2
+        assert waiting(77) == 4
+
+    def test_a_rank_hours_are_its_runs_through_midnight_as_one(self) -> None:
+        hours = [False] * 24
+        for hour in (22, 23, 0, 1, 8, 9):
+            hours[hour] = True
+        assert hour_windows(hours) == [(8.0, 10.0), (22.0, 2.0)]
+        for window in hour_windows(hours):
+            assert window is not None
+        flagged = [any(in_window(h + 0.5, w) for w in hour_windows(hours)) for h in range(24)]
+        assert flagged == hours
+
+    def test_every_hour_is_always_and_none_is_no_window(self) -> None:
+        assert hour_windows([True] * 24) == [ALWAYS]
+        assert hour_windows([False] * 24) == []
 
 
 class TestTheSideAndTheFlow:

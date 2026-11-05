@@ -140,6 +140,7 @@ from pipeline.config_blocks.parked import (  # noqa: F401
     SOURCE_LAYBY,
     SOURCE_STAND,
     SOURCE_STOP,
+    SOURCE_TERMINAL,
     SOURCES,
     Bays,
     Clearances,
@@ -151,6 +152,7 @@ from pipeline.config_blocks.parked import (  # noqa: F401
     Parked,
     Stand,
     StopSet,
+    Terminals,
     Vehicle,
     _parked,
 )

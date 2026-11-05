@@ -10,9 +10,16 @@ vehicles are hand-authored assets under CC BY-SA, not build output.
 1. **A bay** — Road Network v2's `ONSTREETPARK`, one point per bay, whose
    attribute table says what parks there (a motorcycle on 342 of Wan Chai's
    607). The one positive "parking is allowed here" source the estate has.
-2. **A stop** — TD's bus stop and minibus terminus point sets, each a position
-   and a stop id, snapped as a fare node is (`Q15`: level 0, plan distance),
-   with a bus present by a seeded CHANCE so the same stop is not always served.
+2. **A stop** — TD's minibus terminus point set, each a position and a stop
+   id, snapped as a fare node is (`Q15`: level 0, plan distance), with a minibus
+   present by a seeded CHANCE so the same terminus is not always full. A bus
+   never parks at a mere stop (the user's call, 2026-11-06): the routed fleet
+   stops there, and only a TERMINUS (next) stands one.
+2a. **A terminus** — each bus route direction's first stop in `bus_routes.json`
+   (`P3-78`), as `busroutes` snapped it: the buses laid over before they leave,
+   a queue behind the pole whose length each clock hour is that hour's
+   departures from the terminus times `terminals.layover_min`. A rank's hours
+   that are not one run are published as one placement per run, same pose.
 3. **A stand** — `fares.json`'s own kinds: a queue of taxis behind a taxi
    stand. A tram stop stands nothing: the trams run (`P3-4`, `Q176`).
 4. **A frontage** — what a building's published name says about its kerb: a
@@ -59,6 +66,7 @@ import numpy as np
 import shapely
 from shapely.strtree import STRtree
 
+from pipeline.busroutes import BUS_ROUTES_NAME, BUS_ROUTES_SCHEMA, HOURS
 from pipeline.config import (
     ALWAYS,
     AS_FOUND,
@@ -68,6 +76,7 @@ from pipeline.config import (
     SOURCE_LAYBY,
     SOURCE_STAND,
     SOURCE_STOP,
+    SOURCE_TERMINAL,
     SOURCES,
     Config,
     Parked,
@@ -141,6 +150,15 @@ class ParkedReport:
     stops_outside: int = 0
     stops_unsnapped: int = 0
     stands_read: int = 0
+    # Bus termini (a route direction's first stop inside the region), the route
+    # directions leaving them, those whose stop `busroutes` could not snap, and
+    # the placements past one per stood rank a split window added.
+    terminals_read: int = 0
+    terminal_routes: int = 0
+    terminals_unsnapped: int = 0
+    terminals_resnapped: int = 0
+    terminal_off_edge: int = 0
+    terminal_windows: int = 0
     places_read: int = 0
     frontages_classified: int = 0
     frontages_too_far: int = 0
@@ -205,6 +223,9 @@ class Candidate:
     rows: int = 1
     # A stand's published category (`Q183`): which licences queue there.
     category: str | None = None
+    # More windows the same vehicle stands in, past `hours` (a terminus rank's
+    # hours that are not one run): one more placement each, same pose.
+    more_hours: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -393,6 +414,103 @@ def _region_licences(
         mesh: round(mix[mesh] / counted, 4) for mesh in sorted(mix) if counted > 0.0
     }
     report.taxi_licence_districts = sorted(inside)
+
+
+def _queue_along_m(street: _Street, edge: int, t: float, side: float, back_m: float) -> float:
+    """Metres along `edge` a vehicle `back_m` behind the point at `t` stands —
+    behind meaning against its kerb's flow: the nearside and both kerbs of a
+    one-way edge flow with it, a two-way edge's offside against it."""
+    at_m = t * street.length_m(edge)
+    return at_m - back_m if side > 0.0 or street.one_way(edge) else at_m + back_m
+
+
+def hour_windows(hours: list[bool]) -> list[tuple[float, float] | None]:
+    """The clock hours flagged in `hours` (24 of them) as `[from_h, to_h)`
+    runs, a run through midnight as one wrapping window; every hour is ALWAYS,
+    none is no window."""
+    if all(hours):
+        return [ALWAYS]
+    if not any(hours):
+        return []
+    # Start the walk at an hour off, so a run through midnight is read whole.
+    start = hours.index(False)
+    windows: list[tuple[float, float] | None] = []
+    run_from: int | None = None
+    for step in range(1, HOURS + 1):
+        hour = (start + step) % HOURS
+        if hours[hour] and run_from is None:
+            run_from = hour
+        elif not hours[hour] and run_from is not None:
+            windows.append((float(run_from), float(hour)))
+            run_from = None
+    return windows
+
+
+def _terminal_candidates(
+    spec: Parked, street: _Street, out_dir: Path, report: ParkedReport
+) -> list[Candidate]:
+    """Each terminus's queue: rank `k` stands in every hour whose departures
+    keep more than `k` buses laid over there."""
+    terminals = spec.terminals
+    path = out_dir / BUS_ROUTES_NAME
+    if terminals is None or not path.exists():
+        return []
+    routes = read_document(path, BUS_ROUTES_SCHEMA, "python -m pipeline.busroutes")["routes"]
+    by_stop: dict[str, tuple[dict, list[int]]] = {}
+    for route in routes:
+        if route["kind"] != terminals.kind or not route["stops"]:
+            continue
+        first = route["stops"][0]
+        if int(first["seq"]) != 1:
+            continue
+        report.terminal_routes += 1
+        _, departures = by_stop.setdefault(str(first["stop_id"]), (first, [0] * HOURS))
+        for hour, count in enumerate(route["per_hour"]):
+            departures[hour] += int(count)
+    report.terminals_read = len(by_stop)
+    vehicle = spec.vehicle(terminals.kind)
+    candidates: list[Candidate] = []
+    for stop_id in sorted(by_stop):
+        stop, departures = by_stop[stop_id]
+        edge_id = int(stop["edge"])
+        if edge_id >= 0:
+            t, side = float(stop["t"]), float(stop["side"])
+        else:
+            # An interchange laid back off the carriageway: its own, wider snap.
+            snap = street.segments.nearest(float(stop["plan"][0]), float(stop["plan"][1]))
+            if snap.distance_m <= terminals.max_snap_m:
+                edge_id, t, side = snap.edge, snap.t, street.kerb_side(snap)
+                report.terminals_resnapped += 1
+        if edge_id < 0 or edge_id not in street.ribbons:
+            report.terminals_unsnapped += 1
+            continue
+        waiting = [terminals.waiting(count) for count in departures]
+        length_m = street.length_m(edge_id)
+        for rank in range(max(waiting)):
+            windows = hour_windows([count > rank for count in waiting])
+            # The first bus's front at the pole.
+            along_m = _queue_along_m(
+                street, edge_id, t, side, vehicle.length_m / 2.0 + rank * terminals.pitch_m
+            )
+            if not 0.0 <= along_m <= length_m:
+                # Off the edge's end: past its trim, as `_stand` would say.
+                # Asked, so counted a candidate too: the partition closes.
+                report.terminal_off_edge += 1
+                report.refuse(SOURCE_TERMINAL, AT_JUNCTION)
+                continue
+            candidates.append(
+                Candidate(
+                    terminals.kind,
+                    SOURCE_TERMINAL,
+                    edge_id,
+                    along_m / length_m,
+                    side,
+                    windows[0],
+                    1.0,
+                    more_hours=tuple(w for w in windows[1:] if w is not None),
+                )
+            )
+    return candidates
 
 
 def _seeded(*parts: Any) -> random.Random:
@@ -813,6 +931,7 @@ def build_region(
             # itself keeps cars away at the fill's own gap.
             keep_out.append(shapely.Point(x, z).buffer(clear.gap_m))
             candidates.append(candidate)
+    candidates.extend(_terminal_candidates(spec, street, out_dir, report))
     keep_out_tree = STRtree(keep_out) if keep_out else None
 
     for x, z, t, edge, kind, category in fare_points:
@@ -827,12 +946,11 @@ def build_region(
         snap = street.segments.nearest(x, z)
         side = street.kerb_side(snap)
         length_m = street.length_m(edge_id)
-        # Behind the stand, against its kerb's flow, so the hail ring and the
-        # passenger's own kerb stay clear: the queue starts `fare_m` back.
-        with_flow = side > 0.0 or street.one_way(edge_id)
+        # The queue starts `fare_m` back, so the hail ring and the passenger's
+        # own kerb stay clear.
         for rank in range(stand.queue):
             back_m = clear.fare_m + spec.vehicle(stand.kind).length_m / 2.0 + rank * stand.pitch_m
-            along_m = t * length_m - back_m if with_flow else t * length_m + back_m
+            along_m = _queue_along_m(street, edge_id, t, side, back_m)
             if not 0.0 <= along_m <= length_m:
                 continue
             candidates.append(
@@ -902,7 +1020,7 @@ def build_region(
 
     # ---- the shared refusals, in precedence ----
     candidates.sort(key=lambda c: (_PRIORITY[c.source], c.edge, c.t, c.side))
-    report.candidates = len(candidates)
+    report.candidates = len(candidates) + report.terminal_off_edge
     stood: list[Stood] = []
     # Accepted footprints, each padded by half its gap, bucketed by a plan cell
     # two buses long: an overlap test walks one cell and its eight neighbours.
@@ -954,20 +1072,22 @@ def build_region(
             report.by_licence[mesh] = report.by_licence.get(mesh, 0) + 1
         elif len(meshes) > 1:
             mesh = _seeded("mesh", candidate.edge, candidate.side, candidate.t).choice(meshes)
-        entry = placement(mesh, (placed.x, placed.y, placed.z), placed.rot_y_deg)
-        entry["kind"] = placed.candidate.kind
-        entry["source"] = placed.candidate.source
-        entry["hours"] = None if placed.candidate.hours is None else list(placed.candidate.hours)
-        entry["chance"] = round(placed.candidate.chance, 3)
-        entry["edge"] = placed.candidate.edge
-        stands.append(entry)
+        for hours in (candidate.hours, *candidate.more_hours):
+            entry = placement(mesh, (placed.x, placed.y, placed.z), placed.rot_y_deg)
+            entry["kind"] = candidate.kind
+            entry["source"] = candidate.source
+            entry["hours"] = None if hours is None else list(hours)
+            entry["chance"] = round(candidate.chance, 3)
+            entry["edge"] = candidate.edge
+            stands.append(entry)
+            key = _window_key(hours)
+            report.by_hours[key] = report.by_hours.get(key, 0) + 1
+        report.terminal_windows += len(candidate.more_hours)
         report.placed += 1
         report.by_kind[placed.candidate.kind] = report.by_kind.get(placed.candidate.kind, 0) + 1
         report.by_source[placed.candidate.source] = (
             report.by_source.get(placed.candidate.source, 0) + 1
         )
-        key = _window_key(placed.candidate.hours)
-        report.by_hours[key] = report.by_hours.get(key, 0) + 1
         report.narrowest_lane_room_m = min(report.narrowest_lane_room_m, placed.lane_room_m)
         if placed.lane_room_m < 0.0:
             report.published_in_lane += 1

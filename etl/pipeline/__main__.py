@@ -171,14 +171,15 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # After `tramway`, `fares` and `signals` (`P3-4`): the lines a tram runs, off
     # the beds, the stops and the stop lines.
     "tramlines": tramlines.main,
-    # After `fares`, `tramlines`, `fence` and `surface` (`P3-71`): the stationary
-    # vehicles stand at the kerb the ribbon drew, clear of the fare nodes, out of
-    # a tram's path, and off the fenced edges. Before `export`, which names the
-    # document.
-    "parked": parked.main,
     # After `surface` (`P3-78`): a route's stops are snapped to the drawn kerb.
-    # Before `export`, which names the document.
+    # Before `parked`, which lays buses over at each route's terminus, and
+    # `export`, which names the document.
     "busroutes": busroutes.main,
+    # After `fares`, `tramlines`, `fence`, `busroutes` and `surface` (`P3-71`):
+    # the stationary vehicles stand at the kerb the ribbon drew, clear of the
+    # fare nodes, out of a tram's path, off the fenced edges, and queued at the
+    # bus termini. Before `export`, which names the document.
+    "parked": parked.main,
     "export": export.main,
 }
 
@@ -227,8 +228,8 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "trees": ("carve", "surface"),
     "signals": ("surface",),
     "tramlines": ("tramway", "fares", "signals", "railings", "signs", "lamps", "trees"),
-    "parked": ("surface", "fares", "tramlines", "fence"),
     "busroutes": ("surface",),
+    "parked": ("surface", "fares", "tramlines", "fence", "busroutes"),
     "export": (
         "basemap",
         "landmarks",
