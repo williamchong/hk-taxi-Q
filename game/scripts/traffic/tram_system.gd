@@ -221,7 +221,8 @@ func _load_mesh() -> bool:
 	_batch = MultiMesh.new()
 	_batch.transform_format = MultiMesh.TRANSFORM_3D
 	_batch.use_custom_data = true
-	_batch.mesh = mesh
+	# Lamps from `INSTANCE_CUSTOM.a`, not the instance uniforms (`VehicleBodyBatch`).
+	_batch.mesh = VehicleBodyBatch.batched(mesh)
 	var drawn := MultiMeshInstance3D.new()
 	drawn.name = KIND
 	drawn.multimesh = _batch

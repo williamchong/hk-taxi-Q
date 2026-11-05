@@ -233,7 +233,19 @@ const int CHANNEL_ROOFSIGN = 6;
 // around with dark lenses rather than failing. An AI roster car too far away to
 // be worth switching is the case that matters now; the `taxi_builtin` spike was
 // the original one, and `Q50` retired it.
+//
+// ⚠️ **`VEHICLE_BATCHED` drops both to constants** (`VehicleBodyBatch`): every
+// node drawn with an `instance uniform` holds 16 slots of the global buffer,
+// which the web renderer caps at its uniform block (16 KB on this Mac's WebGL2:
+// 1,024 slots, about 60 nodes), and each parked cell's `MultiMesh` is a node.
+// A batch reads its lamps from
+// `INSTANCE_CUSTOM.a` and nobody writes its instance channels, so the
+// constants are the zero it read anyway; only the player's car keeps these.
+#ifdef VEHICLE_BATCHED
+const vec4 lamp_lit = vec4(0.0);
+#else
 instance uniform vec4 lamp_lit = vec4(0.0);
+#endif
 
 // Circuits 5-8, in the same ordering: x side lamps, y head lamps, z the roof
 // sign, w unwired. Mostly the car's *front* lamps, and they are in a second
@@ -254,7 +266,11 @@ instance uniform vec4 lamp_lit = vec4(0.0);
 // not spare capacity to raid casually:
 // Godot caps instance uniforms per shader, and a third vector spends a slot on
 // a car that has run out of lenses to light long before it runs out of channels.
+#ifdef VEHICLE_BATCHED
+const vec4 lamp_front = vec4(0.0);
+#else
 instance uniform vec4 lamp_front = vec4(0.0);
+#endif
 
 group_uniforms cabin;
 

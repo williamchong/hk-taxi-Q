@@ -641,7 +641,8 @@ func _add_kind(kind: String, mesh: Mesh, weight: float) -> int:
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.use_custom_data = true
-	multi.mesh = mesh
+	# Lamps from `INSTANCE_CUSTOM.a`, not the instance uniforms (`VehicleBodyBatch`).
+	multi.mesh = VehicleBodyBatch.batched(mesh)
 	_batches.append(multi)
 	return _kinds.size() - 1
 

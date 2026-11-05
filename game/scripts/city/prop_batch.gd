@@ -27,7 +27,10 @@ static func batch(
 	var tinted: bool = not colours.is_empty()
 	assert(not tinted or colours.size() == transforms.size(), "one colour a transform")
 	multi.use_colors = tinted
-	multi.mesh = mesh
+	# A car's body without its instance uniforms (`VehicleBodyBatch`): a batch
+	# never had them written, and on the web every node holding them spends a
+	# slot of a buffer the parked cells alone overran.
+	multi.mesh = VehicleBodyBatch.batched(mesh)
 	# Set after `mesh` and `transform_format`: `instance_count` allocates the
 	# buffer, so assigning it first and the format second discards every
 	# transform written in between.
