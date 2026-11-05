@@ -44,3 +44,5 @@ paths:
 - **A tram's lamps are the running bit** (`Q177`): the head lamp on `headlamp_l` (⚠️ `headlamp_c` is on no
   circuit, so the lens goes dark without a word) and the side lamps on `foglamp_{side}`. They burn by day
   too, on the user's "always". A close tram cannot be re-shot on demand: placement moves with `--shots`.
+- **A tram at its stop winks left** (`Q187`): `TramSystem.at_stop` (braking into the stop or
+  standing at it) puts the left bit in its lamp write; `verify_trams`' `stops:` wink line.

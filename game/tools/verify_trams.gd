@@ -5,7 +5,8 @@
 ##   where two regions are resident, no stop line on an edge the graph lost.
 ## - 🔴 **No tram passes a stop line on red or red-and-amber.** Its front's travel past
 ##   the line is watched tick by tick. Amber may be passed.
-## - 🔴 **A tram stops at every stop it reaches**, with its doors open `dwell_s`.
+## - 🔴 **A tram stops at every stop it reaches**, with its doors open `dwell_s`,
+##   winking left while it stands there (`Q187`).
 ## - 🔴 **No tram runs backwards or jumps**: its body moves forwards, no further each
 ##   tick than its speed takes it, across every bed's gap and across the seam.
 ## - **No tram stands inside another** on one route.
@@ -125,6 +126,8 @@ func _drive(lines: TramLines, table: TramProfile, controller: SignalController, 
 	var worst_jump: float = 0.0
 	var skipped_stop: int = 0
 	var dwelled: int = 0
+	# Tram-ticks at a stop winking left alone, and not.
+	var stop_wink: Vector2i = Vector2i.ZERO
 	var inside: int = 0
 	var too_fast: int = 0
 	var held: Dictionary[int, int] = {}
@@ -177,6 +180,13 @@ func _drive(lines: TramLines, table: TramProfile, controller: SignalController, 
 						and line.s_m <= tram.s + system.half_length
 					):
 						crossed += 1
+			if tram.live and tram.dwell_left > 0.0:
+				var left: bool = tram.written & TrafficSystem.LAMP_LEFT != 0
+				var right: bool = tram.written & TrafficSystem.LAMP_RIGHT != 0
+				if left and not right:
+					stop_wink.x += 1
+				else:
+					stop_wink.y += 1
 			if tram.live:
 				held[tram.held] = held.get(tram.held, 0) + 1
 				last_s[row] = tram.s
@@ -210,6 +220,11 @@ func _drive(lines: TramLines, table: TramProfile, controller: SignalController, 
 		"every stop dwelt at: %d dwelt, %d skipped" % [dwelled, skipped_stop]
 	)
 	_expect(dwelled > 0, "stops", "some tram stopped at a stop")
+	_expect(
+		stop_wink.x > 0 and stop_wink.y == 0,
+		"stops",
+		"a tram at its stop winks left (%d tram-ticks, %d wrong)" % [stop_wink.x, stop_wink.y]
+	)
 	_expect(backward == 0, "path", "no tram ran backwards (%d tram-ticks)" % backward)
 	_expect(jumped == 0, "path", "no tram jumped: worst %.3f m over its travel" % worst_jump)
 	_expect(too_fast == 0, "speed", "no tram over its cruise (%d tram-ticks)" % too_fast)

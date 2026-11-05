@@ -312,7 +312,9 @@ func step(delta: float) -> void:
 				tram.moved = false
 				tram.body.global_transform = tram.pose
 				_batch.set_instance_transform(tram.id, tram.pose)
-			_write_lamps(tram, TrafficSystem.lamp_bits(true, tram.braking))
+			_write_lamps(
+				tram, TrafficSystem.lamp_bits(true, tram.braking, 1 if at_stop(tram) else 0)
+			)
 
 
 func _try_set_out(tram: Tram) -> void:
@@ -509,6 +511,12 @@ func _hide(tram: Tram) -> void:
 	_write_lamps(tram, TrafficSystem.lamp_bits(false, false))
 	tram.shape.set_deferred("disabled", true)
 	_batch.set_instance_transform(tram.id, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
+
+
+## Braking into its stop or standing at it for its passengers: it winks left (the
+## user's call, 2026-11-06, as a bus does at its stop, `Q187`).
+static func at_stop(tram: Tram) -> bool:
+	return tram.dwell_left > 0.0 or tram.held == Held.STOP
 
 
 func _write_lamps(tram: Tram, bits: int) -> void:
