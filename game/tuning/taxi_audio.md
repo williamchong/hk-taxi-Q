@@ -68,6 +68,13 @@ The engine sits well under the horns and impacts: -4, then -12 on the user's cal
 "need less engine noise" (2026-11-06). Lifting off drops it 6 dB, the cheapest way to hear
 load without a second set of loops.
 
+## `pedal_up = 0.05`, `off_throttle_ease_db_s = 40.0`
+
+Under 5% of pedal the engine is off load and takes `off_throttle_cut_db`. The cut eases at
+40 dB/s, 0.15 s for the 6 dB, so a keyboard's pedal — all or nothing — no longer steps the level
+from one tick to the next; the rpm was already slewed and the level was not (the review,
+2026-11-06). A first guess, owed the user's ears. `pedal_up` was the code's `PEDAL_UP` until then.
+
 ## `park_fade_s = 0.6`
 
 Parked — the menu's showroom, HOME, REPORT — the taxi is silent, as its horn
@@ -80,6 +87,11 @@ the payout's coins among them, finish. Back on the road the loops come up on the
 
 The hybrid alone. Mirrors `EV_REF_KPH`. The engine starts over 45 kph or past 60% pedal, roughly
 where a Toyota hybrid's does, and the CVT holds it by the pedal rather than by the speed: the drone.
+
+## `ev_pitch_min = 0.05`, `ev_pitch_max = 2.0`
+
+The EV whine's pitch is the speed over `ev_ref_kph`, held at twice the loop's at the most and
+never quite stopped. Were the code's own constants until the review of 2026-11-06.
 
 ## `skid_full_slip = 2.0`, `skid_db = -10.0`, `skid_pitch_rise = 0.15`
 
@@ -96,6 +108,11 @@ the slip's own pitch from a crawl to 60 kph. The angle is the slip: a car sidewa
 
 Nothing under 30; full at the car's top speed. The quietest loop: at speed it never stops, and its file
 is dark (nothing over 1 kHz) for the same reason.
+
+## `wind_pitch_still = 0.8`, `wind_pitch_rise = 0.4`
+
+The wind's pitch at `wind_from_kph`, rising by 0.4 to `wind_full_kph`. Were the code's own
+constants until the review of 2026-11-06.
 
 ## `tap_min_mps = 1.5`, `impact_cool_s = 0.25`
 
@@ -121,6 +138,12 @@ A kerb hop is not a landing. `skills.tres`' `air_min_s` (0.5) pays; this sounds 
 ## `cabin_db = -2.0`
 
 The cabin's sounds (the flag, the payout and the indicator relay) play at this, not positioned.
+
+## `relay_off_pitch = 0.8`, `shot_pitch_jitter = 0.06`
+
+The indicator relay ticks pulling in at 1.0 and tocks letting go at 0.8. Every one-shot's pitch
+is scattered ±6% so a repeat is not the same sample twice. Were the code's own constants until the
+review of 2026-11-06.
 
 ## `coin_hkd = 2.0`, `coin_max = 15`, `coin_gap_s = 0.07`, `coin_after_s = 0.35`
 

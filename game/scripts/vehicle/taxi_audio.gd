@@ -24,11 +24,6 @@ const AUDIO: String = "res://assets/authored/audio/%s.wav"
 const SHOT_VOICES: int = 6
 ## A loop turned down to this is silent.
 const SILENT_DB: float = -80.0
-## Throttle under this is the pedal up.
-const PEDAL_UP: float = 0.05
-## Each impact plays up to this share either side of its file's pitch, so two
-## alike do not sound alike.
-const PITCH_JITTER: float = 0.06
 
 ## The car. Assign in the scene.
 @export var vehicle: Node3D
@@ -56,6 +51,10 @@ var _ev: AudioStreamPlayer3D = null
 var _skid: AudioStreamPlayer3D = null
 var _wind: AudioStreamPlayer3D = null
 var _scrape: AudioStreamPlayer3D = null
+## The engine loops' shares and pitches, refilled every tick.
+var _mix: Array[Vector2] = []
+## The off-throttle cut where it stands, easing toward the pedal's.
+var _cut_db: float = 0.0
 ## Every looping voice, for the park's fade.
 var _loops: Array[AudioStreamPlayer3D] = []
 var _shots: Array[AudioStreamPlayer3D] = []
@@ -164,15 +163,15 @@ func _step_engine(delta: float) -> void:
 		gear = 0 if _car.is_reversing() else profile.gear_after(gear, speed, throttle)
 		target = profile.rpm_in(gear, speed, throttle)
 	rpm = move_toward(rpm, target, profile.rpm_slew * delta)
-	var level: float = (
-		profile.engine_db - (0.0 if throttle > PEDAL_UP else profile.off_throttle_cut_db)
-	)
-	var mix: Array[Vector2] = profile.loop_mix(maxf(rpm, 1.0))
+	var cut: float = 0.0 if throttle > profile.pedal_up else profile.off_throttle_cut_db
+	_cut_db = move_toward(_cut_db, cut, profile.off_throttle_ease_db_s * delta)
+	profile.loop_mix_into(maxf(rpm, 1.0), _mix)
 	for i: int in _engine.size():
-		var share: float = mix[i].x if rpm > 0.0 else 0.0
-		_level_voice(_engine[i], level, share, mix[i].y)
-	var ev: float = clampf(absf(speed) / profile.ev_ref_kph, 0.0, 2.0) if profile.hybrid else 0.0
-	_level_voice(_ev, profile.ev_db, minf(ev, 1.0), maxf(ev, 0.05))
+		var share: float = _mix[i].x if rpm > 0.0 else 0.0
+		_level_voice(_engine[i], profile.engine_db - _cut_db, share, _mix[i].y)
+	if profile.hybrid:
+		var ev: float = clampf(absf(speed) / profile.ev_ref_kph, 0.0, profile.ev_pitch_max)
+		_level_voice(_ev, profile.ev_db, minf(ev, 1.0), maxf(ev, profile.ev_pitch_min))
 
 
 func _step_surface() -> void:
@@ -193,7 +192,9 @@ func _step_surface() -> void:
 	var air: float = clampf(
 		inverse_lerp(profile.wind_from_kph, profile.wind_full_kph, absf(_car.speed_kph)), 0.0, 1.0
 	)
-	_level_voice(_wind, profile.wind_db, air, 0.8 + 0.4 * air)
+	_level_voice(
+		_wind, profile.wind_db, air, profile.wind_pitch_still + profile.wind_pitch_rise * air
+	)
 
 
 func _step_contacts(delta: float) -> void:
@@ -209,7 +210,7 @@ func _step_contacts(delta: float) -> void:
 		0.0,
 		1.0
 	)
-	_level_voice(_scrape, profile.scrape_db, grind if _car.step_scrape_mps > 0.0 else 0.0, 1.0)
+	_level_voice(_scrape, profile.scrape_db, grind, 1.0)
 	if _car.is_airborne():
 		_air_s += delta
 		return
@@ -224,7 +225,7 @@ func _step_controls() -> void:
 	if lit != _relay_lit:
 		relays += 1
 		# Tick on, tock off: the same relay, lower as it lets go.
-		_shot("indicator", profile.cabin_db, 1.0 if lit else 0.8)
+		_shot("indicator", profile.cabin_db, 1.0 if lit else profile.relay_off_pitch)
 	_relay_lit = lit
 
 
@@ -263,11 +264,12 @@ func _shot(file: String, db: float, pitch: float = 1.0) -> void:
 		return
 	voice.stream = _stream(file)
 	voice.volume_db = db
-	voice.pitch_scale = pitch * (1.0 + _rng.randf_range(-PITCH_JITTER, PITCH_JITTER))
+	var jitter: float = profile.shot_pitch_jitter
+	voice.pitch_scale = pitch * (1.0 + _rng.randf_range(-jitter, jitter))
 	voice.play()
 
 
-## A loop's level and pitch: `share` of `db`, silent at none.
+## Parked: every loop falls toward `SILENT_DB` over `park_fade_s`, then pauses.
 func _fade_loops(delta: float) -> void:
 	var step_db: float = (
 		INF if profile.park_fade_s <= 0.0 else -SILENT_DB * delta / profile.park_fade_s
@@ -279,11 +281,24 @@ func _fade_loops(delta: float) -> void:
 		voice.stream_paused = voice.volume_db <= SILENT_DB
 
 
+## A loop's level and pitch: `share` of `db`, silent at none.
 static func _level_voice(voice: AudioStreamPlayer3D, db: float, share: float, pitch: float) -> void:
 	if voice == null:
 		return
-	voice.volume_db = db + linear_to_db(share) if share > 0.0 else SILENT_DB
-	voice.pitch_scale = maxf(pitch, 0.01)
 	# A silent loop still decodes and pans every tick: paused, it costs nothing,
-	# and it resumes from silence where it stopped, so nothing clicks.
-	voice.stream_paused = share <= 0.0
+	# and it resumes where it stopped, so nothing clicks. Each property is
+	# written only when it moves: a write is a server call.
+	if share <= 0.0:
+		if not voice.stream_paused:
+			voice.stream_paused = true
+		return
+	# Level and pitch before the unpause, so a resumed loop never plays a mix
+	# block at the level it was silenced from.
+	var db_now: float = db + linear_to_db(share)
+	if voice.volume_db != db_now:
+		voice.volume_db = db_now
+	var pitch_now: float = maxf(pitch, 0.01)
+	if voice.pitch_scale != pitch_now:
+		voice.pitch_scale = pitch_now
+	if voice.stream_paused:
+		voice.stream_paused = false

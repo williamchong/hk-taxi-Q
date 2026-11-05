@@ -40,6 +40,11 @@ const PATH: String = "res://tuning/taxi_audio.tres"
 @export_range(-40.0, 12.0, 0.5, "suffix:dB") var engine_db: float
 ## How much quieter the engine is with the pedal up.
 @export_range(0.0, 30.0, 0.5, "suffix:dB") var off_throttle_cut_db: float
+## Under this much pedal the engine is off load and takes the cut.
+@export_range(0.0, 1.0, 0.01) var pedal_up: float
+## How fast the cut comes and goes, so a keyboard's all-or-nothing pedal does
+## not step the engine's level from one tick to the next.
+@export_range(1.0, 1000.0, 1.0, "suffix:dB/s") var off_throttle_ease_db_s: float
 ## How long every loop takes to fall silent once the car is parked (the menu's
 ## showroom, HOME and REPORT). 0 cuts at once.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var park_fade_s: float
@@ -48,6 +53,9 @@ const PATH: String = "res://tuning/taxi_audio.tres"
 ## The kph the EV whine's loop was made at (`EV_REF_KPH`).
 @export_range(1.0, 200.0, 1.0, "suffix:km/h") var ev_ref_kph: float
 @export_range(-40.0, 12.0, 0.5, "suffix:dB") var ev_db: float
+## The whine's pitch is the speed over `ev_ref_kph`, held between these.
+@export_range(0.01, 1.0, 0.01) var ev_pitch_min: float
+@export_range(1.0, 4.0, 0.05) var ev_pitch_max: float
 ## The engine starts over this speed, or over `engine_on_throttle` of pedal.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var engine_on_kph: float
 @export_range(0.0, 1.0, 0.01) var engine_on_throttle: float
@@ -73,6 +81,9 @@ const PATH: String = "res://tuning/taxi_audio.tres"
 @export_range(0.0, 300.0, 1.0, "suffix:km/h") var wind_from_kph: float
 @export_range(1.0, 300.0, 1.0, "suffix:km/h") var wind_full_kph: float
 @export_range(-40.0, 12.0, 0.5, "suffix:dB") var wind_db: float
+## The wind's pitch at `wind_from_kph`, and what it rises by to `wind_full_kph`.
+@export_range(0.1, 2.0, 0.01) var wind_pitch_still: float
+@export_range(0.0, 2.0, 0.01) var wind_pitch_rise: float
 
 @export_group("Impacts")
 ## Under this speed into a contact there is no sound: a nudge. The bump and
@@ -94,12 +105,21 @@ const PATH: String = "res://tuning/taxi_audio.tres"
 
 @export_group("Cabin")
 @export_range(-40.0, 12.0, 0.5, "suffix:dB") var cabin_db: float
+## The indicator relay's pitch letting go, against 1.0 pulling in: tick, tock.
+@export_range(0.1, 2.0, 0.01) var relay_off_pitch: float
+## Every one-shot's pitch is scattered by up to this share either way, so a
+## repeat is not the same sample twice.
+@export_range(0.0, 0.5, 0.01) var shot_pitch_jitter: float
 ## At the delivery, one coin per this many HK$ of tip and time bonus, up to
 ## `coin_max`, `coin_gap_s` apart after the card reader's beep.
 @export_range(0.1, 100.0, 0.1, "suffix:HK$") var coin_hkd: float
 @export_range(1, 100, 1) var coin_max: int
 @export_range(0.01, 1.0, 0.01, "suffix:s") var coin_gap_s: float
 @export_range(0.0, 2.0, 0.01, "suffix:s") var coin_after_s: float
+
+## `loop_rpms`' logs, taken again only when `loop_rpms` itself changes.
+var _log_rpms := PackedFloat64Array()
+var _logged_rpms := PackedFloat32Array()
 
 
 ## Whether the table is whole. Pure over the table, so `verify_vehicle.gd` can
@@ -114,6 +134,11 @@ func usable(who: String) -> bool:
 		"upshift_light_share": upshift_light_share,
 		"downshift_rpm": downshift_rpm,
 		"rpm_slew": rpm_slew,
+		"off_throttle_ease_db_s": off_throttle_ease_db_s,
+		"ev_pitch_min": ev_pitch_min,
+		"ev_pitch_max": ev_pitch_max,
+		"wind_pitch_still": wind_pitch_still,
+		"relay_off_pitch": relay_off_pitch,
 		"ev_ref_kph": ev_ref_kph,
 		"cvt_low_rpm": cvt_low_rpm,
 		"cvt_high_rpm": cvt_high_rpm,
@@ -168,23 +193,32 @@ func hybrid_rpm(speed_kph: float, throttle: float) -> float:
 ## square root of their ratio of its own pitch — and the pitch each plays at.
 func loop_mix(rpm: float) -> Array[Vector2]:
 	var out: Array[Vector2] = []
+	loop_mix_into(rpm, out)
+	return out
+
+
+## `loop_mix` into `out`, resized to fit: the player's car calls it every tick.
+func loop_mix_into(rpm: float, out: Array[Vector2]) -> void:
 	var count: int = loop_rpms.size()
+	if _logged_rpms != loop_rpms:
+		_logged_rpms = loop_rpms.duplicate()
+		_log_rpms.resize(count)
+		for i: int in count:
+			_log_rpms[i] = log(loop_rpms[i])
+	out.resize(count)
 	var at: float = log(rpm)
 	for i: int in count:
 		var share: float = 0.0
-		var here: float = log(loop_rpms[i])
+		var here: float = _log_rpms[i]
 		if at <= here:
-			share = (
-				1.0 if i == 0 else clampf(inverse_lerp(log(loop_rpms[i - 1]), here, at), 0.0, 1.0)
-			)
+			share = 1.0 if i == 0 else clampf(inverse_lerp(_log_rpms[i - 1], here, at), 0.0, 1.0)
 		else:
 			share = (
 				1.0
 				if i + 1 == count
-				else clampf(inverse_lerp(log(loop_rpms[i + 1]), here, at), 0.0, 1.0)
+				else clampf(inverse_lerp(_log_rpms[i + 1], here, at), 0.0, 1.0)
 			)
-		out.append(Vector2(share, rpm / loop_rpms[i]))
-	return out
+		out[i] = Vector2(share, rpm / loop_rpms[i])
 
 
 ## What `body` is, off `materials`: "" for a wall, or a body that is gone.
