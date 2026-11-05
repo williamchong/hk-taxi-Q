@@ -36,8 +36,8 @@ extends Node
 
 const BEEP_PATH: String = "res://assets/authored/audio/meter_beep.wav"
 const AUDIO: String = "res://assets/authored/audio/%s.wav"
-## Players per cabin sound, so a run of coins overlaps rather than cuts.
-const CABIN_VOICES: int = 4
+## Plays per cabin sound at once, so a run of coins overlaps rather than cuts.
+const CABIN_POLYPHONY: int = 4
 
 ## The loop to follow. Assign in the scene.
 @export var fares: FareSystem
@@ -54,9 +54,7 @@ var coins: int = 0
 
 var _beep: AudioStreamPlayer = null
 var _audio: TaxiAudioProfile = null
-## Each cabin sound's players, played round in turn.
-var _cabin: Dictionary[String, Array] = {}
-var _cabin_next: Dictionary[String, int] = {}
+var _cabin: Dictionary[String, AudioStreamPlayer] = {}
 var _lamps: VehicleLamps = null
 var _door: TaxiDoor = null
 var _emote: PassengerEmote = null
@@ -118,15 +116,13 @@ func _load_cabin() -> void:
 		if stream == null:
 			push_warning("TaxiHire: %s did not load; it is silent" % (AUDIO % file))
 			continue
-		var voices: Array[AudioStreamPlayer] = []
-		for _i: int in CABIN_VOICES:
-			var voice := AudioStreamPlayer.new()
-			voice.stream = stream
-			voice.bus = &"Cabin"
-			add_child(voice)
-			voices.append(voice)
-		_cabin[file] = voices
-		_cabin_next[file] = 0
+		var voice := AudioStreamPlayer.new()
+		voice.stream = stream
+		voice.bus = &"Cabin"
+		voice.volume_db = _audio.cabin_db
+		voice.max_polyphony = CABIN_POLYPHONY
+		add_child(voice)
+		_cabin[file] = voice
 
 
 func _on_meter_changed(_hkd: float, _delta_hkd: float) -> void:
@@ -134,28 +130,20 @@ func _on_meter_changed(_hkd: float, _delta_hkd: float) -> void:
 	if _beep == null or not _beep.is_inside_tree():
 		return
 	# The flagfall's beep waits for the flag to land.
+	var flag: AudioStreamPlayer = _cabin.get("flag_down")
 	var wait_s: float = 0.0
-	for flag: AudioStreamPlayer in _cabin.get("flag_down", []):
-		if flag.playing:
-			wait_s = maxf(wait_s, flag.stream.get_length() - flag.get_playback_position())
+	if flag != null and flag.playing:
+		wait_s = flag.stream.get_length() - flag.get_playback_position()
 	if wait_s > 0.0:
 		get_tree().create_timer(wait_s, false, true).timeout.connect(_beep.play)
 	else:
 		_beep.play()
 
 
-## A cabin sound at `db` and `pitch` on its next player.
-func _cabin_sound(file: String, db: float, pitch: float = 1.0) -> void:
-	var voices: Array = _cabin.get(file, [])
-	if voices.is_empty():
-		return
-	var voice: AudioStreamPlayer = voices[_cabin_next[file]]
-	_cabin_next[file] = (_cabin_next[file] + 1) % voices.size()
-	if not voice.is_inside_tree():
-		return
-	voice.volume_db = db
-	voice.pitch_scale = pitch
-	voice.play()
+func _cabin_sound(file: String) -> void:
+	var voice: AudioStreamPlayer = _cabin.get(file)
+	if voice != null and voice.is_inside_tree():
+		voice.play()
 
 
 func _on_hailed(_fare: Fare) -> void:
@@ -165,8 +153,7 @@ func _on_hailed(_fare: Fare) -> void:
 
 func _on_boarded(_fare: Fare) -> void:
 	flags_down += 1
-	if _audio != null:
-		_cabin_sound("flag_down", _audio.cabin_db)
+	_cabin_sound("flag_down")
 	if _lamps != null:
 		_lamps.for_hire = false
 	if _door != null:
@@ -180,8 +167,7 @@ func _on_cancelled(_fare: Fare) -> void:
 
 func _on_alighted(_fare: Fare) -> void:
 	flags_up += 1
-	if _audio != null:
-		_cabin_sound("flag_up", _audio.cabin_db)
+	_cabin_sound("flag_up")
 	if _lamps != null:
 		_lamps.for_hire = true
 	if _door != null:
@@ -205,13 +191,11 @@ func _on_delivered(fare: Fare) -> void:
 	payouts += 1
 	if _audio == null:
 		return
-	_cabin_sound("octopus", _audio.cabin_db)
+	_cabin_sound("octopus")
 	var count: int = clampi(roundi(fare.tip_hkd / _audio.coin_hkd), 0, _audio.coin_max)
 	coins += count
 	if not is_inside_tree():
 		return
 	for k: int in count:
 		var due_s: float = _audio.coin_after_s + float(k) * _audio.coin_gap_s
-		get_tree().create_timer(due_s, false, true).timeout.connect(
-			_cabin_sound.bind("coin", _audio.cabin_db)
-		)
+		get_tree().create_timer(due_s, false, true).timeout.connect(_cabin_sound.bind("coin"))
