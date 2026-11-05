@@ -56,6 +56,8 @@ var _ev: AudioStreamPlayer3D = null
 var _skid: AudioStreamPlayer3D = null
 var _wind: AudioStreamPlayer3D = null
 var _scrape: AudioStreamPlayer3D = null
+## Every looping voice, for the park's fade.
+var _loops: Array[AudioStreamPlayer3D] = []
 var _shots: Array[AudioStreamPlayer3D] = []
 var _next_shot: int = 0
 var _streams: Dictionary[String, AudioStream] = {}
@@ -95,6 +97,10 @@ func _ready() -> void:
 	_skid = _loop("skid", &"SFX")
 	_wind = _loop("wind", &"SFX")
 	_scrape = _loop("scrape", &"SFX")
+	_loops.append_array(_engine)
+	for voice: AudioStreamPlayer3D in [_ev, _skid, _wind, _scrape]:
+		if voice != null:
+			_loops.append(voice)
 	for _i: int in SHOT_VOICES:
 		var voice := AudioStreamPlayer3D.new()
 		voice.bus = &"SFX"
@@ -136,6 +142,12 @@ func _loop(file: String, bus: StringName) -> AudioStreamPlayer3D:
 
 
 func _physics_process(delta: float) -> void:
+	# 🔴 **Silent while `parked`**, as `TaxiHorn` is (the user's call, 2026-11-06):
+	# the menu's showroom is no place for an idling engine. Nothing new starts;
+	# the loops fall away over `park_fade_s`, and a one-shot already playing ends.
+	if _car.parked:
+		_fade_loops(delta)
+		return
 	_step_engine(delta)
 	_step_surface()
 	_step_contacts(delta)
@@ -256,6 +268,17 @@ func _shot(file: String, db: float, pitch: float = 1.0) -> void:
 
 
 ## A loop's level and pitch: `share` of `db`, silent at none.
+func _fade_loops(delta: float) -> void:
+	var step_db: float = (
+		INF if profile.park_fade_s <= 0.0 else -SILENT_DB * delta / profile.park_fade_s
+	)
+	for voice: AudioStreamPlayer3D in _loops:
+		if voice.stream_paused:
+			continue
+		voice.volume_db = move_toward(voice.volume_db, SILENT_DB, step_db)
+		voice.stream_paused = voice.volume_db <= SILENT_DB
+
+
 static func _level_voice(voice: AudioStreamPlayer3D, db: float, share: float, pitch: float) -> void:
 	if voice == null:
 		return

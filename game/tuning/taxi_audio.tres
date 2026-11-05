@@ -15,6 +15,7 @@ stall_rpm = 1800.0
 rpm_slew = 6000.0
 engine_db = -18.0
 off_throttle_cut_db = 6.0
+park_fade_s = 0.6
 ev_ref_kph = 50.0
 ev_db = -20.0
 engine_on_kph = 45.0

@@ -68,6 +68,14 @@ The engine sits well under the horns and impacts: -4, then -12 on the user's cal
 "need less engine noise" (2026-11-06). Lifting off drops it 6 dB, the cheapest way to hear
 load without a second set of loops.
 
+## `park_fade_s = 0.6`
+
+Parked — the menu's showroom, HOME, REPORT — the taxi is silent, as its horn
+already was (the user's call, 2026-11-06): the idle under the menu at `engine_db` read as a car
+left running. The loops fall from where they stand to silence over this long and then pause,
+so a shift ending into REPORT does not cut the engine mid-cycle; the one-shots already playing,
+the payout's coins among them, finish. Back on the road the loops come up on the next tick.
+
 ## `ev_ref_kph = 50.0`, `ev_db = -20.0`, `engine_on_kph = 45.0`, `engine_on_throttle = 0.6`, `cvt_low_rpm = 1200.0`, `cvt_high_rpm = 4800.0`
 
 The hybrid alone. Mirrors `EV_REF_KPH`. The engine starts over 45 kph or past 60% pedal, roughly

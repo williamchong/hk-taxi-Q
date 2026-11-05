@@ -40,6 +40,9 @@ const PATH: String = "res://tuning/taxi_audio.tres"
 @export_range(-40.0, 12.0, 0.5, "suffix:dB") var engine_db: float
 ## How much quieter the engine is with the pedal up.
 @export_range(0.0, 30.0, 0.5, "suffix:dB") var off_throttle_cut_db: float
+## How long every loop takes to fall silent once the car is parked (the menu's
+## showroom, HOME and REPORT). 0 cuts at once.
+@export_range(0.0, 5.0, 0.05, "suffix:s") var park_fade_s: float
 
 @export_group("Hybrid")
 ## The kph the EV whine's loop was made at (`EV_REF_KPH`).

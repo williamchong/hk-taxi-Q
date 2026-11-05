@@ -454,6 +454,49 @@ func _check_the_outline_takes_the_speed(car: Node3D) -> void:
 		print("  ok    the city's line takes the car's speed")
 
 
+## Parked — the menu's showroom — the taxi is silent, as its horn is (the user's
+## call, 2026-11-06): every loop falls from where it stood to `SILENT_DB` over
+## `park_fade_s`, and is still falling halfway through.
+func _check_the_taxi_is_silent_parked(car: Node3D) -> void:
+	var before: int = _failed
+	var controller := car as VehicleController
+	var table := load(AUDIO_PROFILE_PATH) as TaxiAudioProfile
+	if controller == null or table == null or table.park_fade_s <= 0.0:
+		_problem("no controller at the taxi's root, or no park_fade_s in the audio table")
+		return
+	var audio := TaxiAudio.new()
+	audio.profile = table
+	audio._car = controller
+	for _i: int in 2:
+		var voice := AudioStreamPlayer3D.new()
+		voice.volume_db = table.engine_db
+		audio._loops.append(voice)
+	var held: bool = controller.parked
+	controller.parked = true
+	var tick: float = 1.0 / 60.0
+	var half: int = ceili(table.park_fade_s * 0.5 / tick)
+	for _i: int in half:
+		audio._physics_process(tick)
+	for voice: AudioStreamPlayer3D in audio._loops:
+		if not (TaxiAudio.SILENT_DB < voice.volume_db and voice.volume_db < table.engine_db):
+			_problem("a loop is not fading halfway through park_fade_s (%.1f dB)" % voice.volume_db)
+	for _i: int in ceili(table.park_fade_s / tick) + 1 - half:
+		audio._physics_process(tick)
+	for voice: AudioStreamPlayer3D in audio._loops:
+		# The volume, not `stream_paused`: a player with no stream playing keeps
+		# no paused flag headless.
+		if voice.volume_db > TaxiAudio.SILENT_DB:
+			_problem(
+				"a loop still sounds park_fade_s after the car parked (%.1f dB)" % voice.volume_db
+			)
+	controller.parked = held
+	for voice: AudioStreamPlayer3D in audio._loops:
+		voice.free()
+	audio.free()
+	if _failed == before:
+		print("  ok    the taxi falls silent over park_fade_s once parked")
+
+
 ## The batched material (`VehicleBodyBatch`) carries the indicator beat and the
 ## roof sign whoever builds it first: built from a `vehicle_body.tres` no
 ## `wire_blink` has touched, its three parameters are still the lamps table's.
@@ -716,6 +759,7 @@ func _run() -> void:
 	_check_the_taxi_sounds()
 	_check_the_door_sounds(car)
 	_check_the_batch_takes_the_beat()
+	_check_the_taxi_is_silent_parked(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)
