@@ -525,6 +525,7 @@ func _check_rules() -> void:
 	_expect(not TrafficScript.wants_horn(10.0, 7.5, 0.0, 3.0, 2.0), "rules", "just under it, not")
 	_expect(TrafficScript.wants_horn(0.0, 0.0, 2.0, 3.0, 2.0), "rules", "stood the wait")
 	_expect(not TrafficScript.wants_horn(0.0, 0.0, 1.9, 3.0, 2.0), "rules", "just short of it, not")
+	_check_horn_patterns()
 	var red := SignalController.Light.RED
 	var amber := SignalController.Light.AMBER
 	_expect(TrafficScript.must_stop(red, 100.0, 0.0, 3.0), "rules", "red stops a car")
@@ -1032,6 +1033,57 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	_check_horn(system)
 
 
+## A honk's pattern (`P3-79`): every draw inside its reason's ranges, a cross
+## car's longer than a calm one's, and the same seed the same pattern.
+func _check_horn_patterns() -> void:
+	var table := load(TrafficProfile.PATH) as TrafficProfile
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for reason: String in TrafficScript.HORN_REASONS:
+		var count: Vector2i = table.horn_count[reason]
+		var press: Vector2 = table.horn_press_s[reason]
+		var gap: Vector2 = table.horn_gap_s[reason]
+		var inside: bool = true
+		var held: Array[float] = [0.0, 0.0]
+		var pressed: Array[int] = [0, 0]
+		for temper_at: int in 2:
+			var temper: float = 0.0 if temper_at == 0 else table.horn_temper_max
+			for _draw: int in 200:
+				var pattern: PackedFloat32Array = TrafficScript.horn_pattern(
+					table, reason, temper, rng
+				)
+				var presses: int = ceili(pattern.size() / 2.0)
+				inside = inside and pattern.size() % 2 == 1
+				inside = inside and presses >= count.x and presses <= count.y
+				for at: int in pattern.size():
+					var span: Vector2 = press if at % 2 == 0 else gap
+					inside = (
+						inside and pattern[at] >= span.x - 1e-4 and pattern[at] <= span.y + 1e-4
+					)
+					if at % 2 == 0:
+						held[temper_at] += pattern[at]
+						pressed[temper_at] += 1
+		_expect(inside, "horn", "every %s pattern stays inside its ranges" % reason)
+		_expect(
+			held[1] / pressed[1] > held[0] / pressed[0],
+			"horn",
+			"a cross car leans on each press longer (%s)" % reason
+		)
+		_expect(pressed[1] >= pressed[0], "horn", "and presses no fewer times (%s)" % reason)
+	var one := RandomNumberGenerator.new()
+	var two := RandomNumberGenerator.new()
+	one.seed = 9
+	two.seed = 9
+	_expect(
+		(
+			TrafficScript.horn_pattern(table, "hit", 0.3, one)
+			== TrafficScript.horn_pattern(table, "hit", 0.3, two)
+		),
+		"horn",
+		"the same seed draws the same pattern"
+	)
+
+
 ## The horns the loop's awards draw: the car close-called, and on a docked hit the
 ## car with the taxi in its path or the car struck; a car's own wait does not hold
 ## them. `car` stands with `taxi` 6 m ahead of it.
@@ -1048,6 +1100,9 @@ func _check_reactions(system: TrafficSystem, car: TrafficSystem.Car, taxi: Node3
 		[Fare.Skill.BUMP, {}, 1, "and so does a collision"],
 		[Fare.Skill.DRIFT, {}, 0, "a drift does not"],
 	]
+	var rolls: int = system._rng.state
+	car.temper = 0.0
+	var temper: float = car.temper
 	for case: Array in cases:
 		var award := Fare.Award.new(case[0], 1.0)
 		award.passed = case[1]
@@ -1055,6 +1110,17 @@ func _check_reactions(system: TrafficSystem, car: TrafficSystem.Car, taxi: Node3
 		var before: int = system.horns
 		system.react_to(award)
 		_expect(system.horns == before + int(case[2]), "react", case[3])
+	# `P3-79`: a pattern rolls on its own RNG, never the traffic's.
+	_expect(system._rng.state == rolls, "react", "a honk's pattern moves no car's roll")
+	_expect(car.temper > temper, "react", "a honk raises the car's temper")
+	var presses: int = system.horn_presses
+	for _tick: int in 400:
+		system._step_horns(1.0 / 60.0)
+	_expect(
+		system._horn_calls.all(func(honk: Variant) -> bool: return honk == null),
+		"react",
+		"every pattern plays out and frees its voice (%d presses)" % (presses)
+	)
 	var crash := Fare.Award.new(Fare.Skill.CRASH, -5.0)
 	var forward: Vector3 = -car.pose.basis.z
 	taxi.global_position = car.pose.origin - forward * 20.0

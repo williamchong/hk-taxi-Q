@@ -132,10 +132,12 @@ than the planned stop and a car brakes hard for every crossing. The rule's angle
 `straight_deg` (two paths under it run side by side or head to head) and its clearance
 `side_clear_m` (bodies apart by it, as a flank from a parked vehicle) — not values of their own.
 
-## `horn_voices = 3`, `horn_range_m = 110.0`, `horn_repeat_s = 4.0`
+## `horn_voices = 6`, `horn_range_m = 110.0`, `horn_repeat_s = 4.0`
 
-The tram bell's numbers (`trams.md`), for the same reasons: three at once is a busy street, and four
-seconds is impatient without being a car alarm. ⚠️ `horn_range_m` is only the fade: a car sees the taxi
+The range and the repeat are the tram bell's numbers (`trams.md`), for the same reasons: four seconds is
+impatient without being a car alarm. The voices were the bell's three until `P3-79`: a honk is now a
+pattern that holds its voice up to about 3.5 s (a temper-full `hit`), where the old press was 0.42 s, so
+three would be stolen mid-pattern at any busy junction. A seventh caller takes the voice nearest done. ⚠️ `horn_range_m` is only the fade: a car sees the taxi
 within `look_m`, so no horn sounds from past about 46 m, where this leaves it at around 0.6.
 
 ## `horn_after_s = 2.0`
@@ -152,6 +154,29 @@ this on the tick it happens. This is the horn a moving taxi hears: it rarely sta
 ## `horn_pitch_spread = 0.08`
 
 A semitone or so either side, so that two cars do not sound like one car twice. Fixed per car.
+
+## `horn_count`, `horn_press_s`, `horn_gap_s`
+
+A honk is a pattern (`P3-79`, the user's ask 2026-11-05: "randomised the length, interval and
+times"): presses, each press's length and the gap between, drawn per honk from these ranges by why
+the car honks. Each kind sounds its own file (`horn_<kind>.wav`, `tools/make_vehicle_sounds.py`), a
+loop held for the press, so one file gives any length.
+
+- `stood` — 1–2 presses of 0.08–0.2 s, 0.1–0.25 s apart: the polite tap of a car whose driver has
+  noticed the taxi is not going anywhere.
+- `cut` — 1–2 of 0.4–1.2 s: being cut up or met head-on is a real blast.
+- `hit` — 1–2 of 0.6–1.6 s, close together: leaning on it after the taxi hit it or the car ahead.
+- `close_call` — 2–4 of 0.1–0.3 s, 0.08–0.15 s apart: the angry beep-beep-beep after a scrape past.
+
+All authored by ear-sense, none measured: no Hong Kong source counts honks. The draws are on their
+own RNG off the traffic seed, so a pattern never moves a car (`Q178`'s pitch rule, for the same reason).
+
+## `horn_temper_step = 0.3`, `horn_temper_max = 0.8`, `horn_temper_s = 20.0`
+
+Escalation: each honk at the taxi raises the car's temper 0.3, which pushes its next count and press
+lengths toward the top of their ranges (never past them); the gaps stay random. Held at 0.8 so even
+the angriest car's draws still vary, and falling a whole share over 20 s, so a car the taxi left alone
+for half a minute is calm again. The first honk is a tap, the third a long blast.
 
 ## `kinds = {car_a 4, car_b 3, minibus 1.5, taxi 2.02, van 1.5}`
 

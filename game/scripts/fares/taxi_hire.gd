@@ -16,6 +16,11 @@ extends Node
 ##   or not — a practised slide shows as a paid one does.
 ## - **The meter's beep** (`Q178`): each time the reading moves — the flagfall at
 ##   the boarding, then every unit. In the cab with the player, so not a 3D voice.
+## - **The flag** (`P3-79`): the meter's motor turns its flag down at the
+##   boarding — the beep waits for it, as the reading does on a real meter — and
+##   up again at the delivery or the bail.
+## - **The payout** (`P3-79`): the card reader's double beep at the delivery,
+##   then a coin for each `coin_hkd` of the tip.
 ##
 ## ⚠️ **Listens, and never polls.** Every change here is a `FareSystem` signal,
 ## so nothing runs per frame and the system stays pure enough for
@@ -30,6 +35,9 @@ extends Node
 ## hire.
 
 const BEEP_PATH: String = "res://assets/authored/audio/meter_beep.wav"
+const AUDIO: String = "res://assets/authored/audio/%s.wav"
+## Players per cabin sound, so a run of coins overlaps rather than cuts.
+const CABIN_VOICES: int = 4
 
 ## The loop to follow. Assign in the scene.
 @export var fares: FareSystem
@@ -38,8 +46,17 @@ const BEEP_PATH: String = "res://assets/authored/audio/meter_beep.wav"
 
 ## Beeps asked for, for the verify tool.
 var beeps: int = 0
+## The flag turned down and up, payouts and coins, for the same.
+var flags_down: int = 0
+var flags_up: int = 0
+var payouts: int = 0
+var coins: int = 0
 
 var _beep: AudioStreamPlayer = null
+var _audio: TaxiAudioProfile = null
+## Each cabin sound's players, played round in turn.
+var _cabin: Dictionary[String, Array] = {}
+var _cabin_next: Dictionary[String, int] = {}
 var _lamps: VehicleLamps = null
 var _door: TaxiDoor = null
 var _emote: PassengerEmote = null
@@ -78,18 +95,67 @@ func _ready() -> void:
 	else:
 		_beep = AudioStreamPlayer.new()
 		_beep.stream = stream
+		_beep.bus = &"Cabin"
 		add_child(_beep)
 	fares.meter_changed.connect(_on_meter_changed)
+	fares.delivered.connect(_on_delivered)
+	_load_cabin()
 	if _sparks != null:
 		fares.drift_tier_changed.connect(_sparks.show_tier)
 	if _tail != null:
 		fares.drift_tier_changed.connect(_tail.show_tier)
 
 
+## The cabin's voices (`P3-79`), off `taxi_audio.tres`; none, and silent, on a
+## table that will not load.
+func _load_cabin() -> void:
+	_audio = load(TaxiAudioProfile.PATH) as TaxiAudioProfile
+	if _audio == null or not _audio.usable("TaxiHire"):
+		_audio = null
+		return
+	for file: String in ["flag_down", "flag_up", "octopus", "coin"]:
+		var stream := load(AUDIO % file) as AudioStream
+		if stream == null:
+			push_warning("TaxiHire: %s did not load; it is silent" % (AUDIO % file))
+			continue
+		var voices: Array[AudioStreamPlayer] = []
+		for _i: int in CABIN_VOICES:
+			var voice := AudioStreamPlayer.new()
+			voice.stream = stream
+			voice.bus = &"Cabin"
+			add_child(voice)
+			voices.append(voice)
+		_cabin[file] = voices
+		_cabin_next[file] = 0
+
+
 func _on_meter_changed(_hkd: float, _delta_hkd: float) -> void:
 	beeps += 1
-	if _beep != null and _beep.is_inside_tree():
+	if _beep == null or not _beep.is_inside_tree():
+		return
+	# The flagfall's beep waits for the flag to land.
+	var wait_s: float = 0.0
+	for flag: AudioStreamPlayer in _cabin.get("flag_down", []):
+		if flag.playing:
+			wait_s = maxf(wait_s, flag.stream.get_length() - flag.get_playback_position())
+	if wait_s > 0.0:
+		get_tree().create_timer(wait_s, false, true).timeout.connect(_beep.play)
+	else:
 		_beep.play()
+
+
+## A cabin sound at `db` and `pitch` on its next player.
+func _cabin_sound(file: String, db: float, pitch: float = 1.0) -> void:
+	var voices: Array = _cabin.get(file, [])
+	if voices.is_empty():
+		return
+	var voice: AudioStreamPlayer = voices[_cabin_next[file]]
+	_cabin_next[file] = (_cabin_next[file] + 1) % voices.size()
+	if not voice.is_inside_tree():
+		return
+	voice.volume_db = db
+	voice.pitch_scale = pitch
+	voice.play()
 
 
 func _on_hailed(_fare: Fare) -> void:
@@ -98,6 +164,9 @@ func _on_hailed(_fare: Fare) -> void:
 
 
 func _on_boarded(_fare: Fare) -> void:
+	flags_down += 1
+	if _audio != null:
+		_cabin_sound("flag_down", _audio.cabin_db)
 	if _lamps != null:
 		_lamps.for_hire = false
 	if _door != null:
@@ -110,6 +179,9 @@ func _on_cancelled(_fare: Fare) -> void:
 
 
 func _on_alighted(_fare: Fare) -> void:
+	flags_up += 1
+	if _audio != null:
+		_cabin_sound("flag_up", _audio.cabin_db)
 	if _lamps != null:
 		_lamps.for_hire = true
 	if _door != null:
@@ -126,3 +198,20 @@ func _on_bailed(_fare: Fare) -> void:
 func _on_skilled(_fare: Fare, award: Fare.Award) -> void:
 	if _emote != null:
 		_emote.show_face(PassengerEmote.Face.HURT if award.hkd < 0.0 else PassengerEmote.Face.GRIN)
+
+
+## The card reader, then the tip in coins.
+func _on_delivered(fare: Fare) -> void:
+	payouts += 1
+	if _audio == null:
+		return
+	_cabin_sound("octopus", _audio.cabin_db)
+	var count: int = clampi(roundi(fare.tip_hkd / _audio.coin_hkd), 0, _audio.coin_max)
+	coins += count
+	if not is_inside_tree():
+		return
+	for k: int in count:
+		var due_s: float = _audio.coin_after_s + float(k) * _audio.coin_gap_s
+		get_tree().create_timer(due_s, false, true).timeout.connect(
+			_cabin_sound.bind("coin", _audio.cabin_db)
+		)

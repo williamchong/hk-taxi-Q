@@ -607,9 +607,30 @@ func _check_beep() -> void:
 		_expect(hire.beeps == steps + 1, "beep", "%d units, %d beeps" % [steps, hire.beeps])
 	else:
 		_expect(false, "beep", "the staged drive ended the fare before it charged a unit")
+	_check_cabin_sounds(system, hire)
 	hire.free()
 	car.free()
 	system.free()
+
+
+## The cabin's sounds (`P3-79`), off the loop's own signals: the flag down at the
+## boarding and up at the end, and the tip paid in coins.
+func _check_cabin_sounds(system: FareSystem, hire: TaxiHire) -> void:
+	var table := load(TaxiAudioProfile.PATH) as TaxiAudioProfile
+	_expect(hire.flags_down == 1, "cabin", "the boarding turns the flag down once")
+	var paid := Fare.new()
+	paid.tip_hkd = table.coin_hkd * 5.0
+	system.delivered.emit(paid)
+	_expect(hire.payouts == 1, "cabin", "the delivery pays out once")
+	_expect(hire.coins == 5, "cabin", "a tip of five coins' worth is five coins (%d)" % hire.coins)
+	_expect(hire.flags_up == 1, "cabin", "and turns the flag up")
+	paid.tip_hkd = table.coin_hkd * float(table.coin_max * 3)
+	system.delivered.emit(paid)
+	_expect(hire.coins == 5 + table.coin_max, "cabin", "a huge tip stops at coin_max")
+	system.bailed.emit(paid)
+	_expect(
+		hire.flags_up == 3 and hire.payouts == 2, "cabin", "a bail turns it up and pays nothing"
+	)
 
 
 ## The skills (`P3-49`): each dwell from both sides, a slide that ends

@@ -101,6 +101,50 @@ const MARKS_PROFILE_PATH := "res://tuning/skid_marks.tres"
 const SPARKS_PROFILE_PATH := "res://tuning/drift_sparks.tres"
 const OUTLINE_PROFILE_PATH := "res://tuning/car_outline.tres"
 const TAIL_PROFILE_PATH := "res://tuning/light_tail.tres"
+const AUDIO_SCRIPT := "res://scripts/vehicle/taxi_audio.gd"
+const AUDIO_PROFILE_PATH := "res://tuning/taxi_audio.tres"
+const AUDIO_DIR := "res://assets/authored/audio/%s.wav"
+## Every file `make_vehicle_sounds.py` writes that a script plays, by shape.
+const AUDIO_LOOPS: PackedStringArray = [
+	"engine_1050",
+	"engine_2520",
+	"engine_5040",
+	"engine_ev",
+	"skid",
+	"wind",
+	"scrape",
+	"horn_car_a",
+	"horn_car_b",
+	"horn_taxi",
+	"horn_minibus",
+	"horn_van",
+	"horn_bus",
+]
+const AUDIO_SHOTS: PackedStringArray = [
+	"flag_down",
+	"flag_up",
+	"hit_tap_1",
+	"hit_tap_2",
+	"hit_bump_1",
+	"hit_bump_2",
+	"hit_crash_1",
+	"hit_crash_2",
+	"top_car",
+	"top_railing",
+	"top_tram",
+	"top_tree",
+	"debris",
+	"glass",
+	"land",
+	"door_open",
+	"door_shut",
+	"indicator",
+	"wrong_way",
+	"octopus",
+	"coin",
+	"meter_beep",
+	"tram_bell",
+]
 
 
 ## The rigs' dials are tuning resources, and a zero key makes each rig inert
@@ -633,6 +677,8 @@ func _run() -> void:
 	_check_the_sparks_take_the_tier(car)
 	_check_the_outline_takes_the_speed(car)
 	_check_the_light_tail_streaks_and_fades(car, body)
+	_check_the_taxi_sounds()
+	_check_the_door_sounds(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)
@@ -642,6 +688,109 @@ func _run() -> void:
 	# `ERROR: ... leaked` lines that read like a failure and are not one.
 	car.free()
 	_finish("verify_vehicle")
+
+
+## The taxi's sounds (`P3-79`): every file loads in the shape its player
+## expects, the table is whole, the box changes gear without hunting, the
+## engine loops crossfade to one, and an impact is tiered on the award's bars
+## and named by what it struck.
+func _check_the_taxi_sounds() -> void:
+	var before: int = _failed
+	for file: String in AUDIO_LOOPS:
+		var loop := load(AUDIO_DIR % file) as AudioStreamWAV
+		if loop == null or loop.loop_mode != AudioStreamWAV.LOOP_FORWARD:
+			_problem("%s does not load as a forward loop; its voice would stop" % file)
+	for file: String in AUDIO_SHOTS:
+		var shot := load(AUDIO_DIR % file) as AudioStreamWAV
+		if shot == null or shot.loop_mode != AudioStreamWAV.LOOP_DISABLED:
+			_problem("%s does not load as a one-shot" % file)
+	var table: Resource = load(AUDIO_PROFILE_PATH)
+	if table == null or not table.usable("verify_vehicle"):
+		_problem("%s is not a whole TaxiAudioProfile" % AUDIO_PROFILE_PATH)
+		return
+	var top: int = table.rpm_per_kph.size() - 1
+	for throttle: float in [0.0, 0.3, 1.0]:
+		var gear: int = 0
+		var last_gear: int = 0
+		for kph: int in range(0, 161):
+			for _settle: int in 4:
+				gear = table.gear_after(gear, float(kph), throttle)
+			if table.gear_after(gear, float(kph), throttle) != gear:
+				_problem("the box hunts at %d kph, throttle %.1f" % [kph, throttle])
+			if gear < last_gear:
+				_problem("the box changed down accelerating, at %d kph" % kph)
+			last_gear = gear
+			var heard: float = table.rpm_in(gear, float(kph), throttle)
+			if heard < table.idle_rpm or heard > table.redline_rpm:
+				_problem("%.0f rpm at %d kph is off the engine's range" % [heard, kph])
+		if gear != top:
+			_problem(
+				"at 160 kph and throttle %.1f the box is in gear %d, not top" % [throttle, gear]
+			)
+	if table.rpm_in(0, 0.0, 1.0) <= table.idle_rpm:
+		_problem("the converter lets the engine run up nothing off the line")
+	for rpm: int in range(int(table.idle_rpm), int(table.redline_rpm), 50):
+		var total: float = 0.0
+		for mix: Vector2 in table.loop_mix(float(rpm)):
+			total += mix.x
+			# The louder of two crossfading loops: within the square root of
+			# the widest ratio between neighbours (2.4, so 0.65x to 1.55x).
+			if mix.x >= 0.5 and (mix.y < 0.64 or mix.y > 1.56):
+				_problem("the louder loop plays at %.2fx its pitch at %d rpm" % [mix.y, rpm])
+		if not is_equal_approx(total, 1.0):
+			_problem("the engine loops sum to %.2f at %d rpm, not 1" % [total, rpm])
+	var audio_script := load(AUDIO_SCRIPT) as GDScript
+	var skills: Resource = load("res://tuning/skills.tres")
+	var bump: float = skills.bump_min_kph
+	var crash: float = skills.crash_min_kph
+	for case: Array in [
+		[bump - 0.1, "tap"], [bump, "bump"], [crash - 0.1, "bump"], [crash, "crash"]
+	]:
+		var tier: String = audio_script.tier_of(case[0], bump, crash)
+		if tier != case[1]:
+			_problem("%.1f kph sounds a %s, not a %s" % [case[0], tier, case[1]])
+	for case: Array in [
+		["car_12", "car"],
+		["tram_3", "tram"],
+		["minibus_col_4", "car"],
+		["taxi_col_0", "car"],
+		["tree_a_trunks_1_2", "tree"],
+		["barrier_col_7", "railing"],
+		["tile_3_4", ""],
+	]:
+		var body := Node.new()
+		body.name = case[0]
+		var what: String = table.material_of(body)
+		body.free()
+		if what != case[1]:
+			_problem('a body named %s sounds as "%s", not "%s"' % [case[0], what, case[1]])
+	if table.material_of(null) != "":
+		_problem("a body that is gone sounds as something")
+	if _failed == before:
+		print("  ok    the taxi's sounds load, the box shifts without hunting, an impact is tiered")
+
+
+## The door sounds as it leaves shut and as it lands shut, once each.
+func _check_the_door_sounds(car: Node3D) -> void:
+	var before: int = _failed
+	var authored := _running(car, DOOR_SCRIPT) as Node3D
+	if authored == null:
+		return
+	var door := (load(DOOR_SCRIPT) as GDScript).new() as Node3D
+	door.profile = authored.profile
+	door.position = authored.position
+	door._ready()
+	door.open_briefly()
+	door.open_briefly()
+	for _tick: int in 240:
+		door._physics_process(1.0 / 60.0)
+	if door.opens != 1 or door.shuts != 1:
+		_problem(
+			"a brief open sounded %d opens and %d shuts, not one each" % [door.opens, door.shuts]
+		)
+	door.free()
+	if _failed == before:
+		print("  ok    the door latches open once and thuds shut once")
 
 
 ## Every surface of the body must render with `vehicle_body.tres`.

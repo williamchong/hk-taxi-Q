@@ -12,7 +12,9 @@ extends Node3D
 ## **The horn** (`Q178`) is for the taxi alone: cut up, or stood behind it with no
 ## red to wait for (`wants_horn`); and on the loop's awards, the car the taxi
 ## close-called, and on a docked hit every car that had the taxi ahead or was the
-## one struck (`react_to`). A parked taxi hears nothing.
+## one struck (`react_to`). A parked taxi hears nothing. Each kind has its own
+## horn, and each honk is a pattern of presses drawn by why it honks, growing
+## with the car's temper (`P3-79`), off its own RNG so no car moves for it.
 ##
 ## 🔴 **Kinematic, not simulated — until the taxi hits it.** A car is a position
 ## along its edge and a speed; its body is an `AnimatableBody3D` moved to where it
@@ -125,7 +127,14 @@ const HIDDEN := Transform3D(Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO), Vec
 
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
-const HORN_PATH: String = "res://assets/authored/audio/car_horn.wav"
+## A kind's horn, a loop held for as long as a press lasts (`P3-79`).
+const HORN_PATH: String = "res://assets/authored/audio/horn_%s.wav"
+## The horn a kind with no file of its own sounds.
+const HORN_FALLBACK_KIND: String = "car_a"
+## Why a car honks, each with its own pattern ranges in `traffic.tres`.
+const HORN_REASONS: PackedStringArray = ["stood", "cut", "hit", "close_call"]
+## A press starts and stops over this long, so the loop never clicks.
+const HORN_DECLICK_S: float = 0.03
 ## Centre to centre past touching a car is still the car struck, in plan metres:
 ## the box is the mesh's bound, and the contact a tick old.
 const STRUCK_SLACK_M: float = 0.5
@@ -167,6 +176,26 @@ var routed_spawned: int = 0
 
 ## What stopped a car on its last tick, for the verify tool and the overlay.
 enum Held { NONE, LIGHT, CAR, PARKED, TAXI, GIVE_WAY, DWELL }
+
+
+## One honk on one voice (`P3-79`): the car, its pattern, where in it the
+## voice is, and the level the press has ramped to.
+class HornCall:
+	extends RefCounted
+	var car: Car
+	## Press, gap, press, … in seconds; `at` indexes it, even is a press.
+	var pattern: PackedFloat32Array
+	var at: int = 0
+	## Seconds left of the step `at` names.
+	var left_s: float = 0.0
+	var level: float = 0.0
+
+	## Seconds until the pattern is done.
+	func remaining_s() -> float:
+		var left: float = maxf(left_s, 0.0)
+		for later: int in range(at + 1, pattern.size()):
+			left += pattern[later]
+		return left
 
 
 ## One car.
@@ -247,6 +276,9 @@ class Car:
 	var braking: bool = false
 	## Seconds until this car may sound its horn again.
 	var horn_wait: float = 0.0
+	## How cross it is with the taxi, 0 to `horn_temper_max`, as of `temper_at_s`.
+	var temper: float = 0.0
+	var temper_at_s: float = 0.0
 	## Seconds it has stood behind the taxi with no light to wait for.
 	var taxi_stood_s: float = 0.0
 	## The livery `ParkedRoster` drew, alpha 1 to apply or 0 for none.
@@ -345,8 +377,12 @@ var cars: Array[Car] = []
 ## Spawns and retirements since the start, for the verify tool.
 var spawned: int = 0
 var retired: int = 0
-## Horns sounded (`Q178`), for the verify tool.
+## Horns sounded (`Q178`), a pattern each, and the presses in them, for the
+## verify tool.
 var horns: int = 0
+var horn_presses: int = 0
+## The last pattern drawn: press, gap, press, … in seconds.
+var last_horn_pattern: PackedFloat32Array = PackedFloat32Array()
 ## Cars the taxi knocked, and knocked cars that drove on again (`Q180`).
 var knocks: int = 0
 var recovered: int = 0
@@ -357,7 +393,14 @@ var fares: FareSystem = null
 ## Ticks run, so a car's turn path is read once a tick.
 var _tick: int = 0
 var _horn_voices: Array[AudioStreamPlayer3D] = []
-var _next_horn: int = 0
+## What each voice is sounding, or null.
+var _horn_calls: Array[HornCall] = []
+var _horn_streams: Dictionary[String, AudioStream] = {}
+## The patterns' own draws, off the traffic's seed but never on its RNG: one more
+## draw there would move every later car (`Q178`).
+var _horn_rng := RandomNumberGenerator.new()
+## Seconds run, for a car's temper.
+var _clock_s: float = 0.0
 var _rng := RandomNumberGenerator.new()
 ## The cars by their body's instance id, for `take_push`.
 var _by_body: Dictionary[int, Car] = {}
@@ -425,6 +468,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	profile = table
 	_rng.seed = seed
 	_route_rng.seed = seed * 7919 + 1
+	_horn_rng.seed = seed * 104729 + 3
 	router = RoadRouterScript.new(graph, RoadRouterScript.Profile.legal())
 	_admitted = PackedInt32Array()
 	for edge: int in router.admitted_edge_ids():
@@ -552,6 +596,9 @@ static func usable(table: TrafficProfile) -> bool:
 		"horn_after_s": table.horn_after_s,
 		"horn_cut_mps": table.horn_cut_mps,
 		"horn_pitch_spread": table.horn_pitch_spread,
+		"horn_temper_step": table.horn_temper_step,
+		"horn_temper_max": table.horn_temper_max,
+		"horn_temper_s": table.horn_temper_s,
 		"kinds": float(table.kinds.size()),
 		"taxi_for_hire": table.taxi_for_hire,
 		"react_s": table.react_s,
@@ -564,20 +611,42 @@ static func usable(table: TrafficProfile) -> bool:
 		"dwell_s": table.dwell_s,
 		"dwell_reach_m": table.dwell_reach_m,
 	}
+	for reason: String in HORN_REASONS:
+		if not (
+			table.horn_count.has(reason)
+			and table.horn_press_s.has(reason)
+			and table.horn_gap_s.has(reason)
+		):
+			push_error(
+				"TrafficSystem: %s has no horn pattern for %s" % [table.resource_path, reason]
+			)
+			return false
 	return not TuningTable.any_zero(table, required, "TrafficSystem", "no traffic will run")
 
 
 func _load_horn() -> void:
-	var stream := load(HORN_PATH) as AudioStream
-	if stream == null:
-		push_warning("TrafficSystem: %s did not load; the cars are silent" % HORN_PATH)
-		return
 	for _voice: int in profile.horn_voices:
 		var voice := AudioStreamPlayer3D.new()
-		voice.stream = stream
 		voice.max_distance = profile.horn_range_m
+		voice.bus = &"SFX"
 		add_child(voice)
 		_horn_voices.append(voice)
+		_horn_calls.append(null)
+	# Every kind's horn now, not on the tick of its first honk.
+	for kind: String in profile.kinds:
+		_horn_streams[kind] = horn_stream(kind)
+
+
+## `kind`'s horn, or the fallback's where it has none; null, warned, where
+## neither loads.
+static func horn_stream(kind: String) -> AudioStream:
+	var path: String = HORN_PATH % kind
+	if not ResourceLoader.exists(path):
+		path = HORN_PATH % HORN_FALLBACK_KIND
+	var stream := load(path) as AudioStream
+	if stream == null:
+		push_warning("TrafficSystem: %s did not load; that horn is silent" % path)
+	return stream
 
 
 func _load_library() -> bool:
@@ -1056,6 +1125,8 @@ func _physics_process(delta: float) -> void:
 ## One tick: spawn into the ring, drive every car, retire what left it.
 func step(delta: float) -> void:
 	_tick += 1
+	_clock_s += delta
+	_step_horns(delta)
 	if trams == null and is_inside_tree():
 		trams = get_tree().get_first_node_in_group(TramSystem.GROUP) as TramSystem
 	if not is_instance_valid(fares) and is_inside_tree():
@@ -1636,7 +1707,19 @@ func _drive(car: Car, delta: float) -> void:
 static func wants_horn(
 	speed: float, stop_from: float, stood_s: float, cut_mps: float, after_s: float
 ) -> bool:
-	return speed - stop_from >= cut_mps or stood_s >= after_s
+	return horn_reason(speed, stop_from, stood_s, cut_mps, after_s) != ""
+
+
+## Which of `wants_horn`'s two bars the car is over (`P3-79`): "cut", "stood", or
+## "" for neither. Cut wins: a car cut up after a wait is cut up.
+static func horn_reason(
+	speed: float, stop_from: float, stood_s: float, cut_mps: float, after_s: float
+) -> String:
+	if speed - stop_from >= cut_mps:
+		return "cut"
+	if stood_s >= after_s:
+		return "stood"
+	return ""
 
 
 func _mind_horn(car: Car, target: float, for_light: bool, delta: float) -> void:
@@ -1647,8 +1730,11 @@ func _mind_horn(car: Car, target: float, for_light: bool, delta: float) -> void:
 	car.taxi_stood_s = (0.0 if for_light or car.speed >= STOPPED_MPS else car.taxi_stood_s + delta)
 	if car.horn_wait > 0.0:
 		return
-	if wants_horn(car.speed, target, car.taxi_stood_s, profile.horn_cut_mps, profile.horn_after_s):
-		_sound_horn(car)
+	var reason: String = horn_reason(
+		car.speed, target, car.taxi_stood_s, profile.horn_cut_mps, profile.horn_after_s
+	)
+	if reason != "":
+		_sound_horn(car, reason)
 
 
 ## Hear `loop`'s awards, paid and practised alike: an empty cab is cut up as rudely.
@@ -1673,11 +1759,11 @@ func react_to(award: Fare.Award) -> void:
 		Fare.Skill.CLOSE_CALL:
 			for car: Car in cars:
 				if car.live and is_same(car.obstacle, award.passed):
-					_sound_horn(car)
+					_sound_horn(car, "close_call")
 		Fare.Skill.BUMP, Fare.Skill.CRASH:
 			for car: Car in cars:
 				if car.live and (_struck(car) or _taxi_gap(car) < INF):
-					_sound_horn(car)
+					_sound_horn(car, "hit")
 
 
 ## Whether `car` is near enough the taxi to be what it hit.
@@ -1688,22 +1774,102 @@ func _struck(car: Car) -> bool:
 	return _plan_distance(car.pose.origin, vehicle.global_position) <= reach
 
 
-func _sound_horn(car: Car) -> void:
+func _sound_horn(car: Car, reason: String) -> void:
 	car.horn_wait = profile.horn_repeat_s
 	# The taxi in the menu's showroom stands on a road, and nobody is driving it.
 	var controller := vehicle as VehicleController
 	if controller != null and controller.parked:
 		return
+	var temper: float = maxf(car.temper - (_clock_s - car.temper_at_s) / profile.horn_temper_s, 0.0)
+	var pattern: PackedFloat32Array = horn_pattern(profile, reason, temper, _horn_rng)
+	car.temper = minf(temper + profile.horn_temper_step, profile.horn_temper_max)
+	car.temper_at_s = _clock_s
 	horns += 1
-	if _horn_voices.is_empty():
+	horn_presses += ceili(pattern.size() / 2.0)
+	last_horn_pattern = pattern
+	var slot: int = _horn_slot(car)
+	if slot < 0:
 		return
-	var voice: AudioStreamPlayer3D = _horn_voices[_next_horn]
-	_next_horn = (_next_horn + 1) % _horn_voices.size()
-	if not voice.is_inside_tree():
-		return
-	voice.global_position = car.pose.origin
+	var kind: String = profile.taxi_kind if car.taxi else _kinds[car.kind]
+	if not _horn_streams.has(kind):
+		_horn_streams[kind] = horn_stream(kind)
+	var voice: AudioStreamPlayer3D = _horn_voices[slot]
+	voice.stream = _horn_streams[kind]
 	voice.pitch_scale = 1.0 + profile.horn_pitch_spread * sin(float(car.id) * PITCH_STIR)
-	voice.play()
+	var honk := HornCall.new()
+	honk.car = car
+	honk.pattern = pattern
+	honk.left_s = pattern[0]
+	_horn_calls[slot] = honk
+	if voice.is_inside_tree():
+		voice.global_position = car.pose.origin
+		voice.volume_db = linear_to_db(0.0)
+		voice.play()
+
+
+## A pattern for `reason` (`P3-79`): press, gap, press, … in seconds, the count
+## and each press drawn toward the top of their ranges by `temper`, the gaps
+## not. Static, so the verify tool can draw from it without a city.
+static func horn_pattern(
+	table: TrafficProfile, reason: String, temper: float, rng: RandomNumberGenerator
+) -> PackedFloat32Array:
+	var count: Vector2i = table.horn_count[reason]
+	var press: Vector2 = table.horn_press_s[reason]
+	var gap: Vector2 = table.horn_gap_s[reason]
+	var presses: int = mini(
+		count.x + int(lerpf(rng.randf(), 1.0, temper) * float(count.y - count.x + 1)), count.y
+	)
+	var out := PackedFloat32Array()
+	for i: int in presses:
+		if i > 0:
+			out.append(lerpf(gap.x, gap.y, rng.randf()))
+		out.append(lerpf(press.x, press.y, lerpf(rng.randf(), 1.0, temper)))
+	return out
+
+
+## The voice `car` sounds on: its own if it is mid-pattern (the new one replaces
+## it), else an idle one, else the one nearest done. -1 with no voices.
+func _horn_slot(car: Car) -> int:
+	var best: int = -1
+	var best_left: float = INF
+	for slot: int in _horn_calls.size():
+		var honk: HornCall = _horn_calls[slot]
+		if honk == null:
+			if best_left > 0.0:
+				best = slot
+				best_left = 0.0
+			continue
+		if honk.car == car:
+			return slot
+		if honk.remaining_s() < best_left:
+			best = slot
+			best_left = honk.remaining_s()
+	return best
+
+
+## Each sounding voice: follow its car, press and lift on the pattern, and ramp
+## the level over `HORN_DECLICK_S` either way.
+func _step_horns(delta: float) -> void:
+	for slot: int in _horn_calls.size():
+		var honk: HornCall = _horn_calls[slot]
+		if honk == null:
+			continue
+		var voice: AudioStreamPlayer3D = _horn_voices[slot]
+		honk.left_s -= delta
+		while honk.left_s <= 0.0 and honk.at < honk.pattern.size():
+			honk.at += 1
+			if honk.at < honk.pattern.size():
+				honk.left_s += honk.pattern[honk.at]
+		var on: bool = honk.at < honk.pattern.size() and honk.at % 2 == 0
+		honk.level = move_toward(honk.level, 1.0 if on else 0.0, delta / HORN_DECLICK_S)
+		if honk.at >= honk.pattern.size() and honk.level <= 0.0:
+			voice.stop()
+			_horn_calls[slot] = null
+			continue
+		if voice.is_inside_tree():
+			if honk.car.live:
+				voice.global_position = honk.car.pose.origin
+			voice.volume_db = linear_to_db(honk.level)
 
 
 ## What a knocked car's tyres hold across them, in m/s²: `tyre.tres`' `mu` times

@@ -239,6 +239,7 @@ func _load_bell() -> void:
 		var voice := AudioStreamPlayer3D.new()
 		voice.stream = stream
 		voice.max_distance = profile.bell_range_m
+		voice.bus = &"SFX"
 		add_child(voice)
 		_voices.append(voice)
 

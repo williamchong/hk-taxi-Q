@@ -89,6 +89,9 @@ const TURN_RELEASE: float = 0.75
 ## tool, `B3`'s traffic — is a taxi plying for hire, which is what the sign
 ## showed before anything simulated a fare.
 var for_hire: bool = true
+## Whether an indicator lamp is lit this tick: the flasher's beat, for its
+## relay's tick (`TaxiAudio`, `P3-79`).
+var indicator_lit: bool = false
 
 var _car: VehicleController = null
 var _body: MeshInstance3D = null
@@ -363,6 +366,7 @@ func _physics_process(delta: float) -> void:
 	# live — `side` is one number — so the only thing a second phase could
 	# express is a hazard flash, which nothing asks for.
 	var flash: float = 1.0 if _blink_phase < profile.blink_duty else 0.0
+	indicator_lit = indicating and flash > 0.0
 
 	# `CIRCUIT_*` order less one: x brake, y reverse, z indicator left, w right.
 	#

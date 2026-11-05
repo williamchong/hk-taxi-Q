@@ -98,7 +98,17 @@ script before any autoload exists. Freed with its parent under `--fares=off`.
 dark from boarding to the drop, the passenger door open from the hail to the
 boarding and briefly at the drop. Signals only, so it adds nothing per frame. A
 child of `Fares` on `Readout`'s pattern, so `--fares=off` frees it with the
-loop and the car keeps its authored state: sign lit, door shut.
+loop and the car keeps its authored state: sign lit, door shut. Since `P3-79` it
+also sounds the fare: the meter's flag and the payout.
+
+## `[node name="Sounds" type="Node" parent="."]`
+
+`taxi_audio.gd` (`P3-79`): the taxi's sounds off the car — engine, squeal, wind,
+scrape, impacts, landing, indicator relay. A sibling of `Horn` and not
+a child of the car, for the horn's reason: it is the player's car's, and an AI
+taxi on the same body (`B3`) must not carry it. Not under `Fares`, so free roam
+still hears its engine. Its voices hang on the car; its numbers are
+`tuning/taxi_audio.tres`.
 
 ## `[node name="Attract" type="Node" parent="."]`
 

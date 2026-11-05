@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="TaxiAudioProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicle/taxi_audio_profile.gd" id="1_audio"]
+
+[resource]
+script = ExtResource("1_audio")
+loop_rpms = PackedFloat32Array(1050, 2520, 5040)
+idle_rpm = 800.0
+redline_rpm = 6000.0
+rpm_per_kph = PackedFloat32Array(103, 55, 37, 27)
+upshift_rpm = 4000.0
+upshift_light_share = 0.6
+downshift_rpm = 1200.0
+stall_rpm = 1800.0
+rpm_slew = 6000.0
+engine_db = -18.0
+off_throttle_cut_db = 6.0
+ev_ref_kph = 50.0
+ev_db = -20.0
+engine_on_kph = 45.0
+engine_on_throttle = 0.6
+cvt_low_rpm = 1200.0
+cvt_high_rpm = 4800.0
+skid_full_slip = 2.0
+skid_db = -10.0
+skid_pitch_rise = 0.15
+skid_full_kph = 60.0
+skid_slow_share = 0.3
+skid_speed_pitch = 0.2
+wind_from_kph = 30.0
+wind_full_kph = 140.0
+wind_db = -22.0
+tap_min_mps = 1.5
+impact_cool_s = 0.25
+materials = Dictionary[String, String]({
+"barrier": "railing",
+"bollard": "railing",
+"bus": "car",
+"car_": "car",
+"lamp": "railing",
+"railing": "railing",
+"sign": "railing",
+"taxi": "car",
+"tram": "tram",
+"trunks": "tree",
+"van": "car"
+})
+scrape_from_mps = 1.0
+scrape_full_mps = 10.0
+scrape_db = -6.0
+land_min_air_s = 0.3
+cabin_db = -2.0
+coin_hkd = 2.0
+coin_max = 15
+coin_gap_s = 0.07
+coin_after_s = 0.35

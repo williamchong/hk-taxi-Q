@@ -63,6 +63,15 @@ var _brake_n: float = 0.0
 ## not drain the latch — `driver.gd`'s trace, which is how a kerb was shown
 ## to read nothing (`Q148`). Never read by the game.
 var last_impact_mps: float = 0.0
+## The hardest contact of the last physics step, for the taxi's sounds
+## (`P3-79`): the speed into it, as `_impact_mps` reads it, and the body it was.
+## Reset every step, so a reader never drains `take_impact_mps`'s latch and the
+## fare's penalty stays the one reader of that. 0 and null between contacts.
+var step_hit_mps: float = 0.0
+var step_hit_with: Object = null
+## How fast the car slid along whatever it touched in the last step, m/s: the
+## scrape along a wall. 0 off every wall.
+var step_scrape_mps: float = 0.0
 ## Fraction of top speed over which drive force eases to zero. Shapes the
 ## approach to max_speed_kph rather than setting it, so it stays a structural
 ## constant while the speed itself remains a profile dial.
@@ -709,16 +718,24 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var velocity: Vector3 = _velocity_into_step
 	var struck: bool = false
 	var pushed: Dictionary[int, Vector3] = {}
+	step_hit_mps = 0.0
+	step_hit_with = null
+	step_scrape_mps = 0.0
 	for i: int in state.get_contact_count():
 		var normal: Vector3 = state.get_contact_local_normal(i)
 		if absf(normal.y) > WALL_NORMAL_Y:
 			continue  # road surface, handled by the suspension
 		var moving: Vector3 = state.get_contact_collider_velocity_at_position(i)
 		if _velocity_into_step.length() >= 1.0 and _velocity_into_step.dot(normal) < 0.0:
-			_impact_mps = maxf(_impact_mps, -(_velocity_into_step - moving).dot(normal))
+			var into: float = -(_velocity_into_step - moving).dot(normal)
+			_impact_mps = maxf(_impact_mps, into)
+			if into > step_hit_mps:
+				step_hit_mps = into
+				step_hit_with = state.get_contact_collider_object(i)
 		var collider_id: int = state.get_contact_collider_id(i)
 		moving = pushed.get(collider_id, moving)
 		var relative: Vector3 = velocity - moving
+		step_scrape_mps = maxf(step_scrape_mps, relative.slide(normal).length())
 		if relative.length() < 1.0:
 			continue
 		var into_wall: float = relative.normalized().dot(normal)

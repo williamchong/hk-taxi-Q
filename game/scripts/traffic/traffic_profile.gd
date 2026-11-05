@@ -73,6 +73,18 @@ const PATH: String = "res://tuning/traffic.tres"
 @export var horn_cut_mps: float
 ## Each car's horn is pitched up to this fraction either side of the file's.
 @export var horn_pitch_spread: float
+## A honk is a pattern (`P3-79`): how many presses, how long each, and the gap
+## between, each drawn from these ranges by why the car honks — `stood`, `cut`,
+## `hit` or `close_call` (`TrafficSystem.HORN_REASONS`), x the least, y the most.
+@export var horn_count: Dictionary[String, Vector2i]
+@export var horn_press_s: Dictionary[String, Vector2]
+@export var horn_gap_s: Dictionary[String, Vector2]
+## Each honk raises the car's temper by this share; temper pushes its next draws
+## toward the top of each range, never past it, and is held at `horn_temper_max`.
+@export var horn_temper_step: float
+@export var horn_temper_max: float
+## A car's temper falls by one whole share over this many seconds.
+@export var horn_temper_s: float
 ## The library's meshes a car is drawn from, by name, and the weight of each.
 @export var kinds: Dictionary[String, float]
 ## The kind among `kinds` that is a taxi (`Q183`): it wears the licence its spawn

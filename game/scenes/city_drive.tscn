@@ -19,6 +19,7 @@
 [ext_resource type="Script" uid="uid://cr7bi74yl4y4a" path="res://scripts/traffic/traffic_system.gd" id="26_traffic"]
 [ext_resource type="Script" path="res://scripts/traffic/tram_system.gd" id="26_trams"]
 [ext_resource type="Script" path="res://scripts/vehicle/taxi_horn.gd" id="29_horn"]
+[ext_resource type="Script" uid="uid://dagrgp7jiynq0" path="res://scripts/vehicle/taxi_audio.gd" id="30_audio"]
 [ext_resource type="Script" uid="uid://d1gf36j2js6mk" path="res://scripts/traffic/signal_controller.gd" id="27_signals"]
 [ext_resource type="Script" uid="uid://cg3ycg2i4crlw" path="res://scripts/traffic/signal_heads.gd" id="28_heads"]
 
@@ -86,6 +87,10 @@ vehicle = NodePath("../../Taxi")
 
 [node name="Horn" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
 script = ExtResource("29_horn")
+vehicle = NodePath("../Taxi")
+
+[node name="Sounds" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
+script = ExtResource("30_audio")
 vehicle = NodePath("../Taxi")
 
 [node name="FareGuide" type="Node3D" parent="." node_paths=PackedStringArray("fares", "vehicle")]

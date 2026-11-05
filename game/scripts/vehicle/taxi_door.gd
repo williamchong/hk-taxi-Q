@@ -20,6 +20,8 @@ extends Node3D
 ## Runs on the physics tick for the lamps' reason: the calls that move it are made
 ## from `FareSystem._physics_process`, and the drive harness's frames are graded
 ## byte for byte, so the swing must advance on the clock that is fixed.
+##
+## It sounds (`P3-79`): the latch as it leaves shut, the thud as it lands shut.
 
 ## The swing's dials — how far, how fast, how long a brief open holds. Assigned
 ## in `taxi.tscn`; the values and their reasons are `tuning/taxi_door.md`'s.
@@ -27,11 +29,19 @@ extends Node3D
 ## defaults, so a missing key is a zero, and `_physics_process` divides by one.
 @export var profile: TaxiDoorProfile
 
+const OPEN_SOUND: AudioStream = preload("res://assets/authored/audio/door_open.wav")
+const SHUT_SOUND: AudioStream = preload("res://assets/authored/audio/door_shut.wav")
+
+## Times the door left shut and landed shut, for the verify tool.
+var opens: int = 0
+var shuts: int = 0
+
 ## -1 or +1: the side of the car the hinge is on, and so which way is out.
 var _outward: float = 0.0
 ## 0 shut, 1 open, and where the leaf is between them.
 var _swing: float = 0.0
 var _target: float = 0.0
+var _voice: AudioStreamPlayer3D = null
 ## Counts down while the door is held open by `open_briefly`; negative otherwise.
 var _hold_s: float = -1.0
 
@@ -46,6 +56,9 @@ func _ready() -> void:
 	if usable():
 		_apply()
 	set_physics_process(false)
+	_voice = AudioStreamPlayer3D.new()
+	_voice.bus = &"SFX"
+	add_child(_voice)
 
 
 ## Whether the table is whole: a profile, and no zero where a zero would divide
@@ -101,8 +114,15 @@ func _move_to(target: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	var step: float = delta / profile.swing_s
+	var was: float = _swing
 	_swing = move_toward(_swing, _target, step)
 	_apply()
+	if was == 0.0 and _swing > 0.0:
+		opens += 1
+		_sound(OPEN_SOUND)
+	elif was > 0.0 and _swing == 0.0:
+		shuts += 1
+		_sound(SHUT_SOUND)
 	if _swing != _target:
 		return
 	# The hold starts once the door is fully open, so a shorter swing never eats
@@ -120,3 +140,10 @@ func _apply() -> void:
 	# Eased at both ends, so the leaf leaves the frame and lands against its stop
 	# rather than starting and stopping at full speed.
 	rotation.y = _outward * deg_to_rad(profile.open_deg) * smoothstep(0.0, 1.0, _swing)
+
+
+func _sound(stream: AudioStream) -> void:
+	if _voice == null or not _voice.is_inside_tree():
+		return
+	_voice.stream = stream
+	_voice.play()

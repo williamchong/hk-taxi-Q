@@ -55,6 +55,8 @@ const STREET_HZ: float = 5.0
 ## but still not per frame, because the last digit of an integer kph readout
 ## strobes unreadably when it is redrawn at 60 Hz.
 const SPEED_HZ: float = 10.0
+## The wrong-way buzzer (`P3-79`, `tools/make_vehicle_sounds.py`).
+const BUZZER_PATH: String = "res://assets/authored/audio/wrong_way.wav"
 
 ## How often the shift's clock is read: a game minute is a third of a second
 ## at the shipped length, so 4 Hz never skips one a player could notice.
@@ -69,6 +71,11 @@ var _tracker: StreetTracker = null
 var _monitor: WrongWayMonitor = null
 var _tracking: StreetTrackerProfile = null
 var _wrong_way: WrongWayProfile = null
+## The wrong-way sign's buzzer (`P3-79`): once each time the sign is raised, at
+## the file's own level, in the cab. `buzzes` is for the verify tool.
+var buzzes: int = 0
+var _buzzer: AudioStreamPlayer = null
+var _buzzed_raises: int = 0
 var _mapping: MinimapProfile = null
 var _graph: RoadGraph = null
 ## The car this HUD reads, handed in by `Main` (`P5-24`) — the ancestor that
@@ -194,6 +201,12 @@ func _ready() -> void:
 
 	_tracker = StreetTracker.new(_tracking)
 	_monitor = WrongWayMonitor.new(_wrong_way)
+	_buzzer = AudioStreamPlayer.new()
+	_buzzer.stream = load(BUZZER_PATH) as AudioStream
+	if _buzzer.stream == null:
+		push_warning("HUD: %s did not load; the wrong-way sign is silent" % BUZZER_PATH)
+	_buzzer.bus = &"Cabin"
+	add_child(_buzzer)
 	_graph = RoadGraph.shared()
 	_build()
 
@@ -890,6 +903,11 @@ func _update_readout(hit: RoadGraph.Hit) -> void:
 ## `warn_blink_hz` is capped by `verify_hud.gd` well under the photosensitivity
 ## threshold rather than left to taste. See `hud_style.gd`.
 func _update_warning(delta: float) -> void:
+	if _monitor.raises != _buzzed_raises:
+		_buzzed_raises = _monitor.raises
+		buzzes += 1
+		if _buzzer != null and _buzzer.stream != null and _buzzer.is_inside_tree():
+			_buzzer.play()
 	var lit: bool = false
 	if _monitor.wrong_way:
 		var period: float = 1.0 / maxf(_style.warn_blink_hz, 0.001)
