@@ -128,8 +128,8 @@ paths:
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
   has not run the red. ⚠️ The line is `width_of` (published) wide, not the drawn ribbon. Mutations:
   counting green, and crossing either way, fail `watch:` by name (2026-10-29).
-- **The horn** (`Q178`): `verify_traffic`'s `horn:` lines, and `tools/make_car_horn.py` is byte-identical
-  (`test_make_sounds.py`). 🔴 **A red does not count towards the wait.** 🔴 **Silent while the taxi is
+- **The horn** (`Q178`, `Q185`): `verify_traffic`'s `horn:` lines, and `tools/make_vehicle_sounds.py` is byte-identical. 🔴 **A pattern draws on `_horn_rng`, never `_rng`** — one more roll there moves every later car; `react:` checks `_rng.state` unmoved. A kind with no `horn_<kind>.wav` sounds `HORN_FALLBACK_KIND`'s; a new kind owes a file (`test_every_kind_the_traffic_draws_has_its_own_horn`). ⚠️ A cross car's draws are judged on the MEAN press: a total-held check missed an untempered press length, since a cross car also presses more often. (`test_make_sounds.py`)
+  🔴 **A red does not count towards the wait.** 🔴 **Silent while the taxi is
   `parked`**: `verify_traffic` cannot see this, so a change near it owes a `--menu=on` run. ⚠️ A car's
   pitch comes from its id: a roll would move every later car on the seeded RNG. ⚠️ The taxi's gap is
   `_taxi_gap`, apart from `_gap_ahead` only so that `Held.TAXI` can name it. 🔴 **`react_to` answers the

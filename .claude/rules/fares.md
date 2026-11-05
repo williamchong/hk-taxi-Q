@@ -203,6 +203,11 @@ the loop's own numbers in `tuning/fares.tres`.
   `reset()` is a fresh run on the same pools — the reach table and the draw are the city's.
   `verify_fares`'s `close:` block holds every path; the last fare's `finished` is the mutation.
   🚫 No time added by a delivery: the shift's clock is the day's (`DayClock`).
+- 🔴 **The cabin's sounds are `TaxiHire`'s, on the loop's signals only** (`Q185`): the flag down at
+  `boarded` (the flagfall's beep waits for it) and up at `delivered` / `bailed`, and at the door
+  the card beep and a coin per `coin_hkd` of tip, at most `coin_max`. `verify_fares`' `cabin:`
+  lines; mutation: the cap removed. 🚫 No sound on a skill or a penalty for now (the user,
+  2026-11-06: built, heard, removed); 🚫 none like the meter's 2 kHz pip.
 - ⚠️ **The meter's beep is `TaxiHire`'s, on `meter_changed`** (`Q178`): `verify_fares`' `beep:` lines hold one
   per unit and one at the boarding. It is rare because the 2 km flagfall charges nothing: 🚫 not a
   reason to beep on anything but the reading. `tools/make_meter_beep.py` is byte-identical.

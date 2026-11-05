@@ -11571,3 +11571,112 @@ spike issue", then "implement suggested fix").
 
 **See.** `Q76` · `P6-1` · `game/tuning/menu.md` · `game/scripts/ui/shader_warmup.gd` ·
 `game/scripts/vehicle/vehicle_body_batch.gd`
+
+## `Q185` — The taxi's own sounds: the meter's flag, an engine, the tyres, crashes by what was hit, a horn per kind in patterns, and the payout
+
+**Status.** 🟡 Built 2026-11-06 on the user's ask (2026-11-05): "more sound effect for our own taxi,
+like engine, steer/skid, the classic motor sound when the passenger flag goes up and down", then
+"different honk for different car … randomized the length, interval and times", "also crash sound?"
+and "not sure how bonus should be sounded". No ear has graded any of it but the engine's first
+draft. `P3-79`.
+
+**Every file is `tools/make_vehicle_sounds.py`'s** (36 files, 22,050 Hz mono, replacing
+`make_car_horn.py`): authored, no attribution, byte-identical per run on seeded noise. A loop is
+exactly periodic — every tone on the loop's own frequency grid, every noise drawn through `irfft` —
+and carries a `smpl` chunk, which Godot's importer reads as the loop, so no `.import` is edited by
+hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the chunk.
+
+**What plays, and from where.**
+- **The flag** (`TaxiHire`): a geared motor's whirr and a clunk, down at `boarded` (the flagfall's
+  beep waits for it to land) and up at `delivered` / `bailed`.
+- **The engine** (`TaxiAudio`, a `Sounds` node beside `Horn`): three loops of whole engine cycles
+  at 1,050 / 2,520 / 5,040 rpm, crossfaded in log rpm and pitched, off a virtual 4-speed on
+  `crown_comfort.tres`' own ratios. ⚠️ The box's downshift sits under the lightest change's landing
+  rpm or it hunts; `verify_vehicle` sweeps 0–160 kph at three pedals. The Comfort Hybrid (EV whine,
+  CVT drone) is `hybrid`, off: the car is the LPG Crown Comfort.
+- **The tyres**: the squeal starts at `SkidMarksProfile.mark_from_slip`, read from that file, so it
+  starts on the tick the marks do. Read-only on the car.
+- **A crash**: off `VehicleController.step_hit_mps` / `step_hit_with` / `step_scrape_mps`, new
+  per-step readings beside the fare's latch, which a second reader would drain. Three tiers on
+  `skills.tres`' own bars (the crash you hear is the one you are docked for), a top layer by what
+  was struck read off the body's node name (`materials`: car, tram, tree, railing; a wall has none),
+  glass on a crash, a scrape loop along a wall. Plays under `--fares=off`.
+- **The horns** (`TrafficSystem`): one loop per kind (`horn_<kind>.wav`: two saloons, the taxi's
+  thin nasal note, the minibus, the van, the bus's air horn), held for a press. Each honk is a
+  pattern — presses, length and gap — drawn per reason (`stood`, `cut`, `hit`, `close_call`) on
+  `_horn_rng`, seeded off the traffic seed and never `_rng`, so no car moves (`verify_traffic`
+  checks `_rng.state` unmoved). A car's temper rises 0.3 a honk to 0.8 and falls over 20 s, pushing
+  its draws to the top of each range; the voices went 3 → 6. **The player's horn sounds for as long
+  as it is held**: it is the thumb, never rolled.
+- **The bonus** (`TaxiHire`), as first built: the user had no answer, so both, split by when. In the ride a chime
+  per paid skill, a step up a major pentatonic each time in the fare (a whoosh under a near miss or
+  close call), a practised skill 10 dB down and climbing nothing, a penalty a low dock; at the door
+  the card reader's double beep, then a coin per HK$2 of tip, at most 15. Nothing sounds like the
+  meter's 2 kHz pip, which stays the only flat electronic beep.
+- **Small ones**: the door's latch and thud (`TaxiDoor`, as it leaves shut and lands shut), the
+  indicator relay off `VehicleLamps.indicator_lit`, the landing, and the
+  wrong-way buzzer once per raise (`hud.gd`).
+- **Three buses** under `Master` (`default_bus_layout.tres`, a light compressor on `Master`): `SFX`,
+  `Engine`, `Cabin`. `AudioDirector` and a volume setting stay Phase 5.
+
+**Round two, the same day, on the user's two notes.**
+- "gasline engine doesn't produce these sound, they sound like some kind of noisy motor": the first
+  engine rang resonances up to 790 Hz over a band of hiss to 3.5 kHz. Rebuilt as pressure pulses
+  through one broad pipe resonance and a muffler: nothing over 1.5 kHz, the idle's energy at
+  135 Hz, and 98% of high revs between 150 and 800 Hz, where a phone speaker carries it. ⚠️ A first
+  pass put the idle at 66 Hz, which a phone cannot play.
+- "make the noise that consistently appear less distracting compared to event based one": the
+  always-on loops went down — engine −4 → −12 dB, EV −10 → −20, wind −10 → −22 and darkened under
+  1 kHz, squeal −6 → −10. 🔴 A loop is raised only against a drive, never on its own
+  (`taxi_audio.md`).
+
+**Round three, the same day, on four more notes.**
+- "remove sound effect on handbrake": the ratchet and its file are gone.
+- "remove se on bonus and penalty for now": the chime, the whoosh and the dock are gone, with
+  `chime_steps` and `practised_cut_db`. The flag and the payout at the door stay: neither is a skill
+  or a penalty. The plan's design is kept in `P3-79` if it comes back.
+- "now the taxi sound like ferrari more than taxi, need less engine noise": `engine_db` −12 → −18,
+  the box changing up at 4,000 rpm, not 5,000 (2,400 on a light pedal), and the pulses softer and
+  more muffled (`PULSE_S` 0.8 → 1.2 ms, muffler 700 → 550 Hz). Energy under 150 Hz / 150–800 Hz /
+  over 1.5 kHz: idle 78 / 22 / 0%, mid 59 / 41 / 0%, high 2 / 97 / 0%.
+- "should skit and tire noise change loudness and pitch according to speed and angle": yes. Until
+  then the squeal followed the slip (the angle) alone. Now it also follows the speed: 30% of the
+  level at a crawl, full by 60 kph, and the pitch ±10% across that range (`skid_full_kph`,
+  `skid_slow_share`, `skid_speed_pitch`).
+
+**Also from the `/simplify` pass.**
+- A tap's cooldown no longer swallows a harder hit a tick behind it.
+- A freed body reads as a wall.
+- A silent loop is paused, not decoding at −80 dB.
+- The EV loop exists only on the hybrid.
+- Every one-shot and every kind's horn is loaded at start, not on the tick it first plays.
+- The cabin has a pool of players per sound.
+- `test_make_sounds` holds `verify_vehicle`'s file lists to the script's.
+
+**Measured.**
+- `check.sh` green; the skidpad at 42 / 63 / 86 kph is byte-identical before and after but for the
+  cost column.
+- Live, `wan_chai/f_004` with the wrong-way route and a handbrake, before round three: one impact
+  (a bump, `railing`), one landing, one ratchet, two relays. The run then stalled the renderer at 15 s, the known
+  unattended stall.
+- `--menu=on` for 30 s: no horn.
+
+**Mutations caught by name.**
+- **`verify_traffic`:** the pattern drawn on `_rng`; the temper never raised; the press length
+  untempered. That last one was MISSED by a total-held check, since a cross car also presses more
+  often, and is caught by the mean press.
+- **`verify_fares`:** the coin cap removed; the chime's step frozen, until the chime went.
+- **`verify_vehicle`:** the downshift raised into a hunt; the crash bar made exclusive; the door's
+  open uncounted.
+
+🚫 **Not built.**
+- A volume setting.
+- Sounds for another car's crash or engine.
+- The bus routes' own door hiss.
+- A touch horn: `Q178`'s reason still holds.
+
+⚠️ **Not measured.**
+- The PCK cost. 1.0 MB of WAV goes in, imported QOA-compressed. Measured from a PCK only (root
+  rule), owed.
+
+**See.** `Q178` · `Q176` · `Q148` · `Q175` · `game/tuning/taxi_audio.md` · `game/tuning/traffic.md`
