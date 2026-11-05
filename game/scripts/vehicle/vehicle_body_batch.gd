@@ -63,4 +63,11 @@ static func material() -> ShaderMaterial:
 	shader.code = code.replace(SHADER_TYPE, SHADER_TYPE + "\n" + DEFINE)
 	_material = source.duplicate() as ShaderMaterial
 	_material.shader = shader
+	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
+	if lamps == null:
+		push_warning(
+			"VehicleBodyBatch: %s did not load; no indicator flashes" % VehicleLampsProfile.PATH
+		)
+	else:
+		lamps.wire_material(_material)
 	return _material

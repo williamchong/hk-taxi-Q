@@ -454,6 +454,43 @@ func _check_the_outline_takes_the_speed(car: Node3D) -> void:
 		print("  ok    the city's line takes the car's speed")
 
 
+## The batched material (`VehicleBodyBatch`) carries the indicator beat and the
+## roof sign whoever builds it first: built from a `vehicle_body.tres` no
+## `wire_blink` has touched, its three parameters are still the lamps table's.
+## Its `duplicate` took them from the source alone until 2026-11-06, so a region
+## whose traffic built the batch before its parked layer wired the source ran
+## every batched car's indicators at 0 Hz.
+func _check_the_batch_takes_the_beat() -> void:
+	var before: int = _failed
+	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
+	var source := load(VehicleBodyBatch.MATERIAL_PATH) as ShaderMaterial
+	if lamps == null or source == null:
+		_problem("the lamps table or the body material did not load")
+		return
+	const NAMES: Array[StringName] = [
+		&"traffic_blink_hz", &"traffic_blink_duty", &"traffic_sign_lit"
+	]
+	var held: Array[Variant] = []
+	for name: StringName in NAMES:
+		held.append(source.get_shader_parameter(name))
+		source.set_shader_parameter(name, 0.0)
+	var kept: ShaderMaterial = VehicleBodyBatch._material
+	VehicleBodyBatch._material = null
+	var batch: ShaderMaterial = VehicleBodyBatch.material()
+	var want: Array[float] = [lamps.blink_hz, lamps.blink_duty, lamps.sign_lit]
+	for i: int in NAMES.size():
+		var got: float = float(batch.get_shader_parameter(NAMES[i]))
+		if not is_equal_approx(got, want[i]):
+			_problem(
+				"the batched material's %s is %s, not the table's %s" % [NAMES[i], got, want[i]]
+			)
+	VehicleBodyBatch._material = kept
+	for i: int in NAMES.size():
+		source.set_shader_parameter(NAMES[i], held[i])
+	if _failed == before:
+		print("  ok    the batched material takes the beat whoever builds it first")
+
+
 ## The light tail (`P3-70`): the trail lays a piece from where a lamp was to
 ## where it is — nothing on its first tick, nothing while not laying — stamped
 ## with the clock at each end, breaks past `max_step_m` and on a stop, and wraps
@@ -678,6 +715,7 @@ func _run() -> void:
 	_check_the_light_tail_streaks_and_fades(car, body)
 	_check_the_taxi_sounds()
 	_check_the_door_sounds(car)
+	_check_the_batch_takes_the_beat()
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)

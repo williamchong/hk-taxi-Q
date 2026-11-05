@@ -78,7 +78,14 @@ static func wire_blink(meshes: Array[Mesh]) -> void:
 		for surface: int in mesh.get_surface_count():
 			var material := mesh.surface_get_material(surface) as ShaderMaterial
 			if material != null:
-				material.set_shader_parameter("traffic_blink_hz", lamps.blink_hz)
-				material.set_shader_parameter("traffic_blink_duty", lamps.blink_duty)
-				# A moving taxi's roof sign for hire (`Q183`) burns at the player's.
-				material.set_shader_parameter("traffic_sign_lit", lamps.sign_lit)
+				lamps.wire_material(material)
+
+
+## The beat and the roof sign on one material. `VehicleBodyBatch` calls it on
+## its own copy: a `duplicate` taken before `wire_blink` ran would hold zeros, and
+## which layer builds the batch first is the load order's, not this table's.
+func wire_material(material: ShaderMaterial) -> void:
+	material.set_shader_parameter("traffic_blink_hz", blink_hz)
+	material.set_shader_parameter("traffic_blink_duty", blink_duty)
+	# A moving taxi's roof sign for hire (`Q183`) burns at the player's.
+	material.set_shader_parameter("traffic_sign_lit", sign_lit)
