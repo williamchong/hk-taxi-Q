@@ -675,8 +675,11 @@ func _load_horn() -> void:
 		add_child(voice)
 		_horn_voices.append(voice)
 		_horn_calls.append(null)
-	# Every kind's horn now, not on the tick of its first honk.
+	# Every kind's horn now, not on the tick of its first honk — a route-only
+	# kind (the bus) included, which `profile.kinds` never draws.
 	for kind: String in profile.kinds:
+		_horn_streams[kind] = horn_stream(kind)
+	for kind: String in _routed_kinds:
 		_horn_streams[kind] = horn_stream(kind)
 
 
@@ -812,6 +815,13 @@ func _wear_licence(car: Car) -> void:
 ## Which licence `car` wears, by mesh name.
 func kind_name(car: Car) -> String:
 	return _kinds[car.kind]
+
+
+## The kind a rule reads `car` as: every taxi is `taxi_kind` whatever licence's
+## mesh it wears (`_wear_licence` swaps `car.kind` to `taxi_nt` or
+## `taxi_lantau`), so a green taxi stops at the kerb and honks as a red one does.
+func _rules_kind(car: Car) -> String:
+	return profile.taxi_kind if car.taxi else _kinds[car.kind]
 
 
 ## Index every parked vehicle in `layers` by the merged edge it was published
@@ -1203,7 +1213,7 @@ func _pick_kerb_stop(car: Car) -> void:
 	if (
 		car.knocked
 		or car.dwell_left > 0.0
-		or not profile.kerb_stop_kinds.has(_kinds[car.kind])
+		or not _stops_at_kerb(car)
 		or car.turn_side == -1
 		or graph.level_of(car.edge) != 0
 		or _is_goal_way(car, car.edge, car.along)
@@ -1243,11 +1253,17 @@ func _pick_kerb_stop(car: Car) -> void:
 		kerb_unlawful += 1
 
 
+## Whether `car` is a kind that pulls up at the kerb for a passenger
+## (`kerb_stop_kinds`): a minibus or a taxi, whatever licence it wears.
+func _stops_at_kerb(car: Car) -> bool:
+	return profile.kerb_stop_kinds.has(_rules_kind(car))
+
+
 ## Whether `car` is a kind that stops on a no-stopping line now and then
 ## (`kerb_unlawful_kinds`: the red minibus and every taxi, the user's call
 ## 2026-11-06) — never a routed vehicle, so never a green minibus.
 func _may_stop_unlawfully(car: Car) -> bool:
-	return car.route == null and profile.kerb_unlawful_kinds.has(_kinds[car.kind])
+	return car.route == null and profile.kerb_unlawful_kinds.has(_rules_kind(car))
 
 
 ## The speed a kerb-stopping car may drive at for its kerbside stop: it brakes to
@@ -2022,7 +2038,7 @@ func _sound_horn(car: Car, reason: String) -> void:
 	var slot: int = _horn_slot(car)
 	if slot < 0:
 		return
-	var kind: String = profile.taxi_kind if car.taxi else _kinds[car.kind]
+	var kind: String = _rules_kind(car)
 	if not _horn_streams.has(kind):
 		_horn_streams[kind] = horn_stream(kind)
 	var voice: AudioStreamPlayer3D = _horn_voices[slot]

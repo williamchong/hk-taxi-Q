@@ -441,9 +441,16 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	var bit_wrong: int = 0
 	var in_frame: int = 0
 	var green_in_frame: int = 0
+	# Car-ticks of a taxi wearing another licence's mesh that a kerb rule refused.
+	var licensed: int = 0
+	var licensed_refused: int = 0
 	for _tick: int in roundi(RUN_S / TICK_S):
 		system.step(TICK_S)
 		for car: TrafficSystem.Car in system.cars:
+			if car.live and not car.routed and system.kind_name(car) != table.taxi_kind:
+				licensed += 1
+				if not (system._stops_at_kerb(car) and system._may_stop_unlawfully(car)):
+					licensed_refused += 1
 			if not car.live or car.routed or lives.get(car.id, 0) == car.lives:
 				continue
 			lives[car.id] = car.lives
@@ -474,6 +481,16 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		"the frame's staged half green wears green (%d of %d)" % [green_in_frame, in_frame]
 	)
 	_expect(shown_wrong == 0, "licence", "a taxi stands in its own licence's slot")
+	# A rule reads the family, never the mesh (the review, 2026-11-06): a green or
+	# a Lantau taxi stops at the kerb, and on a line, as a red one does.
+	_expect(
+		licensed > 0 and licensed_refused == 0,
+		"licence",
+		(
+			"a taxi wearing another licence is a kerb stopper (%d of %d car-ticks refused)"
+			% [licensed_refused, licensed]
+		)
+	)
 	_expect(bit_wrong == 0, "licence", "a lit roof sign writes the bit, a dark one not")
 	_expect(
 		absf(float(lit) / maxf(spawns, 1) - table.taxi_for_hire) < 0.2,
