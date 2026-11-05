@@ -53,8 +53,9 @@ var flags_down: int = 0
 var flags_up: int = 0
 var payouts: int = 0
 var coins: int = 0
-## Hazards asked on for a boarding, and held for an alighting, for the same.
+## Whether the hazards are on for a boarding, for the same.
 var hazards: bool = false
+## Drop-offs that held the hazards, for the same.
 var hazard_holds: int = 0
 
 var _beep: AudioStreamPlayer = null

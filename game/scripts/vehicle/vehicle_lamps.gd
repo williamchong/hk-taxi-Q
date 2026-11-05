@@ -352,7 +352,8 @@ func hold_hazards() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_hazards_hold_s = maxf(_hazards_hold_s - delta, 0.0)
+	# A boarding's hazards end a drop-off's hold: off at the boarding means off.
+	_hazards_hold_s = 0.0 if hazards else maxf(_hazards_hold_s - delta, 0.0)
 	var hazard: bool = hazards or _hazards_hold_s > 0.0
 	# The threshold to start turning; TURN_RELEASE's share of it to stop.
 	var leaving: float = profile.steer_threshold * TURN_RELEASE
@@ -366,7 +367,9 @@ func _physics_process(delta: float) -> void:
 	# phase with it so the next turn's first flash is a lit one.
 	if side != _turn_side:
 		_turn_held_s = 0.0
-		_blink_phase = 0.0
+		# Not under the hazards: steering while they flash must not restart them.
+		if not hazard:
+			_blink_phase = 0.0
 	_turn_side = side
 	if side != 0:
 		_turn_held_s += delta

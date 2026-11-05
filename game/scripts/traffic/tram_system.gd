@@ -313,7 +313,10 @@ func step(delta: float) -> void:
 				tram.body.global_transform = tram.pose
 				_batch.set_instance_transform(tram.id, tram.pose)
 			_write_lamps(
-				tram, TrafficSystem.lamp_bits(true, tram.braking, 1 if at_stop(tram) else 0)
+				tram,
+				TrafficSystem.lamp_bits(
+					true, tram.braking, TrafficSystem.WINK_LEFT if at_stop(tram) else 0
+				)
 			)
 
 

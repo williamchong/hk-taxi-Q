@@ -114,7 +114,9 @@ const PARKED_READS_PER_TICK: int = 16
 ## What an edge with nothing parked on it answers: one shared empty list, not a
 ## fresh one a call.
 const NO_PARKED: Array = []
-## `lamp_bits`' `wink` for both indicators at once.
+## `lamp_bits`' `wink`: the left indicator, the right, and both at once.
+const WINK_LEFT: int = 1
+const WINK_RIGHT: int = -1
 const HAZARDS: int = 2
 ## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
 ## `winking`): the one spelling the parked layer and the verify tools read.
@@ -2985,9 +2987,9 @@ func _retire(car: Car) -> void:
 ## the stopping parked car's (`P3-3f`). 0 is a switched-off car.
 static func lamp_bits(running: bool, braking: bool, wink: int = 0) -> int:
 	var bits: int = (2 if running else 0) + (LAMP_BRAKE if running and braking else 0)
-	if wink == 1 or wink == HAZARDS:
+	if wink == WINK_LEFT or wink == HAZARDS:
 		bits += LAMP_LEFT
-	if wink == -1 or wink == HAZARDS:
+	if wink == WINK_RIGHT or wink == HAZARDS:
 		bits += LAMP_RIGHT
 	return bits
 
@@ -3004,7 +3006,7 @@ func _winking(car: Car) -> int:
 	if car.turning:
 		return car.turn_side
 	if standing(car) or pulling_in(car):
-		return 1
+		return WINK_LEFT
 	if approaching_turn(car):
 		return car.turn_side
 	if car.held_side != 0 and car.s < car.held_until_m:
