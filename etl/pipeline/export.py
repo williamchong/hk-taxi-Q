@@ -644,7 +644,7 @@ def build_region(
         # Each taxi licence's share of the region's taxis (`Q183`), mesh name to
         # share, read off the published stands by `parked.py`. Empty where the
         # region holds no stand: the moving taxis then wear the first licence.
-        "taxi_licences": parked.get("taxi_licences", {}),
+        "taxi_licences": parked["taxi_licences"],
         # The published trees (`P3-77`, `Q171`), on `lamps`' terms: `null`
         # where the city declares no `trees:` block or stood nothing.
         "trees": trees["asset"],

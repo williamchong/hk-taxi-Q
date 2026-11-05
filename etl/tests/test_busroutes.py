@@ -8,7 +8,16 @@ from typing import ClassVar
 
 import pytest
 
-from pipeline.busroutes import HOURS, departures_per_hour, read_directions, snap_stop
+from pipeline.busroutes import (
+    BUS_ROUTES_NAME,
+    BUSROUTES_MANIFEST_NAME,
+    HOURS,
+    BusRoutesReport,
+    _write_manifest,
+    departures_per_hour,
+    read_directions,
+    snap_stop,
+)
 from pipeline.config import load_config
 from pipeline.fetch import artefact_path, source_artefact
 from pipeline.polyline import Segments
@@ -156,3 +165,15 @@ class TestSnap:
 
     def test_a_stop_past_the_snap_is_refused(self) -> None:
         assert self._snap(-13.0, "both") is None
+
+
+class TestTheManifest:
+    def test_a_build_that_keeps_no_route_leaves_no_route_document(self, city, tmp_path) -> None:
+        # A stale `bus_routes.json` would lay buses over at its termini
+        # (`parked`), whatever this build kept (the review, 2026-11-06).
+        stale = tmp_path / BUS_ROUTES_NAME
+        stale.write_text("{}", encoding="utf-8")
+        _write_manifest(tmp_path, city, "wan_chai", BusRoutesReport(), wrote=False)
+        assert not stale.exists()
+        manifest = json.loads((tmp_path / BUSROUTES_MANIFEST_NAME).read_text(encoding="utf-8"))
+        assert manifest["document"] is None

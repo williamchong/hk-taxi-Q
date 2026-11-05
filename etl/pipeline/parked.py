@@ -66,7 +66,12 @@ import numpy as np
 import shapely
 from shapely.strtree import STRtree
 
-from pipeline.busroutes import BUS_ROUTES_NAME, BUS_ROUTES_SCHEMA, HOURS
+from pipeline.busroutes import (
+    BUS_ROUTES_SCHEMA,
+    BUSROUTES_MANIFEST_NAME,
+    BUSROUTES_MANIFEST_SCHEMA,
+    HOURS,
+)
 from pipeline.config import (
     ALWAYS,
     AS_FOUND,
@@ -107,7 +112,10 @@ log = logging.getLogger(__name__)
 
 PARKED_PLACEMENTS_NAME = "parked_placements.json"
 PARKED_MANIFEST_NAME = "parked.json"
-PARKED_MANIFEST_SCHEMA = 1
+# 2 since `Q183`: the manifest carries `taxi_licences`. A v1 manifest under the
+# v2 export would ship every region's moving taxis red with nothing to say so,
+# so `export` indexes the key rather than defaulting it.
+PARKED_MANIFEST_SCHEMA = 2
 
 # The order a placement wins a kerb in: a published bay over a stop over a
 # stand over a frontage over the fill.
@@ -452,10 +460,14 @@ def _terminal_candidates(
     """Each terminus's queue: rank `k` stands in every hour whose departures
     keep more than `k` buses laid over there."""
     terminals = spec.terminals
-    path = out_dir / BUS_ROUTES_NAME
-    if terminals is None or not path.exists():
+    if terminals is None:
         return []
-    routes = read_document(path, BUS_ROUTES_SCHEMA, "python -m pipeline.busroutes")["routes"]
+    rebuild = "python -m pipeline.busroutes"
+    manifest = read_document(out_dir / BUSROUTES_MANIFEST_NAME, BUSROUTES_MANIFEST_SCHEMA, rebuild)
+    document = manifest["document"]
+    if document is None:
+        return []
+    routes = read_document(out_dir / document, BUS_ROUTES_SCHEMA, rebuild)["routes"]
     by_stop: dict[str, tuple[dict, list[int]]] = {}
     for route in routes:
         if route["kind"] != terminals.kind or not route["stops"]:
@@ -473,6 +485,7 @@ def _terminal_candidates(
     for stop_id in sorted(by_stop):
         stop, departures = by_stop[stop_id]
         edge_id = int(stop["edge"])
+        resnapped = False
         if edge_id >= 0:
             t, side = float(stop["t"]), float(stop["side"])
         else:
@@ -480,10 +493,14 @@ def _terminal_candidates(
             snap = street.segments.nearest(float(stop["plan"][0]), float(stop["plan"][1]))
             if snap.distance_m <= terminals.max_snap_m:
                 edge_id, t, side = snap.edge, snap.t, street.kerb_side(snap)
-                report.terminals_resnapped += 1
+                resnapped = True
         if edge_id < 0 or edge_id not in street.ribbons:
+            # Before the re-snap is counted: one onto an edge with no ribbon is
+            # unsnapped only, so the two counters partition `terminals_read`.
             report.terminals_unsnapped += 1
             continue
+        if resnapped:
+            report.terminals_resnapped += 1
         waiting = [terminals.waiting(count) for count in departures]
         length_m = street.length_m(edge_id)
         for rank in range(max(waiting)):
@@ -1098,6 +1115,7 @@ def build_region(
     report.by_kind = dict(sorted(report.by_kind.items()))
     report.by_source = dict(sorted(report.by_source.items()))
     report.by_hours = dict(sorted(report.by_hours.items()))
+    report.by_licence = dict(sorted(report.by_licence.items()))
     for source in SOURCES:
         report.refused.setdefault(source, {})
     report.refused = {

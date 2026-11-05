@@ -13,6 +13,7 @@ moves only on a real change.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import itertools
 import math
 from types import MappingProxyType
@@ -24,6 +25,12 @@ import shapely
 import yaml
 
 from pipeline import parked as parked_stage
+from pipeline.busroutes import (
+    BUS_ROUTES_NAME,
+    BUS_ROUTES_SCHEMA,
+    BUSROUTES_MANIFEST_NAME,
+    BUSROUTES_MANIFEST_SCHEMA,
+)
 from pipeline.config import ALWAYS, SOURCE_BAY, SOURCE_FILL, Terminals, load_config
 from pipeline.documents import write_document
 from pipeline.drawnroad import ribbons
@@ -222,6 +229,78 @@ class TestTheTerminus:
     def test_every_hour_is_always_and_none_is_no_window(self) -> None:
         assert hour_windows([True] * 24) == [ALWAYS]
         assert hour_windows([False] * 24) == []
+
+    @staticmethod
+    def _routes(tmp_path, stops: list[dict[str, Any]], per_hour: dict[int, int]) -> None:
+        """`busroutes`' two documents, each stop the first of a route of its own."""
+        write_document(
+            tmp_path / BUSROUTES_MANIFEST_NAME,
+            {"schema_version": BUSROUTES_MANIFEST_SCHEMA, "document": BUS_ROUTES_NAME},
+        )
+        hours = [per_hour.get(hour, 0) for hour in range(24)]
+        routes = [
+            {"kind": "bus", "per_hour": hours, "stops": [stop | {"seq": 1}]} for stop in stops
+        ]
+        write_document(
+            tmp_path / BUS_ROUTES_NAME, {"schema_version": BUS_ROUTES_SCHEMA, "routes": routes}
+        )
+
+    def _candidates(self, spec, tmp_path) -> tuple[list[Candidate], ParkedReport]:
+        report = ParkedReport()
+        spec = dataclasses.replace(spec, terminals=self.TERMINALS)
+        found = parked_stage._terminal_candidates(
+            spec, _street(_graph(), _surface()), tmp_path, report
+        )
+        return found, report
+
+    def test_a_manifest_naming_no_document_stands_no_terminus(self, spec, tmp_path) -> None:
+        # A later build that kept no route, beside a stale `bus_routes.json`
+        # (the review, 2026-11-06): the manifest is what says there is none.
+        self._routes(tmp_path, [{"stop_id": "A", "edge": 7, "t": 0.5, "side": 1.0}], {8: 7})
+        write_document(
+            tmp_path / BUSROUTES_MANIFEST_NAME,
+            {"schema_version": BUSROUTES_MANIFEST_SCHEMA, "document": None},
+        )
+        found, report = self._candidates(spec, tmp_path)
+        assert found == []
+        assert report.terminals_read == 0
+
+    def test_a_terminus_is_resnapped_or_unsnapped_never_both(self, spec, tmp_path) -> None:
+        stops = [
+            # Laid back 4 m past the kerb: within `max_snap_m` of the edge.
+            {"stop_id": "near", "edge": -1, "plan": [10.0, -100.0]},
+            # Far from any edge.
+            {"stop_id": "far", "edge": -1, "plan": [60.0, -100.0]},
+            # Snapped by `busroutes` onto an edge this street holds no ribbon for.
+            {"stop_id": "gone", "edge": 99, "t": 0.5, "side": 1.0, "plan": [0.0, -100.0]},
+        ]
+        self._routes(tmp_path, stops, {8: 1})
+        found, report = self._candidates(spec, tmp_path)
+        assert report.terminals_read == 3
+        assert report.terminals_resnapped == 1
+        assert report.terminals_unsnapped == 2
+        assert [candidate.edge for candidate in found] == [7]
+
+    def test_each_rank_stands_in_its_own_hours(self, spec, tmp_path) -> None:
+        self._routes(tmp_path, [{"stop_id": "A", "edge": 7, "t": 0.5, "side": 1.0}], {8: 7, 9: 1})
+        found, report = self._candidates(spec, tmp_path)
+        # 7 departures keep two buses over at 08:00, one at 09:00.
+        assert [candidate.hours for candidate in found] == [(8.0, 10.0), (8.0, 9.0)]
+        assert report.terminal_off_edge == 0
+        apart_m = abs(found[0].t - found[1].t) * 200.0
+        assert apart_m == pytest.approx(self.TERMINALS.pitch_m)
+
+    def test_a_queue_past_the_edge_end_is_counted_off_the_edge(self, spec, tmp_path) -> None:
+        stops = [
+            {"stop_id": "start", "edge": 7, "t": 0.02, "side": 1.0},
+            {"stop_id": "end", "edge": 7, "t": 0.98, "side": 1.0},
+        ]
+        self._routes(tmp_path, stops, {8: 77})
+        found, report = self._candidates(spec, tmp_path)
+        asked = 2 * self.TERMINALS.queue
+        # The partition closes: every rank asked stands or is counted off the edge.
+        assert len(found) + report.terminal_off_edge == asked
+        assert report.terminal_off_edge > 0
 
 
 class TestTheSideAndTheFlow:

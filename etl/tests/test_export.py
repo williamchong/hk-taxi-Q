@@ -376,6 +376,7 @@ class _Region:
                 "placements_document": None,
                 "library": None,
                 "placed": 0,
+                "taxi_licences": {},
             },
             # And an eighth: `testville` declares no `trees:` block.
             TREES_MANIFEST_NAME: {

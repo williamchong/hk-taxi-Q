@@ -337,6 +337,10 @@ def _write_manifest(
     }
     document.update(vars(report))
     write_document(out_dir / BUSROUTES_MANIFEST_NAME, document)
+    if not wrote:
+        # A previous build's routes must not outlive a build that keeps none:
+        # `parked` lays buses over from this file.
+        (out_dir / BUS_ROUTES_NAME).unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:
