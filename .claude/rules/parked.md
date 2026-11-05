@@ -91,6 +91,11 @@ traffic, and the bonus for threading them.
   touch. `verify_fares.gd`'s `near miss:` block drives the SAME clearance twice, aimed and not,
   and the unaimed pass must pay nothing; every bar is held from both sides. The memory is
   measured to the tick the car comes alongside, not to the end of the pass — a bus is 12 m long.
+  ⚠️ **Except the close call** (`Q161`, the user's call 2026-11-05, off the user's logged drive: 0.24 m
+  at 130 kph in the next lane paid nothing): a pass inside `close_call_m` pays aimed or not, and
+  `near_miss_m` went 0.6 → 0.9, so a lane-centred pass (~0.65 m) is inside the near-miss band and
+  the path rule alone refuses it. A touch or a flight while alongside spoils any pass
+  (`Track.spoiled`). Do not "restore consistency" by putting the path rule back on the close call.
   ⚠️ **Down a row, only the cars inside `near_miss_look_s` at the swerve pay** (2 of 6 at
   54 kph); the rest are a lane pass by the same rule. `verify_fares`'s row checks hold that, and
   that a second row past a gap pays again; dropping the in-path width test fails both (6 of 6,

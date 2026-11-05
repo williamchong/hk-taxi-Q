@@ -9872,6 +9872,21 @@ behind them. The user's drive owed, by day and at night.
   drives the same clearance aimed and unaimed and the unaimed pass pays nothing. The memory is
   measured to the tick the car comes alongside: a bus is 12 m long, and measured to the end of the
   pass a lazy swerve round one never paid.
+- ⚠️ **Loosened twice on the user's logged drive (2026-11-05)**, after "near-miss only appeared
+  once then never". The detector was not stuck: a temporary per-pass log over one free drive read
+  38 passes within 2 m — 4 close calls paid (0.06–0.22 m at 140–145 kph), 13 contacts, 13 at
+  0.95 m or wider, and the eight that felt owed: five never in the path (**0.24 m at 130 kph**,
+  0.28, 0.40, 0.52, 0.55) and three swerves just outside the band (0.69 / 0.80 / 0.85 m). No pass
+  was refused on speed or on the memory, and no threat was wiped without a real hit. The user
+  took both remedies: **(A) inside `close_call_m` the path rule does not apply** — a hand's width
+  at speed is danger in any lane — though a touch or a flight while alongside still pays nothing
+  (`Track.spoiled`); **(B) `near_miss_m` 0.6 → 0.9**. The near-miss band keeps the path rule, which
+  is now the whole of a lane pass's refusal: a lane-centred pass reads ~0.65 m, inside the band.
+  On that log the pair pays the 0.24 m pass and the three swerves; the four lane passes at
+  0.28–0.55 m stay unpaid. `verify_fares` adds the unaimed close call (parked and moving), a hand
+  outside it unaimed, and a touch and a flight while alongside; mutations caught by name: the path
+  rule back on the close call (2 checks a region), the spoil check dropped (1), the flight left
+  out of the spoil (1).
 - The hour is `parked.tres`'s clock over the rig's `time_of_day` (noon to midnight: dusk 18:36,
   night 22:48); vans keep 8–19, the single-yellow fill 19–7, a bus stands at a stop with chance
   0.35 and a minibus at a terminus 0.8, re-rolled after 90 s while the cell is hidden. A cell is
