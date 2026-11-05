@@ -1376,6 +1376,7 @@ All paths under `game/`.
 | `scripts/camera/menu_orbit.gd`, `menu_shot.gd` | `MenuOrbit`: the chase rig round the parked car while the menu is up, eased to the page's `MenuShot` (`Q164`; the door open on PLAY) — the same rig, so the streamer keeps one camera |
 | `scripts/core/settings.gd` | `Settings`, the saved options and the lifetime record (`P3-76`) under `user://settings.cfg`; `Locale` reads it after `--lang=` |
 | `scripts/fares/session_tally.gd`, `scripts/ui/ledger_card.gd` | `SessionTally`, a run's books, and `LedgerCard`, the 成績表 that reads them on REPORT, free mode's PAUSE and RECORD (`P3-76`, `Q169`) |
+| `scripts/ui/sheet_image.gd` | `SheetImage`, SAVE IMAGE's picture of the 成績表 (`P3-80`, `Q188`): the page's sheet column duplicated into a `SubViewport` on the housing's field at `sheet_image_scale`, saved to Pictures or downloaded on the web; `is_phone` hides it on a phone |
 | `scripts/city/city_manifest.gd` | `city.json`, typed: tiles, AABBs, per-edge widths and clearances, the lane-width bar, resolved document paths |
 | `scripts/city/city_regions.gd` | `CityRegions` (`P5-9c`) |
 | `scripts/city/generated_regions.gd` | The one place the generated root is spelled: synced regions, the frame, each directory; `--region=` picks one (`P5-9b`) |

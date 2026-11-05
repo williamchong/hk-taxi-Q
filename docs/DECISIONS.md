@@ -11793,3 +11793,45 @@ parked bus at a stop is gone. Owed: the user's drive by day and at night.
   bail. Both indicators flash on the one phase, so `TaxiAudio`'s relay ticks for them as for a
   turn. `verify_fares`' `hazards:` lines. ⚠️ Nothing checks the lamp vector itself: the lenses
   flashing is owed to a drive.
+
+## `Q188` — The result sheet is saved as a picture; no share sheet, no achievements
+
+**Asked** by the user, 2026-11-06: "plan for a share feature for the result screen with numbers, and
+achievement screen in main menu". Then, on the plan: "just export the result sheet as image", "hide share
+in mobile until we have plugin since user can just screen cap and share", and "lets not do achievements
+for now, just a stat table or sth".
+
+**Decided.**
+- **The picture is the 成績表 itself**, not a designed card (the plan's first draft). The sheet the page
+  shows is copied, `Node.duplicate`, into a `SubViewport` on the housing's field (`plate_field`), so the
+  picture is what was read, row for row, with no second build path to drift. It is never a crop of the
+  screen: the panel sits on the blurred city, and a crop would carry our render of the government's
+  data out of the game and change with every window.
+- **Where:** SAVE IMAGE / 儲存圖片 on REPORT, free mode's PAUSE and RECORD, the three pages with a
+  sheet. A computer writes `hk-taxi-q-sheet-<stamp>.png` to `OS.SYSTEM_DIR_PICTURES` (else `user://`)
+  and opens its folder; the web build downloads it (`JavaScriptBridge.download_buffer`).
+- **No button on a phone**: `mobile`, `web_android` or `web_ios`, so the phone browser's free
+  `navigator.share` was declined too. Godot 4.7.2 has no share sheet and no save-to-Photos call: its
+  class reference, dumped from the installed binary with `--doctool`, has neither, and the 4.7 / 4.7.1
+  release notes add none. iOS needs a plugin round `UIActivityViewController`; Android an
+  `ACTION_SEND` / `FileProvider` plugin, or perhaps `get_system_dir(SYSTEM_DIR_PICTURES)` untested on a
+  device. Both wait for Phase 7's store plugins; `SheetImage.is_phone` is the line one lifts.
+- **Achievements dropped.** RECORD (`P3-76`) is the lifetime stat table already.
+
+**Built 2026-11-06 (`P3-80`).** `scripts/ui/sheet_image.gd`; `menu.tres` `sheet_image_scale` 2.0 (`menu.md`);
+three strings in `menu_text.json`, every glyph in the Kai. The picture is laid out at the sheet column's
+own size less its button row: a first cut at a fixed `ledger_px` cut RECORD's walked and floor lines
+off its foot, since RECORD's runs and best stand over the tables. Only the PNG showed it. REPORT
+2240 × 1540; RECORD 2240 × 1644 (en) / 1678 (zh) on the sample sheet.
+
+**Measured.** `verify_menu` `image:` (11 lines): the button beside each sheet and on no shift's PAUSE;
+each phone feature hides it and a desktop browser does not; the copy reads the sheet's total; RECORD's
+picture keeps its heading and loses its buttons and their room; the viewport opaque and at
+`sheet_image_scale`. Four mutations caught by name: `web_ios` not a phone, the buttons kept in the
+copy, their room kept, a fixed box. The pixels need a renderer `check.sh`'s headless run has not got;
+PNGs from a windowed run, both pages in both languages, read by eye, and one press in a window wrote the
+file to `~/Pictures` and relabelled the button IMAGE SAVED (the file deleted after).
+
+Owed: the user's look, and a press on the web build.
+
+**See.** `Q169` · `Q162` · `P3-76` · `game/scripts/ui/sheet_image.gd` · `menu.md`
