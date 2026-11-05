@@ -9,6 +9,8 @@ extends Node
 ##   `cancelled`, and the car is still for hire.
 ## - **The door** stands open from the hail to the boarding, and opens briefly
 ##   when a fare gets out — delivered or bailed.
+## - **The hazards** (`Q187`) flash from the hail to the boarding or the cancel,
+##   and for `alight_hazards_s` when a fare gets out.
 ## - **The face** (`P3-49`): the passenger grins out of the back seat each time
 ##   a skill pays, and rages out of it when the clock runs out and they walk
 ##   without paying — the door swinging open beside it.
@@ -51,6 +53,9 @@ var flags_down: int = 0
 var flags_up: int = 0
 var payouts: int = 0
 var coins: int = 0
+## Hazards asked on for a boarding, and held for an alighting, for the same.
+var hazards: bool = false
+var hazard_holds: int = 0
 
 var _beep: AudioStreamPlayer = null
 var _audio: TaxiAudioProfile = null
@@ -146,7 +151,14 @@ func _cabin_sound(file: String) -> void:
 		voice.play()
 
 
+func _boarding_hazards(on: bool) -> void:
+	hazards = on
+	if _lamps != null:
+		_lamps.hazards = on
+
+
 func _on_hailed(_fare: Fare) -> void:
+	_boarding_hazards(true)
 	if _door != null:
 		_door.open()
 
@@ -154,6 +166,7 @@ func _on_hailed(_fare: Fare) -> void:
 func _on_boarded(_fare: Fare) -> void:
 	flags_down += 1
 	_cabin_sound("flag_down")
+	_boarding_hazards(false)
 	if _lamps != null:
 		_lamps.for_hire = false
 	if _door != null:
@@ -161,6 +174,7 @@ func _on_boarded(_fare: Fare) -> void:
 
 
 func _on_cancelled(_fare: Fare) -> void:
+	_boarding_hazards(false)
 	if _door != null:
 		_door.close()
 
@@ -168,8 +182,10 @@ func _on_cancelled(_fare: Fare) -> void:
 func _on_alighted(_fare: Fare) -> void:
 	flags_up += 1
 	_cabin_sound("flag_up")
+	hazard_holds += 1
 	if _lamps != null:
 		_lamps.for_hire = true
+		_lamps.hold_hazards()
 	if _door != null:
 		_door.open_briefly()
 

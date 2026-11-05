@@ -631,6 +631,20 @@ func _check_cabin_sounds(system: FareSystem, hire: TaxiHire) -> void:
 	_expect(
 		hire.flags_up == 3 and hire.payouts == 2, "cabin", "a bail turns it up and pays nothing"
 	)
+	# The hazards (`Q187`): on from the hail to the boarding or a cancel, and held
+	# at every drop-off — two deliveries and a bail above.
+	_expect(
+		hire.hazard_holds == 3,
+		"hazards",
+		"each fare out holds the hazards (%d)" % hire.hazard_holds
+	)
+	system.hailed.emit(paid)
+	_expect(hire.hazards, "hazards", "a hail turns the hazards on")
+	system.boarded.emit(paid)
+	_expect(not hire.hazards, "hazards", "the boarding turns them off")
+	system.hailed.emit(paid)
+	system.cancelled.emit(paid)
+	_expect(not hire.hazards, "hazards", "a cancel turns them off")
 
 
 ## The skills (`P3-49`): each dwell from both sides, a slide that ends

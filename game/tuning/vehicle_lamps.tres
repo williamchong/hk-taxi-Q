@@ -8,6 +8,7 @@ blink_hz = 1.5
 blink_duty = 0.55
 steer_threshold = 0.35
 steer_hold_s = 0.3
+alight_hazards_s = 3.0
 sign_lit = 0.45
 tail_lit = 0.35
 sun_probe_m = 200.0

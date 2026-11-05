@@ -11784,3 +11784,12 @@ parked bus at a stop is gone. Owed: the user's drive by day and at night.
   and only a red minibus or a taxi stood on a no-stopping line. The kerbside stops are rare —
   1–2 in the 180 s drive — because the short edges and the restriction runs leave little kerb;
   `kerb_stop_every_m` is the dial.
+- **The tram winks left at its stop** (the user's call, 2026-11-06: "tram that stop at tram stop
+  should also has left blinker on"): `TramSystem.at_stop` — braking into its stop or standing at
+  it. `verify_trams`' `stops:` line; `at_stop` reading the light instead fails it (34,380 wrong).
+- **The player's taxi flashes its hazards for a passenger** ("turn on double blinkers when we
+  board or alight passengers"): `TaxiHire` sets `VehicleLamps.hazards` from the hail to the
+  boarding or a cancel, and `hold_hazards` holds them `alight_hazards_s` (3 s) at a delivery or a
+  bail. Both indicators flash on the one phase, so `TaxiAudio`'s relay ticks for them as for a
+  turn. `verify_fares`' `hazards:` lines. ⚠️ Nothing checks the lamp vector itself: the lenses
+  flashing is owed to a drive.

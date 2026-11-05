@@ -92,6 +92,12 @@ var for_hire: bool = true
 ## Whether an indicator lamp is lit this tick: the flasher's beat, for its
 ## relay's tick (`TaxiAudio`, `P3-79`).
 var indicator_lit: bool = false
+## Both indicators flashing while a passenger boards (`Q187`). Written from
+## outside, as `for_hire` is: `TaxiHire` turns it on at the hail and off at the
+## boarding or a cancel. ⚠️ An alighting passenger is `hold_hazards` instead.
+var hazards: bool = false
+## Seconds the hazards still flash after a drop-off.
+var _hazards_hold_s: float = 0.0
 
 var _car: VehicleController = null
 var _body: MeshInstance3D = null
@@ -339,7 +345,15 @@ func read_rig() -> void:
 	_night = sun.light_energy <= profile.night_energy or _sun_toward.y <= 0.0
 
 
+## Flash the hazards for `alight_hazards_s`: a passenger is getting out.
+func hold_hazards() -> void:
+	if _usable:
+		_hazards_hold_s = profile.alight_hazards_s
+
+
 func _physics_process(delta: float) -> void:
+	_hazards_hold_s = maxf(_hazards_hold_s - delta, 0.0)
+	var hazard: bool = hazards or _hazards_hold_s > 0.0
 	# The threshold to start turning; TURN_RELEASE's share of it to stop.
 	var leaving: float = profile.steer_threshold * TURN_RELEASE
 	var side: int = 0
@@ -358,15 +372,14 @@ func _physics_process(delta: float) -> void:
 		_turn_held_s += delta
 
 	var indicating: bool = side != 0 and _turn_held_s > profile.steer_hold_s
-	if indicating:
+	if indicating or hazard:
 		_blink_phase = fmod(_blink_phase + delta * profile.blink_hz, 1.0)
 	else:
 		_blink_phase = 0.0
-	# One phase for both sides rather than a flasher each. They are never both
-	# live — `side` is one number — so the only thing a second phase could
-	# express is a hazard flash, which nothing asks for.
+	# One phase for both sides rather than a flasher each: the hazards flash both
+	# on it together, which is what a hazard switch does.
 	var flash: float = 1.0 if _blink_phase < profile.blink_duty else 0.0
-	indicator_lit = indicating and flash > 0.0
+	indicator_lit = (indicating or hazard) and flash > 0.0
 
 	# `CIRCUIT_*` order less one: x brake, y reverse, z indicator left, w right.
 	#
@@ -384,8 +397,8 @@ func _physics_process(delta: float) -> void:
 	var lit := Vector4(
 		1.0 if _car.is_braking() else tail,
 		1.0 if _car.is_reversing() else 0.0,
-		flash if indicating and side < 0 else 0.0,
-		flash if indicating and side > 0 else 0.0,
+		flash if hazard or (indicating and side < 0) else 0.0,
+		flash if hazard or (indicating and side > 0) else 0.0,
 	)
 	_body.set_instance_shader_parameter(PARAMETER, lit)
 

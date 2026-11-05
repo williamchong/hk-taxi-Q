@@ -32,6 +32,8 @@ const PATH: String = "res://tuning/vehicle_lamps.tres"
 @export_range(0.0, 1.0, 0.01) var steer_threshold: float
 ## How long lock has to be *held* one way before the indicator comes on.
 @export_range(0.0, 3.0, 0.05) var steer_hold_s: float
+## How long the hazards flash once a passenger has got out (`hold_hazards`).
+@export_range(0.0, 10.0, 0.1) var alight_hazards_s: float
 
 @export_group("Roof sign")
 ## How hard the illuminated box on the roof burns, when `for_hire` lights it.

@@ -31,6 +31,14 @@ UK and Hong Kong regulation puts a real indicator between 1 and 2 Hz, and the
 middle of that is also what reads as a flash rather than as a flicker at the
 frame rates this ships at.
 
+## `alight_hazards_s = 3.0`
+
+How long both indicators flash once a passenger has got out (`Q187`, the user's call 2026-11-06:
+"turn on double blinkers when we board or alight passengers"). While a hail is boarding the hazards
+are on until the passenger is in the seat or walks away; at the drop-off there is no such event to
+end them, so they hold this long — the door's swing, its `alight_hold_s` and the swing back
+(1.5 s) with time for the passenger to step clear. Authored.
+
 ## `blink_duty = 0.55`
 
 Above a half on purpose: an indicator seen from behind at speed is a small
