@@ -11505,3 +11505,69 @@ already read 0.
 
 **See.** `Q167` · `Q173` · `Q180` · `Q181` · `P3-8` · `game/tuning/traffic.md` · `game/tuning/parked.md`
 
+
+## `Q184` — The web build compiles its shaders under a boot cover, and a batched car holds no instance uniform
+
+**Status.** ✅ Built 2026-11-05 on the user's ask ("run web build and check for any lag/latency
+spike issue", then "implement suggested fix").
+
+**Found.** The warm web build drove at 120 fps with no frame over 25 ms. On a first load it did not.
+- **Method.** Chrome, a fresh profile with `--disable-gpu-shader-disk-cache`. Chrome GPU helper's
+  Metal cache (`$(getconf DARWIN_USER_CACHE_DIR)com.google.Chrome.helper/com.apple.metal`) was moved
+  aside for the run and restored after. Frame gaps came from `requestAnimationFrame`, stalls from
+  the `longtask` observer, and input from CDP.
+- **Cold:** a 13.6 s boot, then 733, 2124 and 595 ms tasks in the menu's first seconds, and 312 and
+  462 ms as the drive started.
+- **Warm:** the same frames were 107, 180, 73 and 66 ms.
+- The fresh profile alone did not reproduce it, because macOS keeps the Metal cache system-wide.
+  Forcing Liftoff (`--js-flags=--liftoff-only`) did not reproduce it either, so the cost is
+  compiling shaders, not WebAssembly. Every first-time player is cold, and so is everyone after a
+  browser or driver update.
+- **Why.** The web runs Compatibility (`Q76`). It compiles a shader variant the first time
+  something draws with it, and Godot's shader baker covers only the RenderingDevice renderers.
+- **Found alongside:** 83 `Too many instances using shader instance variables` errors per load.
+  This Mac's WebGL2 uniform block is 16,384 B: 1,024 global-buffer slots, 16 for each node holding
+  an instance uniform, so about 60 nodes. `vehicle_body.gdshader`'s two lamp channels made every
+  node drawing it hold slots, and each parked cell's kinds are a `MultiMeshInstance3D` each.
+
+**Decision.**
+- **A boot cover, `ShaderWarmup`.** `Main` opens it under the menu, and only there: `--menu=off`,
+  every scripted run, never sees it.
+  - It waits for `CityRegions.built` plus `cover_settle_frames`. Then one copy of each distinct
+    draw under the level stands shrunk in a grid in front of the camera for `cover_warm_frames`,
+    with the HUD shown under the cover.
+  - A copy keeps its source's mesh, materials, shadow casting, layers and draw kind. A `MultiMesh`
+    copy is a one-instance `MultiMesh` with the same formats. Particles are left to
+    `ParticleWarmup`, which already draws the slide's emitters at their own load.
+  - The menu's process mode is off until the cover lifts. Numbers are `menu.tres`'s `cover_*` and
+    `warm_*`; the reasons are in `menu.md`.
+- **A batched car drops its instance uniforms.** `VehicleBodyBatch` builds a second material:
+  `vehicle_body.tres` duplicated, with its shader defining `VEHICLE_BATCHED`, which turns
+  `lamp_lit` and `lamp_front` into zero constants. `PropBatch`, `TrafficSystem` and `TramSystem`
+  draw through it. A batch reads its lamps from `INSTANCE_CUSTOM.a` and nothing ever wrote its
+  instance channels, so it draws what it drew. Only the player's car, which `VehicleLamps` writes,
+  keeps the uniforms.
+
+**Measured after** (same method, three cold runs):
+- **Boot:** 14.0–14.8 s.
+- **Behind the cover:** every stall now lands before it lifts. The tasks were 740 / 2357 / 607 /
+  1270, 712 / 2235 / 1845 and 714 / 2244 / 1954 ms; the last of each is the warm frame. The cover
+  lifts about 6 s after the boot ends.
+- **After it lifts:** no task over 50 ms in the menu or on the PLAY page (before: 588 ms there).
+  The drive start was clean in two runs and 309 ms in one.
+- **Warm:** the cover lifts 2.3 s after the boot. Behind it the tasks are 106, 346 and 630 ms, and
+  nothing over 50 ms after.
+- **Errors:** instance-uniform errors went from 83 a load to 0.
+- **Native:** 37 copies after 18 frames as measured; 33 since the particle copies were dropped
+  for `ParticleWarmup`. The before and after of the default drive and the PLAY
+  page shot (buses, red taxis) differ no more than two runs of the before.
+
+**Not covered.**
+- Lights a shift brings at dusk: new light counts are new variants, so the first dusk still
+  compiles.
+- What a drive builds only once it starts, such as the fare guide's pending batch.
+- The 309 ms start in one cold run in three.
+- The 14 s cold boot is the engine's loading spinner and was not moved.
+
+**See.** `Q76` · `P6-1` · `game/tuning/menu.md` · `game/scripts/ui/shader_warmup.gd` ·
+`game/scripts/vehicle/vehicle_body_batch.gd`

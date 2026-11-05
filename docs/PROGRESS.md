@@ -509,6 +509,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q183` Taxis join the traffic at TD's 16.8% and wear a licence their region's stands name (user, 2026-11-05): one mesh per licence in `parked.glb`, the region's mix off every stand in its stands' districts (`city.json` `taxi_licences`, schema 44), the roof sign lit on half the spawns. The user's look and drive owed.
 - `Q181` No traffic-law penalty until something enforces it (user, 2026-11-04): the bus-lane penalty leaves `P3-8`; it, the red the player runs (`P3-3d`), a double yellow and a bus lane or stop come back together behind an enforcer — something like a policeman who catches them. The red stays counted, never docked. No task yet.
 - `Q182` Buses and green minibuses run their published routes and stop at their stops; a bus at a stop may be moving or parked, at random (user, 2026-11-04): TD's stop sequences, the path between stops inferred by the legal router, entered at GTFS headways. `P3-78`, built 2026-11-05; the path is found at runtime by `RoadRouter.goal_tree`, not in the ETL.
+- `Q184` The web build compiles its shaders under a boot cover, and a batched car holds no instance uniform (user, 2026-11-05): cold, the menu stalled 0.6–2.1 s and the drive start 0.3–0.5 s, now all behind the cover; 83 instance-uniform errors a load to 0. Not covered: the first dusk's lights, what a drive builds at start (309 ms in one cold run of three).
 - `Q179` A drift can be held for 30 s on the pad and not for 2 on the street, so it is not capped (2026-11-04): `--manoeuvre-s` lifts the pad's 4 s window, which had hidden it; `ride` from 20 kph holds 28.6 s (HK$435), and `hold` from 76–95 kph holds 29.6 s. Six stands and the eight widest junctions never let a slide past 1.5 s. Reopens on the user's attempt or any open space
 - `Q176` The trams run the published rails as walls that never push (2026-11-01): direction read off the other track, a one-way street or what a bed continues, unresolved refused; a separate `TramSystem`, whole fleet always; moving trams replace the parked ones, and nothing stands in a tram's path.
 - `Q175` A hit on a moving car reads the closing speed, only when the taxi is moving into it, and the near miss looks at moving cars on the closing speed (2026-10-30). Bars and prices unchanged; the user's drive owed.
@@ -598,6 +599,7 @@ Budget
 | Texture memory | < 128 MB | 131,072 px — one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
 | Bundle size (PCK) | < 200 MB | 89,196,660 B, web, `wan_chai` + `causeway_bay` (2026-10-07, `tools/export.sh web`); was 55,955,496 B at `P5-13` — re-export before quoting |
 | Boot to drivable (web, warm) | — | 830 ms (2026-07-31; stale) |
+| First load (web, cold GPU shader cache) | — | 14.0–14.8 s boot, then the cover up ~6 s; nothing over 50 ms after it lifts in 2 of 3 runs (`Q184`, 2026-11-05) |
 | Tab memory (web) | — | 307 MB (2026-07-31; stale) |
 | ETL full run, warm cache | — | not re-timed since 27 s / 19 stages; `region` alone 9.4 s |
 | Buildings stage peak RSS | — | 657 MB |
