@@ -211,10 +211,6 @@ class Car:
 	var kind: int = 0
 	## Its index in its kind's `MultiMesh`.
 	var slot: int = 0
-	## A taxi's slot in every licence's `MultiMesh`, by kind index (`Q183`): it
-	## shows the one its spawn region draws and hides the rest. Empty for any
-	## other car, and for a taxi where only one licence is resident.
-	var licence_slots: Dictionary[int, int] = {}
 	## Whether it is a taxi, and whether its roof sign is lit for hire.
 	var taxi: bool = false
 	var for_hire: bool = false
@@ -313,6 +309,11 @@ class Car:
 	## A slot of the routed fleet (`P3-78`): it spawns only on a route, as the
 	## route's kind, from its slot in each routed kind's `MultiMesh` by kind index.
 	var routed: bool = false
+	## Its slot in every `MultiMesh` it may be drawn from, by kind index: a routed
+	## car's in each route kind, a wandering car's in every kind the hours draw
+	## and every taxi licence (`Q183`, `Q186`) — `instance_count` clears a buffer,
+	## so a car cannot be moved between batches after `setup`. It shows one and
+	## hides the rest.
 	var kind_slots: Dictionary[int, int] = {}
 	## The route it keeps to and the index of the stop it is bound for or stands
 	## at; null once it has left its route, when it wanders.
@@ -413,7 +414,17 @@ var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
 var _extents: Array[AABB] = []
 var _batches: Array[MultiMesh] = []
+## Each kind's weight this hour, what `_pick_kind` and `kind_for` draw on; and
+## each kind's weight by clock hour (`Q186`), all zeros for a kind only a licence
+## or a route wears.
 var _weights: PackedFloat32Array = []
+var _weight_total: float = 0.0
+var _hourly: Array[PackedFloat32Array] = []
+## Whether each kind is one the hours draw a wandering car as.
+var _wandering: Array[bool] = []
+## The hour `_weights` was read for, and the wandering fleet's size in it.
+var _weights_hour: int = -1
+var _fleet_now: int = 0
 var _admitted: PackedInt32Array = []
 ## Each resident region's taxi licences (`Q183`), mesh name to share, off its
 ## `CityManifest`; read at `setup` unless a verify tool set it first.
@@ -494,18 +505,18 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		signals = SignalController.create(PlanScript.resident(graph), plan_table)
 		if signals != null:
 			add_child(signals)
+	_parked_profile = load(ParkedProfile.PATH) as ParkedProfile
+	_read_hour()
+	var licences: Array[int] = _licence_kinds.values()
 	for index: int in profile.cars:
 		var car := Car.new()
 		car.kind = _pick_kind()
 		car.taxi = _kinds[car.kind] == profile.taxi_kind
-		if car.taxi and _licence_kinds.size() > 1:
-			for kind: int in _licence_kinds.values():
-				car.licence_slots[kind] = _batches[kind].instance_count
+		for kind: int in _kinds.size():
+			if _wandering[kind] or licences.has(kind):
+				car.kind_slots[kind] = _batches[kind].instance_count
 				_batches[kind].instance_count += 1
-			car.slot = car.licence_slots[car.kind]
-		else:
-			car.slot = _batches[car.kind].instance_count
-			_batches[car.kind].instance_count += 1
+		car.slot = car.kind_slots[car.kind]
 		cars.append(car)
 	if not _routed_kinds.is_empty():
 		for _index: int in profile.buses:
@@ -522,11 +533,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		drawn.name = _kinds[kind]
 		drawn.multimesh = _batches[kind]
 		add_child(drawn)
-	var palettes: Dictionary = {}
-	var parked := load(ParkedProfile.PATH) as ParkedProfile
-	_parked_profile = parked
-	if parked != null:
-		palettes = parked.liveries
+	var parked: ParkedProfile = _parked_profile
 	for car: Car in cars:
 		var extent: AABB = _extents[car.kind]
 		car.half_length = extent.size.z * 0.5
@@ -543,10 +550,9 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		car.body.add_child(car.shape)
 		add_child(car.body)
 		if not car.routed:
-			var palette: PackedColorArray = profile.wander_liveries.get(
-				_kinds[car.kind], palettes.get(_kinds[car.kind], PackedColorArray())
+			car.livery = ParkedRoster.livery(
+				_rng.randi() & 0xFFFF, _palette(profile.wander_liveries, _kinds[car.kind])
 			)
-			car.livery = ParkedRoster.livery(_rng.randi() & 0xFFFF, palette)
 		car.obstacle = {
 			"transform": Transform3D.IDENTITY,
 			"extent": extent,
@@ -557,8 +563,6 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		if car.mass_kg > 0.0:
 			Pushable.mark(car.body, self)
 			_by_body[car.body.get_instance_id()] = car
-		for kind: int in car.licence_slots:
-			_batches[kind].set_instance_transform(car.licence_slots[kind], HIDDEN)
 		for kind: int in car.kind_slots:
 			_batches[kind].set_instance_transform(car.kind_slots[kind], HIDDEN)
 		_hide(car)
@@ -600,6 +604,7 @@ static func usable(table: TrafficProfile) -> bool:
 		"horn_temper_max": table.horn_temper_max,
 		"horn_temper_s": table.horn_temper_s,
 		"kinds": float(table.kinds.size()),
+		"fleet_by_hour": float(table.fleet_by_hour.size()),
 		"taxi_for_hire": table.taxi_for_hire,
 		"react_s": table.react_s,
 		"recover_after_s": table.recover_after_s,
@@ -611,6 +616,24 @@ static func usable(table: TrafficProfile) -> bool:
 		"dwell_s": table.dwell_s,
 		"dwell_reach_m": table.dwell_reach_m,
 	}
+	var hourly: Array[PackedFloat32Array] = [table.fleet_by_hour]
+	hourly.append_array(table.kinds.values())
+	for table_row: PackedFloat32Array in hourly:
+		if table_row.size() != TrafficProfile.HOURS:
+			push_error(
+				(
+					"TrafficSystem: %s has an hourly table of %d entries, not %d"
+					% [table.resource_path, table_row.size(), TrafficProfile.HOURS]
+				)
+			)
+			return false
+	for hour: int in TrafficProfile.HOURS:
+		var drawn: float = 0.0
+		for by_hour: PackedFloat32Array in table.kinds.values():
+			drawn += by_hour[hour]
+		if drawn <= 0.0:
+			push_error("TrafficSystem: %s draws no kind at %02d:00" % [table.resource_path, hour])
+			return false
 	for reason: String in HORN_REASONS:
 		if not (
 			table.horn_count.has(reason)
@@ -662,10 +685,11 @@ func _load_library() -> bool:
 			found[String(mesh_node.name)] = mesh_node.mesh
 	library.free()
 	for kind: String in profile.kinds:
-		if not found.has(kind) or profile.kinds[kind] <= 0.0:
+		var by_hour: PackedFloat32Array = profile.kinds[kind]
+		if not found.has(kind) or Array(by_hour).max() <= 0.0:
 			push_warning("TrafficSystem: no mesh %s in %s; skipped" % [kind, LIBRARY_PATH])
 			continue
-		_add_kind(kind, found[kind], profile.kinds[kind])
+		_add_kind(kind, found[kind], by_hour)
 	if _kinds.is_empty():
 		push_error("TrafficSystem: none of %s is in %s" % [profile.kinds.keys(), LIBRARY_PATH])
 		return false
@@ -680,7 +704,7 @@ func _load_library() -> bool:
 					push_warning("TrafficSystem: no licence mesh %s in %s" % [mesh, LIBRARY_PATH])
 					continue
 				# Never drawn by `_pick_kind`: only a taxi's spawn region wears it.
-				_licence_kinds[mesh] = _add_kind(mesh, found[mesh], 0.0)
+				_licence_kinds[mesh] = _add_kind(mesh, found[mesh], PackedFloat32Array())
 	if bus_routes != null:
 		for route: BusRoutes.Route in bus_routes.routes:
 			if _routed_kinds.has(route.kind):
@@ -691,7 +715,9 @@ func _load_library() -> bool:
 			var known: int = _kinds.find(route.kind)
 			# Weight 0: `_pick_kind` never draws a kind only a route runs.
 			_routed_kinds[route.kind] = (
-				known if known >= 0 else _add_kind(route.kind, found[route.kind], 0.0)
+				known
+				if known >= 0
+				else _add_kind(route.kind, found[route.kind], PackedFloat32Array())
 			)
 	VehicleLampsProfile.wire_blink(_meshes)
 	for extent: AABB in _extents:
@@ -701,12 +727,15 @@ func _load_library() -> bool:
 	return true
 
 
-## One drawn kind and its batch; its index.
-func _add_kind(kind: String, mesh: Mesh, weight: float) -> int:
+## One drawn kind and its batch, at its weight by clock hour — none for a kind
+## only a licence or a route wears; its index.
+func _add_kind(kind: String, mesh: Mesh, by_hour: PackedFloat32Array) -> int:
 	_kinds.append(kind)
 	_meshes.append(mesh)
 	_extents.append(mesh.get_aabb())
-	_weights.append(weight)
+	_hourly.append(by_hour)
+	_wandering.append(not by_hour.is_empty() and Array(by_hour).max() > 0.0)
+	_weights.append(0.0)
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.use_custom_data = true
@@ -749,7 +778,7 @@ func _wear_licence(car: Car) -> void:
 	car.for_hire = for_hire_of(car.id, car.lives)
 	# The sign may have changed with the lamps not: write the datum afresh.
 	car.written = -1
-	if car.licence_slots.is_empty():
+	if _licence_kinds.size() < 2:
 		return
 	var mesh: String = licence_of(graph.region_of(car.edge), car.id, car.lives)
 	var kind: int = _licence_kinds.get(mesh, _licence_kinds[profile.taxi_kind])
@@ -757,7 +786,7 @@ func _wear_licence(car: Car) -> void:
 		return
 	_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
 	car.kind = kind
-	car.slot = car.licence_slots[kind]
+	car.slot = car.kind_slots[kind]
 
 
 ## Which licence `car` wears, by mesh name.
@@ -934,7 +963,8 @@ func _try_spawn_routed(car: Car, here: Vector3) -> void:
 	for other: Car in cars:
 		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
 			return
-	_wear_kind(car, kind, route)
+	var palette: PackedColorArray = _palette(profile.route_liveries, route.kind)
+	_wear_kind(car, kind, ParkedRoster.livery(_route_rng.randi() & 0xFFFF, palette))
 	if (
 		_nearest_parked(
 			stop.edge,
@@ -972,8 +1002,8 @@ func _try_spawn_routed(car: Car, here: Vector3) -> void:
 
 
 ## Show `car` as `kind`, from that kind's slot, at that kind's size and mass, in
-## the route's colours.
-func _wear_kind(car: Car, kind: int, route: BusRoutes.Route) -> void:
+## `livery`.
+func _wear_kind(car: Car, kind: int, livery: Color) -> void:
 	if kind != car.kind:
 		_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
 		car.kind = kind
@@ -986,16 +1016,66 @@ func _wear_kind(car: Car, kind: int, route: BusRoutes.Route) -> void:
 	car.obstacle["extent"] = extent
 	if _parked_profile != null:
 		car.mass_kg = _parked_profile.masses_kg.get(_kinds[kind], car.mass_kg)
-	var palette: PackedColorArray = profile.route_liveries.get(
-		route.kind,
-		(
-			_parked_profile.liveries.get(route.kind, PackedColorArray())
-			if _parked_profile != null
-			else PackedColorArray()
-		)
-	)
-	car.livery = ParkedRoster.livery(_route_rng.randi() & 0xFFFF, palette)
+	car.taxi = not car.routed and _kinds[kind] == profile.taxi_kind
+	car.livery = livery
 	car.written = -1
+
+
+## The colours `kind` wears: `table`'s own (a wandering or a route livery), else the
+## parked roster's palette for it, else none.
+func _palette(table: Dictionary[String, PackedColorArray], kind: String) -> PackedColorArray:
+	if table.has(kind):
+		return table[kind]
+	if _parked_profile != null:
+		return _parked_profile.liveries.get(kind, PackedColorArray())
+	return PackedColorArray()
+
+
+## The kind a wandering car is drawn as for its `lives`th spawn (`Q186`): a draw
+## on this hour's weights off its id and lives, never the seeded RNG — one more
+## roll there would move every later car, as a taxi's licence would (`Q183`).
+func kind_for(id: int, lives: int) -> int:
+	var draw: float = fposmod(float(id) * 0.267949 + float(lives) * 0.414214, 1.0) * _weight_total
+	for kind: int in _weights.size():
+		draw -= _weights[kind]
+		if draw < 0.0:
+			return kind
+	return _pick_last()
+
+
+## The last kind with any weight this hour: where a float's slack runs a draw out.
+func _pick_last() -> int:
+	for kind: int in range(_weights.size() - 1, -1, -1):
+		if _weights[kind] > 0.0:
+			return kind
+	return 0
+
+
+## Read this hour's kind weights and fleet size when the hour has moved.
+func _read_hour() -> void:
+	var hour: int = _hour_now()
+	if hour == _weights_hour:
+		return
+	_weights_hour = hour
+	_weight_total = 0.0
+	for kind: int in _kinds.size():
+		_weights[kind] = _hourly[kind][hour] if _wandering[kind] else 0.0
+		_weight_total += _weights[kind]
+	_fleet_now = clampi(roundi(profile.cars * profile.fleet_by_hour[hour]), 0, profile.cars)
+
+
+## The wandering fleet's size this hour (`Q186`), for the verify tool.
+func fleet_now() -> int:
+	return _fleet_now
+
+
+## Wandering cars alive.
+func live_wandering() -> int:
+	var live: int = 0
+	for car: Car in cars:
+		if car.live and not car.routed:
+			live += 1
+	return live
 
 
 ## Rebuild where a routed vehicle may be placed when the hour has moved: every stop
@@ -1145,11 +1225,17 @@ func step(delta: float) -> void:
 			_slide(car, delta)
 		else:
 			_drive(car, delta)
+	_read_hour()
+	var wandering: int = live_wandering()
 	for _try: int in SPAWN_TRIES:
+		if wandering >= _fleet_now:
+			break
 		var idle: Car = _idle_car(false)
 		if idle == null:
 			break
 		_try_spawn(idle, here)
+		if idle.live:
+			wandering += 1
 	_refresh_spawn_pool()
 	for _try: int in SPAWN_TRIES:
 		var idle: Car = _idle_car(true)
@@ -1192,7 +1278,9 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 		if other.live and _plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
 			return
 	var lane: float = float(_rng.randi_range(0, graph.lanes_each_way(edge) - 1))
-	var half_length: float = _extents[car.kind].size.z * 0.5
+	if car.lives > 0:
+		_redraw(car, car.lives + 1)
+	var half_length: float = car.half_length
 	var room: float = (cruise * 0.5) ** 2 / profile.brake_mps2 + profile.look_m * 0.25
 	if (
 		_nearest_parked(
@@ -1223,6 +1311,20 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	car.shape.disabled = false
 	_wear_licence(car)
 	spawned += 1
+
+
+## Draw idle `car` afresh for its `lives`th spawn (`Q186`; `car.lives` is not yet
+## counted up) and wear it, before the spawn's checks read its size. Its first
+## life keeps the kind `setup` drew; a draw of the kind it wears changes nothing,
+## so a spawn that fails its checks and is tried again keeps what it was drawn.
+func _redraw(car: Car, lives: int) -> void:
+	var kind: int = kind_for(car.id, lives)
+	if kind == car.kind:
+		return
+	# Off its id and lives, as the kind is: never `_rng`.
+	var livery_seed: int = hash(Vector2i(car.id, lives)) & 0xFFFF
+	var palette: PackedColorArray = _palette(profile.wander_liveries, _kinds[kind])
+	_wear_kind(car, kind, ParkedRoster.livery(livery_seed, palette))
 
 
 ## Fill a car's per-edge state on entering `car.edge`: its length, cruise, the

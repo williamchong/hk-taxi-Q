@@ -10,6 +10,8 @@ extends Resource
 ## Path to the shipped table, so the system and `verify_traffic.gd` cannot load
 ## two different files.
 const PATH: String = "res://tuning/traffic.tres"
+## Entries in each hourly table: a clock hour each, 0 to 23.
+const HOURS: int = 24
 
 ## Cars alive at once round the player.
 @export var cars: int
@@ -85,8 +87,13 @@ const PATH: String = "res://tuning/traffic.tres"
 @export var horn_temper_max: float
 ## A car's temper falls by one whole share over this many seconds.
 @export var horn_temper_s: float
-## The library's meshes a car is drawn from, by name, and the weight of each.
-@export var kinds: Dictionary[String, float]
+## The library's meshes a car is drawn from, by name, and the weight of each by
+## clock hour (`Q186`): `HOURS` entries, hour 0 first, each read at a spawn in
+## that hour. TD's census, by `tools/traffic_census.py`.
+@export var kinds: Dictionary[String, PackedFloat32Array]
+## The share of `cars` alive at each clock hour (`Q186`), `HOURS` entries: a car
+## that leaves the ring is not placed again while the fleet stands at or over it.
+@export var fleet_by_hour: PackedFloat32Array
 ## The kind among `kinds` that is a taxi (`Q183`): it wears the licence its spawn
 ## region's `taxi_licences` draws, and lights its roof sign when for hire.
 @export var taxi_kind: String

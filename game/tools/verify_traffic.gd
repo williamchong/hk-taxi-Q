@@ -51,6 +51,11 @@
 ##   neighbour wears, at every spawn, a licence its spawn road's region names, in
 ##   that licence's slot, with the green and the lit roof signs near their
 ##   shares, and the lit ones writing the roof sign's bit.
+## - 🔴 **The traffic follows the census's hours** (`Q186`): each checked hour
+##   runs its share of `cars` and draws each kind near its weight; driven at
+##   20:00 and then 04:00, no car is placed into a full fleet, the fleet thins,
+##   and a respawn drawn as another kind stands in that kind's slot at its size.
+##   The seeds drive at `PEAK_HOUR`, the whole fleet.
 ## - 🔴 **A bus keeps to its route and stands at its stops** (`P3-78`, `Q182`):
 ##   the three seeds above drive the wandering fleet alone, as they were measured;
 ##   a fourth drive adds the routed fleet at 08:00, holds every check above but the
@@ -99,6 +104,20 @@ const KNOCK_AGAIN_MPS: float = 4.0
 const KNOCK_RUN_S: float = 40.0
 ## The hour the routed fleet is driven at: the morning peak, TD's busiest.
 const ROUTED_HOUR: float = 8.0
+## The hour the wandering seeds are driven at (`Q186`): the census's busiest, at
+## which the whole of `cars` is out — the fleet the seeds were measured on.
+const PEAK_HOUR: float = 12.0
+## The hours the fleet and the mix are checked at (`Q186`): the shift's opening,
+## the midday peak, the night's taxis, and a small hour, where few run.
+const CHECK_HOURS: Array[int] = [7, 12, 20, 4]
+## How far a kind's share over `KIND_DRAWS` draws may sit from its weight.
+const KIND_DRAWS: int = 4000
+const KIND_SLACK: float = 0.03
+## Where the hours drive moves its ring at the switch: past `retire_m` and the
+## spawn ring both, so every evening car retires.
+const FAR_M: float = 600.0
+## The kind whose colour is its licence (`Q167`): green on a route, red off one.
+const MINIBUS: String = "minibus"
 ## A dwelling vehicle's front this much past `dwell_reach_m` from its pole is not
 ## at its stop: a tick's travel at the turning pace.
 const DWELL_SLACK_M: float = 0.15
@@ -125,6 +144,7 @@ func _run() -> void:
 	var layers: Array[Node] = _stand_parked(graph)
 	_check_knock(graph, table, layers)
 	_check_licences(graph, table)
+	_check_hours(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
 	for run: int in SEEDS.size() + 2:
@@ -135,6 +155,7 @@ func _run() -> void:
 		if routed:
 			system.hour_override = ROUTED_HOUR
 		else:
+			system.hour_override = PEAK_HOUR
 			# The wandering fleet alone, what the seeds were measured on: an empty
 			# set, since `setup` reads the resident routes only into a null one.
 			system.bus_routes = BusRoutes.new()
@@ -387,7 +408,10 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 
 	var regions: PackedStringArray = graph.resident_regions()
 	var staged_table := table.duplicate() as TrafficProfile
-	staged_table.kinds = {table.taxi_kind: 1.0}
+	var always := PackedFloat32Array()
+	always.resize(TrafficProfile.HOURS)
+	always.fill(1.0)
+	staged_table.kinds = {table.taxi_kind: always}
 	var system: TrafficSystem = TrafficScript.new()
 	system.licence_mixes[regions[0]] = {"taxi": 0.5, "taxi_nt": 0.5}
 	if regions.size() > 1:
@@ -430,7 +454,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 					green_in_frame += 1
 			# Read off the system's own record: headless, the dummy renderer keeps
 			# no `MultiMesh` buffer to read a transform or a datum back from.
-			if car.licence_slots.get(car.kind, -1) != car.slot:
+			if car.kind_slots.get(car.kind, -1) != car.slot:
 				shown_wrong += 1
 			if ((car.written & TrafficSystem.ROOF_SIGN) != 0) != car.for_hire:
 				bit_wrong += 1
@@ -467,6 +491,193 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		"a region with no mix wears the red urban taxi"
 	)
 	_drop(system)
+
+
+## The census's hours (`Q186`): the fleet each hour stands at, the kinds each
+## hour draws, a respawn drawn afresh into its own slot at its own size, and a
+## fleet that thins when the hour does — no car placed while the fleet is full.
+func _check_hours(graph: RoadGraph, table: TrafficProfile) -> void:
+	var peak: int = 0
+	for hour: int in TrafficProfile.HOURS:
+		if table.fleet_by_hour[hour] > table.fleet_by_hour[peak]:
+			peak = hour
+	_expect(
+		is_equal_approx(table.fleet_by_hour[peak], 1.0) and peak == int(PEAK_HOUR),
+		"hours",
+		"the fleet is whole at its busiest hour, %02d:00, the seeds' own" % peak
+	)
+	for hour: int in CHECK_HOURS:
+		var system: TrafficSystem = TrafficScript.new()
+		system.hour_override = hour
+		if not system.setup(graph, table, SEEDS[0]):
+			_fail("hours", "the shipped table and city carry no traffic")
+			system.free()
+			return
+		var wanted: int = roundi(table.cars * table.fleet_by_hour[hour])
+		_expect(
+			system.fleet_now() == wanted,
+			"hours",
+			"%02d:00 runs %d of %d cars (%d)" % [hour, wanted, table.cars, system.fleet_now()]
+		)
+		var drawn: Dictionary[String, int] = {}
+		for draw: int in KIND_DRAWS:
+			var kind: String = system._kinds[system.kind_for(draw % 97, floori(draw / 97.0) + 1)]
+			drawn[kind] = drawn.get(kind, 0) + 1
+		var total: float = 0.0
+		for kind: String in table.kinds:
+			total += table.kinds[kind][hour]
+		var worst: float = 0.0
+		var shares: PackedStringArray = []
+		for kind: String in table.kinds:
+			var share: float = float(drawn.get(kind, 0)) / KIND_DRAWS
+			worst = maxf(worst, absf(share - table.kinds[kind][hour] / total))
+			shares.append("%s %.2f" % [kind, share])
+		print("  hours: %02d:00 %d cars, %s" % [hour, system.fleet_now(), ", ".join(shares)])
+		_expect(
+			worst < KIND_SLACK,
+			"hours",
+			"%02d:00 draws each kind near its weight (worst %.3f)" % [hour, worst]
+		)
+		system.free()
+
+	# A drive at the evening's hour, then the small hours: every respawn in its
+	# own kind's slot at its own size, and no car placed into a full fleet.
+	var drive: TrafficSystem = TrafficScript.new()
+	drive.hour_override = 20
+	drive.bus_routes = BusRoutes.new()
+	if not drive.setup(graph, table, SEEDS[1]):
+		_fail("hours", "the shipped table and city carry no traffic")
+		drive.free()
+		return
+	root.add_child(drive)
+	drive.centre = _signal_centre(drive.signals.plan)
+	var lives: Dictionary[int, int] = {}
+	var first: Dictionary[int, int] = {}
+	var respawns: int = 0
+	var redrawn: int = 0
+	var misworn: int = 0
+	var over: int = 0
+	var most: int = 0
+	var thinned_to: int = 0
+	var ticks: int = roundi(RUN_S / TICK_S)
+	for tick: int in ticks * 2:
+		if tick == ticks:
+			# The small hours, and the ring moved off: the evening's cars retire
+			# as they would driving away, and only the hour's few are placed.
+			drive.hour_override = 4
+			drive.centre = _far_centre(drive)
+		var spawned_before: int = drive.spawned
+		drive.step(TICK_S)
+		var live: int = drive.live_wandering()
+		# A car may be placed on the tick another retired: over its hour's size after
+		# a placing, it was placed into a full fleet.
+		if live > drive.fleet_now() and drive.spawned > spawned_before:
+			over += 1
+		if tick < ticks:
+			most = maxi(most, live)
+		else:
+			thinned_to = live
+		for car: TrafficSystem.Car in drive.cars:
+			if not car.live or lives.get(car.id, 0) == car.lives:
+				continue
+			if not first.has(car.id):
+				first[car.id] = car.kind
+			elif car.lives > 1:
+				respawns += 1
+				if car.kind != first[car.id]:
+					redrawn += 1
+			lives[car.id] = car.lives
+			var extent: AABB = drive.extent_of(car)
+			if (
+				car.kind_slots.get(car.kind, -1) != car.slot
+				or not is_equal_approx(car.half_length, extent.size.z * 0.5)
+			):
+				misworn += 1
+	print(
+		(
+			(
+				"  hours: 20:00 drive, at most %d of %d live, %d respawns, %d in another kind;"
+				+ " 04:00 thinned it to %d of %d"
+			)
+			% [
+				most,
+				roundi(table.cars * table.fleet_by_hour[20]),
+				respawns,
+				redrawn,
+				thinned_to,
+				roundi(table.cars * table.fleet_by_hour[4])
+			]
+		)
+	)
+	_expect(over == 0, "hours", "no car is placed into a full fleet")
+	_expect(
+		thinned_to == roundi(table.cars * table.fleet_by_hour[4]),
+		"hours",
+		"the small hours' fleet stands at its size (%d)" % thinned_to
+	)
+	_expect(
+		most <= roundi(table.cars * table.fleet_by_hour[20]),
+		"hours",
+		"the evening fleet never runs over its hour's size (%d)" % most
+	)
+	_expect(
+		respawns > 0 and redrawn > 0,
+		"hours",
+		"a respawn is drawn afresh (%d of %d)" % [redrawn, respawns]
+	)
+	_expect(misworn == 0, "hours", "every spawn stands in its own kind's slot at its size")
+	_drop(drive)
+
+	# Half minibuses: a car redrawn as one wears a wandering minibus's red, and
+	# one redrawn as a saloon the saloons' palette, never the red.
+	var staged_table := table.duplicate() as TrafficProfile
+	var half := PackedFloat32Array()
+	half.resize(TrafficProfile.HOURS)
+	half.fill(1.0)
+	staged_table.kinds = {MINIBUS: half, "car_a": half}
+	var staged: TrafficSystem = TrafficScript.new()
+	staged.hour_override = PEAK_HOUR
+	staged.bus_routes = BusRoutes.new()
+	if not staged.setup(graph, staged_table, SEEDS[2]):
+		_fail("hours", "a fleet of minibuses and saloons does not set up")
+		staged.free()
+		return
+	root.add_child(staged)
+	staged.centre = _signal_centre(staged.signals.plan)
+	var red: Color = Color(table.wander_liveries[MINIBUS][0], 1.0)
+	var minibus: int = staged._kinds.find(MINIBUS)
+	var red_right: int = 0
+	var red_wrong: int = 0
+	var seen: Dictionary[int, int] = {}
+	for tick: int in ticks * 2:
+		if tick == ticks:
+			staged.centre = _far_centre(staged)
+		staged.step(TICK_S)
+		for car: TrafficSystem.Car in staged.cars:
+			if not car.live or car.lives < 2 or seen.get(car.id, 0) == car.lives:
+				continue
+			seen[car.id] = car.lives
+			if (car.kind == minibus) == car.livery.is_equal_approx(red):
+				red_right += 1
+			else:
+				red_wrong += 1
+	print("  hours: a staged half-minibus fleet, %d respawns read" % (red_right + red_wrong))
+	_expect(
+		red_right > 0 and red_wrong == 0,
+		"hours",
+		"a respawned wandering minibus wears red, and nothing else does (%d wrong)" % red_wrong
+	)
+	_drop(staged)
+
+
+## A point on a road the traffic drives, past `FAR_M` from the system's centre.
+func _far_centre(system: TrafficSystem) -> Vector3:
+	for edge: int in system._admitted:
+		var at: Vector3 = system.graph.lane_at(edge, system.graph.plan_length_of(edge) * 0.5, true)
+		if Vector2(at.x - system.centre.x, at.z - system.centre.z).length() > FAR_M:
+			return at
+	_fail("hours", "no road the traffic drives lies %.0f m from the centre" % FAR_M)
+	return system.centre
 
 
 ## A level-0 one-way road with two lanes, `KNOCK_ROAD_M` long and nothing parked
@@ -732,6 +943,10 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	var dwelling: int = 0
 	var dwell_moving: int = 0
 	var dwell_away: int = 0
+	# Car-ticks a minibus was looked at for its colour, and wore the wrong one.
+	var minibus_looked: int = 0
+	var minibus_wrong: int = 0
+	var minibus: int = system._kinds.find(MINIBUS)
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
@@ -816,6 +1031,15 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 						)
 					):
 						dwell_away += 1
+			if routed and car.kind == minibus:
+				minibus_looked += 1
+				var livery: PackedColorArray = (
+					system.profile.route_liveries[MINIBUS]
+					if car.routed
+					else system.profile.wander_liveries[MINIBUS]
+				)
+				if not car.livery.is_equal_approx(Color(livery[0], 1.0)):
+					minibus_wrong += 1
 			if car.speed > car.cruise_mps + SPEED_SLACK_MPS:
 				too_fast += 1
 			if car.held == TrafficSystem.Held.LIGHT:
@@ -1015,7 +1239,9 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 			"no two cars met in a signalled junction (%d car-ticks)" % crossings["signalled"].x
 		)
 	else:
-		_check_routed(system, off_route, dwelling, dwell_moving, dwell_away)
+		_check_routed(
+			system, off_route, dwelling, dwell_moving, dwell_away, minibus_looked, minibus_wrong
+		)
 	for where: String in crossings:
 		print(
 			(
@@ -1369,7 +1595,13 @@ static func _count_crossings(
 
 ## The routed fleet's own checks, after a drive with it (`P3-78`).
 func _check_routed(
-	system: TrafficSystem, off_route: int, dwelling: int, dwell_moving: int, dwell_away: int
+	system: TrafficSystem,
+	off_route: int,
+	dwelling: int,
+	dwell_moving: int,
+	dwell_away: int,
+	minibus_looked: int,
+	minibus_wrong: int,
 ) -> void:
 	print(
 		(
@@ -1406,24 +1638,14 @@ func _check_routed(
 			% dwell_away
 		)
 	)
-	var minibus: int = system._kinds.find("minibus")
-	var green: Color = system.profile.route_liveries["minibus"][0]
-	var red: Color = system.profile.wander_liveries["minibus"][0]
-	var wrong: int = 0
-	var looked: int = 0
-	for car: TrafficSystem.Car in system.cars:
-		if car.lives == 0 or car.kind != minibus:
-			continue
-		looked += 1
-		var wanted: Color = green if car.routed else red
-		if not car.livery.is_equal_approx(Color(wanted, 1.0)):
-			wrong += 1
+	# Every tick of the drive, not its last: the census draws a wandering minibus
+	# rarely (`Q186`), so one may not be standing when the drive ends.
 	_expect(
-		looked > 0 and wrong == 0,
+		minibus_looked > 0 and minibus_wrong == 0,
 		"route",
 		(
-			"a routed minibus wears green and a wandering one red (%d looked at, %d wrong)"
-			% [looked, wrong]
+			"a routed minibus wears green and a wandering one red (%d car-ticks, %d wrong)"
+			% [minibus_looked, minibus_wrong]
 		)
 	)
 

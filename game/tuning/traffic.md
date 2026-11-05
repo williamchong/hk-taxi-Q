@@ -5,14 +5,15 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-How the moving traffic drives and where it lives (`P3-3c`, `Q173`). Every value is AUTHORED: no
-source publishes Wan Chai's flows, and the cars are a backdrop to the taxi, not a model of the
-city's traffic. `traffic_system.gd` says what each rule does; this says why each number.
+How the moving traffic drives and where it lives (`P3-3c`, `Q173`). Every value is AUTHORED but
+two: the cars are a backdrop to the taxi, not a model of the city's traffic. The two are `kinds`
+and `fleet_by_hour`, the mix and the fleet by clock hour, which are TD's census on these streets
+(`Q186`). `traffic_system.gd` says what each rule does; this says why each number.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `traffic_profile.gd` declares no defaults, so a missing key reads
 as zero, and `TrafficSystem` refuses to run on a zero. Three are held as DIFFERENCES — `spawn_max_m`
 over `spawn_min_m`, `retire_m` over `spawn_max_m`, `brake_max_mps2` over `brake_mps2` — so a table
-that inverts one is refused too. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
+that inverts one is refused too, and an hourly table of any length but 24. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
 streets, with each region's parked roster resident.
 
 ## `cars = 24`
@@ -178,22 +179,68 @@ lengths toward the top of their ranges (never past them); the gaps stay random. 
 the angriest car's draws still vary, and falling a whole share over 20 s, so a car the taxi left alone
 for half a minute is calm again. The first honk is a tap, the third a long blast.
 
-## `kinds = {car_a 4, car_b 3, minibus 1.5, taxi 2.02, van 1.5}`
+## `kinds = {car_a, car_b, minibus, taxi, van}`, each by clock hour
 
-The parked library's road vehicles, weighted toward saloons. No coach (too long for the turn curve
-the cars take) and no motorcycle (a box under it would read as a car). ⚠️ The 12 m bus does take
-that curve since `P3-78`, on its routes only (weight 0 here); `verify_traffic`'s routed drive
-holds it to every rule a car is held to.
+The parked library's road vehicles, each weighted by the clock hour (`Q186`, the user's ask
+2026-11-06: "can road car type and density change according to time of day? … fetch the TD census
+first"). 24 entries a kind, hour 0 first; a wandering car's kind is drawn on its hour's weights at
+every spawn. No coach (too long for the turn curve the cars take) and no motorcycle (a box under it
+would read as a car). ⚠️ The 12 m bus does take that curve since `P3-78`, on its routes only;
+`verify_traffic`'s routed drive holds it to every rule a car is held to.
 
-**`taxi` 2.02 is TD's measured share** (`Q183`, the user's call 2026-11-05: "real share"): 2.02 of
-12.02 is 16.8%, the taxis' share of the 16-hour weekday flow across the harbour in TD's *Annual
-Traffic Census 2023* (§5.4, "Cross Harbour Vehicular Trips Characteristics", the Cross Harbour
-Tunnel, whose south portal is in Causeway Bay, among the four crossings counted). The census's
-station pages for Wan Chai's own roads (Hennessy Road 1029, Gloucester Road 1028) are drawn, not
-text, so this is the nearest published share. ⚠️ It is the taxis' share of every vehicle; the other
-four weights are not TD's and are unchanged, so the taxi is 16.8% of THIS roster, not of the
-census's. ⚠️ The same table reads 23–31% from 20:00 to 23:00; the share does not follow the hour
-here.
+**Every number is TD's**, printed by `tools/traffic_census.py` — do not edit it by hand; rerun the
+tool. Source: *The Annual Traffic Census 2025*, read through the census's interactive site
+(`atc.td.gov.hk`, the AADT Analysis page's `api/analysis`): the vehicle classification surveys at
+the three counting stations inside the two regions that have one — 1002 Victoria Park Road,
+2214 Causeway Road and 1107 Tung Lo Wan Road — **pooled by vehicles counted** each hour (about
+3,000–5,000 an hour; Tung Lo Wan Road's ~20 an hour barely moves it). Of the census's ten classes
+four are drawn: private car → `car_a` + `car_b`, taxi → `taxi`, public light bus → `minibus`, light
+goods → `van`; the rest (motorcycles, heavy goods, coaches, private light buses, franchised buses —
+which run on their routes) are left out and the four renormalised to 100.
+
+| hour | car_a + car_b | taxi | minibus | van |
+|---|---|---|---|---|
+| 07 | 48.5 | 39.9 | 1.8 | 9.8 |
+| 10 | 50.2 | 31.5 | 0.3 | 17.9 |
+| 12 | 54.5 | 35.1 | 0.0 | 10.4 |
+| 16 | 63.0 | 23.9 | 0.4 | 12.7 |
+| 18 | 72.6 | 23.4 | 0.0 | 4.0 |
+| 20 | 54.8 | 42.4 | 0.3 | 2.5 |
+
+- **The taxis**: about a third of what these roads carry, 24–42% by hour, most at 20:00 — well over
+  the 16.8% (`Q183`) the roster drew before, which was the CROSS-HARBOUR share (§5.4 of the 2023
+  report), the nearest the PDF printed; the stations' own surveys were not in it. 🔴 Not tuned for
+  the look: the user asked for the census, and this is the census on these streets.
+- **The vans** — light goods — work the day: 10–18% from 09:00 to 15:00, under 4% after 18:00.
+- **The red minibus all but vanishes** (0–2%): the public light buses these three stations counted
+  were few. The green ones keep to their routes (`buses`, `P3-78`) and are not drawn here.
+- ⚠️ **`car_a` : `car_b` is 4 : 3, AUTHORED** (`CAR_SPLIT` in the tool): the census has one class for
+  private cars, and this is the split the roster drew them at before.
+- ⚠️ **The survey covers 07:00–23:00**: hours outside it hold the nearest surveyed one (00–06 the
+  07:00 mix, 23 the 22:00). The shift runs 07:00–21:00, so only free mode past its clock could read
+  one, and the clock holds at 21:00 there.
+- ⚠️ **One weekday's survey per station**: the census surveys each station once, on a weekday;
+  the API answers the same row whatever day is asked.
+
+## `fleet_by_hour`, 24 entries
+
+The share of `cars` alive at each clock hour (`Q186`): a car that leaves the ring is not placed
+again while the wandering fleet stands at or over `round(cars × share)`, so the fleet thins as cars
+drive off and fills as the ring places them, never popping in view. **TD's too**, by the same tool:
+the weekday (`M-F`) hourly variation — each hour's share of the day — at the seven counting
+stations inside the two regions (1002, 1020 Lockhart Road, 1024 Tai Hang Road, 1028 Gloucester
+Road, 1029 Hennessy Road, 1107, 2214), averaged with each station counted ONCE and divided by the
+busiest hour. A mean of shapes, not of flows: Gloucester Road's 104,000 a day would otherwise drown
+the side streets the taxi drives.
+
+| hour | 04 | 07 | 08 | 12 | 18 | 20 | 21 | 22 |
+|---|---|---|---|---|---|---|---|---|
+| share | 0.14 | 0.77 | 0.97 | 1.00 | 0.99 | 0.79 | 0.74 | 0.68 |
+| cars of 24 | 3 | 19 | 23 | 24 | 24 | 19 | 18 | 16 |
+
+⚠️ **Daytime Wan Chai is flat**: from 08:00 to 19:00 every hour is within 7% of the busiest, so the
+shift opens at three-quarters of the fleet, fills by 08:00 and thins from 20:00. `cars` is the
+busiest hour's fleet and the ceiling: no hour runs more than the 24 the cost was measured at.
 
 ## `taxi_kind = "taxi"`
 
