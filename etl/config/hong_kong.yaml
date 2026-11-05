@@ -4566,6 +4566,16 @@ bus_routes:
   # street, or in another region's road.
   max_snap_m: 12.0
 
+# TD's Annual Traffic Census (`Q186`), read by hand through `tools/traffic_census.py`
+# into `traffic.tres`' hourly tables — never by the pipeline, never by the game.
+traffic_census:
+  # The counting stations inside `wan_chai` and `causeway_bay`'s bounds, by TD's
+  # number: core (A) stations 1002 1020 1024 1028 1029 1107 and coverage (B)
+  # station 2214. 1020 / 1028 / 1029 / 1024 carry no VCO survey (Appendix A2
+  # stations); the mix is 1002 Victoria Park Rd, 1107 Tung Lo Wan Rd and 2214
+  # Causeway Rd.
+  stations: ["1002", "1020", "1024", "1028", "1029", "1107", "2214"]
+
 parked:
   library: res://assets/authored/vehicles/parked.glb
 

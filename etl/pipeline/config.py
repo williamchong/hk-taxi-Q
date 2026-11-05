@@ -463,6 +463,10 @@ class Config:
     # (`P3-78`, `Q182`). Optional: absent, the region ships no routes and every
     # moving vehicle wanders.
     bus_routes: BusRoutes | None = None
+    # TD's Annual Traffic Census counting stations `tools/traffic_census.py`
+    # reads the traffic's hours off (`Q186`), by TD's number. Empty where the
+    # city names none.
+    census_stations: tuple[str, ...] = ()
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -830,6 +834,7 @@ def load_config(path: Path | None = None) -> Config:
         trees=_trees(document.get("trees"), f"{path}:trees", table),
         signals=_signals(document.get("signals"), f"{path}:signals"),
         bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
+        census_stations=_census_stations(document.get("traffic_census"), f"{path}:traffic_census"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1288,6 +1293,23 @@ def _bounds(body: dict[str, Any], where: str) -> GeodeticBounds:
         south=float(_require(body, "south", where)),
         north=float(_require(body, "north", where)),
     )
+
+
+def _census_stations(body: Any, where: str) -> tuple[str, ...]:
+    """The optional `traffic_census:` block's TD station numbers (`Q186`), read
+    by `tools/traffic_census.py` alone. Absent is none; a bare string or a
+    repeat is refused, on `_deck_codes`' terms."""
+    if body is None:
+        return ()
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    raw = body.get("stations", [])
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise ValueError(f"{where}:stations must be a list, got {raw!r}")
+    stations = tuple(str(station).strip() for station in raw)
+    if any(not station for station in stations) or len(set(stations)) != len(stations):
+        raise ValueError(f"{where}:stations must be distinct station numbers, got {raw!r}")
+    return stations
 
 
 def _region(region_id: str, body: dict[str, Any], path: Path) -> RegionConfig:

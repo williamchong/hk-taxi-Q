@@ -37,16 +37,15 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "etl"))
+
+from pipeline.config import load_config  # noqa: E402
+from pipeline.fetch import _USER_AGENT  # noqa: E402
+
 CACHE = ROOT / "build" / "census"
 API = "https://atc.td.gov.hk/api/analysis"
-# The fetch stage's agent (`pipeline/fetch.py`): a plain build-time client.
-USER_AGENT = "hk-taxi-Q-etl/0.1 (+build-time dataset fetch)"
-
-# The counting stations inside the two regions' bounds, by TD's number: core
-# (A) stations 1002 1020 1024 1028 1029 1107 and coverage (B) station 2214.
-# 1020 / 1028 / 1029 / 1024 carry no VCO survey (Appendix A2 stations); the mix
-# is 1002 Victoria Park Rd, 1107 Tung Lo Wan Rd and 2214 Causeway Rd.
-STATIONS: tuple[str, ...] = ("1002", "1020", "1024", "1028", "1029", "1107", "2214")
+# The counting stations are a Hong Kong fact, so they live in `hong_kong.yaml`'s
+# `traffic_census:` block (hard rule 3), read through `load_config`.
 
 # The VCO's ten classes, in the API's order (`VCO.ylabels`).
 VCO_CLASSES: tuple[str, ...] = (
@@ -96,7 +95,7 @@ def fetch(station: str, vco_hour: int, refresh: bool) -> dict:
     request = Request(
         API,
         data=body,
-        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+        headers={"Content-Type": "application/json", "User-Agent": _USER_AGENT},
     )
     with urlopen(request, timeout=60) as response:
         data = json.load(response)
@@ -171,7 +170,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     shapes: list[list[float]] = []
     counts: dict[int, list[dict[str, float]]] = {}
     vehicles: dict[int, float] = {}
-    for station in STATIONS:
+    stations = load_config().census_stations
+    if not stations:
+        parser.error("hong_kong.yaml's traffic_census block names no station")
+    for station in stations:
         first = fetch(station, VCO_HOURS[0], args.refresh)
         info = first["Info"]
         shapes.append(weekday_shape(first))

@@ -95,3 +95,21 @@ def test_reads_the_weekday_row_and_the_vehicle_counts() -> None:
 
 def test_an_unsurveyed_station_reads_none() -> None:
     assert vco_counts(_analysis(["-"] * 10)) is None
+
+
+def test_the_stations_are_the_citys_not_the_tools() -> None:
+    # Hard rule 3: TD's station numbers are a Hong Kong fact, read off
+    # `hong_kong.yaml`'s `traffic_census:` block, never a second copy here.
+    from pipeline.config import load_config
+
+    stations = load_config().census_stations
+    assert stations == ("1002", "1020", "1024", "1028", "1029", "1107", "2214")
+    assert all(isinstance(station, str) for station in stations)
+
+
+@pytest.mark.parametrize("body", [{"stations": "1002"}, {"stations": ["1002", "1002"]}, ["1002"]])
+def test_a_station_list_that_is_not_one_is_refused(body) -> None:
+    from pipeline.config import _census_stations
+
+    with pytest.raises(ValueError):
+        _census_stations(body, "traffic_census")
