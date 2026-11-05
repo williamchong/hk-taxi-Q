@@ -77,6 +77,7 @@ func _ready() -> void:
 	if is_instance_valid(hud):
 		hud.visible = false
 	_follow_menu(menu)
+	_cover_boot(menu)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -145,6 +146,22 @@ func _on_run_ended() -> void:
 	if is_instance_valid(hud):
 		hud.visible = false
 	_open_menu(null)
+
+
+## The boot's shaders compiled under a cover (`ShaderWarmup`): the menu takes
+## no input until it lifts, so a key cannot start a drive the cover hides.
+func _cover_boot(shown: StartMenu) -> void:
+	var cover := ShaderWarmup.new()
+	cover.name = "BootCover"
+	_gui.add_child(cover)
+	shown.process_mode = Node.PROCESS_MODE_DISABLED
+	cover.finished.connect(_uncover.bind(shown))
+	cover.warm(level, level.regions, hud if is_instance_valid(hud) else null)
+
+
+func _uncover(shown: StartMenu) -> void:
+	if is_instance_valid(shown):
+		shown.process_mode = Node.PROCESS_MODE_INHERIT
 
 
 func _follow_menu(shown: StartMenu) -> void:

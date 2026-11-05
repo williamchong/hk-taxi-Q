@@ -117,3 +117,26 @@ walked: 640 left the total hanging under the panel, which nothing but a frame sh
 
 The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
 digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.
+
+## The boot cover — `cover_*`, `warm_*`
+
+The opaque cover `ShaderWarmup` holds over the menu's first seconds, so the web build compiles its
+shaders where a wait is expected instead of in the menu and on the first frames of a drive. The
+Compatibility renderer compiles a shader the first time something draws with it; measured cold on
+the export (Chrome's Metal shader cache emptied), that was 733, 2124 and 595 ms frames in the
+menu's first seconds and 312 and 462 ms as the drive started.
+
+- `cover_wait_frames = 600`: the most it waits for the city's first settle (`CityRegions.built`)
+  before warming anyway, so a city that never settles cannot hold the cover up.
+- `cover_settle_frames = 30`: frames after the settle, for the traffic and the parked cells to
+  stand.
+- `cover_warm_frames = 2`: frames the copies stand. One is enough to draw; the second covers a
+  frame the first one's compile ran over.
+- `cover_fade_s = 0.4`: the cover's fade once the copies are gone. The menu takes input from the
+  fade's first frame.
+- `warm_distance_m = 3.0`, `warm_size_m = 0.08`: the copies' grid, that far in front of the camera,
+  each shrunk to that size — 33 draws on the boot of 2026-11-05, so the grid is about 0.7 m across
+  and inside the frame at the menu's 60° shots. A copy outside the frustum is culled and warms
+  nothing.
+
+The cover is `HudStyle.plate_field`, the housing, opaque.

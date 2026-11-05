@@ -69,3 +69,16 @@ const PATH: String = "res://tuning/menu.tres"
 @export var backdrop_lod: float
 @export var backdrop_width_px: float
 @export var backdrop_fade_from: float
+
+@export_group("Boot cover")
+## The cover over the menu's first seconds (`ShaderWarmup`): how many frames it
+## waits for the city's first settle at most, how many more it lets pass once
+## settled, how many frames the warm copies stand, and its fade.
+@export var cover_wait_frames: int
+@export var cover_settle_frames: int
+@export var cover_warm_frames: int
+@export var cover_fade_s: float
+## Where the warm copies stand in front of the camera, and the size each is
+## shrunk to.
+@export var warm_distance_m: float
+@export var warm_size_m: float

@@ -136,6 +136,12 @@ const POSITIVE: PackedStringArray = [
 	"heading_size_zh",
 	"body_size",
 	"body_size_zh",
+	"cover_wait_frames",
+	"cover_settle_frames",
+	"cover_warm_frames",
+	"cover_fade_s",
+	"warm_distance_m",
+	"warm_size_m",
 ]
 const POSITIVE_VECTORS: PackedStringArray = [
 	"margin_px", "button_px", "credits_px", "guide_px", "guide_picture_px", "ledger_px"
