@@ -1464,6 +1464,22 @@ func _check_near_miss() -> void:
 		"near miss",
 		"🔴 the SAME clearance with the car never pointed at it — a lane pass — pays nothing"
 	)
+	paid = _pass(brush_m, PASS_MPS, false)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.CLOSE_CALL,
+		"near miss",
+		"🔴 but a lane pass inside close_call_m is a close call, aimed or not (the user's call)"
+	)
+	paid = _pass(_skills.close_call_m + 0.05, PASS_MPS, false)
+	_expect(paid.is_empty(), "near miss", "and a hand outside close_call_m, unaimed, pays nothing")
+	paid = _brush_touched(brush_m, false)
+	_expect(
+		paid.is_empty(),
+		"near miss",
+		"a touch while alongside spoils the unaimed close call: a brush is not a miss"
+	)
+	paid = _brush_touched(brush_m, true)
+	_expect(paid.is_empty(), "near miss", "and so does a flight while alongside")
 	var slow_mps: float = _skills.near_miss_min_kph / 3.6 - 0.5
 	paid = _pass(swerve_m, slow_mps, true)
 	_expect(paid.is_empty(), "near miss", "under near_miss_min_kph a swerve pays nothing")
@@ -1585,6 +1601,12 @@ func _check_near_miss_moving(swerve_m: float, brush_m: float) -> void:
 		paid.is_empty(),
 		"near miss moving",
 		"the same pass in the next lane, never aimed, pays nothing"
+	)
+	paid = _pass_moving(brush_m, PASS_MPS, slower, false)
+	_expect(
+		paid.size() == 1 and paid[0].skill == Fare.Skill.CLOSE_CALL,
+		"near miss moving",
+		"but inside close_call_m in the next lane it is a close call"
 	)
 	paid = _pass_moving(swerve_m + 0.2, PASS_MPS, slower, true)
 	_expect(paid.is_empty(), "near miss moving", "a hand wider than the band pays nothing")
@@ -1726,6 +1748,33 @@ func _pass(
 					waited += TICK_S
 			paid.append_array(detector.tick(at, velocity, [obstacle], TICK_S, touched, false))
 			at.origin += velocity * TICK_S
+	return paid
+
+
+## A lane pass at `clearance_m` past a parked car on the pure detector, never
+## aimed, with a wall touched — or every wheel off, when `airborne` — on one
+## tick while the car is alongside it.
+func _brush_touched(clearance_m: float, airborne: bool) -> Array[Fare.Award]:
+	var detector := NearMiss.new(_skills, CAR_HALF_M.x, CAR_HALF_M.y)
+	var aside: float = CAR_HALF_M.x + PARKED_EXTENT.size.x / 2.0 + clearance_m
+	var obstacle: Dictionary = {
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -30.0)),
+		"extent": PARKED_EXTENT,
+		"id": 7,
+	}
+	var at := Transform3D(Basis.IDENTITY, Vector3(aside, 0.0, 0.0))
+	var velocity := Vector3(0.0, 0.0, -PASS_MPS)
+	var paid: Array[Fare.Award] = []
+	var touched_once: bool = false
+	for tick: int in int(ceil(60.0 / PASS_MPS / TICK_S)) + 4:
+		var touch: bool = not touched_once and absf(at.origin.z + 30.0) <= 1.0
+		touched_once = touched_once or touch
+		paid.append_array(
+			detector.tick(
+				at, velocity, [obstacle], TICK_S, touch and not airborne, touch and airborne
+			)
+		)
+		at.origin += velocity * TICK_S
 	return paid
 
 

@@ -168,20 +168,25 @@ One wall is one dock. The pad shows a head-on reporting two contact ticks and a 
 twenty-four, all inside a second; a rebound off the same wall inside the window is the same
 event. A second wall a second later is a second dock.
 
-## `near_miss_m = 0.6`
+## `near_miss_m = 0.9`
 
 The across-clearance at or under which a pass is a near miss (`P3-2a`, `Q161`, the user's ask
 2026-10-11), flank to the parked vehicle's nearer corner, the least of it while the car is
-alongside. A Crown Comfort is 1.695 m wide in a 3.0 m lane, so a car dead-centre in its lane
-passes a bay-row car at about 0.65 m — just OUTSIDE this band, which is the point: the band
-alone must not pay a lane pass, and the path rule below is what pays a swerve. First guess
-ahead of the user's drive.
+alongside. 0.6 → 0.9 on the user's logged drive (2026-11-05): three swerves round a car the taxi was
+heading at read 0.69 / 0.80 / 0.85 m and paid nothing; the log's 13 passes past 0.9 m include
+no swerve. A Crown Comfort dead-centre in a 3.0 m lane passes a bay-row car
+at about 0.65 m, now INSIDE this band — so the band alone no longer refuses a lane pass, and
+the path rule below (`near_miss_look_s`) is the whole of that refusal for a near miss.
 
 ## `close_call_m = 0.25`
 
 A hand's width. Under it the pass is a close call and pays `close_call_hkd` instead; at 0 the
 car touched, and a touch pays nothing (`NearMiss._judge` refuses a negative clearance, and the
 penalty block docks the hit). Must be under `near_miss_m`; `NearMiss` refuses the folded pair.
+🔴 **Inside this band the path rule does not apply** (the user's call, 2026-11-05): a pass this
+close at speed is danger in any lane, and the user's drive passed a car at 0.24 m at 130 kph for
+nothing because it was never in the path. A touch or a flight while alongside still pays
+nothing.
 
 ## `near_miss_min_kph = 40.0`
 
@@ -191,7 +196,7 @@ the pass does not forfeit it.
 
 ## `near_miss_look_s = 1.5`
 
-🔴 **The rule that keeps a lane pass from paying** (the user's call: "should not trigger if we
+🔴 **The rule that keeps a lane pass from paying a near miss** (the user's call: "should not trigger if we
 are just passing cars in nearby lane without real danger"). A parked vehicle is IN THE PATH when
 some part of it lies ahead within this many seconds of travel AND inside the car's own width
 along that travel — the car would hit it going straight. A car in the next lane is never inside
