@@ -42,3 +42,7 @@ paths:
   `materials` names. Mutations caught by name: the downshift raised into a hunt, the crash bar
   exclusive, the door's open uncounted.
 - ⚠️ **The PCK cost is measured from a PCK** (root rule), never summed from the WAVs.
+- 🔴 **The taxi is silent while `parked`** (`Q185`, 2026-11-06): its loops fade over `park_fade_s`,
+  as the horn does. `verify_vehicle`'s `_check_the_taxi_is_silent_parked` reads the LEVEL — a
+  headless player with no stream does not hold `stream_paused`. A voice is written only on a
+  change, so a check that a write happened every tick is wrong by design.

@@ -39,7 +39,7 @@ the ETL snaps the stops (`pipeline/busroutes.py`), the game drives the legs on t
   by `RoadRouter.next_toward` over `goal_tree`, whose arcs are `moves_from`'s** — never a second
   successor rule. 🔴 **The goal is one WAY of the stop's edge**: the other way is not seeded, so a
   bus on the far side of a two-way street goes round rather than dwelling on the wrong kerb.
-  🔴 **The routed fleet rolls on its own RNG** (`_route_rng`), so the wandering cars draw what they
+  🔴 **The routed fleet rolls on its own RNG** (`TrafficRouted`'s own `_rng`), so the wandering cars draw what they
   always drew. ⚠️ **The three gated seeds drive the wandering fleet alone** (`bus_routes` set empty):
   the routed drive's signalled meetings are printed, not gated, because the wandering fleet ALONE
   meets at two merges on seeds 1, 2 and 8 (e114 / e216 into e333 at 0.20 m; e618's fork at
@@ -51,18 +51,21 @@ the ETL snaps the stops (`pipeline/busroutes.py`), the game drives the legs on t
   wanders but keeps its route → "plans the move its stop's search takes" (2,926 car-ticks).
   🚫 "On SOME legal path to its stop" was the first form of that last line and read 0 under the
   same mutation: on a connected network almost every state reaches the stop.
-- ⚠️ **`_aim` runs one uncached `goal_tree` (a full reverse search, ~0.7 ms) per stop it tries**,
+- ⚠️ **`TrafficRouted.aim` runs one uncached `goal_tree` (a full reverse search, ~0.7 ms) per stop it tries**,
   only on a departure. One a departure today (`stops_unreachable` 0 in the routed drive); a run of
   unreachable stops costs one search each. A cache keyed by stop is the fix if that counter rises
   or the frame cost shows it — not before.
 - 🔴 **The colour is the licence** (`Q167`): a wandering minibus wears `wander_liveries` (red), a
   routed one `route_liveries` (green); the bus wears none. `verify_traffic`'s `route:` livery line.
-- ⚠️ **A knocked bus leaves its route** and wanders (`_leave_route` in `_knock`); its mass is
+- ⚠️ **A knocked bus leaves its route** and wanders (`TrafficRouted.leave_route` in `_knock`); its mass is
   `parked.tres` `masses_kg["bus"]`, cited in `parked.md`.
 - 🔴 **A bus parks only at a terminus** (`Q187`): `parked.terminals` reads THIS stage's
   `bus_routes.json` (a direction's first stop), so `busroutes` runs before `parked` and a change
   here moves the parked roster — paste `parked.json`'s `terminal*` counters too.
+  🔴 **It reads busroutes' MANIFEST for the document's name**, never a probe of the file, and a
+  run that keeps no route deletes `bus_routes.json`: a stale file read off an old build put termini
+  where no route runs (2026-11-06, `TestTheTerminus`).
 - **The stop signals** (`Q187`): brake + left from `lane_change_m` short of the pole and while it
   stands, right for `pull_out_m` as it leaves; `verify_traffic`'s `route:` lamp lines. The kerbside
-  stop (`kerb_stop_kinds`, `_kerb_rng`, `RoadGraph.no_stopping`) shares them; 🔴 a routed vehicle
-  never stops on a restriction run (`_may_stop_unlawfully`), only a red minibus or a taxi.
+  stop (`kerb_stop_kinds`, `TrafficKerbside`'s own `_rng`, `RoadGraph.no_stopping`) shares them; 🔴 a routed vehicle
+  never stops on a restriction run (`TrafficKerbside.may_stop_unlawfully`), only a red minibus or a taxi.

@@ -109,6 +109,11 @@ paths:
   indicators (`P3-3f2`): paste both `wink:` lines (the second: still winking as a turn joins,
   `wink_hold_m`); the beat is `vehicle_lamps.tres`' via `wire_blink`, never
   a shader default.
+- **`TrafficSystem` is split by concern** (`P3-3c`, `Q187`): `TrafficTurns` (static turn
+  geometry), `TrafficHorns`, `TrafficFleetMix`, `TrafficRouted` and `TrafficKerbside`, each owned
+  by the system and reading it back. 🔴 **A stream moves with its owner and keeps its seed and draw
+  order**; a change that moves a draw between pieces moves every later car. A refactor here is
+  gated on `verify_traffic` byte-identical on both regions, not on its pass.
 - **The routed fleet** (`P3-78`): the three seeds drive the wandering cars alone and a fourth drive
   adds the buses — its rules are `busroutes.md`'s. ⚠️ The wandering fleet alone meets in a
   signalled junction on seeds 1, 2 and 8 (two merges, `Q182`); the gate holds on 7 / 4 / 23 only.
@@ -124,7 +129,7 @@ paths:
 - **The hours** (`Q186`): `kinds` by clock hour and `fleet_by_hour` are TD's census, printed by
   `tools/traffic_census.py` — 🔴 **never edited by hand, never retuned for the look without the
   user's call**: rerun the tool. Paste `verify_traffic`'s `hours:` lines. 🔴 **A respawn's kind
-  comes off its id and lives (`kind_for`), never `_rng`**; the first life keeps `setup`'s draw so
+  comes off its id and lives (`TrafficFleetMix.kind_for`), never `_rng`**; the first life keeps `setup`'s draw so
   that roll is unchanged. 🔴 **The fleet changes only by the ring**: nothing is removed for the
   hour, so no car pops in view; `cars` is the busiest hour's fleet and the ceiling. ⚠️ Every
   wandering car holds a slot in every kind the hours draw and every licence: a kind added to
@@ -135,7 +140,7 @@ paths:
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
   has not run the red. ⚠️ The line is `width_of` (published) wide, not the drawn ribbon. Mutations:
   counting green, and crossing either way, fail `watch:` by name (2026-10-29).
-- **The horn** (`Q178`, `Q185`): `verify_traffic`'s `horn:` lines, and `tools/make_vehicle_sounds.py` is byte-identical. 🔴 **A pattern draws on `_horn_rng`, never `_rng`** — one more roll there moves every later car; `react:` checks `_rng.state` unmoved. A kind with no `horn_<kind>.wav` sounds `HORN_FALLBACK_KIND`'s; a new kind owes a file (`test_every_kind_the_traffic_draws_has_its_own_horn`). ⚠️ A cross car's draws are judged on the MEAN press: a total-held check missed an untempered press length, since a cross car also presses more often. (`test_make_sounds.py`)
+- **The horn** (`Q178`, `Q185`): `verify_traffic`'s `horn:` lines, and `tools/make_vehicle_sounds.py` is byte-identical. 🔴 **A pattern draws on `TrafficHorns`' own `_rng`, never the traffic's `_rng`** — one more roll there moves every later car; `react:` checks `_rng.state` unmoved. A kind with no `horn_<kind>.wav` sounds `HORN_FALLBACK_KIND`'s; a new kind owes a file (`test_every_kind_the_traffic_draws_has_its_own_horn`). ⚠️ A cross car's draws are judged on the MEAN press: a total-held check missed an untempered press length, since a cross car also presses more often. (`test_make_sounds.py`)
   🔴 **A red does not count towards the wait.** 🔴 **Silent while the taxi is
   `parked`**: `verify_traffic` cannot see this, so a change near it owes a `--menu=on` run. ⚠️ A car's
   pitch comes from its id: a roll would move every later car on the seeded RNG. ⚠️ The taxi's gap is

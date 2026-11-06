@@ -11573,6 +11573,13 @@ spike issue", then "implement suggested fix").
 **See.** `Q76` · `P6-1` · `game/tuning/menu.md` · `game/scripts/ui/shader_warmup.gd` ·
 `game/scripts/vehicle/vehicle_body_batch.gd`
 
+- **Amendment, 2026-11-06 (`P3-3f`, the review).** The batched body material carries the beat
+  itself: `VehicleBodyBatch.material()` calls `VehicleLampsProfile.wire_material`, the same
+  writer `wire_blink` uses, so a batch built before any layer wired the blink no longer runs its
+  indicators at 0 Hz. 🔴 **One writer for `traffic_blink_hz`, `traffic_blink_duty` and
+  `traffic_sign_lit`** — never a shader default. `verify_vehicle`'s
+  `_check_the_batch_takes_the_beat`.
+
 ## `Q185` — The taxi's own sounds: the meter's flag, an engine, the tyres, crashes by what was hit, a horn per kind in patterns, and the payout
 
 **Status.** 🟡 Built 2026-11-06 on the user's ask (2026-11-05): "more sound effect for our own taxi,
@@ -11684,6 +11691,13 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
 
 **See.** `Q178` · `Q176` · `Q148` · `Q175` · `game/tuning/taxi_audio.md` · `game/tuning/traffic.md`
 
+- **Amendment, 2026-11-06 (`P3-79`, the review).** 🔴 **Silent while parked**: under the menu the
+  taxi's loops fade out over `park_fade_s` (0.6 s), as the horn already was; `verify_vehicle`'s
+  `_check_the_taxi_is_silent_parked` reads the level, not `stream_paused`, which a headless player
+  with no stream does not hold. The off-throttle cut eases at `off_throttle_ease_db_s` (40 dB/s)
+  instead of stepping 6 dB, a first value owed the user's ears. The last pitch and pedal constants
+  are `taxi_audio.tres`' (`taxi_audio.md`). A voice is written only when its level, pitch or pause
+  changes, and the loop mix is cached by rpm.
 
 ## `Q186` — The traffic's mix and size follow the clock hour, off TD's census on these streets
 
@@ -11793,6 +11807,24 @@ parked bus at a stop is gone. Owed: the user's drive by day and at night.
   bail. Both indicators flash on the one phase, so `TaxiAudio`'s relay ticks for them as for a
   turn. `verify_fares`' `hazards:` lines. ⚠️ Nothing checks the lamp vector itself: the lenses
   flashing is owed to a drive.
+
+- **Amendments, 2026-11-06 (the review).**
+  - **`parked` reads the termini off busroutes' MANIFEST**, never a probe of the file: a
+    `busroutes` run that keeps no route deletes a stale `bus_routes.json`, so no terminus is read
+    off an old build. A refused re-snap counts once, `by_licence` is sorted, and the parked
+    manifest is schema 2 for `taxi_licences` (a consumer reading 1 would miss the licences).
+  - **The kerb a stop stands on, and which way it flows, are spelled once** in
+    `pipeline/drawnroad.py` (`Ribbon.kerb_side`, `flows_along`) for the signs, lamps, parked roster
+    and bus stops. Every region's output hashed as before.
+  - **A taxi's rules are its family's, not its licence's mesh** (`TrafficSystem.rules_kind`): a
+    green or Lantau taxi stops at the kerb, breaks the line and honks as a red one does.
+    `verify_traffic`'s licence check asserts it over every licence.
+  - **`TrafficSystem` is split by concern (`P3-3c`)**, each piece owned by the system and reading it
+    back: `TrafficTurns` (the turn curve's plan geometry, static), `TrafficHorns`, `TrafficFleetMix`
+    (the hour's kinds and the taxi licences), `TrafficRouted` (placement and stops) and
+    `TrafficKerbside`. 🔴 **Each RNG keeps its seed and its draw order** — the horns, routed and
+    kerbside streams moved with their owners, the wandering `_rng` stayed. `verify_traffic` was
+    byte-identical on both regions after every step.
 
 ## `Q188` — The result sheet is saved as a picture; no share sheet, no achievements
 
