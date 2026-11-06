@@ -77,7 +77,7 @@ const HOURS: int = 24
 @export var horn_pitch_spread: float
 ## A honk is a pattern (`P3-79`): how many presses, how long each, and the gap
 ## between, each drawn from these ranges by why the car honks — `stood`, `cut`,
-## `hit` or `close_call` (`TrafficSystem.HORN_REASONS`), x the least, y the most.
+## `hit` or `close_call` (`TrafficHorns.HORN_REASONS`), x the least, y the most.
 @export var horn_count: Dictionary[String, Vector2i]
 @export var horn_press_s: Dictionary[String, Vector2]
 @export var horn_gap_s: Dictionary[String, Vector2]

@@ -762,10 +762,10 @@ func _print_parked(system: TrafficSystem) -> void:
 ## the turn's control point.
 func _check_rules() -> void:
 	# The horn's two bars, each from both sides.
-	_expect(TrafficScript.wants_horn(10.0, 7.0, 0.0, 3.0, 2.0), "rules", "cut up at the bar")
-	_expect(not TrafficScript.wants_horn(10.0, 7.5, 0.0, 3.0, 2.0), "rules", "just under it, not")
-	_expect(TrafficScript.wants_horn(0.0, 0.0, 2.0, 3.0, 2.0), "rules", "stood the wait")
-	_expect(not TrafficScript.wants_horn(0.0, 0.0, 1.9, 3.0, 2.0), "rules", "just short of it, not")
+	_expect(TrafficHorns.wants_horn(10.0, 7.0, 0.0, 3.0, 2.0), "rules", "cut up at the bar")
+	_expect(not TrafficHorns.wants_horn(10.0, 7.5, 0.0, 3.0, 2.0), "rules", "just under it, not")
+	_expect(TrafficHorns.wants_horn(0.0, 0.0, 2.0, 3.0, 2.0), "rules", "stood the wait")
+	_expect(not TrafficHorns.wants_horn(0.0, 0.0, 1.9, 3.0, 2.0), "rules", "just short of it, not")
 	_check_horn_patterns()
 	var red := SignalController.Light.RED
 	var amber := SignalController.Light.AMBER
@@ -1356,7 +1356,7 @@ func _check_horn_patterns() -> void:
 	var table := load(TrafficProfile.PATH) as TrafficProfile
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	for reason: String in TrafficScript.HORN_REASONS:
+	for reason: String in TrafficHorns.HORN_REASONS:
 		var count: Vector2i = table.horn_count[reason]
 		var press: Vector2 = table.horn_press_s[reason]
 		var gap: Vector2 = table.horn_gap_s[reason]
@@ -1366,7 +1366,7 @@ func _check_horn_patterns() -> void:
 		for temper_at: int in 2:
 			var temper: float = 0.0 if temper_at == 0 else table.horn_temper_max
 			for _draw: int in 200:
-				var pattern: PackedFloat32Array = TrafficScript.horn_pattern(
+				var pattern: PackedFloat32Array = TrafficHorns.horn_pattern(
 					table, reason, temper, rng
 				)
 				var presses: int = ceili(pattern.size() / 2.0)
@@ -1393,8 +1393,8 @@ func _check_horn_patterns() -> void:
 	two.seed = 9
 	_expect(
 		(
-			TrafficScript.horn_pattern(table, "hit", 0.3, one)
-			== TrafficScript.horn_pattern(table, "hit", 0.3, two)
+			TrafficHorns.horn_pattern(table, "hit", 0.3, one)
+			== TrafficHorns.horn_pattern(table, "hit", 0.3, two)
 		),
 		"horn",
 		"the same seed draws the same pattern"
@@ -1424,36 +1424,38 @@ func _check_reactions(system: TrafficSystem, car: TrafficSystem.Car, taxi: Node3
 		var award := Fare.Award.new(case[0], 1.0)
 		award.passed = case[1]
 		car.horn_wait = 99.0
-		var before: int = system.horns
+		var before: int = system.horn.horns
 		system.react_to(award)
-		_expect(system.horns == before + int(case[2]), "react", case[3])
+		_expect(system.horn.horns == before + int(case[2]), "react", case[3])
 	# `P3-79`: a pattern rolls on its own RNG, never the traffic's.
 	_expect(system._rng.state == rolls, "react", "a honk's pattern moves no car's roll")
 	_expect(car.temper > temper, "react", "a honk raises the car's temper")
-	var presses: int = system.horn_presses
+	var presses: int = system.horn.presses
 	for _tick: int in 400:
-		system._step_horns(1.0 / 60.0)
+		system.horn.step(1.0 / 60.0)
 	_expect(
-		system._horn_calls.all(func(honk: Variant) -> bool: return honk == null),
+		system.horn.idle(),
 		"react",
 		"every pattern plays out and frees its voice (%d presses)" % (presses)
 	)
 	var crash := Fare.Award.new(Fare.Skill.CRASH, -5.0)
 	var forward: Vector3 = -car.pose.basis.z
 	taxi.global_position = car.pose.origin - forward * 20.0
-	var horns: int = system.horns
+	var horns: int = system.horn.horns
 	system.react_to(crash)
-	_expect(system.horns == horns, "react", "a crash 20 m behind it does not")
+	_expect(system.horn.horns == horns, "react", "a crash 20 m behind it does not")
 	taxi.global_position = car.pose.origin + car.pose.basis.x * 2.5
 	system.react_to(crash)
-	_expect(system.horns == horns + 1, "react", "a crash into its flank does")
+	_expect(system.horn.horns == horns + 1, "react", "a crash into its flank does")
 	# Heard off the loop's own signals, paid and practised alike.
 	var loop: FareSystem = FareSystemScript.new()
 	system._listen(loop)
-	horns = system.horns
+	horns = system.horn.horns
 	loop.practised.emit(crash)
 	loop.skilled.emit(null, crash)
-	_expect(system.horns == horns + 2, "react", "the loop's awards reach it, empty or carrying")
+	_expect(
+		system.horn.horns == horns + 2, "react", "the loop's awards reach it, empty or carrying"
+	)
 	system.fares = null
 	loop.free()
 	taxi.global_position = car.pose.origin + forward * 6.0
@@ -1497,11 +1499,11 @@ func _check_horn(system: TrafficSystem) -> void:
 	# Pulled out on it at the car's own speed, close enough to be a cut-up.
 	car.speed = maxf(car.speed, 10.0)
 	car.horn_wait = 0.0
-	var horns: int = system.horns
+	var horns: int = system.horn.horns
 	taxi.global_position = car.pose.origin - car.pose.basis.z * 12.0
 	system.step(TICK_S)
 	_expect(car.held == TrafficSystem.Held.TAXI, "horn", "the taxi holds the car")
-	_expect(system.horns == horns + 1, "horn", "cut up, it sounds its horn on the tick")
+	_expect(system.horn.horns == horns + 1, "horn", "cut up, it sounds its horn on the tick")
 	# Stood right up behind it: a car left to brake could run on round a bend, off the
 	# taxi's line (seed 23).
 	car.speed = 0.0
@@ -1511,38 +1513,38 @@ func _check_horn(system: TrafficSystem) -> void:
 	# The wait, from both sides: nothing short of it, the horn on it, then the repeat.
 	car.horn_wait = 0.0
 	car.taxi_stood_s = 0.0
-	horns = system.horns
+	horns = system.horn.horns
 	_step_for(system, table.horn_after_s - 0.1)
-	_expect(system.horns == horns, "horn", "not before horn_after_s")
+	_expect(system.horn.horns == horns, "horn", "not before horn_after_s")
 	_step_for(system, 0.2)
-	_expect(system.horns == horns + 1, "horn", "stood horn_after_s, it sounds")
+	_expect(system.horn.horns == horns + 1, "horn", "stood horn_after_s, it sounds")
 	_step_for(system, table.horn_repeat_s - 0.1)
-	_expect(system.horns == horns + 1, "horn", "not again before horn_repeat_s")
+	_expect(system.horn.horns == horns + 1, "horn", "not again before horn_repeat_s")
 	_step_for(system, 0.2)
-	_expect(system.horns == horns + 2, "horn", "and again after it")
+	_expect(system.horn.horns == horns + 2, "horn", "and again after it")
 	# Creeping up behind the taxi is not standing behind it.
 	car.horn_wait = 0.0
 	car.taxi_stood_s = 0.0
-	horns = system.horns
+	horns = system.horn.horns
 	car.held = TrafficSystem.Held.TAXI
 	car.speed = 1.0
 	for _tick: int in int(table.horn_after_s * 2.0 / TICK_S):
-		system._mind_horn(car, 1.0, false, TICK_S)
-	_expect(system.horns == horns, "horn", "a car still creeping has not stood")
+		system.horn.mind(car, 1.0, false, TICK_S)
+	_expect(system.horn.horns == horns, "horn", "a car still creeping has not stood")
 	car.speed = 0.0
 	# A queue at a red is quiet: the wait starts when the light stops being the reason.
 	car.horn_wait = 0.0
 	car.taxi_stood_s = 0.0
-	horns = system.horns
+	horns = system.horn.horns
 	car.held = TrafficSystem.Held.TAXI
 	for _tick: int in int(table.horn_after_s * 2.0 / TICK_S):
-		system._mind_horn(car, 0.0, true, TICK_S)
-	_expect(system.horns == horns, "horn", "a car at a red with the taxi ahead stays quiet")
+		system.horn.mind(car, 0.0, true, TICK_S)
+	_expect(system.horn.horns == horns, "horn", "a car at a red with the taxi ahead stays quiet")
 	for _tick: int in int((table.horn_after_s + 0.1) / TICK_S):
-		system._mind_horn(car, 0.0, false, TICK_S)
-	_expect(system.horns == horns + 1, "horn", "and sounds once the light has gone")
+		system.horn.mind(car, 0.0, false, TICK_S)
+	_expect(system.horn.horns == horns + 1, "horn", "and sounds once the light has gone")
 	_check_reactions(system, car, taxi)
-	print("  horn: %d sounded" % system.horns)
+	print("  horn: %d sounded" % system.horn.horns)
 	system.vehicle = null
 	taxi.free()
 
