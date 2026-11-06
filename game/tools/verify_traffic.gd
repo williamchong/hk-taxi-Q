@@ -449,7 +449,9 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		for car: TrafficSystem.Car in system.cars:
 			if car.live and not car.routed and system.kind_name(car) != table.taxi_kind:
 				licensed += 1
-				if not (system._stops_at_kerb(car) and system._may_stop_unlawfully(car)):
+				if not (
+					system.kerbside.stops_at_kerb(car) and system.kerbside.may_stop_unlawfully(car)
+				):
 					licensed_refused += 1
 			if not car.live or car.routed or lives.get(car.id, 0) == car.lives:
 				continue
@@ -1052,7 +1054,7 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 				var a: float = TrafficScript._edge_m(car.s - reach, car.length_m, car.along)
 				var b: float = TrafficScript._edge_m(car.s + reach, car.length_m, car.along)
 				if system.graph.no_stopping(car.edge, car.along, minf(a, b), maxf(a, b)):
-					if system._may_stop_unlawfully(car):
+					if system.kerbside.may_stop_unlawfully(car):
 						on_line.x += 1
 					else:
 						on_line.y += 1
