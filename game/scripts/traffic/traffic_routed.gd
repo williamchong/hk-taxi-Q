@@ -8,6 +8,8 @@ extends RefCounted
 ## would move every later wandering car. It is seeded off the traffic's seed in
 ## `seed_from`.
 
+const ParkedRoster = preload("res://scripts/city/parked_roster.gd")
+
 var _system: TrafficSystem
 var _rng := RandomNumberGenerator.new()
 ## Where a routed vehicle may be placed this hour, `(route, stop)`, and the weight
@@ -67,14 +69,10 @@ func try_spawn(car: TrafficSystem.Car, here: Vector3) -> void:
 	var at: Vector3 = system.graph.lane_at(
 		stop.edge, TrafficSystem._edge_m(s, length_m, stop.along), stop.along
 	)
-	var away: float = RoadGraph.plan_distance(at, here)
-	if away < profile.spawn_min_m or away > profile.spawn_max_m:
+	if not system._in_ring_and_clear(at, here):
 		return
-	for other: TrafficSystem.Car in system.cars:
-		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
-			return
 	var palette: PackedColorArray = system._palette(profile.route_liveries, route.kind)
-	system._wear_kind(car, kind, TrafficSystem.ParkedRoster.livery(_rng.randi() & 0xFFFF, palette))
+	system._wear_kind(car, kind, ParkedRoster.livery(_rng.randi() & 0xFFFF, palette))
 	if (
 		system._nearest_parked(
 			stop.edge,
@@ -88,26 +86,12 @@ func try_spawn(car: TrafficSystem.Car, here: Vector3) -> void:
 		< INF
 	):
 		return
-	car.live = true
-	car.lives += 1
-	car.edge = stop.edge
-	car.along = stop.along
-	car.s = s
-	car.turning = false
-	car.joined_until_m = 0.0
-	car.crossed.clear()
-	car.lane = 0.0
-	car.held_side = 0
 	car.route = route
 	car.stop_index = pick.y
 	car.goal = null
 	# Found part-way through its dwell, as a bus is.
 	car.dwell_left = _rng.randf_range(profile.placed_dwell_left, 1.0) * profile.dwell_s
-	system._enter(car)
-	car.speed = 0.0
-	car.pose = system._pose_on_edge(car)
-	car.shape.disabled = false
-	system.spawned += 1
+	system._place(car, stop.edge, stop.along, s, 0.0, 0.0)
 	system.routed_spawned += 1
 
 

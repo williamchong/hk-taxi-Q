@@ -995,6 +995,39 @@ func _idle_car(routed: bool) -> Car:
 	return null
 
 
+## Whether `at` stands in the spawn ring round `here` and `spawn_clear_m` clear
+## of every live car.
+func _in_ring_and_clear(at: Vector3, here: Vector3) -> bool:
+	var away: float = RoadGraph.plan_distance(at, here)
+	if away < profile.spawn_min_m or away > profile.spawn_max_m:
+		return false
+	for other: Car in cars:
+		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
+			return false
+	return true
+
+
+## Put idle `car` on `edge` its `along` way at `s`, in `lane`, moving at
+## `cruise_share` of its cruise. A routed car's route is set before, so that
+## `_enter` plans toward its stop.
+func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_share: float) -> void:
+	car.live = true
+	car.lives += 1
+	car.edge = edge
+	car.along = along
+	car.s = s
+	car.turning = false
+	car.joined_until_m = 0.0
+	car.crossed.clear()
+	car.lane = lane
+	car.held_side = 0
+	_enter(car)
+	car.speed = car.cruise_mps * cruise_share
+	car.pose = _pose_on_edge(car)
+	car.shape.disabled = false
+	spawned += 1
+
+
 func _try_spawn(car: Car, here: Vector3) -> void:
 	var edge: int = _admitted[_rng.randi_range(0, _admitted.size() - 1)]
 	var along: bool = _rng.randf() < 0.5
@@ -1005,17 +1038,13 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 		return
 	var s: float = _rng.randf_range(0.2, 0.6) * length_m
 	var at: Vector3 = graph.lane_at(edge, s if along else length_m - s, along)
-	var away: float = RoadGraph.plan_distance(at, here)
-	if away < profile.spawn_min_m or away > profile.spawn_max_m:
+	if not _in_ring_and_clear(at, here):
 		return
 	# Never where a red ahead could not be stopped for from the spawn speed.
 	var stop: float = _stop_along_m(edge, along, length_m)
 	var cruise: float = _cruise_of(edge)
 	if stop >= 0.0 and stop - s < (cruise * 0.5) ** 2 / profile.brake_mps2 + profile.look_m * 0.25:
 		return
-	for other: Car in cars:
-		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
-			return
 	var lane: float = float(_rng.randi_range(0, graph.lanes_each_way(edge) - 1))
 	if car.lives > 0:
 		_redraw(car, car.lives + 1)
@@ -1034,22 +1063,8 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 		< INF
 	):
 		return
-	car.live = true
-	car.lives += 1
-	car.edge = edge
-	car.along = along
-	car.s = s
-	car.turning = false
-	car.joined_until_m = 0.0
-	car.crossed.clear()
-	car.lane = lane
-	car.held_side = 0
-	_enter(car)
-	car.speed = car.cruise_mps * 0.5
-	car.pose = _pose_on_edge(car)
-	car.shape.disabled = false
+	_place(car, edge, along, s, lane, 0.5)
 	_wear_licence(car)
-	spawned += 1
 
 
 ## Draw idle `car` afresh for its `lives`th spawn (`Q186`; `car.lives` is not yet

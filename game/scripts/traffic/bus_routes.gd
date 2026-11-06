@@ -15,7 +15,6 @@ extends RefCounted
 ## two stops it never drove past.
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
-const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## Schema this understands, matching `BUS_ROUTES_SCHEMA` in `etl/pipeline/busroutes.py`.
 const SCHEMA_VERSION: int = 1
@@ -53,6 +52,15 @@ class Route:
 	var regions: PackedStringArray = PackedStringArray()
 
 
+## One `key` as it is read: the route's own fields once, off its first region,
+## and every region's stops by `seq`.
+class _Gathered:
+	extends RefCounted
+
+	var route := Route.new()
+	var stops: Dictionary[int, Stop] = {}
+
+
 var routes: Array[Route] = []
 ## Stops snapped in their region on an edge the merged graph does not hold.
 var stops_dropped: int = 0
@@ -60,11 +68,11 @@ var stops_dropped: int = 0
 var runs_split: int = 0
 
 
-## Every resident region's routes over `graph`. Empty where no region has any.
+## Every region of `graph`'s routes over it. Empty where no region has any.
 static func resident(graph: RoadGraph) -> BusRoutes:
 	var found := BusRoutes.new()
-	var by_key: Dictionary[String, Dictionary] = {}
-	for region: String in GeneratedRegions.resident():
+	var by_key: Dictionary[String, _Gathered] = {}
+	for region: String in graph.resident_regions():
 		var manifest: CityManifest = CityManifest.shared(region)
 		if manifest == null or manifest.bus_routes_path.is_empty():
 			continue
@@ -86,7 +94,7 @@ func is_empty() -> bool:
 ## `region`'s rows into `by_key`: per key, the route's own fields once and its
 ## stops by `seq`.
 func _read_region(
-	document: Dictionary, region: String, graph: RoadGraph, by_key: Dictionary[String, Dictionary]
+	document: Dictionary, region: String, graph: RoadGraph, by_key: Dictionary[String, _Gathered]
 ) -> void:
 	var offset: Vector3 = graph.region_offset(region)
 	for row: Dictionary in document.get("routes", []):
@@ -95,17 +103,15 @@ func _read_region(
 			var per_hour := PackedInt32Array()
 			for count: Variant in row["per_hour"]:
 				per_hour.append(int(count))
-			by_key[key] = {
-				"key": key,
-				"name": String(row["name"]),
-				"kind": String(row["kind"]),
-				"per_hour": per_hour,
-				"stops": {},
-				"regions": PackedStringArray(),
-			}
-		var entry: Dictionary = by_key[key]
-		(entry["regions"] as PackedStringArray).append(region)
-		var stops: Dictionary = entry["stops"]
+			var gathered := _Gathered.new()
+			gathered.route.key = key
+			gathered.route.name = String(row["name"])
+			gathered.route.kind = String(row["kind"])
+			gathered.route.per_hour = per_hour
+			by_key[key] = gathered
+		var entry: _Gathered = by_key[key]
+		entry.route.regions.append(region)
+		var stops: Dictionary[int, Stop] = entry.stops
 		for published: Dictionary in row["stops"]:
 			var stop := Stop.new()
 			stop.seq = int(published["seq"])
@@ -130,8 +136,8 @@ func _read_region(
 
 ## One key's stops cut into runs of consecutive `seq`, each run with a stop on
 ## the graph kept.
-func _split(entry: Dictionary) -> void:
-	var stops: Dictionary = entry["stops"]
+func _split(entry: _Gathered) -> void:
+	var stops: Dictionary[int, Stop] = entry.stops
 	var seqs: Array = stops.keys()
 	seqs.sort()
 	var run: Array[Stop] = []
@@ -147,15 +153,15 @@ func _split(entry: Dictionary) -> void:
 		runs_split += 1
 
 
-func _keep(entry: Dictionary, run: Array[Stop]) -> bool:
+func _keep(entry: _Gathered, run: Array[Stop]) -> bool:
 	if not run.any(func(stop: Stop) -> bool: return stop.edge >= 0):
 		return false
 	var route := Route.new()
-	route.key = entry["key"]
-	route.name = entry["name"]
-	route.kind = entry["kind"]
-	route.per_hour = entry["per_hour"]
-	route.regions = entry["regions"]
+	route.key = entry.route.key
+	route.name = entry.route.name
+	route.kind = entry.route.kind
+	route.per_hour = entry.route.per_hour
+	route.regions = entry.route.regions
 	route.stops.assign(run)
 	routes.append(route)
 	return true
