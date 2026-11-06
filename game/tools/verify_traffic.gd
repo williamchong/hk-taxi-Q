@@ -401,7 +401,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		shipped.free()
 		return
 	for region: String in graph.resident_regions():
-		var mix: Dictionary = shipped.licence_mixes.get(region, {})
+		var mix: Dictionary = shipped.fleet_mix.licence_mixes.get(region, {})
 		print("  licence: %s %s" % [region, str(mix) if not mix.is_empty() else "none (red)"])
 		for mesh: String in mix:
 			_expect(
@@ -418,16 +418,16 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	always.fill(1.0)
 	staged_table.kinds = {table.taxi_kind: always}
 	var system: TrafficSystem = TrafficScript.new()
-	system.licence_mixes[regions[0]] = {"taxi": 0.5, "taxi_nt": 0.5}
+	system.fleet_mix.licence_mixes[regions[0]] = {"taxi": 0.5, "taxi_nt": 0.5}
 	if regions.size() > 1:
-		system.licence_mixes[regions[1]] = {"taxi_lantau": 1.0}
+		system.fleet_mix.licence_mixes[regions[1]] = {"taxi_lantau": 1.0}
 	if not system.setup(graph, staged_table, SEEDS[0]):
 		_fail("licence", "a fleet of taxis does not set up")
 		system.free()
 		return
 	root.add_child(system)
 	_expect(
-		system._licence_kinds.size() == system.licence_mixes.size() + 1,
+		system._licence_kinds.size() == system.fleet_mix.licence_mixes.size() + 1,
 		"licence",
 		"every staged licence is a drawn kind (%d)" % system._licence_kinds.size()
 	)
@@ -458,7 +458,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 			var region: String = graph.region_of(car.edge)
 			var mesh: String = system.kind_name(car)
 			worn[mesh] = worn.get(mesh, 0) + 1
-			if not (system.licence_mixes.get(region, {}) as Dictionary).has(mesh):
+			if not (system.fleet_mix.licence_mixes.get(region, {}) as Dictionary).has(mesh):
 				wrong += 1
 			if region == regions[0]:
 				in_frame += 1
@@ -500,7 +500,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	# The draw itself, over a thousand ids: near each share.
 	var green: int = 0
 	for id: int in 1000:
-		if system.licence_of(regions[0], id, 1) == "taxi_nt":
+		if system.fleet_mix.licence_of(regions[0], id, 1) == "taxi_nt":
 			green += 1
 	_expect(
 		absf(green / 1000.0 - 0.5) < 0.05,
@@ -508,7 +508,7 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		"the staged half green draws %d of 1000 green" % green
 	)
 	_expect(
-		system.licence_of("nowhere", 3, 1) == table.taxi_kind,
+		system.fleet_mix.licence_of("nowhere", 3, 1) == table.taxi_kind,
 		"licence",
 		"a region with no mix wears the red urban taxi"
 	)
@@ -537,13 +537,18 @@ func _check_hours(graph: RoadGraph, table: TrafficProfile) -> void:
 			return
 		var wanted: int = roundi(table.cars * table.fleet_by_hour[hour])
 		_expect(
-			system.fleet_now() == wanted,
+			system.fleet_mix.fleet_now() == wanted,
 			"hours",
-			"%02d:00 runs %d of %d cars (%d)" % [hour, wanted, table.cars, system.fleet_now()]
+			(
+				"%02d:00 runs %d of %d cars (%d)"
+				% [hour, wanted, table.cars, system.fleet_mix.fleet_now()]
+			)
 		)
 		var drawn: Dictionary[String, int] = {}
 		for draw: int in KIND_DRAWS:
-			var kind: String = system._kinds[system.kind_for(draw % 97, floori(draw / 97.0) + 1)]
+			var kind: String = system._kinds[system.fleet_mix.kind_for(
+				draw % 97, floori(draw / 97.0) + 1
+			)]
 			drawn[kind] = drawn.get(kind, 0) + 1
 		var total: float = 0.0
 		for kind: String in table.kinds:
@@ -554,7 +559,9 @@ func _check_hours(graph: RoadGraph, table: TrafficProfile) -> void:
 			var share: float = float(drawn.get(kind, 0)) / KIND_DRAWS
 			worst = maxf(worst, absf(share - table.kinds[kind][hour] / total))
 			shares.append("%s %.2f" % [kind, share])
-		print("  hours: %02d:00 %d cars, %s" % [hour, system.fleet_now(), ", ".join(shares)])
+		print(
+			"  hours: %02d:00 %d cars, %s" % [hour, system.fleet_mix.fleet_now(), ", ".join(shares)]
+		)
 		_expect(
 			worst < KIND_SLACK,
 			"hours",
@@ -593,7 +600,7 @@ func _check_hours(graph: RoadGraph, table: TrafficProfile) -> void:
 		var live: int = drive.live_wandering()
 		# A car may be placed on the tick another retired: over its hour's size after
 		# a placing, it was placed into a full fleet.
-		if live > drive.fleet_now() and drive.spawned > spawned_before:
+		if live > drive.fleet_mix.fleet_now() and drive.spawned > spawned_before:
 			over += 1
 		if tick < ticks:
 			most = maxi(most, live)

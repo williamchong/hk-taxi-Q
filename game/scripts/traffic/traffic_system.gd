@@ -383,21 +383,9 @@ var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
 var _extents: Array[AABB] = []
 var _batches: Array[MultiMesh] = []
-## Each kind's weight this hour, what `_pick_kind` and `kind_for` draw on; and
-## each kind's weight by clock hour (`Q186`), all zeros for a kind only a licence
-## or a route wears.
-var _weights: PackedFloat32Array = []
-var _weight_total: float = 0.0
-var _hourly: Array[PackedFloat32Array] = []
-## Whether each kind is one the hours draw a wandering car as.
-var _wandering: Array[bool] = []
-## The hour `_weights` was read for, and the wandering fleet's size in it.
-var _weights_hour: int = -1
-var _fleet_now: int = 0
+## The fleet's kinds by the hour and its taxis' licences (`Q183`, `Q186`).
+var fleet_mix := TrafficFleetMix.new()
 var _admitted: PackedInt32Array = []
-## Each resident region's taxi licences (`Q183`), mesh name to share, off its
-## `CityManifest`; read at `setup` unless a verify tool set it first.
-var licence_mixes: Dictionary[String, Dictionary] = {}
 ## The kind index of each licence mesh a taxi may wear, the profile's own first.
 var _licence_kinds: Dictionary[String, int] = {}
 ## Where the ring is centred when there is no vehicle: the verify tool's.
@@ -450,6 +438,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		return false
 	graph = with_graph
 	profile = table
+	fleet_mix.profile = table
 	_rng.seed = seed
 	_route_rng.seed = seed * 7919 + 1
 	horn.seed_from(seed)
@@ -462,11 +451,11 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	if _admitted.is_empty():
 		push_warning("TrafficSystem: no edge admits traffic; none will run")
 		return false
-	if licence_mixes.is_empty():
+	if fleet_mix.licence_mixes.is_empty():
 		for region: String in graph.resident_regions():
 			var manifest: CityManifest = CityManifest.shared(region)
 			if manifest != null and not manifest.taxi_licences.is_empty():
-				licence_mixes[region] = manifest.taxi_licences
+				fleet_mix.licence_mixes[region] = manifest.taxi_licences
 	if bus_routes == null:
 		bus_routes = BusRoutes.resident(graph)
 	if not _load_library():
@@ -480,14 +469,14 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		if signals != null:
 			add_child(signals)
 	_parked_profile = load(ParkedProfile.PATH) as ParkedProfile
-	_read_hour(_hour_now())
+	fleet_mix.read_hour(_hour_now())
 	var licences: Array[int] = _licence_kinds.values()
 	for index: int in profile.cars:
 		var car := Car.new()
 		car.kind = _pick_kind()
 		car.taxi = _kinds[car.kind] == profile.taxi_kind
 		for kind: int in _kinds.size():
-			if _wandering[kind] or licences.has(kind):
+			if fleet_mix.wanders(kind) or licences.has(kind):
 				car.kind_slots[kind] = _batches[kind].instance_count
 				_batches[kind].instance_count += 1
 		car.slot = car.kind_slots[car.kind]
@@ -652,8 +641,8 @@ func _load_library() -> bool:
 	var taxi: int = _kinds.find(profile.taxi_kind)
 	if taxi >= 0:
 		_licence_kinds[profile.taxi_kind] = taxi
-		for region: String in licence_mixes:
-			for mesh: String in licence_mixes[region]:
+		for region: String in fleet_mix.licence_mixes:
+			for mesh: String in fleet_mix.licence_mixes[region]:
 				if _licence_kinds.has(mesh):
 					continue
 				if not found.has(mesh):
@@ -689,9 +678,7 @@ func _add_kind(kind: String, mesh: Mesh, by_hour: PackedFloat32Array) -> int:
 	_kinds.append(kind)
 	_meshes.append(mesh)
 	_extents.append(mesh.get_aabb())
-	_hourly.append(by_hour)
-	_wandering.append(not by_hour.is_empty() and Array(by_hour).max() > 0.0)
-	_weights.append(0.0)
+	fleet_mix.add_kind(by_hour)
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.use_custom_data = true
@@ -701,42 +688,17 @@ func _add_kind(kind: String, mesh: Mesh, by_hour: PackedFloat32Array) -> int:
 	return _kinds.size() - 1
 
 
-## The licence a taxi wears for its `lives`th spawn in `region` (`Q183`): a draw
-## on the region's mix off the car's id and lives, never the seeded RNG, which
-## would move every later car. The profile's taxi where the region has no mix.
-func licence_of(region: String, id: int, lives: int) -> String:
-	var mix: Dictionary = licence_mixes.get(region, {})
-	var total: float = 0.0
-	for share: float in mix.values():
-		total += share
-	if total <= 0.0:
-		return profile.taxi_kind
-	var draw: float = fposmod(float(id) * 0.618034 + float(lives) * 0.754878, 1.0) * total
-	var meshes: Array = mix.keys()
-	meshes.sort()
-	for mesh: String in meshes:
-		draw -= float(mix[mesh])
-		if draw < 0.0:
-			return mesh
-	return meshes[-1]
-
-
-## Whether a taxi's `lives`th spawn is for hire, on the same terms as its licence.
-func for_hire_of(id: int, lives: int) -> bool:
-	return fposmod(float(id) * 0.381966 + float(lives) * 0.569840, 1.0) < profile.taxi_for_hire
-
-
 ## Light the roof sign or not for this spawn, show the licence `car`'s spawn
 ## region draws, and hide the one it wore.
 func _wear_licence(car: Car) -> void:
 	if not car.taxi:
 		return
-	car.for_hire = for_hire_of(car.id, car.lives)
+	car.for_hire = fleet_mix.for_hire_of(car.id, car.lives)
 	# The sign may have changed with the lamps not: write the datum afresh.
 	car.written = -1
 	if _licence_kinds.size() < 2:
 		return
-	var mesh: String = licence_of(graph.region_of(car.edge), car.id, car.lives)
+	var mesh: String = fleet_mix.licence_of(graph.region_of(car.edge), car.id, car.lives)
 	var kind: int = _licence_kinds.get(mesh, _licence_kinds[profile.taxi_kind])
 	if kind == car.kind:
 		return
@@ -994,43 +956,6 @@ func _palette(table: Dictionary[String, PackedColorArray], kind: String) -> Pack
 	return PackedColorArray()
 
 
-## The kind a wandering car is drawn as for its `lives`th spawn (`Q186`): a draw
-## on this hour's weights off its id and lives, never the seeded RNG — one more
-## roll there would move every later car, as a taxi's licence would (`Q183`).
-func kind_for(id: int, lives: int) -> int:
-	var draw: float = fposmod(float(id) * 0.267949 + float(lives) * 0.414214, 1.0) * _weight_total
-	for kind: int in _weights.size():
-		draw -= _weights[kind]
-		if draw < 0.0:
-			return kind
-	return _pick_last()
-
-
-## The last kind with any weight this hour: where a float's slack runs a draw out.
-func _pick_last() -> int:
-	for kind: int in range(_weights.size() - 1, -1, -1):
-		if _weights[kind] > 0.0:
-			return kind
-	return 0
-
-
-## Read this hour's kind weights and fleet size when the hour has moved.
-func _read_hour(hour: int) -> void:
-	if hour == _weights_hour:
-		return
-	_weights_hour = hour
-	_weight_total = 0.0
-	for kind: int in _kinds.size():
-		_weights[kind] = _hourly[kind][hour] if _wandering[kind] else 0.0
-		_weight_total += _weights[kind]
-	_fleet_now = clampi(roundi(profile.cars * profile.fleet_by_hour[hour]), 0, profile.cars)
-
-
-## The wandering fleet's size this hour (`Q186`), for the verify tool.
-func fleet_now() -> int:
-	return _fleet_now
-
-
 ## Wandering cars alive.
 func live_wandering() -> int:
 	var live: int = 0
@@ -1264,7 +1189,7 @@ func _leave_route(car: Car) -> void:
 
 
 func _pick_kind() -> int:
-	return _rng.rand_weighted(_weights)
+	return _rng.rand_weighted(fleet_mix.weights)
 
 
 func _physics_process(delta: float) -> void:
@@ -1296,10 +1221,10 @@ func step(delta: float) -> void:
 			_drive(car, delta)
 	# Once a tick for both readers: the rig is a tree search away.
 	var hour: int = _hour_now()
-	_read_hour(hour)
+	fleet_mix.read_hour(hour)
 	var wandering: int = live_wandering()
 	for _try: int in SPAWN_TRIES:
-		if wandering >= _fleet_now:
+		if wandering >= fleet_mix.fleet_now():
 			break
 		var idle: Car = _idle_car(false)
 		if idle == null:
@@ -1391,7 +1316,7 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 ## life keeps the kind `setup` drew; a draw of the kind it wears changes nothing,
 ## so a spawn that fails its checks and is tried again keeps what it was drawn.
 func _redraw(car: Car, lives: int) -> void:
-	var kind: int = kind_for(car.id, lives)
+	var kind: int = fleet_mix.kind_for(car.id, lives)
 	if kind == car.kind:
 		return
 	# Off its id and lives, as the kind is: never `_rng`.
