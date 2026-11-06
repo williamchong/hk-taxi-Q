@@ -91,8 +91,6 @@ const ARG: String = "--traffic="
 const LIBRARY_PATH: String = "res://assets/authored/vehicles/parked.glb"
 ## Spawn attempts a tick; a ring with no room waits for the next.
 const SPAWN_TRIES: int = 16
-## Samples a turn curve's length is measured over.
-const CURVE_SAMPLES: int = 8
 ## Under this a car is stopped, for the counters.
 const STOPPED_MPS: float = 0.1
 ## A stop point is aimed this far short of, so float slack never carries a car
@@ -2299,8 +2297,8 @@ func _try_recover(car: Car) -> bool:
 	var p0: Vector3 = car.pose.origin
 	var p2: Vector3 = graph.lane_at(edge, _edge_m(join, length_m, along), along, 0.0)
 	var out: Vector3 = _travel_dir(edge, join, length_m, along)
-	var p1: Vector3 = turn_control(p0, forward, p2, out)
-	var middle: Vector3 = curve_point(p0, p1, p2, 0.5)
+	var p1: Vector3 = TrafficTurns.turn_control(p0, forward, p2, out)
+	var middle: Vector3 = TrafficTurns.curve_point(p0, p1, p2, 0.5)
 	for other: Car in cars:
 		# A car under way is looked for; one standing — queued behind the wreck for
 		# it to move, which a look would wait on for ever — is in the sweep below
@@ -2315,8 +2313,8 @@ func _try_recover(car: Car) -> bool:
 	var from: Transform3D = car.pose
 	from.origin.y += SWEEP_LIFT_M
 	for piece: int in RECOVER_SAMPLES:
-		var a: Vector3 = curve_point(p0, p1, p2, float(piece) / RECOVER_SAMPLES)
-		var b: Vector3 = curve_point(p0, p1, p2, float(piece + 1) / RECOVER_SAMPLES)
+		var a: Vector3 = TrafficTurns.curve_point(p0, p1, p2, float(piece) / RECOVER_SAMPLES)
+		var b: Vector3 = TrafficTurns.curve_point(p0, p1, p2, float(piece + 1) / RECOVER_SAMPLES)
 		from.origin = Vector3(a.x, car.pose.origin.y + SWEEP_LIFT_M, a.z)
 		if car.body.test_move(from, Vector3(b.x - a.x, 0.0, b.z - a.z)):
 			return false
@@ -2343,7 +2341,7 @@ func _try_recover(car: Car) -> bool:
 	car.p0 = p0
 	car.p1 = p1
 	car.p2 = p2
-	car.turn_len = curve_length(p0, p1, p2)
+	car.turn_len = TrafficTurns.curve_length(p0, p1, p2)
 	car.turn_u = 0.0
 	car.turning = true
 	car.speed = 0.0
@@ -2650,7 +2648,9 @@ func _give_way_gap(car: Car) -> float:
 		if mine.is_empty():
 			mine = _turn_path(car)
 		var touch_m: float = car.half_width + other.half_width
-		if paths_cross(mine, _turn_path(other), touch_m + profile.side_clear_m, touch_m, min_sin):
+		if TrafficTurns.paths_cross(
+			mine, _turn_path(other), touch_m + profile.side_clear_m, touch_m, min_sin
+		):
 			return maxf(to_line, 0.0)
 	return INF
 
@@ -2734,7 +2734,7 @@ func _turn_path(car: Car) -> PackedVector3Array:
 		not car.turning
 		and (not behind_it or car.next_edge >= 0 and to_give_way_m(car) <= profile.give_way_look_m)
 	)
-	car.path.resize((CURVE_SAMPLES + 2) * (int(behind_it) + int(ahead)))
+	car.path.resize((TrafficTurns.CURVE_SAMPLES + 2) * (int(behind_it) + int(ahead)))
 	var at: int = 0
 	if behind_it:
 		at = _write_curve(car.path, at, [car.p0, car.p1, car.p2], from_u, car.half_length)
@@ -2748,81 +2748,21 @@ func _turn_path(car: Car) -> PackedVector3Array:
 static func _write_curve(
 	path: PackedVector3Array, at: int, points: PackedVector3Array, from_u: float, half_length: float
 ) -> int:
-	for index: int in CURVE_SAMPLES + 1:
-		path[at + index] = curve_point(
-			points[0], points[1], points[2], lerpf(from_u, 1.0, float(index) / CURVE_SAMPLES)
+	for index: int in TrafficTurns.CURVE_SAMPLES + 1:
+		path[at + index] = TrafficTurns.curve_point(
+			points[0],
+			points[1],
+			points[2],
+			lerpf(from_u, 1.0, float(index) / TrafficTurns.CURVE_SAMPLES)
 		)
-	var last: Vector3 = path[at + CURVE_SAMPLES - 1]
+	var last: Vector3 = path[at + TrafficTurns.CURVE_SAMPLES - 1]
 	var out := Vector3(points[2].x - last.x, 0.0, points[2].z - last.z)
-	path[at + CURVE_SAMPLES + 1] = (
+	path[at + TrafficTurns.CURVE_SAMPLES + 1] = (
 		points[2] + out.normalized() * half_length * 2.0
 		if out.length_squared() > 0.0
 		else points[2]
 	)
-	return at + CURVE_SAMPLES + 2
-
-
-## Whether two turn paths meet in plan: a stretch of each within `reach_m` of
-## the other at more than the angle whose sine is `min_sin`, or within `touch_m`
-## at any angle. Under the angle the two run side by side or head to head, and
-## meet only where their bodies would (seeds 4 and 7: a car joining a road ran
-## alongside one crossing its mouth, nearer than its width).
-static func paths_cross(
-	a: PackedVector3Array, b: PackedVector3Array, reach_m: float, touch_m: float, min_sin: float
-) -> bool:
-	var a_plan: PackedVector2Array = _plan_points(a)
-	var b_plan: PackedVector2Array = _plan_points(b)
-	var reach: float = maxf(reach_m, touch_m)
-	if not _plan_bounds(a_plan).grow(reach).intersects(_plan_bounds(b_plan)):
-		return false
-	var b_dirs: PackedVector2Array = []
-	b_dirs.resize(b_plan.size() - 1)
-	for j: int in b_dirs.size():
-		b_dirs[j] = (b_plan[j + 1] - b_plan[j]).normalized()
-	for i: int in a_plan.size() - 1:
-		var a0: Vector2 = a_plan[i]
-		var a1: Vector2 = a_plan[i + 1]
-		if a0.is_equal_approx(a1):
-			continue
-		var a_dir: Vector2 = (a1 - a0).normalized()
-		for j: int in b_dirs.size():
-			if b_dirs[j] == Vector2.ZERO:
-				continue
-			var crossing: bool = absf(a_dir.cross(b_dirs[j])) >= min_sin
-			if segment_gap(a0, a1, b_plan[j], b_plan[j + 1]) < (reach_m if crossing else touch_m):
-				return true
-	return false
-
-
-static func _plan_points(path: PackedVector3Array) -> PackedVector2Array:
-	var plan: PackedVector2Array = []
-	plan.resize(path.size())
-	for index: int in path.size():
-		plan[index] = Vector2(path[index].x, path[index].z)
-	return plan
-
-
-static func _plan_bounds(plan: PackedVector2Array) -> Rect2:
-	var bounds := Rect2(plan[0], Vector2.ZERO)
-	for point: Vector2 in plan:
-		bounds = bounds.expand(point)
-	return bounds
-
-
-## The least plan distance between two segments: 0 where they cross.
-static func segment_gap(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> float:
-	if Geometry2D.segment_intersects_segment(a0, a1, b0, b1) != null:
-		return 0.0
-	return minf(
-		minf(
-			a0.distance_to(Geometry2D.get_closest_point_to_segment(a0, b0, b1)),
-			a1.distance_to(Geometry2D.get_closest_point_to_segment(a1, b0, b1))
-		),
-		minf(
-			b0.distance_to(Geometry2D.get_closest_point_to_segment(b0, a0, a1)),
-			b1.distance_to(Geometry2D.get_closest_point_to_segment(b1, a0, a1))
-		)
-	)
+	return at + TrafficTurns.CURVE_SAMPLES + 2
 
 
 ## Two lane positions close enough that one car is behind the other: under
@@ -2893,7 +2833,7 @@ func _start_turn(car: Car) -> void:
 	car.p0 = points[0]
 	car.p1 = points[1]
 	car.p2 = points[2]
-	car.turn_len = curve_length(car.p0, car.p1, car.p2)
+	car.turn_len = TrafficTurns.curve_length(car.p0, car.p1, car.p2)
 	car.turn_u = 0.0
 	car.turning = true
 
@@ -2914,41 +2854,7 @@ func _turn_points(car: Car, lane: float) -> PackedVector3Array:
 	)
 	var into: Vector3 = _travel_dir(car.edge, car.leave_m, car.length_m, car.along)
 	var out: Vector3 = _travel_dir(car.next_edge, car.join_m, next_length, car.next_along)
-	return [p0, turn_control(p0, into, p2, out), p2]
-
-
-## The curve's middle control point: where the line in along `into` meets the
-## line out along `out`, in plan, or the chord's middle where they do not meet
-## ahead of both (straight on, or a kink the wrong way).
-static func turn_control(p0: Vector3, into: Vector3, p2: Vector3, out: Vector3) -> Vector3:
-	var chord: Vector3 = p2 - p0
-	var middle: Vector3 = p0.lerp(p2, 0.5)
-	var denom: float = into.x * out.z - into.z * out.x
-	if absf(denom) < 0.05:
-		return middle
-	var a: float = (chord.x * out.z - chord.z * out.x) / denom
-	var b: float = (into.x * chord.z - chord.x * into.z) / denom
-	var reach: float = Vector2(chord.x, chord.z).length()
-	if a <= 0.0 or b <= 0.0 or a > reach * 2.0 or b > reach * 2.0:
-		return middle
-	var meet: Vector3 = p0 + into * a
-	meet.y = middle.y
-	return meet
-
-
-static func curve_point(p0: Vector3, p1: Vector3, p2: Vector3, u: float) -> Vector3:
-	var v: float = 1.0 - u
-	return p0 * (v * v) + p1 * (2.0 * v * u) + p2 * (u * u)
-
-
-static func curve_length(p0: Vector3, p1: Vector3, p2: Vector3) -> float:
-	var total: float = 0.0
-	var last: Vector3 = p0
-	for index: int in range(1, CURVE_SAMPLES + 1):
-		var point: Vector3 = curve_point(p0, p1, p2, float(index) / CURVE_SAMPLES)
-		total += last.distance_to(point)
-		last = point
-	return total
+	return [p0, TrafficTurns.turn_control(p0, into, p2, out), p2]
 
 
 static func _edge_m(travel_m: float, length_m: float, along: bool) -> float:
@@ -2975,9 +2881,9 @@ func _pose_on_edge(car: Car) -> Transform3D:
 
 func _pose_on_turn(car: Car) -> Transform3D:
 	var u: float = clampf(car.turn_u / car.turn_len, 0.0, 1.0) if car.turn_len > 0.0 else 1.0
-	var at: Vector3 = curve_point(car.p0, car.p1, car.p2, u)
-	var ahead: Vector3 = curve_point(car.p0, car.p1, car.p2, minf(u + 0.05, 1.0))
-	var behind: Vector3 = curve_point(car.p0, car.p1, car.p2, maxf(u - 0.05, 0.0))
+	var at: Vector3 = TrafficTurns.curve_point(car.p0, car.p1, car.p2, u)
+	var ahead: Vector3 = TrafficTurns.curve_point(car.p0, car.p1, car.p2, minf(u + 0.05, 1.0))
+	var behind: Vector3 = TrafficTurns.curve_point(car.p0, car.p1, car.p2, maxf(u - 0.05, 0.0))
 	var dir := Vector3(ahead.x - behind.x, 0.0, ahead.z - behind.z)
 	return Transform3D(
 		_facing(dir.normalized() if dir.length_squared() > 0.0 else -car.pose.basis.z), at

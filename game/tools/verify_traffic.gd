@@ -794,11 +794,11 @@ func _check_rules() -> void:
 	)
 	# A left turn: in heading north (-z) at the origin, out heading west (-x)
 	# from (-6, 0, -6); the lines meet at (0, 0, -6).
-	var corner: Vector3 = TrafficScript.turn_control(
+	var corner: Vector3 = TrafficTurns.turn_control(
 		Vector3.ZERO, Vector3(0, 0, -1), Vector3(-6, 0, -6), Vector3(-1, 0, 0)
 	)
 	_expect(corner.is_equal_approx(Vector3(0, 0, -6)), "rules", "a turn bends at the lanes' corner")
-	var straight: Vector3 = TrafficScript.turn_control(
+	var straight: Vector3 = TrafficTurns.turn_control(
 		Vector3.ZERO, Vector3(0, 0, -1), Vector3(0, 0, -10), Vector3(0, 0, -1)
 	)
 	_expect(straight.is_equal_approx(Vector3(0, 0, -5)), "rules", "straight on takes the chord")
@@ -821,9 +821,9 @@ func _check_rules() -> void:
 	var too_near := PackedVector3Array([Vector3(10, 0, 1.5), Vector3(0, 0, 1.5)])
 	_expect(
 		(
-			TrafficScript.paths_cross(east, cross, 2.3, 2.0, 0.5)
-			and not TrafficScript.paths_cross(east, lane_over, 2.3, 2.0, 0.5)
-			and TrafficScript.paths_cross(east, too_near, 2.3, 2.0, 0.5)
+			TrafficTurns.paths_cross(east, cross, 2.3, 2.0, 0.5)
+			and not TrafficTurns.paths_cross(east, lane_over, 2.3, 2.0, 0.5)
+			and TrafficTurns.paths_cross(east, too_near, 2.3, 2.0, 0.5)
 		),
 		"rules",
 		"turns that cross meet, a lane apart head to head do not, nearer than a car's width do"
