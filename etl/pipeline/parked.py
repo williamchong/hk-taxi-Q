@@ -90,7 +90,7 @@ from pipeline.config import (
 from pipeline.crossings import CrossingReport, read_crossings
 from pipeline.crs import GameTransform, transformer
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside
+from pipeline.drawnroad import Ribbon, flows_along, kerbed_ribbons, nearside
 from pipeline.fares import FARES_NAME, FARES_SCHEMA, read_places
 from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.fetch import cached_source, read_feature_collection
@@ -292,11 +292,8 @@ class _Street:
         return bearing_deg(ribbon.plan[index + 1] - ribbon.plan[index])
 
     def kerb_side(self, snap: Snap) -> float:
-        """Which kerb of the ROAD a snapped point is nearer: `+1` nearside,
-        `-1` offside — `Ribbon.kerb_target`'s expression, `-0.0` reading as
-        the nearside for its reason."""
-        middle_m, _ = self.ribbons[snap.edge].kerb_at(snap.t)
-        return 1.0 if snap.offset_m - middle_m >= 0.0 else -1.0
+        """Which kerb of the ROAD a snapped point is nearer (`Ribbon.kerb_side`)."""
+        return self.ribbons[snap.edge].kerb_side(snap)
 
 
 def _flow_heading(street: _Street, edge: int, t: float, side: float) -> float:
@@ -307,9 +304,9 @@ def _flow_heading(street: _Street, edge: int, t: float, side: float) -> float:
     `Snap.offset_m`'s sign (`+` nearside), read nowhere else.
     """
     heading = street.heading_deg(edge, t)
-    if side < 0.0 and not street.one_way(edge):
-        return (heading + 180.0) % 360.0
-    return heading
+    if flows_along(side, street.one_way(edge)):
+        return heading
+    return (heading + 180.0) % 360.0
 
 
 def _footprint(x: float, z: float, rot_y_deg: float, length_m: float, width_m: float):
@@ -429,7 +426,7 @@ def _queue_along_m(street: _Street, edge: int, t: float, side: float, back_m: fl
     behind meaning against its kerb's flow: the nearside and both kerbs of a
     one-way edge flow with it, a two-way edge's offside against it."""
     at_m = t * street.length_m(edge)
-    return at_m - back_m if side > 0.0 or street.one_way(edge) else at_m + back_m
+    return at_m - back_m if flows_along(side, street.one_way(edge)) else at_m + back_m
 
 
 def hour_windows(hours: list[bool]) -> list[tuple[float, float] | None]:

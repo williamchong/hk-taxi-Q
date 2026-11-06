@@ -42,7 +42,7 @@ from typing import Any
 from pipeline.config import BusRoutes, Config, load_config
 from pipeline.crs import GameTransform, transformer
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, kerbed_ribbons
+from pipeline.drawnroad import Ribbon, flows_along, kerbed_ribbons
 from pipeline.fetch import cached_source, read_feature_collection
 from pipeline.polyline import Segments
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -205,16 +205,15 @@ def snap_stop(
     snap = segments.nearest(x, z)
     if snap.distance_m > max_snap_m or snap.edge not in ribbons:
         return None
-    middle_m, _ = ribbons[snap.edge].kerb_at(snap.t)
-    # `parked._Street.kerb_side`'s expression: `+` nearside, `-0.0` the nearside.
-    side = 1 if snap.offset_m - middle_m >= 0.0 else -1
+    # An int, as `bus_routes.json` has always carried it.
+    side = int(ribbons[snap.edge].kerb_side(snap))
     two_way = str(edges[snap.edge]["direction"]) == _BOTH
     return {
         "edge": snap.edge,
         "t": round(float(snap.t), 6),
         # The nearside flows with the edge; a two-way edge's offside against it;
         # a one-way edge's two kerbs both its way (`parked._flow_heading`).
-        "along": side > 0 or not two_way,
+        "along": flows_along(side, not two_way),
         "side": side,
     }
 

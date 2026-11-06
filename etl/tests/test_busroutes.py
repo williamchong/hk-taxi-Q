@@ -19,6 +19,7 @@ from pipeline.busroutes import (
     snap_stop,
 )
 from pipeline.config import load_config
+from pipeline.drawnroad import Ribbon
 from pipeline.fetch import artefact_path, source_artefact
 from pipeline.polyline import Segments
 
@@ -133,6 +134,9 @@ class _Ribbon:
 
     def kerb_at(self, t: float) -> tuple[float, float]:
         return 0.0, 6.0
+
+    # The real rule, bound onto the stub: it reads only `kerb_at`.
+    kerb_side = Ribbon.kerb_side
 
 
 class TestSnap:

@@ -170,6 +170,7 @@ class _Ribbon:
 
     # The real arithmetic, bound onto the stub — the methods read only `kerb_at`
     # and `foot_at`, and copying them here would test a copy.
+    kerb_side = Ribbon.kerb_side
     kerb_target = Ribbon.kerb_target
     past_kerb_m = Ribbon.past_kerb_m
 

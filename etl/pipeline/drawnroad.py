@@ -27,6 +27,13 @@ from pipeline.polyline import Snap, frame, plan_lengths
 from pipeline.region import KERB, REGION_NAME, read_region
 
 
+def flows_along(side: float, one_way: bool) -> bool:
+    """Whether the traffic at a kerb runs the edge's own way: the nearside does,
+    and both kerbs of a one-way edge; a two-way edge's offside runs against it.
+    Spelled once for `parked`'s headings and queues and `busroutes`' stops."""
+    return side > 0.0 or one_way
+
+
 def nearside(heading_deg: float) -> np.ndarray:
     """The unit vector to the **nearside** of an edge, in game plan space.
 
@@ -162,6 +169,18 @@ class Ribbon:
             ]
         )
 
+    def kerb_side(self, snap: Snap) -> float:
+        """Which kerb of the ROAD `snap` is nearer: `+1` nearside, `-1` offside.
+
+        About the road's middle (`kerb_at`), never the centreline. `>=`, so
+        `-0.0` — which `Segments.nearest` really returns for a point on the
+        line — reads as the nearside, the convention every caller pins: a point
+        exactly on the middle has no side to keep, and the nearside is the one a
+        left-driving city's traffic passes closest to.
+        """
+        middle_m, _ = self.kerb_at(snap.t)
+        return 1.0 if snap.offset_m - middle_m >= 0.0 else -1.0
+
     def kerb_target(self, snap: Snap, outset_m: float) -> tuple[float, float, float, np.ndarray]:
         """The registration target `outset_m` past the drawn kerb, and its frame.
 
@@ -188,9 +207,7 @@ class Ribbon:
         counter stay with each stage.
         """
         middle_m, half_width_m = self.kerb_at(snap.t)
-        # `>=`, so `-0.0` — which `Segments.nearest` really returns for a point on
-        # the line — reads as the nearside, the convention every caller pins.
-        side = 1.0 if snap.offset_m - middle_m >= 0.0 else -1.0
+        side = self.kerb_side(snap)
         target_m = middle_m + side * (half_width_m + outset_m)
         point = self.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
         return side, half_width_m, target_m, point
