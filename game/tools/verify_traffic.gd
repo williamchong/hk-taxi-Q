@@ -1092,7 +1092,7 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 				if (
 					car.goal != null
 					and not car.turning
-					and not system._is_goal_way(car, car.edge, car.along)
+					and not TrafficRouted.is_goal_way(car, car.edge, car.along)
 				):
 					var planned: Vector2i = (
 						car.via[0]
@@ -1116,7 +1116,7 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 							car.edge != stop.edge
 							or car.along != stop.along
 							or (
-								absf(system._to_pole(car, stop))
+								absf(TrafficRouted.to_pole(car, stop))
 								> system.profile.dwell_reach_m + DWELL_SLACK_M
 							)
 						)

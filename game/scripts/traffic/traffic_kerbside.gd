@@ -40,7 +40,7 @@ func pick(car: TrafficSystem.Car) -> void:
 		or not stops_at_kerb(car)
 		or car.turn_side == -1
 		or graph.level_of(car.edge) != 0
-		or _system._is_goal_way(car, car.edge, car.along)
+		or TrafficRouted.is_goal_way(car, car.edge, car.along)
 	):
 		return
 	var length_m: float = car.length_m
