@@ -209,6 +209,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | ✅ Decided and built 2026-10-27 (`P3-77`): 1,061 + 2,375 trees, a trunk collider each. Reverses `Q144`'s "trees are not built". |
 | `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`; the heads lit 2026-10-30). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
 | `Q191` | Lamp columns, sign posts and signal posts collide, as a cylinder up each post | ✅ Built 2026-11-09 on the user's ask (`P3-83`). Reverses the lamps', the signs' and the heads' "no collider" budget stances. The user's drive owed. |
+| `Q192` | The bus lane's line is TD's survey (`RM1006`, `RM1007`); the shader's `U = 1` bar is off | ✅ Built 2026-11-09 on the user's report and call. Extends `Q132`'s "where TD surveys no line, none is drawn" to the last line the shader invented. |
 
 ---
 
@@ -12038,3 +12039,53 @@ stopped dead by a 32 mm post at speed. Breakaway poles stay `B3`'s. Owed: the us
 column, a sign and a signal post.
 
 **See.** `P3-83` · `Q159` · `Q171` · `Q76` · `game/scripts/city/prop_batch.gd` · `game/scenes/region.md`
+
+## `Q192` — The bus lane's line is TD's survey, and the shader's bar is off
+
+**Reported** by the user, 2026-11-09, from the driving seat on HENNESSY ROAD westbound (grid
+836422.6E 815498.6N, hdg 252): "why huge white line in the middle of a lane?"
+
+**Cause.** `road_markings.gdshader`'s `draw_bus_lane` — the last line the shader still invented
+after `Q132` switched off its lane and centre lines. It painted `bus_width` (0.09 U-lanes) at `U = 1`
+of every edge carrying `bus_lane`, which is a ROUTE flag off Road Network v2's `BUS_ONLY_LANE`: it
+says a bus lane exists along the route, not where its line runs. A U-lane is the drawn ribbon over
+`lanes`, and on edge 237 (10.3 m drawn, the tram lane included, `lanes` 2 off the arrows) that put a
+**0.46 m** bar about 5.1 m off the kerb. TD's survey across the same section, + to the left of travel:
+
+    +6.33 m  nearside kerb (rail)
+    +2.87 m  RM1048 bus-stop boundary box — the bus stands in it
+    ~+1.2 m  the shader's bar — nothing surveyed
+    -0.89 m  RM1001 double white
+    -3.70 m  RM1001 double white (the tram lane between)
+
+So the bar stood ~1.7 m inside the traffic lane, and TD surveys no `RM1006` within 282 m of it.
+
+**Decided and built 2026-11-09, the user's call ("fix both").**
+
+- **`draw_bus_lane` is 0.0** in `tuning/road_markings.tres`; `bus_width` reaches nothing while it is.
+  The `bus_lane` bit stays in the codec and the flag in the graph — the router reads it.
+- **`RM1006` BUS LANE and `RM1007` BUS LANE CONTINUATION are `marks:` rows**, transcribed off sheet
+  `CT174/51-5(1)F`: `LINE WIDTH = 250`, continuous / `1000 MARK, 1000 GAP`, white, regulatory.
+  `longitudinal`, and **not** `divides_flows` — a lane line must never carry it. `RM1006` is filed in
+  `DTAD_RD_MARK_LINE`, `RM1007` in the sister layer, both already read.
+
+**Measured** (`roadmarks.json`, before → after). Every pre-existing `drawn_by_id` /
+`drawn_m_by_id` / `host_off_carriageway_m_by_id` row and the `join` block are unchanged, both regions.
+
+    region         row                      drawn   metres    off c'way   was refused
+    wan_chai       bus_lane_line            15      234.9     50.3 m      285.3 m (RM1006)
+                   bus_lane_continuation    67     1705.2    153.5 m     2033.6 m (RM1007)
+    causeway_bay   bus_lane_line             1      111.5      —          111.5 m
+                   bus_lane_continuation    18      402.2     27.4 m      449.0 m
+
+`no_host_on_axis` 18 → 40 / 7 → 10 and `axis_residual_deg`'s tail (p99 55.9 → 89.4°) are the
+sheet's own shape: `RM1006`'s diagonal lead-in off the kerb and `RM1007`'s corner curve are parts
+no longitudinal host lies along, refused and counted rather than drawn — a known under-draw, not
+re-hosted as `oblique`. `host_disagreement` 287 → 332 / 73 → 80. `paint_clearance --layer roadmarks`:
+deep 0.11% → 0.11%, under-highest 3.6% → 3.7%, coverage 98.9% → 98.9%, within bounds. Frames at the
+reported spot (bar gone, the double whites as before) and on edge 237's west end (`RM1006`'s
+lead-in and run drawn). `check.sh` passes; 3,064 tests pass.
+
+Not drawn: `RM1048`, the bus-stop box the player saw the bus standing in — out of this scope.
+
+**See.** `Q132` · `Q54` · `P3-34` · `game/tuning/road_markings.md` · `etl/config/hong_kong.yaml` `road_marks.marks`

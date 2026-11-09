@@ -78,7 +78,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   vertices, and they cost **0.41%** of the paint's plan area. ⚠️ **`height_spread_m`'s tail now
   reads a long line climbing a hill** (max 8.4 / 19.5 m) and is no longer a burial signal;
   `paint_clearance` is. ⚠️ **`lane_paint.py` still runs but its question moved**: the shader cuts
-  the ribbon into `lanes_painted` strips for the bus lane and the kerbside yellows only. Schema 33.
+  the ribbon into `lanes_painted` strips for the kerbside yellows only — `draw_bus_lane` is 0.0 and
+  the bus lane's line is TD's `RM1006` / `RM1007` since `Q192`; do not switch the shader's `U = 1` bar
+  back on (a route flag, not a placement: 0.46 m, 1.7 m inside Hennessy Road's traffic lane). Schema 33.
   Numbers in `Q132`.
 - 🔴 **`RoadMark.axis`, `longitudinal_legibility_scale`, or `_on_its_own_carriageway`: paste
   `roadmarks.json`'s `drawn_by_id`/`drawn_m_by_id`, `host_off_carriageway` and `no_host_on_axis`
