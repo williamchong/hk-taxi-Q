@@ -210,6 +210,8 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`; the heads lit 2026-10-30). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
 | `Q191` | Lamp columns, sign posts and signal posts collide, as a cylinder up each post | ✅ Built 2026-11-09 on the user's ask (`P3-83`). Reverses the lamps', the signs' and the heads' "no collider" budget stances. The user's drive owed. |
 | `Q192` | The bus lane's line is TD's survey (`RM1006`, `RM1007`); the shader's `U = 1` bar is off | ✅ Built 2026-11-09 on the user's report and call. Extends `Q132`'s "where TD surveys no line, none is drawn" to the last line the shader invented. |
+| `Q193` | A building's street band takes no measured colour of its own | 🚫 Refused by measurement 2026-11-09, on the user's question: shop vs tower distinct on 10.8% of tall buildings against a 25% bar; three layers by hue 1.2%. |
+| `Q194` | The tower's surveyed hue is mostly the building, not the light | ✅ Closed 2026-11-09, no change: compass and brightness explain 15% of the wall-to-wall hue; the building mean is 0.70–0.74 reliable. |
 
 ---
 
@@ -2475,7 +2477,7 @@ verdict). Nothing consumes `podiums.json` yet · **Owner.** `P3-7a`.
 - Open: whether a data-only podium boundary ships at all. It now needs a new channel (`Q102`), and
   the shipped boundary would be graded before this closes.
 
-**See.** `Q41` · `Q42` · `Q43` · `Q34` · `Q102` · `P3-7a`
+**See.** `Q41` · `Q42` · `Q43` · `Q34` · `Q102` · `Q193` · `P3-7a`
 
 ## `Q48` — A contrast ratio measures banding where an `L*` profile could not
 
@@ -12089,3 +12091,88 @@ lead-in and run drawn). `check.sh` passes; 3,064 tests pass.
 Not drawn: `RM1048`, the bus-stop box the player saw the bus standing in — out of this scope.
 
 **See.** `Q132` · `Q54` · `P3-34` · `game/tuning/road_markings.md` · `etl/config/hong_kong.yaml` `road_marks.marks`
+
+## `Q193` — A building's street band takes no measured colour of its own
+
+**Status.** 🚫 Refused by measurement, on the user's question (2026-11-09) · **Owner.**
+`tools/facade_survey.py`, survey
+
+**Asked** by the user: the colour and features at street level often differ from the tower's, so
+should detection and rendering split the two? Reading the contact sheet, the user added that many
+buildings show three layers: shops, a podium, the tower.
+
+**Method** (scratch scripts, not committed). `facade_survey`'s own guards (`photographic`) and
+estimator (`estimate`), run per height band, assigning each wall triangle by its centroid's height
+above the textured mesh's floor. That floor registers to the shipped `base_mpd` to centimetres.
+Bands: shop 0–5 m, mid 5 m to the podium line, tower above it. The podium line is `podiums.json`'s
+`boundary_m` where joined (134 of the tall buildings), else the shader's `podium_height_m` 12.0.
+Wan Chai, 1,385 stems, of which 970 are tall (a tower band of at least 6 m). Bar fixed before the
+run: a band is distinct when its gap to the band above is ≥ 2.0 Δab (measured, before `strength`)
+**and** ≥ 2× its own wall-to-wall spread (the median pairwise Δab over walls with ≥ 2,000 clean
+texels). The split earns a channel at ≥ 25% of tall buildings.
+
+    band   measured        wall spread   shade (L* < 25)
+    shop   810 / 916       8.67          53%
+    mid    778 / 916       7.93          32%
+    tower  916 / 916       6.55          18%
+
+- Two bands: shop vs tower distinct on **10.8%** of tall buildings (105 of 970); 0 m-to-line vs
+  tower on **8.6%**.
+- Three bands, over the 916 with a mid band of at least 3 m: all three distinct 11 (**1.2%**);
+  shops alone differ 54 (5.9%); shop = mid ≠ tower 42 (4.6%); nothing resolvable 469 (51.2%); one
+  measurable wall, untested, 160 (17.5%); a band unmeasured 180 (19.7%).
+- The gap is the size of the noise: street vs tower on the **same** wall, median 6.1 Δab; two
+  walls of one tower, 6.5.
+- A test that does not depend on the noise floor: a real middle layer shifts the hue the same way
+  on every wall. The mid-minus-tower shift agrees across walls (median pairwise cosine > 0.5) on
+  206 of 714 buildings, **29%**. Two unrelated directions agree that closely about 33% of the time.
+- Lightness does separate the bands (mid 8.6 `L*` darker than tower; 108 of 778 pass an `L*`
+  version of the bar), but the street bands are half shade and `Q34` refuses the survey's `L*` as
+  albedo. Dark cladding cannot be told from shadow.
+- The iB1000 line does not move the result: gap 5.85 on a data line, 6.14 on the default.
+- ⚠️ A first grade read a one-wall band's missing spread as zero and passed 138 of 243 shop bands
+  on the gap alone, reporting 25.1%. A one-wall band is untested, never passed.
+- ⚠️ The contact sheet (77 buildings unwrapped by `tools/facade_unwrap.py`, filler hatched out):
+  the largest shop gaps are lit signs and shopfronts; a few read as podium cladding or glazing.
+- What stands: the three layers are structure, and the shader already draws them (shopfront
+  ribbon, plinth, cornice, tower; the plinth takes the hashed accent). A data podium line is
+  `Q47`'s open half, not this record's.
+- Reopen on: a reader that separates material from shade, or a per-wall estimate whose spread
+  falls well under the gap.
+
+**See.** `Q47` · `Q34` · `Q37` · `Q194` · `game/assets/shaders/city_facade_clean.gdshaderinc`
+
+## `Q194` — The tower's surveyed hue is mostly the building, not the light
+
+**Status.** ✅ Closed, no change (2026-11-09) · a per-wall light correction refused on yield ·
+**Owner.** `tools/facade_survey.py`
+
+Two walls of one tower disagree by a median 6.7 Δab (over every building with a tower band; 6.5
+over `Q193`'s 970 tall ones), about the building's own chroma (wall-mean
+`C*` p50 4.95; the shipped pooled estimate 6.04), and `strength` 3.0 triples both. The question
+was whether the per-building hue measures the sun. It mostly does not. Over 1,177 buildings with
+at least two measured tower walls (4,590 walls, `Q193`'s method):
+
+    wall   n      dL*     db* (±95%)
+    W      1144   +5.06   +1.88 ±0.33
+    S      1146   +3.14   +0.95 ±0.31
+    E      1149   −3.58   −1.48 ±0.28
+    N      1151   −4.58   −1.33 ±0.30
+
+- Compass is real and small: **6.3%** of the hue variance within a building. ⚠️ Not `Q34`'s 1.4%,
+  which is `L*` against the variance of the whole stock; this is `a*`/`b*` against the variance
+  between one building's walls.
+- Brightness: within a building, a brighter wall is yellower — corr(`dL*`, `db*`) +0.39, 0.21
+  `b*` per `L*`; **13.7%**. Compass and brightness together **15.0%**; the spread falls 6.71 →
+  6.07.
+- Sheet: **1.4%** of the hue variance between buildings. No capture-day cast.
+- Reliability of a building's wall-mean hue (the true between-building variance over the observed):
+  `a*` **0.70**, `b*` **0.74**. Corrected for light: 0.71 and 0.78. The yield is not worth a
+  survey change, which would owe `facade`'s re-derivations.
+- ⚠️ The estimator leans to the lit walls: the shipped pooled estimate minus the plain wall mean is
+  `db*` +0.81 at p50 (mean +1.05), Δab p50 2.60 — about +3 `b*` on screen at 3.0. It belongs to
+  `Q30` and does not answer it.
+- ⚠️ The other 85% of the wall-to-wall spread is not light. Real differences between sides and
+  clutter in the photography are the likely remainder; that is inferred, not measured.
+
+**See.** `Q30` · `Q34` · `Q34′` · `Q193` · `etl/pipeline/colour.py`
