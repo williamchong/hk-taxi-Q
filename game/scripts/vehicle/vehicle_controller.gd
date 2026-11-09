@@ -260,6 +260,13 @@ func _ready() -> void:
 
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = Vector3(0.0, car.centre_of_mass_offset_y, 0.0)
+	# Authored, never derived from the collider (`Q190`): the box is sized to
+	# what the car hits, and a longer one must not turn the car more slowly.
+	assert(
+		car.inertia_kgm2.x > 0.0 and car.inertia_kgm2.y > 0.0 and car.inertia_kgm2.z > 0.0,
+		"CarSpec.inertia_kgm2 is unset; a zero inertia is derived from the collider."
+	)
+	inertia = car.inertia_kgm2
 	_rear_axle_behind_m = _axle_z(_rear) - center_of_mass.z
 	contact_monitor = true
 	max_contacts_reported = 8

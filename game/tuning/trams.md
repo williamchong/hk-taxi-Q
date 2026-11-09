@@ -37,9 +37,12 @@ one body and a tram's stopping room.
 
 Half the 5.39 m between the mesh's axles (`tools/make_parked.py`), so the body swings as a tram does.
 
-## `taxi_half_m = 2.3`
+## `taxi_half_m = 2.5`
 
-Half the saloon's length, read off the taxi's mesh: the bumper a tram stops `gap_m` short of.
+Half the saloon's length, read off the taxi's mesh: the bumper a tram stops `gap_m` short of. Since
+`Q190` the body is set back over a long boot, its nose 2.07 m ahead of the origin and its rear
+bumper 2.505 m behind, and a tram meets it either way round — so the further of the two, where it
+was 2.3 on the symmetric 4.30 m body.
 
 ## `seam_join_m = 30.0`, `seam_heading_deg = 40.0`
 

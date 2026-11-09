@@ -259,6 +259,14 @@ LAMP_CIRCUITS: dict[str, float] = {
     "taillamp_r_brake": CIRCUIT_BRAKE,
     "taillamp_high_brake": CIRCUIT_BRAKE,
     "sign": CIRCUIT_ROOFSIGN,
+    # The die-cast pass: each corner lens wraps onto the flank, and a repeater
+    # sits on each front wing. They flash and burn with the lens they extend.
+    "indicator_l_side": CIRCUIT_INDICATOR_L,
+    "indicator_r_side": CIRCUIT_INDICATOR_R,
+    "indicator_l_repeater": CIRCUIT_INDICATOR_L,
+    "indicator_r_repeater": CIRCUIT_INDICATOR_R,
+    "taillamp_l_side": CIRCUIT_BRAKE,
+    "taillamp_r_side": CIRCUIT_BRAKE,
 }
 
 
@@ -329,16 +337,19 @@ class Chassis:
 class Proportions:
     """The toy caricature, in metres. These are the numbers worth tuning.
 
-    Defaults caricature a Toyota Crown Comfort — the Hong Kong urban taxi — by
-    cutting its overhangs
-    length and raising its greenhouse — see `length_m` for the figures.
+    Defaults follow a 1:64 die-cast Crown Comfort — the Hong Kong urban taxi —
+    rather than the real car: the die-cast's ends are shorter than the real
+    car's, and the user chose its proportions over full scale (`Q190`). See
+    `length_m` for the figures.
     """
 
-    # Lengthened from 4.00 with the cabin pulled back, which is what buys the
-    # long bonnet and boot of a three-box saloon. The real car is 4.69 m on a
-    # 2.785 m wheelbase; the toy has the real wheelbase since 2026-10-05 and
-    # keeps its shorter body around it.
-    length_m: float = 4.30
+    # Lengthened from 4.00 to 4.30 with the cabin pulled back, which is what
+    # bought the long bonnet and boot of a three-box saloon, then to 4.54 by
+    # measurement (`Q190`): the die-cast's side view, scaled by its wheelbase,
+    # puts the nose 0.65 m ahead of the front axle and the tail 1.10 m behind
+    # the rear one. The real car is 4.695 m on a 2.785 m wheelbase; the toy has
+    # the real wheelbase since 2026-10-05 and the die-cast's shorter ends.
+    length_m: float = 4.54
     # ⚠️ Flush with the tyres, which reach x 0.815 exactly on the Crown Comfort's
     # track (0.90 on the toy's 1.60 m track before 2026-10-05). Three values were
     # tried and the two failures are worth keeping: at 0.86 the wheels were
@@ -358,19 +369,21 @@ class Proportions:
     # the reference art is, and because a 90° vertical edge is what reads as
     # blocky rather than as a Crown Comfort.
     corner_cut_m: float = 0.16
-    sill_y_m: float = -0.20
-    belt_y_m: float = 0.38
+    sill_y_m: float = -0.38
+    belt_y_m: float = 0.29
     roof_y_m: float = 0.86
     # Greenhouse, as fractions of the body: where the cabin starts and ends
     # along z, and how far the roof pulls in from the belt line.
-    cabin_front_z_m: float = -0.62
+    cabin_front_z_m: float = -0.83
     # ⚠️ The C-pillar base, and it was 1.00 — 0.30 m *ahead* of the rear axle,
     # where every reference photograph puts it at or behind. A short cabin is
     # what made the backlight unaffordable, because rake is paid for out of roof
     # length: at 1.00 a 30° screen left a 1.01 m roof, shorter than the upright
     # version started with. At 1.25 the same rake leaves 1.26 m. The two numbers
-    # are one decision, not two, which is why they moved together.
-    cabin_rear_z_m: float = 1.25
+    # are one decision, not two, which is why they moved together. Both moved
+    # again to the die-cast's (`Q190`): the windscreen base at -0.83 and the
+    # backlight base at 1.74, a cabin set back over the long boot.
+    cabin_rear_z_m: float = 1.74
     roof_inset_m: float = 0.13
     # ⚠️ Screen rake, in degrees from vertical, and these are the **authored**
     # numbers — the roof taper is derived from them rather than the reverse.
@@ -406,7 +419,7 @@ class Proportions:
     # The silver band between the glass and the roof. The reference art shows
     # roof paint coming down over the pillars; without this the roof reads as a
     # pale lid laid on a red box, which is the note the first review returned.
-    cant_rail_m: float = 0.10
+    cant_rail_m: float = 0.12
     # The high-level brake lamp, sitting in the bottom centre of the backlight.
     # `rise_m` is measured from the belt line, so it follows the glass rather
     # than the body — rake the backlight and the lamp rakes with it.
@@ -431,17 +444,17 @@ class Proportions:
     # gently and folds in hard, and `_seated_depth` answers a fixture spanning
     # the fold by making it deep enough to bridge it — so it stands 4 cm off
     # the paint at its bottom edge and hangs below the car's own outline.
-    plate_front_y_m: float = -0.08
-    plate_rear_y_m: float = 0.16
-    # ⚠️ Top of the bumper, and the bumper is *paint*, not a part. Everything
-    # below this line on the lower body is DARK — the nose and tail through
-    # `loft`, the flanks through `_flank` — so the car keeps a bumper band all
-    # the way round without one face leaving the silhouette. Raise it and the
-    # dark hem climbs the doors; the *front* plate, both badges and the fog
-    # lamps sit on the band and have to stay under it. The rear plate does not —
-    # it is on the boot, as the real car's is, which is why it alone is exempt
-    # from the "stays on the bumper" test.
-    bumper_top_y_m: float = 0.02
+    plate_front_y_m: float = -0.16
+    plate_rear_y_m: float = 0.0
+    # ⚠️ Top of the bumper. Until `Q190` the bumper was *paint*: everything
+    # below this line on the lower body was DARK, and nothing left the
+    # silhouette. It is a part now — `_bumpers` stands a bar proud of the nose
+    # and tail from `bar_bottom_y_m` up to this line, wrapping round to the
+    # arches — and the lower body is DARK only across the bar's own band, with
+    # the red valance under it. The front plate and both badges sit on the bar;
+    # the fog lamps sit in the valance below it. The rear plate does not — it is
+    # on the boot, as the real car's is.
+    bumper_top_y_m: float = -0.08
     # ⚠️ Top of the dark rocker, and the **third** attempt at a strip down the
     # flank. The first was a box standing 2-3 cm proud, which read as a stick;
     # the second continued the bumper band at `bumper_top_y_m`, which is 38% of
@@ -456,7 +469,7 @@ class Proportions:
     # the flank, which is a bumper with a valance under it meeting a sill panel.
     # Set it to `sill_y_m` to switch the rocker off; `_flank` then emits no dark
     # faces at all, which is the setting `B3`'s traffic wants.
-    rocker_top_y_m: float = -0.14
+    rocker_top_y_m: float = -0.32
     # How far forward of a door's trailing edge its handle sits. The handles
     # used to be placed from `cabin_mid_z_m` +/- a fixed 0.42, which is not
     # where a handle is on a car and does not survive the cabin changing length:
@@ -475,18 +488,104 @@ class Proportions:
     # drawn as pixels; the words are gone and the dome is geometry now, faceted
     # at the segment count the wheel arch uses because nothing else in this city
     # is smooth either.
-    badge_x_m: float = 0.34
-    badge_y_m: float = -0.125
+    badge_x_m: float = 0.50
+    badge_y_m: float = -0.235
     badge_radius_m: float = 0.085
     badge_segments: int = 7
 
+    # ---- The die-cast pass (`Q190`): what a 1:64 Crown Comfort (Tiny City
+    # TINY01, VM6172) carries, read off its nine product photographs. Every
+    # number that moves when the proportions move is a dial; the defaults are
+    # the die-cast's, and `body_offset_z_m = 0` with `bumper_bar_bottom_y_m =
+    # None` is most of the way back to the symmetric toy that shipped before.
+    #
+    # How far the body sits behind the wheelbase's centre. The real car's boot
+    # overhang is longer than its nose's (about 1.10 m to 0.65 m on the
+    # die-cast); zero is the symmetric body this generator drew before.
+    #
+    # ⚠️ 0.2175, not the 0.23 the photograph reads: at 0.23 the nose is too
+    # short to hold the front wheel opening and the corner chamfer both — the
+    # opening started 12.5 mm *ahead* of where the flank may, and a sliver of
+    # panel stood down through the front of it to the sill. `_flank` now
+    # refuses that. 0.2175 is the offset at which the opening starts exactly
+    # where the chamfer ends (axle 1.3925 + opening 0.42 + chamfer 0.24 =
+    # 2.0525 = 2.27 - 0.2175), so no stretch of flank is drawn between them;
+    # 12.5 mm is inside what a photograph of a 1:64 model measures.
+    body_offset_z_m: float = 0.2175
+    # The bumper as a bar standing proud of the nose and tail and wrapping
+    # round both corners to the wheel arches, from `bumper_bar_bottom_y_m` (or
+    # the sill tuck when unset) up to `bumper_top_y_m`.
+    bumper_proud_m: float = 0.035
+    bumper_side_proud_m: float = 0.012
+    bumper_bar_bottom_y_m: float | None = -0.24
+    # A dark moulding standing proud along the doors, arch to arch, its top on
+    # the bumper line so it reads as the bumper carried down the flank.
+    rub_strip_half_height_m: float = 0.014
+    rub_strip_proud_m: float = 0.012
+    # Door shut lines: dark, a few millimetres proud — paint, not ribs.
+    shut_line_half_width_m: float = 0.006
+    shut_line_proud_m: float = 0.003
+    # The greenhouse's sides: a dark sash between the doors' windows, a dark
+    # sash at the rear door's trailing edge, a quarter light behind it, and the
+    # silver C-pillar. The chamfers either side of each screen are the A- and
+    # C-pillars, painted silver.
+    b_pillar_half_m: float = 0.035
+    sash_half_m: float = 0.018
+    quarter_glass_m: float = 0.22
+    c_pillar_lean_m: float = 0.14
+    belt_moulding_m: float = 0.025
+    # Front: headlamps in chrome bezels either side of a chrome grille with
+    # horizontal bars; the fog lamps sit in the red valance under the bumper.
+    # ⚠️ Also authored in `game/scenes/vehicle/taxi.tscn`, which seats
+    # `HeadlampL`/`HeadlampR` — the cones the lamps throw (`P3-11e`) — at the
+    # same x. Nothing carries a part coordinate across the Python/Godot seam,
+    # so moving the lens leaves the light where it was.
+    headlamp_x_m: float = 0.58
+    headlamp_y_m: float = 0.03
+    headlamp_half_height_m: float = 0.075
+    grille_y_m: float = 0.03
+    grille_half_height_m: float = 0.085
+    grille_half_width_m: float = 0.40
+    grille_bars: int = 4
+    foglamp_y_m: float = -0.28
+    foglamp_half_height_m: float = 0.02
+    # Rear: tall clusters at the corners, red over amber over white, with a
+    # chrome garnish between them and the plate in a chrome frame above it.
+    tail_lamp_half_width_m: float = 0.10
+    tail_lamp_x_m: float = 0.56
+    garnish_m: float = 0.05
+    # Door mirrors on a stalk at the front of the front door's window.
+    mirror_reach_m: float = 0.09
+    # The roof sign stands on a dark plinth.
+    sign_plinth_m: float = 0.025
+    # Hubcap slots — six round the cap, as the die-cast's turbine cap has.
+    hub_slots: int = 6
+
     @property
     def front_z_m(self) -> float:
-        return -self.length_m / 2.0
+        return -self.length_m / 2.0 + self.body_offset_z_m
 
     @property
     def rear_z_m(self) -> float:
-        return self.length_m / 2.0
+        return self.length_m / 2.0 + self.body_offset_z_m
+
+    @property
+    def bar_bottom_y_m(self) -> float:
+        """Bottom of the bumper bar: the dial, or the sill tuck when unset."""
+        if self.bumper_bar_bottom_y_m is None:
+            return self.bumper_bottom_y_m
+        return self.bumper_bar_bottom_y_m
+
+    @property
+    def rub_strip_y_m(self) -> tuple[float, float]:
+        """(bottom, top) of the rub strip: its top on the bumper line."""
+        return self.bumper_top_y_m - 2.0 * self.rub_strip_half_height_m, self.bumper_top_y_m
+
+    @property
+    def tail_lamp_y_m(self) -> tuple[float, float]:
+        """(bottom, top) of the tail cluster: just over the bumper bar, and just
+        under the shoulder, where the tail panel turns over into the boot lid."""
+        return self.bumper_top_y_m + 0.01, self.belt_y_m - self.bevel_m * 1.4 - 0.005
 
     @property
     def cabin_mid_z_m(self) -> float:
@@ -643,12 +742,24 @@ class Proportions:
                 f"got {self.bumper_top_y_m:+.3f}"
             )
         ys = [entry[1] for entry in base]
-        bumper = (
-            float(np.interp(self.bumper_top_y_m, ys, [entry[0] for entry in base])),
-            self.bumper_top_y_m,
-            float(np.interp(self.bumper_top_y_m, ys, [entry[2] for entry in base])),
-        )
-        return (*base[:2], bumper, *base[2:])
+
+        def spliced(y: float) -> tuple[float, float, float]:
+            return (
+                float(np.interp(y, ys, [entry[0] for entry in base])),
+                y,
+                float(np.interp(y, ys, [entry[2] for entry in base])),
+            )
+
+        bumper = spliced(self.bumper_top_y_m)
+        bar = self.bumper_bar_bottom_y_m
+        if bar is None:
+            return (*base[:2], bumper, *base[2:])
+        if not base[1][1] < bar < self.bumper_top_y_m:
+            raise ValueError(
+                f"bumper_bar_bottom_y_m must sit between {base[1][1]:+.3f} and "
+                f"bumper_top_y_m {self.bumper_top_y_m:+.3f}, got {bar:+.3f}"
+            )
+        return (*base[:2], spliced(bar), bumper, *base[2:])
 
     def face_inset_m(self, y: float) -> float:
         """How far the nose and tail draw in at height `y`.
@@ -698,14 +809,22 @@ def _seated_depth(
     drawn at and pre-existing — the bezel this replaced overhung further — so it
     is recorded rather than fixed. Do not read the promise above as covering x.
     """
-    knots = [y for _, y, _ in shape.lower_profile if y_low < y < y_high]
-    insets = [shape.face_inset_m(y) for y in (y_low, y_high, *knots)]
+    outermost, innermost = _inset_span(shape, y_low, y_high)
     end = shape.rear_z_m if rear else shape.front_z_m
     inward = -1.0 if rear else 1.0
     return (
-        end + inward * max(insets),
-        end + inward * (min(insets) - FIXTURE_PROUD_M),
+        end + inward * innermost,
+        end + inward * (outermost - FIXTURE_PROUD_M),
     )
+
+
+def _inset_span(shape: Proportions, y_low: float, y_high: float) -> tuple[float, float]:
+    """(least, greatest) `face_inset_m` across a band of the nose or tail —
+    sampled at every profile knot inside it, for the reason `_seated_depth`
+    gives: the profile is not monotonic, so the band's edges do not bracket it."""
+    knots = [y for _, y, _ in shape.lower_profile if y_low < y < y_high]
+    insets = [shape.face_inset_m(y) for y in (y_low, y_high, *knots)]
+    return min(insets), max(insets)
 
 
 def _flush_fixture(
@@ -716,11 +835,18 @@ def _flush_fixture(
     colour: Colour,
     rear: bool,
     name: str,
+    extra_m: float = 0.0,
 ) -> MeshData:
-    """A rectangular lamp or plate seated in the nose or the tail. See `_seated_depth`."""
+    """A rectangular lamp or plate seated in the nose or the tail. See `_seated_depth`.
+
+    `extra_m` stands it that much further out, so a lens can sit proud of the
+    bezel it is set in and a plate proud of its frame.
+    """
     half_x, half_y = half
     x, y = centre
-    z0, z1 = sorted(_seated_depth(shape, y - half_y, y + half_y, rear=rear))
+    inner, outer = _seated_depth(shape, y - half_y, y + half_y, rear=rear)
+    outer += extra_m if rear else -extra_m
+    z0, z1 = sorted((inner, outer))
     return box((x - half_x, y - half_y, z0), (x + half_x, y + half_y, z1), colour, name=name)
 
 
@@ -770,6 +896,597 @@ def _high_brake_lamp(shape: Proportions) -> MeshData:
     )
 
 
+# --------------------------------------------------------------------------
+# The die-cast pass: the parts a 1:64 Crown Comfort carries
+# --------------------------------------------------------------------------
+
+
+def _corner_fill(
+    shape: Proportions,
+    profile: Sequence[tuple[float, float, float]],
+    ends: tuple[float, float],
+) -> list[MeshData]:
+    """Close the slit between each corner chamfer and the flank.
+
+    🔴 **The slit shipped.** `_flank` starts at the chamfer of the most inset
+    ring, the sill's, because a flank running further would stand proud of that
+    ring as a fin. Every ring above it chamfers out less far, so between its
+    chamfer and the flank there was nothing, up to 8 cm at the shoulder, and
+    the road showed through each corner of the car at close range. This draws
+    that stretch band by band in the flank's own plane: each quad runs from the
+    ring's own chamfer to the flank, so nothing can stand proud, and it is
+    painted as the flank is — dark below the rocker line, red above.
+    """
+    front_z, rear_z = shape.front_z_m, shape.rear_z_m
+    flank_z0, flank_z1 = ends
+    parts: list[MeshData] = []
+    for side_tag, side in (("l", -1.0), ("r", 1.0)):
+        x = side * shape.half_width_m
+        for i in range(len(profile) - 1):
+            (inset_a, y_a, cut_a), (inset_b, y_b, cut_b) = profile[i], profile[i + 1]
+            colour = DARK if y_b <= shape.rocker_top_y_m + 1e-9 else RED
+            for end, (start_a, start_b, stop) in (
+                ("front", (front_z + inset_a + cut_a, front_z + inset_b + cut_b, flank_z0)),
+                ("rear", (rear_z - inset_a - cut_a, rear_z - inset_b - cut_b, flank_z1)),
+            ):
+                quad = [(x, y_a, start_a), (x, y_a, stop), (x, y_b, stop), (x, y_b, start_b)]
+                made = _facing_or_none(
+                    quad, colour, (side, 0.0, 0.0), name=f"corner_{side_tag}_{end}_{i}"
+                )
+                if made is not None:
+                    parts.append(made)
+    return parts
+
+
+def _facing_or_none(
+    points: Sequence[tuple[float, ...]], colour: Colour, outward: Sequence[float], name: str
+) -> MeshData | None:
+    """`polygon_facing`, after dropping repeated corners; None if under three
+    remain, where a band or a strip has pinched to an edge."""
+    kept = [p for k, p in enumerate(points) if p != points[k - 1]]
+    if len(kept) < 3:
+        return None
+    return polygon_facing(kept, colour, outward, name=name)
+
+
+def _flank_span_m(shape: Proportions) -> tuple[float, float]:
+    """(front z, rear z) where the flat flank starts and stops — the chamfers'
+    inner edges, as `taxi_body` clamps `_flank` to."""
+    profile = shape.lower_profile
+    return (
+        max(shape.front_z_m + inset_z + ring_cut for inset_z, _, ring_cut in profile),
+        min(shape.rear_z_m - inset_z - ring_cut for inset_z, _, ring_cut in profile),
+    )
+
+
+def _greenhouse(chassis: Chassis, shape: Proportions) -> list[MeshData]:
+    """The cabin: a glazed band with its pillars painted in, under the cant rail.
+
+    The glazed band is drawn face by face rather than lofted, because each face
+    takes its own colour: the screens glass, the chamfers either side of them
+    silver — those are the A- and C-pillars — and each flank split along z into
+    the front door's window, a dark B-pillar sash, the rear door's window, a
+    dark sash at its trailing edge, a quarter light and the silver C-pillar.
+
+    ⚠️ **Painted, never boxed.** Pillars were boxes once and stood 0.14 m proud
+    of a greenhouse that tapers as it rises (`_flank_detail`). A split along z
+    keeps every piece in the flank's own plane, because the plane holds every
+    line parallel to z between the two rings.
+    """
+    sections = shape.greenhouse_profile
+    lower, upper = ring(*sections[0]), ring(*sections[1])
+    corners = len(lower)
+    flanks = flank_edges(corners)
+    centre = np.mean(np.asarray(lower, dtype=np.float64), axis=0)
+    centre[1] = 0.0
+    rear_door_z = _rear_door_z_m(chassis, shape)
+    band = shape.glass_band_m
+    moulding = min(0.45, shape.belt_moulding_m / band) if band > 0.0 else 0.0
+
+    parts: list[MeshData] = []
+    for edge in range(corners):
+        nxt = (edge + 1) % corners
+        a0, b0 = np.asarray(lower[edge]), np.asarray(lower[nxt])
+        a1, b1 = np.asarray(upper[edge]), np.asarray(upper[nxt])
+        outward = np.mean([a0, b0, a1, b1], axis=0) - centre
+        outward[1] = 0.0
+        if edge not in flanks:
+            colour = GLASS if edge in (0, corners // 2) else SILVER
+            made = _facing_or_none(
+                [tuple(b0), tuple(a0), tuple(a1), tuple(b1)], colour, outward, f"glass_{edge}"
+            )
+            if made is not None:
+                parts.append(made)
+            continue
+        # Front-to-rear along this flank, at the belt and at the top of the glass.
+        (zl0, zl1), (zu0, zu1) = sorted((a0[2], b0[2])), sorted((a1[2], b1[2]))
+        xl, xu = float(a0[0]), float(a1[0])
+        yl, yu = float(a0[1]), float(a1[1])
+        mid = shape.cabin_mid_z_m
+        c_belt = rear_door_z + shape.sash_half_m + shape.quarter_glass_m
+        cuts = [
+            (zl0, zu0),
+            (mid - shape.b_pillar_half_m,) * 2,
+            (mid + shape.b_pillar_half_m,) * 2,
+            (rear_door_z - shape.sash_half_m,) * 2,
+            (rear_door_z + shape.sash_half_m,) * 2,
+            (c_belt, c_belt - shape.c_pillar_lean_m),
+            (zl1, zu1),
+        ]
+        colours = (GLASS, DARK, GLASS, DARK, GLASS, SILVER)
+        bounds = [(float(np.clip(zb, zl0, zl1)), float(np.clip(zt, zu0, zu1))) for zb, zt in cuts]
+        for k, colour in enumerate(colours):
+            (zb0, zt0), (zb1, zt1) = bounds[k], bounds[k + 1]
+            if zb1 <= zb0 and zt1 <= zt0:
+                continue
+            zb1, zt1 = max(zb1, zb0), max(zt1, zt0)
+            strips = [(0.0, 1.0, colour)]
+            if colour is GLASS and moulding > 0.0:
+                strips = [(0.0, moulding, SILVER), (moulding, 1.0, GLASS)]
+            for s, (t0, t1, paint) in enumerate(strips):
+                # Each corner is `t` of the way from the belt up to the top of
+                # the glass, on the line joining `zb` at the belt to `zt` there.
+                points = [
+                    (xl + t * (xu - xl), yl + t * (yu - yl), zb + t * (zt - zb))
+                    for zb, zt, t in (
+                        (zb0, zt0, t0),
+                        (zb1, zt1, t0),
+                        (zb1, zt1, t1),
+                        (zb0, zt0, t1),
+                    )
+                ]
+                made = _facing_or_none(
+                    points,
+                    paint,
+                    outward,
+                    f"glass_{edge}_{k}_{s}",
+                )
+                if made is not None:
+                    parts.append(made)
+    parts.append(polygon_facing(lower, GLASS, (0.0, -1.0, 0.0), name="glass_bottom"))
+    parts.append(
+        loft(
+            [ring(*sections[1]), ring(*sections[2])],
+            [SILVER],
+            bottom=None,
+            top=SILVER,
+            name="greenhouse",
+        )
+    )
+    return parts
+
+
+def _bar_depth_m(shape: Proportions, *, rear: bool) -> tuple[float, float]:
+    """(inner z, outer z) of the bumper bar across the nose or the tail.
+
+    Its back goes behind the deepest point of the panel across its band, so
+    nothing shows between bar and body; its face stands `bumper_proud_m` clear
+    of the outermost. Sampled at every profile knot inside the band, for the
+    reason `_seated_depth` gives.
+    """
+    outermost, innermost = _inset_span(shape, shape.bar_bottom_y_m, shape.bumper_top_y_m)
+    end = shape.rear_z_m if rear else shape.front_z_m
+    inward = -1.0 if rear else 1.0
+    return (
+        end + inward * (innermost + 0.02),
+        end + inward * (outermost - shape.bumper_proud_m),
+    )
+
+
+def _bar_seat_z(shape: Proportions, *, rear: bool) -> tuple[float, float]:
+    """(low z, high z) of a fixture on the bumper bar: 5 mm into the bar's face
+    and `FIXTURE_PROUD_M` out of it."""
+    _, outer = _bar_depth_m(shape, rear=rear)
+    inward = -1.0 if rear else 1.0
+    low, high = sorted((outer + inward * 0.005, outer - inward * FIXTURE_PROUD_M))
+    return low, high
+
+
+def _on_bar(
+    shape: Proportions,
+    *,
+    centre: tuple[float, float],
+    half: tuple[float, float],
+    colour: Colour,
+    rear: bool,
+    name: str,
+) -> MeshData:
+    """A plate standing on the bumper bar's face, `FIXTURE_PROUD_M` clear of it."""
+    z0, z1 = _bar_seat_z(shape, rear=rear)
+    (x, y), (hx, hy) = centre, half
+    return box((x - hx, y - hy, z0), (x + hx, y + hy, z1), colour, name=name)
+
+
+def _bumpers(chassis: Chassis, shape: Proportions) -> list[MeshData]:
+    """Front and rear bumper bars, wrapping each corner back to the wheel arch.
+
+    Five convex pieces an end — the bar across, a corner prism following the
+    chamfer, and a side piece on each flank — because a bar that wraps is
+    concave in plan and `loft` turns faces outward from a centroid. Each piece
+    is convex, so each one faces the right way by construction.
+    """
+    y0, y1 = shape.bar_bottom_y_m, shape.bumper_top_y_m
+    profile = shape.lower_profile
+    ys = [entry[1] for entry in profile]
+    cut = float(np.interp((y0 + y1) / 2.0, ys, [entry[2] for entry in profile]))
+    outermost, _ = _inset_span(shape, y0, y1)
+    hw = shape.half_width_m
+    parts: list[MeshData] = []
+    for rear in (False, True):
+        end_tag = "rear" if rear else "front"
+        inward = -1.0 if rear else 1.0
+        end = shape.rear_z_m if rear else shape.front_z_m
+        inner, outer = _bar_depth_m(shape, rear=rear)
+        face_z = end + inward * outermost
+        side_z = face_z + inward * cut
+        z0, z1 = sorted((inner, outer))
+        parts.append(box((-(hw - cut), y0, z0), (hw - cut, y1, z1), DARK, name=f"bumper_{end_tag}"))
+        axle = chassis.axle_z_m[1 if rear else 0]
+        arch_z = axle - inward * (opening_radius_m(chassis, shape) + 0.005)
+        for tag, side in (("l", -1.0), ("r", 1.0)):
+            plan = [
+                (side * (hw - cut), outer),
+                (side * (hw + shape.bumper_side_proud_m), side_z),
+                (side * (hw - 0.03), side_z),
+                (side * (hw - cut), inner),
+            ]
+            parts.append(
+                loft(
+                    [[(x, y, z) for x, z in plan] for y in (y0, y1)],
+                    [DARK],
+                    bottom=DARK,
+                    top=DARK,
+                    name=f"bumper_{end_tag}_corner_{tag}",
+                )
+            )
+            if (arch_z - side_z) * inward > 0.0:
+                za, zb = sorted((side_z, arch_z))
+                xa, xb = sorted((side * (hw - 0.03), side * (hw + shape.bumper_side_proud_m)))
+                parts.append(box((xa, y0, za), (xb, y1, zb), DARK, name=f"bumper_{end_tag}_{tag}"))
+    return parts
+
+
+def _front_end(shape: Proportions) -> list[MeshData]:
+    """Grille, headlamps in their bezels, indicators, fog lamps, plate, badge
+    and the wipers lying at the foot of the windscreen."""
+    parts: list[MeshData] = []
+    gy, gh, gw = shape.grille_y_m, shape.grille_half_height_m, shape.grille_half_width_m
+    # ⚠️ Bars across the whole width, never blocks. Three silver blocks in the
+    # middle of the grille read as three white squares floating on the nose;
+    # a frame and full-width bars read as the chrome grille the die-cast has.
+    rim = 0.022
+    # The dark field fills the frame's opening and no more: drawn to the
+    # frame's outline, its top and bottom lay in the frame's own planes,
+    # facing the same way, and the two colours z-fought along the edges.
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, gy),
+            half=(gw - rim, gh - rim),
+            colour=DARK,
+            rear=False,
+            name="grille",
+        )
+    )
+    pieces = [
+        ((0.0, gy + gh - rim / 2.0), (gw, rim / 2.0)),
+        ((0.0, gy - gh + rim / 2.0), (gw, rim / 2.0)),
+        ((-gw + rim / 2.0, gy), (rim / 2.0, gh)),
+        ((gw - rim / 2.0, gy), (rim / 2.0, gh)),
+    ]
+    for k in range(shape.grille_bars):
+        y = gy - gh + rim + (k + 1) * (2.0 * (gh - rim)) / (shape.grille_bars + 1)
+        pieces.append(((0.0, y), (gw - rim, 0.006)))
+    for k, (centre, half) in enumerate(pieces):
+        parts.append(
+            _flush_fixture(
+                shape,
+                centre=centre,
+                half=half,
+                colour=SILVER,
+                rear=False,
+                name=f"grille_bar_{k}",
+                extra_m=0.006,
+            )
+        )
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, gy + 0.01),
+            half=(0.045, 0.032),
+            colour=SILVER,
+            rear=False,
+            name="grille_emblem",
+            extra_m=0.012,
+        )
+    )
+    hy, hh = shape.headlamp_y_m, shape.headlamp_half_height_m
+    for tag, side in (("l", -1.0), ("r", 1.0)):
+        # The front cluster is three lamps, not one pale block: the main beam
+        # inboard, an amber indicator outboard of it, and a small white lamp low
+        # on the car. The amber is what stops the nose reading as two blank
+        # rectangles, and it pairs with the amber in the tail cluster.
+        # ⚠️ `headlamp_x_m` is also authored in `taxi.tscn` — see the dial.
+        parts.append(
+            _flush_fixture(
+                shape,
+                centre=(side * shape.headlamp_x_m, hy),
+                half=(0.15 + 0.018, hh + 0.018),
+                colour=SILVER,
+                rear=False,
+                name=f"bezel_{tag}",
+            )
+        )
+        parts.append(
+            _flush_fixture(
+                shape,
+                centre=(side * shape.headlamp_x_m, hy),
+                half=(0.15, hh),
+                colour=LAMP,
+                rear=False,
+                name=f"headlamp_{tag}",
+                extra_m=0.006,
+            )
+        )
+        parts.append(
+            _flush_fixture(
+                shape,
+                centre=(side * 0.80, hy),
+                half=(0.065, hh),
+                colour=AMBER,
+                rear=False,
+                name=f"indicator_{tag}",
+            )
+        )
+        parts.append(
+            _flush_fixture(
+                shape,
+                centre=(side * 0.62, shape.foglamp_y_m),
+                half=(0.08, shape.foglamp_half_height_m),
+                colour=LAMP,
+                rear=False,
+                name=f"foglamp_{tag}",
+            )
+        )
+    parts.append(
+        _on_bar(
+            shape,
+            centre=(0.0, shape.plate_front_y_m),
+            half=(shape.plate_half_width_m, shape.plate_half_height_m),
+            colour=LAMP,
+            rear=False,
+            name="plate_front",
+        )
+    )
+    parts.append(_badge(shape, rear=False))
+    # Wipers parked along the foot of the screen, each a dark bar half in the glass.
+    rake = shape.windscreen_rake_deg
+    y_low, y_high = shape.belt_y_m + 0.02, shape.belt_y_m + 0.036
+    z_front = shape.cabin_front_z_m + _rake_run_m(rake, y_low - shape.belt_y_m) - 0.015
+    z_back = shape.cabin_front_z_m + _rake_run_m(rake, y_high - shape.belt_y_m) + 0.006
+    for k, (xa, xb) in enumerate(((-0.62, -0.08), (-0.02, 0.50))):
+        parts.append(box((xa, y_low, z_front), (xb, y_high, z_back), DARK, name=f"wiper_{k}"))
+    return parts
+
+
+def _tail_lenses(shape: Proportions) -> tuple[tuple[float, float, Colour, str], ...]:
+    """Each tail lens as (bottom y, top y, colour, circuit), top to bottom.
+
+    ⚠️ **Red over amber over white**, from the die-cast's rear: red above, the
+    white reverse lens at the foot, level with the garnish. It was amber over
+    white over red, read off earlier photographs — the order is a reference
+    call and this is the one the die-cast shows. Named for the circuit, so the
+    order and the wiring stay one list; `_die_cast_flank` wraps the red one
+    round the corner.
+    """
+    bottom, top = shape.tail_lamp_y_m
+    tall = top - bottom
+    split_white, split_amber = bottom + 0.24 * tall, bottom + 0.44 * tall
+    return (
+        (split_amber, top, RED, "brake"),
+        (split_white, split_amber, AMBER, "indicator"),
+        (bottom, split_white, LAMP, "reverse"),
+    )
+
+
+def _rear_end(shape: Proportions) -> list[MeshData]:
+    """Tail clusters, the chrome garnish between them, the plate in its chrome
+    frame, the maker's emblem and the rear badge."""
+    parts: list[MeshData] = []
+    bottom, top = shape.tail_lamp_y_m
+    lenses = _tail_lenses(shape)
+    lx, lw = shape.tail_lamp_x_m, shape.tail_lamp_half_width_m
+    for tag, side in (("l", -1.0), ("r", 1.0)):
+        for y0, y1, colour, circuit in lenses:
+            parts.append(
+                _flush_fixture(
+                    shape,
+                    centre=(side * lx, (y0 + y1) / 2.0),
+                    half=(lw, (y1 - y0) / 2.0),
+                    colour=colour,
+                    rear=True,
+                    name=f"taillamp_{tag}_{circuit}",
+                )
+            )
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, bottom + shape.garnish_m / 2.0),
+            half=(lx - lw - 0.005, shape.garnish_m / 2.0),
+            colour=SILVER,
+            rear=True,
+            name="garnish",
+        )
+    )
+    pw, ph, py = shape.plate_half_width_m, shape.plate_half_height_m, shape.plate_rear_y_m
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, py),
+            half=(pw + 0.025, ph + 0.02),
+            colour=SILVER,
+            rear=True,
+            name="plate_rear_frame",
+            extra_m=0.004,
+        )
+    )
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, py),
+            half=(pw, ph),
+            colour=AMBER,
+            rear=True,
+            name="plate_rear",
+            extra_m=0.010,
+        )
+    )
+    emblem_y = min(py + ph + 0.06, top - 0.03)
+    parts.append(
+        _flush_fixture(
+            shape,
+            centre=(0.0, emblem_y),
+            half=(0.04, 0.025),
+            colour=SILVER,
+            rear=True,
+            name="emblem_rear",
+        )
+    )
+    parts.append(_badge(shape, rear=True))
+    return parts
+
+
+def _mirrors(shape: Proportions) -> list[MeshData]:
+    """Door mirrors on a stalk at the front of the front door's window.
+
+    Dark housings with their glass facing back, as the die-cast's: wider than
+    deep, standing `mirror_reach_m` off the door.
+    """
+    parts: list[MeshData] = []
+    z = shape.cabin_front_z_m + shape.corner_cut_m * 0.8 + 0.06
+    y = shape.belt_y_m + 0.075
+    hw = shape.half_width_m
+    for tag, side in (("l", -1.0), ("r", 1.0)):
+        xa, xb = sorted((side * (shape.cabin_half_width_m - 0.01), side * (hw + 0.04)))
+        parts.append(
+            box(
+                (xa, shape.belt_y_m + 0.02, z - 0.03),
+                (xb, y, z + 0.03),
+                DARK,
+                name=f"mirror_stalk_{tag}",
+            )
+        )
+        centre = (side * (hw + shape.mirror_reach_m), y, z)
+        parts.append(box_at(centre, (0.075, 0.05, 0.035), DARK, name=f"mirror_{tag}"))
+        # The glass is one quad 4 mm off the housing's back, the only way it faces.
+        gx, gz = centre[0], z + 0.039
+        parts.append(
+            polygon_facing(
+                [
+                    (gx - 0.062, y - 0.04, gz),
+                    (gx + 0.062, y - 0.04, gz),
+                    (gx + 0.062, y + 0.04, gz),
+                    (gx - 0.062, y + 0.04, gz),
+                ],
+                GLASS,
+                (0.0, 0.0, 1.0),
+                name=f"mirror_glass_{tag}",
+            )
+        )
+    return parts
+
+
+def _die_cast_flank(chassis: Chassis, shape: Proportions) -> list[MeshData]:
+    """The rub strip, the door shut lines, the wrap-round lenses, the wing
+    repeaters and the filler lid.
+
+    ⚠️ **Each of these was tried once and refused, and none is in the form it
+    was refused in.** The rub strip was a bar 2-3 cm proud at the belt that read
+    as a stick; this one is 2.8 cm tall at the bumper line, where the die-cast
+    has it, and continues the bumper bar down the doors. The shut lines were
+    ribs a centimetre proud; these are paint, `shut_line_proud_m` off the panel
+    only so they cannot z-fight it.
+    """
+    parts: list[MeshData] = []
+    hw = shape.half_width_m
+    opening = opening_radius_m(chassis, shape)
+    front_axle, rear_axle = chassis.axle_z_m
+    rear_door_z = _rear_door_z_m(chassis, shape)
+    door = door_span_m(chassis, shape)
+    flank_z0, flank_z1 = _flank_span_m(shape)
+    strip_bottom, strip_top = shape.rub_strip_y_m
+    red_bottom, tail_top, _, _ = _tail_lenses(shape)[0]
+    for tag, side in (("l", -1.0), ("r", 1.0)):
+        xa, xb = sorted((side * (hw - 0.005), side * (hw + shape.rub_strip_proud_m)))
+        runs = [(front_axle + opening + 0.01, rear_axle - opening - 0.01)]
+        if side == KERB_SIDE:
+            runs = [(runs[0][0], door[0] - 0.004), (door[1] + 0.004, runs[0][1])]
+        for k, (za, zb) in enumerate(runs):
+            if zb > za:
+                parts.append(
+                    box((xa, strip_bottom, za), (xb, strip_top, zb), DARK, name=f"rub_{tag}_{k}")
+                )
+        # Shut lines: the front door's leading edge on both sides; the split
+        # between the doors and the rear door's trailing edge on the offside,
+        # where no real doorway is cut.
+        lines = [shape.cabin_front_z_m]
+        if side != KERB_SIDE:
+            lines += [shape.cabin_mid_z_m, rear_door_z]
+        # One quad each, not a box: a box this thin is all sliver walls.
+        x = side * (hw + shape.shut_line_proud_m)
+        y0, y1 = shape.sill_y_m + 0.01, shape.belt_y_m - 0.005
+        for k, z in enumerate(lines):
+            za, zb = z - shape.shut_line_half_width_m, z + shape.shut_line_half_width_m
+            parts.append(
+                polygon_facing(
+                    [(x, y0, za), (x, y0, zb), (x, y1, zb), (x, y1, za)],
+                    DARK,
+                    (side, 0.0, 0.0),
+                    name=f"shut_{tag}_{k}",
+                )
+            )
+        lens_x = sorted((side * (hw - 0.004), side * (hw + 0.010)))
+        hy, hh = shape.headlamp_y_m, shape.headlamp_half_height_m
+        parts.append(
+            box(
+                (lens_x[0], hy - hh, flank_z0),
+                (lens_x[1], hy + hh, flank_z0 + 0.08),
+                AMBER,
+                name=f"indicator_{tag}_side",
+            )
+        )
+        parts.append(
+            box(
+                (lens_x[0], red_bottom, flank_z1 - 0.10),
+                (lens_x[1], tail_top, flank_z1),
+                RED,
+                name=f"taillamp_{tag}_side",
+            )
+        )
+        repeater_y = (shape.bumper_top_y_m + shape.belt_y_m) / 2.0
+        repeater_z = front_axle + 0.28
+        parts.append(
+            box(
+                (lens_x[0], repeater_y - 0.018, repeater_z - 0.035),
+                (lens_x[1], repeater_y + 0.018, repeater_z + 0.035),
+                AMBER,
+                name=f"indicator_{tag}_repeater",
+            )
+        )
+    side = -KERB_SIDE
+    xa, xb = sorted((side * (hw - 0.003), side * (hw + 0.005)))
+    lid_y, lid_z = shape.belt_y_m - 0.13, rear_axle + 0.24
+    parts.append(
+        box(
+            (xa, lid_y - 0.06, lid_z - 0.065),
+            (xb, lid_y + 0.06, lid_z + 0.065),
+            RED,
+            name="filler_lid",
+        )
+    )
+    return parts
+
+
 def _wheel(
     radius: float,
     width: float,
@@ -777,6 +1494,7 @@ def _wheel(
     *,
     rim_fraction: float = 0.58,
     faces: Sequence[float] = (1.0, -1.0),
+    hub_slots: int = 0,
     name: str,
 ) -> MeshData:
     """One wheel, centred on the origin and rolling about X.
@@ -787,6 +1505,10 @@ def _wheel(
     """
     if segments < 3:
         raise ValueError(f"'{name}': a wheel needs at least three segments, got {segments}")
+    if hub_slots and segments % hub_slots:
+        raise ValueError(
+            f"'{name}': {hub_slots} hub slots do not divide {segments} segments evenly"
+        )
 
     half = width / 2.0
     angles = np.linspace(0.0, 2.0 * np.pi, segments, endpoint=False)
@@ -821,9 +1543,38 @@ def _wheel(
                 (face_x, wy1, wz1),
                 (face_x, wy0, wz0),
             ]
-            hub = [(face_x, 0.0, 0.0), (face_x, wy0, wz0), (face_x, wy1, wz1)]
             parts.append(polygon_facing(wall, DARK, (face_x, 0.0, 0.0), name=f"{name}_wall_{i}"))
-            parts.append(polygon_facing(hub, SILVER, (face_x, 0.0, 0.0), name=f"{name}_hub_{i}"))
+            outward = (face_x, 0.0, 0.0)
+            # A slot is a dark band across one segment of the cap, between an
+            # inner boss and an outer lip — `hub_slots` of them evenly round it,
+            # which is the turbine cap the die-cast wears. 0 is the plain disc.
+            slotted = hub_slots > 0 and i % (segments // hub_slots) == 0
+            if not slotted:
+                hub = [(face_x, 0.0, 0.0), (face_x, wy0, wz0), (face_x, wy1, wz1)]
+                parts.append(polygon_facing(hub, SILVER, outward, name=f"{name}_hub_{i}"))
+                continue
+            inner, outer = 0.38, 0.80
+            boss = [(face_x, wy0 * inner, wz0 * inner), (face_x, wy1 * inner, wz1 * inner)]
+            lip = [(face_x, wy0 * outer, wz0 * outer), (face_x, wy1 * outer, wz1 * outer)]
+            rim_edge = [(face_x, wy0, wz0), (face_x, wy1, wz1)]
+            parts.append(
+                polygon_facing(
+                    [(face_x, 0.0, 0.0), *boss], SILVER, outward, name=f"{name}_boss_{i}"
+                )
+            )
+            parts.append(
+                polygon_facing(
+                    [boss[0], lip[0], lip[1], boss[1]], DARK, outward, name=f"{name}_slot_{i}"
+                )
+            )
+            parts.append(
+                polygon_facing(
+                    [lip[0], rim_edge[0], rim_edge[1], lip[1]],
+                    SILVER,
+                    outward,
+                    name=f"{name}_lip_{i}",
+                )
+            )
     return merge(parts, name=name)
 
 
@@ -861,7 +1612,11 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
             # red bodywork carries on below it to the bottom edge. That valance
             # is the lowest 27% of what used to be solid black. The ring it
             # starts at is `bumper_bottom_y_m`, which the flank shares.
-            [RED, DARK, RED, RED],
+            # With a bar bottom set, one more ring: the valance runs up to the
+            # bar, so the red under the bumper is as tall as the die-cast's.
+            [RED, DARK, RED, RED]
+            if shape.bumper_bar_bottom_y_m is None
+            else [RED, RED, DARK, RED, RED],
             bottom=DARK,
             top=RED,
             # The two long flanks are `_flank`'s, because a loft band cannot
@@ -879,19 +1634,11 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # used to be written out here, with the top of the glass placed at a bare
     # `* 0.8` of the roof taper — which is how the car ended up with a backlight
     # raked 18.6° that nobody had chosen and nobody could change on its own.
-    parts.append(
-        loft(
-            [ring(*section) for section in shape.greenhouse_profile],
-            [GLASS, SILVER],
-            bottom=GLASS,
-            top=SILVER,
-            name="greenhouse",
-        )
-    )
+    parts.extend(_greenhouse(chassis, shape))
 
     # Roof sign, raked rather than a plain cuboid: narrower and shorter at the
     # top, which is the profile the real fitting has and what stops it reading
-    # as a white brick. Blank — see `_plates` for why no lettering survives.
+    # as a white brick. Blank — see `plate_half_width_m` for why no lettering survives.
     #
     # ⚠️ **The whole box is one switched lens, cap included, and the `SILVER` top
     # is not an oversight.** `LAMP_PARTS` marks by part, so the cap comes with it
@@ -901,11 +1648,23 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # other lit. Unlit, the cap trades `MARKER_TRIM` for `MARKER_LAMP`, which is
     # a roughness and a reflection strength and no colour at all.
     sign_z = shape.sign_z_m
+    sign_base_y = shape.roof_y_m + shape.sign_plinth_m
+    if shape.sign_plinth_m > 0.0:
+        parts.append(
+            box(
+                (-shape.sign_half_width_m + 0.03, shape.roof_y_m - 0.01, sign_z - 0.06),
+                (shape.sign_half_width_m - 0.03, sign_base_y, sign_z + 0.06),
+                DARK,
+                # ⚠️ Not `sign_…`: `LAMP_PARTS` marks every part starting `sign`
+                # as a lens, and this plinth is not one.
+                name="roof_plinth",
+            )
+        )
     parts.append(
         loft(
             [
                 ring(
-                    shape.roof_y_m,
+                    sign_base_y,
                     shape.sign_half_width_m,
                     sign_z - shape.sign_half_length_m,
                     sign_z + shape.sign_half_length_m,
@@ -915,7 +1674,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
                 # to them any more, but the silhouette a raked box gives from
                 # the side is the whole reason the rake is here.
                 ring(
-                    shape.roof_y_m + shape.sign_height_m,
+                    sign_base_y + shape.sign_height_m,
                     shape.sign_half_width_m * 0.86,
                     sign_z - shape.sign_half_length_m,
                     sign_z + shape.sign_half_length_m,
@@ -928,106 +1687,19 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         )
     )
 
-    # ⚠️ No bumper *parts*. There are no boxes here any more and there should
-    # not be: the bumper is the dark band `loft` and `_flank` paint below
-    # `bumper_top_y_m`, so it is visible from every angle and adds nothing to
-    # the silhouette. Adding a box back is how it went wrong the first time.
-    parts.append(box_at((0.0, 0.11, front_z + 0.01), (0.42, 0.09, 0.03), DARK, name="grille"))
-    parts.extend(_plates(shape))
-    parts.extend(_badge(shape, rear=rear) for rear in (False, True))
+    parts.extend(_front_end(shape))
+    parts.extend(_rear_end(shape))
+    parts.extend(_bumpers(chassis, shape))
     # Centred, so it is outside the per-side loop below — the only lamp on the
     # car that is not one of a pair.
     parts.append(_high_brake_lamp(shape))
-
-    for tag, side in (("l", -1.0), ("r", 1.0)):
-        # The front cluster is three lamps, not one pale block: the main beam
-        # inboard, an amber indicator outboard of it, and a small white lamp low
-        # in the bumper. The amber is what stops the nose reading as two blank
-        # rectangles, and it pairs with the amber at the top of the tail cluster.
-        # ⚠️ **`0.58` is also authored in `game/scenes/vehicle/taxi.tscn`**, which
-        # seats `HeadlampL`/`HeadlampR` — the cones the lamps throw (`P3-11e`) —
-        # at the same offset. Nothing carries a part coordinate across the
-        # Python/Godot seam, so moving this lens leaves the light where it was
-        # and the beam simply stops coming out of the lamp. Visible only in a
-        # frame, and only if someone looks at the nose.
-        parts.append(
-            box_at(
-                (side * 0.58, 0.19, front_z + 0.015),
-                (0.15, 0.085, 0.035),
-                LAMP,
-                name=f"headlamp_{tag}",
-            )
-        )
-        parts.append(
-            box_at(
-                (side * 0.80, 0.19, front_z + 0.02),
-                (0.065, 0.085, 0.035),
-                AMBER,
-                name=f"indicator_{tag}",
-            )
-        )
-        # Seated in the bumper band rather than bolted to a bumper bar, so its
-        # depth follows the panel it sits in instead of being copied by hand.
-        parts.append(
-            _flush_fixture(
-                shape,
-                centre=(side * 0.66, -0.04),
-                half=(0.105, 0.03),
-                colour=LAMP,
-                rear=False,
-                name=f"foglamp_{tag}",
-            )
-        )
-        # Three lenses stacked in the cluster, top to bottom: amber indicator,
-        # white reverse, red tail and brake. Ordering is not decorative — it is
-        # what the car actually carries, and getting it upside down would be as
-        # wrong to a local eye as the wrong badge.
-        #
-        # ⚠️ They sit straight on the paint, with no dark bezel behind them, and
-        # that costs the bottom lens: RED on RED bodywork has only the lens's
-        # own edges to separate it, so the cluster reads as two lamps and a
-        # bump at anything past a few metres. The bezel existed to buy that
-        # contrast. Removing it was asked for with the trade understood — do not
-        # "fix" it by making the lens cream, which is the earlier bug and a
-        # white tail lamp besides. What the lens has instead is a *circuit*: it
-        # is the brake lamp, and a brake lamp that lights separates itself.
-        #
-        # ⚠️ **Named for the circuit, not numbered `0/1/2` as they were.** The
-        # names are what `LAMP_CIRCUITS` wires, so the stacking order and the
-        # wiring are one list rather than two that can disagree.
-        for offset, colour, circuit in (
-            (0.073, AMBER, "indicator"),
-            (0.0, LAMP, "reverse"),
-            (-0.073, RED, "brake"),
-        ):
-            parts.append(
-                _flush_fixture(
-                    shape,
-                    centre=(side * (hw - 0.13), 0.21 + offset),
-                    half=(0.085, 0.034),
-                    colour=colour,
-                    rear=True,
-                    name=f"taillamp_{tag}_{circuit}",
-                )
-            )
-        # Wing mirrors: wider than they are deep. The earlier proportions were
-        # 0.12 x 0.09 x 0.15, longer front-to-back than across, which is a stalk
-        # rather than a mirror — part of what the review read as strange.
-        parts.append(
-            box_at(
-                (side * (hw + 0.025), 0.34, shape.cabin_front_z_m + 0.06),
-                (0.032, 0.04, 0.035),
-                DARK,
-                name=f"mirror_{tag}",
-            )
-        )
+    parts.extend(_mirrors(shape))
 
     # The two flanks, each with its wheel openings cut through.
     # The flank may not run past the point where the chamfer takes over, or it
     # stands proud of it as a flat fin and cancels the rounding — 0.24 m of it
     # at each lower corner, before this was clamped.
-    flank_z0 = max(front_z + inset_z + ring_cut for inset_z, _, ring_cut in profile)
-    flank_z1 = min(rear_z - inset_z - ring_cut for inset_z, _, ring_cut in profile)
+    flank_z0, flank_z1 = _flank_span_m(shape)
     for side_tag, side in (("l", -1.0), ("r", 1.0)):
         parts.extend(
             _flank(
@@ -1040,7 +1712,9 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
             )
         )
 
+    parts.extend(_corner_fill(shape, profile, (flank_z0, flank_z1)))
     parts.extend(_flank_detail(chassis, shape))
+    parts.extend(_die_cast_flank(chassis, shape))
     parts.extend(_doorway(chassis, shape))
     _check_wiring(parts)
     body = merge([_marked(part) for part in parts], name="taxi_body")
@@ -1185,37 +1859,6 @@ def material_parts(body: MeshData) -> MeshGroup:
     return MeshGroup(body.name, tuple(parts))
 
 
-def _plates(shape: Proportions) -> list[MeshData]:
-    """Front and rear registration plates, in that order.
-
-    Blank. The characters were pixels on a texture sheet, and a bitmap font is
-    the one thing on this car that no amount of triangles reaches and nothing
-    else in the city has. What survives is the part that is colour rather than
-    text: Hong Kong follows the UK, so the plate is **white at the front and
-    yellow at the rear**, and that alone still says which end of the car you
-    are looking at. Kept as its own function because it is also the only
-    asymmetry the tests can use to prove the model is not mirrored.
-    """
-    return [
-        _flush_fixture(
-            shape,
-            centre=(0.0, shape.plate_front_y_m),
-            half=(shape.plate_half_width_m, shape.plate_half_height_m),
-            colour=LAMP,
-            rear=False,
-            name="plate_front",
-        ),
-        _flush_fixture(
-            shape,
-            centre=(0.0, shape.plate_rear_y_m),
-            half=(shape.plate_half_width_m, shape.plate_half_height_m),
-            colour=AMBER,
-            rear=True,
-            name="plate_rear",
-        ),
-    ]
-
-
 def _badge(shape: Proportions, *, rear: bool) -> MeshData:
     """The 4 SEATS badge — a green half-disc standing on its flat edge.
 
@@ -1231,17 +1874,17 @@ def _badge(shape: Proportions, *, rear: bool) -> MeshData:
     builds it, extruding along Z — see `axis` there for why that is not a
     second implementation.
     """
-    x, y0, radius = shape.badge_x_m, shape.badge_y_m, shape.badge_radius_m
+    # On the bumper bar's face, at the car's right at the front and its left at
+    # the rear — where the die-cast carries the two.
+    x = -shape.badge_x_m if rear else shape.badge_x_m
+    y0, radius = shape.badge_y_m, shape.badge_radius_m
     angles = np.linspace(np.pi, 0.0, shape.badge_segments + 1)
     outline = [(x + radius * float(np.cos(a)), y0 + radius * float(np.sin(a))) for a in angles]
     # Sorted, so `rings[0]` is always the end `loft` caps facing -Z. The nose
     # seats its face at the *lower* z and the tail at the higher one, and
     # passing them in call order would turn one of the two badges inside out.
     return loft(
-        [
-            [(px, py, z) for px, py in outline]
-            for z in sorted(_seated_depth(shape, y0, y0 + radius, rear=rear))
-        ],
+        [[(px, py, z) for px, py in outline] for z in _bar_seat_z(shape, rear=rear)],
         [BADGE_GREEN],
         bottom=BADGE_GREEN,
         top=BADGE_GREEN,
@@ -1389,6 +2032,17 @@ def _flank(
         (wheels_z[0] + opening_r, wheels_z[1] - opening_r),
         (wheels_z[1] + opening_r, rear_z),
     )
+    # ⚠️ Refused rather than clamped: a nose or tail too short for its wheel
+    # opening puts the opening's edge inside the corner chamfer, and the first
+    # stretch runs backwards — a sliver of panel standing down through the
+    # opening to the sill. Clamping it away leaves the arch's first column
+    # standing proud of the chamfer as a fin instead.
+    for end, (z0, z1) in (("nose", spans[0]), ("tail", spans[-1])):
+        if z1 < z0 - 1e-9:
+            raise ValueError(
+                f"the {end} is {abs(z1 - z0) * 1000:.1f} mm too short for its wheel "
+                "opening and corner chamfer"
+            )
     if door is not None:
         # Split round the doorway rather than drawn under it: a panel left
         # behind the leaf would be coplanar with the shut door and fight it,
@@ -1400,7 +2054,9 @@ def _flank(
                 f"openings at {between[0]:+.3f}..{between[1]:+.3f}"
             )
         spans = (spans[0], (between[0], door[0]), (door[1], between[1]), spans[2])
-        spans = tuple((z0, z1) for z0, z1 in spans if z1 > z0)
+    # A stretch of no length is not drawn — the nose's, where the opening
+    # starts exactly at the chamfer, is one by design (`body_offset_z_m`).
+    spans = tuple((z0, z1) for z0, z1 in spans if z1 - z0 > 1e-9)
     for i, (z0, z1) in enumerate(spans):
         parts.extend(panels(z0, z1, shape.sill_y_m, shape.sill_y_m, tag=f"span_{i}"))
 
@@ -1706,6 +2362,17 @@ def taxi_door(chassis: Chassis, shape: Proportions) -> MeshData:
         )
     tag = "l" if side < 0.0 else "r"
     parts.append(_handle(shape, side=side, trailing_z=z1, name=f"handle_rear_{tag}"))
+    # The rub strip's run across this door, so it swings with the leaf.
+    strip_bottom, strip_top = shape.rub_strip_y_m
+    xa, xb = sorted((x_out - side * 0.005, x_out + side * shape.rub_strip_proud_m))
+    parts.append(
+        box(
+            (xa, strip_bottom, z0 + 0.004),
+            (xb, strip_top, z1 - 0.004),
+            DARK,
+            name="door_rub",
+        )
+    )
 
     door = merge([_marked(part) for part in parts], name="taxi_door")
     hinge = np.asarray(door_hinge(chassis, shape), dtype=np.float64)
@@ -1723,7 +2390,11 @@ def build_taxi(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     closed and the car is untextured all the way through — like the city.
     """
     wheel = _wheel(
-        chassis.wheel_radius_m, shape.wheel_width_m, shape.wheel_segments, name="taxi_tyre"
+        chassis.wheel_radius_m,
+        shape.wheel_width_m,
+        shape.wheel_segments,
+        hub_slots=shape.hub_slots,
+        name="taxi_tyre",
     )
     return [taxi_body(chassis, shape), wheel]
 

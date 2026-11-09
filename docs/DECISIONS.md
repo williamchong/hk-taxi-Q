@@ -11902,3 +11902,102 @@ in both languages, the free PAUSE and the shift's REPORT (unchanged) read by eye
 Owed: the user's look, and a real drive ended from the pause (the frames are of the sample sheet).
 
 **See.** `Q165` · `Q162` · `Q169` · `Q188` · `P3-81`
+
+## `Q190` — The taxi takes a 1:64 die-cast's proportions and detail, without its lettering
+
+**Asked** by the user, 2026-11-07: "can we make sure our car models are at least at detailed as
+tomica cars", then the Hong Kong die-cast instead (Tiny City TINY01, the VM6172 Crown Comfort,
+`ATC66367`), then "lets try drop lettering but make the shape and geometry more detailed and
+matching", "lets try python first" and "lets try not rule out features". On 2026-11-09, asked
+whether the die-cast's proportions are the more realistic, and told they sit between ours and the
+real car's: "lets go model scale".
+
+**Decided.**
+- **The die-cast's proportions, not the real car's.** Measured off its side view, scaled by the
+  2.785 m wheelbase: the nose 0.65 m ahead of the front axle, the tail 1.10 m behind the rear, the
+  sill at -0.38, the belt at 0.29, the windscreen base at -0.83 and the backlight's at 1.74. The
+  body is 4.54 m (4.30 before, symmetric); the real long-wheelbase Crown Comfort is 4.695 m. A
+  die-cast shortens the ends; "accurate city, toy vehicles" leaves room for that.
+- **Every feature the die-cast carries except its lettering**, built in `tools/make_vehicle.py`
+  and named in `Proportions`' die-cast block: a bumper *bar* across each end wrapping to the
+  arches, with a red valance under it; chrome grille with bars, headlamp bezels, wrap-round
+  indicators, front repeaters, fog lamps in the valance; tall tail lamps, a chrome garnish, the
+  rear plate in a chrome frame, emblems; a rub strip down the doors (on the leaf too); shut lines;
+  a filler lid; door mirrors on stalks; silver A- and C-pillars, dark sashes, a quarter light and a
+  belt moulding; wipers; a plinth under the roof sign; six-slot hubcaps. Rub strip and shut lines
+  were rejected forms before (`_flank_detail`'s list); these are thin, on the bumper line, and
+  nearly flush.
+- ⚠️ **The bumper is a part again.** "The bumper is paint" (the band below `bumper_top_y_m`) is
+  reversed: the bar stands 35 mm proud from `bumper_bar_bottom_y_m` to `bumper_top_y_m`, and the
+  front plate and both badges are mounted on it. The rocker stays paint at the sill.
+- **Tail lamps red over amber over white**, where they were amber, white, red: the die-cast's lamp
+  is a tall red lens over a white strip, and amber in the middle keeps the indicator its own lens.
+  A reference call, not a measured one — the user's to correct.
+- **Four grille bars, as the die-cast has.** The first build dropped one to stay under
+  `TRIANGLE_CEILING`; the review below freed the room for it.
+- **`body_offset_z_m` 0.2175, not the photograph's 0.23**: at 0.23 the front wheel opening starts
+  12.5 mm ahead of the corner chamfer's end, and a sliver of panel stood down through it to the
+  sill. At 0.2175 the opening starts exactly where the chamfer ends. `_flank` now refuses an end
+  too short for its opening.
+- **The door hinge is `cabin_mid_z_m` 0.455** (0.315 before), in `taxi.tscn` as in the generator.
+
+**Found on the way, and fixed.** A see-through slit at all four lower corners had shipped: the flank
+starts at the sill ring's chamfer, every ring above chamfers out less far, and up to 8 cm of road
+showed through at the shoulder. `_corner_fill` closes it in the flank's plane.
+
+**Built 2026-11-09.** `tools/make_vehicle.py`, the three `.glb`s, `taxi.tscn`'s hinge and
+`taxi.md`. Tests rewritten where they held the old design: the fixtures are read off `_front_end` /
+`_rear_end` and checked against the bar or the panel they sit on (they built their own plates and
+fog lamps before, and passed against positions the car no longer used); the rocker against the
+opening as drawn, not the circle it samples (the sill at hub height puts the first chord 19 mm
+inside it); the screens' rake skips the mirror glass; the handles are the silver on the flank's
+plane; the roof sign is read above its plinth, and the plinth is held off `LAMP_PARTS`. `_plates`
+deleted, unused. Seven mutations, all caught.
+
+**Measured.** 1,948 triangles (1,142 body, 4 × 192 tyres, 38 door) against 1,204. A drive with
+fares and traffic off, trial against shipped: +1,616 primitives (+0.2%), the same draw calls, the
+car at the same place to the centimetre. Frames against the die-cast's photographs, close and from
+the chase camera.
+
+**The collider follows the body** (the user's "fix Physics box", 2026-11-09). The 4.0 m box,
+centred, left the tail 0.51 m behind it, sinking into any wall the car stopped against. It is
+4.575 m and set 0.2175 m back now, bumper to bumper (z -2.07 to +2.505). ⚠️ The car's inertia was
+unauthored, so Jolt derived it from that box: a longer one would have raised the yaw inertia 29%
+and changed every slide. `CarSpec.inertia_kgm2` freezes the 4.0 m box's values (2,609.83 /
+2,201.85 / 1,078.35 kg·m², read off the running body and equal to the box's formula about the
+centre of mass), `VehicleController._ready` refuses a zero, and `--sweep` refuses the field. The
+trams' `taxi_half_m` 2.3 → 2.5, the further bumper.
+
+Measured, `tools/skidpad.sh` at 42 / 63 / 86 kph before and after: every driving row
+byte-identical — corner, drift, tap, brake, coast, lift, hold, catch, turn, the techniques. Only
+contact moved. `impact` equals `approach` on every wall and traffic row, before and after, so
+the penalty is unchanged. Exits after a wall clip, kph:
+
+| row | 42 before → after | 63 | 86 |
+|---|---|---|---|
+| `wall@10` | 46.48 → 47.92 | 66.39 → 65.55 | 86.63 → 85.71 |
+| `wall@30` | 24.62 → **12.45** | 28.56 → 29.60 | 45.54 → 49.80 |
+| `traffic@rear40_car` (the taxi's exit) | 14.23 → 16.92 | same | same |
+
+The 30° clip at 42 kph loses twice the speed: the longer tail swings into the wall after the nose
+glances off it, as the body always looked like it should. The other traffic rows move under
+0.7 kph, the contact a few centimetres earlier, except `back20` (a body moving away, which latches
+no impact): its exit 82.66 / 99.94 / 118.63 → 79.85 / 97.76 / 117.20 kph. `verify_trams`: a tram stops 10.8 m centre to
+centre from the taxi, 10.7 before.
+
+**Reviewed** before commit. Fixed: the grille's dark field was drawn to the silver frame's
+outline, so their top and bottom faces lay in one plane facing one way and z-fought; it fills the
+frame's opening now. The shut lines and the mirror glass are single quads, not boxes (−60
+triangles), which paid for the fourth grille bar. Refactors with byte-identical output: one
+sampler of the panel's inset (`_inset_span`), one bar seat (`_bar_seat_z`), one tail-lens table
+(`_tail_lenses`, which the wrap-round lens reads), `headlamp_x_m` a dial, `rub_strip_y_m` and
+`tail_lamp_y_m` properties, and `taxi_body` reading `_flank_span_m`. Left: the tyres' inboard
+faces, hidden behind the well (240 triangles; the left wheels would turn 180° in the scene), and
+the buried backs of the fixtures.
+
+**Not done.** The headlamp spots stay at y 0.5, z -2.05 while the lenses moved 16 cm down. Clear glass with an interior is a shader change and transparency. Still short of
+the die-cast: chrome window frames, a bonnet sloping to the nose, rounder shoulders.
+
+Owed: the user's look, and a chase frame of the shipped car in situ.
+
+**See.** `P3-11` · `Q153` · `Q151` · `Q180` · `P3-82`

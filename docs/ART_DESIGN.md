@@ -540,6 +540,11 @@ physics hardpoints and the model are one set of numbers (`make_vehicle.Chassis`)
 caricature returns in a later art pass, on the body rather than the hardpoints or by the user's
 call.
 
+⚠️ **Since `Q190` the taxi's body is a 1:64 die-cast's** (the Tiny City Crown Comfort), the
+user's call over the real car's: 4.54 m on the real wheelbase, nose 0.66 m and tail 1.095 m past the
+axles (0.65 / 1.10 measured; the real car is 4.695 m), a low sill and a cabin set back over a long boot. Its detail is the
+die-cast's, lettering excepted — the checklist is `Proportions`' die-cast block.
+
 **Body shader** (`vehicle_body.gdshader`, `P3-11c`): "flat" means flat *albedo*. A surface marker in
 `UV.y` gives glazing, lenses and paint a clearcoat over a three-band sky gradient (zenith, horizon,
 dark ground) chosen by the reflected ray's elevation.
@@ -558,9 +563,11 @@ dark ground) chosen by the reflected ray's elevation.
   because the hubs share it on the tyre mesh, which gets no shader.
 
 **Shape** (`tools/make_vehicle.py`): screens are raked by angle — 35° front, 30° rear — and
-`roof_*_taper_m` is derived; windscreen and cant rail are one plane. The lower body breaks once at
-`bumper_bottom_y_m`: red valance at nose and tail, dark rocker along the flank. ⚠️ The rocker is the
-third dark strip tried there and is on trial at 60 mm; `rocker_top_y_m = sill_y_m` removes it.
+`roof_*_taper_m` is derived; windscreen and cant rail are one plane. The bumper is a bar standing
+35 mm proud across each end and wrapping to the arches, with a red valance below it (`Q190`; it was
+a band of paint before); the flank breaks once at `bumper_bottom_y_m`, with a dark rocker below.
+⚠️ The rocker is the third dark strip tried there and is on trial at 60 mm; `rocker_top_y_m =
+sill_y_m` removes it.
 
 **In situ**: on `build/driver/art_taxi` t04.50 the red bodywork is `C*` 86.5 against a frame median
 of 7.5 and a city p99 of 39.8 — the only chromatic object in the frame.
@@ -583,7 +590,7 @@ instance, because the body material is shared by the roster.
 
 **Parked roster** (`P3-72`, detailed by `P3-75`): nine kinds in `parked.glb`, 672–932 triangles a lofted kind (the tram 406, its trucks under a whole skirt) and 372 the motorcycle, detailed inside the footprint `parked.vehicles:` places by (`Q166`).
 
-**Roster for the slice** (only the player taxi is built — `P3-11`, 1,180 triangles; the rest are
+**Roster for the slice** (only the player taxi is built — `P3-11`, 1,948 triangles since `Q190`; the rest are
 `B3`'s `P3-3`/`P3-4`/`P3-8`): player taxi, private car (2 variants), red taxi (AI), double-decker
 bus, green minibus, tram. Player-side vehicles are real models because drive layout differs
 (`ARCHITECTURE.md`):

@@ -27,6 +27,13 @@ const PATH: String = "res://tuning/cars/crown_comfort.tres"
 ## Downward offset of the centre of mass from the body origin. Lower = less roll.
 @export_range(-2.0, 2.0, 0.01, "suffix:m") var centre_of_mass_offset_y: float
 
+## The body's principal moments of inertia about its centre of mass (pitch,
+## yaw, roll), set on the rigid body in `VehicleController._ready`. ⚠️ Zero in
+## any axis is refused: Godot reads a zero inertia as "derive it from the
+## collision shapes", which is how the car's yaw inertia used to be an accident
+## of the collider's size (`Q190`). Re-derive it with a change of mass.
+@export var inertia_kgm2: Vector3
+
 @export_group("Drive and brakes")
 ## Top speed in forward gear.
 @export_range(0.0, 300.0, 1.0, "suffix:km/h") var max_speed_kph: float

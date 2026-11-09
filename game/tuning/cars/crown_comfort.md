@@ -31,6 +31,18 @@ body in `VehicleController._ready` — it was `taxi.tscn`'s `mass` until 2026-10
 Under the body's origin, not a measured figure: seeded for roll on the engine-tyre car (`Q50`) and
 kept. The side force's own height is `TyreProfile.side_force_depth`.
 
+## `inertia_kgm2 = Vector3(2609.8333, 2201.853, 1078.353)`
+
+Pitch, yaw and roll about the centre of mass, kg·m². Not a measured figure: they are what Jolt
+derived from the 1.695 × 0.7 × 4.0 m collider at 1,400 kg about the centre of mass 0.35 m under
+the body origin and 0.7 m under the box's centre — yaw `m (w² + l²) / 12` = 2,201.85, pitch and
+roll the box's own plus `m · 0.7²` — read off the running body and frozen here on 2026-11-09
+(`Q190`). Until then the inertia was unauthored, so the collider's size was a handling dial; the box
+grew to 4.575 m to cover the die-cast body, and at the derived value the yaw would have risen 29%.
+On the skidpad every driving row read the same before and after, the freeze and the longer box
+together; only the wall and traffic rows moved, with the box. A real Crown Comfort's figure would be
+a handling change of its own (`tools/skidpad.sh`); with a change of mass, scale all three with it.
+
 ## `max_speed_kph = 140.0`, `max_reverse_kph = 40.0`
 
 The limiter the drive tapers into. A game's ceiling for city streets rather than the car's own top

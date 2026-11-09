@@ -6,6 +6,7 @@
 script = ExtResource("1_car")
 mass_kg = 1400.0
 centre_of_mass_offset_y = -0.35
+inertia_kgm2 = Vector3(2609.8333, 2201.853, 1078.353)
 max_speed_kph = 140.0
 max_reverse_kph = 40.0
 engine_force = 6000.0

@@ -20,7 +20,7 @@
 [ext_resource type="Resource" uid="uid://14q9gunypeuys" path="res://tuning/passenger_emote.tres" id="18_emotetune"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(1.695, 0.7, 4)
+size = Vector3(1.695, 0.7, 4.575)
 
 [node name="Taxi" type="VehicleBody3D" unique_id=1800590424]
 linear_damp_mode = 1
@@ -30,7 +30,7 @@ car = ExtResource("19_car")
 pace = ExtResource("20_pace")
 
 [node name="Body" type="CollisionShape3D" parent="." unique_id=1062071944]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0.2175)
 shape = SubResource("BoxShape3D_body")
 
 [node name="Mesh" parent="." unique_id=1596244631 instance=ExtResource("4_body")]
@@ -38,7 +38,7 @@ script = ExtResource("9_lamps")
 profile = ExtResource("16_lamptune")
 
 [node name="PassengerDoor" type="Node3D" parent="." unique_id=1283577419]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.815, 0, 0.315)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.815, 0, 0.455)
 script = ExtResource("10_door")
 profile = ExtResource("17_doortune")
 

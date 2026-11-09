@@ -41,7 +41,16 @@ Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. 1.695 m wide 
 Toyota Crown Comfort's width (`Q153`; 1.8 m before). ⚠️ **Mirrored, not read**, into
 `etl/config/hong_kong.yaml`'s `clearance.car_width_m` (the player fence) and the `CAR_WIDTH_M`
 defaults of `tools/narrowing.py`, `reachability.py` and `centreline_error.py`: change all of them
-together, rebuild the city and re-sync. Its length (4.0 m) and height are not yet the real car's.
+together, rebuild the city and re-sync. Its height is not yet the real car's.
+
+4.575 m long and set 0.2175 m back on the `Body` node (`Q190`), bumper to bumper over the visual
+body: z -2.07 to +2.505, which is `make_vehicle.Proportions`' `length_m` and `body_offset_z_m`
+plus the bars. It was 4.0 m and centred, and once the body took a die-cast's long boot the tail
+stood 0.51 m behind it and sank into any wall the car stopped against. ⚠️ Move the body in the
+generator and this box goes with it, by hand. Pitch, yaw and roll inertia are authored in
+`crown_comfort.tres` (`inertia_kgm2`) rather than derived from this box, so its size moves what the
+car hits and not how it turns: every driving row on the skidpad read the same, and only the wall and
+traffic rows moved. The trams' `taxi_half_m` is the further bumper, 2.5.
 
 ## `[node name="Mesh" parent="." instance=ExtResource("4_body")]`
 
@@ -88,7 +97,7 @@ two emote meshes here, rises it through the roof and shrinks it away. The
 origin is the rear kerbside seat — x on the kerb side like the door
 (-0.45, half way from the centreline to the flank), y 0.55 (between the belt
 line and the roof, `make_vehicle.Proportions`), z 0.8 (behind the door hinge
-at `cabin_mid_z_m` 0.315 and ahead of `cabin_rear_z_m` 1.25) — so the face is
+at `cabin_mid_z_m` 0.455 and ahead of `cabin_rear_z_m` 1.74 since `Q190`) — so the face is
 hidden by the roof at the pop and emerges from the back of the car rather than
 appearing on it. `verify_vehicle.gd` holds it on the door's side of the car and
 behind the hinge.

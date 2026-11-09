@@ -238,6 +238,7 @@ const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 ## values are swept through `BODY_SWEEP_PREFIX` instead.
 const READY_ONLY_FIELDS: PackedStringArray = [
 	"centre_of_mass_offset_y",
+	"inertia_kgm2",
 	"suspension_frequency_hz",
 	"suspension_damping_ratio",
 	"suspension_rest_length_m",

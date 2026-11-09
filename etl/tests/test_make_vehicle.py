@@ -62,12 +62,12 @@ from make_vehicle import (
     SILVER,
     Chassis,
     Proportions,
-    _badge,
+    _bar_depth_m,
     _check_wiring,
-    _flush_fixture,
+    _front_end,
     _high_brake_lamp,
-    _plates,
     _rear_door_z_m,
+    _rear_end,
     _wheel,
     build_taxi,
     door_hinge,
@@ -109,15 +109,19 @@ def _rgbs(mesh: MeshData, where: np.ndarray | None = None) -> set[Colour]:
 
 
 def _above_roof(mesh: MeshData) -> np.ndarray:
-    """The vertices strictly above the roof panel, which is the roof sign alone.
+    """The vertices strictly above the sign's plinth, which is the roof sign alone.
 
-    `ROOF_EPS_M` is what makes "strictly": the sign's bottom ring sits *on*
-    `roof_y_m`, and so does the roof it stands on, so an inclusive test selects
-    the panel as well and every claim about the sign becomes a claim about the
-    roof. Two tests in two classes ask this, and the tolerance belongs with the
-    question rather than copied beside each of them.
+    `ROOF_EPS_M` is what makes "strictly": the sign's bottom ring sits *on* the
+    plinth's top, so an inclusive test selects the plinth as well and every
+    claim about the sign becomes a claim about the box under it. Since `Q190`
+    that box is a dark `roof_plinth`, `sign_plinth_m` tall and deliberately
+    not a lens — named off the `sign` prefix so it does not glow — which is why
+    the line is the plinth's top rather than `roof_y_m`. Two tests in two
+    classes ask this, and the tolerance belongs with the question rather than
+    copied beside each of them.
     """
-    return mesh.positions[:, 1] > Proportions().roof_y_m + ROOF_EPS_M
+    shape = Proportions()
+    return mesh.positions[:, 1] > shape.roof_y_m + shape.sign_plinth_m + ROOF_EPS_M
 
 
 def _tres_float(text: str, field: str) -> float:
@@ -264,52 +268,47 @@ class Seated(NamedTuple):
 
 
 class TestFixturesSeatedInTheBodywork:
-    """Lamps and plates sit *in* the nose and tail, not on a bumper bar.
+    """Lamps, plates and badges sit *in* the nose and tail or *on* the bumper
+    bar, and never hang off either.
 
-    The bumpers used to be two boxes standing 6 cm proud of each end, and the
-    plate and the fog lamps were mounted on them. With the bar folded back into
-    the bodywork there is nothing flat left to bolt to: the lower body is lofted
-    through rings that draw in towards the sill, so the panel these sit on is at
-    a different z at every height. A hand-copied z floats at one edge and sinks
-    at the other, and neither raises anything.
+    The lower body is lofted through rings that draw in towards the sill, so
+    the panel a fixture sits on is at a different z at every height; a
+    hand-copied z floats at one edge and sinks at the other. Since `Q190` the
+    bumper is a bar again (`_bumpers`), standing proud of the panel across its
+    own band, and three fixtures are mounted on its face: the front plate and
+    both badges. Everything else is seated in the bodywork, above the bar or in
+    the red valance under it.
+
+    Read off `_front_end` and `_rear_end`, the parts the body actually draws —
+    this class used to build its own plates and fog lamps, and went on passing
+    against positions the car no longer used.
     """
+
+    BAR_MOUNTED = frozenset({"plate_front", "badge_front", "badge_rear"})
 
     @staticmethod
     def _face_z(shape: Proportions, y: float, *, rear: bool) -> float:
         inset = shape.face_inset_m(y)
         return shape.rear_z_m - inset if rear else shape.front_z_m + inset
 
-    @staticmethod
-    def _fixtures(shape: Proportions) -> list[Seated]:
-        """Every fixture `_seated_depth` places, with what is expected of it.
+    @classmethod
+    def _fixtures(cls, shape: Proportions) -> list[Seated]:
+        """Every fixture on the nose and tail, with where it is mounted.
 
-        The tail lamps are absent because they cannot pass the last assertion by
-        design — they sit on the boot, above the bumper band — and the fog lamps
-        are present because the class docstring names them and they were the
-        other thing bolted to the deleted bar.
-        """
-        front_plate, rear_plate = _plates(shape)
-        fog = [
-            _flush_fixture(
-                shape,
-                centre=(side * 0.66, -0.04),
-                half=(0.105, 0.03),
-                colour=LAMP,
-                rear=False,
-                name=f"foglamp_{tag}",
-            )
-            for tag, side in (("l", -1.0), ("r", 1.0))
-        ]
+        The wipers are absent: they lie at the foot of the windscreen, not on
+        either end's face."""
+        ends = [(part, False) for part in _front_end(shape)]
+        ends += [(part, True) for part in _rear_end(shape)]
         return [
-            Seated(front_plate, rear=False, on_bumper=True),
-            # ⚠️ The one exemption, and it is an expectation rather than a skip.
-            # The rear plate is on the boot, as the real car's is; asserting that
-            # here is what keeps it from silently drifting onto the band.
-            Seated(rear_plate, rear=True, on_bumper=False),
-            Seated(_badge(shape, rear=False), rear=False, on_bumper=True),
-            Seated(_badge(shape, rear=True), rear=True, on_bumper=True),
-            *(Seated(lamp, rear=False, on_bumper=True) for lamp in fog),
+            Seated(part, rear=rear, on_bumper=part.name in cls.BAR_MOUNTED)
+            for part, rear in ends
+            if not part.name.startswith("wiper_")
         ]
+
+    def test_every_bar_mounted_fixture_is_built(self) -> None:
+        """A renamed plate or badge would drop out of every test below."""
+        names = {seat.mesh.name for seat in self._fixtures(Proportions())}
+        assert names >= self.BAR_MOUNTED
 
     def test_each_one_is_proud_of_the_panel_along_its_whole_height(self) -> None:
         """Visible at the top edge and at the bottom edge, not just the middle.
@@ -317,63 +316,70 @@ class TestFixturesSeatedInTheBodywork:
         ⚠️ And at every profile knot between them. `face_inset_m` is not
         monotonic — the body is furthest out at `belt_y_m - bevel_m * 1.4`, in
         the middle of the range — so sampling only the edges passed a top
-        tail-lamp lens that stood 8.5 mm proud where 15 mm was promised."""
+        tail-lamp lens that stood 8.5 mm proud where 15 mm was promised. A
+        fixture on the bar is measured from the bar's face instead, which is
+        flat."""
         shape = Proportions()
         for seat in self._fixtures(shape):
             low, high = seat.mesh.aabb()
             outer = high[2] if seat.rear else low[2]
-            knots = [y for _, y, _ in shape.lower_profile if low[1] < y < high[1]]
-            for y in (low[1], high[1], *knots):
-                face = self._face_z(shape, y, rear=seat.rear)
+            if seat.on_bumper:
+                faces = [_bar_depth_m(shape, rear=seat.rear)[1]]
+            else:
+                knots = [y for _, y, _ in shape.lower_profile if low[1] < y < high[1]]
+                faces = [self._face_z(shape, y, rear=seat.rear) for y in (low[1], high[1], *knots)]
+            for face in faces:
                 clear = (outer - face) if seat.rear else (face - outer)
                 assert clear >= FIXTURE_PROUD_M - 1e-9, (
-                    f"{seat.mesh.name} stands only {clear * 1000:.1f} mm proud at y={y:+.3f}"
+                    f"{seat.mesh.name} stands only {clear * 1000:.1f} mm proud"
                 )
 
     def test_none_of_them_leaves_a_gap_behind_it(self) -> None:
-        """The other failure: a fixture bridging a slope hangs off the paint."""
+        """The other failure: a fixture bridging a slope hangs off the paint,
+        and one on the bar hangs off the bar's face."""
         shape = Proportions()
         for seat in self._fixtures(shape):
             low, high = seat.mesh.aabb()
             inner = low[2] if seat.rear else high[2]
-            for y in (low[1], high[1]):
-                face = self._face_z(shape, y, rear=seat.rear)
+            if seat.on_bumper:
+                faces = [_bar_depth_m(shape, rear=seat.rear)[1]]
+            else:
+                faces = [self._face_z(shape, y, rear=seat.rear) for y in (low[1], high[1])]
+            for face in faces:
                 buried = (face - inner) if seat.rear else (inner - face)
                 # Flush is the intended answer at the deepest edge, so the bound
                 # has to tolerate the rounding that reaches it, not just floats.
-                assert buried >= -1e-9, f"{seat.mesh.name} floats clear at y={y:+.3f}"
+                assert buried >= -1e-9, f"{seat.mesh.name} floats clear of what it sits on"
 
-    def test_none_of_them_reaches_below_the_valance(self) -> None:
-        """⚠️ Where the body folds in hard, `_seated_depth` answers correctly
-        and the answer looks wrong: a fixture spanning the fold is made deep
-        enough to bridge it, so it stands 4 cm off the paint at its bottom edge
-        and hangs below the car's own outline. The badge did exactly that. The
-        fix is placement, not depth, and this is what holds the placement.
-
-        Stated against `bumper_bottom_y_m` rather than against `sill_y_m +
-        bevel_m`, which is the same number and was what this asserted before.
-        The sum was arithmetic about a fold; the property is the line the bumper
-        band stops at, and every fixture here is *on* that band — so a plate
-        crossing it now fails for the reason that matters, which is that it
-        would be a light shape half on the dark bumper and half on the red
-        valance below it."""
+    def test_the_bar_mounted_ones_stay_on_the_bar(self) -> None:
+        """⚠️ A plate or badge crossing the bar's edge is a light shape half on
+        the dark bar and half on the red below or above it — and, since the
+        bar stands proud, half of it in the air. This used to be stated
+        against `bumper_bottom_y_m`, the sill tuck, when the bumper was a band
+        of paint ending there; the bar ends at `bar_bottom_y_m`."""
         shape = Proportions()
         for seat in self._fixtures(shape):
-            low, _ = seat.mesh.aabb()
-            assert low[1] >= shape.bumper_bottom_y_m, (
-                f"{seat.mesh.name} reaches below the bumper band onto the valance"
+            if not seat.on_bumper:
+                continue
+            low, high = seat.mesh.aabb()
+            assert shape.bar_bottom_y_m <= low[1] and high[1] <= shape.bumper_top_y_m, (
+                f"{seat.mesh.name} reaches off the bumper bar"
             )
 
-    def test_each_one_sits_where_its_backing_colour_is(self) -> None:
-        """A fixture on the bumper is a light shape on DARK; one on the boot is a
-        light shape on RED. Crossing `bumper_top_y_m` puts half of it on each."""
+    def test_the_rest_keep_off_the_bar(self) -> None:
+        """A fixture seated in the bodywork is drawn at the panel, behind the
+        bar's face: one reaching into the bar's band is half hidden inside it.
+        Above the bar (lamps, grille, the rear plate on the boot) or below it
+        in the valance (the fog lamps), never across."""
         shape = Proportions()
         for seat in self._fixtures(shape):
+            if seat.on_bumper:
+                continue
             low, high = seat.mesh.aabb()
-            edge = high[1] if seat.on_bumper else low[1]
-            below = edge <= shape.bumper_top_y_m
-            assert below is seat.on_bumper, (
-                f"{seat.mesh.name} straddles the bumper line at y={edge:+.3f}"
+            above = low[1] >= shape.bumper_top_y_m
+            below = high[1] <= shape.bar_bottom_y_m
+            assert above or below, (
+                f"{seat.mesh.name} spans y {low[1]:+.3f}..{high[1]:+.3f}, into the bar"
             )
 
 
@@ -418,6 +424,10 @@ class TestTheScreensAreRaked:
         # rather than by where it is.
         upright = np.abs(normals[:, 2]) > 1e-6
         faces, normals = faces[upright], normals[upright]
+        # The door mirrors' glass (`Q190`) faces along z too, and reads 0°. It
+        # stands outboard of the flank, where no screen can.
+        inboard = np.abs(body.positions[faces].mean(axis=1)[:, 0]) < shape.half_width_m
+        faces, normals = faces[inboard], normals[inboard]
         rake = np.degrees(np.arctan2(np.abs(normals[:, 1]), np.abs(normals[:, 2])))
         z = body.positions[faces].mean(axis=1)[:, 2]
         return {
@@ -547,6 +557,10 @@ class TestTheBumperBandAndTheRocker:
         photograph shows the dark band stopping and red bodywork carrying on
         below it, which is the lowest 27% of what used to be solid black.
 
+        Since `Q190` the dark band is the panel behind the bumper *bar*, from
+        `bar_bottom_y_m` to `bumper_top_y_m`; the valance runs from the sill up
+        to the bar, through the sill tuck at `bumper_bottom_y_m`.
+
         Read off the lofted panel rather than off the bounding box: the plate,
         the fog lamps and the badge all face the same way and stand proud of it,
         so `z` has to land on the panel itself to be sampling paint. The panel's
@@ -563,8 +577,8 @@ class TestTheBumperBandAndTheRocker:
         on_panel = np.all(np.abs(corners[:, :, 2] - panel_z) < 1e-9, axis=1)
 
         bands = {
-            "valance": (shape.sill_y_m, shape.bumper_bottom_y_m, RED),
-            "bumper": (shape.bumper_bottom_y_m, shape.bumper_top_y_m, DARK),
+            "valance": (shape.sill_y_m, shape.bar_bottom_y_m, RED),
+            "bumper": (shape.bar_bottom_y_m, shape.bumper_top_y_m, DARK),
             "body": (shape.bumper_top_y_m, shape.belt_y_m, RED),
         }
         for label, (low, high, expected) in bands.items():
@@ -593,20 +607,47 @@ class TestTheBumperBandAndTheRocker:
         assert red[:, :, 1].min() >= shape.rocker_top_y_m - 1e-9
 
     def test_the_rocker_stops_at_the_wheel_openings(self, meshes: list[MeshData]) -> None:
-        """A sill panel runs between the arches and no further. The arc rises
-        above the rocker line for 89% of each opening, so this is mostly a check
-        that the columns which *do* dip below it are clipped to the arc rather
-        than filled in square."""
+        """A sill panel runs between the arches and no further: the columns of
+        it that dip below the rocker line are clipped to the arch rather than
+        filled in square.
+
+        ⚠️ Measured against the opening **as drawn** — `arch_segments` columns
+        joined by chords — not against the circle it samples. The two were the
+        same test while the sill sat 0.19 m above the hub, where the chords run
+        nearly level. Since `Q190` the sill is at hub height, the first chord
+        climbs the side of the circle, and it cuts 19 mm inside it; the rocker,
+        the rim and the well all follow the chord, which is right, and a test
+        against the circle fails them for it."""
         shape, chassis, body = Proportions(), Chassis(), meshes[0]
-        dark = body.positions[self._flank_faces(body, shape, DARK)]
+        dark = body.positions[self._flank_faces(body, shape, DARK)].reshape(-1, 3)
         assert len(dark), "the flank carries no rocker at all"
         opening_r = opening_radius_m(chassis, shape)
         for wheel_z in chassis.axle_z_m:
-            radial = np.hypot(dark[:, :, 2] - wheel_z, dark[:, :, 1] - chassis.hub_y_m)
-            assert radial.min() >= opening_r - 1e-9, (
-                f"the rocker intrudes {(opening_r - radial.min()) * 1000:.1f} mm "
-                f"into the opening at z={wheel_z:+.2f}"
+            columns = np.linspace(wheel_z - opening_r, wheel_z + opening_r, shape.arch_segments + 1)
+            offsets = np.minimum(np.abs(columns - wheel_z), opening_r)
+            arch = np.maximum(shape.sill_y_m, chassis.hub_y_m + np.sqrt(opening_r**2 - offsets**2))
+            inside = np.abs(dark[:, 2] - wheel_z) < opening_r
+            floor = np.interp(dark[inside, 2], columns, arch)
+            assert len(floor), f"no rocker reaches the arch at z={wheel_z:+.2f}"
+            shortfall = float((floor - dark[inside, 1]).max())
+            assert shortfall <= 1e-9, (
+                f"the rocker reaches {shortfall * 1000:.1f} mm into the opening at z={wheel_z:+.2f}"
             )
+
+    @pytest.mark.parametrize(
+        ("offset", "end"),
+        [(0.23, "nose"), (-0.23, "tail")],
+        ids=["the photograph's nose", "a mirrored tail"],
+    )
+    def test_an_end_too_short_for_its_wheel_opening_is_refused(
+        self, offset: float, end: str
+    ) -> None:
+        """⚠️ 0.23 is the offset the die-cast photograph reads (`Q190`), and it
+        drew a sliver of panel standing down through the front opening to the
+        sill — the opening started 12.5 mm ahead of the corner chamfer's end."""
+        shape = replace(Proportions(), body_offset_z_m=offset)
+        with pytest.raises(ValueError, match=f"the {end} is .* too short"):
+            taxi_body(Chassis(), shape)
 
     def test_the_rocker_is_paint_and_not_a_part(
         self, meshes: list[MeshData], bare_flank: MeshData
@@ -670,11 +711,14 @@ class TestTheDoorHandles:
 
         Read off the mesh rather than recomputed. The cant rail is SILVER too, so
         the belt line separates trim from handles; one side is enough, and taking
-        one keeps the two boxes apart instead of pooling four.
+        one keeps the two boxes apart instead of pooling four. And since `Q190`
+        the nose and tail carry chrome below the belt — bezels, grille, emblems,
+        garnish, the plate frame — all of it inboard of the flank, so a handle
+        is the silver standing on the flank's plane or outside it.
         """
         corners = mesh.positions[_faces_of(mesh, SILVER)]
         keep = np.all(corners[:, :, 1] < shape.belt_y_m, axis=1) & np.all(
-            corners[:, :, 0] > 0.0, axis=1
+            corners[:, :, 0] >= shape.half_width_m - 1e-6, axis=1
         )
         corners = corners[keep]
         if not len(corners):
@@ -851,10 +895,13 @@ class TestTaxiContract:
         roughly *symmetric*, which is true of any centred box facing either way
         and caught nothing.
 
-        Read off `_plates` rather than off the merged body, because once the
-        plates are flat-coloured boxes their colours are shared with the lamps
-        at both ends and nothing in the merged mesh can pick them out again."""
-        front, rear = _plates(Proportions())
+        Read off the two ends' parts rather than off the merged body, because
+        once the plates are flat-coloured boxes their colours are shared with
+        the lamps at both ends and nothing in the merged mesh can pick them out
+        again."""
+        shape = Proportions()
+        parts = {part.name: part for part in (*_front_end(shape), *_rear_end(shape))}
+        front, rear = parts["plate_front"], parts["plate_rear"]
         for plate, colour, expected_sign in ((front, LAMP, -1.0), (rear, AMBER, 1.0)):
             # The whole set, not its first row: a plate that picked up a second
             # colour would still pass if the smaller row happened to match.
@@ -1078,6 +1125,20 @@ class TestSurfaceMarkers:
         assert np.all(markers[cap] == MARKER_LAMP), (
             "the sign's cap took MARKER_TRIM from its colour — LAMP_PARTS is no longer overriding"
         )
+        # And the plinth under it is *not* a lens (`Q190`): the one DARK part on
+        # the roof, kept off the `sign` prefix so `LAMP_PARTS` leaves it paint.
+        # Read below the plinth's top, where the sign's own DARK base sits, and
+        # above the glass, where the dark sashes stop; the plinth is sunk into
+        # the roof, so the roof line is not its bottom.
+        shape = Proportions()
+        y = body.positions[:, 1]
+        plinth = (
+            (y > shape.glass_top_y_m + ROOF_EPS_M)
+            & (y < shape.roof_y_m + shape.sign_plinth_m - ROOF_EPS_M)
+            & np.all(body.colours[:, :3] == np.array(DARK, dtype=np.uint8), axis=1)
+        )
+        assert plinth.any(), "the sign has lost its plinth"
+        assert not np.any(markers[plinth] == MARKER_LAMP), "the sign's plinth is marked as a lens"
 
 
 class TestLampCircuits:
@@ -1197,9 +1258,12 @@ class TestLampCircuits:
         body = meshes[0]
         circuits = self._circuits(body)
         sign = circuits == CIRCUIT_ROOFSIGN
-        assert np.all(body.positions[sign, 1] >= Proportions().roof_y_m - ROOF_EPS_M), (
-            f"circuit {CIRCUIT_ROOFSIGN} reaches below the roof"
-        )
+        # Its plinth's top, not the roof: the dark `roof_plinth` under the sign
+        # is the one part a `sign_` name would light by mistake.
+        shape = Proportions()
+        assert np.all(
+            body.positions[sign, 1] >= shape.roof_y_m + shape.sign_plinth_m - ROOF_EPS_M
+        ), f"circuit {CIRCUIT_ROOFSIGN} reaches below the top of the sign's plinth"
         aloft = _above_roof(body)
         assert set(circuits[aloft].tolist()) == {CIRCUIT_ROOFSIGN}, (
             "something other than the roof sign is switched above the roof"
