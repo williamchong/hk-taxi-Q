@@ -98,3 +98,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   stands: an unlit head asserts a signal out of service and a lit one cannot be derived from anything
   published. ⚠️ What a return must keep is in `Q76`. ⚠️ `signs.disc`, `facing_from_side` and
   `plate_frame` stay public for it.
+- **The poles collide** (`Q191`): `region.tscn`'s `posts` stands a cylinder up every `pole`, read off
+  its foot; a face hangs at its own centre and stands nothing. A face drawn standing on its origin
+  would gain a post of its own, and `verify_signs`' `check_posts` counts it. Never a collider in
+  `signs.glb` itself.

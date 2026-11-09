@@ -79,3 +79,6 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `MultiMesh` per 300 m cell since then, hidden past 400 m measured to the CELL's centre, not the
   lamp. ⚠️ `prims` baselines shift with which capture macOS stalled; compare runs whose `pos` column
   matches. 🚫 The signs do not join the list: 23 library meshes a cell, +65 to +94 draws.
+- **The columns collide** (`Q191`): `region.tscn`'s `posts` stands a cylinder read off the library
+  mesh's foot, so a kind must stay drawn standing on its origin (`y` = 0) or it stands nothing and
+  `verify_lamps`' `check_posts` fails. Never a collider in `lamps.glb` itself.

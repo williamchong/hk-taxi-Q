@@ -208,6 +208,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q170` | Space is the handbrake: the button is named for what it does, and the drift is what the car and the player make of it | ✅ Built 2026-10-27 on the user's ask. A rename; no force on the car moves. |
 | `Q171` | Trees are built from HyD's and LCSD's published inventories, and only where one is surveyed | ✅ Decided and built 2026-10-27 (`P3-77`): 1,061 + 2,375 trees, a trunk collider each. Reverses `Q144`'s "trees are not built". |
 | `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`; the heads lit 2026-10-30). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
+| `Q191` | Lamp columns, sign posts and signal posts collide, as a cylinder up each post | ✅ Built 2026-11-09 on the user's ask (`P3-83`). Reverses the lamps', the signs' and the heads' "no collider" budget stances. The user's drive owed. |
 
 ---
 
@@ -12001,3 +12002,39 @@ the die-cast: chrome window frames, a bonnet sloping to the nose, rounder should
 Owed: the user's look, and a chase frame of the shipped car in situ.
 
 **See.** `P3-11` · `Q153` · `Q151` · `Q180` · `P3-82`
+
+## `Q191` — Lamp columns, sign posts and signal posts collide, as a cylinder up each post
+
+**Asked** by the user, 2026-11-09: "make pole, traffic light, road sign etc collisable".
+
+**Decided and built 2026-11-09 (`P3-83`).** 🔴 **Two recorded stances are reversed on the user's
+instruction**, both budget calls and neither measured shut: `region.md`'s "no collider" on the lamps
+(897 bodies before `P2-6` had measured a frame) and on the signs (699 bodies, likewise), and the
+signal heads' "no colliders" (`Q76`).
+
+- **A cylinder up the post, read off the mesh.** `PropBatch.post_of` takes the ring of vertices at a
+  library mesh's foot (`y` = 0 in its own frame) and returns an upright cylinder from the foot to the
+  mesh's top: the lamp column's 90 mm × 9.05 m, the sign `pole`'s 32 mm × 1 m (scaled to its stack),
+  the signal post's 60 mm × 3.65 m. No second copy of a radius in code. A sign's face hangs on its
+  pole at its own centre, so it stands on nothing and gets no shape; a lamp's bracket arm and lantern
+  get none — the column is what a bumper meets.
+- **A body a kind and plan cell, never a body a post** (`PropBatch.posts`), the trees' rule: Jolt's
+  `max_bodies` is 10,240 and the railings hold 7,693. Wan Chai: 1,077 columns in 18 bodies, 634 sign
+  poles in 1 (the signs are not in `prop_cells.tres`), 368 signal posts in 15; Causeway Bay 364 in 10,
+  216 in 1, 64 in 6. Posts of one size share one `CylinderShape3D` by reference, as the railings
+  share their box. The trunks now stand through the same `PropBatch.posts`.
+- **The switches are the placer's**: `posts` on `region.tscn`'s `Lamps` and `Signs` and on
+  `city_drive.tscn`'s `Heads`. `lamps.glb`, `signs.glb` and `heads.glb` stay collider-free, and
+  `verify_lamps` / `verify_signs` still assert it.
+
+**Checked.** `VerifyLayer.check_posts` (lamps, signs) builds the layer with `posts` on and holds the
+shape count to the placements on a post, the body count to the kind-and-cell pairs, and the first
+post's radius, height and centre to its placement; `verify_signals` `heads:` holds a post per head.
+Three mutations caught: radius doubled, a body per post, the post at the foot rather than its
+centre. `check.sh` passes; `city_drive.tscn` boots headless with the same exit warnings as before.
+
+Not measured: a frame's `phys` on the throttle route with the posts in, and the feel of a car
+stopped dead by a 32 mm post at speed. Breakaway poles stay `B3`'s. Owed: the user's drive into a
+column, a sign and a signal post.
+
+**See.** `P3-83` · `Q159` · `Q171` · `Q76` · `game/scripts/city/prop_batch.gd` · `game/scenes/region.md`
