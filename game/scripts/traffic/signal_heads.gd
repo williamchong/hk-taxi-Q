@@ -12,7 +12,9 @@ extends Node3D
 ## not drawn — a lamp showing nothing would read as a junction that is off.
 ## The light is `SignalController.light_at` for the head's own approach, the one
 ## the cars stop by, written into `INSTANCE_CUSTOM.a` only when it changes
-## (`signal_head.gdshader` decodes it). No colliders (`Q76`).
+## (`signal_head.gdshader` decodes it). With `posts`, the post each head
+## stands on collides: a cylinder read off the library mesh's foot, a body a
+## plan cell (`PropBatch.posts`, `Q191`). The head itself stays collider-free.
 
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
@@ -46,6 +48,10 @@ class Stage:
 	var light: int = -1
 	var heads: Array[Head] = []
 
+
+## Stand a cylinder up every head's post. On in `city_drive.tscn`; the
+## sidecar says why, and `false` is the off switch.
+@export var posts: bool = false
 
 var heads: Array[Head] = []
 var _stages: Array[Stage] = []
@@ -143,7 +149,22 @@ func build(graph: RoadGraph) -> void:
 				by_stage[key] = stage
 				_stages.append(stage)
 			by_stage[key].heads.append(head)
+	if posts:
+		_stand_posts(mesh, cells)
 	refresh()
+
+
+## The posts under every head, one body a plan cell of `cells`.
+func _stand_posts(mesh: Mesh, cells: PropCellProfile) -> void:
+	var post: AABB = PropBatch.post_of(mesh)
+	if not post.has_volume():
+		push_error("SignalHeads: %s stands on no post; the heads do not collide" % MESH_NAME)
+		return
+	var transforms: Array[Transform3D] = []
+	for head: Head in heads:
+		transforms.append(head.at)
+	for body: StaticBody3D in PropBatch.posts(post, transforms, MESH_NAME + "_posts", cells):
+		add_child(body)
 
 
 func _physics_process(_delta: float) -> void:

@@ -37,8 +37,9 @@
 ## The collider count is printed because for every layer here but one there
 ## must be **none**, and each layer's reason is its own — they live in
 ## `region.md` beside the scene, under the node that would have to change
-## (`Q74`, `Q119`). The one is the railings since `Q159`: `collides` stands
-## a box body under every placement, and the asset itself stays collider-free.
+## (`Q74`, `Q119`). The exceptions are the placer's, never the asset's: the
+## railings' box a placement (`collides`, `Q159`), the trees' trunks
+## (`trunks`), and the lamps' and the signs' posts (`posts`, `Q191`).
 extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
@@ -69,6 +70,14 @@ signal built(low: Vector3, high: Vector3)
 ## because Jolt's 10,240 bodies already hold the railings' 7,693 and a body a
 ## tree would pass it. On for the trees alone; `region.md` says why.
 @export var trunks: bool = false
+
+## Stand an upright cylinder up the post of every placement whose library mesh
+## is drawn standing on its origin — a lamp column, a sign pole — read off the
+## mesh's own foot (`PropBatch.post_of`), one static body per plan cell for
+## `trunks`' reason. A mesh that hangs (a sign's face) stands nothing: the post
+## it hangs on is the obstacle. On for the lamps and the signs; `region.md`
+## says why.
+@export var posts: bool = false
 
 ## The one figure worth printing beyond the plan extent: a column has a height
 ## and a painted arrow does not. The preview's own formatting, kept out of the
@@ -111,8 +120,8 @@ func _ready() -> void:
 		bounds = placed["bounds"]
 		triangles = int(placed["triangles"])
 	else:
-		if collides:
-			push_warning("%s: collides stands boxes under a library's props only" % layer)
+		if collides or posts:
+			push_warning("%s: collides and posts stand bodies under a library's props only" % layer)
 		instance.name = name
 		add_child(instance)
 		bounds = MeshContract.bounds(instance)
@@ -169,6 +178,7 @@ func _place(library: Node3D) -> Dictionary:
 	if trunks and trunk_table.is_empty():
 		push_error("%s: trunks is on and the document carries no trunks table" % layer)
 	var boxes: Array[AABB] = []
+	var posted: int = 0
 	var triangles: int = 0
 	var batches: int = 0
 	var cells := load(PropCellProfile.PATH) as PropCellProfile
@@ -201,6 +211,12 @@ func _place(library: Node3D) -> Dictionary:
 				push_error("%s: library mesh %s is flat and cannot collide" % [layer, mesh_name])
 			for body: StaticBody3D in PropBatch.bodies(local, batch, mesh_name + "_col"):
 				add_child(body)
+		if posts:
+			var post: AABB = PropBatch.post_of(mesh)
+			if post.has_volume():
+				posted += batch.size()
+				for body: StaticBody3D in PropBatch.posts(post, batch, mesh_name + "_posts", cells):
+					add_child(body)
 		if trunk_table.is_empty():
 			pass
 		elif not trunk_table.has(mesh_name):
@@ -213,6 +229,8 @@ func _place(library: Node3D) -> Dictionary:
 		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
 		if layer == GeneratedLayer.LAMPS:
 			batches += _stand_pools(mesh, batch, mesh_name, cells)
+	if posts and posted == 0:
+		push_error("%s: posts is on and no library mesh stands on a post" % layer)
 	print(
 		(
 			"%s: %d placements over %d library meshes, %d batches"
@@ -281,25 +299,13 @@ func _stand_trunks(
 	if radius_m <= 0.0 or height_m <= 0.0:
 		push_error("%s: %s's trunk has no size" % [layer, mesh_name])
 		return bodies
-	var by_cell: Dictionary[Vector2i, StaticBody3D] = {}
-	for at: Transform3D in batch:
-		var cell: Vector2i = Vector2i.ZERO if cells == null else cells.cell_of(at.origin)
-		if not by_cell.has(cell):
-			var body := StaticBody3D.new()
-			body.name = "%s_trunks_%d_%d" % [mesh_name, cell.x, cell.y]
-			by_cell[cell] = body
-			bodies.append(body)
-		# `trees.py` stands a tree at (across, up, across): a crown is round in
-		# plan, so the trunk widens with its across-scale and rises with its up.
-		var grown: Vector3 = at.basis.get_scale()
-		var shape := CylinderShape3D.new()
-		shape.radius = radius_m * grown.x
-		shape.height = height_m * grown.y
-		var collision := CollisionShape3D.new()
-		collision.shape = shape
-		collision.position = at.origin + Vector3(0.0, shape.height * 0.5, 0.0)
-		by_cell[cell].add_child(collision)
-	return bodies
+	# `trees.py` stands a tree at (across, up, across): a crown is round in
+	# plan, so the trunk widens with its across-scale and rises with its up —
+	# `PropBatch.posts`' own reading of a stand.
+	var trunk_post := AABB(
+		Vector3(-radius_m, 0.0, -radius_m), Vector3(2.0 * radius_m, height_m, 2.0 * radius_m)
+	)
+	return PropBatch.posts(trunk_post, batch, mesh_name + "_trunks", cells)
 
 
 ## The pool of light under each of `columns`' lanterns (`Q160`), on the lamps'

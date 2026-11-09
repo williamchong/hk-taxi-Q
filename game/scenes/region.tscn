@@ -39,6 +39,7 @@ collides = true
 [node name="Lamps" type="Node3D" parent="." unique_id=1040385558]
 script = ExtResource("1_layer")
 layer = "lamps"
+posts = true
 
 [node name="Trees" type="Node3D" parent="." unique_id=1779342917]
 script = ExtResource("1_layer")
@@ -48,6 +49,7 @@ trunks = true
 [node name="Signs" type="Node3D" parent="." unique_id=637669317]
 script = ExtResource("1_layer")
 layer = "signs"
+posts = true
 
 [node name="Landmarks" type="Node3D" parent="." unique_id=1943762930]
 script = ExtResource("2_landmarks")

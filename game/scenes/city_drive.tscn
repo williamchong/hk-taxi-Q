@@ -61,6 +61,7 @@ vehicle = NodePath("../Taxi")
 
 [node name="Heads" type="Node3D" parent="Signals"]
 script = ExtResource("28_heads")
+posts = true
 
 [node name="Traffic" type="Node3D" parent="." node_paths=PackedStringArray("vehicle", "signals")]
 script = ExtResource("26_traffic")

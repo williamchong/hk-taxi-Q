@@ -113,6 +113,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 	problems.append_array(_check_placements(library))
 	problems.append_array(_check_has_no_collision(scene_root))
+	problems.append_array(VerifyLayer.check_posts(GeneratedLayer.SIGNS, library))
 	return problems
 
 

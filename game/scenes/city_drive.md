@@ -69,6 +69,12 @@ Unset, the car reads no rig — no daylight to be in or out of — and drives wi
 its front lamps out, which is `vehicle_lamps.gd`'s stated rule for a car with
 no world around it.
 
+## `[node name="Heads" type="Node3D" parent="Signals"]`
+
+The lit signal heads (`P3-3e`, `Q173`). `posts = true` (`Q191`, the user's call, 2026-11-09): the
+post each head stands on collides, an upright cylinder read off `heads.glb`'s foot (60 mm, 3.65 m), in
+one body per plan cell; the head itself does not. `false` is the off switch.
+
 ## `[node name="GraphOverlay" type="Node3D" parent="."]`
 
 `P2-2`'s debug overlay: what `RoadGraph` believes is under the car, drawn on

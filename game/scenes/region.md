@@ -106,12 +106,14 @@ carriageway. **Unlit**, and deliberately: `Q38` bakes the exposure into
 `COLOR_0` at build time, `Q26` has not chosen a look, and `ART_DESIGN.md` says
 to resist adding lights. A region whose sources publish no utility point layer
 ships none and this node simply stays empty.
-No collider: a lamp column is a 90 mm prism every twenty metres down every
-kerb, so modelling 897 of them as collision geometry before `P2-6` has
-measured a frame on the device floor is the wrong order — and a car catching
-one mid-drift is a worse failure than passing through it. `B3` revisits it;
-breakaway poles are the genre's answer, and that is an effect rather than a
-shape.
+`posts = true`: a lamp column is a crash (`Q191`, the user's call, 2026-11-09),
+reversing the old stance — "897 bodies before `P2-6` has measured a frame" —
+which was a budget call and never measured shut. An upright cylinder up each
+column, read off the library mesh's own foot (`PropBatch.post_of`: 90 mm,
+9.05 m), and nothing for the bracket arm or the lantern over the carriageway.
+**One static body per kind and plan cell**, the trees' reason: 18 bodies for
+Wan Chai's 1,077 columns, 10 for Causeway Bay's 364. `lamps.glb` stays
+collider-free. Breakaway is still `B3`'s; `false` is the off switch.
 
 ## `[node name="Trees" type="Node3D" parent="."]`
 
@@ -133,10 +135,14 @@ The published traffic signs (`P3-16`), one mesh for the whole region, standing
 on the poles TD surveyed rather than at the abbreviation points that name them
 — those are drawing labels and sit a median 2.6 m away. Only the signs whose
 meaning is their *shape* are here; the text-faced 2,364 are refused (`Q42`).
-No collider, and unlike the railings that is a budget decision rather than a
-design one: a sign post is a real obstacle a real car would hit, but 699 of
-them is 699 collision bodies and `P2-6` has not measured a frame on the
-device floor yet. Breakaway posts are a `B3` question.
+`posts = true`: a sign post is a crash (`Q191`, the user's call, 2026-11-09),
+reversing the old budget stance. A cylinder up every `pole` placement, read off
+the mesh's foot (32 mm, scaled to the stack), and none under a face — a plate
+hangs on its pole at its own centre, so `post_of` reads it as standing on
+nothing, and the pole is what a bumper meets. The signs are not in
+`prop_cells.tres`, so the posts are one body a region holding a shape each (634
+in Wan Chai, 216 in Causeway Bay). `signs.glb` stays collider-free; `false` is
+the off switch.
 
 ## `[node name="Landmarks" type="Node3D" parent="."]`
 

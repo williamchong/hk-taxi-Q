@@ -68,3 +68,83 @@ static func bodies(
 		body.add_child(collision)
 		built.append(body)
 	return built
+
+
+## The post `mesh` stands on, in its own frame: the bounds of an upright
+## cylinder over the ring of vertices at its foot, from the foot to the mesh's
+## top. Read off the geometry, so the radius is whatever the ETL drew — a lamp
+## column's 90 mm, a sign pole's 32 mm, a signal post's 60 mm — and never a
+## second copy of it here.
+##
+## Empty for a mesh not drawn standing on its origin: a sign's face hangs on its
+## pole at the face's centre, so its lowest vertex is below zero and it stands
+## nothing. Empty too for a foot of no area.
+static func post_of(mesh: Mesh) -> AABB:
+	var extent: AABB = mesh.get_aabb()
+	if not is_zero_approx(extent.position.y) or extent.size.y <= 0.0:
+		return AABB()
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	var foot := PackedVector2Array()
+	for surface: int in mesh.get_surface_count():
+		var vertices: PackedVector3Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+		for vertex: Vector3 in vertices:
+			if is_zero_approx(vertex.y):
+				var plan := Vector2(vertex.x, vertex.z)
+				foot.append(plan)
+				low = low.min(plan)
+				high = high.max(plan)
+	if foot.is_empty():
+		return AABB()
+	var centre: Vector2 = 0.5 * (low + high)
+	var radius: float = 0.0
+	for plan: Vector2 in foot:
+		radius = maxf(radius, centre.distance_to(plan))
+	if radius <= 0.0:
+		return AABB()
+	return AABB(
+		Vector3(centre.x - radius, 0.0, centre.y - radius),
+		Vector3(2.0 * radius, extent.size.y, 2.0 * radius)
+	)
+
+
+## An upright cylinder over `post` — `post_of`'s shape, in the prop's frame —
+## under each of `transforms`, as one static body per plan cell of `cells`
+## holding a shape a placement, or one body for the lot without `cells`.
+##
+## 🔴 **A body a cell, never a body a post.** Jolt's `max_bodies` is 10,240 and
+## the railings alone hold 7,693 of it (`Q159`); the lamps, the sign poles, the
+## signal posts and the trees together would pass it. A placement's scale
+## widens the cylinder with its across-scale and raises it with its up, and the
+## shape stands upright whatever the bearing: every one of these is stood by a
+## turn about `+Y`. Posts of one size share one shape by reference, as
+## `bodies` shares its box: a region's columns are one size, not a thousand.
+static func posts(
+	post: AABB, transforms: Array[Transform3D], name: String, cells: PropCellProfile
+) -> Array[StaticBody3D]:
+	var stood: Array[StaticBody3D] = []
+	if not post.has_volume():
+		return stood
+	var centre: Vector3 = post.get_center()
+	var by_cell: Dictionary[Vector2i, StaticBody3D] = {}
+	var by_size: Dictionary[Vector2, CylinderShape3D] = {}
+	for at: Transform3D in transforms:
+		var cell: Vector2i = Vector2i.ZERO if cells == null else cells.cell_of(at.origin)
+		if not by_cell.has(cell):
+			var body := StaticBody3D.new()
+			body.name = "%s_%d_%d" % [name, cell.x, cell.y]
+			by_cell[cell] = body
+			stood.append(body)
+		var grown: Vector3 = at.basis.get_scale()
+		var size := Vector2(0.5 * post.size.x * grown.x, post.size.y * grown.y)
+		if not by_size.has(size):
+			var made := CylinderShape3D.new()
+			made.radius = size.x
+			made.height = size.y
+			by_size[size] = made
+		var shape: CylinderShape3D = by_size[size]
+		var collision := CollisionShape3D.new()
+		collision.shape = shape
+		collision.position = at * centre
+		by_cell[cell].add_child(collision)
+	return stood

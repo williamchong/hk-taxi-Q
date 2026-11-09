@@ -26,6 +26,7 @@ extends "res://tools/verify_tool.gd"
 const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
 const ControllerScript = preload("res://scripts/traffic/signal_controller.gd")
 const HeadsScript = preload("res://scripts/traffic/signal_heads.gd")
+const VerifyLayer = preload("res://tools/verify_layer.gd")
 ## `generated_scene_import.gd`'s row for the library's material.
 const HEADS_MATERIAL: String = "res://tuning/signal_heads.tres"
 
@@ -309,6 +310,7 @@ func _check_the_heads(graph: RoadGraph, plan: SignalPlan, table: SignalPlanProfi
 	var controller: SignalController = ControllerScript.create(plan, table)
 	var heads: SignalHeads = HeadsScript.new()
 	heads.controller = controller
+	heads.posts = true
 	heads.build(graph)
 	var by_region: Dictionary[String, int] = {}
 	for head: HeadsScript.Head in heads.heads:
@@ -326,6 +328,21 @@ func _check_the_heads(graph: RoadGraph, plan: SignalPlan, table: SignalPlanProfi
 		controller.free()
 		return
 	var mesh: Mesh = heads.heads[0].multimesh.mesh
+	# `posts` (`Q191`): a cylinder up every head's post, in a body per cell.
+	var shapes: Array[CollisionShape3D] = []
+	var post_bodies: int = VerifyLayer.cylinders_under(heads, VerifyLayer.POSTS, shapes)
+	var cells := load(PropCellProfile.PATH) as PropCellProfile
+	var cells_with_heads: Dictionary[Vector2i, bool] = {}
+	for head: HeadsScript.Head in heads.heads:
+		cells_with_heads[cells.cell_of(head.at.origin)] = true
+	_expect(
+		shapes.size() == heads.heads.size() and post_bodies == cells_with_heads.size(),
+		"heads",
+		(
+			"%d posts collide, in %d bodies, under %d heads in %d cells"
+			% [shapes.size(), post_bodies, heads.heads.size(), cells_with_heads.size()]
+		)
+	)
 	var material: Material = mesh.surface_get_material(0)
 	_expect(
 		material != null and material.resource_path == HEADS_MATERIAL,

@@ -93,14 +93,8 @@ func _check_trunks(path: String, library: Dictionary[String, Mesh]) -> PackedStr
 	node.layer = GeneratedLayer.TREES
 	node.trunks = true
 	node._ready()
-	var bodies: int = 0
 	var shapes: Array[CollisionShape3D] = []
-	for found: Node in node.find_children("*", "StaticBody3D", true, false):
-		bodies += 1
-		for child: Node in found.get_children():
-			var collision := child as CollisionShape3D
-			if collision != null and collision.shape is CylinderShape3D:
-				shapes.append(collision)
+	var bodies: int = VerifyLayer.cylinders_under(node, "*", shapes)
 	if shapes.size() != placements.size():
 		problems.append("%d trunk shapes stand under %d trees" % [shapes.size(), placements.size()])
 	if bodies != expected_bodies.size():
