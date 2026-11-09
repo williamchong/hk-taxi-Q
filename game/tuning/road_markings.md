@@ -64,8 +64,18 @@ silent streets are surveyed streets with no centre line — JARDINE'S CRESCENT c
 its kerbside yellows and nothing else — and where the middle *is* occupied it is by
 hatching, zigzags or a yellow box that an invented line would run through.
 ⚠️ `line_width`, `centre_width`, `centre_gap`, `dash_length_m` and `dash_gap_m` now
-reach only `draw_bus_lane`'s line and a region that switches these back on; the lane
-coordinate, `lanes_painted` and `centre_at` stay in the codec for that region.
+reach only a region that switches these back on; the lane coordinate, `lanes_painted`
+and `centre_at` stay in the codec for that region.
+
+🔴 **`draw_bus_lane` is 0.0 since 2026-11-09 (`Q192`), on the user's call, for the
+same reason as the two above.** It painted a `bus_width` line at `U = 1` of every edge
+whose route `BUS_ONLY_LANE` flags — a flag that says a bus lane exists along the route,
+not where its line runs. U-lanes are the drawn ribbon over `lanes`, tram lane included,
+so on HENNESSY ROAD (edge 237, 10.3 m drawn, `lanes` 2) it was a **0.46 m** bar 1.7 m
+inside the traffic lane, beside TD's bus-stop box and with no surveyed bus-lane line
+within 282 m. `roadmarks.py` now draws TD's own `RM1006` BUS LANE and `RM1007` BUS
+LANE CONTINUATION at the sheet's 250 mm. ⚠️ `bus_width` reaches nothing while this is
+0.0, and the `bus_lane` bit stays in the codec — the router reads the flag off the graph.
 
 ⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
 rather than chosen.** A junction cap overlaps its arms rather than abutting

@@ -25,6 +25,6 @@ shader_parameter/fade_softness_m = 3.0
 shader_parameter/draw_lane_lines = 0.0
 shader_parameter/draw_centre_line = 0.0
 shader_parameter/draw_pair_join = 0.0
-shader_parameter/draw_bus_lane = 1.0
+shader_parameter/draw_bus_lane = 0.0
 shader_parameter/draw_double_yellow = 1.0
 shader_parameter/paint_night_glow = 0.6

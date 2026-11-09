@@ -2798,6 +2798,41 @@ road_marks:
       mark_m: 6.0
       gap_m: 3.0
 
+    # 🔴 **The bus lane's line is TD's survey since 2026-11-09, and the shader's
+    # `draw_bus_lane` is 0.0** (`Q192`, the user's call). The shader drew a
+    # 0.09-lane line at `U = 1` of every `bus_lane` edge — `bus_lane` is a ROUTE
+    # flag off `BUS_ONLY_LANE`, which says a bus lane exists along the route and
+    # not where its line runs — so on HENNESSY ROAD (edge 237: 10.3 m drawn,
+    # tram lane included, `lanes` 2) it painted a 0.46 m bar 1.7 m inside the
+    # traffic lane, beside a bus stop box (`RM1048`) and with no `RM1006` within
+    # 282 m. Back on sheet `CT174/51-5(1)F`:
+    #
+    #   1006 (TC 504)  BUS LANE       LINE WIDTH = 250
+    #                  - WHITE        MODULE: CONTINUOUS
+    #                  REGULATORY
+    #
+    # ⚠️ Not `divides_flows`: it divides a lane from a lane, and a lane line must
+    # never carry it (the inferred join's `_covered` reach).
+    - id: bus_lane_line
+      codes: [RM1006]
+      axis: longitudinal
+      line_width_m: 0.25
+      lines: 1
+
+    #   1007 (TC 518)  BUS LANE       LINE WIDTH = 250
+    #                  CONTINUATION   MODULE: 1000 MARK, 1000 GAP
+    #                  - WHITE
+    #                  REGULATORY
+    #
+    # Filed in the sister layer (`DTAD_RD_MARK_LINE_C`), as the broken family is.
+    - id: bus_lane_continuation
+      codes: [RM1007]
+      axis: longitudinal
+      line_width_m: 0.25
+      lines: 1
+      mark_m: 1.0
+      gap_m: 1.0
+
     # ⚠️ No `lines_spacing_m`: a single line has no gap to declare, and the
     # loader only reads one where there is a second line for it to sit between.
     - id: stop_line
