@@ -210,10 +210,11 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q173` | Signals return as a phase plan we author and can check, and heads show only what it runs | 🟡 Decided 2026-10-29 on the user's instruction (`P3-3a`–`P3-3e`; the heads lit 2026-10-30). Reverses `Q77`'s closure; `Q76`'s vocabulary findings stand. |
 | `Q191` | Lamp columns, sign posts and signal posts collide, as a cylinder up each post | ✅ Built 2026-11-09 on the user's ask (`P3-83`). Reverses the lamps', the signs' and the heads' "no collider" budget stances. The user's drive owed. |
 | `Q192` | The bus lane's line is TD's survey (`RM1006`, `RM1007`); the shader's `U = 1` bar is off | ✅ Built 2026-11-09 on the user's report and call. Extends `Q132`'s "where TD surveys no line, none is drawn" to the last line the shader invented. |
-| `Q193` | A building's street band takes no measured colour of its own | 🚫 Refused by measurement 2026-11-09, on the user's question: shop vs tower distinct on 10.8% of tall buildings against a 25% bar; three layers by hue 1.2%. |
+| `Q193` | A building's street band takes no measured colour of its own | 🚫 Refused by measurement 2026-11-09, on the user's question: shop vs tower distinct on 10.8% of tall buildings against a 25% bar; three layers by hue 1.2%. | ⚠️ Reversed on the user's instruction by `Q197` (2026-11-11), weighted by its noise.
 | `Q194` | The tower's surveyed hue is mostly the building, not the light | ✅ Closed 2026-11-09, no change: compass and brightness explain 15% of the wall-to-wall hue; the building mean is 0.70–0.74 reliable. |
 | `Q195` | A podium's cornice is drawn at iB1000's line and nowhere else | ✅ Shipped 2026-11-11 on the user's pick (0.28 at 0.5 m): 133 + 61 buildings, `COLOR_0.a`, schema 46. No shopfront, no invented line, no made-up podium colour. |
 | `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
+| `Q197` | A building's street band and podium take the survey's colour, weighed by its own noise | ✅ Shipped 2026-11-11 on the user's instruction and pick (noise-weighted over raw): 1,637 street bands and 87 podiums, cut on the finished tier; +16% Wan Chai triangles, +5.5 MB PCK. Reverses `Q193` on instruction. |
 
 ---
 
@@ -12098,8 +12099,9 @@ Not drawn: `RM1048`, the bus-stop box the player saw the bus standing in — out
 
 ## `Q193` — A building's street band takes no measured colour of its own
 
-**Status.** 🚫 Refused by measurement, on the user's question (2026-11-09) · **Owner.**
-`tools/facade_survey.py`, survey
+**Status.** 🚫 Refused by measurement, on the user's question (2026-11-09) · ⚠️ **Reversed on the
+user's instruction by `Q197`** (2026-11-11): every band ships, pulled toward the tower by this
+entry's own noise; the numbers here stand · **Owner.** `tools/facade_survey.py`, survey
 
 **Asked** by the user: the colour and features at street level often differ from the tower's, so
 should detection and rendering split the two? Reading the contact sheet, the user added that many
@@ -12144,7 +12146,7 @@ texels). The split earns a channel at ≥ 25% of tall buildings.
 - Reopen on: a reader that separates material from shade, or a per-wall estimate whose spread
   falls well under the gap.
 
-**See.** `Q47` · `Q34` · `Q37` · `Q194` · `Q195` · `game/assets/shaders/city_facade_clean.gdshaderinc`
+**See.** `Q47` · `Q34` · `Q37` · `Q194` · `Q195` · `Q197` · `game/assets/shaders/city_facade_clean.gdshaderinc`
 
 ## `Q194` — The tower's surveyed hue is mostly the building, not the light
 
@@ -12218,14 +12220,14 @@ different just keep them as is no different, dont make up a podium color").
 - **Shopfronts** — rendered on every wall at `shopfront_share` 1.0 and dropped on sight.
 - **A podium palette** — dropped for `Q193`'s measured rule: a podium is coloured only where the
   survey resolves it from the tower (about 9% of the data-line buildings), and otherwise keeps the
-  tower's colour. ⚠️ **Owed, not built**: the alpha byte is the line and the RGB the tower, so a
-  second colour needs the walls cut at the line in the ETL. Count the resolvable buildings first.
+  tower's colour. ⚠️ **Built by `Q197`** (2026-11-11), on the user's later instruction to survey
+  every layer: the walls are cut at the line, and the podium's colour is weighted by its noise.
 
 ⚠️ **Visible less often than 133 suggests.** At the `Q27` street camera every lined building is
 hidden behind nearer towers at its line's height, and the frame does not move; the trial frames
 are from a junction facing one (`496,5.9,658` → `480,17.2,646`).
 
-**See.** `Q47` · `Q193` · `Q102` · `P3-7a` · `game/tuning/city_facade.md` ·
+**See.** `Q47` · `Q193` · `Q197` · `Q102` · `P3-7a` · `game/tuning/city_facade.md` ·
 `docs/ARCHITECTURE.md` (`COLOR_0.a`)
 
 ## `Q196` — Vehicles take detail lines from their own mesh, a width in metres
@@ -12288,3 +12290,57 @@ pick, which is owed.**
 **Owed.** The user's pick of the weight; a night frame; the PCK; the handset's frame time.
 
 **See.** `P3-84` · `Q158` · `P3-65` · `Q124` · `tools/vehicle_ink.py` · `game/tuning/vehicle_body.md` · `etl/tests/test_vehicle_ink.py`
+
+## `Q197` — A building's street band and podium take the survey's colour, weighed by its own noise
+
+**Status.** ✅ Shipped 2026-11-11 on the user's instruction and pick · **Owner.**
+`tools/facade_survey.py` (`survey_bands`), `etl/pipeline/buildings.py` (`facade_bands`,
+`band_hue`, `cut_bands`)
+
+**Asked** by the user, 2026-11-11: build all three layers surveyed, "even if they end up same or
+similar color". ⚠️ **This reverses `Q193`'s refusal on instruction, not on a new measurement**:
+`Q193`'s numbers stand, and the weighting below is how its noise is kept off the screen. Picked
+from two Wan Chai previews (raw band colour, and this), "noise weighted".
+
+**Built.**
+- **The survey measures three bands** in the same pass as the whole-building colour, by each wall
+  triangle's centroid: the street band to `STREET_BAND_M` (5.0 m) above the textured floor, the
+  podium from there to the iB1000 line — the ETL's own `podium_lines`, so data only (`Q195`) —
+  and the tower above. A building with under `min_tower_above_m` (6.0) over its street band is one
+  colour. Per band: `lab`, the cut heights in mPD, and `noise`, the median pairwise `Δab` between
+  the band's walls (each with ≥2,000 photographic texels) squared over their count; under two such
+  walls, `Q193`'s city median 6.5. `--regions` names whose podium lines cut the bands.
+- **Validated**: re-run over the six sheets, all 2,213 rows' shipped columns are byte-identical to
+  the table before (moved: 0). 1,809 rows carry bands, 103 a podium band; the 92 lined buildings
+  without one are 54 off the six sheets, 36 with a line inside the street band, 1 too short.
+- **Weighting** (`band_hue`): a band ships the building's hue plus `w·(band − tower)`, with
+  `w = gap² / (gap² + noise_band + noise_tower)`. Measured on the shipped table: street bands
+  (1,637) stand a median 6.6 `Δab` from their tower and ship a median 3.3 (9.8 on screen at
+  `strength` 3.0), 857 of them over 3; podium bands (87) 5.0 measured, 2.3 shipped. The raw
+  preview put a median 22 on screen. The tower keeps the exact colour it shipped with.
+- **The cut is on the finished tier** (`cut_bands`), after `collapse`, for `along_m`'s reason: cut
+  on the source, the cluster means would move the edge a cell and fuse its two colours. A triangle
+  crossing a cut becomes three; each takes its band's RGBA by centroid. Only triangles whose three
+  corners are one object's are cut — `collapse` stitches a few across two buildings, and
+  interpolating their ordinal invented a third (`verify_tiles` caught 21–279 stray vertices a tile
+  before the fix). The material, lightness, jitter and podium byte stay the building's.
+- **A podium band only where the build ships that line** (`_ship_line`), so band and cornice
+  agree: Causeway Bay's build holds Wan Chai buildings at the seam whose `P` blocks only Wan
+  Chai's podium stage reads, and there neither is drawn. A line that ships but differs warns that
+  the survey is stale (0 today).
+- `facade_hue.bands: true` is the switch. Off, all 132 Wan Chai tiles are byte-identical to the
+  build before.
+
+**Cost.** Finest tier triangles: Wan Chai 513,862 → 596,977 (+16.2%), coarse 253,086 → 310,782
+(+22.8%); Causeway Bay +0.6% / +1.0%. Web PCK 92.9 → 98.4 MB (+5.5 MB). Collider and occluder
+counts unchanged on every tile. No schema bump: no consumer reads `COLOR_0.rgb` as one per
+object (the pane pull reads it per vertex, and the panes are parked).
+
+**Unchanged by it.** `ring_weights.py` and `facade_chroma.py` print byte-identical output on the
+old and new table — they read the whole-building colour, which did not move; the bands are not in
+`ART_DESIGN.md`'s chroma table.
+
+⚠️ **Visible mostly at street level.** Frames: the street, raised, junction and skyline cameras
+moved 228k, 60k, 295k and 45k px against the committed look.
+
+**See.** `Q193` · `Q195` · `Q47` · `Q34` · `Q37` · `docs/ARCHITECTURE.md` (`COLOR_0.rgb`)

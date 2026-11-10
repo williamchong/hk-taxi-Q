@@ -526,6 +526,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q194` The tower's surveyed hue is mostly the building, not the light (user, 2026-11-09): compass and brightness explain 15% of the wall-to-wall hue, sheets 1.4% of the between-building hue; the building mean is 0.70 / 0.74 reliable on `a*` / `b*`. No survey change; the estimator's +1 `b*` lean to lit walls is filed under `Q30`.
 - `Q195` A podium's cornice is drawn at iB1000's line and nowhere else (user, 2026-11-11): the line rides `COLOR_0.a` (schema 46) on 133 Wan Chai + 61 Causeway Bay buildings with ≥6 m of tower above it; 0.28 dark, 0.5 m, the user's pick of four. No default podium, no shopfronts, no palette; a measured podium colour where `Q193` resolves one is owed.
 - `Q196` Vehicles take detail lines from their own mesh (user, 2026-11-11): the depth outline cannot see a window or a band on a flat panel, so the generator marks those edges and the body shader inks them, a width in metres. The weight is the user's to pick. `P3-84`.
+- `Q197` A building's street band and podium take the survey's colour, weighed by its own noise (user, 2026-11-11, reverses `Q193`): `facade_survey.py` measures three bands with `--regions`; the ETL cuts the finished tier at the measured heights. 1,637 street bands, 87 podiums; Wan Chai triangles +16.2%, PCK 92.9 → 98.4 MB; `facade_hue.bands` off is byte-identical.
 - `Q190` The taxi takes a 1:64 die-cast's proportions and detail, without its lettering (user, 2026-11-09): 4.54 m with a short nose and long boot, between the 4.30 m toy and the real 4.695 m; the bumper a bar again, chrome front and rear, rub strip, shut lines, pillars, mirrors, hubcaps; tail lamps red over amber over white; 1,948 triangles of 2,000; the door hinge 0.455. `P3-82`.
 - `Q189` A free drive ends from its PAUSE on its own REPORT, with the time driven (user, 2026-11-06): END DRIVE, no best, the drive's game seconds off the fare loop's tick, never written to the record; SAVE IMAGE renamed SAVE RESULT. `P3-81`.
 - `Q188` The result sheet is saved as a picture, not shared (user, 2026-11-06): the 成績表 itself, copied off screen, never a screen crop; no share sheet and no button on a phone until a plugin, since Godot 4.7.2 has no share API and a screenshot serves; achievements dropped, RECORD is the stat table. `P3-80`.
@@ -579,7 +580,9 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
   `BeamBudget` + `verify_beam_budget.gd`. `P3-3` decides whether the player's slot is reserved.
 - **Podium floors measure the treatment band** — Medium. `Q47`: data-only pack; true fill owed.
 - **`facade_lab.json` is an uncommitted input** — Low. Gitignored; `facade_survey.py
-  --filler-report` reproduces `Q55`; hand-run.
+  --filler-report` reproduces `Q55`; hand-run. Since `Q197` it also carries the bands, cut at the
+  built `podiums.json` lines, so a podium change wants the survey re-run (`--regions`); the build
+  warns when a line it ships disagrees.
 - **The tyre model is unpriced on a handset** — Medium. `Q152`: about 216 µs a physics tick on
   the desk, GDScript, eight substeps a wheel; never run on `P0-3b`'s floor handsets. Lever:
   `substeps`. No off switch since the engine-tyre car was dropped (2026-10-05); a revert of that
