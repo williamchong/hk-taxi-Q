@@ -69,7 +69,14 @@ from shapely.geometry.base import BaseGeometry
 from pipeline import gdb
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.colour import chroma_and_hue, with_hue
-from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_config
+from pipeline.config import (
+    BuildingStyle,
+    Config,
+    Material,
+    PodiumBlocks,
+    RegionConfig,
+    load_config,
+)
 from pipeline.crs import GameTransform, GeodeticBounds
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
@@ -202,6 +209,17 @@ COLLISION_TIER = 0
 # `verify_tiles.gd` can see it.
 FACADE_MATERIAL = "city_facade"
 
+# The podium line on `COLOR_0.a` (`Q195`): metres above the object's own base
+# (the `TEXCOORD_0.y` frame) in `PODIUM_STEP_M` steps, codes 1-254, so 0.5 m to
+# 127 m. A codec constant, so contract and never tuning; the shader holds the
+# same step. `PODIUM_NO_LINE` is 255, the opaque byte every vertex carried
+# before, so a building without a line ships exactly what it did. The shader
+# also reads code 0 as "no line": a renderer that drops vertex alpha (the
+# web build lost it on the signal heads, `Q173`) then draws no cornice rather
+# than one at the base.
+PODIUM_STEP_M = 0.5
+PODIUM_NO_LINE = 255
+
 
 @dataclass(frozen=True)
 class LodOutput:
@@ -271,6 +289,9 @@ class BuildReport:
     # Ground vertices painted `basemap.park_material` inside the basemap's
     # parks (2026-09-25) — zero with parks in the frame is the same failure.
     greened: int = 0
+    # Stems that shipped a podium line on `COLOR_0.a` (`Q195`). Zero with a
+    # `podiums:` block declared is the stage-order failure again.
+    podium_lines: set[str] = field(default_factory=set)
 
 
 # --------------------------------------------------------------------------
@@ -629,6 +650,41 @@ def material_for(
     return style.material_for(class_id, height_m)
 
 
+def podium_code(line_m: float | None) -> int:
+    """The `COLOR_0.a` byte for a podium line `line_m` metres above the object's
+    own base (`Q195`). A line the codec cannot hold — at or below the base, or
+    past 127 m — ships as no line rather than clamped onto a wrong height."""
+    if line_m is None:
+        return PODIUM_NO_LINE
+    code = round(line_m / PODIUM_STEP_M)
+    return code if 1 <= code < PODIUM_NO_LINE else PODIUM_NO_LINE
+
+
+def podium_lines(out_dir: Path, region_id: str, spec: PodiumBlocks | None) -> dict[str, float]:
+    """Per stem, the podium line in mPD, where a tower stands over it (`Q195`).
+
+    The line is the iB1000 `P` block's roof that `podiums.py` joined — data
+    only, `Q47`'s precedence with no survey and no hash beneath it: a building
+    with no row keeps no line. A row whose building rises less than
+    `min_tower_above_m` over its line is the block covering the whole building,
+    and ships nothing.
+    """
+    if spec is None:
+        return {}
+    # Imported here: `podiums` reads sheets through this module.
+    from pipeline.podiums import PODIUMS_NAME, PODIUMS_SCHEMA
+
+    document = read_document(
+        out_dir / PODIUMS_NAME, PODIUMS_SCHEMA, f"python -m pipeline.podiums --region {region_id}"
+    )
+    lines = {}
+    for key, row in document["buildings"].items():
+        line = row["base_mpd"] + row["boundary_m"]
+        if row["top_mpd"] - line >= spec.min_tower_above_m:
+            lines[key] = line
+    return lines
+
+
 def colour_for(
     style: BuildingStyle,
     class_id: str,
@@ -636,8 +692,10 @@ def colour_for(
     *,
     bounds: Bounds | None = None,
     hue: dict[str, Hue] | None = None,
+    podium: int = PODIUM_NO_LINE,
 ) -> np.ndarray:
-    """One RGBA row per vertex: the class or height-band colour, jittered.
+    """One RGBA row per vertex: the class or height-band colour, jittered, and
+    in alpha the podium line's byte (`podium_code`).
 
     How much jitter is the class's to say, not the city's alone. Seeding per
     source mesh only means "per object" where the source ships one mesh per
@@ -667,7 +725,8 @@ def colour_for(
     # A read-only broadcast view, not 4 bytes repeated a million times. `merge`
     # and `select_triangles` materialise it where it is actually needed.
     return np.broadcast_to(
-        np.array([red, green, blue, 255], dtype=np.uint8), (len(mesh.positions), 4)
+        np.array([red, green, blue, podium], dtype=np.uint8),
+        (len(mesh.positions), 4),
     )
 
 
@@ -973,6 +1032,7 @@ def build_region(
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
     hue = facade_hue(style, root=sources_root)
+    lines = podium_lines(place.out_dir, region_id, city.podiums)
     # The sea the ground drops under (`sink_sea`) and the parks it is painted
     # green in (`paint_parks`), read from the basemap stage's document; a city
     # with no `basemap:` block sinks and paints nothing.
@@ -1062,9 +1122,16 @@ def build_region(
             # splitting, so a viaduct partitioned across four tiles stays one
             # colour and keeps one base to measure its height above.
             ordinal = _register(objects, key, class_id, bounds)
+            # The line in this mesh's own frame: a stem can ship as several
+            # meshes, each measuring `TEXCOORD_0.y` from its own base.
+            line_mpd = lines.get(key)
+            line_m = None if line_mpd is None else line_mpd - (bounds[0][1] - place.offset[1])
+            podium = podium_code(line_m)
+            if podium != PODIUM_NO_LINE:
+                report.podium_lines.add(key)
             coloured = replace(
                 placed,
-                colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue),
+                colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue, podium=podium),
                 uvs=facade_uv(style, class_id, placed, bounds),
                 uv2=identity_uv2(style, class_id, placed, ordinal),
             )
@@ -1531,6 +1598,8 @@ def _write_manifest(
             # Ground vertices painted `basemap.park_material` inside the parks
             # (`paint_parks`), before decimation. Zero where the frame holds none.
             "ground_park_vertices": report.greened,
+            # Stems whose `COLOR_0.a` carries a podium line (`podium_lines`).
+            "podium_lines": len(report.podium_lines),
         },
     )
 

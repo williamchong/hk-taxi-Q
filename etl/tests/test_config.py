@@ -1685,6 +1685,18 @@ class TestPodiums:
         with pytest.raises(ValueError, match="placeholder"):
             load_config(rewrite(mistype))
 
+    @pytest.mark.parametrize("bar", [-1.0, float("nan"), float("inf")])
+    def test_a_tower_bar_outside_the_codec_is_rejected(self, rewrite, bar: float) -> None:
+        """`min_tower_above_m` gates which podium lines ship (`Q195`): below
+        zero it would ship a line above the roof, and a NaN would pass a
+        one-sided test and ship no line at all."""
+
+        def set_bar(doc: dict[str, Any]) -> None:
+            doc["podiums"]["min_tower_above_m"] = bar
+
+        with pytest.raises(ValueError, match="min_tower_above_m"):
+            load_config(rewrite(set_bar))
+
     def test_a_missing_role_is_rejected(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             del doc["podiums"]["blocks"]["fields"]["roof_level"]

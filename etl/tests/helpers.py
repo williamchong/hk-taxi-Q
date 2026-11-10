@@ -23,6 +23,7 @@ from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignm
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.gltf import MeshData
+from pipeline.podiums import PODIUMS_NAME, PODIUMS_SCHEMA
 from pipeline.terrain import HeightField
 
 # The six faces of an axis-aligned box, over corners ordered x-outer, y-middle,
@@ -524,13 +525,23 @@ def write_basemap(
     region_id: str,
     water: list[list[float]] | None = None,
     parks: list[list[float]] | None = None,
+    podiums: dict[str, dict] | None = None,
 ) -> Path:
     """The basemap stage's document, as `buildings.build_region` expects to find
     it (2026-09-25): the sink under the sea reads it, so a test that builds tiles
     writes one first. `water` is the sea's triangles in game plan metres and
-    `parks` the open space's, none by default."""
+    `parks` the open space's, none by default.
+
+    Also the podiums stage's, where the city declares `podiums:` — the other
+    document the buildings stage reads before it tiles (`Q195`). `podiums` is
+    its `buildings` rows by stem, none by default."""
     out_dir = city.out_dir(region_id, out_root)
     out_dir.mkdir(parents=True, exist_ok=True)
+    if city.podiums is not None:
+        write_document(
+            out_dir / PODIUMS_NAME,
+            {"schema_version": PODIUMS_SCHEMA, "buildings": podiums or {}},
+        )
     write_document(
         out_dir / BASEMAP_NAME,
         {

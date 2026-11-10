@@ -4,13 +4,13 @@
 Where a shipped building overlaps a surveyed podium (`P`) block, that block's
 roof level is the façade boundary — metres from data, the top of `Q47`'s
 `data > survey-inferred` precedence. This stage writes the join's result to
-`podiums.json`: per building stem, the boundary in metres above the mesh's own
-base (the frame `TEXCOORD_0.x` ships), and the mechanism that won it. The
-document is a stage intermediate like `buildings.json` — `export.py` never
-names it, nothing in the game reads it, and the contract argument for both
-lives under `Q47` in `docs/DECISIONS.md`. Its consumers are `R4`'s pack and
-grading, which is also why every row records provenance: grading floors→metres
-only makes sense against rows whose metres came from data.
+`podiums.json`: per building stem, the boundary in metres above the building's
+base, its base and top in mPD, and the mechanism that won it. The document is a
+stage intermediate like `buildings.json` — `export.py` never names it and
+nothing in the game reads it. Its consumer is the buildings stage, which packs
+the line into `COLOR_0.a` where a tower stands over it (`Q195`); the contract
+argument is `Q47`'s. Every row records provenance, because a line is only as
+good as the mechanism that won it.
 
 Two geometric facts about the source shape everything here:
 
@@ -55,7 +55,11 @@ from pipeline.geometry import (
 log = logging.getLogger(__name__)
 
 PODIUMS_NAME = "podiums.json"
-PODIUMS_SCHEMA = 1
+# 2 since `Q195`: each row carries `top_mpd`, the building's highest point, so
+# the buildings stage can tell a podium with a tower over it from a building the
+# block covers whole. A v1 row cannot say, and its reader would put a line under
+# every roof.
+PODIUMS_SCHEMA = 2
 
 # Stitch contact tolerance. The clips abut *exactly* — the probe measured
 # shared cut coordinates to the last decimal — so this is slack for float
@@ -479,6 +483,7 @@ def _document(
         buildings[key] = {
             "boundary_m": round(winner.roof - footprint.base_mpd, 3),
             "base_mpd": round(footprint.base_mpd, 3),
+            "top_mpd": round(footprint.top_mpd, 3),
             "mechanism": "data",
             "certain": winner.certain,
             "blocks": winner.refs,

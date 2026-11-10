@@ -159,6 +159,28 @@ func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 		problems.append("%s carries no TEXCOORD_1; the marker and object row are missing" % where)
 
 	problems.append_array(MeshContract.check_shader_material(mesh, surface, where, FACADE_MATERIAL))
+	problems.append_array(_check_podium_codes(mesh, surface, where))
+	return problems
+
+
+## Every `COLOR_0.a` is a podium-line code the shader can read (`Q195`): 1–254
+## a line, 255 none. A 0 is never shipped — the shader reads it as "no line" only
+## to survive a renderer that drops vertex alpha — so one arriving here is an
+## importer or exporter that zeroed the channel, and every cornice in the tile
+## would vanish without an error.
+func _check_podium_codes(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
+		return problems
+	var colours: PackedColorArray = mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR]
+	var zeros: int = 0
+	for colour: Color in colours:
+		if roundi(colour.a * 255.0) == 0:
+			zeros += 1
+	if zeros > 0:
+		problems.append(
+			"%s has %d vertices with COLOR_0.a = 0; podium codes are 1-255" % [where, zeros]
+		)
 	return problems
 
 

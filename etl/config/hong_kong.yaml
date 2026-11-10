@@ -1008,6 +1008,10 @@ podiums:
   codes:
     tower: T
     podium: P
+  # A podium line ships (`COLOR_0.a`, `Q195`) only where the building rises at
+  # least this far above it — the bar `Q193` cut its bands at. Below it the
+  # block is the whole building and a line under the roof reads as a parapet.
+  min_tower_above_m: 6.0
 
 # Where the carriageway edge is *published*, for tools/carriageway_margin.py.
 # Read by the build since Q95 — pipeline/carriageway.py runs the same survey to

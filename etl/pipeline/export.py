@@ -295,7 +295,10 @@ CITY_NAME = "city.json"
 # 45 since `P3-78` (`Q182`): the manifest names `bus_routes.json`, each bus and
 # green-minibus route's stops in order. A v44 reader would ship the document
 # unlisted and run every bus and minibus wandering.
-CITY_SCHEMA = 45
+# 46 since `Q195`: a building tile's `COLOR_0.a` carries its podium line
+# (`buildings.podium_code`), 255 where it has none. A v45 bundle is 255
+# everywhere, and a v46 reader would draw it as a city with no podium at all.
+CITY_SCHEMA = 46
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

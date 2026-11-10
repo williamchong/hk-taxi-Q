@@ -30,6 +30,7 @@ SPEC = PodiumBlocks(
         },
     ),
     codes={"tower": "T", "podium": "P"},
+    min_tower_above_m=6.0,
 )
 
 
@@ -340,4 +341,6 @@ def test_real_join_reproduces_both_frames(hong_kong, tmp_path) -> None:
     # Every boundary is a real band inside its own building.
     for row in rows.values():
         assert row["boundary_m"] > 0.0
+        # The top the buildings stage gates the cornice on (`Q195`).
+        assert row["top_mpd"] > row["base_mpd"] + row["boundary_m"]
         assert row["mechanism"] == "data"

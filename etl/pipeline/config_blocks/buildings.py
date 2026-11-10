@@ -462,6 +462,10 @@ class PodiumBlocks:
     member: str
     blocks: SourceLayer
     codes: dict[str, str]
+    # How far a building must rise above its podium line for the line to ship
+    # (`Q195`). Below it the block is the whole building, not a base under a
+    # tower, and a line just under the roof reads as a parapet.
+    min_tower_above_m: float
 
     def code(self, role: str) -> str:
         return _field(self.codes, role, "podiums:codes")
@@ -917,4 +921,9 @@ def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
             _require(body, "blocks", where), f"{where}:blocks", _PODIUM_BLOCK_ROLES
         ),
         codes=_fields(body, where, _PODIUM_CODE_ROLES, key="codes"),
+        # Bounded by the codec's 127 m (`buildings.PODIUM_STEP_M`), and two-sided
+        # so a YAML `.nan` cannot silently ship no line at all.
+        min_tower_above_m=_scale(
+            _require(body, "min_tower_above_m", where), f"{where}:min_tower_above_m", 127.0
+        ),
     )

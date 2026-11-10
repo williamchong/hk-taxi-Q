@@ -524,6 +524,7 @@ class is collapsed separately then merged, so a tile is still one mesh and one d
 | Attribute | Meaning |
 |---|---|
 | `COLOR_0.rgb` | Albedo, **sRGB-encoded** normalised `uint8`. Every consumer must linearise it |
+| `COLOR_0.a` | The podium line (`Q195`, schema 46), constant per source object: codes 1–254 are metres above that object's own base (the `TEXCOORD_0.y` frame) in 0.5 m steps (`buildings.PODIUM_STEP_M`), so 0.5–127 m; **255 is no line**, the byte every vertex carried before. Set only from an iB1000 `P` block with at least `podiums.min_tower_above_m` of building over it — no survey, no hash beneath. `city_facade_clean` draws its cornice there and nowhere else, and reads 0 as no line too. ⚠️ Not opacity |
 | `TEXCOORD_0.x` | Metres along the wall (`P5-11`, schema 28): the world axis chosen by the vertex normal, blended over 45° (`buildings.along_m`). Stamped on the shipped tier after `collapse`; the carve re-stamps it |
 | `TEXCOORD_0.y` | Metres above that source object's own base. Metres, not a fraction: the floor count is what the window shader carries. With `.x`, a real planar UV in metres |
 | `TEXCOORD_1.x` | `floor()` is the `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps |
@@ -608,8 +609,11 @@ before the lights.
 - A layer is a parameterisation, not a shader (`Q71`): arrows, box junctions and stop lines share
   `marking_paint.gdshader`; `railings` / `bollards` / `barriers` share `railings.gdshader`.
   `MeshContract.check_shader_material` holds each layer to its own `.tres` by `resource_path`.
-- ⚠️ `COLOR_0.a` on tiles is a constant `255` and is not a safe place for a shader mask: enable
-  transparency on a tile and the city renders see-through with no error.
+- ⚠️ `COLOR_0.a` on tiles is a **code, not opacity** (`Q195`): 255 on most vertices, the podium
+  line on the rest. Enable transparency on a tile and the lined buildings render see-through with
+  no error. The Compatibility renderer keeps it on tiles (measured 2026-11-11: the cornice moved
+  22,806 px there against 22,749 on Mobile) though it lost it on the `MultiMesh` signal heads
+  (`Q173`), which is why the shader also reads 0 as no line.
 
 ### `roadgraph.json` — drivable network
 

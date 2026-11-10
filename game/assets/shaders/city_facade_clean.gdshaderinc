@@ -35,6 +35,13 @@ const float MARKER_STRUCTURE = 2.0;
 // keeps neighbouring seeds far apart in every derived decision.
 const float PHASE_STEPS = 256.0;
 
+// The podium line on `COLOR_0.a` (`Q195`), `PODIUM_STEP_M` in `buildings.py`:
+// codes 1-254 are the line in half metres above the object's own base, the
+// `UV.y` frame. 255 is no line — the byte every vertex carried before — and so
+// is 0, so a renderer that drops vertex alpha draws no cornice rather than one
+// at the foot of every wall.
+const float PODIUM_STEP_M = 0.5;
+
 // Which draw each per-building decision takes from `draw()`. Named so that two
 // decisions cannot share a slot unnoticed: a shared slot is one draw read twice,
 // and it would tie — say — every glazed building to the accent colour with
@@ -117,7 +124,9 @@ uniform float bay_width_m : hint_range(2.0, 24.0) = 9.0;
 uniform float mullion_ratio : hint_range(0.0, 0.5) = 0.08;
 uniform float mullion_darkness : hint_range(0.0, 1.0) = 0.35;
 // Where the tower grid starts. A podium is shopfront and plant, not flats.
-// Authored, not measured.
+// Authored, not measured — and since `Q195` only the fallback: a building with
+// an iB1000 podium line on `COLOR_0.a` uses that, and only that one draws a
+// cornice.
 uniform float podium_height_m : hint_range(0.0, 40.0) = 12.0;
 
 group_uniforms street;
@@ -361,6 +370,10 @@ varying flat float marker;
 // only ones whose fragments read it; with every `Q45` knob at zero it is the
 // raw hashed pick, bit-exact with what the fragment used to compute.
 varying flat vec3 fallback_pane;
+// The building's podium line in metres, negative where it has none (`Q195`).
+// `flat` for `phase`'s reason: a triangle `collapse` stitched across two
+// buildings would otherwise ramp one line into the other's.
+varying flat float podium_line_m;
 varying float upness;
 varying float along_m;
 // The reflection needs a world-space frame, and both are already computed in the
@@ -464,6 +477,10 @@ void vertex() {
 	height_m = UV.y;
 	marker = floor(UV2.x);
 	phase = fract(UV2.x);
+	float podium_code = floor(COLOR.a * 255.0 + 0.5);
+	podium_line_m = podium_code >= 1.0 && podium_code <= 254.0
+		? podium_code * PODIUM_STEP_M
+		: -1.0;
 
 	// The hashed pane (`Q45`), the same seed and draw slot the fragment
 	// always used. Modulated per building in CIELAB: `L*`/`b*` jitter on the
@@ -626,7 +643,7 @@ void fragment() {
 			// with no grid on it at all.
 			//
 			// ⚠️ **It is derived, so it has to be kept honest.** Anything added below
-			// that can reach the albedo while all five of these are off must be added
+			// that can reach the albedo while all four of these are off must be added
 			// here too. `mullion_darkness` and `emission_strength` are deliberately
 			// absent: both reach it only through `fenestrated` or `has_shop`, which
 			// are already tested. `glazed` earns no term of its own, and that is an
@@ -639,10 +656,15 @@ void fragment() {
 			// `unglazed_glassy` (`Q44`) is absent on `glazed`'s exact rule: it
 			// moves what an opening is made of, and an opening needs
 			// `fenestrated` or `has_shop` before it exists.
+			// The cornice is not a term here (`Q195`): it is drawn only where the
+			// ETL shipped a podium line, and a building whose only element is its
+			// cornice takes the cheap path after this branch rather than paying for
+			// the whole grid to multiply it out — which the shipped look, cornice
+			// on and every other element off, would otherwise do on every tower.
+			bool has_line = podium_line_m >= 0.0;
 			bool draws_detail = fenestrated > 0.5
 				|| has_shop > 0.5
 				|| accented
-				|| cornice_darkness > 0.0
 				|| floor_line_darkness > 0.0;
 
 			if (draws_detail) {
@@ -661,11 +683,16 @@ void fragment() {
 				float bay_scale = mix(bay_scale_min, bay_scale_max, draw(seed, DRAW_BAY_SCALE));
 				float band_mult = draw(seed, DRAW_TWO_STOREY) < two_storey_share ? 2.0 : 1.0;
 
+				// Where the podium stops: the building's own line where the ETL
+				// shipped one (`Q195`), the authored uniform where it did not. The
+				// tower grid counts its storeys from it either way, so a data line
+				// never starts a second grid.
+				float line_m = has_line ? podium_line_m : podium_height_m;
 				float band_pitch_m = floor_height_m * band_storeys * band_mult;
-				float storey = (height_m - podium_height_m) / floor_height_m + phase;
-				float ribbon = (height_m - podium_height_m) / band_pitch_m + phase;
+				float storey = (height_m - line_m) / floor_height_m + phase;
+				float ribbon = (height_m - line_m) / band_pitch_m + phase;
 				float bay = along_m / (bay_width_m * bay_scale) + phase;
-				float above = over(height_m, podium_height_m);
+				float above = over(height_m, line_m);
 
 				// Which grammar this building is built in. One grid, four sets of
 				// ratios: 0 ribbon (the default), 1 fin, 2 curtain, 3 punched.
@@ -719,18 +746,22 @@ void fragment() {
 				// The plinth between the shopfront and the cornice. On an accent
 				// building it takes the colour — down here, where it is seen.
 				if (accented) {
-					float plinth = slab(height_m, shopfront_top_m, podium_height_m - cornice_thickness_m);
+					float plinth = slab(height_m, shopfront_top_m, line_m - cornice_thickness_m);
 					albedo = mix(albedo, accent, plinth * accent_opacity * fade);
 				}
 				// A cornice where the podium stops and the tower starts. It is what
 				// makes the two read as one building with a base rather than as a tower
-				// standing in a box.
-				albedo *= (
-					1.0
-					- cornice_darkness
-						* slab(height_m, podium_height_m - cornice_thickness_m, podium_height_m)
-						* fade
-				);
+				// standing in a box. ⚠️ **Only on a data line** (`Q195`): the uniform
+				// line is 12 m on every building, and a cornice there drew an invented
+				// podium on the 78% of Wan Chai iB1000 says nothing about.
+				if (has_line) {
+					albedo *= (
+						1.0
+						- cornice_darkness
+							* slab(height_m, line_m - cornice_thickness_m, line_m)
+							* fade
+					);
+				}
 
 				// --- the tower ------------------------------------------------------
 
@@ -796,11 +827,12 @@ void fragment() {
 				// of — `has_shop` never passed through the glazed gate and must not
 				// start now, or every tenement's ground floor turns to concrete. The
 				// two masks are disjoint at any sane tuning (`above` zeroes the tower
-				// below `podium_height_m`, and `shop_top` peaks at `shopfront_top_m *
-				// 1.5`, 6.9 m against 12.0 as shipped), so this is a coverage weight
+				// below `line_m`, and `shop_top` peaks at `shopfront_top_m * 1.5`,
+				// 6.9 m against 12.0 as shipped — ⚠️ though a `Q195` data line can sit
+				// lower, and there they overlap), so this is a coverage weight
 				// and not a blend of two materials; the `max` only guards the
 				// fragments where both are zero. ⚠️ Push `shopfront_top_m * 1.5` past
-				// `podium_height_m` and the clamp above caps the denominator while the
+				// `line_m` and the clamp above caps the denominator while the
 				// numerator keeps climbing, so the overlap reads glassier than its
 				// coverage. Those are both tuning, so this is a caveat, not an
 				// invariant.
@@ -875,6 +907,17 @@ void fragment() {
 					EMISSION = lit_window_colour
 						* (opening_mask * step(1.0 - lit_window_share, hashed) * emission_strength);
 				}
+			} else if (has_line && cornice_darkness > 0.0) {
+				// The cornice alone, exactly as the branch above draws it: there every
+				// other element is zero, so its glazing mix, floor lines and plinth
+				// leave the albedo as they found it and this is the same pixel.
+				float fade = 1.0 - smoothstep(fade_start_m, fade_end_m, length(VERTEX));
+				albedo *= (
+					1.0
+					- cornice_darkness
+						* slab(height_m, podium_line_m - cornice_thickness_m, podium_line_m)
+						* fade
+				);
 			}
 		}
 	}

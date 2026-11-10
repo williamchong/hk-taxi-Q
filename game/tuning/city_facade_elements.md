@@ -35,10 +35,15 @@ path, so restoring this look is `cp city_facade_elements.tres city_facade.tres`
 and a reimport — no rebuild, because it names the same shader and reads the
 same `TEXCOORD_0` payload as the shipped `C`.
 
-**The seven values that separate the two looks**, which here are the ON side:
+**The six values that separate the two looks**, which here are the ON side:
 
   solid_share 0.27 · glass_ratio 0.44 · shopfront_share 0.55 · accent_share 0.11
-  cornice_darkness 0.28 · floor_line_darkness 0.11 · mullion_darkness 0.12
+  floor_line_darkness 0.11 · mullion_darkness 0.12
+
+⚠️ **`cornice_darkness` 0.28 is shared since `Q195`, and this look moved with
+it.** The cornice is drawn only on a building with an iB1000 podium line in
+`COLOR_0.a`, at that line — `A‴`'s cornice at `podium_height_m` on every
+building is gone, and so restoring this file no longer restores it.
 
 ⚠️ **Why it takes all seven, why `solid_share` is a gate rather than a value,
 and what the retired eighth was are argued once, in `city_facade.tres`.** They

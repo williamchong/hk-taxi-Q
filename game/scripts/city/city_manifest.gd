@@ -242,7 +242,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 45 since `P3-78` (`Q182`): the manifest names `bus_routes.json`, each bus and
 ## green-minibus route's stops in order.
-const SCHEMA_VERSION: int = 45
+##
+## 46 since `Q195`: a building tile's `COLOR_0.a` carries its podium line, the
+## cornice `city_facade_clean` draws; 255 where it has none.
+const SCHEMA_VERSION: int = 46
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

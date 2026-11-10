@@ -41,11 +41,18 @@ Restoring it is one `cp`, and the `≥3`-HK-driver round at `P3-9a` — which
 closed before running — is now what can **reopen** `Q26` rather than what
 decides it.
 
-**Seven values separate this from `A‴`**, and `diff` against
-`city_facade_elements.tres` should show exactly those seven lines:
+**Six values separate this from `A‴`**, and `diff` against
+`city_facade_elements.tres` should show exactly those six lines:
 
   solid_share 1.0 · glass_ratio 0.0 · shopfront_share 0.0 · accent_share 0.0
-  cornice_darkness 0.0 · floor_line_darkness 0.0 · mullion_darkness 0.0
+  floor_line_darkness 0.0 · mullion_darkness 0.0
+
+⚠️ **It was seven until `Q195`.** `cornice_darkness` came back to `A‴`'s 0.28
+on the user's pick from four trial strengths (0.28 at 0.5 m, against 0.5 and
+0.75 at 1.0 m), and it no longer means what it did in `A‴`: the shader draws a
+cornice **only** on a building whose tile carries an iB1000 podium line in
+`COLOR_0.a` — 133 in Wan Chai, 61 in Causeway Bay — and never at
+`podium_height_m`. Every other building is untouched by it.
 
 ⚠️ **It takes all seven, and `solid_share` is a gate rather than a zero.**
 `glazed = step(solid_share, …)` in the shader, so at 1.0 no building is ever

@@ -24,6 +24,8 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
     BUILDINGS_MANIFEST_SCHEMA,
     COLLISION_TIER,
+    PODIUM_NO_LINE,
+    PODIUM_STEP_M,
     SOURCE_ID,
     Grid,
     _material_seed,
@@ -41,6 +43,8 @@ from pipeline.buildings import (
     occluder_name,
     paint_parks,
     podium_blocks,
+    podium_code,
+    podium_lines,
     sink_sea,
 )
 from pipeline.config import (
@@ -54,6 +58,7 @@ from pipeline.config import (
 )
 from pipeline.gltf import MeshData, read_glb, read_render
 from pipeline.mesh import collapse
+from pipeline.podiums import PODIUMS_NAME, PODIUMS_SCHEMA
 from tests.helpers import (
     BOX_FACES,
     box_corners,
@@ -344,6 +349,58 @@ class TestAssign:
 # --------------------------------------------------------------------------
 # Colour
 # --------------------------------------------------------------------------
+
+
+class TestPodiumLine:
+    """The podium line on `COLOR_0.a` (`Q195`)."""
+
+    @pytest.mark.parametrize("line_m", [0.5, 4.6, 14.6, 56.0, 127.0])
+    def test_the_codec_round_trips_to_half_a_metre(self, line_m: float) -> None:
+        code = podium_code(line_m)
+        assert 1 <= code < PODIUM_NO_LINE
+        assert abs(code * PODIUM_STEP_M - line_m) <= PODIUM_STEP_M / 2
+
+    @pytest.mark.parametrize("line_m", [None, -3.0, 0.0, 0.2, 127.3, 400.0])
+    def test_a_line_the_codec_cannot_hold_ships_as_none(self, line_m: float | None) -> None:
+        """Never clamped: a line pinned to 127 m or the base is a wrong line."""
+        assert podium_code(line_m) == PODIUM_NO_LINE
+
+    def test_no_line_is_the_byte_every_vertex_shipped_before(self) -> None:
+        """A building without a line is byte-identical to the schema-45 tile."""
+        assert PODIUM_NO_LINE == 255
+        assert colour_for(style(), "BUILDING", flat_mesh("a", 8.0))[0][3] == 255
+
+    def test_colour_carries_the_line_in_alpha_and_leaves_rgb(self) -> None:
+        plain = colour_for(style(), "BUILDING", flat_mesh("a", 40.0))
+        lined = colour_for(style(), "BUILDING", flat_mesh("a", 40.0), podium=podium_code(14.6))
+        assert (lined[:, :3] == plain[:, :3]).all()
+        assert (lined[:, 3] == podium_code(14.6)).all()
+
+    def test_only_a_line_with_a_tower_over_it_ships(self, hong_kong, tmp_path: Path) -> None:
+        """`min_tower_above_m` cuts the block that IS the building."""
+        rows = {
+            "B_tower": {"base_mpd": 4.0, "boundary_m": 12.0, "top_mpd": 80.0},
+            "B_short": {"base_mpd": 4.0, "boundary_m": 12.0, "top_mpd": 21.0},
+            "B_edge": {"base_mpd": 4.0, "boundary_m": 12.0, "top_mpd": 22.0},
+        }
+        (tmp_path / PODIUMS_NAME).write_text(
+            json.dumps({"schema_version": PODIUMS_SCHEMA, "buildings": rows})
+        )
+        spec = replace(hong_kong.podiums, min_tower_above_m=6.0)
+        assert podium_lines(tmp_path, "wan_chai", spec) == {"B_tower": 16.0, "B_edge": 16.0}
+
+    def test_no_podiums_block_ships_no_lines(self, tmp_path: Path) -> None:
+        assert podium_lines(tmp_path, "wan_chai", None) == {}
+
+    def test_the_shader_decodes_with_the_same_step_and_range(self) -> None:
+        """The codec is restated in GLSL; a step or range that drifts on one
+        side puts every cornice at the wrong height with nothing failing."""
+        shader = (
+            Path(__file__).resolve().parents[2]
+            / "game/assets/shaders/city_facade_clean.gdshaderinc"
+        ).read_text()
+        assert f"const float PODIUM_STEP_M = {PODIUM_STEP_M};" in shader
+        assert f"podium_code <= {PODIUM_NO_LINE - 1}.0" in shader
 
 
 class TestColour:
@@ -1022,6 +1079,40 @@ class TestBuildRegion:
         [tile] = read_render(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert tile.colours is not None
         assert tile.texture is None
+
+    def test_a_podium_line_rides_alpha_through_every_tier(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`Q195`: a data line on the tall building reaches every shipped vertex
+        of it as `COLOR_0.a`, in its own base's frame, through the collapse; the
+        low building, whose block is the whole building, ships the old 255."""
+        # Two stems: `stem` drops the variant suffix, so the default set's
+        # B0001 and B0002 are one building to it.
+        fixtures = [
+            Fixture("B1000100", "BUILDING", 75.0, 75.0, 10.0),
+            Fixture("B2000200", "BUILDING", 90.0, 90.0, 90.0),
+        ]
+        # Where the fixtures' base sits in mPD, from a run without lines.
+        self.build(hong_kong, sources, tmp_path, fixtures=fixtures, out="probe")
+        [probe] = read_render(tmp_path / "probe" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        row = next(r for r in probe.extras["objects"] if r["id"] == "B20002")
+        base_mpd = row["aabb"][0][1] - game_offset(hong_kong.game_transform("wan_chai"))[1]
+        rows = {
+            "B20002": {"base_mpd": base_mpd, "boundary_m": 30.0, "top_mpd": base_mpd + 90.0},
+            "B10001": {"base_mpd": base_mpd, "boundary_m": 6.0, "top_mpd": base_mpd + 10.0},
+        }
+        out = tmp_path / "lined"
+        write_basemap(out, hong_kong, "wan_chai", podiums=rows)
+        report = build_region(hong_kong, "wan_chai", sources_root=sources(fixtures), out_root=out)
+        assert report.podium_lines == {"B20002"}
+        tiles = out / "wan_chai" / "tiles"
+        for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
+            [tile] = read_render(tiles / f"t_00_00_lod{level}.glb")
+            ids = np.array([r["id"] for r in tile.extras["objects"]])
+            owner = ids[np.rint(tile.uv2[:, 1]).astype(int)]
+            assert (owner == "B20002").any()
+            assert (tile.colours[owner == "B20002", 3] == podium_code(30.0)).all()
+            assert (tile.colours[owner != "B20002", 3] == PODIUM_NO_LINE).all()
 
     def test_tiles_ship_the_identity_channel_and_its_table(
         self, hong_kong, sources, tmp_path

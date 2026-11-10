@@ -68,8 +68,8 @@ log = logging.getLogger(__name__)
 
 # Name to entry point. Order is the run order; see the module docstring.
 # `podiums` sits before `buildings` because that is the dependency direction:
-# the buildings stage consumes `podiums.json` when `R4` packs the boundary,
-# so the order never has to move when it starts to.
+# the buildings stage reads `podiums.json` to pack each podium line into
+# `COLOR_0.a` (`Q195`).
 STAGES: dict[str, Callable[[list[str]], int]] = {
     "fetch": fetch.main,
     "podiums": podiums.main,
@@ -191,9 +191,8 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
 # it read. The run order above is one valid order of it; this is the rest.
 #
 # Three entries say more than the log did, each on purpose:
-#   - `buildings` needs `podiums`. It opens no `podiums.json` today; `STAGES`
-#     says it will the day `R4` packs the boundary, and the order must not have
-#     to move then.
+#   - `buildings` needs `podiums`: it packs the podium line from
+#     `podiums.json` (`Q195`).
 #   - `clearance` needs `carve` and not merely `buildings`: both write `tiles/`
 #     and `buildings.json`, and the clearance is of the carved ones.
 #   - everything needs `fetch`, which writes the sources tree and nothing here.
