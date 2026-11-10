@@ -212,6 +212,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q192` | The bus lane's line is TD's survey (`RM1006`, `RM1007`); the shader's `U = 1` bar is off | ✅ Built 2026-11-09 on the user's report and call. Extends `Q132`'s "where TD surveys no line, none is drawn" to the last line the shader invented. |
 | `Q193` | A building's street band takes no measured colour of its own | 🚫 Refused by measurement 2026-11-09, on the user's question: shop vs tower distinct on 10.8% of tall buildings against a 25% bar; three layers by hue 1.2%. |
 | `Q194` | The tower's surveyed hue is mostly the building, not the light | ✅ Closed 2026-11-09, no change: compass and brightness explain 15% of the wall-to-wall hue; the building mean is 0.70–0.74 reliable. |
+| `Q195` | A podium's cornice is drawn at iB1000's line and nowhere else | ✅ Shipped 2026-11-11 on the user's pick (0.28 at 0.5 m): 133 + 61 buildings, `COLOR_0.a`, schema 46. No shopfront, no invented line, no made-up podium colour. |
 | `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
 
 ---
@@ -2476,9 +2477,11 @@ verdict). Nothing consumes `podiums.json` yet · **Owner.** `P3-7a`.
   the same packed pitch the shader multiplies back, never a second metres grid or an ETL copy of
   the 2.8 m fallback; provenance stays ETL-side; precedence `authored > data > survey > hash`.
 - Open: whether a data-only podium boundary ships at all. It now needs a new channel (`Q102`), and
-  the shipped boundary would be graded before this closes.
+  the shipped boundary would be graded before this closes. ⚠️ **Answered in part by `Q195`**
+  (2026-11-11): the data line ships, in `COLOR_0.a`, as a cornice — on the user's instruction and
+  pick, not on a grade.
 
-**See.** `Q41` · `Q42` · `Q43` · `Q34` · `Q102` · `Q193` · `P3-7a`
+**See.** `Q41` · `Q42` · `Q43` · `Q34` · `Q102` · `Q193` · `Q195` · `P3-7a`
 
 ## `Q48` — A contrast ratio measures banding where an `L*` profile could not
 
@@ -12141,7 +12144,7 @@ texels). The split earns a channel at ≥ 25% of tall buildings.
 - Reopen on: a reader that separates material from shade, or a per-wall estimate whose spread
   falls well under the gap.
 
-**See.** `Q47` · `Q34` · `Q37` · `Q194` · `game/assets/shaders/city_facade_clean.gdshaderinc`
+**See.** `Q47` · `Q34` · `Q37` · `Q194` · `Q195` · `game/assets/shaders/city_facade_clean.gdshaderinc`
 
 ## `Q194` — The tower's surveyed hue is mostly the building, not the light
 
@@ -12177,6 +12180,53 @@ at least two measured tower walls (4,590 walls, `Q193`'s method):
   clutter in the photography are the likely remainder; that is inferred, not measured.
 
 **See.** `Q30` · `Q34` · `Q34′` · `Q193` · `etl/pipeline/colour.py`
+
+## `Q195` — A podium's cornice is drawn at iB1000's line and nowhere else
+
+**Status.** ✅ Shipped 2026-11-11 on the user's instructions and pick · **Owner.**
+`etl/pipeline/buildings.py` (`podium_code`, `podium_lines`), `city_facade_clean.gdshaderinc`
+
+**Asked** by the user, 2026-11-11, after `Q193`: a plan for the three layers (shop, podium, tower)
+in the ETL and the shader. Then, decision by decision: buildings with no known podium get **no**
+podium band ("keep existing if not"); shopfronts were trialled on every wall and **dropped** ("lets
+not do shop"); the cornice **ships** ("do conrice"), at 0.28 dark and 0.5 m from four trial
+strengths; and a podium takes **no colour of its own** unless the photographs show one ("if no
+different just keep them as is no different, dont make up a podium color").
+
+**Built.**
+- **The line is data only** — `Q47`'s `authored > data` with nothing beneath it. `podiums.json`
+  (schema 2) gains each building's `top_mpd`; a line ships where the building rises at least
+  `podiums.min_tower_above_m` (6.0, `Q193`'s bar) above it, since below that the `P` block is the
+  whole building. 133 of Wan Chai's 310 data rows and 61 of Causeway Bay's 135 pass.
+- **`COLOR_0.a` carries it** (`CITY_SCHEMA` 46): metres above the object's own base in 0.5 m steps,
+  codes 1–254; 255 is no line, the byte every vertex shipped before, so an unlined building is
+  byte-identical. The only free channel — `TEXCOORD_0`/`1` are full, `extras` is CPU-only, custom
+  attributes are dropped, a data texture breaks `mesh_contract.gd`. Per building, not per wall:
+  `P3-7a` measured that a per-face payload does not survive the collapse.
+- **The shader draws a cornice only where a line is**, as a cheap path beside the grid branch
+  (A/B against the full branch: 2 px, the same as two runs of one build). `podium_height_m`
+  stays the fallback anchor for the parked grid and draws nothing on its own. `Q47`'s "never a
+  second metres grid" holds: the grid counts its storeys from whichever line the building has.
+- **Measured on the web build's renderer**: the cornice moves 22,806 px on Compatibility against
+  22,749 on Mobile. Vertex alpha survives on tiles though it did not on the `MultiMesh` signal
+  heads (`Q173`); the shader reads 0 as no line all the same.
+
+**Refused or deferred, each on the user's word.**
+- **A 12 m default podium on every other building.** It would have been a new invented line on
+  ~78% of the stock, against `Q193`'s 4.2% distinct on that subset — no evidence of a change at
+  12 m.
+- **Shopfronts** — rendered on every wall at `shopfront_share` 1.0 and dropped on sight.
+- **A podium palette** — dropped for `Q193`'s measured rule: a podium is coloured only where the
+  survey resolves it from the tower (about 9% of the data-line buildings), and otherwise keeps the
+  tower's colour. ⚠️ **Owed, not built**: the alpha byte is the line and the RGB the tower, so a
+  second colour needs the walls cut at the line in the ETL. Count the resolvable buildings first.
+
+⚠️ **Visible less often than 133 suggests.** At the `Q27` street camera every lined building is
+hidden behind nearer towers at its line's height, and the frame does not move; the trial frames
+are from a junction facing one (`496,5.9,658` → `480,17.2,646`).
+
+**See.** `Q47` · `Q193` · `Q102` · `P3-7a` · `game/tuning/city_facade.md` ·
+`docs/ARCHITECTURE.md` (`COLOR_0.a`)
 
 ## `Q196` — Vehicles take detail lines from their own mesh, a width in metres
 
