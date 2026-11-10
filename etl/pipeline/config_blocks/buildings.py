@@ -341,6 +341,11 @@ class BuildingStyle:
     # survey's `vegetation` column required — one set against a survey that never
     # recorded it would filter nothing while looking like it filtered.
     facade_hue_vegetation_max: float | None = None
+    # Whether a building's street band and podium take the survey's own colour
+    # for them (`Q197`), each pulled toward the tower's by how far the band's
+    # walls disagree. Off, every building is its tower colour floor to roof — the
+    # city before `Q197`, and the city a survey without a `bands` column builds.
+    facade_hue_bands: bool = False
 
     @property
     def height_bands(self) -> tuple[HeightBand, ...]:
@@ -681,6 +686,9 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         if vegetation_max is None
         else _scale(vegetation_max, f"{where}:facade_hue.vegetation_max", 1.0)
     )
+    hue_bands = False if hue is None else hue.get("bands", False)
+    if not isinstance(hue_bands, bool):
+        raise ValueError(f"{where}:facade_hue.bands must be true or false, got {hue_bands!r}")
 
     # ⚠️ **Refused rather than ignored** (`Q102`). The vision reader this block
     # configured is gone, and so is the `TEXCOORD_1` payload it fed. A stale
@@ -811,6 +819,7 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         facade_hue_source=hue_source,
         facade_hue_strength=hue_strength,
         facade_hue_vegetation_max=hue_vegetation_max,
+        facade_hue_bands=hue_bands,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         collision_cell_m=collision_cell,

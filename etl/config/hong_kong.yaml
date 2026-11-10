@@ -934,10 +934,17 @@ buildings:
   # `source` is a filename, not a path: the pipeline resolves it through
   # `fetch.source_dir`, which is the single definition of the sources-tree
   # layout. A city's own config never repeats its own id.
+  #
+  # `bands` (Q197, the user's pick of two from frames): the street band (5 m)
+  # and the podium (to its iB1000 line) each take the survey's colour for them,
+  # pulled toward the tower's by how much the band's own walls disagree, so a
+  # difference the photos cannot resolve ships as the tower's colour. Needs a
+  # survey with the `bands` column; false is every building one colour.
   facade_hue:
     source: facade_lab.json
     strength: 3.0
     vegetation_max: 0.5
+    bands: true
 
   # Vertex-clustering cell size per LOD tier, in metres, coarsest last.
   #

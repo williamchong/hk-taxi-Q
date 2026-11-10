@@ -49,8 +49,8 @@ single sheet, so whatever the lost script counted, it was neither covered texels
 nor wall area (4.5 to 2,877 per m² — not a density either). `Q34`'s regression on
 log pixel count has to be re-fitted, not carried over.
 
-Run:  .venv/bin/python tools/facade_survey.py 11-SW-9D
-      .venv/bin/python tools/facade_survey.py --all --merge
+Run:  .venv/bin/python tools/facade_survey.py 11-SW-9D --regions wan_chai causeway_bay
+      .venv/bin/python tools/facade_survey.py --all --merge --regions wan_chai causeway_bay
       .venv/bin/python tools/facade_survey.py --all --filler-report
 """
 
@@ -75,8 +75,9 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
-from pipeline.buildings import HUE_SOURCE_ID, resolver, stem  # noqa: E402
+from pipeline.buildings import HUE_SOURCE_ID, podium_lines, resolver, stem  # noqa: E402
 from pipeline.colour import srgb_to_lab  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 from pipeline.fetch import SOURCES_ROOT, source_dir  # noqa: E402
 from pipeline.gltf import MeshData, normalise, read_scene  # noqa: E402
 
@@ -166,6 +167,22 @@ MIN_TEXELS = 64
 # larger. Sampling is seeded from the model name so a rerun reproduces the table.
 SAMPLE_CAP = 2_000_000
 
+# The street band's top, in metres above the textured model's floor (`Q197`).
+# The spike's 5.0 — a shopfront and its sign, below the first floor of flats —
+# and recorded per row as an absolute height, so the ETL cuts where this
+# measured rather than restating the number.
+STREET_BAND_M = 5.0
+
+# A face's band estimate counts toward a band's noise only with this many
+# photographic texels behind it (`Q197`): the preview's floor, below which one
+# sign or one shadow is the whole face.
+BAND_FACE_TEXELS = 2000
+
+# The spread between two walls of one building, `Δab`, where a band has fewer
+# than two faces to measure its own: `Q193`'s city median (6.5) of exactly that
+# spread, measured on the walls this survey reads.
+FALLBACK_SPREAD_AB = 6.5
+
 # Compass names for the four horizontal quadrants, as (column, sign) into the
 # (x, z) pair `face_of` builds. On the Y-up axes `read_scene` produces, +X is
 # east, and north is -Z because the node matrix maps the source's +Y northing
@@ -186,6 +203,7 @@ class Row:
     vegetation: float
     height_m: float
     sheet: str
+    bands: dict[str, Any] | None = None
 
 
 def coverage(uvs: np.ndarray, triangles: np.ndarray, width: int, height: int) -> np.ndarray:
@@ -301,8 +319,24 @@ def wall_texels(
     Returns `uint8` RGB per face. Empty faces are absent rather than empty, which
     is what puts a `null` in `face_L` for a building with nothing facing that way.
     """
+    return banded_texels(meshes, (), decoded)[0]
+
+
+def banded_texels(
+    meshes: list[MeshData], cuts: tuple[float, ...], decoded: dict[int, np.ndarray] | None = None
+) -> list[dict[str, np.ndarray]]:
+    """`wall_texels` per height band, bottom first: one more band than `cuts`.
+
+    A triangle joins the band its **centroid** stands in, `cuts` being heights on
+    the models' own Y — the photo cannot be cut finer than a triangle, and
+    `Q193` measured 21% of a podium building's wall triangles straddling its line.
+    With no cuts this is `wall_texels`' gather exactly, texel for texel.
+    """
     decoded = decode_textures(meshes, decoded)
-    buckets: dict[str, list[np.ndarray]] = {name: [] for name in FACES}
+    edges = np.asarray(cuts, dtype=np.float64)
+    buckets: list[dict[str, list[np.ndarray]]] = [
+        {name: [] for name in FACES} for _ in range(len(cuts) + 1)
+    ]
     names = list(FACES)
     for mesh in meshes:
         if mesh.texture is None or mesh.uvs is None:
@@ -310,24 +344,31 @@ def wall_texels(
         image = decoded[id(mesh.texture)]
         height, width = image.shape[:2]
         assigned = assigned_faces(mesh)
+        band = np.searchsorted(
+            edges, mesh.positions[mesh.triangles][:, :, 1].mean(axis=1), side="right"
+        )
         flat = image.reshape(-1, 3)
-        for index, name in enumerate(names):
-            triangles = mesh.triangles[assigned == index]
-            if not len(triangles):
-                continue
-            # `compress` over the flattened atlas rather than `image[mask]`: same
-            # rows in the same order, six times faster, and this gather is the
-            # tool's largest single cost.
-            mask = coverage(mesh.uvs, triangles, width, height)
-            buckets[name].append(np.compress(mask.ravel(), flat, axis=0))
+        for level, faces in enumerate(buckets):
+            for index, name in enumerate(names):
+                triangles = mesh.triangles[(assigned == index) & (band == level)]
+                if not len(triangles):
+                    continue
+                # `compress` over the flattened atlas rather than `image[mask]`:
+                # same rows in the same order, six times faster, and this gather
+                # is the tool's largest single cost.
+                mask = coverage(mesh.uvs, triangles, width, height)
+                faces[name].append(np.compress(mask.ravel(), flat, axis=0))
 
     # Concatenating in a comprehension would hold every chunk alongside every
     # joined array, doubling the peak on exactly the buildings that set it.
-    gathered = {}
-    for name, chunks in buckets.items():
-        if chunks:
-            gathered[name] = np.concatenate(chunks)
-            chunks.clear()
+    gathered: list[dict[str, np.ndarray]] = []
+    for faces in buckets:
+        joined = {}
+        for name, chunks in faces.items():
+            if chunks:
+                joined[name] = np.concatenate(chunks)
+                chunks.clear()
+        gathered.append(joined)
     return gathered
 
 
@@ -512,8 +553,100 @@ def estimate(
     return srgb_to_lab(lit[None, :])[0], lit
 
 
-def survey_building(meshes: list[MeshData], name: str, sheet: str) -> Row | None:
-    """One building's row, or `None` when nothing measurable survives the guards."""
+def band_noise(face_labs: list[np.ndarray]) -> float:
+    """The variance of one band's estimate, `Δab²`, from its walls' disagreement.
+
+    The median pairwise `Δab` between the band's faces, squared over the number
+    of faces: how far a band's colour could move by which walls happened to be
+    photographed. A band with fewer than two faces takes `FALLBACK_SPREAD_AB`.
+    """
+    count = len(face_labs)
+    if count < 2:
+        return FALLBACK_SPREAD_AB**2 / max(1, count)
+    spread = np.median(
+        [
+            np.hypot(*(face_labs[i][1:] - face_labs[j][1:]))
+            for i in range(count)
+            for j in range(i + 1, count)
+        ]
+    )
+    return float(spread**2 / count)
+
+
+def survey_bands(
+    meshes: list[MeshData],
+    decoded: dict[int, np.ndarray],
+    colours: frozenset[int],
+    name: str,
+    *,
+    floor: float,
+    roof: float,
+    line_mpd: float | None,
+    min_tower_m: float,
+) -> dict[str, Any] | None:
+    """The street band, the podium and the tower, each measured on its own (`Q197`).
+
+    `cuts_mpd` are where the bands were cut, absolute, so the ETL cuts the
+    shipped wall at the heights this measured. The podium band exists only where
+    `line_mpd` does — the ETL's own `podium_lines`, so data only, `Q195` — and
+    the street band only where `min_tower_m` of building stands over it; a
+    building too short for that is one colour and gets `None`.
+
+    Per band: `lab`, or `None` where nothing photographic survived, and `noise`,
+    `band_noise` of the faces with `BAND_FACE_TEXELS` behind them. The weighting
+    the ETL applies is computed there from these; nothing here decides what a
+    difference is worth.
+    """
+    shop_top = floor + STREET_BAND_M
+    if roof - shop_top < min_tower_m:
+        return None
+    cuts = [shop_top]
+    if line_mpd is not None and line_mpd > shop_top:
+        cuts.append(line_mpd)
+    bands = banded_texels(meshes, tuple(cuts), decoded)
+    labs: list[list[float] | None] = []
+    noises: list[float] = []
+    for level, faces in enumerate(bands):
+        if not faces:
+            labs.append(None)
+            noises.append(band_noise([]))
+            continue
+        sampled = _subsample(faces, f"{name}/band{level}")
+        offsets = np.cumsum([0, *(len(pixels) for pixels in sampled.values())])
+        pooled = np.concatenate(list(sampled.values()))
+        pooled_lab = srgb_to_lab(pooled)
+        result = estimate(pooled, pooled_lab, colours)
+        labs.append(None if result is None else [round(float(v), 2) for v in result[0]])
+        keep = photographic(pooled, pooled_lab, colours)
+        face_labs = []
+        for index in range(len(sampled)):
+            low, high = offsets[index], offsets[index + 1]
+            if keep[low:high].sum() < BAND_FACE_TEXELS:
+                continue
+            per_face = estimate(pooled[low:high], pooled_lab[low:high], colours)
+            if per_face is not None:
+                face_labs.append(per_face[0])
+        noises.append(round(band_noise(face_labs), 3))
+    return {
+        "cuts_mpd": [round(cut, 3) for cut in cuts],
+        "lab": labs,
+        "noise": noises,
+    }
+
+
+def survey_building(
+    meshes: list[MeshData],
+    name: str,
+    sheet: str,
+    *,
+    line_mpd: float | None = None,
+    min_tower_m: float | None = None,
+) -> Row | None:
+    """One building's row, or `None` when nothing measurable survives the guards.
+
+    `min_tower_m` set measures the three bands too (`survey_bands`); the
+    whole-building estimate does not move with them, texel for texel.
+    """
     # Decoded once and read twice: `filler_colours` scans these atlases for their
     # repeated panels and `wall_texels` gathers from the same ones. Passing the
     # dict through is what `decode_textures` documents it is for, so the second
@@ -530,12 +663,33 @@ def survey_building(meshes: list[MeshData], name: str, sheet: str) -> Row | None
     decoded = decode_textures(meshes)
     colours = filler_colours(decoded)
     faces = wall_texels(meshes, decoded)
-    del decoded
-    if not faces:
-        return None
     total = sum(len(pixels) for pixels in faces.values())
+    # Sampled before the bands gather theirs, so the whole building's texels —
+    # up to 90 million — are not held through a second gather the same size.
     sampled = _subsample(faces, name)
     del faces
+    floor = min(float(mesh.positions[:, 1].min()) for mesh in meshes)
+    roof = max(float(mesh.positions[:, 1].max()) for mesh in meshes)
+    # ⚠️ A second rasterisation of every wall, roughly doubling the tool's
+    # time: one pass ORing a band bit per texel would feed both, but the
+    # whole-building gather is what ships, and this kept it texel for texel.
+    bands = (
+        None
+        if min_tower_m is None or not sampled
+        else survey_bands(
+            meshes,
+            decoded,
+            colours,
+            name,
+            floor=floor,
+            roof=roof,
+            line_mpd=line_mpd,
+            min_tower_m=min_tower_m,
+        )
+    )
+    del decoded
+    if not sampled:
+        return None
 
     # One conversion for the building and its four faces: the faces partition the
     # pooled sample, so each is a slice of it rather than a separate measurement.
@@ -557,8 +711,6 @@ def survey_building(meshes: list[MeshData], name: str, sheet: str) -> Row | None
             face_lightness[face] = round(float(per_face[0][0]), 2)
 
     keep = photographic(pooled, pooled_lab, colours)
-    floor = min(float(mesh.positions[:, 1].min()) for mesh in meshes)
-    roof = max(float(mesh.positions[:, 1].max()) for mesh in meshes)
     return Row(
         lab=[round(float(value), 2) for value in lab],
         lit_rgb=[int(value) for value in lit],
@@ -569,6 +721,7 @@ def survey_building(meshes: list[MeshData], name: str, sheet: str) -> Row | None
         vegetation=round(float((pooled_lab[:, 1] < VEGETATION_A).mean()), 4),
         height_m=round(roof - floor, 2),
         sheet=sheet,
+        bands=bands,
     )
 
 
@@ -777,7 +930,29 @@ def filler_report(findings: list[FillerFinding]) -> None:
     log.info("\n".join(lines))
 
 
-def survey_sheet(archive: Path) -> dict[str, dict[str, Any]]:
+def region_lines(regions: list[str]) -> tuple[dict[str, float], float]:
+    """The named regions' podium lines, and the tower bar they were cut at.
+
+    Through the ETL's own `podium_lines`, so the survey's podium band is cut at
+    exactly the line the city ships (`Q195`). Named rather than discovered: a
+    region left off gives its buildings the street band and the tower only, as
+    a building with no line has, and that should be a choice at the command line.
+    """
+    city = load_config()
+    spec = city.podiums
+    if spec is None:
+        raise ValueError("no podiums block in the config: the bands need its min_tower_above_m")
+    lines: dict[str, float] = {}
+    for region_id in regions:
+        found = podium_lines(city.out_dir(region_id), region_id, spec)
+        log.info("bands: %s, %d podium lines", region_id, len(found))
+        lines.update(found)
+    return lines, spec.min_tower_above_m
+
+
+def survey_sheet(
+    archive: Path, lines: dict[str, float] | None = None, min_tower_m: float | None = None
+) -> dict[str, dict[str, Any]]:
     """Every building on one sheet, keyed by the stem `pipeline/buildings.py` joins on.
 
     ⚠️ **Keyed through the pipeline's own `stem`, not a local copy of it.** The two
@@ -791,7 +966,13 @@ def survey_sheet(archive: Path) -> dict[str, dict[str, Any]]:
         documents = sheet_documents(bundle)
         log.info("%s: %d %s-prefixed models", sheet, len(documents), MODEL_PREFIX)
         for index, (name, document) in enumerate(sorted(documents.items()), 1):
-            row = survey_building(load_building(bundle, document), name, sheet)
+            row = survey_building(
+                load_building(bundle, document),
+                name,
+                sheet,
+                line_mpd=None if lines is None else lines.get(stem(name)),
+                min_tower_m=min_tower_m,
+            )
             if row is None:
                 continue
             rows[stem(name)] = asdict(row)
@@ -814,6 +995,12 @@ def main(argv: list[str] | None = None) -> int:
         "--out-dir", type=Path, help="where to write facade_lab.<sheet>.json [the city's cache]"
     )
     parser.add_argument("--all", action="store_true", help="every archive in --zip-dir")
+    parser.add_argument(
+        "--regions",
+        nargs="+",
+        metavar="REGION",
+        help="the built regions whose podium lines cut the bands, e.g. wan_chai causeway_bay",
+    )
     parser.add_argument(
         "--merge", action="store_true", help="also write the merged facade_lab.json"
     )
@@ -839,6 +1026,8 @@ def main(argv: list[str] | None = None) -> int:
     # ignored, so that is visible at the command line and not only here.
     if arguments.filler_report and (arguments.merge or arguments.out_dir):
         parser.error("--filler-report writes no table, so --merge and --out-dir do nothing")
+    if not arguments.filler_report and not arguments.regions:
+        parser.error("a table needs --regions: the podium lines that cut its bands (Q197)")
     if arguments.filler_report:
         findings: list[FillerFinding] = []
         for archive in archives:
@@ -852,9 +1041,10 @@ def main(argv: list[str] | None = None) -> int:
         log.info("%s: %d rows -> %s", label, len(rows), destination)
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    lines, min_tower_m = region_lines(arguments.regions)
     merged: dict[str, dict[str, Any]] = {}
     for archive in archives:
-        rows = survey_sheet(archive)
+        rows = survey_sheet(archive, lines, min_tower_m)
         write(f"{TABLE_STEM}.{archive.stem}.json", rows, archive.stem)
         clash = merged.keys() & rows.keys()
         if clash:

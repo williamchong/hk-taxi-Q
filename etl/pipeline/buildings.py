@@ -56,7 +56,7 @@ from dataclasses import asdict, dataclass, field, replace
 from functools import partial
 from hashlib import blake2b
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import unquote
 from zlib import crc32
 
@@ -85,15 +85,60 @@ from pipeline.gltf import (
     OCCLUDER_ONLY_SUFFIX,
     Bounds,
     MeshData,
+    normalise,
     read_scene,
     write_glb,
 )
-from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
+from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles, weld
 
 log = logging.getLogger(__name__)
 
 # A building's measured `(a*, b*)` — hue without lightness. See `colour.py`.
 Hue = tuple[float, float]
+
+
+@dataclass(frozen=True)
+class Banding:
+    """One building's colour bands up its walls, bottom first (`Q197`).
+
+    `cuts_mpd` are absolute heights, where the survey cut the photographs; one
+    more hue than cuts, the last always the tower's. A `None` hue is the
+    building's own — the tower's — so a band the survey could not measure is
+    drawn as the building always was.
+    """
+
+    cuts_mpd: tuple[float, ...]
+    hues: tuple[Hue | None, ...]
+
+
+class BandTables(NamedTuple):
+    """Every banded object's cuts and colours, indexed by its ordinal (`Q197`).
+
+    Dense over the region's object table, so a tier looks a triangle's bands up
+    by the ordinal in `TEXCOORD_1.y` with one index rather than a loop over
+    objects. `cuts` pads with `inf`, which no vertex reaches: an object with
+    fewer cuts has nothing straddling or above the missing ones.
+    """
+
+    banded: np.ndarray  # (objects,) bool
+    cuts: np.ndarray  # (objects, cuts) float64, in the object's `TEXCOORD_0.y` metres
+    rgba: np.ndarray  # (objects, cuts + 1, 4) uint8, bottom band first
+
+
+def band_tables(bands: dict[int, tuple[np.ndarray, np.ndarray]], objects: int) -> BandTables:
+    """`BandTables` from each banded ordinal's cuts and RGBA rows."""
+    width = max((len(cuts) for cuts, _ in bands.values()), default=0)
+    tables = BandTables(
+        banded=np.zeros(objects, dtype=bool),
+        cuts=np.full((objects, width), np.inf),
+        rgba=np.zeros((objects, width + 1, 4), dtype=np.uint8),
+    )
+    for ordinal, (cuts, rgba) in bands.items():
+        tables.banded[ordinal] = True
+        tables.cuts[ordinal, : len(cuts)] = cuts
+        tables.rgba[ordinal, : len(rgba)] = rgba
+    return tables
+
 
 # The config key for the tiled source that carries massing. A stage name rather
 # than a city fact — `fetch.py --only buildings` names the same thing.
@@ -292,6 +337,14 @@ class BuildReport:
     # Stems that shipped a podium line on `COLOR_0.a` (`Q195`). Zero with a
     # `podiums:` block declared is the stage-order failure again.
     podium_lines: set[str] = field(default_factory=set)
+    # Stems drawn in more than one colour (`Q197`), and those whose survey cut
+    # its podium band at another line than the one this build ships — a survey
+    # older than the podiums it should have read, which drops that band rather
+    # than drawing it at the wrong height. A survey with no podium band where
+    # this build ships a line is not counted: its line sat inside the street
+    # band, which the survey decided, not a staleness.
+    banded: set[str] = field(default_factory=set)
+    band_line_stale: set[str] = field(default_factory=set)
 
 
 # --------------------------------------------------------------------------
@@ -660,6 +713,84 @@ def podium_code(line_m: float | None) -> int:
     return code if 1 <= code < PODIUM_NO_LINE else PODIUM_NO_LINE
 
 
+def band_hue(hue: Hue, band: Hue, tower: Hue, band_noise: float, tower_noise: float) -> Hue:
+    """A band's hue: the building's, moved toward what the band measured (`Q197`).
+
+    By `gap² / (gap² + noise)`, `gap` the band's `Δab` from the tower band and
+    `noise` the two bands' variance from their walls' disagreement — a shrinkage
+    toward the tower. A difference several times what the walls disagree by
+    ships nearly whole; one the walls cannot resolve ships as the tower. The
+    user picked this over the raw band colour from frames: raw put a median 22
+    `Δab` on screen between a street band and its tower, mostly signs and shade.
+
+    Moves from the building's hue, not the tower band's, so the tower keeps the
+    exact colour it shipped with before bands existed.
+    """
+    gap_a, gap_b = band[0] - tower[0], band[1] - tower[1]
+    gap2 = gap_a * gap_a + gap_b * gap_b
+    if gap2 == 0.0:
+        return hue
+    weight = gap2 / (gap2 + band_noise + tower_noise)
+    return (hue[0] + weight * gap_a, hue[1] + weight * gap_b)
+
+
+def facade_bands(
+    style: BuildingStyle, hue: dict[str, Hue], *, root: Path | None = None
+) -> dict[str, Banding]:
+    """Per stem, the survey's street band and podium as hues (`Q197`).
+
+    Only for a stem `facade_hue` kept — the vegetation guard drops a building's
+    bands with its hue — and only where the tower band measured, since every
+    other band is weighed against it. Missing survey is `{}`, as for the hue; a
+    survey without the `bands` column while `facade_hue.bands` is on is refused,
+    for the vegetation column's reason: it would colour nothing while looking
+    configured.
+    """
+    if not style.facade_hue_bands or style.facade_hue_source is None or not hue:
+        return {}
+    path = source_dir(HUE_SOURCE_ID, root=root) / style.facade_hue_source
+    try:
+        table = json.loads(path.read_text())
+    except FileNotFoundError:
+        return {}
+    if table and not any("bands" in row for row in table.values()):
+        raise ValueError(
+            f"{path}: facade_hue.bands is on, but this survey has no `bands` column — "
+            "re-run tools/facade_survey.py, or turn bands off"
+        )
+    bands: dict[str, Banding] = {}
+    try:
+        for key, row in table.items():
+            measured = row.get("bands")
+            if measured is None or key not in hue:
+                continue
+            cuts = tuple(float(cut) for cut in measured["cuts_mpd"])
+            labs, noises = measured["lab"], [float(noise) for noise in measured["noise"]]
+            if len(labs) != len(cuts) + 1 or len(noises) != len(labs):
+                raise ValueError(f"{key}: {len(cuts)} cuts against {len(labs)} bands")
+            tower = labs[-1]
+            if tower is None:
+                continue
+            hues: list[Hue | None] = [
+                None
+                if lab is None
+                else band_hue(
+                    hue[key],
+                    (float(lab[1]), float(lab[2])),
+                    (float(tower[1]), float(tower[2])),
+                    noise,
+                    noises[-1],
+                )
+                for lab, noise in zip(labs[:-1], noises[:-1], strict=True)
+            ]
+            if any(band is not None for band in hues):
+                bands[key] = Banding(cuts_mpd=cuts, hues=(*hues, None))
+    except (AttributeError, KeyError, TypeError, IndexError, ValueError) as exc:
+        raise ValueError(f"{path}: facade hue survey bands are malformed ({exc})") from exc
+    log.info("facade bands: %d buildings from %s", len(bands), path.name)
+    return bands
+
+
 def podium_lines(out_dir: Path, region_id: str, spec: PodiumBlocks | None) -> dict[str, float]:
     """Per stem, the podium line in mPD, where a tower stands over it (`Q195`).
 
@@ -708,26 +839,61 @@ def colour_for(
     building's walls disagree by compass direction — that is 1.4% of the
     variance, and `colour.py`'s header has the rest of the arithmetic.
     """
-    low, high = bounds if bounds is not None else mesh.aabb()
     measured = None if hue is None else hue.get(stem(mesh.name))
-    red, green, blue = material_for(style, class_id, mesh, high[1] - low[1], measured).colour
-
-    if measured is not None:
-        red, green, blue = with_hue((red, green, blue), measured, style.facade_hue_strength)
-
-    jitter = style.jitter_for(class_id)
-    if jitter > 0.0:
-        factor = 1.0 + jitter * (2.0 * _seed(mesh) - 1.0)
-        red, green, blue = (
-            min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
-        )
-
     # A read-only broadcast view, not 4 bytes repeated a million times. `merge`
     # and `select_triangles` materialise it where it is actually needed.
     return np.broadcast_to(
-        np.array([red, green, blue, podium], dtype=np.uint8),
+        _rgba(style, class_id, mesh, bounds, measured, [measured], podium)[0],
         (len(mesh.positions), 4),
     )
+
+
+def band_colours(
+    style: BuildingStyle,
+    class_id: str,
+    mesh: MeshData,
+    banding: Banding,
+    *,
+    bounds: Bounds,
+    hue: Hue,
+    podium: int,
+) -> np.ndarray:
+    """One RGBA row per band of `banding`, bottom first (`Q197`).
+
+    `colour_for`'s colour with each band's hue in place of the building's: the
+    material — chosen by the building's hue, as before — its lightness, the
+    jitter and the podium byte are the building's, so only `(a*, b*)` moves up
+    the wall.
+    """
+    tints = [hue if band is None else band for band in banding.hues]
+    return _rgba(style, class_id, mesh, bounds, hue, tints, podium)
+
+
+def _rgba(
+    style: BuildingStyle,
+    class_id: str,
+    mesh: MeshData,
+    bounds: Bounds | None,
+    measured: Hue | None,
+    tints: list[Hue | None],
+    podium: int,
+) -> np.ndarray:
+    """One RGBA row per tint: the material `measured` picks, carrying each tint."""
+    low, high = bounds if bounds is not None else mesh.aabb()
+    material = material_for(style, class_id, mesh, high[1] - low[1], measured).colour
+    jitter = style.jitter_for(class_id)
+    factor = 1.0 + jitter * (2.0 * _seed(mesh) - 1.0) if jitter > 0.0 else None
+    rows = []
+    for tint in tints:
+        red, green, blue = material
+        if tint is not None:
+            red, green, blue = with_hue((red, green, blue), tint, style.facade_hue_strength)
+        if factor is not None:
+            red, green, blue = (
+                min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
+            )
+        rows.append((red, green, blue, podium))
+    return np.array(rows, dtype=np.uint8)
 
 
 def facade_uv(
@@ -1033,6 +1199,8 @@ def build_region(
     place = Placement.resolve(city, region_id, sources_root, out_root)
     hue = facade_hue(style, root=sources_root)
     lines = podium_lines(place.out_dir, region_id, city.podiums)
+    bands = facade_bands(style, hue, root=sources_root)
+    tier_bands: dict[int, tuple[np.ndarray, np.ndarray]] = {}
     # The sea the ground drops under (`sink_sea`) and the parks it is painted
     # green in (`paint_parks`), read from the basemap stage's document; a city
     # with no `basemap:` block sinks and paints nothing.
@@ -1125,10 +1293,23 @@ def build_region(
             # The line in this mesh's own frame: a stem can ship as several
             # meshes, each measuring `TEXCOORD_0.y` from its own base.
             line_mpd = lines.get(key)
-            line_m = None if line_mpd is None else line_mpd - (bounds[0][1] - place.offset[1])
+            base_mpd = bounds[0][1] - place.offset[1]
+            line_m = None if line_mpd is None else line_mpd - base_mpd
             podium = podium_code(line_m)
             if podium != PODIUM_NO_LINE:
                 report.podium_lines.add(key)
+            banding = bands.get(key)
+            if banding is not None and line_mpd is not None and not _same_line(banding, line_mpd):
+                report.band_line_stale.add(key)
+            banding = None if banding is None else _ship_line(banding, line_mpd)
+            if banding is not None:
+                tier_bands[ordinal] = (
+                    np.asarray(banding.cuts_mpd) - base_mpd,
+                    band_colours(
+                        style, class_id, placed, banding, bounds=bounds, hue=hue[key], podium=podium
+                    ),
+                )
+                report.banded.add(key)
             coloured = replace(
                 placed,
                 colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue, podium=podium),
@@ -1163,13 +1344,26 @@ def build_region(
     # stage instead of all staying live to the end. The ground arrives already
     # decimated and comes to 4.0 MB, against the 52.5 MB it occupied here as
     # source geometry.
+    tables = band_tables(tier_bands, len(objects)) if tier_bands else None
     for tile in sorted(set(buckets) | set(tiers)):
         written = _write_tile(
-            place.out_dir, tile, buckets.pop(tile, {}), tiers.pop(tile, {}), style, objects
+            place.out_dir,
+            tile,
+            buckets.pop(tile, {}),
+            tiers.pop(tile, {}),
+            style,
+            objects,
+            tables,
         )
         if written is not None:
             report.tiles.append(written)
 
+    if report.band_line_stale:
+        log.warning(
+            "facade bands: %d buildings' podium band was cut at another line than this build "
+            "ships, and is drawn as the tower — re-run tools/facade_survey.py",
+            len(report.band_line_stale),
+        )
     _write_manifest(place.out_dir, city, place.region, place.grid, report)
     return report
 
@@ -1271,6 +1465,129 @@ def _within_region(mesh: MeshData, grid: Grid) -> MeshData | None:
         & (centroids[:, 2] <= grid.max_z + margin)
     )
     return select_triangles(mesh, inside)
+
+
+def _same_line(banding: Banding, line_mpd: float) -> bool:
+    """Whether `banding`'s podium band, if it has one, was cut at `line_mpd`."""
+    return len(banding.cuts_mpd) < 2 or abs(banding.cuts_mpd[1] - line_mpd) <= PODIUM_STEP_M / 2
+
+
+def _ship_line(banding: Banding, line_mpd: float | None) -> Banding | None:
+    """`banding` as this build can draw it, or `None` where nothing is left.
+
+    A podium band is drawn only where it was cut at the line this build ships
+    (`Q195`), to within half a code step, so a podium band never stands without
+    its cornice. Where this build ships no line — a neighbour's building inside
+    this region's sheets, whose `P` block only the neighbour's podium stage
+    reads — there is no cornice and no podium band. Where it ships another
+    line, the survey is stale and `build_region` says so. The converse is not
+    promised: a line inside the street band has a cornice and no podium band.
+    """
+    if len(banding.cuts_mpd) < 2:
+        return banding
+    if line_mpd is not None and _same_line(banding, line_mpd):
+        return banding
+    street = banding.hues[0]
+    return None if street is None else Banding(banding.cuts_mpd[:1], (street, None))
+
+
+def cut_bands(tier: MeshData, bands: BandTables | None) -> MeshData:
+    """Cut each banded object's walls at its band heights and colour each band (`Q197`).
+
+    On the **finished** tier, after `collapse`, for `along_m`'s reason: a cut
+    made on the source would be moved by the cluster means and its two colours
+    fused into one vertex, so the edge would wander a cell either way and blur.
+    Cut here, every tier keeps the edge exactly at the measured height, and the
+    collider and occluder — built from the uncut classes — never see it.
+
+    A triangle crossing a cut becomes three, every attribute interpolated along
+    its edges; each piece then takes its band's colour by its centroid's
+    `TEXCOORD_0.y`. Only the cut objects' triangles are rebuilt, re-welded by
+    `weld` where every attribute agrees, colour included, so each cut stays a
+    hard edge.
+
+    ⚠️ **Only a triangle whose three corners are one object's.** `collapse`
+    stitches a few triangles across two buildings where they meet, and there
+    the corners disagree about both the frame `TEXCOORD_0.y` measures in and
+    the ordinal in `TEXCOORD_1.y` — interpolating either invents a vertex that
+    belongs to no building. Those keep the tower's colour, as they did before.
+    """
+    if bands is None or tier.uvs is None or tier.uv2 is None or tier.colours is None:
+        return tier
+    corner_owner = np.rint(tier.uv2[tier.triangles, 1]).astype(np.int64)
+    owner = corner_owner[:, 0]
+    cut = (corner_owner == owner[:, None]).all(axis=1) & bands.banded[owner]
+    if not cut.any():
+        return tier
+    corners = tier.triangles[cut]
+    owner = owner[cut]
+    attributes = {
+        "positions": tier.positions[corners].astype(np.float64),
+        "normals": tier.normals[corners].astype(np.float64),
+        "uvs": tier.uvs[corners].astype(np.float64),
+        "uv2": tier.uv2[corners].astype(np.float64),
+    }
+    heights = bands.cuts[owner]
+    for column in range(heights.shape[1]):
+        attributes, owner, heights = _split_at(attributes, owner, heights, column)
+
+    band = (attributes["uvs"][:, :, 1].mean(axis=1)[:, None] >= heights).sum(axis=1)
+    positions = attributes["positions"]
+    area = np.linalg.norm(
+        np.cross(positions[:, 1] - positions[:, 0], positions[:, 2] - positions[:, 0]), axis=1
+    )
+    # A cut through a vertex leaves a sliver with no area; it draws nothing.
+    live = area > 1e-9
+    count = int(live.sum()) * 3
+    pieces = MeshData(
+        name=tier.name,
+        positions=positions[live].reshape(-1, 3),
+        normals=normalise(attributes["normals"][live].reshape(-1, 3)).astype(np.float32),
+        triangles=np.arange(count, dtype=np.int64).reshape(-1, 3),
+        colours=np.repeat(bands.rgba[owner[live], band[live]], 3, axis=0),
+        uvs=attributes["uvs"][live].reshape(-1, 2).astype(np.float32),
+        uv2=attributes["uv2"][live].reshape(-1, 2).astype(np.float32),
+    )
+    kept = select_triangles(tier, ~cut)
+    return replace(
+        merge([weld(pieces)] if kept is None else [kept, weld(pieces)], name=tier.name),
+        material=tier.material,
+        extras=tier.extras,
+    )
+
+
+def _split_at(
+    attributes: dict[str, np.ndarray], owner: np.ndarray, heights: np.ndarray, column: int
+) -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
+    """Split every triangle that crosses `heights[:, column]` on `TEXCOORD_0.y`.
+
+    The lone corner on one side is rolled to the front; the two edges leaving
+    it are cut at the height, giving one triangle on its side and two on the
+    other, wound as the original was.
+    """
+    side = attributes["uvs"][:, :, 1] - heights[:, column, None]
+    above = side >= 0.0
+    count = above.sum(axis=1)
+    straddle = (count == 1) | (count == 2)
+    if not straddle.any():
+        return attributes, owner, heights
+    lone = np.where(count == 1, above.argmax(axis=1), (~above).argmax(axis=1))[straddle]
+    roll = (lone[:, None] + np.arange(3)) % 3
+    rolled = np.take_along_axis(side[straddle], roll, axis=1)
+    to_b = (rolled[:, 0] / (rolled[:, 0] - rolled[:, 1]))[:, None]
+    to_c = (rolled[:, 0] / (rolled[:, 0] - rolled[:, 2]))[:, None]
+    split = {}
+    for name, values in attributes.items():
+        corner = np.take_along_axis(values[straddle], roll[:, :, None], axis=1)
+        a, b, c = corner[:, 0], corner[:, 1], corner[:, 2]
+        ab, ac = a + to_b * (b - a), a + to_c * (c - a)
+        pieces = np.stack([np.stack(t, axis=1) for t in ((a, ab, ac), (ab, b, c), (ab, c, ac))], 1)
+        split[name] = np.concatenate([values[~straddle], pieces.reshape(-1, 3, values.shape[2])])
+    return (
+        split,
+        np.concatenate([owner[~straddle], np.repeat(owner[straddle], 3)]),
+        np.concatenate([heights[~straddle], np.repeat(heights[straddle], 3, axis=0)]),
+    )
 
 
 def _identify(tier: MeshData, objects: list[dict[str, Any]]) -> MeshData:
@@ -1430,6 +1747,7 @@ def _write_tile(
     ground: dict[float, MeshData],
     style: BuildingStyle,
     objects: list[dict[str, Any]],
+    bands: BandTables | None,
 ) -> TileOutput | None:
     """One tile at every tier it has, or `None` when it has none.
 
@@ -1482,7 +1800,10 @@ def _write_tile(
         # primitive has one material and `merge` refuses to guess which. This is
         # the tile's request for the window-band shader, and the only channel
         # glTF gives for it — see `FACADE_MATERIAL`.
-        tier = _identify(replace(merge(pieces, name=label), material=FACADE_MATERIAL), objects)
+        tier = _identify(
+            replace(cut_bands(merge(pieces, name=label), bands), material=FACADE_MATERIAL),
+            objects,
+        )
         boxes.append(tier.aabb())
 
         # The render primitive first, then the helpers: `read_glb` returns them
@@ -1600,6 +1921,8 @@ def _write_manifest(
             "ground_park_vertices": report.greened,
             # Stems whose `COLOR_0.a` carries a podium line (`podium_lines`).
             "podium_lines": len(report.podium_lines),
+            # Stems drawn in more than one colour up their walls (`Q197`).
+            "banded": len(report.banded),
         },
     )
 

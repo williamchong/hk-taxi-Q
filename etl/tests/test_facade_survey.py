@@ -13,12 +13,14 @@ import pytest
 from facade_survey import (
     CLIP_LEVEL,
     FACES,
+    FALLBACK_SPREAD_AB,
     MODAL_SHARE,
     PERCENTILE,
     VEGETATION_A,
     _atlas_filler,
     _pack,
     _repeats,
+    band_noise,
     coverage,
     estimate,
     face_of,
@@ -287,3 +289,16 @@ class TestRowColumns:
         leaves = np.tile([70.0, 140.0, 60.0], (250, 1))
         pooled = np.vstack([facade, leaves])
         assert (srgb_to_lab(pooled)[:, 1] < VEGETATION_A).mean() == pytest.approx(0.25)
+
+
+class TestBandNoise:
+    """`Q197`: how far a band's colour could move by which walls were photographed."""
+
+    def test_two_walls_give_their_gap_squared_over_two(self) -> None:
+        walls = [np.array([50.0, 0.0, 0.0]), np.array([50.0, 3.0, 4.0])]
+        assert band_noise(walls) == pytest.approx(25.0 / 2)
+
+    @pytest.mark.parametrize("count", [0, 1])
+    def test_under_two_walls_take_the_city_spread(self, count: int) -> None:
+        walls = [np.array([50.0, 0.0, 0.0])] * count
+        assert band_noise(walls) == pytest.approx(FALLBACK_SPREAD_AB**2 / max(1, count))

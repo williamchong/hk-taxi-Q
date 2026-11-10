@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.buildings import colour_for, facade_hue
+from pipeline.buildings import band_hue, colour_for, facade_bands, facade_hue
 from pipeline.colour import (
     _lab_to_encoded,
     chroma,
@@ -332,3 +332,68 @@ class TestReflectance:
         reflects."""
         assert reflectance((0, 255, 0)) == pytest.approx(71.5, abs=0.1)
         assert reflectance((0, 0, 255)) == pytest.approx(7.2, abs=0.1)
+
+
+class TestBandHue:
+    """`Q197`'s weighting: a band moves from the building's hue by how far it
+    stands from the tower band, against how far its walls disagree."""
+
+    def test_no_noise_ships_the_whole_difference(self) -> None:
+        assert band_hue((1.0, 2.0), (10.0, 2.0), (0.0, 2.0), 0.0, 0.0) == (11.0, 2.0)
+
+    def test_noise_equal_to_the_gap_ships_half(self) -> None:
+        assert band_hue((0.0, 0.0), (4.0, 0.0), (0.0, 0.0), 8.0, 8.0) == pytest.approx((2.0, 0.0))
+
+    def test_a_band_the_tower_matches_is_the_building(self) -> None:
+        assert band_hue((3.0, -1.0), (5.0, 5.0), (5.0, 5.0), 1.0, 1.0) == (3.0, -1.0)
+
+
+class TestFacadeBands:
+    """The survey's `bands` column reaching `Banding`, and every refusal."""
+
+    @staticmethod
+    def row() -> dict:
+        return {
+            "lab": [60.0, 0.0, 0.0],
+            "bands": {
+                "cuts_mpd": [5.0, 20.0],
+                "lab": [[60.0, 6.0, 0.0], None, [60.0, 0.0, 0.0]],
+                "noise": [0.0, 1.0, 0.0],
+            },
+        }
+
+    def banded(self, tmp_path: Path, table: dict) -> BuildingStyle:
+        return replace(_style_with_hue(tmp_path, table), facade_hue_bands=True)
+
+    def test_an_unmeasured_band_is_the_tower(self, tmp_path: Path) -> None:
+        loaded = self.banded(tmp_path, {"B1": self.row()})
+        bands = facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+        assert bands["B1"].cuts_mpd == (5.0, 20.0)
+        assert bands["B1"].hues == ((6.0, 0.0), None, None)
+
+    def test_off_reads_nothing(self, tmp_path: Path) -> None:
+        loaded = _style_with_hue(tmp_path, {"B1": self.row()})
+        assert facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path) == {}
+
+    def test_a_building_without_a_hue_has_no_bands(self, tmp_path: Path) -> None:
+        """The vegetation guard drops a row's hue; its bands go with it."""
+        loaded = self.banded(tmp_path, {"B1": self.row()})
+        assert facade_bands(loaded, {}, root=tmp_path) == {}
+
+    def test_an_unmeasured_tower_bands_nothing(self, tmp_path: Path) -> None:
+        row = self.row()
+        row["bands"]["lab"][-1] = None
+        loaded = self.banded(tmp_path, {"B1": row})
+        assert facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path) == {}
+
+    def test_a_survey_without_the_column_is_refused(self, tmp_path: Path) -> None:
+        loaded = self.banded(tmp_path, {"B1": {"lab": [60.0, 0.0, 0.0]}})
+        with pytest.raises(ValueError, match="no `bands` column"):
+            facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+
+    def test_mismatched_lengths_are_malformed(self, tmp_path: Path) -> None:
+        row = self.row()
+        row["bands"]["cuts_mpd"] = [5.0]
+        loaded = self.banded(tmp_path, {"B1": row})
+        with pytest.raises(ValueError, match="cuts against"):
+            facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)

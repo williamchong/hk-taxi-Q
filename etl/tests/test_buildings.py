@@ -24,18 +24,23 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
     BUILDINGS_MANIFEST_SCHEMA,
     COLLISION_TIER,
+    HUE_SOURCE_ID,
     PODIUM_NO_LINE,
     PODIUM_STEP_M,
     SOURCE_ID,
+    Banding,
     Grid,
     _material_seed,
     _seed,
+    _ship_line,
     _tile_ground,
     along_m,
     assign,
+    band_tables,
     build_region,
     collider_name,
     colour_for,
+    cut_bands,
     facade_uv,
     game_offset,
     identity_uv2,
@@ -1114,6 +1119,69 @@ class TestBuildRegion:
             assert (tile.colours[owner == "B20002", 3] == podium_code(30.0)).all()
             assert (tile.colours[owner != "B20002", 3] == PODIUM_NO_LINE).all()
 
+    def test_colour_bands_survive_every_tier_with_sharp_edges(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`Q197`: a surveyed street band and podium reach every shipped tier of
+        the tall building as their own colours, cut exactly at the survey's
+        heights — no triangle carries two colours or crosses a cut — while the
+        short building, banded by nobody, stays one colour."""
+        fixtures = [
+            Fixture("B1000100", "BUILDING", 75.0, 75.0, 10.0),
+            Fixture("B2000200", "BUILDING", 90.0, 90.0, 90.0),
+        ]
+        self.build(hong_kong, sources, tmp_path, fixtures=fixtures, out="probe")
+        [probe] = read_render(tmp_path / "probe" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
+        row = next(r for r in probe.extras["objects"] if r["id"] == "B20002")
+        base_mpd = row["aabb"][0][1] - game_offset(hong_kong.game_transform("wan_chai"))[1]
+        out = tmp_path / "banded"
+        write_basemap(
+            out,
+            hong_kong,
+            "wan_chai",
+            podiums={
+                "B20002": {"base_mpd": base_mpd, "boundary_m": 30.0, "top_mpd": base_mpd + 90.0}
+            },
+        )
+        root = sources(fixtures)
+        survey = root / HUE_SOURCE_ID / hong_kong.buildings.facade_hue_source
+        survey.parent.mkdir(parents=True, exist_ok=True)
+        tower = {"lab": [60.0, 0.0, 0.0], "vegetation": 0.0}
+        survey.write_text(
+            json.dumps(
+                {
+                    "B10001": tower,
+                    "B20002": {
+                        **tower,
+                        "bands": {
+                            "cuts_mpd": [base_mpd + 5.0, base_mpd + 30.0],
+                            "lab": [[60.0, 12.0, 0.0], [60.0, 0.0, 12.0], [60.0, 0.0, 0.0]],
+                            "noise": [0.0, 0.0, 0.0],
+                        },
+                    },
+                }
+            )
+        )
+        report = build_region(hong_kong, "wan_chai", sources_root=root, out_root=out)
+        assert report.banded == {"B20002"} and not report.band_line_stale
+        tiles = out / "wan_chai" / "tiles"
+        for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
+            [tile] = read_render(tiles / f"t_00_00_lod{level}.glb")
+            ids = np.array([r["id"] for r in tile.extras["objects"]])
+            owner = ids[np.rint(tile.uv2[:, 1]).astype(int)]
+            short = tile.colours[owner == "B10001"]
+            assert len(np.unique(short, axis=0)) == 1
+            tall = tile.triangles[owner[tile.triangles[:, 0]] == "B20002"]
+            colours = tile.colours[tall]
+            assert (colours == colours[:, :1]).all(), "a triangle carries one colour"
+            up = tile.uvs[tall, 1]
+            for cut in (5.0, 30.0):
+                assert not ((up.min(axis=1) < cut - 1e-3) & (up.max(axis=1) > cut + 1e-3)).any()
+            band = (up.mean(axis=1)[:, None] >= [5.0, 30.0]).sum(axis=1)
+            shades = [np.unique(colours[band == b, 0], axis=0) for b in range(3)]
+            assert all(len(shade) == 1 for shade in shades), f"lod{level}: one colour per band"
+            assert len({tuple(shade[0]) for shade in shades}) == 3
+
     def test_tiles_ship_the_identity_channel_and_its_table(
         self, hong_kong, sources, tmp_path
     ) -> None:
@@ -1734,3 +1802,74 @@ class TestSinkSea:
         mesh = soup([[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]], name="g", colour=None)
         same, count = sink_sea(mesh, Plan(), -3.0)
         assert count == 0 and same is mesh
+
+
+class TestCutBands:
+    """`Q197`'s cutter on one wall, where every number can be read by eye."""
+
+    @staticmethod
+    def wall(ordinal: float = 0.0) -> MeshData:
+        """A 10 m x 20 m wall as two triangles, `TEXCOORD_0.y` its height."""
+        positions = np.array([[0, 0, 0], [10, 0, 0], [10, 20, 0], [0, 20, 0]], dtype=np.float64)
+        return MeshData(
+            name="t",
+            positions=positions,
+            normals=np.tile(np.array([0, 0, 1], dtype=np.float32), (4, 1)),
+            triangles=np.array([[0, 1, 2], [0, 2, 3]], dtype=np.uint32),
+            colours=np.full((4, 4), 200, dtype=np.uint8),
+            uvs=positions[:, :2].astype(np.float32),
+            uv2=np.column_stack([np.zeros(4), np.full(4, ordinal)]).astype(np.float32),
+        )
+
+    PALETTE = np.array([[255, 0, 0, 9], [0, 255, 0, 9], [0, 0, 255, 9]], dtype=np.uint8)
+
+    @staticmethod
+    def area(mesh: MeshData) -> np.ndarray:
+        p = mesh.positions[mesh.triangles]
+        return 0.5 * np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)
+
+    def test_three_bands_cover_the_wall_exactly(self) -> None:
+        cut = cut_bands(self.wall(), band_tables({0: (np.array([5.0, 12.0]), self.PALETTE)}, 1))
+        corners = cut.colours[cut.triangles]
+        assert (corners == corners[:, :1]).all()
+        up = cut.uvs[cut.triangles, 1].mean(axis=1)
+        band = (up[:, None] >= [5.0, 12.0]).sum(axis=1)
+        assert (corners[:, 0] == self.PALETTE[band]).all()
+        area = self.area(cut)
+        assert area.sum() == pytest.approx(200.0)
+        assert [area[band == b].sum() for b in range(3)] == pytest.approx([50.0, 70.0, 80.0])
+
+    def test_an_object_with_no_bands_is_untouched(self) -> None:
+        wall = self.wall(ordinal=1.0)
+        assert cut_bands(wall, band_tables({0: (np.array([5.0]), self.PALETTE[:2])}, 2)) is wall
+
+    def test_a_triangle_shared_with_another_object_is_not_cut(self) -> None:
+        """A seam triangle `collapse` stitched across two buildings: cut, its
+        corners would interpolate an ordinal that names neither."""
+        wall = self.wall()
+        wall.uv2[2, 1] = 1.0
+        cut = cut_bands(wall, band_tables({0: (np.array([5.0]), self.PALETTE[:2])}, 2))
+        assert set(np.unique(cut.uv2[:, 1])) == {0.0, 1.0}
+        assert len(cut.triangles) == 2
+
+    def test_a_cut_through_a_vertex_leaves_no_sliver(self) -> None:
+        cut = cut_bands(self.wall(), band_tables({0: (np.array([20.0]), self.PALETTE[:2])}, 1))
+        assert (self.area(cut) > 0.0).all()
+        assert len({tuple(c) for c in cut.colours[:, :3]}) == 1
+
+
+class TestShipLine:
+    """A podium band is drawn only at the line the build ships (`Q195`, `Q197`)."""
+
+    BANDS = Banding(cuts_mpd=(10.0, 30.0), hues=((5.0, 0.0), (0.0, 5.0), None))
+
+    def test_the_same_line_keeps_the_podium(self) -> None:
+        assert _ship_line(self.BANDS, 30.0 + PODIUM_STEP_M / 4) == self.BANDS
+
+    @pytest.mark.parametrize("line", [None, 31.0])
+    def test_another_line_or_none_draws_the_podium_as_the_tower(self, line) -> None:
+        assert _ship_line(self.BANDS, line) == Banding((10.0,), ((5.0, 0.0), None))
+
+    def test_nothing_left_is_none(self) -> None:
+        podium_only = Banding(cuts_mpd=(10.0, 30.0), hues=(None, (0.0, 5.0), None))
+        assert _ship_line(podium_only, None) is None

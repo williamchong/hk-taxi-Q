@@ -523,7 +523,7 @@ class is collapsed separately then merged, so a tile is still one mesh and one d
 
 | Attribute | Meaning |
 |---|---|
-| `COLOR_0.rgb` | Albedo, **sRGB-encoded** normalised `uint8`. Every consumer must linearise it |
+| `COLOR_0.rgb` | Albedo, **sRGB-encoded** normalised `uint8`. Every consumer must linearise it. ⚠️ **Not one per object since `Q197`**: a surveyed building's walls are cut at its street band and podium line on the finished tier, and each band carries its own hue; nothing may read one vertex as the building's colour |
 | `COLOR_0.a` | The podium line (`Q195`, schema 46), constant per source object: codes 1–254 are metres above that object's own base (the `TEXCOORD_0.y` frame) in 0.5 m steps (`buildings.PODIUM_STEP_M`), so 0.5–127 m; **255 is no line**, the byte every vertex carried before. Set only from an iB1000 `P` block with at least `podiums.min_tower_above_m` of building over it — no survey, no hash beneath. `city_facade_clean` draws its cornice there and nowhere else, and reads 0 as no line too. ⚠️ Not opacity |
 | `TEXCOORD_0.x` | Metres along the wall (`P5-11`, schema 28): the world axis chosen by the vertex normal, blended over 45° (`buildings.along_m`). Stamped on the shipped tier after `collapse`; the carve re-stamps it |
 | `TEXCOORD_0.y` | Metres above that source object's own base. Metres, not a fraction: the floor count is what the window shader carries. With `.x`, a real planar UV in metres |
