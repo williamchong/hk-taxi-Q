@@ -212,6 +212,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q192` | The bus lane's line is TD's survey (`RM1006`, `RM1007`); the shader's `U = 1` bar is off | ✅ Built 2026-11-09 on the user's report and call. Extends `Q132`'s "where TD surveys no line, none is drawn" to the last line the shader invented. |
 | `Q193` | A building's street band takes no measured colour of its own | 🚫 Refused by measurement 2026-11-09, on the user's question: shop vs tower distinct on 10.8% of tall buildings against a 25% bar; three layers by hue 1.2%. |
 | `Q194` | The tower's surveyed hue is mostly the building, not the light | ✅ Closed 2026-11-09, no change: compass and brightness explain 15% of the wall-to-wall hue; the building mean is 0.70–0.74 reliable. |
+| `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
 
 ---
 
@@ -12176,3 +12177,64 @@ at least two measured tower walls (4,590 walls, `Q193`'s method):
   clutter in the photography are the likely remainder; that is inferred, not measured.
 
 **See.** `Q30` · `Q34` · `Q34′` · `Q193` · `etl/pipeline/colour.py`
+
+## `Q196` — Vehicles take detail lines from their own mesh, a width in metres
+
+**Asked** by the user, 2026-11-11: "should vechicle has bolded lines according to distance and speed
+also?", then, on the frames of the build as it stood: "there is no lines in vechicle details".
+
+**Cause.** `cel_outline.gdshader` (`Q158`) is one pass over the depth buffer. It inks a vehicle as
+it inks a building — silhouette and folds — and a vehicle's details are neither: a window, a livery
+band and a lens are a change of colour on one flat panel. On Hennessy Road a bus 8 m ahead showed
+its rim and the step between its decks and nothing else, and a tram alongside at 115 kph nearly
+nothing.
+
+**Built 2026-11-11 (`P3-84`).**
+
+- **The mesh says where.** `tools/vehicle_ink.py` inks an edge when no other triangle of the same
+  colour and marker touches it — sampled at three points along the edge, two deciding, so a panel
+  tiled differently on its two sides and a fixture seated a millimetre proud both read correctly. A
+  fold between two faces of one colour is left to the depth pass. The distance to each inked edge
+  goes into `TEXCOORD_1`, two channels; a triangle inked on all three sides is split at its
+  incentre. `weld` then re-shares every vertex that still agrees.
+- **The body shader draws it**, in the surface's own colour × `ink_darkness`, `ink_width_m` wide
+  **on the vehicle**. That is the answer to "according to distance": a width in metres is bold on a
+  near car and thins as it recedes, and under a pixel it fades by its true width. "According to
+  speed" is the city line's own rule and global (`outline_speed`): thinner and fainter, never
+  bolder (`P3-65`). It is the player's speed; a passing bus's own speed plays no part.
+- **No draw call, no pass.** The cost is vertex data and about fifteen fragment operations.
+
+**Measured.**
+
+    mesh         vertices before -> after    on disk before -> after
+    taxi_body    2,264 -> 2,417  (+7%)       80.0 -> 105.2 KB
+    parked.glb   15,290 -> 16,573 (+8%)      553 -> 734 KB
+
+Triangles are unchanged but for the incentre splits. ⚠️ The PCK is not measured.
+
+**Rendered** on Hennessy Road westbound from `f_016`, traffic on, at no line and 1.2 cm / ×0.5,
+2 cm / ×0.35, 3 cm / ×0.2 (`build/driver/ink_sheet/sheet.png`). 1.2 cm is barely there; 2 cm frames
+the tram's windows and the taxi's glass; 3 cm is the only one that still reads on the tram at
+115 kph. A black panel takes no darker line at any weight, and traffic 100 m off looks the same in
+all four. 2 cm / ×0.35 is in `vehicle_body.tres` as the middle of the sheet, ⚠️ **not as the user's
+pick, which is owed.**
+
+**Refused on the way.**
+
+- **A per-vehicle speed.** It needs a hull or an ID buffer per vehicle against a 150 draw-call
+  budget the city nearly fills, and `P3-65` built and withdrew the hull once.
+- **A colour-edge term in the screen pass.** It cannot tell a vehicle from road paint or a sign, so
+  it would ink every lane line.
+
+**Traps.**
+
+- ⚠️ `global uniform float outline_speed` declared inside the shader's `group_uniforms ink` block
+  compiled with no error and drew the city's façades in wrong colours. It is declared beside the
+  other globals.
+- ⚠️ The `.glb` carries the payload as material names and no `TEXCOORD_0` (`Q124`), so the ink rides
+  `TEXCOORD_1`, and `generated_scene_import.gd` carries it into the merged surface. A DCC body with
+  none is filled with 0 and draws no line.
+
+**Owed.** The user's pick of the weight; a night frame; the PCK; the handset's frame time.
+
+**See.** `P3-84` · `Q158` · `P3-65` · `Q124` · `tools/vehicle_ink.py` · `game/tuning/vehicle_body.md` · `etl/tests/test_vehicle_ink.py`
