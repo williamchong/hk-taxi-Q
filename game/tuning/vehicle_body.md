@@ -70,3 +70,27 @@ the plain glazing by day. `cabin_glow` 0.25 is the bus and the tram, `cabin_glow
 minibus, whose saloon is dimmer on the street (the user, 2026-11-01). Both sit well under the 1.0
 glow threshold: a lit room, not a lamp. 0.9 and 0.4 were shot first and refused as too bright, and
 the first colour, `(1, 0.93, 0.76)`, read as a cream panel rather than a light.
+
+## ink_width_m, ink_max_px, ink_darkness, ink_speed_thin, ink_speed_fade
+
+The detail lines (`P3-84`, `Q196`, the user's report, 2026-11-11: "there is no lines in vehicle
+details"). The city's outline reads depth, so on a vehicle it draws the silhouette and the folds
+and nothing else: a window, a livery band or a lens is a change of colour on one flat panel.
+`tools/vehicle_ink.py` marks those edges in the mesh and this shader draws them.
+
+- `ink_width_m` 0.02 is a width on the vehicle, in metres, so the line is bold on a near car and
+  thins with distance — the user's first question was whether vehicles should have lines bolded by
+  distance. Under a pixel it is held a pixel wide and faded by its true width. `ink_max_px` 4.0
+  stops it swelling on a car against the lens.
+- `ink_darkness` 0.35 scales the surface's own colour, as the city's line does at 0.5. Darker than
+  the city's because the line lies inside the detail: a 0.5 line on dark glass does not read.
+- `ink_speed_thin` 0.33 / `ink_speed_fade` 0.2 take the same share off the line at the player's
+  full speed as `cel_outline.tres` takes off the city's (1.5 px to 1.0 px, 80% strength), on the
+  same `outline_speed` global. It is the player's speed, not each vehicle's own.
+
+Rendered at 0.012 / 0.5, 0.02 / 0.35 and 0.03 / 0.2 beside no line; 0.02 / 0.35 is the middle of
+that sheet and ⚠️ **not yet the user's pick**. At 0.012 the line is barely there; 0.03 is the only
+one that still reads on a tram at 115 kph. A black panel takes no darker line at any weight.
+
+⚠️ `global uniform float outline_speed` must be declared OUTSIDE a `group_uniforms` block. Inside
+the `ink` group it compiled without an error and the city's façades drew with wrong colours.

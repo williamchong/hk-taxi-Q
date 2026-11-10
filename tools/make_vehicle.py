@@ -51,6 +51,7 @@ from primitives import (  # noqa: E402
     polygon_facing,
     ring,
 )
+from vehicle_ink import inked  # noqa: E402
 
 LOG = logging.getLogger("make_vehicle")
 
@@ -2409,11 +2410,11 @@ def write_taxi(
     wheel_path = out_dir / WHEEL_FILE
     door_path = out_dir / DOOR_FILE
     return [
-        (body_path, write_glb(body_path, [material_parts(body)]), body),
+        (body_path, write_glb(body_path, [material_parts(inked(body))]), body),
         (wheel_path, write_glb(wheel_path, [wheel]), wheel),
         # Through the same material-name door as the body, so the import hook
         # hands it `vehicle_body.tres` and it shades as the flank it fills.
-        (door_path, write_glb(door_path, [material_parts(door)]), door),
+        (door_path, write_glb(door_path, [material_parts(inked(door))]), door),
     ]
 
 

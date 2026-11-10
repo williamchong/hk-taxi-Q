@@ -81,6 +81,7 @@ from primitives import (  # noqa: E402
     polygon_facing,
     ring,
 )
+from vehicle_ink import inked  # noqa: E402
 
 LOG = logging.getLogger("make_parked")
 
@@ -1232,7 +1233,7 @@ def write_roster(
     """The library, one node per kind; returns where it went and its bytes."""
     meshes = build_roster(shapes)
     path = out_dir / LIBRARY_FILE
-    groups: list[MeshGroup] = [material_parts(mesh) for mesh in meshes]
+    groups: list[MeshGroup] = [material_parts(inked(mesh)) for mesh in meshes]
     return path, write_glb(path, groups), meshes
 
 

@@ -221,6 +221,9 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 	var normals := PackedVector3Array()
 	var colours := PackedColorArray()
 	var uvs := PackedVector2Array()
+	# The detail lines' edge distances (`tools/vehicle_ink.py`). A surface
+	# without them — a DCC export — is filled with 0, which draws no line.
+	var inks := PackedVector2Array()
 	var indices := PackedInt32Array()
 	for surface: int in mesh.get_surface_count():
 		var arrays: Array = mesh.surface_get_arrays(surface)
@@ -236,6 +239,11 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 		stamp.resize(vertices.size())
 		stamp.fill(VEHICLE[names[surface]])
 		uvs.append_array(stamp)
+		var ink: Variant = arrays[Mesh.ARRAY_TEX_UV2]
+		if typeof(ink) == TYPE_PACKED_VECTOR2_ARRAY:
+			inks.append_array(ink)
+		else:
+			inks.resize(positions.size())
 		var colour: Variant = arrays[Mesh.ARRAY_COLOR]
 		if typeof(colour) == TYPE_PACKED_COLOR_ARRAY:
 			colours.append_array(colour)
@@ -267,6 +275,7 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 	merged[Mesh.ARRAY_NORMAL] = normals
 	merged[Mesh.ARRAY_COLOR] = colours
 	merged[Mesh.ARRAY_TEX_UV] = uvs
+	merged[Mesh.ARRAY_TEX_UV2] = inks
 	merged[Mesh.ARRAY_INDEX] = indices
 	var body := ArrayMesh.new()
 	body.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)

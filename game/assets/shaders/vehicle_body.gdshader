@@ -110,6 +110,9 @@ const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
 global uniform vec3 sky_light;
 // 0 by day, 1 at full night (`Q160`): a moving car's tail and head lamps.
 global uniform float night_lights;
+// 0 at rest to 1 at the player's full speed (`cel_outline.gdshader`): the
+// detail lines thin and fade with the city's.
+global uniform float outline_speed;
 uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
 uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
 uniform vec3 ground_reflection : source_color = vec3(0.32, 0.33, 0.35);
@@ -323,6 +326,25 @@ uniform vec3 sun_toward = vec3(0.0, 1.0, 0.0);
 uniform float glint_strength : hint_range(0.0, 4.0) = 1.1;
 uniform float glint_sharpness : hint_range(1.0, 256.0) = 48.0;
 
+group_uniforms ink;
+
+// The detail lines (`tools/vehicle_ink.py`): a window, a band or a lens is a
+// change of colour on one flat panel, which the city's depth outline cannot
+// see, so the mesh carries each such edge in `UV2` and the line is drawn here.
+// The width is in METRES, so the line is bold on a near car and thins with
+// distance; under a pixel it is held a pixel wide and faded by its true width,
+// and `ink_max_px` stops it swelling on a car against the lens.
+// Must match `INK_SPAN_M` in `tools/vehicle_ink.py`.
+const float INK_SPAN_M = 16.0;
+uniform float ink_width_m : hint_range(0.0, 0.1) = 0.02;
+uniform float ink_max_px : hint_range(0.0, 8.0) = 4.0;
+// The line is the surface's own colour scaled by this, as the city's is.
+uniform float ink_darkness : hint_range(0.0, 1.0) = 0.35;
+// What the player's full speed takes off it: the same share `cel_outline.tres`
+// takes off the city's line, restated here because that is another material.
+uniform float ink_speed_thin : hint_range(0.0, 1.0) = 0.33;
+uniform float ink_speed_fade : hint_range(0.0, 1.0) = 0.2;
+
 varying flat float marker;
 // `flat` for the same reason `marker` is: every vertex of a lens carries the
 // same circuit, and an interpolated one would land between two channels at the
@@ -365,6 +387,7 @@ void vertex() {
 
 void fragment() {
 	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
+	vec3 ink_tone = albedo * ink_darkness;
 
 	bool is_cabin = abs(marker - MARKER_CABIN) < 0.5;
 	bool is_cabin_dim = abs(marker - MARKER_CABIN_DIM) < 0.5;
@@ -480,6 +503,20 @@ void fragment() {
 		// else, which is what brightwork is.
 		albedo = mix(albedo, mirrored, paint_reflect * mix(paint_face_on, 1.0, fresnel));
 	}
+
+	// Metres from each inked edge, and how many metres a pixel spans there. A
+	// channel with no edge is 0 and is masked rather than left to the clamp:
+	// its distance over a zero derivative is a number a phone's half floats
+	// cannot hold.
+	vec2 edge_m = (1.0 - UV2) * INK_SPAN_M;
+	vec2 px_per_m = 1.0 / max(fwidth(edge_m), vec2(1e-6));
+	float width_m = ink_width_m * (1.0 - ink_speed_thin * outline_speed);
+	vec2 width_px = min(width_m * px_per_m, vec2(ink_max_px));
+	vec2 drawn = clamp(max(width_px, vec2(1.0)) - edge_m * px_per_m, 0.0, 1.0)
+			* min(width_px, vec2(1.0)) * step(vec2(1e-5), UV2);
+	float ink = max(drawn.x, drawn.y) * (1.0 - ink_speed_fade * outline_speed);
+	albedo = mix(albedo, ink_tone, ink);
+	EMISSION *= 1.0 - ink;
 
 	ALBEDO = albedo;
 	// Nailed down rather than left at a default. The Mobile renderer has no SSR
