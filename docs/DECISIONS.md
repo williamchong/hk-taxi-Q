@@ -11710,7 +11710,8 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
 
 ## `Q186` — The traffic's mix and size follow the clock hour, off TD's census on these streets
 
-**Status.** 🟡 Built 2026-11-06 on the user's ask: "can road car type and density change according
+**Status.** ⚠️ **`fleet_by_hour` amended by `Q198`** (2026-11-11): flow over the detectors' speed,
+peaking at 18:00, and `cars` 40. The mix below stands. 🟡 Built 2026-11-06 on the user's ask: "can road car type and density change according
 to time of day?", then "fetch the TD census first, then build it". `P3-3g`. Owed: the user's drive
 across a shift.
 
@@ -12344,3 +12345,43 @@ old and new table — they read the whole-building colour, which did not move; t
 moved 228k, 60k, 295k and 45k px against the committed look.
 
 **See.** `Q193` · `Q195` · `Q47` · `Q34` · `Q37` · `docs/ARCHITECTURE.md` (`COLOR_0.rgb`)
+
+
+## `Q198` — The traffic is the cars on the street: flow over TD's detector speed, 40 at the evening rush
+
+**Status.** 🟡 Built 2026-11-11 on the user's ask: "we need more cars on street esp rush hours";
+then, offered a hand-set rush boost or a derivation, "Derive from TD speeds", and a peak of 40.
+`P3-3g`. **Amends `Q186`**: `fleet_by_hour` is no longer the census's flow shape. Owed: the user's
+drive at the rush, and the mobile tier's re-take of `cars`.
+
+**Decision.**
+- **Why the flow was wrong.** `Q186` read the cars alive at once off the census's vehicles PER HOUR.
+  A flow saturates in a jam while the street fills: 08:00–19:00 sat within 7% of noon, so the rush
+  read as lunch. The cars on a street are its density, flow over speed.
+- **The speed.** TD's raw detector feed (`rawSpeedVol-all.xml`) through DATA.GOV.HK's historical
+  archive, at the eight detectors inside the two regions (Canal Road Flyover ×4, Gloucester Road
+  ×4), 18 weekdays 2026-10-12 → 2026-11-05 (the Chung Yeung Monday out), six minutes an hour. Each
+  hour's SPACE-mean speed (volume over Σ volume/speed), over the fastest hour's. The flow stays the
+  census's mean of seven station shapes. Both are `hong_kong.yaml`'s `traffic_census:` block.
+- **What it reads.** Speed 58–62 kph overnight, 37–40 through the morning and midday, 29 at 18:00.
+  The fleet peaks at **18:00**; 09:00 0.76, 12:00 0.79, 15:00 0.86, 20:00 0.51 (was 0.79), 22:00
+  0.40. The detectors' mean occupancy, an independent reading of density, peaks at the same hour
+  and tracks within ~0.1 (09:00 0.89, 12:00 0.85, 20:00 0.42).
+- **`cars` 24 → 40**, the evening rush's fleet: 29 at 08:00, 32 at noon, 40 at 18:00, 20 at 20:00 —
+  the shift's evening barely moves, its day gains a third to two-thirds. Throttle route
+  (desktop, two runs each): `phys` 4.0–4.5 ms against 3.3–4.3 at 24 and 1.4–2.0 off; `draws`
+  +2. `verify_traffic`'s seeds move to 18:00 (`PEAK_HOUR`), the whole fleet, as `Q186` had them
+  at noon.
+- 🔴 **A placement leaves the car behind room to stop** (`TrafficSystem._room_behind`, both the
+  wandering and the routed spawn): a live car in the placed vehicle's lane on its edge, or turning
+  onto it, must be able to stop at `brake_mps2` and `gap_m` short of its tail. At 40 cars seed 4's
+  routed drive placed a bus mid-dwell with its centre 12 m ahead of a car at 11 m/s —
+  `spawn_clear_m` is a point's distance, blind to a bus's 6 m half-length and to speed — and the car
+  stopped 3.7 m inside it at full braking (476 car-ticks). The check returning true brings that
+  back by name.
+- ⚠️ **Authored inside the measurement:** the detectors are the trunk roads' (none stands on a side
+  street here) and their speed scales every station's flow; the sampled days and six minutes an
+  hour. The tool is hand-run like `Q186`'s: the numbers are never edited by hand.
+
+**See.** `Q186` · `P3-3g` · `P3-3c` · `docs/DATA_SOURCES.md` (Traffic Data of Strategic / Major
+Roads) · `game/tuning/traffic.md`

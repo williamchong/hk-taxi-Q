@@ -681,6 +681,29 @@ holds three, all urban.
 - ⚠️ A survey's sample is small on a local road: 1107 Tung Lo Wan Road classified ~20 vehicles an
   hour against 1,500–3,000 at 1002 and 2214. Pool by count, never average the percentages.
 
+### ✅ USE — Traffic Data of Strategic / Major Roads, through the DATA.GOV.HK archive (`Q198`)
+
+- **Publisher:** TD, via DATA.GOV.HK (`hk-td-sm_4-traffic-data-strategic-major-roads`).
+  `https://resource.data.one.gov.hk/td/traffic-detectors/rawSpeedVol-all.xml`: every detector's
+  lanes, each 30 s period with `speed` (kph), `occupancy` (%), `volume`, `s.d.` and `valid`, about
+  0.7 MB a minute. Detector locations:
+  `https://static.data.gov.hk/td/traffic-data-strategic-major-roads/info/traffic_speed_volume_occ_info.csv`
+  (`AID_ID_Number`, HK1980 and WGS84).
+- **The archive:** `GET https://api.data.gov.hk/v1/historical-archive/list-file-versions?url=<feed>&start=YYYYMMDD&end=YYYYMMDD`
+  lists a day's versions (`YYYYMMDD-HHMM`, ~1,000 a day); `get-file?url=<feed>&time=<version>`
+  answers with a redirect to `app.data.gov.hk`, which serves the file. On 2026-11-11 the archive
+  reached 2026-11-05.
+- **Used** (`tools/traffic_census.py`, cached under `build/detectors/` as the configured detectors'
+  rows only): the eight detectors inside `wan_chai` and `causeway_bay` — Canal Road Flyover
+  AID01109 / 01110 / 01214 / 01215, Gloucester Road TDSIEC10003 / 10004 / 20001 / 20002 — on 18
+  weekdays 2026-10-12 to 2026-11-05, six minutes an hour: each hour's space-mean speed → `traffic.tres`
+  `fleet_by_hour` as flow over speed. ~2,600 files, ~1.9 GB fetched, 80,000 lane-periods kept.
+- ⚠️ **A listed version can 404** (16 of 48 on one probed day): the tool falls back to the next
+  nearest minute in the same ten-minute slot.
+- ⚠️ A lane-period with no car reads speed 0; one with cars at speed 0 is rare (41 of 80,331) and
+  skipped with them.
+- ⚠️ No detector stands on a side street here: the speed is the trunk roads'.
+
 ### ✅ USE — Routes and Fares of Public Transport (`P3-78`, `Q182`)
 
 - **Publisher:** TD, via DATA.GOV.HK. `JSON_BUS.json` (78 MB) and `JSON_GMB.json` (21 MB) under

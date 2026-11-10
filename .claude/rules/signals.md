@@ -70,7 +70,7 @@ paths:
   none, and red-and-amber 2 s / amber 3 s are the British values, TD's own unread.
 - **`traffic_system.gd`, `traffic.tres` or `verify_traffic.gd`: run `tools/check.sh`, paste
   `verify_traffic`'s three `lights:` lines and its `lane:` line, and a throttle-route `draws` /
-  `phys` with and without `--traffic=off`** (`P3-3c`; 24 cars: +7 draws, ~+1 ms). 🔴 **A car moves
+  `phys` with and without `--traffic=off`** (`P3-3c`; 24 cars: +7 draws, ~+1 ms; 40 cars since `Q198`: +2 draws over 24, ~+0.7 ms). 🔴 **A car moves
   only by `RoadRouter.moves_from` under `Profile.legal()`** — never a second successor rule.
   🔴 **Amber is judged at `brake_max_mps2`, TO THE LINE** (`to_stop + STOP_SHORT_M`): at the planned
   rate a braking car rode its own judgement into the red, and to the aim point a crawling car met
@@ -133,8 +133,14 @@ paths:
   that roll is unchanged. 🔴 **The fleet changes only by the ring**: nothing is removed for the
   hour, so no car pops in view; `cars` is the busiest hour's fleet and the ceiling. ⚠️ Every
   wandering car holds a slot in every kind the hours draw and every licence: a kind added to
-  `kinds` adds a hidden instance per car to every batch. ⚠️ The seeds drive at `PEAK_HOUR` 12:00,
+  `kinds` adds a hidden instance per car to every batch. ⚠️ The seeds drive at `PEAK_HOUR` 18:00,
   the whole fleet; at 07:00 they would drive 19 cars and every staged case would move.
+  🔴 **The fleet is flow over speed** (`Q198`): the detectors and their days are `hong_kong.yaml`'s
+  `traffic_census:` block, and the busiest hour moves with them — `PEAK_HOUR` follows it.
+  🔴 **A placement leaves the car behind room to stop** (`_room_behind`, both spawns): a bus placed
+  mid-dwell 12 m in front of a car at cruise was run into at 40 cars (seed 4 routed, 476 car-ticks;
+  the check returning true brings it back by name, 2026-11-11). Do not raise `INSIDE_M` or
+  `spawn_clear_m` instead.
 - **The player's red** (`P3-3d`): `SignalController.observe` and `StopLine.crossed_by`. 🔴 **Counted,
   never paid or docked** until the user calls it a bonus or a penalty — do not wire it to
   `FareSystem` on a guess. ⚠️ The taxi's MIDDLE crosses, not its nose: a car stopped nose-over
