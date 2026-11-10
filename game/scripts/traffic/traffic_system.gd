@@ -1007,6 +1007,31 @@ func _in_ring_and_clear(at: Vector3, here: Vector3) -> bool:
 	return true
 
 
+## Whether a vehicle `half_length` long placed on `edge` its `along` way at `s`,
+## in `lane`, leaves every live car coming up behind it in that lane — on the
+## edge, or turning onto it — room to stop at `brake_mps2` and `gap_m` short.
+## Without it a bus placed mid-dwell 12 m ahead of a car at cruise was run into
+## at the hardest braking (`Q198`, seed 4 at 40 cars): `_in_ring_and_clear` is a
+## point's distance, blind to the placed length and the speed behind.
+func _room_behind(edge: int, along: bool, s: float, half_length: float, lane: float) -> bool:
+	for other: Car in cars:
+		if not other.live:
+			continue
+		var behind: float = INF
+		if other.edge == edge and other.along == along and other.s <= s:
+			if same_lane(other.lane, lane):
+				behind = s - other.s
+		elif other.next_edge == edge and other.next_along == along:
+			if same_lane(other.next_lane, lane):
+				behind = other.length_m - other.s + s
+		if behind == INF:
+			continue
+		var stopping: float = other.speed * other.speed / (2.0 * profile.brake_mps2)
+		if behind - half_length - other.half_length < stopping + profile.gap_m:
+			return false
+	return true
+
+
 ## Put idle `car` on `edge` its `along` way at `s`, in `lane`, moving at
 ## `cruise_share` of its cruise. A routed car's route is set before, so that
 ## `_enter` plans toward its stop.
@@ -1049,6 +1074,8 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 	if car.lives > 0:
 		_redraw(car, car.lives + 1)
 	var half_length: float = car.half_length
+	if not _room_behind(edge, along, s, half_length, lane):
+		return
 	var room: float = (cruise * 0.5) ** 2 / profile.brake_mps2 + profile.look_m * 0.25
 	if (
 		_nearest_parked(

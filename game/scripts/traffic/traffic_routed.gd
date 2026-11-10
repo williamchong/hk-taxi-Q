@@ -71,6 +71,8 @@ func try_spawn(car: TrafficSystem.Car, here: Vector3) -> void:
 	)
 	if not system._in_ring_and_clear(at, here):
 		return
+	if not system._room_behind(stop.edge, stop.along, s, half_length, 0.0):
+		return
 	var palette: PackedColorArray = system._palette(profile.route_liveries, route.kind)
 	system._wear_kind(car, kind, ParkedRoster.livery(_rng.randi() & 0xFFFF, palette))
 	if (

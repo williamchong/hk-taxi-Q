@@ -4621,6 +4621,21 @@ traffic_census:
   # stations); the mix is 1002 Victoria Park Rd, 1107 Tung Lo Wan Rd and 2214
   # Causeway Rd.
   stations: ["1002", "1020", "1024", "1028", "1029", "1107", "2214"]
+  # TD's traffic detectors (`Traffic Data of Strategic / Major Roads`,
+  # `rawSpeedVol-all.xml`) inside the two regions' bounds, by `AID_ID_Number`
+  # (`Q198`): the Canal Road Flyover's four and Gloucester Road's four. Their
+  # speed by hour turns the census's FLOW into the cars on the street at once.
+  detectors:
+    [AID01109, AID01110, AID01214, AID01215, TDSIEC10003, TDSIEC10004, TDSIEC20001, TDSIEC20002]
+  # The weekdays read off DATA.GOV.HK's historical archive: three and a half
+  # school weeks, 2026-10-19 (the Chung Yeung holiday's Monday) left out.
+  detector_days:
+    [
+      "20261012", "20261013", "20261014", "20261015", "20261016",
+      "20261020", "20261021", "20261022", "20261023",
+      "20261026", "20261027", "20261028", "20261029", "20261030",
+      "20261102", "20261103", "20261104", "20261105",
+    ]
 
 parked:
   library: res://assets/authored/vehicles/parked.glb

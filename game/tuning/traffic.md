@@ -7,7 +7,7 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 How the moving traffic drives and where it lives (`P3-3c`, `Q173`). Every value is AUTHORED but
 two: the cars are a backdrop to the taxi, not a model of the city's traffic. The two are `kinds`
-and `fleet_by_hour`, the mix and the fleet by clock hour, which are TD's census on these streets
+and `fleet_by_hour`, the mix and the fleet by clock hour, which are TD's census and detectors on these streets
 (`Q186`). `traffic_system.gd` says what each rule does; this says why each number.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. `traffic_profile.gd` declares no defaults, so a missing key reads
@@ -16,12 +16,15 @@ over `spawn_min_m`, `retire_m` over `spawn_max_m`, `brake_max_mps2` over `brake_
 that inverts one is refused too, and an hourly table of any length but 24. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
 streets, with each region's parked roster resident.
 
-## `cars = 24`
+## `cars = 40`
 
-The fleet alive at once. Measured on the throttle route (2026-10-29, desktop): +7 `draws` (one
-`MultiMesh` per kind, and their shadows) and about +1 ms of `phys` against `--traffic=off`
-(2.8 against 1.8 ms a tick, ±0.5 ms run to run). The mobile tier (`P0-3b`) must re-take it; the
-per-car cost is the car-ahead search, which is every pair.
+The fleet alive at once in the busiest hour, the evening rush (`Q198`, the user's call 2026-11-11:
+"we need more cars on street esp rush hours"; was 24). Measured on the throttle route
+(2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
+1.4–2.0 with `--traffic=off`; `draws` 111–117 against 109–116 at 24 and 106–110 off. The mobile
+tier (`P0-3b`) must re-take it; the per-car cost is the car-ahead search, which is every pair.
+⚠️ Every staged case in `verify_traffic` moved with it: seed 4's routed drive found a bus placed
+mid-dwell in front of a car at cruise, and `_room_behind` answers it.
 
 ## `spawn_min_m = 60.0`
 
@@ -226,17 +229,29 @@ which run on their routes) are left out and the four renormalised to 100.
 
 The share of `cars` alive at each clock hour (`Q186`): a car that leaves the ring is not placed
 again while the wandering fleet stands at or over `round(cars × share)`, so the fleet thins as cars
-drive off and fills as the ring places them, never popping in view. **TD's too**, by the same tool:
-the weekday (`M-F`) hourly variation — each hour's share of the day — at the seven counting
-stations inside the two regions (1002, 1020 Lockhart Road, 1024 Tai Hang Road, 1028 Gloucester
-Road, 1029 Hennessy Road, 1107, 2214), averaged with each station counted ONCE and divided by the
-busiest hour. A mean of shapes, not of flows: Gloucester Road's 104,000 a day would otherwise drown
-the side streets the taxi drives.
+drive off and fills as the ring places them, never popping in view. **TD's too**, by the same tool,
+and since `Q198` it is the cars ON THE STREET, which is flow over speed:
 
-| hour | 04 | 07 | 08 | 12 | 18 | 20 | 21 | 22 |
-|---|---|---|---|---|---|---|---|---|
-| share | 0.14 | 0.77 | 0.97 | 1.00 | 0.99 | 0.79 | 0.74 | 0.68 |
-| cars of 24 | 3 | 19 | 23 | 24 | 24 | 19 | 18 | 16 |
+- the **flow** is the weekday (`M-F`) hourly variation — each hour's share of the day — at the seven
+  counting stations inside the two regions (1002, 1020 Lockhart Road, 1024 Tai Hang Road, 1028
+  Gloucester Road, 1029 Hennessy Road, 1107, 2214), averaged with each station counted ONCE. A mean
+  of shapes, not of flows: Gloucester Road's 104,000 a day would otherwise drown the side streets.
+- the **speed** is TD's eight traffic detectors inside the regions (Canal Road Flyover ×4,
+  Gloucester Road ×4), off DATA.GOV.HK's archive on 18 weekdays, six minutes an hour: each hour's
+  space-mean speed over the fastest hour's.
+
+A flow saturates in a jam while the street fills, so the flow alone read 08:00–19:00 within 7% of
+noon and the rush as no busier than lunch. The detectors' own occupancy, an independent reading of
+density, puts the peak at the same 18:00 (`traffic_census.py` prints it beside the fleet).
+
+| hour | 04 | 07 | 08 | 09 | 12 | 15 | 18 | 20 | 21 | 22 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| speed kph | 60.5 | 48.2 | 39.4 | 37.0 | 37.1 | 33.0 | 29.0 | 45.6 | 49.9 | 49.9 |
+| share | 0.07 | 0.47 | 0.72 | 0.76 | 0.79 | 0.86 | 1.00 | 0.51 | 0.44 | 0.40 |
+| cars of 40 | 3 | 19 | 29 | 31 | 32 | 34 | 40 | 20 | 17 | 16 |
+
+⚠️ The speed is the trunk roads' — TD publishes no detector on a side street here — applied to every
+station's flow. The morning rush is milder than the evening's on these roads (09:00 0.76).
 
 ⚠️ **Daytime Wan Chai is flat**: from 08:00 to 19:00 every hour is within 7% of the busiest, so the
 shift opens at three-quarters of the fleet, fills by 08:00 and thins from 20:00. `cars` is the

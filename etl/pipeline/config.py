@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -467,6 +468,10 @@ class Config:
     # reads the traffic's hours off (`Q186`), by TD's number. Empty where the
     # city names none.
     census_stations: tuple[str, ...] = ()
+    # TD's traffic detectors inside the regions, and the weekdays sampled off the
+    # data.gov.hk archive, that the same tool reads the hours' speed off (`Q198`).
+    census_detectors: tuple[str, ...] = ()
+    census_detector_days: tuple[str, ...] = ()
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -835,6 +840,10 @@ def load_config(path: Path | None = None) -> Config:
         signals=_signals(document.get("signals"), f"{path}:signals"),
         bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
         census_stations=_census_stations(document.get("traffic_census"), f"{path}:traffic_census"),
+        census_detectors=_census_list(
+            document.get("traffic_census"), "detectors", f"{path}:traffic_census"
+        ),
+        census_detector_days=_census_days(document.get("traffic_census"), f"{path}:traffic_census"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1299,17 +1308,40 @@ def _census_stations(body: Any, where: str) -> tuple[str, ...]:
     """The optional `traffic_census:` block's TD station numbers (`Q186`), read
     by `tools/traffic_census.py` alone. Absent is none; a bare string or a
     repeat is refused, on `_deck_codes`' terms."""
+    return _census_list(body, "stations", where)
+
+
+def _census_list(body: Any, key: str, where: str) -> tuple[str, ...]:
+    """One of the `traffic_census:` block's lists of distinct identifiers, on
+    `_deck_codes`' terms but for any key and without upper-casing."""
     if body is None:
         return ()
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
-    raw = body.get("stations", [])
+    raw = body.get(key, [])
     if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
-        raise ValueError(f"{where}:stations must be a list, got {raw!r}")
-    stations = tuple(str(station).strip() for station in raw)
-    if any(not station for station in stations) or len(set(stations)) != len(stations):
-        raise ValueError(f"{where}:stations must be distinct station numbers, got {raw!r}")
-    return stations
+        raise ValueError(f"{where}:{key} must be a list, got {raw!r}")
+    items = tuple(str(item).strip() for item in raw)
+    if any(not item for item in items) or len(set(items)) != len(items):
+        raise ValueError(f"{where}:{key} must be distinct identifiers, got {raw!r}")
+    return items
+
+
+def _census_days(body: Any, where: str) -> tuple[str, ...]:
+    """The `traffic_census:` block's `detector_days` (`Q198`): weekdays as
+    `YYYYMMDD`, the archive's own spelling. A weekend day is refused: the
+    census's fleet shape is the `M-F` row, and the speed must be the same days'."""
+    days = _census_list(body, "detector_days", where)
+    for day in days:
+        try:
+            if len(day) != 8:
+                raise ValueError(day)
+            parsed = datetime.strptime(day, "%Y%m%d")
+        except ValueError as error:
+            raise ValueError(f"{where}:detector_days: {day!r} is not YYYYMMDD") from error
+        if parsed.weekday() >= 5:
+            raise ValueError(f"{where}:detector_days: {day} is a weekend")
+    return days
 
 
 def _region(region_id: str, body: dict[str, Any], path: Path) -> RegionConfig:

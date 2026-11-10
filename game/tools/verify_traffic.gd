@@ -109,12 +109,13 @@ const KNOCK_RUN_S: float = 40.0
 const ROUTED_HOUR: float = 8.0
 ## How many `RUN_S` the routed drive runs.
 const ROUTED_RUNS: float = 2.0
-## The hour the wandering seeds are driven at (`Q186`): the census's busiest, at
-## which the whole of `cars` is out — the fleet the seeds were measured on.
-const PEAK_HOUR: float = 12.0
+## The hour the wandering seeds are driven at (`Q186`, `Q198`): the busiest, the
+## evening rush, at which the whole of `cars` is out — the fleet the seeds were
+## measured on.
+const PEAK_HOUR: float = 18.0
 ## The hours the fleet and the mix are checked at (`Q186`): the shift's opening,
-## the midday peak, the night's taxis, and a small hour, where few run.
-const CHECK_HOURS: Array[int] = [7, 12, 20, 4]
+## midday, the evening rush, the night's taxis, and a small hour, where few run.
+const CHECK_HOURS: Array[int] = [7, 12, 18, 20, 4]
 ## How far a kind's share over `KIND_DRAWS` draws may sit from its weight.
 const KIND_DRAWS: int = 4000
 const KIND_SLACK: float = 0.03
