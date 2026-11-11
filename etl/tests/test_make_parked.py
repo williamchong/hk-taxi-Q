@@ -174,8 +174,8 @@ class TestTheBudget:
         for mesh in meshes:
             colours = {tuple(int(v) for v in row[:3]) for row in mesh.colours}
             ceiling = 10 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
-            # The sky's streak in a flat-sided body's windows is one more.
-            ceiling += mesh.name in GLINTED
+            # The sky's streak in a window is one more.
+            ceiling += mesh.name in GLINTED | TAXIS
             assert 3 <= len(colours) <= ceiling, f"{mesh.name} carries {len(colours)} colours"
 
     def test_every_part_goes_through_the_material_door(self, meshes: list[MeshData]) -> None:

@@ -58,6 +58,9 @@ from make_vehicle import (  # noqa: E402
     BODY_MATERIAL,
     DARK,
     GLASS,
+    GLINT,
+    GLINT_FOOT,
+    GLINT_LEAN,
     KERB_SIDE,
     LAMP,
     MARKER_CABIN,
@@ -145,12 +148,6 @@ TOP_LIGHT_BAR_M = 0.05
 CORNER_WRAP = (0.15, 0.85)
 # How far a run of windows' surround shows round it.
 SURROUND_M = 0.04
-# The sky's streak in a window: its colour, where along a pane its foot
-# stands and how wide, and how far it leans back as it rises — a share of the
-# pane's width, never more than half its height.
-GLINT = (120, 142, 160)
-GLINT_FOOT = (0.55, 0.72)
-GLINT_LEAN = 0.3
 # Proud of the glass it lies on (twice `FLANK_PROUD_M` over a surround), and
 # still inside `SKIN_M`.
 GLINT_PROUD_M = 0.010
@@ -1552,21 +1549,8 @@ def vehicle(shape: Shape) -> MeshData:
         parts.extend(_wipers(shape))
     parts.extend(DETAILS.get(shape.kind, lambda _: [])(shape))
     parts.extend(_wheels(shape) if shape.arches else [_underframe(shape)])
-    body = _liveried(merge([_roster_marked(part) for part in parts], name=shape.kind), shape)
+    body = _liveried(merge([_marked(part) for part in parts], name=shape.kind), shape)
     return replace(_cabin_lit(body, shape), material=BODY_MATERIAL)
-
-
-def _roster_marked(part: MeshData) -> MeshData:
-    """`make_vehicle._marked`, and a glint as the glass it lies on: its pale
-    swatch is no colour that rule knows, and it must shade, reflect and light
-    with its window."""
-    marked = _marked(part)
-    if not part.name.startswith("glint_"):
-        return marked
-    assert marked.uvs is not None
-    uvs = marked.uvs.copy()
-    uvs[:, 1] = MARKER_GLASS
-    return replace(marked, uvs=uvs)
 
 
 def _liveried(body: MeshData, shape: Shape) -> MeshData:

@@ -112,6 +112,15 @@ RED = (198, 32, 40)
 SILVER = (175, 171, 166)
 DARK = (30, 32, 36)
 GLASS = (18, 19, 22)
+# The sky caught in a window: one pale streak across a pane (the user's pick of
+# five glass treatments, 2026-11-11; the bus and tram wear it too,
+# `make_parked`). Where along a pane its foot stands and how wide, how far it
+# leans back as it rises as a share of the pane's width, and how far it stands
+# off the glass.
+GLINT = (120, 142, 160)
+GLINT_FOOT = (0.55, 0.72)
+GLINT_LEAN = 0.3
+GLINT_PROUD_M = 0.006
 LAMP = (242, 236, 205)
 # ⚠️ A sixth colour, where `ART_DESIGN.md` says 3-5 per vehicle. It buys the
 # indicator in the tail-lamp cluster, which is three lenses stacked — amber
@@ -179,6 +188,9 @@ MARKER_CABIN_DIM = 6.0
 COLOUR_MARKERS: dict[Colour, float] = {
     GLASS: MARKER_GLASS,
     SILVER: MARKER_TRIM,
+    # The sky's streak in a window is its glass: it reflects with the pane it
+    # lies on, and lights with a lit saloon. Nothing matte wears the swatch.
+    GLINT: MARKER_GLASS,
 }
 
 # Parts whose every vertex is a lamp lens, whatever colour it is wearing. Name
@@ -557,6 +569,8 @@ class Proportions:
     garnish_m: float = 0.05
     # Door mirrors on a stalk at the front of the front door's window.
     mirror_reach_m: float = 0.09
+    # The sky's streak in each door window (`GLINT`).
+    glint: bool = True
     # The roof sign stands on a dark plinth.
     sign_plinth_m: float = 0.025
     # Hubcap slots — six round the cap, as the die-cast's turbine cap has.
@@ -985,6 +999,8 @@ def _greenhouse(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     moulding = min(0.45, shape.belt_moulding_m / band) if band > 0.0 else 0.0
 
     parts: list[MeshData] = []
+    # Of a flank's six pieces (`colours` below), the two door windows.
+    GLINT_PANES = (0, 2)
     for edge in range(corners):
         nxt = (edge + 1) % corners
         a0, b0 = np.asarray(lower[edge]), np.asarray(lower[nxt])
@@ -1044,6 +1060,35 @@ def _greenhouse(chassis: Chassis, shape: Proportions) -> list[MeshData]:
                 )
                 if made is not None:
                     parts.append(made)
+                # The two door windows take the streak; the quarter light is
+                # too small to carry one.
+                if shape.glint and paint is GLASS and k in GLINT_PANES and made is not None:
+                    reach = outward / np.linalg.norm(outward) * GLINT_PROUD_M
+                    foot0, foot1 = GLINT_FOOT
+                    # (along the pane, up it): the foot, then the head leant back.
+                    streak = (
+                        (foot0, t0),
+                        (foot1, t0),
+                        (foot1 - GLINT_LEAN, t1),
+                        (foot0 - GLINT_LEAN, t1),
+                    )
+                    parts.append(
+                        polygon_facing(
+                            [
+                                (
+                                    xl + t * (xu - xl) + float(reach[0]),
+                                    yl + t * (yu - yl),
+                                    (zb0 + t * (zt0 - zb0)) * (1.0 - u)
+                                    + (zb1 + t * (zt1 - zb1)) * u
+                                    + float(reach[2]),
+                                )
+                                for u, t in streak
+                            ],
+                            GLINT,
+                            outward,
+                            name=f"glint_{edge}_{k}",
+                        )
+                    )
     parts.append(polygon_facing(lower, GLASS, (0.0, -1.0, 0.0), name="glass_bottom"))
     parts.append(
         loft(

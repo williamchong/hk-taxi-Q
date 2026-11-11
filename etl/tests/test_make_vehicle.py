@@ -51,6 +51,7 @@ from make_vehicle import (
     DEEP_RED,
     FIXTURE_PROUD_M,
     GLASS,
+    GLINT,
     KERB_SIDE,
     LAMP,
     LAMP_CIRCUITS,
@@ -75,6 +76,7 @@ from make_vehicle import (
     opening_radius_m,
     taxi_body,
     taxi_door,
+    taxi_parts,
     write_taxi,
 )
 from primitives import Colour, box, polygon
@@ -90,7 +92,7 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
 # `ART_DESIGN.md`'s ceiling for one vehicle.
 TRIANGLE_CEILING = 2000
-PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED)
+PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED, GLINT)
 # How far off the roof line counts as clear of it. Smaller than anything the
 # generator builds and larger than the loft's own float error.
 ROOF_EPS_M = 1e-4
@@ -872,7 +874,9 @@ class TestTaxiContract:
             assert len(mesh.colours) == len(mesh.positions)
 
     def test_the_palette_is_the_declared_colours(self, meshes: list[MeshData]) -> None:
-        """`ART_DESIGN.md` asks for 3-5; this is eight. All three extras are
+        """`ART_DESIGN.md` asks for 3-5; this is nine with `GLINT`, the sky's
+        streak in the door windows the user picked (2026-11-11). The other
+        three extras are
         deliberate: AMBER because the tail cluster stacks three lenses and two
         colours cannot express three, BADGE_GREEN because the 4 SEATS badge
         stopped being a texture and a green dome is the whole of what is left
@@ -1055,12 +1059,37 @@ class TestSurfaceMarkers:
     ) -> None:
         """`GLASS` names one material and nothing else wears it, so here the
         colour rule is exact — and it has to be per-vertex, because the
-        greenhouse is one lofted part carrying both `GLASS` and `SILVER`."""
+        greenhouse is one lofted part carrying both `GLASS` and `SILVER`.
+        `GLINT`, the sky's streak in a door window, is the same material in a
+        second swatch, and equally nothing else wears it."""
         body = meshes[0]
         assert body.colours is not None
         glass = np.all(body.colours[:, :3] == np.array(GLASS, dtype=np.uint8), axis=1)
+        glint = np.all(body.colours[:, :3] == np.array(GLINT, dtype=np.uint8), axis=1)
         assert glass.any(), "no glazing on the car"
-        assert np.array_equal(self._markers(body) == MARKER_GLASS, glass)
+        assert np.array_equal(self._markers(body) == MARKER_GLASS, glass | glint)
+
+    def test_each_door_window_carries_one_streak_inside_it(self) -> None:
+        """The user's pick, 2026-11-11: the side windows only — four streaks,
+        two a flank, none on a screen or a quarter light — each proud of its
+        pane and inside its span."""
+        parts = {part.name: part for part in taxi_parts(Chassis(), Proportions())}
+        glints = [part for name, part in parts.items() if name.startswith("glint_")]
+        assert len(glints) == 4
+        for glint in glints:
+            _, edge, piece = glint.name.split("_")
+            pane = max(
+                (part for name, part in parts.items() if name.startswith(f"glass_{edge}_{piece}_")),
+                key=lambda part: float(np.ptp(part.positions[:, 1])),
+            )
+            for axis in (1, 2):
+                assert glint.positions[:, axis].min() >= pane.positions[:, axis].min() - 1e-6
+                assert glint.positions[:, axis].max() <= pane.positions[:, axis].max() + 1e-6
+            assert np.abs(glint.positions[:, 0]).mean() > np.abs(pane.positions[:, 0]).mean()
+        assert not any(
+            name.startswith("glint_")
+            for name in (p.name for p in taxi_parts(Chassis(), replace(Proportions(), glint=False)))
+        )
 
     def test_the_tail_lens_is_a_lamp_although_it_is_painted_red(
         self, meshes: list[MeshData]
