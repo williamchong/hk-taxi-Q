@@ -119,9 +119,13 @@ paths:
   signalled junction on seeds 1, 2 and 8 (two merges, `Q182`); the gate holds on 7 / 4 / 23 only.
 - **The taxis** (`Q183`): `verify_traffic`'s `licence:` lines — paste them. 🔴 **A taxi's licence
   and roof sign come off its id and spawn count, never `_rng`**: one more roll moves every later
-  car and every seed's staged case. 🔴 **One slot per licence per taxi, the rest hidden** — a
-  `MultiMesh`'s `instance_count` clears its buffer, so a taxi cannot be moved between batches after
-  `setup`. The roof sign is bit 32 (`ROOF_SIGN`) at `vehicle_lamps.tres`' `sign_lit` through
+  car and every seed's staged case. 🔴 **A batch has room for every car that may wear its kind, and draws only the ones shown**
+  (`Q200`) — a `MultiMesh`'s `instance_count` clears its buffer, so it is sized once in `setup`;
+  the shown cars are its first `visible_instance_count` instances, kept dense by `_take_slot` /
+  `_drop_slot`. Do not go back to hiding a car at no size: a hidden instance still costs its
+  triangles (a fifth to a third of the throttle route's primitives). `verify_traffic`'s `licence:` line holds
+  that every live car is drawn from its own kind's batch and no other car is drawn; a retired car
+  left drawn fails it by name (2026-11-11). The roof sign is bit 32 (`ROOF_SIGN`) at `vehicle_lamps.tres`' `sign_lit` through
   `wire_blink`; a shader change owes a day and a night frame and the `shader error` grep.
   ⚠️ A car still clearing the last junction within `give_way_look_m` of its next line carries BOTH
   turns in `_turn_path` (`Q183`): seed 7's minibus on a short link turned right across a left turn
@@ -132,8 +136,8 @@ paths:
   comes off its id and lives (`TrafficFleetMix.kind_for`), never `_rng`**; the first life keeps `setup`'s draw so
   that roll is unchanged. 🔴 **The fleet changes only by the ring**: nothing is removed for the
   hour, so no car pops in view; `cars` is the busiest hour's fleet and the ceiling. ⚠️ Every
-  wandering car holds a slot in every kind the hours draw and every licence: a kind added to
-  `kinds` adds a hidden instance per car to every batch. ⚠️ The seeds drive at `PEAK_HOUR` 18:00,
+  batch is sized for every wandering car that may wear its kind: a kind added to `kinds` adds a
+  buffer of the fleet's size, and draws nothing until a car wears it (`Q200`). ⚠️ The seeds drive at `PEAK_HOUR` 18:00,
   the whole fleet; at 07:00 they would drive 19 cars and every staged case would move.
   🔴 **The fleet is flow over speed** (`Q198`): the detectors and their days are `hong_kong.yaml`'s
   `traffic_census:` block, and the busiest hour moves with them — `PEAK_HOUR` follows it.

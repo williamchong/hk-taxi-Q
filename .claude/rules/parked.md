@@ -67,6 +67,21 @@ traffic, and the bonus for threading them.
   are the taxi's `indicator_{side}` / `taillamp_{side}_indicator` (`P3-3f2`). A placement whose
   source is in `parked.tres`' `hazard_sources` writes both indicator bits (`datum_of`, held by
   `verify_parked`; its `hazards on:` line is the share) — by source, never by kind.
+- 🔴 **A roster taxi is the player's body, never a loft of its own** (`P3-85`, `Q200`):
+  `make_parked.Taxi` builds each licence from `make_vehicle.taxi_parts`, the door shut, the
+  mirrors tucked (`TAXI_MIRROR_REACH_M`), so a change to the player's taxi changes all three and
+  owes `python tools/make_parked.py` and the `.glb`. The footprint is that body's, 4.575 m: do not
+  put the real car's 4.7 back in `parked.vehicles:` — the stand's queue moves with it. The roof's
+  white is found by part name (`glass_*`, `greenhouse`); a rename in `make_vehicle` fails the
+  build, by design.
+- **A lofted kind's die-cast detail is `Shape` fields, off by default** (`P3-85`): `nose_drop_m` /
+  `tail_drop_m`, `hub_slots`, `bezels`, `shut_lines`, `rub_strip`, `wipers`, `doors_m` /
+  `door_glass`, `window_bar`. 🔴 Everything stands inside the footprint, in the skin
+  (`FLANK_PROUD_M`): a mirror on a stalk or a step past the flank widens the collider. ⚠️ A falling
+  deck takes its waist down with it (`waist_y_at`); a drop that puts an arch's crown over the
+  waist, or the deck under the lamps, is refused — lower the drop, do not move the guard. Doors are
+  on `KERB_SIDE` and refused in a wheel arch. A new feature owes a lineup sheet before and after
+  (`asset_viewer.tscn --lineup=20`, a forced reimport first) and the throttle route's `prims`.
 - 🔴 **A colour that means something is never a livery** (`Q167`, the user's rule 2026-10-13):
   the taxi, the bus and the tram carry no `livery`, and the minibus's palette is green and red
   only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`

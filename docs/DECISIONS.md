@@ -10220,7 +10220,7 @@ the centimetre): `prims` 777,737 → 783,769 at t=1–4 (+0.8%), 684,129 → 688
 97 → 97 and 100 → 100. Well under the +40k that would have bought a far LOD, so none
 is built. `parked.py` reads the library's names only, so the placements cannot move.
 
-**Refused:** the parked taxi as the player's `taxi_body` with its door shut (`P3-72`'s wording).
+**Refused:** the parked taxi as the player's `taxi_body` with its door shut (`P3-72`'s wording). ⚠️ Reversed by `Q200` (2026-11-11): the roster's taxis are that body, and the stand's footprint moved to it.
 The player's body is 4.34 x 1.74 m and the stand places by a Crown Comfort's 4.70 x 1.70 m, so the
 reuse moves every taxi placement; the parked taxi keeps its own shape and borrows the look.
 
@@ -11748,7 +11748,9 @@ across a shift.
   The first life keeps the kind `setup` drew on `_rng`, so that roll is unchanged. Each wandering
   car holds a slot in every kind the hours draw and every licence, the rest hidden: a
   `MultiMesh`'s `instance_count` clears its buffer, so a car cannot change batch after `setup`.
-  Draw calls are unchanged — one batch per kind as before.
+  Draw calls are unchanged — one batch per kind as before. ⚠️ Amended by `Q200` (2026-11-11): the
+  batches are still sized once, but a hidden car is no longer an instance of no size — each batch
+  draws only the cars shown.
 - **How the fleet changes.** 🔴 **Only by the ring**: a car is not placed while the wandering fleet
   stands at its hour's size, and nothing is removed for the hour. It thins as cars drive out of the
   ring and fills as the ring places them, so no car pops in view. `cars` is the busiest hour's
@@ -12440,3 +12442,101 @@ user's look.
   keys, no reader's old interpretation is wrong.
 
 **See.** `Q82` · `Q78` · `Q171` · `P3-26` · `.claude/rules/lamps.md`
+
+## `Q200` — The roster takes its die-casts' detail, the taxi's the player's own body, and a batch draws only the cars shown
+
+**Asked** by the user, 2026-11-11: "should we continue to improve vechicle details, type and
+variations via using tiny car models as ref?", then "plan for it" and "complete plan". The verdict
+was to go on, but on the roster rather than the player's taxi (`Q190` already carries that), and to
+take variety from liveries before new kinds. The plan's three open calls were taken at their
+recommendations with the user away: the roster's taxi at the player's length, references found
+here, the ink at the shipped 2 cm. ⚠️ All three are his to correct.
+
+**Decided and built (`P3-85`).**
+
+- **A roster taxi IS the player's body** (`make_parked.Taxi`): `make_vehicle.taxi_parts` with the
+  door leaf shut in its doorway and four wheels baked in, twelve segments under the player's
+  six-slot hubcap. The licence's paint goes on every painted red vertex — a red lens keeps its red
+  — and the green and blue licences' greenhouse is white where the urban taxi's is silver, by part
+  name (`glass_*`, `greenhouse`); a rename there now fails the build rather than leaving a silver
+  roof. The mirrors are tucked to the handles' depth (`TAXI_MIRROR_REACH_M` -0.04): a roster
+  vehicle's box is its collider, and the player's stand 16 cm out. 742 → 1,516 triangles a taxi.
+  ⚠️ **Reverses `Q166`'s refusal** of exactly this reuse. Its reason was the footprint: the stand
+  placed by the real Crown Comfort's 4.70 m. `parked.vehicles: taxi` is 4.575 m now, the body
+  bumper to bumper, so the taxi in the next lane is the car being driven. Rebuilt, both regions:
+  every count in `parked.json` identical; 17 of Wan Chai's 23 taxis moved, 6.3 cm at most, as the
+  stands' queues closed up; no other placement moved; Causeway Bay's four did not.
+- **The lofted kinds take what their die-casts carry**, read off Tiny's product photographs of the
+  Coaster minibus, the Hiace, the tram, the Enviro500 and the Isuzu N (in
+  `build/reference/vehicles/diecast/`, with `CREDITS.tsv`; reference, never committed). Each is a
+  `Shape` field, off by default, so a kind that sets none is byte-identical:
+  - a deck that falls from the cabin (`nose_drop_m`, `tail_drop_m`): the saloon's bonnet 10 cm and
+    boot 6, the MPV's nose 14, the van's 12. The waist falls with it (`waist_y_at`), or the nose
+    would have no band of body over its skirt — the first build had the bonnet under its own waist,
+    and the new test found it;
+  - slotted hubcaps (`hub_slots`), shut lines that stop at an arch's crown, a rub strip, chrome
+    bezels, wipers;
+  - kerb-side doors (`doors_m`): two glazed leaves in a dark frame on the bus (entrance and exit),
+    the minibus and the coach; open doorways on the tram; refused where one would stand in a wheel
+    arch;
+  - a bar across the side glass (`window_bar`): the tram's top lights, the minibus's slider rails.
+  672–932 → 710–960 triangles a kind (the saloon 718 → 858, the tram 454 → 474). Every footprint
+  where it stood, within the 5 cm the test allows.
+- **No proportions were re-measured off the toys, on purpose.** A 1:76 bus, minibus or tram is a
+  scale model, not a caricature: its proportions are the real vehicle's, which the roster already
+  stands at (`Q166`). Only the taxi's die-cast shortens its ends, and that was `Q190`'s call. A
+  search of Tiny's catalogue found no Alphard and no modern saloon, so the two private cars took the shared parts alone.
+- **Liveries, two more a private kind** (`parked.tres`): a dark green and a mid blue saloon, a
+  champagne and a grey MPV, a grey and a navy van. Still off saturated red (`Q167`).
+- **A batch draws only the cars shown** (`TrafficSystem._take_slot` / `_drop_slot`). Found by
+  measuring the cost: the taxis alone added 100,000 primitives to the throttle route, far more than
+  the taxis in view could. Every wandering car held an instance in every kind and licence it might
+  wear, hidden at no size (`Q183`, `Q186`) — and an instance of no size still costs its triangles.
+  The batches are still sized once in `setup` (`instance_count` clears a buffer); each now keeps
+  its drawn cars first and sets `visible_instance_count`, the last drawn car moving into a freed
+  place. Amends `Q186`'s "the rest hidden".
+
+**Measured.** The throttle route (`--debug-view=off --hud=off`, two runs a side, each pair
+identical, the car's path the same to the centimetre), `prims` / `draws`:
+
+| t | before | the taxis | + the lofted kinds | + only the shown drawn |
+|---|---|---|---|---|
+| 1 s | 1,010,611 / 114 | 1,110,895 / 114 | 1,136,391 / 114 | **890,847 / 113** |
+| 2 s | 1,192,947 / 120 | 1,293,231 / 120 | 1,349,927 / 120 | **900,233 / 119** |
+| 4 s | 1,009,266 / 115 | 1,076,670 / 115 | 1,128,858 / 115 | **729,306 / 110** |
+| 5 s | 702,017 / 110 | 769,421 / 110 | 793,277 / 110 | **521,701 / 107** |
+
+The detail alone was +12% to +13%, three to four times the +40,000 `Q166` named as the price of a
+far tier; with only the shown cars drawn the route is 12% to 28% under where the task began. With
+`--traffic=off` the same route reads 822,711 / 108 and 826,487 / 110 at 1 s and 2 s: the traffic
+is +68,000 to +74,000 primitives and +5 to +9 draw calls. `phys` 3.6–4.3 ms with traffic, 2.1–3.0
+without. `parked.glb` 733,800 → 1,006,696 B on disk. ⚠️ The PCK is not measured, nor the handset.
+
+`verify_traffic`, the old scripts against the new on one library, both regions: identical but for
+the one renamed line — the change draws differently and decides nothing. (Across the mesh change
+two counters move by one and two car-ticks: the bus and the minibus are a centimetre wider.)
+
+**Held, each caught by a named mutation.** The roster: no door in the doorway, a lens repainted,
+every silver whitened, the mirrors out, the waist not falling, a nose that never falls, doors on
+the offside, a shut line across an arch. The traffic: a retired car left drawn fails `licence:`;
+the last car not moved into a freed place is a script error on the first drop.
+
+**Not built: the goods lorry**, the plan's one new kind, and not for the draw calls — there is room.
+(1) TD's bays offer it two places in Wan Chai (`Goods Vehicles`, which the roster reads as a van),
+so parked it would be invented. (2) Moving, it is a share of the census's light-goods class, a
+split nobody has measured — the saloon's 4 : 3 is authored the same way and flagged for it. (3) A
+kind added to `kinds` moves every seeded draw `verify_traffic` gates on, and the gated seeds were
+chosen by hand (`Q182`). Each is the user's call; the Isuzu's photograph is in the reference
+folder for when it is made.
+
+**Candidates, not built.** The arches' feet fold back on themselves by 7 mm where the sill sits
+under the hub (16 triangles a car, older than this task; the review found it). Three hub slots in
+place of six would save 48 triangles a car. `asset_viewer.tscn` has no switch for its readout,
+which covers a third of a lineup frame.
+
+**Owed.** The user's look: `build/driver/p385_before_all/sheet.png` against
+`p385_after_all/sheet.png`, the taxis in `p385_taxi/sheet.png`; a drive among the traffic by day
+and night; the PCK; the handset's frame time; and the three calls taken for him above.
+
+**See.** `P3-85` · `Q190` · `Q166` · `Q167` · `Q183` · `Q186` · `Q196` · `tools/make_parked.py` ·
+`etl/tests/test_make_parked.py` · `.claude/rules/parked.md` · `.claude/rules/signals.md`
