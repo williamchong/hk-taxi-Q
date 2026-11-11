@@ -41,8 +41,9 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **A few customers wait, each paired with where they are going as they are drawn** (`Q203`).
   `pickups()` is the LIVE set — `live_pickups` of the pool, `street_share` of the draws from the
   street spots — and `pick_destination` reads the pair `_refill` drew: a destination drawn the same
-  way and routed from the pickup, kept at `min_trip_m`, up to `pair_tries` draws (`pair_ms` on the
-  boot line and in `verify_fares`). `_board` takes the customer off the kerb and `_deliver` /
+  way from those one forward search from the pickup reaches at `min_trip_m`
+  (`RoadRouter.source_tree`, `pair_ms` on the boot line and in `verify_fares`). 🚫 Drawing blind
+  and routing each try: a `prepare` a try, 24 for a stranded kerb, and false strands (`Q203`). `_board` takes the customer off the kerb and `_deliver` /
   `_bail` draw the replacement — 🔴 never at the hail or mid-fare, where a draw's `prepare`s would
   evict the tree the car's route reads (`router.md`'s `TREE_CACHE`). 🚫 The old all-pairs reach
   table: 268 street spots make it seconds at load. 🚫 Drawing blind and retrying AT THE HAIL was
@@ -57,7 +58,7 @@ the loop's own numbers in `tuning/fares.tres`.
   and roads over 50 kph, beside a named building. The kind of a fare is the DESTINATION's (`pudo`
   → short hop, anything else standard) and prices nothing since `Q203`. ⚠️ **`street_share` is
   the one key `setup` does not refuse at zero**: 0 is the off switch, the published points alone.
-- ⚠️ **A pickup that pairs with no destination at `min_trip_m` in `pair_tries` draws is
+- ⚠️ **A pickup that reaches no destination at `min_trip_m` is
   stranded**: dropped from the pickup pool as it is drawn, kept as a destination, counted in
   `FareSystem.stranded` and named by `verify_fares` and the boot line. Found by the draw, not by
   a survey, so which are stranded depends on the seed and grows over a session; the clip-edge

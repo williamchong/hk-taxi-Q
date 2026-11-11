@@ -12714,15 +12714,22 @@ the form below. The user's drive owed.
   read `nodes`, never meet one; `export._check_fares` holds them to the same stale-edge checks.
 - **A live set, paired as drawn** (`FareSystem`). `live_pickups` (4) customers wait;
   `street_share` (0.75) of the draws, pickups and destinations alike, come from the street; each is
-  bound to a destination drawn the same way and routed at `min_trip_m`, up to `pair_tries` (24),
-  else the kerb is stranded for the session. A boarding takes the customer off the kerb and the
+  bound to a destination drawn the same way from those the legal network reaches at `min_trip_m`,
+  else the kerb is stranded for the session. One forward search a customer prices every
+  destination (`RoadRouter.source_tree` / `distance_from`, the reverse tree's convention run
+  forwards, uncached, so it evicts nothing); `verify_road_graph` ties it to `route()` on 8,528
+  pairs, unreached included, worst 0 m. A boarding takes the customer off the kerb and the
   fare's end draws a replacement, never inside the car's hail radius. `pickups()` is the live set
   and `pickups_changed` tells the minimap and the rings to rebuild — a handful, where walking ~270
   rings a frame for `withheld` would not be. 🚫 The all-pairs reach table it replaces: ~270 × ~270
   routes is seconds at load. 🚫 Drawing at the hail and retrying stays refused (`Q141`): here a
-  pickup that pairs with nothing is never shown. Pairing at `setup` 14.7 ms on Wan Chai alone,
-  1.3 ms on Causeway Bay; on the merged runtime `fares: 4 waiting of 273 pickups (252 street; 0
-  stranded), 277 destinations (252 street), pairing 3.1 ms` (seed 7).
+  pickup that pairs with nothing is never shown. Pairing at `setup` 3.8 ms on Wan Chai alone,
+  0.9 ms on Causeway Bay; on the merged runtime `fares: 4 waiting of 272 pickups (251 street; 1
+  stranded: causeway_bay/s_0082), 277 destinations (252 street), pairing 3.7 ms` (seed 7).
+- 🚫 **Drawing destinations blind and routing each try** (built first, `pair_tries` 24, refused
+  in `/simplify`): each try was a fresh `prepare` (`TREE_CACHE` is 8), so a kerb that reaches
+  nothing cost 24 prepares, about 20 ms, at the fare end that drew it, and a kerb reaching 5% of
+  destinations was stranded wrongly 29% of the time (0.95²⁴).
 - ⚠️ **The drive no longer opens with a hail.** The car still starts 20 m short of `f_004`, but
   a customer waits there only when the draw puts one there; the arrow points at the nearest one
   that does. Whether the first fare should always wait at the start is the user's call.
@@ -12739,13 +12746,6 @@ the form below. The user's drive owed.
   "obeying the signs" costs here; the clock is now 57 s for the shortest trip and the tip on a fast
   run roughly doubles. The script was a scratch tool and is not committed; the recipe is above and
   in `fares.md`.
-- ⚠️ **Deferred, needs new router machinery: a forward search from the pickup.** Pairing tries
-  random destinations, each a fresh `prepare` (`TREE_CACHE` is 8), so a kerb that reaches nothing
-  costs `pair_tries` (24) prepares, about 20 ms on desktop, at the fare end that draws it — once
-  a kerb a session, since it then leaves the pool — and a kerb that reaches 5% of destinations is
-  wrongly stranded 29% of the time (0.95²⁴). One forward search over the router's successor arrays
-  would price every destination at once: no false strand, a strand for one search. Measured: 0
-  stranded at boot on the merged runtime, 1 on each region alone.
 - Not done: no figure stands at the kerb (the user's call); a single-yellow kerb is refused at
   every hour; `stop_length_m`, `spacing_m`, `junction_clear_m`, `live_pickups` and `street_share`
   are first guesses for the drive.

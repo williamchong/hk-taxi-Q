@@ -63,6 +63,12 @@ paths:
   g. `RoadGraph._build`: store the reversed triple → `_check_topology`, 314 lines.
   h. A table header edited (`"edges"`) → the stale guard, naming the command.
   i. Python: `--json` rows from `world.reach` instead of `distances` → `TestTable`.
+  j. `source_tree`: half the edge's length in the relaxation → `source trees` names the pairs.
+- ⚠️ **`source_tree` / `distance_from` is the forward search** (`Q203`): one source, every
+  destination, the same convention run forwards, uncached so it evicts no prepared tree.
+  `FareSystem` pairs a waiting customer with it. `distance_from` is INF for no route — a bar test
+  must refuse INF by name, since INF clears any `>=`. `verify_road_graph`'s `source trees:` line
+  ties it to `route()` pair by pair, found or not.
   🚫 Storing `false` under the key is NOT a mutation: `is_turn_banned` tests presence.
 - ⚠️ **One consumer is wired: `FareSystem`** (`P3-1a`, `fares.md`). It pays `prepare` at the hail,
   one per candidate destination, and `route` at its own 5 Hz sample from the car's `Hit`; its par
