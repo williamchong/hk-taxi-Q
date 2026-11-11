@@ -8,6 +8,7 @@ extends RefCounted
 ## **The kind is the DESTINATION's.** `GAME_DESIGN.md` names a short hop by its
 ## `pudo` and a standard fare by its `taxi_stand`; a trip is what it is by where
 ## it ends. Cross-harbour and long haul are `P3-1b`'s kinds and are not drawn.
+## Nothing prices a kind any more: the allowance is the legal route alone.
 ##
 ## **The money is two numbers, and stays two.** `meter` is the tariff on what
 ## was driven and waited, honest to the cent; `tip_hkd` is everything the
@@ -90,6 +91,10 @@ class Stop:
 	func same_as(other: Stop) -> bool:
 		return other != null and other.region == region and other.id == id
 
+	## Unique across regions: two regions both publish an `f_001`.
+	func key() -> String:
+		return region + "/" + id
+
 
 var kind: Kind = Kind.STANDARD
 var pickup: Stop = null
@@ -140,7 +145,8 @@ func count_of(skill: Skill) -> int:
 	return count
 
 
-## A destination node's kind. `taxi_stand` is standard and `pudo` a short hop;
-## nothing else is drawn, so nothing else arrives here.
+## A destination node's kind. `pudo` is a short hop and anything else — a
+## stand, a street spot — standard. The allowance no longer reads it (the
+## user's call, 2026-11-12: the legal route alone); `P3-1b`'s kinds will.
 static func kind_of(node: Dictionary) -> Kind:
 	return Kind.SHORT_HOP if str(node.get("kind", "")) == "pudo" else Kind.STANDARD

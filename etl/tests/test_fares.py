@@ -21,9 +21,16 @@ import numpy as np
 import pytest
 import shapely
 
-from pipeline.config import load_config
+from pipeline.config import StreetSpots, load_config
 from pipeline.crs import transformer
-from pipeline.fares import FARES_NAME, FARES_SCHEMA, Place, build_region, nearest_place
+from pipeline.fares import (
+    FARES_NAME,
+    FARES_SCHEMA,
+    Place,
+    build_region,
+    nearest_place,
+    street_spots,
+)
 from pipeline.polyline import Segments
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from tests.helpers import CITY_YAML
@@ -688,3 +695,99 @@ class TestNearestPlace:
         node = _written(testville.out_dir)["nodes"][0]
         assert node["place"] == {"en": "Times Square", "zh": "時代廣場"}
         assert report.placed == 1 and report.places_read == 1
+
+
+class TestStreetSpots:
+    """Street hails: a kerb no restriction covers, beside a named building."""
+
+    SPEC = StreetSpots(
+        spacing_m=60.0, junction_clear_m=20.0, stop_length_m=12.0, max_speed_limit_kph=50.0
+    )
+    HIGH = (1000.0, 1000.0)
+
+    def _north(self, **overrides) -> dict:
+        """A 200 m edge running north (`-Z`) up `x = 100`, 10 m wide."""
+        edge = {
+            "id": 7,
+            "polyline": [[100.0, 4.0, 300.0], [100.0, 4.0, 100.0]],
+            "direction": "forward",
+            "width_m": 10.0,
+            "bus_lane": False,
+            "speed_limit_kph": 50,
+            "kerbside": [],
+        }
+        edge.update(overrides)
+        return edge
+
+    def _block(self, x0: float) -> Place:
+        """A building the whole length of the edge, on the side `x0` puts it."""
+        return Place(
+            name_en="Block",
+            name_zh="樓",
+            footprint=shapely.Polygon(
+                [(x0, 100.0), (x0 + 10.0, 100.0), (x0 + 10.0, 300.0), (x0, 300.0)]
+            ),
+        )
+
+    def _spots(self, edge: dict, places: list[Place] | None = None):
+        both = places if places is not None else [self._block(80.0), self._block(110.0)]
+        return street_spots([edge], self.SPEC, both, 25.0, self.HIGH)
+
+    def test_stations_are_spaced_and_kept_off_the_ends(self) -> None:
+        report = self._spots(self._north())
+        # 160 m between the two 20 m clears: 60 m apart, three stations, centred.
+        along = sorted(spot.edge_t * 200.0 for spot in report.spots)
+        assert along == pytest.approx([40.0, 100.0, 160.0])
+
+    def test_a_one_way_edge_takes_its_nearside_alone(self) -> None:
+        report = self._spots(self._north())
+        assert {spot.side for spot in report.spots} == {"near"}
+        # Travelling north, left is west: the kerb is half the width west.
+        assert all(spot.pos[0] == pytest.approx(95.0) for spot in report.spots)
+
+    def test_the_nearside_is_the_side_a_snap_calls_positive(self) -> None:
+        """Asserted against `Segments`' own offset sign, which `TestTheSideAnd
+        HeadingASnapPublishes` holds against `surface.mitres`."""
+        edge = self._north(direction="both")
+        segments = Segments.of([edge])
+        for spot in self._spots(edge).spots:
+            offset = segments.nearest(spot.pos[0], spot.pos[2]).offset_m
+            assert (offset > 0.0) == (spot.side == "near")
+
+    def test_a_two_way_edge_takes_both_kerbs(self) -> None:
+        report = self._spots(self._north(direction="both"))
+        assert sorted(spot.side for spot in report.spots) == ["near"] * 3 + ["off"] * 3
+
+    def test_a_restriction_within_half_a_stop_refuses_the_station(self) -> None:
+        # The middle station is at 100 m; a run ending 5 m short of it reaches
+        # inside its 6 m half-stop, one ending 7 m short does not.
+        inside = self._spots(
+            self._north(kerbside=[{"side": "near", "from_m": 0.0, "to_m": 95.0, "kind": "single"}])
+        )
+        outside = self._spots(
+            self._north(kerbside=[{"side": "near", "from_m": 0.0, "to_m": 93.0, "kind": "single"}])
+        )
+        assert len(inside.spots) == 1 and inside.restricted == 2
+        assert len(outside.spots) == 2 and outside.restricted == 1
+
+    def test_a_restriction_on_the_other_side_refuses_nothing(self) -> None:
+        report = self._spots(
+            self._north(kerbside=[{"side": "off", "from_m": 0.0, "to_m": 200.0, "kind": "double"}])
+        )
+        assert len(report.spots) == 3
+
+    def test_a_bus_lane_or_a_fast_road_refuses_the_edge(self) -> None:
+        assert self._spots(self._north(bus_lane=True)).bus_lane_edges == 1
+        assert self._spots(self._north(speed_limit_kph=70)).fast_edges == 1
+        assert not self._spots(self._north(speed_limit_kph=70)).spots
+
+    def test_a_kerb_with_no_building_in_reach_is_refused(self) -> None:
+        # Only the offside block: the nearside kerb at x = 95 is 15 m from it,
+        # inside 25 m; move it to 130 and nothing is in reach.
+        assert len(self._spots(self._north(), [self._block(110.0)]).spots) == 3
+        far = self._spots(self._north(), [self._block(130.0)])
+        assert not far.spots and far.unnamed == 3
+
+    def test_an_edge_shorter_than_its_two_clears_has_no_station(self) -> None:
+        short = self._north(polyline=[[100.0, 4.0, 130.0], [100.0, 4.0, 100.0]])
+        assert self._spots(short).stations == 0

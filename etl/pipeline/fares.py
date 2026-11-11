@@ -54,21 +54,36 @@ import numpy as np
 import shapely
 
 from pipeline import gdb
-from pipeline.config import TAXI_STAND, Config, FareCategory, FareGroup, Places, load_config
+from pipeline.config import (
+    TAXI_STAND,
+    Config,
+    FareCategory,
+    FareGroup,
+    Places,
+    StreetSpots,
+    load_config,
+)
 from pipeline.crs import GameTransform, transformer
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import cached_source, read_feature_collection, source_reads
-from pipeline.polyline import Segments, Snap
+from pipeline.kerbside import NEARSIDE, OFFSIDE
+from pipeline.polyline import Segments, Snap, plan_lengths
 from pipeline.roads import ROADGRAPH_NAME, clean_text, read_graph
 
 log = logging.getLogger(__name__)
 
 FARES_NAME = "fares.json"
+# The `kind` a street spot carries, so a consumer that holds one beside a
+# published node can tell them apart without knowing which list it came from.
+STREET = "street"
 FARES_SCHEMA = 1
 
 # Node ids in the data contract are `f_001`. Zero-padded to three so a listing
 # sorts in the order the nodes were written; wider ids simply grow past it.
 _ID_FORMAT = "f_{:03d}"
+# Street spots (`StreetSpots`) are numbered apart, so adding or losing one
+# never renumbers a published point.
+_STREET_ID_FORMAT = "s_{:04d}"
 
 
 @dataclass(frozen=True)
@@ -109,6 +124,35 @@ class Place:
         return float(self.footprint.distance(shapely.Point(x, z)))
 
 
+@dataclass(frozen=True)
+class StreetSpot:
+    """One kerb a passenger may flag a cab at, off any published point."""
+
+    id: str
+    # Where the passenger stands: the kerb, half the road's width off the
+    # centreline on `side`. Like a `FareNode`'s, the stop is `nearest_edge` at
+    # `edge_t`, and this is what the building was looked up from.
+    pos: tuple[float, float, float]
+    nearest_edge: int
+    edge_t: float
+    side: str
+    place: dict[str, str | None]
+
+
+@dataclass
+class StreetReport:
+    """Every station considered, by what refused it."""
+
+    spots: list[StreetSpot] = field(default_factory=list)
+    stations: int = 0
+    restricted: int = 0
+    unnamed: int = 0
+    outside: int = 0
+    # Edges refused whole, before any station.
+    bus_lane_edges: int = 0
+    fast_edges: int = 0
+
+
 @dataclass
 class FareReport:
     nodes: list[FareNode] = field(default_factory=list)
@@ -145,6 +189,7 @@ class FareReport:
     # any node reached for its name — not stored on the node, so kept here.
     places_read: int = 0
     worst_place_m: float = 0.0
+    street: StreetReport = field(default_factory=StreetReport)
 
     @property
     def placed(self) -> int:
@@ -268,8 +313,114 @@ def build_region(
             )
             report.add(node, category, snap.distance_m)
 
+    if style.street is not None and places:
+        level0 = [edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0]
+        report.street = street_spots(
+            level0, style.street, places, style.places.max_distance_m, (far_x, far_z)
+        )
+
     _write(out_dir, city, region_id, report)
     return report
+
+
+def street_spots(
+    edges: Sequence[dict[str, Any]],
+    spec: StreetSpots,
+    places: Sequence[Place],
+    max_place_m: float,
+    region_high: tuple[float, float],
+) -> StreetReport:
+    """Every kerb station a cab may stop at for a passenger beside a building.
+
+    Stations run every `spacing_m` along each edge, `junction_clear_m` in from
+    both ends and centred in what that leaves, on each side traffic keeps to:
+    the nearside of a one-way edge, both of a two-way one. A station is refused
+    when any `kerbside` run on its side reaches within half `stop_length_m`,
+    and when no named footprint lies within `max_place_m` of its kerb.
+    """
+    report = StreetReport()
+    tree = shapely.STRtree([place.footprint for place in places])
+    for edge in edges:
+        polyline = np.asarray(edge["polyline"], dtype=np.float64)
+        if len(polyline) < 2:
+            continue
+        if edge.get("bus_lane"):
+            report.bus_lane_edges += 1
+            continue
+        if float(edge.get("speed_limit_kph") or 0.0) > spec.max_speed_limit_kph:
+            report.fast_edges += 1
+            continue
+        cumulative = plan_lengths(polyline)
+        length = float(cumulative[-1])
+        usable = length - 2.0 * spec.junction_clear_m
+        if usable < 0.0:
+            continue
+        count = int(usable // spec.spacing_m) + 1
+        first = spec.junction_clear_m + (usable - (count - 1) * spec.spacing_m) / 2.0
+        sides = [NEARSIDE] if edge.get("direction") != "both" else [NEARSIDE, OFFSIDE]
+        half_width = float(edge.get("width_m") or 0.0) / 2.0
+        half_stop = spec.stop_length_m / 2.0
+        for station in range(count):
+            along = first + station * spec.spacing_m
+            centre, left = _station(polyline, cumulative, along)
+            for side in sides:
+                report.stations += 1
+                if any(
+                    run["side"] == side
+                    and run["from_m"] < along + half_stop
+                    and run["to_m"] > along - half_stop
+                    for run in edge.get("kerbside", ())
+                ):
+                    report.restricted += 1
+                    continue
+                kerb = centre + left * (half_width if side == NEARSIDE else -half_width)
+                x, z = float(kerb[0]), float(kerb[2])
+                if not (0.0 <= x <= region_high[0] and 0.0 <= z <= region_high[1]):
+                    report.outside += 1
+                    continue
+                place = _nearest_in(tree, places, x, z, max_place_m)
+                if place is None:
+                    report.unnamed += 1
+                    continue
+                report.spots.append(
+                    StreetSpot(
+                        id=_STREET_ID_FORMAT.format(len(report.spots) + 1),
+                        pos=(x, float(kerb[1]), z),
+                        nearest_edge=int(edge["id"]),
+                        edge_t=round(along / length, 6),
+                        side=side,
+                        place={"en": place.name_en, "zh": place.name_zh},
+                    )
+                )
+    return report
+
+
+def _station(
+    polyline: np.ndarray, cumulative: np.ndarray, along: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """The centreline point `along` plan metres in, and the unit left of travel
+    there — `Snap.offset_m`'s normal, `(step_z, -step_x)`."""
+    index = int(np.clip(np.searchsorted(cumulative, along, side="right") - 1, 0, len(polyline) - 2))
+    start, end = polyline[index], polyline[index + 1]
+    span = float(cumulative[index + 1] - cumulative[index])
+    fraction = 0.0 if span <= 0.0 else (along - float(cumulative[index])) / span
+    step = end - start
+    norm = float(np.hypot(step[0], step[2])) or 1.0
+    left = np.array([step[2] / norm, 0.0, -step[0] / norm])
+    return start + step * fraction, left
+
+
+def _nearest_in(
+    tree: shapely.STRtree, places: Sequence[Place], x: float, z: float, max_distance_m: float
+) -> Place | None:
+    """`nearest_place` with no text to name one, through an index: a region has
+    a thousand footprints and a thousand stations."""
+    point = shapely.Point(x, z)
+    found = tree.query(point, predicate="dwithin", distance=max_distance_m)
+    if len(found) == 0:
+        return None
+    candidates = [places[int(index)] for index in sorted(found)]
+    return nearest_place(x, z, candidates, max_distance_m)
 
 
 def _node(
@@ -504,6 +655,20 @@ def _write(out_dir: Path, city: Config, region_id: str, report: FareReport) -> i
             }
             for node in report.nodes
         ],
+        "street": [
+            {
+                "id": spot.id,
+                "pos": round_position(spot.pos),
+                "kind": STREET,
+                "nearest_edge": spot.nearest_edge,
+                "edge_t": spot.edge_t,
+                "side": spot.side,
+                "pickup": True,
+                "dropoff": True,
+                "place": spot.place,
+            }
+            for spot in report.street.spots
+        ],
     }
     return write_document(out_dir / FARES_NAME, document)
 
@@ -556,6 +721,19 @@ def main(argv: list[str] | None = None) -> int:
             len(report.nodes),
             report.places_read,
             report.worst_place_m,
+        )
+    street = report.street
+    if city.fares.street is not None:
+        log.info(
+            "  street: %d spots of %d stations (%d restricted, %d with no building, %d outside);"
+            " edges refused: %d bus lane, %d over the speed bar",
+            len(street.spots),
+            street.stations,
+            street.restricted,
+            street.unnamed,
+            street.outside,
+            street.bus_lane_edges,
+            street.fast_edges,
         )
     return 0
 

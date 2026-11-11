@@ -15,6 +15,7 @@ from pipeline.config_blocks.base import (
     SourceLayer,
     _field,
     _fields,
+    _measures,
     _require,
     _source_layer,
     _spec_header,
@@ -168,6 +169,32 @@ class Places(LayerSpec):
 
 
 @dataclass(frozen=True)
+class StreetSpots:
+    """Where a passenger may flag a cab off a stand (the user's ask, 2026-11-12).
+
+    Hong Kong lets a taxi pick up and set down at any kerb a restriction does
+    not cover, so a street spot is a station along a level-0 edge's kerb that
+    no no-stopping run (`kerbside`, double OR single: no run carries its hours)
+    reaches, on a road with no bus lane and no limit above
+    `max_speed_limit_kph`, clear of the edge's ends by `junction_clear_m`, and
+    beside a named building (`places`) — a passenger says where they are by
+    the building. Published under `fares.json`'s `street` key, not `nodes`, so
+    the stages that read the published points (`parked`, `tramlines`, the
+    spawn) never see one.
+    """
+
+    # One station per side every this many metres along the edge.
+    spacing_m: float
+    # No station nearer an edge's end than this: a junction mouth.
+    junction_clear_m: float
+    # The kerb a stopped taxi takes, centred on the station: a run inside it
+    # refuses the station.
+    stop_length_m: float
+    # Roads faster than this are not kerbs a cab stops at.
+    max_speed_limit_kph: float
+
+
+@dataclass(frozen=True)
 class Fares:
     """How `P1-5` turns published point datasets into fare nodes."""
 
@@ -180,6 +207,8 @@ class Fares:
     null_values: tuple[str, ...]
     # Optional: a city with no building-name table publishes `place: null`.
     places: Places | None
+    # Optional: no `street:` block publishes `street: []`.
+    street: StreetSpots | None = None
 
 
 def _fares(body: dict[str, Any], where: str) -> Fares:
@@ -201,7 +230,17 @@ def _fares(body: dict[str, Any], where: str) -> Fares:
         max_snap_m=max_snap_m,
         null_values=tuple(str(value) for value in (body.get("null_values") or ())),
         places=_places(body.get("places"), f"{where}:places"),
+        street=_street(body.get("street"), f"{where}:street"),
     )
+
+
+def _street(body: Any, where: str) -> StreetSpots | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    known = ("spacing_m", "junction_clear_m", "stop_length_m", "max_speed_limit_kph")
+    return StreetSpots(**_measures(body, where, known, positive=True))
 
 
 def _places(body: Any, where: str) -> Places | None:

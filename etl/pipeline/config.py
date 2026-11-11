@@ -111,6 +111,7 @@ from pipeline.config_blocks.fares import (  # noqa: F401
     FareGroup,
     Fares,
     Places,
+    StreetSpots,
     _check_categories_are_reachable,
     _fare_group,
     _fares,

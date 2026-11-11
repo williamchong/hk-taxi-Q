@@ -949,6 +949,17 @@ class TestValidation:
             "1 fare nodes name an edge roadgraph.json does not have: ['f_001']"
         ]
 
+    def test_a_street_spot_naming_an_edge_the_graph_lost(self, region) -> None:
+        """A street spot names its edge the way a node does, and goes stale the
+        same way."""
+        region.build()
+        node = dict(region.documents[FARES_NAME]["nodes"][0])
+        region.documents[FARES_NAME]["street"] = [{**node, "id": "s_0001", "nearest_edge": 999}]
+
+        assert region.check() == [
+            "1 fare nodes name an edge roadgraph.json does not have: ['s_0001']"
+        ]
+
     def test_an_edge_t_off_the_end_of_its_edge(self, region) -> None:
         region.build()
         region.documents[FARES_NAME]["nodes"][0]["edge_t"] = 1.5

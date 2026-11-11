@@ -1,11 +1,12 @@
 extends "res://tools/verify_tool.gd"
 
-## The fare loop's contracts (`P3-1a`, `Q141`): the tariff's arithmetic, the two
-## pools, every pickup's reach, the allowance, and the state machine driven by
-## synthetic samples — dwells and bars from both sides, and every counter moved.
+## The fare loop's contracts (`P3-1a`, `Q141`): the tariff's arithmetic, the
+## pools, the waiting customers and where each is going (`Q203`), the
+## allowance, and the state machine driven by synthetic samples — dwells and
+## bars from both sides, and every counter moved.
 ##
 ## Runs once per synced region (`check.sh`'s `VERIFY_TOOLS`): the pools and the
-## reach are that region's `fares.json` against its graph, and the stand with
+## pairs are that region's `fares.json` against its graph, and the stand with
 ## no legal destination at `min_trip_m` is a finding about the data, named.
 ##
 ## ⚠️ **The assertions are written so they can fail** (`Q72`). Each table is
@@ -111,7 +112,7 @@ func _init() -> void:
 
 	_check_tariff()
 	_check_pools()
-	_check_reach()
+	_check_pairs()
 	_check_allowance()
 	_check_loop()
 	_check_beep()
@@ -201,13 +202,24 @@ func _check_tariff() -> void:
 func _check_pools() -> void:
 	var system: FareSystem = _system(_fares, _profile, SEED)
 	_expect(system.usable(), "pools", "the shipped tables construct a usable system")
-	var pickups: Array[Fare.Stop] = system.pickups()
+	# Every stop a customer may wait at: the pool now, and what drawing stranded.
+	var pickups: Array[Fare.Stop] = system.pool() + system.stranded
 	var dropoffs: Array[Fare.Stop] = system.dropoffs()
+	var street: int = 0
+	for stop: Fare.Stop in dropoffs:
+		if str(stop.node.get("kind", "")) == GeneratedFares.STREET:
+			street += 1
 	print(
 		(
-			"  pools: %d pickups, %d destinations, %d stranded"
-			% [pickups.size(), dropoffs.size(), system.stranded.size()]
+			"  pools: %d pickups, %d destinations (%d street), %d stranded"
+			% [pickups.size(), dropoffs.size(), street, system.stranded.size()]
 		)
+	)
+	var published: int = (_fares.get("street", []) as Array).size()
+	_expect(
+		street > 0 or published == 0,
+		"pools",
+		"%d of the document's %d street spots are destinations" % [street, published]
 	)
 	_expect(not dropoffs.is_empty(), "pools", "the destination pool is non-empty")
 	# A region every pickup of which is stranded has an empty pool by the reach
@@ -250,7 +262,7 @@ func _check_pools() -> void:
 	)
 	var probe: FareSystem = _system(smuggled, _profile, SEED)
 	_expect(
-		probe.pickups().size() == pickups.size(),
+		probe.pool().size() + probe.stranded.size() == pickups.size(),
 		"pools",
 		"mutation caught: a drop-off-only point, a tram stop and a cross-harbour stand hail nobody"
 	)
@@ -262,92 +274,117 @@ func _check_pools() -> void:
 	probe.free()
 
 
-## The reach table: who is stranded and why it costs what it costs, and that
-## a seeded draw at every shipped pickup lands a destination at the bar.
-func _check_reach() -> void:
+## The waiting customers (`Q203`): as many as `live_pickups` asks, each paired
+## with a destination the legal network reaches at the bar, no stranded kerb
+## among them; the street share's off switch; and a bar past every route
+## stranding the whole pool.
+func _check_pairs() -> void:
 	var system: FareSystem = _system(_fares, _profile, SEED)
-	var pickups: Array[Fare.Stop] = system.pickups()
-	var dropoffs: Array[Fare.Stop] = system.dropoffs()
+	var waiting: Array[Fare.Stop] = system.pickups()
 	var names: PackedStringArray = []
 	for stop: Fare.Stop in system.stranded:
 		names.append(stop.id)
-	var least: int = dropoffs.size()
-	var total: int = 0
-	for pickup: Fare.Stop in pickups:
-		var count: int = system.reach_of(pickup)
-		least = mini(least, count)
-		total += count
+	var on_street: int = 0
+	for stop: Fare.Stop in waiting:
+		if str(stop.node.get("kind", "")) == GeneratedFares.STREET:
+			on_street += 1
 	print(
 		(
-			"  reach: %d pickups reach %d destinations (least %d, mean %.1f); %d stranded [%s]; %.1f ms"
+			"  pairs: %d waiting (%d on the street) of %d pickups; %d stranded [%s]; %.1f ms"
 			% [
-				pickups.size(),
-				dropoffs.size(),
-				least,
-				float(total) / maxf(float(pickups.size()), 1.0),
+				waiting.size(),
+				on_street,
+				system.pool().size(),
 				names.size(),
 				", ".join(names),
-				system.reach_ms
+				system.pair_ms
 			]
 		)
 	)
-	_expect(least >= 1, "reach", "every shipped pickup reaches at least one destination")
+	_expect(
+		waiting.size() == mini(_profile.live_pickups, system.pool().size()),
+		"pairs",
+		(
+			"%d customers wait, as many as the pool allows of %d"
+			% [waiting.size(), _profile.live_pickups]
+		)
+	)
 	for stop: Fare.Stop in system.stranded:
-		for pickup: Fare.Stop in pickups:
+		for pickup: Fare.Stop in system.pool():
 			if pickup.same_as(stop):
-				_fail("reach", "%s is stranded and still in the pickup pool" % stop.id)
+				_fail("pairs", "%s is stranded and still in the pickup pool" % stop.id)
 
-	# Every shipped pickup draws, and what it draws is a legal route at the bar.
-	var refused: int = 0
+	# Every waiting customer is going somewhere, and that is a legal route at the
+	# bar by a router of the tool's own.
+	var unpaired: int = 0
 	var short: int = 0
 	var router: RoadRouter = RouterScript.new(_graph, RoadRouter.Profile.legal())
-	for pickup: Fare.Stop in pickups:
+	for pickup: Fare.Stop in waiting:
 		var chosen: Fare.Stop = system.pick_destination(pickup)
 		if chosen == null:
-			refused += 1
+			unpaired += 1
 			continue
 		var route: RoadRouter.Route = router.route(pickup.edge, pickup.t, chosen.edge, chosen.t)
 		if not route.found or route.distance_m < _profile.min_trip_m:
 			short += 1
-	_expect(refused == 0, "reach", "a seeded hail at every shipped pickup drew a destination")
+	_expect(unpaired == 0, "pairs", "every waiting customer knows where they are going")
 	_expect(
-		short == 0, "reach", "every draw is a legal route at %.0f m or more" % _profile.min_trip_m
+		short == 0, "pairs", "every pair is a legal route at %.0f m or more" % _profile.min_trip_m
 	)
 	system.free()
 
-	# Mutation: a bar past every route strands every pickup and empties the pool.
+	# The off switch: no share, no customer on the street.
+	var published_only: FareProfile = _profile.duplicate()
+	published_only.street_share = 0.0
+	var kerbless: FareSystem = _system(_fares, published_only, SEED)
+	var street_drawn: int = 0
+	for pickup: Fare.Stop in kerbless.pickups():
+		for stop: Fare.Stop in [pickup, kerbless.pick_destination(pickup)]:
+			if stop != null and str(stop.node.get("kind", "")) == GeneratedFares.STREET:
+				street_drawn += 1
+	_expect(
+		street_drawn == 0,
+		"pairs",
+		"street_share 0 draws no street spot, waiting or bound (%d)" % street_drawn
+	)
+	kerbless.free()
+
+	# Mutation: a bar past every route strands every pickup and leaves no one
+	# waiting. The published points alone, so the tool does not pay 24 draws a
+	# street spot to prove the same rule.
+	var published_nodes: Dictionary = {"nodes": _fares.get("nodes", [])}
 	var unreachable: FareProfile = _profile.duplicate()
 	unreachable.min_trip_m = 1.0e9
-	var mutated: FareSystem = _system(_fares, unreachable, SEED)
+	var counted: FareSystem = _system(published_nodes, _profile, SEED)
+	var hailable: int = counted.pool().size() + counted.stranded.size()
+	counted.free()
+	var mutated: FareSystem = _system(published_nodes, unreachable, SEED)
 	_expect(
-		mutated.pickups().is_empty() and mutated.stranded.size() == pickups.size() + names.size(),
-		"reach",
+		mutated.pickups().is_empty() and mutated.stranded.size() == hailable,
+		"pairs",
 		"mutation caught: a bar past every route strands all %d pickups" % mutated.stranded.size()
 	)
 	mutated.free()
 
 
-## Both branches of the allowance. A pure function of the profile, so the
-## system is built over no nodes: no reach table to pay for.
+## The allowance is the legal route at par and nothing else (the user's call,
+## 2026-11-12): no floor on a short trip. A pure function of the profile, so
+## the system is built over no nodes: no customer to draw.
 func _check_allowance() -> void:
 	var system: FareSystem = _system({"nodes": []}, _profile, SEED)
 	var per_s: float = _profile.par_kph / 3.6
 	_expect(
-		is_equal_approx(
-			system.allowance_for(Fare.Kind.SHORT_HOP, 100.0), _profile.short_hop_floor_s
-		),
+		is_equal_approx(system.allowance_for(_profile.min_trip_m), _profile.min_trip_m / per_s),
 		"allowance",
-		"100 m short hop takes the floor"
+		(
+			"the shortest trip, %.0f m, is priced at par with no floor (%.1f s)"
+			% [_profile.min_trip_m, _profile.min_trip_m / per_s]
+		)
 	)
 	_expect(
-		is_equal_approx(system.allowance_for(Fare.Kind.STANDARD, 100.0), _profile.standard_floor_s),
+		is_equal_approx(system.allowance_for(2000.0), 2000.0 / per_s),
 		"allowance",
-		"100 m standard takes its own floor"
-	)
-	_expect(
-		is_equal_approx(system.allowance_for(Fare.Kind.STANDARD, 2000.0), 2000.0 / per_s),
-		"allowance",
-		"2,000 m standard is priced at par (%.1f s)" % (2000.0 / per_s)
+		"2,000 m is priced at par (%.1f s)" % (2000.0 / per_s)
 	)
 	system.free()
 
@@ -384,6 +421,14 @@ func _check_loop() -> void:
 	_expect(system.state == FareSystem.State.BOARDING, "loop", "0.75 s in, still boarding")
 	_tick(system, pickup.point, CRAWL, 1)
 	_expect(system.state == FareSystem.State.CARRYING, "loop", "1.0 s in, the passenger is aboard")
+	var still_waiting: bool = false
+	for stop: Fare.Stop in system.pickups():
+		still_waiting = still_waiting or stop.same_as(pickup)
+	_expect(
+		not still_waiting and system.pick_destination(pickup) == null,
+		"loop",
+		"the passenger aboard no longer waits at the kerb (%d waiting)" % system.pickups().size()
+	)
 	_expect(
 		is_equal_approx(system.fare.remaining_s, system.fare.allowance_s),
 		"loop",
@@ -404,6 +449,11 @@ func _check_loop() -> void:
 	_tick(system, destination.point, CRAWL, 1)
 	_expect(system.state == FareSystem.State.IDLE, "loop", "stopping at the destination delivers")
 	_expect(system.deliveries == 1, "loop", "deliveries counted")
+	_expect(
+		system.pickups().size() == mini(_profile.live_pickups, system.pool().size()),
+		"loop",
+		"the fare's end drew a replacement: %d waiting again" % system.pickups().size()
+	)
 	# The pending customer a reader may point at is never the stand the car
 	# is disarmed on (the user's call): a delivery at a stand that is also a
 	# pickup would otherwise aim the arrow at the kerb under the car.
@@ -491,9 +541,21 @@ func _check_loop() -> void:
 	)
 	var banked_fast: float = system.fare.banked_hkd
 
-	# Delivered at the same stand, the car cannot hail again until it has left.
+	# Stopped where the fare ended, nobody is hailed: no customer is drawn in
+	# reach of it (`Q203`), and one already waiting there finds the hail
+	# disarmed until the car has left.
+	var waiting_here: bool = false
+	for stop: Fare.Stop in system.pickups():
+		waiting_here = (
+			waiting_here
+			or RoadGraph.plan_distance(stop.point, destination.point) <= _profile.hail_radius_m
+		)
 	_tick(system, destination.point, CRAWL, 2)
-	_expect(not system.armed(), "loop", "a fare cannot start where the last one ended")
+	_expect(
+		system.state == FareSystem.State.IDLE and (not waiting_here or not system.armed()),
+		"loop",
+		"a fare cannot start where the last one ended (a customer in reach: %s)" % waiting_here
+	)
 	_tick(system, FAR_AWAY, FAST, 1)
 	_expect(system.armed(), "loop", "leaving every stand re-arms the hail")
 	system.free()
@@ -1928,7 +1990,7 @@ func _check_close() -> void:
 		"close",
 		"reset empties the run and opens it"
 	)
-	_tick(last, pickup.point, CRAWL, 1)
+	_tick(last, last.pickups()[0].point, CRAWL, 1)
 	_expect(last.state == FareSystem.State.BOARDING, "close", "and the next run hails again")
 	last.free()
 
@@ -2071,7 +2133,7 @@ func _check_tally() -> void:
 	)
 
 	# The floor: a debt bigger than the time. The page still closes.
-	_armed_again(system, pickup)
+	_armed_again(system)
 	for crash: int in 3:
 		_hit(system, _skills.crash_min_kph)
 		_tick(system, FAR_AWAY, FAST, cool_ticks)
@@ -2092,7 +2154,7 @@ func _check_tally() -> void:
 	# A walked fare: on the count, off the money, its loss on its own line.
 	var before_bonus: float = tally.bonus_hkd()
 	var before_earned: float = system.earned_hkd
-	_armed_again(system, pickup)
+	_armed_again(system)
 	_slide(system, FAST, threshold, drift_ticks)
 	_slide(system, FAST, 0.0, 1)
 	var lost: float = system.fare.meter.reading_hkd() + maxf(system.fare.skills_hkd, 0.0)
@@ -2158,10 +2220,11 @@ func _check_tally() -> void:
 	system.free()
 
 
-## Clear of the last stop and back to `pickup`, boarded again.
-static func _armed_again(system: FareSystem, pickup: Fare.Stop) -> void:
+## Clear of the last stop and on to a customer waiting now, boarded again: the
+## one the last fare took is off the kerb (`Q203`).
+static func _armed_again(system: FareSystem) -> void:
 	_tick(system, FAR_AWAY, CRAWL, 2)
-	_tick(system, pickup.point, CRAWL, 5)
+	_tick(system, system.pickups()[0].point, CRAWL, 5)
 
 
 ## `_pass`'s swerve at `clearance_m`, through `system.sample` so the tally sees it.

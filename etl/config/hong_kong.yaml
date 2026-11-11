@@ -4517,6 +4517,21 @@ fares:
     # the name is looked for in it. Full-width letters, as the publisher types them.
     block_suffix: "\\s*(Tower|Block)\\s+[A-Z0-9-]+$|[Ａ-Ｚ0-9—-]+座$"
 
+  # Street hails (the user's ask, 2026-11-12): a passenger at any kerb no
+  # restriction covers, beside a named building, on a road with no bus lane.
+  # Every no-stopping run refuses, single as well as double, because `NSR`'s
+  # hours are not carried into `roadgraph.json`. The level-0 roads over 50 kph
+  # here are Gloucester Road, the Wan Chai Interchange and the Cross Harbour
+  # Tunnel approach (measured 2026-11-12): trunk roads a cab does not pull in
+  # on. The three distances are first guesses ahead of a drive: 60 m between
+  # stations, 20 m off an edge's end to stay out of a junction mouth, and a
+  # 12 m stop — a cab and its doors — so a run within 6 m either side refuses.
+  street:
+    spacing_m: 60.0
+    junction_clear_m: 20.0
+    stop_length_m: 12.0
+    max_speed_limit_kph: 50.0
+
   groups:
     - kind: taxi_stand
       source: taxi_stands

@@ -30,12 +30,17 @@ const PATH: String = "res://tuning/fares.tres"
 @export var min_trip_m: float
 ## The speed the allowance is priced at over the legal route, in km/h.
 @export var par_kph: float
-## The least allowance a short hop (a `pudo` destination) gets, in seconds.
-@export var short_hop_floor_s: float
-## The least allowance a standard fare (a `taxi_stand` destination) gets, in
-## seconds.
-@export var standard_floor_s: float
 ## What each second left on the allowance at delivery pays as a tip, in HK$.
 @export var tip_hkd_per_s: float
 ## How often the loop samples the car against the graph, in hertz.
 @export var sample_hz: float
+## How many customers wait at once: the pickups drawn, each with its
+## destination, and replaced as one boards.
+@export var live_pickups: int
+## The share of draws — a waiting customer and a destination alike — taken
+## from the street spots rather than the published stands and PUDO points.
+## 0 draws none: the off switch.
+@export var street_share: float
+## How many destinations a waiting customer is offered before its kerb is
+## given up as stranded.
+@export var pair_tries: int

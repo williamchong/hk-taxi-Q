@@ -28,6 +28,9 @@ const SCHEMA_VERSION: int = 1
 const TAXI_STAND: String = "taxi_stand"
 const PUDO: String = "pudo"
 const POI: String = "poi"
+## A street spot's `kind`, under the document's `street` key rather than
+## `nodes`: a kerb a passenger flags a cab at, off any published point.
+const STREET: String = "street"
 
 ## The `stand_category` the game treats specially — `docs/GAME_DESIGN.md` makes
 ## it the premium fare. Every other category is an ordinary stand.

@@ -961,6 +961,7 @@ func _unfollow_fares() -> void:
 		fares.meter_changed.disconnect(_on_meter_changed)
 		fares.skilled.disconnect(_on_fare_skilled)
 		fares.practised.disconnect(_on_fare_practised)
+		fares.pickups_changed.disconnect(_on_pickups_changed)
 
 
 ## Read the new system: its pool onto the map, its samples into the face.
@@ -982,6 +983,13 @@ func _follow_fares() -> void:
 	fares.meter_changed.connect(_on_meter_changed)
 	fares.skilled.connect(_on_fare_skilled)
 	fares.practised.connect(_on_fare_practised)
+	fares.pickups_changed.connect(_on_pickups_changed)
+	_on_pickups_changed()
+
+
+## The waiting customers onto the map: a handful, re-pinned whenever the loop
+## draws a new one or one boards (`FareSystem.pickups_changed`).
+func _on_pickups_changed() -> void:
 	if _minimap != null:
 		var points := PackedVector3Array()
 		for stop: Fare.Stop in fares.pickups():

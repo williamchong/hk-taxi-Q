@@ -1141,7 +1141,9 @@ def _check_fares(fares: dict, graph: dict) -> list[str]:
     # writes the field on every edge and `read_document` refuses any roadgraph at
     # another `schema_version`, so the strict read is also the accurate one.
     levels = {int(edge["id"]): int(edge["elevation_level"]) for edge in graph.get("edges", [])}
-    nodes = fares.get("nodes", [])
+    # The street spots (`StreetSpots`) name edges the same way and go stale the
+    # same way, so they are held to the same three checks.
+    nodes = fares.get("nodes", []) + fares.get("street", [])
     # Counted, like every other check here. This is the one failure that fires
     # on every node at once — renumber the edges and none of them resolve — so
     # listing them would bury the other findings under the region's node count.

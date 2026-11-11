@@ -30,8 +30,8 @@ var _profile: FareGuideProfile = null
 var _target: FareFace.Target = FareFace.Target.new()
 var _arrow: MeshInstance3D = null
 var _ring: MeshInstance3D = null
-## One ring per pending customer, as one multimesh: shown while no one is
-## aboard, pulsed with the destination's.
+## One ring per waiting customer (`FareSystem.pickups`), as one multimesh:
+## shown while no one is aboard, pulsed with the destination's.
 var _pending: MultiMeshInstance3D = null
 var _pending_at: PackedVector3Array = PackedVector3Array()
 ## Indices into `_pending_at` drawn at zero scale: `FareSystem.withheld_pickups`.
@@ -77,6 +77,21 @@ func _ready() -> void:
 	var pending: Color = _profile.pending_colour
 	pending.a = _profile.ring_alpha
 	_pending_material.albedo_color = pending
+	_place_pending()
+	visible = false
+	fares.sampled.connect(_on_sampled)
+	fares.pickups_changed.connect(_on_pickups_changed)
+	_on_sampled()
+
+
+## One ring per waiting customer, rebuilt whenever the loop's set of them
+## changes — a handful, so a rebuild is cheap and the frame loop below walks
+## only those.
+func _place_pending() -> void:
+	var shown: bool = _pending != null and _pending.visible
+	if _pending != null:
+		_pending.queue_free()
+	_pending_at = PackedVector3Array()
 	var placed: Array[Transform3D] = []
 	for stop: Fare.Stop in fares.pickups():
 		var at: Vector3 = stop.point + Vector3.UP * _profile.ring_lift_m
@@ -86,10 +101,12 @@ func _ready() -> void:
 	_pending.material_override = _pending_material
 	_pending.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_pending.top_level = true
-	_pending.visible = false
+	_pending.visible = shown and not _pending_at.is_empty()
 	add_child(_pending)
-	visible = false
-	fares.sampled.connect(_on_sampled)
+
+
+func _on_pickups_changed() -> void:
+	_place_pending()
 	_on_sampled()
 
 
