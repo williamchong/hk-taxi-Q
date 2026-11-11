@@ -215,6 +215,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q195` | A podium's cornice is drawn at iB1000's line and nowhere else | ✅ Shipped 2026-11-11 on the user's pick (0.28 at 0.5 m): 133 + 61 buildings, `COLOR_0.a`, schema 46. No shopfront, no invented line, no made-up podium colour. |
 | `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
 | `Q197` | A building's street band and podium take the survey's colour, weighed by its own noise | ✅ Shipped 2026-11-11 on the user's instruction and pick (noise-weighted over raw): 1,637 street bands and 87 podiums, cut on the finished tier; +16% Wan Chai triangles, +5.5 MB PCK. Reverses `Q193` on instruction. |
+| `Q201` | The chase camera sits lower, further back and narrower: 8.0 m, 0.9 m, −9°, 50° + 10° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
 
 ---
 
@@ -12562,3 +12563,29 @@ and night; the handset's frame time; and the three calls taken for him above.
 
 **See.** `P3-85` · `Q190` · `Q166` · `Q167` · `Q183` · `Q186` · `Q196` · `tools/make_parked.py` ·
 `etl/tests/test_make_parked.py` · `.claude/rules/parked.md` · `.claude/rules/signals.md`
+
+## `Q201` — The chase camera sits lower, further back and narrower
+
+**Status.** ✅ Built 2026-11-11 on the user's ask. The user's look owed.
+
+- Origin: the user found the taxi "too thin and long" on the chase camera and asked for a
+  third-person view like a common racing game's, keeping the way the car pulls away with speed.
+- Cause: `fov_base` 70° is a vertical angle — 102° across a 16:9 frame, 120° at the boosted 88° —
+  from a rig 3.4 m above the car's origin and 6.4 m behind it. The car sat 15° below the axis of a
+  wide lens, which stretches it along its length and tapers it to the nose.
+- `camera.tres`: `distance` 6.5 → 8.0, `height` 2.2 → 0.9, `pitch_deg` −10.3 → −9.0, `fov_base`
+  70 → 50, `fov_boost` 18 → 10. The camera stands 2.15 m above the car's origin (3.36 before).
+- ⚠️ The rig looks along its arm at the anchor, so the anchor is the centre of the frame and
+  `height` is what places the car in it: lowering `height` lifts the car up the frame, and
+  `pitch_deg` alone only raises the camera. A trial at `height` 1.3, `pitch_deg` −6 put the bumper
+  on the bottom edge at rest.
+- The pull-away with speed is kept and is two things, neither touched in kind: the FOV boost, and
+  `follow_response`'s lag (`v / k`: 2.2 m at 104 kph, so 8.0 m reads as 10.2). `follow_response`
+  and `yaw_response` are unchanged, so `Q98`'s yaw arithmetic stands.
+- Evidence: `build/driver/cam_sheet2.png` — the old rig and three candidates, each at rest and at
+  104 kph on the throttle route from the start line (`--traffic=off --fares=off`). Six framings
+  were shot; this is `E`.
+- Not done: no dial for a dolly-back with speed (the lag already is one), and the menu's shots
+  (`menu.tres`) carry their own distances and are unmoved.
+
+**See.** `Q98` · `P2-5` · `Q164` · `game/tuning/camera.tres` · `chase_profile.gd`

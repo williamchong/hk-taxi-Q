@@ -131,7 +131,7 @@ again by its own next sample.
 ## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
 
 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km
-far plane culls nothing at all, and a chase camera 6.5 m behind a car in a Wan
+far plane culls nothing at all, and a chase camera 8 m behind a car in a Wan
 Chai street canyon cannot see past a couple of blocks anyway. Measured: 94 draw
 calls and 2.06 M primitives at 2 km, against 48 and 1.16 M at 400 m, with
 nothing visible lost at street level.
