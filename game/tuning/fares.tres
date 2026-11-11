@@ -14,4 +14,3 @@ tip_hkd_per_s = 0.5
 sample_hz = 5.0
 live_pickups = 4
 street_share = 0.75
-pair_tries = 24

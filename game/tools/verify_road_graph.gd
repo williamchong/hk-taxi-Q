@@ -1049,6 +1049,7 @@ func _check_router(graph: RoadGraph, manifest: CityManifest) -> PackedStringArra
 	if pins.tied == 0:
 		problems.append("no one-way pair to tie route() to the table")
 	problems.append_array(_check_same_edge(graph, legal))
+	problems.append_array(_check_source_tree(legal))
 	print(
 		(
 			"  router[legal]: %d states, %d off-grade edges, %d pairs; %d pairs no longer than at the lane"
@@ -1135,6 +1136,59 @@ func _check_same_edge(graph: RoadGraph, router: RoadRouter) -> PackedStringArray
 			break
 	if not one_way_checked or not two_way_checked:
 		problems.append("no one-way and two-way edge pair to check the same-edge routes on")
+	return problems
+
+
+## `Q203`: the forward search agrees with `route` on every pair of a sample of
+## edges, both ways along each, the same edge included — found or not.
+func _check_source_tree(router: RoadRouter) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var edges: PackedInt32Array = router.admitted_edge_ids()
+	var sample: PackedInt32Array = []
+	var stride: int = maxi(1, floori(edges.size() / 40.0))
+	for i: int in range(0, edges.size(), stride):
+		sample.append(edges[i])
+	var trees: Array[RoadRouter.SourceTree] = []
+	for source: int in sample:
+		trees.append(router.source_tree(source, 0.7))
+	var pairs: int = 0
+	var unreached: int = 0
+	var worst_m: float = 0.0
+	for target: int in sample:
+		for to_t: float in [0.2, 0.9]:
+			for i: int in sample.size():
+				var by_route: RoadRouter.Route = router.route(sample[i], 0.7, target, to_t)
+				var by_tree: float = router.distance_from(trees[i], target, to_t)
+				pairs += 1
+				if not by_route.found:
+					unreached += 1
+					if by_tree != INF:
+						problems.append(
+							(
+								"e%d -> e%d: the forward search reaches what route() cannot"
+								% [sample[i], target]
+							)
+						)
+					continue
+				var gap: float = absf(by_tree - by_route.distance_m)
+				worst_m = maxf(worst_m, gap)
+				if gap > 1e-6:
+					problems.append(
+						(
+							"e%d -> e%d at %.1f: the forward search says %.3f m, route() %.3f m"
+							% [sample[i], target, to_t, by_tree, by_route.distance_m]
+						)
+					)
+		if problems.size() > 10:
+			break
+	if router.source_tree(-1, 0.5) != null:
+		problems.append("a forward search from an edge off the network")
+	print(
+		(
+			"  source trees: %d pairs from %d sources tied to route(), %d unreached, worst %f m"
+			% [pairs, sample.size(), unreached, worst_m]
+		)
+	)
 	return problems
 
 

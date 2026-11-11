@@ -24,19 +24,19 @@ extends Node
 ## on the merged runtime — too many to route every pair at load. So
 ## `live_pickups` of them are drawn, `street_share` of the draws from the
 ## street, and each is paired with its destination as it is drawn: a
-## destination drawn the same way, routed from the pickup, kept at
-## `min_trip_m` or beyond. `pickups()` is that live set; a boarding takes one
-## out and the fare's end draws its replacement, so a draw's run of `prepare`s
-## never lands mid-fare on the tree the car's route reads. The hail still pays
-## one `prepare` for its destination, the draw having churned the cache. Drawing blind and
+## destination drawn the same way from those one forward search from the
+## pickup reaches at `min_trip_m` or beyond (`RoadRouter.source_tree`, uncached,
+## so it evicts no prepared tree). `pickups()` is that live set; a boarding
+## takes one out and the fare's end draws its replacement. The hail pays one
+## `prepare` for its destination, as before. Drawing blind and
 ## retrying AT THE HAIL was built first and refused — a stand with one
 ## reachable destination was refused most of its hails; here a pickup that
 ## pairs with nothing is never shown.
 ##
 ## ⚠️ **"No route" is an answer** (`Q137`), and here it is a pool decision. 40%
 ## of ordered fare pairs in Wan Chai have none — the clip is not strongly
-## connected — and a pickup offered `pair_tries` destinations without one
-## landing is **stranded**: dropped from the pickup pool for the session, kept
+## connected — and a pickup the forward search reaches no destination from at
+## `min_trip_m` is **stranded**: dropped from the pickup pool for the session, kept
 ## as a destination, counted and named, never asserted. Found as it is drawn,
 ## not surveyed at load: the westbound Hennessy and Johnston Road points at the
 ## clip's west edge and Causeway Bay's far-side stands, where forward leaves
@@ -322,7 +322,6 @@ func setup(
 		"tip_hkd_per_s": profile.tip_hkd_per_s,
 		"sample_hz": profile.sample_hz,
 		"live_pickups": float(profile.live_pickups),
-		"pair_tries": float(profile.pair_tries),
 	}
 	if TuningTable.any_zero(profile, required, "FareSystem", "nothing will be hailed"):
 		return
@@ -697,22 +696,30 @@ func _refill() -> void:
 		pickups_changed.emit()
 
 
-## A destination for a customer at `pickup`: drawn like a pickup and kept where
-## the legal network reaches it at `min_trip_m` or beyond, up to `pair_tries`
-## draws; null when none landed.
+## A destination for a customer at `pickup`, drawn like a pickup from those the
+## legal network reaches at `min_trip_m` or beyond; null when it reaches none.
+## One forward search prices every destination (`RoadRouter.source_tree`), so a
+## stranded kerb costs one search, and a kerb that reaches few is never mistaken
+## for one that reaches none — drawing blind and routing each try did both.
 func _pair(pickup: Fare.Stop) -> Fare.Stop:
-	for _try: int in _profile.pair_tries:
-		var destination: Fare.Stop = _draw(_dropoffs, _dropoffs_street)
-		if destination == null:
-			return null
+	var tree: RoadRouter.SourceTree = _router.source_tree(pickup.edge, pickup.t)
+	if tree == null:
+		return null
+	return _draw(_reached(tree, pickup, _dropoffs), _reached(tree, pickup, _dropoffs_street))
+
+
+func _reached(
+	tree: RoadRouter.SourceTree, pickup: Fare.Stop, destinations: Array[Fare.Stop]
+) -> Array[Fare.Stop]:
+	var reached: Array[Fare.Stop] = []
+	for destination: Fare.Stop in destinations:
 		if destination.same_as(pickup):
 			continue
-		var route: RoadRouter.Route = _router.route(
-			pickup.edge, pickup.t, destination.edge, destination.t
-		)
-		if route.found and route.distance_m >= _profile.min_trip_m:
-			return destination
-	return null
+		var distance_m: float = _router.distance_from(tree, destination.edge, destination.t)
+		# INF clears any bar: "no route" has to be refused by name.
+		if distance_m != INF and distance_m >= _profile.min_trip_m:
+			reached.append(destination)
+	return reached
 
 
 ## One stop, uniformly on `_rng`: from `street` on `street_share` of the draws,

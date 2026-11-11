@@ -41,6 +41,3 @@ const PATH: String = "res://tuning/fares.tres"
 ## from the street spots rather than the published stands and PUDO points.
 ## 0 draws none: the off switch.
 @export var street_share: float
-## How many destinations a waiting customer is offered before its kerb is
-## given up as stranded.
-@export var pair_tries: int

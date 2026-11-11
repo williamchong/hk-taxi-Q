@@ -135,6 +135,17 @@ class GoalTree:
 	var next: PackedInt32Array = PackedInt32Array()
 
 
+## The forward search from one source point: what driving from it to each
+## state's entry costs, so that `route`'s distance to every destination is a
+## lookup (`distance_from`).
+class SourceTree:
+	extends RefCounted
+
+	var edge_id: int = -1
+	var t: float = 0.0
+	var to_entry: PackedFloat64Array = PackedFloat64Array()
+
+
 ## How many destinations' trees are kept. A fare has one; the cap only bounds a
 ## caller that prepares many.
 const TREE_CACHE: int = 8
@@ -336,6 +347,68 @@ func route(
 		result.forward.append(_state_forward[state])
 		state = tree.next[state]
 	return result
+
+
+## Search forward from a source point once, for a caller that asks one source
+## about many destinations (`FareSystem` pairing a customer, `Q203`): a reverse
+## tree each would be a search each, and evict the cache. Seeded from either way
+## along the source edge, as `route` with `Facing.EITHER`.
+##
+## Not cached. Null when the edge is not in this profile's network.
+func source_tree(edge_id: int, t: float) -> SourceTree:
+	if not _states_of.has(edge_id):
+		return null
+	var tree := SourceTree.new()
+	tree.edge_id = edge_id
+	tree.t = clampf(t, 0.0, 1.0)
+	var count: int = _state_edge.size()
+	tree.to_entry.resize(count)
+	tree.to_entry.fill(INF)
+	var length_m: float = _graph.plan_length_of(edge_id)
+	_heap_size = 0
+	for state: int in _states_of[edge_id]:
+		var along_edge: bool = _state_forward[state] == 1
+		var partial: float = ((1.0 - tree.t) if along_edge else tree.t) * length_m
+		for arc: int in range(_succ_start[state], _succ_start[state + 1]):
+			var onward: int = _succ[arc]
+			if partial < tree.to_entry[onward]:
+				tree.to_entry[onward] = partial
+				_push(partial, onward)
+	while _heap_size > 0:
+		var cost: float = _heap_cost[0]
+		var state: int = _heap_state[0]
+		_pop()
+		if cost > tree.to_entry[state]:
+			continue
+		# Leaving `state` costs its whole edge — the reverse search's convention,
+		# run forwards.
+		var through: float = cost + _length[state]
+		for arc: int in range(_succ_start[state], _succ_start[state + 1]):
+			var onward: int = _succ[arc]
+			if through < tree.to_entry[onward]:
+				tree.to_entry[onward] = through
+				_push(through, onward)
+	return tree
+
+
+## `route(tree.edge_id, tree.t, to_edge, to_t).distance_m` where a route is
+## found, INF where none is.
+func distance_from(tree: SourceTree, to_edge: int, to_t: float) -> float:
+	if not _states_of.has(to_edge):
+		return INF
+	var target_t: float = clampf(to_t, 0.0, 1.0)
+	var length_m: float = _graph.plan_length_of(to_edge)
+	var best: float = INF
+	for state: int in _states_of[to_edge]:
+		var along_edge: bool = _state_forward[state] == 1
+		# Staying on the source edge, where the destination lies ahead.
+		if to_edge == tree.edge_id:
+			var direct: float = (target_t - tree.t) if along_edge else (tree.t - target_t)
+			if direct >= 0.0:
+				best = minf(best, direct * length_m)
+		var into: float = (target_t if along_edge else 1.0 - target_t) * length_m
+		best = minf(best, tree.to_entry[state] + into)
+	return best
 
 
 ## `reachability.py`'s table, one column: the distance from every other edge in

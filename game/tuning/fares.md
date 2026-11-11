@@ -40,8 +40,8 @@ this the car may still be creeping into the kerb.
 ## `min_trip_m = 300.0`
 
 The shortest legal route a destination may be drawn at. `GAME_DESIGN.md` names 191 m as
-"barely a trip"; 300 m is a block and a turn. A pickup offered `pair_tries` destinations with
-none at this bar is **stranded** — dropped from the pickup pool as it is drawn, kept as a
+"barely a trip"; 300 m is a block and a turn. A pickup from which the legal network reaches
+no destination at this bar is **stranded** — dropped from the pickup pool as it is drawn, kept as a
 destination, and named by `verify_fares` and by the boot line. On the shipped regions that is three westbound points on
 Hennessy and Johnston Road at Wan Chai's west edge and two of Causeway Bay's far-side stands,
 whose forward direction leaves the clip; raising this bar strands more, and lowering it is not
@@ -87,10 +87,3 @@ spots (268 on the merged runtime) rather than the published stands and PUDO poin
 hailed at): three of four waiting customers flag a cab off a stand, and one in four still waits
 at a stand, which Hong Kong has plenty of. 0 is the off switch — the published points alone, as
 before `Q203` — and is why this is the one key `FareSystem` does not refuse at zero.
-
-## `pair_tries = 24`
-
-How many destinations a waiting customer is offered before its kerb is given up as stranded for
-the session. 40% of ordered pairs in Wan Chai have no legal route, so an ordinary pickup misses 24
-in a row about once in three billion draws (0.4²⁴); one at the clip's edge that reaches nothing costs 24
-`prepare`s, about 20 ms, once.
