@@ -369,6 +369,20 @@ func _check_style() -> void:
 		"style",
 		"the total's LED has a digit height and a segment weight under the meter's, and its cells"
 	)
+	# Its red is the meter's turned down, to tell the row from the tip's. The
+	# meter's own red clears its ghost by a hair over `MIN_CONTRAST`, so a
+	# dimmer one cannot hold that bar; it holds half, and stays under the lit.
+	var total_lit: Color = style.total_lit
+	_expect(
+		(
+			total_lit.r > total_lit.g * 2.0
+			and total_lit.r > total_lit.b * 2.0
+			and total_lit.get_luminance() < lit.get_luminance()
+			and _contrast(total_lit, style.meter_unlit) >= MIN_CONTRAST * 0.5
+		),
+		"style",
+		"the total's digits are a dimmer red than the meter's, and still off their ghost"
+	)
 	if (
 		style.timer_size <= 0
 		or style.timer_unit_size <= 0

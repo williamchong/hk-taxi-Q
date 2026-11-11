@@ -419,6 +419,8 @@ func _build() -> void:
 	_total = _seven_segment(
 		"TotalDigits", _style.total_digit_px, _style.total_segment_px, _style.total_cells
 	)
+	# The one LED off the meter's red: dimmer, to be told from the tip's.
+	_total.lit = _style.total_lit
 	total_row.add_child(_total)
 
 	_timer_box = HBoxContainer.new()

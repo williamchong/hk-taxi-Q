@@ -55,6 +55,7 @@ tip_segment_px = 5.0
 total_digit_px = 26.0
 total_segment_px = 5.0
 total_cells = 6
+total_lit = Color(0.65, 0.143, 0.078, 1)
 timer_size = 84
 timer_unit_size = 22
 timer_unit_gap = 4

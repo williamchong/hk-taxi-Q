@@ -115,6 +115,16 @@ digit, and a session passes HK$9,999.9 long before a fare does. The three
 rows share one stack as wide as the fare's row, the small LEDs ending where
 the fare's does, the way a meter's columns line up.
 
+## `total_lit = Color(0.65, 0.143, 0.078, 1)`
+
+The total's lit segments: `meter_lit` at 65% (the user's ask, 2026-11-11: a
+dimmer red, so the row differs from the tip's by more than its chip). Picked
+from frames at 100 / 80 / 65 / 50%: 80 is hard to tell from the tip beside
+it, 50 starts to sink into the ghost. The ghost stays `meter_unlit`.
+⚠️ `meter_lit` clears its ghost by 0.306 of luminance against
+`verify_hud`'s 0.30, so no dimmer red can hold the meter's bar; this one
+clears 0.17 and the check holds it to half the bar and under the meter's red.
+
 ## `timer_outline_px = 6`
 
 The tip clock has no housing (`Q142`, the user's call: the countdown in the

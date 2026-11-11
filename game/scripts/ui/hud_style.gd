@@ -205,6 +205,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var total_digit_px: float
 @export var total_segment_px: float
 @export var total_cells: int
+## The total's lit segments: the meter's red turned down, so the row is told
+## from the tip's above it by more than its chip.
+@export var total_lit: Color
 ## The tip clock: seconds left on the allowance, red under `timer_warn_s`.
 @export var timer_size: int
 @export var timer_unit_size: int
