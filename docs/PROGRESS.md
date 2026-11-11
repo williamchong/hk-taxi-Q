@@ -404,7 +404,7 @@ and there in the same change.
 - `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the border arrow are the user's calls; the one-way arrows are off (2026-09-24). Owed the user: a drive; `span_m`. Owed: the web frame.
 - `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. The four stranded pickups (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`) are closed as the data's (2026-10-15): one-way exits off the map, reopened only by `Q6`.
 - `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
-- `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The user's drive owed.
+- `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The session's total on a third LED row, six cells, tip and total right-aligned under the fare (user, 2026-11-11; 200 `draws` before and after). The user's drive owed.
 - `Q140` The harbour (user; `P3-45`): on the minimap with `P3-44`, in the world as a plane at sea level over ground the tile stage sinks (2026-09-25). The user's frame owed.
 - `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
 - `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):

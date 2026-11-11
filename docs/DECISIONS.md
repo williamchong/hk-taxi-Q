@@ -7189,6 +7189,17 @@ legal route to the fare's destination is drawn on the minimap — `P3-46`, the s
   before the dial existed. Both sides of an A/B are re-run together.
 - 🚫 White seven-segment for the speed: consistent, and the language of an instrument the speed
   is not on. 🚫 A dot-matrix face for the street name: a fifth licence (`Q79`).
+- **The session's total on the LED too** (the user's ask, 2026-11-11). It was a label, "合計
+  HK$0.0", under the fare; it is a third `SevenSegment` at the tip's size (`total_digit_px` 26,
+  `total_segment_px` 5) with the chip "合計" / "TOTAL", "HK$" standing once on the fare's row.
+  `total_cells` is 6 against the fare's 5 — an overflowing sum drops its LEADING digit
+  (`SevenSegment.cells_of`) and free mode has no end; `verify_hud` refuses fewer cells than the
+  fare's. The three rows share one stack as wide as the fare's row and the small LEDs end where
+  the fare's does, which moved the tip row from centred to right-aligned. Idle at
+  `--spawn-fare=wan_chai/f_025`, both sides run together: **200 `draws` before and after** (163
+  at `--hud=off`), `prims` 1,349,922 → 1,350,080. ⚠️ Tip and total are now two identical red
+  rows told apart by their chips alone; seen only reading 0.0, no scripted run having banked a
+  delivery. The user's drive owed.
 
 **See.** `Q80` · `Q136` · `Q138` · `Q79` · `game/tuning/hud_style.md`
 
