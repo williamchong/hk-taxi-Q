@@ -445,13 +445,34 @@ class Proportions:
     high_brake_half_width_m: float = 0.18
     high_brake_half_height_m: float = 0.022
     high_brake_rise_m: float = 0.055
-    # Registration plates. Blank rectangles, not lettering: the characters were
+    # Registration plates. Blank rectangles in `taxi_parts`: the characters were
     # a texture, and a pixel font is the one thing on the car that does not
     # belong in a flat-shaded city. Colour still carries the information a plate
     # carries here — Hong Kong follows the UK, white at the front and yellow at
     # the rear — so the two ends stay told apart without a glyph.
     plate_half_width_m: float = 0.17
     plate_half_height_m: float = 0.055
+    # ⚠️ The player's car carries characters again since `Q202`, as flat strokes
+    # (`_text`) and still no texture: at the chase camera's 6 m the blank plate
+    # and the blank roof sign were the two largest unfinished faces on screen.
+    # The roster's taxis stay blank — they would all wear this one mark.
+    # A made-up mark in the Hong Kong form, two letters and up to four digits.
+    plate_text: str = "TX 852"
+    plate_glyph_height_m: float = 0.066
+    # The roof sign reads the same fore and aft.
+    sign_text: str = "的 TAXI 士"
+    sign_glyph_height_m: float = 0.075
+    # Width of a stroke, the gap between two glyphs and the width of a space
+    # (the last two as shares of the glyph height), and how far the strokes
+    # stand off the face they are on — paint, as the shut lines are.
+    glyph_stroke_m: float = 0.012
+    glyph_gap: float = 0.22
+    glyph_space: float = 0.45
+    glyph_proud_m: float = 0.003
+    # The boot lid's seam on the deck: across behind the backlight, and back
+    # down each side to the tail in line with the tail lamps' inner edges. As
+    # wide and as proud as a door shut line.
+    boot_seam_setback_m: float = 0.06
     # ⚠️ Both plate heights, and the badge below, are chosen to sit *above* the
     # sill tuck at `sill_y_m + bevel_m`. That is where the body stops sloping
     # gently and folds in hard, and `_seated_depth` answers a fixture spanning
@@ -1767,9 +1788,235 @@ def taxi_parts(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     return parts
 
 
+# The lettering's glyphs, as stroke centrelines `(x0, y0, x1, y1)` in a cell one
+# unit tall, beside the cell's width. A stroke is one quad, so a glyph costs two
+# triangles a stroke and no texture; the Latin ones are drawn on a 0.6 cell.
+_W = 0.6
+GLYPHS: dict[str, tuple[float, tuple[tuple[float, float, float, float], ...]]] = {
+    "T": (_W, ((0.0, 1.0, _W, 1.0), (_W / 2, 0.0, _W / 2, 1.0))),
+    "A": (_W, ((0.0, 0.0, _W / 2, 1.0), (_W / 2, 1.0, _W, 0.0), (0.12, 0.35, 0.48, 0.35))),
+    "X": (_W, ((0.0, 0.0, _W, 1.0), (0.0, 1.0, _W, 0.0))),
+    "I": (0.0, ((0.0, 0.0, 0.0, 1.0),)),
+    "2": (
+        _W,
+        (
+            (0.0, 1.0, _W, 1.0),
+            (_W, 0.5, _W, 1.0),
+            (0.0, 0.5, _W, 0.5),
+            (0.0, 0.0, 0.0, 0.5),
+            (0.0, 0.0, _W, 0.0),
+        ),
+    ),
+    "5": (
+        _W,
+        (
+            (0.0, 1.0, _W, 1.0),
+            (0.0, 0.5, 0.0, 1.0),
+            (0.0, 0.5, _W, 0.5),
+            (_W, 0.0, _W, 0.5),
+            (0.0, 0.0, _W, 0.0),
+        ),
+    ),
+    "8": (
+        _W,
+        (
+            (0.0, 0.0, 0.0, 1.0),
+            (_W, 0.0, _W, 1.0),
+            (0.0, 1.0, _W, 1.0),
+            (0.0, 0.5, _W, 0.5),
+            (0.0, 0.0, _W, 0.0),
+        ),
+    ),
+    # 白 with its tick, then 勺: the sweep, the hooked frame and the dot.
+    "的": (
+        1.0,
+        (
+            (0.0, 0.0, 0.0, 0.78),
+            (0.42, 0.0, 0.42, 0.78),
+            (0.0, 0.78, 0.42, 0.78),
+            (0.0, 0.39, 0.42, 0.39),
+            (0.0, 0.0, 0.42, 0.0),
+            (0.26, 1.0, 0.16, 0.78),
+            (0.7, 1.0, 0.58, 0.72),
+            (0.58, 0.72, 1.0, 0.72),
+            (1.0, 0.0, 1.0, 0.72),
+            (0.82, 0.0, 1.0, 0.0),
+            (0.68, 0.48, 0.8, 0.28),
+        ),
+    ),
+    # The long bar over the short one; the other way up it is 土.
+    "士": (1.0, ((0.5, 0.0, 0.5, 1.0), (0.0, 0.6, 1.0, 0.6), (0.18, 0.0, 0.82, 0.0))),
+}
+
+
+def _stroke(a: np.ndarray, b: np.ndarray, width: float) -> list[np.ndarray]:
+    """The four corners of one stroke from `a` to `b` in the text's plane.
+
+    An upright or level stroke is squared off half a width past each end, so
+    two meeting at a corner fill it. A slanted one is cut level instead, on the
+    lines the upright ones stop at, so an `A` stands on a flat foot.
+    """
+    along = (b - a) / np.linalg.norm(b - a)
+    half = width / 2.0
+    if abs(along[0]) < 1e-9 or abs(along[1]) < 1e-9:
+        across = np.array([-along[1], along[0]]) * half
+        a, b = a - along * half, b + along * half
+        return [a - across, b - across, b + across, a + across]
+    reach = half / abs(along[1])
+    a, b = a - along * reach, b + along * reach
+    level = np.array([reach, 0.0])
+    return [a - level, b - level, b + level, a + level]
+
+
+def _text(
+    shape: Proportions,
+    text: str,
+    *,
+    centre: Sequence[float],
+    right: Sequence[float],
+    height_m: float,
+    colour: Colour,
+    name: str,
+) -> list[MeshData]:
+    """`text` as flat strokes on an upright face, centred on `centre` and read
+    along `right`; it faces the way a reader of it would stand."""
+    stroke = shape.glyph_stroke_m
+    scale = height_m - stroke
+    gap = shape.glyph_gap * height_m
+    pen = 0.0
+    placed: list[tuple[np.ndarray, np.ndarray]] = []
+    for char in text:
+        if char == " ":
+            pen += shape.glyph_space * height_m - gap
+            continue
+        if char not in GLYPHS:
+            raise ValueError(f"'{name}': no glyph for {char!r} in {text!r} — add it to GLYPHS")
+        width, strokes = GLYPHS[char]
+        origin = np.array([pen + stroke / 2.0, stroke / 2.0])
+        for x0, y0, x1, y1 in strokes:
+            placed.append(
+                (origin + np.array([x0, y0]) * scale, origin + np.array([x1, y1]) * scale)
+            )
+        pen += width * scale + stroke + gap
+    span = np.array([pen - gap, height_m])
+    across = np.asarray(right, dtype=np.float64)
+    up = np.array([0.0, 1.0, 0.0])
+    outward = np.cross(across, up)
+    middle = np.asarray(centre, dtype=np.float64) + outward * shape.glyph_proud_m
+    return [
+        polygon_facing(
+            [
+                middle + across * (x - span[0] / 2.0) + up * (y - span[1] / 2.0)
+                for x, y in _stroke(a, b, stroke)
+            ],
+            colour,
+            outward,
+            name=f"{name}_{k}",
+        )
+        for k, (a, b) in enumerate(placed)
+    ]
+
+
+def _boot_seam(shape: Proportions) -> list[MeshData]:
+    """The boot lid's seam: across the deck behind the backlight, back down
+    each side to the tail, and over the shoulder to the top of the lamps."""
+    half, proud = shape.shut_line_half_width_m, shape.shut_line_proud_m
+    x = shape.tail_lamp_x_m - shape.tail_lamp_half_width_m
+    deck_y = shape.belt_y_m
+    shoulder_y = shape.tail_lamp_y_m[1] + 0.005
+    z0 = shape.cabin_rear_z_m + shape.boot_seam_setback_m
+    z1 = shape.rear_z_m - shape.face_inset_m(deck_y)
+    z2 = shape.rear_z_m - shape.face_inset_m(shoulder_y)
+    y = deck_y + proud
+    up = (0.0, 1.0, 0.0)
+    parts = [
+        polygon_facing(
+            [
+                (-x - half, y, z0 - half),
+                (x + half, y, z0 - half),
+                (x + half, y, z0 + half),
+                (-x - half, y, z0 + half),
+            ],
+            DARK,
+            up,
+            name="boot_seam_across",
+        )
+    ]
+    # The shoulder is one plane from the deck's edge down to the lamps' tops.
+    slope = np.array([0.0, shoulder_y - deck_y, z2 - z1])
+    out = np.array([0.0, slope[2], -slope[1]])
+    out *= proud / np.linalg.norm(out)
+    for tag, side in (("l", -1.0), ("r", 1.0)):
+        xa, xb = side * x - half, side * x + half
+        parts.append(
+            polygon_facing(
+                [(xa, y, z0 + half), (xb, y, z0 + half), (xb, y, z1), (xa, y, z1)],
+                DARK,
+                up,
+                name=f"boot_seam_{tag}",
+            )
+        )
+        parts.append(
+            polygon_facing(
+                [
+                    (xa, deck_y + out[1], z1 + out[2]),
+                    (xb, deck_y + out[1], z1 + out[2]),
+                    (xb, shoulder_y + out[1], z2 + out[2]),
+                    (xa, shoulder_y + out[1], z2 + out[2]),
+                ],
+                DARK,
+                out,
+                name=f"boot_seam_{tag}_shoulder",
+            )
+        )
+    return parts
+
+
+def player_detail(parts: Sequence[MeshData], shape: Proportions) -> list[MeshData]:
+    """What only the player's car wears (`Q202`): the plates' characters, the
+    roof sign's lettering and the boot lid's seam, each placed off the part it
+    is drawn on.
+
+    ⚠️ Not in `taxi_parts`, which the roster's taxis are built from
+    (`make_parked`): every one of them would carry this car's mark.
+    """
+    named = {part.name: part for part in parts}
+    detail: list[MeshData] = _boot_seam(shape)
+    for end, toward in (("front", -1.0), ("rear", 1.0)):
+        # ⚠️ `roof_text`, not `sign_…`: `LAMP_PARTS` would mark the strokes as
+        # the lit lens.
+        for text, host, height_m, colour, name in (
+            (
+                shape.plate_text,
+                f"plate_{end}",
+                shape.plate_glyph_height_m,
+                DARK,
+                f"plate_{end}_text",
+            ),
+            (shape.sign_text, "sign", shape.sign_glyph_height_m, RED, f"roof_text_{end}"),
+        ):
+            low, high = named[host].aabb()
+            detail += _text(
+                shape,
+                text,
+                centre=(
+                    (low[0] + high[0]) / 2.0,
+                    (low[1] + high[1]) / 2.0,
+                    high[2] if toward > 0.0 else low[2],
+                ),
+                right=(toward, 0.0, 0.0),
+                height_m=height_m,
+                colour=colour,
+                name=name,
+            )
+    return detail
+
+
 def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     """The body as one mesh, and so one draw call and one material."""
-    body = merge([_marked(part) for part in taxi_parts(chassis, shape)], name="taxi_body")
+    parts = taxi_parts(chassis, shape)
+    parts = [*parts, *player_detail(parts, shape)]
+    body = merge([_marked(part) for part in parts], name="taxi_body")
     # `merge` deliberately does not carry `material` — many meshes in, one out,
     # and inheriting whichever was first would be a coin toss. The caller names
     # the result, exactly as `buildings._write_tile` does for a tile.

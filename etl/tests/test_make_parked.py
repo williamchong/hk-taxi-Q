@@ -77,6 +77,7 @@ from make_vehicle import (  # noqa: E402
     material_parts,
     taxi_body,
     taxi_door,
+    taxi_parts,
 )
 
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
@@ -339,8 +340,9 @@ class TestTheTaxis:
             hub_slots=shape.hub_slots,
             name="w",
         )
+        # `taxi_parts`, not `taxi_body`: the lettering is the player's car's alone (`Q202`).
         expected = (
-            taxi_body(chassis, shape).triangle_count
+            sum(part.triangle_count for part in taxi_parts(chassis, shape))
             + taxi_door(chassis, shape).triangle_count
             + 4 * wheel.triangle_count
         )

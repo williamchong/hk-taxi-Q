@@ -52,6 +52,7 @@ from make_vehicle import (
     FIXTURE_PROUD_M,
     GLASS,
     GLINT,
+    GLYPHS,
     KERB_SIDE,
     LAMP,
     LAMP_CIRCUITS,
@@ -74,6 +75,7 @@ from make_vehicle import (
     door_hinge,
     door_span_m,
     opening_radius_m,
+    player_detail,
     taxi_body,
     taxi_door,
     taxi_parts,
@@ -90,8 +92,9 @@ TAXI_SCENE = ROOT / "game" / "scenes" / "vehicle" / "taxi.tscn"
 CAR_SPEC = ROOT / "game" / "tuning" / "cars" / "crown_comfort.tres"
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
-# `ART_DESIGN.md`'s ceiling for one vehicle.
-TRIANGLE_CEILING = 2000
+# `ART_DESIGN.md`'s ceiling for one vehicle is 2,000; the player's car has 2,200
+# since `Q202`, for the 174 its lettering and boot seam cost at a 6 m camera.
+TRIANGLE_CEILING = 2200
 PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED, GLINT)
 # How far off the roof line counts as clear of it. Smaller than anything the
 # generator builds and larger than the loft's own float error.
@@ -1142,7 +1145,13 @@ class TestSurfaceMarkers:
         body = meshes[0]
         assert body.colours is not None
         markers = self._markers(body)
-        aloft = _above_roof(body)
+        # Its lettering (`Q202`) is paint on the lens, the one RED thing up there.
+        lettering = _above_roof(body) & np.all(
+            body.colours[:, :3] == np.array(RED, dtype=np.uint8), axis=1
+        )
+        assert lettering.any(), "the roof sign has lost its lettering"
+        assert np.all(markers[lettering] == MARKER_PAINT), "the sign's lettering is lit"
+        aloft = _above_roof(body) & ~lettering
         assert aloft.any(), "nothing sits above the roof — the sign has gone"
         assert np.all(markers[aloft] == MARKER_LAMP), (
             "part of the roof sign is not marked as a lens"
@@ -1293,8 +1302,9 @@ class TestLampCircuits:
         assert np.all(
             body.positions[sign, 1] >= shape.roof_y_m + shape.sign_plinth_m - ROOF_EPS_M
         ), f"circuit {CIRCUIT_ROOFSIGN} reaches below the top of the sign's plinth"
+        # The sign and, unswitched, the lettering painted on it (`Q202`).
         aloft = _above_roof(body)
-        assert set(circuits[aloft].tolist()) == {CIRCUIT_ROOFSIGN}, (
+        assert set(circuits[aloft].tolist()) == {CIRCUIT_ROOFSIGN, CIRCUIT_NONE}, (
             "something other than the roof sign is switched above the roof"
         )
 
@@ -1420,3 +1430,70 @@ class TestTheMaterialDoor:
         uvs[first[1]] = (make_vehicle.CIRCUIT_NONE, make_vehicle.MARKER_PAINT)
         with pytest.raises(ValueError, match="more than one payload"):
             make_vehicle.material_parts(replace(body, uvs=uvs))
+
+
+class TestPlayerDetail:
+    """`Q202`: the plates' characters, the roof sign's lettering and the boot
+    lid's seam, on the player's car alone."""
+
+    @pytest.fixture(scope="class")
+    def parts(self) -> dict[str, MeshData]:
+        return {p.name: p for p in taxi_parts(Chassis(), Proportions())}
+
+    @pytest.fixture(scope="class")
+    def detail(self, parts: dict[str, MeshData]) -> list[MeshData]:
+        return player_detail(list(parts.values()), Proportions())
+
+    def test_every_character_has_a_glyph(self) -> None:
+        shape = Proportions()
+        assert set(shape.plate_text + shape.sign_text) - {" "} <= GLYPHS.keys()
+
+    def test_the_roster_s_parts_carry_none_of_it(
+        self, parts: dict[str, MeshData], detail: list[MeshData]
+    ) -> None:
+        """`make_parked` builds every roster taxi from `taxi_parts`, and each
+        would wear the player's mark."""
+        assert detail
+        assert not parts.keys() & {part.name for part in detail}
+
+    @pytest.mark.parametrize(
+        ("prefix", "host"),
+        [
+            ("plate_front_text", "plate_front"),
+            ("plate_rear_text", "plate_rear"),
+            ("roof_text_front", "sign"),
+            ("roof_text_rear", "sign"),
+        ],
+    )
+    def test_the_strokes_lie_on_their_face_and_inside_it(
+        self, parts: dict[str, MeshData], detail: list[MeshData], prefix: str, host: str
+    ) -> None:
+        strokes = np.concatenate([p.positions for p in detail if p.name.startswith(prefix)])
+        face = parts[host].positions
+        rear = prefix.endswith("rear") or prefix.startswith("plate_rear")
+        face_z = face[:, 2].max() if rear else face[:, 2].min()
+        proud = (strokes[:, 2] - face_z) * (1.0 if rear else -1.0)
+        assert np.allclose(proud, Proportions().glyph_proud_m, atol=1e-9)
+        # Inside the face's narrowest width: the sign is raked across its top.
+        top = face[np.isclose(face[:, 1], face[:, 1].max())]
+        assert np.abs(strokes[:, 0]).max() < np.abs(top[:, 0]).max()
+        assert face[:, 1].min() < strokes[:, 1].min()
+        assert strokes[:, 1].max() < face[:, 1].max()
+
+    def test_the_text_reads_left_to_right_from_outside(self, detail: list[MeshData]) -> None:
+        """The first glyph's strokes are on the reader's left: the car's left
+        from behind (-x), its right from the front (+x)."""
+        for end, sign in (("front", 1.0), ("rear", -1.0)):
+            first = next(p for p in detail if p.name == f"plate_{end}_text_0")
+            assert sign * first.positions[:, 0].mean() > 0.0, end
+            assert first.normals[0][2] * sign < 0.0, f"the {end} plate's text faces into the car"
+
+    def test_the_seam_is_on_the_deck_between_the_lamps(self, detail: list[MeshData]) -> None:
+        shape = Proportions()
+        seam = np.concatenate([p.positions for p in detail if p.name.startswith("boot_seam")])
+        inner = shape.tail_lamp_x_m - shape.tail_lamp_half_width_m
+        assert np.abs(seam[:, 0]).max() <= inner + shape.shut_line_half_width_m + 1e-9
+        assert seam[:, 2].min() > shape.cabin_rear_z_m
+        assert seam[:, 2].max() < shape.rear_z_m + shape.shut_line_proud_m + 1e-9
+        assert seam[:, 1].max() == pytest.approx(shape.belt_y_m + shape.shut_line_proud_m)
+        assert seam[:, 1].min() > shape.tail_lamp_y_m[1]

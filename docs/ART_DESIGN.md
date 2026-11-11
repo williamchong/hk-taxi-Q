@@ -528,7 +528,7 @@ vertices and flat across an over-drawn width. `roads.ground_profile` closed the 
 
 | Property | Target |
 |---|---|
-| Triangles | 800–2,000 |
+| Triangles | 800–2,000 (⚠️ the player's taxi may reach 2,200 since `Q202`: its lettering and boot seam, seen from 6 m) |
 | Materials | 1–2 — the body's is one `ShaderMaterial` (`P3-11c`). ⚠️ The source carries a slot per part (`vehicle_paint`, `vehicle_glass`, `vehicle_lamp_*`) which the import merges (`P5-23`); the budget is what renders |
 | Colours | 3–5 flat colours per vehicle (⚠️ the taxi is at eight, each granted for a stated reason — a standing exception) |
 | Wheels | Oversized, separate mesh, simple rotation |
@@ -543,7 +543,8 @@ call.
 ⚠️ **Since `Q190` the taxi's body is a 1:64 die-cast's** (the Tiny City Crown Comfort), the
 user's call over the real car's: 4.54 m on the real wheelbase, nose 0.66 m and tail 1.095 m past the
 axles (0.65 / 1.10 measured; the real car is 4.695 m), a low sill and a cabin set back over a long boot. Its detail is the
-die-cast's, lettering excepted — the checklist is `Proportions`' die-cast block.
+die-cast's, lettering excepted — the checklist is `Proportions`' die-cast block. The player's car
+alone carries a plate and its roof sign's lettering, as flat strokes (`Q202`).
 
 **Body shader** (`vehicle_body.gdshader`, `P3-11c`): "flat" means flat *albedo*. A surface marker in
 `UV.y` gives glazing, lenses and paint a clearcoat over a three-band sky gradient (zenith, horizon,

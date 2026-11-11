@@ -216,6 +216,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
 | `Q197` | A building's street band and podium take the survey's colour, weighed by its own noise | ✅ Shipped 2026-11-11 on the user's instruction and pick (noise-weighted over raw): 1,637 street bands and 87 podiums, cut on the finished tier; +16% Wan Chai triangles, +5.5 MB PCK. Reverses `Q193` on instruction. |
 | `Q201` | The chase camera sits low and close on a narrow lens: 6.0 m, 1.0 m, −6°, 50° + 4° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
+| `Q202` | The player's taxi carries its plate, its roof sign's lettering and a boot seam, as strokes | ✅ Built 2026-11-11 on the user's ask; amends `Q190`. The mark and the sign's wording are the user's to correct. |
 
 ---
 
@@ -12654,3 +12655,35 @@ and night; the handset's frame time; and the three calls taken for him above.
   (`menu.tres`) carry their own distances and are unmoved.
 
 **See.** `Q98` · `P2-5` · `Q164` · `game/tuning/camera.tres` · `chase_profile.gd`
+
+## `Q202` — The player's taxi carries its plate, its roof sign's lettering and a boot seam
+
+**Status.** ✅ Built 2026-11-11 on the user's ask. Amends `Q190`'s "without its lettering".
+
+- Origin: `Q201`'s camera draws the taxi's tail about 500 px wide on a 1920 frame, and the user
+  asked whether the player's car then needs more detail. Offered the three blank faces that size
+  shows — the plate, the roof sign and the boot — and told "add the plate, roof sign and boot seam".
+- **Strokes, not a texture.** `Q190` dropped the lettering because it was a decal sheet in a pixel
+  font, a third material on an untextured car. `make_vehicle._text` draws each glyph as flat quads
+  along stroke centrelines (`GLYPHS`), a few millimetres proud of the face like a shut line, in
+  colours the car already has (`DARK` on the plates, `RED` on the sign). One material, no texture.
+- **The plate reads `TX 852`**, front and rear: a made-up mark in the Hong Kong form.
+  **The sign reads `的 TAXI 士`**, fore and aft. Both are reference calls from memory, not from a
+  photograph — the user's to correct (`Proportions.plate_text`, `sign_text`).
+- **The sign's lettering is paint on the lens, never the lens**: lit for hire it stands dark on the
+  glowing box. Its parts are `roof_text_*`, kept off the `sign` prefix `LAMP_PARTS` lights.
+- **The boot seam** is five dark quads: across the deck 6 cm behind the backlight, back down each
+  side in line with the tail lamps' inner edges, and over the shoulder to the lamps' tops. Below
+  that the lamps' own edges carry the line.
+- ⚠️ **The player's car alone** (`player_detail`, added in `taxi_body`, not in `taxi_parts`): the
+  roster's taxis are built from `taxi_parts` and every one would wear this car's mark. They keep
+  blank plates and a blank sign, and no seam.
+- ⚠️ **+174 triangles, over `ART_DESIGN.md`'s 2,000 for a vehicle**: 2,130 as the scene builds it
+  (88 the sign's two faces, 76 the two plates, 10 the seam). The player's car has a ceiling of
+  2,200 as a standing exception (`test_make_vehicle.TRIANGLE_CEILING`); the roster's stays 2,000.
+- Evidence: `build/driver/detail/crop.png` (day, the chase camera at rest), `views.png` (the menu's
+  orbit and a lit sign at night). Four mutations, all caught: the text mirrored, the lettering
+  named as the lens, the seam wider than the lamps, the strokes sunk into their face.
+- Not done: the 4 SEATS badge stays a shape; no lettering on the doors; the roster.
+
+**See.** `Q190` · `Q201` · `P3-82` · `tools/make_vehicle.py` · `test_make_vehicle.TestPlayerDetail`
