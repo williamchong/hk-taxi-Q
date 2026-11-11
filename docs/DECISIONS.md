@@ -196,7 +196,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q140` | The harbour is a frame minus the land, and the land is north of the sheets we hold | ✅ Closed — the user's calls: on the minimap with `P3-44` (2026-09-24), in the world as a plane over sunk ground (2026-09-25) · `P3-45` |
 | `Q141` | The 咪錶 runs TD's tariff on what was driven; the skill is the tip, and speed pays now | ✅ Closed — the user's calls, built as `P3-1a`. Four stranded pickups on the merged runtime, named, closed as the data's (2026-10-15). The user's drive owed. |
 | `Q146` | A start menu over the parked taxi; the language is the flag, then the saved option, then the OS, then Chinese | ✅ Closed — the user's asks (2026-09-26), built as `P6-1`. The credits screen discharges hard rule 6 in the build. The user's look owed. |
-| `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. |
+| `Q142` | The pending customer is the pickup pool, a stop is said as its building over its road, and the arrow is as the crow flies | ✅ Closed — the user's asks, built as `P3-5a`; iB1000's `BUILDINGNAME` joined in the ETL. The user's drive owed. The pool-is-the-customer reading reopened by `Q203` (2026-11-12): a live set of four. |
 | `Q139` | One voice: the cab's instruments in one dark housing — a dial for the speed, the 咪錶's red LED kept for the fare | ✅ Closed — the user's calls, built with `P3-44`. The user's drive owed. |
 | `Q138` | The HUD takes the racing-game arrangement, and every known future component has a graded slot | ✅ Closed — the user's call, built with `P3-44`. The user's drive owed. |
 | `Q137` | A router is built; a route line on the map is not | ✅ Closed — router ✅ built (`P3-43`), consumed by `P3-1a` (`Q141`): a directed-edge search prepared once per destination, diffed pair for pair against `reachability.py`. **Reopened and reversed by the user on 2026-09-24**: the legal route is drawn on the minimap (`P3-46`), and guidance routes legally. Held: the next-junction arrow. |
@@ -217,6 +217,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q197` | A building's street band and podium take the survey's colour, weighed by its own noise | ✅ Shipped 2026-11-11 on the user's instruction and pick (noise-weighted over raw): 1,637 street bands and 87 podiums, cut on the finished tier; +16% Wan Chai triangles, +5.5 MB PCK. Reverses `Q193` on instruction. |
 | `Q201` | The chase camera sits low and close on a narrow lens: 6.0 m, 1.0 m, −6°, 50° + 4° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
 | `Q202` | The player's taxi carries its plate, its roof sign's lettering and a boot seam, as strokes | ✅ Built 2026-11-11 on the user's ask; amends `Q190`. The mark and the sign's wording are the user's to correct. |
+| `Q203` | Customers wait at street kerbs as well as stands, a few at a time, each knowing where they go; the allowance is the legal route at a measured par | ✅ Built 2026-11-12 as `P3-86` on the user's asks; reopens `Q142`'s "one designated waiting passenger" in a live-set form. The user's drive owed. |
 
 ---
 
@@ -7403,7 +7404,8 @@ had two readings, and the one built is the one that changes no loop.
 - 🚫 **Not one designated waiting passenger per hail.** That reading would make the loop refuse a
   hail anywhere but the drawn stand — a `FareSystem` change, a different game, and not what a Hong
   Kong player expects of a cab that stops where it is flagged. Weighed, not taken; reopens only on
-  the user's word.
+  the user's word. ⚠️ **Reopened on the user's word, 2026-11-12 (`Q203`)**: four customers
+  wait at once, each with its destination, at stands and at street kerbs.
 - **A stop is said the way a passenger says it: the building first, the road under it** (the
   user's call, 2026-09-24, on seeing "→ Leighton Road eastbound near Matheson Street" as a
   destination). TD's `Location_EN` describes the kerb; a passenger says "皇冠假日酒店". The
@@ -12687,3 +12689,66 @@ and night; the handset's frame time; and the three calls taken for him above.
 - Not done: the 4 SEATS badge stays a shape; no lettering on the doors; the roster.
 
 **See.** `Q190` · `Q201` · `P3-82` · `tools/make_vehicle.py` · `test_make_vehicle.TestPlayerDetail`
+
+
+## `Q203` — Customers wait at street kerbs as well as stands; the allowance is the route at a measured par
+
+**Status.** ✅ Built 2026-11-12 as `P3-86`, on the user's asks. Reopens what `Q142` weighed and did
+not take ("not one designated waiting passenger per hail … reopens only on the user's word"), in
+the form below. The user's drive owed.
+
+- Origin: "can the pick up spot and drop off spot be more randomized instead of always taxi
+  stops?" The pool was TD's published points alone: 25 pickups on Wan Chai, 2 on Causeway Bay, so
+  the same kerbs came round. Evaluated (`/eval`, GO WITH CAVEATS): a live set rather than one
+  designated passenger, destinations drawn the same way, and the published points kept in the mix.
+  Then "time allowance should be base on legal route length", "measure it" (the par) and "pip and
+  a ring is enough for now" (no figure at the kerb).
+- **Street spots, in the ETL** (`fares.street`, `fares.json`'s `street` key, schema 1 additive):
+  a station every 60 m along each level-0 edge, 20 m in from its ends, on the nearside of a one-way
+  edge and both kerbs of a two-way one; refused where any `kerbside` run on that side reaches
+  within 6 m — single yellow as well as double, because `roadgraph.json` carries no hours — on an
+  edge with a bus lane or a limit over 50 kph (Gloucester Road, the Wan Chai Interchange, the tunnel
+  approach), outside the region, or with no named building within 25 m of the kerb. Wan Chai: 166
+  of 555 stations (331 restricted, 56 unnamed, 2 outside; 12 bus-lane edges, 44 fast). Causeway Bay:
+  102 of 183 (41, 38, 2; 2, 0). Under their own key so `parked`, `tramlines` and the spawn, which
+  read `nodes`, never meet one; `export._check_fares` holds them to the same stale-edge checks.
+- **A live set, paired as drawn** (`FareSystem`). `live_pickups` (4) customers wait;
+  `street_share` (0.75) of the draws, pickups and destinations alike, come from the street; each is
+  bound to a destination drawn the same way and routed at `min_trip_m`, up to `pair_tries` (24),
+  else the kerb is stranded for the session. A boarding takes the customer off the kerb and the
+  fare's end draws a replacement, never inside the car's hail radius. `pickups()` is the live set
+  and `pickups_changed` tells the minimap and the rings to rebuild — a handful, where walking ~270
+  rings a frame for `withheld` would not be. 🚫 The all-pairs reach table it replaces: ~270 × ~270
+  routes is seconds at load. 🚫 Drawing at the hail and retrying stays refused (`Q141`): here a
+  pickup that pairs with nothing is never shown. Pairing at `setup` 14.7 ms on Wan Chai alone,
+  1.3 ms on Causeway Bay; on the merged runtime `fares: 4 waiting of 273 pickups (252 street; 0
+  stranded), 277 destinations (252 street), pairing 3.1 ms` (seed 7).
+- ⚠️ **The drive no longer opens with a hail.** The car still starts 20 m short of `f_004`, but
+  a customer waits there only when the draw puts one there; the arrow points at the nearest one
+  that does. Whether the first fare should always wait at the start is the user's call.
+- **The allowance is the legal route over par, no floor by kind** (the user's call). The 30 s /
+  60 s floors were only ever reached on routes under 500 m, and the short hop's never (300 m at 30
+  kph is 36 s). `Fare.kind` stays, priced by nothing until `P3-1b`.
+- **Par is measured, 19 kph.** The AI traffic driven headless with no player, wandering fleet at
+  the census's 18:00 and 12:00, centred on four seeded level-0 points of the merged runtime, two
+  seeds, 30 s warm then 180 s, each car's life metered as plan metres over seconds with kerbside
+  stops left out: 813 / 686 lives, 150 / 133 km. Runs of 200 m or more: p10 10.6 / 11.7, p25 14.2 /
+  15.3, **p50 18.8 / 19.2**, p75 24.6 / 26.7, p90 30.8 / 33.8 kph; the whole fleet 15.7 / 17.3. Under
+  0.5 m/s it stood behind a car 20.9 / 16.0% of its time, at a light 13.7 / 16.1%, giving way 4.8 /
+  3.8%. The old 30 was the legal traffic's 90th percentile. Par 19 is its median, which is what
+  "obeying the signs" costs here; the clock is now 57 s for the shortest trip and the tip on a fast
+  run roughly doubles. The script was a scratch tool and is not committed; the recipe is above and
+  in `fares.md`.
+- ⚠️ **Deferred, needs new router machinery: a forward search from the pickup.** Pairing tries
+  random destinations, each a fresh `prepare` (`TREE_CACHE` is 8), so a kerb that reaches nothing
+  costs `pair_tries` (24) prepares, about 20 ms on desktop, at the fare end that draws it — once
+  a kerb a session, since it then leaves the pool — and a kerb that reaches 5% of destinations is
+  wrongly stranded 29% of the time (0.95²⁴). One forward search over the router's successor arrays
+  would price every destination at once: no false strand, a strand for one search. Measured: 0
+  stranded at boot on the merged runtime, 1 on each region alone.
+- Not done: no figure stands at the kerb (the user's call); a single-yellow kerb is refused at
+  every hour; `stop_length_m`, `spacing_m`, `junction_clear_m`, `live_pickups` and `street_share`
+  are first guesses for the drive.
+
+**See.** `Q141` · `Q142` · `Q137` · `P3-86` · `etl/pipeline/fares.py::street_spots` ·
+`game/scripts/fares/fare_system.gd` · `game/tuning/fares.md` · `.claude/rules/fares.md`

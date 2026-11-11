@@ -754,10 +754,32 @@ never culled or streamed — `Q115`, `Q120`).
       "dropoff": true,
       "place": { "en": "Soundwill Plaza", "zh": "金朝陽中心" }
     }
+  ],
+  "street": [
+    {
+      "id": "s_0001",
+      "pos": [802.661, 3.693, 441.181],
+      "kind": "street",
+      "nearest_edge": 3,
+      "edge_t": 0.297118,
+      "side": "near",
+      "pickup": true,
+      "dropoff": true,
+      "place": { "en": "Dandenong Mansion", "zh": "特麗樓" }
+    }
   ]
 }
 ```
 
+- `street` (the user's ask 2026-11-12, schema 1 additive — a reader without it keeps `nodes`): a
+  kerb a passenger flags a cab at off any published point — a station every
+  `fares.street.spacing_m` along a level-0 edge, `junction_clear_m` in from its ends, on the
+  nearside of a one-way edge and both kerbs of a two-way one (`side`, `kerbside`'s words), where no
+  no-stopping run of either kind reaches within half `stop_length_m`, on a road with no bus lane and
+  no limit over `max_speed_limit_kph`, and beside a named building — `place` is never null here.
+  `pos` is the kerb, half `width_m` off the centreline. Apart from `nodes` so the stages that read
+  the published points (`parked`, `tramlines`, the spawn) never meet one. Wan Chai 166, Causeway
+  Bay 102.
 - `kind` ∈ `taxi_stand` | `pudo` | `poi`. `stand_category` is null unless `taxi_stand`.
 - `place` (`P3-5a`, `Q142`, schema 1 additive — a reader without it keeps `name`) is the named
   building the passenger stands at: iB1000's current `BUILDINGNAME` for the footprint nearest
@@ -1345,7 +1367,7 @@ city_space = region_local + city_offset
 | `lamps.glb` + `lamps_placements.json` | Lamp posts on the drawn kerb with a bracket arm over the carriageway; `rot_y_deg` is the arm's bearing. Unlit (`Q38`, `Q26`). Library of one mesh per drawn kind. No collider | ✅ `P3-26`, `P5-3` |
 | `trees.glb` + `trees_placements.json` | The trees HyD and LCSD survey, and nothing where neither does: Victoria Park and the roadside are bare (`Q171`). Four library meshes, a `MultiMesh` per kind per prop cell, a trunk collider per tree in a body per kind and cell. Unlit | ✅ `P3-77` |
 | `railings.glb` + `railings_placements.json` | Railings, bollards, vehicle barriers on the drawn kerb. One unit panel per class, its `.tres` post pitch wide, tiled per run with `pitch_deg`; tiling cost is reported in `railings.json` (`metres_snapped`, `joint_gap_m`, `bends`), never closed by a stretched panel. Three draw calls, `cull_disabled`, no collider | ✅ `P3-19`, `Q61`, `P5-5` |
-| `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes; a reach table at load (every destination prepared once), a hail drawn from it, `route` at 5 Hz; the allowance `max(kind floor, legal route / par)`; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
+| `FareSystem` | The fare loop (`scripts/fares/`): idle → boarding → carrying → delivered / bailed over the resident regions' fare nodes and street spots; `live_pickups` customers waiting, each paired with its destination as it is drawn and replaced as a fare ends (`Q203`), `route` at 5 Hz; the allowance the legal route over par, no floor; delivery banks meter + tip. `--fares=off` (free roam), `--fare-seed=`. `Fare` is what the HUD and the score read (`Q141`) | ✅ `P3-1a` standard and short hop; `P3-1b` the rest |
 | `FareMeter` | TD's tariff in `scripts/core/`: flagfall, then a unit per 200 m or per minute past it, in cents, charged as the unit begins (`tuning/tariff.tres`, cited in `tariff.md`) | ✅ `P3-1a` |
 | `ScoreSystem` | The **style chain** and **fare combo** — two distinct multipliers — paying into `Fare.tip_hkd` beside the time bonus `P3-1a` already pays | ⬜ `P3-2` |
 | `StartMenu` | Start, options (the language), credits and licences, over the parked taxi with the rig circling it (`MenuOrbit`); `Main` parks the level while it is up and resumes it on `started`. `--menu=off` for scripted runs; every string in `tuning/menu_text.json`, every number in `tuning/menu.tres` | ✅ `P6-1` |

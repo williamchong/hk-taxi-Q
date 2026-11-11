@@ -69,22 +69,27 @@ adds money, never time. At 21:00 no new customer hails and the passenger aboard 
 ## Fares
 
 Fare nodes come from `fares.json`, built from the Taxi Stands and Taxi Pick-up & Drop-off Points
-datasets, plus hand-added POIs.
+datasets, plus hand-added POIs — and from **street spots** (`Q203`): any kerb no no-stopping run
+reaches, off bus lanes and trunk roads, beside a named building, where a Hong Kong passenger flags a
+cab. Four customers wait at once (`live_pickups`), three in four of them at a street spot
+(`street_share`), each already knowing where they are going, and a new one appears as a fare ends;
+destinations are drawn the same way.
 
-| Type | Source | Allowance floor | Payout | Notes |
-|---|---|---|---|---|
-| Short hop | `pudo` | 30 s | The meter | Common; keeps the chain alive |
-| Standard | `taxi_stand` (urban) | 60 s | The meter | The default fare |
-| Long haul | `poi`, cross-district | 90 s | The meter | Rewards route knowledge (`P3-1b`) |
-| **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | 75 s | The meter + the HK$25 toll and HK$25 return toll | Terminates at the tunnel approach (`P3-1b`) |
+| Type | Source | Payout | Notes |
+|---|---|---|---|
+| Short hop | `pudo` | The meter | Common; keeps the chain alive |
+| Standard | `taxi_stand` (urban), a street spot | The meter | The default fare |
+| Long haul | `poi`, cross-district | The meter | Rewards route knowledge (`P3-1b`) |
+| **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | The meter + the HK$25 toll and HK$25 return toll | Terminates at the tunnel approach (`P3-1b`) |
 
 **The meter is real** (`Q141`): the 咪錶 runs Transport Department's urban tariff — HK$29 for the
 first 2 km, then HK$2.1 per 200 m or per minute waiting until HK$102.5, HK$1.4 after — on the
 metres actually driven and the seconds actually waited. Inside one region most trips stay on the
 flagfall, so the base is HK$29 and the drive earns the rest as a tip (Scoring). The kind is the
-destination's. **The allowance is road distance**: the legal route over a par of 30 kph, floored by
-the kind's figure above. A destination is only ever drawn at 300 m of legal route or more, and a
-pickup that reaches none is not a pickup.
+destination's. **The allowance is the legal route alone** (the user's call, 2026-11-12): its
+length over a par of 19 kph, the legal traffic's measured median, with no floor by kind. A
+destination is only ever drawn at 300 m of legal route or more, and a pickup that reaches none is
+not a pickup.
 
 The cross-harbour fare is the signature mechanic: the source dataset distinguishes that stand
 category, it pays the most, and it ends at a diegetic map boundary. The fare terminates at the

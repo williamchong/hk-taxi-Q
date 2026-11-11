@@ -33,26 +33,37 @@ the loop's own numbers in `tuning/fares.tres`.
 - 🔴 **Cents, not dollars, inside `FareMeter`.** 29 + 35 × 2.1 must land on 102.50 exactly for
   the threshold comparison; `_cents_of` rounds once at construction.
 - ⚠️ **Par is the legal profile** (`Q137`'s recommendation): the allowance is
-  `max(kind floor, legal route / par_kph)`. `GAME_DESIGN.md`'s 30 s / 60 s are the floors, not the
-  allowance. 🚫 Not the player's profile: par is what obeying the signs costs, and the player may
-  break every rule to beat it.
-- ⚠️ **The reach table is built once at load; the hail pays one `prepare`.** `_build_reach`
-  prepares every destination and routes every pickup to it (14 ms on Wan Chai, `reach_ms` on the
-  boot line and in `verify_fares`); `pick_destination` draws uniformly from a pickup's reachable
-  list on the seeded RNG; `route` at the sample rate from the car's `Hit`; never per frame
-  (`router.md`). 🚫 Drawing blind and retrying at the hail was built and refused: a stand with one
-  reachable destination was refused most of its hails. 🚫 "No route" is a pool decision, never an
+  `legal route / par_kph` and nothing else — no floor by kind (the user's call, 2026-11-12,
+  `Q203`). `par_kph` 19 is MEASURED: the AI traffic's median run (18.8 / 19.2 kph at 18:00 / 12:00;
+  the recipe and the table are in `fares.md`). 🚫 Not the player's profile: par is what obeying the
+  signs costs, and the player may break every rule to beat it. A change to the traffic's pace
+  (`traffic.tres`'s `cruise_of_limit`, the signal timings) is a reason to re-measure it.
+- ⚠️ **A few customers wait, each paired with where they are going as they are drawn** (`Q203`).
+  `pickups()` is the LIVE set — `live_pickups` of the pool, `street_share` of the draws from the
+  street spots — and `pick_destination` reads the pair `_refill` drew: a destination drawn the same
+  way and routed from the pickup, kept at `min_trip_m`, up to `pair_tries` draws (`pair_ms` on the
+  boot line and in `verify_fares`). `_board` takes the customer off the kerb and `_deliver` /
+  `_bail` draw the replacement — 🔴 never at the hail or mid-fare, where a draw's `prepare`s would
+  evict the tree the car's route reads (`router.md`'s `TREE_CACHE`). 🚫 The old all-pairs reach
+  table: 268 street spots make it seconds at load. 🚫 Drawing blind and retrying AT THE HAIL was
+  built and refused: a stand with one reachable destination was refused most of its hails — here a
+  pickup that pairs with nothing is never shown. 🚫 "No route" is a pool decision, never an
   assert (`Q137`).
 - ⚠️ **The pools are the yaml's rules.** A stand is a pickup and a destination unless
   `cross_harbour` (`P3-1b`'s); a PUDO point is what its `pickup` / `dropoff` say — a quarter are
   drop-off only, and a hail at one is what a Hong Kong player notices; a `poi` tram stop is
-  neither. The kind of a fare is the DESTINATION's (`pudo` → short hop, `taxi_stand` → standard).
-- ⚠️ **A pickup that reaches no destination at `min_trip_m` is stranded**: dropped from the
-  pickup pool at load, kept as a destination, counted in `FareSystem.stranded` and named by
-  `verify_fares` and the boot line. Five region by region, four on the merged runtime (`Q141`), all
-  at a clip edge whose forward direction leaves it. A new one is a finding about the data, answered by looking at the
-  node — never by lowering the bar silently, and never by an assert that would fail every region
-  with an edge.
+  neither. A street spot (`fares.json`'s `street`, `fares.street` in the yaml) is both, where the
+  legal router admits its edge: a kerb no no-stopping run of either kind reaches, off bus lanes
+  and roads over 50 kph, beside a named building. The kind of a fare is the DESTINATION's (`pudo`
+  → short hop, anything else standard) and prices nothing since `Q203`. ⚠️ **`street_share` is
+  the one key `setup` does not refuse at zero**: 0 is the off switch, the published points alone.
+- ⚠️ **A pickup that pairs with no destination at `min_trip_m` in `pair_tries` draws is
+  stranded**: dropped from the pickup pool as it is drawn, kept as a destination, counted in
+  `FareSystem.stranded` and named by `verify_fares` and the boot line. Found by the draw, not by
+  a survey, so which are stranded depends on the seed and grows over a session; the clip-edge
+  points whose forward direction leaves the region (`Q141`) are the ones it finds. A new pattern is
+  a finding about the data, answered by looking at the node — never by lowering the bar silently,
+  and never by an assert that would fail every region with an edge.
 - ⚠️ **`nearest_pending` never returns a pickup the loop would refuse**: disarmed after a
   delivery, it skips every pickup inside `hail_radius_m` — the user read an arrow at the kerb
   under the car as a "dumb 3 s cooldown". `verify_fares` asserts it at the delivery.
@@ -68,7 +79,9 @@ the loop's own numbers in `tuning/fares.tres`.
 - ⚠️ **Mutation-check it rather than reading its pass** (`Q72`). Each of these fails by name in
   `verify_fares.gd`: `step_m = 1` (a linear meter) at the 2,200 m point; a zero price (an inert
   meter); a drop-off-only point, a tram stop and a cross-harbour stand smuggled into `fares.json`
-  (the pools); `min_trip_m` raised past every route (every pickup stranded, the pool empty);
+  (the pools); `min_trip_m` raised past every route (every pickup stranded, no one waiting);
+  `street_share` 0 (no street spot waiting or bound); the boarded customer still waiting, or no
+  replacement drawn at the delivery (the loop);
   half the tip rate (what the same drive banks); the same trip delivered 2 s later (banks
   strictly less). Dwells and bars are asserted from BOTH sides: 0.75 s boarding and 1.0 s
   aboard; arriving fast and arriving stopped; one tick short of the allowance and one past it.
@@ -92,8 +105,9 @@ the loop's own numbers in `tuning/fares.tres`.
   its building, is correctly none). `pytest tests/test_fares.py::TestNearestPlace` holds the
   radius, the footprint-not-centroid distance and the mention rule from both sides.
 - ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
-  `fare_guide.gd` connect `sampled`, `delivered` and `bailed` and read `state`, `fare`,
-  `pending`, `withheld` and `pickups()` inside them, because under `--fares=off` the system frees
+  `fare_guide.gd` connect `sampled`, `delivered`, `bailed` and `pickups_changed` (`Q203`: the pins
+  and rings are rebuilt there, a handful, never walked per frame over the pool) and read `state`,
+  `fare`, `pending`, `withheld` and `pickups()` inside them, because under `--fares=off` the system frees
   itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
   reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided,
   and `FareFace.target_of` the one place a reader's target is — the guide's arrow and the map's
