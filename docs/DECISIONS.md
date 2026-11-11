@@ -215,7 +215,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q195` | A podium's cornice is drawn at iB1000's line and nowhere else | ✅ Shipped 2026-11-11 on the user's pick (0.28 at 0.5 m): 133 + 61 buildings, `COLOR_0.a`, schema 46. No shopfront, no invented line, no made-up podium colour. |
 | `Q196` | Vehicles take detail lines from their own mesh, a width in metres | 🟡 Built 2026-11-11 on the user's report (`P3-84`). The weight (2 cm / ×0.35 shipped from the middle of the sheet) is the user's pick, owed. |
 | `Q197` | A building's street band and podium take the survey's colour, weighed by its own noise | ✅ Shipped 2026-11-11 on the user's instruction and pick (noise-weighted over raw): 1,637 street bands and 87 podiums, cut on the finished tier; +16% Wan Chai triangles, +5.5 MB PCK. Reverses `Q193` on instruction. |
-| `Q201` | The chase camera sits lower, further back and narrower: 8.0 m, 1.4 m, −8°, 50° + 10° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
+| `Q201` | The chase camera sits low and close on a narrow lens: 6.0 m, 1.0 m, −6°, 50° + 4° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
 
 ---
 
@@ -12608,7 +12608,7 @@ and night; the handset's frame time; and the three calls taken for him above.
 **See.** `P3-85` · `Q190` · `Q166` · `Q167` · `Q183` · `Q186` · `Q196` · `tools/make_parked.py` ·
 `etl/tests/test_make_parked.py` · `.claude/rules/parked.md` · `.claude/rules/signals.md`
 
-## `Q201` — The chase camera sits lower, further back and narrower
+## `Q201` — The chase camera sits low and close on a narrow lens
 
 **Status.** ✅ Built 2026-11-11 on the user's ask. The user's look owed.
 
@@ -12633,6 +12633,23 @@ and night; the handset's frame time; and the three calls taken for him above.
 - Evidence: `build/driver/cam_sheet2.png` — the old rig and three candidates, each at rest and at
   104 kph on the throttle route from the start line (`--traffic=off --fares=off`). Six framings
   were shot; `E` is the first build.
+- ⚠️ **Closer and lower the same day, and most of the pull-away given up, on the user's
+  references** (two frames of a racing game's chase view): its road edges run out flat to the
+  frame's sides, and its car fills about 30% of the frame's width low in the frame at 191 kph,
+  where ours at 105 kph was about 11% wide and near the centre. `camera.tres`: `distance`
+  8.0 → 6.0, `height` 1.4 → 1.0, `pitch_deg` −8.0 → −6.0, `follow_response` 13.388613 → 40.0,
+  `fov_boost` 10 → 4. The camera stands 1.63 m above the car's origin (2.51 before).
+  - A road edge's slope on screen is the camera's height over the edge's sideways distance,
+    whatever the lens, so only a lower camera flattens the edges — and the camera's height is
+    `height + distance · sin(pitch)`, so the tilt is what lowers it, `height` what frames the car.
+  - The car climbed to the centre at speed because of the lag, not the distance: `distance` 6.5
+    alone left it rising (`build/driver/camnear/sheet.png`). The lag is now 0.7 m at 104 kph
+    (2.2 before), so the rest and speed frames differ by that and by 3° of lens.
+  - Closer than this at a 50° lens cuts the bumper off the bottom of the rest frame (5.5 m and
+    5.0 m, `build/driver/camforza/sheet.png`); a wider lens is the thin, long car again. The car
+    is about 23% of the width at 105 kph, short of the reference's 30%.
+  - Evidence: `build/driver/camforza/now_vs_O.png`, the rig before and this one, at rest and at
+    105 kph. Fifteen framings were shot across three sheets; this is row `O`.
 - Not done: no dial for a dolly-back with speed (the lag already is one), and the menu's shots
   (`menu.tres`) carry their own distances and are unmoved.
 

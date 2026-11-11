@@ -49,9 +49,11 @@ extends Resource
 
 ## How fast the rig's anchor converges on the car's position.
 ##
-## ⚠️ 13.388613 is not a tuned value — it is the exact `1/s` equivalent of the
-## 12.0 this shipped as under the old linear `follow_lag * delta`, chosen so
-## `Q98`'s change of law moved the framing by nothing measurable.
+## The car pulls `v / k` ahead of the rig: 0.7 m at 104 kph on the 40.0 of
+## `Q201`, 2.2 m on the 13.388613 before it — which was not a tuned value but
+## the exact `1/s` equivalent of the 12.0 this shipped as under the old linear
+## `follow_lag * delta`, chosen so `Q98`'s change of law moved the framing by
+## nothing measurable.
 @export_range(0.5, 40.0, 0.1, "suffix:1/s") var follow_response: float
 
 ## How fast the rig converges on the car's heading.

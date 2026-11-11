@@ -4,11 +4,11 @@
 
 [resource]
 script = ExtResource("1_camera")
-distance = 8.0
-height = 1.4
-pitch_deg = -8.0
-follow_response = 13.388613
+distance = 6.0
+height = 1.0
+pitch_deg = -6.0
+follow_response = 40.0
 yaw_response = 6.0
 fov_base = 50.0
-fov_boost = 10.0
+fov_boost = 4.0
 fov_full_kph = 140.0
