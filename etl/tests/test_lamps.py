@@ -69,6 +69,10 @@ BLOCK: dict[str, Any] = {
     "max_shift_m": 3.0,
     "merge_m": 0.75,
     "gap_report_m": 40.0,
+    "overhead_clear_m": 2.5,
+    "soffit_gap_m": 0.5,
+    "min_column_height_m": 5.0,
+    "deck_outset_m": 0.1,
 }
 
 
@@ -243,6 +247,38 @@ class TestTheRegistrationRunsOutwardOnly:
         _, side = _register(spec, _Snap(offset_m=-0.0), _Ribbon(1.0), np.array([0.0, 0.0]), report)
 
         assert side == 1.0
+
+
+class TestADeckColumnStandsOnItsDeck:
+    """A column hosted to a deck takes the deck's kerb, `deck_outset_m` out: the
+    drawn slab ends just past its kerb, so `outset_m` would stand it on air."""
+
+    def test_a_column_inside_the_deck_ribbon_goes_to_its_edge(self, spec):
+        report = LampReport()
+        placed, _ = _register(
+            spec, _Snap(offset_m=4.0), _Ribbon(5.0), np.array([4.0, 0.0]), report, on_deck=True
+        )
+
+        assert float(np.linalg.norm(placed)) == pytest.approx(5.0 + spec.deck_outset_m)
+
+    def test_a_column_just_past_the_deck_kerb_is_pulled_back_onto_it(self, spec):
+        """The one inward move this stage makes (`Q78` is about a street)."""
+        report = LampReport()
+        placed, _ = _register(
+            spec, _Snap(offset_m=5.5), _Ribbon(5.0), np.array([5.5, 0.0]), report, on_deck=True
+        )
+
+        assert float(np.linalg.norm(placed)) == pytest.approx(5.0 + spec.deck_outset_m)
+        assert report.posts_kept_as_surveyed == 0
+
+    def test_a_column_deep_in_the_deck_is_refused(self, spec):
+        report = LampReport()
+        assert (
+            _register(
+                spec, _Snap(offset_m=0.0), _Ribbon(5.0), np.array([0.0, 0.0]), report, on_deck=True
+            )
+            is None
+        )
 
 
 class TestTheMeshFacesOutward:

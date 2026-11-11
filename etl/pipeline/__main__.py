@@ -157,7 +157,8 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # fifths of a kilometre of the region's columns stand in the carriageway. It
     # needs `roads` for the level-0 centrelines that give it a host edge, a deck
     # height and the kerb side its arm reaches away from. Before `export`, which
-    # names the asset.
+    # names the asset. After `carve` since `Q199`: a column is refused where
+    # the carved tiles draw something through its height.
     "lamps": lamps.main,
     # After `carve` and `surface`, and forced: a tree stands on the ground the
     # carved tiles draw and is refused inside the carriageway region and under
@@ -223,7 +224,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "roadmarks": ("surface",),
     "railings": ("surface",),
     "signs": ("surface",),
-    "lamps": ("surface",),
+    "lamps": ("carve", "surface"),
     "trees": ("carve", "surface"),
     "signals": ("surface",),
     "tramlines": ("tramway", "fares", "signals", "railings", "signs", "lamps", "trees"),

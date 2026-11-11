@@ -422,7 +422,7 @@ def trunks(spec: Trees) -> dict[str, dict[str, float]]:
 # --------------------------------------------------------------------------
 
 
-def _shipped_faces(city: Config, region_id: str, out_dir: Path) -> tuple[_Faces, _Faces]:
+def shipped_faces(city: Config, region_id: str, out_dir: Path) -> tuple[_Faces, _Faces]:
     """The ground the tiles draw, and everything else the bundle draws over it."""
     rebuild = f"python -m pipeline --region {region_id}"
     buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
@@ -476,7 +476,7 @@ def build_region(
     carriageway = read_carriageway_region(out_dir, region_id).whole
     kept_clear = carriageway.buffer(spec.kerb_clear_m)
     shapely.prepare(kept_clear)
-    ground, structure = _shipped_faces(city, region_id, out_dir)
+    ground, structure = shipped_faces(city, region_id, out_dir)
 
     stands: list[Placement] = []
     for tree in candidates:

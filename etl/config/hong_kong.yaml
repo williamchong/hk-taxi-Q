@@ -3300,6 +3300,22 @@ lamps:
   # 5 neighbour gaps over 40 m; drawn, it has 16. A widening change moves that
   # number and nothing else would show it.
   gap_report_m: 40.0
+  # 🔴 **No column through a deck or a roof**: a face the bundle draws over a
+  # column's foot, between this height (`trees.overhead_clear_m`'s value) and
+  # the column's top, is one it would pass through. A column surveyed inside a
+  # deck's drawn ribbon is not one of these — it stands on the deck.
+  overhead_clear_m: 2.5
+  # Such a column is stood SHORTER (the user's call, 2026-11-11), its top this
+  # far under the lowest face, and refused where that leaves less than
+  # `min_column_height_m`. ⚠️ Both authored. 5.0 keeps the lantern, which hangs
+  # 1 m over the lane at 94% of the column, above a 4.4 m double-decker.
+  soffit_gap_m: 0.5
+  min_column_height_m: 5.0
+  # Where a deck's column stands, out from the deck's drawn kerb. ⚠️ Not
+  # `outset_m`: the drawn slab ends just past the kerb, so at 0.6 m 53 of the
+  # two regions' 81 deck columns stood on air, at 0.3 m two, at 0.1 m one
+  # (measured 2026-11-11). Just over `column_radius_m`, so the foot is whole.
+  deck_outset_m: 0.1
 
 # The trees (`P3-77`, `Q171`): two published per-tree inventories, each a point
 # and an identity, stood as a library of four kinds by `pipeline/trees.py`.

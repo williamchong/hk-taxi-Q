@@ -146,6 +146,16 @@ class Lamps(LayerSpec):
     # has 5 gaps over 40 m; drawn, it has 16. That is the number a widening change
     # would move, and without this counter nobody would see it.
     gap_report_m: float
+    # A face the bundle draws over a column's foot, between this height and the
+    # column's top, is one the column would pass through: it is stood shorter,
+    # `soffit_gap_m` under the lowest, and refused where that is less than
+    # `min_column_height_m`.
+    overhead_clear_m: float
+    soffit_gap_m: float
+    min_column_height_m: float
+    # Where a column hosted to a deck stands, measured out from the deck's kerb.
+    # Not `outset_m`: a deck draws no footway to stand in.
+    deck_outset_m: float
 
     def is_lamp(self, kind: str) -> bool:
         """Whether a published `UTILITYPOINTTYPE` names a lamp post.
@@ -174,6 +184,10 @@ _LAMP_MEASURES = (
     "max_shift_m",
     "merge_m",
     "gap_report_m",
+    "overhead_clear_m",
+    "soffit_gap_m",
+    "min_column_height_m",
+    "deck_outset_m",
 )
 
 

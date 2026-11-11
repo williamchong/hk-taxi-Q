@@ -60,7 +60,9 @@ static func stand(
 	columns: Array[Transform3D], lantern: Vector3, drop_m: float
 ) -> Array[Transform3D]:
 	var pools: Array[Transform3D] = []
-	var centre: Vector3 = lantern - Vector3(0.0, drop_m * 0.5, 0.0)
+	# The drop is taken off the STOOD lantern: a column shortened under a deck
+	# (`Q199`) is scaled in Y, and a drop scaled with it would not reach the road.
+	var half_drop := Vector3(0.0, drop_m * 0.5, 0.0)
 	for column: Transform3D in columns:
-		pools.append(Transform3D(Basis.IDENTITY, column * centre))
+		pools.append(Transform3D(Basis.IDENTITY, column * lantern - half_drop))
 	return pools

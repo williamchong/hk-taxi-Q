@@ -226,8 +226,13 @@ def kerbed_ribbons(
     return ribbons(graph, surface, read_region(out_dir / REGION_NAME, region_id))
 
 
-def ribbons(graph: dict, surface: dict, region: dict | None = None) -> dict[int, Ribbon]:
-    """The drawn ribbon, keyed by edge id.
+def ribbons(
+    graph: dict, surface: dict, region: dict | None = None, *, elevated: bool = False
+) -> dict[int, Ribbon]:
+    """The drawn ribbon, keyed by edge id: level 0's, or with `elevated` the decks'.
+
+    A deck's ribbon has no territory, so its kerbs are its own rails. Asked for
+    by `lamps.py` alone, to stand a flyover's columns on the flyover.
 
     ⚠️ **Read from `roadsurface.json` rather than recomputed.** The drawn
     half-width is `surface.py`'s answer after the widening and after `Q23`'s
@@ -243,7 +248,9 @@ def ribbons(graph: dict, surface: dict, region: dict | None = None) -> dict[int,
     }
     drawn_ribbons: dict[int, Ribbon] = {}
     for edge in graph["edges"]:
-        if int(edge["elevation_level"]) != 0:
+        level = int(edge["elevation_level"])
+        wanted = level > 0 if elevated else level == 0
+        if not wanted:
             continue
         drawn = widths.get(int(edge["id"]))
         if drawn is None:

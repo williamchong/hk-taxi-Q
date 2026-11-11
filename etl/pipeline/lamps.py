@@ -28,10 +28,16 @@ also reads `0.0` and keeps its value in a `HEIGHTVALUE` column this layer does
 not have. So **every dimension drawn here is authored** — `Q60`'s railing debt
 and `P3-16`'s plate debt at a fourth and fifth layer.
 
-🔴 **NO ELEVATION COLUMN, so a lamp on a flyover is drawn on the street
-underneath.** Every other stage reading a TD or LandsD point layer gets an
+🔴 **NO ELEVATION COLUMN, so which lamp is a flyover's is INFERRED from the
+plan** (`Q199`, the user's report 2026-11-11: hosted to the street below, a
+deck's columns came up through the deck). A column surveyed inside a deck's
+drawn ribbon stands on the deck, `deck_outset_m` past its kerb; any other whose
+9 m passes through something the bundle draws is stood shorter, under it
+(`shortened`), and refused (`under_structure`) only where nothing of
+`min_column_height_m` fits. Every other stage reading a TD or LandsD point layer gets an
 `ELEVATION` and refuses what is on a structure (`Q13`, `Q21`); this one has
-nothing to refuse on. The honest instrument is `nearest_is_elevated`: how many
+nothing published to refuse on. `nearest_is_elevated` is the older, report-only
+reading of the same problem and is kept unchanged: how many
 **candidates** have an off-grade edge nearer than the nearest level-0 one. ⚠️ It
 is counted before the `too_far` and `no_ribbon` guards, so it is over all 1,263
 and not over the 1,127 that found a host — deliberately, because a lamp with no
@@ -124,7 +130,7 @@ import numpy as np
 from pipeline import gdb
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside
+from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside, ribbons
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
@@ -135,6 +141,7 @@ from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
+from pipeline.trees import shipped_faces
 
 log = logging.getLogger(__name__)
 
@@ -179,7 +186,7 @@ class LampReport:
 
         features   == not_a_lamp + empty_geometry + duplicate_point + candidates
         candidates == drawn + too_far + no_ribbon + over_shift + in_carriageway
-                      + merged
+                      + under_structure + merged
     """
 
     features: int = 0
@@ -206,6 +213,16 @@ class LampReport:
     # their own host's kerb, because they landed inside a *different* edge's
     # ribbon. A finding about `Q19`'s widening, not about this stage.
     in_carriageway: int = 0
+    # Columns refused because something the bundle draws — a deck, a roof, a
+    # footbridge — stands over the foot lower than `min_column_height_m` plus
+    # `soffit_gap_m`: no column worth drawing fits under it.
+    under_structure: int = 0
+    # Of `drawn`: columns stood shorter than the library's, to fit under one.
+    shortened: int = 0
+    # Of `drawn`: columns hosted to an elevated edge and stood at its height,
+    # because they were surveyed inside its drawn ribbon. ⚠️ An inference, not a
+    # reading — the layer publishes no elevation (module docstring).
+    on_deck: int = 0
     # Columns folded together *after* registration pushed them onto one point.
     # ⚠️ **Every one of these is a coincidence this stage MADE**: the layer
     # publishes zero coincident pairs under 0.05 m, so unlike the removed signal stage (`Q76`) there
@@ -346,6 +363,13 @@ class _Placed:
     # refusal that let the post through. These are the numbers that refusal used.
     kerb_offset_m: float
     half_width_m: float
+    # Hosted to an elevated edge, and standing at its height.
+    on_deck: bool = False
+    # How tall this column stands: the library's `column_height_m`, or less
+    # under a soffit; 0.0 is the library's. ⚠️ The stand is scaled in `Y`
+    # alone, so the reach, the radius and the post collider's plan stay the
+    # kind's; the arm's drop and the lantern's depth shrink with the column.
+    height_m: float = 0.0
 
 
 # --------------------------------------------------------------------------
@@ -616,6 +640,10 @@ def build_region(
     # is precisely "some off-grade edge is". Verified to give the identical 177
     # over a 60-edge index instead of a 797-edge one.
     off_grade = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) != 0])
+    # The decks alone (a tunnel is off-grade too, and a lamp over one stands on
+    # the street): a column surveyed inside a deck's drawn ribbon is the deck's.
+    decks = [edge for edge in graph["edges"] if int(edge["elevation_level"]) > 0]
+    elevated = Segments.of(decks) if decks else None
 
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -623,6 +651,9 @@ def build_region(
         f"python -m pipeline.surface --region {region_id}",
     )
     ribbon_by_edge = kerbed_ribbons(city, out_dir, region_id, graph, surface)
+    deck_ribbon_by_edge = ribbons(graph, surface, elevated=True)
+    # Everything the bundle draws that is not ground, the trees' own reading.
+    _, structure = shipped_faces(city, region_id, out_dir)
 
     # ⚠️ **Sorted, and the sort is not cosmetic.** `_merge` below is greedy and
     # first-wins, so a mesh built from an unsorted read is not reproducible
@@ -640,19 +671,34 @@ def build_region(
             # this post was hosted to, which is what a flyover lamp looks like
             # from here. It cannot be refused on — see the module docstring.
             report.nearest_is_elevated += 1
+        # 🔴 **A column surveyed in a deck's drawn ribbon stands ON the deck**
+        # (the user's report, 2026-11-11: columns hosted to the street below came
+        # up through the flyover). The layer publishes no elevation, so this is
+        # an inference from the plan: inside the ribbon, or within the `outset_m`
+        # the registration would move it out by. The deck is then its host for
+        # everything below — kerb, shift, the second pass and the height.
+        hosts, host_ribbons, on_deck = segments, ribbon_by_edge, False
+        if elevated is not None:
+            deck_snap = elevated.nearest(lamp.x, lamp.z)
+            deck_ribbon = deck_ribbon_by_edge.get(deck_snap.edge)
+            if deck_ribbon is not None and deck_ribbon.past_kerb_m(deck_snap) <= spec.outset_m:
+                hosts, host_ribbons, on_deck = elevated, deck_ribbon_by_edge, True
+                snap = deck_snap
         if snap.distance_m > spec.max_offset_m:
-            # No level-0 street near enough to say which kerb this column stands
+            # No street (or deck) near enough to say which kerb this column stands
             # on. Refused rather than guessed at: without a host edge there is no
             # kerb side, and without a kerb side there is no arm direction.
             report.too_far += 1
             continue
-        ribbon = ribbon_by_edge.get(snap.edge)
+        ribbon = host_ribbons.get(snap.edge)
         if ribbon is None:
             # No drawn carriageway on the host edge, so no kerb to stand on.
             report.no_ribbon += 1
             continue
 
-        registered = _register(spec, snap, ribbon, np.array([lamp.x, lamp.z]), report)
+        registered = _register(
+            spec, snap, ribbon, np.array([lamp.x, lamp.z]), report, on_deck=on_deck
+        )
         if registered is None:
             report.over_shift += 1
             continue
@@ -677,11 +723,28 @@ def build_region(
         # identical snaps, 0 refusals**, against **78** from the moved half, every
         # one on a *different* edge. Left running because the branch condition is
         # one edit from making it reachable — what is corrected here is the claim.
-        settled = segments.nearest(float(placed[0]), float(placed[1]))
-        settled_ribbon = ribbon_by_edge.get(settled.edge)
+        settled = hosts.nearest(float(placed[0]), float(placed[1]))
+        settled_ribbon = host_ribbons.get(settled.edge)
         if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
             report.in_carriageway += 1
             continue
+
+        # 🔴 **No column through a deck or a roof.** A face the bundle draws over
+        # the foot, between `overhead_clear_m` and the column's top, is a column
+        # drawn through it — so the column is SHORTENED to stand `soffit_gap_m`
+        # under the lowest one (the user's call, 2026-11-11: a hole in the row
+        # is worse than a short lamp), and refused only where that leaves less
+        # than `min_column_height_m`. Never pushed again. The trees' instrument
+        # (`trees.shipped_faces`).
+        over = structure.heights(float(placed[0]), float(placed[1]))
+        low, high = snap.y + spec.overhead_clear_m, snap.y + spec.column_height_m
+        inside = over[(over > low) & (over < high)]
+        height_m = spec.column_height_m
+        if len(inside):
+            height_m = float(inside.min()) - snap.y - spec.soffit_gap_m
+            if height_m < spec.min_column_height_m:
+                report.under_structure += 1
+                continue
 
         # ⚠️ **`settled_ribbon` where it exists, the host ribbon otherwise.** The
         # guard above only runs when there is a settled ribbon to compare against;
@@ -711,6 +774,8 @@ def build_region(
                 arm_reach_m=spec.arm_reach_m,
                 kerb_offset_m=graded_offset_m,
                 half_width_m=graded_half_m,
+                on_deck=on_deck,
+                height_m=height_m,
             )
         )
 
@@ -734,8 +799,20 @@ def build_region(
                 f"{post.kind} reaches {post.arm_reach_m} m at ({post.x:.1f}, {post.z:.1f}) "
                 f"and {reach_by_kind[post.kind]} m in the library"
             )
-        stands.append(placement(post.kind, (post.x, post.y, post.z), bearing_deg(post.arm)))
+        short = 0.0 < post.height_m < spec.column_height_m
+        stands.append(
+            placement(
+                post.kind,
+                (post.x, post.y, post.z),
+                bearing_deg(post.arm),
+                scale=(1.0, post.height_m / spec.column_height_m, 1.0) if short else None,
+            )
+        )
         report.drawn += 1
+        if short:
+            report.shortened += 1
+        if post.on_deck:
+            report.on_deck += 1
         report.drawn_by_kind[post.kind] = report.drawn_by_kind.get(post.kind, 0) + 1
     # ⚠️ **Every declared kind gets a row, drawn or not.** A city that declares a
     # code its region does not carry should read 0 rather than be absent — an
@@ -776,7 +853,13 @@ def build_region(
 
 
 def _register(
-    spec: Lamps, snap: Snap, ribbon: Ribbon, published: np.ndarray, report: LampReport
+    spec: Lamps,
+    snap: Snap,
+    ribbon: Ribbon,
+    published: np.ndarray,
+    report: LampReport,
+    *,
+    on_deck: bool = False,
 ) -> tuple[np.ndarray, float] | None:
     """Push a column out to the kerb the ribbon actually drew, or leave it, or refuse.
 
@@ -797,12 +880,18 @@ def _register(
     `CLAUDE.md` says not to align it — a fence is a run and a conditional push
     would zigzag it. A lamp post is not a run.
 
+    ⚠️ **A deck's column always takes the target, `deck_outset_m` past the
+    kerb, pulled in as well as pushed out.** A deck has no footway: the drawn
+    slab ends a hand's width past its kerb, and a column kept where it was
+    surveyed, or stood `outset_m` out, stands on air beside it.
+
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move.
     """
-    side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
+    outset_m = spec.deck_outset_m if on_deck else spec.outset_m
+    side, _, target_m, placed = ribbon.kerb_target(snap, outset_m)
 
-    if ribbon.past_kerb_m(snap) > spec.outset_m:
+    if not on_deck and ribbon.past_kerb_m(snap) > spec.outset_m:
         # ⚠️ **The published point, never a reconstruction** — see the foot note
         # below, which applies here with nothing to catch it.
         #
@@ -986,7 +1075,13 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         # 🔴 Refused because registration could not get them out of the road — a
         # finding about `Q19`'s widening, not about this stage.
         "in_carriageway": report.in_carriageway,
+        # Refused because a deck or a roof stands too low for any column.
+        "under_structure": report.under_structure,
+        # Of `drawn`: stood shorter than the library's, under a deck or a roof.
+        "shortened": report.shortened,
         "merged": report.merged,
+        # Of `drawn`: stood on the deck whose drawn ribbon they were surveyed in.
+        "on_deck": report.on_deck,
         # ⚠️ `Q78`'s branch: columns that kept the point LandsD surveyed because
         # they already stood clear. They append a real 0.0 to `shift_m`.
         "posts_kept_as_surveyed": report.posts_kept_as_surveyed,

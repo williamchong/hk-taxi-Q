@@ -42,6 +42,18 @@ def _across(point: np.ndarray, heading_deg: float) -> float:
     return float((point - MID_EDGE) @ nearside(heading_deg))
 
 
+class TestTheDecksAreAskedForByName:
+    def test_a_deck_is_no_level_0_ribbon_and_the_only_elevated_one(self):
+        graph, surface = _graph(elevation_level=1), _surface()
+
+        assert ribbons(graph, surface) == {}
+        assert set(ribbons(graph, surface, elevated=True)) == {7}
+
+    def test_a_street_and_a_tunnel_are_not_decks(self):
+        for level in (0, -1):
+            assert ribbons(_graph(elevation_level=level), _surface(), elevated=True) == {}
+
+
 class TestTheKerbIsTheRoads:
     """A share 3 m either side of its centreline, in a road whose kerbs stand
     4 m to the nearside and 12 m to the offside — two more carriageways lie
