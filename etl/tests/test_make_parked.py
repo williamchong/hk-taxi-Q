@@ -472,3 +472,22 @@ class TestTheDieCastPass:
         plain = sum(part.triangle_count for part in _wheels(replace(shape, hub_slots=0)))
         # Three faces where one was, a slot a wheel face.
         assert slotted - plain == 4 * len(shape.axles_m) * 2 * shape.hub_slots
+
+
+def test_the_lorry_is_a_cab_and_a_box_taller_than_it(by_name: dict[str, MeshData]) -> None:
+    """`P3-85`'s one new kind: the box body stands behind the cab, over it,
+    inside the footprint, and wears the cab's livery."""
+    shape = next(shape for shape in SHAPES if shape.kind == "lorry")
+    mesh = by_name["lorry"]
+    cab_rear = shape.front_z_m + shape.cabin_rear_m
+    over_cab = mesh.positions[:, 1] > shape.roof_y_m + 1e-6
+    assert over_cab.any()
+    assert mesh.positions[over_cab, 2].min() > cab_rear
+    assert np.abs(mesh.positions[over_cab, 0]).max() <= shape.half_width_m
+    assert mesh.positions[over_cab, 2].max() <= shape.rear_z_m + 1e-6
+    assert mesh.positions[over_cab, 1].max() == pytest.approx(shape.cargo_top_m)
+    painted = over_cab & np.all(
+        mesh.colours[:, :3] == np.array(shape.paint, dtype=np.uint8), axis=1
+    )
+    assert painted.any()
+    assert np.all(mesh.uvs[painted, 1] == MARKER_LIVERY)

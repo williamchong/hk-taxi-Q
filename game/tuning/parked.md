@@ -75,6 +75,8 @@ keeps its colour on every visit. sRGB, painted by `vehicle_body.gdshader` over t
   all white, with a grey and a navy for the trade's own. The last two of each came with `P3-85`. 🔴 Kept off saturated red on purpose: the
   player's red taxi is meant to be the one chromatic car in the frame (`ART_DESIGN.md`), and
   `maroon` is dark enough not to compete.
+- **`lorry`: cab and box together, white 4 of 7** with a blue, a dark green and a yellow — a
+  trade's own colours on a plain box lorry (`P3-85`). Authored: nothing publishes a fleet's paint.
 - **`coach`: the belt band** — navy 2, red, green, orange; a tour coach's body stays white.
 - **`motorcycle`: tank, fairing and fender** — red and black 2 each, white, blue.
 

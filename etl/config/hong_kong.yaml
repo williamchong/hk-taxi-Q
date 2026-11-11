@@ -4673,6 +4673,9 @@ parked:
     bus: {length_m: 12.0, width_m: 2.5}
     coach: {length_m: 12.0, width_m: 2.5}
     van: {length_m: 4.7, width_m: 1.8}
+    # The 5.5-tonne box lorry (`P3-85`, `Q200`): an Isuzu N's, the light goods
+    # vehicle a Hong Kong kerb carries beside the van.
+    lorry: {length_m: 6.0, width_m: 2.1}
     # A Hong Kong tram's published 8.89 m (`Q166`); 1.98 m wide, within the
     # library's slack of 2.0.
     tram: {length_m: 8.89, width_m: 2.0}
@@ -4706,7 +4709,7 @@ parked:
       "Any Vehicles": car
       "Disable": car
       "Coaches/Buses": coach
-      "Goods Vehicles": van
+      "Goods Vehicles": lorry
       "Others": car
     join_m: 1.0
 
@@ -4776,7 +4779,10 @@ parked:
         kinds: [coach, taxi]
       office:
         match: [Centre, Center, Tower, Plaza, Exchange]
-        kinds: [van]
+        # A van at the door and a delivery lorry behind it (`P3-85`): the
+        # second rank is new candidates, so no van's own place moved for it;
+        # what a lorry stands over is counted under `refused`.
+        kinds: [van, lorry]
         hours: [8, 19]
     max_distance_m: 15.0
     pitch_m: 14.0

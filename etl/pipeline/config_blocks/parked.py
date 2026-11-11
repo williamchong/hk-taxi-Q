@@ -28,7 +28,7 @@ from pipeline.config_blocks.base import (
 # carries one mesh per kind, named after it; a kind not in this tuple is a mesh
 # nothing authored, so the loader refuses it rather than publish a placement of
 # nothing.
-ROSTER = ("car", "taxi", "minibus", "bus", "coach", "van", "tram", "motorcycle")
+ROSTER = ("car", "taxi", "minibus", "bus", "coach", "van", "lorry", "tram", "motorcycle")
 
 # What a placement cites, so a reader can tell a published bay from a fill
 # the stage invented at a config share (`Q161`: the complement of the

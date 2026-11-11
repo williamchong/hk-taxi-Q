@@ -581,7 +581,7 @@ class TestTheBlock:
 
     def test_a_kind_outside_the_roster_is_refused(self, tmp_path) -> None:
         def mutate(block):
-            block["vehicles"]["lorry"] = {"length_m": 9.0, "width_m": 2.5}
+            block["vehicles"]["rickshaw"] = {"length_m": 2.5, "width_m": 1.1}
 
         with pytest.raises(ValueError, match="not in the roster"):
             mutated(tmp_path, mutate)

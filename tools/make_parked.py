@@ -5,7 +5,7 @@
 
 One `.glb`, `parked.glb`, holding one node per roster kind — `car_a`, `car_b`,
 `taxi` and its two other licences, `minibus`, `bus`, `coach`, `van`, `tram`,
-`motorcycle` — which
+`lorry`, `motorcycle` — which
 `pipeline/parked.py` stands by a placements document, the shape every prop
 library takes (`P5-2`). Each node is a MeshGroup of `vehicle_*` material parts
 (`make_vehicle.material_parts`), so `generated_scene_import.gd` merges it into
@@ -212,6 +212,8 @@ class Shape:
     side_lamps: bool = False
     # A saloon lit behind every window at night: the marker its glass takes.
     cabin: float | None = None
+    # The roof of a box body standing behind the cab (`_lorry`).
+    cargo_top_m: float | None = None
     # --- The die-cast pass (`P3-85`): what a 1:64 model of the kind carries
     # that the loft alone does not. Each is off unless the kind sets it.
     # How far the bonnet falls from the scuttle to the nose, and the boot from
@@ -857,21 +859,9 @@ def _rub_strips(shape: Shape, colour: Colour) -> list[MeshData]:
     """A strip along each flank between the arches, at the bumper's height."""
     axles = _axle_zs(shape)
     reach = shape.arch_radius_m + 0.04
-    z0, z1 = axles[0] + reach, axles[-1] - reach
     y0 = shape.sill_y_m + shape.bumper_height_m - 0.05
-    x = shape.body_half_width_m + FLANK_PROUD_M
     return [
-        polygon_facing(
-            [
-                (side * x, y0, z0),
-                (side * x, y0, z1),
-                (side * x, y0 + 0.05, z1),
-                (side * x, y0 + 0.05, z0),
-            ],
-            colour,
-            (side, 0.0, 0.0),
-            name=f"rub_{'l' if side < 0 else 'r'}",
-        )
+        _flank_quad(shape, side, y0, y0 + 0.05, axles[0] + reach, axles[-1] - reach, colour, "rub")
         for side in (-1.0, 1.0)
     ]
 
@@ -1135,7 +1125,69 @@ def _coach(shape: Shape) -> list[MeshData]:
     return _seams(shape, [float(z) for z in zs], shape.sill_y_m + 0.08, shape.waist_y_m)
 
 
+# How far a box lorry's body stands behind its cab.
+CARGO_GAP_M = 0.08
+
+
+def _lorry(shape: Shape) -> list[MeshData]:
+    """The box body behind the cab, on the chassis the lower body draws: its
+    two rear doors' seam and hinge posts, and a rail along each lower edge.
+
+    Lofted on the chassis's own chamfered ring: a square box overhung the cut
+    corners under it by their whole depth.
+    """
+    if shape.cargo_top_m is None:
+        raise ValueError(f"{shape.kind}: a box body needs `cargo_top_m`")
+    hw, cut = shape.body_half_width_m, shape.corner_cut_m
+    z0 = shape.front_z_m + shape.cabin_rear_m + CARGO_GAP_M
+    z1 = shape.body_rear_z_m
+    floor, top = shape.belt_y_m, shape.cargo_top_m
+    tail = z1 + FLANK_PROUD_M
+    low, high = floor + 0.05, top - 0.05
+    # The rear face, inside the chamfers, and a hinge post's width and inset.
+    face_hw, post, inset = hw - cut, 0.03, 0.04
+
+    def on_tail(x0: float, x1: float, name: str) -> MeshData:
+        return polygon_facing(
+            [(x0, low, tail), (x1, low, tail), (x1, high, tail), (x0, high, tail)],
+            DARK,
+            (0.0, 0.0, 1.0),
+            name=name,
+        )
+
+    return [
+        loft(
+            [ring(floor, hw, z0, z1, cut), ring(top, hw, z0, z1, cut)],
+            [shape.paint],
+            bottom=shape.paint,
+            top=shape.paint,
+            name="cargo",
+        ),
+        on_tail(-0.012, 0.012, "cargo_door_seam"),
+        on_tail(-face_hw + inset, -face_hw + inset + post, "cargo_hinge_l"),
+        on_tail(face_hw - inset - post, face_hw - inset, "cargo_hinge_r"),
+        *(
+            _flank_quad(shape, side, floor, floor + 0.07, z0 + cut, z1 - cut, SILVER, "cargo_rail")
+            for side in (-1.0, 1.0)
+        ),
+    ]
+
+
+def _flank_quad(
+    shape: Shape, side: float, y0: float, y1: float, z0: float, z1: float, colour: Colour, name: str
+) -> MeshData:
+    """A quad on one flank's plane, `FLANK_PROUD_M` off it, named by its side."""
+    x = side * (shape.body_half_width_m + FLANK_PROUD_M)
+    return polygon_facing(
+        [(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)],
+        colour,
+        (side, 0.0, 0.0),
+        name=f"{name}_{'l' if side < 0 else 'r'}",
+    )
+
+
 DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
+    "lorry": _lorry,
     "minibus": _minibus,
     "bus": _bus,
     "tram": _tram,
@@ -1587,6 +1639,36 @@ ROSTER: tuple[RosterEntry, ...] = (
         door_glass=False,
         # The top lights over each deck's windows.
         window_bar=(0.8, 0.09),
+    ),
+    # The 5.5-tonne box lorry, an Isuzu N: a cab over the front axle, a box
+    # body on a dark chassis behind it (`_lorry`). The cab is the glasshouse;
+    # the lower body's top behind it is the chassis deck the box stands on.
+    Shape(
+        kind="lorry",
+        length_m=6.0,
+        width_m=2.1,
+        paint=WHITE,
+        roof=WHITE,
+        sill_y_m=0.45,
+        belt_y_m=1.2,
+        roof_y_m=2.3,
+        cabin_front_m=0.1,
+        cabin_rear_m=1.7,
+        windscreen_rake_deg=8.0,
+        backlight_rake_deg=1.0,
+        corner_cut_m=0.1,
+        roof_inset_m=0.08,
+        wheel_radius_m=0.38,
+        wheel_width_m=0.24,
+        axles_m=(1.05, 4.35),
+        skirt=DARK,
+        window_bays=1,
+        mirrors=False,
+        livery=WHITE,
+        cargo_top_m=3.0,
+        hub_slots=6,
+        bezels=True,
+        wipers=True,
     ),
     Shape(
         kind="motorcycle",
