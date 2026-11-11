@@ -11,6 +11,7 @@ the material door every part goes through; and the winding, for the reason
 
 from __future__ import annotations
 
+import math
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -25,22 +26,29 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from make_parked import (  # noqa: E402
+    GLINT,
     LIBRARY_FILE,
     NT_TAXI_GREEN,
     ROSTER,
     SHAPES,
+    SURROUND_M,
     TAXI_MIRROR_REACH_M,
     WHEEL_SEGMENTS,
     WHITE,
+    Glass,
     Shape,
     Taxi,
     _axle_zs,
     _doors,
+    _end_panes,
     _glasshouse,
     _glazing,
     _liveried,
     _lower,
     _side_fixtures,
+    _slab,
+    _slab_glass,
+    _slab_upper,
     _wheels,
     _window_bars,
     build_roster,
@@ -73,6 +81,7 @@ from make_vehicle import (  # noqa: E402
 
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 TAXIS = frozenset({"taxi", "taxi_nt", "taxi_lantau"})
+GLINTED = frozenset({"bus", "tram"})
 # `ART_DESIGN.md`'s upper bar per vehicle.
 TRIANGLE_CEILING = 2000
 # The library's footprint may differ from the config's by this much: a wheel
@@ -165,6 +174,8 @@ class TestTheBudget:
         for mesh in meshes:
             colours = {tuple(int(v) for v in row[:3]) for row in mesh.colours}
             ceiling = 10 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
+            # The sky's streak in a flat-sided body's windows is one more.
+            ceiling += mesh.name in GLINTED
             assert 3 <= len(colours) <= ceiling, f"{mesh.name} carries {len(colours)} colours"
 
     def test_every_part_goes_through_the_material_door(self, meshes: list[MeshData]) -> None:
@@ -223,8 +234,11 @@ class TestCabins:
             mesh = by_name[kind]
             marked = mesh.uvs[:, 1] == LIT_CABINS[kind]
             assert not np.any(mesh.uvs[:, 1] == MARKER_GLASS), kind
-            # The glass and nothing but: not a pillar or a blind on it.
-            assert np.all(mesh.colours[marked, :3] == np.array(GLASS, dtype=np.uint8)), kind
+            # The glass and the sky's streak in it, nothing else: not a pillar
+            # or a blind on it.
+            lit = {tuple(int(v) for v in row) for row in mesh.colours[marked, :3]}
+            assert lit <= {GLASS, GLINT}, kind
+            assert GLASS in lit, kind
 
 
 def test_the_trams_one_head_lamp_is_on_the_circuit(by_name: dict[str, MeshData]) -> None:
@@ -276,6 +290,9 @@ class TestWinding:
             if shape.single_track:
                 continue
             assert self._outward_fraction(_lower(shape)) == 1.0, shape.kind
+            if shape.slab_sided:
+                assert self._outward_fraction(_slab_upper(shape)) == 1.0, shape.kind
+                continue
             assert (
                 self._outward_fraction(
                     _glasshouse(
@@ -454,9 +471,9 @@ class TestTheDieCastPass:
 
     def test_a_window_bar_lies_on_its_glass(self) -> None:
         barred = [shape for shape in SHAPES if shape.window_bar is not None]
-        assert {shape.kind for shape in barred} == {"minibus", "tram"}
+        assert {shape.kind for shape in barred} == {"minibus"}
         for shape in barred:
-            top = shape.deck_y_m if shape.upper_deck else shape.roof_y_m
+            top = shape.roof_y_m
             g = _glazing(shape, shape.belt_y_m, top)
             bars = _window_bars(shape, shape.belt_y_m, top, name="deck")
             assert len(bars) == 2
@@ -493,3 +510,144 @@ def test_the_lorry_is_a_cab_and_a_box_taller_than_it(by_name: dict[str, MeshData
     )
     assert painted.any()
     assert np.all(mesh.uvs[painted, 1] == MARKER_LIVERY)
+
+
+class TestFlatSides:
+    """`P3-85`: the bus and the tram are one wall from the belt to a crowned
+    roof, their windows applied run by run, as Tiny's models of them are —
+    where two stacked glasshouses stepped in at each deck."""
+
+    FLAT = ("bus", "tram")
+
+    def test_the_double_deckers_are_flat_sided(self) -> None:
+        assert {shape.kind for shape in SHAPES if shape.slab_sided} == set(self.FLAT)
+
+    def test_the_wall_is_one_plane_a_flank_to_its_shoulder(self) -> None:
+        for kind in self.FLAT:
+            shape = _shape(kind)
+            wall, b = _slab_upper(shape), _slab(shape)
+            below = wall.positions[:, 1] <= b.shoulder_y + 1e-6
+            # Under the shoulder a vertex is on the flank or on a corner cut's
+            # inner edge, never between; over it the crown turns in.
+            widths = np.abs(wall.positions[below, 0])
+            assert np.all(np.isclose(widths, b.half_w) | np.isclose(widths, b.half_w - b.cut))
+            assert (~below).any()
+            assert np.abs(wall.positions[~below, 0]).max() < b.half_w
+
+    def test_every_window_lies_on_its_flank_inside_the_skin(self) -> None:
+        for kind in self.FLAT:
+            shape = _shape(kind)
+            b = _slab(shape)
+            panes = _slab_glass(shape)
+            assert panes, kind
+            for pane in panes:
+                assert np.abs(pane.positions[:, 0]).min() > b.half_w, pane.name
+                assert np.abs(pane.positions[:, 0]).max() < shape.half_width_m, pane.name
+                # A surround shows `SURROUND_M` round its run and no further.
+                slack = SURROUND_M + 1e-6 if pane.name.startswith("surround_") else 1e-6
+                assert pane.positions[:, 1].min() >= b.belt_y - slack, pane.name
+                assert pane.positions[:, 1].max() < b.shoulder_y, pane.name
+                front, rear = b.flank_z(float(pane.positions[:, 1].max()))
+                assert pane.positions[:, 2].min() >= front - slack, pane.name
+                assert pane.positions[:, 2].max() <= rear + slack, pane.name
+
+    def test_a_window_off_the_flank_or_the_wall_is_refused(self) -> None:
+        bus = _shape("bus")
+        with pytest.raises(ValueError, match="off the flank"):
+            _slab_glass(replace(bus, side_glass=(Glass(2.9, 3.8, 0.1, 11.4, 8),)))
+        with pytest.raises(ValueError, match="leaves the wall"):
+            _slab_glass(replace(bus, side_glass=(Glass(2.9, 4.3, 0.7, 11.4, 8),)))
+
+    def test_no_window_stands_in_a_doorway(self) -> None:
+        for kind in self.FLAT:
+            shape = _shape(kind)
+            for start, end in shape.doors_m:
+                for run in shape.side_glass:
+                    if KERB_SIDE not in run.sides or run.y0_m >= shape.door_head_m:
+                        continue
+                    # Its surround clear of the door's frame too.
+                    margin = SURROUND_M if run.surround is not None else 0.0
+                    assert run.end_m + margin <= start or run.start_m - margin >= end, (kind, run)
+
+    def test_the_bus_is_blank_where_its_stairs_climb(self) -> None:
+        """Offside, behind the driver's window: no lower-deck glass."""
+        bus = _shape("bus")
+        lower = [
+            run
+            for run in bus.side_glass
+            if -KERB_SIDE in run.sides and run.y1_m < bus.door_head_m + 0.1
+        ]
+        assert len(lower) == 2
+        cab, saloon = sorted(lower, key=lambda run: run.start_m)
+        assert saloon.start_m - cab.end_m > 1.0
+
+    def test_an_end_pane_follows_its_raked_face_and_wraps_the_corners(self) -> None:
+        for kind in self.FLAT:
+            shape = _shape(kind)
+            b = _slab(shape)
+            parts = {part.name: part for part in _end_panes(shape)}
+            for index, pane in enumerate(shape.end_panes):
+                tag = f"pane_{index}_{'rear' if pane.rear else 'front'}"
+                out = 1.0 if pane.rear else -1.0
+                rake = shape.backlight_rake_deg if pane.rear else shape.windscreen_rake_deg
+                end = shape.body_rear_z_m if pane.rear else shape.body_front_z_m
+                for x, y, z in parts[tag].positions:
+                    assert abs(x) <= b.half_w - b.cut, tag
+                    # The face by the shape's own rake, not the builder's `end_z`:
+                    # upright to the belt, leaning in by the tangent above it.
+                    lean = max(0.0, float(y) - shape.belt_y_m) * math.tan(math.radians(rake))
+                    proud = (z - (end - out * lean)) * out
+                    assert 0.0 < proud < shape.bumper_m, tag
+                assert (f"{tag}_l" in parts) == pane.corners
+                if pane.corners:
+                    for side_tag in ("l", "r"):
+                        wrap = np.abs(parts[f"{tag}_{side_tag}"].positions[:, 0])
+                        assert wrap.min() > b.half_w - b.cut and wrap.max() < shape.half_width_m
+
+    def test_the_tram_wears_the_models_plain_green_under_a_dark_roof(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        tram = _shape("tram")
+        assert tram.band is None and tram.roof != tram.paint
+        mesh = by_name["tram"]
+        roof = np.all(mesh.colours[:, :3] == np.array(tram.roof, dtype=np.uint8), axis=1)
+        assert roof.any()
+        assert mesh.positions[roof, 1].min() >= _slab(tram).shoulder_y - 1e-6
+
+    def test_a_glint_lies_in_its_own_window_and_is_glass(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        """The user's pick of five glass treatments (2026-11-11): one pale
+        streak a side window, proud of the pane, inside it, and marked glass
+        so it reflects by day and lights with the saloon at night."""
+        assert {shape.kind for shape in SHAPES if shape.glint is not None} == GLINTED
+        for kind in GLINTED:
+            shape = _shape(kind)
+            parts = _slab_glass(shape)
+            panes = {part.name: part for part in parts if part.name.startswith("glass_")}
+            glints = [part for part in parts if part.name.startswith("glint_")]
+            assert glints, kind
+            for glint in glints:
+                _, run, bay, side = glint.name.split("_")
+                pane = panes[f"glass_{run}_{bay}_{side}"]
+                for axis in (1, 2):
+                    assert glint.positions[:, axis].min() >= pane.positions[:, axis].min() - 1e-6
+                    assert glint.positions[:, axis].max() <= pane.positions[:, axis].max() + 1e-6
+                assert np.abs(glint.positions[:, 0]).min() > np.abs(pane.positions[:, 0]).max()
+                assert np.abs(glint.positions[:, 0]).max() < shape.half_width_m
+            mesh = by_name[kind]
+            streak = np.all(mesh.colours[:, :3] == np.array(GLINT, dtype=np.uint8), axis=1)
+            assert streak.any()
+            assert np.all(mesh.uvs[streak, 1] == LIT_CABINS[kind]), kind
+
+    def test_a_run_with_no_room_for_its_windows_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="no width"):
+            Glass(1.4, 2.2, 1.0, 1.2, 4, pillar_m=0.07)
+        with pytest.raises(ValueError, match="top light"):
+            Glass(1.4, 1.6, 1.0, 5.0, 4, top_light_m=0.2)
+
+    def test_applied_glass_on_a_lofted_body_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="flat-sided"):
+            replace(_shape("coach"), glint=GLINT)
+        with pytest.raises(ValueError, match="lofted glass"):
+            replace(_shape("bus"), blind_rear_share=0.2)
