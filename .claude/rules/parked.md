@@ -82,6 +82,18 @@ traffic, and the bonus for threading them.
   waist, or the deck under the lamps, is refused — lower the drop, do not move the guard. Doors are
   on `KERB_SIDE` and refused in a wheel arch. A new feature owes a lineup sheet before and after
   (`asset_viewer.tscn --lineup=20`, a forced reimport first) and the throttle route's `prims`.
+- 🔴 **The bus and the tram are flat-sided** (`Shape.slab_sided`, `Q200`): one wall to a crowned
+  roof, the windows applied (`side_glass` runs, `end_panes`), never two stacked glasshouses — that
+  body stepped in at each deck and is gone. A window is refused off its flank, above the shoulder
+  or with no width; keep a kerb-side run and its surround clear of every door
+  (`test_no_window_stands_in_a_doorway`). Everything applied stands inside the skin: surround
+  4 mm, glass 8, a streak 10, of `SKIN_M`'s 12. ⚠️ The tram's box is its collider and the raised
+  pole is in it (5.17 m): do not raise the pole further. ⚠️ The tram wears no cream band and hides
+  its trucks — the model's call and the user's (`Q166`), each his to reverse.
+- **The sky's streak** (`GLINT`, the user's pick of five glass treatments): on the bus's and the
+  tram's side windows (`Shape.glint`) and the taxi body's door windows (`Proportions.glint`, so
+  the roster's taxis too). Its swatch is glass by `make_vehicle.COLOUR_MARKERS`; nothing matte may
+  wear it. A change to it owes the day and night option sheet again, not a guess.
 - **The lorry is parked only** (`P3-85`, `Q200`): at TD's `Goods Vehicles` bays and as the second
   rank of the `office` frontage. 🔴 Do not add it to `traffic.tres` `kinds` by hand — that table is
   the census's (`signals.md`), the lorry's share of light goods is unmeasured, and a new kind there

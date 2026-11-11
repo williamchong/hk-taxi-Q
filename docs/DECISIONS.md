@@ -12545,6 +12545,50 @@ after the review found a square one overhanging its corners.
   mass and no horn for the same reason. The throttle route is unchanged to the primitive: no
   lorry stands on it.
 
+**Reshaped to the models, the same evening.** Shown the first build, the user asked "does the tram
+and bus rly has same shape as tiny models". They did not: the features were on, the bodies were not
+reshaped — two stacked glasshouses step in at each deck, and the models' sides are flat. "reshape
+all bodies as needed", with his own references: Tiny's bus page (the plain Enviro500 MMC,
+`ATC65947`) and its city-cars list (the white Hiace H300, the Isuzu N, a RAV4, the Comfort Hybrid
+taxi; `build/reference/vehicles/diecast_bus/`, `diecast_city/`, each with `CREDITS.tsv`).
+- **A flat-sided body** (`Shape.slab_sided`): one wall from the belt to a crowned roof
+  (`_slab_upper`), its windows applied run by run (`Glass`, `EndPane`) a few millimetres proud,
+  inside the skin. The lofted double-decker is gone with it (`upper_deck`, `_board`).
+- **The bus**, an Enviro500 MMC's: the lower deck's windows in groups between the two doors, a
+  blank offside where the stairs climb, one band of eight upstairs, the blind dark between two
+  raked screens that wrap the corners, the engine's cover under the rear window. On "bus has more
+  large window and thin bezel i think?": taller panes, 4 cm pillars and a dark surround behind each
+  run, so the glass reads as the model's one bonded band. Its lamps moved inside the end face
+  (`lamp_inset_m` 0.3; they hung 5 cm past its corners, older than this task). 960 → 994 triangles.
+- **The tram**: flat sides to a dark crowned roof, rounded ends (`corner_cut_m` 0.3) the screens
+  wrap, a top light over each of eight upstairs windows, five windows between two open doorways
+  downstairs, the pole raised. ⚠️ **The cream band is gone** — the model is plain green — and
+  **the skirt still hides the trucks**, where the model shows its truck: the first is the model
+  over `P3-72`'s band, the second his own call (`Q166`) kept. Both his to reverse. 474 → 468
+  triangles; the box is 5.17 m tall with the pole (4.94 before), and it is the tram's collider.
+- **The van** takes the H300's short bonnet under a steep screen and a panel van's blind rear
+  quarter (`blind_rear_share`); **the minibus** the Coaster's four windows a side and solid rear
+  corner; **the lorry** its cab doors under the glass. The two private cars and the coach have no
+  model on Tiny's lists and keep their shapes.
+- **The glass, his pick of five** rendered day and night on the bus
+  (`build/driver/p385_glass_options.png`: the dark band, a tint, reflection streaks, seats showing,
+  all three): **C, the streaks**, on the bus and the tram — one pale parallelogram a side window
+  (`GLINT`), glass by the colour rule, so it reflects by day and lights with the saloon. Then
+  "what if also for taxi glass", from three more frames (`p385_taxi_glint_options.png`): **the
+  side windows only** — two a flank on the player's body, and so on the roster's three licences.
+  The player's taxi 1,948 → 1,956 triangles, a roster taxi 1,516 → 1,524.
+- **Held**, each by a named mutation: the crown not turning in, a pane ignoring its face's rake, the
+  flank check off; with the tests for a window in a doorway, the stairs' blank and a glint outside
+  its pane. `check.sh` passes; 3,155 tests.
+- ⚠️ **Not re-measured**: the throttle route's `prims` after the reshape (the bus is +34 triangles,
+  the tram -6, a taxi +8). ⚠️ **Deferred**, from the last review, until a concurrent session's
+  lettering work on `make_vehicle.py` (`Q201`) has landed: `GLINT_PANES` to module level, the
+  "two unambiguous swatches" comment (three now), `GLINT_PROUD_M` named in both generators at two
+  values, the streak test's outline check, and "leans back" where the streak leans to the nose.
+- ⚠️ **Night frames of a lone vehicle show no lamps**, and that is the viewer: a lamp is switched
+  per instance by the traffic, and a parked car's are off (`parked.md`). Moving, they burn —
+  `build/driver/p385_near_crop.png`.
+
 **Candidates, not built.** The arches' feet fold back on themselves by 7 mm where the sill sits
 under the hub (16 triangles a car, older than this task; the review found it). Three hub slots in
 place of six would save 48 triangles a car. `asset_viewer.tscn` has no switch for its readout,
