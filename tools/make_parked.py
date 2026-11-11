@@ -4,7 +4,8 @@
     python tools/make_parked.py --out-dir /tmp/vehicles --report
 
 One `.glb`, `parked.glb`, holding one node per roster kind — `car_a`, `car_b`,
-`taxi`, `minibus`, `bus`, `coach`, `van`, `tram`, `motorcycle` — which
+`taxi` and its two other licences, `minibus`, `bus`, `coach`, `van`, `tram`,
+`motorcycle` — which
 `pipeline/parked.py` stands by a placements document, the shape every prop
 library takes (`P5-2`). Each node is a MeshGroup of `vehicle_*` material parts
 (`make_vehicle.material_parts`), so `generated_scene_import.gd` merges it into
@@ -12,11 +13,13 @@ one `vehicle_body` surface on `vehicle_body.tres`: the glass, the lamps and the
 paint shade as the player's taxi does, and every lens stays dark because no
 `vehicle_lamps.gd` drives a parked car.
 
-**Real footprints, not toy proportions.** A parked car sits beside the
-player's Crown Comfort, which has run on its real wheelbase since `Q153`, and
-a toy beside it reads as a toy. The lengths and widths here are the ones
-`hong_kong.yaml`'s `parked.vehicles:` places by, and `tests/test_make_parked.py`
-pins the two tables to each other.
+**Real footprints, but the taxi's.** A parked car sits beside the player's
+Crown Comfort, and a toy beside it reads as a toy: the lofted kinds' lengths
+and widths are the real vehicles'. The taxis are the exception since `P3-85`
+— they ARE the player's die-cast body (`Taxi`, `Q190`), so the taxi in the
+next lane is the car being driven. Every footprint here is the one
+`hong_kong.yaml`'s `parked.vehicles:` places by, and
+`tests/test_make_parked.py` pins the two tables to each other.
 
 **Detailed inside the footprint** (`P3-75`). The engine sizes each parked
 vehicle's collider from this mesh's own box (`parked_layer.gd`), so nothing
@@ -52,7 +55,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from make_vehicle import (  # noqa: E402
     AMBER,
-    BADGE_GREEN,
     BODY_MATERIAL,
     DARK,
     GLASS,
@@ -64,10 +66,15 @@ from make_vehicle import (  # noqa: E402
     MARKER_PAINT,
     RED,
     SILVER,
+    Chassis,
+    Proportions,
     _marked,
     _rake_run_m,
     _wheel,
+    door_hinge,
     material_parts,
+    taxi_door,
+    taxi_parts,
 )
 from pipeline.gltf import MeshData, MeshGroup, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
@@ -105,9 +112,10 @@ TRAM_GREEN = (22, 108, 60)
 TRAM_CREAM = (232, 226, 196)
 STEEL = (120, 122, 126)
 
-# Fewer segments than the taxi's 18: a parked wheel is looked at from a car
+# Fewer segments than the player's 18: a roster wheel is looked at from a car
 # going past, and four of them a vehicle over nine kinds is where the triangles
-# go. Twelve since the arches opened the wheel to view (`P3-75`).
+# go. Twelve since the arches opened the wheel to view (`P3-75`); the roster's
+# taxis wear the player's hubcap on it.
 WHEEL_SEGMENTS = 12
 
 # How far inside the footprint the body's flanks are drawn, so a fixture on
@@ -752,24 +760,6 @@ def _underframe(shape: Shape) -> MeshData:
 # --------------------------------------------------------------------------
 
 
-def _taxi(shape: Shape) -> list[MeshData]:
-    """The roof's TAXI sign over the front seats, and the 4 SEATS badge."""
-    hw = shape.body_half_width_m
-    face = shape.body_front_z_m
-    sign_z = _glazing(shape, shape.belt_y_m, shape.roof_y_m).roof_end_z(rear=False) + 0.15
-    return [
-        # Named `sign`, the player's roof-sign circuit: a moving taxi lights it
-        # for hire through `INSTANCE_CUSTOM.a` (`Q183`); a parked one writes 0.
-        box_at((0.0, shape.roof_y_m + 0.08, sign_z), (0.24, 0.08, 0.09), LAMP, name="sign"),
-        box(
-            (hw - 0.34, shape.sill_y_m + shape.bumper_height_m + 0.01, face - FIXTURE_PROUD_M),
-            (hw - 0.18, shape.sill_y_m + shape.bumper_height_m + 0.09, face + 0.01),
-            BADGE_GREEN,
-            name="badge_front",
-        ),
-    ]
-
-
 def _minibus(shape: Shape) -> list[MeshData]:
     """The route board standing on the roof's front edge."""
     g = _glazing(shape, shape.belt_y_m, shape.roof_y_m)
@@ -836,9 +826,6 @@ def _coach(shape: Shape) -> list[MeshData]:
 
 
 DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
-    "taxi": _taxi,
-    "taxi_nt": _taxi,
-    "taxi_lantau": _taxi,
     "minibus": _minibus,
     "bus": _bus,
     "tram": _tram,
@@ -1007,32 +994,85 @@ def _car(kind: str, paint: Colour, roof: Colour) -> Shape:
     )
 
 
-# The red urban taxi, parked: a Crown Comfort's footprint (`Q153`), the
-# silver above the belt and the chrome grille of the photographs.
-_URBAN_TAXI = Shape(
-    kind="taxi",
-    length_m=4.7,
-    width_m=1.7,
-    paint=RED,
-    roof=SILVER,
-    sill_y_m=0.22,
-    belt_y_m=0.8,
-    roof_y_m=1.46,
-    cabin_front_m=1.45,
-    cabin_rear_m=3.9,
-    windscreen_rake_deg=35.0,
-    backlight_rake_deg=30.0,
-    corner_cut_m=0.16,
-    roof_inset_m=0.13,
-    wheel_radius_m=0.31,
-    wheel_width_m=0.2,
-    axles_m=(0.95, 3.75),
-    grille=SILVER,
-    handles=True,
-)
+@dataclass(frozen=True)
+class Taxi:
+    """One licence's taxi: the player's die-cast body (`make_vehicle`, `Q190`)
+    in the licence's paint, its door shut and its wheels baked in (`P3-85`).
+
+    Not a `Shape`: nothing here is a proportion. The body is the one the
+    player drives, so the taxi in the next lane is the same car.
+    """
+
+    kind: str
+    paint: Colour
+    # The cant rail, roof and pillars: silver on the urban taxi, white on the
+    # other two licences.
+    roof: Colour
 
 
-SHAPES: tuple[Shape, ...] = (
+# How far a taxi's door mirror stands off the flank. The player's stand
+# `Proportions.mirror_reach_m` out on their stalks; a roster vehicle's box is
+# its collider, so these are tucked to the door handles' depth.
+TAXI_MIRROR_REACH_M = -0.04
+# The greenhouse parts whose silver is the roof's paint, not chrome.
+_TAXI_ROOF_PARTS = ("glass_", "greenhouse")
+
+
+def taxi(licence: Taxi) -> MeshData:
+    """A licence's taxi as one marked mesh, in the roster's frame."""
+    chassis = Chassis()
+    shape = replace(Proportions(), mirror_reach_m=TAXI_MIRROR_REACH_M)
+    parts = []
+    roofed = 0
+    for part in taxi_parts(chassis, shape):
+        if part.name.startswith(_TAXI_ROOF_PARTS):
+            part, hit = _repainted(part, SILVER, licence.roof)
+            roofed += hit
+        parts.append(_marked(part))
+    # The names are `make_vehicle`'s: renamed there, the roof would stay silver
+    # on a green taxi without a word.
+    if not roofed:
+        raise ValueError(f"{licence.kind}: no part in {_TAXI_ROOF_PARTS} wears the roof's silver")
+    hinge = np.asarray(door_hinge(chassis, shape), dtype=np.float64)
+    parts.append(taxi_door(chassis, shape).translated(hinge))
+    half_track = chassis.track_m / 2.0
+    for index, axle_z in enumerate(chassis.axle_z_m):
+        for side, tag in ((-1.0, "l"), (1.0, "r")):
+            wheel = _wheel(
+                chassis.wheel_radius_m,
+                shape.wheel_width_m,
+                WHEEL_SEGMENTS,
+                faces=(side,),
+                hub_slots=shape.hub_slots,
+                name=f"wheel_{index}_{tag}",
+            )
+            parts.append(_marked(wheel).translated((side * half_track, chassis.hub_y_m, axle_z)))
+    body = merge(parts, name=licence.kind)
+    assert body.colours is not None and body.uvs is not None
+    # The licence's paint on every painted red vertex; a red lens keeps its red.
+    painted = np.all(body.colours[:, :3] == np.array(RED, dtype=np.uint8), axis=1)
+    painted &= body.uvs[:, 1] == MARKER_PAINT
+    colours = body.colours.copy()
+    colours[painted, :3] = licence.paint
+    low, high = body.aabb()
+    centred = replace(body, colours=colours).translated(
+        (0.0, -chassis.ground_y_m, -(low[2] + high[2]) / 2.0)
+    )
+    return replace(centred, material=BODY_MATERIAL)
+
+
+def _repainted(part: MeshData, old: Colour, new: Colour) -> tuple[MeshData, int]:
+    """`part` with every vertex wearing `old` in `new`, and how many did."""
+    assert part.colours is not None
+    hit = np.all(part.colours[:, :3] == np.array(old, dtype=np.uint8), axis=1)
+    colours = part.colours.copy()
+    colours[hit, :3] = new
+    return replace(part, colours=colours), int(hit.sum())
+
+
+RosterEntry = Shape | Taxi
+
+ROSTER: tuple[RosterEntry, ...] = (
     replace(_car("car_a", WHITE, WHITE), livery=WHITE),
     # A people-carrier on the saloon's footprint — an Alphard, the private
     # car a Hong Kong street carries most after the saloon: tall, the cabin
@@ -1060,11 +1100,11 @@ SHAPES: tuple[Shape, ...] = (
         handles=True,
         livery=NAVY,
     ),
-    _URBAN_TAXI,
-    # The New Territories' and Lantau's licences (`Q183`): the same Crown
-    # Comfort, green or blue under a white roof.
-    replace(_URBAN_TAXI, kind="taxi_nt", paint=NT_TAXI_GREEN, roof=WHITE),
-    replace(_URBAN_TAXI, kind="taxi_lantau", paint=LANTAU_TAXI_BLUE, roof=WHITE),
+    # The urban licence's red under silver, and the New Territories' and
+    # Lantau's (`Q183`): the same Crown Comfort, green or blue under white.
+    Taxi("taxi", RED, SILVER),
+    Taxi("taxi_nt", NT_TAXI_GREEN, WHITE),
+    Taxi("taxi_lantau", LANTAU_TAXI_BLUE, WHITE),
     # The green minibus: a Toyota Coaster, cream with the green roof.
     Shape(
         kind="minibus",
@@ -1222,16 +1262,26 @@ SHAPES: tuple[Shape, ...] = (
 )
 
 
-def build_roster(shapes: Sequence[Shape] = SHAPES) -> list[MeshData]:
+# The lofted kinds, every one but the taxis.
+SHAPES: tuple[Shape, ...] = tuple(entry for entry in ROSTER if isinstance(entry, Shape))
+
+
+def build_roster(roster: Sequence[RosterEntry] = ROSTER) -> list[MeshData]:
     """Every kind as one marked mesh, in roster order."""
-    return [motorcycle(shape) if shape.single_track else vehicle(shape) for shape in shapes]
+    meshes: list[MeshData] = []
+    for entry in roster:
+        if isinstance(entry, Taxi):
+            meshes.append(taxi(entry))
+        else:
+            meshes.append(motorcycle(entry) if entry.single_track else vehicle(entry))
+    return meshes
 
 
 def write_roster(
-    out_dir: Path, shapes: Sequence[Shape] = SHAPES
+    out_dir: Path, roster: Sequence[RosterEntry] = ROSTER
 ) -> tuple[Path, int, list[MeshData]]:
     """The library, one node per kind; returns where it went and its bytes."""
-    meshes = build_roster(shapes)
+    meshes = build_roster(roster)
     path = out_dir / LIBRARY_FILE
     groups: list[MeshGroup] = [material_parts(inked(mesh)) for mesh in meshes]
     return path, write_glb(path, groups), meshes

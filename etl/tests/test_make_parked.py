@@ -26,7 +26,13 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from make_parked import (  # noqa: E402
     LIBRARY_FILE,
+    NT_TAXI_GREEN,
+    ROSTER,
     SHAPES,
+    TAXI_MIRROR_REACH_M,
+    WHEEL_SEGMENTS,
+    WHITE,
+    Taxi,
     _glasshouse,
     _liveried,
     _lower,
@@ -37,18 +43,27 @@ from make_vehicle import (  # noqa: E402
     CIRCUIT_HEADLAMP,
     CIRCUIT_SIDELAMP,
     GLASS,
+    KERB_SIDE,
     LAMP,
     MARKER_CABIN,
     MARKER_CABIN_DIM,
     MARKER_GLASS,
     MARKER_LAMP,
     MARKER_LIVERY,
+    MARKER_PAINT,
     MATERIAL_OF_PAYLOAD,
     RED,
+    SILVER,
+    Chassis,
+    Proportions,
+    _wheel,
     material_parts,
+    taxi_body,
+    taxi_door,
 )
 
 SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
+TAXIS = frozenset({"taxi", "taxi_nt", "taxi_lantau"})
 # `ART_DESIGN.md`'s upper bar per vehicle.
 TRIANGLE_CEILING = 2000
 # The library's footprint may differ from the config's by this much: a wheel
@@ -110,10 +125,15 @@ class TestTheFrame:
             assert low[0] < 0.0 < high[0] and low[2] < 0.0 < high[2], mesh.name
 
     def test_the_nose_is_north(self, meshes: list[MeshData]) -> None:
-        """The head lamps — the one `LAMP`-coloured part on every kind — sit
-        at negative z, where `placed_positions` stands a bearing's nose."""
+        """The head lamps sit at negative z, where `placed_positions` stands a
+        bearing's nose: the one `LAMP`-coloured part on every lofted kind, and
+        on a taxi — whose reversing lamps wear `LAMP` at the tail — the lenses
+        on the head-lamp circuit."""
         for mesh in meshes:
-            lamp = np.all(mesh.colours[:, :3] == np.array(LAMP, dtype=np.uint8), axis=1)
+            if mesh.name in TAXIS:
+                lamp = mesh.uvs[:, 0] == CIRCUIT_HEADLAMP
+            else:
+                lamp = np.all(mesh.colours[:, :3] == np.array(LAMP, dtype=np.uint8), axis=1)
             assert lamp.any(), f"{mesh.name} has no head lamp"
             assert mesh.positions[lamp, 2].max() < 0.0, f"{mesh.name}'s lamps are not at the nose"
 
@@ -126,11 +146,11 @@ class TestTheBudget:
     def test_each_kind_is_within_a_few_flat_colours(self, meshes: list[MeshData]) -> None:
         """`ART_DESIGN.md`'s 3 to 5, plus the three lens colours every vehicle
         carries, is the standing exception the taxi already holds. A green or
-        blue licence (`Q183`) holds one more: the red taxi's tail lens is its
-        paint, and theirs is not."""
+        blue licence (`Q183`) holds two more: the red taxi's tail lens is its
+        paint and its roof is its chrome's silver, and theirs are not."""
         for mesh in meshes:
             colours = {tuple(int(v) for v in row[:3]) for row in mesh.colours}
-            ceiling = 9 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
+            ceiling = 10 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
             assert 3 <= len(colours) <= ceiling, f"{mesh.name} carries {len(colours)} colours"
 
     def test_every_part_goes_through_the_material_door(self, meshes: list[MeshData]) -> None:
@@ -146,7 +166,7 @@ class TestLiveries:
     """`Q167`: a kind whose colour means something carries no livery panel,
     and every other kind's livery marks paint the palette can repaint."""
 
-    IDENTITY = frozenset({"taxi", "taxi_nt", "taxi_lantau", "bus", "tram"})
+    IDENTITY = TAXIS | {"bus", "tram"}
 
     def test_a_colour_that_means_something_is_not_a_livery(
         self, by_name: dict[str, MeshData]
@@ -167,9 +187,9 @@ class TestLiveries:
 
     def test_a_livery_on_no_painted_vertex_is_refused(self, by_name: dict[str, MeshData]) -> None:
         # The glass wears `GLASS` and is marked glass, so no paint matches it.
-        shape = replace(next(s for s in SHAPES if s.kind == "taxi"), livery=GLASS)
+        shape = replace(next(s for s in SHAPES if s.kind == "car_a"), livery=GLASS)
         with pytest.raises(ValueError, match="no painted vertex"):
-            _liveried(by_name["taxi"], shape)
+            _liveried(by_name["car_a"], shape)
 
 
 # The kinds whose windows light at night, and at which level.
@@ -215,9 +235,10 @@ def test_the_trams_side_lamps_are_white_ahead_and_red_behind(
     assert np.all(mesh.colours[behind, :3] == np.array(RED, dtype=np.uint8))
     for end in (ahead, behind):
         assert {bool(x > 0.0) for x in mesh.positions[end, 0]} == {False, True}
-    # No other kind has a side lamp to light.
+    # No other kind has a side lamp to light, but the taxis: the player's body
+    # carries its position lamps, which no moving car's instance data switches.
     for kind, other in by_name.items():
-        if kind != "tram":
+        if kind != "tram" and kind not in TAXIS:
             assert not np.any(other.uvs[:, 0] == CIRCUIT_SIDELAMP), kind
 
 
@@ -265,7 +286,86 @@ class TestWinding:
 
 class TestTheRoster:
     def test_the_kinds_are_distinct_and_named_after_their_shape(self) -> None:
-        names = [shape.kind for shape in SHAPES]
+        names = [entry.kind for entry in ROSTER]
         assert len(names) == len(set(names))
-        for shape, mesh in zip(SHAPES, build_roster(), strict=True):
-            assert mesh.name == shape.kind
+        for entry, mesh in zip(ROSTER, build_roster(), strict=True):
+            assert mesh.name == entry.kind
+
+
+class TestTheTaxis:
+    """`P3-85`: a roster taxi is the player's die-cast body (`Q190`), shut and
+    on its wheels, in its licence's paint."""
+
+    def test_it_is_the_players_body_with_its_door_and_four_wheels(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        chassis, shape = Chassis(), Proportions()
+        wheel = _wheel(
+            chassis.wheel_radius_m,
+            shape.wheel_width_m,
+            WHEEL_SEGMENTS,
+            faces=(1.0,),
+            hub_slots=shape.hub_slots,
+            name="w",
+        )
+        expected = (
+            taxi_body(chassis, shape).triangle_count
+            + taxi_door(chassis, shape).triangle_count
+            + 4 * wheel.triangle_count
+        )
+        for kind in TAXIS:
+            assert by_name[kind].triangle_count == expected, kind
+
+    def test_the_doorway_is_shut(self, by_name: dict[str, MeshData]) -> None:
+        """The body leaves a hole in its kerb-side flank for the scene's
+        swinging door; with the leaf in it, both flanks' planes are whole."""
+        mesh = by_name["taxi"]
+        half_width = Proportions().half_width_m
+        areas = np.linalg.norm(mesh.triangle_cross(), axis=1) / 2.0
+        corners = mesh.positions[mesh.triangles][:, :, 0]
+
+        def skin_m2(side: float) -> float:
+            in_plane = np.all(np.isclose(corners, side * half_width, atol=1e-6), axis=1)
+            return float(areas[in_plane].sum())
+
+        assert skin_m2(KERB_SIDE) == pytest.approx(skin_m2(-KERB_SIDE), abs=1e-4)
+        assert skin_m2(KERB_SIDE) > 1.0
+
+    def test_the_mirrors_stand_inside_the_footprint(self, by_name: dict[str, MeshData]) -> None:
+        shape = Proportions()
+        assert shape.mirror_reach_m > TAXI_MIRROR_REACH_M
+        low, high = by_name["taxi"].aabb()
+        players = taxi_body(Chassis(), shape).aabb()
+        assert high[0] - low[0] < (players[1][0] - players[0][0]) - 0.2
+
+    def test_a_licence_repaints_the_paint_and_never_a_lens(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        red = np.array(RED, dtype=np.uint8)
+        urban, other = by_name["taxi"], by_name["taxi_nt"]
+        was_red = np.all(urban.colours[:, :3] == red, axis=1)
+        assert np.array_equal(urban.positions, other.positions)
+        painted = was_red & (urban.uvs[:, 1] == MARKER_PAINT)
+        assert painted.any()
+        assert np.all(other.colours[painted, :3] == np.array(NT_TAXI_GREEN, dtype=np.uint8))
+        # The brake lens is red on every licence.
+        lens = was_red & (urban.uvs[:, 1] == MARKER_LAMP)
+        assert lens.any()
+        assert np.all(other.colours[lens, :3] == red)
+
+    def test_a_white_roof_leaves_the_chrome_silver(self, by_name: dict[str, MeshData]) -> None:
+        urban, other = by_name["taxi"], by_name["taxi_nt"]
+        silver = np.all(urban.colours[:, :3] == np.array(SILVER, dtype=np.uint8), axis=1)
+        whitened = silver & np.all(other.colours[:, :3] == np.array(WHITE, dtype=np.uint8), axis=1)
+        kept = silver & ~whitened
+        assert whitened.any() and kept.any()
+        # The roof is paint; chrome keeps its trim marker.
+        assert np.all(other.uvs[whitened, 1] == MARKER_PAINT)
+        # Everything whitened is the greenhouse, above the belt; the grille,
+        # bezels and hubcaps below it stay chrome.
+        belt_y = Proportions().belt_y_m - Chassis().ground_y_m
+        assert other.positions[whitened, 1].min() >= belt_y - 1e-6
+        assert other.positions[kept, 1].min() < belt_y
+
+    def test_the_roster_names_three_licences(self) -> None:
+        assert {entry.kind for entry in ROSTER if isinstance(entry, Taxi)} == TAXIS

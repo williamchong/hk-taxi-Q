@@ -1584,8 +1584,9 @@ def _wheel(
 # --------------------------------------------------------------------------
 
 
-def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
-    """The body as one mesh, and so one draw call and one material."""
+def taxi_parts(chassis: Chassis, shape: Proportions) -> list[MeshData]:
+    """The body's parts, named and unmarked — what `taxi_body` merges, and what
+    the roster's taxis repaint by part before they do (`make_parked`, `P3-85`)."""
     front_z, rear_z = shape.front_z_m, shape.rear_z_m
     hw = shape.half_width_m
     parts: list[MeshData] = []
@@ -1718,7 +1719,12 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     parts.extend(_die_cast_flank(chassis, shape))
     parts.extend(_doorway(chassis, shape))
     _check_wiring(parts)
-    body = merge([_marked(part) for part in parts], name="taxi_body")
+    return parts
+
+
+def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
+    """The body as one mesh, and so one draw call and one material."""
+    body = merge([_marked(part) for part in taxi_parts(chassis, shape)], name="taxi_body")
     # `merge` deliberately does not carry `material` — many meshes in, one out,
     # and inheriting whichever was first would be a coin toss. The caller names
     # the result, exactly as `buildings._write_tile` does for a tile.
