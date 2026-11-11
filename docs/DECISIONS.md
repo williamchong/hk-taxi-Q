@@ -12549,6 +12549,13 @@ under the hub (16 triangles a car, older than this task; the review found it). T
 place of six would save 48 triangles a car. `asset_viewer.tscn` has no switch for its readout,
 which covers a third of a lineup frame.
 
+**Seen moving.** The traffic's ring pulled in for the frames only (`spawn_min_m` 18, `spawn_max_m`
+70, `retire_m` 90 in a trial `traffic.tres`, restored): Hennessy Road from `f_016` at noon and at
+`--time-of-day=0.93`, the roster's taxis, a saloon, an MPV and a van under way with their head and
+tail lamps lit at night — `build/driver/p385_near.png`, the cars enlarged in `p385_near_crop.png`.
+At the shipped ring no frame of twenty-four caught a wandering car near the camera: they spawn 60 m
+out and further.
+
 **Owed.** The user's look: `build/driver/p385_before_all/sheet.png` against
 `p385_after_all/sheet.png`, the taxis in `p385_taxi/sheet.png`; a drive among the traffic by day
 and night; the handset's frame time; and the three calls taken for him above.
