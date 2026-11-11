@@ -12510,7 +12510,9 @@ The detail alone was +12% to +13%, three to four times the +40,000 `Q166` named 
 far tier; with only the shown cars drawn the route is 12% to 28% under where the task began. With
 `--traffic=off` the same route reads 822,711 / 108 and 826,487 / 110 at 1 s and 2 s: the traffic
 is +68,000 to +74,000 primitives and +5 to +9 draw calls. `phys` 3.6–4.3 ms with traffic, 2.1–3.0
-without. `parked.glb` 733,800 → 1,006,696 B on disk. ⚠️ The PCK is not measured, nor the handset.
+without. `parked.glb` 733,800 → 1,006,696 B on disk. The web PCK is 98,384,232 B after it (`tools/export.sh web`); the last
+measured, 89,196,660 B, is a month of other work older, so the task's own share is the library's
+273 KB at most. ⚠️ The handset is not measured.
 
 `verify_traffic`, the old scripts against the new on one library, both regions: identical but for
 the one renamed line — the change draws differently and decides nothing. (Across the mesh change
@@ -12536,7 +12538,7 @@ which covers a third of a lineup frame.
 
 **Owed.** The user's look: `build/driver/p385_before_all/sheet.png` against
 `p385_after_all/sheet.png`, the taxis in `p385_taxi/sheet.png`; a drive among the traffic by day
-and night; the PCK; the handset's frame time; and the three calls taken for him above.
+and night; the handset's frame time; and the three calls taken for him above.
 
 **See.** `P3-85` · `Q190` · `Q166` · `Q167` · `Q183` · `Q186` · `Q196` · `tools/make_parked.py` ·
 `etl/tests/test_make_parked.py` · `.claude/rules/parked.md` · `.claude/rules/signals.md`
