@@ -58,6 +58,7 @@ from make_vehicle import (  # noqa: E402
     BODY_MATERIAL,
     DARK,
     GLASS,
+    KERB_SIDE,
     LAMP,
     MARKER_CABIN,
     MARKER_CABIN_DIM,
@@ -80,6 +81,7 @@ from pipeline.gltf import MeshData, MeshGroup, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
 from primitives import (  # noqa: E402
     Colour,
+    Point,
     box,
     box_at,
     flank_edges,
@@ -129,6 +131,13 @@ ARCH_CLEARANCE_M = 0.05
 ARCH_SEGMENTS = 8
 # How deep a wheel well runs in, past the tyre's inner face.
 WELL_SPARE_M = 0.06
+# A head lamp's chrome bezel: how far it shows round the lens and the
+# indicator under it, and how far it stands off the face (the lens stands
+# `FIXTURE_PROUD_M`, so the bezel is behind it).
+BEZEL_M = 0.02
+BEZEL_PROUD_M = 0.004
+# How far a line or a strip drawn on a flank stands off it, inside `SKIN_M`.
+FLANK_PROUD_M = 0.004
 # A tram's side lamp: its half-size, and how far a rear one stands inboard of
 # the tail lens, on the row of the indicator under it.
 SIDE_LAMP_HALF_M = (0.06, 0.05)
@@ -203,12 +212,40 @@ class Shape:
     side_lamps: bool = False
     # A saloon lit behind every window at night: the marker its glass takes.
     cabin: float | None = None
+    # --- The die-cast pass (`P3-85`): what a 1:64 model of the kind carries
+    # that the loft alone does not. Each is off unless the kind sets it.
+    # How far the bonnet falls from the scuttle to the nose, and the boot from
+    # the backlight's foot to the tail: the three-box profile a flat deck at
+    # the belt cannot make.
+    nose_drop_m: float = 0.0
+    tail_drop_m: float = 0.0
+    # Slots round each hubcap (`make_vehicle._wheel`); 0 is the plain disc.
+    hub_slots: int = 0
+    # A chrome bezel behind each head lamp.
+    bezels: bool = False
+    # A shut line at each door's edge, where `handles` puts the doors.
+    shut_lines: bool = False
+    # A strip along each flank between the arches, in this colour.
+    rub_strip: Colour | None = None
+    # Wiper arms lying at the windscreen's foot.
+    wipers: bool = False
+    # Passenger doors on the kerb side, each (start, end) from the nose: a
+    # dark frame from the step up, two glazed leaves, posts across the glass.
+    doors_m: tuple[tuple[float, float], ...] = ()
+    # Glazed leaves in those doors; off, the doorway stands open and dark (a
+    # tram's, behind its turnstile).
+    door_glass: bool = True
+    # A bar across each deck's side glass: (how far up the glass its centre
+    # sits, its height in metres). A tram's top lights, a minibus's sliders.
+    window_bar: tuple[float, float] | None = None
 
     def __post_init__(self) -> None:
         if self.panel_share + self.glass_share >= 1.0:
             raise ValueError(f"{self.kind}: the panel and the glass leave no roof rail")
         if self.head_lamps not in (1, 2):
             raise ValueError(f"{self.kind}: head_lamps is 1 or 2, not {self.head_lamps}")
+        if self.shut_lines and not self.handles:
+            raise ValueError(f"{self.kind}: shut lines stand at the doors `handles` places")
 
     @property
     def half_width_m(self) -> float:
@@ -335,6 +372,11 @@ def _lower(shape: Shape) -> MeshData:
         ring(y, hw, shape.body_front_z_m, shape.body_rear_z_m, shape.corner_cut_m)
         for y in (shape.sill_y_m, shape.waist_y_m, shape.belt_y_m)
     ]
+    falling = bool(shape.nose_drop_m or shape.tail_drop_m)
+    if falling:
+        if not shape.arches:
+            raise ValueError(f"{shape.kind}: a falling deck needs the flanks its arches draw")
+        rings[1] = tuple((x, waist_y_at(shape, z), z) for x, _, z in rings[1])
     skirt = loft(
         rings[:2],
         [shape.skirt_colour],
@@ -343,9 +385,94 @@ def _lower(shape: Shape) -> MeshData:
         skip_edges=flank_edges(len(rings[0])) if shape.arches else (),
         name="skirt",
     )
-    body = loft(rings[1:], [shape.paint], bottom=None, top=shape.paint, name="lower")
+    if falling:
+        body = _falling_deck(shape, rings[1], rings[2])
+    else:
+        body = loft(rings[1:], [shape.paint], bottom=None, top=shape.paint, name="lower")
     flanks = [_flank(shape, rings[0], side) for side in (-1.0, 1.0)] if shape.arches else []
     return merge([skirt, body, *flanks], name="lower")
+
+
+def deck_y_at(shape: Shape, z: float) -> float:
+    """The lower body's top at `z`: the belt under the cabin, falling
+    `nose_drop_m` to the nose and `tail_drop_m` to the tail."""
+    scuttle = shape.front_z_m + shape.cabin_front_m
+    deck = shape.front_z_m + shape.cabin_rear_m
+    front, rear = shape.body_front_z_m, shape.body_rear_z_m
+    y = shape.belt_y_m
+    if z < scuttle:
+        y -= shape.nose_drop_m * (scuttle - z) / (scuttle - front)
+    elif z > deck:
+        y -= shape.tail_drop_m * (z - deck) / (rear - deck)
+    return y
+
+
+def waist_y_at(shape: Shape, z: float) -> float:
+    """The skirt's top at `z`: the waist, falling with the deck over it so the
+    band between them keeps its height to the nose and the tail."""
+    if not (shape.nose_drop_m or shape.tail_drop_m):
+        return shape.waist_y_m
+    return deck_y_at(shape, z) - (shape.belt_y_m - shape.waist_y_m)
+
+
+def _deck_stations(shape: Shape) -> list[float]:
+    """Where a falling deck creases: the scuttle, and the backlight's foot."""
+    stations: list[float] = []
+    if shape.nose_drop_m:
+        stations.append(shape.front_z_m + shape.cabin_front_m)
+    if shape.tail_drop_m:
+        stations.append(shape.front_z_m + shape.cabin_rear_m)
+    return stations
+
+
+def _falling_deck(
+    shape: Shape, waist: Sequence[Sequence[float]], belt: Sequence[Sequence[float]]
+) -> MeshData:
+    """Waist to belt with the bonnet and the boot falling away from the cabin.
+
+    Both rings gain a station each side at the scuttle and at the backlight's
+    foot, so the fall creases there, and the waist falls with the deck
+    (`waist_y_at`) so the nose keeps a band of body over its skirt; the cap
+    is then one strip a station, each a plane because the height depends on
+    `z` alone.
+    """
+    if len(belt) != 8:
+        raise ValueError(f"{shape.kind}: a falling deck needs chamfered corners")
+    flank_front, flank_rear = belt[2][2], belt[3][2]
+    stations = _deck_stations(shape)
+    if not all(flank_front < z < flank_rear for z in stations):
+        raise ValueError(f"{shape.kind}: the cabin's end leaves the flank; no deck can fall")
+
+    def stationed(
+        ring_: Sequence[Sequence[float]], y_at: Callable[[Shape, float], float]
+    ) -> list[Point]:
+        hw = ring_[2][0]
+        points: list[Point] = [
+            *ring_[:3],
+            *((hw, 0.0, z) for z in stations),
+            *ring_[3:7],
+            *((-hw, 0.0, z) for z in reversed(stations)),
+            ring_[7],
+        ]
+        return [(x, y_at(shape, z), z) for x, _, z in points]
+
+    low, high = stationed(waist, waist_y_at), stationed(belt, deck_y_at)
+    sides = loft([low, high], [shape.paint], bottom=None, top=None, name="lower")
+    # The cap, a strip between each pair of sections nose to tail: the right
+    # flank runs up the ring's indices from 1, the left down them from 0.
+    count = len(high)
+    right = list(range(1, count // 2 + 1))
+    left = [0, *range(count - 1, count // 2, -1)]
+    caps = [
+        polygon_facing(
+            [high[left[i]], high[right[i]], high[right[i + 1]], high[left[i + 1]]],
+            shape.paint,
+            (0.0, 1.0, 0.0),
+            name=f"lower_cap_{i}",
+        )
+        for i in range(len(right) - 1)
+    ]
+    return merge([sides, *caps], name="lower")
 
 
 def _arch(shape: Shape, axle_z: float) -> list[tuple[float, float]]:
@@ -376,21 +503,32 @@ def _flank(shape: Shape, sill_ring: Sequence[Sequence[float]], side: float) -> M
     edge = flank_edges(len(sill_ring))[0]
     z_ends = sorted((sill_ring[edge][2], sill_ring[(edge + 1) % len(sill_ring)][2]))
     x = side * shape.body_half_width_m
-    sill, waist = shape.sill_y_m, shape.waist_y_m
+    sill = shape.sill_y_m
     bottom: list[tuple[float, float]] = [(z_ends[0], sill)]
     for axle_z in _axle_zs(shape):
         arch = _arch(shape, axle_z)
         if arch[0][0] <= bottom[-1][0] or arch[-1][0] >= z_ends[1]:
             raise ValueError(f"{shape.kind}: the arch at z {axle_z:+.2f} leaves its flank")
-        if max(y for _, y in arch) >= waist:
+        if any(y >= waist_y_at(shape, z) for z, y in arch):
             raise ValueError(f"{shape.kind}: the arch at z {axle_z:+.2f} rises past the waist")
         bottom.extend(arch)
     bottom.append((z_ends[1], sill))
+    # A falling deck's creases, so no column's top cuts one.
+    for station in _deck_stations(shape):
+        for i, ((z0, y0), (z1, y1)) in enumerate(pairwise(bottom)):
+            if z0 < station < z1:
+                bottom.insert(i + 1, (station, y0 + (y1 - y0) * (station - z0) / (z1 - z0)))
+                break
     tag = "l" if side < 0 else "r"
     return merge(
         [
             polygon_facing(
-                [(x, y0, z0), (x, y1, z1), (x, waist, z1), (x, waist, z0)],
+                [
+                    (x, y0, z0),
+                    (x, y1, z1),
+                    (x, waist_y_at(shape, z1), z1),
+                    (x, waist_y_at(shape, z0), z0),
+                ],
                 shape.skirt_colour,
                 (side, 0.0, 0.0),
                 name=f"flank_{tag}_{i}",
@@ -485,8 +623,8 @@ def _pillars(shape: Shape, belt_y: float, top_y: float, *, name: str) -> list[Me
     colour = shape.pillar or shape.roof
     parts: list[MeshData] = []
     for side in (-1.0, 1.0):
-        x_low = side * (g.side_x(g.panel_y) + 0.004)
-        x_high = side * (g.side_x(g.glass_y) + 0.004)
+        x_low = side * (g.side_x(g.panel_y) + FLANK_PROUD_M)
+        x_high = side * (g.side_x(g.glass_y) + FLANK_PROUD_M)
         for k in range(1, shape.window_bays):
             z = z0 + (z1 - z0) * k / shape.window_bays
             parts.append(
@@ -556,6 +694,8 @@ def _ends(shape: Shape) -> list[MeshData]:
     hw = shape.body_half_width_m
     lamp_y = shape.sill_y_m + (shape.belt_y_m - shape.sill_y_m) * 0.65
     bumper_top = shape.sill_y_m + shape.bumper_height_m
+    if lamp_y + 0.06 > shape.belt_y_m - max(shape.nose_drop_m, shape.tail_drop_m):
+        raise ValueError(f"{shape.kind}: the deck falls below its own lamps")
     parts: list[MeshData] = []
     for rear in (False, True):
         out = 1.0 if rear else -1.0
@@ -587,6 +727,21 @@ def _ends(shape: Shape) -> list[MeshData]:
         for side, side_tag in ((-1.0, "l"), (1.0, "r")):
             x = side * (hw - 0.22)
             lens_half = (0.08, 0.05) if rear else (0.11, 0.05)
+            if shape.bezels and not rear and shape.head_lamps == 2:
+                z_bezel = face + out * BEZEL_PROUD_M
+                parts.append(
+                    polygon_facing(
+                        [
+                            (x - lens_half[0] - BEZEL_M, lamp_y - 0.105 - BEZEL_M, z_bezel),
+                            (x + lens_half[0] + BEZEL_M, lamp_y - 0.105 - BEZEL_M, z_bezel),
+                            (x + lens_half[0] + BEZEL_M, lamp_y + lens_half[1] + BEZEL_M, z_bezel),
+                            (x - lens_half[0] - BEZEL_M, lamp_y + lens_half[1] + BEZEL_M, z_bezel),
+                        ],
+                        SILVER,
+                        (0.0, 0.0, out),
+                        name=f"bezel_{side_tag}",
+                    )
+                )
             if rear or shape.head_lamps == 2:
                 parts.append(
                     box(
@@ -651,7 +806,7 @@ def _ends(shape: Shape) -> list[MeshData]:
 
 def _side_fixtures(shape: Shape) -> list[MeshData]:
     """Folded mirrors and door handles, in the flanks' skin."""
-    if not (shape.mirrors or shape.handles):
+    if not (shape.mirrors or shape.handles or shape.rub_strip is not None):
         return []
     g = _glazing(shape, shape.belt_y_m, shape.roof_y_m)
     hw = shape.half_width_m
@@ -682,13 +837,167 @@ def _side_fixtures(shape: Shape) -> list[MeshData]:
                         name=f"handle_{k}_{tag}",
                     )
                 )
+    if shape.shut_lines:
+        z0, z1 = g.glass_top_z()
+        edges = [
+            g.front_z + 0.04,
+            *(z0 + (z1 - z0) * k / shape.window_bays for k in range(1, shape.window_bays)),
+            z1,
+        ]
+        for k, z in enumerate(edges):
+            foot = _over_arch(shape, z, shape.sill_y_m + 0.04)
+            for part in _seams(shape, (z,), foot, shape.belt_y_m):
+                parts.append(replace(part, name=f"shut_{k}_{part.name[-1]}"))
+    if shape.rub_strip is not None:
+        parts.extend(_rub_strips(shape, shape.rub_strip))
     return parts
+
+
+def _rub_strips(shape: Shape, colour: Colour) -> list[MeshData]:
+    """A strip along each flank between the arches, at the bumper's height."""
+    axles = _axle_zs(shape)
+    reach = shape.arch_radius_m + 0.04
+    z0, z1 = axles[0] + reach, axles[-1] - reach
+    y0 = shape.sill_y_m + shape.bumper_height_m - 0.05
+    x = shape.body_half_width_m + FLANK_PROUD_M
+    return [
+        polygon_facing(
+            [
+                (side * x, y0, z0),
+                (side * x, y0, z1),
+                (side * x, y0 + 0.05, z1),
+                (side * x, y0 + 0.05, z0),
+            ],
+            colour,
+            (side, 0.0, 0.0),
+            name=f"rub_{'l' if side < 0 else 'r'}",
+        )
+        for side in (-1.0, 1.0)
+    ]
+
+
+def _wipers(shape: Shape) -> list[MeshData]:
+    """Two wiper arms lying along the windscreen's foot, on the raked glass."""
+    g = _glazing(shape, shape.belt_y_m, shape.deck_y_m if shape.upper_deck else shape.roof_y_m)
+    y0, y1 = g.panel_y + 0.03, g.panel_y + 0.06
+    reach = g.belt_half_w - g.cut - 0.12
+    parts: list[MeshData] = []
+    for k, (xa, xb) in enumerate(((-reach, -0.06), (0.04, reach - 0.1))):
+        corners = [
+            (x, y, g.end_z(y, rear=False) - 0.006)
+            for x, y in ((xa, y0), (xb, y0), (xb, y1), (xa, y1))
+        ]
+        parts.append(polygon_facing(corners, DARK, (0.0, 0.0, -1.0), name=f"wiper_{k}"))
+    return parts
+
+
+def _doors(shape: Shape) -> list[MeshData]:
+    """The kerb-side passenger doors: below the belt a dark frame from the
+    step with two glazed leaves in it, and its posts carried up the glass."""
+    if not shape.doors_m:
+        return []
+    side = KERB_SIDE
+    top_y = shape.deck_y_m if shape.upper_deck else shape.roof_y_m
+    g = _glazing(shape, shape.belt_y_m, top_y)
+    x = side * (shape.body_half_width_m + FLANK_PROUD_M)
+    step_y = shape.sill_y_m + 0.05
+    parts: list[MeshData] = []
+
+    def pane(
+        z0: float, z1: float, y0: float, y1: float, proud: float, colour: Colour, name: str
+    ) -> MeshData:
+        xp = x + side * proud
+        return polygon_facing(
+            [(xp, y0, z0), (xp, y0, z1), (xp, y1, z1), (xp, y1, z0)],
+            colour,
+            (side, 0.0, 0.0),
+            name=name,
+        )
+
+    for k, (start, end) in enumerate(shape.doors_m):
+        z0, z1 = shape.front_z_m + start, shape.front_z_m + end
+        if shape.arches and any(
+            abs(z - axle) < shape.arch_radius_m for axle in _axle_zs(shape) for z in (z0, z1)
+        ):
+            raise ValueError(f"{shape.kind}: door {k} stands in a wheel arch")
+        parts.append(pane(z0, z1, step_y, g.panel_y, 0.0, DARK, f"door_{k}_frame"))
+        if shape.door_glass:
+            mid, post = (z0 + z1) / 2.0, 0.035
+            for leaf, (za, zb) in enumerate(
+                ((z0 + post, mid - post / 2.0), (mid + post / 2.0, z1 - post))
+            ):
+                parts.append(
+                    pane(
+                        za,
+                        zb,
+                        step_y + 0.25,
+                        g.panel_y - 0.02,
+                        0.003,
+                        GLASS,
+                        f"door_{k}_leaf_{leaf}",
+                    )
+                )
+        # The posts over the side glass, leaning with it.
+        x_low = side * (g.side_x(g.panel_y) + FLANK_PROUD_M)
+        x_high = side * (g.side_x(g.glass_y) + FLANK_PROUD_M)
+        posts = (z0, (z0 + z1) / 2.0, z1) if shape.door_glass else (z0, z1)
+        for j, z in enumerate(posts):
+            parts.append(
+                polygon_facing(
+                    [
+                        (x_low, g.panel_y, z - 0.03),
+                        (x_low, g.panel_y, z + 0.03),
+                        (x_high, g.glass_y, z + 0.03),
+                        (x_high, g.glass_y, z - 0.03),
+                    ],
+                    DARK,
+                    (side, 0.0, 0.0),
+                    name=f"door_{k}_post_{j}",
+                )
+            )
+    return parts
+
+
+def _window_bars(shape: Shape, belt_y: float, top_y: float, *, name: str) -> list[MeshData]:
+    """The bar across one deck's side glass, on both sides."""
+    if shape.window_bar is None:
+        return []
+    share, height = shape.window_bar
+    g = _glazing(shape, belt_y, top_y)
+    z0, z1 = g.glass_top_z()
+    centre = g.panel_y + (g.glass_y - g.panel_y) * share
+    y0, y1 = centre - height / 2.0, centre + height / 2.0
+    colour = shape.pillar or shape.roof
+    return [
+        polygon_facing(
+            [
+                (side * (g.side_x(y0) + FLANK_PROUD_M), y0, z0),
+                (side * (g.side_x(y0) + FLANK_PROUD_M), y0, z1),
+                (side * (g.side_x(y1) + FLANK_PROUD_M), y1, z1),
+                (side * (g.side_x(y1) + FLANK_PROUD_M), y1, z0),
+            ],
+            colour,
+            (side, 0.0, 0.0),
+            name=f"{name}_bar_{'l' if side < 0 else 'r'}",
+        )
+        for side in (-1.0, 1.0)
+    ]
+
+
+def _over_arch(shape: Shape, z: float, y: float, reach: float = 0.03) -> float:
+    """`y`, or the waist there where `z` stands over a wheel arch: a line down a
+    flank stops at the arch's crown instead of crossing the opening."""
+    if not shape.arches:
+        return y
+    span = shape.arch_radius_m + reach
+    over = any(abs(z - axle) <= span for axle in _axle_zs(shape))
+    return max(y, waist_y_at(shape, z)) if over else y
 
 
 def _seams(shape: Shape, zs: Sequence[float], y0: float, y1: float) -> list[MeshData]:
     """Dark lines on both flanks at `zs` — a sliding door's, a luggage bay's."""
     parts: list[MeshData] = []
-    x = shape.body_half_width_m + 0.004
+    x = shape.body_half_width_m + FLANK_PROUD_M
     for side in (-1.0, 1.0):
         for i, z in enumerate(zs):
             parts.append(
@@ -718,6 +1027,7 @@ def _wheels(shape: Shape) -> list[MeshData]:
             WHEEL_SEGMENTS,
             rim_fraction=0.5,
             faces=faces,
+            hub_slots=shape.hub_slots,
             name="wheel",
         )
 
@@ -857,6 +1167,8 @@ def vehicle(shape: Shape) -> MeshData:
         )
         parts.extend(_pillars(shape, shape.belt_y_m, deck, name="lower_deck"))
         parts.extend(_pillars(shape, deck, shape.roof_y_m, name="upper_deck"))
+        parts.extend(_window_bars(shape, shape.belt_y_m, deck, name="lower_deck"))
+        parts.extend(_window_bars(shape, deck, shape.roof_y_m, name="upper_deck"))
     else:
         parts.append(
             _glasshouse(
@@ -864,6 +1176,7 @@ def vehicle(shape: Shape) -> MeshData:
             )
         )
         parts.extend(_pillars(shape, shape.belt_y_m, shape.roof_y_m, name="glasshouse"))
+        parts.extend(_window_bars(shape, shape.belt_y_m, shape.roof_y_m, name="glasshouse"))
     if shape.band is not None:
         parts.append(
             box_at(
@@ -881,6 +1194,9 @@ def vehicle(shape: Shape) -> MeshData:
         )
     parts.extend(_ends(shape))
     parts.extend(_side_fixtures(shape))
+    parts.extend(_doors(shape))
+    if shape.wipers:
+        parts.extend(_wipers(shape))
     parts.extend(DETAILS.get(shape.kind, lambda _: [])(shape))
     parts.extend(_wheels(shape) if shape.arches else [_underframe(shape)])
     body = _liveried(merge([_marked(part) for part in parts], name=shape.kind), shape)
@@ -991,6 +1307,13 @@ def _car(kind: str, paint: Colour, roof: Colour) -> Shape:
         wheel_width_m=0.2,
         axles_m=(0.85, 3.55),
         handles=True,
+        nose_drop_m=0.1,
+        tail_drop_m=0.06,
+        hub_slots=6,
+        bezels=True,
+        shut_lines=True,
+        rub_strip=DARK,
+        wipers=True,
     )
 
 
@@ -1099,6 +1422,11 @@ ROSTER: tuple[RosterEntry, ...] = (
         grille=SILVER,
         handles=True,
         livery=NAVY,
+        nose_drop_m=0.14,
+        hub_slots=4,
+        bezels=True,
+        shut_lines=True,
+        wipers=True,
     ),
     # The urban licence's red under silver, and the New Territories' and
     # Lantau's (`Q183`): the same Crown Comfort, green or blue under white.
@@ -1129,6 +1457,13 @@ ROSTER: tuple[RosterEntry, ...] = (
         mirrors=False,
         livery=MINIBUS_GREEN,
         cabin=MARKER_CABIN_DIM,
+        hub_slots=6,
+        bezels=True,
+        wipers=True,
+        # The Coaster's folding door, behind the front wheel.
+        doors_m=((2.15, 2.95),),
+        # The sliding lights' rail across each window.
+        window_bar=(0.5, 0.03),
     ),
     # The double-decker, in Citybus yellow over its blue skirt.
     Shape(
@@ -1154,6 +1489,9 @@ ROSTER: tuple[RosterEntry, ...] = (
         window_bays=6,
         mirrors=False,
         cabin=MARKER_CABIN,
+        wipers=True,
+        # The entrance ahead of the front axle and the exit amidships.
+        doors_m=((0.55, 1.75), (5.3, 6.5)),
     ),
     # A tour coach: single deck, high floor, white.
     Shape(
@@ -1178,6 +1516,8 @@ ROSTER: tuple[RosterEntry, ...] = (
         window_bays=7,
         mirrors=False,
         livery=NAVY,
+        wipers=True,
+        doors_m=((0.6, 1.5),),
     ),
     # The Hiace: a van's box, tall, short-nosed.
     Shape(
@@ -1200,6 +1540,10 @@ ROSTER: tuple[RosterEntry, ...] = (
         axles_m=(0.95, 3.55),
         window_bays=3,
         livery=WHITE,
+        nose_drop_m=0.12,
+        hub_slots=6,
+        bezels=True,
+        wipers=True,
     ),
     # The tram: a tall, narrow double-decker with a cream band at the belt,
     # boxy — square ends, flat sides, the roof barely drawn in — and its
@@ -1237,6 +1581,12 @@ ROSTER: tuple[RosterEntry, ...] = (
         mirrors=False,
         side_lamps=True,
         cabin=MARKER_CABIN,
+        # The exit beside the driver and the entrance at the tail, open
+        # doorways behind their gates.
+        doors_m=((0.4, 1.15), (7.74, 8.49)),
+        door_glass=False,
+        # The top lights over each deck's windows.
+        window_bar=(0.8, 0.09),
     ),
     Shape(
         kind="motorcycle",

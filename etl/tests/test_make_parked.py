@@ -33,10 +33,18 @@ from make_parked import (  # noqa: E402
     WHEEL_SEGMENTS,
     WHITE,
     Taxi,
+    _axle_zs,
+    _doors,
     _glasshouse,
+    _glazing,
     _liveried,
     _lower,
+    _side_fixtures,
+    _wheels,
+    _window_bars,
     build_roster,
+    deck_y_at,
+    waist_y_at,
     write_roster,
 )
 from make_vehicle import (  # noqa: E402
@@ -369,3 +377,98 @@ class TestTheTaxis:
 
     def test_the_roster_names_three_licences(self) -> None:
         assert {entry.kind for entry in ROSTER if isinstance(entry, Taxi)} == TAXIS
+
+
+class TestTheDieCastPass:
+    """`P3-85`: what each lofted kind carries off its 1:64 model."""
+
+    @staticmethod
+    def _shape(kind: str):
+        return next(shape for shape in SHAPES if shape.kind == kind)
+
+    def test_a_deck_falls_from_the_cabin_and_nowhere_else(self) -> None:
+        falling = [shape for shape in SHAPES if shape.nose_drop_m or shape.tail_drop_m]
+        assert {shape.kind for shape in falling} >= {"car_a", "car_b", "van"}
+        for shape in falling:
+            scuttle = shape.front_z_m + shape.cabin_front_m
+            deck = shape.front_z_m + shape.cabin_rear_m
+            assert deck_y_at(shape, (scuttle + deck) / 2.0) == shape.belt_y_m
+            assert deck_y_at(shape, shape.body_front_z_m) == pytest.approx(
+                shape.belt_y_m - shape.nose_drop_m
+            )
+            assert deck_y_at(shape, shape.body_rear_z_m) == pytest.approx(
+                shape.belt_y_m - shape.tail_drop_m
+            )
+            lower = _lower(shape)
+            ceiling = np.array([deck_y_at(shape, z) for z in lower.positions[:, 2]])
+            assert np.all(lower.positions[:, 1] <= ceiling + 1e-6), shape.kind
+            # The cap reaches its ceiling at both ends: nothing is left flat.
+            nose = np.isclose(lower.positions[:, 2], shape.body_front_z_m)
+            assert lower.positions[nose, 1].max() == pytest.approx(
+                shape.belt_y_m - shape.nose_drop_m
+            )
+
+    def test_a_cabin_past_the_flank_refuses_a_falling_boot(self) -> None:
+        with pytest.raises(ValueError, match="leaves the flank"):
+            _lower(replace(self._shape("car_b"), tail_drop_m=0.05))
+
+    def test_a_deck_may_not_fall_below_its_lamps(self) -> None:
+        with pytest.raises(ValueError, match="below its own lamps"):
+            build_roster([replace(self._shape("van"), nose_drop_m=0.25)])
+
+    def test_doors_stand_on_the_kerb_side_clear_of_the_arches(self) -> None:
+        doored = [shape for shape in SHAPES if shape.doors_m]
+        assert {shape.kind for shape in doored} == {"minibus", "bus", "coach", "tram"}
+        for shape in doored:
+            parts = _doors(shape)
+            assert parts, shape.kind
+            for part in parts:
+                assert np.all(np.sign(part.positions[:, 0]) == KERB_SIDE), part.name
+                # In the skin: proud of the body, inside the footprint.
+                assert np.abs(part.positions[:, 0]).max() < shape.half_width_m, part.name
+            leaves = [part for part in parts if "_leaf_" in part.name]
+            assert bool(leaves) == shape.door_glass, shape.kind
+
+    def test_a_door_in_a_wheel_arch_is_refused(self) -> None:
+        bus = self._shape("bus")
+        axle = bus.axles_m[0]
+        with pytest.raises(ValueError, match="wheel arch"):
+            _doors(replace(bus, doors_m=((axle - 0.2, axle + 1.0),)))
+
+    def test_a_shut_line_stops_at_an_arch_crown(self) -> None:
+        for shape in SHAPES:
+            if not shape.shut_lines:
+                continue
+            lines = [part for part in _side_fixtures(shape) if part.name.startswith("shut_")]
+            assert len(lines) == 2 * (shape.window_bays + 1), shape.kind
+            crossed = 0
+            for part in lines:
+                z = float(part.positions[:, 2].mean())
+                foot = float(part.positions[:, 1].min())
+                over = any(abs(z - axle) <= shape.arch_radius_m for axle in _axle_zs(shape))
+                assert foot >= (waist_y_at(shape, z) if over else shape.sill_y_m) - 1e-6, part.name
+                crossed += over
+            assert crossed, f"{shape.kind}: no shut line met an arch, so the rule went untested"
+
+    def test_a_window_bar_lies_on_its_glass(self) -> None:
+        barred = [shape for shape in SHAPES if shape.window_bar is not None]
+        assert {shape.kind for shape in barred} == {"minibus", "tram"}
+        for shape in barred:
+            top = shape.deck_y_m if shape.upper_deck else shape.roof_y_m
+            g = _glazing(shape, shape.belt_y_m, top)
+            bars = _window_bars(shape, shape.belt_y_m, top, name="deck")
+            assert len(bars) == 2
+            for bar in bars:
+                assert g.panel_y < bar.positions[:, 1].min()
+                assert bar.positions[:, 1].max() < g.glass_y
+                z0, z1 = g.glass_top_z()
+                assert bar.positions[:, 2].min() >= z0 - 1e-6
+                assert bar.positions[:, 2].max() <= z1 + 1e-6
+
+    def test_a_slotted_hubcap_costs_its_slots(self) -> None:
+        shape = self._shape("car_a")
+        assert shape.hub_slots
+        slotted = sum(part.triangle_count for part in _wheels(shape))
+        plain = sum(part.triangle_count for part in _wheels(replace(shape, hub_slots=0)))
+        # Three faces where one was, a slot a wheel face.
+        assert slotted - plain == 4 * len(shape.axles_m) * 2 * shape.hub_slots
