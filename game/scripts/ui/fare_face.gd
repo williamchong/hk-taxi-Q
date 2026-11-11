@@ -44,8 +44,7 @@ var caption: String = ""
 var callout: String = ""
 var callout_sub: String = ""
 ## The meter's digits, `money`-formatted — 0.0 between fares, everything but
-## the total resetting at delivery (the user's call) — and the session's
-## takings under them.
+## the total resetting at delivery (the user's call).
 var meter_text: String = "0.0"
 ## The tip as it stands, under the meter while carrying — the skills paid so
 ## far, `money`-formatted for a second LED in the meter's red (the user's
@@ -54,7 +53,10 @@ var meter_text: String = "0.0"
 var tip_text: String = ""
 ## The chip beside the tip's digits, the way "HK$" stands beside the meter's.
 var tip_caption: String = ""
-var total_text: String = ""
+## The session's takings under both, `money`-formatted for a third LED, and
+## the chip beside its digits.
+var total_text: String = "0.0"
+var total_caption: String = ""
 ## The tip clock: whole seconds left, shown only while carrying.
 var timer_text: String = ""
 var show_timer: bool = false
@@ -139,7 +141,8 @@ func on_ended(fare: Fare, delivered: bool) -> void:
 func on_sampled(
 	state: FareSystem.State, fare: Fare, nearest: Fare.Stop, warn_s: float, earned_hkd: float
 ) -> void:
-	total_text = _say("合計 HK$", "TOTAL HK$") + money(earned_hkd)
+	total_text = money(earned_hkd)
+	total_caption = _say("合計", "TOTAL")
 	show_timer = state == FareSystem.State.CARRYING
 	timer_urgent = false
 	timer_text = ""

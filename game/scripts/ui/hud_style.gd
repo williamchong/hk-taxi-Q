@@ -200,6 +200,11 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## lean, a smaller digit so both rows fit the meter's housing.
 @export var tip_digit_px: float
 @export var tip_segment_px: float
+## The session's takings on a third LED under both: the same face again, in
+## `total_cells` cells of its own — a session's sum outruns the fare's.
+@export var total_digit_px: float
+@export var total_segment_px: float
+@export var total_cells: int
 ## The tip clock: seconds left on the allowance, red under `timer_warn_s`.
 @export var timer_size: int
 @export var timer_unit_size: int

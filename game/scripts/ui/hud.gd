@@ -137,9 +137,10 @@ var _clock_accum_s: float = 0.0
 var _face: FareFace = null
 var _meter_panel: ChamferPanel = null
 var _meter: SevenSegment = null
-## The session's takings, under the LED (the user's call: a total beside the
-## current fare).
-var _total: Label = null
+## The session's takings, a third LED under the meter's with its chip (the
+## user's calls: a total beside the current fare, and on the meter's display).
+var _total: SevenSegment = null
+var _total_caption: Label = null
 ## The tip as it stands, a second LED under the meter's while carrying
 ## (`P3-49`), with its chip; the row hides between fares.
 var _tip_row: HBoxContainer = null
@@ -378,26 +379,47 @@ func _build() -> void:
 	# reserved rects are taken as they are, and nothing here is laid out.
 	# All three hide until a usable `FareSystem` is handed in.
 	_meter_panel = _housing("Meter", root, _layout.meter)
-	var meter_lines: VBoxContainer = _lines(_meter_panel, 0)
+	# The rows in a stack as wide as the widest, centred in the housing, so the
+	# two small LEDs can end where the fare's does — a meter's columns line up.
+	var meter_lines := VBoxContainer.new()
+	meter_lines.name = "Stack"
+	meter_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	meter_lines.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	meter_lines.add_theme_constant_override(&"separation", 0)
+	_lines(_meter_panel, 0).add_child(meter_lines)
 	var meter_row: HBoxContainer = _row(meter_lines, "Row", roundi(_style.plate_pad.y))
 	var currency: Label = _label("Currency", _style.meter_label_size, _style.chip_muted)
 	currency.text = "HK$"
 	currency.size_flags_vertical = Control.SIZE_SHRINK_END
 	meter_row.add_child(currency)
 	# The LED (`Q139`): the fare's red, and the one place it is spent.
-	_meter = _seven_segment("Digits", _style.meter_digit_px, _style.meter_segment_px)
+	_meter = _seven_segment(
+		"Digits", _style.meter_digit_px, _style.meter_segment_px, _style.meter_cells
+	)
 	meter_row.add_child(_meter)
 	# The tip, live: the one number on the meter the driver can move at the
 	# wheel, on the same LED in the same red (the user's call), smaller.
 	_tip_row = _row(meter_lines, "TipRow", roundi(_style.plate_pad.y))
+	_tip_row.alignment = BoxContainer.ALIGNMENT_END
 	_tip_row.visible = false
 	_tip_caption = _label("TipCaption", _style.meter_label_size, _style.chip_muted)
 	_tip_caption.size_flags_vertical = Control.SIZE_SHRINK_END
 	_tip_row.add_child(_tip_caption)
-	_tip = _seven_segment("TipDigits", _style.tip_digit_px, _style.tip_segment_px)
+	_tip = _seven_segment(
+		"TipDigits", _style.tip_digit_px, _style.tip_segment_px, _style.meter_cells
+	)
 	_tip_row.add_child(_tip)
-	_total = _label("Total", _style.meter_label_size, _style.chip_muted)
-	meter_lines.add_child(_total)
+	# The takings on the same LED again (the user's ask), in cells of their
+	# own: a session outruns the fare's five.
+	var total_row: HBoxContainer = _row(meter_lines, "TotalRow", roundi(_style.plate_pad.y))
+	total_row.alignment = BoxContainer.ALIGNMENT_END
+	_total_caption = _label("TotalCaption", _style.meter_label_size, _style.chip_muted)
+	_total_caption.size_flags_vertical = Control.SIZE_SHRINK_END
+	total_row.add_child(_total_caption)
+	_total = _seven_segment(
+		"TotalDigits", _style.total_digit_px, _style.total_segment_px, _style.total_cells
+	)
+	total_row.add_child(_total)
 
 	_timer_box = HBoxContainer.new()
 	_timer_box.name = "Timer"
@@ -530,12 +552,15 @@ func _bare(node_name: String, root: Control, rect: Rect2) -> ChamferPanel:
 	return panel
 
 
-## A meter's LED in the meter's face — its red, its ghost, its cells and lean —
-## at a digit size: the fare's and the tip's differ only there.
-func _seven_segment(node_name: String, digit_px: float, segment_px: float) -> SevenSegment:
+## A meter's LED in the meter's face — its red, its ghost and lean — at a
+## digit size in a count of cells: the fare's, the tip's and the total's differ
+## only there.
+func _seven_segment(
+	node_name: String, digit_px: float, segment_px: float, cells: int
+) -> SevenSegment:
 	var led := SevenSegment.new()
 	led.name = node_name
-	led.cells = _style.meter_cells
+	led.cells = cells
 	led.digit_px = digit_px
 	led.segment_px = segment_px
 	led.slant = _style.meter_slant
@@ -1089,8 +1114,9 @@ func _paint_fares() -> void:
 		_tip.text = _face.tip_text
 		if _tip_caption.text != _face.tip_caption:
 			_tip_caption.text = _face.tip_caption
-	if _total.text != _face.total_text:
-		_total.text = _face.total_text
+	_total.text = _face.total_text
+	if _total_caption.text != _face.total_caption:
+		_total_caption.text = _face.total_caption
 
 	if _timer_box.visible != _face.show_timer:
 		_timer_box.visible = _face.show_timer

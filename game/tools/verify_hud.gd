@@ -357,6 +357,18 @@ func _check_style() -> void:
 		"style",
 		"the tip's LED has a digit height and a segment weight, under the meter's"
 	)
+	# The takings' LED likewise, and never in fewer cells than the fare's: a
+	# sum that overflows drops its LEADING digit (`SevenSegment.cells_of`).
+	_expect(
+		(
+			style.total_digit_px > 0.0
+			and style.total_segment_px > 0.0
+			and style.total_digit_px < style.meter_digit_px
+			and style.total_cells >= style.meter_cells
+		),
+		"style",
+		"the total's LED has a digit height and a segment weight under the meter's, and its cells"
+	)
 	if (
 		style.timer_size <= 0
 		or style.timer_unit_size <= 0
@@ -1840,7 +1852,8 @@ func _check_fare_face() -> void:
 	_expect(
 		(
 			face.meter_text == "0.0"
-			and face.total_text == "TOTAL HK$0.0"
+			and face.total_text == "0.0"
+			and face.total_caption == "TOTAL"
 			and face.tip_text.is_empty()
 			and not face.show_timer
 		),
@@ -1850,9 +1863,14 @@ func _check_fare_face() -> void:
 	face.on_sampled(idle, null, null, 10.0, 245.7)
 	zh.on_sampled(idle, null, null, 10.0, 245.7)
 	_expect(
-		face.total_text == "TOTAL HK$245.7" and zh.total_text == "合計 HK$245.7",
+		(
+			face.total_text == "245.7"
+			and zh.total_text == "245.7"
+			and face.total_caption == "TOTAL"
+			and zh.total_caption == "合計"
+		),
 		"face",
-		"the session's takings read under the meter, in the language"
+		"the session's takings read under the meter as LED digits, the chip in the language"
 	)
 
 	var fare: RefCounted = FareScript.new()
@@ -2015,7 +2033,7 @@ func _check_fare_face() -> void:
 		"a fare with no tip is the meter alone (%s)" % face.receipt(bare)
 	)
 	_expect(
-		face.meter_text == "0.0" and face.total_text == "TOTAL HK$122.9" and not face.show_timer,
+		face.meter_text == "0.0" and face.total_text == "122.9" and not face.show_timer,
 		"face",
 		"everything but the total resets: the meter reads 0.0, the clock is down"
 	)

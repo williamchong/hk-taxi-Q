@@ -103,6 +103,18 @@ same five cells and lean, and still a meter's face at that size. It shows the
 skills paid so far while carrying and nothing else: the seconds left are
 priced at the door, since a tip that fell with the clock read as a penalty.
 
+## `total_digit_px = 26.0`
+
+The session's takings on a third LED under the tip's (the user's ask,
+2026-11-11: seven-segment for the total too, where it was a label reading
+"合計 HK$0.0"). The tip's size and weight (`total_segment_px` 5), so the two
+small rows read as one face under the fare; the chip beside it is "合計" /
+"TOTAL" alone, "HK$" standing once on the fare's row. `total_cells` is 6, one
+more than the fare's five: a sum that overflows its cells drops its LEADING
+digit, and a session passes HK$9,999.9 long before a fare does. The three
+rows share one stack as wide as the fare's row, the small LEDs ending where
+the fare's does, the way a meter's columns line up.
+
 ## `timer_outline_px = 6`
 
 The tip clock has no housing (`Q142`, the user's call: the countdown in the
