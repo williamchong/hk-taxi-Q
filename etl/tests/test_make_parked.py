@@ -32,6 +32,7 @@ from make_parked import (  # noqa: E402
     TAXI_MIRROR_REACH_M,
     WHEEL_SEGMENTS,
     WHITE,
+    Shape,
     Taxi,
     _axle_zs,
     _doors,
@@ -77,6 +78,11 @@ TRIANGLE_CEILING = 2000
 # The library's footprint may differ from the config's by this much: a wheel
 # of ten segments does not reach its own radius exactly.
 FOOTPRINT_SLACK_M = 0.05
+
+
+def _shape(kind: str) -> Shape:
+    """The lofted kind of that name."""
+    return next(shape for shape in SHAPES if shape.kind == kind)
 
 
 @pytest.fixture(scope="module")
@@ -195,7 +201,7 @@ class TestLiveries:
 
     def test_a_livery_on_no_painted_vertex_is_refused(self, by_name: dict[str, MeshData]) -> None:
         # The glass wears `GLASS` and is marked glass, so no paint matches it.
-        shape = replace(next(s for s in SHAPES if s.kind == "car_a"), livery=GLASS)
+        shape = replace(_shape("car_a"), livery=GLASS)
         with pytest.raises(ValueError, match="no painted vertex"):
             _liveried(by_name["car_a"], shape)
 
@@ -382,10 +388,6 @@ class TestTheTaxis:
 class TestTheDieCastPass:
     """`P3-85`: what each lofted kind carries off its 1:64 model."""
 
-    @staticmethod
-    def _shape(kind: str):
-        return next(shape for shape in SHAPES if shape.kind == kind)
-
     def test_a_deck_falls_from_the_cabin_and_nowhere_else(self) -> None:
         falling = [shape for shape in SHAPES if shape.nose_drop_m or shape.tail_drop_m]
         assert {shape.kind for shape in falling} >= {"car_a", "car_b", "van"}
@@ -410,11 +412,11 @@ class TestTheDieCastPass:
 
     def test_a_cabin_past_the_flank_refuses_a_falling_boot(self) -> None:
         with pytest.raises(ValueError, match="leaves the flank"):
-            _lower(replace(self._shape("car_b"), tail_drop_m=0.05))
+            _lower(replace(_shape("car_b"), tail_drop_m=0.05))
 
     def test_a_deck_may_not_fall_below_its_lamps(self) -> None:
         with pytest.raises(ValueError, match="below its own lamps"):
-            build_roster([replace(self._shape("van"), nose_drop_m=0.25)])
+            build_roster([replace(_shape("van"), nose_drop_m=0.25)])
 
     def test_doors_stand_on_the_kerb_side_clear_of_the_arches(self) -> None:
         doored = [shape for shape in SHAPES if shape.doors_m]
@@ -430,7 +432,7 @@ class TestTheDieCastPass:
             assert bool(leaves) == shape.door_glass, shape.kind
 
     def test_a_door_in_a_wheel_arch_is_refused(self) -> None:
-        bus = self._shape("bus")
+        bus = _shape("bus")
         axle = bus.axles_m[0]
         with pytest.raises(ValueError, match="wheel arch"):
             _doors(replace(bus, doors_m=((axle - 0.2, axle + 1.0),)))
@@ -466,7 +468,7 @@ class TestTheDieCastPass:
                 assert bar.positions[:, 2].max() <= z1 + 1e-6
 
     def test_a_slotted_hubcap_costs_its_slots(self) -> None:
-        shape = self._shape("car_a")
+        shape = _shape("car_a")
         assert shape.hub_slots
         slotted = sum(part.triangle_count for part in _wheels(shape))
         plain = sum(part.triangle_count for part in _wheels(replace(shape, hub_slots=0)))
@@ -477,7 +479,7 @@ class TestTheDieCastPass:
 def test_the_lorry_is_a_cab_and_a_box_taller_than_it(by_name: dict[str, MeshData]) -> None:
     """`P3-85`'s one new kind: the box body stands behind the cab, over it,
     inside the footprint, and wears the cab's livery."""
-    shape = next(shape for shape in SHAPES if shape.kind == "lorry")
+    shape = _shape("lorry")
     mesh = by_name["lorry"]
     cab_rear = shape.front_z_m + shape.cabin_rear_m
     over_cab = mesh.positions[:, 1] > shape.roof_y_m + 1e-6

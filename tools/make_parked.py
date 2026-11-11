@@ -625,23 +625,10 @@ def _pillars(shape: Shape, belt_y: float, top_y: float, *, name: str) -> list[Me
     colour = shape.pillar or shape.roof
     parts: list[MeshData] = []
     for side in (-1.0, 1.0):
-        x_low = side * (g.side_x(g.panel_y) + FLANK_PROUD_M)
-        x_high = side * (g.side_x(g.glass_y) + FLANK_PROUD_M)
         for k in range(1, shape.window_bays):
             z = z0 + (z1 - z0) * k / shape.window_bays
-            parts.append(
-                polygon_facing(
-                    [
-                        (x_low, g.panel_y, z - half),
-                        (x_low, g.panel_y, z + half),
-                        (x_high, g.glass_y, z + half),
-                        (x_high, g.glass_y, z - half),
-                    ],
-                    colour,
-                    (side, 0.0, 0.0),
-                    name=f"{name}_pillar_{k}_{'l' if side < 0 else 'r'}",
-                )
-            )
+            tag = f"{name}_pillar_{k}_{'l' if side < 0 else 'r'}"
+            parts.append(_leaning_strip(g, side, z, half, colour, tag))
     return parts
 
 
@@ -855,6 +842,38 @@ def _side_fixtures(shape: Shape) -> list[MeshData]:
     return parts
 
 
+def _flank_quad(
+    shape: Shape, side: float, y0: float, y1: float, z0: float, z1: float, colour: Colour, name: str
+) -> MeshData:
+    """A quad on one flank's plane, `FLANK_PROUD_M` off it, named by its side."""
+    x = side * (shape.body_half_width_m + FLANK_PROUD_M)
+    return polygon_facing(
+        [(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)],
+        colour,
+        (side, 0.0, 0.0),
+        name=f"{name}_{'l' if side < 0 else 'r'}",
+    )
+
+
+def _leaning_strip(
+    g: _Glazing, side: float, z: float, half: float, colour: Colour, name: str
+) -> MeshData:
+    """An upright strip on one side's glass at `z`, leaning in with it."""
+    x_low = side * (g.side_x(g.panel_y) + FLANK_PROUD_M)
+    x_high = side * (g.side_x(g.glass_y) + FLANK_PROUD_M)
+    return polygon_facing(
+        [
+            (x_low, g.panel_y, z - half),
+            (x_low, g.panel_y, z + half),
+            (x_high, g.glass_y, z + half),
+            (x_high, g.glass_y, z - half),
+        ],
+        colour,
+        (side, 0.0, 0.0),
+        name=name,
+    )
+
+
 def _rub_strips(shape: Shape, colour: Colour) -> list[MeshData]:
     """A strip along each flank between the arches, at the bumper's height."""
     axles = _axle_zs(shape)
@@ -928,23 +947,11 @@ def _doors(shape: Shape) -> list[MeshData]:
                     )
                 )
         # The posts over the side glass, leaning with it.
-        x_low = side * (g.side_x(g.panel_y) + FLANK_PROUD_M)
-        x_high = side * (g.side_x(g.glass_y) + FLANK_PROUD_M)
         posts = (z0, (z0 + z1) / 2.0, z1) if shape.door_glass else (z0, z1)
-        for j, z in enumerate(posts):
-            parts.append(
-                polygon_facing(
-                    [
-                        (x_low, g.panel_y, z - 0.03),
-                        (x_low, g.panel_y, z + 0.03),
-                        (x_high, g.glass_y, z + 0.03),
-                        (x_high, g.glass_y, z - 0.03),
-                    ],
-                    DARK,
-                    (side, 0.0, 0.0),
-                    name=f"door_{k}_post_{j}",
-                )
-            )
+        parts.extend(
+            _leaning_strip(g, side, z, 0.03, DARK, f"door_{k}_post_{j}")
+            for j, z in enumerate(posts)
+        )
     return parts
 
 
@@ -986,24 +993,11 @@ def _over_arch(shape: Shape, z: float, y: float, reach: float = 0.03) -> float:
 
 def _seams(shape: Shape, zs: Sequence[float], y0: float, y1: float) -> list[MeshData]:
     """Dark lines on both flanks at `zs` — a sliding door's, a luggage bay's."""
-    parts: list[MeshData] = []
-    x = shape.body_half_width_m + FLANK_PROUD_M
-    for side in (-1.0, 1.0):
-        for i, z in enumerate(zs):
-            parts.append(
-                polygon_facing(
-                    [
-                        (side * x, y0, z - 0.012),
-                        (side * x, y0, z + 0.012),
-                        (side * x, y1, z + 0.012),
-                        (side * x, y1, z - 0.012),
-                    ],
-                    DARK,
-                    (side, 0.0, 0.0),
-                    name=f"seam_{i}_{'l' if side < 0 else 'r'}",
-                )
-            )
-    return parts
+    return [
+        _flank_quad(shape, side, y0, y1, z - 0.012, z + 0.012, DARK, f"seam_{i}")
+        for side in (-1.0, 1.0)
+        for i, z in enumerate(zs)
+    ]
 
 
 def _wheels(shape: Shape) -> list[MeshData]:
@@ -1171,19 +1165,6 @@ def _lorry(shape: Shape) -> list[MeshData]:
             for side in (-1.0, 1.0)
         ),
     ]
-
-
-def _flank_quad(
-    shape: Shape, side: float, y0: float, y1: float, z0: float, z1: float, colour: Colour, name: str
-) -> MeshData:
-    """A quad on one flank's plane, `FLANK_PROUD_M` off it, named by its side."""
-    x = side * (shape.body_half_width_m + FLANK_PROUD_M)
-    return polygon_facing(
-        [(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)],
-        colour,
-        (side, 0.0, 0.0),
-        name=f"{name}_{'l' if side < 0 else 'r'}",
-    )
 
 
 DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
