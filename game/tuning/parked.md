@@ -70,8 +70,9 @@ keeps its colour on every visit. sRGB, painted by `vehicle_body.gdshader` over t
   are exactly two: green is a scheduled route, red a free-running one. Island streets carry more
   green.
 - **`car_a`, `car_b`, `van`: mostly neutrals, as the street is.** White, silver, black and grey
-  carry 11 of the saloon's 14 draws, with one navy, one maroon and one champagne; the MPV is white
-  and black (an Alphard), the Hiace almost all white. 🔴 Kept off saturated red on purpose: the
+  carry 11 of the saloon's 16 draws, with one each of navy, maroon, champagne, dark green and a
+  mid blue; the MPV is white and black (an Alphard) with a champagne and a grey; the Hiace almost
+  all white, with a grey and a navy for the trade's own. The last two of each came with `P3-85`. 🔴 Kept off saturated red on purpose: the
   player's red taxi is meant to be the one chromatic car in the frame (`ART_DESIGN.md`), and
   `maroon` is dark enough not to compete.
 - **`coach`: the belt band** — navy 2, red, green, orange; a tour coach's body stays white.
