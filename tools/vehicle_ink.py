@@ -131,7 +131,10 @@ def inked(body: MeshData) -> MeshData:
     return weld(
         replace(
             body,
-            positions=np.concatenate(positions),
+            # At the precision the file stores: `weld` sorts on these, and a
+            # float64's last bit differs between macOS and Linux, which would
+            # reorder the vertices from one platform to the next.
+            positions=np.concatenate(positions).astype(np.float32).astype(np.float64),
             normals=body.normals[lookup],
             triangles=np.arange(len(lookup), dtype=np.uint32).reshape(-1, 3),
             colours=body.colours[lookup],
