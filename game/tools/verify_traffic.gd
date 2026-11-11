@@ -448,6 +448,9 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	for _tick: int in roundi(RUN_S / TICK_S):
 		system.step(TICK_S)
 		for car: TrafficSystem.Car in system.cars:
+			# A retired car left in a batch is a ghost standing where it died.
+			if car.live != system.draws(car):
+				shown_wrong += 1
 			if car.live and not car.routed and system.kind_name(car) != table.taxi_kind:
 				licensed += 1
 				if not (
@@ -467,10 +470,6 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 				in_frame += 1
 				if mesh == "taxi_nt":
 					green_in_frame += 1
-			# Read off the system's own record: headless, the dummy renderer keeps
-			# no `MultiMesh` buffer to read a transform or a datum back from.
-			if car.kind_slots.get(car.kind, -1) != car.slot:
-				shown_wrong += 1
 			if ((car.written & TrafficSystem.ROOF_SIGN) != 0) != car.for_hire:
 				bit_wrong += 1
 			if car.for_hire:
@@ -483,7 +482,11 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		"licence",
 		"the frame's staged half green wears green (%d of %d)" % [green_in_frame, in_frame]
 	)
-	_expect(shown_wrong == 0, "licence", "a taxi stands in its own licence's slot")
+	_expect(
+		shown_wrong == 0,
+		"licence",
+		"every live car is drawn from its own kind's batch, and no other car is drawn"
+	)
 	# A rule reads the family, never the mesh (the review, 2026-11-06): a green or
 	# a Lantau taxi stops at the kerb, and on a line, as a red one does.
 	_expect(
@@ -620,10 +623,7 @@ func _check_hours(graph: RoadGraph, table: TrafficProfile) -> void:
 					redrawn += 1
 			lives[car.id] = car.lives
 			var extent: AABB = drive.extent_of(car)
-			if (
-				car.kind_slots.get(car.kind, -1) != car.slot
-				or not is_equal_approx(car.half_length, extent.size.z * 0.5)
-			):
+			if not drive.draws(car) or not is_equal_approx(car.half_length, extent.size.z * 0.5):
 				misworn += 1
 	print(
 		(

@@ -123,8 +123,6 @@ const LAMP_LEFT: int = 8
 const LAMP_RIGHT: int = 16
 ## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
 const ROOF_SIGN: int = 32
-## Where a hidden instance stands: nowhere, at no size.
-const HIDDEN := Transform3D(Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO), Vector3.ZERO)
 
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
@@ -184,8 +182,8 @@ class Car:
 	## Spawns this car has had, so a reader can tell a respawn from a move.
 	var lives: int = 0
 	var kind: int = 0
-	## Its index in its kind's `MultiMesh`.
-	var slot: int = 0
+	## Its index among its kind's drawn instances; -1 while it is hidden.
+	var slot: int = -1
 	## Whether it is a taxi, and whether its roof sign is lit for hire.
 	var taxi: bool = false
 	var for_hire: bool = false
@@ -284,12 +282,6 @@ class Car:
 	## A slot of the routed fleet (`P3-78`): it spawns only on a route, as the
 	## route's kind, from its slot in each routed kind's `MultiMesh` by kind index.
 	var routed: bool = false
-	## Its slot in every `MultiMesh` it may be drawn from, by kind index: a routed
-	## car's in each route kind, a wandering car's in every kind the hours draw
-	## and every taxi licence (`Q183`, `Q186`) — `instance_count` clears a buffer,
-	## so a car cannot be moved between batches after `setup`. It shows one and
-	## hides the rest.
-	var kind_slots: Dictionary[int, int] = {}
 	## The route it keeps to and the index of the stop it is bound for or stands
 	## at; null once it has left its route, when it wanders.
 	var route: BusRoutes.Route = null
@@ -387,6 +379,14 @@ var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
 var _extents: Array[AABB] = []
 var _batches: Array[MultiMesh] = []
+## The cars each batch draws, by kind index: a batch's first
+## `visible_instance_count` instances are these, in this order (`P3-85`). A
+## batch has room for every car that may wear its kind — a routed car's in each
+## route kind, a wandering car's in every kind the hours draw and every taxi
+## licence (`Q183`, `Q186`) — because `instance_count` clears a buffer and
+## cannot grow after `setup`; only the cars shown are drawn, where a hidden one
+## was an instance of no size that still cost its triangles.
+var _shown: Array[Array] = []
 ## The fleet's kinds by the hour and its taxis' licences (`Q183`, `Q186`).
 var fleet_mix := TrafficFleetMix.new()
 var _admitted: PackedInt32Array = []
@@ -472,24 +472,21 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		car.taxi = _kinds[car.kind] == profile.taxi_kind
 		for kind: int in _kinds.size():
 			if fleet_mix.wanders(kind) or licences.has(kind):
-				car.kind_slots[kind] = _batches[kind].instance_count
 				_batches[kind].instance_count += 1
-		car.slot = car.kind_slots[car.kind]
 		cars.append(car)
 	if not _routed_kinds.is_empty():
 		for _index: int in profile.buses:
 			var car := Car.new()
 			car.routed = true
 			for kind: int in _routed_kinds.values():
-				car.kind_slots[kind] = _batches[kind].instance_count
 				_batches[kind].instance_count += 1
 			car.kind = _routed_kinds.values()[0]
-			car.slot = car.kind_slots[car.kind]
 			cars.append(car)
 	for kind: int in _kinds.size():
 		var drawn := MultiMeshInstance3D.new()
 		drawn.name = _kinds[kind]
 		drawn.multimesh = _batches[kind]
+		_batches[kind].visible_instance_count = 0
 		add_child(drawn)
 	var parked: ParkedProfile = _parked_profile
 	for car: Car in cars:
@@ -521,8 +518,6 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		if car.mass_kg > 0.0:
 			Pushable.mark(car.body, self)
 			_by_body[car.body.get_instance_id()] = car
-		for kind: int in car.kind_slots:
-			_batches[kind].set_instance_transform(car.kind_slots[kind], HIDDEN)
 		_hide(car)
 	_grip_mps2 = grip_mps2()
 	var horn_kinds: Array[String] = []
@@ -680,6 +675,7 @@ func _add_kind(kind: String, mesh: Mesh, by_hour: PackedFloat32Array) -> int:
 	# Lamps from `INSTANCE_CUSTOM.a`, not the instance uniforms (`VehicleBodyBatch`).
 	multi.mesh = VehicleBodyBatch.batched(mesh)
 	_batches.append(multi)
+	_shown.append([])
 	return _kinds.size() - 1
 
 
@@ -697,9 +693,7 @@ func _wear_licence(car: Car) -> void:
 	var kind: int = _licence_kinds.get(mesh, _licence_kinds[profile.taxi_kind])
 	if kind == car.kind:
 		return
-	_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
-	car.kind = kind
-	car.slot = car.kind_slots[kind]
+	_change_kind(car, kind)
 
 
 ## Which licence `car` wears, by mesh name.
@@ -866,9 +860,7 @@ func _nearest_parked(
 ## `livery`.
 func _wear_kind(car: Car, kind: int, livery: Color) -> void:
 	if kind != car.kind:
-		_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
-		car.kind = kind
-		car.slot = car.kind_slots[kind]
+		_change_kind(car, kind)
 	var extent: AABB = _extents[kind]
 	car.half_length = extent.size.z * 0.5
 	car.half_width = extent.size.x * 0.5
@@ -982,6 +974,8 @@ func step(delta: float) -> void:
 	for car: Car in cars:
 		if car.live:
 			car.body.global_transform = car.pose
+			if car.slot < 0:
+				_take_slot(car)
 			_batches[car.kind].set_instance_transform(car.slot, car.pose)
 			# Standing for a passenger, it shows its brake lamps from the first tick:
 			# one placed mid-dwell has not braked yet.
@@ -2471,15 +2465,79 @@ func _write_lamps(car: Car, bits: int) -> void:
 	if bits == car.written:
 		return
 	car.written = bits
+	if car.slot >= 0:
+		_batches[car.kind].set_instance_custom_data(car.slot, _datum(car))
+
+
+## What `car`'s instance carries: its livery, and its lamp bits above it.
+func _datum(car: Car) -> Color:
 	var data: Color = car.livery
-	data.a = car.livery.a + bits
-	_batches[car.kind].set_instance_custom_data(car.slot, data)
+	data.a = car.livery.a + maxi(car.written, 0)
+	return data
 
 
 func _hide(car: Car) -> void:
-	_write_lamps(car, lamp_bits(false, false))
 	car.shape.disabled = true
-	_batches[car.kind].set_instance_transform(car.slot, HIDDEN)
+	_drop_slot(car)
+	_write_lamps(car, lamp_bits(false, false))
+
+
+## Draw `car`: the next instance of its kind's batch, at its pose and datum.
+func _take_slot(car: Car) -> void:
+	var shown: Array = _shown[car.kind]
+	car.slot = shown.size()
+	shown.append(car)
+	_write_instance(car)
+	_batches[car.kind].visible_instance_count = shown.size()
+
+
+## Stop drawing `car`: the batch's last drawn car moves into its place, so the
+## drawn instances stay the batch's first ones.
+func _drop_slot(car: Car) -> void:
+	if car.slot < 0:
+		return
+	var shown: Array = _shown[car.kind]
+	var last: Car = shown.back()
+	if last != car:
+		shown[car.slot] = last
+		last.slot = car.slot
+		_write_instance(last)
+	shown.pop_back()
+	_batches[car.kind].visible_instance_count = shown.size()
+	car.slot = -1
+
+
+## Write `car`'s pose and datum into the instance it is drawn from.
+func _write_instance(car: Car) -> void:
+	var batch: MultiMesh = _batches[car.kind]
+	batch.set_instance_transform(car.slot, car.pose)
+	batch.set_instance_custom_data(car.slot, _datum(car))
+
+
+## Whether `car` is drawn, by the system's own record, from the batch of the
+## kind it wears and from no other: headless, the dummy renderer keeps no
+## buffer to read back.
+func draws(car: Car) -> bool:
+	for kind: int in _shown.size():
+		if kind != car.kind and _shown[kind].has(car):
+			return false
+	var shown: Array = _shown[car.kind]
+	return (
+		car.slot >= 0
+		and car.slot < shown.size()
+		and shown[car.slot] == car
+		and _batches[car.kind].visible_instance_count == shown.size()
+	)
+
+
+## Wear another kind: out of the batch it is drawn from and, if it was drawn,
+## into the new kind's.
+func _change_kind(car: Car, kind: int) -> void:
+	var drawn: bool = car.slot >= 0
+	_drop_slot(car)
+	car.kind = kind
+	if drawn:
+		_take_slot(car)
 
 
 ## The moving cars the near miss should look at, as `ParkedLayer.near` hands out
