@@ -7198,8 +7198,11 @@ legal route to the fare's destination is drawn on the minimap — `P3-46`, the s
   the fare's does, which moved the tip row from centred to right-aligned. Idle at
   `--spawn-fare=wan_chai/f_025`, both sides run together: **200 `draws` before and after** (163
   at `--hud=off`), `prims` 1,349,922 → 1,350,080. ⚠️ Tip and total are now two identical red
-  rows told apart by their chips alone; seen only reading 0.0, no scripted run having banked a
-  delivery. The user's drive owed.
+  rows told apart by their chips alone — answered the same day on the user's ask: `total_lit` is
+  `meter_lit` at 65%, picked over 80% (too near the tip's) and 50% (sinking into the ghost). It
+  clears its ghost by 0.17 of luminance where the meter's red clears 0.306 against `verify_hud`'s
+  0.30 bar, so the check holds the total to half that bar. Seen only reading 0.0, no scripted
+  run having banked a delivery. The user's drive owed.
 
 **See.** `Q80` · `Q136` · `Q138` · `Q79` · `game/tuning/hud_style.md`
 

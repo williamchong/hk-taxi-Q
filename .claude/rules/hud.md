@@ -106,7 +106,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   not a reading**: held under `MIN_CONTRAST` of the housing and over it from `meter_lit`. ⚠️ **The
   clock rounds UP**: 0.2 s left reads 1, never 0 with time on it. 🔴 **The total is a third LED** (`Q139`, the user's ask
   2026-11-11): `total_cells` never under `meter_cells` — an overflow drops the LEADING digit — and
-  the tip and total rows end where the fare's digits do (`Stack`, shrink-centred). ⚠️ **+31 draws for the whole
+  the tip and total rows end where the fare's digits do (`Stack`, shrink-centred). Its red is
+  `total_lit`, dimmer than `meter_lit` to be told from the tip's, and held to HALF `MIN_CONTRAST`
+  off the ghost — the meter's own red clears the full bar by 0.006, so no dimmer one can. ⚠️ **+31 draws for the whole
   HUD** (103 → 134 on the boot stand) against `Q139`'s +15 — the three housings, the LED, two
   labels, four callout labels, two pip nodes and the arrow; measure BOTH sides again after any
   change here. 🔴 **One language at a time in the callout** (`Locale`, `--lang=`): never English beside
