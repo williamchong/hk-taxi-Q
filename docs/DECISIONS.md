@@ -12399,3 +12399,44 @@ drive at the rush, and the mobile tier's re-take of `cars`.
 
 **See.** `Q186` · `P3-3g` · `P3-3c` · `docs/DATA_SOURCES.md` (Traffic Data of Strategic / Major
 Roads) · `game/tuning/traffic.md`
+
+## `Q199` — A flyover's lamp stands on the flyover, a lamp under one stands shorter, and no column passes through a deck or a roof
+
+**Status.** 🟡 Built 2026-11-11 on the user's report from the Marsh Road ramp: "some light poles
+are wrongly piecing into brigdes on top, instead of below or on top of them". `P3-26`. Owed: the
+user's look.
+
+**Decision.**
+- **The defect.** `UtilityPoint` publishes no elevation, so every column was hosted to the level-0
+  street and stood 9 m from there. Measured on the shipped bundle: Wan Chai 116 of 1,077 columns
+  passed through a drawn road deck and 90 more through a roof, podium or footbridge; Causeway Bay
+  12 and 8 of 364.
+- **On top.** A column surveyed inside an elevated edge's drawn ribbon, or within `outset_m` of its
+  kerb, is the deck's: hosted to that edge for the kerb, the shift bar, the second pass and the
+  height. ⚠️ An inference from the plan, not a reading. A tunnel is off-grade and is not a deck.
+- **`deck_outset_m` 0.1**, and a deck column always takes it — pulled in as well as pushed out, the
+  one inward move in the stage (`Q78` argues about a street's footway; a deck has none). At
+  `outset_m` 0.6, 53 of the two regions' 81 deck columns had no slab under the foot; at 0.3 two,
+  at 0.1 one.
+- **Below, shorter.** Any other column with a face the bundle draws over its foot between
+  `overhead_clear_m` (2.5, the trees' value) and its own top — the trees' instrument,
+  `trees.shipped_faces` — stands with its top `soffit_gap_m` (0.5) under the lowest one, and is
+  refused, `under_structure`, only where that leaves under `min_column_height_m` (5.0: the lantern
+  hangs over the lane at 94% of the column, above a 4.4 m double-decker). First built as a refusal
+  alone; the user, offered the choice the same day: "shorter". It is the stand's `Y` scale, not a
+  second mesh — the arm's drop and the lantern's depth shrink with the column, the reach and the
+  collider's plan do not — and `lamp_pools.gd` takes the pool's drop off the stood lantern.
+  `lamps` runs after `carve` for it.
+- **What it reads** (before → after). Wan Chai: drawn 1,077 → 1,012, `on_deck` 92, `shortened` 50
+  (5.0–7.8 m, p50 6.1), `under_structure` 39, `over_shift` 43 → 58, `in_carriageway` 4 → 6,
+  `merged` 1 → 17 (two parapet rows a few metres apart landing on one kerb), `gaps_over_report_m`
+  4 → 9, `spacing_drawn_m` p50 18.26 → 18.97, `min_kerb_clearance_m` 0.17 → 0.04. Causeway Bay:
+  364 → 364, `on_deck` 16, `shortened` 5, `under_structure` 3, `over_shift` 2 → 4,
+  `in_carriageway` 0 → 2, gaps 1 → 1, clearance 0.60 → 0.10. Columns through a
+  deck or roof: 0 in both.
+- ⚠️ **Open.** About ten deck columns stand at the slab's edge with the foot just off it, where the
+  ribbon's kerb lies past the drawn slab (six in a row on the Canal Road flyover, x 960). The
+  shortening has no fixture test: it lives in `build_region`, which no test drives. `lamps.json` keeps schema 3: two new
+  keys, no reader's old interpretation is wrong.
+
+**See.** `Q82` · `Q78` · `Q171` · `P3-26` · `.claude/rules/lamps.md`

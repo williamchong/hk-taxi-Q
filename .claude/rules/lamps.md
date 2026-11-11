@@ -73,6 +73,25 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   migrate assets that already have a sidecar, and `check.sh` cannot see a stale one. Delete the
   sidecars and re-import, then re-measure. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
   Numbers in `Q82`.
+- 🔴 **No column through a deck or a roof** (`Q199`, the user's report 2026-11-11): paste `on_deck`,
+  `shortened` and `under_structure` both regions, before and after, and shoot the Marsh Road ramp —
+  `--spawn-at=734,12.3,407 --spawn-facing=743,12,457 --fares=off --traffic=off --trams=off`, day and
+  `--time-of-day=1`. The layer publishes no elevation, so **a deck's lamp is an inference**: surveyed
+  inside an elevated edge's drawn ribbon (or within `outset_m` of its kerb), it is hosted to the deck
+  and stands at the deck's height. ⚠️ **A deck column takes `deck_outset_m`, pulled in as well as
+  pushed out — the one inward move here, and not `Q78`'s case**: the slab ends just past its kerb,
+  and at `outset_m` 53 of 81 deck columns stood on air. ⚠️ Tunnels are off-grade and are NOT decks
+  (`elevation_level > 0` only). Everything else with a drawn face between `overhead_clear_m` and the
+  column's top over its foot (`trees.shipped_faces`, the trees' instrument) is stood SHORTER, its
+  top `soffit_gap_m` under the lowest face (the user's call: a hole in the row is worse), and
+  refused only under `min_column_height_m` — never pushed again. ⚠️ **Shorter is the STAND's `Y`
+  scale, not a second mesh**: reach, radius and the post collider's plan stay the kind's, the arm's
+  drop and the lantern's depth shrink with it, and `lamp_pools.gd` takes the pool's drop off the
+  stood lantern so it still reaches the road. Shoot a short row too —
+  `city_preview.tscn --camera=1535,9,400 --look=1575,7,450`, day and night. ⚠️ So `lamps` now runs after `carve`, and a `materials:` ground
+  colour change moves `under_structure` as it moves the trees'. ⚠️ Open: a handful of deck columns
+  stand at the slab's edge with the foot just off it (the ribbon's kerb is past the drawn slab
+  there); `min_kerb_clearance_m` fell to 0.04 / 0.10 because a deck column stands 0.1 m out by design.
 - **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `layer_preview._batches`: the throttle route
   and `--spawn-fare=wan_chai/f_045`, overlays, HUD and fares off, `prims` and `draws` before and
   after, and the five fixed cameras in `Q135` `P3-67` shot twice a side** (`P3-67`). ⚠️ The lamps are a

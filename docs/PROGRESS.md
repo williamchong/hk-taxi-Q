@@ -127,7 +127,7 @@ Phase 3 — Build `B2`
 - `P3-21` ❌ Road lettering — no-go under `Q65`; data findings kept in `PLAN.md`.
 - `P3-22` ✅ Direction signs (`Q66`, `Q67`).
 - `P3-23` ✅ Stop and give-way lines (`Q69`, `Q73`).
-- `P3-26` ✅ Lamp posts from iB1000 (`Q82`).
+- `P3-26` ✅ Lamp posts from iB1000 (`Q82`); a deck's columns on the deck, shorter ones under it, none through a deck or roof (`Q199`, 2026-11-11, the user's look owed).
 - `P3-9a` 🟢 Recognition round 0 — run and closed; recognised, blocked by bridges (`P3-9a′`).
 - `P3-28` ✅ `Q19` carve — 8 edges cut, `e99` at an authored width.
 - `P3-29` ✅ `Q19` fence, dressed — car bar 1.695 m since 2026-10-05 (a Crown Comfort's width; 1.80 m before, which fenced Causeway Bay's `e123`); the vertical term refuted.
@@ -526,6 +526,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q194` The tower's surveyed hue is mostly the building, not the light (user, 2026-11-09): compass and brightness explain 15% of the wall-to-wall hue, sheets 1.4% of the between-building hue; the building mean is 0.70 / 0.74 reliable on `a*` / `b*`. No survey change; the estimator's +1 `b*` lean to lit walls is filed under `Q30`.
 - `Q195` A podium's cornice is drawn at iB1000's line and nowhere else (user, 2026-11-11): the line rides `COLOR_0.a` (schema 46) on 133 Wan Chai + 61 Causeway Bay buildings with ≥6 m of tower above it; 0.28 dark, 0.5 m, the user's pick of four. No default podium, no shopfronts, no palette; a measured podium colour where `Q193` resolves one is owed.
 - `Q196` Vehicles take detail lines from their own mesh (user, 2026-11-11): the depth outline cannot see a window or a band on a flat panel, so the generator marks those edges and the body shader inks them, a width in metres. The weight is the user's to pick. `P3-84`.
+- `Q199` A flyover's lamp stands on the flyover, and no column passes through a deck or a roof (user, 2026-11-11): surveyed inside a deck's drawn ribbon → hosted to the deck, 0.1 m past its kerb (`on_deck` 92 / 16); anything else with a drawn face inside its 9 m stands shorter under it (`shortened` 50 / 5), refused under 5 m (`under_structure` 39 / 3). Wan Chai 1,077 → 1,012 columns, Causeway Bay 364 → 364; 0 through a deck. Open: ~10 feet just off the slab edge. `P3-26`.
 - `Q198` The traffic is the cars on the street, flow over TD's detector speed (user, 2026-11-11, amends `Q186`): 8 detectors × 18 weekdays off DATA.GOV.HK's archive; the fleet peaks at 18:00 (29 kph), `cars` 24 → 40; a placement leaves the car behind room to stop (`_room_behind`). `P3-3g`.
 - `Q197` A building's street band and podium take the survey's colour, weighed by its own noise (user, 2026-11-11, reverses `Q193`): `facade_survey.py` measures three bands with `--regions`; the ETL cuts the finished tier at the measured heights. 1,637 street bands, 87 podiums; Wan Chai triangles +16.2%, PCK 92.9 → 98.4 MB; `facade_hue.bands` off is byte-identical.
 - `Q190` The taxi takes a 1:64 die-cast's proportions and detail, without its lettering (user, 2026-11-09): 4.54 m with a short nose and long boot, between the 4.30 m toy and the real 4.695 m; the bumper a bar again, chrome front and rear, rub strip, shut lines, pillars, mirrors, hubcaps; tail lamps red over amber over white; 1,948 triangles of 2,000; the door hinge 0.455. `P3-82`.
