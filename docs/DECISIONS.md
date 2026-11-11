@@ -12510,9 +12510,9 @@ The detail alone was +12% to +13%, three to four times the +40,000 `Q166` named 
 far tier; with only the shown cars drawn the route is 12% to 28% under where the task began. With
 `--traffic=off` the same route reads 822,711 / 108 and 826,487 / 110 at 1 s and 2 s: the traffic
 is +68,000 to +74,000 primitives and +5 to +9 draw calls. `phys` 3.6–4.3 ms with traffic, 2.1–3.0
-without. `parked.glb` 733,800 → 1,006,696 B on disk. The web PCK is 98,384,232 B after it (`tools/export.sh web`); the last
-measured, 89,196,660 B, is a month of other work older, so the task's own share is the library's
-273 KB at most. ⚠️ The handset is not measured.
+without. `parked.glb` 733,800 → 1,006,696 B on disk. The web PCK is 98,402,008 B after it, the lorry included (`tools/export.sh web`); the
+last measured, 89,196,660 B, is a month of other work older, so the task's own share is the
+library's 351 KB at most (`parked.glb` 1,084,548 B with the lorry). ⚠️ The handset is not measured.
 
 `verify_traffic`, the old scripts against the new on one library, both regions: identical but for
 the one renamed line — the change draws differently and decides nothing. (Across the mesh change
@@ -12523,13 +12523,26 @@ every silver whitened, the mirrors out, the waist not falling, a nose that never
 the offside, a shut line across an arch. The traffic: a retired car left drawn fails `licence:`;
 the last car not moved into a freed place is a script error on the first drop.
 
-**Not built: the goods lorry**, the plan's one new kind, and not for the draw calls — there is room.
-(1) TD's bays offer it two places in Wan Chai (`Goods Vehicles`, which the roster reads as a van),
-so parked it would be invented. (2) Moving, it is a share of the census's light-goods class, a
-split nobody has measured — the saloon's 4 : 3 is authored the same way and flagged for it. (3) A
-kind added to `kinds` moves every seeded draw `verify_traffic` gates on, and the gated seeds were
-chosen by hand (`Q182`). Each is the user's call; the Isuzu's photograph is in the reference
-folder for when it is made.
+**The goods lorry, parked only.** The plan's one new kind was first held, then built on the
+session's stop check, in the form that moves the least: a 5.5-tonne cab-over with a box body on
+its chassis (`Shape` `lorry`, `cargo_top_m`; 6.0 x 2.1 x 3.0 m, 784 triangles; the Isuzu N's
+photograph for the type, the size authored), the box lofted on the chassis's own chamfered ring
+after the review found a square one overhanging its corners.
+- **Where it stands.** TD's `Goods Vehicles` bays, which the roster read as a van (2 on Wan Chai,
+  1 on Causeway Bay), and a second rank behind the van at an office's door by day (`frontage`
+  `office` `kinds: [van, lorry]`, 08:00–19:00). ⚠️ The second is invented, as every frontage is:
+  his to keep or strike — it is one word in the yaml.
+- **What it reads.** Wan Chai: `lorry` 29 (2 bays, 27 frontages), `placed` 697 → 716, `car`
+  400 → 394, `van` 55 → 52, `coach` 4 → 3, frontage 33 → 59, fill 229 → 222; refused frontage
+  `at_junction` 15 → 26, `overlapping` 5 → 12, `in_keep_out` 2 → 3, `kerb_hidden` 0 → 2; refused
+  fill `overlapping` 78 → 85. Causeway Bay: `lorry` 3, `van` 25 → 23, `car` 225 → 224, frontage
+  4 → 6. The partition's standing hole (−99 / −16, `parked.md`) is unchanged.
+- **Liveries**: white 4 of 7, a blue, a dark green and a yellow — authored.
+- 🔴 **Not in the moving traffic**, and that part stays the user's: it is a share of the census's
+  light-goods class nobody has measured (`traffic.tres` `kinds` is never edited by hand, `Q186`),
+  and a kind added there moves every seeded draw `verify_traffic` gates on (`Q182`). It has no
+  mass and no horn for the same reason. The throttle route is unchanged to the primitive: no
+  lorry stands on it.
 
 **Candidates, not built.** The arches' feet fold back on themselves by 7 mm where the sill sits
 under the hub (16 triangles a car, older than this task; the review found it). Three hub slots in

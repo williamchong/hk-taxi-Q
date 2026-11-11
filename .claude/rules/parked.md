@@ -82,6 +82,12 @@ traffic, and the bonus for threading them.
   waist, or the deck under the lamps, is refused — lower the drop, do not move the guard. Doors are
   on `KERB_SIDE` and refused in a wheel arch. A new feature owes a lineup sheet before and after
   (`asset_viewer.tscn --lineup=20`, a forced reimport first) and the throttle route's `prims`.
+- **The lorry is parked only** (`P3-85`, `Q200`): at TD's `Goods Vehicles` bays and as the second
+  rank of the `office` frontage. 🔴 Do not add it to `traffic.tres` `kinds` by hand — that table is
+  the census's (`signals.md`), the lorry's share of light goods is unmeasured, and a new kind there
+  moves every seeded drive. Moving, it also owes a mass (`masses_kg`) and a horn file. ⚠️ A second
+  kind in a frontage class's `kinds` is a second RANK, `pitch_m` behind the first: new candidates,
+  each counted, the first rank's own places unmoved.
 - 🔴 **A colour that means something is never a livery** (`Q167`, the user's rule 2026-10-13):
   the taxi, the bus and the tram carry no `livery`, and the minibus's palette is green and red
   only — the licence colours. `parked.tres`'s `liveries` is the palette; a kind's `Shape.livery`
