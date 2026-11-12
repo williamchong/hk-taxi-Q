@@ -57,9 +57,11 @@ call): the map sits on the plate at the plate's width, under one keyline, and
 was built first and read as too large (the user's call). The
 pair is anchored as the PLATE is — bottom, with the speed.
 
-⚠️ `award` AND `combo` ARE RESERVED: one rect for every component a planned
-task is known to add (`Q138`), graded now and drawn only under
-`--debug-view=full`. `timer`, `meter` and `callout` were, until `P3-5a` filled
+⚠️ `combo` IS RESERVED, for `P3-2b`'s fare combo: one rect for every
+component a planned task is known to add (`Q138`), graded now and drawn only
+under `--debug-view=full`. `award` was, until the style combo filled it
+(`Q205`, 2026-11-13: 車手 ×N over the skills it holds, the gap's bar under
+them, 340 × 72 under the meter). `timer`, `meter` and `callout` were, until `P3-5a` filled
 them — the 咪錶 top-right, the callout top-centre as they stood, and the tip
 clock moved to the middle of the frame (`Q142`) — and they stay graded against
 the thumbs as filled slots.

@@ -198,6 +198,14 @@
       "en": "TOP SPEED",
       "zh": "最高車速"
     },
+    "sheet_best_combo": {
+      "en": "BEST COMBO",
+      "zh": "最佳車手"
+    },
+    "sheet_combo": {
+      "en": "MAX",
+      "zh": "車手"
+    },
     "sheet_save": {
       "en": "SAVE RESULT",
       "zh": "儲存成績"

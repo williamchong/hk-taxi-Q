@@ -88,3 +88,10 @@ const PATH: String = "res://tuning/skills.tres"
 @export var near_miss_hkd: float
 ## What a close call pays into the tip, in HK$, instead of the near miss.
 @export var close_call_hkd: float
+## The style combo's gap (`P3-2b`, `Q205`): seconds with no skill paid and none
+## in progress before the combo ends on its own. Counted only while the car is
+## doing nothing that will pay — a slide, a run at speed or a flight holds it.
+@export var combo_gap_s: float
+## The smallest combo total whose end is called out: a lone award is a skill,
+## not a combo (the user's call, `Q205`: two or more).
+@export var combo_show_min: int

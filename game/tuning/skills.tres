@@ -28,3 +28,5 @@ near_miss_look_s = 1.5
 near_miss_memory_s = 2.0
 near_miss_hkd = 5.0
 close_call_hkd = 10.0
+combo_gap_s = 2.5
+combo_show_min = 2

@@ -19,6 +19,8 @@ const KEY_SHIFTS: String = "shifts_finished"
 ## A skill's two lines in the lifetime books, under its name (`ExamSheet.key_of`).
 const COUNT_SUFFIX: String = "_count"
 const HKD_SUFFIX: String = "_hkd"
+## The most of a skill one style combo held (`Q205`): `drift_combo_best`.
+const COMBO_SUFFIX: String = "_combo_best"
 
 ## The file read and written: `PATH`, except under `verify_menu`, which round
 ## trips its own so a check never overwrites the player's choices.
@@ -71,6 +73,7 @@ static func lifetime() -> SessionTally:
 		var key: String = ExamSheet.key_of(skill as Fare.Skill)
 		tally.counts[skill] = int(file.get_value(RECORDS, key + COUNT_SUFFIX, 0))
 		tally.banked[skill] = float(file.get_value(RECORDS, key + HKD_SUFFIX, 0.0))
+		tally.combo_best[skill] = int(file.get_value(RECORDS, key + COMBO_SUFFIX, 0))
 	for field: String in SessionTally.SUMS + SessionTally.BESTS:
 		tally.set(field, file.get_value(RECORDS, field, tally.get(field)))
 	return tally
@@ -95,6 +98,7 @@ static func bank_tally(tally: SessionTally, shift_finished: bool) -> void:
 		var key: String = ExamSheet.key_of(skill as Fare.Skill)
 		file.set_value(RECORDS, key + COUNT_SUFFIX, sum.counts[skill])
 		file.set_value(RECORDS, key + HKD_SUFFIX, sum.banked[skill])
+		file.set_value(RECORDS, key + COMBO_SUFFIX, sum.combo_best[skill])
 	for field: String in SessionTally.SUMS + SessionTally.BESTS:
 		# An untried best is left off the file: a ConfigFile's INF is not worth
 		# trusting across a platform, and absent reads as untried.

@@ -154,6 +154,13 @@ func paid_slide_s() -> float:
 	return _drift.total if _drift.paid > 0 else 0.0
 
 
+## Whether a skill is in progress as of the last `tick`: a slide over the
+## threshold, a run at or over `speed_min_kph`, or a flight — what will pay if
+## it holds. The style combo's timer stands still while it is true (`Q205`).
+func holding() -> bool:
+	return _drift.total > 0.0 or _speed.total > 0.0 or _air.total > 0.0
+
+
 ## The flight that paid on the last `tick`, in seconds, or 0.
 func landed_flight_s() -> float:
 	return _landed_s

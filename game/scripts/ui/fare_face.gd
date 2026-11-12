@@ -224,6 +224,22 @@ func practice_text(award: Fare.Award) -> String:
 	return skill_name(award.skill)
 
 
+## The style combo's headline (`P3-2b`, `Q205`): 車手 ×11, the user's word,
+## and COMBO ×11 in English. A count, never money — the HK$ stay on the meter.
+func combo_text(combo: StyleCombo) -> String:
+	return "%s ×%d" % [_say("車手", "COMBO"), combo.total()]
+
+
+## Each skill the combo holds with its count, in the 成績表's order: 甩尾 ×5 ·
+## 高速行駛 ×3. A skill it does not hold is left out.
+func combo_parts(combo: StyleCombo) -> String:
+	var parts: PackedStringArray = []
+	for skill: Fare.Skill in SessionTally.BONUSES:
+		if combo.counts[skill] > 0:
+			parts.append("%s ×%d" % [skill_name(skill), combo.counts[skill]])
+	return " · ".join(parts)
+
+
 ## A skill's name, in the face's language (`P3-76`, `Q169`, the user's ask) —
 ## 貼身而過 for a near miss, 碰及物體（嚴重） for a crash, a penalty's off the
 ## driving test's fault sheet — read from `tuning/exam_sheet.json`.

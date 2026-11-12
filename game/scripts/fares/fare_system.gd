@@ -112,6 +112,14 @@ signal skilled(fare: Fare, award: Fare.Award)
 ## Emitted each time a skill is performed with no passenger aboard — a
 ## practice run, shown and never paid. The award is on no fare and in no tip.
 signal practised(award: Fare.Award)
+## Emitted each time a bonus joins the style combo (`P3-2b`, `Q205`), paid or
+## practised alike: `combo` is `FareSystem.combo`, live, its counts as they
+## stand. Never money — the award's own signal says what it paid.
+signal combo_changed(combo: StyleCombo)
+## Emitted once when a style combo ends: on a collision or a crash (`broken`),
+## or when its gap ran out. `combo` is a copy of its last counts; the live one
+## is already empty. Whether it is called out is `StyleCombo.shown`'s.
+signal combo_ended(combo: StyleCombo, broken: bool)
 ## Emitted when the drift's tier moves (`SkillTracker.drift_tier`, `P3-58`):
 ## -1 when no slide is at the threshold, 0 while one counts, then the awards
 ## it has paid. Paid or practised alike — the sparks show the slide, not the
@@ -203,6 +211,9 @@ var withheld: PackedInt32Array = []
 var skill_counts: PackedInt32Array:
 	get:
 		return tally.counts
+## The style combo running now (`P3-2b`, `Q205`): shown and recorded, never
+## money. Read inside `combo_changed` and `sampled`, like everything here.
+var combo: StyleCombo = null
 
 var _profile: FareProfile = null
 var _tariff: FareTariff = null
@@ -360,6 +371,11 @@ func setup(
 	if not near.usable():
 		push_error("FareSystem: the NearMiss detector is inert; nothing will be hailed.")
 		return
+	# And the style combo's gap (`Q205`).
+	var running := StyleCombo.new(skills)
+	if not running.usable():
+		push_error("FareSystem: the StyleCombo is inert; nothing will be hailed.")
+		return
 	var probe := FareMeter.new(tariff)
 	if not probe.usable():
 		return
@@ -374,6 +390,7 @@ func setup(
 	_router = RoadRouter.new(graph, RoadRouter.Profile.legal())
 	_tracker = tracker
 	_near = near
+	combo = running
 	_drift_tier = -1
 	_pool.clear()
 	_pool_street.clear()
@@ -445,6 +462,10 @@ func reset() -> void:
 		_tracker.reset()
 	if _near != null:
 		_near.reset()
+	# A new run's combo starts empty; the old one's bests went into the old
+	# tally as it climbed, so nothing is lost by dropping it unannounced.
+	if combo != null:
+		combo.clear()
 
 
 ## The customers waiting now: where a fare may start. A handful, redrawn as
@@ -600,6 +621,11 @@ func sample(
 		car, velocity, obstacles, elapsed, impact_mps > 0.0, airborne
 	):
 		_award(award)
+	# The combo's clock after this tick's awards, on whether a skill is in
+	# progress now: an award this tick restarted it, and it runs only on a
+	# tick with neither (`StyleCombo.tick`).
+	if combo.tick(elapsed, _tracker.holding()):
+		_end_combo(false)
 	tally.note_tick(
 		maxf(speed_mps, 0.0) * 3.6,
 		airborne,
@@ -962,6 +988,13 @@ func _bail(position: Vector3) -> void:
 ## on no fare and in no tip (the user's call).
 func _award(award: Fare.Award) -> void:
 	tally.note_award(award)
+	# By the table, not the sign: a bonus is never a hit, whatever it pays.
+	if award.skill in SessionTally.PENALTIES:
+		_end_combo(true)
+	else:
+		combo.hit(award.skill)
+		tally.note_combo(combo)
+		combo_changed.emit(combo)
 	if state != State.CARRYING:
 		practised.emit(award)
 		return
@@ -969,6 +1002,17 @@ func _award(award: Fare.Award) -> void:
 	fare.skills_hkd += award.hkd
 	fare.tip_hkd = tip_of(fare.time_hkd, fare.skills_hkd)
 	skilled.emit(fare, award)
+
+
+## The style combo is over: a copy announced, the live one emptied. Its bests
+## are already in the tally — `note_combo` weighs them at every hit, so a run
+## saved mid-combo (the pause, 交更) records it without ending it.
+func _end_combo(broken: bool) -> void:
+	if not combo.live():
+		return
+	var ended: StyleCombo = combo.snapshot()
+	combo.clear()
+	combo_ended.emit(ended, broken)
 
 
 ## The tip from its two parts. Never negative: a penalty (`P3-50`) docks the

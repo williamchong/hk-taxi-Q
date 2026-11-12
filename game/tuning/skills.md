@@ -216,3 +216,19 @@ A drift's price: a pass threaded at speed is worth the same as two seconds sidew
 ## `close_call_hkd = 10.0`
 
 Twice the near miss, the early arrival's price: the one pass a player will remember.
+
+## `combo_gap_s = 2.5`
+
+The style combo's gap (`P3-2b`, `Q205`, the user's design 2026-11-13): after a skill pays, this
+many seconds of doing nothing end the combo. A first guess ahead of the user's drive. 🔴 **The
+clock does not run while a skill is in progress** — sliding over the threshold, at or over
+`speed_min_kph`, or in the air (`SkillTracker.holding`) — because the speed run pays every
+`speed_hold_m`, 9 s apart at 80 kph, and a gap that short would end every speed run at ×1. So the
+gap is the time between skills, not between payments: a corner's exit to the next near miss, a
+landing to the next slide. Long enough for one, short enough that cruising ends it.
+
+## `combo_show_min = 2`
+
+The smallest total whose end is called out (the user's call, `Q205`): a lone near miss is a
+skill, and "×1" at its end is noise. The records keep every combo; this is the callout's bar
+alone. An int, refused at 0 like every key.

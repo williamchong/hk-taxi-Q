@@ -76,6 +76,8 @@ const KEYS: PackedStringArray = [
 	"sheet_best_flight",
 	"sheet_best_pass",
 	"sheet_best_speed",
+	"sheet_best_combo",
+	"sheet_combo",
 	"sheet_save",
 	"sheet_saved",
 	"sheet_save_failed",
@@ -254,6 +256,11 @@ func _check_sheet() -> void:
 			"sheet",
 			"%s's money reads the tally, signed" % ExamSheetScript.key_of(skill)
 		)
+		_expect(
+			(row.get_node("Combo") as Label).text == "×%d" % tally.combo_best[skill],
+			"sheet",
+			"%s's best combo reads the tally (Q205)" % ExamSheetScript.key_of(skill)
+		)
 	for skill: int in SessionTallyScript.PENALTIES:
 		var row: Node = card.get_node("Tables/Penalty/%s" % ExamSheetScript.key_of(skill))
 		_expect(
@@ -274,6 +281,16 @@ func _check_sheet() -> void:
 		"sheet",
 		"the closest pass reads in metres"
 	)
+	_expect(
+		(card.get_node("Books/Bests/Combo/Value") as Label).text == "×11",
+		"sheet",
+		"the best combo's total reads as a multiplier"
+	)
+	_expect(
+		card.get_node_or_null("Tables/Penalty/crash/Combo") == null,
+		"sheet",
+		"a penalty has no combo column: it ends a combo, never joins one"
+	)
 	_check_image_of(report._profile, report._style, page, ledger.get_node("Pad/Column"), tally)
 	report._show(StartMenuScript.Page.HOME)
 	await process_frame
@@ -291,6 +308,7 @@ func _check_sheet() -> void:
 	_expect(
 		(
 			(empty.get_node("Books/Bests/Slide/Value") as Label).text == "—"
+			and (empty.get_node("Books/Bests/Combo/Value") as Label).text == "—"
 			and empty.get_node_or_null("Books/Sums/Floored") == null
 			and empty.get_node_or_null("Books/Sums/Walked") == null
 		),
@@ -632,6 +650,8 @@ func _check_record() -> void:
 	run.deliveries = 1
 	run.longest_slide_s = 2.0
 	run.closest_pass_m = 0.5
+	run.combo_best[FareScript.Skill.SPEED] = 10
+	run.combo_best_total = 11
 	SettingsScript.bank_tally(run, false)
 	SettingsScript.bank_tally(run, false)
 	SettingsScript.use_file(SETTINGS_PATH)
@@ -650,6 +670,11 @@ func _check_record() -> void:
 		is_equal_approx(saved.closest_pass_m, 0.5) and is_equal_approx(saved.longest_slide_s, 2.0),
 		"record",
 		"the bests survive a restart"
+	)
+	_expect(
+		saved.combo_best[FareScript.Skill.SPEED] == 10 and saved.combo_best_total == 11,
+		"record",
+		"the style combo's bests survive a restart (Q205)"
 	)
 
 	run.counts[FareScript.Skill.DRIFT] = 5
@@ -670,8 +695,20 @@ func _check_record() -> void:
 	var next: SessionTallyScript = SessionTallyScript.new()
 	next.counts[FareScript.Skill.DRIFT] = 2
 	next.closest_pass_m = 0.2
+	next.combo_best[FareScript.Skill.SPEED] = 4
+	next.combo_best[FareScript.Skill.DRIFT] = 6
+	next.combo_best_total = 7
 	SettingsScript.bank_tally(next, false)
 	saved = SettingsScript.lifetime()
+	_expect(
+		(
+			saved.combo_best[FareScript.Skill.SPEED] == 10
+			and saved.combo_best[FareScript.Skill.DRIFT] == 6
+			and saved.combo_best_total == 11
+		),
+		"record",
+		"a combo best is weighed per skill, never summed, and a smaller total keeps the best"
+	)
 	_expect(
 		(
 			saved.counts[FareScript.Skill.DRIFT] == 7

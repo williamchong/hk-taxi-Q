@@ -72,6 +72,8 @@ const FareFaceScript = preload("res://scripts/ui/fare_face.gd")
 const FareScript = preload("res://scripts/fares/fare.gd")
 const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
+const StyleComboScript = preload("res://scripts/fares/style_combo.gd")
+const SkillProfileScript = preload("res://scripts/fares/skill_profile.gd")
 const FareMeterScript = preload("res://scripts/core/fare_meter.gd")
 const FareGuideScript = preload("res://scripts/fares/fare_guide.gd")
 const FareGuideProfileScript = preload("res://scripts/fares/fare_guide_profile.gd")
@@ -193,20 +195,21 @@ func _check_layout() -> void:
 			not reserved.has("MeterSlot")
 			and not reserved.has("TimerSlot")
 			and not reserved.has("CalloutSlot")
-			and reserved.has("AwardSlot")
+			and not reserved.has("AwardSlot")
 			and reserved.has("ComboSlot")
 		),
 		"layout",
-		"the meter, the timer and the callout are filled; the award and the combo stay reserved"
+		"the meter, the timer, the callout and the style combo are filled; the fare combo stays reserved"
 	)
 	_expect(
 		(
 			layout.hud_slots().has("meter")
 			and layout.hud_slots().has("timer")
 			and layout.hud_slots().has("callout")
+			and layout.hud_slots().has("award")
 		),
 		"layout",
-		"and the three filled slots are still graded against the thumbs"
+		"and the four filled slots are still graded against the thumbs"
 	)
 	_expect(layout.abutting(), "layout", "the minimap sits on the street plate at its width")
 	var apart: Resource = layout.duplicate()
@@ -2009,6 +2012,26 @@ func _check_fare_face() -> void:
 		face.practice_text(flight) == "airborne" and zh.practice_text(fare.awards[0]) == "甩尾",
 		"face",
 		"a skill with no passenger aboard flashes its name alone, no money"
+	)
+	# The style combo (`P3-2b`, `Q205`): the user's 車手 over each skill held,
+	# in the 成績表's order, a count and never money.
+	var combo: RefCounted = StyleComboScript.new(load(SkillProfileScript.PATH))
+	combo.hit(FareScript.Skill.SPEED)
+	combo.hit(FareScript.Skill.CLOSE_CALL)
+	combo.hit(FareScript.Skill.DRIFT)
+	combo.hit(FareScript.Skill.SPEED)
+	_expect(
+		(
+			zh.combo_text(combo) == "車手 ×4"
+			and face.combo_text(combo) == "COMBO ×4"
+			and zh.combo_parts(combo) == "甩尾 ×1 · 高速行駛 ×2 · 險過剃頭 ×1"
+			and face.combo_parts(combo) == "drift ×1 · high speed ×2 · hair's-breadth pass ×1"
+		),
+		"face",
+		(
+			"a combo reads 車手 ×4 over each skill and its count (%s / %s)"
+			% [zh.combo_parts(combo), face.combo_parts(combo)]
+		)
 	)
 	# An early arrival is named in the delivery's caption, since its flash is
 	# overwritten by the banked sum in the same call.

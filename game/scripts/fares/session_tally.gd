@@ -16,6 +16,12 @@ extends RefCounted
 ## slide held into a hail is still the longest slide. Practised alike. A slide
 ## or a flight counts once it has paid, and top speed on the ground only, so one
 ## physics glitch in the air cannot sit in a lifetime record for good.
+##
+## **The style combo's bests are weighed at every hit** (`P3-2b`, `Q205`):
+## `combo_best` is the most of each skill one combo held, and
+## `combo_best_total` the biggest combo's total — the sum of its counts, the
+## final multiplier. A combo still running when the run is saved is in them
+## already, so a pause or 交更 records it without ending it.
 
 ## The two tables, in the order they are read. Every `Fare.Skill` is in one;
 ## `verify_fares` fails a value appended to the enum and left out.
@@ -35,7 +41,7 @@ const SUMS: PackedStringArray = [
 	"meter_hkd", "time_hkd", "floored_hkd", "forfeited_hkd", "deliveries", "bails"
 ]
 const BESTS: PackedStringArray = [
-	"longest_slide_s", "longest_flight_s", "closest_pass_m", "top_speed_kph"
+	"longest_slide_s", "longest_flight_s", "closest_pass_m", "top_speed_kph", "combo_best_total"
 ]
 
 ## Awards per `Fare.Skill`, paid or not.
@@ -55,6 +61,11 @@ var longest_flight_s: float = 0.0
 ## INF until a pass has paid.
 var closest_pass_m: float = INF
 var top_speed_kph: float = 0.0
+## The most of each `Fare.Skill` one style combo held (`Q205`); 0 for a
+## penalty, which ends a combo and never joins one.
+var combo_best: PackedInt32Array = []
+## The biggest style combo's total, the sum of its counts.
+var combo_best_total: int = 0
 ## Game seconds driven this run, the pause and the menu not counted: free
 ## mode's REPORT shows it. Neither a sum nor a best — the lifetime record keeps
 ## no driving time — so it is in neither list and the record never reads it.
@@ -70,10 +81,19 @@ func _init() -> void:
 	counts.fill(0)
 	banked.resize(Fare.Skill.size())
 	banked.fill(0.0)
+	combo_best.resize(Fare.Skill.size())
+	combo_best.fill(0)
 
 
 func note_award(award: Fare.Award) -> void:
 	counts[award.skill] += 1
+
+
+## The style combo as it stands, weighed against the bests (`Q205`).
+func note_combo(combo: StyleCombo) -> void:
+	for index: int in combo.counts.size():
+		combo_best[index] = maxi(combo_best[index], combo.counts[index])
+	combo_best_total = maxi(combo_best_total, combo.total())
 
 
 ## One tick's bests. `flight_s` and `pass_m` read 0 and INF on a tick with none.
@@ -136,6 +156,11 @@ func take_unsaved() -> SessionTally:
 		delta.closest_pass_m = closest_pass_m
 	if top_speed_kph > last.top_speed_kph:
 		delta.top_speed_kph = top_speed_kph
+	if combo_best_total > last.combo_best_total:
+		delta.combo_best_total = combo_best_total
+	for index: int in combo_best.size():
+		if combo_best[index] > last.combo_best[index]:
+			delta.combo_best[index] = combo_best[index]
 	_saved = SessionTally.new()
 	_saved.add(self)
 	return delta
@@ -152,6 +177,9 @@ func add(other: SessionTally) -> void:
 	longest_flight_s = maxf(longest_flight_s, other.longest_flight_s)
 	closest_pass_m = minf(closest_pass_m, other.closest_pass_m)
 	top_speed_kph = maxf(top_speed_kph, other.top_speed_kph)
+	combo_best_total = maxi(combo_best_total, other.combo_best_total)
+	for index: int in combo_best.size():
+		combo_best[index] = maxi(combo_best[index], other.combo_best[index])
 
 
 ## Whether there is nothing here to write.
@@ -164,6 +192,7 @@ func is_empty() -> bool:
 		and is_zero_approx(longest_flight_s)
 		and is_inf(closest_pass_m)
 		and is_zero_approx(top_speed_kph)
+		and combo_best_total == 0
 	)
 
 
@@ -194,6 +223,17 @@ static func sample() -> SessionTally:
 	tally.longest_flight_s = 1.5
 	tally.closest_pass_m = 0.18
 	tally.top_speed_kph = 142.0
+	var combos: Dictionary[Fare.Skill, int] = {
+		Fare.Skill.DRIFT: 6,
+		Fare.Skill.SPEED: 4,
+		Fare.Skill.NEAR_MISS: 3,
+		Fare.Skill.CLOSE_CALL: 1,
+		Fare.Skill.AIR: 2,
+		Fare.Skill.EARLY: 1,
+	}
+	for skill: Fare.Skill in combos:
+		tally.combo_best[skill] = combos[skill]
+	tally.combo_best_total = 11
 	tally.driven_s = 1834.0
 	return tally
 

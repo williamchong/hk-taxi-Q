@@ -85,6 +85,10 @@ var _last_practice: Fare.Award = null
 var _closes: int = 0
 ## Every `drift_tier_changed` the system under test emitted, in order.
 var _tiers: Array[int] = []
+## What the style combo said (`Q205`): its climbs, and its ends.
+var _combo_climbs: int = 0
+var _combo_ends: Array[StyleCombo] = []
+var _combo_broken: Array[bool] = []
 
 
 func _init() -> void:
@@ -120,6 +124,7 @@ func _init() -> void:
 	_check_beep()
 	_check_skills()
 	_check_practice()
+	_check_combo()
 	_check_penalties()
 	_check_sparks()
 	_check_near_miss()
@@ -1519,6 +1524,179 @@ func _check_practice() -> void:
 		"the session's count holds every drift, practised and paid alike, and the empty crash"
 	)
 	system.free()
+
+
+## The style combo (`P3-2b`, `Q205`, the user's design): each skill's own
+## count, a second skill beside the first leaving it as it was, the gap from
+## both sides, the clock held while a skill is in progress, a collision and a
+## crash ending it and a touch not, practice counting and a boarding carrying
+## it, the bests weighed in the tally, and no money moved.
+func _check_combo() -> void:
+	var zeroed: SkillProfile = _skills.duplicate()
+	zeroed.combo_gap_s = 0.0
+	var inert: FareSystem = _system_with({"nodes": []}, _profile, zeroed, SEED)
+	_expect(not inert.usable(), "combo", "mutation caught: a zero combo_gap_s is an inert system")
+	inert.free()
+
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	var all_stranded: bool = scout.pickups().is_empty() and not scout.stranded.is_empty()
+	scout.free()
+	if pickup == null:
+		_expect(all_stranded, "combo", "SKIP: no pickup on this region alone to drive from")
+		return
+
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_combo_climbs = 0
+	_combo_ends.clear()
+	_combo_broken.clear()
+	system.combo_changed.connect(_count_combo_climb)
+	system.combo_ended.connect(_count_combo_end)
+	var threshold: float = _slip_threshold_deg
+	var drift_ticks: int = int(ceil(_skills.drift_min_s / TICK_S))
+	var drift_repeat: int = int(ceil(_skills.drift_s / TICK_S))
+	var gap_ticks: int = int(ceil(_skills.combo_gap_s / TICK_S))
+	var speed_ticks: int = int(ceil(_skills.speed_hold_m / (RUN * TICK_S)))
+
+	# Two awards of one slide, practised: drift ×2.
+	_slide(system, FAST, threshold, drift_ticks)
+	_expect(
+		(
+			system.combo.counts[Fare.Skill.DRIFT] == 1
+			and _combo_climbs == 1
+			and not system.combo.shown()
+		),
+		"combo",
+		"a practised drift starts a combo at ×1, too small to call out"
+	)
+	_slide(system, FAST, threshold, drift_repeat)
+	_expect(
+		system.combo.counts[Fare.Skill.DRIFT] == 2 and system.combo.shown(),
+		"combo",
+		"the same skill again within the gap adds its count: drift ×2"
+	)
+	# The slide ends and a run at speed starts: longer than the gap with
+	# nothing paid, yet the combo holds, because a skill is in progress.
+	_fly(system, RUN, speed_ticks - 1, false, true)
+	_expect(
+		system.combo.live() and system.combo.counts[Fare.Skill.SPEED] == 0,
+		"combo",
+		(
+			"mutation caught: %d ticks at speed with nothing paid, past the %d-tick gap, hold the combo"
+			% [speed_ticks - 1, gap_ticks]
+		)
+	)
+	_fly(system, RUN, 1, false, true)
+	_expect(
+		(
+			system.combo.counts[Fare.Skill.SPEED] == 1
+			and system.combo.counts[Fare.Skill.DRIFT] == 2
+			and system.combo.total() == 3
+		),
+		"combo",
+		"a second skill joins beside the first, which keeps its count: drift ×2, speed ×1"
+	)
+	# Off the speed: the gap from both sides of its last tick.
+	_fly(system, FAST, gap_ticks - 1, false, true)
+	_expect(
+		system.combo.live() and _combo_ends.is_empty(),
+		"combo",
+		"one tick short of combo_gap_s with nothing in progress keeps it"
+	)
+	_fly(system, FAST, 1, false, true)
+	_expect(
+		(
+			not system.combo.live()
+			and _combo_ends.size() == 1
+			and not _combo_broken[0]
+			and _combo_ends[0].total() == 3
+			and _combo_ends[0].counts[Fare.Skill.DRIFT] == 2
+		),
+		"combo",
+		"the tick that reaches it ends it, unbroken, its final ×3 announced and the live one empty"
+	)
+	_expect(
+		(
+			system.tally.combo_best[Fare.Skill.DRIFT] == 2
+			and system.tally.combo_best[Fare.Skill.SPEED] == 1
+			and system.tally.combo_best_total == 3
+		),
+		"combo",
+		"the tally holds each skill's best and the best total"
+	)
+
+	# A touch does not end one; a collision does.
+	_slide(system, FAST, threshold, drift_ticks + drift_repeat)
+	_hit(system, _skills.bump_min_kph - 1.0)
+	_expect(
+		system.combo.live() and _combo_ends.size() == 1,
+		"combo",
+		"a touch under bump_min_kph is no collision: the combo runs on"
+	)
+	_hit(system, _skills.bump_min_kph)
+	_expect(
+		(
+			not system.combo.live()
+			and _combo_ends.size() == 2
+			and _combo_broken[1]
+			and _combo_ends[1].total() == 2
+		),
+		"combo",
+		"a collision ends it at once, broken"
+	)
+	_expect(
+		system.tally.combo_best_total == 3 and system.tally.combo_best[Fare.Skill.DRIFT] == 2,
+		"combo",
+		"and a smaller combo moves no best"
+	)
+	_slide(system, FAST, 0.0, gap_ticks)
+	_slide(system, FAST, threshold, drift_ticks)
+	_hit(system, _skills.crash_min_kph)
+	_expect(
+		_combo_ends.size() == 3 and _combo_broken[2] and _combo_ends[2].total() == 1,
+		"combo",
+		"a crash ends one too, and a ×1 is still announced for the reader to drop"
+	)
+
+	# Carried through a boarding: practised before, paid after, one combo.
+	_slide(system, FAST, 0.0, gap_ticks)
+	var ends_before: int = _combo_ends.size()
+	_slide(system, FAST, threshold, drift_ticks)
+	for tick: int in 5:
+		system.sample(pickup.point, CRAWL, Vector3.FORWARD, TICK_S)
+	_expect(
+		system.state == FareSystem.State.CARRYING and system.combo.live(),
+		"combo",
+		"a boarding inside the gap leaves the combo running"
+	)
+	_slide(system, FAST, threshold, drift_ticks)
+	_expect(
+		(
+			system.combo.counts[Fare.Skill.DRIFT] == 2
+			and _combo_ends.size() == ends_before
+			and system.fare.awards.size() == 1
+			and is_equal_approx(system.fare.skills_hkd, _skills.drift_hkd)
+		),
+		"combo",
+		"the passenger's drift joins the practised one, and pays its own price, no more"
+	)
+
+	system.reset()
+	_expect(
+		not system.combo.live() and system.tally.combo_best_total == 0,
+		"combo",
+		"a new run starts with no combo and no combo best"
+	)
+	system.free()
+
+
+func _count_combo_climb(_combo: StyleCombo) -> void:
+	_combo_climbs += 1
+
+
+func _count_combo_end(combo: StyleCombo, broken: bool) -> void:
+	_combo_ends.append(combo)
+	_combo_broken.append(broken)
 
 
 ## The penalties (`P3-50`, `Q148`): the tiers on the speed into the wall from

@@ -159,6 +159,15 @@ var _callout_sub: Label = null
 ## The meter's tick, flashed under the clock and faded out (the user's call).
 var _tick: Label = null
 var _tick_s: float = 0.0
+## The style combo (`P3-2b`, `Q205`) under the meter, in the `award` slot: the
+## headline, the skills it holds, and the gap's bar while it runs; the final
+## held then faded once it ends.
+var _combo_panel: ChamferPanel = null
+var _combo_value: Label = null
+var _combo_parts: Label = null
+var _combo_bar: ColorRect = null
+## Seconds the ended combo stays up; the last `tick_fade_s` of them fade.
+var _combo_fade_s: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
 
@@ -487,6 +496,29 @@ func _build() -> void:
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
 
+	# ---- the style combo (`P3-2b`, `Q205`) ----
+	#
+	# Under the meter, in the slot `Q138` reserved for it: the combo is no
+	# money, but it is the drive's score, and the middle of the frame stays
+	# the clock's. Bare like the tick, in the gain's green.
+	_combo_panel = _bare("Combo", root, _layout.award)
+	var combo_lines: VBoxContainer = _lines(_combo_panel, 0)
+	_combo_value = _outlined(_label("Total", _style.tick_size, _style.accent))
+	combo_lines.add_child(_combo_value)
+	_combo_parts = _label(
+		"Skills", _sized(_style.callout_sub_size_zh, _style.callout_sub_size), _style.chip_ink
+	)
+	combo_lines.add_child(_style.shade(_combo_parts))
+	if chinese and _font_zh != null:
+		_combo_value.add_theme_font_override(&"font", _font_zh)
+		_combo_parts.add_theme_font_override(&"font", _font_zh)
+	_combo_bar = ColorRect.new()
+	_combo_bar.name = "Gap"
+	_combo_bar.color = _style.accent
+	_combo_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combo_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	combo_lines.add_child(_combo_bar)
+
 	# ---- 特更's clock: the hour, and when the day ends ----
 	#
 	# The time of day and the handover beside it (`Q162`, the user's ask: when
@@ -703,6 +735,7 @@ func _process(delta: float) -> void:
 	# onto 200 ms steps and make the alarm stutter rather than pulse.
 	_update_warning(delta)
 	_update_tick(delta)
+	_update_combo(delta)
 	_update_clock(delta)
 	# The map and the needle, every frame and off one look at the car: both are
 	# motion, and a needle stepped at the numerals' 10 Hz ticks like a clock.
@@ -961,6 +994,8 @@ func _unfollow_fares() -> void:
 		fares.meter_changed.disconnect(_on_meter_changed)
 		fares.skilled.disconnect(_on_fare_skilled)
 		fares.practised.disconnect(_on_fare_practised)
+		fares.combo_changed.disconnect(_on_combo_changed)
+		fares.combo_ended.disconnect(_on_combo_ended)
 		fares.pickups_changed.disconnect(_on_pickups_changed)
 
 
@@ -983,6 +1018,8 @@ func _follow_fares() -> void:
 	fares.meter_changed.connect(_on_meter_changed)
 	fares.skilled.connect(_on_fare_skilled)
 	fares.practised.connect(_on_fare_practised)
+	fares.combo_changed.connect(_on_combo_changed)
+	fares.combo_ended.connect(_on_combo_ended)
 	fares.pickups_changed.connect(_on_pickups_changed)
 	_on_pickups_changed()
 
@@ -1080,6 +1117,55 @@ func _update_tick(delta: float) -> void:
 	)
 
 
+## A skill joined the combo: the headline and the skills, the gap's bar full.
+## Up only once the combo is big enough to be one (`StyleCombo.shown`).
+func _on_combo_changed(combo: StyleCombo) -> void:
+	if not combo.shown():
+		return
+	_paint_combo(combo, _style.accent)
+	_combo_bar.visible = true
+	_combo_bar.custom_minimum_size = Vector2(_layout.award.size.x, _style.accent_px)
+	_combo_fade_s = 0.0
+
+
+## The combo is over: its final held in green when the gap ran out, in the
+## penalty's red when a hit broke it, then faded. Too small a combo just goes.
+func _on_combo_ended(combo: StyleCombo, broken: bool) -> void:
+	if not combo.shown():
+		_combo_panel.visible = false
+		return
+	_paint_combo(combo, _style.accent_negative if broken else _style.accent)
+	_combo_bar.visible = false
+	_combo_fade_s = _style.callout_hold_s
+
+
+func _paint_combo(combo: StyleCombo, ink: Color) -> void:
+	_combo_value.text = _face.combo_text(combo)
+	_combo_value.add_theme_color_override(&"font_color", ink)
+	_combo_parts.text = _face.combo_parts(combo)
+	StreetPlate.shrink_to(
+		_combo_parts,
+		_sized(_style.callout_sub_size_zh, _style.callout_sub_size),
+		_layout.award.size.x
+	)
+	_combo_panel.modulate = Color.WHITE
+	_combo_panel.visible = true
+
+
+## The ended combo's hold and fade. A running one has no fade: its bar is the
+## loop's, set at each sample.
+func _update_combo(delta: float) -> void:
+	if _combo_fade_s <= 0.0:
+		return
+	_combo_fade_s -= delta
+	if _combo_fade_s <= 0.0:
+		_combo_panel.visible = false
+		return
+	_combo_panel.modulate = Color(
+		1.0, 1.0, 1.0, clampf(_combo_fade_s / maxf(_style.tick_fade_s, 0.001), 0.0, 1.0)
+	)
+
+
 func _on_fare_bailed(fare: Fare) -> void:
 	_face.on_ended(fare, false)
 
@@ -1094,6 +1180,10 @@ func _on_fare_sampled() -> void:
 	_face.on_sampled(fares.state, fares.fare, nearest, _style.timer_warn_s, fares.earned_hkd)
 	if _minimap != null and present:
 		_minimap.withhold(fares.withheld)
+	# The gap's bar at the loop's 5 Hz: it stands still while a skill is in
+	# progress, which only the loop knows.
+	if _combo_bar.visible and fares.combo.live():
+		_combo_bar.custom_minimum_size.x = (_layout.award.size.x * fares.combo.remaining_share())
 	_paint_fares()
 
 

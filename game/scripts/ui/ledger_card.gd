@@ -9,6 +9,10 @@ extends VBoxContainer
 ## bonus is not a fault (its 2026-10-28 amendment), and the page is the driver's
 ## books, not the examiner's form. 🚫 No red-light row: `P3-3d` is undecided.
 ##
+## The bonuses carry a fourth column, the most of that skill one style combo
+## held (`P3-2b`, `Q205`), and the bests a fifth line, the biggest combo's
+## total. A combo is never money, so the column has no sum.
+##
 ## Every row's name is its `Fare.Skill` key and every value cell is named, so
 ## `verify_menu` reads what the player reads. A row in use or not always shows:
 ## a ledger's lines do not come and go.
@@ -46,7 +50,7 @@ func build(
 	_font_zh = font_zh
 	add_theme_constant_override(&"separation", profile.ledger_gap_px)
 	var tables: HBoxContainer = _pair_of_columns("Tables")
-	_table(tables, "Bonus", "sheet_bonus", SessionTally.BONUSES, tally, style.plate_ink)
+	_table(tables, "Bonus", "sheet_bonus", SessionTally.BONUSES, tally, style.plate_ink, true)
 	_table(tables, "Penalty", "sheet_penalty", SessionTally.PENALTIES, tally, style.accent_negative)
 	var books: HBoxContainer = _pair_of_columns("Books")
 	_bests(books, tally)
@@ -61,17 +65,24 @@ func _pair_of_columns(node_name: String) -> HBoxContainer:
 	return pair
 
 
-## One table: its title, the column heads, a row per skill and the subtotal.
+## "×10", or none: a combo's count as the sheet shows it.
+static func times(count: int) -> String:
+	return "×%d" % count if count > 0 else NONE
+
+
+## One table: its title, the column heads, a row per skill and the subtotal,
+## and with `combo` each skill's best style combo after its money.
 func _table(
 	parent: Control,
 	node_name: String,
 	title_key: String,
 	skills: Array[Fare.Skill],
 	tally: SessionTally,
-	ink: Color
+	ink: Color,
+	combo: bool = false
 ) -> void:
 	var column: VBoxContainer = _block(parent, node_name)
-	_line_of(
+	var head: HBoxContainer = _line_of(
 		column,
 		"Head",
 		_text.say(title_key, _language),
@@ -80,6 +91,14 @@ func _table(
 		"HK$",
 		_style.chip_muted
 	)
+	if combo:
+		_cell(
+			head,
+			"Combo",
+			_text.say("sheet_combo", _language),
+			_style.chip_muted,
+			_profile.ledger_count_px
+		)
 	_rule(column)
 	var count: int = 0
 	var sum: float = 0.0
@@ -88,10 +107,18 @@ func _table(
 		_cell(row, "Name", ExamSheet.shared().item_name(skill, _language), _style.plate_ink)
 		_cell(row, "Count", str(tally.counts[skill]), _style.plate_ink, _profile.ledger_count_px)
 		_cell(row, "Money", signed(tally.banked[skill]), ink, _profile.ledger_money_px)
+		if combo:
+			_cell(
+				row,
+				"Combo",
+				times(tally.combo_best[skill]),
+				_style.plate_ink,
+				_profile.ledger_count_px
+			)
 		count += tally.counts[skill]
 		sum += tally.banked[skill]
 	_rule(column)
-	_line_of(
+	var subtotal: HBoxContainer = _line_of(
 		column,
 		"Subtotal",
 		_text.say("sheet_subtotal", _language),
@@ -100,6 +127,9 @@ func _table(
 		signed(sum),
 		_style.dial_needle
 	)
+	if combo:
+		# No sum: a combo is a count of one run, and the best total is a best.
+		_cell(subtotal, "Combo", "", _style.dial_needle, _profile.ledger_count_px)
 
 
 ## A row of the table's own three columns: a name, then a count and money.
@@ -111,14 +141,15 @@ func _line_of(
 	count: String,
 	money: String,
 	number_ink: Color
-) -> void:
+) -> HBoxContainer:
 	var row: HBoxContainer = _row(parent, node_name)
 	_cell(row, "Name", label, ink)
 	_cell(row, "Count", count, number_ink, _profile.ledger_count_px)
 	_cell(row, "Money", money, number_ink, _profile.ledger_money_px)
+	return row
 
 
-## The four bests, left under the bonuses.
+## The bests, left under the bonuses: four of the drive and the biggest combo.
 func _bests(parent: Control, tally: SessionTally) -> void:
 	var column: VBoxContainer = _block(parent, "Bests")
 	var ink: Color = _style.plate_ink
@@ -134,6 +165,7 @@ func _bests(parent: Control, tally: SessionTally) -> void:
 	_pair(
 		column, "Speed", "sheet_best_speed", "%d km/h" % roundi(speed) if speed > 0.0 else NONE, ink
 	)
+	_pair(column, "Combo", "sheet_best_combo", times(tally.combo_best_total), ink)
 
 
 ## The sum down to what banked, right under the penalties. The floor's line
