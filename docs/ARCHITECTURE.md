@@ -1630,9 +1630,12 @@ verify tool once per listed region with `--region=`, and a landmark `asset` unde
 `res://assets/generated/` means that region's bundle (`CityManifest.resolve_asset`).
 
 **`game/export_presets.cfg`** is committed comment-free in the export dialog's own form. Never put
-keystore passwords, provisioning profiles or signing identities in it. ⚠️ `com.hktaxiq.game` is a
-`P0-3b` placeholder in three places — `application/bundle_identifier` twice, `package/unique_name`
-once — and all three must change before any store submission.
+keystore passwords, provisioning profiles or signing identities in it. The app's identifier is
+`cloud.williamchong.hktaxiq` (the user's, 2026-11-13), in three places — `application/bundle_identifier`
+twice (macOS, iOS), `package/unique_name` once (Android) — and they move together. ⚠️ It is
+permanent once published: neither store lets a released app change it. The App Store Team ID
+stays out too; an iOS build exports a project (`Export Project Only`) and `xcodebuild` signs it with
+`DEVELOPMENT_TEAM` from the command line.
 
 **Then check in-engine:** `--import` first (a fresh sync has no import sidecars), then
 `tools/check.sh`.

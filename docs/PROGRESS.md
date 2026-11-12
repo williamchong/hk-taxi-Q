@@ -79,7 +79,7 @@ Phase 0–2
 - `P0-1` ✅ Source data granularity — closed `Q2`, `Q3`, `Q5`.
 - `P0-2` ✅ Z-value spike — no Z; `ELEVATION` encodes the level (`Q1`).
 - `P0-3` ✅ Godot scaffold — macOS / web / Android export verified.
-- `P0-3b` ⬜ Mobile device build — needs a signing identity and two handsets; blocks `P2-4`, `P2-6`.
+- `P0-3b` 🟡 Mobile device build — needs two floor handsets; blocks `P2-4`, `P2-6`. 2026-11-13: a signed debug build ran on the user's iPhone Air (an exported Xcode project, `xcodebuild` with the team on the command line); the bundle identifier is `cloud.williamchong.hktaxiq`. The first launch sat about three minutes on the splash compiling Metal pipelines (`shader_baker/enabled` is off). ⚠️ The iOS simulator cannot run it: the 4.7.2 template's simulator slice is x86_64 only and the iOS 27 simulator runs arm64 only. Owed: FPS on an A13, and Android.
 - `P0-4` ✅ ETL scaffold — found the ~304 m datum trap.
 - `P0-5` ✅ Grey-box fun test — verdict closed by `Q8`.
 - `P0-5a` ✅ Vehicle controller — raycast then; `VehicleBody3D` since `Q50` (`Q84`).
