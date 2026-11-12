@@ -37,6 +37,10 @@ const FareScript = preload("res://scripts/fares/fare.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 const SheetImageScript = preload("res://scripts/ui/sheet_image.gd")
 const DayClockScript = preload("res://scripts/world/day_clock.gd")
+const LoadingCoverScript = preload("res://scripts/ui/loading_cover.gd")
+const ShaderWarmupScript = preload("res://scripts/ui/shader_warmup.gd")
+const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
+const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
@@ -55,6 +59,7 @@ const KEYS: PackedStringArray = [
 	"new_best",
 	"again",
 	"menu",
+	"loading",
 	"paused",
 	"resume",
 	"end_shift",
@@ -175,6 +180,7 @@ func _init() -> void:
 	_check_notices()
 	_check_settings()
 	_check_record()
+	_check_splash()
 	# The pause needs a tree, and autoloads register on the first frame.
 	_check_pause.call_deferred()
 	_start_watchdog.call_deferred("verify_menu", 30.0)
@@ -227,7 +233,121 @@ func _check_pause() -> void:
 	paused = false
 	await _check_sheet()
 	await _check_stacked()
+	await _check_loading()
+	await _check_warmup()
 	_finish("verify_menu")
+
+
+## The boot splash (`Q209`): the taxi standing still, on the cover's own field,
+## so the letterbox, the splash and the cover that follows are one colour.
+func _check_splash() -> void:
+	var image: String = str(ProjectSettings.get_setting("application/boot_splash/image", ""))
+	_expect(
+		image == "res://assets/authored/loading/boot_splash.png" and FileAccess.file_exists(image),
+		"splash",
+		"the boot splash is tools/make_splash.py's image, and it is there (read %s)" % image
+	)
+	var style := load(HudStyleScript.PATH) as HudStyleScript
+	var field: Color = ProjectSettings.get_setting("application/boot_splash/bg_color", Color.BLACK)
+	_expect(
+		style != null and field.is_equal_approx(style.plate_field),
+		"splash",
+		"the splash's field is HudStyle.plate_field (read %s)" % field
+	)
+
+
+## The loading cover's meter (`Q209`): the flag fall at nothing loaded, the full
+## fare and every cell at the end, and never backwards.
+func _check_loading() -> void:
+	var cover := LoadingCoverScript.new()
+	root.add_child(cover)
+	await process_frame
+	var tariff := load(FareTariffScript.PATH) as FareTariffScript
+	var drawing: Dictionary = cover._drawing
+	_expect(not drawing.is_empty(), "loading", "the taxi's drawing loads")
+	if drawing.is_empty() or tariff == null:
+		cover.queue_free()
+		return
+	var spec: Dictionary = drawing["meter"]
+	var cells: int = int(spec["bar_cells"])
+	_expect(
+		is_equal_approx(cover.fare_hkd(), tariff.flagfall_hkd) and cover.lit_cells() == 0,
+		"loading",
+		(
+			"nothing loaded reads the flag fall, no cell lit (read %.1f, %d)"
+			% [cover.fare_hkd(), cover.lit_cells()]
+		)
+	)
+	_expect(
+		cover._meter.text == "%.1f" % tariff.flagfall_hkd,
+		"loading",
+		"the LED shows the fare (read %s)" % cover._meter.text
+	)
+	cover.progress = 0.5
+	cover.progress = 0.2
+	_expect(
+		is_equal_approx(cover.progress, 0.5) and cover.lit_cells() == roundi(cells * 0.5),
+		"loading",
+		"the meter never runs back (read %.2f, %d cells)" % [cover.progress, cover.lit_cells()]
+	)
+	cover.progress = 2.0
+	_expect(
+		is_equal_approx(cover.fare_hkd(), float(spec["full_hkd"])) and cover.lit_cells() == cells,
+		"loading",
+		(
+			"done reads the full fare and every cell (read %.1f, %d)"
+			% [cover.fare_hkd(), cover.lit_cells()]
+		)
+	)
+	var text := MenuTextScript.load_text()
+	_expect(
+		cover._line == "%s · %s" % [text.say("loading", "zh"), text.say("loading", "en")],
+		"loading",
+		"the line is menu_text.json's loading row in both languages, as the splash draws it"
+	)
+	cover.queue_free()
+	await process_frame
+
+
+## The cover over the menu (`ShaderWarmup`): its meter only rises frame to frame
+## and is full when the cover starts to fade, on the path with no city to wait on.
+func _check_warmup() -> void:
+	var warmup := ShaderWarmupScript.new()
+	root.add_child(warmup)
+	var level := Node3D.new()
+	root.add_child(level)
+	var seen: Array[float] = []
+	var at_finish: Array[float] = []
+	var loading: LoadingCover = warmup._loading
+	warmup.finished.connect(func() -> void: at_finish.append(loading.progress))
+	warmup.warm(level, null, null)
+	var frames: int = 0
+	while at_finish.is_empty() and frames < 600:
+		seen.append(loading.progress)
+		await process_frame
+		frames += 1
+	var rising: bool = true
+	for i: int in range(1, seen.size()):
+		rising = rising and seen[i] >= seen[i - 1]
+	_expect(
+		rising and seen.size() > 2 and seen[-1] > seen[0],
+		"loading",
+		(
+			"the cover's meter rises frame by frame (%d frames, %.2f → %.2f)"
+			% [
+				seen.size(),
+				seen[0] if not seen.is_empty() else -1.0,
+				seen[-1] if not seen.is_empty() else -1.0
+			]
+		)
+	)
+	_expect(
+		at_finish.size() == 1 and is_equal_approx(at_finish[0], 1.0),
+		"loading",
+		"the meter is full as the cover starts to fade (read %s)" % [at_finish]
+	)
+	level.queue_free()
+	await process_frame
 
 
 ## A phone's 成績表 (`Q206`): one column in a scroll, the same rows by the same

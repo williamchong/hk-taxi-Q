@@ -21,6 +21,11 @@ extends CanvasLayer
 ##
 ## Only under the menu (`Main`): `--menu=off`, every scripted run, never puts a
 ## cover over a frame. Native renderers pay a few milliseconds for it.
+##
+## The cover is the loading screen (`LoadingCover`, `Q209`): the toy taxi idling
+## over the meter, taking over from the boot splash. Its progress counts real
+## steps — the most tiles the streamers have owed at once, then each settle
+## frame, then each warm frame — so no stage's share of the meter is a guess.
 
 signal finished
 
@@ -29,6 +34,7 @@ const LAYER: int = 100
 
 var _profile: MenuProfile = null
 var _cover: ColorRect = null
+var _loading: LoadingCover = null
 var _settled: bool = false
 
 
@@ -42,6 +48,9 @@ func _ready() -> void:
 	_cover.mouse_filter = Control.MOUSE_FILTER_STOP
 	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_cover)
+	_loading = LoadingCover.new()
+	_loading.name = "Loading"
+	_cover.add_child(_loading)
 
 
 ## Wait for `regions` to settle, draw a copy of everything under `level` and
@@ -56,11 +65,21 @@ func warm(level: Node3D, regions: CityRegions, hud: CanvasLayer) -> void:
 	if regions != null:
 		regions.built.connect(_on_built, CONNECT_ONE_SHOT)
 	var waited: int = 0
+	var owed: int = 0
+	var after: int = _profile.cover_settle_frames + _profile.cover_warm_frames
 	while not _settled and regions != null and waited < _profile.cover_wait_frames:
+		var remaining: int = regions.tiles_remaining()
+		owed = maxi(owed, remaining)
+		if owed > 0:
+			_loading.progress = float(owed - remaining) / float(owed + after)
 		await get_tree().process_frame
 		waited += 1
+	var total: float = float(owed + after)
+	var done: int = owed
 	for _frame: int in _profile.cover_settle_frames:
 		await get_tree().process_frame
+		done += 1
+		_loading.progress = done / total
 	var camera: Camera3D = get_viewport().get_camera_3d()
 	var copies: Node3D = null
 	if camera != null:
@@ -74,6 +93,8 @@ func warm(level: Node3D, regions: CityRegions, hud: CanvasLayer) -> void:
 	# and a cover waiting on it would never lift.
 	for _frame: int in _profile.cover_warm_frames:
 		await get_tree().process_frame
+		done += 1
+		_loading.progress = done / total
 	# The camera, and the copies with it, can be gone after the frames.
 	if is_instance_valid(copies):
 		print("warmup: %d copies after %d frames" % [copies.get_child_count(), waited])
@@ -88,6 +109,9 @@ func _on_built(_low: Vector3, _high: Vector3) -> void:
 
 
 func _finish() -> void:
+	# Full as it fades, whatever path got here: a wait that timed out, or no
+	# profile at all, still lifts on a meter that finished.
+	_loading.progress = 1.0
 	finished.emit()
 	var fade: float = _profile.cover_fade_s if _profile != null else 0.0
 	var tween: Tween = create_tween()

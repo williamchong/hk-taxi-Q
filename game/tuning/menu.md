@@ -161,4 +161,9 @@ menu's first seconds and 312 and 462 ms as the drive started.
   and inside the frame at the menu's 60° shots. A copy outside the frustum is culled and warms
   nothing.
 
-The cover is `HudStyle.plate_field`, the housing, opaque.
+The cover is `HudStyle.plate_field`, the housing, opaque. On it stands the loading screen
+(`LoadingCover`, `Q209`): the toy taxi idling over the cab's meter, drawn from
+`assets/authored/loading/taxi.json`, the same drawing the boot splash is a still of. Its meter
+counts real steps — the most tiles the streamers owed at once, then each settle frame, then each
+warm frame — so `cover_settle_frames` and `cover_warm_frames` are also how much of the meter the
+last stretch takes.

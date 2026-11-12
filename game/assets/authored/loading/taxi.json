@@ -1,0 +1,75 @@
+{
+  "_": [
+    "The loading screen's toy taxi and its layout (Q209), the user's pick of a small super-deformed",
+    "cab idling over a taxi meter. ONE drawing, two readers: tools/make_splash.py draws the still",
+    "frame into boot_splash.png (the boot splash and the iOS launch screen), and",
+    "scripts/ui/loading_cover.gd draws it live over the menu's first seconds, so the cover takes",
+    "over from the splash without a jump. Change a number here and re-run the tool.",
+    "Units: a stage stage_px high that fills the screen's height; x right, y down, from the screen's",
+    "centre. A body shape is in the body's own frame, origin ride_px above the ground and pitched",
+    "by the idle; the wheels, the ground and the exhaust stay on the ground. Colours are sRGB hex.",
+    "The line's text is menu_text.json's loading row, both languages; the meter's colours are",
+    "HudStyle's meter_lit / meter_unlit and the field is HudStyle.plate_field."
+  ],
+  "stage_px": 560,
+  "ground_y": 20,
+  "ground_half_px": 90,
+  "ground_colour": "303032",
+  "ride_px": 23,
+  "wheels": {
+    "x": [-30, 30],
+    "radius": 17,
+    "hub_radius": 7,
+    "tyre": "1c1c1e",
+    "hub": "aaacb0"
+  },
+  "body": [
+    {"rrect": [-52, -14, 52, 12], "radius": 10, "colour": "ce162c"},
+    {"rrect": [-50, 4, 50, 12], "radius": 4, "colour": "960c1e"},
+    {"rrect": [-34, -44, 30, -10], "radius": 12, "colour": "d6d8da"},
+    {"rrect": [-28, -38, -3, -16], "radius": 5, "colour": "283440"},
+    {"rrect": [2, -38, 24, -16], "radius": 5, "colour": "283440"},
+    {"rrect": [-15, -58, 13, -43], "radius": 4, "colour": "ce162c"},
+    {"text": "的士", "at": [-1, -57], "px": 9, "colour": "f7f0de"},
+    {"rrect": [46, -8, 53, -1], "radius": 2, "colour": "ffecaa"},
+    {"rrect": [-53, -8, -46, -1], "radius": 2, "colour": "ff4632"}
+  ],
+  "idle": {
+    "loop_s": 1.2,
+    "bounces": 3,
+    "bounce_px": 1.6,
+    "rock_deg": 1.5,
+    "squash": 0.05
+  },
+  "exhaust": {
+    "from": [-60, -10],
+    "drift": [-34, -16],
+    "radius": [3, 9],
+    "alpha": 0.47,
+    "count": 2,
+    "colour": "edede6"
+  },
+  "line": {
+    "y": 52,
+    "px": 20,
+    "colour": "969692"
+  },
+  "meter": {
+    "y": 92,
+    "box": [236, 50],
+    "radius": 8,
+    "fill": "060607",
+    "edge": "343436",
+    "edge_px": 2,
+    "digit_px": 20,
+    "segment_px": 2.5,
+    "cells": 4,
+    "currency_px": 11,
+    "currency_colour": "963c32",
+    "bar_cells": 12,
+    "bar_cell": [14, 6],
+    "bar_gap": 4,
+    "bar_y": 37,
+    "full_hkd": 99.9
+  }
+}

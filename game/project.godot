@@ -16,6 +16,8 @@ config/name_localized={
 }
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
+boot_splash/bg_color=Color(0.07, 0.07, 0.075, 1)
+boot_splash/image="res://assets/authored/loading/boot_splash.png"
 config/icon="res://icon.svg"
 run/max_fps.mobile=60
 

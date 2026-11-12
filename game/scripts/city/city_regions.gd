@@ -95,6 +95,15 @@ func regions() -> Array[Node3D]:
 	return _regions
 
 
+## Tiles every region's streamer still owes the camera (`CityStreamer.tiles_remaining`).
+## 0 under the dev view, which loads every tile at once.
+func tiles_remaining() -> int:
+	var remaining: int = 0
+	for streamer: CityStreamer in _streamers:
+		remaining += streamer.tiles_remaining()
+	return remaining
+
+
 func _tiles_for(id: String) -> Node3D:
 	var tiles: Node3D
 	if streaming != null:

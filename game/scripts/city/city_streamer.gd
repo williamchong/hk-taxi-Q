@@ -98,6 +98,10 @@ var _units: Array[CityManifest.Tile] = []
 var _residents: Array[Resident] = []
 var _loads_in_flight: int = 0
 var _wanted_last_pass: int = 0
+## What the last `_collect` wanted and could not yet request — over budget, or a
+## tier change waiting on a fetch still running. `tiles_remaining` with the in-flight
+## count; `_wanted_last_pass` alone counts this pass's requests twice.
+var _unrequested: int = 0
 var _announced: bool = false
 
 
@@ -231,10 +235,12 @@ func _collect(eye: Vector3) -> void:
 		order.append(slot)
 	order.sort_custom(func(a: int, b: int) -> bool: return distances[a] < distances[b])
 
+	var in_flight_before: int = _loads_in_flight
 	for slot: int in order:
 		if _loads_in_flight >= profile.max_loads_in_flight:
-			return
+			break
 		_request(wanted[slot].x, wanted[slot].y)
+	_unrequested = wanted.size() - (_loads_in_flight - in_flight_before)
 
 
 func _request(index: int, tier: int) -> void:
@@ -337,6 +343,13 @@ func _settle(eye: Vector3) -> void:
 		# miss a direct emit and stay at the origin. There is no error to
 		# notice — the connection exists, it was just made too late.
 		built.emit.call_deferred(_manifest.bounds.position, _manifest.bounds.end)
+
+
+## Tiles this streamer still owes the camera where it stands: fetches in flight
+## and the ones it wants but has not asked for. 0 once the first pass has
+## settled and the camera holds still. Read by the loading cover (`Q209`).
+func tiles_remaining() -> int:
+	return _loads_in_flight + _unrequested
 
 
 ## Collect anything still in flight, so it is not pinned in `ResourceLoader`.

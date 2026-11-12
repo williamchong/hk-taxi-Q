@@ -114,6 +114,10 @@
       "en": "MENU",
       "zh": "主選單"
     },
+    "loading": {
+      "en": "Loading…",
+      "zh": "載入中…"
+    },
     "paused": {
       "en": "PAUSED",
       "zh": "暫停"
