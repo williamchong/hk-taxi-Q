@@ -4523,13 +4523,24 @@ fares:
   # hours are not carried into `roadgraph.json`. The level-0 roads over 50 kph
   # here are Gloucester Road, the Wan Chai Interchange and the Cross Harbour
   # Tunnel approach (measured 2026-11-12): trunk roads a cab does not pull in
-  # on. The three distances are first guesses ahead of a drive: 60 m between
-  # stations, 20 m off an edge's end to stay out of a junction mouth, and a
-  # 12 m stop — a cab and its doors — so a run within 6 m either side refuses.
+  # on. Measured 2026-11-13 (`Q203`):
+  # - `junction_clear_m`: the Road Users' Code says only "near or at a
+  #   junction" (ch. 5, "Where you must not stop") and leaves no-stopping
+  #   zones to signs and markings, which `kerbside` already refuses. Where TD
+  #   left a mouth unmarked, how near it will put a stop is read off its own:
+  #   the 31 stands and PUDO points of both regions sit 15.6 m from the nearer
+  #   junction at the 10th percentile (nearest 8.1 m). Cleared at a junction
+  #   end only (three or more ends, any level) — a split in one street, a dead
+  #   end or the clip is no mouth, and clearing them cost ~21 kerbs a region.
+  # - `stop_length_m`: the kerb one stopped car takes — TD's car bays, at the
+  #   4.96 m median pitch `parked.clearances.gap_m` records. Was 12 m.
+  # - `spacing_m` has one bar, twice `fares.hail_radius_m` (24 m) so two
+  #   neighbours' hails never overlap; above it, it only sets how many kerbs
+  #   there are. 60 m kept on the user's call against the sweep in `Q203`.
   street:
     spacing_m: 60.0
-    junction_clear_m: 20.0
-    stop_length_m: 12.0
+    junction_clear_m: 15.0
+    stop_length_m: 5.0
     max_speed_limit_kph: 50.0
 
   groups:

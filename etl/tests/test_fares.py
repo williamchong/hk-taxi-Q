@@ -709,6 +709,8 @@ class TestStreetSpots:
         """A 200 m edge running north (`-Z`) up `x = 100`, 10 m wide."""
         edge = {
             "id": 7,
+            "from": 1,
+            "to": 2,
             "polyline": [[100.0, 4.0, 300.0], [100.0, 4.0, 100.0]],
             "direction": "forward",
             "width_m": 10.0,
@@ -729,9 +731,14 @@ class TestStreetSpots:
             ),
         )
 
-    def _spots(self, edge: dict, places: list[Place] | None = None):
+    def _spots(
+        self,
+        edge: dict,
+        places: list[Place] | None = None,
+        junction_nodes: frozenset[int] = frozenset({1, 2}),
+    ):
         both = places if places is not None else [self._block(80.0), self._block(110.0)]
-        return street_spots([edge], self.SPEC, both, 25.0, self.HIGH)
+        return street_spots([edge], self.SPEC, both, 25.0, self.HIGH, junction_nodes)
 
     def test_stations_are_spaced_and_kept_off_the_ends(self) -> None:
         report = self._spots(self._north())
@@ -791,3 +798,17 @@ class TestStreetSpots:
     def test_an_edge_shorter_than_its_two_clears_has_no_station(self) -> None:
         short = self._north(polyline=[[100.0, 4.0, 130.0], [100.0, 4.0, 100.0]])
         assert self._spots(short).stations == 0
+
+    def test_only_a_junction_end_is_cleared(self) -> None:
+        """A split in one street, a dead end or the clip is not a junction
+        mouth (`Q203`): the clear comes off the junction end alone."""
+        # 180 m from the junction at `to` back to the split at `from`: 60 m
+        # apart, four stations, centred in 0-180.
+        report = self._spots(self._north(), junction_nodes=frozenset({2}))
+        along = sorted(spot.edge_t * 200.0 for spot in report.spots)
+        assert along == pytest.approx([0.0, 60.0, 120.0, 180.0])
+        # Neither end a junction: the whole 200 m, four stations, centred.
+        neither = self._spots(self._north(), junction_nodes=frozenset())
+        assert sorted(spot.edge_t * 200.0 for spot in neither.spots) == pytest.approx(
+            [10.0, 70.0, 130.0, 190.0]
+        )

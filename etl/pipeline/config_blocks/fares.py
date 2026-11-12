@@ -176,7 +176,7 @@ class StreetSpots:
     not cover, so a street spot is a station along a level-0 edge's kerb that
     no no-stopping run (`kerbside`, double OR single: no run carries its hours)
     reaches, on a road with no bus lane and no limit above
-    `max_speed_limit_kph`, clear of the edge's ends by `junction_clear_m`, and
+    `max_speed_limit_kph`, clear of the edge's junction ends by `junction_clear_m`, and
     beside a named building (`places`) — a passenger says where they are by
     the building. Published under `fares.json`'s `street` key, not `nodes`, so
     the stages that read the published points (`parked`, `tramlines`, the
@@ -185,7 +185,8 @@ class StreetSpots:
 
     # One station per side every this many metres along the edge.
     spacing_m: float
-    # No station nearer an edge's end than this: a junction mouth.
+    # No station nearer an edge's end than this where the end is a junction
+    # (`roads`' node `kind`): a junction mouth.
     junction_clear_m: float
     # The kerb a stopped taxi takes, centred on the station: a run inside it
     # refuses the station.

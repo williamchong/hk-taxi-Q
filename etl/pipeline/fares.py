@@ -68,7 +68,7 @@ from pipeline.documents import round_position, write_document
 from pipeline.fetch import cached_source, read_feature_collection, source_reads
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.polyline import Segments, Snap, plan_lengths
-from pipeline.roads import ROADGRAPH_NAME, clean_text, read_graph
+from pipeline.roads import JUNCTION, ROADGRAPH_NAME, clean_text, read_graph
 
 log = logging.getLogger(__name__)
 
@@ -316,7 +316,14 @@ def build_region(
     if style.street is not None and places:
         level0 = [edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0]
         report.street = street_spots(
-            level0, style.street, places, style.places.max_distance_m, (far_x, far_z)
+            level0,
+            style.street,
+            places,
+            style.places.max_distance_m,
+            (far_x, far_z),
+            # `roads`' own label: three or more edge ends on any level, the
+            # neighbour's edges at a seam counted too (`Q203`).
+            frozenset(int(node["id"]) for node in graph["nodes"] if node["kind"] == JUNCTION),
         )
 
     _write(out_dir, city, region_id, report)
@@ -329,11 +336,14 @@ def street_spots(
     places: Sequence[Place],
     max_place_m: float,
     region_high: tuple[float, float],
+    junction_nodes: frozenset[int],
 ) -> StreetReport:
     """Every kerb station a cab may stop at for a passenger beside a building.
 
     Stations run every `spacing_m` along each edge, `junction_clear_m` in from
-    both ends and centred in what that leaves, on each side traffic keeps to:
+    each end in `junction_nodes` and centred in what that leaves — a street
+    split in two, a dead end or the clip is no mouth (`Q203`) — on each side
+    traffic keeps to:
     the nearside of a one-way edge, both of a two-way one. A station is refused
     when any `kerbside` run on its side reaches within half `stop_length_m`,
     and when no named footprint lies within `max_place_m` of its kerb.
@@ -352,11 +362,13 @@ def street_spots(
             continue
         cumulative = plan_lengths(polyline)
         length = float(cumulative[-1])
-        usable = length - 2.0 * spec.junction_clear_m
+        clear_from = spec.junction_clear_m if int(edge["from"]) in junction_nodes else 0.0
+        clear_to = spec.junction_clear_m if int(edge["to"]) in junction_nodes else 0.0
+        usable = length - clear_from - clear_to
         if usable < 0.0:
             continue
         count = int(usable // spec.spacing_m) + 1
-        first = spec.junction_clear_m + (usable - (count - 1) * spec.spacing_m) / 2.0
+        first = clear_from + (usable - (count - 1) * spec.spacing_m) / 2.0
         sides = [NEARSIDE] if edge.get("direction") != "both" else [NEARSIDE, OFFSIDE]
         half_width = float(edge.get("width_m") or 0.0) / 2.0
         half_stop = spec.stop_length_m / 2.0
