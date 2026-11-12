@@ -50,6 +50,11 @@ the loop's own numbers in `tuning/fares.tres`.
   built and refused: a stand with one reachable destination was refused most of its hails — here a
   pickup that pairs with nothing is never shown. 🚫 "No route" is a pool decision, never an
   assert (`Q137`).
+- ⚠️ **The start stand always has a customer** (`Q203`, `Q142`'s opening). The drive harness calls
+  `FareSystem.wait_at` for its spawn stand at the start and in `play`, after `reset`; it seats
+  first, paired, and the last drawn steps aside. A spawn stand that is not a pickup or reaches
+  nowhere seats nobody and the harness warns. `verify_fares`' `seat:` block; mutations: no trim,
+  seat at the back.
 - ⚠️ **The pools are the yaml's rules.** A stand is a pickup and a destination unless
   `cross_harbour` (`P3-1b`'s); a PUDO point is what its `pickup` / `dropoff` say — a quarter are
   drop-off only, and a hail at one is what a Hong Kong player notices; a `poi` tram stop is

@@ -12730,9 +12730,14 @@ the form below. The user's drive owed.
   in `/simplify`): each try was a fresh `prepare` (`TREE_CACHE` is 8), so a kerb that reaches
   nothing cost 24 prepares, about 20 ms, at the fare end that drew it, and a kerb reaching 5% of
   destinations was stranded wrongly 29% of the time (0.95²⁴).
-- ⚠️ **The drive no longer opens with a hail.** The car still starts 20 m short of `f_004`, but
-  a customer waits there only when the draw puts one there; the arrow points at the nearest one
-  that does. Whether the first fare should always wait at the start is the user's call.
+- **A customer always waits at the start stand** (the user's call after `/eval`, 2026-11-12). The
+  random draw had made `Q142`'s opening — the car 20 m short of `f_004`, the game starting when the
+  player pulls forward — a 1-in-70 chance. `FareSystem.wait_at(region, id)` seats a customer first
+  of the set, paired like any other, the last drawn stepping aside to keep `live_pickups`; the
+  drive harness calls it for its spawn stand at the start and on every restart (`play`), and
+  warns where the stand seats nobody. Later draws stay random. `verify_fares`' `seat:` block holds
+  it, the frame's `f_004` included; dropping the trim or seating last fails by name. Driven: pulled
+  forward and stopped in the ring, the fare boarded for 特麗樓, 謝斐道, 1.5 km, 282 s.
 - **The allowance is the legal route over par, no floor by kind** (the user's call). The 30 s /
   60 s floors were only ever reached on routes under 500 m, and the short hop's never (300 m at 30
   kph is 36 s). `Fare.kind` stays, priced by nothing until `P3-1b`.
