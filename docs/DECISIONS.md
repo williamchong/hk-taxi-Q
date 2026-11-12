@@ -12982,3 +12982,47 @@ place of Godot's logo. That is next, once the 12 s is split into load, city buil
 
 **See.** `P0-3b` · `P2-6` · `Q76` (the web, which has no baker) · `game/export_presets.cfg` ·
 `docs/ARCHITECTURE.md`
+
+## `Q208` — The game is 香港的士車神 / Hong Kong Taxi Ace
+
+**Decision (2026-11-13, the user's pick).** The store and menu name is **香港的士車神** in Chinese and
+**Hong Kong Taxi Ace** in English. The repository, the bundle identifier
+(`cloud.williamchong.hktaxiq`) and the export file names keep `hk-taxi-Q`. The menu's Chinese
+subtitle is **港艇試駕版** (the user's wording: 艇 is the trade's word for a taxi, so it reads as a
+Hong Kong taxi test-drive edition); the English subtitle stays "Wan Chai · Causeway Bay" until
+the user words one.
+
+**Why.** It had to say "taxi game" at a glance in both languages, fit the toy cars and the
+skill ceiling (drift, combo, near miss), and carry no echo of the genre's trademarked title (hard
+rule 8). 車神 is everyday Cantonese for an ace driver and names the top of the skill the game
+grades; 的士 and "Taxi" carry the category. Turned down along the way:
+
+- 紅的 / Red Cab: authentic, but "Red Cab" is a likely clash with real taxi-booking apps.
+- 飛的: an existing Hong Kong taxi-hailing app, 飛的 Fly Taxi, is on the App Store.
+- 暴走的士 / Taxi Rampage, and the other "crazy" synonyms: they promise destruction the game does
+  not have, and a synonym in the trademarked pattern is still a confusion risk.
+- 的士牛奶仔 (trade slang for a rookie driver): a YouTube channel already uses it, and it means
+  nothing to a reader outside the trade. Kept as a candidate rank, below.
+
+**Where the name lives.**
+
+- `project.godot`: `config/name` is the English name, and `config/name_localized` maps `zh_HK`
+  to the Chinese. Android and iOS read both for the home-screen label. `export_presets.cfg`'s
+  Android `package/name` matches.
+- A desktop names `user://` after `config/name`, so desktop settings and records start afresh
+  under `app_userdata/Hong Kong Taxi Ace`. Pinning `use_custom_user_dir` to the old name was
+  tried and does not keep them: it moves the folder to `Application Support/hk-taxi-Q`, out of
+  `Godot/app_userdata/`. Phones and the web are unaffected, and nothing has shipped to a desktop.
+- The menu's title is `menu_text.json`'s `title`, no longer `config/name`, so each language shows
+  its own name. `title_size_zh` is 60 against the Latin 72, because at 72 the six Kai characters
+  wrapped 神 alone onto a second line (HOME frame, `--lang=zh`).
+
+**Open.**
+- The English subtitle.
+- A rank ladder from the trade's slang, 騰雞 or 牛奶仔 → 行家 → 車神, over `Q205`'s 車手. The words
+  are from 港語學's glossary and 《通學：一書讀通．廣東話俗語》, and they are era-bound, so a
+  working driver should read them first. Not built.
+- The trademark registers (USPTO, HK IPD) for the final name, not just the stores.
+
+**See.** `P6-1` · `Q205` · hard rule 8 · `game/tuning/menu_text.json` · `docs/ARCHITECTURE.md`
+"Project settings"
