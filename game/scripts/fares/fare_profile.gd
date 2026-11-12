@@ -35,8 +35,14 @@ const PATH: String = "res://tuning/fares.tres"
 ## How often the loop samples the car against the graph, in hertz.
 @export var sample_hz: float
 ## How many customers wait at once: the pickups drawn, each with its
-## destination, and replaced as one boards.
+## destination, and replaced as one boards or falls behind.
 @export var live_pickups: int
+## Plan metres from the car within which a new customer is placed (`Q203`).
+@export var place_m: float
+## Plan metres from the car past which the farthest waiting customer is
+## removed for a new one placed near it. Over `place_m`, or a customer placed
+## at the edge would be removed on the next turn.
+@export var retire_m: float
 ## The share of draws — a waiting customer and a destination alike — taken
 ## from the street spots rather than the published stands and PUDO points.
 ## 0 draws none: the off switch.

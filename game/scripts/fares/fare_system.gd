@@ -27,8 +27,11 @@ extends Node
 ## destination drawn the same way from those one forward search from the
 ## pickup reaches at `min_trip_m` or beyond (`RoadRouter.source_tree`, uncached,
 ## so it evicts no prepared tree). `pickups()` is that live set; a boarding
-## takes one out and the fare's end draws its replacement. The hail pays one
-## `prepare` for its destination, as before. Drawing blind and
+## takes one out and the fare's end draws its replacement. **They stay near the
+## car** (the user's ask): a customer stays where placed, the farthest leaves
+## once past `retire_m` for a new one placed within `place_m` of the car, one a
+## sample (`_turn_over`). The hail pays one `prepare` for its destination, as
+## before. Drawing blind and
 ## retrying AT THE HAIL was built first and refused — a stand with one
 ## reachable destination was refused most of its hails; here a pickup that
 ## pairs with nothing is never shown.
@@ -160,6 +163,8 @@ const SLIP_FLOOR_MPS: float = 1.0
 const REVERSED_SLIP_DEG: float = 90.0
 
 enum State { IDLE, BOARDING, CARRYING }
+## What one draw did (`_place_one`).
+enum Placed { PLACED, STRANDED, NONE }
 
 ## The car. Set by the scene; `setup()` leaves it null for a headless run.
 @export var vehicle: VehicleController
@@ -182,6 +187,8 @@ var cancellations: int = 0
 var hail_refusals: int = 0
 ## The pickups dropped for pairing with no destination, in the order found.
 var stranded: Array[Fare.Stop] = []
+## Waiting customers removed for falling past `retire_m` of the car.
+var retired: int = 0
 ## What drawing the first waiting customers cost at `setup`, in milliseconds.
 var pair_ms: float = 0.0
 ## The pending customer a reader may point at as of the last sample, and the
@@ -322,8 +329,26 @@ func setup(
 		"tip_hkd_per_s": profile.tip_hkd_per_s,
 		"sample_hz": profile.sample_hz,
 		"live_pickups": float(profile.live_pickups),
+		"place_m": profile.place_m,
+		"retire_m": profile.retire_m,
 	}
 	if TuningTable.any_zero(profile, required, "FareSystem", "nothing will be hailed"):
+		return
+	if profile.place_m <= profile.hail_radius_m:
+		push_error(
+			(
+				"FareSystem: place_m %.0f is not over hail_radius_m %.0f in %s; nobody could be placed near the car."
+				% [profile.place_m, profile.hail_radius_m, FareProfile.PATH]
+			)
+		)
+		return
+	if profile.retire_m <= profile.place_m:
+		push_error(
+			(
+				"FareSystem: retire_m %.0f is not over place_m %.0f in %s; a customer placed at the edge would be removed at once."
+				% [profile.retire_m, profile.place_m, FareProfile.PATH]
+			)
+		)
 		return
 	# The skills' table and the drift's angle are the tracker's to refuse.
 	var tracker := SkillTracker.new(skills, slip_threshold_deg)
@@ -357,6 +382,7 @@ func setup(
 	_live.clear()
 	_bound.clear()
 	stranded.clear()
+	retired = 0
 	_last_position = Vector3.INF
 	for region: String in fares_by_region:
 		_add_stops(region, fares_by_region[region])
@@ -403,6 +429,7 @@ func reset() -> void:
 	tally = SessionTally.new()
 	cancellations = 0
 	hail_refusals = 0
+	retired = 0
 	pending = null
 	withheld = PackedInt32Array()
 	_sample_accum_s = 0.0
@@ -605,8 +632,42 @@ func sample(
 			_sample_boarding(position, since_sample)
 		State.CARRYING:
 			_sample_carrying(position, speed_kph, heading)
+	if state != State.BOARDING and not _closed:
+		_turn_over(position)
 	_rescan(position)
 	sampled.emit()
+
+
+## Keep the waiting customers near the car (`Q203`, the user's ask: "there is
+## always 4 nearby as the car is moving"). A customer stays where they were
+## placed; once the farthest is past `retire_m` they give up and leave, and one
+## new customer is placed within `place_m` — one draw a sample, so a pairing's
+## forward search is never more than one a tick. A swap, never a removal
+## alone: the new customer is placed and paired FIRST, and the farthest leaves
+## only then — with no free kerb within `retire_m` (the clip, the harbour), or a
+## draw that strands, the set stays as it was, where removing first would
+## shrink it or remove a far placement again every sample. Never while
+## boarding: the customer walking to the car is in the set. Mid-fare too, so
+## the fare's end finds them near.
+func _turn_over(position: Vector3) -> void:
+	if _live.size() < _profile.live_pickups:
+		if _place_one(INF) == Placed.PLACED:
+			pickups_changed.emit()
+		return
+	var farthest: int = -1
+	var farthest_m: float = _profile.retire_m
+	for index: int in _live.size():
+		var apart_m: float = RoadGraph.plan_distance(position, _live[index].point)
+		if apart_m > farthest_m:
+			farthest_m = apart_m
+			farthest = index
+	if farthest < 0 or _place_one(_profile.retire_m) != Placed.PLACED:
+		return
+	# The new customer went on the end, so `farthest` still names the leaver.
+	_bound.erase(_live[farthest].key())
+	_live.remove_at(farthest)
+	retired += 1
+	pickups_changed.emit()
 
 
 func _sample_idle(position: Vector3, speed_kph: float) -> void:
@@ -700,33 +761,89 @@ func pick_destination(pickup: Fare.Stop) -> Fare.Stop:
 
 
 ## Draw waiting customers until `live_pickups` wait, each paired with where it
-## is going; a pickup that pairs with nothing is stranded. Emits
-## `pickups_changed` when the set moved. Every draw that strands shrinks the
-## pool and the budget bounds the rest — four draws a stop, enough that a pool
-## barely larger than `live_pickups` still fills past the draws that land on a
-## customer already waiting — so the loop ends: on a pool with fewer pickups
-## than `live_pickups`, or one stranded whole, fewer wait.
+## is going. Emits `pickups_changed` when the set moved. Every draw places a
+## customer or strands a kerb, which leaves the pool for good, so the loop
+## ends: on a pool with fewer pickups than `live_pickups`, or one stranded
+## whole, fewer wait.
 func _refill() -> void:
 	var drew: bool = false
-	var budget: int = 4 * (_pool.size() + _pool_street.size()) + _profile.live_pickups
-	while _live.size() < _profile.live_pickups and budget > 0:
-		budget -= 1
-		var pickup: Fare.Stop = _draw(_pool, _pool_street)
-		if pickup == null:
+	while _live.size() < _profile.live_pickups:
+		var placed: Placed = _place_one(INF)
+		if placed == Placed.NONE:
 			break
-		if _bound.has(pickup.key()):
-			continue
-		if RoadGraph.plan_distance(pickup.point, _last_position) <= _profile.hail_radius_m:
-			continue
-		var destination: Fare.Stop = _pair(pickup)
-		if destination == null:
-			_strand(pickup)
-			continue
-		_live.append(pickup)
-		_bound[pickup.key()] = destination
-		drew = true
+		drew = drew or placed == Placed.PLACED
 	if drew:
 		pickups_changed.emit()
+
+
+## One draw: a customer placed within `place_m` of the car once a sample has
+## said where it is (`_placeable`, anywhere before), else at the nearest free
+## kerb within `max_m`, and paired — or the kerb stranded when it pairs with
+## nothing. One forward search at most.
+func _place_one(max_m: float) -> Placed:
+	var pickup: Fare.Stop = _draw(_placeable(_pool), _placeable(_pool_street))
+	if pickup == null:
+		pickup = _nearest_free(max_m)
+	if pickup == null:
+		return Placed.NONE
+	var destination: Fare.Stop = _pair(pickup)
+	if destination == null:
+		_strand(pickup)
+		return Placed.STRANDED
+	_live.append(pickup)
+	_bound[pickup.key()] = destination
+	return Placed.PLACED
+
+
+## The stops in `stops` a new customer may be placed at: nobody waiting there
+## already, outside the hail radius of the car (or one would appear under a
+## car that just stopped), and within `place_m` of it once a sample has said
+## where it is. Distance first: `key()` builds a string, and few stops are near.
+func _placeable(stops: Array[Fare.Stop]) -> Array[Fare.Stop]:
+	var placeable: Array[Fare.Stop] = []
+	var located: bool = _last_position != Vector3.INF
+	for stop: Fare.Stop in stops:
+		if located:
+			var apart_m: float = RoadGraph.plan_distance(stop.point, _last_position)
+			if apart_m <= _profile.hail_radius_m or apart_m > _profile.place_m:
+				continue
+		if not _bound.has(stop.key()):
+			placeable.append(stop)
+	return placeable
+
+
+## The nearest stop past the hail radius and within `max_m` with nobody
+## waiting, for a car with none free within `place_m` — a clip edge, a
+## seafront — so the set still fills; null with none. Never a street spot at
+## a `street_share` of 0.
+func _nearest_free(max_m: float) -> Fare.Stop:
+	var nearest: Fare.Stop = _nearest_free_in(_pool, max_m)
+	if not _street_on():
+		return nearest
+	var reach_m: float = max_m
+	if nearest != null:
+		reach_m = RoadGraph.plan_distance(nearest.point, _last_position)
+	var street: Fare.Stop = _nearest_free_in(_pool_street, reach_m)
+	return street if street != null else nearest
+
+
+func _nearest_free_in(stops: Array[Fare.Stop], max_m: float) -> Fare.Stop:
+	var nearest: Fare.Stop = null
+	var nearest_m: float = max_m
+	for stop: Fare.Stop in stops:
+		var apart_m: float = RoadGraph.plan_distance(stop.point, _last_position)
+		if apart_m <= _profile.hail_radius_m or apart_m > nearest_m:
+			continue
+		if not _bound.has(stop.key()):
+			nearest_m = apart_m
+			nearest = stop
+	return nearest
+
+
+## Whether the street spots are drawn at all: a `street_share` of 0 is the
+## off switch, the published points alone.
+func _street_on() -> bool:
+	return _profile.street_share > 0.0
 
 
 ## Gone from the pickup pool for the session, kept as a destination.
@@ -766,7 +883,7 @@ func _reached(
 ## from `published` on the rest, and from whichever is not empty when one is —
 ## but never from `street` at a share of 0, the off switch.
 func _draw(published: Array[Fare.Stop], street: Array[Fare.Stop]) -> Fare.Stop:
-	var street_open: bool = _profile.street_share > 0.0 and not street.is_empty()
+	var street_open: bool = _street_on() and not street.is_empty()
 	var from_street: bool = (
 		street_open and (published.is_empty() or _rng.randf() < _profile.street_share)
 	)

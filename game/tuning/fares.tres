@@ -13,4 +13,6 @@ par_kph = 19.0
 tip_hkd_per_s = 0.5
 sample_hz = 5.0
 live_pickups = 4
+place_m = 160.0
+retire_m = 320.0
 street_share = 0.75

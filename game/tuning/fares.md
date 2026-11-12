@@ -78,12 +78,38 @@ is 5.5 m apart, well inside both radii. The meter and the clock run every physic
 How many customers wait at once (`Q203`), each drawn with where they are going; one boarding
 takes them off the kerb and the fare's end draws a replacement. Four pins on the map and four
 rings in the street: enough that one is usually near, few enough that each is a place to drive to
-rather than a carpet. A first guess.
+rather than a carpet. Kept at 4 on the user's call (2026-11-13) against a measured curve, before
+`place_m` kept them near the car: legal-direction route metres from a fare's end to the nearest
+of N drawn city-wide on Wan Chai, against a 1,197 m median trip — N = 2: 892 m p50; 4: 656 m;
+6: 571 m; 8: 489 m. Each step past 4 bought less. Since `place_m` the distance is set by that
+radius instead, and this is only how many pins.
+
+## `place_m = 160.0`
+
+Plan metres from the car within which a new customer is placed (the user's ask, 2026-11-13:
+"there is always 4 nearby as the car is moving"; "the farest one is removed and a new one is
+placed when necessary"). Half the minimap's `span_m` (320 m across a heading-up slot), so a
+customer placed shows on the map at once. Measured against the kerbs: 5% of Wan Chai's and 6%
+of Causeway Bay's kerbs have fewer than four others within 160 m (p10 four and six), against
+37% / 21% at 100 m. Where none is free within it, the nearest free kerb is placed instead.
+
+## `retire_m = 320.0`
+
+Plan metres past which the farthest waiting customer leaves and one is placed within
+`place_m` — a swap, one a sample, and none while no free kerb is within this distance (the
+clip, the harbour), or a far placement would be removed every sample. The minimap's whole
+span: twice `place_m`, so a customer placed at its edge survives the car turning away, and
+one is dropped only once off the map's long way too. `FareSystem` refuses it at or under
+`place_m`.
 
 ## `street_share = 0.75`
 
 The share of draws, waiting customers and destinations alike, taken from `fares.json`'s street
-spots (268 on the merged runtime) rather than the published stands and PUDO points (27 that may be
+spots (387 on the merged runtime, 2026-11-13) rather than the published stands and PUDO points (27 that may be
 hailed at): three of four waiting customers flag a cab off a stand, and one in four still waits
-at a stand, which Hong Kong has plenty of. 0 is the off switch — the published points alone, as
+at a stand, which Hong Kong has plenty of. Kept on the user's call (2026-11-13): no published
+figure splits stand from street. The nearest is TD's 2024–25 point-to-point study (LegCo Panel
+on Transport paper, 18 July 2025, para 6): of drivers who take app orders, about a third of
+trips come by app and "over 60%" by "passengers hailing taxis directly on the street", which
+counts the stands in too. Drawing every place alike would be about 0.92. 0 is the off switch — the published points alone, as
 before `Q203` — and is why this is the one key `FareSystem` does not refuse at zero.

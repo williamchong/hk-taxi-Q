@@ -116,6 +116,7 @@ func _init() -> void:
 	_check_seat()
 	_check_allowance()
 	_check_loop()
+	_check_turnover()
 	_check_beep()
 	_check_skills()
 	_check_practice()
@@ -700,6 +701,194 @@ func _check_loop() -> void:
 		"the meter ran while the clock did (HK$%.1f)" % late.fare.meter.reading_hkd()
 	)
 	late.free()
+
+
+## The waiting customers stay near the car (`Q203`, the user's ask): a customer
+## stays where placed, and once the farthest is past `retire_m` they leave and
+## one is placed near the car — a swap, one a sample, and none where no kerb is
+## near. Held from both sides: a car that stays put moves nobody, and one
+## that drives off has every customer swapped.
+func _check_turnover() -> void:
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	var live: int = system.pickups().size()
+	if live == 0:
+		_expect(not system.stranded.is_empty(), "turnover", "SKIP: nobody waits on this region")
+		system.free()
+		return
+	var home: Vector3 = system.pickups()[0].point
+	var far: Fare.Stop = _far_with_room(home)
+	_tick(system, home, FAST, 1)
+	_expect(
+		system.retired <= 1,
+		"turnover",
+		"one sample swaps one customer at most (%d)" % system.retired
+	)
+	_tick(system, home, FAST, live + 2)
+	_expect(
+		system.pickups().size() == live and _all_within(system, home, _profile.retire_m),
+		"turnover",
+		"parked on a kerb, %d wait and every one is within %.0f m" % [live, _profile.retire_m]
+	)
+	var settled: Array[Fare.Stop] = system.pickups().duplicate()
+	var settled_retired: int = system.retired
+	_tick(system, home, FAST, 8)
+	_expect(
+		system.pickups() == settled and system.retired == settled_retired,
+		"turnover",
+		"a car that stays put moves nobody: they stay where they were placed"
+	)
+	_expect(
+		RoadGraph.plan_distance(far.point, home) > 2.0 * _profile.retire_m,
+		"turnover",
+		"the region has a kerb twice retire_m from the first to drive to"
+	)
+	# One draw a sample, strands included: long enough for every swap and
+	# every kerb the clip strands on the way.
+	var stranded_before: int = system.stranded.size()
+	var swapped_by: Array[int] = []
+	var stranded_by: Array[int] = []
+	var fewest: int = live
+	for tick: int in 40:
+		_tick(system, far.point, FAST, 1)
+		swapped_by.append(system.retired - settled_retired)
+		stranded_by.append(system.stranded.size())
+		fewest = mini(fewest, system.pickups().size())
+	var swapped: int = system.retired - settled_retired
+	var stranded_on_way: int = system.stranded.size() - stranded_before
+	_expect(
+		swapped >= 1 and fewest == live,
+		"turnover",
+		(
+			"driven %.0f m away, %d of %d swapped for customers near the car, and %d always waited though %d kerbs stranded on the way"
+			% [RoadGraph.plan_distance(far.point, home), swapped, live, live, stranded_on_way]
+		)
+	)
+	# Whoever is still far stays only because no kerb near is left: the set
+	# has settled, and more samples move nobody.
+	var arrived: Array[Fare.Stop] = system.pickups().duplicate()
+	var arrived_retired: int = system.retired
+	_tick(system, far.point, FAST, 8)
+	_expect(
+		system.pickups() == arrived and system.retired == arrived_retired,
+		"turnover",
+		(
+			"and then it settles: %d of %d within retire_m, nobody moves on"
+			% [_count_within(system, far.point, _profile.retire_m), live]
+		)
+	)
+	var one_a_sample: bool = true
+	for tick: int in swapped_by.size():
+		var before: int = 0 if tick == 0 else swapped_by[tick - 1]
+		one_a_sample = one_a_sample and swapped_by[tick] - before <= 1
+		var stranded_then: int = stranded_before if tick == 0 else stranded_by[tick - 1]
+		one_a_sample = one_a_sample and stranded_by[tick] - stranded_then <= 1
+	_expect(
+		one_a_sample,
+		"turnover",
+		"and never more than one swap or one forward search a sample, strands included"
+	)
+	settled = system.pickups().duplicate()
+	settled_retired = system.retired
+	_tick(system, FAR_AWAY, FAST, 4)
+	_expect(
+		system.pickups() == settled and system.retired == settled_retired,
+		"turnover",
+		"with no kerb near the car nobody leaves: a swap, never a removal alone"
+	)
+	# The farthest kerb of all, where a clip strands the kerbs near it one after
+	# another: a draw that strands must not cost the set its leaver.
+	var corner: Fare.Stop = null
+	for stop: Fare.Stop in system.pool():
+		if (
+			corner == null
+			or (
+				RoadGraph.plan_distance(stop.point, home)
+				> RoadGraph.plan_distance(corner.point, home)
+			)
+		):
+			corner = stop
+	stranded_before = system.stranded.size()
+	fewest = live
+	for tick: int in 40:
+		_tick(system, corner.point, FAST, 1)
+		fewest = mini(fewest, system.pickups().size())
+	_expect(
+		fewest == live,
+		"turnover",
+		(
+			"at the farthest kerb %d always waited, %d kerbs stranding on the way"
+			% [live, system.stranded.size() - stranded_before]
+		)
+	)
+	system.free()
+
+	# Mutation: retire_m past the city — the old set stays behind the car.
+	var stay: FareProfile = _profile.duplicate()
+	stay.retire_m = 1.0e9
+	var mutated: FareSystem = _system(_fares, stay, SEED)
+	_tick(mutated, home, FAST, live + 3)
+	_tick(mutated, far.point, FAST, live + 2)
+	_expect(
+		mutated.retired == 0 and not _all_within(mutated, far.point, _profile.retire_m),
+		"turnover",
+		(
+			"mutation caught: with nobody ever retired the customers stay %.0f m behind"
+			% _profile.retire_m
+		)
+	)
+	mutated.free()
+
+	# A placement radius at or over the retirement one is refused, named.
+	var inverted: FareProfile = _profile.duplicate()
+	inverted.retire_m = inverted.place_m
+	var refused: FareSystem = _system(_fares, inverted, SEED)
+	_expect(not refused.usable(), "turnover", "retire_m not over place_m is an inert system")
+	refused.free()
+	var inside: FareProfile = _profile.duplicate()
+	inside.place_m = inside.hail_radius_m
+	var unplaceable: FareSystem = _system(_fares, inside, SEED)
+	_expect(
+		not unplaceable.usable(), "turnover", "place_m not over hail_radius_m is an inert system"
+	)
+	unplaceable.free()
+
+
+## The farthest kerb from `home` with another within `place_m` of it that pairs
+## — somewhere a customer can be placed. The farthest of all can be a clip
+## corner where every kerb near strands, and there the right answer is that
+## nobody is swapped, which the drive below would read as a failure.
+func _far_with_room(home: Vector3) -> Fare.Stop:
+	var scout: FareSystem = _system(_fares, _profile, SEED + 1)
+	var by_distance: Array[Fare.Stop] = scout.pool().duplicate()
+	by_distance.sort_custom(
+		func(a: Fare.Stop, b: Fare.Stop) -> bool:
+			return RoadGraph.plan_distance(a.point, home) > RoadGraph.plan_distance(b.point, home)
+	)
+	var found: Fare.Stop = null
+	for stop: Fare.Stop in by_distance:
+		if found != null:
+			break
+		for other: Fare.Stop in scout.pool():
+			var apart_m: float = RoadGraph.plan_distance(other.point, stop.point)
+			if apart_m <= _profile.hail_radius_m or apart_m > _profile.place_m:
+				continue
+			if scout.wait_at(other.region, other.id):
+				found = stop
+				break
+	scout.free()
+	return found if found != null else by_distance.front()
+
+
+static func _all_within(system: FareSystem, point: Vector3, max_m: float) -> bool:
+	return _count_within(system, point, max_m) == system.pickups().size()
+
+
+static func _count_within(system: FareSystem, point: Vector3, max_m: float) -> int:
+	var within: int = 0
+	for stop: Fare.Stop in system.pickups():
+		if RoadGraph.plan_distance(stop.point, point) <= max_m:
+			within += 1
+	return within
 
 
 ## The meter's beep (`Q178`): one at the boarding, then one for every unit charged.
