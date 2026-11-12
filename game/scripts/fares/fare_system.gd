@@ -426,6 +426,41 @@ func pickups() -> Array[Fare.Stop]:
 	return _live
 
 
+## Seat a customer at `region`/`id`, first of the waiting set, paired like any
+## other; the last drawn steps aside to keep `live_pickups`. The drive harness
+## calls it for the stand the car starts behind, at the start and on a restart,
+## so the game opens with a fare to pull forward into (`Q203`, restoring
+## `Q142`'s opening the random draw had made a 1-in-70 chance). Never inside
+## the hail guard `_refill` keeps: that guard is for the car's last stop.
+## False, with nobody seated, where the stop is not a pickup or reaches no
+## destination — the latter stranded like any draw.
+func wait_at(region: String, id: String) -> bool:
+	if not _usable:
+		return false
+	for waiting: Fare.Stop in _live:
+		if waiting.region == region and waiting.id == id:
+			return true
+	var seat: Fare.Stop = null
+	for stop: Fare.Stop in _pool + _pool_street:
+		if stop.region == region and stop.id == id:
+			seat = stop
+			break
+	if seat == null:
+		return false
+	var destination: Fare.Stop = _pair(seat)
+	if destination == null:
+		_pool.erase(seat)
+		_pool_street.erase(seat)
+		stranded.append(seat)
+		return false
+	_live.push_front(seat)
+	_bound[seat.key()] = destination
+	while _live.size() > _profile.live_pickups:
+		_bound.erase(_live.pop_back().key())
+	pickups_changed.emit()
+	return true
+
+
 ## Every stop a customer may be drawn waiting at, published then street.
 func pool() -> Array[Fare.Stop]:
 	return _pool + _pool_street

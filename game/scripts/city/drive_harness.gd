@@ -153,6 +153,7 @@ func _ready() -> void:
 		clock.restart()
 	if is_instance_valid(fares) and fares.usable():
 		fares.finished.connect(shift_over.emit)
+		_seat_start_customer()
 
 
 ## Start a run in `mode` from its first second (`Q162`), from the menu: the
@@ -165,6 +166,7 @@ func play(mode: DayClock.Mode) -> void:
 		clock.restart()
 	if is_instance_valid(fares) and fares.usable():
 		fares.reset()
+		_seat_start_customer()
 	if showroom_fare_id.is_empty():
 		# `resume` moves the car only out of a showroom; a run after a shift
 		# starts on the line all the same.
@@ -292,6 +294,21 @@ func _hold_ground() -> void:
 ## catches that a tick later — so the fallback is about leaving the camera
 ## somewhere sensible while the real message gets read, not about pretending the
 ## spawn worked.
+## A customer waits at the stand the car starts behind (`Q203`): the game
+## starts when the player pulls forward into a fare, as `Q142` set it.
+func _seat_start_customer() -> void:
+	var region: String = (
+		spawn_region if not spawn_region.is_empty() else GeneratedRegions.selected()
+	)
+	if not fares.wait_at(region, spawn_fare_id):
+		push_warning(
+			(
+				"No customer waits at the start stand %s/%s: not a pickup, or it reaches nowhere."
+				% [region, spawn_fare_id]
+			)
+		)
+
+
 func _place_on_start_line() -> Transform3D:
 	var authored: Transform3D = vehicle.global_transform
 

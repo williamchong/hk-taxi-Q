@@ -113,6 +113,7 @@ func _init() -> void:
 	_check_tariff()
 	_check_pools()
 	_check_pairs()
+	_check_seat()
 	_check_allowance()
 	_check_loop()
 	_check_beep()
@@ -350,7 +351,7 @@ func _check_pairs() -> void:
 	kerbless.free()
 
 	# Mutation: a bar past every route strands every pickup and leaves no one
-	# waiting. The published points alone, so the tool does not pay 24 draws a
+	# waiting. The published points alone, so the tool does not pay a search a
 	# street spot to prove the same rule.
 	var published_nodes: Dictionary = {"nodes": _fares.get("nodes", [])}
 	var unreachable: FareProfile = _profile.duplicate()
@@ -365,6 +366,69 @@ func _check_pairs() -> void:
 		"mutation caught: a bar past every route strands all %d pickups" % mutated.stranded.size()
 	)
 	mutated.free()
+
+
+## `wait_at` (`Q203`): the harness seats a customer at the stand the car
+## starts behind, so the game opens on a fare. First of the set, paired, the
+## set's size kept by the last drawn stepping aside; idempotent; a stop that is
+## not a pickup seats nobody.
+func _check_seat() -> void:
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	var last: Fare.Stop = system.pickups().back()
+	var size: int = system.pickups().size()
+	# The first stop not waiting that pairs: one that reaches nowhere is
+	# stranded by `wait_at` and seats nobody, as a draw would.
+	var seat: Fare.Stop = null
+	var refused: int = 0
+	for stop: Fare.Stop in system.pool().duplicate():
+		if system.pickups().has(stop):
+			continue
+		if system.wait_at(stop.region, stop.id):
+			seat = stop
+			break
+		refused += 1
+		_expect(
+			system.stranded.has(stop) and not system.pool().has(stop),
+			"seat",
+			"%s, reaching nowhere, is stranded rather than seated" % stop.id
+		)
+	if seat == null:
+		_fail("seat", "no stop could be seated (%d refused)" % refused)
+		system.free()
+		return
+	_expect(
+		system.pickups()[0] == seat,
+		"seat",
+		"%s/%s waits first once seated (%d refused first)" % [seat.region, seat.id, refused]
+	)
+	_expect(
+		system.pick_destination(seat) != null,
+		"seat",
+		"the seated customer knows where they are going"
+	)
+	_expect(
+		system.pickups().size() == size and system.pick_destination(last) == null,
+		"seat",
+		"the set keeps %d waiting: the last drawn stepped aside, unbound" % size
+	)
+	_expect(
+		system.wait_at(seat.region, seat.id) and system.pickups().size() == size,
+		"seat",
+		"seating the same stop twice seats it once"
+	)
+	_expect(
+		not system.wait_at(seat.region, "no_such_stop") and system.pickups()[0] == seat,
+		"seat",
+		"a stop that is not a pickup seats nobody"
+	)
+	# The shipped start: the harness seats the frame's stand (`spawn_region` "").
+	if _region == GeneratedRegions.frame():
+		_expect(
+			system.wait_at(_region, RoadSpawn.DEFAULT_FARE_ID),
+			"seat",
+			"a customer waits at the start stand %s" % RoadSpawn.DEFAULT_FARE_ID
+		)
+	system.free()
 
 
 ## The allowance is the legal route at par and nothing else (the user's call,
