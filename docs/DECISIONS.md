@@ -12989,8 +12989,8 @@ place of Godot's logo. That is next, once the 12 s is split into load, city buil
 **Hong Kong Taxi Ace** in English. The repository, the bundle identifier
 (`cloud.williamchong.hktaxiq`) and the export file names keep `hk-taxi-Q`. The menu's Chinese
 subtitle is **港艇試駕版** (the user's wording: 艇 is the trade's word for a taxi, so it reads as a
-Hong Kong taxi test-drive edition); the English subtitle stays "Wan Chai · Causeway Bay" until
-the user words one.
+Hong Kong taxi test-drive edition), and the English is **Island Test Drive Edition**, the user's
+wording too: under the title it reads as Hong Kong Island, where the map is.
 
 **Why.** It had to say "taxi game" at a glance in both languages, fit the toy cars and the
 skill ceiling (drift, combo, near miss), and carry no echo of the genre's trademarked title (hard
@@ -13018,7 +13018,6 @@ grades; 的士 and "Taxi" carry the category. Turned down along the way:
   wrapped 神 alone onto a second line (HOME frame, `--lang=zh`).
 
 **Open.**
-- The English subtitle.
 - A rank ladder from the trade's slang, 騰雞 or 牛奶仔 → 行家 → 車神, over `Q205`'s 車手. The words
   are from 港語學's glossary and 《通學：一書讀通．廣東話俗語》, and they are era-bound, so a
   working driver should read them first. Not built.
