@@ -12897,3 +12897,53 @@ owed, and with it `combo_gap_s`.
 
 **See.** `Q145` · `Q138` · `Q169` · `P3-2b` · `game/scripts/fares/style_combo.gd` ·
 `game/tuning/skills.md` · `.claude/rules/fares.md`
+
+## `Q207` — The iOS build bakes its shaders at export
+
+**Decision (2026-11-13, `P0-3b`).** The iOS preset sets `shader_baker/enabled`. Godot compiles
+every shader the export finds into a Metal library and ships it in the PCK, so the phone does not
+compile them from source on first launch. Android's preset stays as it was until a handset can
+measure it.
+
+**Why.** The first signed build sat on the splash for about three minutes on its first launch
+while the phone compiled Metal shaders, and every new player and every player after an OS update
+starts cold. That is the wait `P3-9`'s strangers would meet first.
+
+**Measured** on the user's iPhone Air (A19 Pro), both sides exported from `f46e02ef` and run as
+a debug build, with `--print-fps --log-file user://launch.log` and the log copied off the phone
+about every half-second. "First frame" is when the first `Project FPS` line reached the log.
+
+| Build | Launch | First frame | Then |
+|---|---|---|---|
+| Unbaked | fresh install | none within 260 s | — |
+| Baked | fresh install | 11.9–12.4 s | two seconds at 1 fps, then 60 |
+| Baked | relaunch | 3.8–4.3 s | 60 throughout |
+
+- PCK 98,585,688 → 109,157,308 B (+10,571,620 B), both from the PCK. The baked one holds 70
+  `.metal.cache` entries (38 of them the scene shaders); the unbaked one none.
+- The baked export took 10.1 s against 4.5 s (202 bake steps).
+- The two seconds at 1 fps remain because a baked library is still not the GPU's own
+  instruction set: iOS finishes each pipeline on the device. The `BootCover`
+  (`shader_warmup.gd`) is already over the menu during them.
+- The Air is not the A13 floor. These are upper bounds and do not answer `P2-6`.
+
+**Two silent failures.** Each one ships an unbaked PCK and exits 0.
+
+- A `--headless` export has no GPU and skips the baker without a word. The export has to run with
+  a window.
+- Without Apple's Metal toolchain, a separate 839 MB download since Xcode 26
+  (`xcodebuild -downloadComponent MetalToolchain`), the export warns `Metal shader baking limited
+  to SPIR-V`, and the phone still compiles every shader.
+
+So check the PCK, never the exit code: count its `.godot/shader_cache/*.metal.cache` entries.
+
+**Not done.** `tools/export.sh ios` is unchanged: as committed, the preset neither exports a
+project only nor carries a Team ID, so the script cannot produce a signed build either way. The
+working recipe (a scratch copy of the preset with both set, a windowed export, then `xcodebuild`
+with `DEVELOPMENT_TEAM`) is in `docs/ARCHITECTURE.md` "Build pipeline".
+
+**Open.** The user asked for a loading screen of our own, or at least progress text and a bar, in
+place of Godot's logo. That is next, once the 12 s is split into load, city build and warm-up.
+
+**See.** `P0-3b` · `P2-6` · `Q76` (the web, which has no baker) · `game/export_presets.cfg` ·
+`docs/ARCHITECTURE.md`

@@ -1637,6 +1637,18 @@ permanent once published: neither store lets a released app change it. The App S
 stays out too; an iOS build exports a project (`Export Project Only`) and `xcodebuild` signs it with
 `DEVELOPMENT_TEAM` from the command line.
 
+**The iOS preset bakes its shaders** (`shader_baker/enabled`, `Q207`): Godot compiles every
+shader to a Metal library at export and ships it in the PCK, so a fresh install draws its first
+frame in about 12 s on an iPhone Air instead of none in 260 s. ⚠️ It fails silently two ways,
+each shipping an unbaked PCK with exit 0: a `--headless` export has no GPU and skips the baker
+without a word, so export iOS with a window; and without Apple's Metal toolchain (a separate
+download since Xcode 26, `xcodebuild -downloadComponent MetalToolchain`) it warns `Metal shader
+baking limited to SPIR-V` and the phone still compiles. Check the PCK, not the exit code: a baked
+one holds `.godot/shader_cache/*.metal.cache` entries (70 on 2026-11-13), an unbaked one none.
+Android's preset stays unbaked until a handset can measure it. The export itself wants
+`export_project_only` and `app_store_team_id` set: set them in a scratch copy of the preset for
+the export and restore the committed file after; `tools/export.sh ios` does neither.
+
 **Then check in-engine:** `--import` first (a fresh sync has no import sidecars), then
 `tools/check.sh`.
 
