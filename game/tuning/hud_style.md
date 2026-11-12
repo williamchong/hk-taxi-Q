@@ -213,3 +213,11 @@ map's rim fading to nothing — also its clip. `dial_sweep_px` 6 is the amber ar
 from zero to the needle. `scrim` is the tint the menu's blurred backdrop is
 pulled toward (`menu.md`). `verify_hud` refuses a zero or a light shadow.
 
+
+## `touch_hint = Color(0.93, 0.93, 0.9, 0.3)`
+
+The thumbs' sticks on a touch screen (`Q204`, the user's ask, reversing `Q97`'s
+"no visible touch chrome"): the bracket's ink, faint at 0.3 for the hint where
+each thumb goes and 0.8 under a thumb, in an 8 px stroke. Not red and not
+amber: red is the fare's and amber the speed's (`Q139`), and a stick is
+neither.

@@ -20,6 +20,11 @@ extends Resource
 ## (`verify_spawn.gd`, for the wheel ray) cannot load a second file.
 const PATH: String = "res://tuning/cars/crown_comfort.tres"
 
+@export_group("Cabin")
+## The wheel the steering thumb is drawn as (`Q204`): the HUD's, never the
+## physics'. Its sources are in the car's sidecar.
+@export var steering_wheel: SteeringWheelLook
+
 @export_group("Body")
 ## The car's mass, set on the rigid body in `VehicleController._ready`.
 @export_range(0.0, 10000.0, 1.0, "suffix:kg") var mass_kg: float

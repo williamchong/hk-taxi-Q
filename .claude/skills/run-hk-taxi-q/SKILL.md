@@ -116,7 +116,10 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--trams=off\|on` | the moving trams (`P3-4`, `Q176`). On by default; the rails are drawn either way |
 | `--push=off\|on` | whether the taxi knocks the moving cars and trams by mass (`Q180`). On by default; `off` makes every car and tram a wall again, the A/B for a crash |
 | `--fare-seed=<int>` | fix the destination draw, so two drives from one stand go to one place. Absent, randomised |
-| `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
+| `--touch=mouse\|on\|off` | `mouse` drives the **touch** scheme with the mouse as one finger (`P2-4`); `mouse` and `on` lay out with the touch table (`Q204`), `off` with the desk's. Absent, the screen decides |
+| `--window=WxH` | the window's size from boot (`drive.sh` hands it to the engine as `--resolution`): a handset's aspect at a desk, `1368x630` for an iPhone Air at half size |
+| `--safe-area=l,t,r,b` | a handset's insets in window pixels, where the desk reports none — `102,0,102,30` is the iPhone Air's at `1368x630` (`Q204`) |
+| `--finger=fx,fy>gx,gy@start+dur` | a real touch: lands at (fx, fy), slides to (gx, gy), lifts — shares of the window, repeatable, so two are both thumbs at once (`Q204`) |
 
 One authored asset under the shipped rig, no city needed — the readout prints as `asset:` lines and
 is drawn in the frame:

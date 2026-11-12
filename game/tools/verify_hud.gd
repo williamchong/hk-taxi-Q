@@ -63,6 +63,8 @@ const TrackerProfileScript = preload("res://scripts/core/street_tracker_profile.
 const NoEntryIconScript = preload("res://scripts/ui/no_entry_icon.gd")
 const SevenSegmentScript = preload("res://scripts/ui/seven_segment.gd")
 const SpeedDialScript = preload("res://scripts/ui/speed_dial.gd")
+const CarSpecScript = preload("res://scripts/vehicle/car_spec.gd")
+const TouchSticksScript = preload("res://scripts/ui/touch_sticks.gd")
 const MinimapProfileScript = preload("res://scripts/ui/minimap_profile.gd")
 const MinimapProjectionScript = preload("res://scripts/ui/minimap_projection.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
@@ -154,10 +156,75 @@ func _init() -> void:
 # ---------------------------------------------------------------- layout ----
 
 
+## The touch table's two round readouts on ONE line at every aspect (`Q204`,
+## the user's ask): the map's centre at the dial's pivot, and both slots on the
+## same vertical anchor, so a taller screen moves them together. The map is
+## anchored as its plate is (`hud.gd`), so the plate's anchor is the one read.
+func _check_round_line(layout: Resource) -> void:
+	var style: Resource = load(HudStyleScript.PATH)
+	var pivot: Vector2 = SpeedDialScript.pivot_in(layout.speed, style.dial_inset_px)
+	var centre: float = layout.minimap.get_center().y
+	_expect(
+		is_equal_approx(pivot.y, centre),
+		"layout",
+		"the dial's pivot (y %.1f) is on the map's centre line (y %.1f)" % [pivot.y, centre]
+	)
+	var size_y: float = layout.design_size.y
+	var plate: Rect2 = layout.street_plate
+	var speed: Rect2 = layout.speed
+	_expect(
+		is_equal_approx(
+			layout.axis(plate.position.y, plate.end.y, size_y).x,
+			layout.axis(speed.position.y, speed.end.y, size_y).x
+		),
+		"layout",
+		"and the map and the speed hold the same vertical anchor"
+	)
+	var moved: Resource = layout.duplicate()
+	moved.speed = Rect2(moved.speed.position + Vector2(0.0, 8.0), moved.speed.size)
+	_expect(
+		not is_equal_approx(SpeedDialScript.pivot_in(moved.speed, style.dial_inset_px).y, centre),
+		"layout",
+		"and a speed slot dropped 8 units is off it"
+	)
+
+
+## The sticks' look and the car's wheel they draw (`Q204`): an unknown look
+## falls through to the bare tracks, and a missing wheel key is a rim with no
+## spokes, or a hub of nothing — each looks like a glitch, not an error.
+func _check_wheel() -> void:
+	var style: Resource = load(HudStyleScript.PATH)
+	var looks: Array[String] = [
+		TouchSticksScript.LOOK_TRACKS,
+		TouchSticksScript.LOOK_WHEEL_PEDALS,
+		TouchSticksScript.LOOK_WHEEL_LEVER,
+	]
+	_expect(looks.has(style.touch_look), "layout", "touch_look '%s' is a look" % style.touch_look)
+	var car: Resource = load(CarSpecScript.PATH)
+	var look: Resource = car.steering_wheel if car != null else null
+	_expect(look != null, "layout", "the taxi carries a steering wheel to draw")
+	if look == null:
+		return
+	_expect(
+		look.spokes_deg.size() >= 2 and look.hub_share > 0.0 and look.spoke_share > 0.0,
+		"layout",
+		"and it has %d spokes round a hub of %.2f" % [look.spokes_deg.size(), look.hub_share]
+	)
+
+
+## Both tables (`Q204`): the desk's, and the touch screen's, whose thumbs are
+## the whole reason it exists.
 func _check_layout() -> void:
-	var layout: Resource = load(HudLayoutScript.PATH)
+	for path: String in [HudLayoutScript.PATH, HudLayoutScript.TOUCH_PATH]:
+		print("  layout: %s" % path)
+		_check_layout_at(path)
+	_check_wheel()
+
+
+func _check_layout_at(path: String) -> void:
+	var layout: Resource = load(path)
 	if layout == null:
-		_fail("layout", "%s did not load" % HudLayoutScript.PATH)
+		_fail("layout", "%s did not load" % path)
 		return
 
 	# The shipped layout must be clean. This is the assertion that fails the day
@@ -215,6 +282,9 @@ func _check_layout() -> void:
 	var apart: Resource = layout.duplicate()
 	apart.minimap = Rect2(apart.minimap.position - Vector2(0.0, 8.0), apart.minimap.size)
 	_expect(not apart.abutting(), "layout", "and a minimap lifted 8 px off it is refused")
+
+	if path == HudLayoutScript.TOUCH_PATH:
+		_check_round_line(layout)
 
 	var outside: PackedStringArray = layout.within_design()
 	if outside.size() > 0:

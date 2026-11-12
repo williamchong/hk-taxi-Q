@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="HudLayout" format=3]
+
+[ext_resource type="Script" uid="uid://dehyd5bceu2ww" path="res://scripts/ui/hud_layout.gd" id="1_hud_layout"]
+
+[resource]
+script = ExtResource("1_hud_layout")
+design_size = Vector2(1536, 864)
+speed = Rect2(1268, 282, 236, 216)
+street_plate = Rect2(32, 540, 280, 56)
+wrong_way = Rect2(720, 320, 96, 96)
+minimap = Rect2(32, 260, 280, 280)
+timer = Rect2(618, 116, 300, 130)
+meter = Rect2(1164, 32, 340, 120)
+callout = Rect2(508, 0, 520, 124)
+tick = Rect2(368, 248, 800, 60)
+award = Rect2(1164, 164, 340, 72)
+combo = Rect2(32, 152, 300, 64)
+clock = Rect2(32, 32, 300, 110)
+pause = Rect2(1056, 36, 96, 96)
+touch_zone_left = Rect2(0, 240, 448, 624)
+touch_zone_right = Rect2(1088, 240, 448, 624)
+thumb_rest_left = Rect2(0, 600, 416, 264)
+thumb_rest_right = Rect2(1120, 600, 416, 264)

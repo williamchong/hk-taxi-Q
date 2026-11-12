@@ -89,6 +89,22 @@ static func angle_deg(kph: float, full_scale: float) -> float:
 	return START_DEG + SWEEP_DEG * clampf(kph / maxf(full_scale, 0.001), 0.0, 1.0)
 
 
+## Lay `dial` in its speed slot, `inset` in from the top and the sides and
+## down to the foot: the one placement `pivot_in` measures.
+static func fit(dial: Control, inset: float) -> void:
+	dial.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dial.offset_left = inset
+	dial.offset_top = inset
+	dial.offset_right = -inset
+
+
+## Where the pivot of a dial `fit` in the speed slot `slot` stands: what the
+## touch table lines the round map's centre up with (`Q204`).
+static func pivot_in(slot: Rect2, inset: float) -> Vector2:
+	var placed: Vector3 = frame(slot.size - Vector2(inset * 2.0, inset))
+	return slot.position + Vector2(inset + placed.x, inset + placed.y)
+
+
 ## The pivot and radius a dial takes in `box`: as large as fits with the pivot
 ## low, since the arc is over the top.
 static func frame(box: Vector2) -> Vector3:

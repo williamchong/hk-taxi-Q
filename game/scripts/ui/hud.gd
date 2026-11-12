@@ -226,9 +226,9 @@ func _exit_tree() -> void:
 ## The layout, or false having said why. Split out of `_ready` so the two ways
 ## this HUD declines to exist share one teardown.
 func _load_layout() -> bool:
-	_layout = load(HudLayout.PATH) as HudLayout
+	_layout = HudLayout.for_device()
 	if _layout == null:
-		push_warning("hud: %s did not load; no HUD this run" % HudLayout.PATH)
+		push_warning("hud: the layout did not load; no HUD this run")
 		return false
 	_style = load(HudStyle.PATH) as HudStyle
 	if _style == null:
@@ -278,7 +278,12 @@ func _build() -> void:
 
 	# The glass every bare readout below sits on (`Q163`): first, so it draws
 	# under them all.
-	root.add_child(HeadUpFrame.styled(_style))
+	var frame: HeadUpFrame = HeadUpFrame.styled(_style)
+	frame.bleed = HudLayout.insets(root)
+	root.add_child(frame)
+	if HudLayout.is_touch():
+		# The thumbs' sticks (`Q204`): over the glass, under every readout.
+		root.add_child(TouchSticks.make(_style, _layout))
 
 	# ---- the minimap, and the street name's home ----
 	#
@@ -352,10 +357,7 @@ func _build() -> void:
 	_dial.ink = _style.chip_muted
 	_dial.needle = _style.dial_needle
 	_dial.sweep_px = _style.dial_sweep_px
-	_dial.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_dial.offset_left = _style.dial_inset_px
-	_dial.offset_top = _style.dial_inset_px
-	_dial.offset_right = -_style.dial_inset_px
+	SpeedDial.fit(_dial, _style.dial_inset_px)
 	_speed_chip.add_child(_dial)
 
 	# The numerals sit low in the chip, inside the arc's open side.

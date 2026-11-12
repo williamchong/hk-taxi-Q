@@ -270,6 +270,14 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var map_fade_px: float
 ## The speedometer's amber sweep, outside its ticks, ending at the needle.
 @export var dial_sweep_px: float
+## The thumbs' sticks on a touch screen (`Q204`): the faint hint where a thumb
+## goes, the ink of a stick under a thumb, and the stroke both are drawn in.
+@export var touch_hint: Color
+@export var touch_live: Color
+@export var touch_px: float
+## How the sticks are drawn: `tracks`, `wheel_pedals` or `wheel_lever`
+## (`TouchSticks.LOOK_*`). The thumbs read the same under every one.
+@export_enum("tracks", "wheel_pedals", "wheel_lever") var touch_look: String
 ## The menu's sheets of text (credits, guide, notices): the whole screen dimmed
 ## behind bare lettering, rather than a box on it.
 @export var scrim: Color

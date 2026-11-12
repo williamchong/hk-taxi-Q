@@ -243,6 +243,83 @@ extends Resource
 ## green while the game loads something else.
 const PATH: String = "res://tuning/hud_layout.tres"
 
+## The touch screen's table (`Q204`): the readouts off the thumbs, which on a
+## handset cover the bottom corners, and the whole display larger. Its
+## `design_size` is smaller than `PATH`'s, and that IS the scale: the canvas is
+## stretched by `1080 / design_size.y` over the desk's (`ui_scale`), so a rect
+## here is the same number of units drawn larger.
+const TOUCH_PATH: String = "res://tuning/hud_layout_touch.tres"
+
+## `--safe-area=left,top,right,bottom`, in window pixels: a handset's insets at
+## a desk, where the display reports none. Development only, like `--touch=`.
+const SAFE_AREA_ARG: String = "--safe-area="
+
+## `--touch=`: `mouse|on` lays out for thumbs at a desk (`mouse` also makes the
+## mouse a finger, `InputRouter`), `off` the desk's on a touch screen. Here, a
+## `class_name`, so the verify tools can name it where an autoload is not.
+const TOUCH_ARG: String = "--touch="
+
+
+## Whether this run lays out for thumbs; with no `--touch=`, the screen decides.
+static func is_touch() -> bool:
+	var asked: String = Cmdline.value(TOUCH_ARG).to_lower()
+	if asked == "off":
+		return false
+	if asked == "mouse" or asked == "on":
+		return true
+	return DisplayServer.is_touchscreen_available()
+
+
+## The table this run reads: the touch one on a touch screen.
+static func for_device() -> HudLayout:
+	return load(TOUCH_PATH if is_touch() else PATH) as HudLayout
+
+
+## How much larger this table draws than the desk's 1080-tall frame.
+func ui_scale() -> float:
+	return 1080.0 / design_size.y if design_size.y > 0.0 else 1.0
+
+
+## Stretch the whole canvas — HUD, menu and touch zones — to this table's frame.
+## Called once, by `InputRouter`, before anything is laid out.
+func apply_scale(tree: SceneTree) -> void:
+	tree.root.content_scale_factor = ui_scale()
+
+
+## The root's safe-area inset, left / top / right / bottom, in canvas units.
+static func insets(root: Control) -> Vector4:
+	return Vector4(root.offset_left, root.offset_top, -root.offset_right, -root.offset_bottom)
+
+
+## Push `control` out past the safe area on every side it reaches, so a backdrop
+## or a vignette runs to the glass rather than stopping at the notch's line
+## (`Q204`). `control` must already be laid out inside `root`.
+static func bleed(control: Control, root: Control) -> void:
+	var inset: Vector4 = insets(root)
+	if is_zero_approx(control.anchor_left):
+		control.offset_left -= inset.x
+	if is_zero_approx(control.anchor_top):
+		control.offset_top -= inset.y
+	if is_equal_approx(control.anchor_right, 1.0):
+		control.offset_right += inset.z
+	if is_equal_approx(control.anchor_bottom, 1.0):
+		control.offset_bottom += inset.w
+
+
+## `place`, then out past the safe area on every edge `design` touches: a touch
+## zone takes a thumb wherever the glass is, the notch's strip included.
+func place_to_glass(root: Control, control: Control, design: Rect2) -> void:
+	place(root, control, design)
+	var inset: Vector4 = insets(root)
+	if is_zero_approx(design.position.x):
+		control.offset_left -= inset.x
+	if is_zero_approx(design.position.y):
+		control.offset_top -= inset.y
+	if is_equal_approx(design.end.x, design_size.x):
+		control.offset_right += inset.z
+	if is_equal_approx(design.end.y, design_size.y):
+		control.offset_bottom += inset.w
+
 
 ## The slots this HUD reserves and does not yet fill, by node name: every HUD
 ## component a planned task is known to add (`Q138`). The minimap was one until
@@ -453,10 +530,20 @@ static func inset_for_safe_area(root: Control) -> void:
 	# So the inset applies only where it means anything — a window that fills
 	# the display — and every side is clamped at zero so that no arithmetic here
 	# can ever make the HUD bigger than the screen again.
-	if window != screen:
+	var safe: Rect2i = DisplayServer.get_display_safe_area()
+	var emulated: PackedStringArray = Cmdline.value(SAFE_AREA_ARG).split(",", false)
+	if emulated.size() == 4:
+		# A handset's insets at a desk: the window stands in for the display.
+		screen = window
+		safe = Rect2i(
+			int(emulated[0]),
+			int(emulated[1]),
+			window.x - int(emulated[0]) - int(emulated[2]),
+			window.y - int(emulated[1]) - int(emulated[3])
+		)
+	elif window != screen:
 		return
 
-	var safe: Rect2i = DisplayServer.get_display_safe_area()
 	var canvas: Vector2 = root.get_viewport_rect().size
 	# Not `scale` — `CanvasLayer` already has one, and the warnings sweep
 	# promotes shadowing to an error. Naming it for what it is anyway. The ratio

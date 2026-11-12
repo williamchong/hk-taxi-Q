@@ -74,6 +74,10 @@ var _shot_times: Array[float] = []
 var _out_dir: String = ""
 ## Each entry is [action: StringName, start_s: float, end_s: float].
 var _holds: Array[Array] = []
+## `--finger=fx,fy>gx,gy@start+duration`: a finger lands at (fx, fy), slides to
+## (gx, gy) and lifts, both as shares of the window (`Q204`). Two of them are
+## two thumbs at once, which `--touch=mouse` cannot be.
+var _fingers: Array[Finger] = []
 ## Non-finite until `--camera` / `--look` say otherwise, so "unset" needs no
 ## second flag and cannot be confused with the origin.
 var _camera_pos: Vector3 = Vector3.INF
@@ -121,6 +125,17 @@ var _first_tick: int = -1
 ## Cleared by `_shoot` once the renderer has actually drawn. A field rather than
 ## a local because the signal handler cannot write to a local — see below.
 var _capture_pending: bool = false
+
+
+## One `--finger`: where it lands and slides to, as shares of the window, when,
+## and whether it is down now.
+class Finger:
+	extends RefCounted
+	var land: Vector2
+	var slide: Vector2
+	var start_s: float
+	var end_s: float
+	var down: bool = false
 
 
 func _init() -> void:
@@ -278,6 +293,7 @@ func _drive() -> void:
 	while t < _seconds and not _aborted:
 		_trace_tick()
 		_apply_holds(t)
+		_apply_fingers(t)
 
 		if not shots.is_empty() and t >= shots[0]:
 			await _capture_next_frame(shots.pop_front())
@@ -446,6 +462,8 @@ func _close_trace() -> void:
 func _release_everything() -> void:
 	for hold: Array in _holds:
 		Input.action_release(hold[0])
+	# A finger still down at the end lifts, as a held action is released.
+	_apply_fingers(INF)
 
 
 ## What the renderer drew in the last frame it completed, as `  prims=N draws=N`.
@@ -788,8 +806,22 @@ func _parse_args() -> bool:
 				# exercises steering or the throttle and never their interaction;
 				# `verify_input.gd` covers that, and `P0-3b`'s handset is what
 				# actually settles whether the scheme is usable.
-				if not ["mouse", "off"].has(value):
-					_fail("--touch=%s is not mouse or off" % value)
+				# `on` lays out for thumbs without the mouse finger (`Q204`).
+				if not ["mouse", "on", "off"].has(value):
+					_fail("--touch=%s is not mouse, on or off" % value)
+					return false
+			"--safe-area":
+				# `HudLayout` reads this one itself (`Q204`): a handset's insets,
+				# left,top,right,bottom in window pixels, at a desk.
+				var sides: PackedStringArray = value.split(",")
+				if (
+					sides.size() != 4
+					or Array(sides).any(func(x: String) -> bool: return not x.is_valid_int())
+				):
+					_fail("--safe-area=%s is not four whole numbers, l,t,r,b" % value)
+					return false
+			"--finger":
+				if not _parse_finger(value):
 					return false
 			"--spawn-at":
 				_spawn_at = _parse_vector(key, value)
@@ -945,6 +977,57 @@ func _parse_vector(key: String, value: String) -> Vector3:
 			_fail("bad %s '%s' — '%s' is not a number" % [key, value, piece])
 			return Vector3.INF
 	return Vector3(float(bits[0]), float(bits[1]), float(bits[2]))
+
+
+## `--finger=0.15,0.8>0.2,0.8@1+4` — a thumb at 15 %, 80 % of the window from
+## 1 s, slid to 20 % at once and held 4 s.
+func _parse_finger(value: String) -> bool:
+	var at: PackedStringArray = value.split("@")
+	var path: PackedStringArray = at[0].split(">") if at.size() == 2 else PackedStringArray()
+	var span: PackedStringArray = at[1].split("+") if at.size() == 2 else PackedStringArray()
+	if path.size() != 2 or span.size() != 2:
+		_fail("bad --finger '%s' — want fx,fy>gx,gy@start+duration" % value)
+		return false
+	var ends: Array[Vector2] = []
+	for point: String in path:
+		var xy: PackedStringArray = point.split(",")
+		if xy.size() != 2 or not xy[0].is_valid_float() or not xy[1].is_valid_float():
+			_fail("bad --finger '%s' — '%s' is not fx,fy" % [value, point])
+			return false
+		ends.append(Vector2(xy[0].to_float(), xy[1].to_float()))
+	var start: float = _to_float("--finger", span[0])
+	var duration: float = _to_float("--finger", span[1])
+	if is_nan(start) or is_nan(duration):
+		return false
+	var finger := Finger.new()
+	finger.land = ends[0]
+	finger.slide = ends[1]
+	finger.start_s = start
+	finger.end_s = start + duration
+	_fingers.append(finger)
+	return true
+
+
+## Lands, slides and lifts each `--finger` as a real touch event, through the
+## same window-to-canvas path the handset's go through.
+func _apply_fingers(t: float) -> void:
+	var window := Vector2(DisplayServer.window_get_size())
+	for index: int in _fingers.size():
+		var finger: Finger = _fingers[index]
+		var want: bool = t >= finger.start_s and t < finger.end_s
+		if want == finger.down:
+			continue
+		finger.down = want
+		var touch := InputEventScreenTouch.new()
+		touch.index = index
+		touch.pressed = want
+		touch.position = (finger.land if want else finger.slide) * window
+		Input.parse_input_event(touch)
+		if want:
+			var drag := InputEventScreenDrag.new()
+			drag.index = index
+			drag.position = finger.slide * window
+			Input.parse_input_event(drag)
 
 
 ## `--hold=accelerate@0.5+5.0` — press `accelerate` at 0.5 s, hold 5 s.

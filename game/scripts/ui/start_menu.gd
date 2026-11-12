@@ -708,6 +708,7 @@ func _column(node_name: String) -> VBoxContainer:
 	var backdrop: ColorRect = _backdrop(_root, _profile.backdrop_fade_from)
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	backdrop.offset_right = _profile.backdrop_width_px
+	HudLayout.bleed(backdrop, _root)
 	column.visibility_changed.connect(_follow.bind(backdrop, column))
 	_root.add_child(column)
 	return column
@@ -729,7 +730,10 @@ func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	var panel: ChamferPanel = _panel(node_name)
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(panel)
-	_backdrop(panel, 1.0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var shade: ColorRect = _backdrop(panel, 1.0)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# To the glass, past the notch's line (`Q204`); the text stays inside it.
+	HudLayout.bleed(shade, _root)
 
 	var centre := CenterContainer.new()
 	centre.name = "Centre"

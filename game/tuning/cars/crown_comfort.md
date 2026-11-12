@@ -21,6 +21,16 @@ spring's ceiling `suspension_max_load_ratio` of a wheel's load at rest. Hand-siz
 re-seeded at every change of mass, gravity or grip (`Q153` lists four rounds), and under one that
 was missed every tap spun at 168°.
 
+## `steering_wheel = SubResource("Resource_wh33l")`
+
+The wheel the steering thumb is drawn as (`Q204`, the user's ask: "a Toyota
+Crown like wheel"). Four spokes — a pair just under three and nine o'clock, a
+pair either side of six — round a large horn pad (0.36 of the rim), and no
+twelve o'clock stripe, which a road car does not have; the asymmetric spokes
+show the turn. ⚠️ Drawn from memory of the cab, not from a maker's drawing:
+the user corrects HK taxi facts, and a correction is an edit to `spokes_deg`.
+The physics never reads it.
+
 ## `mass_kg = 1400.0`
 
 The Crown Comfort's kerb weight is about 1,390 kg; with a driver, 1,400 (`Q153`). Set on the rigid

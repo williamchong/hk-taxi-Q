@@ -68,7 +68,7 @@ var auto_accelerate: bool = false
 ## alternative was `input_devices/pointing/emulate_touch_from_mouse` in
 ## `project.godot`, which would have changed desktop behaviour for everyone and
 ## collided with `free_look_camera.gd`'s mouse capture in the preview scenes.
-const TOUCH_ARG: String = "--touch="
+const TOUCH_ARG: String = HudLayout.TOUCH_ARG
 
 ## ⚠️ **`Cmdline` is a `class_name`, and that is what makes naming it here safe.**
 ## The reader this replaced lived on the `DebugHud` autoload, and an autoload
@@ -182,15 +182,15 @@ func _notification(what: int) -> void:
 ## ⚠️ **Controls rather than arithmetic.** Anchors mean the engine re-resolves
 ## every zone on a rotation or a window resize, and `get_global_rect()` is then
 ## the answer; a cached rect would be a second copy of the layout with its own
-## staleness. They are `MOUSE_FILTER_IGNORE` and never drawn — `Q97` ships no
-## visible touch chrome — so this costs no draw call.
+## staleness. They are `MOUSE_FILTER_IGNORE` and never drawn here, so this
+## costs no draw call; the HUD draws the sticks over them (`TouchSticks`, `Q204`).
 ##
 ## ⚠️ **A CanvasLayer of its own, not the HUD's.** `--hud=off` frees the HUD
 ## outright (`hud.gd`), and a touch layer parented to it would take the
 ## player's steering with it — including on `P3-9`'s no-arrow acceptance drive,
 ## which is a *driving* test that turns the HUD off.
 func _build_zones() -> void:
-	var layout: HudLayout = load(HudLayout.PATH) as HudLayout
+	var layout: HudLayout = HudLayout.for_device()
 	_touch = load(TouchProfile.PATH) as TouchProfile
 	if layout == null or _touch == null:
 		# Warned rather than fatal: keyboard and gamepad are unaffected and the
@@ -198,13 +198,15 @@ func _build_zones() -> void:
 		# run in. On a handset it is fatal in practice, and the warning is what
 		# says so.
 		push_warning(
-			(
-				"input: no touch zones this run; %s or %s did not load"
-				% [HudLayout.PATH, TouchProfile.PATH]
-			)
+			"input: no touch zones this run; the layout or %s did not load" % TouchProfile.PATH
 		)
 		_touch = null
 		return
+
+	# First, before any root is inset: the menu, the HUD and these zones all lay
+	# out in the frame the table is written in (`Q204`). The desk table's is the
+	# project's own, so this is a no-op there.
+	layout.apply_scale(get_tree())
 
 	var canvas := CanvasLayer.new()
 	canvas.name = "TouchZones"
@@ -223,8 +225,34 @@ func _zone(layout: HudLayout, root: Control, zone_name: String, design: Rect2) -
 	var zone := Control.new()
 	zone.name = zone_name
 	zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layout.place(root, zone, design)
+	# Out to the glass on the edges the zone reaches: a thumb landing in the
+	# notch's strip still steers (`Q204`).
+	layout.place_to_glass(root, zone, design)
 	return zone
+
+
+## The steering thumb's landing point and where it is now, in canvas units, or
+## an empty array while it is up. For the HUD's sticks, which draw it (`Q204`).
+func steer_touch() -> PackedVector2Array:
+	return _thumb_points(_steer_thumb)
+
+
+## The same for the driving thumb.
+func drive_touch() -> PackedVector2Array:
+	return _thumb_points(_drive_thumb)
+
+
+static func _thumb_points(thumb: Thumb) -> PackedVector2Array:
+	if not thumb.is_down():
+		return PackedVector2Array()
+	return PackedVector2Array([thumb.origin, thumb.current])
+
+
+## How far each thumb may travel, for the sticks to draw: steer, then drive.
+func travel_px() -> Vector2:
+	if _touch == null:
+		return Vector2.ZERO
+	return Vector2(_touch.steer_travel_px, _touch.drive_travel_px)
 
 
 ## The one place in the project that reads raw input events.

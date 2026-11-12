@@ -87,6 +87,19 @@ esac
 
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
+# `--window=WxH` is the engine's, not the driver's: the window's size from boot,
+# before any layout resolves — a handset's aspect at a desk, with `--safe-area=`
+# for its insets (Q204). Taken out of the driver's arguments here.
+ENGINE=()
+DRIVER_ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+	--window=*) ENGINE+=(--resolution "${arg#--window=}") ;;
+	*) DRIVER_ARGS+=("$arg") ;;
+	esac
+done
+set -- "${DRIVER_ARGS[@]}"
+
 # Streamed through tee rather than captured into a variable, so the per-second
 # telemetry arrives while the run is happening. A captured run shows nothing
 # until the process exits, which makes a hang — the failure this and the
@@ -95,7 +108,7 @@ FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 LOG="$(mktemp -t hk-taxi-drive)"
 trap 'rm -f "$LOG"' EXIT
 
-"$GODOT" --path "$ROOT/game" --script "$DRIVER" -- "$@" 2>&1 | tee "$LOG"
+"$GODOT" ${ENGINE[@]+"${ENGINE[@]}"} --path "$ROOT/game" --script "$DRIVER" -- "$@" 2>&1 | tee "$LOG"
 status=${PIPESTATUS[0]}
 
 if grep -qE "$FATAL" "$LOG"; then

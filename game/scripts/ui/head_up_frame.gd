@@ -16,6 +16,10 @@ var style: HudStyle = null
 ## Whether the vignette draws. The menu turns it off: its backdrop shades the
 ## text already, and its frame draws OVER the pages so the brackets show.
 var shaded: bool = true
+## How far the vignette runs past this node, left / top / right / bottom: the
+## safe area's inset, so the shading reaches the glass while the brackets stay
+## inside the notch's line (`Q204`).
+var bleed: Vector4 = Vector4.ZERO
 
 ## Kept: a mesh made inside `_draw` is freed when it returns, before the frame
 ## that draws it.
@@ -45,8 +49,12 @@ func _draw() -> void:
 	var reach: float = size.y * style.vignette_share
 	if shaded and style.vignette.a > 0.0 and reach > 0.0:
 		var clear := Color(style.vignette, 0.0)
-		_quad(points, colours, Rect2(0.0, 0.0, size.x, reach), style.vignette, clear)
-		_quad(points, colours, Rect2(0.0, size.y - reach, size.x, reach), clear, style.vignette)
+		var left: float = -bleed.x
+		var wide: float = size.x + bleed.x + bleed.z
+		var high := Rect2(left, -bleed.y, wide, reach + bleed.y)
+		_quad(points, colours, high, style.vignette, clear)
+		var low := Rect2(left, size.y - reach, wide, reach + bleed.w)
+		_quad(points, colours, low, clear, style.vignette)
 	if style.frame_ink.a > 0.0 and style.frame_px > 0.0:
 		var half: float = style.frame_px * 0.5
 		for corner: PackedVector2Array in brackets(size, style.frame_inset_px, style.frame_arm_px):

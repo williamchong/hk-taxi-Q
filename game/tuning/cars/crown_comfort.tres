@@ -1,9 +1,18 @@
 [gd_resource type="Resource" script_class="CarSpec" format=3 uid="uid://bfyloj8um1s3f"]
 
 [ext_resource type="Script" uid="uid://cqs6l2ktx44if" path="res://scripts/vehicle/car_spec.gd" id="1_car"]
+[ext_resource type="Script" path="res://scripts/vehicle/steering_wheel_look.gd" id="2_wheel"]
+
+[sub_resource type="Resource" id="Resource_wh33l"]
+script = ExtResource("2_wheel")
+spokes_deg = PackedFloat32Array(15, 165, 60, 120)
+hub_share = 0.36
+spoke_share = 1.4
+top_stripe = false
 
 [resource]
 script = ExtResource("1_car")
+steering_wheel = SubResource("Resource_wh33l")
 mass_kg = 1400.0
 centre_of_mass_offset_y = -0.35
 inertia_kgm2 = Vector3(2609.8333, 2201.853, 1078.353)

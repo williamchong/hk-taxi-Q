@@ -14,7 +14,9 @@ handset. Nothing here has been measured against a thumb.
 
 ⚠️ DESIGN UNITS, NOT DEVICE PIXELS — the same 1920x1080 frame hud_layout.tres
 is written in. On a 2340-wide panel every number here is scaled by the
-canvas_items stretch before it reaches a finger.
+canvas_items stretch before it reaches a finger — and on a touch screen by
+the touch table's 1.25 on top (`Q204`, `hud_layout_touch.md`), so 140 here is
+175 desk units of thumb there.
 
 ⚠️ EVERY KEY BELOW IS REQUIRED. touch_profile.gd declares no defaults, so a
 missing key is a zero rather than something sensible — and a zero travel is a
