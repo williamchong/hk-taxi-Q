@@ -25,6 +25,9 @@ var _profile: MenuProfile = null
 var _style: HudStyle = null
 var _language: String = Locale.DEFAULT
 var _font_zh: Font = null
+## The phone's one column (`Q206`): the pairs stacked, and type, rows and
+## number columns at `MenuProfile.ledger_scaled`.
+var _stacked: bool = false
 
 
 ## Money with its sign, "+41.0" or "−10.0", a proper minus; nothing is "0.0".
@@ -41,25 +44,30 @@ func build(
 	profile: MenuProfile,
 	style: HudStyle,
 	language: String,
-	font_zh: Font
+	font_zh: Font,
+	stacked: bool = false
 ) -> void:
 	_text = text
 	_profile = profile
 	_style = style
 	_language = language
 	_font_zh = font_zh
+	_stacked = stacked
 	add_theme_constant_override(&"separation", profile.ledger_gap_px)
-	var tables: HBoxContainer = _pair_of_columns("Tables")
+	var tables: BoxContainer = _pair_of_columns("Tables")
 	_table(tables, "Bonus", "sheet_bonus", SessionTally.BONUSES, tally, style.plate_ink, true)
 	_table(tables, "Penalty", "sheet_penalty", SessionTally.PENALTIES, tally, style.accent_negative)
-	var books: HBoxContainer = _pair_of_columns("Books")
+	var books: BoxContainer = _pair_of_columns("Books")
 	_bests(books, tally)
 	_sums(books, tally)
 
 
-func _pair_of_columns(node_name: String) -> HBoxContainer:
-	var pair := HBoxContainer.new()
+## Two blocks side by side, or one over the other in the phone's column (`Q206`):
+## the same nodes by the same names either way, so a reader finds both.
+func _pair_of_columns(node_name: String) -> BoxContainer:
+	var pair := BoxContainer.new()
 	pair.name = node_name
+	pair.vertical = _stacked
 	pair.add_theme_constant_override(&"separation", _profile.ledger_gutter_px)
 	add_child(pair)
 	return pair
@@ -97,7 +105,7 @@ func _table(
 			"Combo",
 			_text.say("sheet_combo", _language),
 			_style.chip_muted,
-			_profile.ledger_count_px
+			_px(_profile.ledger_count_px)
 		)
 	_rule(column)
 	var count: int = 0
@@ -105,15 +113,17 @@ func _table(
 	for skill: Fare.Skill in skills:
 		var row: HBoxContainer = _row(column, ExamSheet.key_of(skill))
 		_cell(row, "Name", ExamSheet.shared().item_name(skill, _language), _style.plate_ink)
-		_cell(row, "Count", str(tally.counts[skill]), _style.plate_ink, _profile.ledger_count_px)
-		_cell(row, "Money", signed(tally.banked[skill]), ink, _profile.ledger_money_px)
+		_cell(
+			row, "Count", str(tally.counts[skill]), _style.plate_ink, _px(_profile.ledger_count_px)
+		)
+		_cell(row, "Money", signed(tally.banked[skill]), ink, _px(_profile.ledger_money_px))
 		if combo:
 			_cell(
 				row,
 				"Combo",
 				times(tally.combo_best[skill]),
 				_style.plate_ink,
-				_profile.ledger_count_px
+				_px(_profile.ledger_count_px)
 			)
 		count += tally.counts[skill]
 		sum += tally.banked[skill]
@@ -129,7 +139,7 @@ func _table(
 	)
 	if combo:
 		# No sum: a combo is a count of one run, and the best total is a best.
-		_cell(subtotal, "Combo", "", _style.dial_needle, _profile.ledger_count_px)
+		_cell(subtotal, "Combo", "", _style.dial_needle, _px(_profile.ledger_count_px))
 
 
 ## A row of the table's own three columns: a name, then a count and money.
@@ -144,8 +154,8 @@ func _line_of(
 ) -> HBoxContainer:
 	var row: HBoxContainer = _row(parent, node_name)
 	_cell(row, "Name", label, ink)
-	_cell(row, "Count", count, number_ink, _profile.ledger_count_px)
-	_cell(row, "Money", money, number_ink, _profile.ledger_money_px)
+	_cell(row, "Count", count, number_ink, _px(_profile.ledger_count_px))
+	_cell(row, "Money", money, number_ink, _px(_profile.ledger_money_px))
 	return row
 
 
@@ -200,7 +210,7 @@ func _block(parent: Control, node_name: String) -> VBoxContainer:
 func _row(parent: Control, node_name: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = node_name
-	row.custom_minimum_size.y = _profile.ledger_row_px
+	row.custom_minimum_size.y = _px(_profile.ledger_row_px)
 	parent.add_child(row)
 	return row
 
@@ -209,7 +219,7 @@ func _row(parent: Control, node_name: String) -> HBoxContainer:
 func _pair(parent: Control, node_name: String, key: String, value: String, ink: Color) -> void:
 	var row: HBoxContainer = _row(parent, node_name)
 	_cell(row, "Name", _text.say(key, _language), ink)
-	_cell(row, "Value", value, ink, _profile.ledger_money_px)
+	_cell(row, "Value", value, ink, _px(_profile.ledger_money_px))
 
 
 ## One cell: with no `width_px` it takes the row's slack on the left, else a
@@ -222,7 +232,7 @@ func _cell(row: Control, node_name: String, said: String, ink: Color, width_px: 
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_color_override(&"font_color", ink)
 	label.add_theme_font_size_override(
-		&"font_size", Locale.pick(_profile.body_size_zh, _profile.body_size, _language)
+		&"font_size", _px(Locale.pick(_profile.body_size_zh, _profile.body_size, _language))
 	)
 	if _language == Locale.CHINESE and _font_zh != null:
 		label.add_theme_font_override(&"font", _font_zh)
@@ -232,6 +242,11 @@ func _cell(row: Control, node_name: String, said: String, ink: Color, width_px: 
 	else:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_style.shade(label))
+
+
+## `px` at this sheet's scale.
+func _px(px: int) -> int:
+	return _profile.ledger_scaled(px, _stacked)
 
 
 ## A ruled line: what makes it a sheet.

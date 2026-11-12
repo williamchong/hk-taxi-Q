@@ -118,6 +118,19 @@ walked: 640 left the total hanging under the panel, which nothing but a frame sh
 The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
 digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.
 
+## `ledger_stacked_scale = 1.4`
+
+On a touch screen (`Q206`, the user's pick of one scrolling column over two scrolling columns and tabs) the 成績表
+stacks — bonuses, penalties, bests, sums — in one column the thumb scrolls, with the page's buttons pinned outside
+the scroll. Side by side at the desk's 20 px it read about 10 pt on an iPhone Air (20 units × the touch table's
+1.25 × 420 pt / 1080), RECORD's BACK fell under the screen's foot and REPORT's sheet covered the shift's total.
+1.4 makes the body 28 units, ~14 pt there, and the Kai's 24 34; rows and the number columns scale with it so the
+digits still stand in line. The desk keeps its two tables at 1.0.
+
+`ledger_stacked_width_px` 1000 is RECORD's sheet on a phone: the 1.4× bonus table's four columns with air, centred
+on a 20:9 handset's 1596-unit safe width. REPORT's and PAUSE's sheet is not a width but what is left right of the
+page's column, so it never lands on the total again.
+
 ## `sheet_image_scale`
 
 SAVE RESULT's picture of the 成績表 (`SheetImage`, `P3-80`, `Q188`): laid out at the sheet's own size on screen

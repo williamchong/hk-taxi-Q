@@ -61,6 +61,10 @@ const LAYER: int = 20
 const BACKDROP: Shader = preload("res://assets/shaders/backdrop_blur.gdshader")
 ## Where `_sheet` puts a sheet's column, for the page that fills it.
 const SHEET_COLUMN: NodePath = ^"Centre/Pad/Column"
+## The scroll a stacked 成績表 stands in (`Q206`), under its sheet's column.
+const SCROLL: String = "Scroll"
+## The margin between the scroll and the card, clear of the scroll's bar.
+const GUTTER: String = "Gutter"
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
@@ -96,6 +100,9 @@ var pausing: bool = false
 ## Whether the paused run is a shift: its way out is END SHIFT, a free drive's
 ## END DRIVE, which `Main` follows with the drive's REPORT.
 var pausing_shift: bool = false
+## Whether the 成績表 stacks into one scrolling column (`Q206`): on a touch
+## screen, or set before this enters the tree, as `verify_menu` does.
+var stacked: bool = false
 
 var _profile: MenuProfile = null
 var _style: HudStyle = null
@@ -177,6 +184,7 @@ func _load() -> bool:
 
 
 func _build() -> void:
+	stacked = stacked or HudLayout.is_touch()
 	_root = HudLayout.safe_root(self)
 	_pages.clear()
 	_first.clear()
@@ -541,26 +549,32 @@ func _pause() -> Control:
 ## The lifetime record (`P3-76`, `Q169`), off HOME: the 成績表's form on every run
 ## added up, over the shifts and the fares.
 func _record() -> Control:
-	var panel: ChamferPanel = _sheet("Record", _profile.ledger_px)
+	var panel: ChamferPanel = _sheet(
+		"Record", _profile.ledger_px, _profile.ledger_stacked_width_px if stacked else 0
+	)
 	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
-	_heading(column, "Heading", _text.say("record", _language))
+	_sheet_type(_heading(column, "Heading", _text.say("record", _language)))
 	var tally: SessionTally = _shown_tally(Settings.lifetime())
-	_note(
-		column,
-		"Runs",
-		(
-			_text.say("record_runs", _language)
-			% [Settings.shifts_finished(), tally.deliveries, tally.bails]
-		),
-		_style.chip_muted
+	_sheet_type(
+		_note(
+			column,
+			"Runs",
+			(
+				_text.say("record_runs", _language)
+				% [Settings.shifts_finished(), tally.deliveries, tally.bails]
+			),
+			_style.chip_muted
+		)
 	)
-	_note(
-		column,
-		"Best",
-		_text.say("best", _language) + FareFace.money(Settings.best_shift_hkd()),
-		_style.dial_needle
+	_sheet_type(
+		_note(
+			column,
+			"Best",
+			_text.say("best", _language) + FareFace.money(Settings.best_shift_hkd()),
+			_style.dial_needle
+		)
 	)
-	column.add_child(_ledger(tally))
+	_scrolled(column, _ledger(tally))
 	var foot: HBoxContainer = _foot_row(column)
 	_save_button(foot, column)
 	_first[Page.RECORD] = _button(foot, "Back", "back", _show.bind(Page.HOME))
@@ -571,11 +585,19 @@ func _record() -> Control:
 ## blurred ground, shown and hidden with `page`. Returns the sheet's column.
 func _beside(page: Control, tally: SessionTally) -> VBoxContainer:
 	var panel: ChamferPanel = _panel("Ledger")
-	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	panel.offset_left = -_profile.margin_px.x / 2.0 - _profile.ledger_px.x
-	panel.offset_right = -_profile.margin_px.x / 2.0
-	panel.offset_top = -_profile.ledger_px.y / 2.0
-	panel.offset_bottom = _profile.ledger_px.y / 2.0
+	if stacked:
+		# What the page's column leaves, top to foot (`Q206`): never over it.
+		panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		panel.offset_left = _profile.margin_px.x * 1.5 + _profile.button_px.x
+		panel.offset_right = -_profile.margin_px.x / 2.0
+		panel.offset_top = _profile.margin_px.y / 2.0
+		panel.offset_bottom = -_profile.margin_px.y / 2.0
+	else:
+		panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+		panel.offset_left = -_profile.margin_px.x / 2.0 - _profile.ledger_px.x
+		panel.offset_right = -_profile.margin_px.x / 2.0
+		panel.offset_top = -_profile.ledger_px.y / 2.0
+		panel.offset_bottom = _profile.ledger_px.y / 2.0
 	_root.add_child(panel)
 	_backdrop(panel, 1.0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var pad: MarginContainer = padded(_profile.credits_pad_px)
@@ -585,8 +607,8 @@ func _beside(page: Control, tally: SessionTally) -> VBoxContainer:
 	column.name = "Column"
 	column.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	pad.add_child(column)
-	_heading(column, "Heading", _text.say("sheet_title", _language))
-	column.add_child(_ledger(_shown_tally(tally)))
+	_sheet_type(_heading(column, "Heading", _text.say("sheet_title", _language)))
+	_scrolled(column, _ledger(_shown_tally(tally)))
 	# A lambda, not `_follow.bind`: the column's backdrop already holds that
 	# connection, and two binds of one method are one connection to Godot.
 	page.visibility_changed.connect(func() -> void: panel.visible = page.visible)
@@ -621,8 +643,39 @@ func _save_sheet(sheet: Control, button: Button) -> void:
 func _ledger(tally: SessionTally) -> LedgerCard:
 	var card := LedgerCard.new()
 	card.name = "Card"
-	card.build(tally, _text, _profile, _style, _language, _font_zh)
+	card.build(tally, _text, _profile, _style, _language, _font_zh, stacked)
 	return card
+
+
+## `card` under `column`: as it is at a desk, or stacked in a scroll that takes
+## the column's slack on a phone, so the page's buttons stay on the glass.
+func _scrolled(column: VBoxContainer, card: LedgerCard) -> void:
+	if not stacked:
+		column.add_child(card)
+		return
+	var scroll := ScrollContainer.new()
+	scroll.name = SCROLL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# The bar draws over the scroll's child, so the card stands clear of it:
+	# its last column of digits was under the bar.
+	var gutter := MarginContainer.new()
+	gutter.name = GUTTER
+	gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gutter.add_theme_constant_override(
+		&"margin_right",
+		ceili(scroll.get_v_scroll_bar().get_combined_minimum_size().x) + _profile.button_gap_px
+	)
+	gutter.add_child(card)
+	scroll.add_child(gutter)
+	column.add_child(scroll)
+
+
+## A sheet's own line at the stacked 成績表's scale, so a heading over the
+## tables is never smaller than the rows under it (`Q206`).
+func _sheet_type(label: Label) -> void:
+	var px: int = label.get_theme_font_size(&"font_size")
+	label.add_theme_font_size_override(&"font_size", _profile.ledger_scaled(px, stacked))
 
 
 ## `seconds` on a stopwatch, to the second begun: "4:05" under the hour,
@@ -726,7 +779,10 @@ func _panel(node_name: String) -> ChamferPanel:
 
 ## A sheet for a page with more than a column of buttons on it: the whole
 ## screen dimmed by the scrim, and a padded column of `size_px` centred on it.
-func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
+## With `full_height_width_px` the padded column is that wide and runs top to
+## foot of the safe area instead (`Q206`), for a sheet whose middle scrolls.
+func _sheet(node_name: String, size_px: Vector2, full_height_width_px: int = 0) -> ChamferPanel:
+	var full_height: bool = full_height_width_px > 0
 	var panel: ChamferPanel = _panel(node_name)
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(panel)
@@ -735,13 +791,19 @@ func _sheet(node_name: String, size_px: Vector2) -> ChamferPanel:
 	# To the glass, past the notch's line (`Q204`); the text stays inside it.
 	HudLayout.bleed(shade, _root)
 
-	var centre := CenterContainer.new()
+	var centre: Control = Control.new() if full_height else CenterContainer.new()
 	centre.name = "Centre"
 	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(centre)
 
 	var pad: MarginContainer = padded(_profile.credits_pad_px)
-	pad.custom_minimum_size = size_px
+	if full_height:
+		pad.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		pad.anchor_bottom = 1.0
+		pad.offset_left = -full_height_width_px / 2.0
+		pad.offset_right = full_height_width_px / 2.0
+	else:
+		pad.custom_minimum_size = size_px
 	centre.add_child(pad)
 
 	var column := VBoxContainer.new()
@@ -887,11 +949,12 @@ func _line(node_name: String, text: String) -> Label:
 
 
 ## A line of body text under `parent`, in `ink`.
-func _note(parent: Control, node_name: String, said: String, ink: Color) -> void:
+func _note(parent: Control, node_name: String, said: String, ink: Color) -> Label:
 	var note: Label = _line(node_name, said)
 	_size(note, _profile.body_size_zh, _profile.body_size)
 	note.add_theme_color_override(&"font_color", ink)
 	parent.add_child(note)
+	return note
 
 
 func _gap(node_name: String, px: int) -> Control:

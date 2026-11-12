@@ -47,6 +47,11 @@ static func stage(column: Control, profile: MenuProfile, style: HudStyle) -> Sub
 	var source_foot: Control = column.get_node_or_null(FOOT)
 	if source_foot != null:
 		content.y -= source_foot.size.y + column.get_theme_constant(&"separation")
+	# A phone's sheet scrolls (`Q206`): the picture is the whole card, never the
+	# window onto it.
+	var source_scroll: Control = column.get_node_or_null(StartMenu.SCROLL)
+	if source_scroll != null and source_scroll.get_child_count() > 0:
+		content.y += (source_scroll.get_child(0) as Control).size.y - source_scroll.size.y
 	var layout := Vector2i((content + Vector2.ONE * 2.0 * profile.credits_pad_px).ceil())
 	var viewport := SubViewport.new()
 	viewport.name = "SheetImage"
@@ -70,6 +75,14 @@ static func stage(column: Control, profile: MenuProfile, style: HudStyle) -> Sub
 	if foot != null:
 		copy.remove_child(foot)
 		foot.free()
+	var scroll: ScrollContainer = copy.get_node_or_null(StartMenu.SCROLL)
+	if scroll != null:
+		# With scrolling off the scroll's minimum height is the card's, so the
+		# copy lays out the whole card from its top, and with no bar to clear
+		# the card runs to the picture's right edge.
+		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.scroll_vertical = 0
+		scroll.get_node(StartMenu.GUTTER).add_theme_constant_override(&"margin_right", 0)
 	pad.add_child(copy)
 	return viewport
 

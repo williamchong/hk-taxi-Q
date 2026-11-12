@@ -50,6 +50,11 @@ const PATH: String = "res://tuning/menu.tres"
 @export var ledger_money_px: int
 @export var ledger_gutter_px: int
 @export var ledger_gap_px: int
+## On a touch screen (`Q206`) the 成績表 is one column the thumb scrolls: its
+## type, rows and number columns this many times the desk's, and RECORD's sheet
+## this wide (REPORT's and PAUSE's take what the page's column leaves).
+@export var ledger_stacked_scale: float
+@export var ledger_stacked_width_px: int
 ## The 成績表 saved as a picture (`SheetImage`, `P3-80`): drawn this many times
 ## over `ledger_px`, so the picture is sharper than the screen it came from.
 @export var sheet_image_scale: float
@@ -85,3 +90,9 @@ const PATH: String = "res://tuning/menu.tres"
 ## shrunk to.
 @export var warm_distance_m: float
 @export var warm_size_m: float
+
+
+## `px` as the 成績表 draws it: the desk's, or `ledger_stacked_scale` times it
+## in the phone's column (`Q206`).
+func ledger_scaled(px: int, stacked: bool) -> int:
+	return roundi(px * ledger_stacked_scale) if stacked else px

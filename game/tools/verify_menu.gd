@@ -137,6 +137,8 @@ const POSITIVE: PackedStringArray = [
 	"ledger_money_px",
 	"ledger_gutter_px",
 	"ledger_gap_px",
+	"ledger_stacked_scale",
+	"ledger_stacked_width_px",
 	"sheet_image_scale",
 	"title_size",
 	"subtitle_size",
@@ -222,7 +224,84 @@ func _check_pause() -> void:
 	)
 	paused = false
 	await _check_sheet()
+	await _check_stacked()
 	_finish("verify_menu")
+
+
+## A phone's 成績表 (`Q206`): one column in a scroll, the same rows by the same
+## names, REPORT's sheet right of its column and never over it, RECORD's
+## buttons on the glass, and the saved picture the whole card, not its window.
+func _check_stacked() -> void:
+	var tally: SessionTallyScript = SessionTallyScript.sample()
+	var report := StartMenuScript.new()
+	report.stacked = true
+	report.report = StartMenuScript.Report.new()
+	report.report.tally = tally
+	root.add_child(report)
+	await process_frame
+	await process_frame
+	var ledger: Control = report._root.get_node_or_null("Ledger")
+	var card: Node = report._root.get_node_or_null(
+		"Ledger/Pad/Column/%s/%s/Card" % [StartMenuScript.SCROLL, StartMenuScript.GUTTER]
+	)
+	_expect(card != null, "stacked", "REPORT's sheet stands in a scroll")
+	if card == null:
+		report.queue_free()
+		return
+	_expect(
+		(
+			(card.get_node("Tables") as BoxContainer).vertical
+			and (card.get_node("Books") as BoxContainer).vertical
+		),
+		"stacked",
+		"the tables and the books stack, one over the other"
+	)
+	_expect(
+		(card.get_node("Books/Sums/Total/Value") as Label).text == "%.1f" % tally.total_hkd(),
+		"stacked",
+		"the stacked total reads the books' sum"
+	)
+	var column: Control = report._pages[StartMenuScript.Page.REPORT]
+	_expect(
+		ledger.get_global_rect().position.x >= column.get_global_rect().end.x,
+		"stacked",
+		"REPORT's sheet stands right of its column, never over the total"
+	)
+	var stacked_size: int = (card.get_node("Tables/Bonus/drift/Name") as Label).get_theme_font_size(
+		&"font_size"
+	)
+	_expect(
+		stacked_size > report._profile.body_size,
+		"stacked",
+		"the stacked sheet's type is larger than the desk's"
+	)
+	report._show(StartMenuScript.Page.RECORD)
+	await process_frame
+	await process_frame
+	var record: Control = report._pages[StartMenuScript.Page.RECORD]
+	var record_column: Control = record.get_node(StartMenuScript.SHEET_COLUMN)
+	var foot: Control = record_column.get_node("Foot")
+	_expect(
+		report._root.get_global_rect().grow(1.0).encloses(foot.get_global_rect()),
+		"stacked",
+		"RECORD's buttons stay inside the safe area"
+	)
+	var scroll: Control = record_column.get_node(StartMenuScript.SCROLL)
+	var record_card: Control = scroll.get_node("%s/Card" % StartMenuScript.GUTTER)
+	var handset: Resource = load("res://tuning/hud_layout_touch.tres")
+	_expect(
+		record_card.size.y > (handset.get("design_size") as Vector2).y,
+		"stacked",
+		"a full sheet is taller than a handset's canvas, so the phone scrolls"
+	)
+	var staged: SubViewport = SheetImageScript.stage(record_column, report._profile, report._style)
+	_expect(
+		staged.size_2d_override.y > record_card.size.y,
+		"stacked",
+		"the saved picture holds the whole card, not the scroll's window"
+	)
+	staged.free()
+	report.queue_free()
 
 
 ## The 成績表 (`P3-76`): two tables, every row reading the tally's numbers, on
