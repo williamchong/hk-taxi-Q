@@ -218,6 +218,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q201` | The chase camera sits low and close on a narrow lens: 6.0 m, 1.0 m, −6°, 50° + 4° | ✅ Built 2026-11-11 on the user's ask. The user's look owed. |
 | `Q202` | The player's taxi carries its plate, its roof sign's lettering and a boot seam, as strokes | ✅ Built 2026-11-11 on the user's ask; amends `Q190`. The mark and the sign's wording are the user's to correct. |
 | `Q203` | Customers wait at street kerbs as well as stands, a few at a time, each knowing where they go; the allowance is the legal route at a measured par | ✅ Built 2026-11-12 as `P3-86` on the user's asks; reopens `Q142`'s "one designated waiting passenger" in a live-set form. The user's drive owed. |
+| `Q205` | The style combo is a count per skill, shown and recorded, never money: 車手 ×N | ✅ Built 2026-11-13 as `P3-2b`'s first part on the user's design; amends `Q145`'s style chain to no money. The user's drive owed. |
 
 ---
 
@@ -12804,3 +12805,45 @@ the form below. The user's drive owed.
 
 **See.** `Q141` · `Q142` · `Q137` · `P3-86` · `etl/pipeline/fares.py::street_spots` ·
 `game/scripts/fares/fare_system.gd` · `game/tuning/fares.md` · `.claude/rules/fares.md`
+
+## `Q205` — The style combo is a count per skill, shown and recorded, never money
+
+**Status.** ✅ Built 2026-11-13 as `P3-2b`'s first part, on the user's design. `Q145` kept the
+skills flat money and left "the chain may layer on top"; this is that layer, and the user's call is
+that it **moves no fare**: the meter, the tip and `earned_hkd` are what they were. The user's drive
+owed, and with it `combo_gap_s`.
+
+- **The user's design** (2026-11-13, verbatim in substance): the same skill again within the
+  timeout adds to its multiplier (speed ×10 after ten awards); a second skill while the first's
+  combo runs keeps the first's count alive and unchanged (speed ×10, close call ×1); the combo ends
+  on a collision or a timeout; after it ends a final multiplier, the sum of every skill's count, is
+  shown; the most of each skill one combo held and the biggest total are recorded per session and
+  for the lifetime, on the 紀錄 page.
+- **The calls on the follow-up questions** (the same day): one timer shared by every skill, any
+  award restarting it; a **collision or a crash** ends it (`BUMP` / `CRASH`), a free touch under
+  `bump_min_kph` does not; **practice counts** — an empty taxi's stunt builds a combo, since nothing
+  is paid either way; a combo **carries** across a hail, a boarding and a delivery, and the early
+  arrival joins it; a combo running at the pause, 交更 or the menu is **recorded, not lost**; the
+  end is called out **only at ×2 or more**; the name is **車手** (COMBO in English).
+- 🔴 **The timer stands still while a skill is in progress** (proposed with the questions,
+  accepted): sliding over the threshold, at or over `speed_min_kph`, or in the air
+  (`SkillTracker.holding`). Without it the speed skill, paid every 200 m — 9 s apart at 80 kph — could
+  never pass ×1 against a gap short enough to feel tight. `combo_gap_s` 2.5 s is a first guess.
+- **"Total" is the combo's final** — the sum of its counts — and the record keeps its best. Asked
+  whether "total per session" meant every combo hit added up over the session (answer b, "the sum of
+  all live combo added up together"): every bonus award is one combo hit, so that number is already
+  the 成績表's bonus subtotal of counts, and the record keeps the best final instead. Reopen if the
+  user meant a new sum.
+- **Built.** `StyleCombo` (`scripts/fares/style_combo.gd`, pure) holds the counts and the timer;
+  `FareSystem._award` ends it on a penalty and otherwise adds the award, `sample` ticks it after the
+  tick's awards, and `combo_changed` / `combo_ended(combo, broken)` say so. `SessionTally` weighs
+  `combo_best` (per `Fare.Skill`) and `combo_best_total` at every hit, so a run saved mid-combo
+  records it; `Settings` keys them `<skill>_combo_best` and `combo_best_total`. The HUD fills the
+  `award` slot `Q138` reserved under the meter — 車手 ×N over each skill and its count, a bar for the
+  gap, green, then the final held for `callout_hold_s` and faded, in the penalty's red when a hit
+  broke it. The 成績表 gains a 車手 / MAX column on the bonuses and a 最佳車手 / BEST COMBO line.
+- 🚫 **Not money, and not on the meter**: `fares.md`'s "no abstract multiplier" is the meter's rule
+  and still holds — ×N is a count beside it. No sound (the user's 2026-11-06 call on skill sounds).
+
+**See.** `Q145` · `Q138` · `Q169` · `P3-2b` · `game/scripts/fares/style_combo.gd` ·
+`game/tuning/skills.md` · `.claude/rules/fares.md`

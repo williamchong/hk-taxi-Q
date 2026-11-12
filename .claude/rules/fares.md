@@ -138,7 +138,7 @@ the loop's own numbers in `tuning/fares.tres`.
   slip by `sample()` in every state, `tuning/skills.tres` prices them (sidecar `skills.md`), and
   while carrying each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and
   out on `skilled`. `time_hkd` is the seconds left priced at the door; `tip = time + skills`.
-  🚫 No multiplier, no chain, no crash detector here — `P3-2b` layers on top, the awards do not change.
+  🚫 No multiplier on the money — `P3-2b`'s style combo (`Q205`) counts beside it, the awards do not change.
 - 🔴 **Empty, the skills are shown and never paid** (the user's call, 2026-09-26: practice, and
   a later achievement). ONE tracker for the session, built in `setup`; `_award` routes by state —
   every award counts in `skill_counts[skill]` (paid or not — the session's tally, the
@@ -245,5 +245,18 @@ the loop's own numbers in `tuning/fares.tres`.
   reason to beep on anything but the reading. `tools/make_meter_beep.py` is byte-identical.
   ⚠️ A near miss or close call names its obstacle in `Award.passed`, which `TrafficSystem.react_to` reads
   to sound that car's horn; `verify_fares` checks it on the close call.
+- 🔴 **The style combo is a count, never money** (`P3-2b`, `Q205`, the user's design):
+  `StyleCombo` (`style_combo.gd`, pure) in `FareSystem.combo`. `_award` ENDS it on a penalty
+  (`BUMP` / `CRASH`; a free touch is no award and does not) and otherwise adds the award's skill —
+  paid or practised alike — and `note_combo`s the tally; `sample` ticks it AFTER the tick's
+  awards, and the tick an award landed on does not count down. 🔴 **The gap stands still while
+  `SkillTracker.holding()`** — a slide over the threshold, a run at speed, a flight — or the speed
+  skill, paid every 200 m, never passes ×1. `combo_changed` on each hit, `combo_ended(copy,
+  broken)` once; the HUD calls out `StyleCombo.shown()` (`combo_show_min`, 2) and the record keeps
+  every combo. A boarding, a delivery and a bail leave it running; `reset` drops it, its bests
+  already in the old tally. 🚫 It touches no tip, no meter, no `earned_hkd` — "no abstract
+  multiplier" above is the meter's rule and ×N sits beside it. `verify_fares`' `combo:` block;
+  mutations: the hold ignored, a penalty not ending it, half the gap, the best total never
+  weighed, `reset` keeping it, a zero `combo_gap_s` (inert).
 - 🚫 **Not here**: the fare combo (`P3-2b`; the session timer is `Q162`'s shift), cross-harbour and long haul with the tunnel
   toll (`P3-1b`), operating hours (`Q14`).

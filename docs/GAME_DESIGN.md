@@ -149,8 +149,15 @@ one is always the *style chain*.
 
 | | Scope | Climbs on | Resets on |
 |---|---|---|---|
-| **Style chain** | Seconds of driving | Style components | A hard crash, or going quiet after it banks |
+| **Style combo** (車手, `Q205`) | Seconds of driving | Each bonus skill's own count; any skill keeps every count alive | A collision or a crash, or `combo_gap_s` with no skill in progress |
 | **Fare combo** | The session | Consecutive deliveries | A bailed fare |
+
+**The style combo is a count, never money** (`Q205`, the user's design, 2026-11-13): it layers on
+the flat awards and moves no fare. The same skill again adds to its count (speed ×10), a second
+skill joins beside it (speed ×10, close call ×1), and the end calls out the final — 車手 ×11, the sum
+of the counts — under the meter, from ×2 up. The gap does not run while a slide, a speed run or a
+flight is in progress. Practice counts. Each skill's best combo and the best total go in the
+成績表 and the lifetime record.
 
 Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy, so which
 route pays more is a real choice. Air pays off any deck edge: the flyovers are jumpable by design
