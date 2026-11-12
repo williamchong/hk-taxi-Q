@@ -432,8 +432,10 @@ func pickups() -> Array[Fare.Stop]:
 ## so the game opens with a fare to pull forward into (`Q203`, restoring
 ## `Q142`'s opening the random draw had made a 1-in-70 chance). Never inside
 ## the hail guard `_refill` keeps: that guard is for the car's last stop.
+## True at once where a customer already waits there, wherever in the set.
 ## False, with nobody seated, where the stop is not a pickup or reaches no
-## destination — the latter stranded like any draw.
+## destination — the latter stranded like any draw. Between fares only: a
+## pickup aboard is out of the set and could be seated twice.
 func wait_at(region: String, id: String) -> bool:
 	if not _usable:
 		return false
@@ -441,7 +443,7 @@ func wait_at(region: String, id: String) -> bool:
 		if waiting.region == region and waiting.id == id:
 			return true
 	var seat: Fare.Stop = null
-	for stop: Fare.Stop in _pool + _pool_street:
+	for stop: Fare.Stop in pool():
 		if stop.region == region and stop.id == id:
 			seat = stop
 			break
@@ -449,9 +451,7 @@ func wait_at(region: String, id: String) -> bool:
 		return false
 	var destination: Fare.Stop = _pair(seat)
 	if destination == null:
-		_pool.erase(seat)
-		_pool_street.erase(seat)
-		stranded.append(seat)
+		_strand(seat)
 		return false
 	_live.push_front(seat)
 	_bound[seat.key()] = destination
@@ -720,15 +720,20 @@ func _refill() -> void:
 			continue
 		var destination: Fare.Stop = _pair(pickup)
 		if destination == null:
-			_pool.erase(pickup)
-			_pool_street.erase(pickup)
-			stranded.append(pickup)
+			_strand(pickup)
 			continue
 		_live.append(pickup)
 		_bound[pickup.key()] = destination
 		drew = true
 	if drew:
 		pickups_changed.emit()
+
+
+## Gone from the pickup pool for the session, kept as a destination.
+func _strand(pickup: Fare.Stop) -> void:
+	_pool.erase(pickup)
+	_pool_street.erase(pickup)
+	stranded.append(pickup)
 
 
 ## A destination for a customer at `pickup`, drawn like a pickup from those the
