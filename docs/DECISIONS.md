@@ -13025,3 +13025,56 @@ grades; 的士 and "Taxi" carry the category. Turned down along the way:
 
 **See.** `P6-1` · `Q205` · hard rule 8 · `game/tuning/menu_text.json` · `docs/ARCHITECTURE.md`
 "Project settings"
+
+## `Q209` — The loading screen is a toy taxi idling over the cab's meter
+
+**Decision (2026-11-13, `P6-1`, the user's picks).** The boot splash and the cover over the menu's
+first seconds are one loading screen, minimal on the pattern of the user's dice app: the cover's
+dark field, a small super-deformed taxi (red, a silver bubble cab, an oversized 的士 roof sign),
+the line 載入中… · Loading…, and under it the cab's meter. The splash is the taxi standing still;
+the cover takes over in the same place, the taxi starts idling on its springs and puffing exhaust,
+and the meter's fare ticks up from the HK$29.0 flag fall (`tariff.tres`) to HK$99.9 while a row of
+its red cells fills with the real progress. No title on it — the user's call.
+
+**Why.** The first launch on a phone showed Godot's logo, then a flat dark panel, for about 12 s
+cold even with the shaders baked (`Q207`). The user asked for "a customized loading screen or at
+least some progress text and bar", then for something minimalist, a cartoon taxi shaking, a
+taxi-meter bar, a smaller taxi at a die-cast toy's scale, and smaller numbers on the meter. Each
+was a frame they picked from.
+
+**How.**
+
+- **One drawing, two readers.** `assets/authored/loading/taxi.json` holds the taxi as rounded
+  shapes, its idle, the exhaust, the layout and the meter. `tools/make_splash.py` draws the still
+  into `boot_splash.png`; `LoadingCover` draws it live. `test_make_splash.py` fails a stale PNG.
+- **One frame of reference.** Everything is laid out from the screen's centre in units of a stage
+  560 high that fills the screen's height. The splash is a 1680 px square: Godot's default
+  `stretch_mode` fits it by the height on a landscape screen, and so does the iOS launch screen
+  at `storyboard/image_scale_mode` 2 (at 0 the export centred it at 560 pt on a 420 pt screen).
+  Rendered side by side at 1368×630, the taxi and the line coincide; the puffs are the cover's.
+  Every idle term is at rest at time 0, so the first live frame is the still.
+- **Progress is counted, not timed.** `CityStreamer.tiles_remaining` is the fetches in flight plus
+  what the last pass wanted and could not yet request (`_unrequested`; `_wanted_last_pass` alone
+  counts a pass's own requests twice). `ShaderWarmup` takes the most tiles ever owed, then adds
+  each settle frame and each warm frame; the meter is the share done and never runs back.
+- **The splash cannot count.** While it is up the main thread builds the city in one block
+  (about 4 to 5 s on an iPhone Air cold, 1.3 s on the desk; the phone's figure is from a run the
+  screen lock cut short, so an upper bound), so it is a still. A bar from the
+  first second would need a loader scene and a city built in steps (the plan's step 5), measured
+  first.
+- **A texture, once.** The `hud` rule says the bundle ships no UI textures; the splash has to be an
+  image, because the engine and iOS take nothing else there. It is shapes and the bundled Kai,
+  hand-authored under CC BY-SA, never a frame of the city (hard rule 7). The cover is drawn.
+
+**Checked.** `verify_menu`: the splash's path and field, the flag fall at nothing loaded, the LED's
+text, a meter that never runs back, the full fare and every cell at the end, the line as the
+splash draws it, and a `ShaderWarmup` whose meter rises frame by frame and is full as it fades.
+Mutation-checked: dropping the setter's `maxf` fails "never runs back"; a fare that ignores
+progress fails the flag fall and the LED. `tools/check.sh` passes.
+
+**Owed.** The cold launch on the iPhone Air, watched: the splash, the hand-over, and how the idle
+reads during the two seconds at 1 fps, when the GPU is still finishing pipelines and the taxi can
+only move as often as frames arrive.
+
+**See.** `Q207` · `Q184` · `P6-1` · `game/scripts/ui/loading_cover.gd` · `tools/make_splash.py` ·
+`game/tuning/menu.md` · `docs/ARCHITECTURE.md` "Build pipeline"

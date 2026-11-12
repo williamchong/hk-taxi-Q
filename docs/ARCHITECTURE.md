@@ -1650,6 +1650,15 @@ Android's preset stays unbaked until a handset can measure it. The export itself
 `export_project_only` and `app_store_team_id` set: set them in a scratch copy of the preset for
 the export and restore the committed file after; `tools/export.sh ios` does neither.
 
+**The boot splash is the loading screen's still** (`Q209`): `project.godot`'s
+`application/boot_splash/image` is `assets/authored/loading/boot_splash.png`, drawn by
+`tools/make_splash.py` from the same `taxi.json` the cover draws live, and `boot_splash/bg_color`
+is `HudStyle.plate_field` (`verify_menu` holds both). The image is square and the default
+`stretch_mode` (Keep) fits it, so on a landscape screen it scales by the height, which is what the
+cover lays out against. The iOS preset's `storyboard/image_scale_mode` is **2, Scale to Fit**,
+for the same reason: at 0 ("same as the splash") the export wrote a centred launch image, 560 pt on
+an iPhone Air's 420 pt height, and the taxi would have shrunk at the hand-over.
+
 **Then check in-engine:** `--import` first (a fresh sync has no import sidecars), then
 `tools/check.sh`.
 
