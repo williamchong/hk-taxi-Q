@@ -18,9 +18,13 @@
     "back to the theme's faces for a glyph it lacks, never to a box."
   ],
   "strings": {
+    "title": {
+      "en": "Hong Kong Taxi Ace",
+      "zh": "香港的士車神"
+    },
     "subtitle": {
       "en": "Wan Chai · Causeway Bay",
-      "zh": "灣仔 · 銅鑼灣"
+      "zh": "港艇試駕版"
     },
     "start": {
       "en": "PLAY",

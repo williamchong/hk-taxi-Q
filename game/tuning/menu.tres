@@ -79,6 +79,7 @@ ledger_stacked_scale = 1.4
 ledger_stacked_width_px = 1000
 sheet_image_scale = 2.0
 title_size = 72
+title_size_zh = 60
 subtitle_size = 26
 subtitle_size_zh = 30
 button_size = 28

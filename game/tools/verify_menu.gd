@@ -44,6 +44,7 @@ const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
 ## Every string the menu asks for, so a row missing from the table is a
 ## failure here and not a bracketed key on screen.
 const KEYS: PackedStringArray = [
+	"title",
 	"subtitle",
 	"start",
 	"shift",
@@ -141,6 +142,7 @@ const POSITIVE: PackedStringArray = [
 	"ledger_stacked_width_px",
 	"sheet_image_scale",
 	"title_size",
+	"title_size_zh",
 	"subtitle_size",
 	"subtitle_size_zh",
 	"button_size",

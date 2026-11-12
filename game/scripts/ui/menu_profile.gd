@@ -61,6 +61,7 @@ const PATH: String = "res://tuning/menu.tres"
 
 @export_group("Type")
 @export var title_size: int
+@export var title_size_zh: int
 @export var subtitle_size: int
 @export var subtitle_size_zh: int
 @export var button_size: int

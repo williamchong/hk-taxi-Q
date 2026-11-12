@@ -270,9 +270,10 @@ func _home_page() -> Page:
 ## car is the picture and the column keeps off it.
 func _home() -> Control:
 	var column: VBoxContainer = _column("Home")
-	# The name is Latin in either language, and stays in the theme's own face.
-	var title: Label = _line("Title", str(ProjectSettings.get_setting("application/config/name")))
-	title.add_theme_font_size_override(&"font_size", _profile.title_size)
+	# The game's name in the page's language (`Q208`): 香港的士車神 in the Kai,
+	# Hong Kong Taxi Ace in the theme's face.
+	var title: Label = _line("Title", _text.say("title", _language))
+	_size(title, _profile.title_size_zh, _profile.title_size)
 	column.add_child(title)
 	var subtitle: Label = _line("Subtitle", _text.say("subtitle", _language))
 	_size(subtitle, _profile.subtitle_size_zh, _profile.subtitle_size)

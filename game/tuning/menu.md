@@ -87,10 +87,13 @@ generated data committed in another form.
 
 ## `title_size = 72`
 
-The project's name, in the theme's own face whatever the language. The rest are pairs, Chinese
-first like `FareFace._say`: the Kai sets larger than the Latin at every line (`hud_style.md`,
+The game's name, `menu_text.json`'s `title` (`Q208`): 香港的士車神 in the Kai, Hong Kong Taxi Ace
+in the theme's face, two lines at 72 in the column. The rest are pairs, Chinese first like
+`FareFace._say`, and the Kai sets larger than the Latin at every line but this one (`hud_style.md`,
 `callout_*_zh`), so `button_size_zh` 32 against 28, `heading_size_zh` 28 against 24,
-`body_size_zh` 24 against 20, `subtitle_size_zh` 30 against 26.
+`body_size_zh` 24 against 20, `subtitle_size_zh` 30 against 26. The title is the exception:
+`title_size_zh` 60 against 72, because at 72 the column wrapped 神 alone onto a second line
+(HOME frame, `--lang=zh`, 2026-11-13).
 
 ## `backdrop_lod = 3.5`
 
