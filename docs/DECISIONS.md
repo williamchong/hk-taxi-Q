@@ -12898,6 +12898,41 @@ owed, and with it `combo_gap_s`.
 **See.** `Q145` · `Q138` · `Q169` · `P3-2b` · `game/scripts/fares/style_combo.gd` ·
 `game/tuning/skills.md` · `.claude/rules/fares.md`
 
+## `Q206` — On a phone the 成績表 is one column the thumb scrolls, its type 1.4×
+
+**Status.** Closed on the user's pick (2026-11-13), from a RECORD screenshot ("can the text be more
+mobile friendly and readable on phone") and a choice of one scrolling column, two scrolling columns,
+or tabs. Part of `P3-5b`. The desk keeps `Q169`'s two tables side by side, unchanged.
+
+- **What the handset showed** (`drive.sh --window=1368x630 --safe-area=102,0,102,30 --touch=on`,
+  `build/driver/ledger_before_phone*`): the body at 20 units read about 10 pt on an iPhone Air
+  (20 × `Q204`'s 1.25 × 420 pt / 1080). RECORD's 1120 × 770 sheet plus its heading and foot ran past
+  the 864-unit canvas, so BACK fell under the screen's foot. On REPORT the sheet, anchored off the
+  right edge at 1120 wide, covered the page's column and the shift's total, and its heading sat on
+  the BONUS row. Larger type alone would have made both worse.
+- **Built.** On a touch screen (`HudLayout.is_touch()`, or `StartMenu.stacked` set by a check),
+  `LedgerCard` stacks: Tables and Books turn from side by side to one over the other, with the same
+  nodes and names, and type, rows and number columns draw at `ledger_stacked_scale` 1.4 (body 28,
+  the Kai 34; ~14 pt there). The card stands in a `ScrollContainer` that takes the column's slack,
+  behind a gutter clear of the bar, so the page's buttons stay on the glass. RECORD's sheet is
+  `ledger_stacked_width_px` 1000 wide and runs top to foot, and its heading and notes scale with the
+  card. REPORT's and PAUSE's sheet is whatever lies right of the page's column, so it never covers
+  the total.
+- 🔴 **SAVE RESULT saves the whole sheet, never the scroll's window** (the user's reminder):
+  `SheetImage.stage` sizes the picture off the card and copies it with the scroll off. Rendered
+  2026-11-13 (`build/driver/q206/image/`): RECORD's picture runs from the heading to the total.
+  Today the button only appears on a touch screen that is not a phone (a touch laptop, `--touch=on`).
+- `verify_menu`'s `stacked:` checks: the scroll, both pairs stacked, the total read, REPORT's sheet
+  right of its column, larger type, RECORD's foot inside the safe area, a full sheet taller than
+  the touch canvas, and the picture taller than the card.
+- ⚠️ **The thumb's drag is unproven at a desk.** `ScrollContainer` drag-scrolls only where
+  the display reports a touch screen. The wheel and the bar work here, so the drag is owed on
+  `P0-3b`'s handset. The REPORT page's own column (the total, the counts, the buttons) keeps the
+  menu's type: only the sheet was asked for.
+
+**See.** `Q169` · `Q204` · `P3-76` · `P3-80` · `P3-5b` · `game/tuning/menu.md` ·
+`game/scripts/ui/ledger_card.gd`
+
 ## `Q207` — The iOS build bakes its shaders at export
 
 **Decision (2026-11-13, `P0-3b`).** The iOS preset sets `shader_baker/enabled`. Godot compiles
