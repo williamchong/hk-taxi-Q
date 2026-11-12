@@ -44,12 +44,24 @@ the loop's own numbers in `tuning/fares.tres`.
   way from those one forward search from the pickup reaches at `min_trip_m`
   (`RoadRouter.source_tree`, `pair_ms` on the boot line and in `verify_fares`). 🚫 Drawing blind
   and routing each try: a `prepare` a try, 24 for a stranded kerb, and false strands (`Q203`). `_board` takes the customer off the kerb and `_deliver` /
-  `_bail` draw the replacement — 🔴 never at the hail or mid-fare, where a draw's `prepare`s would
-  evict the tree the car's route reads (`router.md`'s `TREE_CACHE`). 🚫 The old all-pairs reach
-  table: 268 street spots make it seconds at load. 🚫 Drawing blind and retrying AT THE HAIL was
-  built and refused: a stand with one reachable destination was refused most of its hails — here a
-  pickup that pairs with nothing is never shown. 🚫 "No route" is a pool decision, never an
-  assert (`Q137`).
+  `_bail` draw the replacement. 🔴 A pairing is `source_tree`, uncached — never a `prepare`, which
+  would evict the tree the car's route reads mid-fare (`router.md`'s `TREE_CACHE`). 🚫 The old
+  all-pairs reach table: ~390 street spots make it seconds at load. 🚫 Drawing blind and retrying
+  AT THE HAIL was built and refused: a stand with one reachable destination was refused most of
+  its hails — here a pickup that pairs with nothing is never shown. 🚫 "No route" is a pool
+  decision, never an assert (`Q137`).
+- ⚠️ **The waiting stay near the car, and stay put** (`Q203`, the user's asks 2026-11-13): a new
+  customer is placed within `place_m` (160, half the minimap's span) — `_placeable` — or at the
+  nearest free kerb where none is; `_turn_over` at each sample (not while BOARDING or closed)
+  refills one short of `live_pickups`, else swaps the farthest past `retire_m` (320) for one
+  placed near. 🔴 **One draw a sample, strands included** (`_refill(1)` caps ATTEMPTS): each is a
+  forward search, and a kerb at the clip strands its neighbours one after another — Causeway Bay
+  alone strands 9 on the way to its far corner. 🔴 **A swap, never a removal alone**
+  (`_room_near`): with no free kerb within `retire_m` nobody leaves, or the nearest far kerb is
+  placed and removed every sample. 🚫 Customers that follow the car (the user: they "dont
+  follow"). `setup` refuses `retire_m` at or under `place_m`. `verify_fares`' `turnover:` block;
+  mutations: `retire_m` past the city, the radii inverted; in the code, the swap guard dropped
+  (fails the turnover, practice and tally blocks) and the attempt cap lifted.
 - ⚠️ **The start stand always has a customer** (`Q203`, `Q142`'s opening). The drive harness calls
   `FareSystem.wait_at` for its spawn stand at the start and in `play`, after `reset`; it seats
   first, paired, and the last drawn steps aside. A spawn stand that is not a pickup or reaches

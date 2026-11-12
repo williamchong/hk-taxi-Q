@@ -12704,9 +12704,10 @@ the form below. The user's drive owed.
   Then "time allowance should be base on legal route length", "measure it" (the par) and "pip and
   a ring is enough for now" (no figure at the kerb).
 - **Street spots, in the ETL** (`fares.street`, `fares.json`'s `street` key, schema 1 additive):
-  a station every 60 m along each level-0 edge, 20 m in from its ends, on the nearside of a one-way
+  a station every 60 m along each level-0 edge, 20 m in from its ends (since measured: 15 m, at
+  junction ends only — below), on the nearside of a one-way
   edge and both kerbs of a two-way one; refused where any `kerbside` run on that side reaches
-  within 6 m — single yellow as well as double, because `roadgraph.json` carries no hours — on an
+  within 6 m (since 2.5 m) — single yellow as well as double, because `roadgraph.json` carries no hours — on an
   edge with a bus lane or a limit over 50 kph (Gloucester Road, the Wan Chai Interchange, the tunnel
   approach), outside the region, or with no named building within 25 m of the kerb. Wan Chai: 166
   of 555 stations (331 restricted, 56 unnamed, 2 outside; 12 bus-lane edges, 44 fast). Causeway Bay:
@@ -12752,8 +12753,54 @@ the form below. The user's drive owed.
   run roughly doubles. The script was a scratch tool and is not committed; the recipe is above and
   in `fares.md`.
 - Not done: no figure stands at the kerb (the user's call); a single-yellow kerb is refused at
-  every hour; `stop_length_m`, `spacing_m`, `junction_clear_m`, `live_pickups` and `street_share`
-  are first guesses for the drive.
+  every hour.
+- **The five first guesses, measured** (2026-11-13). Two from TD, three the user's calls on a
+  curve; the scratch scripts are not committed, their numbers are here.
+  - `junction_clear_m` **20 → 15**. The Road Users' Code (ch. 5, "Where you must not stop") says
+    only "near or at a junction", with no distance, and leaves no-stopping zones to signs and
+    markings — which `kerbside` already refuses. TD marks the mouth on 35% of Wan Chai's
+    junction-end kerbs and 19% of Causeway Bay's; where it does, the run reaches p25 29 / 21 m, p50
+    52 / 41 m. Where it does not, the distance is read off TD's own stops: its 31 stands and PUDO
+    points sit 15.6 m from the nearer junction at the 10th percentile (8.1, 11.6, 13.0, 15.6, 16.8 …).
+  - **A junction end only** (`roads`' own node `kind`: three or more edge ends on any level, the
+    neighbour's edges at a seam counted). The clear
+    had been taken at every end, and 84 + 36 ends are a street split in two, 137 + 41 a dead end
+    or the clip: worth ~21 kerbs a region. With both: Wan Chai **221** street spots, Causeway Bay
+    **166** (were 166 / 102).
+  - `stop_length_m` **12 → 5**: the kerb one stopped car takes, TD's car bays at the 4.96 m median
+    pitch the `parked` stage measured. The old "a cab and its doors" counted doors that swing
+    sideways. Worth 10 kerbs on Wan Chai, none on Causeway Bay.
+  - `spacing_m` **60, kept** (the user's call on the sweep). Its only bar is twice
+    `hail_radius_m` (24 m), so neighbours' hails never overlap; Wan Chai at 30 / 60 / 100 m: 254 /
+    166 / 139 spots naming 167 / 123 / 108 buildings.
+  - `live_pickups` **4, kept** (the user's call): legal-direction route metres from a fare's end
+    to the nearest of N waiting, drawn city-wide, Wan Chai, 400 draws, median trip 1,197 m — N = 1:
+    1,139 m p50; 2: 892; 3: 736; 4: 656; 6: 571; 8: 489. (Causeway Bay 922 / 711 / 653 / 386 / 294
+    / 248.) Superseded as a distance by `place_m` below; it is now only how many pins.
+  - `street_share` **0.75, kept** (the user's call). No published split of stand from street:
+    TD's 2024–25 point-to-point study (LegCo Panel on Transport paper, 18 July 2025, para 6) has,
+    among drivers who take app orders, a third of trips by app and "over 60%" "hailing taxis
+    directly on the street", stands included. Uniform over the places would be ~0.92.
+  - **Parked vehicles on a hail kerb are left** (the user's call): 56 of Wan Chai's 166 old spots
+    and 29 of Causeway Bay's 102 had a placement standing at every hour within 8.5 m on their own
+    kerb (the `parked` stage keeps `fare_m` clear of the published points only). The cab stops
+    alongside, in the lane, as Hong Kong cabs do; the hail is measured from the road anyway.
+- **The waiting stay near the car** (the user's asks, 2026-11-13: "customer should be dynamic to
+  the position of the car, ie there is always 4 nearby as the car is moving", then "Customers dont
+  'follow' the car, but the farest one is removed and a new one is placed when necessary"). A new
+  customer is placed within `place_m` (**160 m**, half the minimap's 320 m span, so it appears on
+  the map) or, where no kerb is free inside it, at the nearest free one; at each sample, not while
+  boarding, `_turn_over` refills one short of `live_pickups`, else swaps the farthest past
+  `retire_m` (**320 m**, the whole span, so one placed at the edge survives the car turning) for
+  one placed near — placed and paired FIRST, the leaver going only then, so a draw that strands
+  (9 at Causeway Bay's clip corner, on the region alone) never shrinks the set. One draw a sample,
+  strands included: a forward search a tick at most. Kerbs with fewer than four others
+  within 160 m: 5% / 6% (37% / 21% at 100 m). 🔴 A swap, never a removal alone — with no free kerb
+  within `retire_m` (the harbour, the clip) nobody leaves, or the nearest far kerb would be placed
+  and removed every sample. Placing mid-fare is safe since `source_tree` caches nothing; the
+  rule's old "never mid-fare" was about `prepare`. 🚫 Customers that move with the car.
+  `verify_fares`' `turnover:` block holds it from both sides; mutations: `retire_m` past the city,
+  the radii inverted (`setup` refuses it).
 
 **See.** `Q141` · `Q142` · `Q137` · `P3-86` · `etl/pipeline/fares.py::street_spots` ·
 `game/scripts/fares/fare_system.gd` · `game/tuning/fares.md` · `.claude/rules/fares.md`
