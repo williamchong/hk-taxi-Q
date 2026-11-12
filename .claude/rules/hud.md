@@ -35,7 +35,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   banning the corners every shipped reference uses (`Q80`). 🔴 **One head-up display since `Q163`**
   (the user's pick): readouts float bare with `float_shadow` on `HeadUpFrame`'s brackets and
   vignette, the map is a round fading scope (`ScopeDisc`, the beacon on its rim), and only the
-  咪錶 keeps a box — do not put housings back on the clock, callout, speed or plate. 🚫 **No screen
+  咪錶 keeps a box — do not put housings back on the clock, callout, speed or plate. 🔴 **A touch screen reads its own table since `Q204`** (`hud_layout_touch.tres`, scale 1.25 in
+  its `design_size`, rests the handset's): a layout change owes BOTH tables, and its frames are a
+  handset's — `drive.sh --window=1368x630 --safe-area=102,0,102,30 --touch=on`, two thumbs with
+  `--finger=`; the map and the dial stay on one line (`verify_hud` asserts it), and the shading and
+  the zones run to the glass while text stays inside the safe line. 🚫 **No screen
   blur in the drive**: `backdrop_blur.gdshader` is the menu's, paid only while the level is parked;
   in the drive it would be a back-buffer copy and a mip chain every frame on a phone.
 - **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `tuning/wrong_way.tres` (the two

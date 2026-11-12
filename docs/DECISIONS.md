@@ -12806,6 +12806,56 @@ the form below. The user's drive owed.
 **See.** `Q141` · `Q142` · `Q137` · `P3-86` · `etl/pipeline/fares.py::street_spots` ·
 `game/scripts/fares/fare_system.gd` · `game/tuning/fares.md` · `.claude/rules/fares.md`
 
+## `Q204` — The touch screen lays out for thumbs: its own table at 1.25, sticks drawn as the taxi's wheel and pedals, the glass to the edge
+
+**Status.** Closed on the user's instruction (2026-11-13), from the first handset's screenshots
+(`P0-3b`, an iPhone Air) and their picks off rendered options (`build/driver/q204/sheet_*.png`).
+Reverses `Q97`'s "no visible touch chrome"; `Q83`'s relative thumbs stand (the user: "keep control
+as relative position").
+
+- **The gap was the safe-area inset, and it was also a dead strip.** `HudLayout.safe_root` pulled
+  the menu's backdrop, the HUD's vignette AND the touch zones in by the notch's ~68 pt a side and
+  21 pt at the foot: an unshaded band, and a thumb landing in it steered nothing. Now the shading
+  runs to the glass (`HudLayout.bleed`, `HeadUpFrame.bleed`) and so do the zones
+  (`place_to_glass`); text, buttons and brackets stay inside the line.
+- **A touch screen reads `hud_layout_touch.tres`** (`HudLayout.for_device()`:
+  `is_touchscreen_available()`, or `--touch=mouse|on`; `--touch=off` the desk's). Its
+  `design_size` IS the scale — `1080 / design_size.y`, applied once as the root's
+  `content_scale_factor` by `InputRouter` before anything lays out — so menu, HUD and zones all draw
+  1.25× (the user's pick of 1.0 / 1.15 / 1.25). Measured: a desk menu button was ~28 pt, the
+  pause 34 pt; the touch pause is 96 units, 47 pt. ⚠️ Menu buttons are ~35 pt at 1.25, still under
+  44 pt; not raised.
+- **The thumbs cover the bottom corners** on the handset, so the touch table's rests are the lower
+  330 desk units of each side (the desk keeps its 100-unit strip), and `verify_hud`'s collision
+  check moves the map and the speed off them. Layout A (the user's pick over B, map in the corner,
+  and C, speed bottom-centre — which the chase camera puts on the taxi's boot): map under the clock
+  left, speed under the meter right, 130 units clear of it (the user asked for more than 92).
+- **The two round readouts share one line at every aspect** (the user's ask): the dial's pivot
+  (`SpeedDial.pivot_in`) on the map's centre, both slots on the same vertical anchor;
+  `verify_hud` asserts it on the touch table and mutation-probes it. Rendered at 20:9, 4:3 and 16:9.
+- **Sticks** (`TouchSticks`, under every readout, `--hud=off` takes them): a faint hint where each
+  thumb goes, and under a thumb the control stands where it LANDED. `hud_style.touch_look`:
+  `wheel_pedals` ships (the user's pick over `wheel_lever` and bare `tracks`) — the steering wheel
+  turns up to 120° with the steer, the accelerator above the driving thumb and the brake below it
+  fill as pushed. 🔴 Steering draws its sideways travel only and the pedals their upright travel
+  only: the driving thumb's sideways axis is the handbrake's (`Q83`).
+- **The wheel is the car's** (the user's ask): `CarSpec.steering_wheel`, a `SteeringWheelLook` —
+  the Crown Comfort's four spokes round a large horn pad, no racing stripe. ⚠️ From memory of the
+  cab, not a maker's drawing. The physics never reads it: `tools/skidpad.sh` with and without it
+  differs only in the `us/tick` timing column.
+- `drive.sh` emulates a handset: `--window=WxH` (the engine's `--resolution`), `--safe-area=l,t,r,b`
+  (window pixels, read by `inset_for_safe_area`), `--touch=on`, and `--finger=fx,fy>gx,gy@t+d` for a
+  real two-thumb touch through the window-to-canvas path.
+
+Open: the handset drive (does 1.25 and the rests suit a thumb — `P2-4`'s review); menu buttons to
+44 pt on touch; whether the idle hint fades after a first drive; mesh caching for a held thumb (the
+sticks rebuild ~650 vertices a frame under one, est. 0.1–0.3 ms; measure on the handset first).
+Measured at iPhone Air proportions: the HUD +31 draws over `--hud=off` (145 / 114), the sticks +1
+over the desk table (145 / 144).
+
+**See.** `Q97` · `Q83` · `Q80` · `Q138` · `Q142` · `Q163` · `Q165` · `P2-4` · `P3-5b` · `P0-3b` ·
+`game/tuning/hud_layout_touch.md` · `game/scripts/ui/touch_sticks.gd` · `.claude/rules/hud.md`
+
 ## `Q205` — The style combo is a count per skill, shown and recorded, never money
 
 **Status.** ✅ Built 2026-11-13 as `P3-2b`'s first part, on the user's design. `Q145` kept the
