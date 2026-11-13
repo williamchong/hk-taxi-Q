@@ -143,7 +143,9 @@ var _face: FareFace = null
 var _meter_panel: ChamferPanel = null
 var _meter: SevenSegment = null
 ## The session's takings, a third LED under the meter's with its chip (the
-## user's calls: a total beside the current fare, and on the meter's display).
+## user's calls: a total beside the current fare, and on the meter's display);
+## the row gives the tip its place while carrying.
+var _total_row: HBoxContainer = null
 var _total: SevenSegment = null
 var _total_caption: Label = null
 ## The tip as it stands, a second LED under the meter's while carrying
@@ -423,8 +425,8 @@ func _build() -> void:
 	meter_row.add_child(_meter)
 	# The tip, live: the one number on the meter the driver can move at the
 	# wheel, on the same LED in the same red (the user's call), smaller.
-	# The tip and the takings share one line under the fare (the user's ask),
-	# the tip first so the takings hold the right edge whether it shows or not.
+	# The tip and the takings take turns on one line under the fare (the
+	# user's ask), each ending where the fare's digits do.
 	var sub_row: HBoxContainer = _row(meter_lines, "SubRow", roundi(_style.plate_pad.y))
 	sub_row.alignment = BoxContainer.ALIGNMENT_END
 	_tip_row = _row(sub_row, "TipRow", roundi(_style.plate_pad.y))
@@ -438,16 +440,16 @@ func _build() -> void:
 	_tip_row.add_child(_tip)
 	# The takings on the same LED again (the user's ask), in cells of their
 	# own: a session outruns the fare's five.
-	var total_row: HBoxContainer = _row(sub_row, "TotalRow", roundi(_style.plate_pad.y))
+	_total_row = _row(sub_row, "TotalRow", roundi(_style.plate_pad.y))
 	_total_caption = _label("TotalCaption", _style.meter_label_size, _style.chip_muted)
 	_total_caption.size_flags_vertical = Control.SIZE_SHRINK_END
-	total_row.add_child(_total_caption)
+	_total_row.add_child(_total_caption)
 	_total = _seven_segment(
 		"TotalDigits", _style.total_digit_px, _style.total_segment_px, _style.total_cells
 	)
 	# The one LED off the meter's red: dimmer, to be told from the tip's.
 	_total.lit = _style.total_lit
-	total_row.add_child(_total)
+	_total_row.add_child(_total)
 	# The housing takes a tap as the pause button does (the user's ask): a
 	# `PauseButton` with no style draws nothing, and the panel's own filter is
 	# held at IGNORE by `ChamferPanel._ready`.
@@ -1318,9 +1320,12 @@ func _paint_fares() -> void:
 		_tip.text = _face.tip_text
 		if _tip_caption.text != _face.tip_caption:
 			_tip_caption.text = _face.tip_caption
-	_total.text = _face.total_text
-	if _total_caption.text != _face.total_caption:
-		_total_caption.text = _face.total_caption
+	if _total_row.visible != _face.show_total:
+		_total_row.visible = _face.show_total
+	if _face.show_total:
+		_total.text = _face.total_text
+		if _total_caption.text != _face.total_caption:
+			_total_caption.text = _face.total_caption
 
 	if _timer_box.visible != _face.show_timer:
 		_timer_box.visible = _face.show_timer

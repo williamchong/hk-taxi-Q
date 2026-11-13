@@ -1942,6 +1942,7 @@ func _check_fare_face() -> void:
 			and face.total_text == "0.0"
 			and face.total_caption == "TOTAL"
 			and face.tip_text.is_empty()
+			and face.show_total
 			and not face.show_timer
 		),
 		"face",
@@ -2265,12 +2266,14 @@ func _check_fare_face() -> void:
 		"face",
 		"carrying, the tip stands under the meter as LED digits (%s)" % face.tip_text
 	)
+	_expect(not face.show_total, "face", "and the takings step aside for it")
 	zh.on_sampled(carrying, fare, null, 10.0, 0.0)
 	_expect(zh.tip_text == "27.5" and zh.tip_caption == "小費", "face", "and in Chinese")
 	face.on_sampled(boarding, fare, null, 10.0, 0.0)
 	_expect(
 		face.tip_text.is_empty() and face.tip_caption.is_empty(), "face", "boarding, no tip yet"
 	)
+	_expect(face.show_total, "face", "so the takings hold the line until the door shuts")
 
 	_expect(
 		(

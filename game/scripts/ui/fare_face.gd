@@ -57,6 +57,9 @@ var tip_caption: String = ""
 ## the chip beside its digits.
 var total_text: String = "0.0"
 var total_caption: String = ""
+## The takings stand in the tip's place while nobody is aboard (the user's
+## call): they move only at a delivery, so carrying hides nothing that moves.
+var show_total: bool = true
 ## The tip clock: whole seconds left, shown only while carrying.
 var timer_text: String = ""
 var show_timer: bool = false
@@ -144,6 +147,7 @@ func on_sampled(
 	total_text = money(earned_hkd)
 	total_caption = _say("合計", "TOTAL")
 	show_timer = state == FareSystem.State.CARRYING
+	show_total = not show_timer
 	timer_urgent = false
 	timer_text = ""
 	meter_text = "0.0"
