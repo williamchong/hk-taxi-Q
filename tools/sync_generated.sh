@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copy built regions from the ETL into the Godot project.
 #
-#   tools/sync_generated.sh                      # wan_chai
+#   tools/sync_generated.sh                      # the regions already synced, else wan_chai
 #   tools/sync_generated.sh <region> [<region>...]
 #
 # Each region lands in its own directory, game/assets/generated/<region>/, and
@@ -26,11 +26,23 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
 
+GENERATED="$ROOT/game/assets/generated"
+
+# With no argument the list is the one the last sync wrote, in its order, so the
+# frame region stays the frame. It was `wan_chai` alone, and the sweep at the
+# bottom removes every region not listed: a bare re-sync of a two-region tree
+# deleted the second one.
 if [[ $# -eq 0 ]]; then
-	set -- wan_chai
+	if [[ -f "$GENERATED/regions.json" ]]; then
+		# shellcheck disable=SC2046
+		set -- $("$PYTHON" -c 'import json, sys; print(*json.load(open(sys.argv[1]))["regions"])' \
+			"$GENERATED/regions.json")
+	fi
+	if [[ $# -eq 0 ]]; then
+		set -- wan_chai
+	fi
 fi
 REGIONS=("$@")
-GENERATED="$ROOT/game/assets/generated"
 
 # Every region is checked before any is copied, for the reason the per-region
 # --check below gives: a sync that stops half way leaves a tree every check
