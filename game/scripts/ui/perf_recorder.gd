@@ -16,6 +16,19 @@ extends Node
 ## ⚠️ **Frame time is read off the clock, never off `delta`.** Godot smooths
 ## `delta` (`application/run/delta_smoothing`, on by default), which is exactly
 ## the averaging this exists to get past.
+##
+## ⚠️ **At the vsync cap the frame time cannot show headroom**: a cheaper frame
+## only waits longer for the next one, so every run on the Air read 16.7 ms
+## whatever it carried. `gpu_ms` and `render_cpu_ms` are the renderer's own
+## timings of the frame's work (`viewport_set_measure_render_time`), which do
+## move when a GPU dial does. GPU timestamps come back a frame or two late, so a
+## row's `gpu_ms` belongs to a frame just before it. ⚠️ **`gpu_ms` reads 0 under
+## Metal** — Godot 4.7's Metal driver times nothing, on the Mac and the iPhone
+## alike — so on iOS the headroom gauge is the frame rate under `--max-fps 120`
+## on the Air's 120 Hz screen instead (`P2-6`). `process_ms` and `physics_ms`
+## are Godot's time monitors, which hold a value for about a second, and
+## `process_ms` is not the frame's CPU work: the Air read 11.8 ms of it at the
+## 60 cap and then ran 120 fps uncapped.
 
 const ARG: String = "--perf-log="
 ## Seconds at the start left out of the summary — boot, the loading cover and
@@ -26,7 +39,7 @@ const DEFAULT_PATH: String = "user://perf.csv"
 ## A frame over this missed a 60 Hz vsync; over `DOUBLE_MS` it missed two.
 const BUDGET_MS: float = 1000.0 / 60.0
 const DOUBLE_MS: float = 2000.0 / 60.0
-const HEADER: String = "t_s,frame_ms,process_ms,physics_ms,draws,prims,video_mem_mb,tiles"
+const HEADER: String = "t_s,frame_ms,process_ms,physics_ms,gpu_ms,render_cpu_ms,draws,prims,video_mem_mb,tiles"
 
 ## How long to record, in seconds from this node's first frame.
 var seconds: float = 0.0
@@ -38,6 +51,9 @@ var _start_us: int = -1
 var _last_us: int = -1
 var _tiles_seen: int = 0
 var _frames_ms: PackedFloat32Array = PackedFloat32Array()
+var _gpu_ms: PackedFloat32Array = PackedFloat32Array()
+var _render_cpu_ms: PackedFloat32Array = PackedFloat32Array()
+var _viewport_rid: RID = RID()
 ## Summarised frames over `BUDGET_MS` that also instantiated a tile.
 var _hitches_tiled: int = 0
 var _done: bool = false
@@ -125,6 +141,8 @@ func _ready() -> void:
 	var viewport: Viewport = get_viewport()
 	_scale_3d = viewport.scaling_3d_scale
 	_msaa_3d = int(viewport.msaa_3d)
+	_viewport_rid = viewport.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(_viewport_rid, true)
 	_file = FileAccess.open(path, FileAccess.WRITE)
 	if _file == null:
 		push_error("perf: could not open %s (%s)" % [path, FileAccess.get_open_error()])
@@ -147,16 +165,20 @@ func _process(_delta: float) -> void:
 	var tiles_total: int = CityStreamer.instantiated_total
 	var tiles: int = tiles_total - _tiles_seen
 	_tiles_seen = tiles_total
+	var gpu_ms: float = RenderingServer.viewport_get_measured_render_time_gpu(_viewport_rid)
+	var render_cpu_ms: float = RenderingServer.viewport_get_measured_render_time_cpu(_viewport_rid)
 	(
 		_file
 		. store_line(
 			(
-				"%.6f,%.3f,%.3f,%.3f,%d,%d,%.1f,%d"
+				"%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.1f,%d"
 				% [
 					t_s,
 					frame_ms,
 					Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 					Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+					gpu_ms,
+					render_cpu_ms,
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 					Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
@@ -167,6 +189,8 @@ func _process(_delta: float) -> void:
 	)
 	if t_s >= skip_s:
 		_frames_ms.append(frame_ms)
+		_gpu_ms.append(gpu_ms)
+		_render_cpu_ms.append(render_cpu_ms)
 		if frame_ms > BUDGET_MS and tiles > 0:
 			_hitches_tiled += 1
 	if t_s >= seconds:
@@ -191,6 +215,8 @@ func _finish() -> void:
 	_done = true
 	set_process(false)
 	_file.close()
+	if _viewport_rid.is_valid():
+		RenderingServer.viewport_set_measure_render_time(_viewport_rid, false)
 	var lines: PackedStringArray = summary_lines()
 	var summary_path: String = path.get_basename() + "_summary.txt"
 	var out := FileAccess.open(summary_path, FileAccess.WRITE)
@@ -205,6 +231,8 @@ func _finish() -> void:
 ## The run's summary, as printed and as written beside the CSV.
 func summary_lines() -> PackedStringArray:
 	var s: Dictionary = summarize(_frames_ms)
+	var gpu: Dictionary = summarize(_gpu_ms)
+	var render_cpu: Dictionary = summarize(_render_cpu_ms)
 	var window: Vector2i = DisplayServer.window_get_size()
 	return PackedStringArray(
 		[
@@ -220,6 +248,17 @@ func summary_lines() -> PackedStringArray:
 			(
 				"perf: over %.1f ms %d (%d with a tile instantiated), over %.1f ms %d"
 				% [BUDGET_MS, s["over_budget"], _hitches_tiled, DOUBLE_MS, s["over_double"]]
+			),
+			(
+				"perf: gpu p50 %.2f p95 %.2f p99 %.2f, render cpu p50 %.2f p95 %.2f p99 %.2f ms"
+				% [
+					gpu["p50"],
+					gpu["p95"],
+					gpu["p99"],
+					render_cpu["p50"],
+					render_cpu["p95"],
+					render_cpu["p99"]
+				]
 			),
 		]
 	)

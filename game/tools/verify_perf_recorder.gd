@@ -17,7 +17,7 @@ const RECORDER_SCRIPT := "res://scripts/ui/perf_recorder.gd"
 const STREAMER_SCRIPT := "res://scripts/city/city_streamer.gd"
 const OUT_PATH := "user://verify_perf_recorder.csv"
 const RUN_S := 1.0
-const COLUMNS := 8
+const COLUMNS := 10
 
 
 func _init() -> void:
@@ -127,7 +127,11 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 	var summary: String = FileAccess.get_file_as_string(OUT_PATH.get_basename() + "_summary.txt")
 	var summary_lines: PackedStringArray = summary.strip_edges().split("\n")
 	_expect(
-		summary_lines.size() == 4 and summary_lines[2].contains("p99"),
+		(
+			summary_lines.size() == 5
+			and summary_lines[2].contains("p99")
+			and summary_lines[4].contains("gpu")
+		),
 		"run",
-		"the summary is written beside the CSV, four lines with the percentiles"
+		"the summary is written beside the CSV, five lines: frame and gpu percentiles"
 	)
