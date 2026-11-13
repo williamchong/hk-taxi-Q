@@ -107,6 +107,11 @@ const BLENDED_SKY: Array[StringName] = [
 ## number is what it is: the rig scene's sidecar.
 @export_range(0.0, 1000.0, 5.0, "suffix:m") var phone_shadow_max_distance_m: float = 0.0
 
+## The share of the window's resolution the 3D scene is drawn at on a phone
+## (`P2-6`), the HUD staying at the window's own; 1 leaves the viewport alone.
+## Why the number is what it is: the rig scene's sidecar.
+@export_range(0.25, 1.0, 0.05) var phone_scale_3d: float = 1.0
+
 ## Where on `cycle` the rig stands, 0 the authored day and 1 the last keyframe.
 ## Written by `DayClock`, or pinned for a frame by `--time-of-day=`.
 var time_of_day: float = 0.0:
@@ -134,6 +139,7 @@ func _ready() -> void:
 	# one must put the day back rather than inherit the dark.
 	_set_globals(Color.WHITE, 0.0)
 	fit_shadow(Handset.is_phone(OS.has_feature))
+	fit_scale(Handset.is_phone(OS.has_feature), get_viewport())
 	if cycle == null or not cycle.usable():
 		return
 	for child: Node in get_children():
@@ -177,6 +183,16 @@ func fit_shadow(phone: bool) -> void:
 		var sun := child as DirectionalLight3D
 		if sun != null:
 			sun.directional_shadow_max_distance = phone_shadow_max_distance_m
+
+
+## On a phone, draw the 3D scene at `phone_scale_3d` of the window (`P2-6`):
+## fill rate is what a phone runs out of first, and the HUD is not scaled with
+## it. Anywhere else, or at 1, the viewport stays as the project set it.
+## `phone` and `viewport` are handed in so a check can ask from a desk.
+func fit_scale(phone: bool, viewport: Viewport) -> void:
+	if not phone or phone_scale_3d >= 1.0 or viewport == null:
+		return
+	viewport.scaling_3d_scale = phone_scale_3d
 
 
 func set_time_of_day(value: float) -> void:

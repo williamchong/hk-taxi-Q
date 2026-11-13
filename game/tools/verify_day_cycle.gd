@@ -146,6 +146,25 @@ func _check_the_phone() -> void:
 		"phone",
 		"on a phone it reaches %.0f m, its cascades as authored" % rig.phone_shadow_max_distance_m
 	)
+	# The 3D scale (`P2-6`): shipped at 1, where no viewport is written; a dial
+	# under 1 reaches a phone's viewport and never a desk's.
+	var view := SubViewport.new()
+	rig.fit_scale(true, view)
+	_expect(
+		rig.phone_scale_3d == 1.0 and view.scaling_3d_scale == 1.0,
+		"phone",
+		"the rig ships a 3D scale of 1, and a phone's viewport is left alone"
+	)
+	rig.phone_scale_3d = 0.75
+	rig.fit_scale(false, view)
+	var desk: float = view.scaling_3d_scale
+	rig.fit_scale(true, view)
+	_expect(
+		desk == 1.0 and view.scaling_3d_scale == 0.75,
+		"phone",
+		"a dial of 0.75 draws a phone's scene at 0.75 and a desk's at 1"
+	)
+	view.free()
 	rig.free()
 
 

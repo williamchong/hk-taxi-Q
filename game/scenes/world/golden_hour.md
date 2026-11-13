@@ -76,3 +76,13 @@ every scene worth looking at instances, so one switch inks all of them. **`visib
 shown since 2026-10-07, the user's pick; hidden restores the unlined look. `extra_cull_margin` keeps the quad from being
 frustum-culled at its true position (it has none), and `cast_shadow = 0` keeps it out of the shadow
 pass. Both rigs carry it alike, for the reason the `Sun` block gives.
+
+## `phone_scale_3d` — unset, so 1.0
+
+The share of the window the 3D scene is drawn at on a phone (`P2-6`); `LightingRig.fit_scale`
+writes the viewport's `scaling_3d_scale` at `_ready` on a phone only, and the HUD keeps the
+window's resolution. **Shipped at 1.0, which writes nothing** — the dial exists so a handset that
+runs out of fill rate can be answered from data, and no handset has been measured yet. Godot's
+writer drops a value at its default, so the scene file does not name it. Set it under 1 only
+with a `--perf-log` run on the device before and after, and a frame to judge the softening by:
+0.75 is 56% of the pixels.
