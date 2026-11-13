@@ -189,6 +189,10 @@ enum Held { NONE, LIGHT, CAR, PARKED, TAXI, GIVE_WAY, DWELL }
 class Car:
 	extends RefCounted
 
+	## Counts every change of any car's `edge` or `next_edge`, so the system
+	## knows when its cars-by-road index (`_cars_on`) is out of date.
+	static var road_changes: int = 0
+
 	## Its place in the fleet: the earlier of two cars waiting on each other
 	## goes first.
 	var id: int = 0
@@ -201,14 +205,22 @@ class Car:
 	## Whether it is a taxi, and whether its roof sign is lit for hire.
 	var taxi: bool = false
 	var for_hire: bool = false
-	var edge: int = -1
+	var edge: int = -1:
+		set(value):
+			if value != edge:
+				edge = value
+				road_changes += 1
 	var along: bool = true
 	var length_m: float = 0.0
 	## Metres travelled from the edge's entry end.
 	var s: float = 0.0
 	var speed: float = 0.0
 	var cruise_mps: float = 0.0
-	var next_edge: int = -1
+	var next_edge: int = -1:
+		set(value):
+			if value != next_edge:
+				next_edge = value
+				road_changes += 1
 	var next_along: bool = true
 	## The junction's inside roads the next turn crosses, `(edge, along)`.
 	var via: Array[Vector2i] = []
@@ -445,6 +457,14 @@ var _rig: LightingRig = null
 var _viewing: bool = false
 var _planes: Array[Plane] = []
 var _eye: Vector3 = Vector3.ZERO
+## The fleet by road: every car whose `edge` or `next_edge` is the key, in
+## fleet order, and the count of road changes and the fleet size it was built
+## at. The lane rules ask about one road; they walked the whole fleet for it.
+var _by_road: Dictionary[int, Array] = {}
+var _indexed_changes: int = -1
+var _indexed_size: int = -1
+## What `_cars_on` answers for a road with no car; never appended to.
+var _no_cars: Array[Car] = []
 var _far_m: float = 0.0
 var _sight := PhysicsRayQueryParameters3D.new()
 
@@ -1167,6 +1187,32 @@ func _idle_car(routed: bool) -> Car:
 	return null
 
 
+## The cars on `edge` or turning into it, in fleet order — live or not, as the
+## fleet itself holds them. Rebuilt when any car has changed road since.
+func _cars_on(edge: int) -> Array[Car]:
+	if _indexed_changes != Car.road_changes or _indexed_size != cars.size():
+		_indexed_changes = Car.road_changes
+		_indexed_size = cars.size()
+		_by_road.clear()
+		for car: Car in cars:
+			_index_on(car.edge, car)
+			if car.next_edge != car.edge:
+				_index_on(car.next_edge, car)
+	if not _by_road.has(edge):
+		return _no_cars
+	var found: Array[Car] = _by_road[edge]
+	return found
+
+
+func _index_on(edge: int, car: Car) -> void:
+	if edge < 0:
+		return
+	if not _by_road.has(edge):
+		var fresh: Array[Car] = []
+		_by_road[edge] = fresh
+	_by_road[edge].append(car)
+
+
 ## Whether `at` stands in the spawn ring round `here` and `spawn_clear_m` clear
 ## of every live car.
 func _in_ring_and_clear(at: Vector3, here: Vector3) -> bool:
@@ -1186,7 +1232,7 @@ func _in_ring_and_clear(at: Vector3, here: Vector3) -> bool:
 ## at the hardest braking (`Q198`, seed 4 at 40 cars): `_in_ring_and_clear` is a
 ## point's distance, blind to the placed length and the speed behind.
 func _room_behind(edge: int, along: bool, s: float, half_length: float, lane: float) -> bool:
-	for other: Car in cars:
+	for other: Car in _cars_on(edge):
 		if not other.live:
 			continue
 		var behind: float = INF
@@ -1586,7 +1632,7 @@ func _edge_out(car: Car) -> float:
 ## way, is between `car` and `pass_look_m` past `until_m`. Two cars each
 ## waiting at a parked vehicle for the other: the earlier in the fleet goes.
 func _oncoming_clear(car: Car, until_m: float) -> bool:
-	for other: Car in cars:
+	for other: Car in _cars_on(car.edge):
 		if other == car or not other.live or other.knocked:
 			continue
 		var at: float
@@ -1643,7 +1689,7 @@ func _lane_blocked(car: Car, toward: float) -> bool:
 		var side: float = (across.x + across.y) * 0.5 - car.lane
 		if side * (toward - car.lane) > 0.0:
 			return true
-	for other: Car in cars:
+	for other: Car in _cars_on(car.edge):
 		if other == car or not other.live or other.knocked:
 			continue
 		# Coming out of its turn beside this one: it stands at its join in the lane it
@@ -2392,7 +2438,7 @@ func _coming_first(car: Car, other: Car) -> bool:
 ## followed one stopped part way through its turn and stood in it for 15 s).
 func _queued_past_join(car: Car) -> Car:
 	var room: float = car.join_m + car.half_length * 2.0 + profile.gap_m
-	for other: Car in cars:
+	for other: Car in _cars_on(car.next_edge):
 		if other == car or not other.live or other.knocked or other.held == Held.NONE:
 			continue
 		# Where it stands or is turning into: the join's road and lane either way.
