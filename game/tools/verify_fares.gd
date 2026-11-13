@@ -2143,7 +2143,22 @@ func _check_near_miss_moving(swerve_m: float, brush_m: float) -> void:
 	_expect(paid.size() == 1, "near miss moving", "a car coming the other way, swerved round, pays")
 	paid = _pass_moving(swerve_m, PASS_MPS, coming, false)
 	_expect(
-		paid.is_empty(), "near miss moving", "and in its own lane, never aimed at, pays nothing"
+		paid.size() == 1 and paid[0].skill == Fare.Skill.NEAR_MISS,
+		"near miss moving",
+		"and in its own lane, never aimed at, pays too: the closing speed is the danger"
+	)
+	paid = _pass_moving(swerve_m + 0.2, PASS_MPS, coming, false)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"an oncoming car a hand wider than the band pays nothing"
+	)
+	var creeping: Array[Vector2] = [Vector2(INF, -NearMiss.SPEED_FLOOR_MPS + 0.25)]
+	paid = _pass_moving(swerve_m, PASS_MPS, creeping, false)
+	_expect(
+		paid.is_empty(),
+		"near miss moving",
+		"a car facing the other way under SPEED_FLOOR_MPS is parked: unaimed, nothing"
 	)
 	var crawl_mps: float = _skills.near_miss_min_kph / 3.6 - 1.0
 	paid = _pass_moving(swerve_m, crawl_mps, coming, true)

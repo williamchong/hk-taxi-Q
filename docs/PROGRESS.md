@@ -279,7 +279,7 @@ Phase 3 — Builds `B1`, `B3`, `B4`
   +2 `draws`, `phys` in the noise, +123.5 KB web PCK. Owed: the user's look and drive.
   `lamps.py`'s alpha lantern marker (`Q160`) checked on Compatibility the same day: it survives,
   and the lanterns alone light at night.
-- `P3-2a` moving cars (`Q175`, 2026-10-30) — the near miss looks at them on the closing speed, and a hit reads the closing speed: a 5 kph tap on a slower car read 100+ kph and stopped the taxi dead. Static walls and the pad byte-identical; `verify_fares` `near miss moving:`, `verify_traffic` `near:`, 7 mutations caught; +6 `draws`, `phys` unmoved. Owed: the user's drive (no scripted drive swerved into a paying pass).
+- `P3-2a` moving cars (`Q175`, 2026-10-30) — the near miss looks at them on the closing speed, and a hit reads the closing speed: a 5 kph tap on a slower car read 100+ kph and stopped the taxi dead. Static walls and the pad byte-identical; `verify_fares` `near miss moving:`, `verify_traffic` `near:`, 7 mutations caught; +6 `draws`, `phys` unmoved. Owed: the user's drive (no scripted drive swerved into a paying pass). 2026-11-13: an ONCOMING car inside `near_miss_m` pays unaimed (the user's report of bare misses unpaid); 2 mutations caught.
 - `P3-4` 🟡 Trams (`Q176`, 2026-11-01) — 60 + 13 directed tracks (4393 + 1371 m), 18 routes, longest
   3431 m, both tracks over the seam, 19 + 5 stops and 26 + 6 stop lines bound. Parked trams 15 + 3 → 0;
   3 + 2 published vehicles refused in a tram's path. 16 trams: +2 `draws`, ~+0.5 ms `phys` on the

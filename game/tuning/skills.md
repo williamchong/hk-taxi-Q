@@ -202,6 +202,11 @@ some part of it lies ahead within this many seconds of travel AND inside the car
 along that travel — the car would hit it going straight. A car in the next lane is never inside
 the width; a car the player swerves round was, a moment before the swerve. Floored at one car
 length so a standing start can still be aimed.
+⚠️ **Not for a car coming the other way** (the user's call, 2026-11-13: "passing opposite traffic
+with bare miss should definitely be close call or near miss"): the closing speed is the danger,
+so an oncoming pass inside `near_miss_m` pays unaimed. Two lane-centred cars on a two-way street
+read `width_m / lanes` apart, which leaves a car inside 0.9 m on 2.4% of the two-way length, a
+minibus 7.7%, a bus 11.6% (`roadgraph.json`, both regions, 2026-11-13).
 
 ## `near_miss_memory_s = 2.0`
 

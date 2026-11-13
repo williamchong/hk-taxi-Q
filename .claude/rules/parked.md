@@ -141,7 +141,10 @@ traffic, and the bonus for threading them.
   `velocity`, a parked one's zero, so every parked row holds byte for byte. The look runs on the
   closing speed, a car pulling away is no threat, one drawn level that pulls clear is a fresh
   approach, and `near_miss_min_kph` stays on the taxi's own speed. `verify_fares`' `near miss moving:`
-  holds it; each of the three is a named mutation. 🚫 A lane pass still pays nothing.
+  holds it; each of the three is a named mutation. 🚫 A lane pass still pays nothing — ⚠️ but
+  an ONCOMING one inside `near_miss_m` pays (the user's call 2026-11-13, `Track.oncoming`: the
+  obstacle's velocity against the travel at `SPEED_FLOOR_MPS` or more while alongside). Do not
+  put the path rule back on it.
 - 🔴 **The moving traffic reads this layer** (`P3-3f1`): `TrafficSystem` indexes every placement
   by its `edge` (`edge_of`, `obstacle_of`, `source_of`) and asks `is_standing` each tick. A change
   to `edge`, the footprint or what stands when moves the traffic too: run `tools/check.sh` and paste

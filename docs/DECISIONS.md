@@ -11052,6 +11052,18 @@ and the whole pad at 42 / 63 / 86 kph is identical bar the cost column.
 - **`near_miss_min_kph` stays on the taxi's own speed**: a car rushing past a taxi crawling is not the
   taxi's skill. A lane pass still pays nothing: the path test is untouched, the user's call of
   2026-10-11.
+- ⚠️ **Reversed for a car coming the other way (2026-11-13, the user: "passing opposite traffic with
+  bare miss should definitely be close call or near miss, but seems sometimes it doesnt trigger").**
+  The "sometimes" was this rule: an oncoming car in its own lane is never in the path, so it paid
+  only inside `close_call_m` (0.25 m), or when the taxi had been aimed at it — a swerve paid and a
+  straight bare miss at 0.3–0.9 m did not. Now `Track.oncoming` (the obstacle's own velocity against
+  the taxi's travel at `NearMiss.SPEED_FLOOR_MPS` or more, read while alongside) lifts the path rule
+  across the whole near-miss band. A same-way lane pass and a parked car keep it. Measured cost: two
+  lane-centred cars on a two-way street are `width_m / lanes` apart, which leaves the taxi inside
+  0.9 m of a car on 2.4% of the two-way level-0 length, a minibus 7.7%, a bus 11.6%
+  (`roadgraph.json`, both regions). `verify_fares` `near miss moving:` flips the unaimed oncoming
+  check and adds a hand outside the band and a car facing the other way under the floor; mutations
+  caught by name: the exemption dropped, the floor at 0.
 - `TrafficSystem.near_cars` hands in live cars, a dictionary each made once like a parked one's, out
   to the disc plus `speed × look_s`, because the disc is sized for a parked car. `FareSystem` finds it
   by `TrafficSystem.GROUP`; `--traffic=off` frees it before it joins, and leaves none.
@@ -13092,44 +13104,63 @@ only move as often as frames arrive.
 **See.** `Q207` · `Q184` · `P6-1` · `game/scripts/ui/loading_cover.gd` · `tools/make_splash.py` ·
 `game/tuning/menu.md` · `docs/ARCHITECTURE.md` "Build pipeline"
 
-## `Q212` — The style combo splits: the live total where the skill flashed, the summary under the meter
+## `Q210` — A key is shaped into a linear input before the car sees it; the car's assists are tuned against that input
 
-**Status.** ✅ Built 2026-11-14 on the user's pick, after four layouts rendered on the handset
-(`--window=1368x630 --safe-area=102,0,102,30 --touch=on`) and the desk. Amends `Q205`'s HUD and
-reverses `Q138`'s "🚫 the award in the middle of the frame" for this one line. The user's drive
-owed, with `Q205`'s.
+**Status.** ✅ Built 2026-11-14 on the user's instruction. Reverses the 2026-09-30 choice (`Q152`'s
+catch round) of a cap on the car over "a keyboard ramp in `InputRouter`": the ramp is built now, and
+the cap stays as a drive assist. Owed: the iPhone drive (touch now steers with no speed ramp), and the
+user's keyboard drive of the flick at 0.6 s.
 
-- **Why it moved.** `Q138` put the `award` slot under the meter because "points are money", and
-  `Q205` then made the combo a count that is never money — so the slot's own reason no longer held,
-  and 車手 ×N beside the HK$ LEDs said the opposite of `Q205`. The right column was also the busiest
-  on a handset: the meter's three LEDs, the combo and the dial in one stack.
-- **What was rendered and refused.** Under the 特更 clock in the reserved `combo` slot: clean on
-  the desk, but on the handset 車手 ×4 crowded 交更 21:00 and the skills ran onto the map's top, and in
-  free mode it floated under an empty corner. The whole three-line combo under the flash: fine on
-  the desk, on the handset it sat ON the taxi — over the 的士 roof sign, since the touch table's tick
-  row (y 368–428) is the last row above the roof. `甩尾 ×2 · 車手 ×4` in one colour: the two ×N read
-  as equal scores.
-- **Built — the user's split and two-tier line.** The live line in the tick's row: the skill that
-  just joined and ITS count, small in the chip's ink (`FareFace.combo_skill_text`, the money first
-  when a passenger paid it, as the flash it replaces said), beside 車手 ×N in the gain's green at the
-  tick's size, the gap's bar under the total alone and as wide as its text. One row deep, so it
-  stays off the roof on the handset. Under the meter, the summary alone — each skill and its count,
-  one small line. When the combo ends the total holds alone in the live line, green when the gap ran
-  out and red when a hit broke it, and both fade over `callout_hold_s`, as the panel did.
-- 🔴 **One row, two tenants.** A lone skill, or one before `combo_show_min`, still flashes as it
-  did; once the combo shows, the skill joins the live line instead (`Hud._join_live`, after
-  `combo_changed`, which `FareSystem._award` emits first). A meter tick or a delivery TAKES the row
-  for its flash and the line comes back when the flash fades — a delivery is never hidden behind a
-  combo — while a skill's own flash gives way to the line at once (`Hud._tick_yields`). A penalty has ended the combo before it reaches the HUD, so it flashes in red as before.
-- **The desk's row moved off the guide arrow.** The world-space arrow lands around y 180–260 on the
-  desk, on the row's text; `tick` 248 → 288 and `wrong_way` 320 → 352, keeping the sign 4 px under
-  the row as the touch table already did. The touch table is unchanged.
-- **Measured.** At one injected combo on the boot stand, draws 156 against HEAD's 158 (the whole HUD
-  +40 over `--hud=off`'s 116). `verify_hud` `face:` holds `combo_skill_text` in both languages and
-  both payers. Not seen: a frame with a passenger aboard — no scripted run boarded one — so the tip
-  clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
+**Asked** by the user, 2026-11-14: "keyboard should compensate the binary input into sth more linear
+into input, where then drive assists params take effect — not drive assists params tuning against a
+binary input", and "so input assists as 1 logic (per input method), and drive assist as another (per
+car potentially)". Touch, a stick and a future wheel can hold any angle; a key cannot, and the car's
+steering had been tuned for the key.
 
-**See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
+**The two layers.**
+- **Input assist, one per input METHOD**, in the input layer: `KeyboardSteerProfile`
+  (`tuning/keyboard_steer.tres`) for keys, `TouchProfile` for a thumb, nothing for a stick, a wheel's
+  own table when there is one. `InputRouter.steer_for(speed_share, quick, delta)` is what the car
+  drives on: a key ramped from centre to full over `attack_s` 0.2 at rest to `attack_at_top_s` 2.0 at
+  the limiter on the share's square (`Q174`'s numbers, moved, not re-tuned), at `attack_s` when the
+  car asks for the quick ramp (drift mode, a countersteer read off the key's own side); a stick or a
+  thumb as it reads. Easing off is not shaped; a reversal ramps. `InputRouter.steer_from_keys` is
+  the method — a key press sets it, a stick past its dead zone or a steering thumb clears it — and
+  is true until either, so `Input.action_press` runs (`drive.sh`, the skidpad) steer as a key.
+- **Drive assist, per CAR**: `handling.tres`'s rack (`steer_attack_s` 0.2 at every speed — the
+  speed-eased `steer_attack_at_top_s` is gone from the car), `steer_to_grip`, the catch cap, the flick
+  and the systems' tables, tuned against a linear input. The car never sees which device steered.
+
+**Measured**, `tools/skidpad.sh` at 42 / 63 / 86 kph and `--only=flick` at 95 / 110 / 120, before
+against keys (the default) and `--steer=analog`:
+- **Keys**: every graded figure held — `turn`'s `came out` within 2.3° (`turn@counter` alone moves),
+  `ride` identical, `hold`'s `longest` 0.68 / 0.83 / 3.57 s identical (its exit 5.4 / 3.9 kph lower at
+  42 / 63: the pad's driver steers in shares, now ramped), `catch`'s `yaw@hold` within 1.5° and
+  `settled` 0.10 s sooner at 42 kph, `corner` within 0.1 kph. `Q174`'s lane change held: `flick@held`
+  5.9 / 6.3 / 6.5° at 95 / 110 / 120 kph, identical.
+- **Analog**: the rack's 0.2 s at every speed brings `Q174`'s slide back on a full-lock thumb —
+  `flick@held` 9.7 / 20.8 / 29.8°. That was a key's figure; whether a thumb swings full lock at
+  110 kph is the handset's question, and the answer, if it does, is the touch table's.
+- **The flick was a key's dial.** `FlickWatch` had read the raw key, across centre in one tick; the
+  shaped key takes 0.38 s at 63 kph, over `flick_window_s` 0.3, and the flick stopped firing on keys
+  at 63 and 86 kph (`flick@lift` 18.4 → 4.3° at 63, `flick@brake` 13.3 → 4.5° at 86). **0.6**,
+  swept 0.3 / 0.45 / 0.6 / 0.8 (`systems/arcade_aids.md`): 15.7° / 25.7° at 63, 10.0° brake at 86,
+  the lifted flick now also sliding at 42 kph (27.9°); analog and every control row identical at
+  every value.
+
+**Not done.** The catch cap stays on the car: graded on full opposite lock held, which a thumb holds
+as well as a key, so it is not a key's dial. Whether a keyboard also wants its countersteer unwound
+for it is a keyboard-assist question, never a car one. `steer_to_grip` and the lock's narrowing with
+speed stay on the car for every method; a wheel that wants neither is the first case for a per-method
+switch on them, not built.
+
+**Checked.** `verify_input`: a key, a stick past and inside its dead zone and a thumb set the method;
+the analogue path passes through; a key ramps at `attack_s` at rest, `attack_at_top_s` at the
+limiter and `attack_s` when quick, reaches full, ramps a reversal, and lets go unshaped.
+
+**See.** `Q174` · `Q152` · `Q153` · `Q83` · `game/tuning/keyboard_steer.md` ·
+`game/tuning/systems/arcade_aids.md` · `game/scripts/input/input_router.gd`
+
 
 ## `Q214` — No vehicle appears or vanishes in view
 
@@ -13243,62 +13274,44 @@ Not done, and owed:
 **See.** `Q160` · `P3-3c` · `P3-11e` · `game/tuning/traffic_beams.md` · `game/tuning/lamp_pools.md` ·
 `game/tuning/beams.md` · `game/scripts/traffic/traffic_beams.gd`
 
-## `Q210` — A key is shaped into a linear input before the car sees it; the car's assists are tuned against that input
+## `Q212` — The style combo splits: the live total where the skill flashed, the summary under the meter
 
-**Status.** ✅ Built 2026-11-14 on the user's instruction. Reverses the 2026-09-30 choice (`Q152`'s
-catch round) of a cap on the car over "a keyboard ramp in `InputRouter`": the ramp is built now, and
-the cap stays as a drive assist. Owed: the iPhone drive (touch now steers with no speed ramp), and the
-user's keyboard drive of the flick at 0.6 s.
+**Status.** ✅ Built 2026-11-14 on the user's pick, after four layouts rendered on the handset
+(`--window=1368x630 --safe-area=102,0,102,30 --touch=on`) and the desk. Amends `Q205`'s HUD and
+reverses `Q138`'s "🚫 the award in the middle of the frame" for this one line. The user's drive
+owed, with `Q205`'s.
 
-**Asked** by the user, 2026-11-14: "keyboard should compensate the binary input into sth more linear
-into input, where then drive assists params take effect — not drive assists params tuning against a
-binary input", and "so input assists as 1 logic (per input method), and drive assist as another (per
-car potentially)". Touch, a stick and a future wheel can hold any angle; a key cannot, and the car's
-steering had been tuned for the key.
+- **Why it moved.** `Q138` put the `award` slot under the meter because "points are money", and
+  `Q205` then made the combo a count that is never money — so the slot's own reason no longer held,
+  and 車手 ×N beside the HK$ LEDs said the opposite of `Q205`. The right column was also the busiest
+  on a handset: the meter's three LEDs, the combo and the dial in one stack.
+- **What was rendered and refused.** Under the 特更 clock in the reserved `combo` slot: clean on
+  the desk, but on the handset 車手 ×4 crowded 交更 21:00 and the skills ran onto the map's top, and in
+  free mode it floated under an empty corner. The whole three-line combo under the flash: fine on
+  the desk, on the handset it sat ON the taxi — over the 的士 roof sign, since the touch table's tick
+  row (y 368–428) is the last row above the roof. `甩尾 ×2 · 車手 ×4` in one colour: the two ×N read
+  as equal scores.
+- **Built — the user's split and two-tier line.** The live line in the tick's row: the skill that
+  just joined and ITS count, small in the chip's ink (`FareFace.combo_skill_text`, the money first
+  when a passenger paid it, as the flash it replaces said), beside 車手 ×N in the gain's green at the
+  tick's size, the gap's bar under the total alone and as wide as its text. One row deep, so it
+  stays off the roof on the handset. Under the meter, the summary alone — each skill and its count,
+  one small line. When the combo ends the total holds alone in the live line, green when the gap ran
+  out and red when a hit broke it, and both fade over `callout_hold_s`, as the panel did.
+- 🔴 **One row, two tenants.** A lone skill, or one before `combo_show_min`, still flashes as it
+  did; once the combo shows, the skill joins the live line instead (`Hud._join_live`, after
+  `combo_changed`, which `FareSystem._award` emits first). A meter tick or a delivery TAKES the row
+  for its flash and the line comes back when the flash fades — a delivery is never hidden behind a
+  combo — while a skill's own flash gives way to the line at once (`Hud._tick_yields`). A penalty has ended the combo before it reaches the HUD, so it flashes in red as before.
+- **The desk's row moved off the guide arrow.** The world-space arrow lands around y 180–260 on the
+  desk, on the row's text; `tick` 248 → 288 and `wrong_way` 320 → 352, keeping the sign 4 px under
+  the row as the touch table already did. The touch table is unchanged.
+- **Measured.** At one injected combo on the boot stand, draws 156 against HEAD's 158 (the whole HUD
+  +40 over `--hud=off`'s 116). `verify_hud` `face:` holds `combo_skill_text` in both languages and
+  both payers. Not seen: a frame with a passenger aboard — no scripted run boarded one — so the tip
+  clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
 
-**The two layers.**
-- **Input assist, one per input METHOD**, in the input layer: `KeyboardSteerProfile`
-  (`tuning/keyboard_steer.tres`) for keys, `TouchProfile` for a thumb, nothing for a stick, a wheel's
-  own table when there is one. `InputRouter.steer_for(speed_share, quick, delta)` is what the car
-  drives on: a key ramped from centre to full over `attack_s` 0.2 at rest to `attack_at_top_s` 2.0 at
-  the limiter on the share's square (`Q174`'s numbers, moved, not re-tuned), at `attack_s` when the
-  car asks for the quick ramp (drift mode, a countersteer read off the key's own side); a stick or a
-  thumb as it reads. Easing off is not shaped; a reversal ramps. `InputRouter.steer_from_keys` is
-  the method — a key press sets it, a stick past its dead zone or a steering thumb clears it — and
-  is true until either, so `Input.action_press` runs (`drive.sh`, the skidpad) steer as a key.
-- **Drive assist, per CAR**: `handling.tres`'s rack (`steer_attack_s` 0.2 at every speed — the
-  speed-eased `steer_attack_at_top_s` is gone from the car), `steer_to_grip`, the catch cap, the flick
-  and the systems' tables, tuned against a linear input. The car never sees which device steered.
-
-**Measured**, `tools/skidpad.sh` at 42 / 63 / 86 kph and `--only=flick` at 95 / 110 / 120, before
-against keys (the default) and `--steer=analog`:
-- **Keys**: every graded figure held — `turn`'s `came out` within 2.3° (`turn@counter` alone moves),
-  `ride` identical, `hold`'s `longest` 0.68 / 0.83 / 3.57 s identical (its exit 5.4 / 3.9 kph lower at
-  42 / 63: the pad's driver steers in shares, now ramped), `catch`'s `yaw@hold` within 1.5° and
-  `settled` 0.10 s sooner at 42 kph, `corner` within 0.1 kph. `Q174`'s lane change held: `flick@held`
-  5.9 / 6.3 / 6.5° at 95 / 110 / 120 kph, identical.
-- **Analog**: the rack's 0.2 s at every speed brings `Q174`'s slide back on a full-lock thumb —
-  `flick@held` 9.7 / 20.8 / 29.8°. That was a key's figure; whether a thumb swings full lock at
-  110 kph is the handset's question, and the answer, if it does, is the touch table's.
-- **The flick was a key's dial.** `FlickWatch` had read the raw key, across centre in one tick; the
-  shaped key takes 0.38 s at 63 kph, over `flick_window_s` 0.3, and the flick stopped firing on keys
-  at 63 and 86 kph (`flick@lift` 18.4 → 4.3° at 63, `flick@brake` 13.3 → 4.5° at 86). **0.6**,
-  swept 0.3 / 0.45 / 0.6 / 0.8 (`systems/arcade_aids.md`): 15.7° / 25.7° at 63, 10.0° brake at 86,
-  the lifted flick now also sliding at 42 kph (27.9°); analog and every control row identical at
-  every value.
-
-**Not done.** The catch cap stays on the car: graded on full opposite lock held, which a thumb holds
-as well as a key, so it is not a key's dial. Whether a keyboard also wants its countersteer unwound
-for it is a keyboard-assist question, never a car one. `steer_to_grip` and the lock's narrowing with
-speed stay on the car for every method; a wheel that wants neither is the first case for a per-method
-switch on them, not built.
-
-**Checked.** `verify_input`: a key, a stick past and inside its dead zone and a thumb set the method;
-the analogue path passes through; a key ramps at `attack_s` at rest, `attack_at_top_s` at the
-limiter and `attack_s` when quick, reaches full, ramps a reversal, and lets go unshaped.
-
-**See.** `Q174` · `Q152` · `Q153` · `Q83` · `game/tuning/keyboard_steer.md` ·
-`game/tuning/systems/arcade_aids.md` · `game/scripts/input/input_router.gd`
+**See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
 
 ## `Q215` — Shade is lit by the street, paint gloss is the engine's clearcoat, and the railings are the lamp posts' steel
 

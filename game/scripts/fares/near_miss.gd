@@ -21,6 +21,15 @@ extends RefCounted
 ## nothing because it was never in the path. So a pass inside `close_call_m`
 ## pays aimed or not, and the aim still decides the near-miss band.
 ##
+## ⚠️ **And except a car coming the other way** (the user's call, 2026-11-13:
+## "passing opposite traffic with bare miss should definitely be close call or
+## near miss"). The closing speed is the danger: an oncoming car passed inside
+## `near_miss_m` pays in any lane. Two cars each centred in its own lane on a
+## two-way street pass wider than the band on 98% of the city's two-way length
+## (a bus, 88%), so the lane pass still mostly pays nothing. Oncoming is read
+## while alongside: the obstacle's own velocity against the car's travel at
+## `SPEED_FLOOR_MPS` or more — a car stopped facing the other way is parked.
+##
 ## **What one obstacle is.** Its global transform and the mesh's own extent,
 ## as `ParkedLayer.near` answers; the detector works in the car's own plan
 ## frame — along its travel (the velocity, or the nose under the floor) and
@@ -67,6 +76,9 @@ class Track:
 	## Whether a touch or a flight came while alongside: such a pass pays
 	## nothing, aimed or not.
 	var spoiled: bool = false
+	## Whether it was coming the other way while alongside: such a pass in
+	## the near-miss band pays unaimed.
+	var oncoming: bool = false
 	## The tick the obstacle was last near enough to be handed in.
 	var last_seen: int = 0
 
@@ -78,6 +90,7 @@ class Track:
 		alongside = false
 		age_at_alongside_s = INF
 		spoiled = false
+		oncoming = false
 
 
 ## Under this the travel direction is the nose, not the velocity.
@@ -223,6 +236,8 @@ func tick(
 				track.age_at_alongside_s = track.threat_age_s
 			track.alongside = true
 			track.spoiled = track.spoiled or touched or airborne
+			var own: Vector3 = obstacle.get("velocity", Vector3.ZERO)
+			track.oncoming = track.oncoming or along.dot(own) <= -SPEED_FLOOR_MPS
 			track.min_clear_m = minf(track.min_clear_m, _clear_across())
 			track.speed_mps = maxf(track.speed_mps, speed)
 		if _s_max < -_half_length_m and track.alongside and not track.judged:
@@ -256,7 +271,11 @@ func _judge(track: Track, obstacle: Dictionary) -> void:
 	if track.spoiled:
 		return
 	var close: bool = track.min_clear_m <= _profile.close_call_m + SLACK
-	if not close and track.age_at_alongside_s > _profile.near_miss_memory_s + SLACK:
+	if (
+		not close
+		and not track.oncoming
+		and track.age_at_alongside_s > _profile.near_miss_memory_s + SLACK
+	):
 		return
 	_paid_clear_m = minf(_paid_clear_m, track.min_clear_m)
 	var award: Fare.Award
