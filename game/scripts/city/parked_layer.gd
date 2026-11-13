@@ -273,14 +273,30 @@ func _process(delta: float) -> void:
 		if stale or rerolled:
 			if rerolled:
 				_roll += 1
-			_build(cell)
+			# One re-stood cell a frame, the rest on the frames after: every
+			# cell is built on the same tick at boot, so they all fell due on
+			# one poll and freed and made a few hundred bodies in one frame.
+			if _build(cell) and not settling:
+				_since_poll_s = _profile.poll_s
+				break
 	if settling and floori(hour) != _boot_hour:
 		print("parked: re-stood at %.1f h, %d standing" % [hour, standing])
 
 
 ## Stand (or re-stand) one cell for the hour and the roll: its vehicles
-## grouped by kind into one `MultiMesh` each, a box body per vehicle.
-func _build(cell: Cell) -> void:
+## grouped by kind into one `MultiMesh` each, a box body per vehicle. False
+## where the same vehicles stand as before and nothing was touched — most
+## re-stands, since few entries carry hours or a chance.
+func _build(cell: Cell) -> bool:
+	var due := PackedInt32Array()
+	for index: int in cell.indices:
+		var entry: Entry = _entries[index]
+		if ParkedRoster.present(index, entry.hours, entry.chance, hour, _roll):
+			due.append(index)
+	if cell.node != null and due == cell.standing:
+		cell.built_hour = floori(hour)
+		cell.built_at_s = _clock_s
+		return false
 	if cell.node != null:
 		standing -= cell.standing.size()
 		for index: int in cell.standing:
@@ -291,13 +307,10 @@ func _build(cell: Cell) -> void:
 		# 7,693 resident.
 		cell.node.free()
 		cell.node = null
-	cell.standing.clear()
+	cell.standing = due
 	var by_mesh: Dictionary[String, Array] = {}
-	for index: int in cell.indices:
+	for index: int in due:
 		var entry: Entry = _entries[index]
-		if not ParkedRoster.present(index, entry.hours, entry.chance, hour, _roll):
-			continue
-		cell.standing.append(index)
 		_up[index] = 1
 		if not by_mesh.has(entry.mesh_name):
 			by_mesh[entry.mesh_name] = []
@@ -330,6 +343,7 @@ func _build(cell: Cell) -> void:
 	add_child(node)
 	cell.node = node
 	standing += cell.standing.size()
+	return true
 
 
 ## The vehicles standing within `radius_m` of a GLOBAL point, each as
