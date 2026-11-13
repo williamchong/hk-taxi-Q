@@ -35,7 +35,7 @@ swings away from the car. See city_streamer.gd for the rest.
 There is no `RoadSurface` node since `P5-6`: the drivable surface (`P1-4`)
 ships as one chunk per tile and `Tiles` streams it beside the buildings, each
 chunk with the `-col` trimesh the wheels stand on — `verify_road_surface.gd`
-asserts it is there on every chunk, and `drive_harness.gd` asks the streamer
+asserts it is there on every chunk, and `drive_level.gd` asks the streamer
 to hold the chunks under the start line before the first tick. Every layer
 node in `region.tscn` prints its collider count for the opposite reason — there must be
 none but the railings' boxes (`Q159`) — and each says why (`Q74`).
@@ -43,7 +43,7 @@ none but the railings' boxes (`Q159`) — and each says why (`Q74`).
 ## `[node name="Taxi" parent="." instance=ExtResource("4_taxi")]`
 
 ⚠️ This transform is a FALLBACK, not the start line. Since P2-3 the spawn is
-resolved at runtime: drive_harness.gd asks RoadSpawn for a fare node and calls
+resolved at runtime: drive_level.gd asks RoadSpawn for a fare node and calls
 place_at, so what is written here only survives on a clone with no generated
 assets — where there is no road to drive on either. The harness prints the gap
 between the two when it exceeds AUTHORED_DRIFT_M.
@@ -121,7 +121,7 @@ still hears its engine. Its voices hang on the car; its numbers are
 `MenuOrbit` (`P6-1`): the chase rig's slow circle round the car while the start
 menu is up. It moves the SAME rig — `Regions.camera` is the rig's camera and
 the streamer measures from it — with the rig's own `_physics_process` off,
-which `DriveHarness.park` and `resume` switch. Its numbers are
+which `DriveLevel.park` and `resume` switch. Its numbers are
 `tuning/menu.tres`. The harness's `showroom_fare_id = "f_001"` is where the
 car stands for it: the Harbour Road stand, HKCEC's old wing behind it, not the
 start line under the Phase II podium (`menu.md`); `resume` puts the car back

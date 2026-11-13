@@ -9,7 +9,7 @@ extends CanvasLayer
 ## overlays supply text and ask what to show.
 ##
 ## **The position block is the point of it.** Where the car is was only ever on
-## stdout — `drive.sh` telemetry and `drive_harness.gd`'s spawn line — which is
+## stdout — `drive.sh` telemetry and `drive_level.gd`'s spawn line — which is
 ## no use when the question is about the *frame*: a screenshot of a car halfway
 ## through a wall is only actionable if the picture itself says where that is.
 ## It is sized to survive being downscaled, because what usually reads it is a

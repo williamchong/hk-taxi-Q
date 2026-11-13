@@ -10,7 +10,7 @@ extends Node
 ## streams by the rig's `Camera3D`, so a second camera made current would leave
 ## the streamer measuring from a rig parked elsewhere; moving the rig keeps one
 ## camera, one streamer and the spring arm's own collision under the menu. The
-## rig's `_physics_process` is off while this runs — `DriveHarness.park` turns
+## rig's `_physics_process` is off while this runs — `DriveLevel.park` turns
 ## it off and `resume` turns it back on and snaps — so the two never write the
 ## rig on one tick.
 ##

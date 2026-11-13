@@ -2,7 +2,7 @@
 ## lantern, drawn by `lamp_pool.gdshader`, which lights what stands inside it.
 ## The shader's header says why this is not a light.
 ##
-## Static, and `layer_preview.gd` is the one caller: it already has the
+## Static, and `city_layer.gd` is the one caller: it already has the
 ## library's meshes and where each stands, and the pools ride the lamps' own
 ## plan cells so a street of them is one draw.
 extends RefCounted

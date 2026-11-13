@@ -1,4 +1,4 @@
-class_name DriveHarness
+class_name DriveLevel
 ## Puts the car on the start line and keeps it on the map (`P0-5`, `P2-3`).
 ##
 ## The kerbs are 0.15 m and mountable by design, so leaving the road is easy.
@@ -11,10 +11,12 @@ class_name DriveHarness
 ## closed (`Q13`), and level -1 runs under the terrain (`Q21`). Without it,
 ## judging the driving means restarting the scene every time you reach one.
 ##
-## A dev harness, not a game system. `P3-*` owns real respawn rules — where the
-## player returns to, what it costs them, and what the fare does meanwhile. This
-## only decides *when* to recover; `VehicleController.place_at` does the work,
-## because the state that has to be reset belongs to the car.
+## The level root `Main` drives: `play`, `park`, `resume`, `shift_over`. It
+## began as a dev harness and was `DriveHarness` until 2026-11-14. `P3-*` still
+## owns real respawn rules — where the player returns to, what it costs them,
+## and what the fare does meanwhile. This only decides *when* to recover;
+## `VehicleController.place_at` does the work, because the state that has to be
+## reset belongs to the car.
 ##
 ## `P2-3` gave it a second job: **resolving where the drive starts**, which used
 ## to be twelve floats on the Taxi node in `city_drive.tscn`. `RoadSpawn` does

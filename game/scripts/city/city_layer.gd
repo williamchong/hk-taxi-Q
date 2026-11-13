@@ -1,7 +1,9 @@
-## Instantiates one of the ETL's one-mesh layers, for looking at the city
-## (`P5-1`). `layer` names a row of `generated_layer.gd`'s table.
+## Stands one of the ETL's one-mesh layers in a region (`P5-1`). `layer` names a
+## row of `generated_layer.gd`'s table.
 ##
-## A dev tool, not the streamer. Each of these layers is region-wide — the
+## The game's own layer node — ten of `region.tscn`'s, with their colliders and
+## lamp pools — and not the streamer. It began as a dev preview and was named
+## `layer_preview.gd` until 2026-11-14. Each of these layers is region-wide — the
 ## tramway as one mesh; the road marks, the boxes and the crossings as a mesh
 ## per plan cell, so the engine can cull what was 72,356 + 20,642 triangles
 ## from anywhere (`P3-40`, `P3-42`, `Q135`); the
@@ -93,7 +95,7 @@ const _HEIGHT: Dictionary[String, String] = {
 func _ready() -> void:
 	var at: String = GeneratedLayer.path(layer, region)
 	if at.is_empty():
-		push_error("layer_preview: %s names no generated layer" % name)
+		push_error("city_layer: %s names no generated layer" % name)
 		return
 	# Presence first, then load — `Q77`'s order, recorded on `is_present`.
 	if not GeneratedLayer.is_present(layer, region):

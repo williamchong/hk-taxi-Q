@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://b4u0ble8tc3t" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" uid="uid://c5cacrr85ddoh" path="res://scenes/vehicle/taxi_tyre.tscn" id="4_taxi"]
 [ext_resource type="Script" uid="uid://d11ead5y5gex8" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
-[ext_resource type="Script" uid="uid://bqbi0m2rxilpm" path="res://scripts/city/drive_harness.gd" id="6_harness"]
+[ext_resource type="Script" uid="uid://bqbi0m2rxilpm" path="res://scripts/level/drive_level.gd" id="6_harness"]
 [ext_resource type="Script" uid="uid://j2xlj2dutfs5" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 [ext_resource type="Resource" uid="uid://df6j4i2or2xy3" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Resource" uid="uid://43k707iftboe" path="res://tuning/camera.tres" id="18_cameratune"]

@@ -51,7 +51,7 @@ const FLATNESS_MIN_COLOURS: int = 3
 ## the Central–Wan Chai Bypass Tunnel bottoms out 15.7 m below the HKCEC spawn,
 ## so anything under about 16 m would fail an honest drive into it.
 ##
-## Above `drive_harness.gd`'s 25 m respawn margin on purpose. In `city_drive`
+## Above `drive_level.gd`'s 25 m respawn margin on purpose. In `city_drive`
 ## the harness catches the car first and this never fires, which is the point:
 ## it is the backstop for runs where the harness is absent (`city_preview`) or
 ## has switched itself off — and it switches itself off in exactly the case
@@ -426,7 +426,7 @@ func _trace_tick() -> void:
 		_trace_line("under %d %.6f %s" % [tick, hit.position.y, (hit.collider as Node).get_path()])
 
 
-## Hides a `layer_preview.gd` node named by `--hide-layers`, children and all.
+## Hides a `city_layer.gd` node named by `--hide-layers`, children and all.
 ## `_hidden_count` is printed at the end so a run that hid nothing says so.
 func _hide_layer(node: Node) -> void:
 	var spatial := node as Node3D

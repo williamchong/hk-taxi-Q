@@ -118,7 +118,7 @@ func _ready() -> void:
 	# different nodes: `verify_fence.gd` grades the asset's own `-col` import and
 	# would stay green if this function stopped building bodies at all, which is a
 	# barrier the car drives through and renders perfectly.
-	# `layer_preview.gd` prints its count too: none but the railings may have any.
+	# `city_layer.gd` prints its count too: none but the railings may have any.
 	print(
 		(
 			"fence: %d barriers placed at %d mouths and %d clipped ends, %d refused, %d colliders"

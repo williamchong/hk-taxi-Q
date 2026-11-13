@@ -17,7 +17,7 @@ extends Node
 ## `started` like the first — the level restarts in place, never reloads.
 ##
 ## And the pause (`Q165`, the user's ask): Esc, the HUD's button or the app
-## losing the screen pause the TREE — not `DriveHarness.park`, which stands the
+## losing the screen pause the TREE — not `DriveLevel.park`, which stands the
 ## car in the showroom — so the car, the fare's clock, the shift's hour and
 ## the parked roster hold where they are. A fresh menu on PAUSE runs alone over
 ## it. RESUME unpauses; the way out parks the level and opens HOME, writing no
@@ -32,7 +32,7 @@ extends Node
 const PAUSE_PAGE_AFTER_S: float = 1.0
 
 ## The level in play. Assign in the scene.
-@export var level: DriveHarness
+@export var level: DriveLevel
 ## The player's HUD. Assign in the scene.
 @export var hud: Hud
 ## The start menu. Assign in the scene; a scene without one, or a run under
@@ -140,7 +140,7 @@ func _release_pause() -> void:
 
 ## Out of a paused run: the level parks under a fresh HOME as at boot, or a
 ## free drive's REPORT, and the next PLAY starts clean through
-## `DriveHarness.play`. Read before the park: nothing resets the books but
+## `DriveLevel.play`. Read before the park: nothing resets the books but
 ## `play`, and the tally was banked as the pause opened.
 func _on_run_ended() -> void:
 	var report: StartMenu.Report = _free_report()

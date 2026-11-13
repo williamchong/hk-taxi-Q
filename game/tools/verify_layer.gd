@@ -14,7 +14,7 @@ extends RefCounted
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const LayerPreview = preload("res://scripts/city/layer_preview.gd")
+const CityLayer = preload("res://scripts/city/city_layer.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 
 ## The name every posts body carries: `PropBatch.posts` is handed `<mesh>_posts`
@@ -100,7 +100,7 @@ static func check_posts(layer: String, library: Dictionary[String, Mesh]) -> Pac
 
 	# Built out of the tree and `_ready` called by hand, as `verify_trees.gd`
 	# does: a node added to a root that has not started is never readied.
-	var node: Node3D = LayerPreview.new()
+	var node: Node3D = CityLayer.new()
 	node.layer = layer
 	node.posts = true
 	node._ready()

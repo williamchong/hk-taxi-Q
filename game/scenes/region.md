@@ -26,7 +26,7 @@ region whose frame holds no shoreline ships none and this node simply stays
 empty.
 No collider, and deliberately: water is not a floor. A car that leaves the quay
 lands on the sunk ground beneath, under the plane, rather than driving on the
-sea; `drive_harness.gd` pulls it back onto the nearest road a tick later
+sea; `drive_level.gd` pulls it back onto the nearest road a tick later
 (`drown_depth_m`).
 
 ## `[node name="Tramway" type="Node3D" parent="."]`
@@ -163,7 +163,7 @@ in the barrier family that collides, and that is the point of it.
 The parked roster (`P3-71`–`P3-73`, `Q161`): the stationary vehicles the region's
 `parked_placements.json` stands from the AUTHORED library
 `assets/authored/vehicles/parked.glb`, by the hour of the lighting rig's clock
-(`Q160`). Not a `layer_preview` row, because that table's library lives in the
+(`Q160`). Not a `city_layer` row, because that table's library lives in the
 bundle and this one is committed, and because that placer stands everything
 once where this one re-stands a hidden cell when the hour moves or a bus's
 chance is rolled again. A region with no `parked:` block ships none and the

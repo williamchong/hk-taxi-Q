@@ -188,7 +188,7 @@ var steer_input: float = 0.0
 ## autoload lookups a tick, and an AI taxi on this script would have driven on the
 ## *player's* throttle while obeying its own brake and handbrake.
 var throttle_input: float = 0.0
-## Held by the start menu (`P6-1`, `DriveHarness.park`): the pedals read
+## Held by the start menu (`P6-1`, `DriveLevel.park`): the pedals read
 ## nothing and the car coasts to rest under `_apply_coast_drag`. The router still
 ## samples the thumbs and the keys — nothing here stops it — so this is the one
 ## gate, and it is off on every scheme until a menu is up.

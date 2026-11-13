@@ -12,7 +12,7 @@ extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const LayerPreview = preload("res://scripts/city/layer_preview.gd")
+const CityLayer = preload("res://scripts/city/city_layer.gd")
 const MeshContract = preload("res://tools/mesh_contract.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 
@@ -89,7 +89,7 @@ func _check_trunks(path: String, library: Dictionary[String, Mesh]) -> PackedStr
 
 	# Built out of the tree and `_ready` called by hand: inside `_init` the
 	# root has not started, so a node added to it is never readied.
-	var node: Node3D = LayerPreview.new()
+	var node: Node3D = CityLayer.new()
 	node.layer = GeneratedLayer.TREES
 	node.trunks = true
 	node._ready()

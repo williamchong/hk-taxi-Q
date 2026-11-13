@@ -153,7 +153,7 @@ func _check_class(mesh: ArrayMesh, class_id: String) -> PackedStringArray:
 
 
 ## The railings **asset** must not collide. The railings do since `Q159`, but
-## as a box per panel the placer stands (`layer_preview.gd`'s `collides`): a
+## as a box per panel the placer stands (`city_layer.gd`'s `collides`): a
 ## `-col` import here would be the panel's trimesh, open between its bars, and
 ## a second collider under every box.
 ##

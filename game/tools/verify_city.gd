@@ -34,7 +34,7 @@ const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 ## dropped offset — without ever firing on rounding.
 const TOLERANCE_M: float = 0.01
 
-## The scene every drawn layer must have a `layer_preview` node in — one since
+## The scene every drawn layer must have a `city_layer` node in — one since
 ## `P5-9c`, because both scenes place it once per region. `roadmarks` shipped
 ## with a node in neither of the old two and `lamps` with a node in the preview
 ## only, each past a green `check.sh` (`Q73`); the table in `generated_layer.gd`
@@ -322,7 +322,7 @@ func _check_prop_cells() -> PackedStringArray:
 	return problems
 
 
-## Every id in `GeneratedLayer.ids()` names a `layer_preview` node in both dev
+## Every id in `GeneratedLayer.ids()` names a `city_layer` node in both dev
 ## scenes, and every such node names an id — read off the `.tscn` text rather
 ## than by instantiating the game. A misspelt `layer = "lampz"` would otherwise
 ## draw nothing and push one error at runtime that no check reads.
@@ -341,7 +341,7 @@ func _check_layer_nodes() -> PackedStringArray:
 			named.append(hit.get_string(1))
 		for id: String in ids:
 			if not named.has(id):
-				problems.append("%s has no layer_preview node for %s" % [scene, id])
+				problems.append("%s has no city_layer node for %s" % [scene, id])
 		for id: String in named:
 			if not ids.has(id):
 				problems.append(

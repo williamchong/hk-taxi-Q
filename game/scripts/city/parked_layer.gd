@@ -18,7 +18,7 @@
 ## it was built, or — for a cell holding a placement with a chance under 1 —
 ## after `reroll_s`, so the next drive down the street finds a different bus.
 ##
-## ⚠️ **This is not a `layer_preview` row** (`generated_layer.gd`): that table's
+## ⚠️ **This is not a `city_layer` row** (`generated_layer.gd`): that table's
 ## library lives in the region's bundle and this one is committed, and that
 ## placer stands everything once where this one stands by the hour. It takes
 ## the same document shape and the same batching (`PropBatch`), which is the

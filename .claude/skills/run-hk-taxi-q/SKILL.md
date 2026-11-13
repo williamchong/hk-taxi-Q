@@ -100,7 +100,7 @@ no arguments at all** — pass any flag, even `--out=`, and the throttle hold is
 | `--trace=<file>` | write one line per physics tick — plus `hit <tick> <m/s>` on a tick the car struck a wall, the speed into it as the penalty read it (`P3-50`) — — the car's position and velocity at six decimals (`tick`) and the collider under it (`under`) — plus every collision body entering (`body`) or leaving (`gone`) the tree, stamped with its tick (−1 is boot). The tool for "why don't two runs repeat": diff two traces for the **first divergent tick** and read the bodies that arrived just before it; the 1 s `%.2f` report cannot see either (`P5-9g`). Ticks spent waiting on a `--shots` capture are not traced, so compare traces from runs with the same shots. Inert: the `f_045` drive's report lines are identical with and without it, although it casts a ray every tick |
 | `award:` lines | not a flag: every skill paid and every penalty docked prints as `award:   t= 5.13  skill 6  HK$-2.0` (`Fare.Skill` index, signed money) when the fare loop is on, so a drive into a wall leaves its evidence on stdout |
 | `red:` lines | not a flag: every red the taxi runs prints as `red:     t= 7.20  edge 216  light 1` (`SignalController.Light`: 1 red, 2 red-and-amber) — counted, never paid or docked (`P3-3d`) |
-| `--hide-layers=a,b` | hide `layer_preview` nodes by `generated_layer.gd` id (`roadmarks`, `arrows`, …) in every resident region — what a layer costs a frame is the same drive with and without it, read off `prims` and `draws`. An unknown id is refused, and a run that hid no node fails. Inert on the car: positions match the unhidden run to the centimetre |
+| `--hide-layers=a,b` | hide `city_layer` nodes by `generated_layer.gd` id (`roadmarks`, `arrows`, …) in every resident region — what a layer costs a frame is the same drive with and without it, read off `prims` and `draws`. An unknown id is refused, and a run that hid no node fails. Inert on the car: positions match the unhidden run to the centimetre |
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
 | `--minimap=off\|on` | the minimap alone (`P3-44`); `--hud=off` takes it with everything else. `P3-9` runs with it off |
@@ -345,7 +345,7 @@ to — see Gotchas.
   because the frames after load count as changed.
 - **Six seconds of full throttle leaves the carriageway.** The default run tops 56 kph and clips
   something at ~5 s. There is no terrain: everything that is not road is void, and the kerbs are
-  0.15 m and mountable by design. `drive_harness.gd` respawns the car after a 25 m fall and says so
+  0.15 m and mountable by design. `drive_level.gd` respawns the car after a 25 m fall and says so
   on stdout — and since 2026-09-25 pulls a car that drives into the harbour back onto the nearest
   road (`in the harbour (n); back onto edge …`): full throttle from the start line is in the water
   at ~7 s.

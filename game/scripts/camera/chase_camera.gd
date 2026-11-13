@@ -59,7 +59,7 @@ func _ready() -> void:
 
 ## Jump to the target instead of easing toward it, for a car that was teleported.
 ##
-## `_ready` alone cannot cover the start line: `DriveHarness` is the scene root,
+## `_ready` alone cannot cover the start line: `DriveLevel` is the scene root,
 ## so its `_ready` places the car *after* this one has read the authored
 ## transform, and the rig sat 1.5 km away at `f_004` for the first frame.
 ## `CityStreamer` measures from this rig's camera, so that frame unloaded every

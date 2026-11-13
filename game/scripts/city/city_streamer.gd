@@ -149,7 +149,7 @@ func _tier_wanted(unit: CityManifest.Tile, distance: float, current: int) -> int
 
 
 ## Make the road within the residency radius of `point` resident **now**, on
-## this thread, before any physics tick — `drive_harness.gd` asks for it at the
+## this thread, before any physics tick — `drive_level.gd` asks for it at the
 ## start line (`P5-6`). Chunks already resident are left alone; the ones loaded
 ## here are ordinary residents afterwards and stream out like any other. The
 ## radius is the streamer's own, so nothing loaded here is dropped by the first

@@ -92,7 +92,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   colour change moves `under_structure` as it moves the trees'. ⚠️ Open: a handful of deck columns
   stand at the slab's edge with the foot just off it (the ribbon's kerb is past the drawn slab
   there); `min_kerb_clearance_m` fell to 0.04 / 0.10 because a deck column stands 0.1 m out by design.
-- **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `layer_preview._batches`: the throttle route
+- **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `city_layer._batches`: the throttle route
   and `--spawn-fare=wan_chai/f_045`, overlays, HUD and fares off, `prims` and `draws` before and
   after, and the five fixed cameras in `Q135` `P3-67` shot twice a side** (`P3-67`). ⚠️ The lamps are a
   `MultiMesh` per 300 m cell since then, hidden past 400 m measured to the CELL's centre, not the

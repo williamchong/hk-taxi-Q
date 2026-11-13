@@ -100,7 +100,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   line"** — the fence is built from that line, so it reads 0 by construction (`Q58`);
   `railing_error.py`'s to-source table is the independent reading.
   🔴 **The railings COLLIDE since `Q159` (the user's call, 2026-10-07), and the collision is the
-  PLACER's, never the asset's** — `layer_preview.gd`'s `collides` on `region.tscn`'s `Railings`
+  PLACER's, never the asset's** — `city_layer.gd`'s `collides` on `region.tscn`'s `Railings`
   node stands `PropBatch.bodies`, a box over each library mesh's AABB under every placement.
   `railings.glb` stays collider-free and `verify_railings.gd` asserts it: a `-col` would be the
   panel's trimesh, open between its bars, under every box. ⚠️ **A change that moves a fence moves a

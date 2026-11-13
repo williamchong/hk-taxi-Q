@@ -8,7 +8,7 @@
 ## Godot rotation.
 ##
 ## No streaming and no LOD, deliberately: residency is cheaper than the
-## machinery — the same argument `layer_preview.gd` makes for the carriageway.
+## machinery — the same argument `city_layer.gd` makes for the carriageway.
 ## ⚠️ That was priced when both heroes were ≤8k triangles; since the `P3-6`
 ## amendment HKCEC is the repainted source mesh at 99,577 triangles against a
 ## 120k budget, always resident, which `DECISIONS.md` books as a resident

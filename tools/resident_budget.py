@@ -178,7 +178,7 @@ def _aabb(entry: dict) -> Box:
     return (tuple(low), tuple(high))
 
 
-# The layers `layer_preview.gd` instances whole for a resident region, by the
+# The layers `city_layer.gd` instances whole for a resident region, by the
 # manifest each publishes its `triangles` in. Optional, as the layers are.
 PAINT_MANIFESTS = (
     ROADMARKS_MANIFEST_NAME,

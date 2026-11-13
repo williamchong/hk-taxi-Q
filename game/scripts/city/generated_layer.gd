@@ -232,7 +232,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 
 
 ## Every layer id, in table order — what `verify_city.gd` holds the two dev
-## scenes' `layer_preview` nodes against, in both directions.
+## scenes' `city_layer` nodes against, in both directions.
 static func ids() -> PackedStringArray:
 	return PackedStringArray(LAYERS.keys())
 

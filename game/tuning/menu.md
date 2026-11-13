@@ -60,7 +60,7 @@ How fast the camera closes on a new page's shot, per second, on the chase rig's 
 about 90% of the way in a second, so a click reads as a camera move, not a cut, and a page changed
 mid-move just bends toward the next. The page the menu opens on is cut to.
 
-The car stands at `DriveHarness.showroom_fare_id` — `f_001`, the Harbour Road cross-harbour
+The car stands at `DriveLevel.showroom_fare_id` — `f_001`, the Harbour Road cross-harbour
 stand, HKCEC's old wing behind it under open sky — not on the start line, which is under the
 Phase II podium where every orbit angle looks at a soffit (measured 2026-09-26; `f_003` faces a
 wall and `f_028` buries the arm in the pavement). `resume` returns the car to the start line.

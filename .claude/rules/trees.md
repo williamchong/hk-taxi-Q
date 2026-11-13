@@ -10,7 +10,7 @@ paths:
 # Trees — before marking work done
 
 - **`pipeline/trees.py`, the `trees` block, `trees.tres`, the trunk colliders
-  (`layer_preview._stand_trunks`) or `verify_trees.gd`: paste `trees.json`'s three partitions,
+  (`city_layer._stand_trunks`) or `verify_trees.gd`: paste `trees.json`'s three partitions,
   `drawn_by_kind`, `sized_by_dbh` / `sized_by_kind`, `height_m`, `min_kerb_clearance_m` and
   `facing_away` for BOTH regions, before and after, plus `verify_trees`' trunks-in-bodies line —
   and a frame of the Wan Chai cluster at `--camera=960,40,200 --look=990,4,280`, day and

@@ -7,7 +7,7 @@
 ## this is its own script rather than a corner of `generated_layer.gd` — that
 ## table is static data about where a layer lives, and this is behaviour.
 ##
-## Four readers: `layer_preview.gd` draws what this decodes, and `verify_signs.gd`,
+## Four readers: `city_layer.gd` draws what this decodes, and `verify_signs.gd`,
 ## `verify_lamps.gd` and `verify_arrows.gd` grade it through `check_join`, so
 ## `group` is the one statement of the join between a library and its document
 ## — a mesh nothing stands, an entry naming no mesh, an entry with no usable

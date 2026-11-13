@@ -5,11 +5,11 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 
 ## Overview
 
-Which prop layers `layer_preview.gd` stands as a `MultiMesh` per plan cell, and how far a cell is
+Which prop layers `city_layer.gd` stands as a `MultiMesh` per plan cell, and how far a cell is
 drawn (`P3-67`, `Q135`). A region-wide `MultiMesh` is one box: the engine draws every instance from
 anywhere inside it, and again in each shadow cascade.
 
-⚠️ EVERY KEY BELOW IS REQUIRED. `prop_cell_profile.gd` declares no defaults; `layer_preview.gd`
+⚠️ EVERY KEY BELOW IS REQUIRED. `prop_cell_profile.gd` declares no defaults; `city_layer.gd`
 refuses a zero cell and `verify_city.gd` refuses a zero cell or range, or an unknown layer, by name.
 
 ## layers = PackedStringArray("lamps", "trees", "railings")
@@ -20,7 +20,7 @@ primitives on the throttle route came back to ~10,000 for +2 draw calls.
 The trees (`P3-77`): four library meshes, so up to four draw calls a visible cell a pass, against
 58,144 / 132,040 placed triangles on Wan Chai / Causeway Bay that a region-wide `MultiMesh` would
 draw from anywhere, three times over with the shadow cascades. Their trunk bodies are cut on the
-same cells (`layer_preview._stand_trunks`).
+same cells (`city_layer._stand_trunks`).
 
 🚫 **Not the signs.** 23 library meshes a region is 23 draw calls a visible cell: +65 to +94 on the
 throttle route, measured. Their cost is draw calls, answered by `shadow_meshes` (`P3-66`).
@@ -34,7 +34,7 @@ harbour railings could not tell the two apart (0.14% of pixels, 0.04% run to run
 
 Arrows are unmeasured; a layer joins this list with its own before and after.
 
-**Read beyond this list.** `layers` names `layer_preview.gd`'s layers only; two placers outside that
+**Read beyond this list.** `layers` names `city_layer.gd`'s layers only; two placers outside that
 table cut on the same `cell_m` and `range_m` unconditionally: `signal_heads.gd`, and the fence
 (`fence.gd`, `P2-6`). The fence was one region-wide `MultiMesh`, and turning its shadow off alone
 saved 121k primitives at each of three views, the start line, Hennessy Road and Times Square.

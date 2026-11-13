@@ -338,6 +338,8 @@ hk-taxi-Q/
 │   ├── scripts/
 │   │   ├── core/                # pure logic, minimal engine coupling
 │   │   ├── city/                # tile streaming, road graph runtime
+│   │   ├── level/               # the level root Main drives
+│   │   ├── dev/                 # dev scenes' scripts — no shipped scene loads one
 │   │   ├── vehicle/  traffic/  fares/  input/  ui/  camera/  world/
 │   ├── assets/
 │   │   ├── generated/           # ETL output — GITIGNORED
@@ -698,7 +700,7 @@ never culled or streamed — `Q115`, `Q120`).
 - Since `P5-7e` an owned run's far half past the region join rides in the last column's chunk
   (`_tile_keys`), with an `aabb` reaching past the region; a seam junction's cap is built by the
   region holding the node (`roadsurface.json`'s `join` block, `P5-7f`).
-- `CityStreamer` streams a chunk by `aabb` like a tile; `drive_harness.gd` holds the chunks under
+- `CityStreamer` streams a chunk by `aabb` like a tile; `drive_level.gd` holds the chunks under
   the start line synchronously before the first physics tick.
 - `pipeline.surface.read_surface` merges the chunks back into the one mesh every grader measures.
 
@@ -975,7 +977,7 @@ the scientific name's genus, HyD's are all the default), drawn at the kind's `he
 with a uniform `scale` to the tree's own height: HyD's off `DBH` × `height_per_dbh_m`, clamped, and
 LCSD's the kind's, jittered on a seed of the tree's id. The same seed widens or narrows the crown
 (`scale` is `(across, up, across)`) and writes a `tint`, an RGB multiplier of at most 1 a channel
-that `layer_preview` sets as the instance colour (`PropBatch.batch`'s `colours`). Refused, never pushed: inside the level-0
+that `city_layer` sets as the instance colour (`PropBatch.batch`'s `colours`). Refused, never pushed: inside the level-0
 carriageway region plus `kerb_clear_m`, over no ground the tiles draw, or under a deck or roof
 lower than the treetop. `trees.json` grades it; `min_kerb_clearance_m` is the invariant.
 
@@ -985,7 +987,7 @@ lower than the treetop. `trees.json` grades it; `min_kerb_clearance_m` is the in
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no UVs, no texture |
 | `COLOR_0` | `materials:` — `tree_bark` and each kind's `crown_material` (`Q33`) |
 | Material name | `trees` → `res://tuning/trees.tres`, on `vertex_albedo.gdshader` |
-| Collider | none in the `.glb`. `trees_placements.json` carries a `trunks` table (each kind's radius and bare-trunk height), and `layer_preview` stands a `CylinderShape3D` per tree in one `StaticBody3D` per kind and prop cell — a tree is a crash, the crown is not (`Q171`) |
+| Collider | none in the `.glb`. `trees_placements.json` carries a `trunks` table (each kind's radius and bare-trunk height), and `city_layer` stands a `CylinderShape3D` per tree in one `StaticBody3D` per kind and prop cell — a tree is a crash, the crown is not (`Q171`) |
 
 ### `lamps.glb` — the published lamp posts (`P3-26`, `Q82`, `P5-3`)
 
@@ -1103,7 +1105,7 @@ decision pending `P2-6`; breakaway is `B3`.
   (`TS115`; a mirrored board is its own mesh, `TS414_mirrored`, because a mirror is not a
   transform under `cull_back`), a unit `pole`, and one `signs_text_<code>` quad per lettered code.
   A placement is `landmarks.json`'s transform (`pos`, compass `rot_y_deg`) plus optional `scale`;
-  a negative scale is refused. `layer_preview.gd` draws one `MultiMesh` per library mesh (24 draw
+  a negative scale is refused. `city_layer.gd` draws one `MultiMesh` per library mesh (24 draw
   calls on Wan Chai, +35 with shadow passes). `verify_signs.gd` grades the join both ways.
   `signs.json` is `SIGNS_MANIFEST_SCHEMA` 5.
 
@@ -1427,11 +1429,11 @@ All paths under `game/`.
 | `scripts/city/mesh_measure.gd` | `triangles`, `bounds`, `union` and `colliders` of a generated asset — the measuring the game reads too (the near miss sizes the car off `bounds`) |
 | `tools/mesh_contract.gd` | The mesh rules every generated asset is held to; also the shader-dispatch and `TEXCOORD_1` importer-drift checks. Loaded by the verify tools only |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material for dev previews |
-| `scripts/city/{tile,road,fare}_preview.gd`, `layer_preview.gd` | Dev previews. `layer_preview.gd` draws any drawn layer by the `layer` id on its node. 🔴 The layer nodes live in `scenes/region.tscn`, which `city_drive.tscn` and `city_preview.tscn` both place through `CityRegions`; `verify_city.gd` holds its `layer` ids against `generated_layer.gd`'s table in both directions (`Q73`, `Q82`, `Q115`). `road` and `fare` are preview-only by design (`road` z-fights the surface; `city_drive.tscn` carries `GraphOverlay`). Not performance measurements |
+| `scripts/city/city_layer.gd`, `tile_preview.gd`, `scripts/dev/{road,fare}_preview.gd` | `city_layer.gd` is the game's layer node (`layer_preview.gd` until 2026-11-14): it draws any drawn layer by the `layer` id on its node and stands its colliders. The three previews are dev views. 🔴 The layer nodes live in `scenes/region.tscn`, which `city_drive.tscn` and `city_preview.tscn` both place through `CityRegions`; `verify_city.gd` holds its `layer` ids against `generated_layer.gd`'s table in both directions (`Q73`, `Q82`, `Q115`). `road` and `fare` are preview-only by design (`road` z-fights the surface; `city_drive.tscn` carries `GraphOverlay`). Not performance measurements |
 | `scripts/city/road_graph_overlay.gd` | Dev: resolved edge, lane centre and legal direction under the car |
-| `scripts/city/drive_harness.gd` | `DriveHarness`, the level root: places the car on the resolved start line and returns it when it leaves the world. `Main` reads the car from it |
-| `scripts/city/asset_viewer.gd` | Dev: one `.glb` named by `--asset=` under `clean_daylight.tscn`, with what the importer did to it (`P5-22`, `Q124`). Needs no built region |
-| `scripts/city/greybox_builder.gd` | Builds the `P0-5b` grey-box circuit from `assets/authored/greybox_wanchai.json` |
+| `scripts/level/drive_level.gd` | `DriveLevel`, the level root: places the car on the resolved start line and returns it when it leaves the world. `Main` reads the car from it |
+| `scripts/dev/asset_viewer.gd` | Dev: one `.glb` named by `--asset=` under `clean_daylight.tscn`, with what the importer did to it (`P5-22`, `Q124`). Needs no built region |
+| `scripts/dev/greybox_builder.gd` | Builds the `P0-5b` grey-box circuit from `assets/authored/greybox_wanchai.json` |
 | `scripts/camera/chase_camera.gd`, `chase_profile.gd` | The follow camera (`P2-5`, `Q98`); numbers in `tuning/camera.tres` |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera; bypasses `InputRouter` |
 | `scripts/input/input_router.gd`, `touch_profile.gd` | `InputRouter` and the touch travel schema (`tuning/touch.tres`) |
@@ -1442,7 +1444,7 @@ All paths under `game/`.
 | `scripts/vehicle/vehicle_lamps_profile.gd`, `taxi_door_profile.gd`, `passenger_emote_profile.gd` | Schemas for `tuning/vehicle_lamps.tres`, `tuning/taxi_door.tres` and `tuning/passenger_emote.tres` (`Q150`). No `@export` defaults; each rig refuses a zero through `usable()` |
 | `scripts/vehicle/skid_marks.gd`, `skid_strip.gd`, `drift_sparks.gd`, `light_tail.gd`, `light_trail.gd` (+ `*_profile.gd`) | The drift shown (`Q154`, `P3-70`): tyre marks and smoke off `TyreVehicleController.wheel_slips` — one ring mesh, one draw call, `SkidStrip` pure for `verify_vehicle` — and, off `SkillTracker.drift_tier` wired by `TaxiHire` from `FareSystem.drift_tier_changed`, sparks and the light tail: the brake lenses found in the body by the import's stamps, streaking as a second ring (`LightTrail`, `assets/shaders/light_tail.gdshader`). `tuning/skid_marks.tres`, `tuning/drift_sparks.tres`, `tuning/light_tail.tres` |
 | `scripts/world/lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd` | `LightingRig`: an environment, a sun and the exposure (`P5-28b`, `Q38`) — and since `Q160` a `cycle` it blends through as `DayClock` hands it the seconds driven. `tuning/day_to_night.tres` is the table |
-| `scripts/city/lamp_pools.gd` | The pool of light under each lantern (`Q160`): a cylinder per lamp on the lamps' cells, drawn by `lamp_pool.gdshader`; `layer_preview.gd` is the one caller |
+| `scripts/city/lamp_pools.gd` | The pool of light under each lantern (`Q160`): a cylinder per lamp on the lamps' cells, drawn by `lamp_pool.gdshader`; `city_layer.gd` is the one caller |
 | `scripts/ui/debug_hud.gd`, `fps_counter.gd` | The one owner of dev chrome, off by default; the counter is a `Label` it builds and stops counting while hidden (`Q119`) |
 | `scripts/ui/perf_recorder.gd` | A row per frame to `user://perf.csv` (clock-read frame time, process and physics ms, the renderer's GPU and CPU render ms, draws, prims, video memory, tiles instantiated; GPU ms reads 0 under Metal, so on iOS headroom is the frame rate under `--max-fps 120`) and a p50/p95/p99 summary beside it; `DebugHud` builds it only under `--perf-log=<s>` (`--perf-skip=<s>`, default 10, leaves boot out of the summary), in any build, so a release build on a handset can be measured (`P2-6`) |
 | `scripts/ui/hud.gd` | `Hud`. Reads the car `Main` handed it. Samples speed at 10 Hz and the road graph at 5 Hz, sets text only on change, registers a raw-versus-displayed readout with `DebugHud` |
@@ -1674,7 +1676,7 @@ an iPhone Air's 420 pt height, and the taxi would have shrunk at the hand-over.
 | `scenes/main.tscn` | Drive. `World` instances `scenes/city_drive.tscn` (taxi on the road collider, chase camera); `GUI` holds the HUD |
 | `scenes/dev/asset_viewer.tscn`, `skidpad.tscn`, `greybox.tscn` | One authored `.glb`; the handling pad (`tools/skidpad.sh`); the `P0-5b` circuit |
 
-- The spawn is resolved at runtime: `drive_harness.gd` asks `RoadSpawn.at_fare_node` for
+- The spawn is resolved at runtime: `drive_level.gd` asks `RoadSpawn.at_fare_node` for
   `spawn_fare_id`, default `f_004` — "Expo Drive eastbound underneath HKCEC Phase II", a real taxi
   stand.
 - The heading is not supplied. A zero heading makes `nearest_edge` take the edge's vertex order,

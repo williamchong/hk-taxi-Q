@@ -2,7 +2,7 @@ class_name RoadSpawn
 extends RefCounted
 ## Where a car starts on the real city, resolved from published data (`P2-3`).
 ##
-## One definition, used twice: `drive_harness.gd` places the car with it and
+## One definition, used twice: `drive_level.gd` places the car with it and
 ## `tools/verify_spawn.gd` asserts the result headless. That is the whole reason
 ## it is a static resolver rather than logic inside the harness — a check that
 ## reimplemented the placement would be checking itself.
@@ -25,7 +25,7 @@ extends RefCounted
 ## bundle publishes the gap, so `Pose.blocked` can answer whether a car fits
 ## where this is about to set one down (`Q52`). It answers and places anyway: relocating
 ## would put the player somewhere no document published, and refusing would drop
-## `drive_harness.gd` onto the authored literal above — on the same street, in
+## `drive_level.gd` onto the authored literal above — on the same street, in
 ## the same wall, with the road name and the lane centre now blank. That is the
 ## outcome `Q51` argued against when it kept passability out of `nearest_edge`.
 ## What refuses is `tools/verify_spawn.gd`, so a bundle whose start line stands
