@@ -199,8 +199,8 @@ static func post_of(mesh: Mesh) -> AABB:
 ## holding a shape a placement, or one body for the lot without `cells`.
 ##
 ## 🔴 **A body a cell, never a body a post.** Jolt's `max_bodies` is 10,240 and
-## the railings alone hold 7,693 of it (`Q159`); the lamps, the sign poles, the
-## signal posts and the trees together would pass it. A placement's scale
+## the railings alone held 7,693 of it (`Q159`) until `boxes` (`Q217`); the
+## lamps, the sign poles, the signal posts and the trees together would pass it. A placement's scale
 ## widens the cylinder with its across-scale and raises it with its up, and the
 ## shape stands upright whatever the bearing: every one of these is stood by a
 ## turn about `+Y`. Posts of one size share one shape by reference, as

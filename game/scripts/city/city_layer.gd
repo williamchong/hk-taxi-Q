@@ -69,8 +69,8 @@ signal built(low: Vector3, high: Vector3)
 
 ## Stand a trunk cylinder under every placement from the document's `trunks`
 ## table (`P3-77`): one static body per plan cell holding a shape per tree,
-## because Jolt's 10,240 bodies already hold the railings' 7,693 and a body a
-## tree would pass it. On for the trees alone; `region.md` says why.
+## because Jolt holds 10,240 bodies and a body a tree would spend a tenth of
+## them (the railings held 7,693 of it until `Q217` gave them a body a cell). On for the trees alone; `region.md` says why.
 @export var trunks: bool = false
 
 ## Stand an upright cylinder up the post of every placement whose library mesh

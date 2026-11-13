@@ -23,7 +23,7 @@ paths:
   off, Wan Chai stands 35 more trees and the minimum falls from 0.3562 to 0.0.
   🔴 **A tree is a crash** (the user's call): every tree gets a trunk cylinder, scaled with the
   tree, and nothing for the crown. ⚠️ **One static body per kind and prop cell, never a body
-  per tree**: Jolt's `max_bodies` is 10,240 and the railings already hold 7,693. ⚠️
+  per tree**: Jolt's `max_bodies` is 10,240 (the railings held 7,693 of it until `Q217` stood them a body a cell). ⚠️
   **Every size is authored**: neither publisher gives a height or a crown, and
   `height_per_dbh_m` (HyD's `DBH` → a height) is a ratio we chose, not a cited allometry. Causeway
   Bay's p90 sits on `max_height_m`, so a change there moves a fifth of its trees. ⚠️ **The two

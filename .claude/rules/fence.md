@@ -47,7 +47,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   cascades drew every barrier from anywhere — 121k primitives at every view. It casts no shadow since
   the same pass, nor do the railings: a sunlit frame could not tell either gone. ⚠️ **The split opens a gap `verify_fence.gd` cannot see** —
   it grades the `.glb`'s own `-col` import, so a placer that stopped building bodies stays green and
-  renders perfectly. `fence.gd` prints its collider count for that reason; keep it, and read it.
+  renders perfectly. `fence.gd` prints its collider count for that reason; keep it, and read it — it counts shapes, one
+  a barrier, in one body a plan cell since `Q217` (`PropBatch.boxes`).
   🔴 **`clipped_edges` is a THIRD population (`Q143`) and joins neither list.** An end is clipped
   when its node has one open arm, no `foreign_edges` run touches it (the neighbour's way in is
   never closed), and the polyline end lies within `fence.clipped_within_m` of the rectangle's line

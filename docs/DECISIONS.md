@@ -13402,3 +13402,62 @@ their separation.
 not a measurement of Wan Chai.
 
 **See.** `Q215` · `Q33` · `Q27` · `Q30` · `docs/ART_DESIGN.md` "Palette"
+
+## `Q217` — The architecture pass: what was fixed, what waits, what was refused
+
+**Status.** Built 2026-11-14 on the user's instruction (a review of the code against Godot and
+racing-game practice, each finding evaluated, the approved ones built in order). Nothing here
+changes a rule of the game except the one line under **Behaviour**.
+
+**Behaviour that changed.**
+
+- **A car in the air is not slowed by coast drag** (`_apply_coast_drag` returns with no wheel
+  grounded): the drag stands for tyres and driveline, and it shortened every jump. Skidpad at
+  42 / 63 / 86 kph is unchanged, as it never leaves the ground.
+- **`place_at` clears the impact reading** it carried across a teleport, and
+  `ChaseCamera.snap_to_target` sets the spring length, the anchor and the rotation, so a respawn
+  neither reads a crash nor swings the camera in.
+- **A bare `tools/sync_generated.sh` keeps the resident regions** (`regions.json`'s list, else
+  `wan_chai`); naming one region still drops the others.
+- **`load_config` checks every declared source**, walking the dataclasses for each `LayerSpec`
+  (and `basemap`, which is not one): lamps and the parked bays were never checked.
+
+**Structure.** `MeshContract`'s measuring half is `scripts/city/mesh_measure.gd` and its checks
+moved to `game/tools/`; `layer_preview.gd` is `city_layer.gd` and `DriveHarness` is `DriveLevel`
+(`scripts/level/`), since both ship; the dev-only scenes' scripts are in `scripts/dev/`;
+`SlipAngle`, `HornSound` and `Handset` each hold what two scripts restated. All four export
+presets exclude `tools/`, the dev scenes and scripts, and the fixtures: the web PCK is
+98,711,108 → **98,195,464** bytes, measured from an export. Two ratchets in `etl/tests`: a stage
+`NEEDS` every stage whose document it reads, and every report counter is read somewhere (which
+found `AreaReport`'s two refusals printed nowhere — Wan Chai 63 under-covered, 51 all mouth).
+
+**Performance**, each result-identical where a seeded tool reads it (`verify_traffic` 381 lines,
+`verify_trams` 63, `verify_parked` 20, `verify_city_streamer` 8 — unchanged):
+
+| change | measured |
+|---|---|
+| `PerfClock` under `--perf-log`: five per-system columns, boot lines | desk, full throttle: traffic 3.31 ms a tick it ran, trams 0.91, signals 0.50, fares 0.11, streamer 0.45 a frame; boot: regions 264–328 ms, landmarks 73, railings 55–68, JSON parse 66 |
+| the streamer reads its bands only after `recollect_m` (2 m) of camera travel, or while anything is owed | 0.45 → **0.00** ms a frame standing |
+| lamp pools hidden and no beam taken while `night_lights` is 0 | 86 → **85** draws, 427.3k → **424.3k** primitives standing on the throttle route |
+| a traffic car's body and instance written only when its pose moved | a queue at a red pays nothing; not separable from run noise in the tick time |
+| a parked cell re-stood only where its vehicles changed, one a frame | no burst of frees on the hour or the reroll |
+| the railings' and the fence's boxes one body a plan cell (`PropBatch.boxes`) | Wan Chai 5,535 + 316 bodies → **34 + 15**, Causeway Bay 2,158 + 75 → **20 + 7** (7,693 railing bodies across the two → 54); the boxes match the old bodies to 1e-7 on 500 placements; the taxi still stops against them on both sides of Expo Drive |
+| a far car refused on one axis before its distance (`FAR_SLACK_M`) | `verify_traffic` 143 → **135** s, whole output byte-identical |
+| `LightingRig.phone_scale_3d`, shipped at 1 | nothing, by design: a dial for a measured handset |
+
+⚠️ The per-tick medians move ±1 ms between identical desk runs (traffic read 3.31, 2.02 and 2.90
+on three), so only the deterministic readings above are claims.
+
+**Not built, and why.**
+
+- **Per-edge buckets for the traffic's lane rules** — approved, then left out: at 40 cars each of
+  those loops is an integer compare a car, and several return the FIRST match in fleet order, so
+  a bucket would need that order kept for a gain under the noise. Reopen at a fleet several
+  times the size.
+- **On hold:** a typed `Obstacle` and a provider interface for the near miss (waits on `Q175`'s
+  contract settling); physics interpolation (waits on whether uneven pacing is seen on a 120 Hz
+  screen); threading the boot (the boot lines above are what it would be judged by — regions at
+  ~300 ms is not yet a reason).
+- **Refused:** breaking up `TrafficSystem` and `Hud` further, typed ETL documents, an artifact
+  registry, a four-way split of `scripts/city`, staggering traffic decisions across ticks (moves
+  every seeded drive), and one body for the parked cars (their cells are freed and re-stood).

@@ -303,8 +303,8 @@ func _build(cell: Cell) -> bool:
 			_up[index] = 0
 		# Freed NOW, not queued: a queued free holds the old bodies until the
 		# end of the frame, and the first poll re-stands every cell at once —
-		# twice the roster's bodies, over Jolt's 10,240 cap with the railings'
-		# 7,693 resident.
+		# twice the roster's bodies, which passed Jolt's 10,240 cap while the
+		# railings held 7,693 of it (a body a cell since `Q217`).
 		cell.node.free()
 		cell.node = null
 	cell.standing = due
