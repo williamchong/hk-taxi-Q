@@ -1157,7 +1157,10 @@ func _stop(region: String, node: Dictionary) -> Fare.Stop:
 	stop.node = node
 	stop.edge = edge
 	stop.t = clampf(float(node.get("edge_t", 0.0)), 0.0, 1.0)
-	stop.point = _graph.point_at(edge, stop.t) + _graph.region_offset(region)
+	# Already in the frame: `RoadJoin.merge` moved the region's polylines by its
+	# offset. Adding `region_offset` again put every neighbour stop 1.6 km off,
+	# so no ring under the destination and no delivery (`verify_join`).
+	stop.point = _graph.point_at(edge, stop.t)
 	stop.road_en = _graph.name_of(edge, "en")
 	stop.road_zh = _graph.name_of(edge, "zh")
 	return stop

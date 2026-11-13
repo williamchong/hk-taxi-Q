@@ -13,7 +13,8 @@
 ## * the turns, in order;
 ## * the clearance rows, re-keyed through the id map, against `clearance.json`;
 ## * that every `nearest_edge` and every fence `edge` either region publishes
-##   resolves through its id map to an edge the merged graph has.
+##   resolves through its id map to an edge the merged graph has;
+## * that every fare stop `FareSystem` resolves sits beside its kerb in the frame.
 ##
 ##     godot --headless --path game --script res://tools/verify_join.gd [-- --dump=<dir>]
 ##
@@ -34,8 +35,11 @@ const Graph = preload("res://scripts/city/road_graph.gd")
 const CommandLine = preload("res://scripts/core/cmdline.gd")
 const MinimapMeshScript = preload("res://scripts/ui/minimap_mesh.gd")
 const RouterDiff = preload("res://tools/router_diff.gd")
+const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 
 const TOLERANCE_M: float = 0.001
+## A stop's road point against its kerbside `pos`: ~10 m at worst when right.
+const FARE_POINT_MAX_M: float = 25.0
 const REPORT_KEYS: PackedStringArray = [
 	"owned_a",
 	"owned_b",
@@ -99,6 +103,7 @@ func _init() -> void:
 			)
 		)
 	_check_documents(graph, pair)
+	_check_fare_points(graph, pair)
 	_check_foreign_aliases(graph, merged, pair)
 	_check_minimap(graph, pair)
 	_check_router(graph, inputs["manifest"], out, pair)
@@ -265,6 +270,42 @@ func _check_documents(graph: RoadGraph, pair: PackedStringArray) -> void:
 				% [region, named.size()]
 			)
 		)
+
+
+## Every fare stop `FareSystem` resolves lands beside its kerbside `pos` moved
+## into the frame — the point the ring is drawn on and the delivery measured
+## from. A stop read in its region's frame AND offset again sat 1,649 m east of
+## every Causeway Bay kerb: no ring, no drop-off. Correct stops are within ~10 m.
+func _check_fare_points(graph: RoadGraph, pair: PackedStringArray) -> void:
+	# `setup` would need every tuning table and resolves only the pickup pool;
+	# the graph alone is what `_stop` reads.
+	var system: FareSystemScript = FareSystemScript.new()
+	system._graph = graph
+	for region: String in pair:
+		var fares: Dictionary = GeneratedFares.load_fares(GeneratedFares.path(region))
+		var offset: Vector3 = graph.region_offset(region)
+		var worst_m: float = 0.0
+		var count: int = 0
+		for key: String in PackedStringArray(["nodes", "street"]):
+			for node: Dictionary in fares.get(key, []):
+				var stop: Fare.Stop = system._stop(region, node)
+				var at: Variant = GeneratedFares.position_of(node)
+				if stop == null or at == null:
+					continue
+				var kerb: Vector3 = (at as Vector3) + offset
+				worst_m = maxf(worst_m, Graph.plan_distance(kerb, stop.point))
+				count += 1
+		if worst_m > FARE_POINT_MAX_M:
+			_fail(
+				(
+					"%s: a fare stop resolves %.1f m from its kerb, over %.0f m"
+					% [region, worst_m, FARE_POINT_MAX_M]
+				)
+			)
+		print(
+			"        %s: %d fare stops beside their kerbs, worst %.1f m" % [region, count, worst_m]
+		)
+	system.free()
 
 
 ## Every foreign copy either region publishes resolves to its owner's merged
