@@ -30,7 +30,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## One surface per mesh, so each primitive is one draw call — the rule the road
 ## surface, the tiles, the tramway and the arrows are all held to.

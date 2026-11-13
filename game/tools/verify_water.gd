@@ -22,7 +22,7 @@ extends SceneTree
 const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## One primitive, so the whole region's sea costs one draw call — the rule the
 ## tramway and the road marks are held to.

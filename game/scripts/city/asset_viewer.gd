@@ -11,7 +11,7 @@ extends Node3D
 ##
 ## Not shipped: `scenes/dev/`, like the other three.
 
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 ## Names the `.glb` to stand: `--asset=res://assets/authored/…`. Read from the
 ## command line the way `--debug-view=` and `--hud=` are, and for the same
@@ -69,7 +69,7 @@ func _ready() -> void:
 	for line: String in lines:
 		print("asset: ", line)
 	_show(lines)
-	var box: AABB = MeshContract.bounds(_asset)
+	var box: AABB = MeshMeasure.bounds(_asset)
 	built.emit(box.position, box.end)
 
 
@@ -92,7 +92,7 @@ static func line_up(asset: Node3D, gap_m: float) -> void:
 		var item := child as Node3D
 		if item == null:
 			continue
-		var box: AABB = MeshContract.bounds(item)
+		var box: AABB = MeshMeasure.bounds(item)
 		item.position.x += x - box.position.x
 		x += box.size.x + gap_m
 
@@ -101,9 +101,9 @@ static func line_up(asset: Node3D, gap_m: float) -> void:
 ## them: the whole, then each mesh and each of its surfaces.
 static func report(path: String, asset: Node3D) -> PackedStringArray:
 	var lines: PackedStringArray = []
-	var box: AABB = MeshContract.bounds(asset)
+	var box: AABB = MeshMeasure.bounds(asset)
 	lines.append(path)
-	lines.append("%d triangles" % MeshContract.triangles(asset))
+	lines.append("%d triangles" % MeshMeasure.triangles(asset))
 	lines.append(
 		(
 			"aabb %.2f x %.2f x %.2f m, base y %.3f"
@@ -115,7 +115,7 @@ static func report(path: String, asset: Node3D) -> PackedStringArray:
 		var parent: String = (
 			String(instance.get_parent().name) if instance.get_parent() != null else "-"
 		)
-		var colliders: int = MeshContract.colliders(instance)
+		var colliders: int = MeshMeasure.colliders(instance)
 		lines.append(
 			(
 				"%s under %s: %d surface(s), %s"

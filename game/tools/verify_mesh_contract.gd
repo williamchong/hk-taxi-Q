@@ -29,7 +29,7 @@ extends "res://tools/verify_tool.gd"
 ## that trap, so the contract is `preload`ed by path, as every other verify tool
 ## does — `ARCHITECTURE.md` states that as the rule.
 
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 ## Comfortably above the stub textures below and comfortably below the atlas
 ## `P3-20` will declare. Nothing ships against this number; it exists so the
 ## over-budget path has something to exceed.

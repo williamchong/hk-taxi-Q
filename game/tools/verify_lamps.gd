@@ -28,7 +28,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## One surface per library mesh, so each is one draw call — `verify_signs.gd`'s
 ## rule, and before `P5-3` the merged mesh's: one primitive for the region.

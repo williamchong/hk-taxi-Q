@@ -12,7 +12,7 @@ extends Node3D
 ## the origin already sits where it belongs. That is also why a tile entry
 ## carries an `aabb` but no position.
 
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 ## Which tier to show. Range is open because the tier count is city config
 ## (`lod_cell_sizes_m`); a tile with fewer tiers draws its coarsest.
@@ -46,7 +46,7 @@ func _ready() -> void:
 			roads += 1
 		else:
 			loaded += 1
-		triangles += MeshContract.triangles(node)
+		triangles += MeshMeasure.triangles(node)
 	if roads == 0:
 		push_warning(CityManifest.road_missing_hint())
 

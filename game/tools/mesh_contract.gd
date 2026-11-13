@@ -8,78 +8,12 @@
 ## only `albedo_texture` and never checked `vertex_color_use_as_albedo` at all,
 ## which is exactly the flag that decides whether the asset renders white.
 ##
-## `triangles` and `bounds` are here for the same argument rather than a
-## different one. Every preview and every verify tool wants one or both, and
-## each carries a trap that is easy to get subtly wrong in a private copy.
+## The measuring half — `triangles`, `bounds`, `colliders` — is
+## `scripts/city/mesh_measure.gd`, which the game reads too; this file is the
+## checks, and only the verify tools load it.
 extends RefCounted
 
-
-## Triangles in `node` and everything below it.
-##
-## `surface_get_array_index_len` is O(1). Counting from
-## `surface_get_arrays(...)[ARRAY_INDEX]` instead pulls every vertex buffer back
-## off the RenderingServer to read one integer — measured at 440 µs against
-## 0.1 µs on a 1.5 MB asset — and returns null on a non-indexed surface, where
-## this returns 0.
-static func triangles(node: Node) -> int:
-	var count: int = 0
-	for instance: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
-		if instance.mesh != null:
-			count += mesh_triangles(instance.mesh)
-	return count
-
-
-## Triangles in one mesh across its surfaces — what `triangles` sums, and what
-## a prop layer multiplies by its placement count (`P5-2`).
-static func mesh_triangles(mesh: Mesh) -> int:
-	var count: int = 0
-	for surface: int in mesh.get_surface_count():
-		count += mesh.surface_get_array_index_len(surface) / 3
-	return count
-
-
-## The union of every mesh below `node`, in `node`'s own space. A zero-size box
-## means there was nothing to measure, which callers report rather than pass.
-##
-## Transforms are accumulated by hand rather than read from
-## `Node3D.global_transform`, which returns identity and pushes an error outside
-## the tree — and a headless `--script` run has no tree to add to. The importer
-## is free to put a mesh under a transformed root, and that is exactly what a
-## georeference check must not assume away.
-static func bounds(node: Node) -> AABB:
-	var boxes: Array[AABB] = []
-	_collect(node, Transform3D.IDENTITY, boxes)
-	return union(boxes)
-
-
-## The smallest box containing every box given, or a zero-size one for none.
-##
-## Seeded from the first entry rather than from `AABB()`, which is not a neutral
-## element: it is a zero-size box *at the world origin*, and the region starts
-## there, so merging one in silently stretches the result back to (0, 0, 0).
-## Written once here because the same trap is one loop away in `_collect`, and
-## `tools/verify_city.gd` needs it over a tile's tiers.
-static func union(boxes: Array[AABB]) -> AABB:
-	if boxes.is_empty():
-		return AABB()
-	var box: AABB = boxes[0]
-	for index: int in range(1, boxes.size()):
-		box = box.merge(boxes[index])
-	return box
-
-
-static func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void:
-	var spatial := node as Node3D
-	var here: Transform3D = parent * spatial.transform if spatial != null else parent
-
-	var instance := node as MeshInstance3D
-	# A mesh with no surfaces reports a zero-size box at the origin, so merging
-	# it in would drag the union back there — the same trap an empty seed is.
-	if instance != null and instance.mesh != null and instance.mesh.get_surface_count() > 0:
-		into.append(here * instance.mesh.get_aabb())
-
-	for child: Node in node.get_children():
-		_collect(child, here, into)
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 
 ## Triangles below `node` whose centroid falls inside `box`, in `node`'s space.
@@ -139,15 +73,7 @@ static func _mesh_triangles_inside(mesh: Mesh, here: Transform3D, box: AABB) -> 
 ## engine, so "did the importer act on it" is a question both the road surface
 ## and the building tiles have to ask.
 static func has_collision(node: Node) -> bool:
-	return colliders(node) > 0
-
-
-## How many static bodies the node's subtree carries. The previews print it
-## because every generated layer but the road surface and the railings must
-## carry none (`Q74`, `Q159`), and `fence.gd` because its bodies are built by
-## hand.
-static func colliders(node: Node) -> int:
-	return node.find_children("*", "StaticBody3D", true, false).size()
+	return MeshMeasure.colliders(node) > 0
 
 
 ## The one `ArrayMesh` a single-primitive asset must carry, or `null` with

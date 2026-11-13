@@ -13,7 +13,8 @@
 extends SceneTree
 
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 const FIXTURE: String = "res://assets/authored/fixtures/dcc_roundtrip.glb"
 ## The vehicle door's fixture (`P5-23`): one Blender object, four material
@@ -74,7 +75,7 @@ func _init() -> void:
 	problems.append_array(_check_materials(body, roof))
 	problems.append_array(_check_collision(node, roof))
 	problems.append_array(_check_placement(node))
-	var triangles: int = MeshContract.triangles(node)
+	var triangles: int = MeshMeasure.triangles(node)
 	if triangles != TRIANGLES:
 		problems.append("%d triangles imported, the fixture draws %d" % [triangles, TRIANGLES])
 	node.free()
@@ -155,7 +156,7 @@ func _check_placement(node: Node3D) -> PackedStringArray:
 	var placement: Variant = GeneratedLandmarks.placement_of(entry)
 	if placement == null:
 		return ["placement_of refused a well-formed transform"]
-	var placed: AABB = (placement as Transform3D) * MeshContract.bounds(node)
+	var placed: AABB = (placement as Transform3D) * MeshMeasure.bounds(node)
 	var problems: PackedStringArray = []
 	if not is_equal_approx(placed.position.y, STAND.y):
 		problems.append(

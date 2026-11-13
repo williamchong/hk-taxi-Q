@@ -13,7 +13,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const LayerPreview = preload("res://scripts/city/layer_preview.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 
 const SURFACES_PER_MESH: int = 1

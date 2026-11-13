@@ -32,7 +32,7 @@
 extends Node3D
 
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 
 ## Which synced region's barriers; "" is `GeneratedRegions.selected()`. Set by
@@ -127,7 +127,7 @@ func _ready() -> void:
 				int(document.get("mouths", 0)),
 				int(document.get("clipped_ends", 0)),
 				refused,
-				MeshContract.colliders(self)
+				MeshMeasure.colliders(self)
 			]
 		)
 	)

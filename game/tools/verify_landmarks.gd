@@ -22,7 +22,8 @@ extends SceneTree
 
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 ## The fallback when an entry carries no `triangle_budget` of its own:
 ## ART_DESIGN.md's authored-hero budget, mirrored in
@@ -97,8 +98,8 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 		return problems
 
 	var node: Node3D = packed.instantiate()
-	var measured: AABB = MeshContract.bounds(node)
-	var triangles: int = MeshContract.triangles(node)
+	var measured: AABB = MeshMeasure.bounds(node)
+	var triangles: int = MeshMeasure.triangles(node)
 	# The excluded building took the tile collider on its footprint with it, so
 	# a hero without its own is a building the taxi drives through — visible in
 	# nothing but a drive. `check_collision` rather than `has_collision` for the

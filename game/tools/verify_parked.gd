@@ -22,7 +22,8 @@ extends SceneTree
 
 const CityManifestScript = preload("res://scripts/city/city_manifest.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const ParkedLayerScript = preload("res://scripts/city/parked_layer.gd")
 const ParkedRoster = preload("res://scripts/city/parked_roster.gd")
 
@@ -97,7 +98,7 @@ func _check_library(path: String) -> Dictionary[String, Mesh]:
 		var where: String = "'%s'" % mesh_name
 		_problems.append_array(MeshContract.check_surface(mesh, 0, where, true))
 		_problems.append_array(MeshContract.check_shader_material(mesh, 0, where, BODY_MATERIAL))
-		var triangles: int = MeshContract.mesh_triangles(mesh)
+		var triangles: int = MeshMeasure.mesh_triangles(mesh)
 		_expect(
 			triangles <= TRIANGLE_BUDGET,
 			"%s is %d triangles, over the %d budget" % [where, triangles, TRIANGLE_BUDGET]

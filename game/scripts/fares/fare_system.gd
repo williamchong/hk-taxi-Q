@@ -144,7 +144,7 @@ signal finished
 const GROUP: StringName = &"fare_system"
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const ParkedLayer = preload("res://scripts/city/parked_layer.gd")
 
 ## How far round the car the parked roster is asked for bodies each tick
@@ -275,7 +275,7 @@ func _ready() -> void:
 	for region: String in GeneratedRegions.resident():
 		fares[region] = GeneratedFares.load_fares(GeneratedFares.path(region))
 	# The car's own plan box, in its own frame, for the near miss's bands.
-	var box: AABB = vehicle.transform.affine_inverse() * MeshContract.bounds(vehicle)
+	var box: AABB = vehicle.transform.affine_inverse() * MeshMeasure.bounds(vehicle)
 	setup(
 		RoadGraph.shared(),
 		fares,

@@ -18,7 +18,8 @@
 extends SceneTree
 
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 ## One primitive per chunk, so a resident chunk costs one draw call — the same
 ## rule the tiles are held to, and the reason the surface is untextured.
@@ -101,7 +102,7 @@ func _init() -> void:
 		problems.append_array(checked["problems"])
 		restricted += int(checked["restricted"])
 		clear += int(checked["clear"])
-		triangles += MeshContract.triangles(scene_root)
+		triangles += MeshMeasure.triangles(scene_root)
 		# Instantiated outside the tree, so nothing else will free it — and a
 		# headless run that leaks buries its own result under exit warnings.
 		scene_root.free()

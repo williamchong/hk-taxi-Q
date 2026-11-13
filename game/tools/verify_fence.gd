@@ -29,7 +29,8 @@ extends SceneTree
 
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 
 ## The prop's own ceiling, mirrored from `etl/tests/test_make_barrier.py`, which
@@ -154,8 +155,8 @@ func _check_the_prop(document: Dictionary, placements: int) -> PackedStringArray
 		problems.append("%s did not load as a scene" % asset)
 		return problems
 	var node: Node3D = packed.instantiate()
-	var triangles: int = MeshContract.triangles(node)
-	var bounds: AABB = MeshContract.bounds(node)
+	var triangles: int = MeshMeasure.triangles(node)
+	var bounds: AABB = MeshMeasure.bounds(node)
 	# `check_collision` rather than `has_collision` for the richer report, the
 	# same reason `verify_landmarks.gd` uses it.
 	var collision: PackedStringArray = MeshContract.check_collision(node)

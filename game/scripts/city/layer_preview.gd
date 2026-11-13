@@ -43,7 +43,7 @@
 extends Node3D
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const LampPools = preload("res://scripts/city/lamp_pools.gd")
@@ -124,8 +124,8 @@ func _ready() -> void:
 			push_warning("%s: collides and posts stand bodies under a library's props only" % layer)
 		instance.name = name
 		add_child(instance)
-		bounds = MeshContract.bounds(instance)
-		triangles = MeshContract.triangles(instance)
+		bounds = MeshMeasure.bounds(instance)
+		triangles = MeshMeasure.triangles(instance)
 		for found: Node in find_children("*", "GeometryInstance3D", true, false):
 			if not GeneratedLayer.casts_shadow(layer, String(found.name)):
 				(found as GeometryInstance3D).cast_shadow = (
@@ -133,7 +133,7 @@ func _ready() -> void:
 				)
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
-		% [layer, triangles, MeshContract.colliders(self), bounds.size.x, bounds.size.z]
+		% [layer, triangles, MeshMeasure.colliders(self), bounds.size.x, bounds.size.z]
 	)
 	match _HEIGHT.get(layer, ""):
 		"tall":
@@ -226,7 +226,7 @@ func _place(library: Node3D) -> Dictionary:
 				trunk_table[mesh_name], batch, mesh_name, cells
 			):
 				add_child(body)
-		triangles += batch.size() * MeshContract.mesh_triangles(mesh)
+		triangles += batch.size() * MeshMeasure.mesh_triangles(mesh)
 		if layer == GeneratedLayer.LAMPS:
 			batches += _stand_pools(mesh, batch, mesh_name, cells)
 	if posts and posted == 0:
@@ -237,7 +237,7 @@ func _place(library: Node3D) -> Dictionary:
 			% [layer, document.get("placements", []).size(), meshes.size(), batches]
 		)
 	)
-	return {"bounds": MeshContract.union(boxes), "triangles": triangles}
+	return {"bounds": MeshMeasure.union(boxes), "triangles": triangles}
 
 
 ## A trunk cylinder under each of `batch`'s trees, one static body per plan

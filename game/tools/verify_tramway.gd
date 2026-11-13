@@ -21,7 +21,7 @@ extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## One primitive, so the whole region's tramway costs one draw call — the same
 ## rule the road surface and the tiles are held to.

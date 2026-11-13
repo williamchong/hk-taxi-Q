@@ -518,7 +518,7 @@ class is collapsed separately then merged, so a tile is still one mesh and one d
   222 m across a 150 m tile). Use the `aabb` for culling and streaming, never the grid position.
   Tile vertices are in region game space; a tile needs no transform.
 - No textures: one material, one drawn primitive, colour in `COLOR_0`; `merge` refuses a textured
-  mesh. ⚠️ `scripts/city/mesh_contract.gd` walks **every shader uniform** and fails on any
+  mesh. ⚠️ `tools/mesh_contract.gd` walks **every shader uniform** and fails on any
   `Texture`, so a region-wide data map sampled by world position is an amendment to this contract
   — change `mesh_contract.gd` and this paragraph together.
 
@@ -1424,7 +1424,8 @@ All paths under `game/`.
 | `scripts/city/parked_layer.gd`, `parked_roster.gd`, `parked_profile.gd` | The parked roster (`P3-73`): the region's `parked_placements.json` over the committed library, a `MultiMesh` per kind per cell with box bodies, re-stood by the rig's hour while hidden; the pure arithmetic of windows, chance and cells; the schema of `tuning/parked.tres` |
 | `scripts/fares/near_miss.gd` | `NearMiss` (`P3-2a`, `Q175`): a parked or moving body passed inside a band at speed, paid only when it was in the car's path a moment before, the look on the closing speed — pure, driven by `verify_fares.gd` |
 | `scripts/city/building_index.gd` | Which source object a point of a tile belongs to, from the glTF mesh `extras` (`P5-11`) |
-| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`; also the shader-dispatch and `TEXCOORD_1` importer-drift checks |
+| `scripts/city/mesh_measure.gd` | `triangles`, `bounds`, `union` and `colliders` of a generated asset — the measuring the game reads too (the near miss sizes the car off `bounds`) |
+| `tools/mesh_contract.gd` | The mesh rules every generated asset is held to; also the shader-dispatch and `TEXCOORD_1` importer-drift checks. Loaded by the verify tools only |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material for dev previews |
 | `scripts/city/{tile,road,fare}_preview.gd`, `layer_preview.gd` | Dev previews. `layer_preview.gd` draws any drawn layer by the `layer` id on its node. 🔴 The layer nodes live in `scenes/region.tscn`, which `city_drive.tscn` and `city_preview.tscn` both place through `CityRegions`; `verify_city.gd` holds its `layer` ids against `generated_layer.gd`'s table in both directions (`Q73`, `Q82`, `Q115`). `road` and `fare` are preview-only by design (`road` z-fights the surface; `city_drive.tscn` carries `GraphOverlay`). Not performance measurements |
 | `scripts/city/road_graph_overlay.gd` | Dev: resolved edge, lane centre and legal direction under the car |

@@ -12,7 +12,7 @@ extends SceneTree
 
 const BuildingIndex = preload("res://scripts/city/building_index.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## Draw calls per tile. `P1-2` accepts "under three", so three is a failure.
 const MAX_SURFACES: int = 2

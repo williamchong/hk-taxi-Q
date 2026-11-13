@@ -28,7 +28,7 @@ extends SceneTree
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshContract = preload("res://tools/mesh_contract.gd")
 
 ## One primitive **per class**, so each class costs one draw call — the rule the
 ## road surface, the tiles, the tramway, the arrows and the box junctions are

@@ -24,7 +24,7 @@ const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 
 ## How far a corner may move between the ETL's arithmetic and the imported mesh.
 ##
@@ -410,7 +410,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile, label: String) -> Pack
 			continue
 
 		var node: Node3D = packed.instantiate()
-		var measured: AABB = MeshContract.bounds(node)
+		var measured: AABB = MeshMeasure.bounds(node)
 		node.free()
 
 		if measured.size == Vector3.ZERO:
@@ -431,7 +431,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile, label: String) -> Pack
 	if measured_boxes.size() != tile.lods.size():
 		return problems
 
-	var spanned: AABB = MeshContract.union(measured_boxes)
+	var spanned: AABB = MeshMeasure.union(measured_boxes)
 
 	# Against the *measured* meshes, not against `tile.aabb`. `bounds_game` is
 	# summed from those declared corners, so comparing the two only ever confirms

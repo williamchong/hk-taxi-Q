@@ -17,7 +17,7 @@
 ## check fails.
 extends SceneTree
 
-const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 const PROFILE_PATH: String = "res://tuning/streaming.tres"
@@ -320,7 +320,7 @@ func _triangles_of(tile: CityManifest.Tile, tier: int) -> int:
 	if packed == null:
 		return 0
 	var node: Node3D = packed.instantiate()
-	var triangles: int = MeshContract.triangles(node)
+	var triangles: int = MeshMeasure.triangles(node)
 	node.free()
 	return triangles
 
