@@ -87,14 +87,14 @@ schema_version: 5
 materials:
   # The five facade colours, warm-and-darker through to cool-and-paler.
   #
-  # ⚠️ **These five are unchanged by the palette rule, and their reflectances are
-  # therefore back-derived rather than cited** — each is simply what the shipped
-  # colour claims once the anchor is divided out. The rule is calibrated *on*
-  # them, so it cannot also check them; they are the one place in this file where
-  # the number describes the colour instead of the colour answering to the
-  # number. The tell is that they read 49-62%, at the top of what painted render
-  # and ceramic tile do. Recorded anyway, because a soft number stated is
-  # arguable and a soft number implied is not.
+  # ⚠️ **These five are not cited.** They were back-derived — what the shipped
+  # colour claimed once the anchor was divided out, 49-62%, the top of what
+  # painted render and ceramic tile do — and `Q216` lowered them to 40-48% by eye,
+  # each scaled in linear light so its hue holds, judged on the `street` and
+  # `skyline` frames. The rule is calibrated *on* them, so it cannot also check
+  # them; they are the one place in this file where the number describes the
+  # colour instead of the colour answering to the number. Recorded anyway,
+  # because a soft number stated is arguable and a soft number implied is not.
   #
   # ⚠️ **The level they sit at is the whole city's, and it was measured — see
   # docs/DECISIONS.md, Q27 and Q33.** These five were 19 L*
@@ -103,40 +103,40 @@ materials:
   #
   # ⚠️ **These colours are what a surface REFLECTS, not what it renders as, and
   # since `P5-28c` those are two different numbers.** The rig multiplies by
-  # 0.520; `render_warm` ships `#c9b79a` here and reaches the screen at the
-  # `#968872` this table used to carry. So do not read the hex as a look — the
+  # 0.520; `render_warm` ships `#b8a78d` here and reaches the screen at
+  # `#897c68`. So do not read the hex as a look — the
   # look is this times the rig's exposure — and do not compare one of these to a
   # colour picked off a screenshot.
   #
   # ⚠️ **Five names for what is really one material family**, at five lightnesses.
   # That is a weaker claim than the height bands used to make and it is still a
   # claim; it is stated here rather than hidden in the assignment. Do not rename
-  # the last of them to anything glazed: 55.2% contradicts curtain-wall glass's
+  # the last of them to anything glazed: 47% contradicts curtain-wall glass's
   # 8-15% diffuse albedo, which is the trap `Q34` records at length.
   render_warm:
-    colour: "#c9b79a"
-    reflectance: 48.7
-    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+    colour: "#b8a78d"
+    reflectance: 40.0
+    source: "back-derived from 235aa4f, lowered by eye (Q216), not cited; painted render is 30-60%"
     bounds: [30, 60]
   render_pale:
-    colour: "#d3c8b4"
-    reflectance: 58.4
-    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+    colour: "#c0b5a3"
+    reflectance: 47.0
+    source: "back-derived from 235aa4f, lowered by eye (Q216), not cited; painted render is 30-60%"
     bounds: [30, 60]
   tile_neutral:
-    colour: "#cfcfc1"
-    reflectance: 61.5
-    source: "back-derived from 235aa4f, not cited; ceramic facade tile is 45-65%"
+    colour: "#b9b9ad"
+    reflectance: 48.0
+    source: "back-derived from 235aa4f, lowered by eye (Q216), not cited; ceramic facade tile is 45-65%"
     bounds: [45, 65]
   render_cool:
-    colour: "#c5cdc8"
-    reflectance: 59.9
-    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+    colour: "#b1b8b3"
+    reflectance: 47.0
+    source: "back-derived from 235aa4f, lowered by eye (Q216), not cited; painted render is 30-60%"
     bounds: [30, 60]
   panel_grey:
-    colour: "#bfc5c5"
-    reflectance: 55.2
-    source: "back-derived from 235aa4f, not cited; light grey panel is 45-60%"
+    colour: "#b2b7b7"
+    reflectance: 47.0
+    source: "back-derived from 235aa4f, lowered by eye (Q216), not cited; light grey panel is 45-60%"
     bounds: [45, 60]
 
   # Weathered concrete at the sooty end: viaduct soffits and pier faces carry

@@ -47,26 +47,27 @@ screen) are different colours; do not read one as the other.
 
 | material | reflectance | bounds | source | authored | rendered |
 |---|---|---|---|---|---|
-| `render_warm` | 48.7% | 30–60% | ⚠️ back-derived, not cited | `#c9b79a` | `#968872` |
-| `render_pale` | 58.4% | 30–60% | ⚠️ back-derived, not cited | `#d3c8b4` | `#9d9586` |
-| `tile_neutral` | 61.5% | 45–65% | ⚠️ back-derived, not cited | `#cfcfc1` | `#9a9a90` |
-| `render_cool` | 59.9% | 30–60% | ⚠️ back-derived, not cited | `#c5cdc8` | `#939995` |
-| `panel_grey` | 55.2% | 45–60% | ⚠️ back-derived, not cited | `#bfc5c5` | `#8e9393` |
+| `render_warm` | 40.0% | 30–60% | ⚠️ not cited; lowered by eye (`Q216`) | `#b8a78d` | `#897c68` |
+| `render_pale` | 47.0% | 30–60% | ⚠️ not cited; lowered by eye (`Q216`) | `#c0b5a3` | `#8f8679` |
+| `tile_neutral` | 48.0% | 45–65% | ⚠️ not cited; lowered by eye (`Q216`) | `#b9b9ad` | `#8a8a80` |
+| `render_cool` | 47.0% | 30–60% | ⚠️ not cited; lowered by eye (`Q216`) | `#b1b8b3` | `#838985` |
+| `panel_grey` | 47.0% | 45–60% | ⚠️ not cited; lowered by eye (`Q216`) | `#b2b7b7` | `#848888` |
 | `concrete_kerb` | 25.0% | 20–30% | weathered concrete, 20–30% | `#8d897d` | `#68655c` |
 | `concrete_sooty` | 22.0% | 20–30% | weathered + sooty concrete | `#84817b` | `#615f5a` |
 | `concrete_paving` | 20.0% | 20–30% | weathered concrete, grubby end of 20–30% | `#817b6f` | `#5f5a51` |
 | `asphalt_aged` | 10.0% | 7–12% | aged urban asphalt, 7–12% | `#5b5854` | `#42403d` |
 | `sea_water` | 8.2% | 5–12% | turbid coastal sea water, diffuse; open ocean ~6% | `#205672` | `#153e53` |
 
-- ⚠️ The five façade materials are the soft entries: their reflectance is what the shipped colour
-  claims, 49–62%, the top of what painted render and ceramic tile do. If that is wrong every other
-  colour moves.
+- ⚠️ The five façade materials are the soft entries. They were back-derived at 49–62%, the top of
+  what painted render and ceramic tile do, and since `Q216` sit at 40–48% — each scaled in linear
+  light so its hue holds, judged on the `street` and `skyline` frames, still not cited. If that is
+  wrong every other colour moves.
 - 🔴 `bounds: [lo, hi]` is what grades an entry. Un-baked, colour and reflectance are the same
   number, so comparing them only catches a colour edited without its number. **Correct a colour
   that falls outside its bounds; never widen the bounds** (`P5-28a` moved `render_cool` one 8-bit
   code from 60.1% to 59.9%).
 - ⚠️ The five façade names are one material family at five lightnesses (`Q34`). Do not rename
-  `panel_grey` to anything glazed — 55.2% contradicts curtain-wall glass's 8–15% diffuse albedo.
+  `panel_grey` to anything glazed — 47% contradicts curtain-wall glass's 8–15% diffuse albedo.
 - ⚠️ `sea_water` is the harbour's *diffuse* albedo and renders near-black on its own; the blue the
   player sees is the sky reflected off `tuning/water.tres`'s roughness (0.45; 0.15 read near-white). Do not lighten the
   entry to make the water bluer — that is the roughness dial, as `steel_rail` is the tramway's.
@@ -135,7 +136,8 @@ top. `tools/facade_chroma.py`, 2,177 surveyed buildings passing `vegetation_max`
 - ⚠️ Accepted costs at 3.0: 7.8% of buildings outside sRGB, and `colour_for`'s uncounted jitter
   clamp fires on 5.50%. `max` saturates at 82.32 from about 2.5 — above that only more buildings
   clip.
-- `L*` is flat across the sweep (61.3–61.5): `strength` assigns chroma, not albedo lightness.
+- `L*` is flat across the sweep (56.1–56.2 since `Q216`; 61.3–61.5 before): `strength` assigns
+  chroma, not albedo lightness.
   ⚠️ Rendered lightness does move — responding pixels on `street` `|ΔL*|` p90 1.61 at 3.0 — the
   tonemapper following chroma. Whole-frame `L*` holds (43.1 → 42.8 `street`).
 - ⚠️ `tools/facade_chroma.py` applies the rig's exposure itself (read from `clean_daylight.tscn`).

@@ -13356,3 +13356,36 @@ Profile the fleet on the iPhone Air (`--perf-log`) before calling it free.
 
 **See.** `P3-11c` · `Q168` · `Q53` · `Q33` · `game/tuning/clean_daylight.md` ·
 `game/tuning/vehicle_body.md` · `game/tuning/railings.md`
+
+## `Q216` — The five façade colours are 20% darker, by eye
+
+**Status.** Built 2026-11-14, the user's call from an A/B. Still not cited.
+
+**Why.** Reviewing the city's PBR values (`Q215`), the five façade materials were the one corner of
+`materials:` that was never measured: back-derived at 49–62%, the top of what painted render and
+ceramic tile do, which is why a Hong Kong street of weathered mosaic and render read chalky.
+
+**What.** Each scaled in linear light so its hue holds, inside its own `bounds:`:
+
+| material | reflectance | authored |
+|---|---|---|
+| `render_warm` | 48.7 → **40.0** | `#c9b79a` → `#b8a78d` |
+| `render_pale` | 58.4 → **47.0** | `#d3c8b4` → `#c0b5a3` |
+| `tile_neutral` | 61.5 → **48.0** | `#cfcfc1` → `#b9b9ad` |
+| `render_cool` | 59.9 → **47.0** | `#c5cdc8` → `#b1b8b3` |
+| `panel_grey` | 55.2 → **47.0** | `#bfc5c5` → `#b2b7b7` |
+
+`exposure_anchor` and `bounds:` are untouched, so no `schema_version`: the game reads the colours
+exactly as before.
+
+**Measured** on the `Q215` build. `facade_chroma.py --shipped wan_chai` at strength 3.0: `L*`
+61.3 → **56.1**, `C*` mean 17.97 → 18.23, p90 34.97 → 36.09, under 8 24.8% → 24.6%, over 20
+35.2% → 35.1%. Frames (`L*` mean, before → after): `street` 46.8 → 44.4 (upper half 55.9 → 51.4),
+`skyline` 59.7 → 57.5 (shot at t=2.0, the after side twice and byte-identical), the Hennessy
+Road sunlit chase 43.0 → 38.8. Share of `skyline` over `L*` 80 holds at 9.3%; the towers keep
+their separation.
+
+**Owed.** A source. 40–48% is a judgement that the city should read weathered rather than fresh,
+not a measurement of Wan Chai.
+
+**See.** `Q215` · `Q33` · `Q27` · `Q30` · `docs/ART_DESIGN.md` "Palette"
