@@ -2700,7 +2700,8 @@ def main(argv: list[str] | None = None) -> int:
             # visible rather than assumed.
             log.info(
                 "    HyD strip: %d rings read (%d stations they cover nothing at), %d edges "
-                "measured; %d published confirmed, %d unconfirmed, %d outside TD's bounds, "
+                "measured (%d refused under-covered, %d all junction mouth); %d published "
+                "confirmed, %d unconfirmed, %d outside TD's bounds, "
                 "%d on an edge a ray already measured",
                 width.strip_rings,
                 # ⚠️ **Not a coverage failure.** HyD does not tile the whole region —
@@ -2708,6 +2709,8 @@ def main(argv: list[str] | None = None) -> int:
                 # is the ceiling on what the strip can ever reach, not a defect.
                 width.strip_stations_unsurveyed,
                 width.strip_read,
+                width.strip_under_covered,
+                width.strip_all_mouth,
                 len(width.confirmed_by),
                 width.strip_unconfirmed,
                 width.strip_outside_bounds,

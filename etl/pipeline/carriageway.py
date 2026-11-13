@@ -192,6 +192,10 @@ class CarriagewayReport:
     strip_rings: int = 0
     strip_stations_unsurveyed: int = 0
     strip_read: int = 0
+    # The strip's two refusals (`AreaReport`), carried so the stage can print
+    # them: counted there and read nowhere until 2026-11-14.
+    strip_under_covered: int = 0
+    strip_all_mouth: int = 0
     strip_agreement_m: list[float] = field(default_factory=list)
     strip_outside_bounds: int = 0
     strip_unconfirmed: int = 0
@@ -1363,6 +1367,8 @@ def _measure_strips(
     report.strip_rings = area.rings
     report.strip_stations_unsurveyed = area.stations_unsurveyed
     report.strip_read = len(area.run_m)
+    report.strip_under_covered = area.edges_under_covered
+    report.strip_all_mouth = area.edges_all_mouth
 
     # Offered only the edges no ray licensed, and only those the bounds admit.
     # ⚠️ **The bounds check is this reading's whole refusal** — there is no span

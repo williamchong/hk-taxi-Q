@@ -1246,6 +1246,40 @@ class TestOrchestratorSideBySide:
                     unscheduled.append(f"{name} reads {writer}'s {', '.join(documents)}")
         assert unscheduled == []
 
+    def test_every_report_counter_is_read_somewhere(self) -> None:
+        """A counter that is incremented and never read is one nobody can see
+        move (`Q58`, `Q72`): `AreaReport`'s two refusals were counted for months
+        and reached no log and no document. Every field of every stage's
+        `*Report` dataclass must be read by the pipeline or a grader — a
+        `report.x += 1` is a write and does not count — unless the module
+        publishes the whole report at once (`asdict`, `vars`)."""
+        root = Path(orchestrator.__file__).resolve().parent
+        sources = {path: path.read_text(encoding="utf-8") for path in sorted(root.rglob("*.py"))}
+        for path in sorted((root.parent.parent / "tools").rglob("*.py")):
+            sources[path] = path.read_text(encoding="utf-8")
+        trees = {path: ast.parse(source) for path, source in sources.items()}
+        read = {
+            node.attr
+            for tree in trees.values()
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load)
+        }
+        unread: list[str] = []
+        for path, tree in trees.items():
+            if root not in path.parents or "asdict(" in sources[path] or "vars(" in sources[path]:
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef) or not node.name.endswith("Report"):
+                    continue
+                unread += [
+                    f"{path.name}:{node.name}.{field.target.id}"
+                    for field in node.body
+                    if isinstance(field, ast.AnnAssign)
+                    and isinstance(field.target, ast.Name)
+                    and field.target.id not in read
+                ]
+        assert unread == []
+
     def test_no_stage_starts_before_what_it_needs_has_finished(self, monkeypatch) -> None:
         calls = self._stub(monkeypatch)
 
