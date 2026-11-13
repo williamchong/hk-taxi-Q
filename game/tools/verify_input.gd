@@ -443,6 +443,30 @@ func _check_keyboard_steer() -> void:
 	_expect(
 		is_equal_approx(_router.steer_for(0.0, false, TICK), 1.0), "keys", "a held key reaches full"
 	)
+	# A curve shapes the slow ramp alone: one tick at rest is that tick's
+	# progress to its power, and the quick ramp stays linear.
+	var curve: float = keys.get("curve")
+	Input.action_release(&"steer_right")
+	_tick()
+	_router.steer_for(0.0, false, TICK)
+	keys.set("curve", 2.0)
+	Input.action_press(&"steer_right")
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), pow(TICK / attack, 2.0)),
+		"keys",
+		"a curve of 2 makes one tick at rest that tick's progress squared"
+	)
+	_expect(
+		is_equal_approx(
+			_router.steer_for(0.0, true, TICK), pow(TICK / attack, 2.0) + TICK / attack
+		),
+		"keys",
+		"the quick ramp stays linear under a curve"
+	)
+	keys.set("curve", curve)
+	for i: int in ceili(attack / TICK) + 1:
+		_router.steer_for(0.0, false, TICK)
 	# A reversal ramps the whole way; letting go does not ramp (the car's own
 	# release returns the wheel).
 	Input.action_release(&"steer_right")

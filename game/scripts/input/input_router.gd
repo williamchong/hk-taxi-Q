@@ -334,8 +334,21 @@ func steer_for(speed_share: float, quick: bool, delta: float) -> float:
 		# Easing off is the car's release. Across centre, only down to the new
 		# magnitude: the rest of the way is a reversal, and that ramps.
 		_key_steer = steer if steer * _key_steer >= 0.0 else signf(_key_steer) * absf(steer)
-	_key_steer = move_toward(_key_steer, steer, delta / seconds)
+	if quick:
+		_key_steer = move_toward(_key_steer, steer, delta / seconds)
+		return _key_steer
+	# The slow ramp moves the progress linearly and the input is its power
+	# (`curve`); carried as the input, so a switch to or from the quick ramp
+	# never jumps.
+	var progress: float = _progress_of(_key_steer)
+	progress = move_toward(progress, _progress_of(steer), delta / seconds)
+	_key_steer = signf(progress) * pow(absf(progress), _keys.curve)
 	return _key_steer
+
+
+## The slow ramp's progress that gives `input`, the inverse of its `curve`.
+func _progress_of(input: float) -> float:
+	return signf(input) * pow(absf(input), 1.0 / _keys.curve)
 
 
 ## The keyboard's input assist, for the skidpad's `--sweep=keyboard_steer.…`.

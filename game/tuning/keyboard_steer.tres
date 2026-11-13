@@ -6,3 +6,4 @@
 script = ExtResource("1_keys")
 attack_s = 0.2
 attack_at_top_s = 2.0
+curve = 1.0
