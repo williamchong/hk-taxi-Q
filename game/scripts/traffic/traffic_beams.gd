@@ -20,6 +20,9 @@ var _lamp_height_m: float = 0.0
 var _draw_sq_m2: float = 0.0
 var _eye: Vector3 = Vector3.ZERO
 var _shown: int = 0
+## Whether this tick's beams are taken at all: not by day, when the shader
+## would collapse every one of them after two writes a vehicle.
+var _lit: bool = true
 
 
 ## The foot of a body's nose, in its own frame: where `add` takes a beam from.
@@ -75,6 +78,7 @@ static func create(capacity: int, widest_half_m: float) -> TrafficBeams:
 ## Start a tick's beams, ranked from the camera when there is one.
 func begin() -> void:
 	_shown = 0
+	_lit = LightingRig.night_lights_now > 0.0
 	var camera: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
 	_eye = camera.global_position if camera != null else Vector3.INF
 
@@ -82,7 +86,7 @@ func begin() -> void:
 ## One vehicle's beam: `nose` the foot of its nose facing its travel (-z),
 ## `half_width_m` half its body's width. Skipped past `draw_m` from the camera.
 func add(nose: Transform3D, half_width_m: float) -> void:
-	if _shown >= multimesh.instance_count:
+	if not _lit or _shown >= multimesh.instance_count:
 		return
 	if _eye != Vector3.INF and nose.origin.distance_squared_to(_eye) > _draw_sq_m2:
 		return

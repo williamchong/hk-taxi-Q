@@ -289,6 +289,7 @@ func _stand_pools(
 	)
 	for node: MultiMeshInstance3D in stood:
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		LightingRig.show_at_night(node)
 		add_child(node)
 	return stood.size()
 

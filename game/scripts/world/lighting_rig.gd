@@ -45,6 +45,16 @@ const TIME_ARG: String = "--time-of-day="
 ## The group the rig joins, so a reader of the hour with no wired path — the
 ## parked roster (`P3-73`) — can find the one rig in the tree.
 const GROUP: StringName = &"lighting_rig"
+## The nodes that draw only at night — the lamps' pools of light — which the rig
+## shows and hides as `night_lights` leaves and reaches 0: their shaders collapse
+## every vertex by day, and a hidden node is not submitted at all. A node joins
+## with `show_at_night`.
+const NIGHT_GROUP: StringName = &"night_only"
+
+## The `night_lights` global as last written: 0 by day. 1 until a rig says
+## otherwise, so a scene with no rig feeds and shows every night layer — a
+## verify tool counts the beams with none.
+static var night_lights_now: float = 1.0
 
 ## The `Environment` properties a cycle blends. Everything else — the switches,
 ## the tonemapper, the glow levels — is the day's and does not move.
@@ -238,3 +248,13 @@ func _set_globals(sky_light: Color, night_lights: float) -> void:
 		&"sky_light", Vector3(sky_light.r, sky_light.g, sky_light.b)
 	)
 	RenderingServer.global_shader_parameter_set(&"night_lights", night_lights)
+	var was_lit: bool = night_lights_now > 0.0
+	night_lights_now = night_lights
+	if was_lit != (night_lights > 0.0) and is_inside_tree():
+		get_tree().call_group(NIGHT_GROUP, &"set_visible", night_lights > 0.0)
+
+
+## Draw `node` only while the night's lights are on, from now.
+static func show_at_night(node: Node3D) -> void:
+	node.add_to_group(NIGHT_GROUP)
+	node.visible = night_lights_now > 0.0
