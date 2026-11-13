@@ -41,6 +41,16 @@ extends Resource
 ## place it left.
 @export_range(0.0, 100.0, 1.0, "suffix:m") var hysteresis_m: float
 
+## How far the camera moves before every tile's band is read again.
+##
+## The pass walks every tile of the region and sorts what it wants — 0.45 ms a
+## frame on the desk for 229 tiles, paid whether or not the camera moved. A band
+## edge is `hysteresis_m` wide, so a pass every couple of metres decides what a
+## pass a frame did, at most that far later. While anything is wanted or in
+## flight the pass runs every frame regardless, so a load is never waited on.
+## 0 reads every frame, which is what it did before 2026-11-14.
+@export_range(0.0, 20.0, 0.5, "suffix:m") var recollect_m: float
+
 @export_group("Load budget")
 ## Threaded loads allowed in flight at once.
 ##

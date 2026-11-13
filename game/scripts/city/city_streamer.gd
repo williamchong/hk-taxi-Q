@@ -108,6 +108,9 @@ var _wanted_last_pass: int = 0
 ## count; `_wanted_last_pass` alone counts this pass's requests twice.
 var _unrequested: int = 0
 var _announced: bool = false
+## Where the camera stood at the last `_collect`, and whether there was one.
+var _collected: bool = false
+var _collected_at: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -196,8 +199,15 @@ func _process(_delta: float) -> void:
 	# stand at an offset from the frame region (`P5-9c`). Identity for the frame.
 	var began: int = PerfClock.begin()
 	var eye: Vector3 = to_local(camera.global_position)
-	_collect(eye)
-	_settle(eye)
+	# Every frame while anything is owed; otherwise only once the camera has
+	# moved `recollect_m`, since a pass from the same place decides the same.
+	var owed: bool = _loads_in_flight > 0 or _wanted_last_pass > 0
+	if owed or not _collected or eye.distance_to(_collected_at) >= profile.recollect_m:
+		_collected = true
+		_collected_at = eye
+		_collect(eye)
+	if _loads_in_flight > 0 or not _announced:
+		_settle(eye)
 	PerfClock.end(PerfClock.Slot.STREAMER, began)
 
 
