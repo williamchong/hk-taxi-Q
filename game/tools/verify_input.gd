@@ -110,6 +110,7 @@ func _run() -> void:
 	_check_drive()
 	_check_two_thumbs()
 	_check_override()
+	_check_keyboard_steer()
 	_check_deferred()
 	_check_mouse()
 	_check_horn()
@@ -357,6 +358,104 @@ func _check_two_thumbs() -> void:
 		"lifting the steering thumb leaves the throttle held"
 	)
 	_lift(FINGER_B, drive_home)
+
+
+# ------------------------------------------------------------------ keys ----
+
+
+## The keyboard's input assist (`Q210`): which method steered last, and a
+## key shaped into a linear input before the car sees it. Each case from the
+## side that would read wrong — a key that reached the car whole is full lock in
+## one tick, the input `Q174`'s lane change spun on.
+func _check_keyboard_steer() -> void:
+	# The table the router loaded, so the ramp is checked against what it shapes with.
+	# Untyped: this tool names no `class_name` global (see the header).
+	var keys: Resource = _router.keyboard_profile()
+	if keys == null:
+		_fail("keys", "the router loaded no keyboard_steer.tres")
+		return
+	var attack: float = keys.get("attack_s")
+	var at_top: float = keys.get("attack_at_top_s")
+
+	_router.steer_from_keys = false
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_D
+	key.pressed = true
+	_router._input(key)
+	_expect(_router.steer_from_keys, "keys", "a steering key hands the steering to the keys")
+
+	var resting := InputEventJoypadMotion.new()
+	resting.axis = JOY_AXIS_LEFT_X
+	resting.axis_value = 0.1
+	_router._input(resting)
+	_expect(
+		_router.steer_from_keys, "keys", "a stick inside its dead zone leaves the keys steering"
+	)
+	var stick := InputEventJoypadMotion.new()
+	stick.axis = JOY_AXIS_LEFT_X
+	stick.axis_value = 1.0
+	_router._input(stick)
+	_expect(not _router.steer_from_keys, "keys", "a stick past its dead zone takes the steering")
+
+	_router.steer_from_keys = true
+	var home: Vector2 = _zone("SteerZone").get_center()
+	_press(FINGER_A, home)
+	_expect(not _router.steer_from_keys, "keys", "a steering thumb takes the steering")
+	_lift(FINGER_A, home)
+
+	# A stick or a thumb passes through as it reads.
+	Input.action_press(&"steer_right", 0.6)
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), _steer()),
+		"keys",
+		"an analogue input reaches the car as it reads"
+	)
+
+	# A key ramps: one tick at rest is one tick of `attack_s`, never full lock.
+	Input.action_release(&"steer_right")
+	_router.steer_from_keys = true
+	_tick()
+	_router.steer_for(0.0, false, TICK)
+	Input.action_press(&"steer_right")
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), TICK / attack),
+		"keys",
+		"a key held one tick at rest is one tick of attack_s"
+	)
+	# At the limiter the slow ramp, and the quick one when the car asks.
+	var at_rest: float = TICK / attack
+	_expect(
+		is_equal_approx(_router.steer_for(1.0, false, TICK), at_rest + TICK / at_top),
+		"keys",
+		"at the limiter a key ramps at attack_at_top_s"
+	)
+	_expect(
+		is_equal_approx(
+			_router.steer_for(1.0, true, TICK), at_rest + TICK / at_top + TICK / attack
+		),
+		"keys",
+		"the quick ramp is attack_s at any speed"
+	)
+	for i: int in ceili(attack / TICK) + 1:
+		_router.steer_for(0.0, false, TICK)
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), 1.0), "keys", "a held key reaches full"
+	)
+	# A reversal ramps the whole way; letting go does not ramp (the car's own
+	# release returns the wheel).
+	Input.action_release(&"steer_right")
+	Input.action_press(&"steer_left")
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), 1.0 - TICK / attack),
+		"keys",
+		"a reversal ramps from where the key was"
+	)
+	Input.action_release(&"steer_left")
+	_tick()
+	_expect(is_zero_approx(_router.steer_for(0.0, false, TICK)), "keys", "letting go is not ramped")
 
 
 # -------------------------------------------------------------- override ----

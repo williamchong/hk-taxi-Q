@@ -20,8 +20,17 @@ extends Node
 ## `look_back` have no touch home yet, and the note above `TOUCH_ARG` says why;
 ## nor has `horn` (`Q178`), for the same reason: the handset prices the gesture.
 
-## Steering, -1.0 (full left) to 1.0 (full right).
+## Steering, -1.0 (full left) to 1.0 (full right), as the device reads it: a key
+## is 0 or 1 here. The car asks `steer_for()`, which shapes a key into a linear
+## input first (`Q210`); this is the raw reading, for anything that wants it.
 var steer: float = 0.0
+## Whether the steering came last from a key, which `steer_for()` shapes, rather
+## than a stick or a thumb, which it passes through (`Q210`). The input METHOD,
+## never the device: a key press sets it, a stick past its dead zone or a
+## steering thumb clears it. True until either, so a run driven through
+## `Input.action_press` (`driver.gd`, the skidpad) steers as a key does; the
+## skidpad's `--steer=analog` clears it.
+var steer_from_keys: bool = true
 ## Throttle, 0.0 to 1.0.
 var accelerate: float = 0.0
 ## Brake / reverse, 0.0 to 1.0.
@@ -145,6 +154,12 @@ class Thumb:
 
 
 var _touch: TouchProfile = null
+## The keyboard's input assist (`Q210`), or null when it did not load — then a
+## key passes through as it reads, which is a car tuned against a linear input
+## driven by a binary one, so it is an error, not a warning.
+var _keys: KeyboardSteerProfile = null
+## The key's shaped steering, carried between ticks: the ramp's own state.
+var _key_steer: float = 0.0
 var _steer_thumb: Thumb = Thumb.new()
 var _drive_thumb: Thumb = Thumb.new()
 var _mouse_is_down: bool = false
@@ -154,6 +169,10 @@ var _mouse_is_a_finger: bool = false
 
 
 func _ready() -> void:
+	_keys = load(KeyboardSteerProfile.PATH) as KeyboardSteerProfile
+	if _keys == null or not _keys.usable():
+		push_error("input: %s did not load or has a zero ramp" % KeyboardSteerProfile.PATH)
+		_keys = null
 	_build_zones()
 	_mouse_is_a_finger = Cmdline.value(TOUCH_ARG).to_lower() == "mouse"
 
@@ -168,6 +187,8 @@ func _notification(what: int) -> void:
 	_steer_thumb.release(_steer_thumb.index)
 	_drive_thumb.release(_drive_thumb.index)
 	_mouse_is_down = false
+	# And a held key ramps afresh after it, never from where the pause found it.
+	_key_steer = 0.0
 
 
 ## Resolve the two touch zones onto the real screen, as Controls.
@@ -261,6 +282,8 @@ func travel_px() -> Vector2:
 ## Control in this project is `MOUSE_FILTER_IGNORE`, so swallowing events here
 ## would buy nothing and would silently break any UI that later wants a button.
 func _input(event: InputEvent) -> void:
+	# Before the touch guard: a desk without touch zones still has keys and sticks.
+	_note_steer_method(event)
 	if _touch == null:
 		return
 
@@ -275,6 +298,49 @@ func _input(event: InputEvent) -> void:
 		return
 
 	_mouse(event)
+
+
+## Which input method steered last (`steer_from_keys`). Pressed past the
+## action's dead zone only, so a stick resting off centre does not take the
+## steering away from a player on the keys.
+func _note_steer_method(event: InputEvent) -> void:
+	# Pointer motion and touch arrive at hundreds a second and never steer here.
+	if not (event is InputEventKey or event is InputEventJoypadMotion):
+		return
+	if not (event.is_action_pressed(&"steer_left") or event.is_action_pressed(&"steer_right")):
+		return
+	steer_from_keys = not event is InputEventJoypadMotion
+
+
+## The steering the car drives on (`Q210`): a stick's or a thumb's as it reads,
+## and a key's shaped into a linear input — ramped from centre to full over the
+## keyboard table's seconds, slower as the car nears its limiter
+## (`speed_share`, its share of the limiter), and at `attack_s` when the car
+## asks for the quick ramp (`quick`: drift mode, or a countersteer). Letting go,
+## or easing to a smaller input on the same side, is not shaped: the car's own
+## release ramp returns the wheel. A reversal ramps the whole way, as the car's
+## rack did when it carried this ramp. Called once per physics tick, by the
+## player's car alone: the ramp's state is the router's.
+func steer_for(speed_share: float, quick: bool, delta: float) -> float:
+	if not steer_from_keys or _keys == null:
+		_key_steer = steer
+		return steer
+	var seconds: float = (
+		_keys.attack_s
+		if quick
+		else lerpf(_keys.attack_s, _keys.attack_at_top_s, speed_share * speed_share)
+	)
+	if absf(steer) <= absf(_key_steer):
+		# Easing off is the car's release. Across centre, only down to the new
+		# magnitude: the rest of the way is a reversal, and that ramps.
+		_key_steer = steer if steer * _key_steer >= 0.0 else signf(_key_steer) * absf(steer)
+	_key_steer = move_toward(_key_steer, steer, delta / seconds)
+	return _key_steer
+
+
+## The keyboard's input assist, for the skidpad's `--sweep=keyboard_steer.…`.
+func keyboard_profile() -> KeyboardSteerProfile:
+	return _keys
 
 
 ## `--touch=mouse` only: one synthetic finger, pressed and dragged by the left
@@ -345,6 +411,7 @@ func _physics_process(_delta: float) -> void:
 	# control whose whole design is that small travel is available (`Q97`).
 	if _steer_thumb.is_down():
 		steer = _touch.steer_from(_steer_thumb.offset().x)
+		steer_from_keys = false
 	if _drive_thumb.is_down():
 		# One bipolar axis split into the two the vehicle reads (`Q83`), and
 		# centre is coast — which is the lift-off `P0-5b/c/d` requires in order

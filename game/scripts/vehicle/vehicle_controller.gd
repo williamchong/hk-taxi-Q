@@ -373,7 +373,10 @@ func _physics_process(delta: float) -> void:
 		brake_input = 0.0
 		handbrake_input = false
 	elif _input != null:
-		steer_input = _input.steer
+		# Shaped by the input method's own assist before the car sees it
+		# (`Q210`): a key's ramp, given this car's speed and whether it asks for
+		# the quick one. The raw reading is `_input.steer`.
+		steer_input = _input.steer_for(_speed_share(), _wants_quick_steer(_input.steer), delta)
 		throttle_input = _input.accelerate
 		brake_input = _input.brake_reverse
 		handbrake_input = _input.handbrake
@@ -429,15 +432,14 @@ func is_reversing() -> bool:
 ## RigidBody3D has no steering property, and that reason does not survive the
 ## switch. `steering` is now both the state and the output.
 func _update_steering(delta: float) -> void:
-	var speed_ratio: float = clampf(absf(speed_kph) / top_speed_kph(), 0.0, 1.0)
-	var max_angle: float = _steer_lock_rad(speed_ratio)
+	var max_angle: float = _steer_lock_rad(_speed_share())
 	# Negated: steer_input is +1 for right, but a positive rotation about +Y
 	# turns the -Z forward vector toward -X, which is left.
 	var target: float = -steer_input * max_angle
 	# Returning to centre is quicker than reaching lock, so the car feels like it
 	# wants to straighten. Rate is expressed as full-lock-per-second.
 	var seconds: float = (
-		_steer_attack_s(speed_ratio) if absf(target) > absf(steering) else profile.steer_release_s
+		profile.steer_attack_s if absf(target) > absf(steering) else profile.steer_release_s
 	)
 	steering = move_toward(steering, target, (max_angle / seconds) * delta)
 	# Guarded because max_angle is a profile value and an unassigned resource
@@ -447,11 +449,17 @@ func _update_steering(delta: float) -> void:
 	steer_ratio = -steering / max_angle if max_angle > 0.0 else 0.0
 
 
-## Seconds to full lock at this share of the limiter: `steer_attack_s` at rest,
-## easing to `steer_attack_at_top_s` on the share's square. A method so the tyre
-## car can keep the quick ramp while the player asks for a slide.
-func _steer_attack_s(speed_ratio: float) -> float:
-	return lerpf(profile.steer_attack_s, profile.steer_attack_at_top_s, speed_ratio * speed_ratio)
+## This tick's speed as a share of the limiter, 0 to 1, either way of travel.
+func _speed_share() -> float:
+	return clampf(absf(speed_kph) / top_speed_kph(), 0.0, 1.0)
+
+
+## Whether the player asks the car for rotation or catches it, with `raw` the
+## device's own steering: the input method's assist then ramps at its quickest
+## (`InputRouter.steer_for`, `Q210`). Never on this car; the tyre car's drift
+## mode and countersteer are.
+func _wants_quick_steer(_raw: float) -> bool:
+	return false
 
 
 ## The lock available at this share of the limiter: `steer_angle_max_deg` at

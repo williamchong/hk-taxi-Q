@@ -10967,7 +10967,8 @@ HEAD's 3.1–4.6, `--traffic=off` 1.8–2.7. Inside the ±0.5 ms noise.
 ## `Q174` — The wheel goes to lock slower at speed, and a slide keeps the quick ramp
 
 **Status.** ✅ Built 2026-10-29 on the user's report. Reopens nothing measured shut: the lock
-(`steer_to_grip`) and the tyre are untouched.
+(`steer_to_grip`) and the tyre are untouched. ⚠️ Moved off the car to the keys by `Q210`
+(2026-11-14): `keyboard_steer.attack_at_top_s`, same value; the car's rack is a flat 0.2 s.
 
 **Asked** by the user, 2026-10-29: "taxi cant steer properly at highspeed (>60 <120) and start
 sliding, even without pressing drift", and "110km/h is the lantau road speed limit where taxi runs
@@ -13174,3 +13175,60 @@ Not done, and owed:
 
 **See.** `Q160` · `P3-3c` · `P3-11e` · `game/tuning/traffic_beams.md` · `game/tuning/lamp_pools.md` ·
 `game/tuning/beams.md` · `game/scripts/traffic/traffic_beams.gd`
+
+## `Q210` — A key is shaped into a linear input before the car sees it; the car's assists are tuned against that input
+
+**Status.** ✅ Built 2026-11-14 on the user's instruction. Reverses the 2026-09-30 choice (`Q152`'s
+catch round) of a cap on the car over "a keyboard ramp in `InputRouter`": the ramp is built now, and
+the cap stays as a drive assist. Owed: the iPhone drive (touch now steers with no speed ramp), and the
+user's keyboard drive of the flick at 0.6 s.
+
+**Asked** by the user, 2026-11-14: "keyboard should compensate the binary input into sth more linear
+into input, where then drive assists params take effect — not drive assists params tuning against a
+binary input", and "so input assists as 1 logic (per input method), and drive assist as another (per
+car potentially)". Touch, a stick and a future wheel can hold any angle; a key cannot, and the car's
+steering had been tuned for the key.
+
+**The two layers.**
+- **Input assist, one per input METHOD**, in the input layer: `KeyboardSteerProfile`
+  (`tuning/keyboard_steer.tres`) for keys, `TouchProfile` for a thumb, nothing for a stick, a wheel's
+  own table when there is one. `InputRouter.steer_for(speed_share, quick, delta)` is what the car
+  drives on: a key ramped from centre to full over `attack_s` 0.2 at rest to `attack_at_top_s` 2.0 at
+  the limiter on the share's square (`Q174`'s numbers, moved, not re-tuned), at `attack_s` when the
+  car asks for the quick ramp (drift mode, a countersteer read off the key's own side); a stick or a
+  thumb as it reads. Easing off is not shaped; a reversal ramps. `InputRouter.steer_from_keys` is
+  the method — a key press sets it, a stick past its dead zone or a steering thumb clears it — and
+  is true until either, so `Input.action_press` runs (`drive.sh`, the skidpad) steer as a key.
+- **Drive assist, per CAR**: `handling.tres`'s rack (`steer_attack_s` 0.2 at every speed — the
+  speed-eased `steer_attack_at_top_s` is gone from the car), `steer_to_grip`, the catch cap, the flick
+  and the systems' tables, tuned against a linear input. The car never sees which device steered.
+
+**Measured**, `tools/skidpad.sh` at 42 / 63 / 86 kph and `--only=flick` at 95 / 110 / 120, before
+against keys (the default) and `--steer=analog`:
+- **Keys**: every graded figure held — `turn`'s `came out` within 2.3° (`turn@counter` alone moves),
+  `ride` identical, `hold`'s `longest` 0.68 / 0.83 / 3.57 s identical (its exit 5.4 / 3.9 kph lower at
+  42 / 63: the pad's driver steers in shares, now ramped), `catch`'s `yaw@hold` within 1.5° and
+  `settled` 0.10 s sooner at 42 kph, `corner` within 0.1 kph. `Q174`'s lane change held: `flick@held`
+  5.9 / 6.3 / 6.5° at 95 / 110 / 120 kph, identical.
+- **Analog**: the rack's 0.2 s at every speed brings `Q174`'s slide back on a full-lock thumb —
+  `flick@held` 9.7 / 20.8 / 29.8°. That was a key's figure; whether a thumb swings full lock at
+  110 kph is the handset's question, and the answer, if it does, is the touch table's.
+- **The flick was a key's dial.** `FlickWatch` had read the raw key, across centre in one tick; the
+  shaped key takes 0.38 s at 63 kph, over `flick_window_s` 0.3, and the flick stopped firing on keys
+  at 63 and 86 kph (`flick@lift` 18.4 → 4.3° at 63, `flick@brake` 13.3 → 4.5° at 86). **0.6**,
+  swept 0.3 / 0.45 / 0.6 / 0.8 (`systems/arcade_aids.md`): 15.7° / 25.7° at 63, 10.0° brake at 86,
+  the lifted flick now also sliding at 42 kph (27.9°); analog and every control row identical at
+  every value.
+
+**Not done.** The catch cap stays on the car: graded on full opposite lock held, which a thumb holds
+as well as a key, so it is not a key's dial. Whether a keyboard also wants its countersteer unwound
+for it is a keyboard-assist question, never a car one. `steer_to_grip` and the lock's narrowing with
+speed stay on the car for every method; a wheel that wants neither is the first case for a per-method
+switch on them, not built.
+
+**Checked.** `verify_input`: a key, a stick past and inside its dead zone and a thumb set the method;
+the analogue path passes through; a key ramps at `attack_s` at rest, `attack_at_top_s` at the
+limiter and `attack_s` when quick, reaches full, ramps a reversal, and lets go unshaped.
+
+**See.** `Q174` · `Q152` · `Q153` · `Q83` · `game/tuning/keyboard_steer.md` ·
+`game/tuning/systems/arcade_aids.md` · `game/scripts/input/input_router.gd`

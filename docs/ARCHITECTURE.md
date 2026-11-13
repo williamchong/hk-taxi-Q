@@ -1514,9 +1514,11 @@ Deadzones are **0.2** on the axes and **0.5** on the buttons, in `project.godot`
 
 ### The three schemes
 
-**Keyboard** is digital on every action; `steer_attack_s` / `steer_release_s` in
-`VehicleController` do all the smoothing, the attack slowing with speed to
-`steer_attack_at_top_s` (`Q174`).
+**Keyboard** is digital on every action. Its steering is shaped into a linear input in the input
+layer, before the car sees it (`Q210`): `InputRouter.steer_for` ramps a key over
+`keyboard_steer.tres`'s seconds, slowing with the car's speed (`Q174`'s numbers), and the car's own
+rack (`steer_attack_s` / `steer_release_s`) is the same for every method. Input assists are per
+input method (this, `touch.tres`); drive assists are per car and tuned against a linear input.
 
 **Gamepad** is analog on steer and both triggers; `handbrake` and `look_back` are face buttons.
 ⚠️ Both triggers are spent, so `handbrake` stays a `bool`. The action was `drift` until `Q170`:

@@ -290,17 +290,23 @@ func _steer_lock_rad(speed_ratio: float) -> float:
 ## positive-left angle; `_slide_toward` is in the angle's sign, so the player is
 ## countersteering when the two have opposite signs.
 func _countersteering() -> bool:
-	return _slide_beyond_peak_rad() > 0.0 and -steer_input * _slide_toward() > 0.0
+	return _countersteers(steer_input)
 
 
-## The parent's speed-eased ramp to lock, but the quick one at rest
-## (`steer_attack_s`) whenever the player asks for rotation or catches it: in
-## drift mode, and on the countersteer side of a slide, where a slow catch would
-## be the spin the slow ramp is there to prevent.
-func _steer_attack_s(speed_ratio: float) -> float:
-	if _drift_mode.engaged or _countersteering():
-		return profile.steer_attack_s
-	return super._steer_attack_s(speed_ratio)
+## Whether `steer`, in `steer_input`'s sign, is against a slide past the
+## tyre's peak.
+func _countersteers(steer: float) -> bool:
+	return _slide_beyond_peak_rad() > 0.0 and -steer * _slide_toward() > 0.0
+
+
+## The input method's quickest ramp (`KeyboardSteerProfile.attack_s` on a key,
+## `Q210`) whenever the player asks for rotation or catches it: in drift mode,
+## and on the countersteer side of a slide, where a slow catch would be the spin
+## the key's slow ramp at speed is there to prevent. Read off `raw`, the
+## device's own steering, where `_countersteering` reads the shaped input: the
+## side the player asks for is the key's, before any ramp has moved the input.
+func _wants_quick_steer(raw: float) -> bool:
+	return _drift_mode.engaged or _countersteers(raw)
 
 
 ## The front wheels' angle that holds the tyres' grip in a steady turn at this

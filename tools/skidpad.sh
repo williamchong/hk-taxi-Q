@@ -76,6 +76,10 @@
 #                                    ahead closing at 5 / 20 kph, a car coming
 #                                    at 50, hit from behind at rest at 40 and
 #                                    under way closing at 20
+#   --steer=analog                   steer through the router's analogue path,
+#                                    a stick's or a thumb's input as it reads;
+#                                    default keys, shaped by the keyboard's
+#                                    input assist (keyboard_steer.tres, Q210)
 #   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile, CarSpec or TyreProfile
 #                                    float, or a system's as SYSTEM.FIELD
 #                                    (traction_control.wheelspin_limit; the

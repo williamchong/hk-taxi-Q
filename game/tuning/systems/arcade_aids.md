@@ -45,7 +45,26 @@ the band to 70). It fires once the player has steered since the press, whichever
 (start and settled heading) with `hold` and `ride` as the guard. The band ended at 70 kph first; 65 since the
 user's second street drive ("sometimes the rear feels too spinny"), with the fade below.
 
-## `flick_window_s = 0.3`, `flick_feint_s = 0.2`, `flick_min_kph = 30.0`, `flick_input_share = 0.5`
+## `flick_window_s = 0.6`, `flick_feint_s = 0.2`, `flick_min_kph = 30.0`, `flick_input_share = 0.5`
+
+**`flick_window_s` 0.3 → 0.6 since 2026-11-14 (`Q210`)**: the window was set against a key, which
+crossed the centre in one tick, and `FlickWatch` read it whole. A key reaches the car as a linear
+input now (`keyboard_steer.tres`), taking 0.38 s from one side to the other at 63 kph and 0.54 s at
+86, so at 0.3 the flick stopped firing on keys at 63 and 86 kph. A drive assist is tuned against a
+linear input, never a key: 0.6 covers the shaped key's crossing to 86 kph, and a thumb or a stick,
+which crosses faster, reads the same at every value. Swept `0.3,0.45,0.6,0.8` on
+`--only=technique`, peak slip over the row, keys / `--steer=analog`; `corner`, `flick@held`, the
+handbrake and the trail-brake identical at every value on both:
+
+| entry | `flick@lift` keys 0.3 → 0.6 | `flick@brake` keys 0.3 → 0.6 | analog, every window (lift / brake) |
+|---|---|---|---|
+| 42 kph | 3.7 → 27.9° | 3.6 → 3.6° | 3.7 / 3.6° |
+| 63 kph | 4.3 → 15.7° (18.4° on the raw key) | 3.9 → 25.7° | 19.2 / 25.7° |
+| 86 kph | 5.1 → 5.1° (6.1 at 0.8) | 4.5 → 10.0° (13.3° on the raw key) | 9.3 / 15.3° |
+
+⚠️ The lifted flick on keys now slides at 42 kph as well, where the raw key never did (recorded, not
+graded: a real car rarely flicks on tarmac that slowly). The paragraph below is the 0.3 s window's.
+
 
 The flick (`P3-54`, `Q153`), read by `FlickWatch`: the steering held past `flick_input_share` to
 one side for `flick_feint_s` with the throttle under that share or the brake touched at some point
@@ -177,7 +196,9 @@ too easily"). The pad found no snap: full opposite lock on gripping tyres turns 
 way at about 90°/s once the slide is caught, and a key holds full lock for as long as it is down.
 With the throttle held the turn starts only once the wheel is at full lock, so the lock kept is
 the lever; the user picked it over a slower countersteer rate and a keyboard ramp in
-`InputRouter` (2026-09-30). `TyreVehicleController._cap_catch` latches the side a tail-out slide
+`InputRouter` (2026-09-30). ⚠️ The keyboard ramp was built later for a different reason (`Q210`,
+2026-11-14: input assists per method, drive assists per car), and the cap stayed: a thumb holds
+full opposite lock as well as a key, so it is a drive assist, not a key's. `TyreVehicleController._cap_catch` latches the side a tail-out slide
 went out on and, while the player keeps steering towards it, caps the fronts at this angle from
 the tick the heading turns the other way faster than `catch_turn_dps`, for `catch_window_s` after
 the tail was last out. It only takes angle away; the catch itself is the player's.

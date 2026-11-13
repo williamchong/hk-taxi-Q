@@ -260,6 +260,9 @@ const BODY_SWEEP_PREFIX: String = "body."
 ## The pace's own sweep (`Q156`): the car is re-fitted at each value and the
 ## entry speed scaled with it (`_entry_scale`).
 const PACE_FIELD: StringName = &"pace.pace_scale"
+## The keyboard's input assist (`Q210`), swept as `keyboard_steer.<field>`: the
+## router's table, which the pad's driver steers through unless `--steer=analog`.
+const KEYBOARD_TABLE: String = "keyboard_steer"
 ## The car's systems a `<system>.<field>` sweep may name (`Q155`), and the
 ## game's pace (`Q156`): only these, so `profile.` or `tyre.` cannot slip past
 ## the refusals the bare names get.
@@ -272,6 +275,7 @@ const SYSTEM_TABLES: PackedStringArray = [
 	"rev_limiter",
 	"arcade_aids",
 	"anti_lock_brakes",
+	KEYBOARD_TABLE,
 ]
 const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", "gravity_scale"]
 
@@ -333,6 +337,14 @@ const STOPPED_KPH: float = 1.0
 const SLIP_FLOOR_MPS: float = 1.0
 
 var _only: String = ""
+## `--steer=analog`: the router's analogue path, a stick's or a thumb's input as
+## it reads (`Q210`). Default the keys': the pad drives through
+## `Input.action_press`, which sends no event, so the router steers as a key does
+## and shapes the driver's input with the keyboard's input assist.
+var _steer_analog: bool = false
+## The `InputRouter` autoload, resolved once in `_boot`; untyped for the reason
+## `_vehicle` is.
+var _router: Node = null
 ## The scene to grade. Configurable rather than constant so a roster car can be
 ## put on the same ground and spawn later. ⚠️ Never `city_drive.tscn`: a 0.14°
 ## micro-gradient there is worth the whole quantity under test, and a published
@@ -597,6 +609,11 @@ func _parse_args() -> bool:
 		match bits[0]:
 			"--only":
 				_only = bits[1]
+			"--steer":
+				if not bits[1] in ["keys", "analog"]:
+					_fail("--steer is keys or analog, got '%s'" % bits[1])
+					return false
+				_steer_analog = bits[1] == "analog"
 			"--scene":
 				_scene_path = bits[1]
 			"--run-up":
@@ -728,6 +745,13 @@ func _boot() -> bool:
 	else:
 		print("run-up:  %.2f s" % _run_up_s)
 	print("scene:   %s" % _scene_path)
+	# The input method the router shapes the driver's steering as (`Q210`).
+	_router = root.get_node_or_null(^"InputRouter")
+	if _router == null:
+		_fail("no InputRouter: the car has no pedals")
+		return false
+	_router.set(&"steer_from_keys", not _steer_analog)
+	print("steer:   %s" % ("analog, as it reads" if _steer_analog else "keys, shaped"))
 	print("vehicle: %s at %s" % [_vehicle.name, _spawn.origin])
 	var profile: Resource = _vehicle.get("profile") as Resource
 	print("profile: %s" % ("none" if profile == null else profile.resource_path))
@@ -787,7 +811,15 @@ func _measure_all() -> void:
 		if not parts[0] in SYSTEM_TABLES:
 			_fail("sweep: '%s' is not a system; one of %s" % [parts[0], ", ".join(SYSTEM_TABLES)])
 			return
-		var system_table := _vehicle.get(parts[0]) as Resource
+		# The keyboard's input assist is the router's, not the car's (`Q210`).
+		var system_table := (
+			(
+				_router.call(&"keyboard_profile")
+				if parts[0] == KEYBOARD_TABLE
+				else _vehicle.get(parts[0])
+			)
+			as Resource
+		)
 		if system_table == null:
 			_fail("sweep: the car has no system table '%s'" % parts[0])
 			return

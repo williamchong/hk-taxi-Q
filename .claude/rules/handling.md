@@ -78,8 +78,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   `+0.5 s` do not compare with a table from before 2026-09-30. ⚠️ A countersteer latch keyed on
   the slip alone takes a turn-in plough for a slide: latch on tail out (yaw and countersteer sign
   disagree), and grade a latch change on the tap at 42 kph.
-- 🔴 **`steer_attack_at_top_s` is graded on `--only=flick`'s `flick@held` at 95, 110 and 120 kph**
-  (`Q174`): the full-lock swap with the throttle held, a lane change, and the street's high-speed
+- 🔴 **A drive assist is tuned against a LINEAR input, never a key** (`Q210`): a key is shaped in
+  `InputRouter.steer_for` by `keyboard_steer.tres` before the car sees it, and the pad steers as a
+  key unless `--steer=analog`. Grade a steering dial on both; a dial that moves on keys alone is
+  the keyboard's, and goes in `keyboard_steer.tres`, not the car.
+- 🔴 **`keyboard_steer.attack_at_top_s` (the car's `steer_attack_at_top_s` until `Q210`) is graded
+  on `--only=flick`'s `flick@held` at 95, 110 and 120 kph** (`Q174`): the full-lock swap with the throttle held, a lane change, and the street's high-speed
   slide with no button pressed. The 42 / 63 / 86 kph pad is its guard and only `corner` and `tap`
   move there; drift mode and a countersteer keep `steer_attack_s`.
 - ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):

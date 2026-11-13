@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="KeyboardSteerProfile" format=3 uid="uid://bs6m2jli0yrtm"]
+
+[ext_resource type="Script" uid="uid://6bl0fo1tir8e" path="res://scripts/input/keyboard_steer_profile.gd" id="1_keys"]
+
+[resource]
+script = ExtResource("1_keys")
+attack_s = 0.2
+attack_at_top_s = 2.0
