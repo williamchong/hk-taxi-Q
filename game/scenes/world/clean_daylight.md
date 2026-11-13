@@ -29,6 +29,21 @@ the three artefacts that ruled out a single cascade. Nothing about raising the
 sun changes that argument, and re-deriving it here would only let the two rigs
 drift apart.
 
+## `phone_shadow_max_distance_m = 100.0`
+
+On a phone the sun's shadows reach 100 m, not the `Sun`'s 400 (`P2-6`, the user's pick
+2026-11-14); `LightingRig.fit_shadow` writes it at `_ready`, and nowhere else is touched. Both
+cascades stay. The shadow map is one size whatever it covers, so the first cascade's 10% is 10 m
+of ground, not 40: on the desktop's 4096 map the near shadows came out crisper than at 400 m, and
+the 2048 map a phone uses (Godot's `.mobile` default) needs that more. Measured at 4a41de7c on the
+desktop, traffic on: −26 / −24 / −29 draws and −17% / −17% / −16% primitives at the start line,
+Hennessy Road and Times Square. One cascade at 100 m saved more primitives (−33% to −37%) for
+fewer draws (−18 to −20), and the user took the draws and the sharper look.
+
+⚠️ The cost is `golden_hour.md`'s 150 m artefact at 100: `directional_shadow_fade_start` is 0.8 of
+the reach, so shadows fade out 80–100 m ahead and a long sunlit street is flat past that. Graded
+by eye on the handset, not here. Both rigs carry it, for the reason the `Sun` block gives.
+
 ## `[node name="CelOutline" type="MeshInstance3D" parent="."]`
 
 The ink line of the cel look (`P3-64`, `Q158`): a 2 x 2 quad that `cel_outline.gdshader` puts

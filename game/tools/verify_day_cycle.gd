@@ -20,6 +20,8 @@
 ## - The pause (`Q165`): over a paused tree the shift's hour and the sky hold
 ##   on real physics frames, and run on after it — the clock must stay
 ##   pausable, or a phone call spends the shift.
+## - A phone's sun reaches the rig's `phone_shadow_max_distance_m`, a desk's
+##   the authored one (`P2-6`).
 ##
 ## No built region needed: the rig scene and its tables are committed tuning.
 extends "res://tools/verify_tool.gd"
@@ -112,7 +114,39 @@ func _run() -> void:
 	await _check_the_shift(rig)
 	await _check_the_pause(rig)
 	rig.queue_free()
+	_check_the_phone()
 	_finish("verify_day_cycle")
+
+
+## The phone's shadow reach (`P2-6`): the rig on a desk keeps the authored sun,
+## and on a phone pulls it in to its own number, cascades untouched.
+func _check_the_phone() -> void:
+	var packed := load(RIG_SCENE) as PackedScene
+	var rig := packed.instantiate() as LightingRig
+	var sun: DirectionalLight3D = _child(rig, "DirectionalLight3D") as DirectionalLight3D
+	var authored: float = sun.directional_shadow_max_distance
+	var mode: DirectionalLight3D.ShadowMode = sun.directional_shadow_mode
+	_expect(
+		rig.phone_shadow_max_distance_m > 0.0 and rig.phone_shadow_max_distance_m < authored,
+		"phone",
+		"the rig names a phone reach under the sun's %.0f m" % authored
+	)
+	rig.fit_shadow(false)
+	_expect(
+		sun.directional_shadow_max_distance == authored,
+		"phone",
+		"off a phone the sun reaches its authored %.0f m" % authored
+	)
+	rig.fit_shadow(true)
+	_expect(
+		(
+			sun.directional_shadow_max_distance == rig.phone_shadow_max_distance_m
+			and sun.directional_shadow_mode == mode
+		),
+		"phone",
+		"on a phone it reaches %.0f m, its cascades as authored" % rig.phone_shadow_max_distance_m
+	)
+	rig.free()
 
 
 ## The clock with nobody parked over it: on, it reaches 1.0 in `length_s` and

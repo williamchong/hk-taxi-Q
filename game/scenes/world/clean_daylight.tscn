@@ -12,6 +12,7 @@ size = Vector2(2, 2)
 script = ExtResource("2_rig")
 exposure_anchor = 0.52
 cycle = ExtResource("4_cycle")
+phone_shadow_max_distance_m = 100.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2008482965]
 environment = ExtResource("1_env")

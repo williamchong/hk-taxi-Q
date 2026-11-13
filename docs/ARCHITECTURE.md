@@ -1553,9 +1553,9 @@ the button is a handbrake, and the drift is what the car and the player make of 
 
 ## Performance budget
 
-⚠️ One tier ships, the desktop one. Nothing in `game/scripts/` reads `OS.has_feature`,
-`OS.get_name` or a quality setting; the only platform branching is the `.mobile` / `.web` suffixes
-in `project.godot`. The mobile tier is unbuilt and blocked on `P0-3b` (signing identity, the two
+⚠️ One tier ships, the desktop one, with two phone exceptions read off `SheetImage.is_phone`:
+the 成績表's SAVE button, and the sun's shadow reach (`LightingRig.fit_shadow`, `P2-6`). All other
+platform branching is the `.mobile` / `.web` suffixes in `project.godot`. The mobile tier is unbuilt and blocked on `P0-3b` (signing identity, the two
 floor handsets).
 
 | Metric | Mobile tier | Desktop tier |
@@ -1565,7 +1565,7 @@ floor handsets).
 | Visible triangles | < 300k | < 1M |
 | Texture memory | < 128 MB | < 512 MB |
 | Bundle size | < 200 MB (iOS cellular threshold) | no hard limit |
-| Shadows | Vehicle blob shadow only ⚠️ | Two directional cascades at 400 m |
+| Shadows | Two directional cascades at 100 m (`P2-6`, the rig's `phone_shadow_max_distance_m`) | Two directional cascades at 400 m |
 
 ⚠️ Shots with shadows off looked flat and blown out. A mobile tier needs the ambient and tonemap
 re-tuned around a blob shadow, not the shadow switched off.

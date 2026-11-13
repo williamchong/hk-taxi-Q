@@ -92,6 +92,11 @@ const BLENDED_SKY: Array[StringName] = [
 ## The day this rig runs through, or null for a rig that stays as authored.
 @export var cycle: RigCycle
 
+## How far the sun's shadows reach on a phone (`P2-6`), in place of the
+## `Sun`'s own `directional_shadow_max_distance`; 0 keeps the node's. Why the
+## number is what it is: the rig scene's sidecar.
+@export_range(0.0, 1000.0, 5.0, "suffix:m") var phone_shadow_max_distance_m: float = 0.0
+
 ## Where on `cycle` the rig stands, 0 the authored day and 1 the last keyframe.
 ## Written by `DayClock`, or pinned for a frame by `--time-of-day=`.
 var time_of_day: float = 0.0:
@@ -118,6 +123,7 @@ func _ready() -> void:
 	# The process-wide globals outlive a scene, so a rig entering after a night
 	# one must put the day back rather than inherit the dark.
 	_set_globals(Color.WHITE, 0.0)
+	fit_shadow(SheetImage.is_phone(OS.has_feature))
 	if cycle == null or not cycle.usable():
 		return
 	for child: Node in get_children():
@@ -147,6 +153,20 @@ func _ready() -> void:
 ## the environment to move.
 func moves() -> bool:
 	return _day != null
+
+
+## On a phone, pull the sun's shadow reach in to `phone_shadow_max_distance_m`
+## (`P2-6`): the shadow map is the same size whatever it covers, so a shorter
+## reach is sharper as well as fewer casters in each cascade. Anywhere else, or
+## at 0, the sun stays as authored. `phone` is handed in so a check can ask
+## about a phone from a desk.
+func fit_shadow(phone: bool) -> void:
+	if not phone or phone_shadow_max_distance_m <= 0.0:
+		return
+	for child: Node in get_children():
+		var sun := child as DirectionalLight3D
+		if sun != null:
+			sun.directional_shadow_max_distance = phone_shadow_max_distance_m
 
 
 func set_time_of_day(value: float) -> void:
