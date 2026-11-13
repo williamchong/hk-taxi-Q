@@ -33,3 +33,13 @@ user asked for more than 244's 92).
 ⚠️ `award` and `combo` stay reserved where the desk has them, over the map and
 the speed's columns. `pause` is 96 units, 47 pt on an iPhone at 1.25, over
 the 44 pt minimum the desk's 88 missed (34 pt).
+
+🔴 THE TIP CLOCK SITS UNDER THE GUIDE'S ARROW HERE, NOT UNDER THE GOAL BOX
+(the user's report from the handset, 2026-11-13): the arrow floating 2.6 m over
+the taxi (`guide.tres`) projects to ~18–24% of the screen's height, and at
+scale 1.25 the desk's y 116 put the countdown at 13–28% — the arrow drew
+behind "376 秒" and could not be read. `timer` moves to y 236, under the arrow,
+and `tick` (y 368) and `wrong_way` (y 432) follow it down the same column, so
+the desk's order — goal box, arrow, clock, tick, NO ENTRY — holds. Trialled
+against the clock left of the goal box (x 336, 168 wide), which crowded the
+numerals into the gap beside the 特更 clock.
