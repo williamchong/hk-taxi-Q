@@ -27,6 +27,11 @@ throttle route, measured. Their cost is draw calls, answered by `shadow_meshes` 
 
 Railings and arrows are unmeasured; a layer joins this list with its own before and after.
 
+**Read beyond this list.** `layers` names `layer_preview.gd`'s layers only; two placers outside that
+table cut on the same `cell_m` and `range_m` unconditionally: `signal_heads.gd`, and the fence
+(`fence.gd`, `P2-6`). The fence was one region-wide `MultiMesh`, and turning its shadow off alone
+saved 121k primitives at each of three views, the start line, Hennessy Road and Times Square.
+
 ## cell_m = 300.0
 
 The paint's cell (`road_marks.cell_m`). 150 m bought −105k primitives against 300 m's −93k for

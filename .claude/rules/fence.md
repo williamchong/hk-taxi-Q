@@ -42,7 +42,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   🔴 **The prop draws as ONE `MultiMesh` and its colliders are separate bodies — do not "simplify"
   it back to instantiating the scene per placement.** That build was measured at **+36 draw calls**
   (81-92 against a 55-57 baseline) on a layer every other generated class ships in one; the
-  MultiMesh is **pixel-identical** at +1. ⚠️ **The split opens a gap `verify_fence.gd` cannot see** —
+  MultiMesh is **pixel-identical** at +1. Since `P2-6` it is one `MultiMesh` a plan cell of
+  `prop_cells.tres` (`PropBatch.batches`): one region-wide box was never culled, and both shadow
+  cascades drew every barrier from anywhere — 121k primitives at every view. ⚠️ **The split opens a gap `verify_fence.gd` cannot see** —
   it grades the `.glb`'s own `-col` import, so a placer that stopped building bodies stays green and
   renders perfectly. `fence.gd` prints its collider count for that reason; keep it, and read it.
   🔴 **`clipped_edges` is a THIRD population (`Q143`) and joins neither list.** An end is clipped

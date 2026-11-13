@@ -198,7 +198,7 @@ func _place(library: Node3D) -> Dictionary:
 		batch.assign(transforms[mesh_name])
 		var casts: bool = GeneratedLayer.casts_shadow(layer, mesh_name)
 		var tint: PackedColorArray = tints.get(mesh_name, PackedColorArray())
-		for node: MultiMeshInstance3D in _batches(mesh, batch, mesh_name, cells, tint):
+		for node: MultiMeshInstance3D in PropBatch.batches(mesh, batch, mesh_name, cells, tint):
 			if not casts:
 				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(node)
@@ -240,52 +240,6 @@ func _place(library: Node3D) -> Dictionary:
 	return {"bounds": MeshContract.union(boxes), "triangles": triangles}
 
 
-## One `MultiMesh` over the whole batch, or with `cells` one per plan cell a
-## transform's origin falls in, each hidden past the profile's range.
-##
-## A region-wide `MultiMesh` is one box, so the engine draws every instance
-## from anywhere inside it and again in each shadow cascade: the lamps were
-## 129,240 of ~900,000 primitives on the throttle route, exactly 3x their
-## placed triangles (`Q135`). A cell is a box the engine can cull.
-##
-## `tint` is one colour a transform or empty; a cell takes its own share.
-func _batches(
-	mesh: Mesh,
-	batch: Array[Transform3D],
-	mesh_name: String,
-	cells: PropCellProfile,
-	tint: PackedColorArray = PackedColorArray()
-) -> Array[MultiMeshInstance3D]:
-	if cells == null:
-		return [PropBatch.batch(mesh, batch, mesh_name, PackedColorArray(), tint)]
-	var by_cell: Dictionary[Vector2i, Array] = {}
-	var tint_by_cell: Dictionary[Vector2i, PackedColorArray] = {}
-	for index: int in batch.size():
-		var at: Transform3D = batch[index]
-		var cell: Vector2i = cells.cell_of(at.origin)
-		if not by_cell.has(cell):
-			by_cell[cell] = []
-			tint_by_cell[cell] = PackedColorArray()
-		by_cell[cell].append(at)
-		if not tint.is_empty():
-			tint_by_cell[cell].append(tint[index])
-	var nodes: Array[MultiMeshInstance3D] = []
-	for cell: Vector2i in by_cell:
-		var part: Array[Transform3D] = []
-		part.assign(by_cell[cell])
-		var node: MultiMeshInstance3D = PropBatch.batch(
-			mesh,
-			part,
-			"%s_%d_%d" % [mesh_name, cell.x, cell.y],
-			PackedColorArray(),
-			tint_by_cell[cell]
-		)
-		node.visibility_range_end = cells.range_m
-		node.visibility_range_end_margin = cells.range_margin_m
-		nodes.append(node)
-	return nodes
-
-
 ## A trunk cylinder under each of `batch`'s trees, one static body per plan
 ## cell (or one for the batch without `cells`). `trunk` is the kind's radius
 ## and height in the library's frame; each tree's stand scales both, and the
@@ -322,7 +276,7 @@ func _stand_pools(
 	var pools: Array[Transform3D] = LampPools.stand(
 		columns, lantern, material.get_shader_parameter(&"drop_m")
 	)
-	var stood: Array[MultiMeshInstance3D] = _batches(
+	var stood: Array[MultiMeshInstance3D] = PropBatch.batches(
 		LampPools.cylinder(material), pools, mesh_name + "_pool", cells
 	)
 	for node: MultiMeshInstance3D in stood:

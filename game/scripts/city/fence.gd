@@ -24,10 +24,11 @@
 ## bumper meets open air under the 0.34 m bottom rail and between the two
 ## courses and snags on a rail edge, where a closure should stop the car flat.
 ##
-## No streaming and no LOD: one draw call and a box per unit against a 300k triangle
-## budget, so residency is cheaper than the machinery. Measure with
-## `tools/frame_stats.py` and the driver's own `prims=/draws=` line before
-## believing that sentence about a bigger region.
+## No streaming and no LOD: a box per unit, and the look a `MultiMesh` per plan
+## cell of `prop_cells.tres`, hidden past its range like the lamps' (`P2-6`).
+## Residency is cheaper than the machinery. Measure with `tools/frame_stats.py`
+## and the driver's own `prims=/draws=` line before believing that sentence
+## about a bigger region.
 extends Node3D
 
 const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
@@ -96,7 +97,17 @@ func _ready() -> void:
 
 	for body: StaticBody3D in PropBatch.bodies(extent, transforms, "barrier_col"):
 		add_child(body)
-	add_child(PropBatch.batch(mesh, transforms, "BarrierRow"))
+	# Cut on the props' cells (`P2-6`): one region-wide `MultiMesh` was one box
+	# the culler could never drop, so both shadow cascades drew every barrier
+	# from anywhere in the region — 121k primitives at every view measured.
+	var cells := load(PropCellProfile.PATH) as PropCellProfile
+	if cells == null or cells.cell_m <= 0.0:
+		# Drawn uncut rather than not at all: a fence missing from the frame is
+		# `Q19`'s invisible refusal, a fence drawn whole only a cost.
+		push_error("fence: %s cuts no cells; the barriers draw as one batch" % PropCellProfile.PATH)
+		cells = null
+	for row: MultiMeshInstance3D in PropBatch.batches(mesh, transforms, "BarrierRow", cells):
+		add_child(row)
 	# ⚠️ **Both halves printed, and the collider count with them.** `placed` alone
 	# reads as success on a bundle where half the fence was refused, and a fence
 	# with holes in it is the state `Q19` forbids shipping. The collider count is

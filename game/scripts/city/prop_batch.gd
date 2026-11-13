@@ -47,6 +47,52 @@ static func batch(
 	return node
 
 
+## One `MultiMesh` over `transforms`, or with `cells` one per plan cell a
+## transform's origin falls in, each hidden past the profile's range.
+##
+## A region-wide `MultiMesh` is one box, so the engine draws every instance
+## from anywhere inside it and again in each shadow cascade: the lamps were
+## 129,240 of ~900,000 primitives on the throttle route, exactly 3x their
+## placed triangles (`Q135`). A cell is a box the engine can cull.
+##
+## `tint` is one colour a transform or empty; a cell takes its own share.
+static func batches(
+	mesh: Mesh,
+	transforms: Array[Transform3D],
+	mesh_name: String,
+	cells: PropCellProfile,
+	tint: PackedColorArray = PackedColorArray()
+) -> Array[MultiMeshInstance3D]:
+	if cells == null:
+		return [batch(mesh, transforms, mesh_name, PackedColorArray(), tint)]
+	var by_cell: Dictionary[Vector2i, Array] = {}
+	var tint_by_cell: Dictionary[Vector2i, PackedColorArray] = {}
+	for index: int in transforms.size():
+		var at: Transform3D = transforms[index]
+		var cell: Vector2i = cells.cell_of(at.origin)
+		if not by_cell.has(cell):
+			by_cell[cell] = []
+			tint_by_cell[cell] = PackedColorArray()
+		by_cell[cell].append(at)
+		if not tint.is_empty():
+			tint_by_cell[cell].append(tint[index])
+	var nodes: Array[MultiMeshInstance3D] = []
+	for cell: Vector2i in by_cell:
+		var part: Array[Transform3D] = []
+		part.assign(by_cell[cell])
+		var node: MultiMeshInstance3D = batch(
+			mesh,
+			part,
+			"%s_%d_%d" % [mesh_name, cell.x, cell.y],
+			PackedColorArray(),
+			tint_by_cell[cell]
+		)
+		node.visibility_range_end = cells.range_m
+		node.visibility_range_end_margin = cells.range_margin_m
+		nodes.append(node)
+	return nodes
+
+
 ## A static body per transform, each standing one box over `extent` — the
 ## prop's own frame. The `BoxShape3D` is built once and shared by reference.
 ## Empty for an `extent` with no volume, which the caller refuses.

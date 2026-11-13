@@ -2,15 +2,17 @@ class_name PropCellProfile
 extends Resource
 ## Which prop layers `layer_preview.gd` stands as a `MultiMesh` per plan cell
 ## rather than one per region, and how far away a cell is still drawn
-## (`P3-67`, `Q135`). The rationale for each value is in `tuning/prop_cells.md`;
+## (`P3-67`, `Q135`). The signal heads and the fence cut on the same cell and
+## range whatever `layers` says (`P2-6`). The rationale for each value is in `tuning/prop_cells.md`;
 ## what each *is* is here.
 ##
 ## 🔴 **No `@export` here declares a default**, on `StreamingProfile`'s
 ## convention: a missing key reads as zero, and the preview refuses a zero cell
 ## rather than fall back to a literal.
 
-## Path to the shipped table, so `layer_preview.gd` and `verify_city.gd` cannot
-## load two different files.
+## Path to the shipped table, so its readers — `layer_preview.gd`,
+## `signal_heads.gd`, `fence.gd` and `verify_city.gd` — cannot load two
+## different files.
 const PATH: String = "res://tuning/prop_cells.tres"
 
 ## Ids of `GeneratedLayer.LAYERS` whose placements are cut into cells. A layer
