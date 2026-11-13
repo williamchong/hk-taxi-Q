@@ -248,6 +248,9 @@ class Car:
 	var p1: Vector3
 	var p2: Vector3
 	var pose: Transform3D
+	## The pose its body and its instance were last written at: a car standing
+	## at a light is not written again.
+	var posed_at: Transform3D
 	var half_length: float = 0.0
 	var half_width: float = 0.0
 	var held: Held = Held.NONE
@@ -1032,10 +1035,13 @@ func step(delta: float) -> void:
 		beams.begin()
 	for car: Car in cars:
 		if car.live:
-			car.body.global_transform = car.pose
-			if car.slot < 0:
+			var fresh: bool = car.slot < 0
+			if fresh:
 				_take_slot(car)
-			_batches[car.kind].set_instance_transform(car.slot, car.pose)
+			if fresh or car.pose != car.posed_at:
+				car.posed_at = car.pose
+				car.body.global_transform = car.pose
+				_batches[car.kind].set_instance_transform(car.slot, car.pose)
 			# Standing for a passenger, it shows its brake lamps from the first tick:
 			# one placed mid-dwell has not braked yet.
 			_write_lamps(
