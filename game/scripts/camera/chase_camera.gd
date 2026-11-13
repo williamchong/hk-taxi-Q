@@ -70,7 +70,12 @@ func _ready() -> void:
 ## jolt on screen for a lift of centimetres.
 func snap_to_target() -> void:
 	_yaw = target.global_rotation.y
-	global_position = target.global_position
+	# The whole pose the tick below settles on, not the car's origin alone: that
+	# was `profile.height` under the anchor, so every snap eased up for a few
+	# ticks, and the streamer measures from this camera.
+	spring_length = profile.distance
+	global_position = target.global_position + Vector3.UP * profile.height
+	global_rotation = Vector3(deg_to_rad(profile.pitch_deg), _yaw, 0.0)
 
 
 func _physics_process(delta: float) -> void:
