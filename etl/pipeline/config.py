@@ -14,7 +14,8 @@ wrong by hundreds of metres, which is far more expensive than a stack trace.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import dataclasses
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -868,34 +869,13 @@ def load_config(path: Path | None = None) -> Config:
         )
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
-    if city.fares.places is not None:
-        _check_declared_source(city, city.fares.places, f"{path}:fares.places.source")
     if city.podiums is not None:
         _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
-    if city.carriageway_survey is not None:
-        for index, edge in enumerate(city.carriageway_survey.edges):
-            _check_declared_source(city, edge, f"{path}:carriageway_survey.edges[{index}].source")
-    if city.tramway is not None:
-        _check_declared_source(city, city.tramway, f"{path}:tramway.source")
-    if city.roads.street_class is not None:
-        _check_declared_source(city, city.roads.street_class, f"{path}:roads.street_class.source")
+    _check_declared_sources(city, city, str(path))
     if city.basemap is not None:
+        # Not a `LayerSpec` — it carries no schema mapping — so the walk passes it.
         _check_declared_source(city, city.basemap, f"{path}:basemap.source")
         _check_basemap_reach_is_fetched(city, path)
-    if city.arrows is not None:
-        _check_declared_source(city, city.arrows, f"{path}:arrows.source")
-    if city.boxjunctions is not None:
-        _check_declared_source(city, city.boxjunctions, f"{path}:boxjunctions.source")
-    if city.crossings is not None:
-        _check_declared_source(city, city.crossings, f"{path}:crossings.source")
-    if city.railings is not None:
-        _check_declared_source(city, city.railings, f"{path}:railings.source")
-    if city.road_marks is not None:
-        _check_declared_source(city, city.road_marks, f"{path}:road_marks.source")
-    if city.signs is not None:
-        _check_declared_source(city, city.signs, f"{path}:signs.source")
-    if city.signals is not None and city.signals.heads is not None:
-        _check_declared_source(city, city.signals.heads, f"{path}:signals.heads.source")
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
@@ -927,6 +907,30 @@ def _check_basemap_reach_is_fetched(city: Config, path: Path) -> None:
             f"{path}:basemap.reach_m is {basemap.reach_m} m and "
             f"tiled_sources.{basemap.source}.fetch_margin_m fetches only {fetched} m"
         )
+
+
+def _check_declared_sources(city: Config, node: Any, where: str) -> None:
+    """Every `LayerSpec` the config holds names a source the city declares.
+
+    A walk over the built config rather than a branch per block: the branch
+    list was hand-kept, and `lamps` and `parked.bays` were never on it, so a
+    typo in either loaded and surfaced stages later. `where` follows the field
+    names, which are the YAML's own keys for every block that carries one.
+    """
+    if isinstance(node, LayerSpec):
+        _check_declared_source(city, node, f"{where}.source")
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        separator = ":" if node is city else "."
+        for field in dataclasses.fields(node):
+            _check_declared_sources(
+                city, getattr(node, field.name), f"{where}{separator}{field.name}"
+            )
+    elif isinstance(node, (tuple, list)):
+        for index, item in enumerate(node):
+            _check_declared_sources(city, item, f"{where}[{index}]")
+    elif isinstance(node, Mapping):
+        for key, item in node.items():
+            _check_declared_sources(city, item, f"{where}.{key}")
 
 
 def _check_declared_source(city: Config, spec: Any, where: str) -> None:

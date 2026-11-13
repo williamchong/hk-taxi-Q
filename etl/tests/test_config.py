@@ -2457,6 +2457,30 @@ class TestCarriagewaySurvey:
         with pytest.raises(ValueError, match="which is not in tiled_sources"):
             load_config(rewrite(rename))
 
+    def test_a_lamp_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
+        """`lamps` and `parked.bays` were never on the hand-kept list of
+        checked blocks, so a typo in either loaded and failed stages later."""
+
+        def rename(doc: dict[str, Any]) -> None:
+            doc["lamps"]["source"] = "no_such_source"
+
+        with pytest.raises(ValueError, match=r"lamps\.source names 'no_such_source'"):
+            load_config(rewrite(rename))
+
+    def test_a_bay_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["parked"]["bays"]["source"] = "no_such_source"
+
+        with pytest.raises(ValueError, match=r"parked\.bays\.source names 'no_such_source'"):
+            load_config(rewrite(rename))
+
+    def test_a_basemap_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["basemap"]["source"] = "no_such_source"
+
+        with pytest.raises(ValueError, match=r"basemap\.source names 'no_such_source'"):
+            load_config(rewrite(rename))
+
     def test_a_malformed_member_placeholder_is_rejected(self, rewrite) -> None:
         """Otherwise it surfaces at first read, once per sheet, rather than at
         load — the same reason `podiums.member` is checked here."""
