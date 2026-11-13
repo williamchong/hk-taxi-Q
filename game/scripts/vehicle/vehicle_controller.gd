@@ -584,6 +584,12 @@ func _apply_air_drag() -> void:
 func _apply_coast_drag(delta: float) -> void:
 	if not is_zero_approx(throttle_input) or not is_zero_approx(brake_input):
 		return
+	# Both terms are the road's — tyres rolling and a drivetrain turning them —
+	# and the drive is already nothing in the air, going through wheel spin: a
+	# jump with the pedals lifted shed 6 m/s² along the nose at 80 kph where one
+	# with the throttle held shed none.
+	if not _any_wheel_grounded():
+		return
 	# `speed_kph` is this same dot product, taken at the top of the tick — nothing
 	# between the two writes `linear_velocity` or the basis, because property
 	# writes only land at the integration step.
