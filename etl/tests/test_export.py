@@ -15,7 +15,9 @@ file in the suite by three orders of magnitude.
 
 from __future__ import annotations
 
+import ast
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
@@ -1207,6 +1209,42 @@ class TestOrchestratorSideBySide:
                     waited_for.add(need)
                     frontier.append(need)
         assert waited_for == set(order) - {"export"}
+
+    def test_a_stage_needs_every_stage_whose_document_it_reads(self) -> None:
+        """`NEEDS` was measured once, off an audit hook, and is kept by hand: a
+        stage that starts reading a sibling's document and names no need for it
+        races that sibling under `--jobs` and reads the last run's file, which
+        usually still "works". A document is read by its `*_NAME` and
+        `*_SCHEMA`, so importing either from another stage's module is the
+        read, and the writer must be in this stage's needs, directly or not."""
+        stage_of = {entry.__module__: name for name, entry in orchestrator.STAGES.items()}
+
+        def everything_needed(name: str) -> set[str]:
+            found: set[str] = set()
+            frontier = [name]
+            while frontier:
+                for need in orchestrator.NEEDS[frontier.pop()]:
+                    if need not in found:
+                        found.add(need)
+                        frontier.append(need)
+            return found
+
+        unscheduled: list[str] = []
+        for module, name in stage_of.items():
+            source = Path(sys.modules[module].__file__).read_text(encoding="utf-8")
+            needed = everything_needed(name)
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.ImportFrom) or node.module not in stage_of:
+                    continue
+                writer = stage_of[node.module]
+                documents = [
+                    alias.name
+                    for alias in node.names
+                    if alias.name.endswith(("_NAME", "_SCHEMA")) or alias.name == "read_graph"
+                ]
+                if documents and writer != name and writer not in needed:
+                    unscheduled.append(f"{name} reads {writer}'s {', '.join(documents)}")
+        assert unscheduled == []
 
     def test_no_stage_starts_before_what_it_needs_has_finished(self, monkeypatch) -> None:
         calls = self._stub(monkeypatch)

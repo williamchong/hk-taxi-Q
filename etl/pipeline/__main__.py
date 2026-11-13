@@ -204,6 +204,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
 #
 # `test_every_stage_is_scheduled` holds this to `STAGES`: a new stage with no
 # entry here would otherwise start first and read whatever was on disk.
+# `test_a_stage_needs_every_stage_whose_document_it_reads` holds each entry to
+# the stage's own imports: a sibling's `*_NAME` or `*_SCHEMA` read with no need
+# named for its writer fails there.
 NEEDS: dict[str, tuple[str, ...]] = {
     "fetch": (),
     "podiums": ("fetch",),
