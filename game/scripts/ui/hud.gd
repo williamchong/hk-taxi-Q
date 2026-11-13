@@ -126,7 +126,12 @@ var pausable: bool = true:
 		pausable = value
 		if _pause_button != null:
 			_pause_button.visible = value
+		if _meter_tap != null:
+			_meter_tap.visible = value
 var _pause_button: PauseButton = null
+## The 咪錶 as a second way into the pause (the user's ask): a bare button over
+## the housing, since a thumb finds the meter before the two small bars.
+var _meter_tap: PauseButton = null
 
 var _clock_panel: ChamferPanel = null
 var _clock_value: Label = null
@@ -433,6 +438,15 @@ func _build() -> void:
 	# The one LED off the meter's red: dimmer, to be told from the tip's.
 	_total.lit = _style.total_lit
 	total_row.add_child(_total)
+	# The housing takes a tap as the pause button does (the user's ask): a
+	# `PauseButton` with no style draws nothing, and the panel's own filter is
+	# held at IGNORE by `ChamferPanel._ready`.
+	_meter_tap = PauseButton.new()
+	_meter_tap.name = "PauseTap"
+	_meter_tap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_meter_tap.visible = pausable
+	_meter_tap.pressed.connect(pause_pressed.emit)
+	_meter_panel.add_child(_meter_tap)
 
 	_timer_box = HBoxContainer.new()
 	_timer_box.name = "Timer"
@@ -541,7 +555,7 @@ func _build() -> void:
 
 	# ---- the pause ----
 	#
-	# The one control here that takes a tap (`Q165`): a phone has no Esc. It
+	# A control that takes a tap (`Q165`), as the meter is: a phone has no Esc. It
 	# says it was pressed and nothing more; `Main` owns what a pause is.
 	_pause_button = PauseButton.new()
 	_pause_button.name = "Pause"

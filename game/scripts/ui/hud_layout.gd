@@ -158,7 +158,7 @@ extends Resource
 ## takes in the arcade-taxi reference; the dev overlay's counter wins it when
 ## the overlay is on, as it does every corner.
 @export var clock: Rect2
-## The pause (`P6-1`, the user's ask): the HUD's one control that takes a tap,
+## The pause (`P6-1`, the user's ask): a control that takes a tap beside the 咪錶's own,
 ## since a phone has no Esc. Top-right beside the meter, far above both touch
 ## zones, so a tap on it is never a thumb landing; graded against the rests
 ## like every readout.

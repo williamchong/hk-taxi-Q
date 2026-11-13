@@ -10150,6 +10150,11 @@ rule's "🚫 No pause menu, no Esc back to the menu from the drive (not asked fo
   against 134 / 795,334 at t=3 on the throttle route, two runs a side, the car's path identical);
   hidden where nothing can pause (`Hud.pausable`, `Main`'s answer), so every `--menu=off` run
   draws what it drew before.
+- **The 咪錶 is a second button** (the user's ask, 2026-11-13: "clicking the taxi meter should open
+  menu so that we can pause/quit in mobile"): a style-less `PauseButton` laid full-rect over the
+  meter's housing, drawing nothing, shown with `Hud.pausable` and hidden with the panel. It ends at
+  y = 152 in the touch table and both thumb zones start at 240, so it claims no thumb. A click pushed
+  at its centre on `--menu-page=pause` opened the pause.
 - **`InputRouter` lets both thumbs go on `NOTIFICATION_PAUSED`**: a paused tree sends it no input,
   so a finger lifted over the menu would hold its last steer and throttle into the resume.
 

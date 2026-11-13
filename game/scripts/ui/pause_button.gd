@@ -1,7 +1,8 @@
 class_name PauseButton
 extends Button
 ## The drive's pause (`P6-1`, `Q165`, the user's ask): two bars on the glass,
-## the HUD's one control that takes a tap, since a phone has no Esc.
+## the HUD's control that takes a tap, since a phone has no Esc. With no
+## `style` it draws nothing: the 咪錶's tap is one laid over the housing.
 ##
 ## Drawn, not a glyph from the font: the Kai has no ⏸ and a fallback face would
 ## set it at its own weight. Bare like every readout since `Q163` — the bars in
