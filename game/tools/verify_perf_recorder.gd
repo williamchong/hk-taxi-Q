@@ -60,6 +60,12 @@ func _check_summary(recorder_script: GDScript) -> void:
 		"summary",
 		"84 frames over 16.7 ms, 67 over 33.3 (got %s, %s)" % [s["over_budget"], s["over_double"]]
 	)
+	var timed: String = recorder_script.timing_line(series, PackedFloat32Array([0.0, 0.0]))
+	_expect(
+		timed == "perf: gpu p50 50.00 p95 95.00 p99 99.00 ms, render cpu n/a",
+		"summary",
+		"a timed series prints its percentiles, an untimed one n/a (got %s)" % timed
+	)
 	var empty: Dictionary = recorder_script.summarize(PackedFloat32Array())
 	_expect(
 		int(empty["frames"]) == 0 and float(empty["max"]) == 0.0,
@@ -103,6 +109,17 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 		"run",
 		"the CSV opens on its header"
 	)
+	var names: PackedStringArray = str(recorder_script.HEADER).split(",")
+	_expect(
+		(
+			names.size() == COLUMNS
+			and names[4] == "gpu_ms"
+			and names[5] == "render_cpu_ms"
+			and names[COLUMNS - 1] == "tiles"
+		),
+		"run",
+		"the header names %d columns, the render timings at 4 and 5 and tiles last" % COLUMNS
+	)
 	var rows: int = 0
 	var tiles: int = 0
 	var monotonic: bool = true
@@ -130,8 +147,8 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 		(
 			summary_lines.size() == 5
 			and summary_lines[2].contains("p99")
-			and summary_lines[4].contains("gpu")
+			and summary_lines[4] == "perf: gpu n/a, render cpu n/a"
 		),
 		"run",
-		"the summary is written beside the CSV, five lines: frame and gpu percentiles"
+		"the summary is written beside the CSV, five lines, the headless render timings n/a"
 	)

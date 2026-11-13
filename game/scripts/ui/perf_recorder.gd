@@ -228,11 +228,23 @@ func _finish() -> void:
 			out.store_line(line)
 
 
+## The renderer's two timings as one summary line. A series that never read
+## above 0 says `n/a`: the driver did not time it (Metal's GPU, or headless), and
+## 0.00 would read as a free GPU.
+static func timing_line(gpu_ms: PackedFloat32Array, render_cpu_ms: PackedFloat32Array) -> String:
+	return "perf: gpu %s, render cpu %s" % [_percentiles(gpu_ms), _percentiles(render_cpu_ms)]
+
+
+static func _percentiles(series: PackedFloat32Array) -> String:
+	var s: Dictionary = summarize(series)
+	if float(s["max"]) <= 0.0:
+		return "n/a"
+	return "p50 %.2f p95 %.2f p99 %.2f ms" % [s["p50"], s["p95"], s["p99"]]
+
+
 ## The run's summary, as printed and as written beside the CSV.
 func summary_lines() -> PackedStringArray:
 	var s: Dictionary = summarize(_frames_ms)
-	var gpu: Dictionary = summarize(_gpu_ms)
-	var render_cpu: Dictionary = summarize(_render_cpu_ms)
 	var window: Vector2i = DisplayServer.window_get_size()
 	return PackedStringArray(
 		[
@@ -249,16 +261,6 @@ func summary_lines() -> PackedStringArray:
 				"perf: over %.1f ms %d (%d with a tile instantiated), over %.1f ms %d"
 				% [BUDGET_MS, s["over_budget"], _hitches_tiled, DOUBLE_MS, s["over_double"]]
 			),
-			(
-				"perf: gpu p50 %.2f p95 %.2f p99 %.2f, render cpu p50 %.2f p95 %.2f p99 %.2f ms"
-				% [
-					gpu["p50"],
-					gpu["p95"],
-					gpu["p99"],
-					render_cpu["p50"],
-					render_cpu["p95"],
-					render_cpu["p99"]
-				]
-			),
+			timing_line(_gpu_ms, _render_cpu_ms),
 		]
 	)
