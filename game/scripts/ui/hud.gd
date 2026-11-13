@@ -411,6 +411,7 @@ func _build() -> void:
 	meter_lines.add_theme_constant_override(&"separation", 0)
 	_lines(_meter_panel, 0).add_child(meter_lines)
 	var meter_row: HBoxContainer = _row(meter_lines, "Row", roundi(_style.plate_pad.y))
+	meter_row.alignment = BoxContainer.ALIGNMENT_END
 	var currency: Label = _label("Currency", _style.meter_label_size, _style.chip_muted)
 	currency.text = "HK$"
 	currency.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -422,8 +423,11 @@ func _build() -> void:
 	meter_row.add_child(_meter)
 	# The tip, live: the one number on the meter the driver can move at the
 	# wheel, on the same LED in the same red (the user's call), smaller.
-	_tip_row = _row(meter_lines, "TipRow", roundi(_style.plate_pad.y))
-	_tip_row.alignment = BoxContainer.ALIGNMENT_END
+	# The tip and the takings share one line under the fare (the user's ask),
+	# the tip first so the takings hold the right edge whether it shows or not.
+	var sub_row: HBoxContainer = _row(meter_lines, "SubRow", roundi(_style.plate_pad.y))
+	sub_row.alignment = BoxContainer.ALIGNMENT_END
+	_tip_row = _row(sub_row, "TipRow", roundi(_style.plate_pad.y))
 	_tip_row.visible = false
 	_tip_caption = _label("TipCaption", _style.meter_label_size, _style.chip_muted)
 	_tip_caption.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -434,8 +438,7 @@ func _build() -> void:
 	_tip_row.add_child(_tip)
 	# The takings on the same LED again (the user's ask), in cells of their
 	# own: a session outruns the fare's five.
-	var total_row: HBoxContainer = _row(meter_lines, "TotalRow", roundi(_style.plate_pad.y))
-	total_row.alignment = BoxContainer.ALIGNMENT_END
+	var total_row: HBoxContainer = _row(sub_row, "TotalRow", roundi(_style.plate_pad.y))
 	_total_caption = _label("TotalCaption", _style.meter_label_size, _style.chip_muted)
 	_total_caption.size_flags_vertical = Control.SIZE_SHRINK_END
 	total_row.add_child(_total_caption)
