@@ -892,6 +892,14 @@ func _parse_args() -> bool:
 				if not [Locale.ENGLISH, Locale.CHINESE].has(value):
 					_fail("--lang=%s is not en or zh" % value)
 					return false
+			"--perf-log", "--perf-skip":
+				# `perf_recorder.gd` reads these itself (`P2-6`), the phone's
+				# instrument run on the desktop to compare against `draws`.
+				# The log needs a positive length; a skip of 0 is allowed.
+				var least: float = 0.0 if key == "--perf-skip" else 0.001
+				if not value.is_valid_float() or value.to_float() < least:
+					_fail("%s=%s is not a number of seconds" % [key, value])
+					return false
 			"--time-of-day":
 				# `lighting_rig.gd` reads this one itself (`Q160`) and holds the
 				# rig there; a value it cannot read would leave the frame at

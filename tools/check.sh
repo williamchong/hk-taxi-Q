@@ -73,7 +73,7 @@ VERIFY_TOOLS=(
 # nothing — the promise every scripted daylight frame rests on.
 ALWAYS_TOOLS=(
 	verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input
-	verify_authored verify_menu verify_day_cycle
+	verify_authored verify_menu verify_day_cycle verify_perf_recorder
 )
 
 # Tuning resources and scenes that carry no sidecar .md, and are allowed not

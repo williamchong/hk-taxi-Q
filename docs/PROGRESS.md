@@ -98,7 +98,7 @@ Phase 0–2
 - `P2-4` 🟡 `InputRouter` — built; touch is three of five actions (`Q97`); `drift` and `look_back`
   have no touch home (`Q83`); every `touch.tres` value is a first guess. Review needs `P0-3b`. 2026-11-13 (`Q204`): the zones reach into the notch strips, the touch table scales 1.25 with larger thumb rests, and the thumbs are drawn as the taxi's wheel and pedals; still relative.
 - `P2-5` ✅ Chase camera — reviewed; yaw law corrected, dials in `camera.tres` (`Q98`).
-- `P2-6` ⬜ Performance pass — Phase 2 gate; needs `P0-3b`.
+- `P2-6` 🟡 Performance pass — Phase 2 gate; needs `P0-3b`. 2026-11-13: the instrument is built — `--perf-log=<s>` writes a row per frame to `user://perf.csv` with a p50/p95/p99 summary, in a release build too (`perf_recorder.gd`, `verify_perf_recorder`, 4 mutations caught); a release iOS build is on the iPhone Air. No handset number yet.
 - `P2-7` ✅ Off-grade carriageway on its structure — deck |error| p90 0.095 m (`Q20`, `Q23`).
 
 Phase 3 — Build `B2`

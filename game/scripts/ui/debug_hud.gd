@@ -82,6 +82,8 @@ const _MARGIN := Vector2(16.0, 12.0)
 ## The frame counter, built here since `Q119` rather than autoloaded beside this.
 ## `preload`ed by path: the script has no `class_name`, on the verify tools' rule.
 const FpsCounterScript = preload("res://scripts/ui/fps_counter.gd")
+## Built only under `--perf-log=`; see `perf_recorder.gd`.
+const PerfRecorderScript = preload("res://scripts/ui/perf_recorder.gd")
 
 var view: View = View.OFF
 
@@ -101,6 +103,15 @@ func _ready() -> void:
 	layer = 127
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build()
+
+	# Before the gate below: the recorder is wanted in a release build on a
+	# handset, which is exactly where the overlay is parked (`P2-6`).
+	var perf_seconds: float = PerfRecorderScript.armed_seconds()
+	if perf_seconds > 0.0:
+		var recorder := PerfRecorderScript.new()
+		recorder.name = "PerfRecorder"
+		recorder.configure(perf_seconds, PerfRecorderScript.armed_skip())
+		add_child(recorder)
 
 	# Headless overrides everything, including an explicit `--debug-view`: the
 	# dummy rasteriser draws nothing, so the only thing an overlay could do there

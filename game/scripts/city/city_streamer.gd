@@ -91,6 +91,11 @@ class Resident:
 	var node: Node3D = null
 
 
+## Tiles instantiated by every streamer since launch. Read by the frame recorder
+## (`perf_recorder.gd`, `P2-6`) to tie a long frame to an instantiation, which
+## runs on the main thread with its Jolt trimesh registration.
+static var instantiated_total: int = 0
+
 var _manifest: CityManifest = null
 ## Everything this streams — `CityManifest.streamable_units()` — indexed like
 ## `_residents`.
@@ -321,6 +326,7 @@ func _settle(eye: Vector3) -> void:
 		node.name = _units[index].node_name(tier)
 		add_child(node)
 		instantiated += 1
+		instantiated_total += 1
 
 		# The new tier is in the tree before the old one leaves, so a tier swap
 		# never opens a hole. They overlap for one frame at a cost of one extra
