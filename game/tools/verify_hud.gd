@@ -2035,8 +2035,9 @@ func _check_fare_face() -> void:
 	)
 
 	# The receipt (`P3-49`): what banked, over the sum that made it — the
-	# meter, the time and each skill by name with its count. 31.1 on the meter
-	# from the 2,200 m above; 12.5 of time; two drifts and a speed.
+	# meter, the time and the skills as one sum (by name they overran the box).
+	# 31.1 on the meter from the 2,200 m above; 12.5 of time; two drifts and a
+	# speed.
 	fare.banked_hkd = 122.88
 	fare.time_hkd = 12.5
 	fare.awards.append(FareScript.Award.new(FareScript.Skill.DRIFT, 5.0))
@@ -2050,7 +2051,7 @@ func _check_fare_face() -> void:
 		(
 			face.caption == "DELIVERED · TIP HK$27.5"
 			and face.callout == "HK$122.9"
-			and (face.callout_sub == "meter 31.1 + time 12.5 + drift ×2 10.0 + high speed 5.0")
+			and (face.callout_sub == "meter 31.1 + time 12.5 + skills 15.0")
 		),
 		"face",
 		"delivered: the callout holds what was banked over the receipt (%s)" % face.callout_sub
@@ -2058,10 +2059,7 @@ func _check_fare_face() -> void:
 	zh.on_ended(fare, true)
 	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
-		(
-			zh.caption == "已送達 · 小費 HK$27.5"
-			and zh.callout_sub == "咪錶 31.1 + 時間 12.5 + 甩尾 ×2 10.0 + 高速行駛 5.0"
-		),
+		zh.caption == "已送達 · 小費 HK$27.5" and zh.callout_sub == "咪錶 31.1 + 時間 12.5 + 技巧 15.0",
 		"face",
 		"and in Chinese (%s)" % zh.callout_sub
 	)
@@ -2135,7 +2133,7 @@ func _check_fare_face() -> void:
 	_expect(
 		(
 			face.caption == "DELIVERED · +HK$10.0 early · TIP HK$22.5"
-			and face.callout_sub == "meter 31.1 + time 12.5 + early 10.0"
+			and face.callout_sub == "meter 31.1 + time 12.5 + skills 10.0"
 		),
 		"face",
 		"an early arrival is named at the door (%s)" % face.caption
@@ -2187,7 +2185,7 @@ func _check_fare_face() -> void:
 		(
 			face.caption == "RAN OFF WITHOUT PAYING"
 			and face.callout == "HK$0.0"
-			and face.callout_sub == "meter 31.1 + drift ×2 10.0 + high speed 5.0 lost"
+			and face.callout_sub == "meter 31.1 + skills 15.0 lost"
 		),
 		"face",
 		"bailed says so, over what was lost (%s)" % face.callout_sub
@@ -2195,7 +2193,7 @@ func _check_fare_face() -> void:
 	zh.on_ended(fare, false)
 	zh.on_sampled(idle, fare, stand, 10.0, 122.88)
 	_expect(
-		zh.caption == "乘客走數" and zh.callout_sub == "咪錶 31.1 + 甩尾 ×2 10.0 + 高速行駛 5.0 冇收",
+		zh.caption == "乘客走數" and zh.callout_sub == "咪錶 31.1 + 技巧 15.0 冇收",
 		"face",
 		"and in Chinese (%s)" % zh.callout_sub
 	)
@@ -2210,10 +2208,11 @@ func _check_fare_face() -> void:
 	var docked: RefCounted = FareScript.Award.new(FareScript.Skill.CRASH, -5.0)
 	var bumped: RefCounted = FareScript.Award.new(FareScript.Skill.BUMP, -2.0)
 	bare.awards.append(docked)
+	bare.skills_hkd = -5.0
 	bare.time_hkd = 4.0
 	_expect(
 		(
-			face.receipt(bare) == "meter 29.0 + time 4.0 + touching an object (serious) −5.0"
+			face.receipt(bare) == "meter 29.0 + time 4.0 + skills −5.0"
 			and face.award_text(docked) == "−HK$5.0 touching an object (serious)"
 			and zh.award_text(docked) == "−HK$5.0 碰及物體（嚴重）"
 			and face.award_text(bumped) == "−HK$2.0 touching an object (minor)"

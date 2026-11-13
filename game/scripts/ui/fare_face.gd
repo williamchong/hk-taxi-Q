@@ -28,7 +28,8 @@ extends RefCounted
 ##
 ## **The receipt says why there was a tip** (`P3-49`, the user's ask): at a
 ## delivery the callout holds what banked over a line adding it up — the
-## meter, the time left, each skill by name with its count. A skill that pays
+## meter, the time left, the skills as one sum (by name they ran past the
+## box, 2026-11-14; each is named by its flash and on the 成績表). A skill that pays
 ## mid-drive flashes under the clock as `award_text`. A bail is said as what
 ## it is — the passenger ran off without paying — over what walked out with
 ## them.
@@ -259,9 +260,11 @@ func skill_name(skill: Fare.Skill) -> String:
 	return ExamSheet.shared().item_name(skill, _language)
 
 
-## The delivery's sum, as one line: the meter, the time left, then each skill
-## that paid with its count — "meter 29.0 + time 18.0 + drift ×2 10.0".
-## Skills that never paid are left out; a fare with no tip is the meter alone.
+## The delivery's sum, as one line: the meter, the time left, then every
+## skill's money as ONE sum — "meter 29.0 + time 18.0 + skills 10.0". Not by
+## skill (the user's call, 2026-11-14): a fare of many skills ran the line past
+## the box and shrank it to a squiggle; each skill was flashed as it paid, and
+## the 成績表 counts them. No skill paid, no term; no tip, the meter alone.
 func receipt(fare: Fare) -> String:
 	var time: PackedStringArray = []
 	if fare.time_hkd > 0.0:
@@ -269,30 +272,18 @@ func receipt(fare: Fare) -> String:
 	return " + ".join(_sum_lines(fare, time))
 
 
-## What a bail cost: the meter and every skill that had paid, all unpaid.
+## What a bail cost: the meter and the skills that had paid, all unpaid.
 func forfeit(fare: Fare) -> String:
 	return " + ".join(_sum_lines(fare, [])) + _say(" 冇收", " lost")
 
 
-## The meter, `after` it, then each skill that paid with its count and its
-## total — one pass over the awards.
+## The meter, `after` it, then the skills' net sum, a penalty docked from it.
+## Keyed on `awards`, not the sum: a bump and a drift that cancel still paid.
 func _sum_lines(fare: Fare, after: PackedStringArray) -> PackedStringArray:
 	var lines: PackedStringArray = [_say("咪錶 ", "meter ") + money(fare.meter.reading_hkd())]
 	lines.append_array(after)
-	var counts: PackedInt32Array = []
-	var paid: PackedFloat64Array = []
-	counts.resize(Fare.Skill.size())
-	paid.resize(Fare.Skill.size())
-	for award: Fare.Award in fare.awards:
-		counts[award.skill] += 1
-		paid[award.skill] += award.hkd
-	for skill: int in Fare.Skill.size():
-		if counts[skill] == 0:
-			continue
-		var name: String = skill_name(skill as Fare.Skill)
-		if counts[skill] > 1:
-			name += " ×%d" % counts[skill]
-		lines.append("%s %s" % [name, signed(paid[skill])])
+	if not fare.awards.is_empty():
+		lines.append(_say("技巧 ", "skills ") + signed(fare.skills_hkd))
 	return lines
 
 

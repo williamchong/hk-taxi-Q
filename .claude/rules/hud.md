@@ -97,7 +97,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   decided in `hud.gd` is one the check cannot see. ⚠️ **The early arrival is named in the delivery
   caption** ("DELIVERED · +HK$10.0 early · TIP HK$22.5", the user's ask): it pays in the same call
   as `delivered`, so its `skilled` flash is overwritten by the banked sum before a frame shows it —
-  a skill paid at the door is shown by the caption, never by the flash. 🔴 **A stop is its building over its road**
+  a skill paid at the door is shown by the caption, never by the flash. 🔴 **The receipt sums the skills as ONE term** ("meter 31.1 + time 12.5 + skills 15.0", 咪錶 / 時間 / 技巧; the user's pick 2026-11-14): by name a many-skill fare overran the callout box and `shrink_to` cut it to an unreadable squiggle — each skill is named by its flash and counted on the 成績表. 🔴 **A stop is its building over its road**
   (`Q142`): the first row is `Fare.Stop.place_en()` / `place_zh()` — `fares.json`'s `place`, iB1000's
   name, falling back to TD's description — and the second is the graph's road name for the stop's
   edge with the distance while idle. 🚫 Do not parse the building out of the description; the
