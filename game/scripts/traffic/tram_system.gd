@@ -129,13 +129,9 @@ func _ready() -> void:
 		_stand_down()
 
 
-## Leave the tree without one more tick. `queue_free` waits for the frame's end,
-## and a long first frame — a phone's — runs physics before it: a tick on a
-## system never set up read a null graph and crashed the iOS build under
-## `--traffic=off` (`P2-6`). The desktop's first frame ticked none, so it hid.
+## Leave the tree without one more tick: see `TrafficSystem._stand_down`.
 func _stand_down() -> void:
 	set_physics_process(false)
-	set_process(false)
 	queue_free()
 
 

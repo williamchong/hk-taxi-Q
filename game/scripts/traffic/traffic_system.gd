@@ -432,7 +432,6 @@ func _ready() -> void:
 ## `--traffic=off` (`P2-6`). The desktop's first frame ticked none, so it hid.
 func _stand_down() -> void:
 	set_physics_process(false)
-	set_process(false)
 	queue_free()
 
 
