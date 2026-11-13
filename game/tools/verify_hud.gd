@@ -2103,6 +2103,22 @@ func _check_fare_face() -> void:
 			% [zh.combo_parts(combo), face.combo_parts(combo)]
 		)
 	)
+	# The live line's skill (the user's call, 2026-11-13): the one that just
+	# joined, with ITS count in the combo, not the total's — and the money
+	# first only when a passenger paid it, as the flash it replaces said.
+	var joined: RefCounted = FareScript.Award.new(FareScript.Skill.SPEED, 5.0)
+	_expect(
+		(
+			zh.combo_skill_text(joined, combo, false) == "高速行駛 ×2"
+			and face.combo_skill_text(joined, combo, false) == "high speed ×2"
+			and zh.combo_skill_text(joined, combo, true) == "+HK$5.0 高速行駛 ×2"
+		),
+		"face",
+		(
+			"the live line names the skill that joined and its own count (%s / %s)"
+			% [zh.combo_skill_text(joined, combo, false), zh.combo_skill_text(joined, combo, true)]
+		)
+	)
 	# An early arrival is named in the delivery's caption, since its flash is
 	# overwritten by the banked sum in the same call.
 	var early_fare: RefCounted = FareScript.new()

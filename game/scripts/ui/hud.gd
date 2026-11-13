@@ -164,13 +164,20 @@ var _callout_sub: Label = null
 ## The meter's tick, flashed under the clock and faded out (the user's call).
 var _tick: Label = null
 var _tick_s: float = 0.0
-## The style combo (`P3-2b`, `Q205`) under the meter, in the `award` slot: the
-## headline, the skills it holds, and the gap's bar while it runs; the final
-## held then faded once it ends.
+## The style combo (`P3-2b`, `Q205`), split in two (the user's call,
+## 2026-11-13): the live line in the tick's row — the skill that just joined
+## and its count, small, beside 車手 ×N with the gap's bar under it — and the
+## summary of every skill it holds under the meter, in the `award` slot. The
+## final total is held then faded in both once it ends.
 var _combo_panel: ChamferPanel = null
-var _combo_value: Label = null
 var _combo_parts: Label = null
+var _combo_live: ChamferPanel = null
+var _combo_skill: Label = null
+var _combo_value: Label = null
 var _combo_bar: ColorRect = null
+## Whether the flash in the tick's row is a skill's, which a combo's live line
+## replaces at once; a meter tick or a delivery is not, and the line waits.
+var _tick_yields: bool = false
 ## Seconds the ended combo stays up; the last `tick_fade_s` of them fade.
 var _combo_fade_s: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
@@ -514,26 +521,38 @@ func _build() -> void:
 
 	# ---- the style combo (`P3-2b`, `Q205`) ----
 	#
-	# Under the meter, in the slot `Q138` reserved for it: the combo is no
-	# money, but it is the drive's score, and the middle of the frame stays
-	# the clock's. Bare like the tick, in the gain's green.
-	_combo_panel = _bare("Combo", root, _layout.award)
-	var combo_lines: VBoxContainer = _lines(_combo_panel, 0)
+	# The live line where the skill flashed (the user's call, reversing
+	# `Q138`'s "nothing in the middle" for this one line): what is happening
+	# now goes where the eye already is, one row deep so it stays off the
+	# taxi on a handset. The skill small in the chip's ink, the total in the
+	# gain's green and the gap's bar under the total alone.
+	var sub_size: int = _sized(_style.callout_sub_size_zh, _style.callout_sub_size)
+	_combo_live = _bare("ComboLive", root, _layout.tick)
+	var live_row: HBoxContainer = _row(_lines(_combo_live, 0), "Row", roundi(_style.plate_pad.y))
+	_combo_skill = _outlined(_label("Skill", sub_size, _style.chip_ink))
+	_combo_skill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	live_row.add_child(_combo_skill)
+	var total_lines := VBoxContainer.new()
+	total_lines.name = "TotalLines"
+	total_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	total_lines.add_theme_constant_override(&"separation", 0)
+	live_row.add_child(total_lines)
 	_combo_value = _outlined(_label("Total", _style.tick_size, _style.accent))
-	combo_lines.add_child(_combo_value)
-	_combo_parts = _label(
-		"Skills", _sized(_style.callout_sub_size_zh, _style.callout_sub_size), _style.chip_ink
-	)
-	combo_lines.add_child(_style.shade(_combo_parts))
-	if chinese and _font_zh != null:
-		_combo_value.add_theme_font_override(&"font", _font_zh)
-		_combo_parts.add_theme_font_override(&"font", _font_zh)
+	total_lines.add_child(_combo_value)
 	_combo_bar = ColorRect.new()
 	_combo_bar.name = "Gap"
 	_combo_bar.color = _style.accent
 	_combo_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_combo_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	combo_lines.add_child(_combo_bar)
+	total_lines.add_child(_combo_bar)
+	# The summary under the meter, in the slot `Q138` reserved for it: a
+	# record to glance at, one small line, so it no longer reads as money.
+	_combo_panel = _bare("Combo", root, _layout.award)
+	_combo_parts = _label("Skills", sub_size, _style.chip_ink)
+	_lines(_combo_panel, 0).add_child(_style.shade(_combo_parts))
+	if chinese and _font_zh != null:
+		for label: Label in [_combo_skill, _combo_value, _combo_parts]:
+			label.add_theme_font_override(&"font", _font_zh)
 
 	# ---- 特更's clock: the hour, and when the day ends ----
 	#
@@ -1092,15 +1111,33 @@ func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
 
 
 ## A skill paid (`P3-49`): the money and its name, in the gain's green, so a
-## tip is seen being earned and not only counted at the door.
+## tip is seen being earned and not only counted at the door. Inside a combo
+## it is the live line's skill instead.
 func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
+	if fares.combo.shown():
+		_join_live(award, true)
+		return
 	_flash(_face.award_text(award), _award_ink(award))
+	_tick_yields = true
 
 
 ## A skill performed with no passenger aboard: its name alone, in the same
 ## ink, so a stunt can be practised between fares — nothing is paid.
 func _on_fare_practised(award: Fare.Award) -> void:
+	if fares.combo.shown():
+		_join_live(award, false)
+		return
 	_flash(_face.practice_text(award), _award_ink(award))
+	_tick_yields = true
+
+
+## A bonus that joined a combo big enough to show. `FareSystem._award` emits
+## `combo_changed` BEFORE `skilled` / `practised`, so the counts read here
+## already hold this award; a penalty has cleared the combo by then, so it
+## never lands here and flashes in red.
+func _join_live(award: Fare.Award, paid: bool) -> void:
+	_paint_live(fares.combo, _face.combo_skill_text(award, fares.combo, paid), _style.accent)
+	_size_gap_bar()
 
 
 func _award_ink(award: Fare.Award) -> Color:
@@ -1117,6 +1154,8 @@ func _flash(text: String, ink: Color) -> void:
 	_tick.modulate = Color.WHITE
 	_tick.visible = true
 	_tick_s = _style.tick_fade_s
+	_tick_yields = false
+	_combo_live.visible = false
 
 
 ## Fade the tick out: alpha follows the time left, and the label hides at the
@@ -1127,37 +1166,81 @@ func _update_tick(delta: float) -> void:
 	_tick_s -= delta
 	if _tick_s <= 0.0:
 		_tick.visible = false
+		_place_live()
 		return
 	_tick.modulate = Color(
 		1.0, 1.0, 1.0, clampf(_tick_s / maxf(_style.tick_fade_s, 0.001), 0.0, 1.0)
 	)
 
 
-## A skill joined the combo: the headline and the skills, the gap's bar full.
-## Up only once the combo is big enough to be one (`StyleCombo.shown`).
+## A skill joined the combo: the summary, the gap's bar full. Up only once the
+## combo is big enough to be one (`StyleCombo.shown`); the live line is
+## painted by the award that follows (`_join_live`).
 func _on_combo_changed(combo: StyleCombo) -> void:
 	if not combo.shown():
 		return
-	_paint_combo(combo, _style.accent)
+	_paint_combo(combo)
 	_combo_bar.visible = true
-	_combo_bar.custom_minimum_size = Vector2(_layout.award.size.x, _style.accent_px)
 	_combo_fade_s = 0.0
 
 
-## The combo is over: its final held in green when the gap ran out, in the
-## penalty's red when a hit broke it, then faded. Too small a combo just goes.
+## The combo is over: its total held alone in the live line, in green when the
+## gap ran out and in the penalty's red when a hit broke it, beside the summary,
+## both then faded. Too small a combo just goes.
 func _on_combo_ended(combo: StyleCombo, broken: bool) -> void:
 	if not combo.shown():
 		_combo_panel.visible = false
+		_combo_live.visible = false
 		return
-	_paint_combo(combo, _style.accent_negative if broken else _style.accent)
+	_paint_combo(combo)
 	_combo_bar.visible = false
+	_paint_live(combo, "", _style.accent_negative if broken else _style.accent)
 	_combo_fade_s = _style.callout_hold_s
 
 
-func _paint_combo(combo: StyleCombo, ink: Color) -> void:
+## The live line: `skill_text` small beside the total in `ink`, the skill cut
+## to the row's room left of the total; no skill once the combo has ended.
+func _paint_live(combo: StyleCombo, skill_text: String, ink: Color) -> void:
 	_combo_value.text = _face.combo_text(combo)
-	_combo_value.add_theme_color_override(&"font_color", ink)
+	# The one write here Godot does not skip on an equal value.
+	if _combo_value.get_theme_color(&"font_color") != ink:
+		_combo_value.add_theme_color_override(&"font_color", ink)
+	_combo_skill.text = skill_text
+	_combo_skill.visible = not skill_text.is_empty()
+	if _combo_skill.visible:
+		var room: float = _layout.tick.size.x - _text_px(_combo_value) - _style.plate_pad.y
+		StreetPlate.shrink_to(
+			_combo_skill, _sized(_style.callout_sub_size_zh, _style.callout_sub_size), room
+		)
+	_combo_live.modulate = Color.WHITE
+	_place_live()
+
+
+## The live line is up while the combo shows, unless a flash that does not
+## yield — a meter tick, a delivery — holds the row; it comes back as that
+## flash fades (`_update_tick`). A skill's flash gives way at once.
+func _place_live() -> void:
+	if _tick.visible and _tick_yields:
+		_tick.visible = false
+	_combo_live.visible = _combo_panel.visible and not _tick.visible
+
+
+## The gap's bar under the total, as wide as the total's text at a full gap.
+func _size_gap_bar() -> void:
+	_combo_bar.custom_minimum_size = Vector2(
+		_text_px(_combo_value) * fares.combo.remaining_share(), _style.accent_px
+	)
+
+
+## A label's text width off its font, as `StreetPlate.fitted_size` measures it:
+## a label written this frame can report a stale minimum size.
+static func _text_px(label: Label) -> float:
+	var font: Font = label.get_theme_font(&"font")
+	var size: int = label.get_theme_font_size(&"font_size")
+	return font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+
+
+func _paint_combo(combo: StyleCombo) -> void:
 	_combo_parts.text = _face.combo_parts(combo)
 	StreetPlate.shrink_to(
 		_combo_parts,
@@ -1176,10 +1259,12 @@ func _update_combo(delta: float) -> void:
 	_combo_fade_s -= delta
 	if _combo_fade_s <= 0.0:
 		_combo_panel.visible = false
+		_combo_live.visible = false
 		return
 	_combo_panel.modulate = Color(
 		1.0, 1.0, 1.0, clampf(_combo_fade_s / maxf(_style.tick_fade_s, 0.001), 0.0, 1.0)
 	)
+	_combo_live.modulate = _combo_panel.modulate
 
 
 func _on_fare_bailed(fare: Fare) -> void:
@@ -1199,7 +1284,7 @@ func _on_fare_sampled() -> void:
 	# The gap's bar at the loop's 5 Hz: it stands still while a skill is in
 	# progress, which only the loop knows.
 	if _combo_bar.visible and fares.combo.live():
-		_combo_bar.custom_minimum_size.x = (_layout.award.size.x * fares.combo.remaining_share())
+		_size_gap_bar()
 	_paint_fares()
 
 

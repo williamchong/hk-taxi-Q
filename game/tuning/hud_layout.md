@@ -28,8 +28,10 @@ a guess either way, and this one is the user's. `P2-4` re-measures it.
 ⚠️ THE GOAL BOX IS 520 WIDE, not 700: it carries one language since `Q142`,
 and the street plate's strip is 56 tall for the same reason — one line.
 
-⚠️ THE NO ENTRY SIGN SITS UNDER THE COUNTDOWN AND THE TICK (y 320, the user's
-call), not at the top: the top-centre is the callout's, flush with the edge.
+⚠️ THE NO ENTRY SIGN SITS UNDER THE COUNTDOWN AND THE TICK (the user's call),
+not at the top: the top-centre is the callout's, flush with the edge. 4 px under
+the tick in both tables — y 352 on the desk since `Q212` moved the tick, y 432
+on touch.
 
 🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the world, right is
 the car, top is the fare, and the middle is the road — with ONE exception the
@@ -37,13 +39,16 @@ user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred
 just under the goal box (y 116), with no housing behind them, and the meter's
 tick and the NO ENTRY sign follow down the same column. A countdown is what an
 arcade racer puts there, and it is only up while a fare runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
-fades; nothing else joins them.
+fades; nothing else joins them but the style combo's live line, which shares
+the tick's row (`Q212`, the user's call): the skill that joined, small, beside
+車手 ×N and the gap's bar. A tick or a delivery takes the row back for its flash.
 
 ⚠️ THE TICK IS 800 WIDE, not 300 (`P3-76`, `Q169`): a skill flashes its item
 off the driving test's fault sheet, and "−HK$5.0 touching an object
 (serious)" is the longest line it says. Centred on the same column, it spans
-x 560–1360 at y 248–308 — above the touch zones (from y 480) and clear of the
-pause button (x 1440) — and `hud.gd` shrinks a line to the box rather than
+x 560–1360 at y 288–348 — above the touch zones (from y 480) and clear of the
+pause button (x 1440); 288, not 248, since `Q212`: the world's guide arrow
+lands around y 180–260 on the desk and sat on the combo's total — and `hud.gd` shrinks a line to the box rather than
 letting it run past.
 
 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
@@ -60,8 +65,9 @@ pair is anchored as the PLATE is — bottom, with the speed.
 ⚠️ `combo` IS RESERVED, for `P3-2b`'s fare combo: one rect for every
 component a planned task is known to add (`Q138`), graded now and drawn only
 under `--debug-view=full`. `award` was, until the style combo filled it
-(`Q205`, 2026-11-13: 車手 ×N over the skills it holds, the gap's bar under
-them, 340 × 72 under the meter). `timer`, `meter` and `callout` were, until `P3-5a` filled
+(`Q205`, 2026-11-13); since `Q212` it holds only the combo's summary — each
+skill and its count, one small line under the meter — while 車手 ×N lives in
+the tick's row. `timer`, `meter` and `callout` were, until `P3-5a` filled
 them — the 咪錶 top-right, the callout top-centre as they stood, and the tip
 clock moved to the middle of the frame (`Q142`) — and they stay graded against
 the thumbs as filled slots.

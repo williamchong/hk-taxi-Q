@@ -147,9 +147,9 @@ extends Resource
 ## The meter's tick — "+HK$2.1" as a unit begins — flashed under the clock
 ## (`P3-5a`, the user's call: feedback near the centre for every tick).
 @export var tick: Rect2
-## `P3-2b`'s style combo (`Q205`): 車手 ×11 over the skills it holds, filled
-## 2026-11-13. Under the meter: NOT in the middle of the frame, where an
-## arcade racer puts it and where this layout puts only the clock.
+## `P3-2b`'s style combo (`Q205`): the summary of the skills it holds, under
+## the meter. Its live total, 車手 ×11, is in `tick`'s row since `Q212` (the
+## user's call): what is happening now where the eye is, the record aside.
 @export var award: Rect2
 ## `P3-2b`'s fare combo, under the timer: both count the session.
 @export var combo: Rect2

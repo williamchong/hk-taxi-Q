@@ -91,7 +91,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   clock are down, the arrow points at the CLOSEST pending customer, and EVERY pending customer in
   range is marked — a pin per pickup on the map and a ring per pickup on the road (one multimesh)
   — all hidden while a fare runs; do not bring the nearest-pickup callout back, and do not invent
-  a designated stand per hail — that is a `FareSystem` change and the user's call. 🔴 **Every meter tick flashes under the clock**
+  a designated stand per hail — that is a `FareSystem` change and the user's call. 🔴 **The style combo is split** (`Q212`, the user's call): the live line — the skill that joined, small, beside 車手 ×N and the gap's bar — shares the tick's row, and only the summary sits in `award`; a tick or a delivery takes the row back and the line returns after; it is one row deep because the touch table's next row down is the taxi's roof. 🔴 **Every meter tick flashes under the clock**
   (`tick` rect, `tick_fade_s`) off `meter_changed`, and the banked sum in green off `delivered`;
   after a delivery everything but the total resets. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
   decided in `hud.gd` is one the check cannot see. ⚠️ **The early arrival is named in the delivery

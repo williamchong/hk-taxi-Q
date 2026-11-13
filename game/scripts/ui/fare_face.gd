@@ -224,6 +224,14 @@ func practice_text(award: Fare.Award) -> String:
 	return skill_name(award.skill)
 
 
+## The skill that just joined the combo, small beside its total in the live
+## line (the user's call, 2026-11-13): 甩尾 ×2, its count in this combo, with the
+## money first when a passenger paid it — the flash it stands in for said so.
+func combo_skill_text(award: Fare.Award, combo: StyleCombo, paid: bool) -> String:
+	var said: String = award_text(award) if paid else practice_text(award)
+	return "%s ×%d" % [said, combo.counts[award.skill]]
+
+
 ## The style combo's headline (`P3-2b`, `Q205`): 車手 ×11, the user's word,
 ## and COMBO ×11 in English. A count, never money — the HK$ stay on the meter.
 func combo_text(combo: StyleCombo) -> String:

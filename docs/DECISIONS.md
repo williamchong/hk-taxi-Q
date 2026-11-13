@@ -219,6 +219,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q202` | The player's taxi carries its plate, its roof sign's lettering and a boot seam, as strokes | ✅ Built 2026-11-11 on the user's ask; amends `Q190`. The mark and the sign's wording are the user's to correct. |
 | `Q203` | Customers wait at street kerbs as well as stands, a few at a time, each knowing where they go; the allowance is the legal route at a measured par | ✅ Built 2026-11-12 as `P3-86` on the user's asks; reopens `Q142`'s "one designated waiting passenger" in a live-set form. The user's drive owed. |
 | `Q205` | The style combo is a count per skill, shown and recorded, never money: 車手 ×N | ✅ Built 2026-11-13 as `P3-2b`'s first part on the user's design; amends `Q145`'s style chain to no money. The user's drive owed. |
+| `Q212` | The style combo splits: the live total where the skill flashed, the summary under the meter | ✅ Built 2026-11-14 on the user's pick from four rendered layouts; reverses `Q138`'s "no award in the middle" for one line. |
 
 ---
 
@@ -7153,6 +7154,8 @@ legal route to the fare's destination is drawn on the minimap — `P3-46`, the s
   | `callout` | `P3-5a` | top-centre, under the wrong-way sign's y 136 — since `Q142` flush with the top edge, the sign moved under the countdown |
 
 - 🚫 The award in the middle of the frame, where an arcade racer puts it: the middle is the road.
+  ⚠️ **Reversed for one line by `Q212`** (the user's call, 2026-11-14): the style combo's live total
+  takes the tick's row; its summary stays in `award`.
 - 🚫 A slot for the destination arrow: it is in the world (`Q80`). 🚫 A pause button: no planned
   task names one, and it is a control — `input_router`'s layer, not this `MOUSE_FILTER_IGNORE` HUD.
 
@@ -12866,7 +12869,8 @@ over the desk table (145 / 144).
 **Status.** ✅ Built 2026-11-13 as `P3-2b`'s first part, on the user's design. `Q145` kept the
 skills flat money and left "the chain may layer on top"; this is that layer, and the user's call is
 that it **moves no fare**: the meter, the tip and `earned_hkd` are what they were. The user's drive
-owed, and with it `combo_gap_s`.
+owed, and with it `combo_gap_s`. ⚠️ Where the HUD shows it moved in `Q212`: the live total in the
+tick's row, only the summary under the meter.
 
 - **The user's design** (2026-11-13, verbatim in substance): the same skill again within the
   timeout adds to its multiplier (speed ×10 after ten awards); a second skill while the first's
@@ -13083,3 +13087,42 @@ only move as often as frames arrive.
 
 **See.** `Q207` · `Q184` · `P6-1` · `game/scripts/ui/loading_cover.gd` · `tools/make_splash.py` ·
 `game/tuning/menu.md` · `docs/ARCHITECTURE.md` "Build pipeline"
+
+## `Q212` — The style combo splits: the live total where the skill flashed, the summary under the meter
+
+**Status.** ✅ Built 2026-11-14 on the user's pick, after four layouts rendered on the handset
+(`--window=1368x630 --safe-area=102,0,102,30 --touch=on`) and the desk. Amends `Q205`'s HUD and
+reverses `Q138`'s "🚫 the award in the middle of the frame" for this one line. The user's drive
+owed, with `Q205`'s.
+
+- **Why it moved.** `Q138` put the `award` slot under the meter because "points are money", and
+  `Q205` then made the combo a count that is never money — so the slot's own reason no longer held,
+  and 車手 ×N beside the HK$ LEDs said the opposite of `Q205`. The right column was also the busiest
+  on a handset: the meter's three LEDs, the combo and the dial in one stack.
+- **What was rendered and refused.** Under the 特更 clock in the reserved `combo` slot: clean on
+  the desk, but on the handset 車手 ×4 crowded 交更 21:00 and the skills ran onto the map's top, and in
+  free mode it floated under an empty corner. The whole three-line combo under the flash: fine on
+  the desk, on the handset it sat ON the taxi — over the 的士 roof sign, since the touch table's tick
+  row (y 368–428) is the last row above the roof. `甩尾 ×2 · 車手 ×4` in one colour: the two ×N read
+  as equal scores.
+- **Built — the user's split and two-tier line.** The live line in the tick's row: the skill that
+  just joined and ITS count, small in the chip's ink (`FareFace.combo_skill_text`, the money first
+  when a passenger paid it, as the flash it replaces said), beside 車手 ×N in the gain's green at the
+  tick's size, the gap's bar under the total alone and as wide as its text. One row deep, so it
+  stays off the roof on the handset. Under the meter, the summary alone — each skill and its count,
+  one small line. When the combo ends the total holds alone in the live line, green when the gap ran
+  out and red when a hit broke it, and both fade over `callout_hold_s`, as the panel did.
+- 🔴 **One row, two tenants.** A lone skill, or one before `combo_show_min`, still flashes as it
+  did; once the combo shows, the skill joins the live line instead (`Hud._join_live`, after
+  `combo_changed`, which `FareSystem._award` emits first). A meter tick or a delivery TAKES the row
+  for its flash and the line comes back when the flash fades — a delivery is never hidden behind a
+  combo — while a skill's own flash gives way to the line at once (`Hud._tick_yields`). A penalty has ended the combo before it reaches the HUD, so it flashes in red as before.
+- **The desk's row moved off the guide arrow.** The world-space arrow lands around y 180–260 on the
+  desk, on the row's text; `tick` 248 → 288 and `wrong_way` 320 → 352, keeping the sign 4 px under
+  the row as the touch table already did. The touch table is unchanged.
+- **Measured.** At one injected combo on the boot stand, draws 156 against HEAD's 158 (the whole HUD
+  +40 over `--hud=off`'s 116). `verify_hud` `face:` holds `combo_skill_text` in both languages and
+  both payers. Not seen: a frame with a passenger aboard — no scripted run boarded one — so the tip
+  clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
+
+**See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
