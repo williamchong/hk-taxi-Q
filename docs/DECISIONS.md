@@ -13444,10 +13444,16 @@ found `AreaReport`'s two refusals printed nowhere — Wan Chai 63 under-covered,
 | the railings' and the fence's boxes one body a plan cell (`PropBatch.boxes`) | Wan Chai 5,535 + 316 bodies → **34 + 15**, Causeway Bay 2,158 + 75 → **20 + 7** (7,693 railing bodies across the two → 54); the boxes match the old bodies to 1e-7 on 500 placements; the taxi still stops against them on both sides of Expo Drive |
 | a far car refused on one axis before its distance (`FAR_SLACK_M`) | `verify_traffic` 143 → **135** s, whole output byte-identical |
 | the lane rules read one road's cars (`_cars_on`: by `edge` and `next_edge`, in fleet order, rebuilt when a car's road changes) | `verify_traffic` 135 → **126** s on Wan Chai, byte-identical in both regions |
+| squared plan distances where only a bar is asked (`RoadGraph.plan_distance_sq`: five traffic tests, the trams' look) | byte-identical in both regions; too small to time |
 | `LightingRig.phone_scale_3d`, shipped at 1 | nothing, by design: a dial for a measured handset |
 
 ⚠️ The per-tick medians move ±1 ms between identical desk runs (traffic read 3.31, 2.02 and 2.90
 on three), so only the deterministic readings above are claims.
+
+⚠️ **`/simplify` ran after most of the performance work was first committed**, not before. The
+timings, the streamer's pass, the day gating and the pose skip were already pushed, so their
+review fixes are the ♻️ commit that follows; the per-cell bodies and the cars-by-road index had
+theirs folded in before any push, and the squared compares were reviewed before they landed.
 
 **Not built, and why.**
 
