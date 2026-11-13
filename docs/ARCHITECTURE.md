@@ -1644,6 +1644,13 @@ permanent once published: neither store lets a released app change it. The App S
 stays out too; an iOS build exports a project (`Export Project Only`) and `xcodebuild` signs it with
 `DEVELOPMENT_TEAM` from the command line.
 
+**Every preset leaves the dev tree out** (`exclude_filter`, 2026-11-14): `tools/*` (the verify
+tools and their mesh checks), `scenes/dev/*`, `scripts/dev/*`, `assets/authored/fixtures/*` and the
+grey-box circuit's JSON. Nothing a shipped scene loads lives under any of them — a script a shipped
+scene needs belongs outside `scripts/dev/` — and `tools/generated_scene_import.gd` runs at import,
+never from a PCK. Measured on the web PCK: 98,711,108 → 98,195,464 bytes, and the macOS export
+boots to the showroom. ⚠️ The four filters move together, and a new dev-only folder joins all four.
+
 **The iOS preset bakes its shaders** (`shader_baker/enabled`, `Q207`): Godot compiles every
 shader to a Metal library at export and ships it in the PCK, so a fresh install draws its first
 frame in about 12 s on an iPhone Air instead of none in 260 s. ⚠️ It fails silently two ways,
