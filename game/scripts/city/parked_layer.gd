@@ -3,7 +3,7 @@
 ## Reads a region's `parked_placements.json` — the document `pipeline/parked.py`
 ## writes over the AUTHORED library `assets/authored/vehicles/parked.glb`, one
 ## mesh per kind — and stands each placement as the lamps are stood (`P3-67`):
-## a `MultiMesh` per kind per plan cell, hidden past the profile's range, with
+## a `MultiMesh` per kind per plan cell, clipped by the camera's own `far`, with
 ## a `BoxShape3D` body per vehicle (`Q159`) so the car cannot drive through a
 ## parked bus and the near miss (`P3-2a`) has a body to pass.
 ##
@@ -11,8 +11,9 @@
 ## `chance` (`ParkedRoster`), read against the lighting rig's `time_of_day`
 ## (`Q160`) — a van by day, the fill on a single yellow at night, a bus at a
 ## stop a third of the time. 🔴 **A cell is only ever rebuilt while it is
-## hidden**, past `range_m` from the camera: a vehicle appearing or leaving in
-## view is a pop, and the street the player can see never changes under them.
+## hidden**, its nearest edge past the camera's `far` and `range_margin_m`
+## (`Q214`): a vehicle appearing or leaving in view is a pop, and the street
+## the player can see never changes under them.
 ## A hidden cell rebuilds when the clock has crossed into another hour since
 ## it was built, or — for a cell holding a placement with a chance under 1 —
 ## after `reroll_s`, so the next drive down the street finds a different bus.
@@ -211,7 +212,6 @@ static func _usable(profile: ParkedProfile) -> bool:
 	var required: Dictionary[String, float] = {
 		"clock_end_h": profile.clock_end_h,
 		"cell_m": profile.cell_m,
-		"range_m": profile.range_m,
 		"poll_s": profile.poll_s,
 		"reroll_s": profile.reroll_s,
 	}
@@ -252,16 +252,15 @@ func _process(delta: float) -> void:
 	if camera == null:
 		return
 	var eye: Vector3 = to_local(camera.global_transform.origin)
-	var far_m: float = _profile.range_m + _profile.range_margin_m
+	var far_m: float = camera.far + _profile.range_margin_m
 	var this_hour: int = floori(hour)
 	var settling: bool = not _settled
 	_settled = true
 	for cell: Cell in _cells.values():
-		var centre: Vector3 = ParkedRoster.cell_centre(cell.id, _profile.cell_m)
 		# The first poll may re-stand a cell in view: the roster was built in
 		# `_ready`, before a pinned `--time-of-day=` or the clock had reached
 		# the rig, and nobody has seen the street yet.
-		if not settling and Vector2(eye.x - centre.x, eye.z - centre.z).length() <= far_m:
+		if not settling and ParkedRoster.cell_distance(eye, cell.id, _profile.cell_m) <= far_m:
 			continue
 		var stale: bool = cell.built_hour != this_hour
 		var rerolled: bool = cell.has_chance and _clock_s - cell.built_at_s >= _profile.reroll_s
@@ -319,8 +318,6 @@ func _build(cell: Cell) -> void:
 			if wears:
 				worn.append(datum_of(entry.livery, entry.source, _profile.hazard_sources))
 		var drawn: MultiMeshInstance3D = PropBatch.batch(_meshes[mesh_name], batch, mesh_name, worn)
-		drawn.visibility_range_end = _profile.range_m
-		drawn.visibility_range_end_margin = _profile.range_margin_m
 		node.add_child(drawn)
 		for body: StaticBody3D in PropBatch.bodies(_extents[mesh_name], batch, mesh_name + "_col"):
 			node.add_child(body)

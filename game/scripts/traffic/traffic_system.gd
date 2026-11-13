@@ -123,6 +123,21 @@ const LAMP_LEFT: int = 8
 const LAMP_RIGHT: int = 16
 ## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
 const ROOF_SIGN: int = 32
+## The fade's bits above the lamps' (`Q214`): `FADE_BIT` times how far out the
+## car is faded, in `FADE_STEPS`ths. 0 is drawn whole, so a parked vehicle and a
+## tram, which write none, are whole. Must match `vehicle_body.gdshader`'s
+## `FADE_BIT` and `FADE_STEPS`.
+const FADE_BIT: int = 64
+const FADE_STEPS: int = 7
+## A spawn or a car is looked at this high off its road, about its roof (`Q214`).
+const SIGHT_HEIGHT_M: float = 1.5
+## What the ETL's colliders import as — a building tile's `<tile>_collision`, a
+## road chunk's `road_surface_collision` — so the view's ray tells the city from
+## a car or a parked vehicle in the way (`Q214`).
+const CITY_COLLIDER_SUFFIX: String = "_collision"
+## Bodies a sight line may pass through looking for the city: the taxi, cars,
+## parked vehicles, trees.
+const SIGHT_HITS: int = 6
 
 ## What `FareSystem` finds the moving cars by, for the near miss.
 const GROUP: StringName = &"traffic_system"
@@ -254,6 +269,12 @@ class Car:
 	var livery: Color
 	## The lamp bits last written, so a car is written only when they change.
 	var written: int = -1
+	## How whole it is drawn (`Q214`): 1 opaque, 0 gone. A car placed in view
+	## fades in from 0; one leaving in view fades out to 0 and is then retired.
+	var fade: float = 1.0
+	var leaving: bool = false
+	## Seconds it has been out of view past `retire_m`.
+	var unseen_s: float = 0.0
 	var body: AnimatableBody3D
 	var shape: CollisionShape3D
 	## What `near_cars` hands the near miss, made once like a parked one's (`Q175`).
@@ -416,6 +437,14 @@ var _routed_kinds: Dictionary[String, int] = {}
 var _parked_profile: ParkedProfile = null
 ## The lighting rig the hour is read off, found once it is in the tree.
 var _rig: LightingRig = null
+## What the camera sees this tick (`Q214`): its frustum, eye and `far`. With no
+## camera — a verify tool's run — nothing is in view, so a car is placed and
+## retired by the ring alone, as the seeded drives were measured.
+var _viewing: bool = false
+var _planes: Array[Plane] = []
+var _eye: Vector3 = Vector3.ZERO
+var _far_m: float = 0.0
+var _sight := PhysicsRayQueryParameters3D.new()
 
 
 func _ready() -> void:
@@ -554,6 +583,11 @@ static func usable(table: TrafficProfile) -> bool:
 		"spawn_max_m": table.spawn_max_m - table.spawn_min_m,
 		"retire_m": table.retire_m - table.spawn_max_m,
 		"spawn_clear_m": table.spawn_clear_m,
+		"spawn_seen_min_m": table.spawn_seen_min_m - table.spawn_min_m,
+		"retire_unseen_s": table.retire_unseen_s,
+		"retire_far_margin_m": table.retire_far_margin_m,
+		"fade_in_s": table.fade_in_s,
+		"fade_out_s": table.fade_out_s,
 		"cruise_of_limit": table.cruise_of_limit,
 		"turn_mps": table.turn_mps,
 		"accel_mps2": table.accel_mps2,
@@ -947,7 +981,8 @@ func _physics_process(delta: float) -> void:
 	step(delta)
 
 
-## One tick: spawn into the ring, drive every car, retire what left it.
+## One tick: retire what left the ring out of view (`Q214`), drive every car,
+## spawn into the ring.
 func step(delta: float) -> void:
 	_tick += 1
 	_clock_s += delta
@@ -960,10 +995,11 @@ func step(delta: float) -> void:
 		_queue_parked(get_tree().get_nodes_in_group(ParkedLayer.GROUP))
 	_read_parked_some(PARKED_READS_PER_TICK)
 	var here: Vector3 = vehicle.global_position if is_instance_valid(vehicle) else centre
+	_read_view()
 	for car: Car in cars:
 		if not car.live:
 			continue
-		if RoadGraph.plan_distance(car.pose.origin, here) > profile.retire_m:
+		if _step_view(car, here, delta):
 			_retire(car)
 			continue
 		if car.knocked:
@@ -999,7 +1035,10 @@ func step(delta: float) -> void:
 			_batches[car.kind].set_instance_transform(car.slot, car.pose)
 			# Standing for a passenger, it shows its brake lamps from the first tick:
 			# one placed mid-dwell has not braked yet.
-			_write_lamps(car, lamp_bits(true, car.braking or standing(car), _winking(car)))
+			_write_lamps(
+				car,
+				lamp_bits(true, car.braking or standing(car), _winking(car)) | fade_bits(car.fade)
+			)
 			if beams != null:
 				beams.add(
 					car.pose.translated_local(TrafficBeams.nose_of(_extents[car.kind])),
@@ -1007,6 +1046,105 @@ func step(delta: float) -> void:
 				)
 	if beams != null:
 		beams.end()
+
+
+## The camera this tick, or none (`Q214`).
+func _read_view() -> void:
+	var camera: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+	_viewing = camera != null
+	if _viewing:
+		_planes = camera.get_frustum()
+		_eye = camera.global_position
+		_far_m = camera.far
+
+
+## Whether a body `radius_m` round `foot` can be seen (`Q214`): in the camera's
+## frustum, its roof in sight past everything the ETL ships — a building, the
+## road over a crest or a deck. A car or a parked vehicle between hides nothing:
+## either may be gone a moment later, the car driving on, the parked one at its
+## hour. Never with no camera.
+func seen(foot: Vector3, radius_m: float) -> bool:
+	var roof: Vector3 = foot + Vector3.UP * SIGHT_HEIGHT_M
+	return _in_frustum(roof, radius_m) and not _behind_city(roof)
+
+
+## Whether a sphere `radius_m` round `point` reaches into the camera's frustum.
+## False with no camera.
+func _in_frustum(point: Vector3, radius_m: float) -> bool:
+	if not _viewing:
+		return false
+	# Godot's frustum planes face out: over any one by more than the radius is out.
+	for plane: Plane in _planes:
+		if plane.distance_to(point) > radius_m:
+			return false
+	return true
+
+
+## Whether the sight line from the camera to `target` meets the city first.
+func _behind_city(target: Vector3) -> bool:
+	if not is_inside_tree():
+		return false
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var passed: Array[RID] = []
+	_sight.from = _eye
+	_sight.to = target
+	for _hit: int in SIGHT_HITS:
+		_sight.exclude = passed
+		var hit: Dictionary = space.intersect_ray(_sight)
+		if hit.is_empty():
+			return false
+		var body := hit["collider"] as Node
+		if body != null and String(body.name).ends_with(CITY_COLLIDER_SUFFIX):
+			return true
+		passed.append(hit["rid"])
+	return false
+
+
+## How whole a car placed at `at` starts (`Q214`): 1 out of view, 0 in view
+## past `spawn_seen_min_m` from the camera, where it fades in; -1 in view nearer,
+## where it is not placed. Past the bar no ray is cast: a car fading in behind a
+## building fades in unseen.
+func placed_fade(at: Vector3) -> float:
+	var roof: Vector3 = at + Vector3.UP * SIGHT_HEIGHT_M
+	if not _in_frustum(roof, _reach_m):
+		return 1.0
+	if at.distance_to(_eye) >= profile.spawn_seen_min_m:
+		return 0.0
+	return 1.0 if _behind_city(roof) else -1.0
+
+
+## Step `car`'s fade, and say whether it is to be retired this tick (`Q214`).
+## Inside `retire_m` it stays. Past it, out of view, it goes after
+## `retire_unseen_s`; in view it stays — a car the taxi chases is not taken from
+## in front of it — until it is within `retire_far_margin_m` of the camera's
+## `far`, where it fades out and then goes. With no camera it goes at
+## `retire_m` at once, as the seeded drives were measured.
+func _step_view(car: Car, here: Vector3, delta: float) -> bool:
+	if car.leaving:
+		car.fade -= delta / profile.fade_out_s
+		return car.fade <= 0.0
+	if car.fade < 1.0:
+		car.fade = minf(car.fade + delta / profile.fade_in_s, 1.0)
+	if RoadGraph.plan_distance(car.pose.origin, here) <= profile.retire_m:
+		car.unseen_s = 0.0
+		return false
+	if not _viewing:
+		return true
+	# Near the far plane in the frustum it fades out, hidden or not: no ray.
+	var near_far: bool = car.pose.origin.distance_to(_eye) > _far_m - profile.retire_far_margin_m
+	if near_far and _in_frustum(car.pose.origin + Vector3.UP * SIGHT_HEIGHT_M, car.half_length):
+		car.leaving = true
+		return false
+	if not seen(car.pose.origin, car.half_length):
+		car.unseen_s += delta
+		return car.unseen_s >= profile.retire_unseen_s
+	car.unseen_s = 0.0
+	return false
+
+
+## The fade's bits for a car `fade` whole (`Q214`): 0 whole.
+static func fade_bits(fade: float) -> int:
+	return FADE_BIT * roundi((1.0 - clampf(fade, 0.0, 1.0)) * FADE_STEPS)
 
 
 func _idle_car(routed: bool) -> Car:
@@ -1067,6 +1205,9 @@ func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_shar
 	car.crossed.clear()
 	car.lane = lane
 	car.held_side = 0
+	car.fade = 1.0
+	car.leaving = false
+	car.unseen_s = 0.0
 	_enter(car)
 	car.speed = car.cruise_mps * cruise_share
 	car.pose = _pose_on_edge(car)
@@ -1111,7 +1252,12 @@ func _try_spawn(car: Car, here: Vector3) -> void:
 		< INF
 	):
 		return
+	# Last, after every cheap refusal: it may cast a ray.
+	var fade: float = placed_fade(at)
+	if fade < 0.0:
+		return
 	_place(car, edge, along, s, lane, 0.5)
+	car.fade = fade
 	_wear_licence(car)
 
 
@@ -2349,7 +2495,12 @@ func _advance(car: Car, metres: float) -> void:
 		car.s = car.leave_m
 		left -= room
 		if car.next_edge < 0:
-			_retire(car)
+			# A dead end — the city's edge. In view it fades out where it stands
+			# (`Q214`), and `_step_view` retires it once gone.
+			if car.leaving or seen(car.pose.origin, car.half_length):
+				car.leaving = true
+			else:
+				_retire(car)
 			return
 		_start_turn(car)
 	if car.live:

@@ -23,6 +23,20 @@ const HOURS: int = 24
 @export var retire_m: float
 ## No car is placed nearer another than this, in plan metres.
 @export var spawn_clear_m: float
+## A car is placed where the camera can see it only past this, in metres from
+## the camera, and fades in there (`Q214`); nearer, only out of view or behind
+## a building or the road.
+@export var spawn_seen_min_m: float
+## A car past `retire_m` is taken away once out of view this long, in seconds:
+## a glance round does not empty the street (`Q214`).
+@export var retire_unseen_s: float
+## A car still in view is kept past `retire_m` until it is this far short of the
+## camera's `far`, in metres, and then fades out (`Q214`).
+@export var retire_far_margin_m: float
+## How long a car placed in view takes to fade in, and one leaving in view to
+## fade out, in seconds (`Q214`).
+@export var fade_in_s: float
+@export var fade_out_s: float
 ## A car cruises at this fraction of its edge's speed limit.
 @export var cruise_of_limit: float
 ## Speed through a junction's turn curve, at most, in m/s.

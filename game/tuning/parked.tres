@@ -7,7 +7,6 @@ script = ExtResource("1_parked")
 clock_start_h = 7.0
 clock_end_h = 21.0
 cell_m = 300.0
-range_m = 400.0
 range_margin_m = 15.0
 poll_s = 1.0
 reroll_s = 90.0

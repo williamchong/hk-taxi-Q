@@ -54,9 +54,13 @@ traffic, and the bonus for threading them.
   (`Q160`). `in_window` is spelled twice on purpose — `parked.py` writes the windows,
   `parked_roster.gd` reads them — and `verify_parked.gd`'s table holds the GDScript side from both
   sides of every bar; `test_parked.py` holds the Python side. A change to one is made twice.
-- 🔴 **A cell rebuilds only while HIDDEN** (`ParkedLayer._process`): past `range_m` from the
-  camera, when the hour moved or `reroll_s` passed for a cell with a chance under 1. A vehicle
-  appearing in view is a pop; do not "fix" a stale street by rebuilding visible cells.
+- 🔴 **A cell rebuilds only while HIDDEN** (`ParkedLayer._process`): its NEAREST EDGE
+  (`ParkedRoster.cell_distance`) past the camera's `far` plus `range_margin_m`, when the hour
+  moved or `reroll_s` passed for a cell with a chance under 1. A vehicle appearing in view is a
+  pop; do not "fix" a stale street by rebuilding visible cells. 🔴 **No `visibility_range_end` on
+  a parked batch** (`Q214`): Godot measures it to the centre of the `MultiMesh`'s box — a 300 m
+  cell's — so a whole cell's cars appeared at once ~190 m ahead (a probe render, 2026-11-14:
+  a box 50 m off hidden by a 380 m range on a batch centred 400 m away). The camera's `far` clips.
 - 🔴 **The library is AUTHORED and committed** (`assets/authored/vehicles/parked.glb`, CC BY-SA):
   `tools/make_parked.py` writes it, `test_make_parked.py` pins the bytes, and `parked.vehicles:`
   in the yaml must match each kind's extent within 5 cm — the ETL places by the numbers and the

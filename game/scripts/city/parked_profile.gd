@@ -21,11 +21,9 @@ const PATH: String = "res://tuning/parked.tres"
 ## Side of a plan cell. A placement goes whole to the cell its origin is in,
 ## and a cell is the unit that is rebuilt out of view.
 @export_range(0.0, 2000.0, 5.0, "suffix:m") var cell_m: float
-## A cell is hidden past this, measured from the camera to the CENTRE of the
-## cell's own box — the engine's `visibility_range_end` — and it is only ever
-## rebuilt while hidden, so nothing pops in view.
-@export_range(0.0, 2000.0, 5.0, "suffix:m") var range_m: float
-## The engine's `visibility_range_end_margin`: the hysteresis about `range_m`.
+## How far past the camera's `far` a cell's nearest edge must stand before it
+## is rebuilt (`Q214`): a vehicle stands in the cell its ORIGIN is in, so its
+## body reaches over the edge by up to half its length.
 @export_range(0.0, 100.0, 1.0, "suffix:m") var range_margin_m: float
 ## How often the roster asks the clock and looks for a hidden cell to rebuild.
 @export_range(0.0, 60.0, 0.1, "suffix:s") var poll_s: float

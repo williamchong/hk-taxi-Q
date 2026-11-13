@@ -88,12 +88,17 @@ func try_spawn(car: TrafficSystem.Car, here: Vector3) -> void:
 		< INF
 	):
 		return
+	# Last, after every cheap refusal: it may cast a ray (`Q214`).
+	var fade: float = system.placed_fade(at)
+	if fade < 0.0:
+		return
 	car.route = route
 	car.stop_index = pick.y
 	car.goal = null
 	# Found part-way through its dwell, as a bus is.
 	car.dwell_left = _rng.randf_range(profile.placed_dwell_left, 1.0) * profile.dwell_s
 	system._place(car, stop.edge, stop.along, s, 0.0, 0.0)
+	car.fade = fade
 	system.routed_spawned += 1
 
 

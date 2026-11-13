@@ -75,6 +75,10 @@ static func cell_of(at: Vector3, cell_m: float) -> Vector2i:
 	return Vector2i(floori(at.x / cell_m), floori(at.z / cell_m))
 
 
-## The centre of a cell's box, on the ground.
-static func cell_centre(cell: Vector2i, cell_m: float) -> Vector3:
-	return Vector3((cell.x + 0.5) * cell_m, 0.0, (cell.y + 0.5) * cell_m)
+## How far `eye` stands in plan from the nearest point of a cell's box — 0
+## inside it. ⚠️ **Never the centre**: a 300 m cell's corner is 212 m from it,
+## so a cell whose centre stood just past 415 m held vehicles about 200 m off,
+## and the engine cut it whole there (`Q214`).
+static func cell_distance(eye: Vector3, cell: Vector2i, cell_m: float) -> float:
+	var box := AABB(Vector3(cell.x * cell_m, 0.0, cell.y * cell_m), Vector3(cell_m, 0.0, cell_m))
+	return TileStreaming.plan_distance_to(box, eye)

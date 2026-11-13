@@ -323,3 +323,28 @@ func _check_roster() -> void:
 		ParkedRoster.cell_of(Vector3(301.0, 0.0, -1.0), 300.0) == Vector2i(1, -1),
 		"a point goes to the cell its plan origin is in"
 	)
+	# `Q214`: hidden is measured to the cell's nearest edge. An eye 420 m from
+	# the centre of cell (0, 0) — past 415 m — is 270 m from its edge, in view.
+	var cell := Vector2i(0, 0)
+	_expect(
+		is_equal_approx(ParkedRoster.cell_distance(Vector3(570.0, 0.0, 150.0), cell, 300.0), 270.0),
+		"a cell is as far as its nearest edge, not its centre (420 m off)"
+	)
+	_expect(
+		ParkedRoster.cell_distance(Vector3(570.0, 0.0, 150.0), cell, 300.0) <= 415.0,
+		"so a cell whose centre is past the range but whose edge is not stays in view"
+	)
+	_expect(
+		ParkedRoster.cell_distance(Vector3(716.0, 0.0, 150.0), cell, 300.0) > 415.0,
+		"and one past the range from its nearest edge is hidden"
+	)
+	_expect(
+		is_equal_approx(
+			ParkedRoster.cell_distance(Vector3(600.0, 50.0, 700.0), cell, 300.0), 500.0
+		),
+		"a corner's distance runs in plan to the corner (300, 400 off)"
+	)
+	_expect(
+		ParkedRoster.cell_distance(Vector3(10.0, 0.0, 10.0), cell, 300.0) == 0.0,
+		"an eye inside the cell is 0 from it"
+	)

@@ -363,6 +363,23 @@ varying flat vec2 winking;
 // Whether a moving taxi's roof sign is lit for hire: 0 or 1.
 varying flat float for_hire;
 
+#ifdef VEHICLE_BATCHED
+// A traffic car fading in where it was placed in view, or out where it leaves
+// in view (`Q214`): `INSTANCE_CUSTOM.a`'s bits from 64 up, how far out it is in
+// sevenths — 0 drawn whole, so a parked vehicle and a tram, which write none,
+// are whole. Must match `FADE_BIT` and `FADE_STEPS` in `traffic_system.gd`.
+// ⚠️ **Dithered, never blended**: the car stays an opaque draw — no sort, no
+// second pass on the Mobile renderer — and a pixel is dropped against a 4×4
+// ordered pattern. Only the batch has the `discard`; the player's car never
+// fades and keeps early depth.
+const float FADE_BIT = 64.0;
+const float FADE_STEPS = 7.0;
+const float FADE_PATTERN[16] = float[](
+	0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0
+);
+varying flat float faded;
+#endif
+
 void vertex() {
 	marker = floor(UV.y);
 	circuit = floor(UV.x);
@@ -381,11 +398,22 @@ void vertex() {
 	float lit = step(fract(TIME * traffic_blink_hz + phase), traffic_blink_duty);
 	winking = vec2(mod(floor(bits / 8.0), 2.0), mod(floor(bits / 16.0), 2.0)) * lit;
 	for_hire = mod(floor(bits / 32.0), 2.0);
+#ifdef VEHICLE_BATCHED
+	faded = mod(floor(bits / FADE_BIT), FADE_STEPS + 1.0) / FADE_STEPS;
+#endif
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
 
 void fragment() {
+#ifdef VEHICLE_BATCHED
+	if (faded > 0.0) {
+		ivec2 cell = ivec2(FRAGCOORD.xy) % 4;
+		if ((FADE_PATTERN[cell.y * 4 + cell.x] + 0.5) / 16.0 < faded) {
+			discard;
+		}
+	}
+#endif
 	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
 	vec3 ink_tone = albedo * ink_darkness;
 

@@ -33,15 +33,15 @@ of a shift (about 21 s) stands no metered car — the window as published.
 `prop_cells.tres`'s cell: the lamps' unit, measured there (`P3-67`). One `MultiMesh` a kind a
 cell, about nine kinds, so Wan Chai's 863 vehicles are some forty draws resident.
 
-## `range_m = 400.0`
-
-`prop_cells.tres`'s range, for the same reason, and the bar a cell must be past before it is
-rebuilt: a vehicle appearing or leaving inside this is a pop, and the street in view never
-changes under the player.
-
 ## `range_margin_m = 15.0`
 
-The engine's hysteresis about `range_m`, `prop_cells.tres`'s value.
+How far past the camera's `far` (400 m, `city_drive.tscn`) a cell's NEAREST EDGE must be before
+the cell is rebuilt: a vehicle appearing or leaving inside the camera's reach is a pop, and the
+street in view never changes under the player. 15 m covers a bus's half length (6 m) over the
+edge of the cell its origin is in, with room. ⚠️ **No `range_m` and no `visibility_range_end`
+any more** (`Q214`): the engine measured that range to the centre of a cell's `MultiMesh` — the
+centre of a 300 m box — so a whole cell's cars appeared at once about 190 m ahead. The camera's
+own `far` clips a vehicle where it stands, and nothing else hides one.
 
 ## `poll_s = 1.0`
 

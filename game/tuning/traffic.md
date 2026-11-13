@@ -44,6 +44,38 @@ two at a time, not a jam.
 No car is placed nearer another than about two car lengths, and no car is placed on an edge
 shorter than this.
 
+## `spawn_seen_min_m = 180.0`
+
+The camera's rule (`Q214`, the user's ask 2026-11-14: "no cars should just suddenly show up in
+front of user"). A place the camera can see — inside its frustum, its roof in sight past every
+building and road deck — takes a car only this far from the camera, and the car fades in there
+(`fade_in_s`). Nearer, a car is placed only out of view: behind the camera, round a corner, behind
+a block. 180 m is past the beams' `draw_m` (140 m), so a faded car never throws a whole beam, and
+inside the ring's 220 m, so a straight road ahead still fills. At 180 m the day's fog is 4%, so the
+fade does the hiding, not the fog. Held as a difference over `spawn_min_m`.
+
+## `retire_unseen_s = 1.0`
+
+How long a car past `retire_m` must be out of view before it is taken away (`Q214`). The look-back
+button and a hard turn swing the frustum off a car for a moment; a second lets a glance back find
+the street as it was.
+
+## `retire_far_margin_m = 30.0`
+
+A car the camera can see is not taken away at `retire_m` (`Q214`, the user's ask: "chasing a car
+just passed us should be possible"): it is kept until it is within this of the camera's `far` (400 m, `city_drive.tscn`), and then fades out (`fade_out_s`). 370 m is 9%
+day fog, 17% at night: the fade finishes where the far plane would have cut it anyway.
+
+## `fade_in_s = 0.8`
+
+The dither's run in (`vehicle_body.gdshader`, seven steps): under a second, so a car at 180 m is
+whole before the taxi has closed 20 m on it at 90 kph, and long enough that no single frame shows
+a car where none was.
+
+## `fade_out_s = 0.8`
+
+The same run out, for a car leaving in view near the camera's `far`.
+
 ## `cruise_of_limit = 0.8`
 
 40 kph on a 50 kph street: a car that keeps to its limit, under it, so the taxi passes traffic.

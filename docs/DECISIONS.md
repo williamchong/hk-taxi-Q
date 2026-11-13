@@ -221,6 +221,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q205` | The style combo is a count per skill, shown and recorded, never money: 車手 ×N | ✅ Built 2026-11-13 as `P3-2b`'s first part on the user's design; amends `Q145`'s style chain to no money. The user's drive owed. |
 | `Q213` | Every moving vehicle throws a headlamp beam on the road at night, drawn as a box of air, never a light | ✅ Built 2026-11-14 on the user's ask. The loudness is the user's pick; the handset's fill owed. |
 | `Q212` | The style combo splits: the live total where the skill flashed, the summary under the meter | ✅ Built 2026-11-14 on the user's pick from four rendered layouts; reverses `Q138`'s "no award in the middle" for one line. |
+| `Q214` | No vehicle appears or vanishes in view: traffic is placed and retired out of the camera's sight, fading where it cannot be; a parked cell is never cut whole | ✅ Built 2026-11-14 on the user's ask. The handset's cost of the dither and the user's drive owed. |
 
 ---
 
@@ -13128,6 +13129,71 @@ owed, with `Q205`'s.
   clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
 
 **See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
+
+## `Q214` — No vehicle appears or vanishes in view
+
+**Asked** by the user, 2026-11-14: "review if parked cars and traffic moving cars are generated
+around user position and visible vision, and if possible, reused … chasing a car just passed us
+should be possible and the car won't just disappear because it went out of vision 1s after.
+similar no cars should just suddenly 'show up' in front of user. worst case they should fade in".
+
+**Found.** The pool was already reused (`P3-3c`, `Q200`: a fixed fleet, a batch slot per car, the
+collider switched off). But the ring was blind: a car was placed anywhere 60–220 m from the taxi
+and retired past 260 m, with no regard for the camera — 60 m up a straight road at 1.5% fog, and
+gone at 260 m on Hennessy Road with the camera's `far` at 400 m. `tram_system.gd` already named
+the first as the reason the trams do not use the ring. The parked layer rebuilt only hidden cells,
+but measured "hidden" and the engine's `visibility_range_end` both to the CENTRE of a 300 m cell:
+a probe render (2026-11-14, Godot 4.7.2) hid a box 50 m from the camera with a 380 m range on a
+`MultiMesh` whose box was centred 400 m off. So a whole cell's cars appeared at once about 190 m
+ahead — the engine's cut, not the roster's rebuild.
+
+**Built.**
+
+- **Traffic is placed out of sight** (`TrafficSystem.placed_fade`, both spawns): a place inside
+  the camera's frustum with its roof in sight takes a car only past `spawn_seen_min_m` (180 m)
+  from the camera, and the car fades in; nearer, only out of view. 🔴 **"In sight" is a ray to the
+  roof that meets nothing the ETL ships** — a body named `*_collision`, a building tile's or a road
+  chunk's (`CITY_COLLIDER_SUFFIX`) — so a car round a corner or behind a block is placed at the
+  ring's own 60 m, and a car or parked vehicle in the way hides nothing: it moves.
+- **Traffic is retired out of sight** (`TrafficSystem._step_view`): past `retire_m` a car goes once
+  it has been out of view `retire_unseen_s` (1 s, so a glance back finds the street as it was);
+  in view it is kept until it is within `retire_far_margin_m` (30 m) of the camera's `far`, then
+  fades out. A car the taxi chases is never taken from in front of it. A car that drives into a
+  dead end — the city's edge — fades out where it stands if it is seen, rather than vanishing.
+- **A ray only where it changes the answer.** The view check is a spawn's LAST refusal, after the
+  ring, the stop, the room behind and the parked; past `spawn_seen_min_m` and near the `far` the
+  frustum alone decides (a car fading behind a building fades unseen). Deferred, as new machinery:
+  the ETL's colliders on their own physics layer, which would drop the name test and the hits on
+  the taxi.
+- **The fade is dithered, never blended** (`vehicle_body.gdshader`, batched variant only):
+  `INSTANCE_CUSTOM.a` bits 64–256 carry seven steps; a pixel is dropped against a 4×4 ordered
+  pattern, so the car stays an opaque draw with no sort. 0 is whole, so a parked vehicle and a
+  tram, which write none, are untouched, and the player's car has no `discard` at all.
+- 🔴 **With no camera nothing is in view**, so every seeded `verify_traffic` drive is
+  byte-identical on both regions (diffed before and after); the rules are held by a staged
+  `view:` block instead, each from both sides. Mutations caught: the view never seen (6 checks),
+  the city collider never recognised, any body hiding a car, the retire hysteresis removed, the
+  seen-min bar removed (the 30 s fleet drive then placed 9 cars in view inside 180 m).
+- **The parked cells** (`ParkedLayer`): `visibility_range_end` is gone from the batches — the
+  camera's own `far` clips a vehicle where it stands — and a cell is rebuilt only while its NEAREST
+  EDGE (`ParkedRoster.cell_distance`) is past the camera's `far` plus `range_margin_m`.
+  `parked.tres` loses `range_m`, which was a second copy of the camera's `far`.
+
+**Measured.** Throttle route, desktop, two runs each: `draws` 116–122 after against 118–127
+before (fewer cars stand in front of the camera at the start), `phys` 3.7–5.1 ms against 3.6–5.2,
+2.3–3.1 with `--traffic=off`. The dither forced on every car rendered stippled on Mobile and on
+Compatibility, no `SHADER ERROR` on either; Compatibility draws the bus dark grey with or without
+it, a look that predates this. ⚠️ A `discard` costs early depth on a tile-based GPU for every
+batched vehicle; the desktop cannot resolve it — the handset's frame time is owed (`P2-6`), and
+the fallback is a second small batch per kind for the fading cars only.
+
+🚫 **Not built: a faster spawn sampler.** The ring fills from empty in 0.5–0.6 s and after a
+500 m jump in 2.5 s (4.4 s with the camera on, seed 7, Wan Chai at 18:00); the taxi never jumps.
+Bucketing the edges would move every seeded drive for nothing a player sees.
+
+⚠️ **Out of scope, the same fault**: the lamps, signs and signal heads (`prop_cells.tres`) set
+`visibility_range_end` on 300 m cells too, so they cut a cell whole at its centre's 400 m. Not
+the user's ask; owed a look.
 
 ## `Q213` — Every moving vehicle throws a headlamp beam at night
 

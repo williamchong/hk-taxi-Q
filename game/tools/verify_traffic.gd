@@ -151,6 +151,7 @@ func _run() -> void:
 	_check_knock(graph, table, layers)
 	_check_licences(graph, table)
 	_check_hours(graph, table)
+	_check_view(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
 	for run: int in SEEDS.size() + 2:
@@ -1886,3 +1887,175 @@ func _check_lane(graph: RoadGraph) -> void:
 		"lane",
 		"lane_at agrees with Hit.lane_centre on %d ways, worst %.4f m" % [compared, worst]
 	)
+
+
+## The camera's rules (`Q214`, the user's ask 2026-11-14: "chasing a car just
+## passed us should be possible", "no cars should just suddenly show up"), with
+## a camera staged at the signals looking down +x — the seeded drives above run
+## with none, and must, so it leaves the tree before they start.
+func _check_view(graph: RoadGraph, table: TrafficProfile) -> void:
+	var system: TrafficSystem = TrafficScript.new()
+	system.hour_override = PEAK_HOUR
+	system.bus_routes = BusRoutes.new()
+	if not system.setup(graph, table, SEEDS[0]):
+		_fail("view", "the shipped table and city carry no traffic")
+		system.free()
+		return
+	root.add_child(system)
+	var eye: Vector3 = _signal_centre(system.signals.plan) + Vector3.UP * 3.0
+	var ahead := Vector3(1.0, 0.0, 0.0)
+	var foot := Vector3(eye.x, eye.y - 3.0, eye.z)
+	var camera := Camera3D.new()
+	camera.far = 400.0
+	root.add_child(camera)
+	camera.look_at_from_position(eye, eye + ahead)
+	camera.make_current()
+	system._read_view()
+	var seen_min: float = table.spawn_seen_min_m
+	_expect(
+		system.placed_fade(foot + ahead * (seen_min - 20.0)) < 0.0,
+		"view",
+		"a car is not placed in view nearer than spawn_seen_min_m"
+	)
+	_expect(
+		is_equal_approx(system.placed_fade(foot + ahead * (seen_min + 20.0)), 0.0),
+		"view",
+		"one placed in view past it starts faded out"
+	)
+	_expect(
+		is_equal_approx(system.placed_fade(foot - ahead * (seen_min - 20.0)), 1.0),
+		"view",
+		"and one placed behind the camera starts whole"
+	)
+	# A wall between the camera and a near place: the city's hides it, a car's not.
+	var wall_at: Vector3 = foot + ahead * 40.0 + Vector3.UP * 2.0
+	var city: StaticBody3D = _wall("tile_9_collision", wall_at)
+	system.add_child(city)
+	_expect(
+		is_equal_approx(system.placed_fade(foot + ahead * 80.0), 1.0),
+		"view",
+		"a car is placed in view behind a building (a `_collision` body)"
+	)
+	system.remove_child(city)
+	city.free()
+	var car_body: StaticBody3D = _wall("car_99", wall_at)
+	system.add_child(car_body)
+	_expect(system.placed_fade(foot + ahead * 80.0) < 0.0, "view", "but not behind another vehicle")
+	system.remove_child(car_body)
+	car_body.free()
+	_expect(TrafficSystem.fade_bits(1.0) == 0, "view", "a whole car writes no fade bits")
+	_expect(
+		TrafficSystem.fade_bits(0.0) == TrafficSystem.FADE_BIT * TrafficSystem.FADE_STEPS,
+		"view",
+		"a car faded out writes every step"
+	)
+	_expect(
+		TrafficSystem.fade_bits(0.0) & (TrafficSystem.FADE_BIT - 1) == 0,
+		"view",
+		"and none of the lamps' bits"
+	)
+	# Retirement, a car stood by hand. `here` is the camera's foot: the ring's
+	# centre is the taxi, and the camera rides behind it.
+	var car := TrafficSystem.Car.new()
+	car.half_length = 2.3
+	car.live = true
+	var kept_s: float = 2.0
+	car.pose = Transform3D(Basis(), foot + ahead * (table.retire_m + 40.0))
+	_expect(
+		not _retired_within(system, car, foot, kept_s),
+		"view",
+		"a car in view past retire_m is kept, so the taxi can chase it"
+	)
+	car.pose = Transform3D(Basis(), foot - ahead * (table.retire_m + 40.0))
+	var gone_s: float = _retired_after(system, car, foot, kept_s)
+	_expect(
+		gone_s >= table.retire_unseen_s - TICK_S and gone_s <= table.retire_unseen_s + TICK_S,
+		"view",
+		"one out of view past it leaves after retire_unseen_s, not at once (%.2f s)" % gone_s
+	)
+	car.unseen_s = 0.0
+	car.pose = Transform3D(Basis(), foot - ahead * (table.retire_m - 40.0))
+	_expect(not _retired_within(system, car, foot, kept_s), "view", "and one inside it stays")
+	car.pose = Transform3D(Basis(), foot + ahead * (camera.far - table.retire_far_margin_m + 10.0))
+	gone_s = _retired_after(system, car, foot, kept_s)
+	_expect(
+		car.leaving and gone_s >= table.fade_out_s - TICK_S * 2.0,
+		"view",
+		"one in view near the camera's far fades out before it leaves (%.2f s)" % gone_s
+	)
+	car.leaving = false
+	car.fade = 0.0
+	car.pose = Transform3D(Basis(), foot + ahead * 100.0)
+	var faded_s: float = 0.0
+	while car.fade < 1.0 and faded_s < kept_s:
+		system._step_view(car, foot, TICK_S)
+		faded_s += TICK_S
+	_expect(
+		absf(faded_s - table.fade_in_s) <= TICK_S * 2.0,
+		"view",
+		"a car placed in view fades in over fade_in_s (%.2f s)" % faded_s
+	)
+	# The fleet driven with the camera on: no car placed in view inside the bar.
+	system.centre = foot
+	var lives: Dictionary[int, int] = {}
+	var placed: int = 0
+	var placed_in_view: int = 0
+	var placed_near: int = 0
+	for _tick: int in roundi(30.0 / TICK_S):
+		system.step(TICK_S)
+		for other: TrafficSystem.Car in system.cars:
+			if not other.live or lives.get(other.id, 0) == other.lives:
+				continue
+			lives[other.id] = other.lives
+			placed += 1
+			if system.seen(other.pose.origin, system._reach_m):
+				placed_in_view += 1
+				if other.pose.origin.distance_to(eye) < seen_min:
+					placed_near += 1
+	_expect(placed > 0, "view", "the fleet is placed with a camera on")
+	_expect(
+		placed_near == 0,
+		"view",
+		"no car is placed in view nearer than %.0f m (%d were)" % [seen_min, placed_near]
+	)
+	print(
+		(
+			"  view: %d placed in 30 s, %d in view past %.0f m fading in"
+			% [placed, placed_in_view, seen_min]
+		)
+	)
+	root.remove_child(camera)
+	camera.free()
+	_drop(system)
+
+
+## A 10 m box named `name`, standing at `at`.
+static func _wall(name: String, at: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = name
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.0, 10.0, 10.0)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = at
+	return body
+
+
+## Whether `car` is taken away within `seconds` of ticks.
+func _retired_within(
+	system: TrafficSystem, car: TrafficSystem.Car, here: Vector3, seconds: float
+) -> bool:
+	return _retired_after(system, car, here, seconds) < seconds
+
+
+## Seconds of ticks until `car` is taken away, or `seconds` if it is not.
+func _retired_after(
+	system: TrafficSystem, car: TrafficSystem.Car, here: Vector3, seconds: float
+) -> float:
+	var run_s: float = 0.0
+	while run_s < seconds:
+		run_s += TICK_S
+		if system._step_view(car, here, TICK_S):
+			return run_s
+	return seconds

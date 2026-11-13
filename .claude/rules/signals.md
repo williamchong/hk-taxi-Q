@@ -113,6 +113,15 @@ paths:
   spot light** — the 8-slot list is the taxi's (`beams.md`). A live car throws one beam, a parked
   vehicle none; paste `verify_traffic`'s `beams:` line. A shader change owes a night frame against an
   oncoming car, a day frame (nothing drawn) and the `shader error` grep.
+- **The camera's rules** (`Q214`): `placed_fade`, `seen`, `_step_view`, the fade bits 64–256 in
+  `INSTANCE_CUSTOM.a` and `vehicle_body.gdshader`'s batched `discard`. Paste `verify_traffic`'s
+  `view:` line. 🔴 **With no camera nothing is in view**: every seeded drive must stay
+  byte-identical — diff the whole output before and after, both regions. 🔴 **Only the city hides
+  a car** (`CITY_COLLIDER_SUFFIX`, the ETL's `*_collision` bodies): a car or a parked vehicle in
+  the sight line moves, so it never licenses a placement. Do not lower `spawn_seen_min_m` under
+  the beams' `draw_m` (a faded car would throw a whole beam). A shader change owes the forced
+  dither frame on Mobile AND Compatibility (`fade_bits(0.5)` for every car, restored) and the
+  `shader error` grep; the `discard` is in the batched variant only — never the player's car.
 - **`TrafficSystem` is split by concern** (`P3-3c`, `Q187`): `TrafficTurns` (static turn
   geometry), `TrafficHorns`, `TrafficFleetMix`, `TrafficRouted` and `TrafficKerbside`, each owned
   by the system and reading it back. 🔴 **A stream moves with its owner and keeps its seed and draw
