@@ -6,7 +6,7 @@
 resource_name = "railings"
 render_priority = 0
 shader = ExtResource("1_railings")
-shader_parameter/rail_colour = Color(0.64, 0.64, 0.64, 1)
+shader_parameter/rail_colour = Color(0.569, 0.569, 0.569, 1)
 shader_parameter/rail_roughness = 0.55
 shader_parameter/rail_metallic = 0.0
 shader_parameter/sky_zenith = Color(0.24, 0.47, 0.78, 1)

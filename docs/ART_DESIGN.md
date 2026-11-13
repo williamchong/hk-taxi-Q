@@ -395,10 +395,11 @@ shared by arrows, boxes and stop lines (`Q71`); `signs.gdshader` by signs and la
   - ⚠️ `rail_metallic` 0.0, for the tramway's reason.
   - The same painted-sky sheen at `rail_reflect` 0.25 (`Q168`); on a vertical fence it darkens a few
     codes, since half its reflected ray lands on `ground_reflection`.
-  - ⚠️ `rail_colour` has no second reading to check it against and has been wrong twice (too near
-    white; then a green bias). Now 0.64/0.64/0.64, dead neutral — HK street railings are galvanised
-    grey. The cool cast is the sky's and is deliberately not in the albedo (a +0.03 blue bias
-    doubled B−R from +5.7 to +11.5). Judge at `street` and `kerb`.
+  - ⚠️ `rail_colour` has been wrong twice (too near white; then a green bias). Since `Q215` it is
+    0.569, dead neutral: the lamp columns' cited `galvanised_steel` (28%), so the two galvanised
+    objects on one pavement agree. It was 0.64 (37%). The cool cast is the sky's and is
+    deliberately not in the albedo (a +0.03 blue bias doubled B−R from +5.7 to +11.5). Judge at
+    `street` and `kerb`.
   - Mesh vs mask: height, station pitch, outset and sink are mesh (`hong_kong.yaml` `railings:`);
     baluster/post pitch and width and the rail bands are mask (`tuning/railings.tres`). All
     authored — no sheet publishes a railing dimension (`Q60`).
@@ -556,10 +557,11 @@ dark ground) chosen by the reflected ray's elevation.
 - The sun glint is the one term that responds to steering. On flat-shaded geometry it is per-facet —
   a pane flashes whole. Its direction is read from the scene's `DirectionalLight3D`, never authored
   twice.
-- ⚠️ Gloss on paint is priced in chroma: the shipped car pays `C*` −7.43 (`paint_reflect` 0.12,
-  roughness 0.55, `fresnel_power` 6.5) and at `C*` 71.63 is still 9× the frame median. Fresnel is
-  what makes it affordable — ablated, paint loses a further `C*` 13.75. Red identifies 紅的, so
-  this dial is the first to back off if recognition scores poorly (`DECISIONS.md` `P3-11c`).
+- Gloss on paint is the engine's `CLEARCOAT` lobe since `Q215` (`clearcoat` 1.0, roughness 0.12
+  over a 0.55 base coat), added over the paint rather than mixed into its albedo. `P3-11c`'s mix
+  cost `C*` −7.43; the lobe gives it back: in sun on Hennessy Road red `C*` went 68.90 → 75.51 at
+  the same `L*`. Red identifies 紅的, so `clearcoat` 0 is the first dial if recognition scores
+  poorly.
 - `SILVER` is `(175,171,166)`, `b*` +3.07: it had been authored blue, and is fixed at the colour
   because the hubs share it on the tyre mesh, which gets no shader.
 
@@ -638,8 +640,10 @@ scenes must name the same rig.
 
 - ⚠️ `ambient_light_sky_contribution` is the colour of every shadow: dark albedo takes nearly all
   its light from ambient, so a saturated sky paints the `#42403d` asphalt blue — and it is also what
-  separates one white face from the next. Blend low toward a cool neutral `ambient_light_color`;
-  do not reach for the road palette.
+  separates one white face from the next. Since `Q215` the sky's share is 0.4 and the rest a warm
+  grey bounce (0.82, 0.8, 0.76), because shade in a street canyon is lit by its buildings: at 0.62
+  toward cool the shaded road read navy and the galvanised railings blue. Do not reach for the
+  road palette.
 - 🔴 The clean rig was tuned against the pre-`Q27` colour-space bug and is due a pass (`Q26` owns
   the look, `Q31` the levers). Grade it on the **shadow value**, not the key: the failing frames
   are the two in shade (51.4% and 28.9% under `L*` 10). The dominant term is `adjustment_contrast`

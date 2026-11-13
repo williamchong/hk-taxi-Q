@@ -5,36 +5,21 @@
 // and lamp lenses all had to share a value. They do not want the same one, and
 // that is the whole reason this file exists.
 //
-// ⚠️ **What decides the shape here is that the reflection needs a *gradient*,
-// not a strength.** A single flat sky colour was tried at two strengths and
+// ⚠️ **For glazing and lenses, what decides the shape here is that the
+// reflection needs a *gradient*, not a strength.** A single flat sky colour was tried at two strengths and
 // judged wrong in both directions — faint at 0.14, a panel painted blue at 0.34
 // — which is the identical failure `ART_DESIGN.md` records against the facades:
 // "a single reflection colour is why glass read as a swatch rather than a
 // mirror". With the three bands below in, the glazing's `L*` spread went
 // `sd 0.05 -> 6.35`, and that structure is what reads as glass.
 //
-// ⚠️ **Gloss on paint is priced, not free, and the prices are measured** at the
-// `taxi` audit cameras (red bodywork `C*`, t04.50, in sun):
-//
-//   matte, as it shipped before this file          79.06
-//   `paint_reflect 0.12`, roughness 0.9            73.65   (-5.42)
-//   `paint_reflect 0.12`, roughness 0.55           69.86   (-9.20)
-//
-// ...all three at `fresnel_power` 4.0. Shipped is **71.63 (-7.43)**, because
-// tightening the fresnel to 6.5 refunds 1.77 of that for 0.06 `L*` of glazing.
-//
-// ⚠️ **`fresnel` is what makes any of this affordable, and reads as decoration
-// until it is ablated.** Forced to 1.0 — the reflection landing at every angle
-// rather than grazing ones — the paint loses a *further* `C* 13.75`, down to
-// 56.11. It is the term keeping the clearcoat off a panel that faces the
-// camera, which is what `paint_face_on` 0.06 exists to say.
-//
-// The cost is real and roughly linear in what is asked for. It is affordable
-// because the property it threatens survives it: at 71.63 the car is still 9x
-// the frame median of 7.5 and clear of the city's 99th percentile of 39.8, so
-// `ART_DESIGN.md`'s "the only chromatic object in the frame" holds at the
-// bottom of the dial. ⚠️ The residual risk is **recognition** rather than art —
-// red is an identifying feature of the car, and `P3-9a` grades exactly that.
+// ⚠️ **Paint no longer takes the painted gradient (`Q215`).** `P3-11c` mixed it
+// into the paint's albedo and paid for it in chroma (`C*` 79.06 matte -> 71.63
+// shipped, at the `taxi` t04.50 camera); the engine's `CLEARCOAT` lobe adds the
+// reflection on top instead, so the red keeps its chroma. Glazing and lenses
+// still take the gradient below — they are meant to read as dark mirrors.
+// ⚠️ The residual risk is still **recognition** — red identifies the car, and
+// `P3-9a` grades exactly that; `clearcoat` 0 is the matte car.
 //
 // `METALLIC` is nailed to zero throughout: metalness with nothing to reflect
 // renders as sky-coloured plastic.
@@ -80,7 +65,7 @@ const float CIRCUIT_NONE = 0.0;
 const int CIRCUIT_SEAM = 4;
 const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
 // ⚠️ `MARKER_TRIM` (3.0) is shipped by the ETL and takes no branch of its own —
-// it shares paint's clearcoat, for the reason given at that branch. Carried
+// it shares paint's `CLEARCOAT`, for the reason given at that branch. Carried
 // separately anyway, on the tiles' ground-marker reasoning: it costs nothing to
 // keep separable now, and a later brightwork treatment would otherwise need a
 // second pass over the vertex format and a rebuild of every vehicle.
@@ -285,22 +270,18 @@ uniform float cabin_glow_dim : hint_range(0.0, 4.0) = 0.12;
 
 group_uniforms paint;
 
-// Clearcoat. ⚠️ **The measurement that refused gloss on paint refused a
-// *uniform* one, and this is not that.** Dropping roughness across the whole
-// body sampled flat ambient over every panel and washed the red with sky —
-// `C* 79.06 -> 70.08`, `L*` rising as `C*` fell. A waxed panel does not read by
-// being uniformly brighter: it reads by picking up the *sky at its shoulders and
-// the dark ground below its beltline*, concentrated where the surface turns away
-// from the eye. So the reflection is the same three-band gradient the glazing
-// uses, `paint_reflect` is small, and `paint_face_on` is near zero — a panel
-// square to the camera keeps its full red, and only the curvature catches
-// anything. That is the difference between wax and a wash.
+// Clearcoat, the engine's own second specular lobe (`Q215`). ⚠️ **It ADDS a
+// reflection over the paint, and that is why it costs no chroma.** `P3-11c`'s
+// coat mixed the painted sky INTO the albedo: the reflection replaced red and was
+// then lit like diffuse paint, so it dimmed in shade and turned with the sun —
+// `C*` -7.43 at the shipped dial. `CLEARCOAT` leaves the base coat's albedo alone,
+// reflects the sky's radiance at a Schlick fresnel of 4% head-on, and gives the
+// sun a tight highlight of its own: measured on the menu orbit's frame, red
+// `C*` 52.12 -> 52.32 and `L*` 30.03 -> 27.77 in shade.
+// `paint_roughness` is now the BASE coat under it, not the gloss.
 uniform float paint_roughness : hint_range(0.0, 1.0) = 0.55;
-uniform float paint_reflect : hint_range(0.0, 1.0) = 0.12;
-// ⚠️ Deliberately not `glass_face_on`'s 0.25. Mirror glass is not transparent
-// faced squarely and must not go black head-on; paint is the opposite case —
-// head-on is exactly where its colour must survive untouched.
-uniform float paint_face_on : hint_range(0.0, 1.0) = 0.06;
+uniform float clearcoat : hint_range(0.0, 1.0) = 1.0;
+uniform float clearcoat_roughness : hint_range(0.0, 1.0) = 0.12;
 
 group_uniforms glint;
 
@@ -422,38 +403,40 @@ void fragment() {
 	bool is_glass = is_cabin || is_cabin_dim || abs(marker - MARKER_GLASS) < 0.5;
 	bool is_lamp = abs(marker - MARKER_LAMP) < 0.5;
 
-	// One fresnel serves both reflective markers; the marker chooses how much of
-	// it lands. Computed unconditionally — it is a handful of ALU and branching
-	// around it on a mesh this small buys nothing.
-	float fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
-
-	// The mirror. Where the reflected ray points decides what it sees, so a
-	// screen darkens toward the city as the car turns and brightens toward the
-	// zenith as it pitches — which a single colour cannot do at any strength.
-	vec3 to_surface = normalize(world_pos - INV_VIEW_MATRIX[3].xyz);
-	vec3 bounced = reflect(to_surface, normalize(world_n));
-	vec3 mirrored = mix(
-		ground_reflection,
-		mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
-		smoothstep(-0.08, 0.08, bounced.y)
-	) * sky_light;
-
-	// Isolated from the sun alone, so it moves with heading where the sky
-	// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
-	// not. Confined to glass and lenses — on paint it is a second way to spend
-	// the chroma the clearcoat is already paying for.
-	//
-	// ⚠️ **Guarded, where `fresnel` above is not, and the difference is which
-	// branches read it.** `fresnel` is consumed on all three, so a test around
-	// it would only add work. This is read by two, and paint is most of a car
-	// body — so without the guard the `pow` runs on the majority of fragments
-	// that discard it.
+	// The painted sky, read by glass and lenses only. Paint takes none of it since
+	// `Q215` — its rim and sun lobe are `CLEARCOAT`'s own — and paint is most of a
+	// car body, so all four terms sit behind the same guard: unguarded, the `pow`s,
+	// the `normalize` and the `reflect` run on the majority of fragments that
+	// discard them. A driver that flattens the branch pays what the old
+	// unconditional code paid, never more.
+	float fresnel = 0.0;
+	vec3 mirrored = vec3(0.0);
 	float glint = 0.0;
 	if (is_glass || is_lamp) {
+		// One fresnel serves both reflective markers; the marker chooses how much
+		// of it lands.
+		fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
+
+		// The mirror. Where the reflected ray points decides what it sees, so a
+		// screen darkens toward the city as the car turns and brightens toward the
+		// zenith as it pitches — which a single colour cannot do at any strength.
+		vec3 to_surface = normalize(world_pos - INV_VIEW_MATRIX[3].xyz);
+		vec3 bounced = reflect(to_surface, normalize(world_n));
+		mirrored = mix(
+			ground_reflection,
+			mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
+			smoothstep(-0.08, 0.08, bounced.y)
+		) * sky_light;
+
+		// Isolated from the sun alone, so it moves with heading where the sky
+		// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
+		// not. Not on paint — `CLEARCOAT` has its own sun lobe, and an albedo
+		// glint there would spend its chroma a second time.
 		glint = pow(max(dot(bounced, sun_toward), 0.0), glint_sharpness);
 	}
 
 	float roughness = paint_roughness;
+	float coat = 0.0;
 	if (is_glass) {
 		roughness = glass_roughness;
 		albedo += sky_horizon * sky_light * glint * glint_strength;
@@ -525,11 +508,10 @@ void fragment() {
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);
 	} else {
 		// Paint and trim. `MARKER_TRIM` shares this branch rather than taking one
-		// of its own: silver is a near-neutral, so it has the least hue of its own
-		// to defend and is the surface a sky wash disfigures first — the ice-blue
-		// roof is that failure already recorded. It gets the clearcoat and nothing
-		// else, which is what brightwork is.
-		albedo = mix(albedo, mirrored, paint_reflect * mix(paint_face_on, 1.0, fresnel));
+		// of its own: `CLEARCOAT` adds its reflection over the albedo without
+		// moving its hue (`Q215`), so silver needs nothing paint does not get —
+		// the ice-blue roof the old albedo-mixed sky gave it cannot recur here.
+		coat = clearcoat;
 	}
 
 	// Metres from each inked edge, and how many metres a pixel spans there. A
@@ -554,4 +536,6 @@ void fragment() {
 	// exactly this reason and not as a matter of taste.
 	METALLIC = 0.0;
 	ROUGHNESS = roughness;
+	CLEARCOAT = coat;
+	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
 }

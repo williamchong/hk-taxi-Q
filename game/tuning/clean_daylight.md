@@ -42,7 +42,7 @@ leaving the white facades — which are mostly lit by the sun — untouched. The
 blend back toward a neutral `ambient_light_color` is the control for that, and
 it is the one to reach for if a *surface* looks wrong rather than a *light*.
 
-## `ambient_light_color = Color(0.8, 0.84, 0.9, 1)`
+## `ambient_light_color = Color(0.82, 0.8, 0.76, 1)`
 
 
 ⚠️ And it is a **balance**, not a floor: at 0.55 with a neutral ambient the
@@ -50,6 +50,18 @@ road came right and the massing went flat, because the cool shadow is also the
 only thing separating one white face from the next. The fix was to keep the
 blend low but make what it blends toward cool rather than neutral — shadow
 colour without sky saturation.
+
+⚠️ **`Q215` moved the balance toward the street, on the user's call
+(2026-11-14).** At 0.62 toward cool (0.8, 0.84, 0.9) every shadow in a street
+canyon was sky: the shaded asphalt read navy, the galvanised railings
+(96, 108, 128) on the `street` frame, and the parked cars in shade blue. A street
+in Hong Kong is lit in shade by its own buildings as much as by the sky, so the
+sky's share is now **0.4** and the rest is a warm grey bounce (0.82, 0.8, 0.76),
+the façade palette's cast. The procedural sky's `ground_bottom_color` went
+(0.58, 0.61, 0.64) → (0.5, 0.48, 0.45) for the same reason: the ground half of
+the sky's ambient is the street, not more sky.
+⚠️ The cost to watch is the one recorded above, separation between pale faces:
+judge `skyline` alongside `street` before moving either number further.
 
 ## `adjustment_enabled = true`
 

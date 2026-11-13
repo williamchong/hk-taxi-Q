@@ -35,6 +35,14 @@ on the user's report — which, for this one value, is the instrument. Now dead
 neutral: `railings.gdshader` records why the cool cast is left to the sky
 rather than authored here.
 
+⚠️ **Since `Q215` it does have a second reading: 0.569 IS `hong_kong.yaml`'s
+`galvanised_steel`** (`#919191`, 28% reflectance, cited), the colour the lamp
+columns already stand in. It was 0.64 (37%), so the railing and the lamp post
+beside it were two greys of one metal. The value is copied rather than read
+through `materials:`, for `Q53`'s reason in `railings.gdshader`; a change to
+either is a change to both. The blue it still read in shade was the ambient's,
+not the albedo's — `clean_daylight.md`.
+
 ⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
 `P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal
 reflects its environment, the only environment here is sky, and the mobile
@@ -47,7 +55,7 @@ hour by the rig's `sky_light`. `rail_reflect` 0.25 at a grazing angle,
 `rail_face_on` 0.05 squarely, `fresnel_power` 5.0 between — the same three
 values in `bollards.tres` and `barriers.tres`. ⚠️ **On a fence it darkens, by a
 few codes at every hour**: a vertical face's reflected ray is near level, so
-half of it lands in `ground_reflection` (0.32), under this file's 0.64. Shipped
+half of it lands in `ground_reflection` (0.32), under this file's 0.569. Shipped
 on the user's call with that understood.
 
 ⚠️ **The fence's shape is now split across two files, and the split is where

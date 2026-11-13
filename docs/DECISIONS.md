@@ -2004,7 +2004,8 @@ heading-dependent terms, a skidpad circle.
   `TestSurfaceMarkers` holds the ETL end, `verify_vehicle.gd` the engine end; only a render plus
   `grep -i "shader error"` proves the shader compiled.
 - ⚠️ `P3-9a` risk: the red identifies 紅的. If recognition scores poorly, `paint_reflect` /
-  `paint_roughness` is the first dial to try.
+  `paint_roughness` is the first dial to try. ⚠️ Superseded by `Q215`: paint's gloss is `CLEARCOAT` now, and
+  `clearcoat` 0 is that dial.
 
 **See.** `ART_DESIGN.md` "Vehicles" · `Q27` · `Q31` · `Q43` · `P3-11`
 
@@ -13298,3 +13299,60 @@ limiter and `attack_s` when quick, reaches full, ramps a reversal, and lets go u
 
 **See.** `Q174` · `Q152` · `Q153` · `Q83` · `game/tuning/keyboard_steer.md` ·
 `game/tuning/systems/arcade_aids.md` · `game/scripts/input/input_router.gd`
+
+## `Q215` — Shade is lit by the street, paint gloss is the engine's clearcoat, and the railings are the lamp posts' steel
+
+**Status.** Built 2026-11-14, the user's call from trial frames. Supersedes `P3-11c`'s paint
+reflection and moves the balance `clean_daylight.md` records for `ambient_light_color`.
+
+**Why.** Asked whether the street, road, cars, poles and fence could take more realistic PBR
+values, I reviewed every material, then rendered each candidate against the shipped build at the
+`street` and `skyline` cameras, a Hennessy Road chase frame, a shaded parked row and the menu orbit.
+The albedos and roughnesses (asphalt 10% / 0.95, concrete 20–30%, paint 0.7, glass 0.12–0.14) were
+already in a real range. What read unreal was the light and the reflections:
+
+- **Every shadow was sky.** At `ambient_light_sky_contribution` 0.62 toward a cool colour, the
+  shaded asphalt read navy and the railings (96, 108, 128) blue. A canyon's shade is lit by its
+  buildings.
+- **The paint's gloss replaced the red.** `P3-11c` mixed a painted sky into the albedo, which was
+  then lit as diffuse paint: the chroma it cost (`C*` −7.43) is a cost of mixing, not of gloss.
+- **Two greys of one metal.** The railings were 0.64 sRGB (37%); the lamp columns beside them
+  stand in the cited `galvanised_steel`, 28%.
+
+**What.**
+
+- `clean_daylight.tres`: `ambient_light_sky_contribution` 0.62 → **0.4**, `ambient_light_color`
+  (0.8, 0.84, 0.9) → **(0.82, 0.8, 0.76)**, the sky's `ground_bottom_color` (0.58, 0.61, 0.64) →
+  **(0.5, 0.48, 0.45)**. The shaded road reads neutral dark grey, the parked cars in shade lose
+  their blue.
+- `vehicle_body.gdshader`: paint and trim set `CLEARCOAT` (`clearcoat` 1.0,
+  `clearcoat_roughness` 0.12) and no longer mix the gradient into their albedo; `paint_reflect`
+  and `paint_face_on` are gone. Glazing and lenses keep the gradient. Red `C*` in sun on Hennessy
+  Road 68.90 → **75.51** (`L*` 45.73 → 45.06); in shade on the menu orbit 52.12 → 52.32.
+- `railings.tres` `rail_colour` 0.64 → **0.569**, `galvanised_steel`'s `#919191`, copied rather
+  than read through `materials:` for `Q53`'s reason. Barriers (0.5) and bollards (0.43) were not
+  moved: nothing says they are galvanised rather than painted.
+
+**Refused on the frames.**
+
+- **A canyon band in the painted reflection** (façade colour between the horizon and the
+  rooflines, for the car, the rails and the railings): about 3k pixels moved on `street` and the
+  near railing's mean not at all. The blue was the ambient's.
+- **A second, glossier material on the taxi's hubs** (0.35 against the rubber's 0.9): 1,152 pixels
+  against 1,456 of run-to-run noise on the menu orbit. Not worth a second material on the tyre.
+
+**Sun, asked and not changed.** The rig's sun is 48° from azimuth 150° — in Hong Kong a February
+or October mid-morning; the midday sun stands 58–89° most of the year. Rendered at 70° / 150° the
+Hennessy Road frame is still mostly shaded (the road runs WSW), and at 85° / 180° it is lit kerb to
+kerb but the façades lose their face-to-face shading, the reason `clean_daylight.md` gives for 48°.
+
+**Owed.** A sunlit frame where the clearcoat's sun lobe faces the camera — the chase camera sits
+behind the car with the sun ahead of it. The `skyline` frame reads the same massing; `P3-9a`'s
+recognition grade still owns the red. ⚠️ **The lobe's cost on a handset, unmeasured**: writing
+`CLEARCOAT` compiles the clearcoat path for every fragment of the material — a second specular
+term per light and a second radiance read — on every car in the traffic. In exchange the painted
+sky's `pow`s, `normalize` and `reflect` now sit behind the glass/lamp guard, so paint skips them.
+Profile the fleet on the iPhone Air (`--perf-log`) before calling it free.
+
+**See.** `P3-11c` · `Q168` · `Q53` · `Q33` · `game/tuning/clean_daylight.md` ·
+`game/tuning/vehicle_body.md` · `game/tuning/railings.md`

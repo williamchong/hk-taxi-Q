@@ -119,7 +119,7 @@ group_uniforms paint;
 // bias is added to it. That is `P3-14`'s metallic lesson wearing a different
 // hat — the albedo says what the steel is, the sky says what it looks like. The
 // same frame is what says the green is gone: **G−R +6.7** before, **+0.6** now.
-uniform vec4 rail_colour : source_color = vec4(0.64, 0.64, 0.64, 1.0);
+uniform vec4 rail_colour : source_color = vec4(0.569, 0.569, 0.569, 1.0);
 // Painted steel, against the road's 0.95 and the markings' 0.7. Lower than
 // paint on tarmac because a railing is a smooth tube rather than thermoplastic
 // pressed into aggregate.

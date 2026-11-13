@@ -16,18 +16,19 @@ Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
 data, not constants — and beside `golden_hour.tres`, because the sun these are
 judged under is tuned in the same directory.
 
-⚠️ **`paint_reflect` and `paint_roughness` are the gloss dial, and it is
-priced.** Measured on the red bodywork at `taxi` t04.50, at `fresnel_power`
-4.0: matte `C* 79.06`, `0.12`/`0.9` gives 73.65, `0.12`/`0.55` gives 69.86 —
-roughly linear in between. The shipped car reads **71.63**, because
-`fresnel_power` 6.5 refunds 1.77 of the cost.
+⚠️ **`clearcoat` and `clearcoat_roughness` are the paint's gloss since `Q215`,
+and they are the engine's lobe, not the painted gradient.** `P3-11c` mixed the
+gradient into the paint's albedo through `paint_reflect` 0.12 / `paint_face_on`
+0.06, which replaced red with sky and then lit the result like diffuse paint:
+`C*` 79.06 matte → 71.63 shipped at `taxi` t04.50. `CLEARCOAT` adds its
+reflection on top at a 4% head-on fresnel and leaves the albedo alone. On the
+menu orbit's frame in shade, red `C*` went 52.12 → 52.32 and `L*` 30.03 → 27.77.
+0.12 is a waxed coat (real clearcoat is 0.05–0.15); `paint_roughness` 0.55 is
+now the base coat under it. `clearcoat` 0 is the matte car and the **first**
+thing to try if `P3-9a` recognition scores poorly.
 
-⚠️ **`fresnel_power` is not a free knob in the other direction.** Lowering it
-broadens the reflection toward the ablated case, where the paint loses a
-further `C* 13.75` — fresnel is what keeps the clearcoat off a panel facing
-the camera, not a decoration on top of it. Backing it off is a one-file change with no rebuild,
-and it is the **first** thing to try if `P3-9a` recognition scores poorly,
-because a washed red is the axis that gate measures.
+`fresnel_power` now shapes the glazing and lenses only; paint takes the
+engine's Schlick fresnel.
 
 ⚠️ **`glass_reflect` went 0.34 → 0.14 → 0.45, and the middle value is the one
 worth understanding.** At 0.34 against a single flat `sky_reflection` colour the
