@@ -420,10 +420,20 @@ func _ready() -> void:
 	if profile != null:
 		return
 	if Cmdline.off(ARG):
-		queue_free()
+		_stand_down()
 		return
 	if not setup(RoadGraph.shared(), load(TrafficProfile.PATH) as TrafficProfile, 1):
-		queue_free()
+		_stand_down()
+
+
+## Leave the tree without one more tick. `queue_free` waits for the frame's end,
+## and a long first frame — a phone's — runs physics before it: a tick on a
+## system never set up read a null graph and crashed the iOS build under
+## `--traffic=off` (`P2-6`). The desktop's first frame ticked none, so it hid.
+func _stand_down() -> void:
+	set_physics_process(false)
+	set_process(false)
+	queue_free()
 
 
 ## Everything a run needs, without the scene: false, with a pushed reason,
