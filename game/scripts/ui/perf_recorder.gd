@@ -41,10 +41,9 @@ const BUDGET_MS: float = 1000.0 / 60.0
 const DOUBLE_MS: float = 2000.0 / 60.0
 ## ⚠️ The five `PerfClock` columns sit before `tiles`, which stays last: a frame's
 ## script time by system, summed over the frame's physics ticks.
-const HEADER: String = (
-	"t_s,frame_ms,process_ms,physics_ms,gpu_ms,render_cpu_ms,draws,prims,video_mem_mb,"
-	+ "traffic_ms,trams_ms,fares_ms,signals_ms,streamer_ms,tiles"
-)
+## The columns either side of `PerfClock`'s, which `header` names a slot each.
+const HEADER_HEAD: String = "t_s,frame_ms,process_ms,physics_ms,gpu_ms,render_cpu_ms,draws,prims,video_mem_mb"
+const HEADER_TAIL: String = "tiles"
 
 ## How long to record, in seconds from this node's first frame.
 var seconds: float = 0.0
@@ -155,7 +154,7 @@ func _ready() -> void:
 		push_error("perf: could not open %s (%s)" % [path, FileAccess.get_open_error()])
 		set_process(false)
 		return
-	_file.store_line(HEADER)
+	_file.store_line(header())
 	for _slot: int in PerfClock.NAMES.size():
 		_systems_ms.append(PackedFloat32Array())
 	PerfClock.enabled = true
@@ -178,13 +177,15 @@ func _process(_delta: float) -> void:
 	var gpu_ms: float = RenderingServer.viewport_get_measured_render_time_gpu(_viewport_rid)
 	var render_cpu_ms: float = RenderingServer.viewport_get_measured_render_time_cpu(_viewport_rid)
 	var systems := PackedFloat32Array()
+	var columns := PackedStringArray()
 	for slot: int in PerfClock.NAMES.size():
 		systems.append(PerfClock.take(slot))
+		columns.append("%.3f" % systems[slot])
 	(
 		_file
 		. store_line(
 			(
-				"%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.1f,%.3f,%.3f,%.3f,%.3f,%.3f,%d"
+				"%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.1f,%s,%d"
 				% [
 					t_s,
 					frame_ms,
@@ -195,11 +196,7 @@ func _process(_delta: float) -> void:
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 					Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
-					systems[0],
-					systems[1],
-					systems[2],
-					systems[3],
-					systems[4],
+					",".join(columns),
 					tiles,
 				]
 			)
@@ -287,6 +284,15 @@ func summary_lines() -> PackedStringArray:
 			systems_line(_systems_ms),
 		]
 	)
+
+
+## The CSV's first line: a `<name>_ms` column for each of `PerfClock`'s slots.
+static func header() -> String:
+	var columns := PackedStringArray([HEADER_HEAD])
+	for slot_name: String in PerfClock.NAMES:
+		columns.append(slot_name + "_ms")
+	columns.append(HEADER_TAIL)
+	return ",".join(columns)
 
 
 ## Each system's script time, p50 and p95, as one summary line — over the frames

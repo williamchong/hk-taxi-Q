@@ -10,7 +10,7 @@ extends RefCounted
 ## each layer's `_ready` and the JSON parses took (`Q209`: "measured first").
 ##
 ## **Inert unless the recorder is built.** `enabled` is false without
-## `--perf-log=`, and a bracket is then two reads of a static bool.
+## `--perf-log=`, and a bracket is then two calls that each read a static bool.
 
 enum Slot { TRAFFIC, TRAMS, FARES, SIGNALS, STREAMER }
 

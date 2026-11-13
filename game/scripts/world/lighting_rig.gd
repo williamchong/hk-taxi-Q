@@ -270,6 +270,12 @@ func _set_globals(sky_light: Color, night_lights: float) -> void:
 		get_tree().call_group(NIGHT_GROUP, &"set_visible", night_lights > 0.0)
 
 
+## A rig that leaves at night would leave every later scene reading day: back
+## to what a scene with no rig reads.
+func _exit_tree() -> void:
+	night_lights_now = 1.0
+
+
 ## Draw `node` only while the night's lights are on, from now.
 static func show_at_night(node: Node3D) -> void:
 	node.add_to_group(NIGHT_GROUP)

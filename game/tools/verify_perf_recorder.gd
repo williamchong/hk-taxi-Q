@@ -112,11 +112,11 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 	var text: String = FileAccess.get_file_as_string(OUT_PATH)
 	var lines: PackedStringArray = text.strip_edges().split("\n")
 	_expect(
-		lines.size() > 0 and lines[0] == recorder_script.HEADER,
+		lines.size() > 0 and lines[0] == recorder_script.header(),
 		"run",
 		"the CSV opens on its header"
 	)
-	var names: PackedStringArray = str(recorder_script.HEADER).split(",")
+	var names: PackedStringArray = str(recorder_script.header()).split(",")
 	_expect(
 		(
 			names.size() == COLUMNS
