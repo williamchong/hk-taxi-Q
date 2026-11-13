@@ -46,3 +46,5 @@ paths:
   too, on the user's "always". A close tram cannot be re-shot on demand: placement moves with `--shots`.
 - **A tram at its stop winks left** (`Q187`): `TramSystem.at_stop` (braking into the stop or
   standing at it) puts the left bit in its lamp write; `verify_trams`' `stops:` wink line.
+- **A tram throws a beam at night** (`Q213`) through the traffic's `TrafficBeams`; its rules are
+  `signals.md`'s beams bullet.

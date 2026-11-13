@@ -109,6 +109,10 @@ paths:
   indicators (`P3-3f2`): paste both `wink:` lines (the second: still winking as a turn joins,
   `wink_hold_m`); the beat is `vehicle_lamps.tres`' via `wire_blink`, never
   a shader default.
+- **The beams** (`Q213`): `TrafficBeams`, `traffic_beam.gdshader`, `traffic_beams.tres`. 🔴 **Never a
+  spot light** — the 8-slot list is the taxi's (`beams.md`). A live car throws one beam, a parked
+  vehicle none; paste `verify_traffic`'s `beams:` line. A shader change owes a night frame against an
+  oncoming car, a day frame (nothing drawn) and the `shader error` grep.
 - **`TrafficSystem` is split by concern** (`P3-3c`, `Q187`): `TrafficTurns` (static turn
   geometry), `TrafficHorns`, `TrafficFleetMix`, `TrafficRouted` and `TrafficKerbside`, each owned
   by the system and reading it back. 🔴 **A stream moves with its owner and keeps its seed and draw

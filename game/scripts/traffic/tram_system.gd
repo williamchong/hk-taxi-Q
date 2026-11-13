@@ -107,6 +107,9 @@ var _by_body: Dictionary[int, Tram] = {}
 
 var _rng := RandomNumberGenerator.new()
 var _batch: MultiMesh
+## Every live tram's headlamp beam at night (`TrafficBeams`); null where its
+## material did not load.
+var beams: TrafficBeams = null
 var _extent: AABB
 var _weights: PackedFloat32Array = []
 var _voices: Array[AudioStreamPlayer3D] = []
@@ -148,6 +151,9 @@ func setup(with_lines: TramLines, table: TramProfile, rolls: int) -> bool:
 	for route: TramLines.Route in lines.routes:
 		_weights.append(route.length_m())
 	_batch.instance_count = table.trams
+	beams = TrafficBeams.create(table.trams, half_width)
+	if beams != null:
+		add_child(beams)
 	var box := BoxShape3D.new()
 	box.size = _extent.size
 	var parked := load(ParkedProfile.PATH) as ParkedProfile
@@ -312,8 +318,13 @@ func step(delta: float) -> void:
 			_run(tram, delta)
 		else:
 			_try_set_out(tram)
+	if beams != null:
+		beams.begin()
+	var nose: Vector3 = TrafficBeams.nose_of(_extent)
 	for tram: Tram in trams:
 		if tram.live:
+			if beams != null:
+				beams.add(tram.pose.translated_local(nose), half_width)
 			if tram.moved:
 				tram.moved = false
 				tram.body.global_transform = tram.pose

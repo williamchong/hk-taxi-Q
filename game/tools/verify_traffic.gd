@@ -445,9 +445,14 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 	# Car-ticks of a taxi wearing another licence's mesh that a kerb rule refused.
 	var licensed: int = 0
 	var licensed_refused: int = 0
+	# Ticks whose beams were not one per live car (`Q213`): no camera here, so none is out of reach.
+	var beams_wrong: int = 0
 	for _tick: int in roundi(RUN_S / TICK_S):
 		system.step(TICK_S)
+		var live: int = 0
 		for car: TrafficSystem.Car in system.cars:
+			if car.live:
+				live += 1
 			# A retired car left in a batch is a ghost standing where it died.
 			if car.live != system.draws(car):
 				shown_wrong += 1
@@ -474,7 +479,14 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 				bit_wrong += 1
 			if car.for_hire:
 				lit += 1
+		if system.beams == null or system.beams.shown() != live:
+			beams_wrong += 1
 	print("  licence: %d spawns of a fleet of taxis wore %s, %d lit for hire" % [spawns, worn, lit])
+	_expect(
+		beams_wrong == 0,
+		"beams",
+		"every live car throws one beam, every tick (%d off)" % beams_wrong
+	)
 	_expect(spawns >= 24, "licence", "the fleet spawned at least once each (%d)" % spawns)
 	_expect(wrong == 0, "licence", "no taxi wears a licence its spawn region does not name")
 	_expect(

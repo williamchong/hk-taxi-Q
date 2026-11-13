@@ -379,6 +379,9 @@ var _kinds: PackedStringArray = []
 var _meshes: Array[Mesh] = []
 var _extents: Array[AABB] = []
 var _batches: Array[MultiMesh] = []
+## Every live car's headlamp beam at night (`TrafficBeams`); null where its
+## material did not load, and the cars then run with their lenses alone.
+var beams: TrafficBeams = null
 ## The cars each batch draws, by kind index: a batch's first
 ## `visible_instance_count` instances are these, in this order (`P3-85`). A
 ## batch has room for every car that may wear its kind — a routed car's in each
@@ -497,6 +500,12 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		drawn.multimesh = _batches[kind]
 		_batches[kind].visible_instance_count = 0
 		add_child(drawn)
+	var widest_half_m: float = 0.0
+	for extent: AABB in _extents:
+		widest_half_m = maxf(widest_half_m, extent.size.x * 0.5)
+	beams = TrafficBeams.create(cars.size(), widest_half_m)
+	if beams != null:
+		add_child(beams)
 	var parked: ParkedProfile = _parked_profile
 	for car: Car in cars:
 		var extent: AABB = _extents[car.kind]
@@ -980,6 +989,8 @@ func step(delta: float) -> void:
 		if idle == null:
 			break
 		route_fleet.try_spawn(idle, here)
+	if beams != null:
+		beams.begin()
 	for car: Car in cars:
 		if car.live:
 			car.body.global_transform = car.pose
@@ -989,6 +1000,13 @@ func step(delta: float) -> void:
 			# Standing for a passenger, it shows its brake lamps from the first tick:
 			# one placed mid-dwell has not braked yet.
 			_write_lamps(car, lamp_bits(true, car.braking or standing(car), _winking(car)))
+			if beams != null:
+				beams.add(
+					car.pose.translated_local(TrafficBeams.nose_of(_extents[car.kind])),
+					car.half_width
+				)
+	if beams != null:
+		beams.end()
 
 
 func _idle_car(routed: bool) -> Car:

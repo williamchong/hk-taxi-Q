@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/traffic_beam.gdshader" id="1_beam"]
+
+[resource]
+render_priority = -1
+shader = ExtResource("1_beam")
+shader_parameter/beam_colour = Color(1, 0.96, 0.88, 1)
+shader_parameter/beam_gain = 8.0
+shader_parameter/beam_floor = 0.16
+shader_parameter/reach_m = 24.0
+shader_parameter/spread_deg = 14.0
+shader_parameter/drop_m = 3.0
+shader_parameter/rise_m = 1.2
+shader_parameter/lamp_height_m = 0.7
+shader_parameter/draw_m = 140.0

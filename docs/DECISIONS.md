@@ -219,6 +219,7 @@ holds live state and chronology lives in git; this file holds why things are the
 | `Q202` | The player's taxi carries its plate, its roof sign's lettering and a boot seam, as strokes | ✅ Built 2026-11-11 on the user's ask; amends `Q190`. The mark and the sign's wording are the user's to correct. |
 | `Q203` | Customers wait at street kerbs as well as stands, a few at a time, each knowing where they go; the allowance is the legal route at a measured par | ✅ Built 2026-11-12 as `P3-86` on the user's asks; reopens `Q142`'s "one designated waiting passenger" in a live-set form. The user's drive owed. |
 | `Q205` | The style combo is a count per skill, shown and recorded, never money: 車手 ×N | ✅ Built 2026-11-13 as `P3-2b`'s first part on the user's design; amends `Q145`'s style chain to no money. The user's drive owed. |
+| `Q213` | Every moving vehicle throws a headlamp beam on the road at night, drawn as a box of air, never a light | ✅ Built 2026-11-14 on the user's ask. The loudness is the user's pick; the handset's fill owed. |
 | `Q212` | The style combo splits: the live total where the skill flashed, the summary under the meter | ✅ Built 2026-11-14 on the user's pick from four rendered layouts; reverses `Q138`'s "no award in the middle" for one line. |
 
 ---
@@ -13126,3 +13127,50 @@ owed, with `Q205`'s.
   clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
 
 **See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
+
+## `Q213` — Every moving vehicle throws a headlamp beam at night
+
+**Asked** by the user, 2026-11-13: "all traffic cars not parked in road should have big lamps turned
+on at night so that player can see nearby and incoming traffic also via lighting".
+
+**Built 2026-11-14.** The lenses already burned at night (`traffic_day_lamps`, `traffic_tail_lit`
+by `night_lights`, `P3-3c`); what was missing was light on the road. Closes `Q160`'s "traffic does
+not exist, so `BeamBudget` has not been asked to ration beams at night" — by not asking it.
+
+- 🔴 **Not a light.** Forward Mobile pairs 8 spot lights with an object, a road chunk is one
+  object, and the taxi's own beams already ration those eight (`beams.md`): forty cars would have
+  lit four. Each vehicle instead draws a box of air ahead of its nose and `traffic_beam.gdshader`
+  adds to whatever the depth buffer says stands inside its cone — `lamp_pool.gdshader`'s method,
+  so the road, the kerb and the car ahead are all lit. The cone opens from the body's own width
+  (`INSTANCE_CUSTOM.r`) and is dipped: a car ahead is lit to its boot, never a façade.
+- **One `MultiMesh` an owner** (`TrafficBeams`): `TrafficSystem` and `TramSystem` hand it their
+  live vehicles once a tick, densely. A parked vehicle (`ParkedLayer`) is never handed over, which
+  is the "not parked" of the ask; a car standing at a stop or the kerb is under way and keeps its
+  lamps, as a real one does. Past `draw_m` (140 m) from the camera a beam fades and is not drawn,
+  which bounds the fill: every box is drawn with the depth test off.
+- **By day the box collapses to a point**; at dusk it fades in with `night_lights`.
+- **The loudness is a first table** (`traffic_beams.md`): 8.0 / 0.16 over 24 m, rendered against
+  4.0 / 0.04 (a smear) and 12.0 / 0.32 over 30 m. The user picks.
+
+Measured 2026-11-14, desktop, `f_045` run, `--time-of-day=1`, positions identical:
+
+| | Beams off | Beams on |
+|---|---|---|
+| `draws` at t=1…7 | 177 / 177 / 176 / 176 / 170 / 172 / 177 | +1 each |
+| `prims` | 905,599 at t=1 | +144 (the boxes) |
+| `phys` | 2.8–4.9 ms | 2.9–5.4 ms, inside run-to-run spread |
+| By day, same frame | — | 16 px differ, all on two indicators mid-wink (the blink runs on `TIME`); no beam drawn |
+| `shader error` in the log | 0 | 0 |
+
+`verify_traffic`'s `beams:` line holds one beam per live car every tick (no camera there, so none
+is out of reach); capping `add` at one beam fails it by name (5,399 ticks off), 2026-11-14.
+
+Not done, and owed:
+
+- 🔴 **The handset's fill.** A box crossing the screen is a full-screen additive pass per beam in
+  the worst case; the levers are `draw_m` and `reach_m`.
+- The trams' beams have no verify line of their own; they share `TrafficBeams` and the frame.
+- The player's own beams stay real lights (`P3-11e`).
+
+**See.** `Q160` · `P3-3c` · `P3-11e` · `game/tuning/traffic_beams.md` · `game/tuning/lamp_pools.md` ·
+`game/tuning/beams.md` · `game/scripts/traffic/traffic_beams.gd`
