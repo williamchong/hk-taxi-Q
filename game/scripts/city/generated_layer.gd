@@ -166,6 +166,9 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"casts_shadow": false,
 		"shadow_meshes": [],
 	},
+	# No shadow (`P2-6`): a 1.1 m fence of bars throws a strip the shadow map
+	# blurs to nothing — a sunlit frame of the harbour railings could not tell
+	# it gone — while it cost a draw a mesh a cell in each cascade.
 	RAILINGS:
 	{
 		"file": "railings.glb",
@@ -174,7 +177,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence":
 		"A city whose sources publish no railing layer ships none, and that is not a failure.",
 		"placements": "railings_placements.json",
-		"casts_shadow": true,
+		"casts_shadow": false,
 		"shadow_meshes": [],
 	},
 	LAMPS:

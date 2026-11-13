@@ -107,6 +107,9 @@ func _ready() -> void:
 		push_error("fence: %s cuts no cells; the barriers draw as one batch" % PropCellProfile.PATH)
 		cells = null
 	for row: MultiMeshInstance3D in PropBatch.batches(mesh, transforms, "BarrierRow", cells):
+		# No shadow, on the railings' reason (`generated_layer.gd`): a 1 m barrier
+		# throws a strip the shadow map blurs to nothing.
+		row.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(row)
 	# ⚠️ **Both halves printed, and the collider count with them.** `placed` alone
 	# reads as success on a bundle where half the fence was refused, and a fence

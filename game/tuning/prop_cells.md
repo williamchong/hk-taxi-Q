@@ -12,7 +12,7 @@ anywhere inside it, and again in each shadow cascade.
 ⚠️ EVERY KEY BELOW IS REQUIRED. `prop_cell_profile.gd` declares no defaults; `layer_preview.gd`
 refuses a zero cell and `verify_city.gd` refuses a zero cell or range, or an unknown layer, by name.
 
-## layers = PackedStringArray("lamps", "trees")
+## layers = PackedStringArray("lamps", "trees", "railings")
 
 The lamps: one library mesh, so a cell costs one draw call a pass: 129,240 of ~900,000
 primitives on the throttle route came back to ~10,000 for +2 draw calls.
@@ -25,7 +25,14 @@ same cells (`layer_preview._stand_trunks`).
 🚫 **Not the signs.** 23 library meshes a region is 23 draw calls a visible cell: +65 to +94 on the
 throttle route, measured. Their cost is draw calls, answered by `shadow_meshes` (`P3-66`).
 
-Railings and arrows are unmeasured; a layer joins this list with its own before and after.
+The railings (`P2-6`): three region-wide meshes cost 65k primitives at every view. Cut, they came
+back −89k / −70k / −71k at the start line, Hennessy Road and Times Square, for −1 / +2 / +11 draw
+calls — a class is several library meshes, so a cell is several draws a pass. They cast no shadow
+since the same change (`generated_layer.gd`), which takes two of the three passes away: together
+−127k / −90k / −97k and −7 / −3 / −2 draws, against the fence already cut. A sunlit frame of the
+harbour railings could not tell the two apart (0.14% of pixels, 0.04% run to run).
+
+Arrows are unmeasured; a layer joins this list with its own before and after.
 
 **Read beyond this list.** `layers` names `layer_preview.gd`'s layers only; two placers outside that
 table cut on the same `cell_m` and `range_m` unconditionally: `signal_heads.gd`, and the fence
