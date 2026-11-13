@@ -25,6 +25,12 @@ const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("landmarks", began)
+
+
+func _boot() -> void:
 	# The manifest is the shipping route (`P1-7`): an exported build cannot
 	# enumerate `res://`, so what it does not name does not exist. The locator
 	# supplies the schema and the hint; `verify_landmarks.gd` asserts the two

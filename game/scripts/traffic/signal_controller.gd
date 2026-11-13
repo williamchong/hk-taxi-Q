@@ -130,7 +130,9 @@ func build_lines(graph: RoadGraph) -> void:
 func _physics_process(delta: float) -> void:
 	clock_s += delta
 	if is_instance_valid(vehicle):
+		var began: int = PerfClock.begin()
 		observe(vehicle.global_position)
+		PerfClock.end(PerfClock.Slot.SIGNALS, began)
 
 
 ## The taxi is at `at` now: count a red for every stop line it crossed since

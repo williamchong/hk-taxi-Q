@@ -23,7 +23,9 @@ static func load_object(path: String, schema_version: int, missing_hint: String)
 		push_warning(missing_hint)
 		return {}
 
+	var began: int = PerfClock.begin()
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	PerfClock.boot("json parse", began)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		push_error("%s is not a JSON object" % path)
 		return {}

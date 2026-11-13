@@ -137,6 +137,12 @@ var _checked_for_road: bool = false
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("level", began)
+
+
+func _boot() -> void:
 	if vehicle == null:
 		push_warning("Drive harness has no VehicleController assigned; nothing will be caught.")
 		set_physics_process(false)

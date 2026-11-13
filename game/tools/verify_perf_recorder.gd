@@ -17,7 +17,10 @@ const RECORDER_SCRIPT := "res://scripts/ui/perf_recorder.gd"
 const STREAMER_SCRIPT := "res://scripts/city/city_streamer.gd"
 const OUT_PATH := "user://verify_perf_recorder.csv"
 const RUN_S := 1.0
-const COLUMNS := 10
+const COLUMNS := 15
+## `traffic_ms`, the first of `PerfClock`'s five columns.
+const TRAFFIC_COLUMN := 9
+const PerfClockScript = preload("res://scripts/core/perf_clock.gd")
 
 
 func _init() -> void:
@@ -97,6 +100,10 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 	# One instantiation mid-run, which the tile column must carry exactly once.
 	await create_timer(RUN_S * 0.5).timeout
 	streamer_script.instantiated_total += 1
+	# And one bracketed span, which the traffic's column must carry and no other.
+	var began: int = PerfClockScript.begin()
+	OS.delay_msec(3)
+	PerfClockScript.end(PerfClockScript.Slot.TRAFFIC, began)
 	await create_timer(RUN_S * 0.5 + 0.5).timeout
 
 	_expect(not recorder.is_processing(), "run", "the recorder stopped itself after %.1f s" % RUN_S)
@@ -122,6 +129,8 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 	)
 	var rows: int = 0
 	var tiles: int = 0
+	var traffic_ms: float = 0.0
+	var others_ms: float = 0.0
 	var monotonic: bool = true
 	var widths_ok: bool = true
 	var last_t: float = -1.0
@@ -136,19 +145,36 @@ func _check_run(recorder_script: GDScript, streamer_script: GDScript) -> void:
 			monotonic = false
 		last_t = t
 		tiles += int(fields[COLUMNS - 1])
+		traffic_ms += float(fields[TRAFFIC_COLUMN])
+		for column: int in range(TRAFFIC_COLUMN + 1, COLUMNS - 1):
+			others_ms += float(fields[column])
 	_expect(rows >= 10, "run", "a row a frame (%d rows in %.1f s)" % [rows, RUN_S])
 	_expect(widths_ok, "run", "every row has %d fields" % COLUMNS)
 	_expect(monotonic, "run", "time only runs forward")
 	_expect(tiles == 1, "run", "the one instantiation is in the tile column once (read %d)" % tiles)
+	_expect(
+		traffic_ms >= 3.0 and traffic_ms < 50.0 and others_ms == 0.0,
+		"run",
+		(
+			"a 3 ms span bracketed as the traffic's is in its column and no other (%.2f, %.2f)"
+			% [traffic_ms, others_ms]
+		)
+	)
+	_expect(
+		not PerfClockScript.enabled and PerfClockScript.begin() == 0,
+		"run",
+		"the clock stops with the recorder, and a bracket then reads no time"
+	)
 
 	var summary: String = FileAccess.get_file_as_string(OUT_PATH.get_basename() + "_summary.txt")
 	var summary_lines: PackedStringArray = summary.strip_edges().split("\n")
 	_expect(
 		(
-			summary_lines.size() == 5
+			summary_lines.size() == 6
 			and summary_lines[2].contains("p99")
 			and summary_lines[4] == "perf: gpu n/a, render cpu n/a"
+			and summary_lines[5].begins_with("perf: script ms a frame it ran: traffic p50 ")
 		),
 		"run",
-		"the summary is written beside the CSV, five lines, the headless render timings n/a"
+		"the summary is written beside the CSV, six lines, the headless render timings n/a"
 	)

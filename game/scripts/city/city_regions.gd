@@ -53,6 +53,12 @@ var _streamers: Array[CityStreamer] = []
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("regions, children included", began)
+
+
+func _boot() -> void:
 	if region_scene == null:
 		push_error("CityRegions has no region_scene; nothing will be placed")
 		return

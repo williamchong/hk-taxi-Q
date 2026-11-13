@@ -93,6 +93,12 @@ const _HEIGHT: Dictionary[String, String] = {
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("layer %s" % layer, began)
+
+
+func _boot() -> void:
 	var at: String = GeneratedLayer.path(layer, region)
 	if at.is_empty():
 		push_error("city_layer: %s names no generated layer" % name)

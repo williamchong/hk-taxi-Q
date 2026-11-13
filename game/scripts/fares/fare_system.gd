@@ -247,6 +247,12 @@ var _closed: bool = false
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("fares", began)
+
+
+func _boot() -> void:
 	if Cmdline.off(FARES_ARG):
 		print("fares: off")
 		set_physics_process(false)
@@ -518,6 +524,12 @@ func armed() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	var began: int = PerfClock.begin()
+	_tick(delta)
+	PerfClock.end(PerfClock.Slot.FARES, began)
+
+
+func _tick(delta: float) -> void:
 	# Held with this tick: `park` stops it and so does the paused tree, so the
 	# books count driving time alone.
 	tally.driven_s += delta

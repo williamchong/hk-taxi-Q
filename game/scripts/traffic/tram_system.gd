@@ -117,6 +117,12 @@ var _next_voice: int = 0
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("trams", began)
+
+
+func _boot() -> void:
 	# `setup` already ran: the verify tool's own run.
 	if profile != null:
 		return
@@ -305,7 +311,9 @@ func _set_on(tram: Tram, route: TramLines.Route, s: float, speed: float) -> void
 
 
 func _physics_process(delta: float) -> void:
+	var began: int = PerfClock.begin()
 	step(delta)
+	PerfClock.end(PerfClock.Slot.TRAMS, began)
 
 
 ## One tick: set out what waits, run every tram, write what moved.

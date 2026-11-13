@@ -113,6 +113,12 @@ static func placements_path(region_id: String = "") -> String:
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("parked", began)
+
+
+func _boot() -> void:
 	add_to_group(GROUP)
 	var manifest: CityManifest = CityManifestScript.shared(region)
 	if manifest == null:

@@ -443,6 +443,12 @@ var _sight := PhysicsRayQueryParameters3D.new()
 
 
 func _ready() -> void:
+	var began: int = PerfClock.begin()
+	_boot()
+	PerfClock.boot("traffic", began)
+
+
+func _boot() -> void:
 	# Set up before it entered the tree: the verify tool's own run.
 	if profile != null:
 		return
@@ -973,7 +979,9 @@ func _pick_kind() -> int:
 
 
 func _physics_process(delta: float) -> void:
+	var began: int = PerfClock.begin()
 	step(delta)
+	PerfClock.end(PerfClock.Slot.TRAFFIC, began)
 
 
 ## One tick: retire what left the ring out of view (`Q214`), drive every car,

@@ -194,9 +194,11 @@ func _process(_delta: float) -> void:
 
 	# In this region's frame: the published `aabb`s are, and the region node may
 	# stand at an offset from the frame region (`P5-9c`). Identity for the frame.
+	var began: int = PerfClock.begin()
 	var eye: Vector3 = to_local(camera.global_position)
 	_collect(eye)
 	_settle(eye)
+	PerfClock.end(PerfClock.Slot.STREAMER, began)
 
 
 ## Apply the policy: drop what is out of range, and queue what is not resident

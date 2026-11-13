@@ -39,7 +39,12 @@ const DEFAULT_PATH: String = "user://perf.csv"
 ## A frame over this missed a 60 Hz vsync; over `DOUBLE_MS` it missed two.
 const BUDGET_MS: float = 1000.0 / 60.0
 const DOUBLE_MS: float = 2000.0 / 60.0
-const HEADER: String = "t_s,frame_ms,process_ms,physics_ms,gpu_ms,render_cpu_ms,draws,prims,video_mem_mb,tiles"
+## ⚠️ The five `PerfClock` columns sit before `tiles`, which stays last: a frame's
+## script time by system, summed over the frame's physics ticks.
+const HEADER: String = (
+	"t_s,frame_ms,process_ms,physics_ms,gpu_ms,render_cpu_ms,draws,prims,video_mem_mb,"
+	+ "traffic_ms,trams_ms,fares_ms,signals_ms,streamer_ms,tiles"
+)
 
 ## How long to record, in seconds from this node's first frame.
 var seconds: float = 0.0
@@ -53,6 +58,8 @@ var _tiles_seen: int = 0
 var _frames_ms: PackedFloat32Array = PackedFloat32Array()
 var _gpu_ms: PackedFloat32Array = PackedFloat32Array()
 var _render_cpu_ms: PackedFloat32Array = PackedFloat32Array()
+## A series a `PerfClock.Slot`, summarised like the frame time.
+var _systems_ms: Array[PackedFloat32Array] = []
 var _viewport_rid: RID = RID()
 ## Summarised frames over `BUDGET_MS` that also instantiated a tile.
 var _hitches_tiled: int = 0
@@ -149,6 +156,9 @@ func _ready() -> void:
 		set_process(false)
 		return
 	_file.store_line(HEADER)
+	for _slot: int in PerfClock.NAMES.size():
+		_systems_ms.append(PackedFloat32Array())
+	PerfClock.enabled = true
 	_tiles_seen = CityStreamer.instantiated_total
 	print("perf: recording %.0f s to %s, summary skips the first %.0f s" % [seconds, path, skip_s])
 
@@ -167,11 +177,14 @@ func _process(_delta: float) -> void:
 	_tiles_seen = tiles_total
 	var gpu_ms: float = RenderingServer.viewport_get_measured_render_time_gpu(_viewport_rid)
 	var render_cpu_ms: float = RenderingServer.viewport_get_measured_render_time_cpu(_viewport_rid)
+	var systems := PackedFloat32Array()
+	for slot: int in PerfClock.NAMES.size():
+		systems.append(PerfClock.take(slot))
 	(
 		_file
 		. store_line(
 			(
-				"%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.1f,%d"
+				"%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.1f,%.3f,%.3f,%.3f,%.3f,%.3f,%d"
 				% [
 					t_s,
 					frame_ms,
@@ -182,6 +195,11 @@ func _process(_delta: float) -> void:
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 					Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+					systems[0],
+					systems[1],
+					systems[2],
+					systems[3],
+					systems[4],
 					tiles,
 				]
 			)
@@ -191,6 +209,8 @@ func _process(_delta: float) -> void:
 		_frames_ms.append(frame_ms)
 		_gpu_ms.append(gpu_ms)
 		_render_cpu_ms.append(render_cpu_ms)
+		for slot: int in systems.size():
+			_systems_ms[slot].append(systems[slot])
 		if frame_ms > BUDGET_MS and tiles > 0:
 			_hitches_tiled += 1
 	if t_s >= seconds:
@@ -218,6 +238,8 @@ func _finish() -> void:
 	if _viewport_rid.is_valid():
 		RenderingServer.viewport_set_measure_render_time(_viewport_rid, false)
 	var lines: PackedStringArray = summary_lines()
+	lines.append_array(PerfClock.boot_lines())
+	PerfClock.reset()
 	var summary_path: String = path.get_basename() + "_summary.txt"
 	var out := FileAccess.open(summary_path, FileAccess.WRITE)
 	if out == null:
@@ -262,5 +284,21 @@ func summary_lines() -> PackedStringArray:
 				% [BUDGET_MS, s["over_budget"], _hitches_tiled, DOUBLE_MS, s["over_double"]]
 			),
 			timing_line(_gpu_ms, _render_cpu_ms),
+			systems_line(_systems_ms),
 		]
 	)
+
+
+## Each system's script time, p50 and p95, as one summary line — over the frames
+## it ran in. A system on the physics tick runs in under half the frames of an
+## uncapped desktop run, and a median over all of them would read 0.
+static func systems_line(systems_ms: Array[PackedFloat32Array]) -> String:
+	var parts := PackedStringArray()
+	for slot: int in systems_ms.size():
+		var ran := PackedFloat32Array()
+		for ms: float in systems_ms[slot]:
+			if ms > 0.0:
+				ran.append(ms)
+		var s: Dictionary = summarize(ran)
+		parts.append("%s p50 %.2f p95 %.2f" % [PerfClock.NAMES[slot], s["p50"], s["p95"]])
+	return "perf: script ms a frame it ran: %s" % ", ".join(parts)

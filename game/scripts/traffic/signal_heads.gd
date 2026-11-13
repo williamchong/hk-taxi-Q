@@ -168,7 +168,9 @@ func _stand_posts(mesh: Mesh, cells: PropCellProfile) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	var began: int = PerfClock.begin()
 	refresh()
+	PerfClock.end(PerfClock.Slot.SIGNALS, began)
 
 
 ## Write each stage's light into its heads where it changed since the last write.
