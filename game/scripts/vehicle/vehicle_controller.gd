@@ -694,6 +694,15 @@ func place_at(pose: Transform3D) -> void:
 	_drift_engagement = 0.0
 	_upside_down_for = 0.0
 	handbrake_input = false
+	# The wall response reads the velocity the step began with, and auto-right
+	# returns before the tick refreshes it: left alone, a contact on the placed
+	# car's first step slid the pre-teleport velocity back onto it and latched
+	# an impact from a hit that never happened.
+	_velocity_into_step = Vector3.ZERO
+	_impact_mps = 0.0
+	step_hit_mps = 0.0
+	step_hit_with = null
+	step_scrape_mps = 0.0
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but
