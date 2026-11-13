@@ -73,7 +73,7 @@ func step(
 		engaged = false
 		return false
 	_released_s += delta
-	var slip: float = FareSystem.slip_deg_of(velocity, nose)
+	var slip: float = SlipAngle.deg_of(velocity, nose)
 	if _released_s >= table.rearm_s and slip < threshold_deg:
 		engaged = false
 	return false

@@ -34,7 +34,7 @@ const PropBatch = preload("res://scripts/city/prop_batch.gd")
 ## Both indicators in `vehicle_body.gdshader`'s `INSTANCE_CUSTOM.a`: 8 left
 ## and 16 right, `TrafficSystem.lamp_bits`' hazards. No running bit: the head
 ## lamps and tails stay dark.
-const HAZARD_BITS: float = TrafficSystem.LAMP_LEFT + TrafficSystem.LAMP_RIGHT
+const HAZARD_BITS: float = VehicleBodyBatch.LAMP_LEFT + VehicleBodyBatch.LAMP_RIGHT
 
 ## The document's name in a region's bundle. Mirrors `PARKED_PLACEMENTS_NAME`
 ## in `etl/pipeline/parked.py`.

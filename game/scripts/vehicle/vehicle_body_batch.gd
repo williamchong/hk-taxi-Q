@@ -16,6 +16,20 @@ extends RefCounted
 ## `duplicate` carries every parameter, and only the shader differs.
 
 const MATERIAL_PATH: String = "res://tuning/vehicle_body.tres"
+## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
+## `winking`): the one spelling the traffic, the parked layer and the verify
+## tools read.
+const LAMP_BRAKE: int = 4
+const LAMP_LEFT: int = 8
+const LAMP_RIGHT: int = 16
+## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
+const ROOF_SIGN: int = 32
+## The fade's bits above the lamps' (`Q214`): `FADE_BIT` times how far out the
+## car is faded, in `FADE_STEPS`ths. 0 is drawn whole, so a parked vehicle and a
+## tram, which write none, are whole. Must match `vehicle_body.gdshader`'s
+## `FADE_BIT` and `FADE_STEPS`.
+const FADE_BIT: int = 64
+const FADE_STEPS: int = 7
 const DEFINE: String = "#define VEHICLE_BATCHED"
 const SHADER_TYPE: String = "shader_type spatial;"
 

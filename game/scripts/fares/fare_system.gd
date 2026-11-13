@@ -87,11 +87,10 @@ extends Node
 ## skill, drops with a penalty, and the clock in the middle of the frame is
 ## the one thing that runs down.
 ##
-## ⚠️ **`slip_deg_of` is a second copy of `skidpad_ablation.gd`'s slip, on
-## purpose** (`Q84`): the grader must never call what it grades, so the
-## instrument keeps its own, and the game — the consumer `PLAN.md` held the
-## slip signal back for — now has this one. Same flattening, same floor, and
-## the same velocity: the rear axle's (`VehicleController.rear_axle_velocity`).
+## ⚠️ **`slip_deg_of` is the car's own `SlipAngle.deg_of`, a second copy of
+## `skidpad_ablation.gd`'s slip on purpose** (`Q84`): the grader must never
+## call what it grades, so the instrument keeps its own, and the game — the
+## consumer `PLAN.md` held the slip signal back for — has that one.
 ##
 ## `--fares=off` frees the node — free roam, and what `P3-9` runs.
 ## `--fare-seed=<int>` fixes the destination draw for a repeatable drive.
@@ -160,15 +159,9 @@ const LONGEST_PARKED_HALF_M: float = 6.0
 const FARES_ARG: String = "--fares="
 ## `--fare-seed=<int>` seeds the destination draw; absent, it is randomised.
 const SEED_ARG: String = "--fare-seed="
-## Ground speed under which a slip angle is noise rather than a measurement:
-## a nearly stationary car has a velocity vector pointing anywhere at all.
-## `skidpad_ablation.gd`'s `SLIP_FLOOR_MPS`, restated on purpose (see above).
-const SLIP_FLOOR_MPS: float = 1.0
-## The slip past which the car is travelling backwards, not sliding: the
-## tyre car's stability control stands aside there, and the drift meter does
-## not run (a reverse reads about 180°, and under `Q172`'s 0.5 s bar it paid).
-## A geometric fact — 90° is the travel crossing the axle — not a dial.
-const REVERSED_SLIP_DEG: float = 90.0
+## The car's own bar (`SlipAngle`), under the name the fare loop's readers
+## and `verify_fares` know it by.
+const REVERSED_SLIP_DEG: float = SlipAngle.REVERSED_DEG
 
 enum State { IDLE, BOARDING, CARRYING }
 ## What one draw did (`_place_one`).
@@ -571,18 +564,10 @@ func _near_radius_m(speed_mps: float) -> float:
 	return clampf(look_m, NEAR_RADIUS_MIN_M, NEAR_RADIUS_MAX_M)
 
 
-## The angle between where the car points and where `velocity` is going — the
-## rear axle's, for a slide (`VehicleController.rear_axle_velocity`) — in degrees,
-## flattened to the ground plane so a ramp or a landing cannot read as slip,
-## and 0 under `SLIP_FLOOR_MPS`. `skidpad_ablation.gd::_slip_deg`, restated.
+## The slip the fare pays on: the car's own (`SlipAngle.deg_of`), by the name
+## the loop's readers know it.
 static func slip_deg_of(velocity: Vector3, nose: Vector3) -> float:
-	var travel := Vector3(velocity.x, 0.0, velocity.z)
-	if travel.length() < SLIP_FLOOR_MPS:
-		return 0.0
-	var heading := Vector3(nose.x, 0.0, nose.z)
-	if heading.is_zero_approx():
-		return 0.0
-	return rad_to_deg(travel.normalized().angle_to(heading.normalized()))
+	return SlipAngle.deg_of(velocity, nose)
 
 
 ## One tick of the loop: the car is at `position` doing `speed_mps` along

@@ -24,6 +24,7 @@ extends "res://tools/verify_tool.gd"
 ## fails to compile — `verify_hud.gd` explains — which is why only
 ## `check.sh`'s exit code means anything.
 
+const HandsetScript = preload("res://scripts/core/handset.gd")
 const MenuProfileScript = preload("res://scripts/ui/menu_profile.gd")
 const MenuShotScript = preload("res://scripts/camera/menu_shot.gd")
 const MenuTextScript = preload("res://scripts/ui/menu_text.gd")
@@ -946,12 +947,12 @@ func _check_image_of(
 	_expect(page.get_node_or_null("Save/Button") != null, "image", "REPORT offers SAVE RESULT")
 	for phone: String in ["mobile", "web_android", "web_ios"]:
 		_expect(
-			SheetImageScript.is_phone(func(feature: String) -> bool: return feature == phone),
+			HandsetScript.is_phone(func(feature: String) -> bool: return feature == phone),
 			"image",
 			"%s is a phone, and gets no button" % phone
 		)
 	_expect(
-		not SheetImageScript.is_phone(
+		not HandsetScript.is_phone(
 			func(feature: String) -> bool: return feature in ["web", "macos", "pc"]
 		),
 		"image",

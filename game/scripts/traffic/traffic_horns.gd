@@ -7,14 +7,8 @@ extends RefCounted
 ## 🔴 **A pattern draws on `_rng`, never the traffic's**: one more roll there
 ## would move every later car. It is seeded off the traffic's seed in `seed_from`.
 
-## A kind's horn, a loop held for as long as a press lasts (`P3-79`).
-const HORN_PATH: String = "res://assets/authored/audio/horn_%s.wav"
-## The horn a kind with no file of its own sounds.
-const HORN_FALLBACK_KIND: String = "car_a"
 ## Why a car honks, each with its own pattern ranges in `traffic.tres`.
 const HORN_REASONS: PackedStringArray = ["stood", "cut", "hit", "close_call"]
-## A press starts and stops over this long, so the loop never clicks.
-const HORN_DECLICK_S: float = 0.03
 ## Spreads the fleet's ids over the horn's pitch range: not a roll, since one more
 ## draw on the seeded RNG would move every later car.
 const PITCH_STIR: float = 2.4
@@ -76,24 +70,12 @@ func load_voices(kinds: Array[String]) -> void:
 		_voices.append(voice)
 		_calls.append(null)
 	for kind: String in kinds:
-		_streams[kind] = horn_stream(kind)
+		_streams[kind] = HornSound.stream(kind)
 
 
 ## Whether no voice is sounding.
 func idle() -> bool:
 	return _calls.all(func(honk: HornCall) -> bool: return honk == null)
-
-
-## `kind`'s horn, or the fallback's where it has none; null, warned, where
-## neither loads.
-static func horn_stream(kind: String) -> AudioStream:
-	var path: String = HORN_PATH % kind
-	if not ResourceLoader.exists(path):
-		path = HORN_PATH % HORN_FALLBACK_KIND
-	var stream := load(path) as AudioStream
-	if stream == null:
-		push_warning("TrafficSystem: %s did not load; that horn is silent" % path)
-	return stream
 
 
 ## Whether a car the taxi holds sounds its horn (`Q178`): at once when the taxi has
@@ -158,7 +140,7 @@ func sound(car: TrafficSystem.Car, reason: String) -> void:
 		return
 	var kind: String = _system.rules_kind(car)
 	if not _streams.has(kind):
-		_streams[kind] = horn_stream(kind)
+		_streams[kind] = HornSound.stream(kind)
 	var voice: AudioStreamPlayer3D = _voices[slot]
 	voice.stream = _streams[kind]
 	voice.pitch_scale = 1.0 + profile.horn_pitch_spread * sin(float(car.id) * PITCH_STIR)
@@ -214,7 +196,7 @@ func _slot(car: TrafficSystem.Car) -> int:
 
 
 ## Each sounding voice: follow its car, press and lift on the pattern, and ramp
-## the level over `HORN_DECLICK_S` either way.
+## the level over `HornSound.DECLICK_S` either way.
 func step(delta: float) -> void:
 	for slot: int in _calls.size():
 		var honk: HornCall = _calls[slot]
@@ -227,7 +209,7 @@ func step(delta: float) -> void:
 			if honk.at < honk.pattern.size():
 				honk.left_s += honk.pattern[honk.at]
 		var on: bool = honk.at < honk.pattern.size() and honk.at % 2 == 0
-		honk.level = move_toward(honk.level, 1.0 if on else 0.0, delta / HORN_DECLICK_S)
+		honk.level = move_toward(honk.level, 1.0 if on else 0.0, delta / HornSound.DECLICK_S)
 		if honk.at >= honk.pattern.size() and honk.level <= 0.0:
 			voice.stop()
 			_calls[slot] = null

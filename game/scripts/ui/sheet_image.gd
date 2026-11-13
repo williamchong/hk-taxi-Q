@@ -13,7 +13,7 @@ extends RefCounted
 ## 🔴 **Not offered on a phone** (the user's call): the app and the phone's
 ## browser alike, since a screenshot is one button press there. Godot 4.7 has no
 ## share sheet and no save-to-Photos call (its class reference, checked
-## 2026-11-06), so a phone needs a plugin; `is_phone` is the one line a plugin
+## 2026-11-06), so a phone needs a plugin; `Handset.is_phone` is the one line a plugin
 ## lifts. On a computer the file goes to Pictures and its folder opens; on the
 ## web it is a download.
 
@@ -25,15 +25,7 @@ const FOOT: String = "Foot"
 
 ## Whether this device gets the button.
 static func offered() -> bool:
-	return not is_phone(OS.has_feature)
-
-
-## `has_feature` answers `OS.has_feature`'s question; handed in so a check can
-## ask about a phone from a desk.
-static func is_phone(has_feature: Callable) -> bool:
-	return (
-		has_feature.call("mobile") or has_feature.call("web_android") or has_feature.call("web_ios")
-	)
+	return not Handset.is_phone(OS.has_feature)
 
 
 ## The viewport the picture is drawn in, holding a copy of `column` on the

@@ -395,7 +395,7 @@ func forward_speed_kph() -> float:
 
 
 ## The rear axle's velocity, which is what the game reads a slide on
-## (`FareSystem.slip_deg_of`): its angle to the nose is how far the tail is
+## (`SlipAngle.deg_of`): its angle to the nose is how far the tail is
 ## out. Not the centre of mass's: a car turning tightly with every tyre
 ## gripping carries an angle there by geometry alone — 15° at full lock —
 ## which read as a slide, paid as one, and had stability control cut the power

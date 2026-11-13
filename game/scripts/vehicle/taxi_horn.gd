@@ -22,7 +22,7 @@ var presses: int = 0
 var _input: Node = null
 var _voice: AudioStreamPlayer3D = null
 var _held: bool = false
-## The press's level, ramped over `TrafficHorns.HORN_DECLICK_S` either way.
+## The press's level, ramped over `HornSound.DECLICK_S` either way.
 var _level: float = 0.0
 
 
@@ -31,7 +31,7 @@ func _ready() -> void:
 	if vehicle == null:
 		push_warning("TaxiHorn has no vehicle assigned; the taxi has no horn.")
 		return
-	var stream: AudioStream = TrafficHorns.horn_stream("taxi")
+	var stream: AudioStream = HornSound.stream("taxi")
 	if stream == null:
 		return
 	_voice = AudioStreamPlayer3D.new()
@@ -65,7 +65,7 @@ func hold(down: bool) -> void:
 func _ramp(delta: float) -> void:
 	if _voice == null or not _voice.playing:
 		return
-	_level = move_toward(_level, 1.0 if _held else 0.0, delta / TrafficHorns.HORN_DECLICK_S)
+	_level = move_toward(_level, 1.0 if _held else 0.0, delta / HornSound.DECLICK_S)
 	if _level <= 0.0 and not _held:
 		_voice.stop()
 		return

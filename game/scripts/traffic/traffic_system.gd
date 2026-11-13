@@ -116,19 +116,14 @@ const NO_PARKED: Array = []
 const WINK_LEFT: int = 1
 const WINK_RIGHT: int = -1
 const HAZARDS: int = 2
-## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
-## `winking`): the one spelling the parked layer and the verify tools read.
-const LAMP_BRAKE: int = 4
-const LAMP_LEFT: int = 8
-const LAMP_RIGHT: int = 16
-## A moving taxi's roof sign, lit for hire (`Q183`): the shader's `for_hire`.
-const ROOF_SIGN: int = 32
-## The fade's bits above the lamps' (`Q214`): `FADE_BIT` times how far out the
-## car is faded, in `FADE_STEPS`ths. 0 is drawn whole, so a parked vehicle and a
-## tram, which write none, are whole. Must match `vehicle_body.gdshader`'s
-## `FADE_BIT` and `FADE_STEPS`.
-const FADE_BIT: int = 64
-const FADE_STEPS: int = 7
+## The batched body's lamp and fade bits (`VehicleBodyBatch`, where the shader's
+## spelling lives), under the names this system and its verify tools use.
+const LAMP_BRAKE: int = VehicleBodyBatch.LAMP_BRAKE
+const LAMP_LEFT: int = VehicleBodyBatch.LAMP_LEFT
+const LAMP_RIGHT: int = VehicleBodyBatch.LAMP_RIGHT
+const ROOF_SIGN: int = VehicleBodyBatch.ROOF_SIGN
+const FADE_BIT: int = VehicleBodyBatch.FADE_BIT
+const FADE_STEPS: int = VehicleBodyBatch.FADE_STEPS
 ## A spawn or a car is looked at this high off its road, about its roof (`Q214`).
 const SIGHT_HEIGHT_M: float = 1.5
 ## What the ETL's colliders import as — a building tile's `<tile>_collision`, a

@@ -123,7 +123,7 @@ func _ready() -> void:
 	# The process-wide globals outlive a scene, so a rig entering after a night
 	# one must put the day back rather than inherit the dark.
 	_set_globals(Color.WHITE, 0.0)
-	fit_shadow(SheetImage.is_phone(OS.has_feature))
+	fit_shadow(Handset.is_phone(OS.has_feature))
 	if cycle == null or not cycle.usable():
 		return
 	for child: Node in get_children():

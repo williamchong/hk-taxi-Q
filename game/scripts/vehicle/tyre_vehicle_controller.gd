@@ -321,14 +321,14 @@ func _grip_lock_rad() -> float:
 
 ## How far the rear axle's slip is past the tyre's peak, in radians, or 0 when
 ## it is not sliding forward. The size is the game's own slip
-## (`FareSystem.slip_deg_of`, the one the fare pays on). Forward travel only:
+## (`SlipAngle.deg_of`, the one the fare pays on). Forward travel only:
 ## backing up reads as a slip near 180° and would snap the fronts to full
 ## lock; past 90° the car has spun anyway.
 func _slide_beyond_peak_rad() -> float:
 	var nose: Vector3 = -global_basis.z
 	if linear_velocity.dot(nose) <= 0.0 or linear_velocity.length() < _low_speed_mps():
 		return 0.0
-	var slip_deg: float = FareSystem.slip_deg_of(rear_axle_velocity(), nose)
+	var slip_deg: float = SlipAngle.deg_of(rear_axle_velocity(), nose)
 	return maxf(deg_to_rad(slip_deg - tyre.peak_slip_angle_deg), 0.0)
 
 
@@ -606,7 +606,7 @@ func _armed_slip_share() -> float:
 
 ## The forward drive left by a slip cut over `from`–`to` degrees of rear-axle slip:
 ## 1 under `from`, none at `to`. 1 when the band is not authored (`to` not over
-## `from`), on reverse drive, and past `FareSystem.REVERSED_SLIP_DEG`, where the car is
+## `from`), on reverse drive, and past `SlipAngle.REVERSED_DEG`, where the car is
 ## travelling backwards and the throttle must brake the roll.
 func _slip_cut_share(from: float, to: float) -> float:
 	if _drive_n <= 0.0:
@@ -616,7 +616,7 @@ func _slip_cut_share(from: float, to: float) -> float:
 
 ## How far the rear axle's slip is through `from`–`to` degrees: 0 under `from`,
 ## 1 at `to`. 0 when the band is not authored (`to` not over `from`) and past
-## `FareSystem.REVERSED_SLIP_DEG`: stability control's slip cuts stand aside
+## `SlipAngle.REVERSED_DEG`: stability control's slip cuts stand aside
 ## there, so the throttle drives the wheels and brakes the backward roll as a
 ## real car's does. Cut at every slip, a car spun round in drift mode had no
 ## drive at all and rolled backwards at 10–30 kph with the throttle held (the
@@ -629,8 +629,8 @@ func _slip_over(from: float, to: float) -> float:
 	# stands aside at a crawl.
 	if linear_velocity.length() < _low_speed_mps():
 		return 0.0
-	var slip: float = FareSystem.slip_deg_of(rear_axle_velocity(), -global_basis.z)
-	if slip > FareSystem.REVERSED_SLIP_DEG:
+	var slip: float = SlipAngle.deg_of(rear_axle_velocity(), -global_basis.z)
+	if slip > SlipAngle.REVERSED_DEG:
 		return 0.0
 	return clampf(inverse_lerp(from, to, slip), 0.0, 1.0)
 
