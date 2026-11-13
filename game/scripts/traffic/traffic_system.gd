@@ -98,6 +98,10 @@ const STOPPED_MPS: float = 0.1
 const STOP_SHORT_M: float = 0.3
 ## A car this far above or below is on another level, not ahead.
 const LEVEL_APART_M: float = 3.0
+## Added to a reach before a car is refused on one plan axis alone, so that
+## refusal never differs from the distance test it stands in front of: the
+## distance is rounded to single precision, an axis is not.
+const FAR_SLACK_M: float = 0.01
 ## Edges and turns one tick may carry a car through; a ring of zero-length
 ## edges would otherwise never end the walk.
 const ADVANCE_STEPS: int = 16
@@ -2067,8 +2071,15 @@ func _gap_ahead(car: Car) -> float:
 	var origin: Vector3 = car.pose.origin
 	var best: float = INF
 	var follow_cos: float = cos(deg_to_rad(profile.follow_heading_deg))
+	var reach: float = profile.look_m + car.half_length + FAR_SLACK_M
 	for other: Car in cars:
 		if other == car or not other.live:
+			continue
+		# Most of the fleet is streets away: refused on one axis, before the
+		# distance is worked out. `FAR_SLACK_M` keeps the test below its answer.
+		var beyond: float = reach + other.half_length
+		var there: Vector3 = other.pose.origin
+		if absf(there.x - origin.x) > beyond or absf(there.z - origin.z) > beyond:
 			continue
 		var apart: float = RoadGraph.plan_distance(origin, other.pose.origin)
 		if apart > profile.look_m + other.half_length + car.half_length:
@@ -2317,12 +2328,17 @@ func _give_way_gap(car: Car) -> float:
 	# junction's width (at most a `look_m`) apart.
 	var near_m: float = profile.give_way_look_m * 2.0 + profile.look_m
 	var min_sin: float = sin(deg_to_rad(profile.straight_deg))
+	var here: Vector3 = car.pose.origin
+	var far_m: float = near_m + FAR_SLACK_M
 	for other: Car in cars:
 		if other == car or not other.live or other.knocked:
 			continue
-		if absf(car.pose.origin.y - other.pose.origin.y) > LEVEL_APART_M:
+		var there: Vector3 = other.pose.origin
+		if absf(here.y - there.y) > LEVEL_APART_M:
 			continue
-		if RoadGraph.plan_distance(car.pose.origin, other.pose.origin) > near_m:
+		if absf(there.x - here.x) > far_m or absf(there.z - here.z) > far_m:
+			continue
+		if RoadGraph.plan_distance(here, there) > near_m:
 			continue
 		if _queues_with(car, other):
 			continue
