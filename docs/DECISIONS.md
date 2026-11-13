@@ -13443,6 +13443,7 @@ found `AreaReport`'s two refusals printed nowhere — Wan Chai 63 under-covered,
 | a parked cell re-stood only where its vehicles changed, one a frame | no burst of frees on the hour or the reroll |
 | the railings' and the fence's boxes one body a plan cell (`PropBatch.boxes`) | Wan Chai 5,535 + 316 bodies → **34 + 15**, Causeway Bay 2,158 + 75 → **20 + 7** (7,693 railing bodies across the two → 54); the boxes match the old bodies to 1e-7 on 500 placements; the taxi still stops against them on both sides of Expo Drive |
 | a far car refused on one axis before its distance (`FAR_SLACK_M`) | `verify_traffic` 143 → **135** s, whole output byte-identical |
+| the lane rules read one road's cars (`_cars_on`: by `edge` and `next_edge`, in fleet order, rebuilt when a car's road changes) | `verify_traffic` 135 → **126** s on Wan Chai, byte-identical in both regions |
 | `LightingRig.phone_scale_3d`, shipped at 1 | nothing, by design: a dial for a measured handset |
 
 ⚠️ The per-tick medians move ±1 ms between identical desk runs (traffic read 3.31, 2.02 and 2.90
@@ -13450,10 +13451,6 @@ on three), so only the deterministic readings above are claims.
 
 **Not built, and why.**
 
-- **Per-edge buckets for the traffic's lane rules** — approved, then left out: at 40 cars each of
-  those loops is an integer compare a car, and several return the FIRST match in fleet order, so
-  a bucket would need that order kept for a gain under the noise. Reopen at a fleet several
-  times the size.
 - **On hold:** a typed `Obstacle` and a provider interface for the near miss (waits on `Q175`'s
   contract settling); physics interpolation (waits on whether uneven pacing is seen on a 120 Hz
   screen); threading the boot (the boot lines above are what it would be judged by — regions at
