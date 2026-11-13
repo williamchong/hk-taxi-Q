@@ -1158,7 +1158,7 @@ func _step_view(car: Car, here: Vector3, delta: float) -> bool:
 		return car.fade <= 0.0
 	if car.fade < 1.0:
 		car.fade = minf(car.fade + delta / profile.fade_in_s, 1.0)
-	if RoadGraph.plan_distance(car.pose.origin, here) <= profile.retire_m:
+	if RoadGraph.plan_distance_sq(car.pose.origin, here) <= profile.retire_m * profile.retire_m:
 		car.unseen_s = 0.0
 		return false
 	if not _viewing:
@@ -1219,8 +1219,9 @@ func _in_ring_and_clear(at: Vector3, here: Vector3) -> bool:
 	var away: float = RoadGraph.plan_distance(at, here)
 	if away < profile.spawn_min_m or away > profile.spawn_max_m:
 		return false
+	var clear_sq: float = profile.spawn_clear_m * profile.spawn_clear_m
 	for other: Car in cars:
-		if other.live and RoadGraph.plan_distance(other.pose.origin, at) < profile.spawn_clear_m:
+		if other.live and RoadGraph.plan_distance_sq(other.pose.origin, at) < clear_sq:
 			return false
 	return true
 
@@ -1850,7 +1851,7 @@ func _struck(car: Car) -> bool:
 	if not is_instance_valid(vehicle):
 		return false
 	var reach: float = car.half_length + _extents[0].size.z * 0.5 + STRUCK_SLACK_M
-	return RoadGraph.plan_distance(car.pose.origin, vehicle.global_position) <= reach
+	return RoadGraph.plan_distance_sq(car.pose.origin, vehicle.global_position) <= reach * reach
 
 
 ## What a knocked car's tyres hold across them, in m/s²: `tyre.tres`' `mu` times
@@ -2032,6 +2033,7 @@ func _try_recover(car: Car) -> bool:
 	var out: Vector3 = _travel_dir(edge, join, length_m, along)
 	var p1: Vector3 = TrafficTurns.turn_control(p0, forward, p2, out)
 	var middle: Vector3 = TrafficTurns.curve_point(p0, p1, p2, 0.5)
+	var recover_sq: float = profile.recover_clear_m * profile.recover_clear_m
 	for other: Car in cars:
 		# A car under way is looked for; one standing — queued behind the wreck for
 		# it to move, which a look would wait on for ever — is in the sweep below
@@ -2039,8 +2041,8 @@ func _try_recover(car: Car) -> bool:
 		if other == car or not other.live or other.knocked or other.speed < STOPPED_MPS:
 			continue
 		if (
-			RoadGraph.plan_distance(other.pose.origin, p2) < profile.recover_clear_m
-			or RoadGraph.plan_distance(other.pose.origin, middle) < profile.recover_clear_m
+			RoadGraph.plan_distance_sq(other.pose.origin, p2) < recover_sq
+			or RoadGraph.plan_distance_sq(other.pose.origin, middle) < recover_sq
 		):
 			return false
 	var from: Transform3D = car.pose
@@ -2376,6 +2378,7 @@ func _give_way_gap(car: Car) -> float:
 	var min_sin: float = sin(deg_to_rad(profile.straight_deg))
 	var here: Vector3 = car.pose.origin
 	var far_m: float = near_m + FAR_SLACK_M
+	var near_sq: float = near_m * near_m
 	for other: Car in cars:
 		if other == car or not other.live or other.knocked:
 			continue
@@ -2384,7 +2387,7 @@ func _give_way_gap(car: Car) -> float:
 			continue
 		if absf(there.x - here.x) > far_m or absf(there.z - here.z) > far_m:
 			continue
-		if RoadGraph.plan_distance(here, there) > near_m:
+		if RoadGraph.plan_distance_sq(here, there) > near_sq:
 			continue
 		if _queues_with(car, other):
 			continue

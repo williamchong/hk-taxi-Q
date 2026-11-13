@@ -1374,6 +1374,14 @@ static func plan_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(b.x - a.x, b.z - a.z).length()
 
 
+## `plan_distance` squared, for a compare against a squared bar: no root. The
+## bar must not be negative, or its square reverses the test.
+static func plan_distance_sq(a: Vector3, b: Vector3) -> float:
+	var x: float = b.x - a.x
+	var z: float = b.z - a.z
+	return x * x + z * z
+
+
 static func _closest_on_segment(a: Vector3, b: Vector3, point: Vector3) -> Vector3:
 	# Projected in plan, then the height is taken from the road rather than from
 	# the query. The caller is a car sitting a ride height above the tarmac.

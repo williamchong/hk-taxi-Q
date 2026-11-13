@@ -499,7 +499,7 @@ func _gap_on_route(
 	if absf(at.y - origin.y) > LEVEL_APART_M:
 		return INF
 	var look_m: float = profile.look_m + half_length + other_half_length
-	if RoadGraph.plan_distance(at, origin) > look_m:
+	if RoadGraph.plan_distance_sq(at, origin) > look_m * look_m:
 		return INF
 	var heading: Vector3 = -other.basis.z
 	var reach: float = half_width + other_half_width
