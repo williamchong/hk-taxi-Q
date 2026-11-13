@@ -77,9 +77,10 @@ static func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void
 		_collect(child, here, into)
 
 
-## How many static bodies the node's subtree carries. The previews print it
+## How many collision shapes the node's subtree carries — a shape, not a body:
+## the railings and the fence stand one body a plan cell (`PropBatch.boxes`). The previews print it
 ## because every generated layer but the road surface and the railings must
 ## carry none (`Q74`, `Q159`), and `fence.gd` because its bodies are built by
 ## hand.
 static func colliders(node: Node) -> int:
-	return node.find_children("*", "StaticBody3D", true, false).size()
+	return node.find_children("*", "CollisionShape3D", true, false).size()

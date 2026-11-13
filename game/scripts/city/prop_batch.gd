@@ -7,6 +7,9 @@
 ## idiom lives here once rather than once per placer.
 extends RefCounted
 
+## Boxes within this of one size share one shape (`boxes`).
+const SIZE_SNAP_M: float = 0.001
+
 
 ## `transforms.size()` copies of `mesh`, as one node. `custom`, when given, is
 ## one `INSTANCE_CUSTOM` per transform — a parked vehicle's livery (`Q167`).
@@ -116,6 +119,43 @@ static func bodies(
 	return built
 
 
+## One box over `extent` — the prop's own frame — under each of `transforms`,
+## as one static body per plan cell of `cells` holding a shape a placement, or
+## one body for the lot without `cells`: `posts`' arrangement, for a prop that
+## never moves or leaves (a railing panel, a barrier). `bodies` stays for the
+## parked vehicles, whose cells are freed and re-stood.
+##
+## 🔴 **Every shape is added before the body enters the tree**, which is why this
+## returns bodies rather than adding them: Jolt builds a body's compound once on
+## entry, and again for each shape added after it.
+##
+## A placement's scale is baked into its box, so no shape carries a scaled
+## transform; boxes of one size share one shape by reference.
+static func boxes(
+	extent: AABB, transforms: Array[Transform3D], name: String, cells: PropCellProfile
+) -> Array[StaticBody3D]:
+	var stood: Array[StaticBody3D] = []
+	if not extent.has_volume():
+		return stood
+	var centre: Vector3 = extent.get_center()
+	var by_cell: Dictionary[Vector2i, StaticBody3D] = {}
+	var by_size: Dictionary[Vector3, BoxShape3D] = {}
+	for at: Transform3D in transforms:
+		var body: StaticBody3D = _cell_body(at.origin, name, cells, by_cell, stood)
+		# Snapped: a turned basis reads its scale back a few ulps off 1, and
+		# every panel would otherwise key a box of its own.
+		var size: Vector3 = (extent.size * at.basis.get_scale()).abs().snappedf(SIZE_SNAP_M)
+		if not by_size.has(size):
+			var made := BoxShape3D.new()
+			made.size = size
+			by_size[size] = made
+		var collision := CollisionShape3D.new()
+		collision.shape = by_size[size]
+		collision.transform = Transform3D(at.basis.orthonormalized(), at * centre)
+		body.add_child(collision)
+	return stood
+
+
 ## The post `mesh` stands on, in its own frame: the bounds of an upright
 ## cylinder over the ring of vertices at its foot, from the foot to the mesh's
 ## top. Read off the geometry, so the radius is whatever the ETL drew — a lamp
@@ -175,12 +215,7 @@ static func posts(
 	var by_cell: Dictionary[Vector2i, StaticBody3D] = {}
 	var by_size: Dictionary[Vector2, CylinderShape3D] = {}
 	for at: Transform3D in transforms:
-		var cell: Vector2i = Vector2i.ZERO if cells == null else cells.cell_of(at.origin)
-		if not by_cell.has(cell):
-			var body := StaticBody3D.new()
-			body.name = "%s_%d_%d" % [name, cell.x, cell.y]
-			by_cell[cell] = body
-			stood.append(body)
+		var body: StaticBody3D = _cell_body(at.origin, name, cells, by_cell, stood)
 		var grown: Vector3 = at.basis.get_scale()
 		var size := Vector2(0.5 * post.size.x * grown.x, post.size.y * grown.y)
 		if not by_size.has(size):
@@ -192,5 +227,23 @@ static func posts(
 		var collision := CollisionShape3D.new()
 		collision.shape = shape
 		collision.position = at * centre
-		by_cell[cell].add_child(collision)
+		body.add_child(collision)
 	return stood
+
+
+## The static body of the plan cell `at` falls in — one for the lot without
+## `cells` — made, named and appended to `stood` the first time it is asked for.
+static func _cell_body(
+	at: Vector3,
+	name: String,
+	cells: PropCellProfile,
+	by_cell: Dictionary[Vector2i, StaticBody3D],
+	stood: Array[StaticBody3D]
+) -> StaticBody3D:
+	var cell: Vector2i = Vector2i.ZERO if cells == null else cells.cell_of(at)
+	if not by_cell.has(cell):
+		var body := StaticBody3D.new()
+		body.name = "%s_%d_%d" % [name, cell.x, cell.y]
+		by_cell[cell] = body
+		stood.append(body)
+	return by_cell[cell]

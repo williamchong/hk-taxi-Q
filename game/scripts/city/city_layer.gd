@@ -217,7 +217,7 @@ func _place(library: Node3D) -> Dictionary:
 		if collides:
 			if not local.has_volume():
 				push_error("%s: library mesh %s is flat and cannot collide" % [layer, mesh_name])
-			for body: StaticBody3D in PropBatch.bodies(local, batch, mesh_name + "_col"):
+			for body: StaticBody3D in PropBatch.boxes(local, batch, mesh_name + "_col", cells):
 				add_child(body)
 		if posts:
 			var post: AABB = PropBatch.post_of(mesh)

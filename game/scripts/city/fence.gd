@@ -5,7 +5,7 @@
 ## `P3-9a` ended with three HK drivers stopping at geometry they could not read.
 ## This is what stands where the refusal is.
 ##
-## 🔴 **One MultiMesh for the look, one collision body per unit — never an
+## 🔴 **One MultiMesh for the look, one collision box per unit — never an
 ## instanced scene per unit.** Instantiating the prop per placement is the obvious build
 ## and it was measured: **+36 draw calls** on a driving frame (92 against 56)
 ## against `ARCHITECTURE.md`'s <150 budget, on a layer every other generated
@@ -19,8 +19,8 @@
 ## picture over it. The generated railing classes collide too since `Q159`,
 ## through their placer's `collides` switch; their asset stays collider-free
 ## (`verify_railings.gd`). The extent is read off the imported `-col` body once
-## and stood as one **box**, shared by every body. ⚠️ **A box, not the
-## trimesh `-col` imports**: that is the rails and posts face for face, so a
+## and stood as one **box** a unit, in one body a plan cell (`PropBatch.boxes`).
+## ⚠️ **A box, not the trimesh `-col` imports**: that is the rails and posts face for face, so a
 ## bumper meets open air under the 0.34 m bottom rail and between the two
 ## courses and snags on a rail edge, where a closure should stop the car flat.
 ##
@@ -101,8 +101,6 @@ func _boot() -> void:
 		var at: Transform3D = placement as Transform3D
 		transforms.append(at)
 
-	for body: StaticBody3D in PropBatch.bodies(extent, transforms, "barrier_col"):
-		add_child(body)
 	# Cut on the props' cells (`P2-6`): one region-wide `MultiMesh` was one box
 	# the culler could never drop, so both shadow cascades drew every barrier
 	# from anywhere in the region — 121k primitives at every view measured.
@@ -112,6 +110,8 @@ func _boot() -> void:
 		# `Q19`'s invisible refusal, a fence drawn whole only a cost.
 		push_error("fence: %s cuts no cells; the barriers draw as one batch" % PropCellProfile.PATH)
 		cells = null
+	for body: StaticBody3D in PropBatch.boxes(extent, transforms, "barrier_col", cells):
+		add_child(body)
 	for row: MultiMeshInstance3D in PropBatch.batches(mesh, transforms, "BarrierRow", cells):
 		# No shadow, on the railings' reason (`generated_layer.gd`): a 1 m barrier
 		# throws a strip the shadow map blurs to nothing.
