@@ -184,7 +184,8 @@ var _tick_yields: bool = false
 var _combo_fade_s: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
-## The 黑體 for what is interface and not a name: captions, units, the sums.
+## The 黑體 for what is interface and not a name: captions, units, a sum
+## flashed alone.
 ## The Kai keeps the plate and the callout's place and road, as on a street.
 var _font_hei: Font = null
 ## What a skill or a penalty is named in (`StreetPlate.load_font_flash`): the
@@ -528,9 +529,9 @@ func _build() -> void:
 		_callout_sub.add_theme_font_override(&"font", _font_zh)
 
 	# The tick: "+HK$2.1" under the clock as a unit begins, bare like the
-	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`. In
-	# a face of its own per flash (`_flash`): a skill flashes its 黃紙 item (`Q169`), and
-	# the theme's face has no CJK glyph of its own to draw it in.
+	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`. Its
+	# face is set per flash (`_flash`): a skill flashes its 黃紙 item (`Q169`),
+	# and the theme's face has no CJK glyph of its own to draw it in.
 	_tick = _outlined(_label("Tick", _style.tick_size, _style.chip_ink))
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
@@ -684,7 +685,7 @@ func _in_hei(labels: Array[Label]) -> void:
 	if _language != Locale.CHINESE or _font_hei == null:
 		return
 	for label: Label in labels:
-		label.add_theme_font_override(&"font", _font_hei)
+		_set_face(label, _font_hei)
 
 
 ## A style number for the callout's language: the Kai face sets larger than
@@ -1132,13 +1133,13 @@ func _paint_route() -> void:
 func _on_fare_delivered(fare: Fare) -> void:
 	_face.on_ended(fare, true)
 	# What was banked, meter and tip as one, in the gain's green.
-	_flash(FareFace.flash(fare.banked_hkd), _style.accent)
+	_flash(FareFace.flash(fare.banked_hkd), _style.accent, _font_hei)
 
 
 ## A unit began: the tick, in the chip's ink. The first is the flagfall.
 func _on_meter_changed(_hkd: float, delta_hkd: float) -> void:
 	if delta_hkd > 0.0:
-		_flash(FareFace.flash(delta_hkd), _style.chip_ink)
+		_flash(FareFace.flash(delta_hkd), _style.chip_ink, _font_hei)
 
 
 ## A skill paid (`P3-49`): the money and its name, in the gain's green, so a
@@ -1148,7 +1149,7 @@ func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
 	if fares.combo.shown():
 		_join_live(award, true)
 		return
-	_flash(_face.award_text(award), _award_ink(award), true)
+	_flash(_face.award_text(award), _award_ink(award), _font_flash)
 	_tick_yields = true
 
 
@@ -1158,7 +1159,7 @@ func _on_fare_practised(award: Fare.Award) -> void:
 	if fares.combo.shown():
 		_join_live(award, false)
 		return
-	_flash(_face.practice_text(award), _award_ink(award), true)
+	_flash(_face.practice_text(award), _award_ink(award), _font_flash)
 	_tick_yields = true
 
 
@@ -1175,11 +1176,11 @@ func _award_ink(award: Fare.Award) -> Color:
 	return _style.accent if award.hkd >= 0.0 else _style.accent_negative
 
 
-## Show `text` under the clock and start it fading. A flash that names a skill
-## or a penalty takes their face; a sum alone stays in the interface's.
-func _flash(text: String, ink: Color, named: bool = false) -> void:
+## Show `text` under the clock in `face` and start it fading: `_font_flash`
+## for a line that names a skill or a penalty, `_font_hei` for a sum alone.
+func _flash(text: String, ink: Color, face: Font) -> void:
 	_tick.text = text
-	_set_face(_tick, _font_flash if named else _font_hei)
+	_set_face(_tick, face)
 	# Cut to the box, like the callout: "−HK$5.0 touching an object (serious)"
 	# is the longest thing flashed here, and the box is its bound.
 	StreetPlate.shrink_to(_tick, _style.tick_size, _layout.tick.size.x)

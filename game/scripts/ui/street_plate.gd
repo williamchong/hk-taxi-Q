@@ -97,13 +97,14 @@ static func load_font_brush_en(who: String, title: bool = false) -> Font:
 ## Latin and the digits and no Chinese, so the money stays in the dashboard's
 ## numerals and the name falls to the brush — whose own digits, thin and
 ## wide-set, were the frame that ruled the brush out for the whole line. In
-## English the Latin brush, money and all.
+## English the Latin brush, money and all. Without the brush a Chinese name
+## still needs a face that has it, so the 黑體 stands in.
 static func load_font_flash(who: String, language: String) -> Font:
 	if language != Locale.CHINESE:
 		return load_font_brush_en(who)
 	var brush: Font = load_font_brush(who)
 	if brush == null:
-		return null
+		return load_font_hei(who)
 	var flash := FontVariation.new()
 	flash.base_font = ThemeDB.fallback_font
 	var under: Array[Font] = [brush]
