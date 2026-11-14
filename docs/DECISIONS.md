@@ -13498,8 +13498,14 @@ whatever the line was.
   hand, never a box (`StreetPlate._load_face`).
 - The 黑體 is cut to the game's own text — `game/tuning/` and the scripts' strings, 470
   characters, 292 KB; cut to the Kai's whole repertoire it was 3.6 MB for glyphs no line asks
-  for, since names are the Kai's. The brushes are cut to `menu_text.json` and its `title`.
-- A menu or a HUD loads only the faces its language draws. `tools/make_fonts.py` cuts them from pinned sources;
+  for, since names are the Kai's. The Bold brush is cut to `menu_text.json`'s `title`.
+- A menu or a HUD loads only the faces its language draws.
+- **A skill's or a penalty's name flashes in the brush** (the user's pick from a sheet of seven,
+  the same day): in Chinese the name in Bakudai Medium beside its money in the dashboard's
+  numerals — the theme's face over the brush (`StreetPlate.load_font_flash`), since the brush's
+  own digits set thin and wide — and in English the whole line in Knewave. The flash, and the
+  combo's three lines; a sum flashed alone stays in the interface's face. The Medium cut is
+  therefore the 黑體's text, not the menu's alone. `tools/make_fonts.py` cuts them from pinned sources;
   `etl/tests/test_fonts.py` fails when the text outruns a subset.
 
 **Licence.** The new faces are SIL OFL 1.1 — a fifth licence in the repository (`LICENSING.md`).
