@@ -13485,7 +13485,8 @@ theirs folded in before any push, and the squared compares were reviewed before 
   ~300 ms is not yet a reason).
 - **Refused:** breaking up `TrafficSystem` and `Hud` further, typed ETL documents, an artifact
   registry, a four-way split of `scripts/city`, staggering traffic decisions across ticks (moves
-  every seeded drive), and one body for the parked cars (their cells are freed and re-stood).
+  every seeded drive — ⚠️ reversed the next day on the user's instruction, `Q219`, in a form that
+  moves none of them), and one body for the parked cars (their cells are freed and re-stood).
 
 ## `Q218` — Three hands: a brush for the menu, 黑體 for interface, the Kai for names
 
@@ -13546,3 +13547,97 @@ HUD draws at the boot stand, one run each: 153 → 155 with the HUD on (126 with
 the web export, not on iOS or Android.
 
 **See.** `Q79` · `Q158` · `Q163` · `Q208` · `LICENSING.md` · `game/assets/authored/fonts/LICENSE`
+
+## `Q219` — More traffic: the far cars' rules thinned, the cars indexed, the spawn by lane-metres, 60 cars
+
+**Status.** Built 2026-11-15 on the user's instruction ("review ai traffic vehicle performance and
+should we use tricks like object pool such that we can support more traffic on main streets and
+rush hours"; then "we need more car for fun factor sooner or later"). Three options were evaluated
+and two built. ⚠️ **`cars = 60` and `spawn_main_weight = 1.0` are the user's to pick**, from a
+rush-hour drive; both are one line of `traffic.tres`.
+
+**The question's own answer.** The fleet is already a pool: `setup` builds every `Car`, its
+`AnimatableBody3D` and each kind's `MultiMesh` once, and a retired car is placed again. Nothing is
+allocated in a drive, so a pool buys nothing. The cost was the rules — each car's look at every
+other car — and where the cars were put.
+
+**Measured first** (`PerfClock.part`, then `tools/bench_traffic.gd`: headless, nothing drawn, the
+steps alone timed, because a desk `--perf-log` read one fleet's tick 3.3 ms on one run and 5.2 on
+the next). At 40 cars `_give_way_gap` was about 45% of the tick and `_gap_ahead` most of the rest;
+both walked the whole fleet for every car.
+
+**Built.**
+
+1. **The cars are indexed by place** — a 64 m grid kept as each car moves; the two fleet-wide
+   looks read the cells in reach, **in fleet order** (`_turn_path` caches at first read and
+   `_give_way_gap` returns at its first hit, so any other order moves every seeded drive). A
+   turn's plan path is kept with the path. Result-identical, and worth more the larger the fleet
+   (the table's second row).
+2. **A far car out of view reads its rules every `thin_every`-th tick** (4) and drives on the
+   speed they last gave it between, still moving every tick and still an obstacle to the rest.
+   Only past `thin_beyond_m` (60) AND out of the frustum; **with no camera no car is thinned**, so
+   the seeded drives did not move — `verify_traffic`'s output was byte-identical in both regions
+   through 1 and 2 (one Causeway Bay `view:` count aside). A sixth drive stands a camera and holds
+   the thinned cars to every gate. **This reverses `Q217`'s refusal** ("staggering traffic
+   decisions across ticks (moves every seeded drive)") on the user's instruction: the refusal's
+   reason is answered by thinning only what a camera cannot see. `thin_every = 1` is the off
+   switch.
+3. **A spawn tries a road by its lane-metres** (length × lanes each way × ways driven), a main
+   road's counted `spawn_main_weight` times, still one roll of `_rng`. The even pick tried a short
+   back street as often as a trunk road. Wan Chai's main roads are 39.6% of the admitted edges and
+   53.3% of the lane-metres; Causeway Bay's 22.4% and 35.5%. Shipped at 1.0 — the fleet even over
+   the lanes; above 1 the main streets fill first.
+4. **`cars` 40 → 60**, in the same commit as 3 so the seeds were re-pinned once.
+
+| `bench_traffic`, Wan Chai, ms a tick | 40 cars | 60 | 80 | 160 |
+|---|---|---|---|---|
+| before, no camera | 2.53 | | 6.44 | 17.6 |
+| index only | 2.51 | | 5.59 | 13.5 |
+| index and thinning, under a camera (even spawn) | 1.04 | | 2.24 | 5.64 |
+| as shipped, no camera | 1.96 | 3.58 | 5.13 | |
+| as shipped, under a camera | 1.01 | 1.67 | 2.39 | |
+
+In the game (desk, `--perf-log`, tick p50): 2.59 ms at 60 cars; 3.32 at 40 before any of it.
+Throttle route at 60: `phys` 3.9–4.5 ms against 2.9–3.1 with `--traffic=off`, `draws` 140–146
+against 138–142.
+
+**Two following rules the weighted spawn exposed** — both older than this work (under a camera,
+Wan Chai's seeds 23, 1 and 11 failed the rear-end gate with thinning on and off):
+
+- **A car ahead on its own edge is as far as the road says** (`_leads_on_edge`). The gap was the
+  straight line between the two, so a car out at a part-lane past a parked row (lane 0.71) measured
+  across to the car in the lane beside and stood half a metre up its flank.
+- **A lane change needs room to stop from the closing speed** (`_lane_blocked`), and a car part
+  way across follows the car in the lane it is moving onto (`_moving_onto`). A change onto a
+  queue's tail arrived at 7 m/s with 3 m to stop in; a bus pulling out met a car at cruise 8 m
+  behind (Causeway Bay seed 4: 12 and 5,120 car-ticks inside).
+
+`INSIDE_M`, `give_way_look_m`, `side_clear_m` and `spawn_clear_m` were not touched.
+
+**Why 60 and not 80.** At 80 Wan Chai holds every gate; Causeway Bay does not — two cars meet in
+a signalled junction on the back-street drive (2 car-ticks) and no routed vehicle reaches a stop
+and stands. The answer to a gate a bigger fleet fails is a smaller fleet, and `cars` is one number
+for both regions.
+
+**The verify tool moved with it.** The routed drive is seed 23 and three run lengths
+(`ROUTED_RUNS`; it was seed 4 and two): a kerbside stop and a served bus stop are rare events and
+seed 4 met no kerbside stop in Wan Chai once the pick was weighted. New staged checks: `spawn:`
+(the main roads' share of 4,000 picks against lane-metres worked out off the graph — a first
+version read the expected share off `_spawn_weight` and so passed an even pick), three `queue:`
+lines for the two rules above, `thin:` on every drive. Mutations caught by name: a far car never
+re-reading (runs a red), thinning with no camera, the even pick, the diagonal gap, no closing
+room, a lane change always refused.
+
+**Dropped or held.**
+
+- **A second pool, a C++ tick, a bias toward the player's heading** — not built; nothing measured
+  asks for them.
+- **A low-detail mesh for far cars — HOLD.** The fleet's draws are +2–4 over none and the cost was
+  never the triangles; it waits on a handset reading that says otherwise.
+- **A per-tick memo of the give-way's answers** — built, 2% off, removed.
+
+**Owed.** The user's rush-hour drive to pick `cars` (40 / 60 / 80 — 80 needs Causeway Bay's gates
+answered first) and `spawn_main_weight` (1 / 1.5 / 2); the handset re-take of the tick (`P0-3b`).
+
+**See.** `Q173` · `Q186` · `Q198` · `Q214` · `Q217` · `game/tuning/traffic.md` ·
+`.claude/rules/signals.md` · `game/tools/bench_traffic.gd`
