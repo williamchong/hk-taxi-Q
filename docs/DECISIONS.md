@@ -13464,3 +13464,57 @@ theirs folded in before any push, and the squared compares were reviewed before 
 - **Refused:** breaking up `TrafficSystem` and `Hud` further, typed ETL documents, an artifact
   registry, a four-way split of `scripts/city`, staggering traffic decisions across ticks (moves
   every seeded drive), and one body for the parked cars (their cells are freed and re-stood).
+
+## `Q218` — Three hands: a brush for the menu, 黑體 for interface, the Kai for names
+
+**Status.** Built 2026-11-15, the user's asks and picks from frames.
+
+**Why.** The user, of the start menu: "a more stylish and themed main menu title, text, buttons and
+layout", after the city's ink outline (`Q158`), in "some Chinese calligraphy font or 勁揪體-like art
+style"; then "mix the use of 標楷 and 黑體 in proper places, in game and in UI according to common
+Chinese font usage". Until now every Chinese line in the game was the street plate's Kai (`Q79`),
+whatever the line was.
+
+**What.**
+
+| hand | file | set in it |
+|---|---|---|
+| brush, heavy | `TaxiAceBrush-Bold.ttf` (Bakudai Bold) | the game's name |
+| brush | `TaxiAceBrush-Medium.ttf` (Bakudai Medium) | the menu's choices and headings |
+| 黑體 | `NotoSansHK-subset.ttf`, `wght` 500 | interface: subtitle, notes, guide and credits text, the 成績表, the HUD's captions, units, meter labels, flashes and combo |
+| 楷書 | Free HK Kai (`Q79`) | names: the street plate, the callout's place and road |
+| Latin brush | `Knewave-Regular.ttf` | the English menu's name, choices and headings |
+
+- The picks are the user's: Bakudai Medium from a sheet of six brush faces, then Bold "for main
+  title only", then Knewave for English from a sheet of nine Latin faces (two serifs among
+  them). 勁揪體 itself is a commercial face and cannot be bundled.
+- English outside the menu's brush lines stays in the theme's sans: the Kai is on names because
+  the plates are set in it, and a plate's English is a grotesque, so a serif has no such place.
+- The focused choice's thin green rule is a stroke of the brush behind the words (`InkStroke`,
+  drawn, no texture) in `HudStyle.brush_stroke`, the taxi's red; one more under the name. The
+  current option keeps its amber lettering and takes no stroke.
+- The title is one line at 96 (was 60, wrapped to the column).
+- The faces load over each other — brush, 黑體, Kai, the theme's — so a missing glyph is the wrong
+  hand, never a box (`StreetPlate._load_face`).
+- The 黑體 is cut to the game's own text — `game/tuning/` and the scripts' strings, 470
+  characters, 292 KB; cut to the Kai's whole repertoire it was 3.6 MB for glyphs no line asks
+  for, since names are the Kai's. The brushes are cut to `menu_text.json` and its `title`.
+- A menu or a HUD loads only the faces its language draws. `tools/make_fonts.py` cuts them from pinned sources;
+  `etl/tests/test_fonts.py` fails when the text outruns a subset.
+
+**Licence.** The new faces are SIL OFL 1.1 — a fifth licence in the repository (`LICENSING.md`).
+Bakudai reserves its name, so its subsets are renamed "Taxi Ace Brush" (OFL clause 3); the test
+holds that. Knewave ships as published. The credits screen names all three and `verify_menu` holds the phrases.
+
+**Measured.** Web PCK 98.20 → 98.67 MB (the subsets are 0.29 MB + 0.22 MB + 0.04 MB on disk,
+Knewave 0.03 MB). The web export's HOME was read in Chrome, in Chinese, before the 黑體 was cut
+down and Knewave added: both brushes and the 黑體 drew from the bundle.
+HUD draws at the boot stand, one run each: 153 → 155 with the HUD on (126 with it off).
+
+**Not built.** The loading cover's line stays in the Kai: the boot splash is a still of it
+(`Q209`).
+
+**Owed.** A frame on a phone: the handset layout was shot on the desk and the fonts were read on
+the web export, not on iOS or Android.
+
+**See.** `Q79` · `Q158` · `Q163` · `Q208` · `LICENSING.md` · `game/assets/authored/fonts/LICENSE`
