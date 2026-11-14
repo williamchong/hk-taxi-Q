@@ -608,22 +608,22 @@ func _check_spawn_pick(graph: RoadGraph, table: TrafficProfile) -> void:
 			int(system.router.admits_way(edge, true)) + int(system.router.admits_way(edge, false))
 		)
 		var weight: float = length_m * graph.lanes_each_way(edge) * ways
-		if graph.is_main(edge):
+		var is_main: bool = graph.is_main(edge)
+		if is_main:
 			weight *= table.spawn_main_weight
-		total += weight
-		if graph.is_main(edge):
 			main += weight
 			main_edges += 1
+		total += weight
 	var picked: int = 0
-	var unweighted: int = 0
+	var unplaceable: int = 0
 	for _draw: int in KIND_DRAWS:
 		var edge: int = system._pick_spawn_edge()
 		picked += int(graph.is_main(edge))
-		unweighted += int(not placeable.has(edge))
+		unplaceable += int(not placeable.has(edge))
 	var share: float = main / total
-	var by_edge: float = float(main_edges) / system._admitted.size()
+	var by_edge: float = float(main_edges) / maxi(placeable.size(), 1)
 	var drawn: float = float(picked) / KIND_DRAWS
-	_expect(unweighted == 0, "spawn", "no road too short to place on is picked")
+	_expect(unplaceable == 0, "spawn", "no road too short to place on is picked")
 	_expect(
 		absf(drawn - share) < KIND_SLACK,
 		"spawn",

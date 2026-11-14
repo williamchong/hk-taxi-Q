@@ -13584,8 +13584,8 @@ both walked the whole fleet for every car.
    switch.
 3. **A spawn tries a road by its lane-metres** (length × lanes each way × ways driven), a main
    road's counted `spawn_main_weight` times, still one roll of `_rng`. The even pick tried a short
-   back street as often as a trunk road. Wan Chai's main roads are 39.6% of the admitted edges and
-   53.3% of the lane-metres; Causeway Bay's 22.4% and 35.5%. Shipped at 1.0 — the fleet even over
+   back street as often as a trunk road. Wan Chai's main roads are 41.2% of the placeable edges and
+   53.3% of the lane-metres; Causeway Bay's 22.8% and 35.5%. Shipped at 1.0 — the fleet even over
    the lanes; above 1 the main streets fill first.
 4. **`cars` 40 → 60**, in the same commit as 3 so the seeds were re-pinned once.
 

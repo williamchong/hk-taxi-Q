@@ -60,8 +60,8 @@ A spawn tries a road by its lane-metres — its length by its lanes each way by 
 drives it — and a main road's count this many times (`Q219`). The pick was even by edge, so a
 short back street was tried as often as a long trunk road and a minor lane-metre drew about twice
 a main one's tries. At 1.0 the fleet is spread evenly over the lanes: Wan Chai's main roads are
-39.6% of the admitted edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line), Causeway Bay's
-22.4% and 35.5%. Above 1 the main streets fill first — ⚠️ **the user's dial**, from drives at 1 /
+41.2% of the placeable edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line), Causeway Bay's
+22.8% and 35.5%. Above 1 the main streets fill first — ⚠️ **the user's dial**, from drives at 1 /
 1.5 / 2; every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
 
 ## `spawn_seen_min_m = 180.0`

@@ -552,7 +552,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 			_admitted.append(edge)
 			reach += _spawn_weight(edge)
 			_admitted_reach.append(reach)
-	if _admitted.is_empty() or reach <= 0.0:
+	if reach <= 0.0:
 		push_warning("TrafficSystem: no edge admits traffic; none will run")
 		return false
 	if fleet_mix.licence_mixes.is_empty():
@@ -2457,8 +2457,7 @@ static func _on_path(car: Car, other: Car) -> bool:
 ## three-quarters of the way over.
 static func _moving_onto(car: Car, other: Car) -> bool:
 	return (
-		car.shift != 0
-		and not is_equal_approx(car.lane, roundf(car.lane))
+		not is_equal_approx(car.lane, roundf(car.lane))
 		and same_lane(car.lane - car.shift * (1.0 - SAME_LANE), other.lane)
 	)
 
