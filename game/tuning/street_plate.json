@@ -14,6 +14,30 @@
 
   "font_zh": "res://assets/authored/fonts/FreeHKKai4700-v1.02.ttf",
 
+  "_faces": [
+    "Three hands, by what a line IS (Q218, the user's ask: 楷 and 黑 each in its",
+    "proper place). `font_zh`, the Kai, is for NAMES — the street plate, and the",
+    "place and road in the fare's callout — as on the plates themselves.",
+    "`font_hei`, the 黑體, is for interface: captions, units, tables, running",
+    "text, at `font_hei_weight` on its variable axis. `font_brush` is the menu's",
+    "choices and headings and `font_brush_title` the game's name alone (the",
+    "user's picks: Bakudai Medium, and Bold for the title). The English menu",
+    "sets those same lines in `font_brush_en` / `font_brush_title_en`, a Latin",
+    "brush (the user's pick: Knewave, one weight, so both keys name it); the",
+    "rest of the English stays in the theme's sans, as on the plates.",
+    "",
+    "The 黑體 and the two brush files are SUBSETS cut by tools/make_fonts.py;",
+    "etl/tests/test_fonts.py fails when the text has outrun them. Each loads",
+    "over the next — brush, 黑體, Kai, the theme's — so a missing glyph is the",
+    "wrong hand and never a box (StreetPlate._load_face)."
+  ],
+  "font_hei": "res://assets/authored/fonts/NotoSansHK-subset.ttf",
+  "font_hei_weight": 500,
+  "font_brush": "res://assets/authored/fonts/TaxiAceBrush-Medium.ttf",
+  "font_brush_title": "res://assets/authored/fonts/TaxiAceBrush-Bold.ttf",
+  "font_brush_en": "res://assets/authored/fonts/Knewave-Regular.ttf",
+  "font_brush_title_en": "res://assets/authored/fonts/Knewave-Regular.ttf",
+
   "_substitutions": [
     "Characters the published street names use that `font_zh` does not draw,",
     "mapped to the form it does. Applied WHEN THE PLATE IS DRAWN — roadgraph.json",

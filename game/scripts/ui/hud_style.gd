@@ -281,6 +281,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## The menu's sheets of text (credits, guide, notices): the whole screen dimmed
 ## behind bare lettering, rather than a box on it.
 @export var scrim: Color
+## The menu's brush (`InkStroke`, `Q218`): the stroke behind the choice the
+## focus is on and under the game's name.
+@export var brush_stroke: Color
 
 # ---- dev only ----
 

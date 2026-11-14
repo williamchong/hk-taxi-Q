@@ -13,6 +13,8 @@ paths:
   - "game/tools/verify_hud.gd"
   - "game/tools/verify_menu.gd"
   - "tools/font_coverage.py"
+  - "tools/make_fonts.py"
+  - "game/scripts/ui/ink_stroke.gd"
   - "game/assets/authored/fonts/*"
 ---
 
@@ -152,10 +154,15 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   must not read the machine's pick or locale, so `drive.sh` appends `--lang=zh`; the menu warns
   when the flag pins a choice it just saved. ⚠️ **A language change is
   a new HUD, not a relabel**: `Main` retires the HUD and readies a fresh one so `hud.gd` keeps one
-  build path. ⚠️ **The menu's Chinese falls back to the theme's faces** (`FontVariation`) for a
-  glyph the Kai lacks — every character in `menu_text.json` was checked against the font's
-  `cmap` (0 missing, 2026-09-26); recheck with `tools/font_coverage.py`'s `read_cmap` after a
-  wording change. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
+  build path. 🔴 **Three hands, by what a line is** (`Q218`, the user's asks): the brush for the
+  menu's name (Bold), choices and headings (Medium), Knewave for the same lines in English; the 黑體 for interface — running text, the
+  成績表, the HUD's captions, units and flashes; the Kai for NAMES alone — the plate, the callout's
+  place and road. Do not put an interface line back in the Kai or a name in the 黑體. The focus is
+  a drawn brush stroke (`InkStroke`, `brush_stroke`), not a rule. ⚠️ **The 黑體 and the brushes
+  are subsets**: a wording change in `menu_text.json` owes `pytest etl/tests/test_fonts.py`, and
+  on a failure `tools/make_fonts.py` (needs `fonttools` and the pinned sources). A glyph a face
+  lacks falls to the next — brush, 黑體, Kai, the theme's — so the failure is one character in the
+  wrong hand, which no check but that test sees. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
   bundle ships no UI textures and a screenshot of the city is the generated data committed in
   another form (hard rule 7); a step names a `GuideCard.KINDS` picture and `verify_menu` refuses
   one that does not exist. 🔴 **The 成績表 is the driver's books, two tables, not TD's form** (`P3-76`, `Q169`, the user's call): `LedgerCard` on REPORT, free mode's PAUSE and RECORD; no tick-boxes, no section headings, no red-light row until `P3-3d`. 🔴 **On a touch screen it stacks into one scrolling column at `ledger_stacked_scale`** (`Q206`, the user's pick): a sheet change owes a handset frame of RECORD and REPORT in both languages, and SAVE RESULT must still copy the whole card, never the scroll's window (`verify_menu`'s `stacked:`). ⚠️ Two `_follow.bind` on one signal are ONE connection to Godot: a second follower of a page connects a lambda. ⚠️ `menu.tres`'s `ledger_px` is read off a frame: a row more needs height, and nothing but a frame shows the total under the panel. A run naming `--menu-page=` or `--menu-sample=` saves no record. 🔴 **Two modes behind one PLAY** (`Q162`, the user's call): HOME is PLAY, RECORD, HOW TO PLAY,
@@ -170,6 +177,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box
   on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
-  — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font
-  is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` carries it, and
-  the credits screen carries it since `P6-1` (`menu_text.json`, held by `verify_menu`; `Q79`).
+  — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled fonts
+  are the **fourth and fifth** licences in a repo whose hard rule 7 says three — the Kai's CC BY
+  and, since `Q218`, the OFL of the 黑體 and the brush, whose subsets must NOT be named Bakudai;
+  `LICENSING.md` carries them, and the credits screen too (`menu_text.json`, held by
+  `verify_menu`; `Q79`).

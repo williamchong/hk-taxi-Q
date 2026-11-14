@@ -108,17 +108,19 @@ var _profile: MenuProfile = null
 var _style: HudStyle = null
 var _text: MenuText = null
 var _language: String = Locale.DEFAULT
-## The plate's Kai for the Chinese lines, over the theme's own faces for any
-## glyph it lacks, so a missing punctuation mark is a different face and never
-## a box.
-var _font_zh: Font = null
+## The 黑體 the menu's running text and tables are set in, the brush for the
+## headings and the choices, and its heavier cut for the game's name (`Q218`).
+var _font_hei: Font = null
+var _font_brush: Font = null
+var _font_title: Font = null
+## The same two lines in the English menu: a Latin brush (`Q218`).
+var _font_brush_en: Font = null
+var _font_title_en: Font = null
 var _root: Control = null
 var _page: Page = Page.HOME
 var _pages: Dictionary[int, Control] = {}
 ## Where the focus lands when a page opens, so a pad or the keys can drive it.
 var _first: Dictionary[int, Button] = {}
-## Each choice's rule (`_button`), for the focus and the current marker.
-var _rules: Dictionary[Button, ColorRect] = {}
 ## The notices' label, filled on the first visit: the text is the engine's and
 ## costs a build, so neither boot nor a language change pays for a page the
 ## player may never open.
@@ -179,16 +181,15 @@ func _load() -> bool:
 			)
 		)
 		return false
-	_font_zh = StreetPlate.load_font_zh("menu")
 	return true
 
 
 func _build() -> void:
 	stacked = stacked or HudLayout.is_touch()
 	_root = HudLayout.safe_root(self)
+	_load_faces()
 	_pages.clear()
 	_first.clear()
-	_rules.clear()
 	_pages[Page.GUIDE] = _guide()
 	if pausing:
 		# The two pages a pause reaches, and no more: built on the tap's frame,
@@ -207,6 +208,20 @@ func _build() -> void:
 	# backdrops shade the text.
 	_root.add_child(HeadUpFrame.styled(_style, false))
 	_show(_page)
+
+
+## The faces the page's language draws with, loaded the first time it is built
+## in that language: an English menu never reads the Chinese files, nor a
+## Chinese one the Latin brush.
+func _load_faces() -> void:
+	if _language != Locale.CHINESE:
+		if _font_brush_en == null:
+			_font_brush_en = StreetPlate.load_font_brush_en("menu")
+			_font_title_en = StreetPlate.load_font_brush_en("menu", true)
+	elif _font_hei == null:
+		_font_hei = StreetPlate.load_font_hei("menu")
+		_font_brush = StreetPlate.load_font_brush("menu")
+		_font_title = StreetPlate.load_font_brush("menu", true)
 
 
 ## Rebuild in the other language, on the same page: every label is set from
@@ -270,11 +285,22 @@ func _home_page() -> Page:
 ## car is the picture and the column keeps off it.
 func _home() -> Control:
 	var column: VBoxContainer = _column("Home")
-	# The game's name in the page's language (`Q208`): 香港的士車神 in the Kai,
+	# The game's name in the page's language (`Q208`): 香港的士車神 in the brush,
 	# Hong Kong Taxi Ace in the theme's face.
 	var title: Label = _line("Title", _text.say("title", _language))
-	_size(title, _profile.title_size_zh, _profile.title_size)
+	_size(title, _profile.title_size_zh, _profile.title_size, _brush(true))
+	# One line, wider than the column: the name is the page's width, not the
+	# buttons'.
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	column.add_child(title)
+	# A stroke of the brush under the name, in the taxi's red.
+	var swash := InkStroke.new()
+	swash.name = "Swash"
+	swash.ink = _style.brush_stroke
+	swash.seed_value = 7
+	swash.custom_minimum_size = Vector2(_profile.button_px.x, _profile.button_gap_px * 1.5)
+	swash.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	column.add_child(swash)
 	var subtitle: Label = _line("Subtitle", _text.say("subtitle", _language))
 	_size(subtitle, _profile.subtitle_size_zh, _profile.subtitle_size)
 	subtitle.add_theme_color_override(&"font_color", _style.chip_muted)
@@ -313,7 +339,7 @@ func _play() -> Control:
 func _options() -> Control:
 	var column: VBoxContainer = _column("Options")
 	var heading: Label = _line("Heading", _text.say("language", _language))
-	_size(heading, _profile.heading_size_zh, _profile.heading_size)
+	_size(heading, _profile.heading_size_zh, _profile.heading_size, _brush())
 	column.add_child(heading)
 	var row := HBoxContainer.new()
 	row.name = "Languages"
@@ -331,7 +357,7 @@ func _options() -> Control:
 	# in free mode; a shift always runs it (`Q162`).
 	column.add_child(_gap("GapTime", _profile.button_gap_px))
 	var time_heading: Label = _line("TimeHeading", _text.say("time", _language))
-	_size(time_heading, _profile.heading_size_zh, _profile.heading_size)
+	_size(time_heading, _profile.heading_size_zh, _profile.heading_size, _brush())
 	column.add_child(time_heading)
 	var times := HBoxContainer.new()
 	times.name = "Times"
@@ -469,7 +495,7 @@ func _guide() -> Control:
 				% [index + 1, MenuText.pick((entry as Dictionary).get("heading"), _language, "")]
 			)
 		)
-		_size(title, _profile.heading_size_zh, _profile.heading_size)
+		_size(title, _profile.heading_size_zh, _profile.heading_size, _brush())
 		step.add_child(title)
 		var body: Label = _line(
 			"Body", MenuText.pick((entry as Dictionary).get("body"), _language, "")
@@ -491,7 +517,7 @@ func _report() -> Control:
 	var shown: Report = report if report != null else Report.new()
 	var free: bool = shown.mode == DayClock.Mode.FREE
 	var heading: Label = _line("Heading", _text.say("free" if free else "handover", _language))
-	_size(heading, _profile.heading_size_zh, _profile.heading_size)
+	_size(heading, _profile.heading_size_zh, _profile.heading_size, _brush())
 	heading.add_theme_color_override(&"font_color", _style.dial_needle)
 	column.add_child(heading)
 	var total: Label = _line("Total", "HK$" + FareFace.money(shown.total_hkd))
@@ -644,7 +670,7 @@ func _save_sheet(sheet: Control, button: Button) -> void:
 func _ledger(tally: SessionTally) -> LedgerCard:
 	var card := LedgerCard.new()
 	card.name = "Card"
-	card.build(tally, _text, _profile, _style, _language, _font_zh, stacked)
+	card.build(tally, _text, _profile, _style, _language, _font_hei, stacked)
 	return card
 
 
@@ -854,10 +880,9 @@ func _foot_row(column: VBoxContainer) -> HBoxContainer:
 	return foot
 
 
-## A choice: bare lettering over a rule down its left side (`Q163`, the
-## callout's mark), the rule and the words lit in the accent while the pointer
-## or the focus is on it. Returned for the focus and the marker; the panel goes
-## under `parent`.
+## A choice: bare brush lettering (`Q163`, `Q218`), with a stroke of the brush
+## behind the words while the pointer or the focus is on it. Returned for the
+## focus and the marker; the panel goes under `parent`.
 func _button(
 	parent: Control, node_name: String, key: String, pressed: Callable = Callable()
 ) -> Button:
@@ -867,13 +892,17 @@ func _button(
 	# otherwise stretch to the row.
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(panel)
-	var rule := ColorRect.new()
-	rule.name = "Rule"
-	rule.color = _style.frame_ink
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rule.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	rule.offset_right = _style.accent_px
-	panel.add_child(rule)
+	# The highlight: a stroke of the brush behind the words, unseen until the
+	# pointer or the focus is on the choice. Each choice its own hand.
+	var stroke := InkStroke.new()
+	stroke.name = "Stroke"
+	stroke.ink = Color.TRANSPARENT
+	stroke.seed_value = key.hash()
+	stroke.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stroke.offset_left = -_style.plate_pad.y
+	stroke.offset_top = _style.plate_pad.y / 2.0
+	stroke.offset_bottom = -_style.plate_pad.y / 2.0
+	panel.add_child(stroke)
 
 	var button := Button.new()
 	button.name = "Button"
@@ -882,7 +911,7 @@ func _button(
 	button.set_anchors_preset(Control.PRESET_FULL_RECT)
 	button.focus_mode = Control.FOCUS_ALL
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	# The rule is the whole look; the theme's box would draw a second one.
+	# The stroke is the whole look; the theme's box would draw over it.
 	var empty := StyleBoxEmpty.new()
 	empty.content_margin_left = _style.plate_pad.y * 2.0
 	for state: StringName in [
@@ -896,22 +925,21 @@ func _button(
 	for state: StringName in [
 		&"font_hover_color", &"font_focus_color", &"font_pressed_color", &"font_hover_pressed_color"
 	]:
-		button.add_theme_color_override(state, _style.accent)
-	_size(button, _profile.button_size_zh, _profile.button_size)
+		button.add_theme_color_override(state, _style.chip_ink)
+	_size(button, _profile.button_size_zh, _profile.button_size, _brush())
 	if pressed.is_valid():
 		button.pressed.connect(pressed)
-	# Hover IS focus, so the lit rule follows the pointer and the pad alike
+	# Hover IS focus, so the stroke follows the pointer and the pad alike
 	# and there is one highlighted choice at a time.
 	button.mouse_entered.connect(button.grab_focus)
-	button.focus_entered.connect(_light.bind(rule, true))
-	button.focus_exited.connect(_light.bind(rule, false))
-	_rules[button] = rule
+	button.focus_entered.connect(_light.bind(stroke, true))
+	button.focus_exited.connect(_light.bind(stroke, false))
 	panel.add_child(button)
 	return button
 
 
-func _light(rule: ColorRect, lit: bool) -> void:
-	rule.color = _style.accent if lit else _style.frame_ink
+func _light(stroke: InkStroke, lit: bool) -> void:
+	stroke.ink = _style.brush_stroke if lit else Color.TRANSPARENT
 
 
 ## The current option: lit in the dial's amber — not the accent, which is the
@@ -923,14 +951,13 @@ func _mark_current(button: Button, current: bool) -> void:
 	button.disabled = true
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_color_override(&"font_disabled_color", _style.dial_needle)
-	_rules[button].color = _style.dial_needle
 
 
 ## A sheet's heading under `parent`: a line in the dial's amber at the heading
 ## size.
 func _heading(parent: Control, node_name: String, text: String) -> Label:
 	var heading: Label = _line(node_name, text)
-	_size(heading, _profile.heading_size_zh, _profile.heading_size)
+	_size(heading, _profile.heading_size_zh, _profile.heading_size, _brush())
 	heading.add_theme_color_override(&"font_color", _style.dial_needle)
 	parent.add_child(heading)
 	return heading
@@ -966,10 +993,22 @@ func _gap(node_name: String, px: int) -> Control:
 	return gap
 
 
-## A size for the language: the Kai face sets larger than the Latin at every
-## line, and takes the plate's font.
-func _size(control: Control, zh: int, en: int) -> void:
+## The brush for the page's language, the heavier cut for the game's name.
+func _brush(title: bool = false) -> Font:
+	if _language == Locale.CHINESE:
+		return _font_title if title else _font_brush
+	return _font_title_en if title else _font_brush_en
+
+
+## A size for the language: a Chinese face sets larger than the Latin at every
+## line. The line takes `face`; with none, Chinese takes the 黑體 — the menu's
+## running text is interface, and the Kai is the HUD's, for names (`Q218`) —
+## and English the theme's.
+func _size(control: Control, zh: int, en: int, face: Font = null) -> void:
 	var chinese: bool = _language == Locale.CHINESE
 	control.add_theme_font_size_override(&"font_size", Locale.pick(zh, en, _language))
-	if chinese and _font_zh != null:
-		control.add_theme_font_override(&"font", _font_zh)
+	var font: Font = face
+	if font == null and chinese:
+		font = _font_hei
+	if font != null:
+		control.add_theme_font_override(&"font", font)

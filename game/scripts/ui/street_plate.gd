@@ -69,17 +69,56 @@ static func fitted_size(label: Label, size: int, room: float) -> int:
 ## `load` had no fallback and the menu's did, which was the drift.
 ## ⚠️ The face is 6.4 MB; a caller with no city to name a street on skips it.
 static func load_font_zh(who: String) -> Font:
-	var face_path: String = str(load_tuning().get("font_zh", ""))
-	var face: Font = null
-	if not face_path.is_empty() and ResourceLoader.exists(face_path):
-		face = load(face_path) as Font
+	return _load_face("font_zh", who, 0, [])
+
+
+## The 黑體 for the lines that are interface, not names (`Q218`): captions,
+## units, tables, running text. Over the Kai, so a glyph it lacks is still
+## Chinese.
+static func load_font_hei(who: String) -> Font:
+	return _load_face("font_hei", who, int(load_tuning().get("font_hei_weight", 0)), ["font_zh"])
+
+
+## The brush for the menu's choices and headings, or with `title` the heavier
+## cut for the game's name, over the 黑體 and the Kai.
+static func load_font_brush(who: String, title: bool = false) -> Font:
+	return _load_face(
+		"font_brush_title" if title else "font_brush", who, 0, ["font_hei", "font_zh"]
+	)
+
+
+## The Latin brush the English menu sets the same lines in.
+static func load_font_brush_en(who: String, title: bool = false) -> Font:
+	return _load_face("font_brush_title_en" if title else "font_brush_en", who, 0, [])
+
+
+## `tuning`'s face under `key` at `weight` (0 leaves the face's own), over the
+## faces under `under` and then the theme's, or null with a warning.
+static func _load_face(key: String, who: String, weight: int, under: Array[String]) -> Font:
+	var tuning: Dictionary = load_tuning()
+	var face: Font = _face(tuning, key)
 	if face == null:
 		# Not fatal, and loud: a missing face is an asset problem, and the
 		# Chinese line in the wrong hand reads as one rather than as a bug.
-		push_warning("%s: the plate's Chinese font did not load; using the theme's fallback" % who)
+		push_warning("%s: the %s face did not load; using the theme's fallback" % [who, key])
 		return null
-	var kai := FontVariation.new()
-	kai.base_font = face
-	var fallbacks: Array[Font] = [ThemeDB.fallback_font]
-	kai.fallbacks = fallbacks
-	return kai
+	var variation := FontVariation.new()
+	variation.base_font = face
+	if weight > 0:
+		var axis: int = TextServerManager.get_primary_interface().name_to_tag("wght")
+		variation.variation_opentype = {axis: weight}
+	var fallbacks: Array[Font] = []
+	for other: String in under:
+		var lower: Font = _face(tuning, other)
+		if lower != null:
+			fallbacks.append(lower)
+	fallbacks.append(ThemeDB.fallback_font)
+	variation.fallbacks = fallbacks
+	return variation
+
+
+static func _face(tuning: Dictionary, key: String) -> Font:
+	var face_path: String = str(tuning.get(key, ""))
+	if face_path.is_empty() or not ResourceLoader.exists(face_path):
+		return null
+	return load(face_path) as Font

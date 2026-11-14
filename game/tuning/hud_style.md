@@ -213,6 +213,11 @@ map's rim fading to nothing — also its clip. `dial_sweep_px` 6 is the amber ar
 from zero to the needle. `scrim` is the tint the menu's blurred backdrop is
 pulled toward (`menu.md`). `verify_hud` refuses a zero or a light shadow.
 
+`brush_stroke` is the menu's brush (`InkStroke`, `Q218`): the stroke behind the
+choice the focus is on and the rule under the game's name, in the taxi's own
+red — the body colour, a shade under the NO ENTRY disc's so the two are not one
+red. It replaced the accent-green rule: the green stays the HUD's gain.
+
 
 ## `touch_hint = Color(0.93, 0.93, 0.9, 0.3)`
 

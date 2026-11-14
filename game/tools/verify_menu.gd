@@ -117,6 +117,10 @@ const REQUIRED: Dictionary = {
 		"does not endorse",
 		"Free HK Kai",
 		"Creative Commons Attribution 4.0",
+		"Noto Sans HK",
+		"Bakudai",
+		"Knewave",
+		"SIL Open Font License 1.1",
 		"Godot Engine",
 	],
 	"zh":
@@ -129,6 +133,10 @@ const REQUIRED: Dictionary = {
 		"並不認可",
 		"自由香港楷書",
 		"署名 4.0 國際",
+		"Noto Sans HK",
+		"莫大毛筆",
+		"Knewave",
+		"SIL Open Font License 1.1",
 		"Godot Engine",
 	],
 }

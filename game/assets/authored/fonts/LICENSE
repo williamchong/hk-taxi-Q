@@ -34,3 +34,52 @@ in the display substitution table, and refuses one that is not. It is run by
 hand, like the other graders in tools/. Wan Chai needs 166
 distinct characters and this font covers 165 of them; the exception, and the
 reason it is not fixed in the data, is Q79.
+
+
+================================================================================
+
+THREE MORE THIRD-PARTY FONTS, all under the SIL Open Font License 1.1, whose
+full text is OFL-1.1.txt beside this file. The first two are SUBSETS — Modified
+Versions in the licence's words — cut by tools/make_fonts.py (DECISIONS.md
+Q218); the third is the published file.
+
+  NotoSansHK-subset.ttf — a subset of Noto Sans HK (variable weight)
+  Version 2.004
+  Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name
+  'Source'
+
+    SPDX-License-Identifier: OFL-1.1
+    Source: https://github.com/google/fonts/tree/main/ofl/notosanshk
+
+  CHANGED: glyphs removed. It keeps the characters of the game's own text —
+  game/tuning/ and the scripts' strings. The name is kept: only 'Source' is
+  reserved.
+
+  TaxiAceBrush-Medium.ttf, TaxiAceBrush-Bold.ttf — subsets of Bakudai
+  (莫大毛筆字體) Medium and Bold, version 1.48
+  Copyright (c) 2020, Chun yu Yao, with Reserved Font Name Bakudai.
+  Bakudai is itself made from Kouzan Brush Font (衡山毛筆フォント) by the
+  calligrapher Aoyagi Kouzan (青柳衡山).
+
+    SPDX-License-Identifier: OFL-1.1
+    Source: https://github.com/max32002/bakudaifont
+
+  CHANGED: glyphs removed — Medium keeps the characters of
+  game/tuning/menu_text.json, Bold those of the game's name — and RENAMED to
+  "Taxi Ace Brush", because OFL clause 3 bars a Modified Version from carrying
+  a Reserved Font Name. etl/tests/test_fonts.py holds the rename.
+
+  Knewave-Regular.ttf — Knewave, version 1.001, UNMODIFIED
+  Copyright (c) 2010, Tyler Finck, with Reserved Font Name: "Knewave".
+
+    SPDX-License-Identifier: OFL-1.1
+    Source: https://github.com/google/fonts/tree/main/ofl/knewave
+
+  The English menu's brush. The published file, so it keeps its name.
+
+WHAT OFL 1.1 ASKS. The copyright notice and the licence travel with every copy
+(clause 2): each file keeps them in its own name table, and they are repeated
+here and on the in-game credits screen. The fonts may be bundled with software
+under any terms (clause 1) but stay under the OFL themselves and are not sold
+on their own (clauses 1 and 5). The authors' names are not used to promote this
+game (clause 4).

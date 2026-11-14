@@ -184,6 +184,9 @@ var _tick_yields: bool = false
 var _combo_fade_s: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
+## The 黑體 for what is interface and not a name: captions, units, the flashes.
+## The Kai keeps the plate and the callout's place and road, as on a street.
+var _font_hei: Font = null
 
 var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
@@ -283,8 +286,13 @@ func _build() -> void:
 	# built a region. `_wanted()` deliberately does not skip headless, so this is
 	# the guard that keeps it honest.
 	_font_zh = null
+	_font_hei = null
 	if _graph != null and not _graph.is_empty():
 		_font_zh = StreetPlate.load_font_zh("hud")
+		# Every line set in it is Chinese; the Kai is loaded either way, the
+		# Chinese plate being built and hidden in English.
+		if Locale.language() == Locale.CHINESE:
+			_font_hei = StreetPlate.load_font_hei("hud")
 
 	# One root Control so the safe-area inset is applied once rather than per
 	# slot. Everything below anchors inside it.
@@ -444,6 +452,7 @@ func _build() -> void:
 	_total_caption = _label("TotalCaption", _style.meter_label_size, _style.chip_muted)
 	_total_caption.size_flags_vertical = Control.SIZE_SHRINK_END
 	_total_row.add_child(_total_caption)
+	_in_hei([currency, _tip_caption, _total_caption])
 	_total = _seven_segment(
 		"TotalDigits", _style.total_digit_px, _style.total_segment_px, _style.total_cells
 	)
@@ -472,8 +481,7 @@ func _build() -> void:
 	_timer_box.add_child(_timer_value)
 	var seconds: Label = _outlined(_label("Unit", _style.timer_unit_size, _style.chip_muted))
 	seconds.text = Locale.pick("秒", "s left", _language)
-	if _language == Locale.CHINESE and _font_zh != null:
-		seconds.add_theme_font_override(&"font", _font_zh)
+	_in_hei([seconds])
 	# Both on their feet, then the unit lifted by the difference of the two
 	# descents: bottoms alone would hang it off the number's descender line.
 	var foot := MarginContainer.new()
@@ -509,18 +517,17 @@ func _build() -> void:
 		"Road", _sized(_style.callout_sub_size_zh, _style.callout_sub_size), _style.chip_muted
 	)
 	callout_lines.add_child(_style.shade(_callout_sub))
+	_in_hei([_caption])
 	if chinese and _font_zh != null:
-		_caption.add_theme_font_override(&"font", _font_zh)
 		_callout.add_theme_font_override(&"font", _font_zh)
 		_callout_sub.add_theme_font_override(&"font", _font_zh)
 
 	# The tick: "+HK$2.1" under the clock as a unit begins, bare like the
 	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`. In
-	# the plate's Kai when Chinese: a skill flashes its 黃紙 item (`Q169`), and
+	# the 黑體 when Chinese: a skill flashes its 黃紙 item (`Q169`), and
 	# the theme's face has no CJK glyph of its own to draw it in.
 	_tick = _outlined(_label("Tick", _style.tick_size, _style.chip_ink))
-	if chinese and _font_zh != null:
-		_tick.add_theme_font_override(&"font", _font_zh)
+	_in_hei([_tick])
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
 
@@ -555,9 +562,7 @@ func _build() -> void:
 	_combo_panel = _bare("Combo", root, _layout.award)
 	_combo_parts = _label("Skills", sub_size, _style.chip_ink)
 	_lines(_combo_panel, 0).add_child(_style.shade(_combo_parts))
-	if chinese and _font_zh != null:
-		for label: Label in [_combo_skill, _combo_value, _combo_parts]:
-			label.add_theme_font_override(&"font", _font_zh)
+	_in_hei([_combo_skill, _combo_value, _combo_parts])
 
 	# ---- 特更's clock: the hour, and when the day ends ----
 	#
@@ -573,8 +578,7 @@ func _build() -> void:
 		_sized(_style.callout_caption_size_zh, _style.meter_label_size),
 		_style.chip_muted
 	)
-	if _language == Locale.CHINESE and _font_zh != null:
-		_clock_caption.add_theme_font_override(&"font", _font_zh)
+	_in_hei([_clock_caption])
 	clock_lines.add_child(_style.shade(_clock_caption))
 
 	# ---- the pause ----
@@ -659,6 +663,15 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	label.add_theme_color_override(&"font_color", ink)
 	label.add_theme_font_size_override(&"font_size", size)
 	return label
+
+
+## Set interface lines — captions, units, flashes — in the 黑體 when the HUD is
+## Chinese (`Q218`); English keeps the theme's face.
+func _in_hei(labels: Array[Label]) -> void:
+	if _language != Locale.CHINESE or _font_hei == null:
+		return
+	for label: Label in labels:
+		label.add_theme_font_override(&"font", _font_hei)
 
 
 ## A style number for the callout's language: the Kai face sets larger than

@@ -11,7 +11,7 @@ down is a licence breach waiting to be discovered by someone else.
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/scenes/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
 | **Hand-authored assets** — authored hero buildings, vehicles, street furniture, the DCC test fixture, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
-| **Bundled third-party assets** — the CJK typeface the street plate is set in | `game/assets/authored/fonts/` | **CC BY 4.0** — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
+| **Bundled third-party assets** — the typefaces: the street plate's Kai, the interface's 黑體 and the menu's two brushes | `game/assets/authored/fonts/` | **CC BY 4.0** (the Kai) and **SIL OFL 1.1** (the rest, `Q218`) — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 
 > **Not legal advice.** This file records the project's position. `docs/DATA_SOURCES.md`'s legal note
 > requires a Hong Kong IP lawyer to review before launch; the open questions at the end belong in
@@ -117,6 +117,23 @@ away from the decision that would have used it, which is exactly why it is writt
 
 ⚠️ **CC BY 4.0 has no reserved font name.** OFL would have required a rename for any subset; this
 does not. That is not exercised today and is the reason a subset stays cheap (`Q79`).
+
+### The OFL faces (`Q218`)
+
+The same directory holds subsets of **Noto Sans HK** (© 2014–2021 Adobe) and of **Bakudai**
+(莫大毛筆, © 2020 Chun yu Yao, made from Aoyagi Kouzan's Kouzan Brush Font), and **Knewave**
+(© 2010 Tyler Finck) as published, all under the
+**SIL Open Font License 1.1** — a fifth licence in this repository. Notices in
+[`fonts/LICENSE`](game/assets/authored/fonts/LICENSE), the licence text in `fonts/OFL-1.1.txt`.
+
+- **The notice and the licence travel with every copy.** Each file carries them in its `name`
+  table; the credits screen names all three (`menu_text.json`, held by `verify_menu.gd`).
+- 🔴 **A subset is a Modified Version, and Bakudai reserves its name.** The brush files are
+  therefore named "Taxi Ace Brush"; `etl/tests/test_fonts.py` fails a file that still calls
+  itself Bakudai. Noto Sans HK reserves only 'Source', so its subset keeps its name. This is the
+  rename the CC BY note below says OFL would require.
+- **Bundling is permitted with software under any terms**, the store build included; the fonts
+  themselves stay OFL and are never sold alone.
 
 ---
 
