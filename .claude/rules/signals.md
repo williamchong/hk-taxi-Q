@@ -70,7 +70,7 @@ paths:
   none, and red-and-amber 2 s / amber 3 s are the British values, TD's own unread.
 - **`traffic_system.gd`, `traffic.tres` or `verify_traffic.gd`: run `tools/check.sh`, paste
   `verify_traffic`'s three `lights:` lines and its `lane:` line, and a throttle-route `draws` /
-  `phys` with and without `--traffic=off`** (`P3-3c`; 24 cars: +7 draws, ~+1 ms; 40 cars since `Q198`: +2 draws over 24, ~+0.7 ms). 🔴 **A car moves
+  `phys` with and without `--traffic=off`** (`P3-3c`; 24 cars: +7 draws, ~+1 ms; 40 cars since `Q198`: +2 draws over 24, ~+0.7 ms; 60 since `Q219`: +2–4 draws and ~+1.1 ms over none). 🔴 **A car moves
   only by `RoadRouter.moves_from` under `Profile.legal()`** — never a second successor rule.
   🔴 **Amber is judged at `brake_max_mps2`, TO THE LINE** (`to_stop + STOP_SHORT_M`): at the planned
   rate a braking car rode its own judgement into the red, and to the aim point a crawling car met
@@ -122,6 +122,29 @@ paths:
   the beams' `draw_m` (a faded car would throw a whole beam). A shader change owes the forced
   dither frame on Mobile AND Compatibility (`fade_bits(0.5)` for every car, restored) and the
   `shader error` grep; the `discard` is in the batched variant only — never the player's car.
+- **The far cars' thinned rules, the index and the spawn's pick** (`Q219`, reversing `Q217`'s
+  refusal on the user's instruction): paste `verify_traffic`'s `thin:` and `spawn:` lines for both
+  regions and `tools/bench_traffic.gd --cars=40,60,80` with and without `--view=on` (a
+  measurement, never a gate; a desk `--perf-log` moves 3.3 → 5.2 ms run to run). 🔴 **With no
+  camera no car is thinned**, so the five no-camera drives stay byte-identical across a change
+  that is not meant to move them; the sixth drive stands a camera and holds the thinned cars to
+  every gate. 🔴 **A thinned car still moves, and still stops for a red**: a far car never
+  re-reading fails `lights:` by name, thinning with no camera fails `thin:`. `thin_every = 1` is
+  the off switch. 🔴 **`_ids_near` hands the cars in fleet order** — `_turn_path` caches at first
+  read and `_give_way_gap` returns at its first hit, so any other order moves every drive. The
+  grid is valid only while `step` drives the fleet; a verify tool's direct call reads every car.
+  🔴 **The spawn's pick is one `_rng` roll** over the cumulative lane-metres
+  (`_pick_spawn_edge`); `spawn:` works the share out off the graph itself — read off
+  `_spawn_weight` it agreed with an even pick. 🔴 **A car ahead on its own edge is as far as the
+  road says** (`_leads_on_edge`), and **a lane change needs room to stop from the closing speed**
+  (`_lane_blocked`, `_moving_onto`): at the weighted spawn a part-lane car stood up another's
+  flank and a change onto a queue's tail arrived at 7 m/s. `queue:` stages all three; mutations
+  caught by name 2026-11-15 (the diagonal gap, no closing room, always blocked, the even pick).
+  ⚠️ Under a camera Wan Chai's seeds 23, 1 and 11 failed the rear-end gate before the along-road
+  rule, thinned or not; the camera drive is seed 7. ⚠️ The routed drive is seed 23 and three run
+  lengths (`ROUTED_RUNS`): a kerbside stop and a served bus stop are rare, and seed 4 met neither
+  in Wan Chai once the pick was weighted. ⚠️ **`cars = 80` fails Causeway Bay** (two cars meet in a
+  signalled junction on the back streets, no routed vehicle stands at a stop): the answer is a lower `cars`.
 - **`TrafficSystem` is split by concern** (`P3-3c`, `Q187`): `TrafficTurns` (static turn
   geometry), `TrafficHorns`, `TrafficFleetMix`, `TrafficRouted` and `TrafficKerbside`, each owned
   by the system and reading it back. 🔴 **A stream moves with its owner and keeps its seed and draw

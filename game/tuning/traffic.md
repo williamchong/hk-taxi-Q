@@ -16,10 +16,20 @@ over `spawn_min_m`, `retire_m` over `spawn_max_m`, `brake_max_mps2` over `brake_
 that inverts one is refused too, and an hourly table of any length but 24. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
 streets, with each region's parked roster resident.
 
-## `cars = 40`
+## `cars = 60`
 
-The fleet alive at once in the busiest hour, the evening rush (`Q198`, the user's call 2026-11-11:
-"we need more cars on street esp rush hours"; was 24). Measured on the throttle route
+The fleet alive at once in the busiest hour, the evening rush (`Q219`, 2026-11-15, the user's
+"we need more car for fun factor sooner or later"; 40 since `Q198`, 24 before). 60 is the largest
+of 40 / 60 / 80 that holds every `verify_traffic` gate in both regions: at 80 Causeway Bay's
+back-street drive has two cars meet in a signalled junction (2 car-ticks) and its routed drive
+has no vehicle reach a stop and stand — the answer to that is a lower `cars`, never a shorter `give_way_look_m`. Paid for
+by `thin_every` and the cars' index: `tools/bench_traffic.gd --view=on` reads 1.67 ms a tick at
+60 against 2.53 at 40 before either; in the game (desk, `--perf-log`) the tick's p50 is 2.59 ms.
+Throttle route (2026-11-15, desk): `phys` 3.9–4.5 ms against 2.9–3.1 with `--traffic=off`,
+`draws` 140–146 against 138–142. ⚠️ **The user picks the number** from a rush-hour drive; the
+mobile tier (`P0-3b`) must re-take it.
+
+At 40 (`Q198`, the user's call 2026-11-11: "we need more cars on street esp rush hours"). Measured on the throttle route
 (2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
 1.4–2.0 with `--traffic=off`; `draws` 111–117 against 109–116 at 24 and 106–110 off. The mobile
 tier (`P0-3b`) must re-take it; the per-car cost is the car-ahead search, which is every pair.
@@ -43,6 +53,16 @@ two at a time, not a jam.
 
 No car is placed nearer another than about two car lengths, and no car is placed on an edge
 shorter than this.
+
+## `spawn_main_weight = 1.0`
+
+A spawn tries a road by its lane-metres — its length by its lanes each way by the ways traffic
+drives it — and a main road's count this many times (`Q219`). The pick was even by edge, so a
+short back street was tried as often as a long trunk road and a minor lane-metre drew about twice
+a main one's tries. At 1.0 the fleet is spread evenly over the lanes: Wan Chai's main roads are
+39.6% of the admitted edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line), Causeway Bay's
+22.4% and 35.5%. Above 1 the main streets fill first — ⚠️ **the user's dial**, from drives at 1 /
+1.5 / 2; every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
 
 ## `spawn_seen_min_m = 180.0`
 
@@ -85,8 +105,9 @@ the speed they last gave it, still moving and still an obstacle to every other c
 while a car may brake at `brake_max_mps2` (8.0), so a late reading is made up inside the margin
 the rules already keep. `verify_traffic`'s last drive runs under a camera and holds the thinned
 cars to every gate; a far car that never read its rules again runs a red there by name.
-`tools/bench_traffic.gd --view=on` (Wan Chai, 2026-11-15): 1.04 ms a tick at 40 cars against 2.51
-with no camera, 5.64 against 13.50 at 160. **1 reads every car's every tick** — the off switch.
+`tools/bench_traffic.gd --view=on` (Wan Chai, 2026-11-15, even spawn): 1.04 ms a tick at 40 cars
+against 2.51 with no camera, 5.64 against 13.50 at 160; with the weighted spawn 1.67 against 3.58
+at 60. **1 reads every car's every tick** — the off switch.
 The car's own timers (a dwell, a kerbside stop, the horn's wait) count the ticks it skipped.
 
 ## `thin_beyond_m = 60.0`
@@ -300,7 +321,7 @@ density, puts the peak at the same 18:00 (`traffic_census.py` prints it beside t
 |---|---|---|---|---|---|---|---|---|---|---|
 | speed kph | 60.5 | 48.2 | 39.4 | 37.0 | 37.1 | 33.0 | 29.0 | 45.6 | 49.9 | 49.9 |
 | share | 0.07 | 0.47 | 0.72 | 0.76 | 0.79 | 0.86 | 1.00 | 0.51 | 0.44 | 0.40 |
-| cars of 40 | 3 | 19 | 29 | 31 | 32 | 34 | 40 | 20 | 17 | 16 |
+| cars of 60 | 4 | 28 | 43 | 46 | 47 | 52 | 60 | 30 | 26 | 24 |
 
 ⚠️ The speed is the trunk roads' — TD publishes no detector on a side street here — applied to every
 station's flow. The morning rush is milder than the evening's on these roads (09:00 0.76).

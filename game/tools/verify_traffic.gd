@@ -108,11 +108,18 @@ const KNOCK_RUN_S: float = 40.0
 ## The hour the routed fleet is driven at: the morning peak, TD's busiest.
 const ROUTED_HOUR: float = 8.0
 ## How many `RUN_S` the routed drive runs.
-const ROUTED_RUNS: float = 2.0
+const ROUTED_RUNS: float = 3.0
 ## The hour the wandering seeds are driven at (`Q186`, `Q198`): the busiest, the
 ## evening rush, at which the whole of `cars` is out — the fleet the seeds were
 ## measured on.
 const PEAK_HOUR: float = 18.0
+## The lane looks' staging (`_check_lane_looks`): the bumper gap a part-lane car
+## stands at and its lane position, the room past `gap_m` the lane changer is
+## given, and one tick's step across.
+const LOOK_GAP_M: float = 0.3
+const LOOK_PART_LANE: float = 0.7
+const LOOK_ROOM_M: float = 3.0
+const LOOK_STEP: float = 0.02
 ## The camera's height over the fleet's centre, in the camera's checks (`Q214`)
 ## and the thinned drive (`Q219`).
 const VIEW_EYE_M: float = 3.0
@@ -137,7 +144,7 @@ var _camera: Camera3D = null
 
 func _init() -> void:
 	_run.call_deferred()
-	_start_watchdog.call_deferred("verify_traffic", 360.0)
+	_start_watchdog.call_deferred("verify_traffic", 900.0)
 
 
 func _run() -> void:
@@ -157,6 +164,7 @@ func _run() -> void:
 	_check_knock(graph, table, layers)
 	_check_licences(graph, table)
 	_check_hours(graph, table)
+	_check_spawn_pick(graph, table)
 	_check_view(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
@@ -165,9 +173,15 @@ func _run() -> void:
 	# held to every gate the others are.
 	for run: int in SEEDS.size() + 3:
 		var viewed: bool = run == SEEDS.size() + 2
-		var seed: int = SEEDS[0] if viewed else SEEDS[run % SEEDS.size()]
 		var back_street: bool = run == SEEDS.size()
 		var routed: bool = run == SEEDS.size() + 1
+		var seed: int = SEEDS[run % SEEDS.size()]
+		if viewed:
+			seed = SEEDS[0]
+		elif routed:
+			# The third: a kerbside stop is a rare thing, and the second fleet
+			# pulled up at none in Wan Chai once the spawn was weighted (`Q219`).
+			seed = SEEDS[2]
 		var system: TrafficSystem = TrafficScript.new()
 		if routed:
 			system.hour_override = ROUTED_HOUR
@@ -267,6 +281,7 @@ func _check_knock(graph: RoadGraph, table: TrafficProfile, layers: Array[Node]) 
 	var coming: TrafficSystem.Car = system.cars[1]
 	system.cars.resize(2)
 	_stage(system, struck, edge, along, KNOCK_AT_M)
+	_check_lane_looks(system, struck, coming)
 	_stage(system, coming, edge, along, KNOCK_AT_M - KNOCK_BEHIND_M)
 	coming.lane = 1.0
 	system._enter(coming)
@@ -567,6 +582,60 @@ func _check_licences(graph: RoadGraph, table: TrafficProfile) -> void:
 		"a region with no mix wears the red urban taxi"
 	)
 	_drop(system)
+
+
+## The spawn's pick (`Q219`): a road is tried by its lane-metres, a main road's
+## counted `spawn_main_weight` times — over `KIND_DRAWS` rolls the main roads
+## take their share of that, which is not their share of the edges. The
+## lane-metres are worked out here, off the graph and the router: read off
+## `_spawn_weight` the check would agree with whatever that returned.
+func _check_spawn_pick(graph: RoadGraph, table: TrafficProfile) -> void:
+	var system: TrafficSystem = TrafficScript.new()
+	if not system.setup(graph, table, SEEDS[0]):
+		_fail("spawn", "the shipped table and city carry no traffic")
+		system.free()
+		return
+	var total: float = 0.0
+	var main: float = 0.0
+	var main_edges: int = 0
+	var placeable: Dictionary[int, bool] = {}
+	for edge: int in system._admitted:
+		var length_m: float = graph.plan_length_of(edge)
+		if length_m < table.spawn_clear_m:
+			continue
+		placeable[edge] = true
+		var ways: int = (
+			int(system.router.admits_way(edge, true)) + int(system.router.admits_way(edge, false))
+		)
+		var weight: float = length_m * graph.lanes_each_way(edge) * ways
+		if graph.is_main(edge):
+			weight *= table.spawn_main_weight
+		total += weight
+		if graph.is_main(edge):
+			main += weight
+			main_edges += 1
+	var picked: int = 0
+	var unweighted: int = 0
+	for _draw: int in KIND_DRAWS:
+		var edge: int = system._pick_spawn_edge()
+		picked += int(graph.is_main(edge))
+		unweighted += int(not placeable.has(edge))
+	var share: float = main / total
+	var by_edge: float = float(main_edges) / system._admitted.size()
+	var drawn: float = float(picked) / KIND_DRAWS
+	_expect(unweighted == 0, "spawn", "no road too short to place on is picked")
+	_expect(
+		absf(drawn - share) < KIND_SLACK,
+		"spawn",
+		"the main roads are picked by their lane-metres, not their count"
+	)
+	print(
+		(
+			"  spawn: main roads %.1f%% of the weighted lane-metres, %.1f%% of %d picks, %.1f%% of the edges"
+			% [share * 100.0, drawn * 100.0, KIND_DRAWS, by_edge * 100.0]
+		)
+	)
+	system.free()
 
 
 ## The census's hours (`Q186`): the fleet each hour stands at, the kinds each
@@ -1007,6 +1076,50 @@ func _check_give_way(system: TrafficSystem) -> void:
 	coming.live = false
 
 
+## Two looks a car takes across the lanes (`Q219`), on the knock's road with
+## `ahead` standing in the nearside lane. A car out at a part-lane behind it —
+## as one squeezing past a parked row stands — is as near as the road says, not
+## as the diagonal between them does. And a car in the next lane does not start
+## across onto it from a speed it could not stop from, though it may at a crawl.
+func _check_lane_looks(
+	system: TrafficSystem, ahead: TrafficSystem.Car, behind: TrafficSystem.Car
+) -> void:
+	var tail_m: float = ahead.half_length + behind.half_length
+	ahead.speed = 0.0
+	_stage(system, behind, ahead.edge, ahead.along, ahead.s - tail_m - LOOK_GAP_M)
+	behind.lane = LOOK_PART_LANE
+	behind.pose = system._pose_on_edge(behind)
+	var gap: float = system._gap_ahead(behind)
+	_expect(
+		absf(gap - LOOK_GAP_M) < 1e-3,
+		"queue",
+		"a car out at a part-lane is as far behind the one ahead as the road says (%.2f m)" % gap
+	)
+	var back_m: float = tail_m + system.profile.gap_m + LOOK_ROOM_M
+	_stage(system, behind, ahead.edge, ahead.along, ahead.s - back_m)
+	behind.lane = 1.0
+	behind.pose = system._pose_on_edge(behind)
+	behind.speed = sqrt(2.0 * system.profile.brake_mps2 * LOOK_ROOM_M) * 1.5
+	var toward: float = 1.0 - LOOK_STEP
+	_expect(
+		system._lane_blocked(behind, toward),
+		"queue",
+		"a car does not start across onto one it could not stop behind"
+	)
+	behind.speed = 0.5
+	_expect(not system._lane_blocked(behind, toward), "queue", "and does at a crawl")
+	# A step across, it follows the car in the lane it is moving onto.
+	behind.lane = toward
+	behind.shift = 1
+	var onto: bool = TrafficSystem._on_path(behind, ahead)
+	behind.shift = 0
+	_expect(
+		onto and not TrafficSystem._on_path(behind, ahead),
+		"queue",
+		"a car part way across follows the one in the lane it moves onto, and one keeping its lane does not"
+	)
+
+
 static func _stage(
 	system: TrafficSystem, car: TrafficSystem.Car, edge: int, along: bool, s: float
 ) -> void:
@@ -1046,8 +1159,9 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
-	# The routed drive runs twice as long: a bus is found mid-dwell, and in 90 s a
-	# departure may not yet have reached its next stop (Causeway Bay, 2026-11-06).
+	# The routed drive runs `ROUTED_RUNS` as long: a bus is found mid-dwell, and in
+	# 90 s a departure may not yet have reached its next stop (Causeway Bay,
+	# 2026-11-06); in 180 s at 60 cars none had (`Q219`).
 	var ticks: int = roundi(RUN_S * (ROUTED_RUNS if routed else 1.0) / TICK_S)
 	var ran_red: int = 0
 	var bad_move: int = 0
@@ -1409,6 +1523,9 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 		root.remove_child(_camera)
 		_camera.free()
 		_camera = null
+		# With no camera a car it kept in view past `retire_m` goes at once: one
+		# tick, so that none of the staged cars below is on its way out.
+		system.step(TICK_S)
 	_check_near(system)
 	_check_horn(system)
 

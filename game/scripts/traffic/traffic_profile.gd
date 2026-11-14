@@ -23,6 +23,9 @@ const HOURS: int = 24
 @export var retire_m: float
 ## No car is placed nearer another than this, in plan metres.
 @export var spawn_clear_m: float
+## A car is placed on a road by its lane-metres, and a main road's count this
+## many times (`Q219`): 1 spreads the fleet evenly over the lanes.
+@export var spawn_main_weight: float
 ## A car is placed where the camera can see it only past this, in metres from
 ## the camera, and fades in there (`Q214`); nearer, only out of view or behind
 ## a building or the road.

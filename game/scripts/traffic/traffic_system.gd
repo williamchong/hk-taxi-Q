@@ -446,6 +446,9 @@ var _shown: Array[Array] = []
 ## The fleet's kinds by the hour and its taxis' licences (`Q183`, `Q186`).
 var fleet_mix := TrafficFleetMix.new()
 var _admitted: PackedInt32Array = []
+## Each admitted edge's `_spawn_weight` summed up to and with it: the spawn
+## picks by where one roll falls among them.
+var _admitted_reach: PackedFloat64Array = []
 ## The kind index of each licence mesh a taxi may wear, the profile's own first.
 var _licence_kinds: Dictionary[String, int] = {}
 ## Where the ring is centred when there is no vehicle: the verify tool's.
@@ -542,10 +545,14 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	kerbside.seed_from(seed)
 	router = RoadRouterScript.new(graph, RoadRouterScript.Profile.legal())
 	_admitted = PackedInt32Array()
+	_admitted_reach = PackedFloat64Array()
+	var reach: float = 0.0
 	for edge: int in router.admitted_edge_ids():
 		if not graph.is_stub(edge):
 			_admitted.append(edge)
-	if _admitted.is_empty():
+			reach += _spawn_weight(edge)
+			_admitted_reach.append(reach)
+	if _admitted.is_empty() or reach <= 0.0:
 		push_warning("TrafficSystem: no edge admits traffic; none will run")
 		return false
 	if fleet_mix.licence_mixes.is_empty():
@@ -689,6 +696,7 @@ static func usable(table: TrafficProfile) -> bool:
 		"kerb_stop_every_m": table.kerb_stop_every_m,
 		"kerb_dwell_s": table.kerb_dwell_s,
 		"kerb_unlawful_share": table.kerb_unlawful_share,
+		"spawn_main_weight": table.spawn_main_weight,
 		"thin_every": float(table.thin_every),
 		"thin_beyond_m": table.thin_beyond_m,
 	}
@@ -1410,8 +1418,29 @@ func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_shar
 	spawned += 1
 
 
+## How much of the spawn's pick `edge` takes (`Q219`): the lane-metres traffic
+## drives on it — its length by its lanes each way by the ways it admits — and
+## `spawn_main_weight` times that on a main road. Picked evenly by edge, a short
+## back street took as many tries as a long trunk road: a minor lane-metre had
+## about twice a main one's. Nothing for a road too short to place on.
+func _spawn_weight(edge: int) -> float:
+	var length_m: float = graph.plan_length_of(edge)
+	if length_m < profile.spawn_clear_m:
+		return 0.0
+	var ways: int = int(router.admits_way(edge, true)) + int(router.admits_way(edge, false))
+	var lane_m: float = length_m * graph.lanes_each_way(edge) * ways
+	return lane_m * (profile.spawn_main_weight if graph.is_main(edge) else 1.0)
+
+
+## The road a spawn is tried on: one roll, as the even pick was, and the first
+## edge whose reach is past it.
+func _pick_spawn_edge() -> int:
+	var rolled: float = _rng.randf() * _admitted_reach[-1]
+	return _admitted[mini(_admitted_reach.bsearch(rolled, false), _admitted.size() - 1)]
+
+
 func _try_spawn(car: Car, here: Vector3) -> void:
-	var edge: int = _admitted[_rng.randi_range(0, _admitted.size() - 1)]
+	var edge: int = _pick_spawn_edge()
 	var along: bool = _rng.randf() < 0.5
 	if not router.admits_way(edge, along):
 		along = not along
@@ -1847,8 +1876,16 @@ func _lane_blocked(car: Car, toward: float) -> bool:
 			or is_equal_approx(other.lane, car.lane)
 		):
 			continue
-		var beside: float = car.half_length + other.half_length + profile.gap_m
-		if absf(other.s - car.s) < beside and absf(other.lane - toward) < 1.0:
+		# Beside it, or near enough that whichever is behind could not stop at
+		# the planned rate from the speed it closes at: a change onto a queue's
+		# tail arrived at 7 m/s with 3 m to stop in, and one out in front of a
+		# car at cruise was run into (`Q219`, Causeway Bay seed 4).
+		var ahead_m: float = other.s - car.s
+		var closing: float = car.speed - other.speed if ahead_m > 0.0 else other.speed - car.speed
+		var room: float = car.half_length + other.half_length + profile.gap_m
+		if closing > 0.0:
+			room += closing * closing / (2.0 * profile.brake_mps2)
+		if absf(ahead_m) < room and absf(other.lane - toward) < 1.0:
 			return true
 	return false
 
@@ -2289,6 +2326,11 @@ func _gap_ahead(car: Car) -> float:
 			)
 			continue
 		if _on_path(car, other) or _coming_over(car, other):
+			# Ahead on its own road it is no farther than the road says: a car out
+			# at a part-lane past a parked row, measured across to the one in the
+			# lane beside, stood half a metre up its flank.
+			if _leads_on_edge(car, other):
+				apart = minf(apart, other.s - car.s)
 			best = minf(best, apart - car.half_length - other.half_length)
 			continue
 		if _merging(car, other):
@@ -2393,7 +2435,7 @@ static func _on_path(car: Car, other: Car) -> bool:
 	if not car.turning and other.edge == car.edge and other.along == car.along:
 		if other.turning:
 			return same_lane(car.lane, other.lane_out)
-		return other.s > car.s and same_lane(car.lane, other.lane)
+		return other.s > car.s and (same_lane(car.lane, other.lane) or _moving_onto(car, other))
 	if car.next_edge < 0:
 		return false
 	if other.edge == car.next_edge and other.along == car.next_along and not other.turning:
@@ -2407,6 +2449,29 @@ static func _on_path(car: Car, other: Car) -> bool:
 		and other.next_along == car.next_along
 		and same_lane(car.next_lane, other.next_lane)
 		and other.turn_len - other.turn_u < car.turn_len - car.turn_u
+	)
+
+
+## Whether `car`, part way across to another lane, is moving onto `other`'s:
+## it follows that lane's car from the moment it leaves its own, not from
+## three-quarters of the way over.
+static func _moving_onto(car: Car, other: Car) -> bool:
+	return (
+		car.shift != 0
+		and not is_equal_approx(car.lane, roundf(car.lane))
+		and same_lane(car.lane - car.shift * (1.0 - SAME_LANE), other.lane)
+	)
+
+
+## Whether `other` is ahead of `car` on its edge, its way, neither in a turn:
+## the two are then `other.s - car.s` apart along the road.
+static func _leads_on_edge(car: Car, other: Car) -> bool:
+	return (
+		not car.turning
+		and not other.turning
+		and other.edge == car.edge
+		and other.along == car.along
+		and other.s > car.s
 	)
 
 
