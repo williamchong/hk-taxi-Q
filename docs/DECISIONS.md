@@ -12955,6 +12955,28 @@ or tabs. Part of `P3-5b`. The desk keeps `Q169`'s two tables side by side, uncha
   `P0-3b`'s handset. The REPORT page's own column (the total, the counts, the buttons) keeps the
   menu's type: only the sheet was asked for.
 
+**Amended 2026-11-15: the sheet takes a hierarchy, and a phone reads the sums first.** Asked by the
+user from a RECORD screenshot: "need better visual hireachy in this report form, also consider
+mobile version UI". Every line was one size and amber stood on the heading, the best and both
+subtotals, so the total read as one more row; on a phone it was four screens down the scroll.
+
+- **Four ranks of type** (`LedgerCard.Rank`, `menu.tres`'s `ledger_*_size`): the total 34 / 40 on a
+  64 px row closed by the books' double rule, a block's title 24 / 28, a row at the body's 20 / 22
+  (`Q218`'s 黑體), a column head 17 / 18. The bests and the sums take a title each (最佳紀錄 / BESTS, 收入 /
+  TAKINGS): untitled, the bests read as the bonus table running on. These are block titles, not
+  `Q169`'s refused TD section headings.
+- **A row nothing happened on is muted, never dropped** (`chip_muted`): a ledger's lines still do
+  not come and go. A subtotal's label is muted and its numbers ink, since the sums restate it;
+  amber is left to the page's heading. The walked line is a footnote at the head's size.
+- **Stacked, the order is sums, bests, bonuses, penalties**, same nodes and names. The desk keeps
+  the tables over the books.
+- **RECORD's name and best shift share a line**, the best on the right, the runs under: three lines
+  of one size took a third of a phone's glass before the first table.
+- `ledger_px` 770 → 840 for the two titles and the taller total.
+- `verify_menu`: the four ranks in order, an idle row muted and present, the desk's order and the
+  phone's. Frames 2026-11-15, RECORD and REPORT at a desk and at
+  `--window=1368x630 --safe-area=102,0,102,30 --touch=on`, both languages.
+
 **See.** `Q169` · `Q204` · `P3-76` · `P3-80` · `P3-5b` · `game/tuning/menu.md` ·
 `game/scripts/ui/ledger_card.gd`
 
