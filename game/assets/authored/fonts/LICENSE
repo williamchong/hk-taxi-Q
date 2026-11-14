@@ -64,8 +64,8 @@ Q218); the third is the published file.
     SPDX-License-Identifier: OFL-1.1
     Source: https://github.com/max32002/bakudaifont
 
-  CHANGED: glyphs removed — Medium keeps the characters of
-  game/tuning/menu_text.json, Bold those of the game's name — and RENAMED to
+  CHANGED: glyphs removed — Medium keeps the characters of the game's own
+  text, Bold those of the game's name — and RENAMED to
   "Taxi Ace Brush", because OFL clause 3 bars a Modified Version from carrying
   a Reserved Font Name. etl/tests/test_fonts.py holds the rename.
 

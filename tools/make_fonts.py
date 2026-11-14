@@ -9,7 +9,8 @@ SIL OFL 1.1 font this project did not author:
   or a building, which are the Kai's, so the Kai's repertoire is not in it —
   that cut was 3.6 MB for glyphs no line asks for.
 - `TaxiAceBrush-Medium.ttf` — Bakudai Medium (莫大毛筆), the menu's choices and
-  headings, cut to the characters of `menu_text.json`.
+  headings and the HUD's skill and penalty names, cut to the same text as the
+  黑體: the two stand side by side in one flash.
 - `TaxiAceBrush-Bold.ttf` — Bakudai Bold, the game's name alone, cut to the
   `title` strings.
 
@@ -103,11 +104,6 @@ def shown_codes() -> set[int]:
     return codes
 
 
-def menu_codes() -> set[int]:
-    """Every character of `menu_text.json`, which is all the brush is asked for."""
-    return {ord(c) for c in MENU_TEXT.read_text(encoding="utf-8")}
-
-
 def title_codes() -> set[int]:
     """The game's name in each language."""
     title = json.loads(MENU_TEXT.read_text(encoding="utf-8"))["strings"]["title"]
@@ -161,8 +157,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     base = base_codes()
-    cut(args.sources / "NotoSansHK[wght].ttf", HEI_OUT, shown_codes() | base)
-    cut(args.sources / "Bakudai-Medium.ttf", BRUSH_OUT, menu_codes() | base, BRUSH_FAMILY, "Medium")
+    shown = shown_codes() | base
+    cut(args.sources / "NotoSansHK[wght].ttf", HEI_OUT, shown)
+    cut(args.sources / "Bakudai-Medium.ttf", BRUSH_OUT, shown, BRUSH_FAMILY, "Medium")
     cut(args.sources / "Bakudai-Bold.ttf", TITLE_OUT, title_codes() | base, BRUSH_FAMILY, "Bold")
     return 0
 

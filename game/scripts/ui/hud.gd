@@ -184,9 +184,12 @@ var _tick_yields: bool = false
 var _combo_fade_s: float = 0.0
 ## The plate's Chinese face, kept for the callout's second line.
 var _font_zh: Font = null
-## The 黑體 for what is interface and not a name: captions, units, the flashes.
+## The 黑體 for what is interface and not a name: captions, units, the sums.
 ## The Kai keeps the plate and the callout's place and road, as on a street.
 var _font_hei: Font = null
+## What a skill or a penalty is named in (`StreetPlate.load_font_flash`): the
+## flash, and the combo's lines.
+var _font_flash: Font = null
 
 var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
@@ -287,12 +290,14 @@ func _build() -> void:
 	# the guard that keeps it honest.
 	_font_zh = null
 	_font_hei = null
+	_font_flash = null
 	if _graph != null and not _graph.is_empty():
 		_font_zh = StreetPlate.load_font_zh("hud")
 		# Every line set in it is Chinese; the Kai is loaded either way, the
 		# Chinese plate being built and hidden in English.
 		if Locale.language() == Locale.CHINESE:
 			_font_hei = StreetPlate.load_font_hei("hud")
+		_font_flash = StreetPlate.load_font_flash("hud", Locale.language())
 
 	# One root Control so the safe-area inset is applied once rather than per
 	# slot. Everything below anchors inside it.
@@ -524,10 +529,9 @@ func _build() -> void:
 
 	# The tick: "+HK$2.1" under the clock as a unit begins, bare like the
 	# clock, faded over `tick_fade_s`. Its alpha is driven in `_process`. In
-	# the 黑體 when Chinese: a skill flashes its 黃紙 item (`Q169`), and
+	# a face of its own per flash (`_flash`): a skill flashes its 黃紙 item (`Q169`), and
 	# the theme's face has no CJK glyph of its own to draw it in.
 	_tick = _outlined(_label("Tick", _style.tick_size, _style.chip_ink))
-	_in_hei([_tick])
 	_tick.visible = false
 	_layout.place(root, _tick, _layout.tick)
 
@@ -562,7 +566,8 @@ func _build() -> void:
 	_combo_panel = _bare("Combo", root, _layout.award)
 	_combo_parts = _label("Skills", sub_size, _style.chip_ink)
 	_lines(_combo_panel, 0).add_child(_style.shade(_combo_parts))
-	_in_hei([_combo_skill, _combo_value, _combo_parts])
+	for label: Label in [_combo_skill, _combo_value, _combo_parts]:
+		_set_face(label, _font_flash)
 
 	# ---- 特更's clock: the hour, and when the day ends ----
 	#
@@ -665,7 +670,15 @@ static func _label(node_name: String, size: int, ink: Color) -> Label:
 	return label
 
 
-## Set interface lines — captions, units, flashes — in the 黑體 when the HUD is
+## `label` in `face`, or back in the theme's with none.
+static func _set_face(label: Label, face: Font) -> void:
+	if face == null:
+		label.remove_theme_font_override(&"font")
+	else:
+		label.add_theme_font_override(&"font", face)
+
+
+## Set interface lines — captions and units — in the 黑體 when the HUD is
 ## Chinese (`Q218`); English keeps the theme's face.
 func _in_hei(labels: Array[Label]) -> void:
 	if _language != Locale.CHINESE or _font_hei == null:
@@ -1135,7 +1148,7 @@ func _on_fare_skilled(_fare: Fare, award: Fare.Award) -> void:
 	if fares.combo.shown():
 		_join_live(award, true)
 		return
-	_flash(_face.award_text(award), _award_ink(award))
+	_flash(_face.award_text(award), _award_ink(award), true)
 	_tick_yields = true
 
 
@@ -1145,7 +1158,7 @@ func _on_fare_practised(award: Fare.Award) -> void:
 	if fares.combo.shown():
 		_join_live(award, false)
 		return
-	_flash(_face.practice_text(award), _award_ink(award))
+	_flash(_face.practice_text(award), _award_ink(award), true)
 	_tick_yields = true
 
 
@@ -1162,9 +1175,11 @@ func _award_ink(award: Fare.Award) -> Color:
 	return _style.accent if award.hkd >= 0.0 else _style.accent_negative
 
 
-## Show `text` under the clock and start it fading.
-func _flash(text: String, ink: Color) -> void:
+## Show `text` under the clock and start it fading. A flash that names a skill
+## or a penalty takes their face; a sum alone stays in the interface's.
+func _flash(text: String, ink: Color, named: bool = false) -> void:
 	_tick.text = text
+	_set_face(_tick, _font_flash if named else _font_hei)
 	# Cut to the box, like the callout: "−HK$5.0 touching an object (serious)"
 	# is the longest thing flashed here, and the box is its bound.
 	StreetPlate.shrink_to(_tick, _style.tick_size, _layout.tick.size.x)

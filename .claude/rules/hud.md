@@ -157,9 +157,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   build path. 🔴 **Three hands, by what a line is** (`Q218`, the user's asks): the brush for the
   menu's name (Bold), choices and headings (Medium), Knewave for the same lines in English; the 黑體 for interface — running text, the
   成績表, the HUD's captions, units and flashes; the Kai for NAMES alone — the plate, the callout's
-  place and road. Do not put an interface line back in the Kai or a name in the 黑體. The focus is
+  place and road. Do not put an interface line back in the Kai or a name in the 黑體. A skill's or a penalty's name flashes in the brush beside its money in the theme's numerals, Knewave in English (`load_font_flash`); a sum alone stays 黑體. The focus is
   a drawn brush stroke (`InkStroke`, `brush_stroke`), not a rule. ⚠️ **The 黑體 and the brushes
-  are subsets**: a wording change in `menu_text.json` owes `pytest etl/tests/test_fonts.py`, and
+  are subsets**: a wording change in `menu_text.json`, `exam_sheet.json` or a script's Chinese string owes `pytest etl/tests/test_fonts.py`, and
   on a failure `tools/make_fonts.py` (needs `fonttools` and the pinned sources). A glyph a face
   lacks falls to the next — brush, 黑體, Kai, the theme's — so the failure is one character in the
   wrong hand, which no check but that test sees. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the

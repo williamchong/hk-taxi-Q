@@ -36,25 +36,22 @@ def _lacking(font: str, wanted: set[int]) -> str:
     return "".join(sorted(chr(code) for code in wanted - read_cmap(FONTS / font)))
 
 
-def test_the_brush_draws_every_character_of_the_menu() -> None:
-    lacking = _lacking("TaxiAceBrush-Medium.ttf", _cjk(MENU_TEXT.read_text(encoding="utf-8")))
-    assert not lacking, f"the brush subset lacks {lacking} — re-run tools/make_fonts.py"
-
-
 def test_the_title_brush_draws_the_name() -> None:
     title = json.loads(MENU_TEXT.read_text(encoding="utf-8"))["strings"]["title"]
     lacking = _lacking("TaxiAceBrush-Bold.ttf", _cjk("".join(title.values())))
     assert not lacking, f"the title subset lacks {lacking} — re-run tools/make_fonts.py"
 
 
-def test_the_hei_draws_every_character_the_game_shows() -> None:
+def test_the_hei_and_the_brush_draw_every_character_the_game_shows() -> None:
     # The tuning and the scripts' own strings: a caption decided in code
-    # (`FareFace`, `hud.gd`) is interface text like any other.
+    # (`FareFace`, `hud.gd`) is interface text like any other, and a skill's
+    # name flashes in the brush beside its money.
     shown: set[int] = set()
     for path in sorted([*TUNING.glob("*.json"), *TUNING.glob("*.tres"), *SCRIPTS.rglob("*.gd")]):
         shown |= _cjk(path.read_text(encoding="utf-8"))
-    lacking = _lacking("NotoSansHK-subset.ttf", shown)
-    assert not lacking, f"the 黑體 subset lacks {lacking} — re-run tools/make_fonts.py"
+    for font in ("NotoSansHK-subset.ttf", "TaxiAceBrush-Medium.ttf"):
+        lacking = _lacking(font, shown)
+        assert not lacking, f"{font} lacks {lacking} — re-run tools/make_fonts.py"
 
 
 def test_the_brush_subsets_do_not_carry_the_reserved_name() -> None:

@@ -92,6 +92,25 @@ static func load_font_brush_en(who: String, title: bool = false) -> Font:
 	return _load_face("font_brush_title_en" if title else "font_brush_en", who, 0, [])
 
 
+## What the HUD names a skill or a penalty in (`Q218`, the user's picks from
+## frames). In Chinese the theme's face over the brush: the theme's has the
+## Latin and the digits and no Chinese, so the money stays in the dashboard's
+## numerals and the name falls to the brush — whose own digits, thin and
+## wide-set, were the frame that ruled the brush out for the whole line. In
+## English the Latin brush, money and all.
+static func load_font_flash(who: String, language: String) -> Font:
+	if language != Locale.CHINESE:
+		return load_font_brush_en(who)
+	var brush: Font = load_font_brush(who)
+	if brush == null:
+		return null
+	var flash := FontVariation.new()
+	flash.base_font = ThemeDB.fallback_font
+	var under: Array[Font] = [brush]
+	flash.fallbacks = under
+	return flash
+
+
 ## `tuning`'s face under `key` at `weight` (0 leaves the face's own), over the
 ## faces under `under` and then the theme's, or null with a warning.
 static func _load_face(key: String, who: String, weight: int, under: Array[String]) -> Font:
