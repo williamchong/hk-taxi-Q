@@ -113,6 +113,9 @@ const ROUTED_RUNS: float = 2.0
 ## evening rush, at which the whole of `cars` is out — the fleet the seeds were
 ## measured on.
 const PEAK_HOUR: float = 18.0
+## The camera's height over the fleet's centre, in the camera's checks (`Q214`)
+## and the thinned drive (`Q219`).
+const VIEW_EYE_M: float = 3.0
 ## The hours the fleet and the mix are checked at (`Q186`): the shift's opening,
 ## midday, the evening rush, the night's taxis, and a small hour, where few run.
 const CHECK_HOURS: Array[int] = [7, 12, 18, 20, 4]
@@ -127,6 +130,9 @@ const MINIBUS: String = "minibus"
 ## A dwelling vehicle's front this much past `dwell_reach_m` from its pole is not
 ## at its stop: a tick's travel at the turning pace.
 const DWELL_SLACK_M: float = 0.15
+
+## The camera the last drive runs under (`Q219`), or null.
+var _camera: Camera3D = null
 
 
 func _init() -> void:
@@ -154,8 +160,12 @@ func _run() -> void:
 	_check_view(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
-	for run: int in SEEDS.size() + 2:
-		var seed: int = SEEDS[run % SEEDS.size()]
+	# Last, the first fleet again under a camera (`Q219`): the cars far from it
+	# and out of its view read their rules every `thin_every`th tick, and are
+	# held to every gate the others are.
+	for run: int in SEEDS.size() + 3:
+		var viewed: bool = run == SEEDS.size() + 2
+		var seed: int = SEEDS[0] if viewed else SEEDS[run % SEEDS.size()]
 		var back_street: bool = run == SEEDS.size()
 		var routed: bool = run == SEEDS.size() + 1
 		var system: TrafficSystem = TrafficScript.new()
@@ -187,7 +197,11 @@ func _run() -> void:
 					(
 						" on the back streets"
 						if back_street
-						else (" with the routed fleet at %02d:00" % ROUTED_HOUR if routed else "")
+						else (
+							" with the routed fleet at %02d:00" % ROUTED_HOUR
+							if routed
+							else (" under a camera, the far cars thinned" if viewed else "")
+						)
 					)
 				]
 			)
@@ -200,7 +214,28 @@ func _run() -> void:
 		)
 		if back_street:
 			_check_give_way(system)
+		if viewed:
+			_camera = Camera3D.new()
+			root.add_child(_camera)
+			var eye: Vector3 = system.centre + Vector3.UP * VIEW_EYE_M
+			_camera.look_at_from_position(eye, eye + Vector3.RIGHT)
+			_camera.make_current()
 		_drive(system, not back_street, routed)
+		if viewed:
+			var driven: int = roundi(RUN_S / TICK_S) * system.cars.size()
+			_expect(
+				table.thin_every > 1 and system.thinned * 4 > driven,
+				"thin",
+				"the far cars drove on a kept answer (%d car-ticks)" % system.thinned
+			)
+			print(
+				(
+					"  thin: %d of at most %d car-ticks on a kept answer, every %d ticks past %.0f m"
+					% [system.thinned, driven, table.thin_every, table.thin_beyond_m]
+				)
+			)
+		else:
+			_expect(system.thinned == 0, "thin", "with no camera every car reads every rule")
 		system.queue_free()
 	_finish("verify_traffic")
 
@@ -1369,6 +1404,11 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 			% [held_give_way, longest_give_way * TICK_S]
 		)
 	)
+	# The staged cars below are read every tick: the camera goes first.
+	if _camera != null:
+		root.remove_child(_camera)
+		_camera.free()
+		_camera = null
 	_check_near(system)
 	_check_horn(system)
 
@@ -1902,9 +1942,9 @@ func _check_view(graph: RoadGraph, table: TrafficProfile) -> void:
 		system.free()
 		return
 	root.add_child(system)
-	var eye: Vector3 = _signal_centre(system.signals.plan) + Vector3.UP * 3.0
+	var eye: Vector3 = _signal_centre(system.signals.plan) + Vector3.UP * VIEW_EYE_M
 	var ahead := Vector3(1.0, 0.0, 0.0)
-	var foot := Vector3(eye.x, eye.y - 3.0, eye.z)
+	var foot := Vector3(eye.x, eye.y - VIEW_EYE_M, eye.z)
 	var camera := Camera3D.new()
 	camera.far = 400.0
 	root.add_child(camera)

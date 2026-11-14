@@ -102,6 +102,9 @@ const LEVEL_APART_M: float = 3.0
 ## refusal never differs from the distance test it stands in front of: the
 ## distance is rounded to single precision, an axis is not.
 const FAR_SLACK_M: float = 0.01
+## The side of a cell of the cars-by-place index (`_ids_near`), metres: about
+## the reach `_gap_ahead` asks, so it reads the nine cells round a car.
+const NEAR_CELL_M: float = 64.0
 ## Edges and turns one tick may carry a car through; a ring of zero-length
 ## edges would otherwise never end the walk.
 const ADVANCE_STEPS: int = 16
@@ -174,6 +177,9 @@ var kerb_picked: int = 0
 var kerb_served: int = 0
 var kerb_missed: int = 0
 var kerb_unlawful: int = 0
+## For the verify tool: car-ticks driven on the speed a car's rules last gave
+## it (`Q219`, `_keeps_answer`), the rules not read.
+var thinned: int = 0
 
 ## The player's car: the ring is round it, and the car ahead may be it.
 @export var vehicle: Node3D
@@ -300,6 +306,18 @@ class Car:
 	## Its turn through the junction in plan points, and the tick it was read on.
 	var path: PackedVector3Array = []
 	var path_tick: int = -1
+	## That path as `TrafficTurns.plans_cross` reads it, made when the path is:
+	## its plan points, each stretch's direction and the box round them.
+	var plan: PackedVector2Array = []
+	var plan_dirs: PackedVector2Array = []
+	var plan_bounds: Rect2
+	## The speed its rules last gave it to make for, whether they have been read
+	## since it was placed or knocked, and the seconds driven on that answer
+	## since (`Q219`): a far car out of view reads its rules every
+	## `thin_every`th tick and drives on the answer between.
+	var target_mps: float = 0.0
+	var answered: bool = false
+	var answer_age_s: float = 0.0
 	## Its kind's kerb mass (`parked.tres` `masses_kg`): 0 is a car the taxi
 	## cannot push.
 	var mass_kg: float = 0.0
@@ -465,6 +483,21 @@ var _indexed_changes: int = -1
 var _indexed_size: int = -1
 ## What `_cars_on` answers for a road with no car; never appended to.
 var _no_cars: Array[Car] = []
+## The live cars' ids by the plan cell each stands in (`NEAR_CELL_M`), each
+## cell's in fleet order — kept only while `step` drives the fleet (`_driving`),
+## when one car moves at a time and is put in its new cell as it does. Any other
+## caller is handed the whole fleet: a verify tool moves a car and asks at once.
+var _near: Dictionary[Vector2i, Array] = {}
+## What `_ids_near` fills where more than one cell holds a car: its two readers
+## ask one after the other, never one inside the other.
+var _near_found: Array[int] = []
+var _driving: bool = false
+var _no_ids: Array[int] = []
+## Every car's id in fleet order, what `_ids_near` hands back with no index.
+var _fleet_ids: Array[int] = []
+## The longest half-length any kind has: how far past a reach a car's middle
+## can stand and still be in it.
+var _longest_half_m: float = 0.0
 var _far_m: float = 0.0
 var _sight := PhysicsRayQueryParameters3D.new()
 
@@ -560,6 +593,7 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 	var widest_half_m: float = 0.0
 	for extent: AABB in _extents:
 		widest_half_m = maxf(widest_half_m, extent.size.x * 0.5)
+		_longest_half_m = maxf(_longest_half_m, extent.size.z * 0.5)
 	beams = TrafficBeams.create(cars.size(), widest_half_m)
 	if beams != null:
 		add_child(beams)
@@ -655,6 +689,8 @@ static func usable(table: TrafficProfile) -> bool:
 		"kerb_stop_every_m": table.kerb_stop_every_m,
 		"kerb_dwell_s": table.kerb_dwell_s,
 		"kerb_unlawful_share": table.kerb_unlawful_share,
+		"thin_every": float(table.thin_every),
+		"thin_beyond_m": table.thin_beyond_m,
 	}
 	var hourly: Array[PackedFloat32Array] = [table.fleet_by_hour]
 	hourly.append_array(table.kinds.values())
@@ -1026,16 +1062,29 @@ func step(delta: float) -> void:
 	_read_parked_some(PARKED_READS_PER_TICK)
 	var here: Vector3 = vehicle.global_position if is_instance_valid(vehicle) else centre
 	_read_view()
+	var began: int = PerfClock.begin()
+	_index_near()
 	for car: Car in cars:
 		if not car.live:
 			continue
 		if _step_view(car, here, delta):
 			_retire(car)
 			continue
+		var cell: Vector2i = _near_cell_of(car.pose.origin)
 		if car.knocked:
+			car.answered = false
+			car.answer_age_s = 0.0
 			_slide(car, delta)
+		elif _keeps_answer(car):
+			thinned += 1
+			car.answer_age_s += delta
+			_move(car, car.target_mps, delta)
 		else:
 			_drive(car, delta)
+		_reindex_near(car, cell)
+	_driving = false
+	PerfClock.part("traffic drive", began)
+	began = PerfClock.begin()
 	# Once a tick for both readers: the rig is a tree search away.
 	var hour: int = _hour_now()
 	fleet_mix.read_hour(hour)
@@ -1055,6 +1104,8 @@ func step(delta: float) -> void:
 		if idle == null:
 			break
 		route_fleet.try_spawn(idle, here)
+	PerfClock.part("traffic spawn", began)
+	began = PerfClock.begin()
 	if beams != null:
 		beams.begin()
 	for car: Car in cars:
@@ -1079,6 +1130,7 @@ func step(delta: float) -> void:
 				)
 	if beams != null:
 		beams.end()
+	PerfClock.part("traffic write", began)
 
 
 ## The camera this tick, or none (`Q214`).
@@ -1180,6 +1232,21 @@ static func fade_bits(fade: float) -> int:
 	return FADE_BIT * roundi((1.0 - clampf(fade, 0.0, 1.0)) * FADE_STEPS)
 
 
+## Whether `car` drives this tick on the speed its rules last gave it (`Q219`):
+## past `thin_beyond_m` from the camera and out of its frustum, on every tick
+## but each `thin_every`th — its own, by its id, so the fleet's readings are
+## spread. Never with no camera, as nothing is in view then (`Q214`): the seeded
+## drives read every rule every tick. Never a car just placed or knocked, whose
+## rules have not been read.
+func _keeps_answer(car: Car) -> bool:
+	if not _viewing or not car.answered or (_tick + car.id) % profile.thin_every == 0:
+		return false
+	var bar_sq: float = profile.thin_beyond_m * profile.thin_beyond_m
+	if RoadGraph.plan_distance_sq(car.pose.origin, _eye) <= bar_sq:
+		return false
+	return not _in_frustum(car.pose.origin + Vector3.UP * SIGHT_HEIGHT_M, car.half_length)
+
+
 func _idle_car(routed: bool) -> Car:
 	for car: Car in cars:
 		if not car.live and car.routed == routed:
@@ -1211,6 +1278,72 @@ func _index_on(edge: int, car: Car) -> void:
 		var fresh: Array[Car] = []
 		_by_road[edge] = fresh
 	_by_road[edge].append(car)
+
+
+static func _near_cell_of(at: Vector3) -> Vector2i:
+	return Vector2i(floori(at.x / NEAR_CELL_M), floori(at.z / NEAR_CELL_M))
+
+
+## Put every live car in its cell, for the tick's drive.
+func _index_near() -> void:
+	_near.clear()
+	for car: Car in cars:
+		if car.live:
+			_enter_near(_near_cell_of(car.pose.origin), car.id)
+	_driving = true
+
+
+## `id` into `cell`, kept in fleet order.
+func _enter_near(cell: Vector2i, id: int) -> void:
+	if not _near.has(cell):
+		var fresh: Array[int] = []
+		_near[cell] = fresh
+	var ids: Array[int] = _near[cell]
+	ids.insert(ids.bsearch(id), id)
+
+
+## Move `car`, just driven from the cell `was`, to the one it now stands in. A
+## car retired in its drive stays where it was: every reader skips it for not
+## being live.
+func _reindex_near(car: Car, was: Vector2i) -> void:
+	var cell: Vector2i = _near_cell_of(car.pose.origin)
+	if cell == was:
+		return
+	if _near.has(was):
+		_near[was].erase(car.id)
+	_enter_near(cell, car.id)
+
+
+## The ids of every car that may stand within `reach_m` of `at` on both plan
+## axes, in fleet order — live or not, and some beyond it: the caller's own
+## test decides. The whole fleet while no index is kept. 🔴 Fleet order, or the
+## seeded drives move: `_turn_path` keeps a car's path from its first reading
+## in a tick, and `_give_way_gap` stops at its first find, so the order it
+## looks in decides which paths are read before their cars have moved.
+func _ids_near(at: Vector3, reach_m: float) -> Array[int]:
+	if not _driving:
+		if _fleet_ids.size() != cars.size():
+			_fleet_ids.assign(range(cars.size()))
+		return _fleet_ids
+	var cells: int = 0
+	var only: Array[int] = _no_ids
+	_near_found.clear()
+	for x: int in range(
+		floori((at.x - reach_m) / NEAR_CELL_M), floori((at.x + reach_m) / NEAR_CELL_M) + 1
+	):
+		for z: int in range(
+			floori((at.z - reach_m) / NEAR_CELL_M), floori((at.z + reach_m) / NEAR_CELL_M) + 1
+		):
+			var cell := Vector2i(x, z)
+			if _near.has(cell):
+				only = _near[cell]
+				cells += 1
+				_near_found.append_array(only)
+	# One cell's ids are in order as they stand.
+	if cells <= 1:
+		return only
+	_near_found.sort()
+	return _near_found
 
 
 ## Whether `at` stands in the spawn ring round `here` and `spawn_clear_m` clear
@@ -1268,6 +1401,8 @@ func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_shar
 	car.fade = 1.0
 	car.leaving = false
 	car.unseen_s = 0.0
+	car.answered = false
+	car.answer_age_s = 0.0
 	_enter(car)
 	car.speed = car.cruise_mps * cruise_share
 	car.pose = _pose_on_edge(car)
@@ -1734,6 +1869,10 @@ func _stop_along_m(edge: int, along: bool, length_m: float) -> float:
 
 
 func _drive(car: Car, delta: float) -> void:
+	# What its timers count: the tick, and the ticks it drove on its last answer.
+	var since: float = car.answer_age_s + delta
+	car.answer_age_s = 0.0
+	car.answered = true
 	var target: float = minf(car.cruise_mps, profile.turn_mps) if car.turning else car.cruise_mps
 	car.held = Held.NONE
 	var to_stop: float = INF
@@ -1770,12 +1909,12 @@ func _drive(car: Car, delta: float) -> void:
 			target = limit
 			car.held = Held.LIGHT
 	if car.route != null:
-		var at_stop: float = route_fleet.stop_limit(car, delta)
+		var at_stop: float = route_fleet.stop_limit(car, since)
 		if at_stop < target:
 			target = at_stop
 			car.held = Held.DWELL
 	if car.kerb_m < INF or car.kerb_left > 0.0:
-		var at_kerb: float = kerbside.limit(car, delta)
+		var at_kerb: float = kerbside.limit(car, since)
 		if at_kerb < target:
 			target = at_kerb
 			car.held = Held.DWELL
@@ -1807,8 +1946,14 @@ func _drive(car: Car, delta: float) -> void:
 		# Pulling out from behind it at the turning pace, standing or not: a car
 		# that changed lane only with the metres it drove would never leave.
 		# Topped up to the turning pace: `_advance` moves it by what it drove.
-		_change_lane(car, maxf(profile.turn_mps - car.speed, 0.0) * delta)
-	horn.mind(car, target, for_light, delta)
+		_change_lane(car, maxf(profile.turn_mps - car.speed, 0.0) * since)
+	horn.mind(car, target, for_light, since)
+	car.target_mps = target
+	_move(car, target, delta)
+
+
+## Take `car`'s speed toward `target` for a tick and move it on.
+func _move(car: Car, target: float, delta: float) -> void:
 	car.braking = target < car.speed or car.speed < STOPPED_MPS
 	if car.speed < target:
 		car.speed = minf(target, car.speed + profile.accel_mps2 * delta)
@@ -2120,11 +2265,12 @@ func _gap_ahead(car: Car) -> float:
 	var best: float = INF
 	var follow_cos: float = cos(deg_to_rad(profile.follow_heading_deg))
 	var reach: float = profile.look_m + car.half_length + FAR_SLACK_M
-	for other: Car in cars:
+	for id: int in _ids_near(origin, reach + _longest_half_m):
+		var other: Car = cars[id]
 		if other == car or not other.live:
 			continue
-		# Most of the fleet is streets away: refused on one axis, before the
-		# distance is worked out. `FAR_SLACK_M` keeps the test below its answer.
+		# Most of what is left is still streets away: refused on one axis, before
+		# the distance is worked out. `FAR_SLACK_M` keeps the test below its answer.
 		var beyond: float = reach + other.half_length
 		var there: Vector3 = other.pose.origin
 		if absf(there.x - origin.x) > beyond or absf(there.z - origin.z) > beyond:
@@ -2156,8 +2302,14 @@ func _gap_ahead(car: Car) -> float:
 		)
 		best = minf(best, gap)
 	if is_instance_valid(trams):
+		# A tram `_gap_to` would find is within `look_m` ahead and the two
+		# half-widths across: no farther than their sum on either axis.
+		var tram_reach: float = profile.look_m + car.half_width + trams.half_width + FAR_SLACK_M
 		for tram: TramSystem.Tram in trams.trams:
 			if not tram.live:
+				continue
+			var there: Vector3 = tram.pose.origin
+			if absf(there.x - origin.x) > tram_reach or absf(there.z - origin.z) > tram_reach:
 				continue
 			var heading: Vector3 = -tram.pose.basis.z
 			if forward.x * heading.x + forward.z * heading.z < follow_cos:
@@ -2371,7 +2523,6 @@ func _give_way_gap(car: Car) -> float:
 		return INF
 	if _queued_past_join(car) != null:
 		return maxf(to_line, 0.0)
-	var mine: PackedVector3Array = []
 	# Two cars each up to `give_way_look_m` short of their lines, the lines a
 	# junction's width (at most a `look_m`) apart.
 	var near_m: float = profile.give_way_look_m * 2.0 + profile.look_m
@@ -2379,7 +2530,8 @@ func _give_way_gap(car: Car) -> float:
 	var here: Vector3 = car.pose.origin
 	var far_m: float = near_m + FAR_SLACK_M
 	var near_sq: float = near_m * near_m
-	for other: Car in cars:
+	for id: int in _ids_near(here, far_m):
+		var other: Car = cars[id]
 		if other == car or not other.live or other.knocked:
 			continue
 		var there: Vector3 = other.pose.origin
@@ -2393,11 +2545,19 @@ func _give_way_gap(car: Car) -> float:
 			continue
 		if not committed(other) and not _coming_first(car, other):
 			continue
-		if mine.is_empty():
-			mine = _turn_path(car)
+		_turn_path(car)
+		_turn_path(other)
 		var touch_m: float = car.half_width + other.half_width
-		if TrafficTurns.paths_cross(
-			mine, _turn_path(other), touch_m + profile.side_clear_m, touch_m, min_sin
+		if TrafficTurns.plans_cross(
+			car.plan,
+			car.plan_dirs,
+			car.plan_bounds,
+			other.plan,
+			other.plan_dirs,
+			other.plan_bounds,
+			touch_m + profile.side_clear_m,
+			touch_m,
+			min_sin
 		):
 			return maxf(to_line, 0.0)
 	return INF
@@ -2488,6 +2648,7 @@ func _turn_path(car: Car) -> PackedVector3Array:
 		at = _write_curve(car.path, at, [car.p0, car.p1, car.p2], from_u, car.half_length)
 	if ahead:
 		_write_curve(car.path, at, _turn_points(car, car.lane_out), 0.0, car.half_length)
+	car.plan_bounds = TrafficTurns.write_plan(car.path, car.plan, car.plan_dirs)
 	return car.path
 
 

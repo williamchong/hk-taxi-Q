@@ -37,6 +37,11 @@ const HOURS: int = 24
 ## fade out, in seconds (`Q214`).
 @export var fade_in_s: float
 @export var fade_out_s: float
+## A car past `thin_beyond_m` from the camera, in plan metres, and out of its
+## view reads its rules on every `thin_every`th tick and drives on the speed
+## they gave it between (`Q219`); 1 reads every car's every tick.
+@export var thin_every: int
+@export var thin_beyond_m: float
 ## A car cruises at this fraction of its edge's speed limit.
 @export var cruise_of_limit: float
 ## Speed through a junction's turn curve, at most, in m/s.

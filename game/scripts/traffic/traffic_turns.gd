@@ -16,21 +16,43 @@ const CURVE_SAMPLES: int = 8
 static func paths_cross(
 	a: PackedVector3Array, b: PackedVector3Array, reach_m: float, touch_m: float, min_sin: float
 ) -> bool:
-	var a_plan: PackedVector2Array = _plan_points(a)
-	var b_plan: PackedVector2Array = _plan_points(b)
-	var reach: float = maxf(reach_m, touch_m)
-	if not _plan_bounds(a_plan).grow(reach).intersects(_plan_bounds(b_plan)):
+	var a_plan: PackedVector2Array = plan_points(a)
+	var b_plan: PackedVector2Array = plan_points(b)
+	return plans_cross(
+		a_plan,
+		plan_dirs(a_plan),
+		plan_bounds(a_plan),
+		b_plan,
+		plan_dirs(b_plan),
+		plan_bounds(b_plan),
+		reach_m,
+		touch_m,
+		min_sin
+	)
+
+
+## `paths_cross` on two paths already read into plan (`plan_points`, `plan_dirs`,
+## `plan_bounds`): the traffic keeps a car's with its path, read once a tick,
+## where the test is asked of it against every car near its junction.
+static func plans_cross(
+	a_plan: PackedVector2Array,
+	a_dirs: PackedVector2Array,
+	a_bounds: Rect2,
+	b_plan: PackedVector2Array,
+	b_dirs: PackedVector2Array,
+	b_bounds: Rect2,
+	reach_m: float,
+	touch_m: float,
+	min_sin: float
+) -> bool:
+	if not a_bounds.grow(maxf(reach_m, touch_m)).intersects(b_bounds):
 		return false
-	var b_dirs: PackedVector2Array = []
-	b_dirs.resize(b_plan.size() - 1)
-	for j: int in b_dirs.size():
-		b_dirs[j] = (b_plan[j + 1] - b_plan[j]).normalized()
 	for i: int in a_plan.size() - 1:
 		var a0: Vector2 = a_plan[i]
 		var a1: Vector2 = a_plan[i + 1]
 		if a0.is_equal_approx(a1):
 			continue
-		var a_dir: Vector2 = (a1 - a0).normalized()
+		var a_dir: Vector2 = a_dirs[i]
 		for j: int in b_dirs.size():
 			if b_dirs[j] == Vector2.ZERO:
 				continue
@@ -40,7 +62,26 @@ static func paths_cross(
 	return false
 
 
-static func _plan_points(path: PackedVector3Array) -> PackedVector2Array:
+## `path` read into `plan` and `dirs` in place, as `plan_points` and `plan_dirs`
+## make them, and the box round it as `plan_bounds` does: one pass, for a path
+## read afresh every tick. An empty path leaves both empty, which crosses nothing.
+static func write_plan(
+	path: PackedVector3Array, plan: PackedVector2Array, dirs: PackedVector2Array
+) -> Rect2:
+	plan.resize(path.size())
+	dirs.resize(maxi(path.size() - 1, 0))
+	if path.is_empty():
+		return Rect2()
+	plan[0] = Vector2(path[0].x, path[0].z)
+	var bounds := Rect2(plan[0], Vector2.ZERO)
+	for index: int in range(1, path.size()):
+		plan[index] = Vector2(path[index].x, path[index].z)
+		dirs[index - 1] = (plan[index] - plan[index - 1]).normalized()
+		bounds = bounds.expand(plan[index])
+	return bounds
+
+
+static func plan_points(path: PackedVector3Array) -> PackedVector2Array:
 	var plan: PackedVector2Array = []
 	plan.resize(path.size())
 	for index: int in path.size():
@@ -48,7 +89,16 @@ static func _plan_points(path: PackedVector3Array) -> PackedVector2Array:
 	return plan
 
 
-static func _plan_bounds(plan: PackedVector2Array) -> Rect2:
+## Each stretch's direction, zero for one of no length.
+static func plan_dirs(plan: PackedVector2Array) -> PackedVector2Array:
+	var dirs: PackedVector2Array = []
+	dirs.resize(plan.size() - 1)
+	for j: int in dirs.size():
+		dirs[j] = (plan[j + 1] - plan[j]).normalized()
+	return dirs
+
+
+static func plan_bounds(plan: PackedVector2Array) -> Rect2:
 	var bounds := Rect2(plan[0], Vector2.ZERO)
 	for point: Vector2 in plan:
 		bounds = bounds.expand(point)

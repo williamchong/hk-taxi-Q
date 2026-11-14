@@ -21,6 +21,9 @@ static var enabled: bool = false
 static var _usec: PackedInt64Array = PackedInt64Array([0, 0, 0, 0, 0])
 ## Milliseconds by what was booted, in the order each first finished.
 static var _boot_ms: Dictionary[String, float] = {}
+## Microseconds and calls by part of a system's tick (`part`), over the whole run.
+static var _part_usec: Dictionary[String, int] = {}
+static var _part_calls: Dictionary[String, int] = {}
 
 
 ## The clock to hand back to `end` or `boot`; 0 while nothing records.
@@ -49,6 +52,32 @@ static func boot(what: String, began: int) -> void:
 		_boot_ms[what] = _boot_ms.get(what, 0.0) + float(Time.get_ticks_usec() - began) / 1000.0
 
 
+## `what`, a part of some system's tick, ran from `began` to now: which rule or
+## pass a dear tick went on, where a slot says only that it was dear. Summed from
+## the first tick: the seconds the recorder's summary skips are in it.
+static func part(what: String, began: int) -> void:
+	if enabled:
+		_part_usec[what] = _part_usec.get(what, 0) + Time.get_ticks_usec() - began
+		_part_calls[what] = _part_calls.get(what, 0) + 1
+
+
+## The parts, dearest first, one summary line each: the run's total, the calls
+## and the mean of one.
+static func part_lines() -> PackedStringArray:
+	var names: Array[String] = _part_usec.keys()
+	names.sort_custom(func(a: String, b: String) -> bool: return _part_usec[a] > _part_usec[b])
+	var lines := PackedStringArray()
+	for what: String in names:
+		var calls: int = _part_calls[what]
+		lines.append(
+			(
+				"perf: part %s %.1f ms in %d calls, %.2f us each"
+				% [what, float(_part_usec[what]) / 1000.0, calls, float(_part_usec[what]) / calls]
+			)
+		)
+	return lines
+
+
 ## The boot's spans, dearest first, one summary line each.
 static func boot_lines() -> PackedStringArray:
 	var names: Array[String] = _boot_ms.keys()
@@ -64,3 +93,5 @@ static func reset() -> void:
 	enabled = false
 	_usec.fill(0)
 	_boot_ms.clear()
+	_part_usec.clear()
+	_part_calls.clear()

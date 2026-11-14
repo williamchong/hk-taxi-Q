@@ -235,6 +235,7 @@ func _finish() -> void:
 	if _viewport_rid.is_valid():
 		RenderingServer.viewport_set_measure_render_time(_viewport_rid, false)
 	var lines: PackedStringArray = summary_lines()
+	lines.append_array(PerfClock.part_lines())
 	lines.append_array(PerfClock.boot_lines())
 	PerfClock.reset()
 	var summary_path: String = path.get_basename() + "_summary.txt"

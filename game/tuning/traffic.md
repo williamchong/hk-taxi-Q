@@ -76,6 +76,26 @@ a car where none was.
 
 The same run out, for a car leaving in view near the camera's `far`.
 
+## `thin_every = 4`
+
+How often a far car out of view reads its rules (`Q219`): the light, the cars and the tram ahead,
+the junction's give-way, the parked vehicles, its stop. On the three ticks between it drives on
+the speed they last gave it, still moving and still an obstacle to every other car. Four ticks is
+67 ms, a third of a driver's quickest reaction, and the rules plan a stop at `brake_mps2` (3.0)
+while a car may brake at `brake_max_mps2` (8.0), so a late reading is made up inside the margin
+the rules already keep. `verify_traffic`'s last drive runs under a camera and holds the thinned
+cars to every gate; a far car that never read its rules again runs a red there by name.
+`tools/bench_traffic.gd --view=on` (Wan Chai, 2026-11-15): 1.04 ms a tick at 40 cars against 2.51
+with no camera, 5.64 against 13.50 at 160. **1 reads every car's every tick** — the off switch.
+The car's own timers (a dwell, a kerbside stop, the horn's wait) count the ticks it skipped.
+
+## `thin_beyond_m = 60.0`
+
+A car is thinned only past this from the camera, in plan metres, AND out of its frustum (`Q219`):
+anything the player can see, and anything near enough to reach the taxi before its next reading,
+reads every tick. 60 m is `spawn_min_m`, the nearest a car is ever placed, and under the horns'
+`horn_range_m`: a thinned car's horn is at most three ticks late.
+
 ## `cruise_of_limit = 0.8`
 
 40 kph on a 50 kph street: a car that keeps to its limit, under it, so the taxi passes traffic.
