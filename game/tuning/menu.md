@@ -111,9 +111,10 @@ car stays the picture; a sheet takes the whole screen.
 ## `ledger_px`
 
 The 成績表 (`LedgerCard`, `P3-76`), beside REPORT's and PAUSE's column and inside RECORD's sheet. 1120 wide fills
-what the 760 px column leaves on a 1920 canvas. 770 tall holds a full sheet with both optional lines, floor and
-walked: 640 left the total hanging under the panel, which nothing but a frame shows. A row added to
-`SessionTally.BONUSES` needs more height here.
+what the 760 px column leaves on a 1920 canvas. 840 tall holds a full sheet with both optional lines, floor and
+walked: 640 left the total hanging under the panel, which nothing but a frame shows, and 770 held it until the
+books took a title each and the total its taller row (2026-11-15). A row added to `SessionTally.BONUSES` needs more
+height here.
 
 ## `ledger_row_px`
 
@@ -125,10 +126,19 @@ walked: 640 left the total hanging under the panel, which nothing but a frame sh
 The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
 digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.
 
+## `ledger_head_size`
+
+The sheet's ranks of type (`LedgerCard.Rank`; the user's ask 2026-11-15, "need better visual hierarchy in this
+report form"). Every line had been the body's size, so the total read as one more row. Four ranks now, pairs like
+the rest, Chinese second: a column head 17 / 18 under the body's 20 / 22, a block's title 24 / 28 over it, and the
+total 34 / 40, about 1.8 times a row, on a `ledger_total_row_px` 64 row closed by a double rule. The sheet is set in
+the 黑體 since `Q218`, whose even strokes hold at 18 where the Kai's thin ones wanted 20; on a phone every rank takes
+`ledger_stacked_scale`.
+
 ## `ledger_stacked_scale = 1.4`
 
 On a touch screen (`Q206`, the user's pick of one scrolling column over two scrolling columns and tabs) the 成績表
-stacks — bonuses, penalties, bests, sums — in one column the thumb scrolls, with the page's buttons pinned outside
+stacks — sums, bests, bonuses, penalties since 2026-11-15, the total on the scroll's first screen — in one column the thumb scrolls, with the page's buttons pinned outside
 the scroll. Side by side at the desk's 20 px it read about 10 pt on an iPhone Air (20 units × the touch table's
 1.25 × 420 pt / 1080), RECORD's BACK fell under the screen's foot and REPORT's sheet covered the shift's total.
 1.4 makes the body 28 units, ~14 pt there, and the Kai's 24 34; rows and the number columns scale with it so the

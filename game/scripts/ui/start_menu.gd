@@ -580,7 +580,23 @@ func _record() -> Control:
 		"Record", _profile.ledger_px, _profile.ledger_stacked_width_px if stacked else 0
 	)
 	var column: VBoxContainer = panel.get_node(SHEET_COLUMN)
-	_sheet_type(_heading(column, "Heading", _text.say("record", _language)))
+	# The page's name and the best shift on one line, the best on the right
+	# where the sheet's money stands, and the runs under them: three lines of
+	# one size took a third of a phone's glass before the first table.
+	var top := HBoxContainer.new()
+	top.name = "Top"
+	column.add_child(top)
+	_sheet_type(_heading(top, "Heading", _text.say("record", _language)))
+	var best: Label = _note(
+		top,
+		"Best",
+		_text.say("best", _language) + FareFace.money(Settings.best_shift_hkd()),
+		_style.plate_ink
+	)
+	best.size_flags_horizontal = Control.SIZE_SHRINK_END
+	best.size_flags_vertical = Control.SIZE_SHRINK_END
+	best.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_sheet_type(best)
 	var tally: SessionTally = _shown_tally(Settings.lifetime())
 	_sheet_type(
 		_note(
@@ -591,14 +607,6 @@ func _record() -> Control:
 				% [Settings.shifts_finished(), tally.deliveries, tally.bails]
 			),
 			_style.chip_muted
-		)
-	)
-	_sheet_type(
-		_note(
-			column,
-			"Best",
-			_text.say("best", _language) + FareFace.money(Settings.best_shift_hkd()),
-			_style.dial_needle
 		)
 	)
 	_scrolled(column, _ledger(tally))

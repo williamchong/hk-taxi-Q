@@ -13,12 +13,23 @@ extends VBoxContainer
 ## held (`P3-2b`, `Q205`), and the bests a fifth line, the biggest combo's
 ## total. A combo is never money, so the column has no sum.
 ##
+## Four ranks of type, so the eye lands in order (the user's ask 2026-11-15):
+## the total, then a block's title, then its rows, then the column heads. A row
+## nothing happened on is set in the muted ink, never dropped, and the total
+## closes on the books' double rule. Amber is left to the page's heading: a
+## subtotal is restated in the sums, so it is ink. On a phone the sums come
+## first, since the answer was four screens down the scroll.
+##
 ## Every row's name is its `Fare.Skill` key and every value cell is named, so
 ## `verify_menu` reads what the player reads. A row in use or not always shows:
 ## a ledger's lines do not come and go.
 
 ## A value this page has none of yet.
 const NONE: String = "—"
+
+## The ranks of type, smallest first: a column head, a row, a block's title
+## and the total (`_type_px`).
+enum Rank { HEAD, BODY, TITLE, TOTAL }
 
 var _text: MenuText = null
 var _profile: MenuProfile = null
@@ -58,8 +69,15 @@ func build(
 	_table(tables, "Bonus", "sheet_bonus", SessionTally.BONUSES, tally, style.plate_ink, true)
 	_table(tables, "Penalty", "sheet_penalty", SessionTally.PENALTIES, tally, style.accent_negative)
 	var books: BoxContainer = _pair_of_columns("Books")
-	_bests(books, tally)
-	_sums(books, tally)
+	if _stacked:
+		# The answer first in the phone's column, then the bests, then what made
+		# them: under the tables the total was four screens down the scroll.
+		_sums(books, tally)
+		_bests(books, tally)
+		move_child(books, 0)
+	else:
+		_bests(books, tally)
+		_sums(books, tally)
 
 
 ## Two blocks side by side, or one over the other in the phone's column (`Q206`):
@@ -90,78 +108,74 @@ func _table(
 	combo: bool = false
 ) -> void:
 	var column: VBoxContainer = _block(parent, node_name)
-	var head: HBoxContainer = _line_of(
-		column,
-		"Head",
-		_text.say(title_key, _language),
-		ink,
+	var head: HBoxContainer = _title(column, title_key, ink)
+	_cell(
+		head,
+		"Count",
 		_text.say("sheet_count", _language),
-		"HK$",
-		_style.chip_muted
+		_style.chip_muted,
+		_px(_profile.ledger_count_px),
+		Rank.HEAD
 	)
+	_cell(head, "Money", "HK$", _style.chip_muted, _px(_profile.ledger_money_px), Rank.HEAD)
 	if combo:
 		_cell(
 			head,
 			"Combo",
 			_text.say("sheet_combo", _language),
 			_style.chip_muted,
-			_px(_profile.ledger_count_px)
+			_px(_profile.ledger_count_px),
+			Rank.HEAD
 		)
 	_rule(column)
 	var count: int = 0
 	var sum: float = 0.0
 	for skill: Fare.Skill in skills:
 		var row: HBoxContainer = _row(column, ExamSheet.key_of(skill))
-		_cell(row, "Name", ExamSheet.shared().item_name(skill, _language), _style.plate_ink)
+		var live: bool = tally.counts[skill] > 0
+		var row_ink: Color = _ink_of(live, _style.plate_ink)
+		_cell(row, "Name", ExamSheet.shared().item_name(skill, _language), row_ink)
+		_cell(row, "Count", str(tally.counts[skill]), row_ink, _px(_profile.ledger_count_px))
 		_cell(
-			row, "Count", str(tally.counts[skill]), _style.plate_ink, _px(_profile.ledger_count_px)
+			row,
+			"Money",
+			signed(tally.banked[skill]),
+			_ink_of(live, ink),
+			_px(_profile.ledger_money_px)
 		)
-		_cell(row, "Money", signed(tally.banked[skill]), ink, _px(_profile.ledger_money_px))
 		if combo:
 			_cell(
-				row,
-				"Combo",
-				times(tally.combo_best[skill]),
-				_style.plate_ink,
-				_px(_profile.ledger_count_px)
+				row, "Combo", times(tally.combo_best[skill]), row_ink, _px(_profile.ledger_count_px)
 			)
 		count += tally.counts[skill]
 		sum += tally.banked[skill]
 	_rule(column)
-	var subtotal: HBoxContainer = _line_of(
-		column,
-		"Subtotal",
-		_text.say("sheet_subtotal", _language),
-		_style.dial_needle,
-		str(count),
-		signed(sum),
-		_style.dial_needle
+	# The label muted and the numbers in the table's ink: the sums restate it.
+	var subtotal: HBoxContainer = _row(column, "Subtotal")
+	_cell(subtotal, "Name", _text.say("sheet_subtotal", _language), _style.chip_muted)
+	var any: bool = count > 0
+	_cell(
+		subtotal, "Count", str(count), _ink_of(any, _style.plate_ink), _px(_profile.ledger_count_px)
 	)
+	_cell(subtotal, "Money", signed(sum), _ink_of(any, ink), _px(_profile.ledger_money_px))
 	if combo:
 		# No sum: a combo is a count of one run, and the best total is a best.
-		_cell(subtotal, "Combo", "", _style.dial_needle, _px(_profile.ledger_count_px))
+		_cell(subtotal, "Combo", "", ink, _px(_profile.ledger_count_px))
 
 
-## A row of the table's own three columns: a name, then a count and money.
-func _line_of(
-	parent: Control,
-	node_name: String,
-	label: String,
-	ink: Color,
-	count: String,
-	money: String,
-	number_ink: Color
-) -> HBoxContainer:
-	var row: HBoxContainer = _row(parent, node_name)
-	_cell(row, "Name", label, ink)
-	_cell(row, "Count", count, number_ink, _px(_profile.ledger_count_px))
-	_cell(row, "Money", money, number_ink, _px(_profile.ledger_money_px))
+## A block's first row, its title a rank over the rows, and the rule under it
+## left to the caller: a table sets its column heads beside the title first.
+func _title(column: Control, key: String, ink: Color) -> HBoxContainer:
+	var row: HBoxContainer = _row(column, "Head")
+	_cell(row, "Name", _text.say(key, _language), ink, 0, Rank.TITLE)
 	return row
 
 
 ## The bests, left under the bonuses: four of the drive and the biggest combo.
 func _bests(parent: Control, tally: SessionTally) -> void:
 	var column: VBoxContainer = _block(parent, "Bests")
+	_title(column, "sheet_bests", _style.plate_ink)
+	_rule(column)
 	var ink: Color = _style.plate_ink
 	var slide: float = tally.longest_slide_s
 	var flight: float = tally.longest_flight_s
@@ -183,6 +197,8 @@ func _bests(parent: Control, tally: SessionTally) -> void:
 ## because it is in no line above it.
 func _sums(parent: Control, tally: SessionTally) -> void:
 	var column: VBoxContainer = _block(parent, "Sums")
+	_title(column, "sheet_sums", _style.plate_ink)
+	_rule(column)
 	var ink: Color = _style.plate_ink
 	_pair(column, "Meter", "sheet_meter", signed(tally.meter_hkd), ink)
 	_pair(column, "Time", "sheet_time", signed(tally.time_hkd), ink)
@@ -191,10 +207,35 @@ func _sums(parent: Control, tally: SessionTally) -> void:
 	if tally.floored_hkd > 0.0:
 		_pair(column, "Floored", "sheet_floored", signed(tally.floored_hkd), ink)
 	_rule(column)
-	_pair(column, "Total", "sheet_total", FareFace.money(tally.total_hkd()), _style.accent)
+	# The line the sheet is for: a taller row, its label a title and its number
+	# the largest type on the page, closed by the books' double rule.
+	var total: HBoxContainer = _pair(
+		column,
+		"Total",
+		"sheet_total",
+		FareFace.money(tally.total_hkd()),
+		_style.accent,
+		Rank.TITLE,
+		Rank.TOTAL
+	)
+	total.custom_minimum_size.y = _px(_profile.ledger_total_row_px)
+	_rule(column)
+	var gap := Control.new()
+	gap.name = "RuleGap"
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size.y = _profile.ledger_rule_px
+	column.add_child(gap)
+	_rule(column)
 	if tally.forfeited_hkd > 0.0:
+		# A footnote: it is in no line above, and it is not the player's money.
 		_pair(
-			column, "Walked", "sheet_walked", FareFace.money(tally.forfeited_hkd), _style.chip_muted
+			column,
+			"Walked",
+			"sheet_walked",
+			FareFace.money(tally.forfeited_hkd),
+			_style.chip_muted,
+			Rank.HEAD,
+			Rank.HEAD
 		)
 
 
@@ -215,25 +256,47 @@ func _row(parent: Control, node_name: String) -> HBoxContainer:
 	return row
 
 
-## A label and a value on one row.
-func _pair(parent: Control, node_name: String, key: String, value: String, ink: Color) -> void:
+## A label and a value on one row, each at its rank; a value there is none of
+## is muted with its label.
+func _pair(
+	parent: Control,
+	node_name: String,
+	key: String,
+	value: String,
+	ink: Color,
+	name_rank: Rank = Rank.BODY,
+	value_rank: Rank = Rank.BODY
+) -> HBoxContainer:
 	var row: HBoxContainer = _row(parent, node_name)
-	_cell(row, "Name", _text.say(key, _language), ink)
-	_cell(row, "Value", value, ink, _px(_profile.ledger_money_px))
+	var row_ink: Color = _ink_of(value != NONE, ink)
+	_cell(row, "Name", _text.say(key, _language), row_ink, 0, name_rank)
+	_cell(row, "Value", value, row_ink, _px(_profile.ledger_money_px), value_rank)
+	return row
+
+
+## `ink`, or the muted ink on a line nothing happened on: the line stays.
+func _ink_of(live: bool, ink: Color) -> Color:
+	return ink if live else _style.chip_muted
 
 
 ## One cell: with no `width_px` it takes the row's slack on the left, else a
 ## right-aligned number in its own column, so a table's digits stand in line.
-func _cell(row: Control, node_name: String, said: String, ink: Color, width_px: int = 0) -> void:
+## Set at `rank`'s size.
+func _cell(
+	row: Control,
+	node_name: String,
+	said: String,
+	ink: Color,
+	width_px: int = 0,
+	rank: Rank = Rank.BODY
+) -> void:
 	var label := Label.new()
 	label.name = node_name
 	label.text = said
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_color_override(&"font_color", ink)
-	label.add_theme_font_size_override(
-		&"font_size", _px(Locale.pick(_profile.body_size_zh, _profile.body_size, _language))
-	)
+	label.add_theme_font_size_override(&"font_size", _px(_type_px(rank)))
 	if _language == Locale.CHINESE and _font_zh != null:
 		label.add_theme_font_override(&"font", _font_zh)
 	if width_px > 0:
@@ -242,6 +305,18 @@ func _cell(row: Control, node_name: String, said: String, ink: Color, width_px: 
 	else:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_style.shade(label))
+
+
+## `rank`'s size in the sheet's language, at the desk's scale.
+func _type_px(rank: Rank) -> int:
+	match rank:
+		Rank.HEAD:
+			return Locale.pick(_profile.ledger_head_size_zh, _profile.ledger_head_size, _language)
+		Rank.TITLE:
+			return Locale.pick(_profile.ledger_title_size_zh, _profile.ledger_title_size, _language)
+		Rank.TOTAL:
+			return Locale.pick(_profile.ledger_total_size_zh, _profile.ledger_total_size, _language)
+	return Locale.pick(_profile.body_size_zh, _profile.body_size, _language)
 
 
 ## `px` at this sheet's scale.

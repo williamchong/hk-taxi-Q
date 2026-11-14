@@ -210,6 +210,14 @@
       "en": "BEST COMBO",
       "zh": "最佳車手"
     },
+    "sheet_bests": {
+      "en": "BESTS",
+      "zh": "最佳紀錄"
+    },
+    "sheet_sums": {
+      "en": "TAKINGS",
+      "zh": "收入"
+    },
     "sheet_combo": {
       "en": "MAX",
       "zh": "車手"

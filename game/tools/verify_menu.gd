@@ -84,6 +84,8 @@ const KEYS: PackedStringArray = [
 	"sheet_best_pass",
 	"sheet_best_speed",
 	"sheet_best_combo",
+	"sheet_bests",
+	"sheet_sums",
 	"sheet_combo",
 	"sheet_save",
 	"sheet_saved",
@@ -152,6 +154,13 @@ const POSITIVE: PackedStringArray = [
 	"ledger_money_px",
 	"ledger_gutter_px",
 	"ledger_gap_px",
+	"ledger_head_size",
+	"ledger_head_size_zh",
+	"ledger_title_size",
+	"ledger_title_size_zh",
+	"ledger_total_size",
+	"ledger_total_size_zh",
+	"ledger_total_row_px",
 	"ledger_stacked_scale",
 	"ledger_stacked_width_px",
 	"sheet_image_scale",
@@ -392,6 +401,14 @@ func _check_stacked() -> void:
 		"stacked",
 		"the stacked total reads the books' sum"
 	)
+	_expect(
+		(
+			card.get_node("Books").get_index() < card.get_node("Tables").get_index()
+			and card.get_node("Books/Sums").get_index() < card.get_node("Books/Bests").get_index()
+		),
+		"stacked",
+		"a phone reads the sums first: the total is on the scroll's first screen"
+	)
 	var column: Control = report._pages[StartMenuScript.Page.REPORT]
 	_expect(
 		ledger.get_global_rect().position.x >= column.get_global_rect().end.x,
@@ -496,6 +513,28 @@ func _check_sheet() -> void:
 		"sheet",
 		"the best combo's total reads as a multiplier"
 	)
+	var total_px: int = _type_px(card.get_node("Books/Sums/Total/Value"))
+	var title_px: int = _type_px(card.get_node("Books/Sums/Head/Name"))
+	var row_px: int = _type_px(card.get_node("Tables/Bonus/drift/Name"))
+	var head_px: int = _type_px(card.get_node("Tables/Bonus/Head/Count"))
+	_expect(
+		total_px > title_px and title_px > row_px and row_px > head_px,
+		"sheet",
+		(
+			"four ranks of type: the total over a title over a row over a head (%d, %d, %d, %d)"
+			% [total_px, title_px, row_px, head_px]
+		)
+	)
+	_expect(
+		_ink(card.get_node("Tables/Bonus/drift/Name")).is_equal_approx(report._style.plate_ink),
+		"sheet",
+		"a row something happened on is in the sheet's ink"
+	)
+	_expect(
+		card.get_node("Tables").get_index() < card.get_node("Books").get_index(),
+		"sheet",
+		"at a desk the tables stand over the books"
+	)
 	_expect(
 		card.get_node_or_null("Tables/Penalty/crash/Combo") == null,
 		"sheet",
@@ -525,6 +564,20 @@ func _check_sheet() -> void:
 		"sheet",
 		"an empty run has no best, no floor line and no loss line"
 	)
+	_expect(
+		(
+			_ink(empty.get_node("Tables/Bonus/drift/Name")).is_equal_approx(fresh._style.chip_muted)
+			and (_ink(empty.get_node("Tables/Penalty/crash/Money")).is_equal_approx(
+				fresh._style.chip_muted
+			))
+			and _ink(empty.get_node("Books/Bests/Slide/Value")).is_equal_approx(
+				fresh._style.chip_muted
+			)
+			and empty.get_node_or_null("Tables/Bonus/drift") != null
+		),
+		"sheet",
+		"a row nothing happened on stays on the sheet, muted"
+	)
 	_expect(fresh._pages.has(StartMenuScript.Page.RECORD), "sheet", "RECORD is a page off HOME")
 	var record: Control = fresh._pages[StartMenuScript.Page.RECORD]
 	# Shown, so its containers have laid it out: the picture is sized off it.
@@ -541,7 +594,7 @@ func _check_sheet() -> void:
 	_expect(
 		(
 			staged.get_node_or_null("Pad/Column/Foot") == null
-			and staged.get_node_or_null("Pad/Column/Heading") != null
+			and staged.get_node_or_null("Pad/Column/Top/Heading") != null
 			and (
 				staged.size_2d_override.y
 				< (record_column as Control).size.y + 2 * fresh._profile.credits_pad_px
@@ -599,6 +652,14 @@ func _check_sheet() -> void:
 		for index: int in said.length():
 			if said.unicode_at(index) > 0x2FFF and not kai.has_char(said.unicode_at(index)):
 				_fail("sheet", "the Kai has no '%s' for %s" % [said[index], key])
+
+
+func _type_px(label: Node) -> int:
+	return (label as Label).get_theme_font_size(&"font_size")
+
+
+func _ink(label: Node) -> Color:
+	return (label as Label).get_theme_color(&"font_color")
 
 
 ## A free drive's REPORT (the user's ask): its name for the heading, the time

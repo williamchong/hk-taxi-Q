@@ -50,6 +50,15 @@ const PATH: String = "res://tuning/menu.tres"
 @export var ledger_money_px: int
 @export var ledger_gutter_px: int
 @export var ledger_gap_px: int
+## The sheet's ranks of type beside the body's (`LedgerCard.Rank`): a column
+## head under it, a block's title and the total over it, and the total's row.
+@export var ledger_head_size: int
+@export var ledger_head_size_zh: int
+@export var ledger_title_size: int
+@export var ledger_title_size_zh: int
+@export var ledger_total_size: int
+@export var ledger_total_size_zh: int
+@export var ledger_total_row_px: int
 ## On a touch screen (`Q206`) the 成績表 is one column the thumb scrolls: its
 ## type, rows and number columns this many times the desk's, and RECORD's sheet
 ## this wide (REPORT's and PAUSE's take what the page's column leaves).
