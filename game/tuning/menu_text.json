@@ -78,6 +78,22 @@
       "en": "ALWAYS DAY",
       "zh": "全日白晝"
     },
+    "sound": {
+      "en": "SOUND",
+      "zh": "聲音"
+    },
+    "sound_on": {
+      "en": "ON",
+      "zh": "開"
+    },
+    "sound_off": {
+      "en": "OFF",
+      "zh": "關"
+    },
+    "volume": {
+      "en": "VOLUME %d%%",
+      "zh": "音量 %d%%"
+    },
     "guide": {
       "en": "HOW TO PLAY",
       "zh": "玩法"

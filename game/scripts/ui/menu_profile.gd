@@ -34,6 +34,10 @@ const PATH: String = "res://tuning/menu.tres"
 @export var margin_px: Vector2
 @export var button_px: Vector2
 @export var button_gap_px: int
+## The volume slider on OPTIONS: a notch of its travel, 0 to 1, and its
+## track's thickness. It is a choice's size, `button_px`.
+@export var volume_step: float
+@export var volume_track_px: int
 ## The credits panel, centred, and the padding inside its keyline.
 @export var credits_px: Vector2
 @export var credits_pad_px: int

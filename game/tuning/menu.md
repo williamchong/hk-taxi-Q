@@ -72,6 +72,19 @@ the orbit frames about the centre — clear of the text, and it is the corner th
 its menu in. `button_px` 420 × 72 is a thumb-sized target with room for 鳴謝及授權 at the Kai's
 32 px; `button_gap_px` 14 is under a button's quarter so the column reads as one control.
 
+## `volume_step = 0.05`
+
+The volume slider on OPTIONS (`Q221`, the user's ask of 2026-11-16), under the sound's ON / OFF. It
+is a choice's size, `button_px`, so a thumb takes the whole 72-unit row and not the line; a notch
+is a twentieth of the travel, twenty presses of left or right from full to nothing on a pad, and
+each one a step the ear can tell. `volume_track_px` 6 is the line drawn: the muted ink, what is
+filled in the dial's amber like a current choice, and the lighter ink under the pointer or the
+focus. The level heard is the travel squared (`Settings.level_db`), so half way is −12 dB.
+
+⚠️ The column on a handset now runs from the foot to the top bracket (frame, 2026-11-16,
+`build/driver/sound_touch`): a fourth option does not fit under it without a scroll or a second
+column.
+
 ## `credits_px = Vector2(1100, 760)`
 
 The credits panel, centred: wide enough for the data credit's English to run six lines at 20 px

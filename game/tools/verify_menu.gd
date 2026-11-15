@@ -100,6 +100,10 @@ const KEYS: PackedStringArray = [
 	"time",
 	"time_cycle",
 	"time_day",
+	"sound",
+	"sound_on",
+	"sound_off",
+	"volume",
 	"notices",
 	"notices_title",
 	"notices_lead",
@@ -147,6 +151,8 @@ const REQUIRED: Dictionary = {
 const POSITIVE: PackedStringArray = [
 	"shot_response",
 	"button_gap_px",
+	"volume_step",
+	"volume_track_px",
 	"credits_pad_px",
 	"ledger_row_px",
 	"ledger_rule_px",
@@ -249,11 +255,87 @@ func _check_pause() -> void:
 		"the key that paused resumes, and the menu leaves"
 	)
 	paused = false
+	await _check_options()
 	await _check_sheet()
 	await _check_stacked()
 	await _check_loading()
 	await _check_warmup()
 	_finish("verify_menu")
+
+
+## The sound on OPTIONS: the slider is heard and saved as it moves with its
+## line renamed, the bottom of its travel is silence, and OFF mutes the bus
+## whatever the slider says. On the check's own file, like `_check_settings`.
+func _check_options() -> void:
+	_forget_settings_file()
+	SettingsScript.use_file(SETTINGS_PATH)
+	var master: int = AudioServer.get_bus_index(SettingsScript.MASTER_BUS)
+	var menu := StartMenuScript.new()
+	root.add_child(menu)
+	await process_frame
+	var page: Control = menu._pages.get(StartMenuScript.Page.OPTIONS)
+	var slider: HSlider = page.get_node_or_null("VolumeSlider")
+	_expect(slider != null, "options", "OPTIONS carries the volume slider")
+	if slider != null:
+		_expect(
+			slider.value == 1.0 and slider.step == menu._profile.volume_step,
+			"options",
+			"the slider stands at the saved level on the table's notch"
+		)
+		slider.value = 0.5
+		_expect(
+			(
+				SettingsScript.volume() == 0.5
+				and is_equal_approx(
+					AudioServer.get_bus_volume_db(master), SettingsScript.level_db(0.5)
+				)
+				and not AudioServer.is_bus_mute(master)
+			),
+			"options",
+			"the slider at half is saved and heard: %.1f dB" % AudioServer.get_bus_volume_db(master)
+		)
+		_expect(
+			"50" in (page.get_node("Volume") as Label).text,
+			"options",
+			"the line over the slider reads 50%"
+		)
+		slider.value = 0.0
+		_expect(AudioServer.is_bus_mute(master), "options", "the slider at nothing is silence")
+		slider.value = 0.5
+		_expect(
+			not AudioServer.is_bus_mute(master),
+			"options",
+			"raised from nothing, the bus sounds again"
+		)
+		(page.get_node("Sounds/Off/Button") as Button).pressed.emit()
+		_expect(
+			not SettingsScript.sound_on() and AudioServer.is_bus_mute(master),
+			"options",
+			"OFF is saved and mutes the bus"
+		)
+		# The press rebuilt the page: the marker moved, and ON is the choice left.
+		await process_frame
+		page = menu._pages.get(StartMenuScript.Page.OPTIONS)
+		_expect(
+			(
+				(page.get_node("Sounds/Off/Button") as Button).disabled
+				and (page.get_node("VolumeSlider") as HSlider).value == 0.5
+			),
+			"options",
+			"the rebuilt page marks OFF and keeps the slider's level"
+		)
+		(page.get_node("Sounds/On/Button") as Button).pressed.emit()
+		_expect(
+			SettingsScript.sound_on() and not AudioServer.is_bus_mute(master),
+			"options",
+			"ON sounds again at the slider's level"
+		)
+		await process_frame
+	menu.queue_free()
+	_forget_settings_file()
+	SettingsScript.use_file(SettingsScript.PATH)
+	AudioServer.set_bus_mute(master, false)
+	AudioServer.set_bus_volume_db(master, 0.0)
 
 
 ## The boot splash (`Q209`): the taxi standing still, on the cover's own field,
@@ -869,6 +951,36 @@ func _check_settings() -> void:
 
 	# Free mode keeps the daylight until the option says otherwise (`Q162`).
 	_expect(not SettingsScript.day_cycle(), "settings", "free mode's day cycle is off unsaved")
+	# The sound: on and full until the options say otherwise, and a level off
+	# the slider's ends is held to them.
+	_expect(
+		SettingsScript.sound_on() and SettingsScript.volume() == 1.0,
+		"settings",
+		"the sound is on and full unsaved"
+	)
+	# Written past `set_volume`, as a hand's edit of the file would be: the
+	# read holds the level, whatever the file says.
+	var edited: Array[bool] = []
+	for raw: float in [1.7, -0.3]:
+		var hand := ConfigFile.new()
+		hand.load(SETTINGS_PATH)
+		hand.set_value(SettingsScript.SECTION, SettingsScript.KEY_VOLUME, raw)
+		hand.save(SETTINGS_PATH)
+		SettingsScript.use_file(SETTINGS_PATH)
+		edited.append(SettingsScript.volume() == clampf(raw, 0.0, 1.0))
+	_expect(
+		edited == [true, true], "settings", "a level edited off the slider's ends reads its end"
+	)
+	SettingsScript.set_sound_on(false)
+	SettingsScript.set_volume(0.5)
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		not SettingsScript.sound_on() and SettingsScript.volume() == 0.5,
+		"settings",
+		"the sound off at half reads so after a restart"
+	)
+	SettingsScript.set_sound_on(true)
+	SettingsScript.set_volume(1.0)
 	# 特更's best: only a higher total is a record, and it survives a restart.
 	_expect(SettingsScript.best_shift_hkd() == 0.0, "records", "no best with nothing saved")
 	_expect(SettingsScript.record_shift(120.5), "records", "a first shift is a record")

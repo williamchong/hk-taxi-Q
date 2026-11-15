@@ -334,8 +334,9 @@ func _play() -> Control:
 	return column
 
 
-## One option, the language: a pair of choices side by side with the current
-## one marked, and the way back.
+## The options — the language, free mode's hour, the sound: each a pair of
+## choices side by side with the current one marked, the sound's volume a
+## slider under its pair, and the way back.
 func _options() -> Control:
 	var column: VBoxContainer = _column("Options")
 	var heading: Label = _line("Heading", _text.say("language", _language))
@@ -369,6 +370,23 @@ func _options() -> Control:
 	_mark_current(cycle, cycling)
 	_mark_current(day, not cycling)
 
+	# The sound (the user's ask, 2026-11-16): on or off, and how loud. The
+	# Master bus, so every voice follows.
+	column.add_child(_gap("GapSound", _profile.button_gap_px))
+	var sound_heading: Label = _line("SoundHeading", _text.say("sound", _language))
+	_size(sound_heading, _profile.heading_size_zh, _profile.heading_size, _brush())
+	column.add_child(sound_heading)
+	var sounds := HBoxContainer.new()
+	sounds.name = "Sounds"
+	sounds.add_theme_constant_override(&"separation", _profile.button_gap_px)
+	column.add_child(sounds)
+	var sounding: bool = Settings.sound_on()
+	var sound_on: Button = _button(sounds, "On", "sound_on", _pick_sound.bind(true))
+	var sound_off: Button = _button(sounds, "Off", "sound_off", _pick_sound.bind(false))
+	_mark_current(sound_on, sounding)
+	_mark_current(sound_off, not sounding)
+	_volume(column)
+
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "Back", "back", _show.bind(Page.HOME))
 	return column
@@ -383,6 +401,60 @@ func _pick_time(cycle: bool) -> void:
 	if not Cmdline.value(DayClock.CYCLE_ARG).is_empty():
 		push_warning("menu: --day-cycle= pins the hour this run; the choice is saved for the next")
 	_relabel.call_deferred()
+
+
+## Save the sound's switch, set the bus and redraw the page so the marker
+## moves.
+func _pick_sound(on: bool) -> void:
+	if on == Settings.sound_on():
+		return
+	Settings.set_sound_on(on)
+	Settings.apply_sound()
+	_relabel.call_deferred()
+
+
+## How loud, under `column`: the level named over a slider a choice's size, so
+## a thumb takes it. The track is the muted ink, what is filled the dial's
+## amber like a current choice, and the lighter ink under the pointer or the
+## focus, where left and right move it a notch.
+func _volume(column: VBoxContainer) -> void:
+	var level: Label = _note(column, "Volume", _volume_text(Settings.volume()), _style.chip_muted)
+	var slider := HSlider.new()
+	slider.name = "VolumeSlider"
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = _profile.volume_step
+	slider.value = Settings.volume()
+	slider.custom_minimum_size = _profile.button_px
+	slider.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	slider.add_theme_stylebox_override(&"slider", _track(_style.chip_muted))
+	slider.add_theme_stylebox_override(&"grabber_area", _track(_style.dial_needle))
+	slider.add_theme_stylebox_override(&"grabber_area_highlight", _track(_style.chip_ink))
+	# Hover IS focus, as on a choice.
+	slider.mouse_entered.connect(slider.grab_focus)
+	slider.value_changed.connect(_on_volume.bind(level))
+	column.add_child(slider)
+
+
+## A length of the slider's track in `ink`.
+func _track(ink: Color) -> StyleBoxFlat:
+	var track := StyleBoxFlat.new()
+	track.bg_color = ink
+	track.content_margin_top = _profile.volume_track_px / 2.0
+	track.content_margin_bottom = _profile.volume_track_px / 2.0
+	return track
+
+
+## The slider moved: saved and heard at once, and the line over it renamed. No
+## rebuild — the slider under the thumb is under the root a rebuild frees.
+func _on_volume(value: float, level: Label) -> void:
+	Settings.set_volume(value)
+	Settings.apply_sound()
+	level.text = _volume_text(value)
+
+
+func _volume_text(level: float) -> String:
+	return _text.say("volume", _language) % roundi(level * 100.0)
 
 
 ## The credits, centred, scrolling: the data's owners, the typeface, the

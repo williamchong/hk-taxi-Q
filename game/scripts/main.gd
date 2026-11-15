@@ -48,6 +48,8 @@ var _pause_menu: StartMenu = null
 
 
 func _ready() -> void:
+	# The saved sound options, before anything plays.
+	Settings.apply_sound()
 	# After `World` and `GUI` have readied: children ready first, so the level
 	# has placed its car and the HUD has built its plate before this runs.
 	if hud == null:

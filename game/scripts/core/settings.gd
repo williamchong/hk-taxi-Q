@@ -12,6 +12,10 @@ const PATH: String = "user://settings.cfg"
 const SECTION: String = "options"
 const KEY_LANGUAGE: String = "language"
 const KEY_DAY_CYCLE: String = "day_cycle"
+const KEY_SOUND: String = "sound"
+const KEY_VOLUME: String = "volume"
+## The bus the sound options act on: every other bus sends to it.
+const MASTER_BUS: StringName = &"Master"
 ## What the player has done, beside what they chose: the best shift's total.
 const RECORDS: String = "records"
 const KEY_SHIFT_BEST: String = "shift_best_hkd"
@@ -48,6 +52,44 @@ static func day_cycle() -> bool:
 
 static func set_day_cycle(on: bool) -> void:
 	_write(KEY_DAY_CYCLE, on)
+
+
+## Whether the game sounds at all (the user's ask, 2026-11-16). On where none
+## was ever saved.
+static func sound_on() -> bool:
+	return bool(_read().get_value(SECTION, KEY_SOUND, true))
+
+
+static func set_sound_on(on: bool) -> void:
+	_write(KEY_SOUND, on)
+
+
+## How loud, 0 to 1 along the slider; full where none was ever saved. Clamped
+## on the read, so a file edited by hand cannot boost the bus.
+static func volume() -> float:
+	return clampf(float(_read().get_value(SECTION, KEY_VOLUME, 1.0)), 0.0, 1.0)
+
+
+static func set_volume(level: float) -> void:
+	_write(KEY_VOLUME, clampf(level, 0.0, 1.0))
+
+
+## The Master bus set to the saved sound options: `Main` at boot, the options
+## menu on a change. Off, or a slider at nothing, mutes the bus — nothing in
+## dB says silence.
+static func apply_sound() -> void:
+	var level: float = volume()
+	var bus: int = AudioServer.get_bus_index(MASTER_BUS)
+	AudioServer.set_bus_mute(bus, not sound_on() or level <= 0.0)
+	if level > 0.0:
+		AudioServer.set_bus_volume_db(bus, level_db(level))
+
+
+## The bus's gain for a slider at `level`: the amplitude is the travel squared,
+## since loudness is heard by ratio and a slider straight on the amplitude does
+## all its work in its bottom fifth. Half way is -12 dB.
+static func level_db(level: float) -> float:
+	return linear_to_db(level * level)
 
 
 ## The best shift's total in HK$ (`Q162`), 0 before the first.
