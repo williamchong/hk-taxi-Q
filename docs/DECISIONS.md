@@ -13666,3 +13666,41 @@ of the travel at 2.0), and whether `Q210`'s full-lock swing at 110 kph still hap
 
 **See.** `Q210` · `Q204` · `Q83` · `Q97` · `Q174` · `game/tuning/touch.md` ·
 `game/scripts/input/touch_profile.gd`
+
+## `Q221` — The sound is an option: on or off, and a volume slider, on the Master bus
+
+**Asked.** The user, 2026-11-16: "add mute/unmute and volume slider in option".
+
+**Built.** OPTIONS takes a third block, 聲音 / SOUND: 開 / 關 (ON / OFF) as a marked pair like the
+language and the hour, and under it 音量 / VOLUME with its percentage over an `HSlider` a choice's
+size. `Settings` saves `sound` and `volume` beside the language (`user://settings.cfg`), on and
+full where nothing was saved, and `Settings.apply_sound` sets the Master bus — `Main` at boot, the
+menu on a change. The slider is heard as it moves and never rebuilds the page.
+
+**Decided.**
+
+- **The Master bus, one slider.** `SFX`, `Engine` and `Cabin` all send to it, and their balance is
+  `taxi_audio.tres`'s, set against a drive (`Q185`). A slider per bus is a mixer the player would
+  have to undo that balance with; there is no music to want one for.
+- **The level is the travel squared** (`Settings.level_db`): half way is −12 dB. Straight on the
+  amplitude a slider does all its work in its bottom fifth. In code beside the read, not a table:
+  it is what a slider's position means, not a level tuned by ear.
+- **Off, or a slider at nothing, mutes the bus**; the two are saved apart, so ON comes back at the
+  level the slider was left on.
+- **No dev flag over it**, unlike the language: no frame reads the bus, so a scripted run is the
+  same run with the machine's saved sound.
+- **Not on PAUSE.** The pause offers no OPTIONS because a language is a new HUD (`Q165`). The
+  sound has no such cost and could stand there alone; not built, not asked.
+- **Two characters recut into the subsets** (音, 量; `tools/make_fonts.py` from the pinned
+  sources): the 黑體 and the brush, the title's Bold untouched.
+
+**Checked.** `verify_menu`: the saved defaults, the clamp and the restart under `settings:`, and
+nine `options:` lines on a built page — the slider at half saved and heard at −12.0 dB, its line
+reading 50%, nothing is silence, OFF mutes whatever the slider says, the rebuilt page keeps the
+level. `pytest tests/test_fonts.py`. Frames `build/driver/sound_{zh,en,touch}`.
+
+**Owed.** The user's ears and a drag on a handset: the grabber drawn is the theme's small dot, and
+the column there reaches the top bracket.
+
+**See.** `Q146` · `Q165` · `Q185` · `Q218` · `game/tuning/menu.md` ·
+`game/scripts/core/settings.gd`
