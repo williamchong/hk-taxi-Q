@@ -40,8 +40,11 @@ just under the goal box (y 116), with no housing behind them, and the meter's
 tick and the NO ENTRY sign follow down the same column. A countdown is what an
 arcade racer puts there, and it is only up while a fare runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
 fades; nothing else joins them but the style combo's live line, which shares
-the tick's row (`Q212`, the user's call): the skill that joined, small, beside
-車手 ×N and the gap's bar. A tick or a delivery takes the row back for its flash.
+the tick's row (`Q212`, the user's call): 車手 ×N and the gap's bar on top, and
+the skill that joined, small, in a row of its own below (2026-11-16). The stack
+hangs from the rect's top and the skill's row runs ~30 px under it, so the
+touch table's `tick` is y 338, not 368: on a handset the row below is the
+taxi's roof sign. A tick or a delivery takes the row back for its flash.
 
 ⚠️ THE TICK IS 800 WIDE, not 300 (`P3-76`, `Q169`): a skill flashes its item
 off the driving test's fault sheet, and "−HK$5.0 touching an object

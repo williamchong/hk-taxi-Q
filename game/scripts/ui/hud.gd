@@ -540,28 +540,25 @@ func _build() -> void:
 	#
 	# The live line where the skill flashed (the user's call, reversing
 	# `Q138`'s "nothing in the middle" for this one line): what is happening
-	# now goes where the eye already is, one row deep so it stays off the
-	# taxi on a handset. The skill small in the chip's ink, the total in the
-	# gain's green and the gap's bar under the total alone.
+	# now goes where the eye already is. The total on top in the gain's green
+	# with the gap's bar under it, and the skill that joined in a row of its
+	# own below, small in the chip's ink (the user's call, 2026-11-16). The
+	# stack hangs from the row's top, so the total stays in the tick's row
+	# and only the skill runs under it.
 	var sub_size: int = _sized(_style.callout_sub_size_zh, _style.callout_sub_size)
 	_combo_live = _bare("ComboLive", root, _layout.tick)
-	var live_row: HBoxContainer = _row(_lines(_combo_live, 0), "Row", roundi(_style.plate_pad.y))
-	_combo_skill = _outlined(_label("Skill", sub_size, _style.chip_ink))
-	_combo_skill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	live_row.add_child(_combo_skill)
-	var total_lines := VBoxContainer.new()
-	total_lines.name = "TotalLines"
-	total_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	total_lines.add_theme_constant_override(&"separation", 0)
-	live_row.add_child(total_lines)
+	var live_lines: VBoxContainer = _lines(_combo_live, 0)
+	live_lines.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_combo_value = _outlined(_label("Total", _style.tick_size, _style.accent))
-	total_lines.add_child(_combo_value)
+	live_lines.add_child(_combo_value)
 	_combo_bar = ColorRect.new()
 	_combo_bar.name = "Gap"
 	_combo_bar.color = _style.accent
 	_combo_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_combo_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	total_lines.add_child(_combo_bar)
+	live_lines.add_child(_combo_bar)
+	_combo_skill = _outlined(_label("Skill", sub_size, _style.chip_ink))
+	live_lines.add_child(_combo_skill)
 	# The summary under the meter, in the slot `Q138` reserved for it: a
 	# record to glance at, one small line, so it no longer reads as money.
 	_combo_panel = _bare("Combo", root, _layout.award)
@@ -1232,8 +1229,8 @@ func _on_combo_ended(combo: StyleCombo, broken: bool) -> void:
 	_combo_fade_s = _style.callout_hold_s
 
 
-## The live line: `skill_text` small beside the total in `ink`, the skill cut
-## to the row's room left of the total; no skill once the combo has ended.
+## The live line: the total in `ink` over `skill_text` small in a row of its
+## own, the skill cut to the row's width; no skill once the combo has ended.
 func _paint_live(combo: StyleCombo, skill_text: String, ink: Color) -> void:
 	_combo_value.text = _face.combo_text(combo)
 	# The one write here Godot does not skip on an equal value.
@@ -1242,9 +1239,10 @@ func _paint_live(combo: StyleCombo, skill_text: String, ink: Color) -> void:
 	_combo_skill.text = skill_text
 	_combo_skill.visible = not skill_text.is_empty()
 	if _combo_skill.visible:
-		var room: float = _layout.tick.size.x - _text_px(_combo_value) - _style.plate_pad.y
 		StreetPlate.shrink_to(
-			_combo_skill, _sized(_style.callout_sub_size_zh, _style.callout_sub_size), room
+			_combo_skill,
+			_sized(_style.callout_sub_size_zh, _style.callout_sub_size),
+			_layout.tick.size.x
 		)
 	_combo_live.modulate = Color.WHITE
 	_place_live()
