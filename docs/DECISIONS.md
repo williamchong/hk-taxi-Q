@@ -13895,8 +13895,10 @@ at 21:00 untouched".
   07:00, 514 a lap.
 - Four keyframes past 1.0 — the moon low at 03:30, set at 04:30, first light at 05:30, dawn at
   06:15 — and the rig blends the last back to the first across `loop_at`. The key light changes
-  hands between two keyframes of energy 0. No new environment: dawn is `dusk.tres`, first light
-  `twilight.tres`.
+  hands between two keyframes of energy 0, and `verify_day_cycle.gd` holds that the widest swing
+  between two keyframes (127°) is on a leg dark at both ends. Dawn has its own look, `dawn.tres` —
+  rose and misty, so the sunrise is not the sunset backwards; first light borrows `twilight.tres`.
+  The borrowed-dusk dawn is the frame beside it in `build/driver/q225/dawn_pair.png`.
 - `ParkedRoster.hour_of` no longer caps the rig's dial at 1, so the parked roster and the routed
   fleet read 21:00 → 07:00 as those hours.
 - `verify_day_cycle.gd`: `night_lights` rises to 1 and only then falls (was: only rises); every
@@ -13908,7 +13910,14 @@ at 21:00 untouched".
 **Owed.** The user's drive of a night. The handset (`Q222`'s debt, now without an end): a free
 drive's rig is moved at `update_hz` for the whole session where it stopped after 300 s, and the
 parked layer re-reads every out-of-view placement on each of 24 hour changes a lap where it settled
-after 14 — neither measured on a long free drive. The parked
+after 14 — neither measured on a handset.
+
+**Measured, 2026-11-16, desktop**, one whole lap of a free drive with the cycle on (`drive.sh
+--seconds=522 --day-cycle=on --perf-log=515`, the car standing after 4 s, traffic on): 60,496
+frames, p50 8.80 ms, p95 13.14, p99 14.00; 425 frames over 16.7 ms and 7 over 33.3, eight of them
+the run's own screenshots. Frames at 150, 300, 420, 470, 490, 505 and 516 s read day, night, night,
+first light, dawn, dawn and the morning again. ⚠️ No cycle-off lap was run beside it, so this is a
+level, not a cost. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
