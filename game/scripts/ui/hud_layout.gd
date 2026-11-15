@@ -567,7 +567,14 @@ static func inset_for_safe_area(root: Control) -> void:
 	# converts screen pixels into canvas units, which `canvas_items` stretch
 	# makes different numbers on every panel that is not 1920 wide.
 	var canvas_per_pixel := Vector2(canvas.x / float(screen.x), canvas.y / float(screen.y))
-	root.offset_left = maxf(0.0, float(safe.position.x)) * canvas_per_pixel.x
+	# The sides take the larger of the two, on both: the screen turns to either
+	# landscape (`window/handheld/orientation`), a half turn resizes nothing so
+	# nothing re-reads this, and a cutout reported on one side only would be
+	# under the HUD after it. An iPhone already reports its sides equal.
+	var side: float = (
+		maxf(0.0, float(maxi(safe.position.x, screen.x - safe.end.x))) * canvas_per_pixel.x
+	)
+	root.offset_left = side
 	root.offset_top = maxf(0.0, float(safe.position.y)) * canvas_per_pixel.y
-	root.offset_right = -maxf(0.0, float(screen.x - safe.end.x)) * canvas_per_pixel.x
+	root.offset_right = -side
 	root.offset_bottom = -maxf(0.0, float(screen.y - safe.end.y)) * canvas_per_pixel.y
