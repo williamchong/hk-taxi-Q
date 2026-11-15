@@ -13742,6 +13742,13 @@ level", and on the first table: "can the light angle move linearly and color fad
 - **The colours ease**: every environment value, the light's colour and energy and both shader
   globals blend on a smoothstep between keyframes. This re-paces `Q160`'s dusk, twilight and night
   between their keyframes; the keyframes themselves are untouched.
+- **Noon made brighter and its sky clean blue, the user's picks the same day** ("can we have a
+  brighter noon", "a clean blue or white sky instead of some grey when noon"): key light 1.15 → 2.20
+  (of 1.15 / 1.6 / 2.2 / 3.0; sunlit road tone 129 → about 160 of 255 under the flyover camera),
+  ambient 0.95 → 1.25, sky `(0.16, 0.4, 0.8)` over `(0.8, 0.9, 0.98)` → `(0.12, 0.42, 0.95)` over
+  `(0.62, 0.82, 1)` (of blue / pale-to-white / white / as it was). ⚠️ A blue GROUND half tints
+  every shadow purple — the sky is the ambient — so the ground stays the day's grey. Colours ease
+  on the smoothstep, so 09:26 and 15:00 are unmoved and the hours between are brighter.
 - Mutation-checked: noon moved to 0.40 fails the one-speed check (0.496–0.746); a `rest()` that
   keeps the live environment fails the rest check.
 - ⚠️ The 07:00 sun stands 16.6° up in the SSE, not the east: the arc through the authored sun and
@@ -13947,7 +13954,16 @@ is not measured.
   the day's ambient would be many times brighter. ⚠️ The car stands a little differently in the
   two, so it is a tone comparison and not a pixel one; a bare-scene probe and a standing twilight
   capture both stalled (`facade.md`'s stall). Desktop, at 120 fps: at a phone's 30 the sky is
-  dirtied every third frame, and that is not looked at. The parked
+  dirtied every third frame, and that is not looked at.
+
+**The handset, one lap** (iPhone Air, release build of `44e2b975`, `--max-fps 120 --menu=off
+--day-cycle=on --perf-log=515`, a standing free drive with the default traffic and trams, the
+whole 514 s lap through night and dawn): 47,096 frames after the first 10 s, p50 10.11 ms, p95
+18.86, p99 19.95, max 30.21; 9,159 over 16.7 ms and **none over 33.3**, none with a tile
+instantiated. So no frame of the loop — the night legs, the wrap, the sky re-filtering — misses a
+30 fps frame, and the median sits near 99 fps. ⚠️ One run, one handset, the fastest we have, and
+the car stood still; the frames over 16.7 ms are not attributed (traffic's script alone is p50 3.4
+ms a frame it runs). The memory saving is not measured on the handset. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
