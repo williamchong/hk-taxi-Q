@@ -21,6 +21,9 @@ const KEY_FRAME_CAP: String = "frame_cap"
 ## (`application/run/max_fps.mobile`) and half of it, which is a whole number
 ## of a 60 Hz panel's refreshes and so paces evenly where 40 or 45 would not.
 const FRAME_CAPS: PackedInt32Array = [60, 30]
+## And the cap a 120 Hz screen is offered above them (`Q223`), a pick and
+## never the default: `ControlOptions.frame_caps`.
+const FRAME_CAP_FAST: int = 120
 ## The bus the sound options act on: every other bus sends to it.
 const MASTER_BUS: StringName = &"Master"
 ## What the player has done, beside what they chose: the best shift's total.
@@ -119,11 +122,12 @@ static func set_steer_on_right(on: bool) -> void:
 	_write(KEY_STEER_ON_RIGHT, on)
 
 
-## A phone's frame cap (`Q223`): one of `FRAME_CAPS`, the first where none was
-## saved or the file names another.
-static func frame_cap() -> int:
+## A phone's frame cap (`Q223`): one of `offered` — what this screen can show,
+## `ControlOptions.frame_caps` — or `FRAME_CAPS`' first where none was saved or
+## the file names another: a 120 saved on one screen reads 60 on a slower one.
+static func frame_cap(offered: PackedInt32Array = FRAME_CAPS) -> int:
 	var saved: int = int(_read().get_value(SECTION, KEY_FRAME_CAP, FRAME_CAPS[0]))
-	return saved if saved in FRAME_CAPS else FRAME_CAPS[0]
+	return saved if saved in offered else FRAME_CAPS[0]
 
 
 static func set_frame_cap(fps: int) -> void:

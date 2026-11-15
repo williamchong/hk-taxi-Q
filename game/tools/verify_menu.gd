@@ -115,6 +115,7 @@ const KEYS: PackedStringArray = [
 	"side_left",
 	"side_right",
 	"frame_rate",
+	"frame_120",
 	"frame_60",
 	"frame_30",
 	"notices",
@@ -1150,6 +1151,25 @@ func _check_settings() -> void:
 	)
 	SettingsScript.set_frame_cap(45)
 	_expect(SettingsScript.frame_cap() == 60, "settings", "a cap not offered reads 60")
+	# 120 is a 120 Hz screen's alone, a pick and never the default.
+	var fast: PackedInt32Array = ControlOptionsScript.caps_for(120.0)
+	var slow: PackedInt32Array = ControlOptionsScript.caps_for(60.0)
+	_expect(
+		(
+			fast == PackedInt32Array([120, 60, 30])
+			and slow == PackedInt32Array([60, 30])
+			and ControlOptionsScript.caps_for(-1.0) == slow
+		),
+		"settings",
+		"120 fps is offered on a 120 Hz screen alone, above 60 and 30"
+	)
+	_expect(SettingsScript.frame_cap(fast) == 60, "settings", "a 120 Hz screen still opens on 60")
+	SettingsScript.set_frame_cap(120)
+	_expect(
+		SettingsScript.frame_cap(fast) == 120 and SettingsScript.frame_cap(slow) == 60,
+		"settings",
+		"a saved 120 is read on a 120 Hz screen and reads 60 on a slower one"
+	)
 	SettingsScript.set_steering("sharp")
 	SettingsScript.set_steer_on_right(true)
 	SettingsScript.set_frame_cap(30)

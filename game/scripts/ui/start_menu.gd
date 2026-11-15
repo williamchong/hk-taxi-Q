@@ -496,12 +496,11 @@ func _languages(column: VBoxContainer) -> void:
 ## always runs it (`Q162`), and a drive under way keeps the hour it has.
 func _display(column: VBoxContainer) -> void:
 	if phone:
+		var offered: PackedInt32Array = ControlOptions.frame_caps()
 		var caps: Array = []
-		for fps: int in Settings.FRAME_CAPS:
+		for fps: int in offered:
 			caps.append(["Fps%d" % fps, "frame_%d" % fps, _pick_frame_cap.bind(fps)])
-		_choices(
-			column, "FrameCaps", "frame_rate", caps, Settings.FRAME_CAPS.find(Settings.frame_cap())
-		)
+		_choices(column, "FrameCaps", "frame_rate", caps, offered.find(ControlOptions.frame_cap()))
 	if not pausing:
 		_choices(
 			column,
@@ -583,7 +582,7 @@ func _pick_side(on_right: bool) -> void:
 
 ## Save a phone's frame cap and set it at once.
 func _pick_frame_cap(fps: int) -> void:
-	if fps == Settings.frame_cap():
+	if fps == ControlOptions.frame_cap():
 		return
 	Settings.set_frame_cap(fps)
 	ControlOptions.apply_frame_cap()
