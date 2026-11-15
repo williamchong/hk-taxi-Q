@@ -81,10 +81,17 @@ the floor handset is not measured, and this is still the lever there.
   to the 07:00 row across `loop_at`. The moon sets in the west with its energy fading to 0.00 at
   04:30; first light is 0.00 too, so the key light crosses from the western horizon to where the
   sun rises unseen — the 19:00 trick mirrored. The 06:15 sun is on the morning's own arc, 9.7°
-  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn has its own look, `dawn.tres` — rose and misty where dusk
-  is orange — so the sunrise is not the sunset backwards; first light still borrows `twilight.tres`.
-  🔴 `verify_day_cycle.gd` holds that the widest swing of the key light between two keyframes is on
-  a leg dark at both ends.
+  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn has its own look,
+  `dawn.tres` — rose and misty where dusk is orange — so the sunrise is not the sunset backwards;
+  first light still borrows `twilight.tres`. 🔴 `verify_day_cycle.gd` holds that the widest swing of
+  the key light between two keyframes is on a leg dark at both ends, and that the wrap leg runs at
+  the daylight speed.
+- 🔴 **Every keyframe environment's `Sky` carries `radiance_size = 0`** (32 px, `Q225`). A loaded
+  `Sky` allocates its radiance map whether or not anything draws it, and the rig only ever reads
+  colours off these — the sky on screen is a copy of the day's. Measured on the desktop: the six
+  keyframe skies cost 110.4 MB of texture memory at the default 256 and 4.7 MB at 32 (129.65 MB
+  with the day's sky drawn; 240.09 with them loaded before, 134.34 after). A new keyframe
+  environment takes the line too. ⚠️ Not on `clean_daylight.tres`: that one is drawn.
 - A shift's 21:00 is 13% of the way from the 20:00 moon to the 03:30 one: the same night, the moon
   a little further west.
 - **The sun sets in the west-south-west** — the engine's −X is west and +Z south.

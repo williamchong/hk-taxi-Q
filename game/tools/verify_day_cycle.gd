@@ -21,6 +21,7 @@
 ## - The key light changes hands unseen (`Q160`'s twilight, `Q225`'s dawn): the
 ##   widest swing between two keyframes in turn is on a leg whose both ends
 ##   have no energy, so nobody watches the moon cross the sky to the sunrise.
+##   The leg that comes round counts, and runs at the daylight speed.
 ## - The cycle comes round (`Q225`): just short of `loop_at` the rig is on its
 ##   first keyframe's look again, lamps out, and a free drive's clock runs on
 ##   through the night into the next morning while a shift's stops at 1.
@@ -107,6 +108,8 @@ func _run() -> void:
 	var sun_kept: bool = true
 	var widest_deg: float = 0.0
 	var widest_is_dark: bool = false
+	var widest_from: float = 0.0
+	var last_at: float = -1.0
 	var last_toward := Vector3.ZERO
 	var last_energy: float = 0.0
 	var highest: float = day_facing.basis.z.normalized().y
@@ -114,9 +117,10 @@ func _run() -> void:
 	var strongest: float = day_energy
 	for key: RigKeyframe in cycle.keyframes:
 		rig.time_of_day = key.at
+		var toward: Vector3 = SunGlint.toward(sun)
 		strongest = maxf(strongest, sun.light_energy)
-		if SunGlint.toward(sun).y > highest:
-			highest = SunGlint.toward(sun).y
+		if toward.y > highest:
+			highest = toward.y
 			highest_energy = sun.light_energy
 		if peak >= 1.0:
 			one_hump = one_hump and key.night_lights <= lights
@@ -126,25 +130,20 @@ func _run() -> void:
 		peak = maxf(peak, lights)
 		if lights >= 1.0 and lamps != null:
 			dim_at_night = dim_at_night and sun.light_energy <= lamps.night_energy
-		var up: float = SunGlint.toward(sun).y
-		var swing_deg: float = rad_to_deg(last_toward.angle_to(SunGlint.toward(sun)))
-		if last_toward != Vector3.ZERO and swing_deg > widest_deg:
-			widest_deg = swing_deg
+		if last_at >= 0.0 and rad_to_deg(last_toward.angle_to(toward)) > widest_deg:
+			widest_deg = rad_to_deg(last_toward.angle_to(toward))
 			widest_is_dark = last_energy <= 0.0 and sun.light_energy <= 0.0
-		last_toward = SunGlint.toward(sun)
+			widest_from = last_at
+		last_at = key.at
+		last_toward = toward
 		last_energy = sun.light_energy
-		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or up > 0.0)
+		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or toward.y > 0.0)
 	_expect(
 		one_hump and is_equal_approx(peak, 1.0),
 		"lights",
 		"night_lights rises to 1.0 and only then falls"
 	)
 	_expect(sun_kept, "sun", "the key light is kept, and above the horizon while it shines")
-	_expect(
-		widest_is_dark,
-		"sun",
-		"the key light's widest swing, %.0f°, is on a leg dark at both ends" % widest_deg
-	)
 	_expect(
 		highest_energy == strongest and highest_energy > day_energy,
 		"sun",
@@ -164,6 +163,19 @@ func _run() -> void:
 	_expect(moved[0] == cycle.keyframes.size(), "signal", "one `changed` a move")
 	rig.time_of_day = 0.0
 	var first: Vector3 = SunGlint.toward(sun)
+	# The leg that comes round, last keyframe to first, is a swing like any other.
+	if cycle.loop_at > 0.0 and rad_to_deg(last_toward.angle_to(first)) > widest_deg:
+		widest_deg = rad_to_deg(last_toward.angle_to(first))
+		widest_is_dark = last_energy <= 0.0 and sun.light_energy <= 0.0
+		widest_from = last_at
+	_expect(
+		widest_is_dark,
+		"sun",
+		(
+			"the key light's widest swing, %.0f° from the keyframe at %.3f, is on a leg dark at both ends"
+			% [widest_deg, widest_from]
+		)
+	)
 	rig.time_of_day = cycle.loop_at - 0.0001
 	_expect(
 		(
@@ -209,7 +221,9 @@ func _run() -> void:
 
 ## The daylight arc: the stops are the keyframes up to the first that lights a
 ## lamp, with the authored day among them, and the key light's angular speed
-## over each leg is within `ARC_SPREAD` of every other's.
+## over each leg is within `ARC_SPREAD` of every other's. Where the cycle comes
+## round, the leg from the last keyframe back to the first is one of them: the
+## dawn sun is already on the morning's arc.
 func _check_the_arc(rig: LightingRig, sun: DirectionalLight3D) -> void:
 	var stops: Array[float] = []
 	for key: RigKeyframe in rig.cycle.keyframes:
@@ -228,12 +242,23 @@ func _check_the_arc(rig: LightingRig, sun: DirectionalLight3D) -> void:
 		speed /= (stops[index] - stops[index - 1]) * rig.cycle.length_s
 		slowest = minf(slowest, speed)
 		fastest = maxf(fastest, speed)
+	var legs: int = stops.size() - 1
+	if rig.cycle.loop_at > 0.0:
+		var last: RigKeyframe = rig.cycle.keyframes[-1]
+		rig.time_of_day = last.at
+		var from: Vector3 = SunGlint.toward(sun)
+		rig.time_of_day = stops[0]
+		var round_s: float = (rig.cycle.loop_at - last.at + stops[0]) * rig.cycle.length_s
+		var speed: float = rad_to_deg(from.angle_to(SunGlint.toward(sun))) / round_s
+		slowest = minf(slowest, speed)
+		fastest = maxf(fastest, speed)
+		legs += 1
 	_expect(
 		stops.size() > 2 and fastest <= slowest * ARC_SPREAD,
 		"sun",
 		(
 			"by day the key light moves at one speed: %.3f to %.3f °/s over %d legs"
-			% [slowest, fastest, stops.size() - 1]
+			% [slowest, fastest, legs]
 		)
 	)
 

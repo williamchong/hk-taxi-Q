@@ -13,4 +13,5 @@ borrowing `dusk.tres` made it.
 
 A copy of `dusk.tres` with only the blended values moved. ⚠️ **Only what `LightingRig.BLENDED` and
 `BLENDED_SKY` name is ever read from this file** (`dusk.md`). A first table picked from frames
-(`build/driver/q225/`, gitignored), beside the borrowed dusk; the user has not picked between them.
+(`build/driver/q225/dawn_pair.png`, gitignored), beside the dusk the dawn borrowed before; the user
+has not picked between them.
