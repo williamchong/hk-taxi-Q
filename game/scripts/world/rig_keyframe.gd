@@ -1,9 +1,11 @@
 ## One authored time of day on a `RigCycle` (`Q160`): everything a `LightingRig`
 ## blends toward as game time passes.
 ##
-## The DAY is not one of these. The rig scene as authored — its `Environment`,
-## its `Sun` — is the day, read off the scene at `_ready`, so the daylight
-## numbers keep exactly one home and a cycle pinned at 0 is the scene untouched.
+## The authored DAY is not one of these. The rig scene as authored — its
+## `Environment`, its `Sun` — is the look at `RigCycle.day_at`, read off the
+## scene at `_ready`, so the graded daylight numbers keep exactly one home and
+## a rig at rest is the scene untouched. The morning, noon and the afternoon
+## either side of it are keyframes (`Q222`).
 ##
 ## 🔴 **No `@export` here declares a default** (`Q150`'s convention): a default
 ## is a second copy of the tuning table and Godot's writer drops any key equal

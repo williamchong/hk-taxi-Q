@@ -10,9 +10,14 @@ The day that runs to night as game time passes (`Q160`, the user's ask, 2026-10-
 `scripts/world/day_clock.gd` in `city_drive.tscn`. It reverses "the sun does not move; night is a
 switch between two static rigs" on the user's instruction; `DECISIONS.md` `Q160` has the record.
 
-🔴 **The day is not in this file.** The rig scene as authored — `clean_daylight.tres`, its `Sun` — is
-the cycle's first look, read off the scene, so the daylight numbers keep one home and a rig at
-`time_of_day` 0 writes nothing at all. `verify_day_cycle.gd` holds that.
+🔴 **The authored day is not in this file.** The rig scene as authored — `clean_daylight.tres`, its
+`Sun` — is the look at `day_at`, read off the scene, so the graded daylight numbers keep one home.
+Since `Q222` (the user's asks, 2026-11-16: "can the sunlight and shine and sky color changes slowly
+according to daytime? e.g. the sun should be brightest and shine directly from up top to street
+level", then "can the light angle move linearly and color fades slowly") it is one MOMENT of the
+cycle, with a morning before it and noon after, not a look held from the start. A rig nobody moves
+is `resting` and writes nothing at all; `DayClock` rests it (`LightingRig.rest()`) for every run
+that holds the daylight. `verify_day_cycle.gd` holds that.
 
 The keyframes are picked from rendered frames (`build/driver/q160*/`, gitignored), under three of
 the user's calls on the way: not "pitch dark with a neon light-blue outline", which read as
@@ -28,10 +33,14 @@ three-to-five minute session; the shift is that session now, and five minutes is
 fares at 30–90 s each. Game time, not wall time — the clock stops under the start menu. Free mode
 runs the same table when its option is DAY TO NIGHT, then holds the night.
 
-## `day_until = 0.71`
+## `day_at = 0.174`
 
-The authored daylight holds to 17:00 on the shift's clock ((17 − 7) / 14): the look every frame so
-far was graded under is most of every run. Was 0.25 when the cycle opened at noon.
+Where the authored scene stands on the cycle: 09:26 on the shift's clock. Not picked — solved. The
+authored sun is 48° up in the south-south-east, noon is 80° up at 0.36 and dusk 8° up at 0.79, so
+the afternoon's 78.0° of arc over 0.43 sets the speed (0.604 °/game s at 300 s), and the authored
+sun's 33.6° before noon puts it here. Move noon, dusk or `length_s`'s keyframes and this moves
+with them. Was `day_until` 0.71 (`Q162`): the authored daylight held to 17:00 and nothing moved
+before it.
 
 ## `update_hz = 10.0`
 
@@ -44,12 +53,30 @@ measured** — if the radiance update costs there, lower this before touching th
 
 | `at` | Look | Key light | `sky_light` | `night_lights` |
 |---|---|---|---|---|
+| 0.00 (07:00) | `morning.tres` | 16.6° up in the SSE, `(1, 0.8, 0.58)`, 0.70 | `(1, 0.88, 0.76)` | 0 |
+| 0.174 (09:26) | the rig scene, in no keyframe | 48° up in the SSE, `(1, 0.98, 0.95)`, 0.90 | white | 0 |
+| 0.36 (12:00) | `noon.tres` | 80° up, due south, `(1, 1, 0.98)`, 1.15 | white | 0 |
+| 0.57 (15:00) | `clean_daylight.tres` | 47.2° up in the WSW, the day's colour, 0.90 | white | 0 |
+| 0.71 (17:00) | `clean_daylight.tres` | 22.3° up in the WSW, `(1, 0.9, 0.76)`, 0.88 | `(1, 0.95, 0.88)` | 0 |
 | 0.79 (18:00) | `dusk.tres` | 8° up in the WSW, `(1, 0.62, 0.36)`, 0.80 | `(1, 0.74, 0.58)` | 0.25 |
 | 0.86 (19:00) | `twilight.tres` | on the horizon, 0.00 | `(0.3, 0.3, 0.45)` | 0.80 |
 | 0.93 (20:00) | `night.tres` | the moon, 38° up, `(0.62, 0.72, 1)`, 0.30 | `(0.1, 0.11, 0.18)` | 1.00 |
 
-- **The sun sets in the west-south-west** — the engine's −X is west and +Z south — from the rig's
-  authored 48° in the south-east, so the slerp carries it across the southern sky.
+- **The sun sets in the west-south-west** — the engine's −X is west and +Z south.
+- 🔴 **By day the angle moves at ONE speed** (`Q222`): the rig slerps the DIRECTION to the light
+  along the great circle between two keyframes, and the five daylight keyframes sit on two great
+  circles that meet at noon — morning → authored day → noon, and noon → dusk — at angles and `at`s
+  solved so every leg runs at 0.604 °/s. `verify_day_cycle.gd` holds the legs within 2% of each
+  other, so a keyframe's angle or `at` cannot be moved alone: re-solve the leg (to a tenth of a
+  degree). ⚠️ So the 07:00 sun is in the south-south-east, not the east: the arc through the
+  authored sun and an overhead noon starts there.
+- **Colours fade on a smoothstep** between keyframes — the environments, the light's colour and
+  energy and both globals — so no look changes pace on the frame a keyframe passes. The angle
+  alone is linear.
+- **Noon is the brightest and the highest**, 1.15 against the day's 0.90, and `verify_day_cycle`
+  holds that the two coincide. 80° and not 90°: `looking_at` has no roll for a vertical light, and
+  a wall under an overhead sun takes no key light at all.
+- 15:00 and 17:00 reuse the day's environment: only the sun moves there, and 17:00 warms it.
 - 🔴 **The twilight keyframe exists so the key light can change hands unseen.** One
   `DirectionalLight3D` is both sun and moon; at 0.86 its energy is 0.0, and the swing from the
   horizon to the moon's 38° happens while it climbs from nothing. Without it the sun's disc rises

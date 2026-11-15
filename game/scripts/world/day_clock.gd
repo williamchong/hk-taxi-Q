@@ -83,7 +83,8 @@ func _ready() -> void:
 
 
 ## Back to the first second, in `mode`: the next shift, or a free drive after
-## one. The rig is put back to the day it opened on.
+## one. The rig is put back to what the run opens on — the morning where the
+## day will run, the authored daylight where it is held (`Q222`).
 func restart() -> void:
 	elapsed_s = 0.0
 	_due_s = 0.0
@@ -97,7 +98,10 @@ func restart() -> void:
 	if _shift != null and not _shift.usable():
 		_shift = null
 	if _moves_rig():
-		rig.time_of_day = 0.0
+		if _runs_day():
+			rig.time_of_day = 0.0
+		else:
+			rig.rest()
 	set_physics_process(_moves_rig() or mode == Mode.SHIFT)
 
 
@@ -183,12 +187,19 @@ func _decide() -> void:
 		else:
 			push_error("DayClock: no usable shift table; this run plays free.")
 			_shift = null
-	if not _moves_rig():
-		_cycling = false
-	elif _shift_s > 0.0:
-		_cycling = not Cmdline.off(CYCLE_ARG)
-	else:
-		_cycling = wanted()
+	# Read again here: the option can change under the menu, after `restart`
+	# showed its guess.
+	_cycling = _moves_rig() and _runs_day()
+	if _moves_rig() and not _cycling:
+		rig.rest()
+
+
+## Whether this run's sky will move, as far as a parked clock can tell: a
+## shift's unless the flag holds it, a free drive's by the option.
+func _runs_day() -> bool:
+	if mode == Mode.SHIFT and _shift != null:
+		return not Cmdline.off(CYCLE_ARG)
+	return wanted()
 
 
 ## A rig with no usable cycle, or one pinned to an hour for a frame, has

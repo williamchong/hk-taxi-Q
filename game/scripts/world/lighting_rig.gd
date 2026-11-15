@@ -23,10 +23,16 @@ extends Node3D
 ## rigs". A rig with a `cycle` takes `time_of_day` from a `DayClock` and blends
 ## the sky, the ambient, the key light and two shader globals between the scene
 ## as authored and the cycle's keyframes; `changed` tells the consumers that
-## cached the sun (`SunGlint`, `VehicleLamps`) to read it again. ⚠️ **At
-## `time_of_day` 0 nothing is written at all** — not the authored values
-## written back, nothing — so every scene that never moves the clock renders
-## the frame it rendered before there was one.
+## cached the sun (`SunGlint`, `VehicleLamps`) to read it again.
+##
+## 🔴 **The whole day moves since `Q222`** (the user's ask: the sun and the sky
+## change slowly with the hour, brightest and overhead at noon). The scene as
+## authored is ONE moment of the cycle — `RigCycle.day_at` — with keyframes
+## before it as well as after, not a look held from the start. ⚠️ **A rig
+## nobody moves is `resting`, and a resting rig writes nothing at all** — not
+## the authored values written back, nothing — so every scene that never runs
+## the clock renders the frame it rendered before there was one. `rest()` is
+## the way back to that; `time_of_day` 0 is the morning now, not the day.
 ##
 ## ⚠️ **A scene with no rig renders at the project default**, `project.godot`'s
 ## `[shader_globals]` 1.0 — unexposed, which is `skidpad.tscn` and the grey box
@@ -112,10 +118,21 @@ const BLENDED_SKY: Array[StringName] = [
 ## Why the number is what it is: the rig scene's sidecar.
 @export_range(0.25, 1.0, 0.05) var phone_scale_3d: float = 1.0
 
-## Where on `cycle` the rig stands, 0 the authored day and 1 the last keyframe.
-## Written by `DayClock`, or pinned for a frame by `--time-of-day=`.
-var time_of_day: float = 0.0:
-	set = set_time_of_day
+## Where on `cycle` the rig stands, 0 the first keyframe and 1 the last.
+## Written by `DayClock`, or pinned for a frame by `--time-of-day=`. ⚠️ A
+## `resting` rig reads 0 here and shows the authored day, which is at
+## `cycle.day_at`: the hour's readers keep the opening hour they always read.
+var time_of_day: float:
+	get:
+		return _time
+	set(value):
+		set_time_of_day(value)
+
+## Whether the rig stands as the scene was authored, untouched: true until
+## something moves it, and again after `rest()`.
+var resting: bool:
+	get:
+		return _live == null
 
 ## Whether `--time-of-day=` holds the rig at one look for this run, which a
 ## clock must respect: a pinned frame that drifted is not a frame of that hour.
@@ -123,10 +140,13 @@ var pinned: bool = false
 
 var _sun: DirectionalLight3D = null
 var _world: WorldEnvironment = null
-## The scene as authored, taken once: the cycle's first look, and the only
-## statement of the daylight numbers.
+## The scene as authored, taken once: the cycle's look at `day_at`, and the
+## only statement of the daylight numbers.
 var _day: RigKeyframe = null
 var _day_basis := Basis.IDENTITY
+## The cycle's keyframes with `_day` stood among them at `day_at`, in order.
+var _keys: Array[RigKeyframe] = []
+var _time: float = 0.0
 ## The environment the blend is written to — a copy, made the first time the
 ## rig moves, because the authored one is a shared and committed `.tres`.
 var _live: Environment = null
@@ -151,13 +171,20 @@ func _ready() -> void:
 		push_error("LightingRig: a cycle needs a sun and an environment to move; staying put.")
 		return
 	_day = RigKeyframe.new()
-	_day.at = cycle.day_until
+	_day.at = cycle.day_at
 	_day.environment = _world.environment
 	_day.sun_colour = _sun.light_color
 	_day.sun_energy = _sun.light_energy
 	_day.sky_light = Color.WHITE
 	_day.night_lights = 0.0
 	_day_basis = _sun.basis
+	_keys.clear()
+	for key: RigKeyframe in cycle.keyframes:
+		if key.at > _day.at and not _keys.has(_day):
+			_keys.append(_day)
+		_keys.append(key)
+	if not _keys.has(_day):
+		_keys.append(_day)
 
 	var pin: String = Cmdline.value(TIME_ARG)
 	if pin.is_valid_float():
@@ -196,23 +223,28 @@ func fit_scale(phone: bool, viewport: Viewport) -> void:
 
 
 func set_time_of_day(value: float) -> void:
-	time_of_day = clampf(value, 0.0, 1.0)
+	_time = clampf(value, 0.0, 1.0)
 	if _day == null:
 		return
 
-	# The pair of looks `time_of_day` stands between. Before `day_until` both
-	# are the day; past the last keyframe both are that keyframe, which is how
-	# the night holds.
-	var from: RigKeyframe = _day
-	var to: RigKeyframe = _day
-	for key: RigKeyframe in cycle.keyframes:
+	# The pair of looks `time_of_day` stands between. Before the first both
+	# are the first; past the last both are that keyframe, which is how the
+	# night holds.
+	var from: RigKeyframe = _keys[0]
+	var to: RigKeyframe = _keys[0]
+	for key: RigKeyframe in _keys:
 		to = key
-		if time_of_day < key.at:
+		if _time < key.at:
 			break
 		from = key
 	var weight: float = 0.0
 	if from != to:
-		weight = clampf(inverse_lerp(from.at, to.at, time_of_day), 0.0, 1.0)
+		weight = clampf(inverse_lerp(from.at, to.at, _time), 0.0, 1.0)
+	# The light's ANGLE moves on `weight`, at one speed from a keyframe to the
+	# next; every colour and energy moves on `fade`, which leaves and arrives
+	# at rest, so no look changes pace on the frame a keyframe passes (`Q222`,
+	# the user's ask: "the light angle move linearly and color fades slowly").
+	var fade: float = smoothstep(0.0, 1.0, weight)
 
 	if _live == null:
 		if from == _day and weight == 0.0:
@@ -226,35 +258,56 @@ func set_time_of_day(value: float) -> void:
 
 	for property: StringName in BLENDED:
 		_live.set(
-			property, lerp(from.environment.get(property), to.environment.get(property), weight)
+			property, lerp(from.environment.get(property), to.environment.get(property), fade)
 		)
 	var sky: Material = _live.sky.sky_material
 	var sky_from: Material = from.environment.sky.sky_material
 	var sky_to: Material = to.environment.sky.sky_material
 	for property: StringName in BLENDED_SKY:
-		sky.set(property, lerp(sky_from.get(property), sky_to.get(property), weight))
+		sky.set(property, lerp(sky_from.get(property), sky_to.get(property), fade))
 
 	if from == _day and weight == 0.0:
 		# The authored basis itself, not its quaternion: a scene file's nine
 		# digits are not quite a rotation, and the round trip moves the sun.
 		_sun.basis = _day_basis
 	else:
-		_sun.quaternion = _facing(from).slerp(_facing(to), weight)
-	_sun.light_color = from.sun_colour.lerp(to.sun_colour, weight)
-	_sun.light_energy = lerpf(from.sun_energy, to.sun_energy, weight)
+		# The direction to the light along the great circle between the two,
+		# not the orientations' quaternions: an arc at a constant angular
+		# speed, whatever the two keyframes' yaw and pitch are.
+		var toward: Vector3 = _toward(from).slerp(_toward(to), weight)
+		_sun.basis = Basis.looking_at(-toward, Vector3.UP)
+	_sun.light_color = from.sun_colour.lerp(to.sun_colour, fade)
+	_sun.light_energy = lerpf(from.sun_energy, to.sun_energy, fade)
 	_set_globals(
-		from.sky_light.lerp(to.sky_light, weight), lerpf(from.night_lights, to.night_lights, weight)
+		from.sky_light.lerp(to.sky_light, fade), lerpf(from.night_lights, to.night_lights, fade)
 	)
 	changed.emit()
 
 
-## The key light's orientation at `key`. The day's is read off the scene's own
-## basis, which is in no table.
-func _facing(key: RigKeyframe) -> Quaternion:
+## Back to the scene as authored, at `time_of_day` 0: what a run that holds
+## the daylight shows (`DayClock`). The authored `Environment` object and the
+## authored basis themselves, not a blend that lands on their values.
+func rest() -> void:
+	_time = 0.0
+	if _live == null:
+		return
+	_live = null
+	_world.environment = _day.environment
+	_sun.basis = _day_basis
+	_sun.light_color = _day.sun_colour
+	_sun.light_energy = _day.sun_energy
+	_set_globals(_day.sky_light, _day.night_lights)
+	changed.emit()
+
+
+## The unit vector toward the key light at `key`: a light shines down its own
+## -Z. The day's is read off the scene's own basis, which is in no table.
+## ⚠️ Never straight up: `looking_at` has no roll to give a vertical light.
+func _toward(key: RigKeyframe) -> Vector3:
 	if key == _day:
-		return _day_basis.get_rotation_quaternion()
+		return _day_basis.z.normalized()
 	var radians: Vector3 = key.sun_rotation_deg * (PI / 180.0)
-	return Quaternion.from_euler(radians)
+	return Basis.from_euler(radians).z
 
 
 func _set_globals(sky_light: Color, night_lights: float) -> void:

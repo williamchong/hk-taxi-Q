@@ -1,10 +1,17 @@
 ## The day that runs to night (`Q160`): the rig's cycle and the clock that
 ## drives it, held to the promises nothing in a frame can show.
 ##
-## - 🔴 **The day writes nothing.** A rig at `time_of_day` 0 must still hold the
+## - 🔴 **A resting rig writes nothing.** A rig nobody moved must still hold the
 ##   authored `Environment` object and the authored sun, untouched — that is
 ##   what keeps every scripted daylight frame the one it was. A rig that
-##   "applied the day" at boot would pass every eye and fail this.
+##   "applied the day" at boot would pass every eye and fail this. `rest()`
+##   puts a moved rig back on those same objects (`Q222`).
+## - By day the key light's angle moves at one speed (`Q222`, the user's ask:
+##   "the light angle move linearly"): from the first keyframe to the first
+##   one that lights a lamp, every leg — the authored day's two included —
+##   covers its arc at the same degrees per game second.
+## - The key light is strongest where it stands highest (`Q222`, the user's
+##   ask: brightest at noon, from overhead), and that is not the authored day.
 ## - 🔴 **Night dims the key light and never loses it.** `VehicleLamps` reads a
 ##   missing sun as "no rig" and drives dark, so at every keyframe the light is
 ##   there, above the horizon while it has energy, and at the last one its
@@ -32,6 +39,9 @@ const SCRATCH := "user://verify_day_cycle.cfg"
 const TICK_S: float = 1.0 / 60.0
 ## Physics frames run each side of the pause.
 const PAUSE_FRAMES: int = 10
+## How far apart the fastest and slowest daylight legs of the sun's arc may be.
+## The keyframes' angles are written to a tenth of a degree.
+const ARC_SPREAD: float = 1.02
 
 
 func _init() -> void:
@@ -68,26 +78,48 @@ func _run() -> void:
 	var moved: Array[int] = [0]
 	rig.changed.connect(func() -> void: moved[0] += 1)
 
-	rig.time_of_day = 0.0
-	rig.time_of_day = cycle.day_until
+	_expect(
+		rig.resting and world.environment == authored and sun.transform == day_facing,
+		"day",
+		"a rig nobody moved rests on the authored scene"
+	)
+	rig.time_of_day = cycle.day_at
 	_expect(
 		world.environment == authored and sun.transform == day_facing and moved[0] == 0,
 		"day",
-		"up to day_until %.2f the rig writes nothing" % cycle.day_until
+		"at day_at %.2f the look is the authored one, and nothing is written" % cycle.day_at
 	)
+
+	_check_the_arc(rig, sun)
+	moved[0] = 0
 
 	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
 	var lights: float = 0.0
 	var rising: bool = true
 	var sun_kept: bool = true
+	var highest: float = SunGlint.toward(sun).y
+	var highest_energy: float = day_energy
+	var strongest: float = day_energy
 	for key: RigKeyframe in cycle.keyframes:
 		rig.time_of_day = key.at
+		strongest = maxf(strongest, sun.light_energy)
+		if SunGlint.toward(sun).y > highest:
+			highest = SunGlint.toward(sun).y
+			highest_energy = sun.light_energy
 		rising = rising and key.night_lights >= lights
 		lights = key.night_lights
 		var up: float = SunGlint.toward(sun).y
 		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or up > 0.0)
 	_expect(rising and is_equal_approx(lights, 1.0), "lights", "night_lights only rises, to 1.0")
 	_expect(sun_kept, "sun", "the key light is kept, and above the horizon while it shines")
+	_expect(
+		highest_energy == strongest and highest_energy > day_energy,
+		"sun",
+		(
+			"the key light is strongest, %.2f, where it stands highest, %.0f° up"
+			% [highest_energy, rad_to_deg(asin(highest))]
+		)
+	)
 	_expect(
 		lamps != null and sun.light_energy <= lamps.night_energy,
 		"sun",
@@ -104,11 +136,23 @@ func _run() -> void:
 	)
 
 	rig.time_of_day = 0.0
+	_expect(not rig.resting, "day", "at 0 the rig is on its first keyframe, not at rest")
+	var before_rest: int = moved[0]
+	rig.rest()
 	_expect(
-		is_equal_approx(sun.light_energy, day_energy) and sun.transform.is_equal_approx(day_facing),
+		(
+			rig.resting
+			and rig.time_of_day == 0.0
+			and world.environment == authored
+			and sun.transform == day_facing
+			and sun.light_energy == day_energy
+			and moved[0] == before_rest + 1
+		),
 		"day",
-		"back at 0 the sun is the authored one"
+		"rest() puts back the authored environment and sun themselves, and says so once"
 	)
+	rig.rest()
+	_expect(moved[0] == before_rest + 1, "day", "a resting rig asked to rest writes nothing")
 
 	await _check_the_clock(rig)
 	await _check_the_shift(rig)
@@ -116,6 +160,37 @@ func _run() -> void:
 	rig.queue_free()
 	_check_the_phone()
 	_finish("verify_day_cycle")
+
+
+## The daylight arc: the stops are the keyframes up to the first that lights a
+## lamp, with the authored day among them, and the key light's angular speed
+## over each leg is within `ARC_SPREAD` of every other's.
+func _check_the_arc(rig: LightingRig, sun: DirectionalLight3D) -> void:
+	var stops: Array[float] = []
+	for key: RigKeyframe in rig.cycle.keyframes:
+		if key.at > rig.cycle.day_at and (stops.is_empty() or stops[-1] < rig.cycle.day_at):
+			stops.append(rig.cycle.day_at)
+		stops.append(key.at)
+		if key.night_lights > 0.0:
+			break
+	var slowest: float = INF
+	var fastest: float = 0.0
+	for index: int in range(1, stops.size()):
+		rig.time_of_day = stops[index - 1]
+		var from: Vector3 = SunGlint.toward(sun)
+		rig.time_of_day = stops[index]
+		var speed: float = rad_to_deg(from.angle_to(SunGlint.toward(sun)))
+		speed /= (stops[index] - stops[index - 1]) * rig.cycle.length_s
+		slowest = minf(slowest, speed)
+		fastest = maxf(fastest, speed)
+	_expect(
+		stops.size() > 2 and fastest <= slowest * ARC_SPREAD,
+		"sun",
+		(
+			"by day the key light moves at one speed: %.3f to %.3f °/s over %d legs"
+			% [slowest, fastest, stops.size() - 1]
+		)
+	)
 
 
 ## The phone's shadow reach (`P2-6`): the rig on a desk keeps the authored sun,
@@ -193,7 +268,11 @@ func _check_the_clock(rig: LightingRig) -> void:
 				)
 			)
 		else:
-			_expect(rig.time_of_day == 0.0, "clock", "with the option off the day never moves")
+			_expect(
+				rig.time_of_day == 0.0 and rig.resting,
+				"clock",
+				"with the option off the rig rests on the authored day"
+			)
 		clock.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
@@ -273,10 +352,11 @@ func _check_the_shift(rig: LightingRig) -> void:
 			clock.hour_now() == shift.opens_h
 			and not clock.is_closed()
 			and rig.time_of_day == 0.0
+			and not rig.resting
 			and clock.is_physics_processing()
 		),
 		"shift",
-		"restart puts the clock and the rig back to the opening hour"
+		"restart puts the clock and the rig back to the opening hour, on the morning"
 	)
 	_expect(
 		(
@@ -290,7 +370,11 @@ func _check_the_shift(rig: LightingRig) -> void:
 	)
 	clock.mode = DayClock.Mode.FREE
 	clock.restart()
-	_expect(is_nan(clock.hour_now()), "shift", "free mode has no hour on the clock")
+	_expect(
+		is_nan(clock.hour_now()) and rig.resting,
+		"shift",
+		"free mode has no hour on the clock, and with the option off the rig rests"
+	)
 	clock.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))

@@ -1,10 +1,12 @@
 ## A day that ends (`Q160`, the user's ask): the looks a `LightingRig` passes
 ## through as game time runs, and how long the passage takes.
 ##
-## A cycle is not a loop. It starts at the rig scene's own daylight, reaches
-## each `RigKeyframe` in turn and HOLDS the last one — a session is three to
-## five minutes and skilled play extends it (`GAME_DESIGN.md`), so the curve
-## needs an end state and night is it.
+## A cycle is not a loop. It starts at its first `RigKeyframe`, passes through
+## each in turn — and through the rig scene's own daylight at `day_at`, which
+## is one moment of the day since `Q222` and no longer where it starts — and
+## HOLDS the last one — a session is three to five minutes and skilled play
+## extends it (`GAME_DESIGN.md`), so the curve needs an end state and night
+## is it.
 ##
 ## 🔴 **No `@export` here declares a default** (`Q150`'s convention). A missing
 ## `length_s` or `update_hz` reads zero and `usable()` refuses the table, so the
@@ -18,17 +20,19 @@ const PATH: String = "res://tuning/day_to_night.tres"
 
 ## Game seconds from the start of a drive to the last keyframe.
 @export_range(10.0, 3600.0, 1.0, "suffix:s") var length_s: float
-## The fraction of the cycle the authored daylight holds before anything moves.
-@export_range(0.0, 1.0, 0.01) var day_until: float
+## Where on the cycle the rig scene as authored stands: the one look that is in
+## no keyframe. Keyframes before it are the morning, after it the rest.
+@export_range(0.0, 1.0, 0.001) var day_at: float
 ## How often the rig is moved, in hertz. The sky's radiance is re-rendered on
 ## every move, so this is a cost dial and not a smoothness one.
 @export_range(0.5, 60.0, 0.5, "suffix:Hz") var update_hz: float
-## The looks after the day, in the order they are reached.
+## The looks either side of the authored day, in the order they are reached.
 @export var keyframes: Array[RigKeyframe]
 
 
 ## Whether the table is whole: both rates, at least one keyframe, every
-## keyframe carrying an environment, and `at` strictly rising past `day_until`.
+## keyframe carrying an environment, and `at` strictly rising and never on
+## `day_at`, which is the authored scene's.
 ## Loud on every call, like `VehicleLamps.usable` — a broken table is a build
 ## defect — and pure, so a verify tool can ask it of a table it has broken.
 func usable() -> bool:
@@ -42,17 +46,17 @@ func usable() -> bool:
 	if keyframes.is_empty():
 		push_error("RigCycle: %s has no keyframes; the day never ends." % resource_path)
 		return false
-	var last: float = day_until
+	var last: float = -1.0
 	for index: int in keyframes.size():
 		var key: RigKeyframe = keyframes[index]
 		if key == null or key.environment == null:
 			push_error("RigCycle: %s keyframe %d has no environment." % [resource_path, index])
 			return false
-		if key.at <= last:
+		if key.at <= last or is_equal_approx(key.at, day_at):
 			push_error(
 				(
-					"RigCycle: %s keyframe %d is at %s, not past %s; the order is the cycle."
-					% [resource_path, index, key.at, last]
+					"RigCycle: %s keyframe %d is at %s, not past %s or on day_at %s; the order is the cycle."
+					% [resource_path, index, key.at, last, day_at]
 				)
 			)
 			return false

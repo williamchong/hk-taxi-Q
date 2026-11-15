@@ -5,6 +5,44 @@
 [ext_resource type="Environment" uid="uid://of6wtgfjc40d" path="res://tuning/twilight.tres" id="3_uh8me"]
 [ext_resource type="Environment" uid="uid://0yiroxil3tmk" path="res://tuning/night.tres" id="4_wlfsk"]
 [ext_resource type="Script" uid="uid://ufpc2lixxnpk" path="res://scripts/world/rig_cycle.gd" id="5_8uk6s"]
+[ext_resource type="Environment" uid="uid://bitsqs3tblv2i" path="res://tuning/morning.tres" id="6_morn"]
+[ext_resource type="Environment" uid="uid://cc6d3dr8om4e5" path="res://tuning/noon.tres" id="7_noon"]
+[ext_resource type="Environment" uid="uid://gvsisvctocxo" path="res://tuning/clean_daylight.tres" id="8_day"]
+
+[sub_resource type="Resource" id="Resource_morn"]
+script = ExtResource("1_v281m")
+environment = ExtResource("6_morn")
+sun_rotation_deg = Vector3(-16.6, 34.9, 0)
+sun_colour = Color(1, 0.8, 0.58, 1)
+sun_energy = 0.7
+sky_light = Color(1, 0.88, 0.76, 1)
+
+[sub_resource type="Resource" id="Resource_noon"]
+script = ExtResource("1_v281m")
+at = 0.36
+environment = ExtResource("7_noon")
+sun_rotation_deg = Vector3(-80, 0, 0)
+sun_colour = Color(1, 1, 0.98, 1)
+sun_energy = 1.15
+sky_light = Color(1, 1, 1, 1)
+
+[sub_resource type="Resource" id="Resource_aftn"]
+script = ExtResource("1_v281m")
+at = 0.57
+environment = ExtResource("8_day")
+sun_rotation_deg = Vector3(-47.2, -56.7, 0)
+sun_colour = Color(1, 0.98, 0.95, 1)
+sun_energy = 0.9
+sky_light = Color(1, 1, 1, 1)
+
+[sub_resource type="Resource" id="Resource_late"]
+script = ExtResource("1_v281m")
+at = 0.71
+environment = ExtResource("8_day")
+sun_rotation_deg = Vector3(-22.3, -63, 0)
+sun_colour = Color(1, 0.9, 0.76, 1)
+sun_energy = 0.88
+sky_light = Color(1, 0.95, 0.88, 1)
 
 [sub_resource type="Resource" id="Resource_52pmp"]
 script = ExtResource("1_v281m")
@@ -38,6 +76,6 @@ night_lights = 1.0
 [resource]
 script = ExtResource("5_8uk6s")
 length_s = 300.0
-day_until = 0.71
+day_at = 0.174
 update_hz = 10.0
-keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh")])
+keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_morn"), SubResource("Resource_noon"), SubResource("Resource_aftn"), SubResource("Resource_late"), SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh")])
