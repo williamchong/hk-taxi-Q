@@ -21,3 +21,27 @@ the touch table's 1.25 on top (`Q204`, `hud_layout_touch.md`), so 140 here is
 ⚠️ EVERY KEY BELOW IS REQUIRED. touch_profile.gd declares no defaults, so a
 missing key is a zero rather than something sensible — and a zero travel is a
 car at full lock the instant a thumb lands. verify_input.gd refuses one.
+
+## `steer_curve = 2.0`
+
+The steering thumb's response curve (`Q220`, 2026-11-16): the lock is the share of the usable travel
+to this power. Was linear (1.0, unstated). The user's report off the handset: "the touch steering is
+too sensitive". On the iPhone Air the 140 units of travel are about 11 mm of thumb at the touch
+table's 1.25, so linear was a tenth of the lock per millimetre from the first one.
+
+| Share of the travel | 1.0 (was) | 1.5 | 2.0 (ships) |
+|---|---|---|---|
+| 25% | 25% of the lock | 13% | 6% |
+| 50% | 50% | 35% | 25% |
+| 75% | 75% | 65% | 56% |
+| 100% | 100% | 100% | 100% |
+
+A curve and not a longer `steer_travel_px`: full lock stays where the thumb already finds it, and the
+drawn wheel (`TouchSticks`, sized off the travel) does not grow. ⚠️ The cost is the far end: at 2.0
+the last quarter of the travel carries 44% of the lock.
+
+🔴 A desk pick, like every number here: no pad row reads a thumb (`tools/skidpad.sh --steer=analog`
+steers in shares of the lock, past this table). The handset is the grader. If it is still too quick,
+raise this before the travel; if the far end snatches, 1.5.
+
+Steering only; the pedals stay linear.

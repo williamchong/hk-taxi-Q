@@ -68,6 +68,19 @@ extends Resource
 ## thumb's travel.
 @export_range(0.0, 60.0, 0.5) var jitter_deadzone_px: float
 
+## The shape of the steering thumb's response: the lock is the share of the
+## usable travel to this power (`Q220`). 1 is linear; 2 gives a quarter of the
+## lock at half the travel, so a small movement about the landing point is a
+## small correction, while full travel is still full lock at the same reach.
+##
+## Steering only. The pedals stay linear: nobody has asked for a throttle that
+## is harder to feather, and a curve there would move the coast point's feel.
+##
+## ⚠️ **An input assist, per input method** (`Q210`): the keyboard has its own
+## `curve` in `keyboard_steer.tres` and the car never sees which device steered.
+## A thumb that is too quick is answered here, never on a car dial.
+@export_range(1.0, 4.0, 0.1) var steer_curve: float
+
 ## Path to the shipped table. Named here so `input_router.gd` and
 ## `verify_input.gd` cannot end up loading two different files — a check that
 ## names its own path can go green while the game reads something else.
@@ -80,9 +93,14 @@ const PATH: String = "res://tuning/touch.tres"
 ## the axis leaves zero smoothly. Subtracting the band after normalising would
 ## instead make the input jump to `jitter/travel` the moment it moves at all,
 ## which is the same discontinuity a raw dead band has and is why gamepad
-## deadzones are written this way too.
+## deadzones are written this way too. Then shaped by `steer_curve`, about
+## centre and with the sign kept, so the ends and the dead band do not move.
 func steer_from(offset_px: float) -> float:
-	return _axis_from(offset_px, steer_travel_px)
+	var linear: float = _axis_from(offset_px, steer_travel_px)
+	# A curve under 1 is a `.tres` missing the key (0.0 would make every touch
+	# past the dead band full lock); read as linear, and `verify_input.gd`
+	# refuses the file.
+	return signf(linear) * pow(absf(linear), maxf(steer_curve, 1.0))
 
 
 ## The longitudinal axis, -1.0 (full brake or reverse) to 1.0 (full throttle).

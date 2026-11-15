@@ -134,6 +134,9 @@ func _check_profile() -> void:
 	_expect(steer_travel > 0.0, "profile", "steer_travel_px is %.1f" % steer_travel)
 	_expect(drive_travel > 0.0, "profile", "drive_travel_px is %.1f" % drive_travel)
 	_expect(jitter >= 0.0, "profile", "jitter_deadzone_px is %.1f" % jitter)
+	# A missing key reads 0.0, which `steer_from` drives as linear rather than
+	# as a switch; this is what says the key is missing.
+	_expect(_touch.steer_curve >= 1.0, "profile", "steer_curve is %.1f" % _touch.steer_curve)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
 	# what says the edit was bad. Below the band there is no usable travel at
 	# all and the axis is a switch.
@@ -228,12 +231,19 @@ func _check_steer() -> void:
 	_move(FINGER_A, home + Vector2(-travel, 0.0))
 	_expect(is_equal_approx(_steer(), -1.0), "steer", "a full travel left is full left lock")
 
-	# Linear between the dead band and full lock. A curve is a legitimate future
-	# choice; it is not what ships, and an unstated one is how a control ends up
+	# Shaped between the dead band and full lock by the table's stated curve
+	# (`Q220`), and by nothing else: an unstated one is how a control ends up
 	# feeling wrong with every counter reading correctly.
 	var half: float = _touch.jitter_deadzone_px + (travel - _touch.jitter_deadzone_px) * 0.5
+	var half_lock: float = pow(0.5, _touch.steer_curve)
 	_move(FINGER_A, home + Vector2(half, 0.0))
-	_expect(is_equal_approx(_steer(), 0.5), "steer", "half the usable travel is half lock")
+	_expect(
+		is_equal_approx(_steer(), half_lock),
+		"steer",
+		"half the usable travel is 0.5^steer_curve (%.3f) of full lock" % half_lock
+	)
+	_move(FINGER_A, home + Vector2(-half, 0.0))
+	_expect(is_equal_approx(_steer(), -half_lock), "steer", "and the same share to the left")
 
 	# Inside the dead band. Reachable — raising `jitter_deadzone_px` past this
 	# offset is what would move it — so this is a check and not a tautology.
