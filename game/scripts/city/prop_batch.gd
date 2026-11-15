@@ -29,7 +29,14 @@ static func batch(
 	# reads it, so a tint needs nothing of the material (`P3-77`).
 	var tinted: bool = not colours.is_empty()
 	assert(not tinted or colours.size() == transforms.size(), "one colour a transform")
-	multi.use_colors = tinted
+	# ⚠️ **A batch with custom data and no colours draws BLACK on the web.** The
+	# Compatibility renderer packs the two into one attribute, reserves both
+	# whenever either is on, zero-fills them, and multiplies `COLOR` by the
+	# colour half all the same — so every surface that keeps its vertex colour
+	# (a taxi, a wheel, a lamp lens) came out black, and only a livery panel,
+	# which the shader overwrites, kept a colour. Forward Mobile reads white
+	# for a colour never asked for. So a wearer with no tint is written white.
+	multi.use_colors = tinted or wears
 	# A car's body without its instance uniforms (`VehicleBodyBatch`): a batch
 	# never had them written, and on the web every node holding them spends a
 	# slot of a buffer the parked cells alone overran.
@@ -44,6 +51,8 @@ static func batch(
 			multi.set_instance_custom_data(index, custom[index])
 		if tinted:
 			multi.set_instance_color(index, colours[index])
+		elif wears:
+			multi.set_instance_color(index, Color.WHITE)
 	var node := MultiMeshInstance3D.new()
 	node.name = name
 	node.multimesh = multi

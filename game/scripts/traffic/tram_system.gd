@@ -157,6 +157,8 @@ func setup(with_lines: TramLines, table: TramProfile, rolls: int) -> bool:
 	for route: TramLines.Route in lines.routes:
 		_weights.append(route.length_m())
 	_batch.instance_count = table.trams
+	for index: int in table.trams:
+		_batch.set_instance_color(index, Color.WHITE)
 	beams = TrafficBeams.create(table.trams, half_width)
 	if beams != null:
 		add_child(beams)
@@ -239,6 +241,9 @@ func _load_mesh() -> bool:
 	_batch = MultiMesh.new()
 	_batch.transform_format = MultiMesh.TRANSFORM_3D
 	_batch.use_custom_data = true
+	# White, written in `setup` once the batch is sized (`PropBatch.batch`):
+	# the web build's renderer draws an unwritten instance colour as black.
+	_batch.use_colors = true
 	# Lamps from `INSTANCE_CUSTOM.a`, not the instance uniforms (`VehicleBodyBatch`).
 	_batch.mesh = VehicleBodyBatch.batched(mesh)
 	var drawn := MultiMeshInstance3D.new()

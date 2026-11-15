@@ -596,6 +596,8 @@ func setup(with_graph: RoadGraph, table: TrafficProfile, seed: int) -> bool:
 		drawn.name = _kinds[kind]
 		drawn.multimesh = _batches[kind]
 		_batches[kind].visible_instance_count = 0
+		for slot: int in _batches[kind].instance_count:
+			_batches[kind].set_instance_color(slot, Color.WHITE)
 		add_child(drawn)
 	var widest_half_m: float = 0.0
 	for extent: AABB in _extents:
@@ -796,6 +798,9 @@ func _add_kind(kind: String, mesh: Mesh, by_hour: PackedFloat32Array) -> int:
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.use_custom_data = true
+	# White, written in `setup` once the batch is sized (`PropBatch.batch`):
+	# the web build's renderer draws an unwritten instance colour as black.
+	multi.use_colors = true
 	# Lamps from `INSTANCE_CUSTOM.a`, not the instance uniforms (`VehicleBodyBatch`).
 	multi.mesh = VehicleBodyBatch.batched(mesh)
 	_batches.append(multi)
