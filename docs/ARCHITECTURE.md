@@ -1454,6 +1454,7 @@ All paths under `game/`.
 | `scripts/ui/chamfer_panel.gd`, `accent_bar.gd` | The HUD's one shape (a polygon, not a `StyleBox`), and the speed chip's signed acceleration bar; `bar_span` is a pure static so `verify_hud.gd` can grade its direction |
 | `scripts/ui/street_plate.gd`, `no_entry_icon.gd` | The plate's tuning and substitution table (`tuning/street_plate.json`, shared with `tools/font_coverage.py`), and the wrong-way NO ENTRY icon (`P3-25`) |
 | `scripts/core/cmdline.gd` | `Cmdline`, the one reader of the command line, both halves (`P5-25`) |
+| `scripts/input/control_options.gd` | `ControlOptions` (`Q223`): the touch steering's response and the steering thumb's side, each flag (`--touch-steer=`, `--touch-side=`) then saved option then default, and a phone's frame cap |
 | `scripts/core/street_tracker.gd`, `wrong_way_monitor.gd` | Pure policy: which street the plate names (dwell, unnamed edges are not evidence, `changes` counter), and whether the car runs against a one-way |
 | `scripts/core/wrong_way_profile.gd`, `street_tracker_profile.gd` | Schemas for `tuning/wrong_way.tres` and `tuning/street_tracker.tres` (`P5-26`). No `@export` defaults; both refuse a zero |
 | `scenes/world/golden_hour.tscn`, `clean_daylight.tscn` | The two lighting rigs; both dev scenes instance `clean_daylight.tscn`. Instance a rig rather than authoring a second Environment |

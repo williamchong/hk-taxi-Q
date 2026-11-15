@@ -13700,7 +13700,8 @@ menu on a change. The slider is heard as it moves and never rebuilds the page.
 - **No dev flag over it**, unlike the language: no frame reads the bus, so a scripted run is the
   same run with the machine's saved sound.
 - **Not on PAUSE.** The pause offers no OPTIONS because a language is a new HUD (`Q165`). The
-  sound has no such cost and could stand there alone; not built, not asked.
+  sound has no such cost and could stand there alone; not built, not asked. ⚠️ Asked and built the
+  same day: `Q223`.
 - **Two characters recut into the subsets** (音, 量; `tools/make_fonts.py` from the pinned
   sources): the 黑體 and the brush, the title's Bold untouched.
 
@@ -13755,3 +13756,63 @@ sun passes overhead; not looked at for crawl. The facade rule's `street` camera 
 
 **See.** `Q160` · `Q162` · `game/tuning/day_to_night.md` · `morning.md` · `noon.md` ·
 `game/tools/verify_day_cycle.gd` · `.claude/rules/facade.md`
+
+## `Q223` — OPTIONS is a list of groups, the pause has one, and three options join: steering response, steering thumb, frame cap
+
+**Asked.** The user, 2026-11-16, after `Q221`: "add option in pause, and add the new options in
+main and pause menu as suitable". Picked from what was offered: the layout (sub-pages, over one
+scrolling column and one line per option), and three options of five — the touch steering's
+sensitivity, a 60 / 30 frame rate, left-handed controls. The route line's switch and a record reset
+were offered and not picked.
+
+**Built.** OPTIONS is a list — SOUND, CONTROLS, DISPLAY, LANGUAGE — and each is a page in the look
+the options had: a row of choices, the current one in amber. PAUSE has OPTIONS.
+
+| Group | Option | Device | Boot menu | PAUSE |
+|---|---|---|---|---|
+| SOUND 聲音 | ON / OFF, the volume slider (`Q221`) | all | ✓ | ✓ |
+| CONTROLS 操控 | STEERING RESPONSE 軚盤反應: GENTLE / NORMAL / SHARP | touch | ✓ | ✓ |
+| CONTROLS | STEERING THUMB 軚盤位置: LEFT / RIGHT | touch | ✓ | — |
+| DISPLAY 畫面 | FRAME RATE 幀率: 60 / 30 | phone | ✓ | ✓ |
+| DISPLAY | FREE MODE · TIME OF DAY (`Q162`) | all | ✓ | — |
+| LANGUAGE 語言 | 繁體中文 / English | all | ✓ | — |
+
+**Decided.**
+
+- **A group with nothing in it is not listed, and a list of one is skipped** (`StartMenu._groups`,
+  `_options_page`): a desk has no CONTROLS, and a desk's pause goes from OPTIONS straight to SOUND.
+- **The pause leaves out what needs a new HUD** — the language and the thumbs' sides, since a HUD
+  readied mid-fare misses the fare's signals (`Q165`'s reason, kept) — and the hour, which a drive
+  under way has already taken. This amends `Q165`'s "no OPTIONS" and `Q221`'s "not on PAUSE".
+- **Steering response is three curves, not a slider**: `touch.tres` `steer_curve_sharp` 1.5,
+  `steer_curve` 2.0, `steer_curve_gentle` 2.5. 1.5 is the alternative `Q220` named; 2.5 is the same
+  step the other way. A slider of a power would be a number nobody can name a feel for.
+- **"Steering thumb: left / right", not "left-handed"**: a hand says nothing about which thumb
+  steers. It swaps the two zones and the two rests in the four functions `hud_layout.gd` already
+  named as where handedness lives; the rects keep the names of their sides. The readouts do not
+  move: both rests were already kept clear of every slot. ⚠️ So the map is then over the pedals
+  and the speed over the wheel — the genre's corners kept, "each readout over the thumb that acts
+  on it" given up for that player. Mirroring the readouts is a layout pass, not built.
+- **A flag beats the saved pick for the two that change a drive** (`ControlOptions`, on
+  `Locale`'s pattern): `--touch-steer=`, `--touch-side=`, and `drive.sh` names both at their
+  defaults so a scripted touch run steers the same on every machine. The frame cap has no flag: it
+  is set on a phone alone (`Handset.is_phone`), a desk stays uncapped.
+- **30 beside the project's 60**: half, a whole number of a 60 Hz panel's refreshes.
+- **The router is told, it does not poll**: `Main` hears `steering_changed` and `side_changed` and
+  calls the router; the menu still reaches nothing outside itself.
+
+**Checked.** `verify_menu` `groups:` 13 lines (the list per device and menu, the way back, the
+pause's omissions, each pick saved and said once) and three `settings:` lines; `verify_input`
+`options:` 9 lines (the flag's precedence, half the travel to each of the three curves, the zones
+and rests swapped, a thumb on the right steering and driving nothing). Mutations caught: LANGUAGE
+listed under a pause, and the rest left behind by the swap. Two scripted thumbs mirrored across the
+screen drive the same path to the centimetre on either side (`build/driver/side_{left,right}`).
+Frames `build/driver/opt_*`.
+
+**Owed.** Everything a hand decides: the two new curves under a thumb (2.5's last quarter carries
+51% of the lock), the swapped sides on a handset, the 30 fps cap on a phone — no frame here shows
+FRAME RATE, which only a phone lists — and a look at the row of three, whose third choice stands
+past the backdrop.
+
+**See.** `Q221` · `Q220` · `Q165` · `Q204` · `Q83` · `game/scripts/input/control_options.gd` ·
+`game/tuning/touch.md` · `game/tuning/menu.md`
