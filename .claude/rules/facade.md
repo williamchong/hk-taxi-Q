@@ -67,9 +67,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
 - **The day cycle — `lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd`,
   `day_to_night.tres` or a keyframe's environment (`Q160`): `tools/check.sh` (which runs
   `verify_day_cycle`), the `street` camera by day shot twice a side against the commit before, and
-  frames at `--time-of-day=0.79`, `0.86` and `1` (the keyframes since `Q162`).** 🔴 **The day writes nothing**: a rig at
-  `time_of_day` 0 holds the authored `Environment` object and the authored sun, and that — not a
-  re-applied copy of the day — is what keeps every scripted daylight frame. 🔴 **One rig blending,
+  frames at `--time-of-day=0.79`, `0.86` and `1` (the keyframes since `Q162`), and since `Q222` the
+  daylight ones too: `0`, `0.36`, `0.57`, `0.71`.** 🔴 **A resting rig writes nothing**: a rig nobody moved
+  (and one `DayClock` put back with `rest()`) holds the authored `Environment` object and the authored sun, and that — not a
+  re-applied copy of the day — is what keeps every scripted daylight frame. ⚠️ `time_of_day` 0 is
+  the MORNING since `Q222`; the authored day is at `day_at`. 🔴 **The daylight keyframes' angles and
+  `at`s are solved together** so the sun moves at one speed (`day_to_night.md`); never move one alone. 🔴 **One rig blending,
   never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the
   dark comes from the light); and **night dims the key light, never deletes it** — the last
   keyframe's energy sits under `vehicle_lamps.tres`'s `night_energy` and the two move together.

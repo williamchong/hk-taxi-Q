@@ -13714,3 +13714,44 @@ the column there reaches the top bracket.
 
 **See.** `Q146` · `Q165` · `Q185` · `Q218` · `game/tuning/menu.md` ·
 `game/scripts/core/settings.gd`
+
+## `Q222` — The whole day moves: the sun on one arc at one speed, the colours eased
+
+**Asked** by the user, 2026-11-16: "can the sunlight and shine and sky color changes slowly
+according to daytime? e.g. the sun should be brightest and shine directly from up top to street
+level", and on the first table: "can the light angle move linearly and color fades slowly".
+
+**Status.** ✅ Built 2026-11-16. A first table picked from frames; the user's drive of a shift is owed.
+
+- 🔴 **Reverses `Q162`'s "the authored daylight holds to 17:00"**, on the user's instruction. The rig
+  scene as authored is one MOMENT of the cycle, `RigCycle.day_at` 0.174 (09:26), in no keyframe;
+  `day_until` is gone. Four daylight keyframes join the three of `Q160`: 07:00 `morning.tres`,
+  12:00 `noon.tres` (80° up, energy 1.15 against the day's 0.90), 15:00 and 17:00 on the day's own
+  environment.
+- 🔴 **`Q160`'s "the day writes nothing" is kept, restated**: a rig nobody moves is `resting` and holds
+  the authored `Environment` and sun untouched, and `LightingRig.rest()` puts a moved rig back on
+  those objects. `DayClock` rests the rig for every run that holds the daylight (`--day-cycle=off`,
+  free mode's ALWAYS DAY), so every scripted frame is the one it was. `time_of_day` 0 is the
+  morning; a resting rig still READS 0, so the parked roster and the traffic keep the 07:00 they
+  always read with the cycle off.
+- **The angle is linear**: the rig slerps the direction to the light along a great circle
+  (`Basis.looking_at`), no longer the orientations' quaternions, and the daylight keyframes are
+  solved onto two great circles meeting at noon so every leg runs at 0.604 °/game s.
+  `verify_day_cycle.gd` holds the legs within 2% (measured 0.603–0.606 over 5 legs).
+- **The colours ease**: every environment value, the light's colour and energy and both shader
+  globals blend on a smoothstep between keyframes. This re-paces `Q160`'s dusk, twilight and night
+  between their keyframes; the keyframes themselves are untouched.
+- Mutation-checked: noon moved to 0.40 fails the one-speed check (0.496–0.746); a `rest()` that
+  keeps the live environment fails the rest check.
+- ⚠️ The 07:00 sun stands 16.6° up in the SSE, not the east: the arc through the authored sun and
+  an overhead noon starts there. An eastern sunrise needs the authored sun off the arc or re-aimed.
+- **Not built: 21:00 → 07:00.** The cycle is still not a loop (`Q160`): the shift closes at 21:00
+  and the night holds. The user asked about it the same day; open.
+
+**Owed.** The user's drive. The handset: the sky's radiance is now re-rendered through the whole
+shift, not its last 29% (`update_hz` is the lever, `Q160`). The shadow's roll swings fastest as the
+sun passes overhead; not looked at for crawl. The facade rule's `street` camera A/B was not shot —
+`verify_day_cycle` holds that a resting rig writes nothing, and one frame pair was compared by eye.
+
+**See.** `Q160` · `Q162` · `game/tuning/day_to_night.md` · `morning.md` · `noon.md` ·
+`game/tools/verify_day_cycle.gd` · `.claude/rules/facade.md`
