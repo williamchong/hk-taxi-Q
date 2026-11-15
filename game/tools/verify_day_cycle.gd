@@ -383,8 +383,9 @@ func _check_the_clock(rig: LightingRig) -> void:
 		SettingsScript.set_day_cycle(not on)
 		var flipped := DayClock.new()
 		flipped.rig = rig
+		# No frame between the two: a physics tick of the tree's own would
+		# decide on the old option before this one is turned.
 		root.add_child(flipped)
-		await process_frame
 		var shown_resting: bool = rig.resting
 		SettingsScript.set_day_cycle(on)
 		_tick(flipped, 1)

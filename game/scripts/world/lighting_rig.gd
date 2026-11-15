@@ -151,6 +151,9 @@ var _keys: Array[RigKeyframe] = []
 var _time: float = 0.0
 ## The authored sky's radiance size, kept while the live copy is drawn.
 var _day_radiance: Sky.RadianceSize = Sky.RADIANCE_SIZE_256
+## The one environment both ends of the last blend shared, if they did: its
+## values are already on the live copy and need no second write.
+var _written: Environment = null
 ## The environment the blend is written to — a copy, made the first time the
 ## rig moves, because the authored one is a shared and committed `.tres`.
 ## ⚠️ One thing IS written to the authored one while this exists: its sky's
@@ -274,15 +277,13 @@ func set_time_of_day(value: float) -> void:
 		_day_radiance = _day.environment.sky.radiance_size
 		_day.environment.sky.radiance_size = Sky.RADIANCE_SIZE_32
 
-	for property: StringName in BLENDED:
-		_live.set(
-			property, lerp(from.environment.get(property), to.environment.get(property), fade)
-		)
-	var sky: Material = _live.sky.sky_material
-	var sky_from: Material = from.environment.sky.sky_material
-	var sky_to: Material = to.environment.sky.sky_material
-	for property: StringName in BLENDED_SKY:
-		sky.set(property, lerp(sky_from.get(property), sky_to.get(property), fade))
+	# Between two keyframes on one environment — the afternoon's pair, and the
+	# night's three, a third of every lap — the blend lands on the same values
+	# whatever `fade` is: written once, since every write dirties the sky.
+	var held: Environment = from.environment if from.environment == to.environment else null
+	if held == null or held != _written:
+		_blend_environment(from.environment, to.environment, fade)
+	_written = held
 
 	if from == _day and weight == 0.0:
 		# The authored basis itself, not its quaternion: a scene file's nine
@@ -310,7 +311,6 @@ func rest() -> void:
 	if _live == null:
 		return
 	_drop_live()
-	_world.environment = _day.environment
 	_sun.basis = _day_basis
 	_sun.light_color = _day.sun_colour
 	_sun.light_energy = _day.sun_energy
@@ -350,13 +350,27 @@ func _exit_tree() -> void:
 	_drop_live()
 
 
-## Let the live copy go and give the authored sky back the radiance size it
-## was shrunk from while the copy was on screen.
+## Let the live copy go: the authored environment back on screen, with the
+## radiance size its sky was shrunk from while the copy was drawn.
 func _drop_live() -> void:
 	if _live == null:
 		return
 	_live = null
+	_written = null
+	_world.environment = _day.environment
 	_day.environment.sky.radiance_size = _day_radiance
+
+
+## Write the look `fade` of the way from one environment to another onto the
+## live copy: what `BLENDED` and `BLENDED_SKY` name, and nothing else.
+func _blend_environment(from: Environment, to: Environment, fade: float) -> void:
+	for property: StringName in BLENDED:
+		_live.set(property, lerp(from.get(property), to.get(property), fade))
+	var sky: Material = _live.sky.sky_material
+	var sky_from: Material = from.sky.sky_material
+	var sky_to: Material = to.sky.sky_material
+	for property: StringName in BLENDED_SKY:
+		sky.set(property, lerp(sky_from.get(property), sky_to.get(property), fade))
 
 
 ## Draw `node` only while the night's lights are on, from now.

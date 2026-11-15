@@ -181,7 +181,7 @@ func _physics_process(delta: float) -> void:
 func _decide() -> void:
 	_shift_s = 0.0
 	if mode == Mode.SHIFT:
-		var cycle: RigCycle = rig.cycle if rig != null and rig.cycle != null else null
+		var cycle: RigCycle = rig.cycle if rig != null else null
 		if cycle == null:
 			cycle = load(RigCycle.PATH) as RigCycle
 		if _shift != null and cycle != null and cycle.usable():
