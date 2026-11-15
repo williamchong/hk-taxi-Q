@@ -13905,7 +13905,10 @@ at 21:00 untouched".
   still running. Mutation-checked: a clock that does not wrap and a rig with no leg back each fail.
 - `--time-of-day=` takes up to 1.714.
 
-**Owed.** The user's drive of a night. The handset (`Q222`'s debt, now without an end). The parked
+**Owed.** The user's drive of a night. The handset (`Q222`'s debt, now without an end): a free
+drive's rig is moved at `update_hz` for the whole session where it stopped after 300 s, and the
+parked layer re-reads every out-of-view placement on each of 24 hour changes a lap where it settled
+after 14 — neither measured on a long free drive. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
