@@ -1,0 +1,26 @@
+《香港的士車神》是一款在真實香港街道上駕駛的街機的士遊戲。你駕駛紅色市區的士穿梭灣仔與銅鑼灣，接載乘客，趕在他們失去耐性之前送抵目的地。
+
+這是「港島試駕版」：早期版本，包含兩個地區，約 1.5 平方公里的港島街道。
+
+真實的城市
+街道、建築物、天橋、電車路軌、路面標記、路牌和的士站，全部以香港政府的開放地圖數據建成，不是憑印象繪畫。軒尼詩道、駱克道、告士打道和堅拿道天橋都在應有的位置，街名牌上是真實的街名。熟悉這一帶的話，不看地圖也能認路。
+
+特更
+一更由 07:00 開到 21:00，實際駕駛五分鐘，天色由日轉夜。乘客在的士站和路邊截車。咪錶按真實市區的士收費計算，快捷送達有小費，乘客等不及便會走數。交更時的總收入就是你的成績。
+
+車神駕駛
+的士的操控取自真車，再加上你察覺不到的輔助。甩尾、貼身而過、高速行駛和從天橋凌空飛躍都有額外小費，撞到東西則會扣錢。電車、巴士、小巴和私家車都守交通規則，你不必。
+
+兜風
+沒有時限，沒有分數。隨意駕駛，可選全日白晝或日轉夜。
+
+其他
+• 雙手拇指觸控：左邊轉向，右邊加速和煞車
+• 繁體中文及英文
+• 離線遊玩。無需帳戶，沒有廣告，不收集任何資料
+• 開放原始碼：https://github.com/williamchong/hk-taxi-Q
+
+數據鳴謝
+Contains geospatial data from the Lands Department, the Transport Department, the Highways Department and the Leisure and Cultural Services Department of the Government of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial Data Infrastructure (CSDI) Portal. The Government of the HKSAR and the relevant organisations own the intellectual property rights in that data. Used under the DATA.GOV.HK and CSDI Portal Terms and Conditions of Use. The Government of the HKSAR does not endorse this product.
+
+街道名稱採用自由香港楷書（Free HK Kai）© 2016 Free Hong Kong Fonts，按共享創意「署名 4.0 國際」授權使用。

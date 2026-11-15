@@ -1,0 +1,82 @@
+# The App Store listing is kept here as text so a change to it is reviewed and
+# kept in git like the code. It goes up with an App Store Connect API key:
+# either a .json file (key_id, issuer_id, key) named by
+# APP_STORE_CONNECT_API_KEY_PATH, or the .p8 Apple hands out, named by
+# APP_STORE_CONNECT_API_KEY_KEY_FILEPATH with APP_STORE_CONNECT_API_KEY_KEY_ID
+# and APP_STORE_CONNECT_API_KEY_ISSUER_ID. Either stays out of git.
+#
+# App Store Connect takes the review notes only with a contact beside them,
+# and a name and a phone number do not belong in a public repository: the
+# notes go up when APP_REVIEW_FIRST_NAME, APP_REVIEW_LAST_NAME,
+# APP_REVIEW_PHONE (+852 ...) and APP_REVIEW_EMAIL are all set, and are left
+# alone otherwise.
+
+default_platform(:ios)
+
+APP_IDENTIFIER = "cloud.williamchong.hktaxiq"
+# The version the listing belongs to: the one Godot stamps on the build, which
+# is 1.0.0 while project.godot names none.
+APP_VERSION = "1.0.0"
+
+def review_information
+  contact = %w[FIRST_NAME LAST_NAME PHONE EMAIL].map { |k| ENV["APP_REVIEW_#{k}"] }
+  return nil unless contact.all? { |v| v && !v.empty? }
+
+  {
+    first_name: contact[0],
+    last_name: contact[1],
+    phone_number: contact[2],
+    email_address: contact[3],
+    notes: File.read(File.join(__dir__, "review_notes.txt"))
+  }
+end
+
+platform :ios do
+  desc "Send the name, description, keywords, URLs, categories, age rating, review notes and screenshots to App Store Connect"
+  lane :metadata do
+    # With no .json key, the action reads the .p8 and its two IDs from the
+    # environment and hands the key on to deliver.
+    app_store_connect_api_key unless ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    deliver(
+      app_identifier: APP_IDENTIFIER,
+      app_version: APP_VERSION,
+      metadata_path: "fastlane/metadata",
+      app_rating_config_path: "fastlane/age_rating.json",
+      app_review_information: review_information,
+      skip_binary_upload: true,
+      # Made by tools/store_screenshots.sh; each upload replaces the last.
+      screenshots_path: "fastlane/screenshots",
+      overwrite_screenshots: true,
+      submit_for_review: false,
+      # Approval alone publishes nothing: the release is a button in App Store
+      # Connect. Set here because deliver sets it with the metadata.
+      automatic_release: false,
+      # The listing is checked by reading the diff, not by an HTML preview.
+      force: true,
+      # deliver runs precheck even with nothing to submit, and its
+      # in-app-purchase check cannot use an API key.
+      run_precheck_before_submit: false
+    )
+  end
+
+  desc "Submit the version for App Store review with an uploaded build (build:<number>, default the latest); the metadata lane sets the release to be by hand"
+  lane :submit do |options|
+    app_store_connect_api_key unless ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    deliver(
+      app_identifier: APP_IDENTIFIER,
+      app_version: APP_VERSION,
+      build_number: options[:build],
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: true,
+      submission_information: {
+        add_id_info_uses_idfa: false
+      },
+      force: true,
+      # precheck's in-app-purchase check cannot use an API key, and there are
+      # none to check.
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

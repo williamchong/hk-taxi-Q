@@ -39,3 +39,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# fastlane run output, App Store Connect API keys, and the store screenshots
+# (renders of the generated city: build output, made by tools/store_screenshots.sh)
+fastlane/report.xml
+fastlane/README.md
+fastlane/screenshots/
+*.p8
