@@ -26,8 +26,8 @@ has no vehicle reach a stop and stand — the answer to that is a lower `cars`, 
 by `thin_every` and the cars' index: `tools/bench_traffic.gd --view=on` reads 1.67 ms a tick at
 60 against 2.53 at 40 before either; in the game (desk, `--perf-log`) the tick's p50 is 2.59 ms.
 Throttle route (2026-11-15, desk): `phys` 3.9–4.5 ms against 2.9–3.1 with `--traffic=off`,
-`draws` 140–146 against 138–142. ⚠️ **The user picks the number** from a rush-hour drive; the
-mobile tier (`P0-3b`) must re-take it.
+`draws` 140–146 against 138–142. **The user's pick** (2026-11-15, over 40 and 80); the mobile
+tier (`P0-3b`) must re-take it.
 
 At 40 (`Q198`, the user's call 2026-11-11: "we need more cars on street esp rush hours"). Measured on the throttle route
 (2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
@@ -61,8 +61,8 @@ drives it — and a main road's count this many times (`Q219`). The pick was eve
 short back street was tried as often as a long trunk road and a minor lane-metre drew about twice
 a main one's tries. At 1.0 the fleet is spread evenly over the lanes: Wan Chai's main roads are
 41.2% of the placeable edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line), Causeway Bay's
-22.8% and 35.5%. Above 1 the main streets fill first — ⚠️ **the user's dial**, from drives at 1 /
-1.5 / 2; every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
+22.8% and 35.5%. Above 1 the main streets fill first — **1.0 is the user's pick** (2026-11-15, over
+1.5 and 2); every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
 
 ## `spawn_seen_min_m = 180.0`
 

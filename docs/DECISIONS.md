@@ -13553,8 +13553,8 @@ the web export, not on iOS or Android.
 **Status.** Built 2026-11-15 on the user's instruction ("review ai traffic vehicle performance and
 should we use tricks like object pool such that we can support more traffic on main streets and
 rush hours"; then "we need more car for fun factor sooner or later"). Three options were evaluated
-and two built. ⚠️ **`cars = 60` and `spawn_main_weight = 1.0` are the user's to pick**, from a
-rush-hour drive; both are one line of `traffic.tres`.
+and two built. **`cars = 60` and `spawn_main_weight = 1.0` are the user's picks** (2026-11-15,
+asked with 40 / 60 / 80 and 1 / 1.5 / 2 on the table); both are one line of `traffic.tres`.
 
 **The question's own answer.** The fleet is already a pool: `setup` builds every `Car`, its
 `AnimatableBody3D` and each kind's `MultiMesh` once, and a retired car is placed again. Nothing is
@@ -13636,8 +13636,8 @@ room, a lane change always refused.
   never the triangles; it waits on a handset reading that says otherwise.
 - **A per-tick memo of the give-way's answers** — built, 2% off, removed.
 
-**Owed.** The user's rush-hour drive to pick `cars` (40 / 60 / 80 — 80 needs Causeway Bay's gates
-answered first) and `spawn_main_weight` (1 / 1.5 / 2); the handset re-take of the tick (`P0-3b`).
+**Owed.** The handset re-take of the tick (`P0-3b`), deferred on the user's call 2026-11-15. A
+`cars` of 80 would need Causeway Bay's two gates answered first.
 
 **See.** `Q173` · `Q186` · `Q198` · `Q214` · `Q217` · `game/tuning/traffic.md` ·
 `.claude/rules/signals.md` · `game/tools/bench_traffic.gd`
