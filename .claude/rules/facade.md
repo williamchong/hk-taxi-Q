@@ -79,5 +79,6 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ A keyframe's `.tres` is read only for what `LightingRig.BLENDED` / `BLENDED_SKY` name. ⚠️ A
   still preview camera at a pinned hour often stalls the capture (`no frame drawn`): shoot at
   `--seconds=2 --shots=1.0`, or from a moving drive. ⚠️ `drive.sh` appends `--day-cycle=off`; a
-  frame of the cycle itself needs `--day-cycle=on`. ⚠️ The handset's cost of a moving sky is not
-  measured; `update_hz` is the lever. Numbers in `Q160`.
+  frame of the cycle itself needs `--day-cycle=on`. ⚠️ A moving sky costs the iPhone Air about
+  0.15 ms a frame at `update_hz` 10 (`Q222`); the floor handset is not measured, and `update_hz` is
+  the lever. Numbers in `Q160`.

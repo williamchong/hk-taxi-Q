@@ -13749,12 +13749,29 @@ level", and on the first table: "can the light angle move linearly and color fad
 - **Not built: 21:00 → 07:00.** The cycle is still not a loop (`Q160`): the shift closes at 21:00
   and the night holds. The user asked about it the same day; open.
 
-**Owed.** The user's drive. The handset: the sky's radiance is now re-rendered through the whole
-shift, not its last 29% (`update_hz` is the lever, `Q160`). The shadow's roll swings fastest as the
+**The handset, measured 2026-11-16** (the user's ask; worst case offered: step the rig once a game
+hour). iPhone Air, release, 2736x1260, `--max-fps 120`, a standing shift's first 60 s (07:00 to
+09:48), traffic, trams and fares off, the first 15 s left out, runs alternated:
+
+| | fps, in the order run |
+|---|---|
+| Sky held (`--day-cycle=off`) | 112.0 (119.9 for 30 s, then 96.3), 97.6, 96.9, 96.8, 92.1 |
+| Sky moving at 10 Hz | 96.0, 96.3, 95.4, 91.8 |
+
+Beside its neighbours the moving sky is 1.0–1.5 fps down at 96, about 0.13–0.16 ms a frame, and
+0.3 fps down after the phone stepped to 92: under 1% of a 60 fps frame. `update_hz` stays 10 and
+nothing is stepped by the hour — an hour is 21 s and 12.9° of sun, a jump 14 times a shift. On the
+desk (Vulkan, for a GPU time) the cost is under the ±0.4 ms between two runs, at 60 Hz too.
+⚠️ The phone's own drift is larger than the effect: one step from 120 to 96 mid-run and one from 97
+to 92, so only neighbouring runs compare. ⚠️ One handset and the fastest; the floor is not measured.
+⚠️ Not looked at: with traffic on at a desk the fleet's script read 1.44 ms a frame with the sky
+held and 2.50 with the day running.
+
+**Owed.** The user's drive. The floor handset (`update_hz` is the lever, `Q160`). The shadow's roll swings fastest as the
 sun passes overhead; not looked at for crawl. The facade rule's `street` camera A/B was not shot —
 `verify_day_cycle` holds that a resting rig writes nothing, and one frame pair was compared by eye.
 
-**See.** `Q160` · `Q162` · `game/tuning/day_to_night.md` · `morning.md` · `noon.md` ·
+**See.** `Q160` · `Q162` · `Q223` · `game/tuning/day_to_night.md` · `morning.md` · `noon.md` ·
 `game/tools/verify_day_cycle.gd` · `.claude/rules/facade.md`
 
 ## `Q223` — OPTIONS is a list of groups, the pause has one, and three options join: steering response, steering thumb, frame cap
@@ -13795,9 +13812,19 @@ the options had: a row of choices, the current one in amber. PAUSE has OPTIONS.
   on it" given up for that player. Mirroring the readouts is a layout pass, not built.
 - **A flag beats the saved pick for the two that change a drive** (`ControlOptions`, on
   `Locale`'s pattern): `--touch-steer=`, `--touch-side=`, and `drive.sh` names both at their
-  defaults so a scripted touch run steers the same on every machine. The frame cap has no flag: it
-  is set on a phone alone (`Handset.is_phone`), a desk stays uncapped.
+  defaults so a scripted touch run steers the same on every machine. The frame cap is set on a
+  phone alone (`Handset.is_phone`), a desk stays uncapped. 🔴 **Its flag is the engine's own
+  `--max-fps`** (amended the same day): as first built the saved cap overwrote `--max-fps 120`,
+  `P2-6`'s headroom gauge, and four handset runs read 60.0 fps whatever they carried. The engine
+  consumes that flag, so no argument list holds it; `apply_frame_cap` reads it once off the cap the
+  engine booted with, against the project's.
 - **30 beside the project's 60**: half, a whole number of a 60 Hz panel's refreshes.
+- **120 above them on a 120 Hz screen** (the user's ask, 2026-11-16: "add 120 to the FRAME RATE
+  option if the device support it"): `ControlOptions.caps_for` off
+  `DisplayServer.screen_get_refresh_rate()`, 120 / 60 / 30, a pick and never the default — an
+  install still opens on 60, and a 120 saved on one screen reads 60 on a slower one. A browser
+  reports no rate and is not offered it. On the iPhone Air a standing shift ran 92–97 fps under
+  that cap with traffic off (`Q222`), so 120 is not held there.
 - **The router is told, it does not poll**: `Main` hears `steering_changed` and `side_changed` and
   calls the router; the menu still reaches nothing outside itself.
 
@@ -13810,9 +13837,9 @@ screen drive the same path to the centimetre on either side (`build/driver/side_
 Frames `build/driver/opt_*`.
 
 **Owed.** Everything a hand decides: the two new curves under a thumb (2.5's last quarter carries
-51% of the lock), the swapped sides on a handset, the 30 fps cap on a phone — no frame here shows
-FRAME RATE, which only a phone lists — and a look at the row of three, whose third choice stands
-past the backdrop.
+51% of the lock), the swapped sides on a handset, the 30 and 120 fps caps on a phone — no frame
+here shows FRAME RATE, which only a phone lists, and its row is three choices on the Air now — and
+a look at the row of three, whose third choice stands past the backdrop.
 
 **See.** `Q221` · `Q220` · `Q165` · `Q204` · `Q83` · `game/scripts/input/control_options.gd` ·
 `game/tuning/touch.md` · `game/tuning/menu.md`

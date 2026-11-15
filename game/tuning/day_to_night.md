@@ -46,8 +46,11 @@ before it.
 
 How often the rig is moved. Each move re-renders the sky's radiance, so this is a cost dial. At
 10 Hz over a 300 s cycle one step is 1/3000 of the way and no step is visible; a 10 s cycle driven
-on `f_045` held 120 fps, 8.3 ms, through the whole blend on the desktop. ⚠️ **The handset is not
-measured** — if the radiance update costs there, lower this before touching the looks.
+on `f_045` held 120 fps, 8.3 ms, through the whole blend on the desktop. **Measured on the iPhone
+Air, 2026-11-16** (release, 2736x1260, `--max-fps 120`, a standing shift's first 60 s, traffic off,
+sky moving against `--day-cycle=off`, alternated): 95.4–96.3 fps moving beside 96.8–97.6 held, about
+0.13–0.16 ms a frame, under 1% of a 60 fps frame. Left at 10. ⚠️ One handset, the fastest we have;
+the floor handset is not measured, and this is still the lever there.
 
 ## The keyframes
 
