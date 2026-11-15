@@ -29,8 +29,8 @@ Throttle route (2026-11-15, desk): `phys` 3.9–4.5 ms against 2.9–3.1 with `-
 `draws` 140–146 against 138–142. **The user's pick** (2026-11-15, over 40 and 80); the mobile
 tier (`P0-3b`) must re-take it.
 
-At 40 (`Q198`, the user's call 2026-11-11: "we need more cars on street esp rush hours"). Measured on the throttle route
-(2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
+At 40 (`Q198`, the user's call 2026-11-11: "we need more cars on street esp rush hours"). Measured
+on the throttle route (2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
 1.4–2.0 with `--traffic=off`; `draws` 111–117 against 109–116 at 24 and 106–110 off. The mobile
 tier (`P0-3b`) must re-take it; the per-car cost is the car-ahead search, which is every pair.
 ⚠️ Every staged case in `verify_traffic` moved with it: seed 4's routed drive found a bus placed
@@ -60,8 +60,8 @@ A spawn tries a road by its lane-metres — its length by its lanes each way by 
 drives it — and a main road's count this many times (`Q219`). The pick was even by edge, so a
 short back street was tried as often as a long trunk road and a minor lane-metre drew about twice
 a main one's tries. At 1.0 the fleet is spread evenly over the lanes: Wan Chai's main roads are
-41.2% of the placeable edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line), Causeway Bay's
-22.8% and 35.5%. Above 1 the main streets fill first — **1.0 is the user's pick** (2026-11-15, over
+41.2% of the placeable edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line),
+Causeway Bay's 22.8% and 35.5%. Above 1 the main streets fill first — **1.0 is the user's pick** (2026-11-15, over
 1.5 and 2); every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
 
 ## `spawn_seen_min_m = 180.0`
