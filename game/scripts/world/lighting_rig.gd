@@ -21,8 +21,8 @@ extends Node3D
 ## 🔴 **The sun moves since `Q160`** (the user's ask: a mode that runs from day
 ## to night as game time), reversing "night is a switch between two static
 ## rigs". A rig with a `cycle` takes `time_of_day` from a `DayClock` and blends
-## the sky, the ambient, the key light and two shader globals between the scene
-## as authored and the cycle's keyframes; `changed` tells the consumers that
+## the sky, the ambient, the key light and two shader globals between the
+## cycle's keyframes, the scene as authored one moment among them; `changed` tells the consumers that
 ## cached the sun (`SunGlint`, `VehicleLamps`) to read it again.
 ##
 ## 🔴 **The whole day moves since `Q222`** (the user's ask: the sun and the sky
@@ -228,9 +228,8 @@ func set_time_of_day(value: float) -> void:
 	if _day == null:
 		return
 
-	# The pair of looks `time_of_day` stands between. Before the first both
-	# are the first; past the last both are that keyframe, which is how the
-	# night holds.
+	# The pair of looks `time_of_day` stands between. Off either end both are
+	# the nearest one, which a cycle that does not come round holds.
 	var from: RigKeyframe = _keys[0]
 	var to: RigKeyframe = _keys[0]
 	for key: RigKeyframe in _keys:

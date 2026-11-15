@@ -5,9 +5,8 @@
 ## `loop_at` says so. It starts at its first `RigKeyframe`, passes through
 ## each in turn — and through the rig scene's own daylight at `day_at`, which
 ## is one moment of the day since `Q222` and no longer where it starts — and
-## HOLDS the last one — a session is three to five minutes and skilled play
-## extends it (`GAME_DESIGN.md`), so the curve needs an end state and night
-## is it.
+## a shift STOPS at 1.0, on the night — a session is three to five minutes
+## (`GAME_DESIGN.md`), so the curve needs an end state and night is it.
 ##
 ## 🔴 **No `@export` here declares a default** (`Q150`'s convention). A missing
 ## `length_s` or `update_hz` reads zero and `usable()` refuses the table, so the
@@ -19,7 +18,8 @@ extends Resource
 ## load two different files.
 const PATH: String = "res://tuning/day_to_night.tres"
 
-## Game seconds from the start of a drive to the last keyframe.
+## Game seconds from the start of a drive to 1.0 on the keyframes' scale, the
+## shift's end.
 @export_range(10.0, 3600.0, 1.0, "suffix:s") var length_s: float
 ## Where on the cycle the rig scene as authored stands: the one look that is in
 ## no keyframe. Keyframes before it are the morning, after it the rest.

@@ -102,7 +102,7 @@ func _run() -> void:
 	var one_hump: bool = true
 	var dim_at_night: bool = true
 	var sun_kept: bool = true
-	var highest: float = SunGlint.toward(sun).y
+	var highest: float = day_facing.basis.z.normalized().y
 	var highest_energy: float = day_energy
 	var strongest: float = day_energy
 	for key: RigKeyframe in cycle.keyframes:
@@ -111,7 +111,10 @@ func _run() -> void:
 		if SunGlint.toward(sun).y > highest:
 			highest = SunGlint.toward(sun).y
 			highest_energy = sun.light_energy
-		one_hump = one_hump and (key.night_lights >= lights or peak >= 1.0)
+		if peak >= 1.0:
+			one_hump = one_hump and key.night_lights <= lights
+		else:
+			one_hump = one_hump and key.night_lights >= lights
 		lights = key.night_lights
 		peak = maxf(peak, lights)
 		if lights >= 1.0 and lamps != null:
@@ -279,16 +282,12 @@ func _check_the_clock(rig: LightingRig) -> void:
 		root.add_child(clock)
 		await process_frame
 		var ticks: int = ceili(rig.cycle.length_s / TICK_S)
-		for tick: int in ticks:
-			if clock.is_physics_processing():
-				clock._physics_process(TICK_S)
+		_tick(clock, ticks)
 		if on:
 			var at_end: float = rig.time_of_day
 			# On round the night, to a second past the morning.
 			var more: int = ceili(((rig.cycle.loop_at - 1.0) * rig.cycle.length_s + 1.0) / TICK_S)
-			for tick: int in more:
-				if clock.is_physics_processing():
-					clock._physics_process(TICK_S)
+			_tick(clock, more)
 			_expect(
 				(
 					absf(at_end - 1.0) < 0.001
@@ -362,9 +361,7 @@ func _check_the_shift(rig: LightingRig) -> void:
 		"shift",
 		"halfway it is %.2f h and the day runs with the option off" % clock.hour_now()
 	)
-	for tick: int in to_close:
-		if clock.is_physics_processing():
-			clock._physics_process(TICK_S)
+	_tick(clock, to_close)
 	_expect(
 		(
 			closings[0] == 1
@@ -440,6 +437,13 @@ func _check_the_pause(rig: LightingRig) -> void:
 		"%d paused frames leave the shift at %.3f s, and it runs on after" % [PAUSE_FRAMES, running]
 	)
 	clock.free()
+
+
+## `ticks` physics ticks of `clock` by hand, for as long as it still runs.
+func _tick(clock: DayClock, ticks: int) -> void:
+	for tick: int in ticks:
+		if clock.is_physics_processing():
+			clock._physics_process(TICK_S)
 
 
 func _stand_rig() -> LightingRig:

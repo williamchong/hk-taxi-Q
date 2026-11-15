@@ -172,7 +172,7 @@ func _physics_process(delta: float) -> void:
 		return
 	rig.time_of_day = minf(at, 1.0)
 	if at >= 1.0 and (_shift_s <= 0.0 or _closed):
-		# The last look holds; there is nothing left to move.
+		# The look at 1.0 holds; there is nothing left to move.
 		set_physics_process(false)
 
 
