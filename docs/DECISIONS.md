@@ -10887,9 +10887,9 @@ head looks back along its approach (`heading_deg + 180`), so a lamp and its faci
   build's alpha-coded lenses were all dark there while Mobile lit them. `lamps.py`'s lantern
   marker (`Q160`) rides that same channel and **survives** there: painting `COLOR.a` into
   `signs.gdshader` on Hennessy Road's street viewpoint reads the column 1 and the lantern 0 on
-  both renderers, and a Compatibility night frame lights the lanterns alone (2026-10-30). Why the
-  heads lost it is not established; the one difference measured is that their `MultiMesh`
-  carries `INSTANCE_CUSTOM` and the lamps' does not.
+  both renderers, and a Compatibility night frame lights the lanterns alone (2026-10-30). The
+  heads lost it to `Q226`: their `MultiMesh` carries `INSTANCE_CUSTOM` and no colours, and the
+  lamps' carries neither. `UV.x` stays.
 - **Graded**: `verify_signals` `heads:` — every placement on an approach the plan holds at its own
   junction and stage (none dark), the library on `signal_heads.tres`, and over the longest cycle
   each head's written datum equal to `light_at` on every 0.05 s tick, red, red-and-amber, green
@@ -13991,3 +13991,35 @@ recorded), and the single write's saving is under it. Not attributed further. Th
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
+
+## `Q226` — A batch with custom data and no colours draws black on the web: it carries a white one
+
+**Asked** by the user, 2026-11-16, of the web build: "why traffic cars has no color", and of a
+black taxi beside the player's: "a red taxi is not red next to me but im still red".
+
+**Status.** ✅ Fixed 2026-11-16. Seen on desktop Compatibility; the browser, a tram and a signal head owed.
+
+- 🔴 **The Compatibility renderer multiplies `COLOR` by an instance colour nobody wrote.** It
+  packs colour and custom data into one attribute, reserves both whenever either is on,
+  zero-fills the buffer and multiplies all the same (4.7.2: `mesh_storage.cpp`
+  `_multimesh_make_local`, `scene.glsl` `color_interp *= instance_color`). Forward Mobile reads
+  white for a colour never asked for, so only the web build showed it.
+- What it drew: every surface that keeps its vertex colour black — a whole traffic taxi, a
+  wheel's hub, a lamp lens — and only a livery panel coloured, which `vehicle_body.gdshader`
+  overwrites from `INSTANCE_CUSTOM`. The player's car is not a batch and stayed red.
+- **The fix is data, not a shader**: `use_colors` on and white written once the batch is sized,
+  in `PropBatch.batch` (a wearer with no tint: the parked vehicles, the signal heads),
+  `TrafficSystem.setup` and `TramSystem.setup`. A multiply by zero cannot be undone in the
+  shader. 16 bytes an instance.
+- Not owed the fix: `TrafficBeams`' batch carries custom data alone, and `traffic_beam.gdshader`
+  reads no `COLOR`.
+- ⚠️ **A new `MultiMesh` with `use_custom_data` whose shader reads `COLOR` owes the white.**
+  Nothing checks it: headless draws nothing, and Mobile is right without it.
+- ⚠️ **Not `Q76`.** A face in shade is still far darker on the web — a silver parked car's shaded
+  side reads near black beside Mobile's grey after the fix — and `Q76`'s shares were measured
+  with these batches black in the frame and are not re-measured.
+- Evidence: one drive from the start line on both renderers, the parked `car_a` at the junction
+  (`build/driver/livery_{mobile,compat}_rest`, `livery_compat_fix2`): hubs, headlamp and tail
+  lamps back, and a traffic taxi red at `t20.00`. `check.sh` passes.
+
+**See.** `Q76` · `Q167` · `Q200` · `P3-3e` · `game/scripts/city/prop_batch.gd`

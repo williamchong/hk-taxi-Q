@@ -1168,7 +1168,7 @@ approach it shows in the plan's own terms: `junction`, `edge` (region numbering)
 resolves each through `SignalPlan.approach_on` and refuses an entry the plan does not hold at that
 junction and stage — never a dark head. The library's one mesh carries the lens circuit on
 `UV.x` (0 housing, 1 red, 2 amber, 3 green), never `COLOR_0` alpha (the Compatibility renderer
-reads it as 0). Null in the manifest where nothing bound. `signals.json` (schema 3) names it as
+read it as 0 until `Q226`). Null in the manifest where nothing bound. `signals.json` (schema 3) names it as
 `heads_document` and carries the binding partition. `P3-17`'s `signals.glb` (`Q77`, removed by
 `P3-35a`) is not coming back: this is its port to a library + placements.
 

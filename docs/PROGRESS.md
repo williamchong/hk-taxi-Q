@@ -555,6 +555,7 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 - `Q221` The sound is an option (user, 2026-11-16): 聲音 開 / 關 and a volume slider on OPTIONS, saved beside the language and set on the Master bus at boot and on a change; the level is the travel squared. ✅ Built; the user's ears and a handset drag owed.
 - `Q225` A free drive's sky comes round (user, 2026-11-16): `loop_at` 1.714, the night at the day's pace (214 s), four keyframes through moonset and a dawn back to 07:00; a shift still ends at 21:00. Owed: the user's night drive, the handset.
 - `Q224` The screen turns to either landscape (user, 2026-11-16): `window/handheld/orientation=4`, the iOS plist lists both sides, and the safe-area side insets take the larger of the two on both since a half turn re-reads nothing. ✅ Built; a handset turned over owed, Android unread.
+- `Q226` A batch with custom data and no colours draws black on the web (user, 2026-11-16: a black traffic taxi beside the player's red one): the Compatibility renderer multiplies `COLOR` by a zero-filled instance colour, so `PropBatch`, the traffic and the trams write white. ✅ Fixed, seen on desktop Compatibility; the browser, a tram and a signal head owed. Not `Q76`.
 - `Q223` OPTIONS is a list of groups (user, 2026-11-16): SOUND, CONTROLS, DISPLAY, LANGUAGE, a page each, and PAUSE has OPTIONS without the language, the thumbs' sides or the hour. New: touch steering response gentle / normal / sharp (`steer_curve` 2.5 / 2.0 / 1.5), the steering thumb left or right, a phone's 60 / 30 frame cap, and 120 where the screen refreshes at it (a pick, never the default); the engine's `--max-fps` beats the saved cap. ✅ Built; every one of the three owed a handset.
 - `Q219` More traffic (user, 2026-11-15): the fleet was already a pool; the cost was every car's look at every other. A 64 m index in fleet order, far out-of-view cars' rules every 4th tick (reverses `Q217`'s staggering refusal — no camera, no thinning, so the seeds held), the spawn by lane-metres with `spawn_main_weight` 1.0, `cars` 40 → 60 (80 fails Causeway Bay). A low-detail far mesh held. The user picked 60 and 1.0. Owed: a handset tick (deferred).
 - `Q218` Three hands (user, 2026-11-15): Bakudai brush for the menu's name (Bold) and choices (Medium), Noto Sans HK 黑體 for interface text in menu and HUD, the Kai kept for names, Knewave for the English menu's brush lines; the focus is a drawn brush stroke. Two OFL subsets cut by `tools/make_fonts.py`, read on the web export. ✅ Built; phone frame owed.
@@ -585,7 +586,8 @@ descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance
 ## Risk register
 
 - **Web artefact and product render differently** — Medium. `Q76`: web crushes a third of the
-  frame under `L*` 10 against 6.0% on Mobile; cause undiagnosed, no knob. Name the renderer in any
+  frame under `L*` 10 against 6.0% on Mobile; cause undiagnosed, no knob (the black batched
+  vehicles were `Q226`, fixed; the shares are not re-measured since). Name the renderer in any
   round's write-up; diagnose before compensating.
 - **Novelty does not survive the first session** — Medium. `P3-9a` could not measure it (sessions
   ended on `Q19`). Next round, record how long each driver keeps going. Levers: `P3-2b`, a roster,

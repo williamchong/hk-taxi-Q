@@ -51,7 +51,8 @@ paths:
   14 of 21). 🔴 **The binding is the kerb's side, never `ANGLE` or the code** (`Q76`): one-way or
   nearside means along the edge, `signs.facing_from_side`'s rule. 🔴 **Never a dark head**: an
   entry the plan does not hold at its own junction and stage is refused and counted, never drawn.
-  🔴 **The circuit is `UV.x`** — the Compatibility renderer reads `COLOR_0` alpha as 0; a shader
+  🔴 **The circuit is `UV.x`** — the Compatibility renderer read `COLOR_0` alpha as 0 (`Q226`: a batch
+  with custom data owes a white instance colour); a shader
   change owes a frame on BOTH renderers (`GODOT=` a wrapper adding `--rendering-method
   gl_compatibility`) and the `shader error` grep. ⚠️ Lit by day: the emission does not multiply
   `night_lights`. ⚠️ A drawing change is `python tools/make_signal_heads.py`,
