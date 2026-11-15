@@ -78,7 +78,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the
   dark comes from the light); and **night dims the key light, never deletes it** — the last
   keyframe's energy sits under `vehicle_lamps.tres`'s `night_energy` and the two move together.
-  ⚠️ A keyframe's `.tres` is read only for what `LightingRig.BLENDED` / `BLENDED_SKY` name. ⚠️ A
+  ⚠️ A keyframe's `.tres` is read only for what `LightingRig.BLENDED` / `BLENDED_SKY` name, and its
+  `Sky` carries `radiance_size = 0` — a loaded sky holds its radiance map undrawn, 18 MB each at the
+  default (`Q225`). ⚠️ A
   still preview camera at a pinned hour often stalls the capture (`no frame drawn`): shoot at
   `--seconds=2 --shots=1.0`, or from a moving drive. ⚠️ `drive.sh` appends `--day-cycle=off`; a
   frame of the cycle itself needs `--day-cycle=on`. ⚠️ A moving sky costs the iPhone Air about

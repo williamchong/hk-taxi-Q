@@ -13917,7 +13917,15 @@ after 14 — neither measured on a handset.
 frames, p50 8.80 ms, p95 13.14, p99 14.00; 425 frames over 16.7 ms and 7 over 33.3, eight of them
 the run's own screenshots. Frames at 150, 300, 420, 470, 490, 505 and 516 s read day, night, night,
 first light, dawn, dawn and the morning again. ⚠️ No cycle-off lap was run beside it, so this is a
-level, not a cost. The parked
+level, not a cost.
+
+**The keyframe skies were holding texture memory undrawn**, found by the simplify pass's efficiency
+review and measured the same day: a loaded `Sky` allocates its radiance map whether or not it is
+ever assigned, and the rig only reads colours off a keyframe's environment. Six keyframe skies cost
+110.4 MB at the default 256 px (129.65 MB with the day's sky drawn, 240.09 with them loaded) —
+three of them, about 55 MB, since `Q160`. `radiance_size = 0` on each brings the six to 4.7 MB
+(134.34). The sky on screen is a copy of the day's and keeps its 256. Desktop numbers; the handset
+is not measured. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
