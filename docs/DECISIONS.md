@@ -13963,7 +13963,23 @@ whole 514 s lap through night and dawn): 47,096 frames after the first 10 s, p50
 instantiated. So no frame of the loop — the night legs, the wrap, the sky re-filtering — misses a
 30 fps frame, and the median sits near 99 fps. ⚠️ One run, one handset, the fastest we have, and
 the car stood still; the frames over 16.7 ms are not attributed (traffic's script alone is p50 3.4
-ms a frame it runs). The memory saving is not measured on the handset. The parked
+ms a frame it runs).
+
+**The handset again on the final table** (release build of `618a3643`, noon's 2.2 and its blue
+sky in; same flags): a held-daylight minute (`--day-cycle=off`) p50 10.36 ms, p95 16.90, max
+23.90, video memory **358.7 MB**; the whole moving lap 43,844 frames, p50 10.74, p95 19.33, p99
+22.95, max 28.85, none over 33.3, video memory **358.8 MB** flat from the first fifth of the run
+to the last. So the live sky costs the phone 0.1 MB over a resting rig — the authored sky's
+shrink holds there (unshrunk it was +18 MB on the desktop) — and about 0.4 ms at the median.
+⚠️ One run a side, the car standing.
+
+**A last pass over the whole set** (`5415f114`): between two keyframes on ONE environment — the
+afternoon's pair and the night's three, about a third of every lap — the blend lands on the same
+values whatever the fade, and the rig wrote all thirteen ten times a second, each sky write
+dirtying the sky. Written once now (`_written`); the sun, its colour and the globals still move.
+Not on the handset build above. ⚠️ `verify_day_cycle`'s option-flip leg was flaky, about one run
+in three: a frame awaited between adding the clock and turning the option let the tree's own
+physics tick decide first. The wait is gone; six runs in a row pass. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
