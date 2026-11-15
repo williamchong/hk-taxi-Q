@@ -13927,19 +13927,27 @@ three of them, about 55 MB, since `Q160`. `radiance_size = 0` on each brings the
 (134.34). The sky on screen is a copy of the day's and keeps its 256. Desktop numbers; the handset
 is not measured.
 
-**Two more from the same pass, not fixed.**
+**Two more from the same pass.**
 
-- **The day's own sky is held twice while the cycle runs**: 18.41 MB, measured (129.65 MB with the
-  authored sky drawn, 148.06 with the live copy drawn and the authored one still loaded). The cheap
-  fix shrinks the authored `Sky`'s `radiance_size` while the copy is on screen and puts it back in
-  `rest()` — which writes to the authored resource, the thing `Q160` says the rig never does. Left
-  for the user's call.
-- **Whether the sky's share of the ambient keeps up with ten moves a second is not known.** The
-  live sky is `PROCESS_MODE_INCREMENTAL`, which re-filters one roughness layer a frame and starts
-  over when the sky is dirtied; the reviewer's reading is that the roughest layers may never catch
-  up while the sun moves. A bare-scene probe on the desktop was inconclusive — its window stopped
-  drawing, the stall `facade.md` already names — and the game's own frames at pinned and moving
-  hours were never shot from one camera. Owed: one street camera, the same hour moving and pinned. The parked
+- **The day's own sky was held twice while the cycle ran**: 18.41 MB, measured (129.65 MB with the
+  authored sky drawn, 148.06 with the live copy drawn and the authored one still loaded). Fixed: the
+  rig shrinks the authored `Sky`'s `radiance_size` to 32 px once the copy is on screen and
+  `_drop_live` puts it back, on `rest()` and when the rig leaves the tree — the authored
+  environment is a cached resource the next scene loads. A live rig reads 175.59 MB with it shrunk
+  and 193.22 with it left at 256; a resting one 174.81. 🔴 **This is the one thing the rig writes
+  to the authored resource**, a narrow exception to `Q160`'s "never the authored `.tres`": no look
+  reads it, a resting rig still writes nothing, and `verify_day_cycle.gd` holds the size while live
+  and its return on rest and on exit. ⚠️ Godot's texture-memory counter wraps when a texture is
+  freed, so the pair was measured live-before-the-first-frame, never across a rest.
+- **Whether the sky's share of the ambient keeps up with ten moves a second**: no lag seen. The
+  reviewer's reading was that an incremental sky dirtied every few frames might never re-filter its
+  roughest layers. One place at one hour, 03:00 on a free lap: the frame after 420 s of the sky
+  moving against a frame pinned there (`build/driver/q225/lag_pair.png`) — the sky, the sea and the
+  unlit road read the same, top-of-frame mean `(17, 13, 22)` against `(17, 13, 21)`; a sky stuck at
+  the day's ambient would be many times brighter. ⚠️ The car stands a little differently in the
+  two, so it is a tone comparison and not a pixel one; a bare-scene probe and a standing twilight
+  capture both stalled (`facade.md`'s stall). Desktop, at 120 fps: at a phone's 30 the sky is
+  dirtied every third frame, and that is not looked at. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
