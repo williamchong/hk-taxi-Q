@@ -91,7 +91,9 @@ the floor handset is not measured, and this is still the lever there.
   colours off these — the sky on screen is a copy of the day's. Measured on the desktop: the six
   keyframe skies cost 110.4 MB of texture memory at the default 256 and 4.7 MB at 32 (129.65 MB
   with the day's sky drawn; 240.09 with them loaded before, 134.34 after). A new keyframe
-  environment takes the line too. ⚠️ Not on `clean_daylight.tres`: that one is drawn.
+  environment takes the line too. ⚠️ Not on `clean_daylight.tres`: that one is drawn — until the
+  rig moves, when the copy is drawn in its place and the rig shrinks the authored sky itself, giving
+  it back on `rest()` and on leaving the tree (18 MB, `Q225`).
 - A shift's 21:00 is 13% of the way from the 20:00 moon to the 03:30 one: the same night, the moon
   a little further west.
 - **The sun sets in the west-south-west** — the engine's −X is west and +Z south.

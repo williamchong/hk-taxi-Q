@@ -27,7 +27,10 @@
 ##   through the night into the next morning while a shift's stops at 1.
 ## - The option turned on or off under the menu, after the clock first read
 ##   it, is what the first tick of the drive shows.
-## - The authored `.tres` is never the one written to.
+## - The authored `.tres` is never the one written to — but for its sky's
+##   `radiance_size`, shrunk while the copy is drawn (`Q225`: a loaded sky
+##   holds its map undrawn) and back at its own on `rest()` and when the rig
+##   leaves the tree.
 ## - A free drive's clock reaches 1 in `length_s` game seconds and the morning
 ##   again in `loop_at` of them, and stays at 0 with the option off.
 ## - 特更 (`Q162`): in a shift the day runs with the option off, the clock reads
@@ -81,6 +84,7 @@ func _run() -> void:
 	var sun: DirectionalLight3D = _child(rig, "DirectionalLight3D") as DirectionalLight3D
 	var authored: Environment = world.environment
 	var authored_energy: float = authored.ambient_light_energy
+	var authored_radiance: Sky.RadianceSize = authored.sky.radiance_size
 	var day_facing: Transform3D = sun.transform
 	var day_energy: float = sun.light_energy
 
@@ -171,6 +175,14 @@ func _run() -> void:
 
 	rig.time_of_day = 0.0
 	_expect(not rig.resting, "day", "at 0 the rig is on its first keyframe, not at rest")
+	_expect(
+		(
+			authored.sky.radiance_size == Sky.RADIANCE_SIZE_32
+			and world.environment.sky.radiance_size == authored_radiance
+		),
+		"table",
+		"while the copy is drawn the authored sky is shrunk, and the copy keeps its size"
+	)
 	var before_rest: int = moved[0]
 	rig.rest()
 	_expect(
@@ -180,6 +192,7 @@ func _run() -> void:
 			and world.environment == authored
 			and sun.transform == day_facing
 			and sun.light_energy == day_energy
+			and authored.sky.radiance_size == authored_radiance
 			and moved[0] == before_rest + 1
 		),
 		"day",
@@ -191,7 +204,13 @@ func _run() -> void:
 	await _check_the_clock(rig)
 	await _check_the_shift(rig)
 	await _check_the_pause(rig)
-	rig.queue_free()
+	rig.time_of_day = 1.0
+	rig.free()
+	_expect(
+		authored.sky.radiance_size == authored_radiance,
+		"table",
+		"a rig that leaves at night gives the authored sky its size back"
+	)
 	_check_the_phone()
 	_finish("verify_day_cycle")
 

@@ -149,8 +149,13 @@ var _day_basis := Basis.IDENTITY
 ## The cycle's keyframes with `_day` stood among them at `day_at`, in order.
 var _keys: Array[RigKeyframe] = []
 var _time: float = 0.0
+## The authored sky's radiance size, kept while the live copy is drawn.
+var _day_radiance: Sky.RadianceSize = Sky.RADIANCE_SIZE_256
 ## The environment the blend is written to — a copy, made the first time the
 ## rig moves, because the authored one is a shared and committed `.tres`.
+## ⚠️ One thing IS written to the authored one while this exists: its sky's
+## `radiance_size`, shrunk because it is loaded and not drawn, and put back by
+## `_drop_live` (`Q225`). No look reads it.
 var _live: Environment = null
 
 
@@ -263,6 +268,11 @@ func set_time_of_day(value: float) -> void:
 		# ambient trails the sky by a few of them, on a blend that takes minutes.
 		_live.sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 		_world.environment = _live
+		# A loaded sky holds its radiance map whether or not it is drawn, and
+		# the authored one is not drawn while the copy is: 18 MB (`Q225`).
+		# Shrunk after the copy was taken, so the copy keeps the day's size.
+		_day_radiance = _day.environment.sky.radiance_size
+		_day.environment.sky.radiance_size = Sky.RADIANCE_SIZE_32
 
 	for property: StringName in BLENDED:
 		_live.set(
@@ -299,7 +309,7 @@ func rest() -> void:
 	_time = 0.0
 	if _live == null:
 		return
-	_live = null
+	_drop_live()
 	_world.environment = _day.environment
 	_sun.basis = _day_basis
 	_sun.light_color = _day.sun_colour
@@ -335,6 +345,18 @@ func _set_globals(sky_light: Color, night_lights: float) -> void:
 ## to what a scene with no rig reads.
 func _exit_tree() -> void:
 	night_lights_now = 1.0
+	# The authored environment is a cached resource the next scene's rig will
+	# load: it must not inherit a sky shrunk for this one.
+	_drop_live()
+
+
+## Let the live copy go and give the authored sky back the radiance size it
+## was shrunk from while the copy was on screen.
+func _drop_live() -> void:
+	if _live == null:
+		return
+	_live = null
+	_day.environment.sky.radiance_size = _day_radiance
 
 
 ## Draw `node` only while the night's lights are on, from now.
