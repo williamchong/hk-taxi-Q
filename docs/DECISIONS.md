@@ -13333,6 +13333,16 @@ owed, with `Q205`'s.
   both payers. Not seen: a frame with a passenger aboard — no scripted run boarded one — so the tip
   clock over the line is read off the rects (clock 236–366, row 368–428 on the handset).
 
+- ⚠️ **Two rows since 2026-11-16** (the user's ask, from a drive: "車手 on top and skill in a new row
+  below"). The live line is a stack hung from the top of the tick's row: 車手 ×N, the gap's bar, then
+  the skill that joined, small, cut to the row's whole width. The skill's row runs ~30 px under the
+  60 px rect, which on the handset put it ON the 的士 roof sign, so the touch table's `tick` moved
+  368 → 338; the desk's is unchanged. Seen on the handset frame and the desk; with a passenger
+  aboard the total sits a few pixels under the tip clock's digits on the handset — close, not
+  touching. The meter's tick flash rides the same rect, so it is 30 px higher there too. Not
+  measured: the draw-call delta (one container fewer, the same two labels and bar). When the NO
+  ENTRY sign is up with a combo live, the skill's row overlaps its top on the desk (sign y 352).
+
 **See.** `Q205` · `Q138` · `Q142` · `P3-2b` · `game/scripts/ui/hud.gd` · `game/tuning/hud_layout.md`
 
 ## `Q215` — Shade is lit by the street, paint gloss is the engine's clearcoat, and the railings are the lamp posts' steel
