@@ -73,9 +73,48 @@ sun_energy = 0.3
 sky_light = Color(0.1, 0.11, 0.18, 1)
 night_lights = 1.0
 
+[sub_resource type="Resource" id="Resource_moon"]
+script = ExtResource("1_v281m")
+at = 1.464
+environment = ExtResource("4_wlfsk")
+sun_rotation_deg = Vector3(-10, -88, 0)
+sun_colour = Color(0.62, 0.72, 1, 1)
+sun_energy = 0.3
+sky_light = Color(0.1, 0.11, 0.18, 1)
+night_lights = 1.0
+
+[sub_resource type="Resource" id="Resource_mset"]
+script = ExtResource("1_v281m")
+at = 1.536
+environment = ExtResource("4_wlfsk")
+sun_rotation_deg = Vector3(-3, -90, 0)
+sun_colour = Color(0.62, 0.72, 1, 1)
+sky_light = Color(0.1, 0.11, 0.18, 1)
+night_lights = 1.0
+
+[sub_resource type="Resource" id="Resource_first"]
+script = ExtResource("1_v281m")
+at = 1.607
+environment = ExtResource("3_uh8me")
+sun_rotation_deg = Vector3(-0.5, 36.6, 0)
+sun_colour = Color(0.9, 0.5, 0.45, 1)
+sky_light = Color(0.3, 0.3, 0.45, 1)
+night_lights = 0.8
+
+[sub_resource type="Resource" id="Resource_dawn"]
+script = ExtResource("1_v281m")
+at = 1.661
+environment = ExtResource("2_0mejh")
+sun_rotation_deg = Vector3(-7, 36, 0)
+sun_colour = Color(1, 0.62, 0.36, 1)
+sun_energy = 0.6
+sky_light = Color(1, 0.74, 0.58, 1)
+night_lights = 0.25
+
 [resource]
 script = ExtResource("5_8uk6s")
 length_s = 300.0
 day_at = 0.174
 update_hz = 10.0
-keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_morn"), SubResource("Resource_noon"), SubResource("Resource_aftn"), SubResource("Resource_late"), SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh")])
+loop_at = 1.714
+keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_morn"), SubResource("Resource_noon"), SubResource("Resource_aftn"), SubResource("Resource_late"), SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh"), SubResource("Resource_moon"), SubResource("Resource_mset"), SubResource("Resource_first"), SubResource("Resource_dawn")])

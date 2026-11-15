@@ -1,7 +1,8 @@
 ## A day that ends (`Q160`, the user's ask): the looks a `LightingRig` passes
 ## through as game time runs, and how long the passage takes.
 ##
-## A cycle is not a loop. It starts at its first `RigKeyframe`, passes through
+## A shift's cycle is not a loop; a free drive's is, since `Q225`, where
+## `loop_at` says so. It starts at its first `RigKeyframe`, passes through
 ## each in turn — and through the rig scene's own daylight at `day_at`, which
 ## is one moment of the day since `Q222` and no longer where it starts — and
 ## HOLDS the last one — a session is three to five minutes and skilled play
@@ -26,6 +27,11 @@ const PATH: String = "res://tuning/day_to_night.tres"
 ## How often the rig is moved, in hertz. The sky's radiance is re-rendered on
 ## every move, so this is a cost dial and not a smoothness one.
 @export_range(0.5, 60.0, 0.5, "suffix:Hz") var update_hz: float
+## Where the cycle comes round to its start again, on the same scale as the
+## keyframes' `at` — past 1.0, the shift's end — or 0 for a cycle that holds
+## its last keyframe. Only a free drive runs past 1.0 (`Q225`): the night goes
+## on through a dawn to the first keyframe, and the day starts over.
+@export_range(0.0, 4.0, 0.001) var loop_at: float
 ## The looks either side of the authored day, in the order they are reached.
 @export var keyframes: Array[RigKeyframe]
 
@@ -61,4 +67,17 @@ func usable() -> bool:
 			)
 			return false
 		last = key.at
+	if loop_at != 0.0 and (loop_at < 1.0 or loop_at <= last):
+		push_error(
+			(
+				"RigCycle: %s loop_at %s is not past 1.0 and its last keyframe at %s."
+				% [resource_path, loop_at, last]
+			)
+		)
+		return false
 	return true
+
+
+## The far end of the cycle's scale: `loop_at` where it comes round, else 1.
+func span() -> float:
+	return loop_at if loop_at > 0.0 else 1.0

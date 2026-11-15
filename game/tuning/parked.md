@@ -22,8 +22,8 @@ Was 12.0 against the 240 s cycle that opened at noon.
 
 ## `clock_end_h = 21.0`
 
-`time_of_day` 1 is 21:00, 交更, where the cycle's night holds — in free mode too, whose day runs
-the same table when its option is DAY TO NIGHT. The vans' 8-19 window closes inside the day and
+`time_of_day` 1 is 21:00, 交更, where a shift's night holds. A free drive whose option is DAY TO
+NIGHT runs on past it (`Q225`), and the roster reads the dial past 1 as the hours after 21:00. The vans' 8-19 window closes inside the day and
 the single-yellow fill (19-7) opens at twilight, which is what makes the night street carry more
 cars than the day. The metered bays' 8am-to-midnight window opens an hour in, so the first game hour
 of a shift (about 21 s) stands no metered car — the window as published.

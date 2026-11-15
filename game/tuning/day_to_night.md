@@ -31,7 +31,7 @@ Five minutes of DRIVING from the start to the end of the cycle, and the length o
 and the HUD's clock end on one game second. Was 240 s (`Q160`) against `GAME_DESIGN.md`'s
 three-to-five minute session; the shift is that session now, and five minutes is about five to eight
 fares at 30–90 s each. Game time, not wall time — the clock stops under the start menu. Free mode
-runs the same table when its option is DAY TO NIGHT, then holds the night.
+runs the same table when its option is DAY TO NIGHT, and since `Q225` runs on round `loop_at`.
 
 ## `day_at = 0.174`
 
@@ -41,6 +41,14 @@ the afternoon's 78.0° of arc over 0.43 sets the speed (0.604 °/game s at 300 s
 sun's 33.6° before noon puts it here. Move noon, dusk or `length_s`'s keyframes and this moves
 with them. Was `day_until` 0.71 (`Q162`): the authored daylight held to 17:00 and nothing moved
 before it.
+
+## `loop_at = 1.714`
+
+Where a free drive's day comes round to 07:00 again (`Q225`, the user's ask, 2026-11-16: "Loop the
+sky in free mode", "keep at the day's pace, the shift end at 21:00 untouched"): 24 hours on the
+scale where 1.0 is the shift's 14, so the night runs at the day's pace — 214 game seconds from
+21:00 to 07:00, 514 a lap. 🔴 **A shift never passes 1.0**; `DayClock` caps it there and only a
+free drive wraps. 0 would be a cycle that holds its last keyframe.
 
 ## `update_hz = 10.0`
 
@@ -65,6 +73,19 @@ the floor handset is not measured, and this is still the lever there.
 | 0.86 (19:00) | `twilight.tres` | on the horizon, 0.00 | `(0.3, 0.3, 0.45)` | 0.80 |
 | 0.93 (20:00) | `night.tres` | the moon, 38° up, `(0.62, 0.72, 1)`, 0.30 | `(0.1, 0.11, 0.18)` | 1.00 |
 
+| 1.464 (03:30) | `night.tres` | the moon, 10° up in the west, 0.30 | night's | 1.00 |
+| 1.536 (04:30) | `night.tres` | the moon on the western horizon, 0.00 | night's | 1.00 |
+| 1.607 (05:30) | `twilight.tres` | the sun on the SSE horizon, 0.00 | twilight's | 0.80 |
+| 1.661 (06:15) | `dusk.tres` | 7° up in the SSE, dusk's colour, 0.60 | dusk's | 0.25 |
+
+- **The rows past 1.0 are the free drive's night and dawn** (`Q225`), and the last leg blends back
+  to the 07:00 row across `loop_at`. The moon sets in the west with its energy fading to 0.00 at
+  04:30; first light is 0.00 too, so the key light crosses from the western horizon to where the
+  sun rises unseen — the 19:00 trick mirrored. The 06:15 sun is on the morning's own arc, 9.7°
+  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn reuses `dusk.tres` and
+  first light `twilight.tres`: a first table, with no look of its own yet.
+- A shift's 21:00 is 13% of the way from the 20:00 moon to the 03:30 one: the same night, the moon
+  a little further west.
 - **The sun sets in the west-south-west** — the engine's −X is west and +Z south.
 - 🔴 **By day the angle moves at ONE speed** (`Q222`): the rig slerps the DIRECTION to the light
   along the great circle between two keyframes, and the five daylight keyframes sit on two great

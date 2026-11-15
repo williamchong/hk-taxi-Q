@@ -13,8 +13,9 @@
 class_name RigKeyframe
 extends Resource
 
-## Where on the cycle this look is reached, as a fraction of `RigCycle.length_s`.
-@export_range(0.0, 1.0, 0.01) var at: float
+## Where on the cycle this look is reached, as a fraction of `RigCycle.length_s`:
+## past 1.0 on the leg only a looping free drive reaches (`RigCycle.loop_at`).
+@export_range(0.0, 4.0, 0.001) var at: float
 ## The sky, ambient, fog and glow at this time. Only the properties
 ## `LightingRig.BLENDED` and `LightingRig.BLENDED_SKY` name are read; the
 ## switches (`glow_enabled`, `tonemap_mode`, …) stay the day's.

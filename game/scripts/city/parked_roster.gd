@@ -17,7 +17,8 @@ extends RefCounted
 
 ## The clock reading for the rig's `time_of_day`, on a 24 h clock.
 static func hour_of(time_of_day: float, start_h: float, end_h: float) -> float:
-	var hour: float = start_h + clampf(time_of_day, 0.0, 1.0) * (end_h - start_h)
+	# Not capped at 1: a free drive's day runs on past the shift's end (`Q225`).
+	var hour: float = start_h + maxf(time_of_day, 0.0) * (end_h - start_h)
 	return fposmod(hour, 24.0)
 
 

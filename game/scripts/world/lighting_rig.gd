@@ -118,7 +118,8 @@ const BLENDED_SKY: Array[StringName] = [
 ## Why the number is what it is: the rig scene's sidecar.
 @export_range(0.25, 1.0, 0.05) var phone_scale_3d: float = 1.0
 
-## Where on `cycle` the rig stands, 0 the first keyframe and 1 the last.
+## Where on `cycle` the rig stands: 0 the first keyframe, 1 the shift's end,
+## and on to `cycle.span()` where the cycle comes round (`Q225`).
 ## Written by `DayClock`, or pinned for a frame by `--time-of-day=`. ⚠️ A
 ## `resting` rig reads 0 here and shows the authored day, which is at
 ## `cycle.day_at`: the hour's readers keep the opening hour they always read.
@@ -223,7 +224,7 @@ func fit_scale(phone: bool, viewport: Viewport) -> void:
 
 
 func set_time_of_day(value: float) -> void:
-	_time = clampf(value, 0.0, 1.0)
+	_time = clampf(value, 0.0, cycle.span() if cycle != null else 1.0)
 	if _day == null:
 		return
 
@@ -240,6 +241,13 @@ func set_time_of_day(value: float) -> void:
 	var weight: float = 0.0
 	if from != to:
 		weight = clampf(inverse_lerp(from.at, to.at, _time), 0.0, 1.0)
+	elif cycle.loop_at > 0.0 and _keys.size() > 1:
+		# Off either end of a cycle that comes round: the leg from the last
+		# look back to the first, across `loop_at`.
+		from = _keys[-1]
+		to = _keys[0]
+		var leg: float = cycle.loop_at - from.at + to.at
+		weight = clampf(fposmod(_time - from.at, cycle.loop_at) / leg, 0.0, 1.0)
 	# The light's ANGLE moves on `weight`, at one speed from a keyframe to the
 	# next; every colour and energy moves on `fade`, which leaves and arrives
 	# at rest, so no look changes pace on the frame a keyframe passes (`Q222`,

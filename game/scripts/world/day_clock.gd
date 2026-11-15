@@ -165,9 +165,14 @@ func _physics_process(delta: float) -> void:
 	# Through the shift's own length where one runs, so `--shift-s=` speeds the
 	# sky with the clock.
 	var length_s: float = _shift_s if _shift_s > 0.0 else rig.cycle.length_s
-	rig.time_of_day = elapsed_s / length_s
-	if rig.time_of_day >= 1.0 and (_shift_s <= 0.0 or _closed):
-		# The last keyframe holds; there is nothing left to move.
+	var at: float = elapsed_s / length_s
+	if _shift_s <= 0.0 and rig.cycle.loop_at > 0.0:
+		# A free drive's day comes round (`Q225`): night, a dawn, the morning.
+		rig.time_of_day = fposmod(at, rig.cycle.loop_at)
+		return
+	rig.time_of_day = minf(at, 1.0)
+	if at >= 1.0 and (_shift_s <= 0.0 or _closed):
+		# The last look holds; there is nothing left to move.
 		set_physics_process(false)
 
 

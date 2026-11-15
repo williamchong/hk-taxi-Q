@@ -16,11 +16,14 @@
 ##   missing sun as "no rig" and drives dark, so at every keyframe the light is
 ##   there, above the horizon while it has energy, and at the last one its
 ##   energy is at or under the car's own `night_energy` bar.
-## - `night_lights` only rises, and ends at 1: a lantern that went out again
-##   on the way to night is a table authored out of order.
+## - `night_lights` rises to 1 and only then falls: a lantern that went out
+##   and came on again is a table authored out of order.
+## - The cycle comes round (`Q225`): just short of `loop_at` the rig is on its
+##   first keyframe's look again, lamps out, and a free drive's clock runs on
+##   through the night into the next morning while a shift's stops at 1.
 ## - The authored `.tres` is never the one written to.
-## - The clock reaches the last keyframe in `length_s` game seconds, holds
-##   there, and stays at 0 with the option off.
+## - A free drive's clock reaches 1 in `length_s` game seconds and the morning
+##   again in `loop_at` of them, and stays at 0 with the option off.
 ## - 特更 (`Q162`): in a shift the day runs with the option off, the clock reads
 ##   the opening hour to the closing one over the same `length_s`, `closed`
 ##   fires once at the end, and `restart` puts the clock and the rig back.
@@ -75,6 +78,7 @@ func _run() -> void:
 	var day_facing: Transform3D = sun.transform
 	var day_energy: float = sun.light_energy
 
+	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
 	var moved: Array[int] = [0]
 	rig.changed.connect(func() -> void: moved[0] += 1)
 
@@ -93,9 +97,10 @@ func _run() -> void:
 	_check_the_arc(rig, sun)
 	moved[0] = 0
 
-	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
 	var lights: float = 0.0
-	var rising: bool = true
+	var peak: float = 0.0
+	var one_hump: bool = true
+	var dim_at_night: bool = true
 	var sun_kept: bool = true
 	var highest: float = SunGlint.toward(sun).y
 	var highest_energy: float = day_energy
@@ -106,11 +111,18 @@ func _run() -> void:
 		if SunGlint.toward(sun).y > highest:
 			highest = SunGlint.toward(sun).y
 			highest_energy = sun.light_energy
-		rising = rising and key.night_lights >= lights
+		one_hump = one_hump and (key.night_lights >= lights or peak >= 1.0)
 		lights = key.night_lights
+		peak = maxf(peak, lights)
+		if lights >= 1.0 and lamps != null:
+			dim_at_night = dim_at_night and sun.light_energy <= lamps.night_energy
 		var up: float = SunGlint.toward(sun).y
 		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or up > 0.0)
-	_expect(rising and is_equal_approx(lights, 1.0), "lights", "night_lights only rises, to 1.0")
+	_expect(
+		one_hump and is_equal_approx(peak, 1.0),
+		"lights",
+		"night_lights rises to 1.0 and only then falls"
+	)
 	_expect(sun_kept, "sun", "the key light is kept, and above the horizon while it shines")
 	_expect(
 		highest_energy == strongest and highest_energy > day_energy,
@@ -121,14 +133,26 @@ func _run() -> void:
 		)
 	)
 	_expect(
-		lamps != null and sun.light_energy <= lamps.night_energy,
+		lamps != null and dim_at_night,
 		"sun",
 		(
-			"the last keyframe's %.2f is night to the car's %.2f bar"
-			% [sun.light_energy, lamps.night_energy if lamps != null else -1.0]
+			"every keyframe at full night is night to the car's %.2f bar"
+			% [lamps.night_energy if lamps != null else -1.0]
 		)
 	)
 	_expect(moved[0] == cycle.keyframes.size(), "signal", "one `changed` a move")
+	rig.time_of_day = 0.0
+	var first: Vector3 = SunGlint.toward(sun)
+	rig.time_of_day = cycle.loop_at - 0.0001
+	_expect(
+		(
+			cycle.loop_at > 1.0
+			and rad_to_deg(first.angle_to(SunGlint.toward(sun))) < 0.5
+			and LightingRig.night_lights_now < 0.01
+		),
+		"loop",
+		"just short of loop_at %.3f the rig is on its first look again, lamps out" % cycle.loop_at
+	)
 	_expect(
 		world.environment != authored and authored.ambient_light_energy == authored_energy,
 		"table",
@@ -254,17 +278,27 @@ func _check_the_clock(rig: LightingRig) -> void:
 		clock.rig = rig
 		root.add_child(clock)
 		await process_frame
-		var ticks: int = ceili(rig.cycle.length_s / TICK_S) + 2
+		var ticks: int = ceili(rig.cycle.length_s / TICK_S)
 		for tick: int in ticks:
 			if clock.is_physics_processing():
 				clock._physics_process(TICK_S)
 		if on:
+			var at_end: float = rig.time_of_day
+			# On round the night, to a second past the morning.
+			var more: int = ceili(((rig.cycle.loop_at - 1.0) * rig.cycle.length_s + 1.0) / TICK_S)
+			for tick: int in more:
+				if clock.is_physics_processing():
+					clock._physics_process(TICK_S)
 			_expect(
-				is_equal_approx(rig.time_of_day, 1.0) and not clock.is_physics_processing(),
+				(
+					absf(at_end - 1.0) < 0.001
+					and rig.time_of_day < 0.01
+					and clock.is_physics_processing()
+				),
 				"clock",
 				(
-					"%.0f game seconds reach the last keyframe, and the clock stops"
-					% rig.cycle.length_s
+					"%.0f game seconds reach 1, and %.0f the morning again with the clock running"
+					% [rig.cycle.length_s, rig.cycle.loop_at * rig.cycle.length_s]
 				)
 			)
 		else:

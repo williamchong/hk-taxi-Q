@@ -256,6 +256,10 @@ func _check_roster() -> void:
 	_expect(
 		is_equal_approx(ParkedRoster.hour_of(1.0, 18.0, 30.0), 6.0), "a day past midnight wraps too"
 	)
+	_expect(
+		is_equal_approx(ParkedRoster.hour_of(1.5, 7.0, 21.0), 4.0),
+		"a looping day's 1.5 on a 07:00–21:00 clock is 04:00"
+	)
 	_expect(ParkedRoster.in_window(13.0, []), "no window is always")
 	_expect(ParkedRoster.in_window(8.0, [8, 19]), "a window includes its start")
 	_expect(not ParkedRoster.in_window(19.0, [8, 19]), "and excludes its end")

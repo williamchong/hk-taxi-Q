@@ -918,8 +918,8 @@ func _parse_args() -> bool:
 				# `lighting_rig.gd` reads this one itself (`Q160`) and holds the
 				# rig there; a value it cannot read would leave the frame at
 				# noon and labelled as some other hour.
-				if not value.is_valid_float() or value.to_float() < 0.0 or value.to_float() > 1.0:
-					_fail("--time-of-day=%s is not a number from 0 to 1" % value)
+				if not value.is_valid_float() or value.to_float() < 0.0 or value.to_float() > 2.0:
+					_fail("--time-of-day=%s is not a number from 0 to 2" % value)
 					return false
 			"--day-cycle":
 				# `day_clock.gd` reads this one itself (`Q160`); a typo would
