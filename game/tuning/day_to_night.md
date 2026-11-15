@@ -75,14 +75,16 @@ the floor handset is not measured, and this is still the lever there.
 | 1.464 (03:30) | `night.tres` | the moon, 10° up in the west, 0.30 | night's | 1.00 |
 | 1.536 (04:30) | `night.tres` | the moon on the western horizon, 0.00 | night's | 1.00 |
 | 1.607 (05:30) | `twilight.tres` | the sun on the SSE horizon, 0.00 | twilight's | 0.80 |
-| 1.661 (06:15) | `dusk.tres` | 7° up in the SSE, dusk's colour, 0.60 | dusk's | 0.25 |
+| 1.661 (06:15) | `dawn.tres` | 7° up in the SSE, `(1, 0.72, 0.6)`, 0.60 | `(0.95, 0.78, 0.74)` | 0.25 |
 
 - **The rows past 1.0 are the free drive's night and dawn** (`Q225`), and the last leg blends back
   to the 07:00 row across `loop_at`. The moon sets in the west with its energy fading to 0.00 at
   04:30; first light is 0.00 too, so the key light crosses from the western horizon to where the
   sun rises unseen — the 19:00 trick mirrored. The 06:15 sun is on the morning's own arc, 9.7°
-  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn reuses `dusk.tres` and
-  first light `twilight.tres`: a first table, with no look of its own yet.
+  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn has its own look, `dawn.tres` — rose and misty where dusk
+  is orange — so the sunrise is not the sunset backwards; first light still borrows `twilight.tres`.
+  🔴 `verify_day_cycle.gd` holds that the widest swing of the key light between two keyframes is on
+  a leg dark at both ends.
 - A shift's 21:00 is 13% of the way from the 20:00 moon to the 03:30 one: the same night, the moon
   a little further west.
 - **The sun sets in the west-south-west** — the engine's −X is west and +Z south.

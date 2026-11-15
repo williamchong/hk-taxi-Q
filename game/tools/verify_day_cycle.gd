@@ -18,6 +18,9 @@
 ##   energy is at or under the car's own `night_energy` bar.
 ## - `night_lights` rises to 1 and only then falls: a lantern that went out
 ##   and came on again is a table authored out of order.
+## - The key light changes hands unseen (`Q160`'s twilight, `Q225`'s dawn): the
+##   widest swing between two keyframes in turn is on a leg whose both ends
+##   have no energy, so nobody watches the moon cross the sky to the sunrise.
 ## - The cycle comes round (`Q225`): just short of `loop_at` the rig is on its
 ##   first keyframe's look again, lamps out, and a free drive's clock runs on
 ##   through the night into the next morning while a shift's stops at 1.
@@ -102,6 +105,10 @@ func _run() -> void:
 	var one_hump: bool = true
 	var dim_at_night: bool = true
 	var sun_kept: bool = true
+	var widest_deg: float = 0.0
+	var widest_is_dark: bool = false
+	var last_toward := Vector3.ZERO
+	var last_energy: float = 0.0
 	var highest: float = day_facing.basis.z.normalized().y
 	var highest_energy: float = day_energy
 	var strongest: float = day_energy
@@ -120,6 +127,12 @@ func _run() -> void:
 		if lights >= 1.0 and lamps != null:
 			dim_at_night = dim_at_night and sun.light_energy <= lamps.night_energy
 		var up: float = SunGlint.toward(sun).y
+		var swing_deg: float = rad_to_deg(last_toward.angle_to(SunGlint.toward(sun)))
+		if last_toward != Vector3.ZERO and swing_deg > widest_deg:
+			widest_deg = swing_deg
+			widest_is_dark = last_energy <= 0.0 and sun.light_energy <= 0.0
+		last_toward = SunGlint.toward(sun)
+		last_energy = sun.light_energy
 		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or up > 0.0)
 	_expect(
 		one_hump and is_equal_approx(peak, 1.0),
@@ -127,6 +140,11 @@ func _run() -> void:
 		"night_lights rises to 1.0 and only then falls"
 	)
 	_expect(sun_kept, "sun", "the key light is kept, and above the horizon while it shines")
+	_expect(
+		widest_is_dark,
+		"sun",
+		"the key light's widest swing, %.0f°, is on a leg dark at both ends" % widest_deg
+	)
 	_expect(
 		highest_energy == strongest and highest_energy > day_energy,
 		"sun",
