@@ -1,10 +1,10 @@
 [gd_resource type="Environment" format=3 uid="uid://cc6d3dr8om4e5"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_material"]
-sky_top_color = Color(0.16, 0.4, 0.8, 1)
-sky_horizon_color = Color(0.8, 0.9, 0.98, 1)
+sky_top_color = Color(0.12, 0.42, 0.95, 1)
+sky_horizon_color = Color(0.62, 0.82, 1, 1)
 ground_bottom_color = Color(0.5, 0.48, 0.45, 1)
-ground_horizon_color = Color(0.8, 0.9, 0.98, 1)
+ground_horizon_color = Color(0.62, 0.82, 1, 1)
 sun_angle_max = 20.0
 
 [sub_resource type="Sky" id="Sky"]
@@ -17,7 +17,7 @@ sky = SubResource("Sky")
 ambient_light_source = 3
 ambient_light_color = Color(0.84, 0.84, 0.84, 1)
 ambient_light_sky_contribution = 0.4
-ambient_light_energy = 0.95
+ambient_light_energy = 1.25
 tonemap_mode = 3
 tonemap_white = 3.0
 glow_enabled = true

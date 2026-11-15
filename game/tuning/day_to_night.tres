@@ -24,7 +24,7 @@ at = 0.36
 environment = ExtResource("7_noon")
 sun_rotation_deg = Vector3(-80, 0, 0)
 sun_colour = Color(1, 1, 0.98, 1)
-sun_energy = 1.15
+sun_energy = 2.2
 sky_light = Color(1, 1, 1, 1)
 
 [sub_resource type="Resource" id="Resource_aftn"]

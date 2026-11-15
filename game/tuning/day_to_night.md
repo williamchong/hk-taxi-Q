@@ -66,7 +66,7 @@ the floor handset is not measured, and this is still the lever there.
 |---|---|---|---|---|
 | 0.00 (07:00) | `morning.tres` | 16.6° up in the SSE, `(1, 0.8, 0.58)`, 0.70 | `(1, 0.88, 0.76)` | 0 |
 | 0.174 (09:26) | the rig scene, in no keyframe | 48° up in the SSE, `(1, 0.98, 0.95)`, 0.90 | white | 0 |
-| 0.36 (12:00) | `noon.tres` | 80° up, due south, `(1, 1, 0.98)`, 1.15 | white | 0 |
+| 0.36 (12:00) | `noon.tres` | 80° up, due south, `(1, 1, 0.98)`, 2.20 | white | 0 |
 | 0.57 (15:00) | `clean_daylight.tres` | 47.2° up in the WSW, the day's colour, 0.90 | white | 0 |
 | 0.71 (17:00) | `clean_daylight.tres` | 22.3° up in the WSW, `(1, 0.9, 0.76)`, 0.88 | `(1, 0.95, 0.88)` | 0 |
 | 0.79 (18:00) | `dusk.tres` | 8° up in the WSW, `(1, 0.62, 0.36)`, 0.80 | `(1, 0.74, 0.58)` | 0.25 |
@@ -107,7 +107,8 @@ the floor handset is not measured, and this is still the lever there.
 - **Colours fade on a smoothstep** between keyframes — the environments, the light's colour and
   energy and both globals — so no look changes pace on the frame a keyframe passes. The angle
   alone is linear.
-- **Noon is the brightest and the highest**, 1.15 against the day's 0.90, and `verify_day_cycle`
+- **Noon is the brightest and the highest**, 2.20 against the day's 0.90 (the user's pick of 1.15 /
+  1.6 / 2.2 / 3.0 from frames, 2026-11-16; was 1.15), and `verify_day_cycle`
   holds that the two coincide. 80° and not 90°: `looking_at` has no roll for a vertical light, and
   a wall under an overhead sun takes no key light at all.
 - 15:00 and 17:00 reuse the day's environment: only the sun moves there, and 17:00 warms it.
