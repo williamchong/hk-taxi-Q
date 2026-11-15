@@ -13979,7 +13979,15 @@ values whatever the fade, and the rig wrote all thirteen ten times a second, eac
 dirtying the sky. Written once now (`_written`); the sun, its colour and the globals still move.
 Not on the handset build above. ⚠️ `verify_day_cycle`'s option-flip leg was flaky, about one run
 in three: a frame awaited between adding the clock and turning the option let the tree's own
-physics tick decide first. The wait is gone; six runs in a row pass. The parked
+physics tick decide first. The wait is gone; six runs in a row pass.
+
+**The handset on the last commit** (release build of `70e07994`, the single write in; same flags,
+the third lap the phone ran that hour): 42,377 frames, p50 11.25 ms, p95 20.02, p99 23.68, max
+34.98; 10,067 over 16.7 ms and **2 over 33.3**, neither with a tile instantiated; video memory
+358.8 MB flat. ⚠️ A little SLOWER than the lap before it (p50 10.74, none over 33.3), on a build
+that does strictly less work in the rig — so the spread between laps, about 0.5 ms at the median
+and one or two frames at the tail, is the run-to-run noise of a standing phone (heat not
+recorded), and the single write's saving is under it. Not attributed further. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
