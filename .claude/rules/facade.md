@@ -72,7 +72,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   (and one `DayClock` put back with `rest()`) holds the authored `Environment` object and the authored sun, and that — not a
   re-applied copy of the day — is what keeps every scripted daylight frame. ⚠️ `time_of_day` 0 is
   the MORNING since `Q222`; the authored day is at `day_at`. 🔴 **The daylight keyframes' angles and
-  `at`s are solved together** so the sun moves at one speed (`day_to_night.md`); never move one alone. 🔴 **One rig blending,
+  `at`s are solved together** so the sun moves at one speed (`day_to_night.md`); never move one alone. Since `Q225` a free drive's cycle
+  comes round at `loop_at`: the keyframes past 1.0 are its night and dawn (frames at `1.464`, `1.607`, `1.661`),
+  `night_lights` rises to 1 and only then falls, and a shift never passes 1.0. 🔴 **One rig blending,
   never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the
   dark comes from the light); and **night dims the key light, never deletes it** — the last
   keyframe's energy sits under `vehicle_lamps.tres`'s `night_energy` and the two move together.

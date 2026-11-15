@@ -13878,3 +13878,34 @@ line in place and changed nothing else (`Q119`). At a desk, `--window=1368x630 -
 exported or read here — and whether the turn mid-drive is wanted or a nuisance.
 
 **See.** `Q204` · `Q119` · `game/scripts/ui/hud_layout.gd` · `docs/ARCHITECTURE.md`
+
+## `Q225` — A free drive's sky comes round: night, a dawn, the morning again
+
+**Asked** by the user, 2026-11-16: "what about the night and light shift from 17:00 to 07:00",
+"plan to Loop the sky in free mode", and on the two picks: "keep at the day's pace, the shift end
+at 21:00 untouched".
+
+**Status.** ✅ Built 2026-11-16. A first table from frames (`build/driver/q225/`); the user's drive owed.
+
+- 🔴 **Reverses `Q160`'s "a cycle is not a loop", for a free drive only**, on the user's instruction.
+  `RigCycle.loop_at` 1.714 is 24 hours on the scale where 1.0 is the shift's 14; `DayClock` wraps a
+  free drive's time there and caps a shift's at 1.0, so 特更 still ends at 21:00 on the night.
+  `loop_at` 0 is the cycle that holds its last keyframe — the off switch.
+- **At the day's pace** (the user's pick over a compressed night): 214 game seconds from 21:00 to
+  07:00, 514 a lap.
+- Four keyframes past 1.0 — the moon low at 03:30, set at 04:30, first light at 05:30, dawn at
+  06:15 — and the rig blends the last back to the first across `loop_at`. The key light changes
+  hands between two keyframes of energy 0. No new environment: dawn is `dusk.tres`, first light
+  `twilight.tres`.
+- `ParkedRoster.hour_of` no longer caps the rig's dial at 1, so the parked roster and the routed
+  fleet read 21:00 → 07:00 as those hours.
+- `verify_day_cycle.gd`: `night_lights` rises to 1 and only then falls (was: only rises); every
+  full-night keyframe is under the car's `night_energy` (was: the last one); just short of
+  `loop_at` the rig is on its first look, lamps out; a free clock reaches the morning again in 514 s
+  still running. Mutation-checked: a clock that does not wrap and a rig with no leg back each fail.
+- `--time-of-day=` takes up to 1.714.
+
+**Owed.** The user's drive of a night. The handset (`Q222`'s debt, now without an end). The parked
+roster and the bus hours were not looked at overnight — only that the hour reads right.
+
+**See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
