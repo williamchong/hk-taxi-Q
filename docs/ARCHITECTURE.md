@@ -1524,6 +1524,7 @@ layer, before the car sees it (`Q210`): `InputRouter.steer_for` ramps a key over
 `keyboard_steer.tres`'s seconds, slowing with the car's speed (`Q174`'s numbers), and the car's own
 rack (`steer_attack_s` / `steer_release_s`) is the same for every method. Input assists are per
 input method (this, `touch.tres`); drive assists are per car and tuned against a linear input.
+A steering thumb's travel is shaped by `touch.tres`'s `steer_curve` (`Q220`).
 
 **Gamepad** is analog on steer and both triggers; `handbrake` and `look_back` are face buttons.
 ⚠️ Both triggers are spent, so `handbrake` stays a `bool`. The action was `drift` until `Q170`:

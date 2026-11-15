@@ -13641,3 +13641,28 @@ room, a lane change always refused.
 
 **See.** `Q173` · `Q186` · `Q198` · `Q214` · `Q217` · `game/tuning/traffic.md` ·
 `.claude/rules/signals.md` · `game/tools/bench_traffic.gd`
+
+## `Q220` — The steering thumb has a response curve: the lock is the travel squared
+
+**Status.** ✅ Built 2026-11-16 on the user's report off the handset ("the touch steering is too
+sensitive"). A desk pick; the handset drive is owed.
+
+- `TouchProfile.steer_curve` (`tuning/touch.tres`, 2.0): `steer_from` raises the share of the usable
+  travel to it, sign kept. Half the travel is a quarter of the lock; the dead band, full lock and
+  the reach to it are where they were. Was linear, unstated.
+- **The touch table's answer, as `Q210` said it would be**: an input assist per input method, so the
+  car, its rack and `keyboard_steer.tres` are untouched, and no pad row moves — the skidpad's
+  `--steer=analog` sets the lock directly, past this table.
+- **Not a longer `steer_travel_px`** (140): that moves full lock further from the thumb and grows the
+  drawn wheel, which is sized off the travel (`Q204`). It is the next dial if the curve is not enough.
+- **Not a speed ramp on the thumb** (the keys' `attack_at_top_s`): the report does not say the car
+  slides at speed, and a lag on an analogue input is felt as one.
+- Steering only; the pedals stay linear.
+- `verify_input.gd` reads the curve off the table: half the usable travel is 0.5 to `steer_curve`,
+  both sides, and a table without the key is refused.
+
+**Owed.** The handset drive: 2.0 against 1.5 (the far end carries 44% of the lock in the last quarter
+of the travel at 2.0), and whether `Q210`'s full-lock swing at 110 kph still happens under a thumb.
+
+**See.** `Q210` · `Q204` · `Q83` · `Q97` · `Q174` · `game/tuning/touch.md` ·
+`game/scripts/input/touch_profile.gd`
