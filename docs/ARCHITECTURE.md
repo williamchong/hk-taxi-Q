@@ -1678,6 +1678,12 @@ icons in the build copy; the source is untouched.
 (`en-US`, `zh-Hant`), `age_rating.json` the rating answers, and `fastlane metadata` sends them
 with the screenshots `tools/store_screenshots.sh` takes from the game (six scenes, two
 languages, a phone and an iPad size; gitignored, they are renders of the generated city).
+Each scene shows one feature and says so in a band above the frame: `tools/caption_screenshot.py`
+sets the scene's line from `fastlane/screenshot_captions.json`, the head in the menu's brush
+(Knewave in English) on a drawn stroke and a line under it in the 黑體 (`Q218`). The faces are the
+committed subsets, so the Chinese is written from characters they already carry —
+`test_fonts.py` holds it — and `store_screenshots.sh --compose` resets the captions over the
+kept frames without a capture.
 `fastlane submit` sends the version to review for a release by hand. Both want an App Store
 Connect API key in the environment (the `Fastfile`'s header); the review notes
 (`review_notes.txt`) go up only with a review contact in the environment, which stays out of git. The description carries the data

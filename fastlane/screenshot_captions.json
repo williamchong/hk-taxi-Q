@@ -1,0 +1,74 @@
+{
+  "_": [
+    "The line over each App Store screenshot, by the scene's name in",
+    "tools/store_screenshots.sh and the game's language (zh, en). A head in the",
+    "menu's brush and a line under it in the interface's face, set by",
+    "tools/caption_screenshot.py.",
+    "",
+    "The Chinese is written from the characters the committed font subsets",
+    "already carry: they are cut to the game's own text, and a caption does",
+    "not get to grow a file the game ships. etl/tests/test_fonts.py holds it."
+  ],
+  "captions": {
+    "1_hennessy": {
+      "en": {
+        "head": "Real Hong Kong streets",
+        "sub": "Built from the government's open map data"
+      },
+      "zh": {
+        "head": "真實香港街道",
+        "sub": "按政府開放地圖數據製成"
+      }
+    },
+    "2_drift": {
+      "en": {
+        "head": "Drift for tips",
+        "sub": "Near misses, fast runs and jumps pay too"
+      },
+      "zh": {
+        "head": "甩尾賺小費",
+        "sub": "貼身而過、高速行駛、凌空飛躍都有小費"
+      }
+    },
+    "3_shift": {
+      "en": {
+        "head": "Pick up. Floor it. Cash in.",
+        "sub": "The Shift: real taxi fares, five minutes, one score"
+      },
+      "zh": {
+        "head": "接客 趕路 交更",
+        "sub": "特更：咪錶按真實的士收費，交更計總收入"
+      }
+    },
+    "4_harbour": {
+      "en": {
+        "head": "Free mode",
+        "sub": "No rush. Just drive the city."
+      },
+      "zh": {
+        "head": "自由兜風",
+        "sub": "不趕時間，自由行"
+      }
+    },
+    "5_night": {
+      "en": {
+        "head": "Day turns to night",
+        "sub": "A shift runs from 07:00 to 21:00"
+      },
+      "zh": {
+        "head": "日轉夜",
+        "sub": "一更由 07:00 開到 21:00"
+      }
+    },
+    "6_menu": {
+      "en": {
+        "head": "Your shift starts here",
+        "sub": "English and Traditional Chinese"
+      },
+      "zh": {
+        "head": "的士開工",
+        "sub": "繁體中文及英文"
+      }
+    }
+  }
+}

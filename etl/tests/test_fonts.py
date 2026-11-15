@@ -12,8 +12,10 @@ Read with `font_coverage.read_cmap`, so this needs no font library.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
+from caption_screenshot import HEAD_FACE, SUB_FACE, lacking
 from font_coverage import read_cmap
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -63,3 +65,19 @@ def test_the_brush_subsets_do_not_carry_the_reserved_name() -> None:
         for encoding in ("utf-16-be", "ascii"):
             for said in ("Bakudai Medium", "Bakudai Bold", "Bakudai-", "BakudaiM", "BakudaiB"):
                 assert said.encode(encoding) not in data, f"{font} still names itself {said}"
+
+
+def test_the_store_captions_are_written_from_the_committed_subsets() -> None:
+    # `fastlane/screenshot_captions.json`: a head in the menu's brush and a line
+    # in the 黑體, set by `tools/caption_screenshot.py`. Neither subset is cut to
+    # this file, so the wording keeps to what the game's own text already asks for.
+    # Every character, Latin too: nothing falls back to another face in a picture.
+    captions = json.loads((ROOT / "fastlane" / "screenshot_captions.json").read_text("utf-8"))
+    script = (ROOT / "tools" / "store_screenshots.sh").read_text(encoding="utf-8")
+    assert sorted(captions["captions"]) == re.findall(r'^\t"(\d_\w+)\|', script, re.MULTILINE)
+    for scene, said in captions["captions"].items():
+        assert set(said) == set(HEAD_FACE), scene
+        for lang, line in said.items():
+            for font, part in ((HEAD_FACE[lang], "head"), (SUB_FACE, "sub")):
+                missing = lacking(font, line[part])
+                assert not missing, f"{font} lacks {missing}, asked for by {scene}'s {part}"

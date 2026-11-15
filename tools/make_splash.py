@@ -57,14 +57,19 @@ CORNER_STEPS = 6
 log = logging.getLogger(__name__)
 
 
-def plate_field() -> tuple[int, int, int]:
-    """`HudStyle.plate_field` from `hud_style.tres`, as 8-bit sRGB."""
+def hud_colour(name: str) -> tuple[int, int, int]:
+    """A `HudStyle` colour from `hud_style.tres`, as 8-bit sRGB."""
     text = HUD_STYLE.read_text(encoding="utf-8")
-    match = re.search(r"^plate_field = Color\(([^)]*)\)", text, re.MULTILINE)
+    match = re.search(rf"^{name} = Color\(([^)]*)\)", text, re.MULTILINE)
     if match is None:
-        raise ValueError(f"{HUD_STYLE} has no plate_field")
+        raise ValueError(f"{HUD_STYLE} has no {name}")
     r, g, b = (float(v) for v in match.group(1).split(",")[:3])
     return (round(r * 255), round(g * 255), round(b * 255))
+
+
+def plate_field() -> tuple[int, int, int]:
+    """`HudStyle.plate_field`, as 8-bit sRGB."""
+    return hud_colour("plate_field")
 
 
 def loading_line() -> str:
