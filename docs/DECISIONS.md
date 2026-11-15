@@ -13816,3 +13816,38 @@ past the backdrop.
 
 **See.** `Q221` · `Q220` · `Q165` · `Q204` · `Q83` · `game/scripts/input/control_options.gd` ·
 `game/tuning/touch.md` · `game/tuning/menu.md`
+
+## `Q224` — The screen turns to either landscape, and the side insets are the larger of the two on both
+
+**Asked.** The user, 2026-11-16: "can we support landscape only rotation on phone".
+
+**Was.** `display/window/handheld/orientation` was unset, so the default: one landscape, fixed. The
+iOS export wrote `UIInterfaceOrientationLandscapeLeft` alone for the phone, and a handset picked up
+the other way round showed the game upside down.
+
+**Built.** `window/handheld/orientation=4` (sensor landscape) in `project.godot`. No portrait: the
+HUD, the thumbs and the 1920x1080 canvas are a landscape layout.
+
+**Decided.**
+
+- **The side insets are equal** (`HudLayout.inset_for_safe_area`): left and right both take the
+  larger. The inset is read once, when a safe root is made, and a half turn resizes nothing, so
+  nothing would re-read it; a cutout reported on one side would be under the HUD after the turn.
+  An iPhone reports its sides equal already, so its layout does not move. A handset that reports
+  one side gives up that strip on the other.
+- **Not a re-read on rotation**: that wants a poll or a signal the engine does not send for a half
+  turn, and every safe root tracked. Equal sides need neither.
+- **The web build is untouched**: `progressive_web_app/orientation` belongs to an installed PWA and
+  the PWA is off; a browser tab turns as the browser does.
+
+**Measured.** An iOS project exported to scratch (headless, a placeholder team): the plist's
+`UISupportedInterfaceOrientations` and its `~ipad` twin both list LandscapeLeft and LandscapeRight,
+where the last real export listed one each. Godot's own writer re-saved `project.godot` with the
+line in place and changed nothing else (`Q119`). At a desk, `--window=1368x630 --touch=on` with
+`--safe-area=102,0,0,30` lays out as `102,0,102,30` does (`build/driver/rot_{asym,sym}`).
+`check.sh` passes.
+
+**Owed.** A handset turned over in the hand, on iOS and on Android — the Android manifest was not
+exported or read here — and whether the turn mid-drive is wanted or a nuisance.
+
+**See.** `Q204` · `Q119` · `game/scripts/ui/hud_layout.gd` · `docs/ARCHITECTURE.md`

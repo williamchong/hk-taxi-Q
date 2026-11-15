@@ -1692,6 +1692,11 @@ cover lays out against. The iOS preset's `storyboard/image_scale_mode` is **2, S
 for the same reason: at 0 ("same as the splash") the export wrote a centred launch image, 560 pt on
 an iPhone Air's 420 pt height, and the taxi would have shrunk at the hand-over.
 
+**A handset turns to either landscape** (`Q224`): `project.godot`'s
+`display/window/handheld/orientation` is **4, sensor landscape**, which the iOS export writes as
+both landscape sides in the plist. Never portrait. The safe-area inset is read once and a half turn
+resizes nothing, so `HudLayout.inset_for_safe_area` gives both sides the larger of the two.
+
 **Then check in-engine:** `--import` first (a fresh sync has no import sidecars), then
 `tools/check.sh`.
 
