@@ -81,9 +81,11 @@ each one a step the ear can tell. `volume_track_px` 6 is the line drawn: the mut
 filled in the dial's amber like a current choice, and the lighter ink under the pointer or the
 focus. The level heard is the travel squared (`Settings.level_db`), so half way is −12 dB.
 
-⚠️ The column on a handset now runs from the foot to the top bracket (frame, 2026-11-16,
-`build/driver/sound_touch`): a fourth option does not fit under it without a scroll or a second
-column.
+The slider stands on OPTIONS' SOUND page since `Q223`: OPTIONS is a list of groups, a page each,
+because three blocks in one column ran from a handset's foot to its top bracket (frame,
+2026-11-16). A page holds two blocks with room; a group that grows past that splits, it does not
+scroll. ⚠️ A row of three choices (CONTROLS' steering response) is 1288 units and its third stands
+past the 760 px backdrop, over the picture, on its outline alone.
 
 ## `credits_px = Vector2(1100, 760)`
 

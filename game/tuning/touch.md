@@ -45,3 +45,20 @@ steers in shares of the lock, past this table). The handset is the grader. If it
 raise this before the travel; if the far end snatches, 1.5.
 
 Steering only; the pedals stay linear.
+
+## `steer_curve_gentle = 2.5`
+
+The same curve for a player who asks OPTIONS for a gentler or a sharper thumb (`Q223`, 2026-11-16):
+STEERING RESPONSE is GENTLE / NORMAL / SHARP, and NORMAL is `steer_curve`. `steer_curve_sharp` 1.5
+is the alternative `Q220` named and left owed; 2.5 is the same step the other way.
+
+| Share of the travel | sharp 1.5 | normal 2.0 | gentle 2.5 |
+|---|---|---|---|
+| 25% | 13% of the lock | 6% | 3% |
+| 50% | 35% | 25% | 18% |
+| 75% | 65% | 56% | 49% |
+| 100% | 100% | 100% | 100% |
+
+🔴 Desk picks, both: no thumb has driven either. At 2.5 the last quarter of the travel carries 51%
+of the lock, which may snatch; if it does, 2.3 before removing the choice. `verify_input.gd` holds
+the order — gentle over normal over sharp, none under 1 — and nothing about the values.

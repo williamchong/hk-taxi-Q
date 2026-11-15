@@ -11,9 +11,16 @@ extends CanvasLayer
 ##
 ## **And over a paused drive** (the user's ask): `Main` opens a fresh one with
 ## `pausing` set on the PAUSE page, over a tree it has paused, so this one
-## alone runs — RESUME, HOW TO PLAY, and the way out of the run. No OPTIONS:
-## a language is a new HUD (`Main._renew_hud`), and a HUD readied mid-fare
-## would never hear the fare's signals already sent.
+## alone runs — RESUME, HOW TO PLAY, OPTIONS, and the way out of the run. Its
+## OPTIONS are the ones a held drive can take (`Q223`): the sound, the
+## steering thumb's response, a phone's frame cap. Never the language nor the
+## thumbs' sides: each is a new HUD (`Main._renew_hud`), and a HUD readied
+## mid-fare would never hear the fare's signals already sent.
+##
+## **OPTIONS is a list of groups, a page each** (`Q223`, the user's pick):
+## SOUND, CONTROLS, DISPLAY, LANGUAGE. A group with nothing in it for this
+## device and this menu is not listed (`_groups`), and a list of one is
+## skipped for its page.
 ##
 ## Under `GUI` beside the HUD, and it never reaches into the level: `Main` parks
 ## the level while this is up and resumes it on `started`, the same way it hands
@@ -25,8 +32,8 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
-## `--menu-page=<home|play|guide|options|credits|notices|report|record|pause>` opens on
-## that page, so a frame of any sheet is one `drive.sh` run and never a click; the
+## `--menu-page=<home|play|guide|options|credits|notices|report|record|pause|sound|controls|display|language>`
+## opens on that page, so a frame of any sheet is one `drive.sh` run and never a click; the
 ## report so opened is an empty shift's, and the pause `Main`'s over the car on
 ## the start line. `--menu-sample=on` fills the 成績表 on any of them for a frame,
 ## and a run naming either flag saves nothing to the record (`Main`).
@@ -41,6 +48,11 @@ extends CanvasLayer
 signal started(mode: DayClock.Mode)
 ## The player picked a language; `Locale.language()` already answers it.
 signal language_changed(code: String)
+## The player picked the steering thumb's response; `ControlOptions.steering()`
+## already answers it, and `Main` tells the router.
+signal steering_changed
+## The player swapped the thumbs' sides: new touch zones and a new HUD, `Main`'s.
+signal side_changed
 ## A page opened; `Main` hands `shot` to the camera round the parked car.
 signal page_shown(shot: MenuShot)
 ## The pause's RESUME: `Main` unpauses the drive where it stood and frees this.
@@ -68,7 +80,29 @@ const GUTTER: String = "Gutter"
 
 ## `PAGE_ARG` names one of these, lower-cased; `driver.gd` validates the same
 ## list by hand, since a `--script` tool cannot preload a `class_name` script.
-enum Page { HOME, PLAY, OPTIONS, CREDITS, GUIDE, NOTICES, REPORT, PAUSE, RECORD }
+enum Page {
+	HOME,
+	PLAY,
+	OPTIONS,
+	CREDITS,
+	GUIDE,
+	NOTICES,
+	REPORT,
+	PAUSE,
+	RECORD,
+	SOUND,
+	CONTROLS,
+	DISPLAY,
+	LANGUAGE
+}
+
+## OPTIONS' groups in the order listed, each with the key of its name.
+const GROUPS: Dictionary[Page, String] = {
+	Page.SOUND: "sound",
+	Page.CONTROLS: "controls",
+	Page.DISPLAY: "display",
+	Page.LANGUAGE: "language",
+}
 
 
 ## What a run banked, for the REPORT page (`Q162`). Filled by `Main`: at a
@@ -103,6 +137,9 @@ var pausing_shift: bool = false
 ## Whether the 成績表 stacks into one scrolling column (`Q206`): on a touch
 ## screen, or set before this enters the tree, as `verify_menu` does.
 var stacked: bool = false
+## Whether this is a phone, which alone is offered a frame cap: read from the
+## device, or set before this enters the tree, as `verify_menu` does.
+var phone: bool = false
 
 var _profile: MenuProfile = null
 var _style: HudStyle = null
@@ -121,6 +158,8 @@ var _page: Page = Page.HOME
 var _pages: Dictionary[int, Control] = {}
 ## Where the focus lands when a page opens, so a pad or the keys can drive it.
 var _first: Dictionary[int, Button] = {}
+## OPTIONS' groups on this device, in this menu (`_groups`), read at build.
+var _shown_groups: Array[Page] = []
 ## The notices' label, filled on the first visit: the text is the engine's and
 ## costs a build, so neither boot nor a language change pays for a page the
 ## player may never open.
@@ -186,19 +225,23 @@ func _load() -> bool:
 
 func _build() -> void:
 	stacked = stacked or HudLayout.is_touch()
+	phone = phone or ControlOptions.caps_frames()
 	_root = HudLayout.safe_root(self)
 	_load_faces()
 	_pages.clear()
 	_first.clear()
+	_shown_groups = _groups()
 	_pages[Page.GUIDE] = _guide()
+	_pages[Page.OPTIONS] = _options()
+	for group: Page in _shown_groups:
+		_pages[group] = _group(group)
 	if pausing:
-		# The two pages a pause reaches, and no more: built on the tap's frame,
-		# and OPTIONS left out by construction.
+		# The pages a pause reaches, and no more: built on the tap's frame, with
+		# the language and the thumbs' sides left out by construction.
 		_pages[Page.PAUSE] = _pause()
 	else:
 		_pages[Page.HOME] = _home()
 		_pages[Page.PLAY] = _play()
-		_pages[Page.OPTIONS] = _options()
 		_pages[Page.CREDITS] = _credits()
 		_pages[Page.NOTICES] = _notices()
 		_pages[Page.REPORT] = _report()
@@ -207,6 +250,10 @@ func _build() -> void:
 	# are one display. Last, over the pages' backdrops, and unshaded — the
 	# backdrops shade the text.
 	_root.add_child(HeadUpFrame.styled(_style, false))
+	# A page this menu did not build — a group this device has nothing for,
+	# named by the flag — is the page the menu starts from.
+	if not _pages.has(_page):
+		_page = _home_page()
 	_show(_page)
 
 
@@ -251,7 +298,7 @@ func shot() -> MenuShot:
 	match _page:
 		Page.PLAY:
 			return _profile.shot_play
-		Page.OPTIONS:
+		Page.OPTIONS, Page.SOUND, Page.CONTROLS, Page.DISPLAY, Page.LANGUAGE:
 			return _profile.shot_options
 		Page.CREDITS, Page.GUIDE, Page.NOTICES, Page.RECORD:
 			return _profile.shot_sheet
@@ -268,14 +315,43 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		_on_resume()
 	elif _page not in [Page.HOME, Page.REPORT]:
-		# The notices hang off the credits, so the way back is one step.
-		_show(Page.CREDITS if _page == Page.NOTICES else _home_page())
+		_show(_back_of(_page))
 		get_viewport().set_input_as_handled()
 
 
 ## Where a way back lands: HOME, or PAUSE over a paused drive.
 func _home_page() -> Page:
 	return Page.PAUSE if pausing else Page.HOME
+
+
+## One step back from `page`: the notices hang off the credits and a group off
+## OPTIONS' list, where there is a list.
+func _back_of(page: Page) -> Page:
+	if page == Page.NOTICES:
+		return Page.CREDITS
+	if page in _shown_groups and _shown_groups.size() > 1:
+		return Page.OPTIONS
+	return _home_page()
+
+
+## OPTIONS' groups for this device and this menu, in `GROUPS`' order.
+func _groups() -> Array[Page]:
+	var groups: Array[Page] = [Page.SOUND]
+	# The thumbs' own: nothing in it for a keyboard or a pad.
+	if stacked:
+		groups.append(Page.CONTROLS)
+	# The hour is the boot menu's and the frame cap a phone's, so a pause at a
+	# desk has nothing to show here.
+	if phone or not pausing:
+		groups.append(Page.DISPLAY)
+	if not pausing:
+		groups.append(Page.LANGUAGE)
+	return groups
+
+
+## Where the OPTIONS choice leads: the list, or the one group there is.
+func _options_page() -> Page:
+	return Page.OPTIONS if _shown_groups.size() > 1 else _shown_groups[0]
 
 
 # ---------------------------------------------------------------- pages ----
@@ -317,7 +393,7 @@ func _home() -> Control:
 	_first[Page.HOME] = _button(column, "Play", "start", _show.bind(Page.PLAY))
 	_button(column, "Record", "record", _show.bind(Page.RECORD))
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
-	_button(column, "Options", "options", _show.bind(Page.OPTIONS))
+	_button(column, "Options", "options", _show.bind(_options_page()))
 	_button(column, "Credits", "credits", _show.bind(Page.CREDITS))
 	return column
 
@@ -334,62 +410,184 @@ func _play() -> Control:
 	return column
 
 
-## The options — the language, free mode's hour, the sound: each a pair of
-## choices side by side with the current one marked, the sound's volume a
-## slider under its pair, and the way back.
+## OPTIONS: its groups, a choice each, and the way back (`Q223`).
 func _options() -> Control:
 	var column: VBoxContainer = _column("Options")
-	var heading: Label = _line("Heading", _text.say("language", _language))
-	_size(heading, _profile.heading_size_zh, _profile.heading_size, _brush())
-	column.add_child(heading)
+	_heading(column, "Heading", _text.say("options", _language))
+	for group: Page in _shown_groups:
+		var choice: Button = _button(column, _group_name(group), GROUPS[group], _show.bind(group))
+		if not _first.has(Page.OPTIONS):
+			_first[Page.OPTIONS] = choice
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_button(column, "Back", "back", _show.bind(_home_page()))
+	return column
+
+
+## A group's node name: "Sound" for `Page.SOUND`.
+func _group_name(group: Page) -> String:
+	return str(Page.find_key(group)).capitalize()
+
+
+## One of OPTIONS' groups: its name, its options — each a row of choices with
+## the current one marked — and the way back.
+func _group(group: Page) -> Control:
+	var column: VBoxContainer = _column(_group_name(group))
+	_heading(column, "Heading", _text.say(GROUPS[group], _language))
+	match group:
+		Page.SOUND:
+			_sound(column)
+		Page.CONTROLS:
+			_controls(column)
+		Page.DISPLAY:
+			_display(column)
+		Page.LANGUAGE:
+			_languages(column)
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_button(column, "Back", "back", _show.bind(_back_of(group)))
+	# The focus lands on the first choice that is one: a current choice is a
+	# marker, and BACK is always there to take it.
+	for found: Node in column.find_children("Button", "Button", true, false):
+		if not (found as Button).disabled:
+			_first[group] = found as Button
+			break
+	return column
+
+
+## An option under `column`: a row named `node_name` of choices side by side,
+## the one at `current` marked, under the heading `heading_key` names — none
+## for "", where the page's own heading says it. Each of `choices` is a node
+## name, a text key and what a press does.
+func _choices(
+	column: VBoxContainer, node_name: String, heading_key: String, choices: Array, current: int
+) -> void:
+	if not heading_key.is_empty():
+		if column.get_child_count() > 1:
+			column.add_child(_gap(node_name + "Gap", _profile.button_gap_px))
+		var heading: Label = _line(node_name + "Heading", _text.say(heading_key, _language))
+		_size(heading, _profile.heading_size_zh, _profile.heading_size, _brush())
+		column.add_child(heading)
 	var row := HBoxContainer.new()
-	row.name = "Languages"
+	row.name = node_name
 	row.add_theme_constant_override(&"separation", _profile.button_gap_px)
 	column.add_child(row)
-	var chinese: Button = _button(row, "Chinese", "language_zh", _pick.bind(Locale.CHINESE))
-	var english: Button = _button(row, "English", "language_en", _pick.bind(Locale.ENGLISH))
-	# The current language's button is the marker: lit in the accent and not a
-	# choice, so there is nothing to press that changes nothing.
-	_mark_current(chinese, _language == Locale.CHINESE)
-	_mark_current(english, _language == Locale.ENGLISH)
-	_first[Page.OPTIONS] = english if _language == Locale.CHINESE else chinese
+	for index: int in choices.size():
+		var choice: Array = choices[index]
+		# The current one is the marker: lit and not a choice, so there is
+		# nothing to press that changes nothing.
+		_mark_current(_button(row, choice[0], choice[1], choice[2]), index == current)
 
-	# The hour (`Q160`): whether the day runs to night as game time passes —
-	# in free mode; a shift always runs it (`Q162`).
-	column.add_child(_gap("GapTime", _profile.button_gap_px))
-	var time_heading: Label = _line("TimeHeading", _text.say("time", _language))
-	_size(time_heading, _profile.heading_size_zh, _profile.heading_size, _brush())
-	column.add_child(time_heading)
-	var times := HBoxContainer.new()
-	times.name = "Times"
-	times.add_theme_constant_override(&"separation", _profile.button_gap_px)
-	column.add_child(times)
-	var cycling: bool = Settings.day_cycle()
-	var cycle: Button = _button(times, "Cycle", "time_cycle", _pick_time.bind(true))
-	var day: Button = _button(times, "Day", "time_day", _pick_time.bind(false))
-	_mark_current(cycle, cycling)
-	_mark_current(day, not cycling)
 
-	# The sound (the user's ask, 2026-11-16): on or off, and how loud. The
-	# Master bus, so every voice follows.
-	column.add_child(_gap("GapSound", _profile.button_gap_px))
-	var sound_heading: Label = _line("SoundHeading", _text.say("sound", _language))
-	_size(sound_heading, _profile.heading_size_zh, _profile.heading_size, _brush())
-	column.add_child(sound_heading)
-	var sounds := HBoxContainer.new()
-	sounds.name = "Sounds"
-	sounds.add_theme_constant_override(&"separation", _profile.button_gap_px)
-	column.add_child(sounds)
-	var sounding: bool = Settings.sound_on()
-	var sound_on: Button = _button(sounds, "On", "sound_on", _pick_sound.bind(true))
-	var sound_off: Button = _button(sounds, "Off", "sound_off", _pick_sound.bind(false))
-	_mark_current(sound_on, sounding)
-	_mark_current(sound_off, not sounding)
+## The language: the two, the current one marked.
+func _languages(column: VBoxContainer) -> void:
+	_choices(
+		column,
+		"Languages",
+		"",
+		[
+			["Chinese", "language_zh", _pick.bind(Locale.CHINESE)],
+			["English", "language_en", _pick.bind(Locale.ENGLISH)],
+		],
+		0 if _language == Locale.CHINESE else 1
+	)
+
+
+## What is drawn: a phone's frame cap (`Q223`), and the hour (`Q160`) —
+## whether the day runs to night as game time passes in free mode; a shift
+## always runs it (`Q162`), and a drive under way keeps the hour it has.
+func _display(column: VBoxContainer) -> void:
+	if phone:
+		var caps: Array = []
+		for fps: int in Settings.FRAME_CAPS:
+			caps.append(["Fps%d" % fps, "frame_%d" % fps, _pick_frame_cap.bind(fps)])
+		_choices(
+			column, "FrameCaps", "frame_rate", caps, Settings.FRAME_CAPS.find(Settings.frame_cap())
+		)
+	if not pausing:
+		_choices(
+			column,
+			"Times",
+			"time",
+			[
+				["Cycle", "time_cycle", _pick_time.bind(true)],
+				["Day", "time_day", _pick_time.bind(false)],
+			],
+			0 if Settings.day_cycle() else 1
+		)
+
+
+## The thumbs (`Q223`): how sharply the steering one answers, and — on the
+## boot menu alone, since it is a new HUD — which side it is on.
+func _controls(column: VBoxContainer) -> void:
+	var steerings: Array = []
+	for steering: String in ControlOptions.STEERINGS:
+		steerings.append(
+			[steering.capitalize(), "steering_" + steering, _pick_steering.bind(steering)]
+		)
+	_choices(
+		column,
+		"Steerings",
+		"steering",
+		steerings,
+		ControlOptions.STEERINGS.find(ControlOptions.steering())
+	)
+	if not pausing:
+		_choices(
+			column,
+			"Sides",
+			"side",
+			[
+				["Left", "side_left", _pick_side.bind(false)],
+				["Right", "side_right", _pick_side.bind(true)],
+			],
+			1 if ControlOptions.steer_on_right() else 0
+		)
+
+
+## The sound (`Q221`): on or off, and how loud. The Master bus, so every voice
+## follows.
+func _sound(column: VBoxContainer) -> void:
+	_choices(
+		column,
+		"Sounds",
+		"",
+		[
+			["On", "sound_on", _pick_sound.bind(true)],
+			["Off", "sound_off", _pick_sound.bind(false)],
+		],
+		0 if Settings.sound_on() else 1
+	)
 	_volume(column)
 
-	column.add_child(_gap("Gap", _profile.button_gap_px))
-	_button(column, "Back", "back", _show.bind(Page.HOME))
-	return column
+
+## Save the steering thumb's response and say so; the page is redrawn so the
+## marker moves. Through `ControlOptions`, not the pick: a flag pins it.
+func _pick_steering(choice: String) -> void:
+	Settings.set_steering(choice)
+	if ControlOptions.steering() != choice:
+		push_warning("menu: --touch-steer= pins the steering this run; the choice is saved")
+		return
+	steering_changed.emit()
+	_relabel.call_deferred()
+
+
+## Save the steering thumb's side and say so: `Main` builds the zones and the
+## HUD afresh.
+func _pick_side(on_right: bool) -> void:
+	Settings.set_steer_on_right(on_right)
+	if ControlOptions.steer_on_right() != on_right:
+		push_warning("menu: --touch-side= pins the thumbs' sides this run; the choice is saved")
+		return
+	side_changed.emit()
+	_relabel.call_deferred()
+
+
+## Save a phone's frame cap and set it at once.
+func _pick_frame_cap(fps: int) -> void:
+	if fps == Settings.frame_cap():
+		return
+	Settings.set_frame_cap(fps)
+	ControlOptions.apply_frame_cap()
+	_relabel.call_deferred()
 
 
 ## Save the hour's mode and redraw the page so the marker moves. `DayClock`
@@ -630,7 +828,8 @@ func _report() -> Control:
 
 
 ## The drive held (the user's ask): a column off the corner like HOME's over
-## the frozen frame — the way on, how to play, and the way out of the run, a
+## the frozen frame — the way on, how to play, the options a held drive can
+## take (`_groups`), and the way out of the run, a
 ## shift's END SHIFT recording no best, since half a shift is not a total, and
 ## a free drive's END DRIVE leading to its REPORT.
 func _pause() -> Control:
@@ -638,6 +837,7 @@ func _pause() -> Control:
 	_heading(column, "Heading", _text.say("paused", _language))
 	_first[Page.PAUSE] = _button(column, "Resume", "resume", _on_resume)
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
+	_button(column, "Options", "options", _show.bind(_options_page()))
 	if pause_tally != null:
 		_save_button(column, _beside(column, pause_tally))
 	column.add_child(_gap("Gap", _profile.button_gap_px))

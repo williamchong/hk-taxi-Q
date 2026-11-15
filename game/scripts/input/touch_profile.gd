@@ -81,6 +81,12 @@ extends Resource
 ## A thumb that is too quick is answered here, never on a car dial.
 @export_range(1.0, 4.0, 0.1) var steer_curve: float
 
+## The same curve for the player who asks for a gentler or a sharper thumb
+## (`Q223`, `ControlOptions.STEERINGS`); `steer_curve` is the one between.
+## Gentle is the larger power: less lock for the same small movement.
+@export_range(1.0, 4.0, 0.1) var steer_curve_gentle: float
+@export_range(1.0, 4.0, 0.1) var steer_curve_sharp: float
+
 ## Path to the shipped table. Named here so `input_router.gd` and
 ## `verify_input.gd` cannot end up loading two different files — a check that
 ## names its own path can go green while the game reads something else.
@@ -95,12 +101,26 @@ const PATH: String = "res://tuning/touch.tres"
 ## which is the same discontinuity a raw dead band has and is why gamepad
 ## deadzones are written this way too. Then shaped by `steer_curve`, about
 ## centre and with the sign kept, so the ends and the dead band do not move.
-func steer_from(offset_px: float) -> float:
+##
+## `curve` is the power, `curve_for` the player's pick of one (`Q223`): handed
+## in, so the router reads the pick when it changes and not on every tick.
+func steer_from(offset_px: float, curve: float) -> float:
 	var linear: float = _axis_from(offset_px, steer_travel_px)
 	# A curve under 1 is a `.tres` missing the key (0.0 would make every touch
 	# past the dead band full lock); read as linear, and `verify_input.gd`
 	# refuses the file.
-	return signf(linear) * pow(absf(linear), maxf(steer_curve, 1.0))
+	return signf(linear) * pow(absf(linear), maxf(curve, 1.0))
+
+
+## The curve for `steering`, one of `ControlOptions.STEERINGS`; anything else
+## reads the one between.
+func curve_for(steering: String) -> float:
+	match steering:
+		ControlOptions.GENTLE:
+			return steer_curve_gentle
+		ControlOptions.SHARP:
+			return steer_curve_sharp
+	return steer_curve
 
 
 ## The longitudinal axis, -1.0 (full brake or reverse) to 1.0 (full throttle).

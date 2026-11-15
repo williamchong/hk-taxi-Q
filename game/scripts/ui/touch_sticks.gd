@@ -58,8 +58,8 @@ static func make(hud_style: HudStyle, layout: HudLayout) -> TouchSticks:
 		sticks.wheel = car.steering_wheel
 	sticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sticks.set_anchors_preset(Control.PRESET_FULL_RECT)
-	sticks._steer_home = _home(sticks, layout, layout.thumb_rest_left, "SteerHome")
-	sticks._drive_home = _home(sticks, layout, layout.thumb_rest_right, "DriveHome")
+	sticks._steer_home = _home(sticks, layout, layout.steer_rest(), "SteerHome")
+	sticks._drive_home = _home(sticks, layout, layout.drive_rest(), "DriveHome")
 	return sticks
 
 

@@ -8,3 +8,5 @@ steer_travel_px = 140.0
 drive_travel_px = 110.0
 jitter_deadzone_px = 6.0
 steer_curve = 2.0
+steer_curve_gentle = 2.5
+steer_curve_sharp = 1.5

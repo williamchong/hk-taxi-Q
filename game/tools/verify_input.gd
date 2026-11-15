@@ -48,6 +48,8 @@ const RouterScript = preload("res://scripts/input/input_router.gd")
 const TouchProfileScript = preload("res://scripts/input/touch_profile.gd")
 const HudLayoutScript = preload("res://scripts/ui/hud_layout.gd")
 const TaxiHornScript = preload("res://scripts/vehicle/taxi_horn.gd")
+const SettingsScript = preload("res://scripts/core/settings.gd")
+const ControlOptionsScript = preload("res://scripts/input/control_options.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -65,6 +67,11 @@ const FINGER_B: int = 1
 ## Somewhere in the top-middle band, which no zone reaches: `touch_zone_*` both
 ## start at y 480 and the drawn HUD's own top row is above that.
 const NOWHERE := Vector2(960.0, 100.0)
+
+## The check's own options file: the router reads the player's steering pick
+## and thumb sides (`ControlOptions`, `Q223`), and a check must neither read
+## this machine's nor overwrite them.
+const SETTINGS_PATH: String = "user://verify_input_settings.cfg"
 
 ## How long `_run` gets before the watchdog (`verify_tool.gd`) gives up on it.
 const WATCHDOG_S: float = 30.0
@@ -95,6 +102,8 @@ func _run() -> void:
 
 	_check_profile()
 
+	_forget_settings_file()
+	SettingsScript.use_file(SETTINGS_PATH)
 	_router = RouterScript.new()
 	_router.name = "TouchRouterUnderTest"
 	get_root().add_child(_router)
@@ -115,7 +124,10 @@ func _run() -> void:
 	_check_mouse()
 	_check_horn()
 	await _check_pause()
+	await _check_options()
 
+	_forget_settings_file()
+	SettingsScript.use_file(SettingsScript.PATH)
 	_router.queue_free()
 	_finish("verify_input")
 
@@ -137,6 +149,20 @@ func _check_profile() -> void:
 	# A missing key reads 0.0, which `steer_from` drives as linear rather than
 	# as a switch; this is what says the key is missing.
 	_expect(_touch.steer_curve >= 1.0, "profile", "steer_curve is %.1f" % _touch.steer_curve)
+	# The player's three (`Q223`): gentle is the larger power, and a missing
+	# key reads 0.0 here too.
+	_expect(
+		(
+			_touch.steer_curve_gentle > _touch.steer_curve
+			and _touch.steer_curve > _touch.steer_curve_sharp
+			and _touch.steer_curve_sharp >= 1.0
+		),
+		"profile",
+		(
+			"the curves run gentle %.1f > normal %.1f > sharp %.1f >= 1"
+			% [_touch.steer_curve_gentle, _touch.steer_curve, _touch.steer_curve_sharp]
+		)
+	)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
 	# what says the edit was bad. Below the band there is no usable travel at
 	# all and the axis is a switch.
@@ -175,14 +201,14 @@ func _check_zones() -> void:
 	var canvas: Vector2 = get_root().get_visible_rect().size
 
 	_expect(
-		_layout.steer_zone().encloses(_layout.thumb_rest_left),
+		_layout.steer_zone().encloses(_layout.steer_rest()),
 		"zones",
-		"the steer zone encloses thumb_rest_left in design space"
+		"the steer zone encloses the steering thumb's rest in design space"
 	)
 	_expect(
-		_layout.drive_zone().encloses(_layout.thumb_rest_right),
+		_layout.drive_zone().encloses(_layout.drive_rest()),
 		"zones",
-		"the drive zone encloses thumb_rest_right in design space"
+		"the drive zone encloses the pedal thumb's rest in design space"
 	)
 
 	_expect(steer_zone.get_area() > 0.0, "zones", "the steer zone resolved to %s" % steer_zone)
@@ -666,6 +692,103 @@ func _check_pause() -> void:
 	_move(FINGER_A, steer_home + Vector2(_touch.steer_travel_px, 0.0))
 	_expect(is_equal_approx(_steer(), 1.0), "pause", "a thumb lands afresh after the pause")
 	_lift(FINGER_A, steer_home)
+
+
+# --------------------------------------------------------------- options ----
+
+
+## The player's picks (`Q223`): a flag beats the saved one, the steering thumb
+## answers to the curve picked once the router is told, and the thumbs swap
+## sides — zones, rests and the screen's edges together.
+func _check_options() -> void:
+	_expect(
+		(
+			ControlOptionsScript.resolve_steering("SHARP", "gentle") == "sharp"
+			and ControlOptionsScript.resolve_steering("", "gentle") == "gentle"
+			and ControlOptionsScript.resolve_steering("quick", "") == "normal"
+		),
+		"options",
+		"the steering reads the flag, then the saved pick, then normal"
+	)
+	_expect(
+		(
+			ControlOptionsScript.resolve_steer_on_right("left", true) == false
+			and ControlOptionsScript.resolve_steer_on_right("right", false) == true
+			and ControlOptionsScript.resolve_steer_on_right("", true) == true
+		),
+		"options",
+		"the thumbs' sides read the flag, then the saved pick"
+	)
+
+	var home: Vector2 = _zone("SteerZone").get_center()
+	var half: float = (
+		_touch.jitter_deadzone_px + (_touch.steer_travel_px - _touch.jitter_deadzone_px) * 0.5
+	)
+	var curves: Dictionary[String, float] = {
+		"sharp": _touch.steer_curve_sharp,
+		"gentle": _touch.steer_curve_gentle,
+		"normal": _touch.steer_curve,
+	}
+	_press(FINGER_A, home)
+	for pick: String in curves:
+		SettingsScript.set_steering(pick)
+		_router.refresh_options()
+		_move(FINGER_A, home + Vector2(half, 0.0))
+		_expect(
+			is_equal_approx(_steer(), pow(0.5, curves[pick])),
+			"options",
+			"picked %s, half the travel is %.3f of the lock" % [pick, _steer()]
+		)
+	_lift(FINGER_A, home)
+
+	# The sides. In design space the swap takes the rests with it, so each zone
+	# still encloses its own; on the screen each zone holds the other edge.
+	SettingsScript.set_steer_on_right(true)
+	_expect(
+		(
+			_layout.steer_zone() == _layout.touch_zone_right
+			and _layout.drive_zone() == _layout.touch_zone_left
+			and _layout.steer_zone().encloses(_layout.steer_rest())
+			and _layout.drive_zone().encloses(_layout.drive_rest())
+		),
+		"options",
+		"steering on the right swaps the zones, and each still encloses its rest"
+	)
+	_router.rebuild_zones()
+	await process_frame
+	await process_frame
+	var canvas: Vector2 = get_root().get_visible_rect().size
+	var steer_zone: Rect2 = _zone("SteerZone")
+	_expect(
+		(
+			is_equal_approx(steer_zone.end.x, canvas.x)
+			and is_zero_approx(_zone("DriveZone").position.x)
+		),
+		"options",
+		"rebuilt, the steer zone holds the right edge and the drive zone the left"
+	)
+	home = steer_zone.get_center()
+	_press(FINGER_A, home)
+	_move(FINGER_A, home + Vector2(_touch.steer_travel_px, 0.0))
+	_expect(
+		is_equal_approx(_steer(), 1.0) and is_zero_approx(_accelerate()),
+		"options",
+		"a thumb on the right steers, and drives nothing"
+	)
+	_lift(FINGER_A, home)
+	SettingsScript.set_steer_on_right(false)
+	_router.rebuild_zones()
+	await process_frame
+	await process_frame
+	_expect(
+		is_zero_approx(_zone("SteerZone").position.x),
+		"options",
+		"swapped back, the steer zone holds the left edge again"
+	)
+
+
+func _forget_settings_file() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
 
 
 func _press(index: int, at: Vector2) -> void:

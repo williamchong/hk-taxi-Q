@@ -94,6 +94,54 @@
       "en": "VOLUME %d%%",
       "zh": "音量 %d%%"
     },
+    "controls": {
+      "en": "CONTROLS",
+      "zh": "操控"
+    },
+    "display": {
+      "en": "DISPLAY",
+      "zh": "畫面"
+    },
+    "steering": {
+      "en": "STEERING RESPONSE",
+      "zh": "軚盤反應"
+    },
+    "steering_gentle": {
+      "en": "GENTLE",
+      "zh": "柔和"
+    },
+    "steering_normal": {
+      "en": "NORMAL",
+      "zh": "標準"
+    },
+    "steering_sharp": {
+      "en": "SHARP",
+      "zh": "靈敏"
+    },
+    "side": {
+      "en": "STEERING THUMB",
+      "zh": "軚盤位置"
+    },
+    "side_left": {
+      "en": "LEFT",
+      "zh": "左"
+    },
+    "side_right": {
+      "en": "RIGHT",
+      "zh": "右"
+    },
+    "frame_rate": {
+      "en": "FRAME RATE",
+      "zh": "幀率"
+    },
+    "frame_60": {
+      "en": "60 FPS",
+      "zh": "60 幀"
+    },
+    "frame_30": {
+      "en": "30 FPS",
+      "zh": "30 幀"
+    },
     "guide": {
       "en": "HOW TO PLAY",
       "zh": "玩法"

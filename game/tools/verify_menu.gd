@@ -38,6 +38,7 @@ const FareScript = preload("res://scripts/fares/fare.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 const SheetImageScript = preload("res://scripts/ui/sheet_image.gd")
 const DayClockScript = preload("res://scripts/world/day_clock.gd")
+const ControlOptionsScript = preload("res://scripts/input/control_options.gd")
 const LoadingCoverScript = preload("res://scripts/ui/loading_cover.gd")
 const ShaderWarmupScript = preload("res://scripts/ui/shader_warmup.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
@@ -104,6 +105,18 @@ const KEYS: PackedStringArray = [
 	"sound_on",
 	"sound_off",
 	"volume",
+	"controls",
+	"display",
+	"steering",
+	"steering_gentle",
+	"steering_normal",
+	"steering_sharp",
+	"side",
+	"side_left",
+	"side_right",
+	"frame_rate",
+	"frame_60",
+	"frame_30",
 	"notices",
 	"notices_title",
 	"notices_lead",
@@ -263,7 +276,7 @@ func _check_pause() -> void:
 	_finish("verify_menu")
 
 
-## The sound on OPTIONS: the slider is heard and saved as it moves with its
+## The sound on OPTIONS' SOUND page: the slider is heard and saved as it moves with its
 ## line renamed, the bottom of its travel is silence, and OFF mutes the bus
 ## whatever the slider says. On the check's own file, like `_check_settings`.
 func _check_options() -> void:
@@ -273,9 +286,9 @@ func _check_options() -> void:
 	var menu := StartMenuScript.new()
 	root.add_child(menu)
 	await process_frame
-	var page: Control = menu._pages.get(StartMenuScript.Page.OPTIONS)
-	var slider: HSlider = page.get_node_or_null("VolumeSlider")
-	_expect(slider != null, "options", "OPTIONS carries the volume slider")
+	var page: Control = menu._pages.get(StartMenuScript.Page.SOUND)
+	var slider: HSlider = page.get_node_or_null("VolumeSlider") if page != null else null
+	_expect(slider != null, "options", "SOUND carries the volume slider")
 	if slider != null:
 		_expect(
 			slider.value == 1.0 and slider.step == menu._profile.volume_step,
@@ -315,7 +328,7 @@ func _check_options() -> void:
 		)
 		# The press rebuilt the page: the marker moved, and ON is the choice left.
 		await process_frame
-		page = menu._pages.get(StartMenuScript.Page.OPTIONS)
+		page = menu._pages.get(StartMenuScript.Page.SOUND)
 		_expect(
 			(
 				(page.get_node("Sounds/Off/Button") as Button).disabled
@@ -332,10 +345,153 @@ func _check_options() -> void:
 		)
 		await process_frame
 	menu.queue_free()
+	await _check_groups()
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
 	AudioServer.set_bus_mute(master, false)
 	AudioServer.set_bus_volume_db(master, 0.0)
+
+
+## OPTIONS is a list of groups, a page each (`Q223`): which are listed is the
+## device's and the menu's, a list of one is skipped, the way back is one
+## step, and a pause never offers what needs a new HUD — the language, the
+## thumbs' sides — nor the hour.
+func _check_groups() -> void:
+	var pages: Dictionary = StartMenuScript.Page
+	var desk: StartMenuScript = await _menu_for(false, false, false)
+	_expect(
+		desk._shown_groups == [pages.SOUND, pages.DISPLAY, pages.LANGUAGE],
+		"groups",
+		"a desk lists SOUND, DISPLAY and LANGUAGE"
+	)
+	var list: Control = desk._pages[pages.OPTIONS]
+	_expect(
+		(
+			list.get_node_or_null("Sound/Button") != null
+			and list.get_node_or_null("Language/Button") != null
+			and list.get_node_or_null("Controls") == null
+		),
+		"groups",
+		"the list carries a choice per group and none for CONTROLS"
+	)
+	var display: Control = desk._pages[pages.DISPLAY]
+	_expect(
+		display.get_node_or_null("Times") != null and display.get_node_or_null("FrameCaps") == null,
+		"groups",
+		"a desk's DISPLAY is the hour, with no frame cap"
+	)
+	desk._show(pages.SOUND)
+	var cancel := InputEventAction.new()
+	cancel.action = &"ui_cancel"
+	cancel.pressed = true
+	desk._unhandled_input(cancel)
+	var on_list: bool = desk._page == pages.OPTIONS
+	desk._unhandled_input(cancel)
+	_expect(
+		on_list and desk._page == pages.HOME,
+		"groups",
+		"back from a group is the list, and back from the list is HOME"
+	)
+	desk.queue_free()
+
+	var phone: StartMenuScript = await _menu_for(true, true, false)
+	_expect(
+		phone._shown_groups == [pages.SOUND, pages.CONTROLS, pages.DISPLAY, pages.LANGUAGE],
+		"groups",
+		"a phone lists all four"
+	)
+	var steerings: Array[int] = [0]
+	var sides: Array[int] = [0]
+	phone.steering_changed.connect(func() -> void: steerings[0] += 1)
+	phone.side_changed.connect(func() -> void: sides[0] += 1)
+	var controls: Control = phone._pages[pages.CONTROLS]
+	_expect(
+		(
+			(
+				controls.get_node("Steerings").get_child_count()
+				== ControlOptionsScript.STEERINGS.size()
+			)
+			and (controls.get_node("Steerings/Normal/Button") as Button).disabled
+			and (controls.get_node("Sides/Left/Button") as Button).disabled
+		),
+		"groups",
+		"CONTROLS offers the three responses and the two sides, the shipped ones marked"
+	)
+	(controls.get_node("Steerings/Sharp/Button") as Button).pressed.emit()
+	(controls.get_node("Sides/Right/Button") as Button).pressed.emit()
+	_expect(
+		(
+			SettingsScript.steering() == "sharp"
+			and SettingsScript.steer_on_right()
+			and steerings[0] == 1
+			and sides[0] == 1
+		),
+		"groups",
+		"a pick of each is saved and said once"
+	)
+	(phone._pages[pages.DISPLAY].get_node("FrameCaps/Fps30/Button") as Button).pressed.emit()
+	_expect(SettingsScript.frame_cap() == 30, "groups", "a phone's DISPLAY saves the 30 fps cap")
+	await process_frame
+	controls = phone._pages[pages.CONTROLS]
+	_expect(
+		(
+			(controls.get_node("Steerings/Sharp/Button") as Button).disabled
+			and (controls.get_node("Sides/Right/Button") as Button).disabled
+			and (
+				(phone._pages[pages.DISPLAY].get_node("FrameCaps/Fps30/Button") as Button).disabled
+			)
+		),
+		"groups",
+		"the rebuilt pages mark the picks"
+	)
+	phone.queue_free()
+
+	var held: StartMenuScript = await _menu_for(true, true, true)
+	_expect(
+		held._shown_groups == [pages.SOUND, pages.CONTROLS, pages.DISPLAY],
+		"groups",
+		"a phone's pause lists SOUND, CONTROLS and DISPLAY, never LANGUAGE"
+	)
+	_expect(
+		(
+			held._pages[pages.CONTROLS].get_node_or_null("Steerings") != null
+			and held._pages[pages.CONTROLS].get_node_or_null("Sides") == null
+			and held._pages[pages.DISPLAY].get_node_or_null("FrameCaps") != null
+			and held._pages[pages.DISPLAY].get_node_or_null("Times") == null
+			and not held._pages.has(pages.LANGUAGE)
+		),
+		"groups",
+		"its CONTROLS has no sides, its DISPLAY no hour, and it built no LANGUAGE"
+	)
+	_expect(
+		held._pages[pages.PAUSE].get_node_or_null("Options/Button") != null,
+		"groups",
+		"the pause offers OPTIONS"
+	)
+	held.queue_free()
+
+	var held_desk: StartMenuScript = await _menu_for(false, false, true)
+	held_desk._show(held_desk._options_page())
+	var on_sound: bool = held_desk._page == pages.SOUND
+	held_desk._show(held_desk._back_of(held_desk._page))
+	_expect(
+		held_desk._shown_groups == [pages.SOUND] and on_sound and held_desk._page == pages.PAUSE,
+		"groups",
+		"a desk's pause has the sound alone: OPTIONS opens it, and its way back is the pause"
+	)
+	held_desk.queue_free()
+
+
+## A menu in the tree for `_check_groups`: on a touch screen or not, a phone
+## or not, the boot menu or the pause.
+func _menu_for(touch: bool, phone: bool, pausing: bool) -> StartMenuScript:
+	var menu := StartMenuScript.new()
+	menu.stacked = touch
+	menu.phone = phone
+	menu.pausing = pausing
+	root.add_child(menu)
+	await process_frame
+	return menu
 
 
 ## The boot splash (`Q209`): the taxi standing still, on the cover's own field,
@@ -981,6 +1137,35 @@ func _check_settings() -> void:
 	)
 	SettingsScript.set_sound_on(true)
 	SettingsScript.set_volume(1.0)
+	# The thumbs and the frame cap (`Q223`): the shipped scheme until picked,
+	# and a cap the game does not offer reads the first that it does.
+	_expect(
+		(
+			SettingsScript.steering() == ""
+			and not SettingsScript.steer_on_right()
+			and SettingsScript.frame_cap() == 60
+		),
+		"settings",
+		"no steering pick, steering on the left and 60 fps unsaved"
+	)
+	SettingsScript.set_frame_cap(45)
+	_expect(SettingsScript.frame_cap() == 60, "settings", "a cap not offered reads 60")
+	SettingsScript.set_steering("sharp")
+	SettingsScript.set_steer_on_right(true)
+	SettingsScript.set_frame_cap(30)
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		(
+			SettingsScript.steering() == "sharp"
+			and SettingsScript.steer_on_right()
+			and SettingsScript.frame_cap() == 30
+		),
+		"settings",
+		"sharp, steering on the right and 30 fps read so after a restart"
+	)
+	SettingsScript.set_steering("")
+	SettingsScript.set_steer_on_right(false)
+	SettingsScript.set_frame_cap(60)
 	# 特更's best: only a higher total is a record, and it survives a restart.
 	_expect(SettingsScript.best_shift_hkd() == 0.0, "records", "no best with nothing saved")
 	_expect(SettingsScript.record_shift(120.5), "records", "a first shift is a record")

@@ -14,6 +14,13 @@ const KEY_LANGUAGE: String = "language"
 const KEY_DAY_CYCLE: String = "day_cycle"
 const KEY_SOUND: String = "sound"
 const KEY_VOLUME: String = "volume"
+const KEY_STEERING: String = "steering"
+const KEY_STEER_ON_RIGHT: String = "steer_on_right"
+const KEY_FRAME_CAP: String = "frame_cap"
+## The frame caps a phone is offered (`Q223`): the project's own 60
+## (`application/run/max_fps.mobile`) and half of it, which is a whole number
+## of a 60 Hz panel's refreshes and so paces evenly where 40 or 45 would not.
+const FRAME_CAPS: PackedInt32Array = [60, 30]
 ## The bus the sound options act on: every other bus sends to it.
 const MASTER_BUS: StringName = &"Master"
 ## What the player has done, beside what they chose: the best shift's total.
@@ -90,6 +97,37 @@ static func apply_sound() -> void:
 ## all its work in its bottom fifth. Half way is -12 dB.
 static func level_db(level: float) -> float:
 	return linear_to_db(level * level)
+
+
+## The touch steering's response as saved (`Q223`), or "" where none was:
+## `ControlOptions.steering` reads this after its flag and names the default.
+static func steering() -> String:
+	return str(_read().get_value(SECTION, KEY_STEERING, ""))
+
+
+static func set_steering(choice: String) -> void:
+	_write(KEY_STEERING, choice)
+
+
+## Whether the steering thumb is the right one, the pedals under the left
+## (`Q223`); `ControlOptions.steer_on_right` reads this after its flag.
+static func steer_on_right() -> bool:
+	return bool(_read().get_value(SECTION, KEY_STEER_ON_RIGHT, false))
+
+
+static func set_steer_on_right(on: bool) -> void:
+	_write(KEY_STEER_ON_RIGHT, on)
+
+
+## A phone's frame cap (`Q223`): one of `FRAME_CAPS`, the first where none was
+## saved or the file names another.
+static func frame_cap() -> int:
+	var saved: int = int(_read().get_value(SECTION, KEY_FRAME_CAP, FRAME_CAPS[0]))
+	return saved if saved in FRAME_CAPS else FRAME_CAPS[0]
+
+
+static func set_frame_cap(fps: int) -> void:
+	_write(KEY_FRAME_CAP, fps)
 
 
 ## The best shift's total in HK$ (`Q162`), 0 before the first.

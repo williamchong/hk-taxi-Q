@@ -30,6 +30,9 @@ extends Node
 ## How long `--menu-page=pause` drives before it pauses: the chase rig is
 ## snapped onto the car at start and needs a moment to frame it.
 const PAUSE_PAGE_AFTER_S: float = 1.0
+## The router is an autoload with no `class_name` (`VehicleController` says
+## why), so it is reached by its path and called by name.
+const INPUT_ROUTER: NodePath = ^"/root/InputRouter"
 
 ## The level in play. Assign in the scene.
 @export var level: DriveLevel
@@ -50,6 +53,7 @@ var _pause_menu: StartMenu = null
 func _ready() -> void:
 	# The saved sound options, before anything plays.
 	Settings.apply_sound()
+	ControlOptions.apply_frame_cap()
 	# After `World` and `GUI` have readied: children ready first, so the level
 	# has placed its car and the HUD has built its plate before this runs.
 	if hud == null:
@@ -128,6 +132,9 @@ func pause() -> void:
 	if not shown.pausing_shift and is_instance_valid(level.fares):
 		shown.pause_tally = level.fares.tally
 	shown.resumed.connect(_release_pause)
+	# The one option under a pause that something outside the menu must hear.
+	# Never the side: that is a new HUD, which the pause does not offer.
+	shown.steering_changed.connect(_on_steering_changed)
 	shown.ended.connect(_on_run_ended)
 	_gui.add_child(shown)
 	_pause_menu = shown
@@ -198,6 +205,8 @@ func _uncover(shown: StartMenu) -> void:
 func _follow_menu(shown: StartMenu) -> void:
 	shown.started.connect(_on_started)
 	shown.language_changed.connect(_on_language_changed)
+	shown.steering_changed.connect(_on_steering_changed)
+	shown.side_changed.connect(_on_side_changed)
 	shown.page_shown.connect(level.frame_menu)
 	# The page it opened on was shown before anything listened; cut to it.
 	level.frame_menu(shown.shot(), true)
@@ -279,6 +288,27 @@ func _open_menu(report: StartMenu.Report) -> void:
 ## grades the one that ships.
 func _on_language_changed(_code: String) -> void:
 	_renew_hud()
+
+
+## The steering thumb's response was picked again: the router reads it. Safe
+## over a paused drive — the thumbs were let go as the pause began.
+func _on_steering_changed() -> void:
+	_tell_router(&"refresh_options")
+
+
+## The thumbs swapped sides: the zones are built afresh, and the HUD with them,
+## since it draws the wheel and the pedal where the thumbs rest.
+func _on_side_changed() -> void:
+	_tell_router(&"rebuild_zones")
+	_renew_hud()
+
+
+## Call `method` on the router, where there is one: a scene run without the
+## autoload has no thumbs to tell.
+func _tell_router(method: StringName) -> void:
+	var router: Node = get_node_or_null(INPUT_ROUTER)
+	if router != null:
+		router.call(method)
 
 
 func _renew_hud() -> void:

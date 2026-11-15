@@ -65,6 +65,9 @@ extends Resource
 # is the left and the map is what steering answers, `drive_zone()` is the right
 # and the speed is what the throttle answers. A consequence, not the reason —
 # the reason is that it is where a player of the genre already looks.
+# ⚠️ And only in the shipped scheme: with the steering thumb on the right
+# (`Q223`) the thumbs swap and the readouts stay, since the reason stands and
+# the consequence does not — the map is then over the pedals.
 
 ## Speed, bottom-right. Raised clear of the right thumb rather than sitting in
 ## the very corner, which a console racing game can use and we cannot.
@@ -377,14 +380,28 @@ func zone_slots() -> Dictionary[String, Rect2]:
 ## literal rect names is a choice nobody can reverse. Swapping the bodies of
 ## these two swaps the scheme, and `P3-5b`'s "one-handed layout" is where a
 ## player-facing toggle would replace them.
+##
+## And it did (`Q223`): `ControlOptions.steer_on_right` swaps the two, and the
+## rests with them (`steer_rest`, `drive_rest`). The rects keep their names by
+## the side of the screen they are on; these four say whose they are.
 func steer_zone() -> Rect2:
-	return touch_zone_left
+	return touch_zone_right if ControlOptions.steer_on_right() else touch_zone_left
 
 
 ## The zone thumb 1 drives in: `accelerate` above its origin, `brake_reverse`
 ## below, on one bipolar axis (`Q83`).
 func drive_zone() -> Rect2:
-	return touch_zone_right
+	return touch_zone_left if ControlOptions.steer_on_right() else touch_zone_right
+
+
+## The fingertip inside `steer_zone`, where the wheel is drawn.
+func steer_rest() -> Rect2:
+	return thumb_rest_right if ControlOptions.steer_on_right() else thumb_rest_left
+
+
+## The fingertip inside `drive_zone`, where the pedal's stick is drawn.
+func drive_rest() -> Rect2:
+	return thumb_rest_left if ControlOptions.steer_on_right() else thumb_rest_right
 
 
 ## True where the minimap sits directly on the street plate at the same width —

@@ -154,6 +154,11 @@ class Thumb:
 
 
 var _touch: TouchProfile = null
+## The steering thumb's curve, the player's pick of `_touch`'s three (`Q223`):
+## read when the zones are built and on `refresh_options`, never per tick.
+var _steer_curve: float = 1.0
+## The layer the zones stand on, kept so `rebuild_zones` can retire it.
+var _zones: CanvasLayer = null
 ## The keyboard's input assist (`Q210`), or null when it did not load — then a
 ## key passes through as it reads, which is a car tuned against a linear input
 ## driven by a binary one, so it is an error, not a warning.
@@ -223,6 +228,7 @@ func _build_zones() -> void:
 		)
 		_touch = null
 		return
+	refresh_options()
 
 	# First, before any root is inset: the menu, the HUD and these zones all lay
 	# out in the frame the table is written in (`Q204`). The desk table's is the
@@ -232,6 +238,7 @@ func _build_zones() -> void:
 	var canvas := CanvasLayer.new()
 	canvas.name = "TouchZones"
 	add_child(canvas)
+	_zones = canvas
 
 	# The same root the HUD builds, from the same function: the zones have to
 	# resolve in the frame the rests were reserved in, and that frame is the root
@@ -240,6 +247,28 @@ func _build_zones() -> void:
 
 	_steer_thumb.zone = _zone(layout, root, "SteerZone", layout.steer_zone())
 	_drive_thumb.zone = _zone(layout, root, "DriveZone", layout.drive_zone())
+
+
+## Read the player's steering pick again (`ControlOptions`): the options menu
+## changed it, at boot or over a paused drive.
+func refresh_options() -> void:
+	if _touch != null:
+		_steer_curve = _touch.curve_for(ControlOptions.steering())
+
+
+## Build the zones afresh: the thumbs swapped sides (`Q223`). Both thumbs are
+## let go first, since a finger held in a zone that has moved is in neither.
+## Freed at once, not queued: the new layer takes the old one's name.
+func rebuild_zones() -> void:
+	_steer_thumb.release(_steer_thumb.index)
+	_drive_thumb.release(_drive_thumb.index)
+	_mouse_is_down = false
+	if is_instance_valid(_zones):
+		_zones.free()
+	_zones = null
+	_steer_thumb.zone = null
+	_drive_thumb.zone = null
+	_build_zones()
 
 
 func _zone(layout: HudLayout, root: Control, zone_name: String, design: Rect2) -> Control:
@@ -423,7 +452,7 @@ func _physics_process(_delta: float) -> void:
 	# beneath it — so the first fifth of every thumb's travel would vanish, on a
 	# control whose whole design is that small travel is available (`Q97`).
 	if _steer_thumb.is_down():
-		steer = _touch.steer_from(_steer_thumb.offset().x)
+		steer = _touch.steer_from(_steer_thumb.offset().x, _steer_curve)
 		steer_from_keys = false
 	if _drive_thumb.is_down():
 		# One bipolar axis split into the two the vehicle reads (`Q83`), and

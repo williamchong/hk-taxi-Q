@@ -779,12 +779,16 @@ func _parse_args() -> bool:
 					"notices",
 					"report",
 					"record",
-					"pause"
+					"pause",
+					"sound",
+					"controls",
+					"display",
+					"language"
 				]
 				if not pages.has(value):
 					_fail(
 						(
-							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record or pause"
+							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record, pause, sound, controls, display or language"
 							% value
 						)
 					)
@@ -891,6 +895,16 @@ func _parse_args() -> bool:
 				# two languages would silently read as the default.
 				if not [Locale.ENGLISH, Locale.CHINESE].has(value):
 					_fail("--lang=%s is not en or zh" % value)
+					return false
+			"--touch-steer":
+				# `control_options.gd` reads these two itself (`Q223`); a name it
+				# does not know would silently read the machine's saved pick.
+				if not ControlOptions.STEERINGS.has(value):
+					_fail("--touch-steer=%s is not gentle, normal or sharp" % value)
+					return false
+			"--touch-side":
+				if not [ControlOptions.SIDE_LEFT, ControlOptions.SIDE_RIGHT].has(value):
+					_fail("--touch-side=%s is not left or right" % value)
 					return false
 			"--perf-log", "--perf-skip":
 				# `perf_recorder.gd` reads these itself (`P2-6`), the phone's
