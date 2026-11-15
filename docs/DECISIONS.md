@@ -13925,7 +13925,21 @@ ever assigned, and the rig only reads colours off a keyframe's environment. Six 
 110.4 MB at the default 256 px (129.65 MB with the day's sky drawn, 240.09 with them loaded) —
 three of them, about 55 MB, since `Q160`. `radiance_size = 0` on each brings the six to 4.7 MB
 (134.34). The sky on screen is a copy of the day's and keeps its 256. Desktop numbers; the handset
-is not measured. The parked
+is not measured.
+
+**Two more from the same pass, not fixed.**
+
+- **The day's own sky is held twice while the cycle runs**: 18.41 MB, measured (129.65 MB with the
+  authored sky drawn, 148.06 with the live copy drawn and the authored one still loaded). The cheap
+  fix shrinks the authored `Sky`'s `radiance_size` while the copy is on screen and puts it back in
+  `rest()` — which writes to the authored resource, the thing `Q160` says the rig never does. Left
+  for the user's call.
+- **Whether the sky's share of the ambient keeps up with ten moves a second is not known.** The
+  live sky is `PROCESS_MODE_INCREMENTAL`, which re-filters one roughness layer a frame and starts
+  over when the sky is dirtied; the reviewer's reading is that the roughest layers may never catch
+  up while the sun moves. A bare-scene probe on the desktop was inconclusive — its window stopped
+  drawing, the stall `facade.md` already names — and the game's own frames at pinned and moving
+  hours were never shot from one camera. Owed: one street camera, the same hour moving and pinned. The parked
 roster and the bus hours were not looked at overnight — only that the hour reads right.
 
 **See.** `Q160` · `Q162` · `Q222` · `game/tuning/day_to_night.md` · `game/tools/verify_day_cycle.gd`
