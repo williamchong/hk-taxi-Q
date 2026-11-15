@@ -241,7 +241,7 @@ func set_time_of_day(value: float) -> void:
 	var weight: float = 0.0
 	if from != to:
 		weight = clampf(inverse_lerp(from.at, to.at, _time), 0.0, 1.0)
-	elif cycle.loop_at > 0.0 and _keys.size() > 1:
+	elif cycle.loop_at > 0.0:
 		# Off either end of a cycle that comes round: the leg from the last
 		# look back to the first, across `loop_at`.
 		from = _keys[-1]
