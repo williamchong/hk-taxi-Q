@@ -125,6 +125,17 @@ tools/serve_web.py           # then open http://127.0.0.1:8060
 Not `python -m http.server`: the build needs `SharedArrayBuffer`, which browsers gate behind
 COOP/COEP headers that it does not send.
 
+**Build it for an iPhone.** Needs Xcode, the iOS export templates and an Apple Developer team.
+
+```bash
+IOS_TEAM_ID=<team> tools/ios.sh device       # build, install and launch on the connected phone
+IOS_TEAM_ID=<team> tools/ios.sh testflight   # archive and upload to TestFlight
+```
+
+The App Store listing is text in `fastlane/metadata/`; `tools/store_screenshots.sh` takes its
+screenshots and `fastlane metadata` sends both, with an App Store Connect API key in the
+environment (see `fastlane/Fastfile`).
+
 ---
 
 ## Documentation

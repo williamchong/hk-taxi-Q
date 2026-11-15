@@ -1662,8 +1662,24 @@ download since Xcode 26, `xcodebuild -downloadComponent MetalToolchain`) it warn
 baking limited to SPIR-V` and the phone still compiles. Check the PCK, not the exit code: a baked
 one holds `.godot/shader_cache/*.metal.cache` entries (70 on 2026-11-13), an unbaked one none.
 Android's preset stays unbaked until a handset can measure it. The export itself wants
-`export_project_only` and `app_store_team_id` set: set them in a scratch copy of the preset for
-the export and restore the committed file after; `tools/export.sh ios` does neither.
+`export_project_only` and `app_store_team_id` set, and `tools/export.sh ios` sets neither.
+**`tools/ios.sh` is the iOS build** (2026-11-15): `IOS_TEAM_ID=<team> tools/ios.sh device` puts a
+Release build on a handset, `… testflight [<build number>]` archives and uploads one. It sets the
+two preset lines for the length of the export and puts the committed file back, exports with a
+window, refuses a PCK with no Metal caches, and signs with `CODE_SIGN_IDENTITY="Apple
+Development"` — the exported project pins Apple Distribution, which automatic signing refuses.
+The upload is signed by the Apple ID in Xcode. ⚠️ App Store Connect refuses an icon with an alpha
+channel and the exported set keeps `icon.svg`'s transparent corners, so `testflight` flattens the
+icons in the build copy; the source is untouched.
+
+**The App Store listing is `fastlane/`** (2026-11-15): `metadata/` holds the text per locale
+(`en-US`, `zh-Hant`), `age_rating.json` the rating answers, and `fastlane metadata` sends them
+with the screenshots `tools/store_screenshots.sh` takes from the game (six scenes, two
+languages, a phone and an iPad size; gitignored, they are renders of the generated city).
+`fastlane submit` sends the version to review for a release by hand. Both want an App Store
+Connect API key in the environment (the `Fastfile`'s header); the review notes
+(`review_notes.txt`) go up only with a review contact in the environment, which stays out of git. The description carries the data
+credit verbatim (hard rule 6) and `PRIVACY.md` and `SUPPORT.md` are the listing's two URLs.
 
 **The boot splash is the loading screen's still** (`Q209`): `project.godot`'s
 `application/boot_splash/image` is `assets/authored/loading/boot_splash.png`, drawn by
