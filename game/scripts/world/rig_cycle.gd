@@ -1,12 +1,13 @@
 ## A day that ends (`Q160`, the user's ask): the looks a `LightingRig` passes
 ## through as game time runs, and how long the passage takes.
 ##
-## A shift's cycle is not a loop; a free drive's is, since `Q225`, where
-## `loop_at` says so. It starts at its first `RigKeyframe`, passes through
-## each in turn — and through the rig scene's own daylight at `day_at`, which
-## is one moment of the day since `Q222` and no longer where it starts — and
-## a shift STOPS at 1.0, on the night — a session is three to five minutes
-## (`GAME_DESIGN.md`), so the curve needs an end state and night is it.
+## It starts at its first `RigKeyframe` and passes through each in turn. The
+## rig scene's own daylight is one moment on the way, at `day_at`, and no
+## longer where it starts (`Q222`).
+##
+## A shift STOPS at 1.0, on the night: a session is three to five minutes
+## (`GAME_DESIGN.md`), so the curve needs an end state and night is it. A free
+## drive runs on to `loop_at` and comes round (`Q225`).
 ##
 ## 🔴 **No `@export` here declares a default** (`Q150`'s convention). A missing
 ## `length_s` or `update_hz` reads zero and `usable()` refuses the table, so the

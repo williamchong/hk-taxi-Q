@@ -22,8 +22,9 @@ extends Node3D
 ## to night as game time), reversing "night is a switch between two static
 ## rigs". A rig with a `cycle` takes `time_of_day` from a `DayClock` and blends
 ## the sky, the ambient, the key light and two shader globals between the
-## cycle's keyframes, the scene as authored one moment among them; `changed` tells the consumers that
-## cached the sun (`SunGlint`, `VehicleLamps`) to read it again.
+## cycle's keyframes, the scene as authored one moment among them; `changed`
+## tells the consumers that cached the sun (`SunGlint`, `VehicleLamps`) to
+## read it again.
 ##
 ## 🔴 **The whole day moves since `Q222`** (the user's ask: the sun and the sky
 ## change slowly with the hour, brightest and overhead at noon). The scene as

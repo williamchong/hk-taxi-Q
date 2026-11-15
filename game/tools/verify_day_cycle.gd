@@ -25,6 +25,8 @@
 ## - The cycle comes round (`Q225`): just short of `loop_at` the rig is on its
 ##   first keyframe's look again, lamps out, and a free drive's clock runs on
 ##   through the night into the next morning while a shift's stops at 1.
+## - The option turned on or off under the menu, after the clock first read
+##   it, is what the first tick of the drive shows.
 ## - The authored `.tres` is never the one written to.
 ## - A free drive's clock reaches 1 in `length_s` game seconds and the morning
 ##   again in `loop_at` of them, and stays at 0 with the option off.
@@ -99,6 +101,7 @@ func _run() -> void:
 	)
 
 	_check_the_arc(rig, sun)
+	_check_the_hand_over(rig, sun)
 	moved[0] = 0
 
 	var lights: float = 0.0
@@ -106,12 +109,6 @@ func _run() -> void:
 	var one_hump: bool = true
 	var dim_at_night: bool = true
 	var sun_kept: bool = true
-	var widest_deg: float = 0.0
-	var widest_is_dark: bool = false
-	var widest_from: float = 0.0
-	var last_at: float = -1.0
-	var last_toward := Vector3.ZERO
-	var last_energy: float = 0.0
 	var highest: float = day_facing.basis.z.normalized().y
 	var highest_energy: float = day_energy
 	var strongest: float = day_energy
@@ -130,13 +127,6 @@ func _run() -> void:
 		peak = maxf(peak, lights)
 		if lights >= 1.0 and lamps != null:
 			dim_at_night = dim_at_night and sun.light_energy <= lamps.night_energy
-		if last_at >= 0.0 and rad_to_deg(last_toward.angle_to(toward)) > widest_deg:
-			widest_deg = rad_to_deg(last_toward.angle_to(toward))
-			widest_is_dark = last_energy <= 0.0 and sun.light_energy <= 0.0
-			widest_from = last_at
-		last_at = key.at
-		last_toward = toward
-		last_energy = sun.light_energy
 		sun_kept = sun_kept and sun.visible and (sun.light_energy <= 0.0 or toward.y > 0.0)
 	_expect(
 		one_hump and is_equal_approx(peak, 1.0),
@@ -163,19 +153,6 @@ func _run() -> void:
 	_expect(moved[0] == cycle.keyframes.size(), "signal", "one `changed` a move")
 	rig.time_of_day = 0.0
 	var first: Vector3 = SunGlint.toward(sun)
-	# The leg that comes round, last keyframe to first, is a swing like any other.
-	if cycle.loop_at > 0.0 and rad_to_deg(last_toward.angle_to(first)) > widest_deg:
-		widest_deg = rad_to_deg(last_toward.angle_to(first))
-		widest_is_dark = last_energy <= 0.0 and sun.light_energy <= 0.0
-		widest_from = last_at
-	_expect(
-		widest_is_dark,
-		"sun",
-		(
-			"the key light's widest swing, %.0f° from the keyframe at %.3f, is on a leg dark at both ends"
-			% [widest_deg, widest_from]
-		)
-	)
 	rig.time_of_day = cycle.loop_at - 0.0001
 	_expect(
 		(
@@ -232,35 +209,66 @@ func _check_the_arc(rig: LightingRig, sun: DirectionalLight3D) -> void:
 		stops.append(key.at)
 		if key.night_lights > 0.0:
 			break
+	# Each leg as its two ends on the cycle's scale; the one that comes round
+	# ends past `loop_at`, on the first stop again.
+	var legs: Array[Vector2] = []
+	for index: int in range(1, stops.size()):
+		legs.append(Vector2(stops[index - 1], stops[index]))
+	if rig.cycle.loop_at > 0.0:
+		legs.append(Vector2(rig.cycle.keyframes[-1].at, rig.cycle.loop_at + stops[0]))
 	var slowest: float = INF
 	var fastest: float = 0.0
-	for index: int in range(1, stops.size()):
-		rig.time_of_day = stops[index - 1]
-		var from: Vector3 = SunGlint.toward(sun)
-		rig.time_of_day = stops[index]
-		var speed: float = rad_to_deg(from.angle_to(SunGlint.toward(sun)))
-		speed /= (stops[index] - stops[index - 1]) * rig.cycle.length_s
+	for leg: Vector2 in legs:
+		var from: Vector3 = _toward_at(rig, sun, leg.x)
+		var swept: float = rad_to_deg(from.angle_to(_toward_at(rig, sun, leg.y)))
+		var speed: float = swept / ((leg.y - leg.x) * rig.cycle.length_s)
 		slowest = minf(slowest, speed)
 		fastest = maxf(fastest, speed)
-	var legs: int = stops.size() - 1
-	if rig.cycle.loop_at > 0.0:
-		var last: RigKeyframe = rig.cycle.keyframes[-1]
-		rig.time_of_day = last.at
-		var from: Vector3 = SunGlint.toward(sun)
-		rig.time_of_day = stops[0]
-		var round_s: float = (rig.cycle.loop_at - last.at + stops[0]) * rig.cycle.length_s
-		var speed: float = rad_to_deg(from.angle_to(SunGlint.toward(sun))) / round_s
-		slowest = minf(slowest, speed)
-		fastest = maxf(fastest, speed)
-		legs += 1
 	_expect(
 		stops.size() > 2 and fastest <= slowest * ARC_SPREAD,
 		"sun",
 		(
 			"by day the key light moves at one speed: %.3f to %.3f °/s over %d legs"
-			% [slowest, fastest, legs]
+			% [slowest, fastest, legs.size()]
 		)
 	)
+
+
+## The key light changes hands unseen: of every leg between two keyframes in
+## turn, the one that comes round included, the widest swing is on a leg whose
+## two ends both have no energy.
+func _check_the_hand_over(rig: LightingRig, sun: DirectionalLight3D) -> void:
+	var stops: Array[float] = []
+	for key: RigKeyframe in rig.cycle.keyframes:
+		stops.append(key.at)
+	if rig.cycle.loop_at > 0.0:
+		stops.append(rig.cycle.loop_at + stops[0])
+	var widest_deg: float = 0.0
+	var widest_is_dark: bool = false
+	var widest_from: float = 0.0
+	for index: int in range(1, stops.size()):
+		var from: Vector3 = _toward_at(rig, sun, stops[index - 1])
+		var dark: bool = sun.light_energy <= 0.0
+		var swing_deg: float = rad_to_deg(from.angle_to(_toward_at(rig, sun, stops[index])))
+		if swing_deg > widest_deg:
+			widest_deg = swing_deg
+			widest_is_dark = dark and sun.light_energy <= 0.0
+			widest_from = stops[index - 1]
+	_expect(
+		widest_is_dark,
+		"sun",
+		(
+			"the key light's widest swing, %.0f° from the keyframe at %.3f, is on a leg dark at both ends"
+			% [widest_deg, widest_from]
+		)
+	)
+
+
+## The direction to the key light with the rig at `at`, which may be past
+## `loop_at` for the far end of the leg that comes round.
+func _toward_at(rig: LightingRig, sun: DirectionalLight3D, at: float) -> Vector3:
+	rig.time_of_day = fposmod(at, rig.cycle.span()) if at > rig.cycle.span() else at
+	return SunGlint.toward(sun)
 
 
 ## The phone's shadow reach (`P2-6`): the rig on a desk keeps the authored sun,
@@ -350,6 +358,26 @@ func _check_the_clock(rig: LightingRig) -> void:
 				"with the option off the rig rests on the authored day"
 			)
 		clock.free()
+	# The option changed under the menu, after `restart` read it: the first
+	# tick of the drive decides, both ways.
+	for on: bool in [true, false]:
+		SettingsScript.set_day_cycle(not on)
+		var flipped := DayClock.new()
+		flipped.rig = rig
+		root.add_child(flipped)
+		await process_frame
+		var shown_resting: bool = rig.resting
+		SettingsScript.set_day_cycle(on)
+		_tick(flipped, 1)
+		_expect(
+			shown_resting == on and rig.resting != on,
+			"clock",
+			(
+				"the option turned %s under the menu is what the drive-off shows"
+				% ("on" if on else "off")
+			)
+		)
+		flipped.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 
