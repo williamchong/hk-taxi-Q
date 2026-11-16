@@ -44,7 +44,8 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   after, and the `Q27`/`Q31` cameras — ⚠️ **shooting the skyline at `t=2.0` and not `t=0.8`**, where
   the streamer has not settled and two runs disagree. Numbers in `Q38`.
 - **Band changes — `survey_bands`, `STREET_BAND_M`, `BAND_FACE_TEXELS`, `FALLBACK_SPREAD_AB`,
-  `band_hue`, `cut_bands`, `_ship_line` or `facade_hue.bands` (`Q197`): re-run the survey with
+  `band_hue`, `cut_bands`, `_ship_line` or `facade_hue.bands` (`Q197`), and `band_lift`,
+  `band_noise_l`, `FALLBACK_SPREAD_L` or `facade_hue.band_lightness` (`Q240`): re-run the survey with
   `--regions wan_chai causeway_bay`, keep the old table in `superseded/`, and check its shipped
   columns moved on ZERO rows** — the bands ride the same pass, and a change that moves the
   whole-building colour is a `Q37` change, not a band change. Then the build's `facade bands` log
@@ -52,7 +53,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ **A podium band is cut at the line `podiums.json` ships**: rebuild `podiums` before the
   survey, or the ETL draws that band as the tower and warns. ⚠️ **Cut only one object's
   triangles** — `collapse` stitches seams across two, and interpolating their ordinal is what
-  `verify_tiles`' 8 m box check caught.
+  `verify_tiles`' 8 m box check caught. ⚠️ **Lightness is the street band's alone** (`Q240`):
+  a step from its own tower, never the building's `L*` — that refusal stands. `band_lightness`
+  at 0 must rebuild `Q197` byte for byte.
 - **Filler-guard changes — `is_filler`, `filler_colours`, `MODAL_SHARE`, `MODAL_STRIDE`: also
   `tools/facade_survey.py --all --filler-report`, and paste its table.** It is the only thing that
   reproduces `Q55`, whose every number came from a scratch script — the same debt `Q37` was opened

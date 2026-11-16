@@ -291,7 +291,7 @@ Traps, each paid for once:
   `cell_m <= 0` welds on position and normal, exactly what a UV seam shares, and that tier costs
   30.5 MB and 40% of worst-case visible triangles (`Q16`).
 - Colour sampled per building is *not* on this list — buildings get it (below). What stays refused
-  is the photographs' `L*`.
+  is the photographs' `L*` — for the building; its street band takes a measured step (`Q240`).
 - ⚠️ Do not re-author the five height bands from clustered façade colour: height explains 1.2% of
   `a*` and 0.8% of `b*` across 2,214 buildings. The ramp is a lightness ramp, the one thing height
   predicts (10.9%).
@@ -307,6 +307,9 @@ conversion in `etl/pipeline/colour.py`.
 - ⚠️ **Hue is taken, lightness refused, on measurement.** `L*` spread *within* one building is 22.9
   mean and 41.1 at p90, against 16.25 between buildings — the sun confound exceeds the signal.
   `facade_hue.strength` scales the chroma and is the stylisation knob, kept separate.
+  ⚠️ **One exception, the street band** (`Q240`, the user's call): its `L*` *step from its own
+  tower* ships, shrunk by how far that band's walls disagree in `L*` — two bands of one building
+  share their sun, which the whole building against its neighbours does not.
 - **`COLOR_0` is authored in sRGB and every consumer must linearise it** — both façade shaders and
   `road_markings.gdshader` (`Q27`). Consumed as linear, 57% of a lit façade pixel's luminance is
   albedo-independent; converted, 6%.

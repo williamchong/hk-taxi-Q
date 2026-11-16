@@ -14539,3 +14539,58 @@ adds the other reading as a pick and leaves relative the default.
 **See.** `Q83` · `Q204` · `Q223` · `Q238` · `game/scripts/input/input_router.gd` ·
 `game/scripts/input/control_options.gd` · `game/tools/verify_input.gd`
 
+## `Q240` — A building's street band takes its measured lightness, shrunk by what its walls disagree
+
+**Asked** by the user, 2026-11-17: "can shop band has its own measured color instead of darkening?",
+then from frames "show lightness on the street band" and "build it then?". `Q197` ships a band's
+hue and keeps every band at the building's lightness; this ships the street band's `L*` step too.
+⚠️ It reverses, for the street band alone, the refusal of the photographs' `L*` (`Q37`,
+`ART_DESIGN.md`): a building's own lightness is still the height ramp's.
+
+**Status.** ✅ Built 2026-11-17. `pytest` 3,226, `tools/check.sh` passes on the rebuilt bundle.
+
+- **The step** is the street band's `L*` less the tower's, both from the survey's `bands.lab`.
+  `buildings.band_lift` ships `step³ / (step² + noise_street + noise_tower)` — `band_hue`'s
+  shrinkage on the lightness axis — and `colour.with_lightness` moves the band's `L*` by it after
+  the hue is in. `facade_hue.band_lightness` (1.0) scales it; 0.0 is `Q197` byte for byte (all 132
+  Wan Chai tiles identical).
+- **The noise is each building's own**: `facade_survey.band_noise_l`, the median pairwise `|ΔL*|`
+  between a band's faces, squared over their number, written as `bands.noise_l`. A band with fewer
+  than two faces takes `FALLBACK_SPREAD_L` 13.2, the six sheets' median of that spread over 3,237
+  bands (quartiles 8.7 and 18.8); 484 of 3,721 bands are on it. This is the sun confound priced
+  per building rather than refused for all: a foot whose walls disagree ships little.
+- **Why the street band and not the building**: the refusal's number is the `L*` spread *within*
+  one building (22.9 mean) against 16.25 between buildings. A step between two bands of one
+  building is read off the same walls under the same sun, so most of that confound cancels; what
+  is left is in `noise_l`.
+- **What ships.** 1,644 of 2,213 surveyed buildings have a street band and a tower measured. The
+  measured step is a median 9.4 `L*` darker; the median share shipped is 0.53. Shipped lift,
+  percentiles 10/25/50/75/90: −24.9, −14.7, −3.7, 0.0, +4.7. At least 2 `L*`: 71% of those feet
+  (57% darker, 14% lighter); at least 5: 56% (46 / 10); at least 10: 41% (35 / 5).
+- **The survey was re-run** (`--all --merge --regions wan_chai causeway_bay`, 16 min): the shipped
+  columns and the `Q197` band columns moved on ZERO of 2,213 rows; the old tables are in
+  `superseded/pre-Q240/`. The build refuses `band_lightness` above 0 on a table without `noise_l`.
+- **Cost.** None in triangles: the banded set is the same 1,639 buildings, since a band was
+  already cut wherever it had a hue. No new channel and no schema bump — `COLOR_0.rgb` is read as
+  before. The podium band and the tower take no lightness.
+- **Frames** against the look before, px moved of 2.07 M: street 67k, side 90k, kerb 85k, a
+  Hennessy Road chase 148k, skyline (`t=2.0`) 14k. A darker foot on most frontages, a lighter one
+  on a few; it does not read as a shopfront.
+
+**Measured and not built, same day.**
+- *The cut at the shopfront's own head* instead of 5 m: a dark-below / light-above step with a
+  sharpness gate finds a head on 372 faces of 332 buildings, about 32 of 40 right by eye. Moving
+  the cut there moved the hue a median 2.1 `Δab` and 10k–34k px beside lightness's 97k–148k.
+- *Storey relief from the photographs* (the user: "base the normal map according to context
+  extracted from real texture ... just do the high confident ones"): autocorrelation finds a
+  storey pitch two faces agree on for 187 of 2,198 buildings (547 on one face) and a bay pitch for
+  about 11. A test render pressed the 187 and was barely visible from the street or the chase
+  camera. `tools/facade_unwrap.py` still has no consumer.
+- *An invented storey and window relief* on the flat look (a `relief` group tilting `NORMAL`, as
+  `Q232` does for vehicles) reads on sunlit walls, faintly in shade and not at night. Not
+  committed; the user has not picked it.
+
+**Owed.** The user's drive. The Causeway Bay frames (the knob is the city's; only Wan Chai was shot).
+
+**See.** `Q197` · `Q37` · `Q193` · `Q102` · `Q232` · `etl/pipeline/buildings.py` (`band_lift`) ·
+`tools/facade_survey.py` (`band_noise_l`) · `docs/ART_DESIGN.md`
