@@ -38,7 +38,7 @@ const CYCLE_ARG: String = "--day-cycle="
 ## `--mode=shift` plays a shift with no menu to pick it; anything else, free.
 const MODE_ARG: String = "--mode="
 ## `--shift-s=<seconds>` runs the whole shift in that many game seconds, for a
-## frame of the handover without five minutes of driving. Dev only.
+## frame of the handover without fourteen minutes of driving. Dev only.
 const SHIFT_S_ARG: String = "--shift-s="
 
 ## The rig this clock moves. Assign in the scene.

@@ -19,5 +19,5 @@ there is no dawn keyframe — so 07:00 is drawn as the day every frame so far wa
 ## `closes_h = 21.0`
 
 交更 at 21:00: an hour after `day_to_night.tres` reaches full night at 20:00, so the last stretch of
-every shift is driven in the dark it was lit for. 14 game hours over 300 s of driving is about
-21 s an hour.
+every shift is driven in the dark it was lit for. 14 game hours over 840 s of driving is a
+minute on the clock for every second driven (`Q233`).

@@ -24,20 +24,23 @@ the user's calls on the way: not "pitch dark with a neon light-blue outline", wh
 science fiction; "a more realistic night with some light-up touch"; and the buildings floodlit,
 not glowing. The first table went to black with a cyan line and was withdrawn the same day.
 
-## `length_s = 300.0`
+## `length_s = 840.0`
 
-Five minutes of DRIVING from the start to the end of the cycle, and the length of 特更 (`Q162`,
+Fourteen minutes of DRIVING from the start to the end of the cycle, and the length of 特更 (`Q162`,
 2026-10-11): `shift.tres` holds the hours, 07:00 to 21:00, and takes its length from here so the sky
-and the HUD's clock end on one game second. Was 240 s (`Q160`) against `GAME_DESIGN.md`'s
-three-to-five minute session; the shift is that session now, and five minutes is about five to eight
-fares at 30–90 s each. Game time, not wall time — the clock stops under the start menu. Free mode
+and the HUD's clock end on one game second. **One second driven is one minute on the clock**
+(`Q233`, the user's ask, 2026-11-17: "slower shift and clock time to 1s real time = 1min in ingame
+clock"): 14 hours x 60, so the number follows `shift.tres`'s hours and moves with them. Was 300 s
+(`Q162`, about 21 s an hour) and 240 s before it (`Q160`), against `GAME_DESIGN.md`'s
+three-to-five minute session; the shift is the session, about fourteen to twenty-two fares at
+30–90 s each by the reckoning that gave 300 s its five to eight. Game time, not wall time — the clock stops under the start menu. Free mode
 runs the same table when its option is DAY TO NIGHT, and since `Q225` runs on round `loop_at`.
 
 ## `day_at = 0.174`
 
 Where the authored scene stands on the cycle: 09:26 on the shift's clock. Not picked — solved. The
 authored sun is 48° up in the south-south-east, noon is 80° up at 0.36 and dusk 8° up at 0.79, so
-the afternoon's 78.0° of arc over 0.43 sets the speed (0.604 °/game s at 300 s), and the authored
+the afternoon's 78.0° of arc over 0.43 sets the speed (0.216 °/game s at 840 s), and the authored
 sun's 33.6° before noon puts it here. Move noon, dusk or `length_s`'s keyframes and this moves
 with them. Was `day_until` 0.71 (`Q162`): the authored daylight held to 17:00 and nothing moved
 before it.
@@ -46,14 +49,14 @@ before it.
 
 Where a free drive's day comes round to 07:00 again (`Q225`, the user's ask, 2026-11-16: "Loop the
 sky in free mode", "keep at the day's pace, the shift end at 21:00 untouched"): 24 hours on the
-scale where 1.0 is the shift's 14, so the night runs at the day's pace — 214 game seconds from
-21:00 to 07:00, 514 a lap. 🔴 **A shift never passes 1.0**; `DayClock` caps it there and only a
+scale where 1.0 is the shift's 14, so the night runs at the day's pace — 600 game seconds from
+21:00 to 07:00, 1440 a lap, a minute a second all the way round (`Q233`). 🔴 **A shift never passes 1.0**; `DayClock` caps it there and only a
 free drive wraps. 0 would be a cycle that holds its last keyframe.
 
 ## `update_hz = 10.0`
 
 How often the rig is moved. Each move re-renders the sky's radiance, so this is a cost dial. At
-10 Hz over a 300 s cycle one step is 1/3000 of the way and no step is visible; a 10 s cycle driven
+10 Hz over an 840 s cycle one step is 1/8400 of the way and no step is visible; a 10 s cycle driven
 on `f_045` held 120 fps, 8.3 ms, through the whole blend on the desktop. **Measured on the iPhone
 Air, 2026-11-16** (release, 2736x1260, `--max-fps 120`, a standing shift's first 60 s, traffic off,
 sky moving against `--day-cycle=off`, alternated): 95.4–96.3 fps moving beside 96.8–97.6 held, about
@@ -100,7 +103,7 @@ the floor handset is not measured, and this is still the lever there.
 - 🔴 **By day the angle moves at ONE speed** (`Q222`): the rig slerps the DIRECTION to the light
   along the great circle between two keyframes, and the five daylight keyframes sit on two great
   circles that meet at noon — morning → authored day → noon, and noon → dusk — at angles and `at`s
-  solved so every leg runs at 0.604 °/s. `verify_day_cycle.gd` holds the legs within 2% of each
+  solved so every leg runs at 0.216 °/s. `verify_day_cycle.gd` holds the legs within 2% of each
   other, so a keyframe's angle or `at` cannot be moved alone: re-solve the leg (to a tenth of a
   degree). ⚠️ So the 07:00 sun is in the south-south-east, not the east: the arc through the
   authored sun and an overhead noon starts there.

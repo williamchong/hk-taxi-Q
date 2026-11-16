@@ -5,7 +5,7 @@
 ## rig scene's own daylight is one moment on the way, at `day_at`, and no
 ## longer where it starts (`Q222`).
 ##
-## A shift STOPS at 1.0, on the night: a session is three to five minutes
+## A shift STOPS at 1.0, on the night: a shift is a session with an end
 ## (`GAME_DESIGN.md`), so the curve needs an end state and night is it. A free
 ## drive runs on to `loop_at` and comes round (`Q225`).
 ##

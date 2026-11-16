@@ -114,7 +114,7 @@ night_lights = 0.25
 
 [resource]
 script = ExtResource("5_8uk6s")
-length_s = 300.0
+length_s = 840.0
 day_at = 0.174
 update_hz = 10.0
 loop_at = 1.714

@@ -46,7 +46,7 @@ own `far` clips a vehicle where it stands, and nothing else hides one.
 ## `poll_s = 1.0`
 
 How often the layer asks the rig's clock and walks the cells. A placement's windows are whole
-hours and an hour is about 21 s of the 300 s day, so once a second is twenty chances to catch it.
+hours and an hour is 60 s of the 840 s day (`Q233`), so once a second is sixty chances to catch it.
 
 ## `reroll_s = 90.0`
 
