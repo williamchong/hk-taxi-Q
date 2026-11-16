@@ -226,3 +226,17 @@ The thumbs' sticks on a touch screen (`Q204`, the user's ask, reversing `Q97`'s
 each thumb goes and 0.8 under a thumb, in an 8 px stroke. Not red and not
 amber: red is the fare's and amber the speed's (`Q139`), and a stick is
 neither.
+
+
+## `touch_go = Color(0.3, 0.82, 0.38, 0.9)`
+
+The pedals' levels under the driving thumb (`Q228`, the user's ask from a new
+player on a phone): the accelerator fills green from the thumb upward as far as
+it is pushed and the brake red from the thumb downward (`touch_stop`,
+`Color(0.92, 0.29, 0.26, 0.9)`), where the whole pedal used to brighten — a
+change of opacity nobody could read a half throttle from. The ▲ and ▼ beside
+the pedals are the sticks' ink, and each takes its pedal's colour only while the
+thumb is pushing that way. `accent`'s green and
+`accent_negative`'s red at 0.9: go and stop. ⚠️ This is the one place a stick
+is red, on the user's instruction — the wheel and the pedals' outlines keep the
+bracket's ink.

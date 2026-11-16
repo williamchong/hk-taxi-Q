@@ -212,6 +212,44 @@ func _check_wheel() -> void:
 	)
 
 
+## The pedals' levels (`Q228`): a share of the pedal that grows AWAY from the
+## thumb — up the accelerator, down the brake — in two colours a glance tells
+## apart from each other and from the sticks' ink.
+func _check_pedal_levels() -> void:
+	var box := Rect2(10.0, 20.0, 40.0, 100.0)
+	var gas: Rect2 = TouchSticksScript.level_box(box, 0.25, true)
+	var brake: Rect2 = TouchSticksScript.level_box(box, 0.25, false)
+	_expect(
+		is_equal_approx(gas.size.y, 25.0) and is_equal_approx(gas.end.y, box.end.y),
+		"layout",
+		"a quarter throttle fills the accelerator's bottom quarter"
+	)
+	_expect(
+		is_equal_approx(brake.size.y, 25.0) and is_equal_approx(brake.position.y, box.position.y),
+		"layout",
+		"and a quarter brake the brake's top quarter"
+	)
+	_expect(
+		is_zero_approx(TouchSticksScript.level_box(box, 0.0, true).size.y),
+		"layout",
+		"a pedal not pressed shows no level"
+	)
+	_expect(
+		TouchSticksScript.level_box(box, 1.7, true).is_equal_approx(box),
+		"layout",
+		"and one pressed past its travel fills the pedal and no more"
+	)
+	var style: Resource = load(HudStyleScript.PATH)
+	var go: Color = style.touch_go
+	var stop: Color = style.touch_stop
+	_expect(go.g > go.r and go.g > go.b and go.a > 0.5, "layout", "touch_go is a green that shows")
+	_expect(
+		stop.r > stop.g and stop.r > stop.b and stop.a > 0.5,
+		"layout",
+		"touch_stop is a red that shows"
+	)
+
+
 ## Both tables (`Q204`): the desk's, and the touch screen's, whose thumbs are
 ## the whole reason it exists.
 func _check_layout() -> void:
@@ -219,6 +257,7 @@ func _check_layout() -> void:
 		print("  layout: %s" % path)
 		_check_layout_at(path)
 	_check_wheel()
+	_check_pedal_levels()
 
 
 func _check_layout_at(path: String) -> void:

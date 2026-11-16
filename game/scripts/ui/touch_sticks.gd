@@ -156,7 +156,7 @@ func _stick(
 
 
 ## A steering wheel round the thumb: rim, three spokes and the stripe at the
-## top that shows how far it has turned. At rest, the hint's chevrons beside it.
+## top that shows how far it has turned, and a small arrow either side of it.
 func _wheel(
 	points: PackedVector2Array,
 	colours: PackedColorArray,
@@ -170,10 +170,10 @@ func _wheel(
 	var radius: float = travel * 0.55
 	var spin: float = deg_to_rad(WHEEL_LOCK_DEG) * turn
 	_ring(points, colours, at, radius, width, ink)
-	if not held:
-		for side: float in [-1.0, 1.0]:
-			var tip: Vector2 = at + Vector2(side * (radius + width * 4.0), 0.0)
-			_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, ink)
+	# Kept under a thumb too (`Q228`): the arrows are what teach the gesture.
+	for side: float in [-1.0, 1.0]:
+		var tip: Vector2 = at + Vector2(side * (radius + width * 4.0), 0.0)
+		_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, ink)
 	if wheel == null:
 		return
 	# The car's own wheel (`CarSpec.steering_wheel`): its horn pad, its spokes.
@@ -193,7 +193,10 @@ func _wheel(
 
 ## Two pedals either side of the thumb: the accelerator above it, tall and
 ## narrow, the brake below it, wide — slide up onto the one, down onto the
-## other. The pressed one fills as far as it is pushed.
+## other. The pressed one fills as far as it is pushed, as a level growing
+## away from the thumb: green up the accelerator, red down the brake (`Q228`).
+## An arrow beyond each pedal says which way to slide, and takes its pedal's
+## colour while the thumb is that way.
 func _pedals(
 	points: PackedVector2Array,
 	colours: PackedColorArray,
@@ -209,23 +212,45 @@ func _pedals(
 		at + Vector2(-travel * 0.22, -gap - travel * 0.85), Vector2(travel * 0.44, travel * 0.85)
 	)
 	var brake := Rect2(at + Vector2(-travel * 0.36, gap), Vector2(travel * 0.72, travel * 0.5))
-	_pedal(points, colours, gas, maxf(push, 0.0), 4, ink)
-	_pedal(points, colours, brake, maxf(-push, 0.0), 3, ink)
+	_pedal(points, colours, gas, push, true, 4, ink, style.touch_go)
+	_pedal(points, colours, brake, -push, false, 3, ink, style.touch_stop)
 	_ring(points, colours, at, width * 1.6, width * 0.5, ink)
+	# In the sticks' ink like the wheel's, and in its pedal's paint only while
+	# the thumb is pushing that way.
+	var reach: float = width * 2.0
+	var above := Vector2(at.x, gas.position.y - reach * 1.6)
+	var below := Vector2(at.x, brake.end.y + reach * 1.6)
+	_chevron(points, colours, above, Vector2.UP, reach, style.touch_go if push > 0.0 else ink)
+	_chevron(points, colours, below, Vector2.DOWN, reach, style.touch_stop if push < 0.0 else ink)
 
 
-## One pedal: filled as far as it is pressed, outlined, and ridged — the
-## rubber's ridges are what say "pedal" and not "button".
+## The part of a pedal `amount` (0 to 1) of the way pressed: the whole width,
+## and that share of the height from the edge the thumb is at — the bottom of
+## the accelerator (`rising`), the top of the brake.
+static func level_box(box: Rect2, amount: float, rising: bool) -> Rect2:
+	var tall: float = box.size.y * clampf(amount, 0.0, 1.0)
+	var top: float = box.end.y - tall if rising else box.position.y
+	return Rect2(Vector2(box.position.x, top), Vector2(box.size.x, tall))
+
+
+## One pedal: a faint face, its `level_box` filled in `paint`, outlined, and
+## ridged — the rubber's ridges are what say "pedal" and not "button", and over
+## the fill they are a scale to read it against.
 func _pedal(
 	points: PackedVector2Array,
 	colours: PackedColorArray,
 	box: Rect2,
 	amount: float,
+	rising: bool,
 	ridges: int,
-	ink: Color
+	ink: Color,
+	paint: Color
 ) -> void:
 	var width: float = style.touch_px
-	_fill(points, colours, box, Color(ink, ink.a * lerpf(TRACK_SHARE * 0.5, 1.0, amount)))
+	_fill(points, colours, box, Color(ink, ink.a * TRACK_SHARE * 0.5))
+	var level: Rect2 = level_box(box, amount, rising)
+	if level.has_area():
+		_fill(points, colours, level, paint)
 	_outline(points, colours, box, width * 0.6, ink)
 	var ridge := Color(0.0, 0.0, 0.0, ink.a * 0.5)
 	var inset: float = box.size.x * 0.2

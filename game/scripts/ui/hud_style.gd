@@ -278,6 +278,10 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## How the sticks are drawn: `tracks`, `wheel_pedals` or `wheel_lever`
 ## (`TouchSticks.LOOK_*`). The thumbs read the same under every one.
 @export_enum("tracks", "wheel_pedals", "wheel_lever") var touch_look: String
+## The pedals' levels under the driving thumb (`Q228`): how far the accelerator
+## is pushed, and the brake.
+@export var touch_go: Color
+@export var touch_stop: Color
 ## The menu's sheets of text (credits, guide, notices): the whole screen dimmed
 ## behind bare lettering, rather than a box on it.
 @export var scrim: Color

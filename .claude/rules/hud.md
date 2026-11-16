@@ -41,7 +41,11 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   its `design_size`, rests the handset's): a layout change owes BOTH tables, and its frames are a
   handset's — `drive.sh --window=1368x630 --safe-area=102,0,102,30 --touch=on`, two thumbs with
   `--finger=`; the map and the dial stay on one line (`verify_hud` asserts it), and the shading and
-  the zones run to the glass while text stays inside the safe line. 🚫 **No screen
+  the zones run to the glass while text stays inside the safe line. 🔴 **A pedal shows its push as a
+  level, never as opacity** (`Q228`, the user's ask from a new player): green up the accelerator,
+  red down the brake, growing away from the thumb (`TouchSticks.level_box`, `touch_go` /
+  `touch_stop`), ▲ ▼ by the pedals and ◀ ▶ by the wheel at rest AND under a thumb, a pedal's arrow
+  white until its direction is pressed and then its pedal's colour — do not put the fade back. 🚫 **No screen
   blur in the drive**: `backdrop_blur.gdshader` is the menu's, paid only while the level is parked;
   in the drive it would be a back-buffer copy and a mip chain every frame on a phone.
 - **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `tuning/wrong_way.tres` (the two
