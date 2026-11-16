@@ -147,6 +147,8 @@ var _water_level_m: float = NAN
 ## `Vector2` a triangle, moved by the region's offset like the minimap's are.
 var _sea: PackedVector2Array = PackedVector2Array()
 var _checked_for_road: bool = false
+## The player's network a reset reads (`_drives_away`), built at the first one.
+var _reset_router: RoadRouter = null
 
 
 func _ready() -> void:
@@ -546,14 +548,36 @@ func _named(edge_id: int) -> String:
 	return "the start line" if edge_id < 0 else "edge %d" % edge_id
 
 
-## Back onto the nearest road, facing the way the car was going, dropped from
-## the spawn's own height; the start line where no road is within reach — a
-## car 300 m out in the harbour has no nearest street worth the name. Returns
-## the edge taken, -1 for the start line.
+## Back onto the nearest road the car can drive away down, in its lane and
+## facing the way the car was going, dropped from the spawn's own height; the
+## start line where no such road is within reach — a car 300 m out in the
+## harbour has no nearest street worth the name. Returns the edge taken, -1 for
+## the start line.
+##
+## 🔴 **Not the nearest road** (the user's ask, 2026-11-17: "always place me
+## into some center of a road that i can always drive and not stuck").
+## `nearest_edge` answers on a blocked edge by design, and the nearest road to
+## a wedged car is often the one it is wedged beside: an alley a wall stands
+## across, or a stretch nothing leads out of. `_drives_away` is the bar.
 func _back_onto_road() -> int:
 	var graph: RoadGraph = RoadGraph.shared()
 	var heading: Vector3 = -vehicle.global_transform.basis.z
-	var hit: RoadGraph.Hit = graph.nearest_edge(vehicle.global_position, heading)
+	var accept: Callable = _drives_away()
+	var hit: RoadGraph.Hit = graph.nearest_edge(
+		vehicle.global_position, heading, RoadGraph.NEAREST_REACH_M, accept
+	)
+	# Turned round where the way the car faced ends at nothing — a street the
+	# region clips, its barrier a car's length ahead — and the other way leads
+	# on. Never on a one-way: its direction is the edge's, not the asker's.
+	if (
+		hit.edge_id >= 0
+		and not hit.one_way
+		and not _leads_on(hit.edge_id, hit.along)
+		and _leads_on(hit.edge_id, not hit.along)
+	):
+		hit = graph.nearest_edge(
+			vehicle.global_position, -hit.forward, RoadGraph.NEAREST_REACH_M, accept
+		)
 	var pose: Transform3D = _spawn
 	if hit.edge_id >= 0:
 		var lift: float = vehicle.car.ray_length_m() + RoadSpawn.DROP_CLEARANCE_M
@@ -563,6 +587,43 @@ func _back_onto_road() -> int:
 	vehicle.place_at(pose)
 	_snap_camera()
 	return hit.edge_id
+
+
+## Whether driving `edge_id` its `along` way arrives at another road, in the
+## player's network: a U-turn at the far end is not somewhere to go.
+func _leads_on(edge_id: int, along: bool) -> bool:
+	for move: Vector2i in _reset_router.moves_from(edge_id, along):
+		if move.x != edge_id:
+			return true
+	return false
+
+
+## Whether a reset may set the car down on an edge, as `nearest_edge`'s
+## `accept`. Two bars, each read by its own predicate (`Q19`):
+##
+## - **a whole lane clear along all of it** (`RoadGraph.is_routable`, the lane
+##   bar): the car lands in its lane centre and must fit there with room to
+##   turn, so the wider bar, not the car's own;
+## - **joined to the run's start line in the player's network**
+##   (`RoadRouter.Profile.player()`: the car bar, no rule kept), which is what
+##   refuses a clear street nothing leads out of. ⚠️ Not the legal network:
+##   one-ways and turn bans leave 8 edges that lead to the HKCEC line, and a
+##   car that may break every rule is not stuck on the other 944. Skipped
+##   where the line's own road is not in the network, so it never empties the
+##   answer.
+##
+## One search a reset (`RoadRouter.distances_to`, 2.5 ms measured), on a button
+## and a drowning, never a tick. The router is kept: its build is the cost.
+func _drives_away() -> Callable:
+	var graph: RoadGraph = RoadGraph.shared()
+	if _reset_router == null:
+		_reset_router = RoadRouter.new(graph, RoadRouter.Profile.player())
+	var home: int = graph.nearest_edge(_spawn.origin).edge_id
+	var joined: Dictionary = _reset_router.distances_to(home)
+	return func(edge_id: int) -> bool:
+		if not graph.is_routable(edge_id):
+			return false
+		return joined.is_empty() or edge_id == home or joined.has(edge_id)
 
 
 ## Stop before the car falls for ever on a clone where the ETL has not been run.

@@ -707,8 +707,16 @@ func _apply_auto_right(delta: float) -> bool:
 ## a car that fell at full lock would otherwise be replaced at full lock and veer
 ## off immediately.
 ##
+## 🔴 **The transform is pushed to the physics server here, not left to the
+## frame.** A `Node3D`'s transform change reaches its body when the tree next
+## flushes its notifications, and a call from an input event — every tap and
+## click on the menu — lands after the last flush and before the server's own
+## sync, which then writes the body's OLD place back over the node: the clock
+## restarted and the car stayed where it was. A call from a script's frame is
+## flushed in time, so every scripted run passed.
 func place_at(pose: Transform3D) -> void:
 	global_transform = pose
+	force_update_transform()
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	engine_force = 0.0

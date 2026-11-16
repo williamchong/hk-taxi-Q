@@ -103,6 +103,8 @@ const CELL_M: float = 25.0
 ## a car in the air over a parapet should read the street below rather than
 ## blank the HUD. See `nearest_edge`.
 const LEVEL_REACH_M: float = 2.5
+## How far `nearest_edge` looks unless told: past it a query is a miss.
+const NEAREST_REACH_M: float = 60.0
 
 ## `direction` values in the contract. The source publishes only these two —
 ## `P1-3` maps `TRAVEL_DIRECTION` onto them and reverses the polyline for the
@@ -993,7 +995,17 @@ static func left_of(forward: Vector3) -> Vector3:
 ##
 ## `heading` resolves which way a two-way edge runs for the asker; pass the car's
 ## forward vector. A zero heading takes the edge's own vertex order.
-func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: float = 60.0) -> Hit:
+##
+## `accept` narrows the answer to the edges it returns true for, called with an
+## edge id: the nearest road *of a kind*, for a caller that must not be handed a
+## blocked one (`DriveLevel`'s reset). Absent, every drivable edge answers, as
+## the class docstring says it must for everything that only reads the road.
+func nearest_edge(
+	point: Vector3,
+	heading: Vector3 = Vector3.ZERO,
+	radius_m: float = NEAREST_REACH_M,
+	accept: Callable = Callable()
+) -> Hit:
 	var best := Hit.new()
 	if _seg_edge.is_empty():
 		return best
@@ -1011,6 +1023,9 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 	var any_distance: float = INF
 	var reach: int = maxi(1, int(ceil(maxf(radius_m, 0.0) / CELL_M)))
 	var centre: Vector2i = _cell_of(point.x, point.z)
+	# One verdict an edge: it has a segment in every cell it crosses.
+	var filtered: bool = accept.is_valid()
+	var verdicts: Dictionary[int, bool] = {}
 
 	# Rings outward from the query cell, stopping as soon as a ring cannot beat
 	# what is already found: everything beyond it is at least `ring - 1` cells
@@ -1030,6 +1045,12 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 			if not _cells.has(key):
 				continue
 			for index: int in _cells[key]:
+				if filtered:
+					var slot: int = _seg_edge[index]
+					if not verdicts.has(slot):
+						verdicts[slot] = accept.call(_ids[slot])
+					if not verdicts[slot]:
+						continue
 				var closest: Vector3 = _closest_on_segment(_seg_a[index], _seg_b[index], point)
 				var span: float = plan_distance(closest, point)
 				if span < any_distance:

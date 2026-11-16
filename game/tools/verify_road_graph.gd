@@ -476,6 +476,9 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
 
+	# --- Q229: a narrowed query never answers with an edge it was refused ---
+	problems.append_array(_check_accept(graph, edges))
+
 	if problems.is_empty():
 		print(
 			(
@@ -846,6 +849,71 @@ func _time_queries(
 			(
 				"nearest_edge p99 is %.1f us over the %s, above the %.0f us budget"
 				% [p99, label, QUERY_BUDGET_USEC]
+			)
+		)
+	return problems
+
+
+## `nearest_edge`'s `accept` (`Q229`, the reset's bar): at every edge's
+## midpoint the plain answer is refused and the query asked again. The second
+## answer is never the refused edge and never nearer than it; an `accept` that
+## takes everything changes nothing; one that takes nothing is a miss. A filter
+## applied to one of the two candidates the query keeps (`best`, `any`) and not
+## the other hands back the refused edge wherever the level fallback is taken.
+func _check_accept(graph: RoadGraph, edges: Array) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var probes: int = 0
+	var elsewhere: int = 0
+	var reach: float = RoadGraph.NEAREST_REACH_M
+	var all: Callable = func(_edge_id: int) -> bool: return true
+	var nothing: Callable = func(_edge_id: int) -> bool: return false
+	for at: Vector3 in _midpoints(edges):
+		var plain: RoadGraph.Hit = graph.nearest_edge(at)
+		if not plain.hit():
+			continue
+		probes += 1
+		var refused: int = plain.edge_id
+		var other: RoadGraph.Hit = graph.nearest_edge(
+			at, Vector3.ZERO, reach, func(edge_id: int) -> bool: return edge_id != refused
+		)
+		if other.hit():
+			elsewhere += 1
+		if other.edge_id == refused or (other.hit() and other.distance < plain.distance - 1e-4):
+			(
+				problems
+				. append(
+					(
+						"nearest_edge at %s answered edge %d at %.2f m with edge %d refused (plain %.2f m)"
+						% [at, other.edge_id, other.distance, refused, plain.distance]
+					)
+				)
+			)
+			break
+		var every: RoadGraph.Hit = graph.nearest_edge(at, Vector3.ZERO, reach, all)
+		var none: RoadGraph.Hit = graph.nearest_edge(at, Vector3.ZERO, reach, nothing)
+		if every.edge_id != refused or none.hit():
+			(
+				problems
+				. append(
+					(
+						"nearest_edge at %s: accepting every edge answered %d (plain %d), accepting none %d"
+						% [at, every.edge_id, refused, none.edge_id]
+					)
+				)
+			)
+			break
+	if probes == 0 or elsewhere == 0:
+		problems.append(
+			(
+				"nearest_edge's accept was never exercised: %d probes, %d answered elsewhere"
+				% [probes, elsewhere]
+			)
+		)
+	if problems.is_empty():
+		print(
+			(
+				"  accept: %d midpoints, the refused edge never answered, %d found another"
+				% [probes, elsewhere]
 			)
 		)
 	return problems

@@ -497,6 +497,35 @@ func _check_the_taxi_is_silent_parked(car: Node3D) -> void:
 		print("  ok    the taxi falls silent over park_fade_s once parked")
 
 
+## `place_at` moves the BODY, at once: read back off the physics server before
+## the tree has flushed a transform notification. A menu's tap calls it from an
+## input event, after the frame's last flush and before the server's sync, and a
+## transform left to the flush was overwritten there with the body's old place —
+## the run restarted with the car where it had stopped. No scripted run calls
+## it from an input event, so this is the only check that would see it.
+func _check_a_placed_car_is_placed_on_the_server(car: Node3D) -> void:
+	var controller := car as VehicleController
+	if controller == null:
+		_problem("no controller at the taxi's root to place")
+		return
+	root.add_child(controller)
+	var pose := Transform3D(Basis(Vector3.UP, 1.0), Vector3(120.0, 40.0, -75.0))
+	controller.place_at(pose)
+	var held: Transform3D = PhysicsServer3D.body_get_state(
+		controller.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM
+	)
+	root.remove_child(controller)
+	if held.origin.is_equal_approx(pose.origin) and held.basis.is_equal_approx(pose.basis):
+		print("  ok    a placed car is on the physics server before the frame flushes")
+	else:
+		_problem(
+			(
+				"place_at left the body at %s with the node at %s: a call from an input event is lost"
+				% [held.origin, pose.origin]
+			)
+		)
+
+
 ## The flasher relay (`TaxiAudio._step_controls`) sounds once as the indicator
 ## lamp lights and once as it goes out, an indicator's or the hazards' alike,
 ## and not at all on a tick the lamp holds. Counted, because a headless player
@@ -788,6 +817,7 @@ func _run() -> void:
 	_check_the_batch_takes_the_beat()
 	_check_the_taxi_is_silent_parked(car)
 	_check_the_relay_ticks_with_the_lamp()
+	_check_a_placed_car_is_placed_on_the_server(car)
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)
