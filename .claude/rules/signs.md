@@ -47,6 +47,12 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   aligned**: a fence is a run and the bar is per sample, so a conditional push would zigzag it. Do
   not "restore consistency". ⚠️ **A widening change is a sign-position change** — `surface.floor_default_m`
   moves the drawn kerb and therefore moves every post, silently and plausibly. Numbers in `Q78`.
+- 🔴 **A post's foot is also tested against the asphalt itself since `Q237`**
+  (`drawnroad.drawn_carriageway`, R less its islands): a ribbon's kerb stations are a share inside
+  a junction, so a post in the mouth passed both ribbon tests. Counted in `in_carriageway` and
+  `posts_in_carriageway` — the `shift_m` identity is unchanged — with `posts_in_carriageway_area`
+  (20 / 3) the part only the polygon caught; paste it with the rest. ⚠️ A change to R or its
+  islands (`region`) now moves which posts stand.
 - **`signs.faces_against_traffic`, `_facing_from_side` or `_plate_facing_deg`: paste `signs.json`'s
   `plates_turned`, `no_entry_against_flow`, `no_entry_on_two_way` and `facing_away`, before and
   after — and mutation-check the flag by turning it off and confirming the counters move.** 🔴 **The

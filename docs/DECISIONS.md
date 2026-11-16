@@ -14400,3 +14400,49 @@ crops, then "keep 0.75 to the app, web stays at 1.0".
 
 **See.** `P2-6` · `Q225` · `Q207` · `game/scenes/world/clean_daylight.md` ·
 `game/scripts/core/handset.gd`
+
+## `Q237` — A post is tested against the drawn asphalt itself, because a ribbon's kerb is a share inside a junction
+
+**Asked** by the user, 2026-11-17, with a frame from the PERCIVAL STREET junction: "why there is a
+pole in the center of a turning lane?", then "fix junctions for lamp and signs".
+
+**Status.** ✅ Built 2026-11-17. `ruff`, `pytest` (3,206) and `tools/check.sh` pass.
+
+**Found.** Two iB1000 lamp columns at game (1100.6, 441.9) and (1107.0, 449.2) stood 2.3 m and
+3.4 m inside `carriageway_region.json`'s R — the first in HyD's own polygon off the block corner,
+the second in the rails-cast patch inside the `e329` → `e333` hairpin, where the real median nose
+is paved over because the kerb lines do not close. Both snap to the first 4% of `e333`, and
+`Ribbon.past_kerb_m` there reads the edge's kerb stations, which inside a junction describe a
+share (`Q57`): 0.48 m and 2.33 m "past the kerb". Stage two re-snaps to the same edge and asks the
+same question, so `in_carriageway` could not see them.
+
+**Decision.** `drawnroad.drawn_carriageway` — R's `whole` less its islands, the trees' instrument
+(`kerb_clear_m`) without the margin — and a third refusal in `lamps.py` and `signs.py`: a placed
+foot inside it is refused under the existing `in_carriageway` counters, so every partition and
+`shift_m` identity closes as before; `in_carriageway_area` / `posts_in_carriageway_area` say how
+many only the polygon caught. Refused, never pushed (the stages' standing rule). A deck's column
+is exempt: it stands over the street.
+
+| | Wan Chai | Causeway Bay |
+|---|---|---|
+| lamps `drawn` | 1,012 → 997 | 364 → 361 |
+| lamps `in_carriageway` (`_area`) | 6 → 22 (16) | 2 → 5 (3) |
+| lamps `shortened` / `under_structure` | 50 → 46 / 39 → 38 | 5 → 4 / 3 |
+| lamps `spacing_drawn_m` p50 / p90 | 18.97 → 19.30 / 30.00 → 30.31 | 18.59 / 31.64 → 31.67 |
+| lamps `gaps_over_report_m` | 9 | 1 |
+| signs `drawn` / `poles_drawn` | 873 → 840 / 634 → 614 | 285 → 279 / 216 → 213 |
+| signs `posts_in_carriageway` (`_area`) | 5 → 25 (20) | 1 → 4 (3) |
+| signs `plates_turned` | 268 → 259 | 95 → 93 |
+
+`min_kerb_clearance_m`, `shift_m`, `posts_kept_as_surveyed`, `lanterns_past_centreline` and
+`facing_away` did not move. A/B at `city_preview.tscn --camera=1090,9,428 --look=1106,3.5,449`,
+each side shot twice and identical: both columns gone, the corner's NO ENTRY kept
+(`build/driver/junction_*`).
+
+- ⚠️ The cost is real: 9 NO ENTRY plates and 18 columns are holes now. Most stand on a refuge or
+  a median nose the region paves; drawing those as islands (the `region` rule's battery) would
+  bring them back, and is not done.
+- Not done: the signal heads (`signals.py`'s `bind_in_carriageway` asks the same ribbon question);
+  a stage-level test — the helper is unit-tested, the wiring is evidenced by the counters above.
+
+**See.** `Q57` · `Q78` · `Q129` · `Q131` · `Q199` · `etl/pipeline/drawnroad.py`

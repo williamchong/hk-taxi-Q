@@ -92,6 +92,13 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   colour change moves `under_structure` as it moves the trees'. ⚠️ Open: a handful of deck columns
   stand at the slab's edge with the foot just off it (the ribbon's kerb is past the drawn slab
   there); `min_kerb_clearance_m` fell to 0.04 / 0.10 because a deck column stands 0.1 m out by design.
+- 🔴 **A THIRD refusal since `Q237`: the placed foot against the asphalt itself**
+  (`drawnroad.drawn_carriageway`, R less its islands — the trees' instrument). The two ribbon tests
+  ask a kerb station, and inside a junction that is a share (`Q57`): two columns in the PERCIVAL
+  STREET mouth read 0.48 m and 2.33 m past a kerb while standing 2.3 m and 3.4 m in the road. It is
+  counted in `in_carriageway`, with `in_carriageway_area` (16 / 3) the part only the polygon caught —
+  paste both. ⚠️ A deck's column is exempt, and an island is not road. ⚠️ Anything that moves R or
+  its islands (`region`) now moves which columns stand.
 - **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `city_layer._batches`: the throttle route
   and `--spawn-fare=wan_chai/f_045`, overlays, HUD and fares off, `prims` and `draws` before and
   after, and the five fixed cameras in `Q135` `P3-67` shot twice a side** (`P3-67`). ⚠️ The lamps are a
