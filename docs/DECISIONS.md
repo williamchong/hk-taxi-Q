@@ -11675,6 +11675,11 @@ hand. `test_make_sounds.py` holds the bytes, the silent ends, the joins and the 
   meter's 2 kHz pip, which stays the only flat electronic beep.
 - **Small ones**: the door's latch and thud (`TaxiDoor`, as it leaves shut and lands shut), the
   indicator relay off `VehicleLamps.indicator_lit` and the landing.
+  ⚠️ The relay was there and unheard (the user asked for it as new, 2026-11-17): 10 ms of click at
+  0.25 of full scale, its loudest 20 ms −24.5 dB against the card reader's −13.5 at the same
+  `cabin_db`. Now the click and the can ringing on, 0.11 s at 0.6, −15.7 dB; an indicator and the
+  hazards alike, since both flash on the one phase. `taxi_audio.md`; ratchets in
+  `test_make_sounds.py` (the level) and `verify_vehicle` (a tick on, a tock off).
 - **Three buses** under `Master` (`default_bus_layout.tres`, a light compressor on `Master`): `SFX`,
   `Engine`, `Cabin`. `AudioDirector` and a volume setting stay Phase 5.
 
