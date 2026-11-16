@@ -21,10 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import shapely
+from shapely.geometry.base import BaseGeometry
 
 from pipeline.config import Config
 from pipeline.polyline import Snap, frame, plan_lengths
 from pipeline.region import KERB, REGION_NAME, read_region
+from pipeline.surface_region import read as read_carriageway_region
 
 
 def flows_along(side: float, one_way: bool) -> bool:
@@ -224,6 +227,28 @@ def kerbed_ribbons(
     if city.carriageway_region is None:
         return ribbons(graph, surface)
     return ribbons(graph, surface, read_region(out_dir / REGION_NAME, region_id))
+
+
+def drawn_carriageway(city: Config, out_dir: Path, region_id: str) -> BaseGeometry | None:
+    """The level-0 asphalt the bundle draws, islands taken out; `None` with no region.
+
+    For a stage that stands a post: `Ribbon.past_kerb_m` asks the nearest edge's
+    own kerb stations, and inside a junction those describe a SHARE (`Q57`), so
+    a post in the mouth reads as past a kerb that is not there (the user's
+    report, 2026-11-17: two lamp columns in the PERCIVAL STREET junction, 2.3 m
+    and 3.4 m inside the carriageway, both passing the ribbon test). This is
+    the trees' instrument (`trees.py`'s `kerb_clear_m`) without the margin — a
+    post stands `outset_m` past a kerb by construction. ⚠️ An island is not
+    road: a refuge's own column or bollard sign stands on it.
+    """
+    if city.carriageway_region is None:
+        return None
+    region = read_carriageway_region(out_dir, region_id)
+    road = region.whole
+    if region.islands:
+        road = shapely.difference(road, shapely.union_all(region.islands))
+    shapely.prepare(road)
+    return road
 
 
 def ribbons(

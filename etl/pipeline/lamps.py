@@ -120,6 +120,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
+import shapely
 
 # ⚠️ **Imports from sibling stages rather than copies**, the shape `signs.py`
 # takes. `nearside` is the canonical statement of a convention a
@@ -130,7 +131,7 @@ import numpy as np
 from pipeline import gdb
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, kerbed_ribbons, nearside, ribbons
+from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons, nearside, ribbons
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
@@ -213,6 +214,10 @@ class LampReport:
     # their own host's kerb, because they landed inside a *different* edge's
     # ribbon. A finding about `Q19`'s widening, not about this stage.
     in_carriageway: int = 0
+    # Of `in_carriageway`: columns clear of every ribbon's kerb and standing in
+    # the drawn asphalt all the same — a junction mouth, a paved-over median
+    # nose, a bay let go of as area — which only `drawn_carriageway` can see.
+    in_carriageway_area: int = 0
     # Columns refused because something the bundle draws — a deck, a roof, a
     # footbridge — stands over the foot lower than `min_column_height_m` plus
     # `soffit_gap_m`: no column worth drawing fits under it.
@@ -651,6 +656,7 @@ def build_region(
         f"python -m pipeline.surface --region {region_id}",
     )
     ribbon_by_edge = kerbed_ribbons(city, out_dir, region_id, graph, surface)
+    road = drawn_carriageway(city, out_dir, region_id)
     deck_ribbon_by_edge = ribbons(graph, surface, elevated=True)
     # Everything the bundle draws that is not ground, the trees' own reading.
     _, structure = shipped_faces(city, region_id, out_dir)
@@ -727,6 +733,20 @@ def build_region(
         settled_ribbon = host_ribbons.get(settled.edge)
         if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
             report.in_carriageway += 1
+            continue
+        # 🔴 **And the asphalt itself, because a ribbon's kerb is not the road's
+        # in a junction.** The test above asks the nearest edge's kerb stations,
+        # which inside a mouth describe a share: a column there read as 0.48 m
+        # past a kerb while standing 2.3 m inside the drawn carriageway
+        # (`drawn_carriageway`). Refused like the rest, never pushed. ⚠️ Not a
+        # deck's column: it stands over the street, not in it.
+        if (
+            not on_deck
+            and road is not None
+            and shapely.contains_xy(road, float(placed[0]), float(placed[1]))
+        ):
+            report.in_carriageway += 1
+            report.in_carriageway_area += 1
             continue
 
         # 🔴 **No column through a deck or a roof.** A face the bundle draws over
@@ -1075,6 +1095,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampRep
         # 🔴 Refused because registration could not get them out of the road — a
         # finding about `Q19`'s widening, not about this stage.
         "in_carriageway": report.in_carriageway,
+        # Of those: clear of every ribbon's kerb and in the drawn asphalt anyway.
+        "in_carriageway_area": report.in_carriageway_area,
         # Refused because a deck or a roof stands too low for any column.
         "under_structure": report.under_structure,
         # Of `drawn`: stood shorter than the library's, under a deck or a roof.

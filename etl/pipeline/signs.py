@@ -117,6 +117,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import shapely
 
 from pipeline import gdb, hongkong
 
@@ -163,7 +164,7 @@ from pipeline.config import (
     load_config,
 )
 from pipeline.documents import read_document, write_document
-from pipeline.drawnroad import Ribbon, kerbed_ribbons
+from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import select_triangles
@@ -402,6 +403,10 @@ class SignReport:
     # the excess over `poles_drawn` came from the bar or from somewhere else.
     posts_over_shift: int = 0
     posts_in_carriageway: int = 0
+    # Of `posts_in_carriageway`: posts clear of every ribbon's kerb and standing
+    # in the drawn asphalt all the same — a junction mouth, where a ribbon's
+    # kerb stations describe a share — which only `drawn_carriageway` can see.
+    posts_in_carriageway_area: int = 0
     # Posts left standing where TD surveyed them, because they were already clear
     # of the drawn kerb and `outset_m` and so the registration's reason did not
     # reach them (`Q78`). ⚠️ **They append a 0.0 to `shift_m` rather than being
@@ -1762,6 +1767,7 @@ def build_region(
         f"python -m pipeline.surface --region {region_id}",
     )
     drawn = kerbed_ribbons(city, out_dir, region_id, graph, surface)
+    road = drawn_carriageway(city, out_dir, region_id)
 
     # Grouped so a pole is drawn once and its plates stack on it. Sorted by code
     # so the stack order is the source's, not the read order's — a mesh that
@@ -1871,6 +1877,16 @@ def build_region(
         if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:
             report.in_carriageway += len(keep)
             report.posts_in_carriageway += 1
+            continue
+        # 🔴 **And the asphalt itself**: the test above asks the nearest edge's
+        # kerb stations, which inside a junction describe a share, so a post in
+        # the mouth passes it (`drawn_carriageway`; `lamps.py` has the case that
+        # found it). Refused under the same two counters, never pushed.
+        # No deck exemption as the lamps have: every host here is level 0.
+        if road is not None and shapely.contains_xy(road, float(placed[0]), float(placed[1])):
+            report.in_carriageway += len(keep)
+            report.posts_in_carriageway += 1
+            report.posts_in_carriageway_area += 1
             continue
 
         placements.append(
@@ -2349,6 +2365,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignRep
         # plates. These are what make `shift_m`'s `n` decomposable.
         "posts_over_shift": report.posts_over_shift,
         "posts_in_carriageway": report.posts_in_carriageway,
+        "posts_in_carriageway_area": report.posts_in_carriageway_area,
         # 🔴 **Posts standing where TD surveyed them** — already clear of the
         # drawn kerb and `outset_m`, so the registration's outward argument never
         # reached them (`Q78`). They contribute a real 0.0 to `shift_m` below, and

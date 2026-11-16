@@ -137,6 +137,7 @@ TRIGGERS: dict[str, Trigger] = {
                     "posts_kept_as_surveyed",
                     "posts_over_shift",
                     "posts_in_carriageway",
+                    "posts_in_carriageway_area",
                     "posts_merged_after_shift",
                     "shift_m",
                     "plates_turned",
@@ -155,6 +156,8 @@ TRIGGERS: dict[str, Trigger] = {
                 (
                     "features",
                     "drawn",
+                    "in_carriageway",
+                    "in_carriageway_area",
                     "min_kerb_clearance_m",
                     "shift_m",
                     "lantern_overhang_m",

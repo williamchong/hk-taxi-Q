@@ -6,13 +6,19 @@ the road?* — for the consumers that stand something at a kerb.
 
 from __future__ import annotations
 
-from types import MappingProxyType
+from pathlib import Path
+from types import MappingProxyType, SimpleNamespace
 
 import numpy as np
 import pytest
+import shapely
+from shapely.geometry import box
+from shapely.geometry.base import BaseGeometry
 
+from pipeline import drawnroad
 from pipeline.drawnroad import Ribbon, nearside, ribbons
 from pipeline.polyline import Segments
+from pipeline.surface_region import Region
 from tests.test_surface import _edge
 
 
@@ -177,3 +183,34 @@ class TestTheKerbIsTheRoads:
     def test_a_side_with_no_kerb_of_its_own_takes_the_corridors(self) -> None:
         _, ribbon = self._ribbon(self.ROAD)
         assert ribbon.kerb_right_m == pytest.approx([12.0] * 5)
+
+
+class TestThePostTestIsTheAsphaltItself:
+    """A ribbon's kerb stations describe a share inside a junction (`Q57`), so a
+    post in the mouth passes `past_kerb_m`; `drawn_carriageway` is what refuses it."""
+
+    @staticmethod
+    def _road(monkeypatch: pytest.MonkeyPatch, *, has_region: bool = True) -> BaseGeometry | None:
+        monkeypatch.setattr(
+            drawnroad,
+            "read_carriageway_region",
+            lambda out_dir, region_id: Region(
+                whole=box(0.0, 0.0, 20.0, 20.0),
+                shapes={},
+                stations={},
+                islands=[box(8.0, 8.0, 12.0, 12.0)],
+            ),
+        )
+        city = SimpleNamespace(carriageway_region=object() if has_region else None)
+        return drawnroad.drawn_carriageway(city, Path("unread"), "testville")
+
+    def test_a_post_in_the_junction_stands_in_the_road(self, monkeypatch) -> None:
+        road = self._road(monkeypatch)
+        assert shapely.contains_xy(road, 3.0, 3.0)
+        assert not shapely.contains_xy(road, 21.0, 3.0)
+
+    def test_an_island_is_not_road(self, monkeypatch) -> None:
+        assert not shapely.contains_xy(self._road(monkeypatch), 10.0, 10.0)
+
+    def test_a_city_with_no_region_has_nothing_to_ask(self, monkeypatch) -> None:
+        assert self._road(monkeypatch, has_region=False) is None
