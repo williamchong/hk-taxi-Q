@@ -353,9 +353,15 @@ def door_shut() -> np.ndarray:
 
 
 def indicator() -> np.ndarray:
-    t = _time(0.05)
-    relay = _band_noise(t.size, 1500.0, 4500.0, seed=141) * np.exp(-260.0 * t)
-    return _fade(relay + _modes(t, ((1100.0, 0.8, 200.0),)), release_s=0.005)
+    """The flasher relay's tick: the contact's click, then the can it sits in ringing on.
+
+    The first was 10 ms of click at a quarter of full scale, 18 dB under every other cabin
+    sound, and went unheard under the engine.
+    """
+    t = _time(0.11)
+    click = _band_noise(t.size, 1200.0, 5000.0, seed=141) * np.exp(-180.0 * t)
+    can = _modes(t, ((640.0, 1.0, 55.0), (1450.0, 0.7, 75.0), (2900.0, 0.35, 110.0)))
+    return _fade(click * 0.6 + can, release_s=0.01)
 
 
 def octopus() -> np.ndarray:
@@ -400,7 +406,7 @@ SHOTS: dict[str, tuple[Callable[[], np.ndarray], float]] = {
     "land": (land, 0.7),
     "door_open": (door_open, 0.4),
     "door_shut": (door_shut, 0.6),
-    "indicator": (indicator, 0.25),
+    "indicator": (indicator, 0.6),
     "octopus": (octopus, 0.3),
     "coin": (coin, 0.3),
 }

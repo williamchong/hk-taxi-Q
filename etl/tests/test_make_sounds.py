@@ -59,6 +59,25 @@ def test_a_one_shot_starts_and_ends_silent_so_nothing_clicks(name: str) -> None:
     assert samples[-1] == 0.0
 
 
+# How far under the cabin's other sounds the relay may sit: it measures 2.2 dB under the
+# card reader, and the 11 dB it shipped at went unheard.
+CABIN_SPREAD_DB = 4.0
+
+
+def _burst_db(name: str) -> float:
+    """The loudest 20 ms of a sound, dB RMS re full scale: what a short one is heard at."""
+    power = (_samples(name) / 32768.0) ** 2
+    rows = int(0.02 * SOUNDS.RATE_HZ)
+    return float(10.0 * np.log10(np.convolve(power, np.ones(rows) / rows, "valid").max()))
+
+
+def test_the_indicator_relay_is_heard_beside_the_cabin_s_other_sounds() -> None:
+    """They share `cabin_db`, and the relay shipped 11 dB under the card reader, unheard."""
+    relay = _burst_db("indicator")
+    for other in ("octopus", "flag_down"):
+        assert relay >= _burst_db(other) - CABIN_SPREAD_DB
+
+
 @pytest.mark.parametrize("name", sorted(SOUNDS.LOOPS))
 def test_a_loop_joins_itself_without_a_step(name: str) -> None:
     """The step from the last sample back to the first is no bigger than the loop's own steps."""

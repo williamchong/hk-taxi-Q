@@ -145,6 +145,14 @@ The indicator relay ticks pulling in at 1.0 and tocks letting go at 0.8. Every o
 is scattered ±6% so a repeat is not the same sample twice. Were the code's own constants until the
 review of 2026-11-06.
 
+The relay sounds for an indicator and for the hazards alike: it follows `VehicleLamps.indicator_lit`,
+the one flasher both run on. Its level is the file's, not a dial here. The first tick was 10 ms of
+click at a quarter of full scale, its loudest 20 ms 11 dB under the card reader's beep at the same
+`cabin_db`, and the user did not hear it at all (2026-11-17). It is now the contact's click and the
+can ringing on for 0.11 s at 0.6 of full scale, its loudest 20 ms −15.7 dB against the flag's −15.3
+and the reader's −13.5; `test_the_indicator_relay_is_heard_beside_the_cabin_s_other_sounds` holds it
+within 4 dB of both.
+
 ## `coin_hkd = 2.0`, `coin_max = 15`, `coin_gap_s = 0.07`, `coin_after_s = 0.35`
 
 At the delivery a coin per HK$2 of tip, after the card reader's beep: a HK$22.50 tip is eleven coins

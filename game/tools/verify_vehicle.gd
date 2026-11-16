@@ -497,6 +497,33 @@ func _check_the_taxi_is_silent_parked(car: Node3D) -> void:
 		print("  ok    the taxi falls silent over park_fade_s once parked")
 
 
+## The flasher relay (`TaxiAudio._step_controls`) sounds once as the indicator
+## lamp lights and once as it goes out, an indicator's or the hazards' alike,
+## and not at all on a tick the lamp holds. Counted, because a headless player
+## plays nothing.
+func _check_the_relay_ticks_with_the_lamp() -> void:
+	var before: int = _failed
+	var table := load(AUDIO_PROFILE_PATH) as TaxiAudioProfile
+	if table == null:
+		_problem("%s did not load" % AUDIO_PROFILE_PATH)
+		return
+	var audio := TaxiAudio.new()
+	var lamps := VehicleLamps.new()
+	audio.profile = table
+	audio._lamps = lamps
+	var heard: Array[int] = []
+	for lit: bool in [false, true, true, false, false, true]:
+		lamps.indicator_lit = lit
+		audio._step_controls()
+		heard.append(audio.relays)
+	if heard != [0, 1, 1, 2, 2, 3]:
+		_problem("the relay does not tick on and tock off with the lamp: %s" % [heard])
+	lamps.free()
+	audio.free()
+	if _failed == before:
+		print("  ok    the relay ticks as the indicator lights and tocks as it goes out")
+
+
 ## The batched material (`VehicleBodyBatch`) carries the indicator beat and the
 ## roof sign whoever builds it first: built from a `vehicle_body.tres` no
 ## `wire_blink` has touched, its three parameters are still the lamps table's.
@@ -760,6 +787,7 @@ func _run() -> void:
 	_check_the_door_sounds(car)
 	_check_the_batch_takes_the_beat()
 	_check_the_taxi_is_silent_parked(car)
+	_check_the_relay_ticks_with_the_lamp()
 	# Last, because it swaps zeroed tables into the rigs and no check above may
 	# run against one.
 	_check_the_dials_are_data(car)
