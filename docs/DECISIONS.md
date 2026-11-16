@@ -14207,3 +14207,45 @@ where everything is grey and washed out, not attractive for main menu first sigh
   the menu into a run was not driven by hand.
 
 **See.** `Q160` · `Q222` · `P6-1` · `game/scenes/city_drive.md` · `game/scripts/level/drive_level.gd`
+
+## `Q232` — A vehicle's panels are pressed in the shader: joints, a crease, and every inked edge seated
+
+**Asked** by the user, 2026-11-17: "can we have some basic normal map for vechicles such that bus
+side is not one flat surface", then "add similar details for all vechicles and player taxi as
+needed", "also add proper normal map for details like windows and frame instead of just the body",
+and of the tram, with a photograph of 147: "the windows and doors should have normal for tram, but
+not random relief on body".
+
+**Status.** ✅ Built 2026-11-17 (`P3-87`). The dials are the model's, **not yet the user's pick**:
+the option sheet is `build/driver/relief/options_bus.png`.
+
+- **No texture and no new vertex channel.** `ART_DESIGN.md` refuses the texture-map workflow, and
+  both UV sets are spent (`UV` the payload, `UV2` the ink). `vehicle_body.gdshader` tilts `NORMAL`
+  from two things the mesh already says:
+  - **A pitch per face** (`make_vehicle.embossed`): joints along the body or one crease up a
+    flank, in `COLOR_0.a` in the `.glb`, moved to `UV.y`'s fraction by the import door.
+  - **Every inked edge** (`UV2`, `Q196`): a surface falls away into the edge the ink is drawn on,
+    `relief_edge_m` in. A pane reads as set in its frame, a frame as proud of its wall, a lens as
+    seated. Every vehicle gets it, the player's taxi included, with no mesh change.
+- 🔴 **Only what the real vehicle carries** (the user's rule, off the tram): the bus's panel joints
+  at its upstairs window pitch (1.35 m), the box lorry's ribs (0.6 m), and a flank crease on the
+  saloon, the Alphard, the Hiace and the Coaster. The tram's sides are smooth sheet and take none;
+  the coach's crease was built and withdrawn as unsourced; the taxi's flank is already bevelled
+  geometry and takes none. ⚠️ The bus, lorry and crease calls are the model's reading, not a
+  photograph's — each is the user's to strike.
+- ⚠️ **`relief_pillow` is the one invented term**: each panel between two joints bows, 0.04 the
+  slope at its edges. Real panels are flat; it is what a far bus keeps once the 4 cm joints go
+  under a pixel (~25 m). 0 is sheet B of the options.
+- **Not `COLOR.a` in the engine.** The Compatibility renderer multiplies `COLOR` by the instance
+  colour (`Q226`), so a batch that forgot its white reads alpha 0. The fraction of `UV.y` survives
+  either way; `verify_parked`'s `pressed kinds:` line holds the six kinds and their codes.
+- A groove or a seat under a pixel and a half is held that wide and its slope cut to match, so a
+  far vehicle loses the line to flat rather than to shimmer.
+- Evidence: `build/driver/relief/` — the lineup before and after, the parked bus at its Wan Chai
+  terminus on Mobile and on desktop Compatibility (no `SHADER ERROR` on either), a day and a night
+  drive. `check.sh` passes; `pytest` 3,199.
+- Not done: a handset frame time (the seat costs four derivatives a vehicle fragment); the
+  browser; the moulded border round the tram's side panel in the photograph; the taxi's own
+  windows judged at the chase camera's distance.
+
+**See.** `Q196` · `Q200` · `Q226` · `P3-84` · `P3-85` · `game/tuning/vehicle_body.md` · `.claude/rules/parked.md`

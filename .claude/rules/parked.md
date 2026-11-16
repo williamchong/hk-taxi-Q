@@ -86,6 +86,14 @@ traffic, and the bonus for threading them.
   waist, or the deck under the lamps, is refused — lower the drop, do not move the guard. Doors are
   on `KERB_SIDE` and refused in a wheel arch. A new feature owes a lineup sheet before and after
   (`asset_viewer.tscn --lineup=20`, a forced reimport first) and the throttle route's `prims`.
+- 🔴 **A relief is what the real vehicle carries, never decoration** (`Q232`, the user's rule
+  2026-11-17 off a photograph of tram 147: "not random relief on body"): `Shape.joints_m` (the
+  bus), `box_ribs_m` (the lorry), `crease_y_m` (the saloon, the Alphard, the van, the minibus).
+  The tram, the coach and the taxis carry none — do not "complete the set". It is shading
+  (`make_vehicle.embossed` → `COLOR_0.a` → the import door → `UV.y`'s fraction), so it moves no
+  box; a window's and a door's seat comes from the ink's edges and needs no field. A change owes
+  the lineup sheet, `verify_parked`'s `pressed kinds:` line, a Compatibility frame and
+  `grep -i "shader error"`; the dials are `vehicle_body.md`'s.
 - 🔴 **The bus and the tram are flat-sided** (`Shape.slab_sided`, `Q200`): one wall to a crowned
   roof, the windows applied (`side_glass` runs, `end_panes`), never two stacked glasshouses — that
   body stepped in at each deck and is gone. A window is refused off its flank, above the shoulder
