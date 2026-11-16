@@ -57,6 +57,7 @@ const PINNED: Dictionary = {
 	"rendering/renderer/rendering_method.web": "gl_compatibility",
 	"application/run/max_fps.mobile": 60,
 	"rendering/anti_aliasing/quality/msaa_3d": 2,
+	"rendering/anti_aliasing/quality/msaa_3d.mobile": 1,
 	"physics/3d/physics_engine": "Jolt Physics",
 	"rendering/textures/vram_compression/import_etc2_astc": true,
 	"display/window/stretch/mode": "canvas_items",
